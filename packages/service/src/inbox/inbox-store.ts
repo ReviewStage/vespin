@@ -3,8 +3,8 @@ import { LIVE_COUNT, liveKeysIn } from "@repo/database/core/live-statement";
 import {
   Database,
   type DatabaseServices,
-  type QueryError,
   queryBuilder,
+  type StoreFailure,
 } from "@repo/database/core/query";
 import { CURRENT_TXID } from "@repo/database/core/txid";
 import { automationReadableBy } from "@repo/database/models/automation-store";
@@ -173,10 +173,8 @@ import type { SyncMoved } from "../sync/live-query.js";
  * database of its own.
  */
 
-type InboxStoreFailure = QueryError | Schema.SchemaError;
-
 /** What an inbox store operation answers: an effect over the ambient client, composed into whatever called it. */
-export type InboxStoreEffect<A> = Effect.Effect<A, InboxStoreFailure, DatabaseServices>;
+export type InboxStoreEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
 /** The agent an item belongs to, as every write of the agent's names it: the task it works on, or none for an agent an automation started with no task. */
 export interface InboxAgent {

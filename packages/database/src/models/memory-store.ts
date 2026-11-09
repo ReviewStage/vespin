@@ -3,7 +3,7 @@ import { MEMORY_BOUNDS } from "@repo/features/memory-wire";
 import { and, desc, eq } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
-import { Database, type DatabaseServices, type QueryError } from "../core/query.js";
+import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { organization } from "../schemas/auth.js";
 import { memory } from "../schemas/memory.js";
@@ -32,11 +32,7 @@ import { InstantColumnSchema } from "./columns.js";
  */
 
 /** What a memory store operation answers: an effect over the ambient client. */
-export type MemoryStoreEffect<A> = Effect.Effect<
-  A,
-  QueryError | Schema.SchemaError,
-  DatabaseServices
->;
+export type MemoryStoreEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
 /** What a keep or a correction came to. */
 export const MEMORY_OUTCOME = {

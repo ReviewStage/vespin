@@ -17,7 +17,7 @@
  * Connect nothing.
  */
 
-import type { DatabaseServices, QueryError } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { INTEGRATION_ROW_STATUS } from "@repo/database/integration-vocabulary";
 import {
   INTEGRATION_GRANT,
@@ -27,7 +27,7 @@ import {
 } from "@repo/features/integration-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { causeKind } from "@repo/runtime/effect";
-import { Effect, Redacted, Result, type Schema } from "effect";
+import { Effect, Redacted, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import type { ConversationAdmission } from "../agents/sessions/admitted-conversation.js";
 import type { GitHubApp } from "../github/github-app.js";
@@ -72,7 +72,7 @@ interface IntegrationTokenResult {
 /** How a host admits the session a connection is opened under: the root's own standing, or a worker's ownership alone. */
 export type IntegrationAdmission = Effect.Effect<
   ConversationAdmission,
-  QueryError | Schema.SchemaError,
+  StoreFailure,
   DatabaseServices
 >;
 

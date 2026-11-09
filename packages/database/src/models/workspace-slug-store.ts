@@ -2,7 +2,7 @@ import { and, eq, ne, sql } from "drizzle-orm";
 import { Data, DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import * as SqlClient from "effect/sql/SqlClient";
-import { Database, type DatabaseServices, type QueryError } from "../core/query.js";
+import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { member, organization } from "../schemas/auth.js";
 import { workspaceFormerSlug } from "../schemas/workspace-former-slug.js";
 
@@ -24,7 +24,7 @@ import { workspaceFormerSlug } from "../schemas/workspace-former-slug.js";
 
 export type WorkspaceSlugEffect<A, E = never> = Effect.Effect<
   A,
-  QueryError | Schema.SchemaError | E,
+  StoreFailure | E,
   DatabaseServices
 >;
 

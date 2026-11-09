@@ -11,10 +11,10 @@
 import { and, eq, lte } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
-import { Database, type DatabaseServices, type QueryError } from "../core/query.js";
+import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { agentRunnerLeaseTable } from "../schemas/agent-runner-lease.js";
 
-type LeaseEffect<A> = Effect.Effect<A, QueryError | Schema.SchemaError, DatabaseServices>;
+type LeaseEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
 const claimOne = SqlSchema.findAll({
   Request: Schema.Struct({

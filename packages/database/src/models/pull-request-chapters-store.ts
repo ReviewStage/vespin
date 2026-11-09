@@ -25,7 +25,7 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import { Effect, type Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
-import { Database, type DatabaseServices, type QueryError } from "../core/query.js";
+import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import {
   PULL_REQUEST_CHAPTERS_FAILURE,
   PULL_REQUEST_CHAPTERS_STATUS,
@@ -93,11 +93,7 @@ export interface PullRequestChapters {
 }
 
 /** What a chapters store operation answers: an effect over the ambient client, composed into whatever called it. */
-export type PullRequestChaptersEffect<A> = Effect.Effect<
-  A,
-  QueryError | Schema.SchemaError,
-  DatabaseServices
->;
+export type PullRequestChaptersEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
 const ChaptersRowSchema = Schema.Struct({
   id: Schema.String,

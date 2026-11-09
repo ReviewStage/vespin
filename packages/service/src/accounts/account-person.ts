@@ -9,7 +9,7 @@
  * sign-in picture here too.
  */
 
-import { Database, type DatabaseServices, type QueryError } from "@repo/database/core/query";
+import { Database, type DatabaseServices, type StoreFailure } from "@repo/database/core/query";
 import { user } from "@repo/database/schemas/auth";
 import { pinnedPictureUrl } from "@repo/features/account-picture";
 import { eq } from "drizzle-orm";
@@ -37,7 +37,7 @@ const findPerson = SqlSchema.findOneOption({
 /** The account's name and email, or nothing for an id no user row holds. */
 export function readAccountPerson(
   userId: string,
-): Effect.Effect<AccountPerson | undefined, QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.Effect<AccountPerson | undefined, StoreFailure, DatabaseServices> {
   return Effect.map(findPerson(userId), Option.getOrUndefined);
 }
 
@@ -55,7 +55,7 @@ const findPicture = SqlSchema.findOneOption({
 /** The account's sign-in picture, where it is one a renderer may draw (`account-picture.ts`); nothing otherwise. */
 export function readAccountPicture(
   userId: string,
-): Effect.Effect<string | undefined, QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.Effect<string | undefined, StoreFailure, DatabaseServices> {
   return Effect.map(findPicture(userId), (row) =>
     pinnedPictureUrl(Option.getOrUndefined(row)?.image),
   );

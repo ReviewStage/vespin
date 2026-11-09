@@ -15,7 +15,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { Database, type DatabaseServices, type QueryError } from "@repo/database/core/query";
+import { Database, type DatabaseServices, type StoreFailure } from "@repo/database/core/query";
 import { TXID_RETURNING, TxidRowSchema } from "@repo/database/core/txid";
 import {
   INTEGRATION_ROW_STATUS,
@@ -32,11 +32,7 @@ import { and, eq, gte, isNull, or, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 
-export type IntegrationStoreEffect<A> = Effect.Effect<
-  A,
-  QueryError | Schema.SchemaError,
-  DatabaseServices
->;
+export type IntegrationStoreEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
 /** One account's row at one provider, as the group and the agents read it. */
 export interface IntegrationConnectionRow {

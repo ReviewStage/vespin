@@ -19,7 +19,7 @@
  */
 
 import { Buffer } from "node:buffer";
-import type { DatabaseServices, QueryError } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { readMessageById } from "@repo/database/models/message-reads";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import {
@@ -40,7 +40,7 @@ import { INTEGRATION_REMOTE_TOOL } from "@repo/features/integration-wire";
 import { isRecord, isWireString, type WireValue } from "@repo/wire";
 import { toolPartName } from "@repo/wire/ui-messages";
 import type { ToolSet } from "ai";
-import { Effect, Option, type Schema } from "effect";
+import { Effect, Option } from "effect";
 
 /** How many characters of a cut field a page carries at each end. */
 export const CUT_END_CHARS = Math.floor(AGENT_BOUNDS.MAX_PART_CHARS / 2);
@@ -139,7 +139,7 @@ export function wholePartOf(
   tools: ToolSet,
   messageId: string,
   index: number,
-): Effect.Effect<Option.Option<WireValue>, QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.Effect<Option.Option<WireValue>, StoreFailure, DatabaseServices> {
   return Effect.map(
     readMessageById(target.userId, target.conversationId, tools, messageId),
     (read) => {

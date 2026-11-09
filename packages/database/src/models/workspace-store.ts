@@ -35,8 +35,8 @@ import {
   Database,
   type DatabaseServices,
   type DatabaseShape,
-  type QueryError,
   queryBuilder,
+  type StoreFailure,
 } from "../core/query.js";
 import { GITHUB_INSTALLATION_STATUS } from "../github-installation-vocabulary.js";
 import { agentTable } from "../schemas/agent.js";
@@ -129,7 +129,7 @@ export const FORMER_SLUGS = sql<string>`coalesce((select string_agg("former"."sl
 
 export type WorkspaceStoreEffect<A, E = never> = Effect.Effect<
   A,
-  QueryError | Schema.SchemaError | E,
+  StoreFailure | E,
   DatabaseServices
 >;
 

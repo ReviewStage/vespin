@@ -10,7 +10,12 @@
  * reads.
  */
 
-import { Database, type DatabaseServices, queryBuilder } from "@repo/database/core/query";
+import {
+  Database,
+  type DatabaseServices,
+  queryBuilder,
+  type StoreFailure,
+} from "@repo/database/core/query";
 import { GITHUB_INSTALLATION_STATUS } from "@repo/database/github-installation-vocabulary";
 import { agentAutomationRunSql } from "@repo/database/models/agent-name";
 import { InstantColumnSchema } from "@repo/database/models/columns";
@@ -77,7 +82,6 @@ import {
   ACCOUNT_FACE_COLUMNS,
   ACCOUNT_FACE_FIELDS,
   AdminMetricsScopeSchema,
-  type AdminQueryFailure,
   AggregateColumnSchema,
   findCohortSizes,
   keptByScope,
@@ -577,7 +581,7 @@ function countsByUser(
 const readAccountCounts = /* @__PURE__ */ Effect.fn("web/readOverviewAccountCounts")(function* (
   userIds: readonly string[],
   since: Date,
-): Effect.fn.Return<AdminOverviewSource["accountCounts"], AdminQueryFailure, DatabaseServices> {
+): Effect.fn.Return<AdminOverviewSource["accountCounts"], StoreFailure, DatabaseServices> {
   if (userIds.length === 0) {
     const none = new Map<string, number>();
     return { tasks: none, agents: none, prsMerged: none, lastSeenAt: none };
@@ -635,7 +639,7 @@ const findMeaningfulCohortActivity = SqlSchema.findAll({
 const readMeaningfulRetention = /* @__PURE__ */ Effect.fn("web/readMeaningfulRetention")(function* (
   now: number,
   scope: AdminMetricsScope,
-): Effect.fn.Return<AdminMetricsSource["retention"], AdminQueryFailure, DatabaseServices> {
+): Effect.fn.Return<AdminMetricsSource["retention"], StoreFailure, DatabaseServices> {
   const oldestWeekStart = dayStart(
     lastNWeekStartKeys(now, ADMIN_RETENTION_WEEKS)[0] ?? utcWeekStartKey(now),
   );
@@ -659,7 +663,7 @@ export function readAdminOverviewSource(input: {
   now: number;
   scope: AdminMetricsScope;
   windowDays: AdminMetricsWindow;
-}): Effect.Effect<AdminOverviewSource, AdminQueryFailure, DatabaseServices> {
+}): Effect.Effect<AdminOverviewSource, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const { now, scope, windowDays } = input;
     const trendKeys = lastNDayKeys(now, ADMIN_TREND_DAYS * 2);
@@ -733,7 +737,7 @@ export function readAdminDashboardSources(input: {
   windowDays: AdminMetricsWindow;
 }): Effect.Effect<
   { metrics: AdminMetricsSource; overview: AdminOverviewSource },
-  AdminQueryFailure,
+  StoreFailure,
   DatabaseServices
 > {
   return Effect.map(

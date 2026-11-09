@@ -4,7 +4,7 @@ import { TURN_STATUS } from "@repo/wire";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { Effect, Result, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
-import { Database, type DatabaseServices, type QueryError } from "../core/query.js";
+import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { conversations, turns } from "../schemas/storage.js";
 import { CONVERSATION_KIND } from "../storage-vocabulary.js";
 import { dropNativeProjectionTurns } from "./native-projection-store.js";
@@ -191,7 +191,7 @@ export const settleEndedSessionTurn = /* @__PURE__ */ Effect.fn("web/settleEnded
     writer: Pick<StoreWriter, "consume">,
     named: Omit<LostTurn, "attempt">,
     now: number,
-  ): Effect.fn.Return<boolean, QueryError | Schema.SchemaError, DatabaseServices> {
+  ): Effect.fn.Return<boolean, StoreFailure, DatabaseServices> {
     const open = (yield* agentRunningTurns({ conversationId: named.conversationId })).find(
       (turn) => turn.id === named.id,
     );
@@ -234,7 +234,7 @@ export const settleEndedSession = /* @__PURE__ */ Effect.fn("web/settleEndedSess
   writer: Pick<StoreWriter, "consume">,
   runtimeSessionId: string,
   options: EndedSessionOptions,
-): Effect.fn.Return<number, QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.fn.Return<number, StoreFailure, DatabaseServices> {
   const limit = options.limit ?? LOST_TURNS.LIMIT;
   let settled = 0;
   const read = new Set<string>();
@@ -298,7 +298,7 @@ export const settleRunnerLostTurns = /* @__PURE__ */ Effect.fn("web/settleRunner
     detail: string = RUNNER_LOST_DETAIL,
     only?: ReadonlySet<string>,
     failure: LostRunnerFailure | typeof TURN_FAILURE.SESSION_ENDED = TURN_FAILURE.MODEL,
-  ): Effect.fn.Return<readonly string[], QueryError | Schema.SchemaError, DatabaseServices> {
+  ): Effect.fn.Return<readonly string[], StoreFailure, DatabaseServices> {
     const running = yield* agentRunningTurns({ conversationId });
     const lost = only === undefined ? running : running.filter((turn) => only.has(turn.id));
     const failed: string[] = [];
@@ -342,7 +342,7 @@ export const settleLapsedTurns = /* @__PURE__ */ Effect.fn("web/settleLapsedTurn
   lapsed: readonly LapsedTurnEnd[],
   lapsedAt: number,
   now: number,
-): Effect.fn.Return<readonly string[], QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.fn.Return<readonly string[], StoreFailure, DatabaseServices> {
   const settled: string[] = [];
   for (const { turn, end } of lapsed) {
     if (yield* settledLost(writer, turn, end, now, lapsedAt)) settled.push(turn.id);
@@ -354,6 +354,6 @@ export const settleLapsedTurns = /* @__PURE__ */ Effect.fn("web/settleLapsedTurn
 /** The ids of the turns still queued or running of the coding agent's conversation named, for a later settle of just those (`settleRunnerLostTurns`'s `only`). */
 export function runningTurnIds(
   conversationId: string,
-): Effect.Effect<readonly string[], QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.Effect<readonly string[], StoreFailure, DatabaseServices> {
   return Effect.map(agentRunningTurns({ conversationId }), (rows) => rows.map((row) => row.id));
 }

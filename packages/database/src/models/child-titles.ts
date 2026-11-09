@@ -12,11 +12,11 @@
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { Effect, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
-import { Database, type DatabaseServices, type QueryError } from "../core/query.js";
+import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { conversations } from "../schemas/storage.js";
 import type { ConversationTarget } from "./writer.js";
 
-type ChildTitleEffect<A> = Effect.Effect<A, QueryError | Schema.SchemaError, DatabaseServices>;
+type ChildTitleEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
 const findTitles = SqlSchema.findAll({
   Request: Schema.Struct({

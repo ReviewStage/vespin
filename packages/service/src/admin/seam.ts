@@ -1,6 +1,6 @@
-import type { DatabaseServices, QueryError } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { causeKind, unlessInterrupted } from "@repo/runtime/effect";
-import { type Cause, Effect, type Schema } from "effect";
+import { type Cause, Effect } from "effect";
 import { ADMIN_REFUSAL, type AdminRefusal } from "./http-effect.js";
 
 /**
@@ -10,11 +10,7 @@ import { ADMIN_REFUSAL, type AdminRefusal } from "./http-effect.js";
  * How a statement fails is the driver's own refusal or a row this build cannot
  * decode, the same pair every query in `admin-queries.ts` answers with.
  */
-export type AdminSeamEffect<A> = Effect.Effect<
-  A,
-  QueryError | Schema.SchemaError,
-  DatabaseServices
->;
+export type AdminSeamEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
 /**
  * A seam that did not answer, as the one refusal every read words the same

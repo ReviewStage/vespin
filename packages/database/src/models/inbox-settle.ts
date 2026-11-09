@@ -45,13 +45,13 @@ import {
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 import { Effect, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
-import { Database, type DatabaseServices, type QueryError } from "../core/query.js";
+import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
 import { inboxItem } from "../schemas/inbox.js";
 import { inboxMessage } from "../schemas/inbox-message.js";
 import { task } from "../schemas/task.js";
 
-type SettleEffect<A> = Effect.Effect<A, QueryError | Schema.SchemaError, DatabaseServices>;
+type SettleEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
 /** Why an item settled on its own, as its close and its withdrawn ask say it. */
 const INBOX_SETTLED_REASON = {

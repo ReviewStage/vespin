@@ -11,7 +11,12 @@
  * `admin-queries.ts`, rides beside them.
  */
 
-import { Database, type DatabaseServices, queryBuilder } from "@repo/database/core/query";
+import {
+  Database,
+  type DatabaseServices,
+  queryBuilder,
+  type StoreFailure,
+} from "@repo/database/core/query";
 import { user } from "@repo/database/schemas/auth";
 import type { AdminDayActivity } from "@repo/features/admin-answer-wire";
 import {
@@ -34,7 +39,6 @@ import {
   ACCOUNT_FACE_COLUMNS,
   ACCOUNT_FACE_FIELDS,
   AdminMetricsScopeSchema,
-  type AdminQueryFailure,
   AggregateColumnSchema,
   keptByScope,
   readAdminDayHostedSource,
@@ -109,7 +113,7 @@ const findDayActiveAccounts = SqlSchema.findAll({
 const readDayActivity = /* @__PURE__ */ Effect.fn("web/readAdminDayActivity")(function* (
   since: Date,
   scope: AdminMetricsScope,
-): Effect.fn.Return<AdminDayActivity, AdminQueryFailure, DatabaseServices> {
+): Effect.fn.Return<AdminDayActivity, StoreFailure, DatabaseServices> {
   const request = { since, until: new Date(since.getTime() + DAY_MS), scope };
   const [dailyRows, accountRows] = yield* Effect.all(
     [findDailyCounts(request), findDayActiveAccounts(request)],
@@ -152,7 +156,7 @@ const readDayActivity = /* @__PURE__ */ Effect.fn("web/readAdminDayActivity")(fu
 export function readAdminDaySource(input: {
   day: string;
   scope: AdminMetricsScope;
-}): Effect.Effect<AdminDaySource, AdminQueryFailure, DatabaseServices> {
+}): Effect.Effect<AdminDaySource, StoreFailure, DatabaseServices> {
   return Effect.map(
     Effect.all(
       [readDayActivity(dayStart(input.day), input.scope), readAdminDayHostedSource(input)],

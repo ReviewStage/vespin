@@ -1,7 +1,7 @@
-import type { DatabaseServices, QueryError } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { memberWorkspaceIds, personalWorkspaceOf } from "@repo/database/models/workspace-store";
 import type { productEventsAnswerSchema } from "@repo/features/analytics";
-import { Clock, Effect, Option, type Schema } from "effect";
+import { Clock, Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
   PRODUCT_EVENT_MAXIMUM_AGE_MS,
@@ -100,7 +100,7 @@ export interface EventsOptions {
    */
   readPerson?: (
     userId: string,
-  ) => Effect.Effect<PosthogPerson | undefined, QueryError | Schema.SchemaError, DatabaseServices>;
+  ) => Effect.Effect<PosthogPerson | undefined, StoreFailure, DatabaseServices>;
 }
 
 /**
@@ -110,7 +110,7 @@ export interface EventsOptions {
  */
 function batchWorkspaceOf(
   userId: string,
-): Effect.Effect<string | undefined, QueryError | Schema.SchemaError, DatabaseServices> {
+): Effect.Effect<string | undefined, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const memberOf = yield* memberWorkspaceIds(userId);
     const personal = Option.getOrUndefined(yield* personalWorkspaceOf(userId));

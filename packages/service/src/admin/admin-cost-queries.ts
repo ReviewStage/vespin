@@ -11,7 +11,7 @@
  * reads its spend.
  */
 
-import { Database, type DatabaseServices, type QueryError } from "@repo/database/core/query";
+import { Database, type DatabaseServices, type StoreFailure } from "@repo/database/core/query";
 import { agentPullRequest } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
@@ -220,7 +220,7 @@ export function readAdminCostUsage(input: {
   windowDays: AdminMetricsWindow;
   scope: AdminMetricsScope;
   userId?: string | undefined;
-}): Effect.Effect<AdminCostUsage, QueryError | Schema.SchemaError, DatabaseServices> {
+}): Effect.Effect<AdminCostUsage, StoreFailure, DatabaseServices> {
   return Effect.gen(function* () {
     const fetchStartDay = costWindowKeys(input.now, input.windowDays).prior[0] ?? "";
     const filter: UsageFilter = {
@@ -258,7 +258,7 @@ export function readAdminCost(input: {
   now: number;
   windowDays: AdminMetricsWindow;
   scope: AdminMetricsScope;
-}): Effect.Effect<AdminCost, QueryError | Schema.SchemaError, DatabaseServices | ModelCatalog> {
+}): Effect.Effect<AdminCost, StoreFailure, DatabaseServices | ModelCatalog> {
   return Effect.gen(function* () {
     const catalog = yield* ModelCatalog;
     const [read, usage] = yield* Effect.all(
