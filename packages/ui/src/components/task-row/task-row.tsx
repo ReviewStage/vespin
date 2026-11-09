@@ -56,7 +56,8 @@ import {
  * Blocked by, its status, its name.
  *
  * The row's press reaches every edge of it (`CardPress`), opening the task,
- * its name on one line in the label's weight, what the eye reads in the
+ * or, on a middle-click, opening it in a tab of its own where the window can
+ * (`onOpenInTab`), its name on one line in the label's weight, what the eye reads in the
  * cells said after the name to a reader (`said`). The cells that hold a control stand over the
  * press, and the rest let the pointer through to it, a related task's kind
  * leading the row among the first; a cell of its owner's, the pull requests
@@ -611,8 +612,10 @@ export function TaskRow({
   menu,
   more = true,
   edges = TASK_ROW_EDGES.LIST,
+  choosable = true,
   disabled = false,
   onOpen,
+  onOpenInTab,
   pressRef,
   depth = 0,
   nest,
@@ -645,9 +648,13 @@ export function TaskRow({
   more?: boolean | undefined;
   /** What room it keeps at its edges, its list's (`TaskRows`'s `edges`): a bare row keeps no gutter for a box and draws no ⋯, its menu still a right-click and the menu key away. */
   edges?: TaskRowEdges | undefined;
+  /** Whether a choosing list may choose it; a start the list offers after its rows may not, its gutter still standing so its cells line up with theirs. */
+  choosable?: boolean | undefined;
   /** Whether its press is unavailable, as while the task is deleted. */
   disabled?: boolean | undefined;
   onOpen: () => void;
+  /** Opens the task in a tab of its own, which a middle-click on its press does; none where the window opens no tab. */
+  onOpenInTab?: (() => void) | undefined;
   /** The press, for what focuses it again once an edit ends. */
   pressRef?: RefObject<HTMLButtonElement | null> | undefined;
   /** How deep it stands nested under other rows: 0, at the top, unless said. */
@@ -697,7 +704,7 @@ export function TaskRow({
     <CardPress
       ref={press}
       disabled={disabled}
-      selectKey={taskId}
+      selectKey={choosable ? taskId : undefined}
       selectBox={edges === TASK_ROW_EDGES.LIST ? SELECT_BOX_PLACE.GUTTER : undefined}
       roving
       onKeyDown={fold === undefined ? undefined : foldKeys}
@@ -705,6 +712,7 @@ export function TaskRow({
         rowMenu.close(false);
         onOpen();
       }}
+      onOpenInTab={onOpenInTab}
     >
       <span id={nameId} className={`${PRESS} ${unread ? NAME_WEIGHT.UNREAD : NAME_WEIGHT.REST}`}>
         {/* A task's name is always a person's words, so a screen recording masks it whatever stands round the row. */}

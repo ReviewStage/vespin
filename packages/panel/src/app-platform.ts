@@ -77,6 +77,14 @@ export interface AppPlatform {
   /** Opens a web page outside the window. */
   openWeb(url: string): void;
   /**
+   * Opens one of the app's own links in a tab of its own, at the window's
+   * own address rather than the link's home, so a preview opens a tab of the
+   * same preview: what a middle-click on a sidebar's place or a task's row
+   * does, and a task's Open in new tab. Only a browser has tabs, so the Mac
+   * app leaves this out, and those offer nothing there.
+   */
+  openInTab?(link: string): void;
+  /**
    * Opens a cloud Browser tab's live view socket: the desktop from its host
    * under the account's bearer, reached over a port main posts this window,
    * and a browser tab from its own page under the session cookie.
@@ -154,6 +162,11 @@ export function installAppPlatform(platform: AppPlatform): () => void {
 export function appPlatform(): AppPlatform {
   if (installed === undefined) throw new Error("No app platform is installed in this window.");
   return installed;
+}
+
+/** Whether this window opens the app's own links in tabs of their own (`openInTab`), as a browser's does; not before its root installed what it can do. */
+export function opensTabs(): boolean {
+  return installed?.openInTab !== undefined;
 }
 
 /** The absolute address of one of the panel's static files, named by its path under the shell's asset base. */

@@ -141,7 +141,6 @@ import {
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
-  TextArea,
   TextField,
   Toolbar,
   type ToolbarPickUp,
@@ -174,7 +173,7 @@ import { useAppCommand } from "../app-commands.js";
 import { useScreenRef, useScreenSplit } from "../column-split.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
-import { useCopyLinkItem } from "../copy-link-item.js";
+import { useLinkItems } from "../copy-link-item.js";
 import { confirmFailure, failureShown, unreadShown } from "../failure-report.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { useCreator } from "../member-directory.js";
@@ -196,6 +195,7 @@ import { useListedAgent } from "../tasks/use-workspace-agents.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { ActionMenu, type MenuAction } from "./action-menu.js";
 import { OWNER_MARK_SIZE, OwnerMark } from "./automation-owner.js";
+import { AutomationPrompt } from "./automation-prompt.js";
 import { AutomationRunsPanel, AutomationRunsScreen } from "./automation-runs-panel.js";
 import { automationDeleteQuestion, automationOwnerName } from "./automation-words.js";
 import { useRunsPanel } from "./folded-groups.js";
@@ -1066,16 +1066,17 @@ export function runNowAction(running: boolean, onRunNow: () => void): MenuAction
  * run; and Delete, red, which asks first, last and alone.
  */
 export function automationActionGroups({
-  copyLink,
+  links,
   runNow,
   onDelete,
 }: {
-  copyLink: MenuAction | undefined;
+  /** Copy link and Open in new tab (`linkItems`); none where the page hands down no workspace. */
+  links: readonly MenuAction[];
   runNow: MenuAction | undefined;
   onDelete: () => void;
 }): MenuAction[][] {
   return [
-    copyLink === undefined ? [] : [copyLink],
+    [...links],
     runNow === undefined ? [] : [runNow],
     [{ label: "Delete", icon: <GLYPH.DELETE />, onSelect: onDelete, danger: true }],
   ].filter((group) => group.length > 0);
@@ -1102,12 +1103,12 @@ function AutomationActions({
   heading?: ReactNode;
 }): React.JSX.Element {
   const menu = useMenu(true);
-  const linkItem = useCopyLinkItem();
+  const linkItemsOf = useLinkItems();
   const own =
     automation === undefined
       ? []
       : automationActionGroups({
-          copyLink: linkItem({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id }),
+          links: linkItemsOf({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id }),
           // Note that the desktop's toolbar stands Run now beside the ⋯, so only a phone's ⋯, the one given a lead, offers it.
           runNow: lead === undefined ? undefined : runNowAction(running, onRunNow),
           onDelete,
@@ -2257,6 +2258,7 @@ function EditorForm({
   slackBot,
   onDraft,
   onUnreadableTime,
+  onSave,
 }: {
   draft: AutomationDraft;
   automation: AutomationSummary | undefined;
@@ -2277,6 +2279,8 @@ function EditorForm({
   onDraft: (patch: Partial<AutomationDraft>) => void;
   /** Hears whether the schedule's time field holds words that are no time, which a save is refused over. */
   onUnreadableTime: (unreadable: boolean) => void;
+  /** Saves the automation as the toolbar's Save does, which ⌘ or Ctrl with Enter in the prompt asks for. */
+  onSave: () => void;
 }): React.JSX.Element {
   // Note that Sentry stays listed where the deployment holds no integration, unpickable and saying why, so it can be found.
   const triggers =
@@ -2287,8 +2291,6 @@ function EditorForm({
             : trigger,
         )
       : TRIGGERS;
-  // The prompt's Escape lets go of the caret and keeps the press, as every field's here does.
-  const prompt = useRef<HTMLTextAreaElement>(null);
   // The form is the area its reveals move, so the groups under a trigger's rows glide as they unroll.
   const form = useRef<HTMLDivElement>(null);
   const workspaceName = workspace?.name ?? "Workspace";
@@ -2385,15 +2387,16 @@ function EditorForm({
           title={<ReplayUnmask>{EDITOR_SECTION.PROMPT}</ReplayUnmask>}
           frame={SETTINGS_SECTION_FRAME.NONE}
         >
-          <TextArea
-            ref={prompt}
+          <AutomationPrompt
+            workspace={workspace}
+            repository={draft.repository}
+            disabledServers={draft.disabledServers}
             label="Prompt"
             rows={PROMPT_ROWS}
-            placeholder="Find the flakiest test in CI this week and fix it."
             value={draft.prompt}
             invalid={problems[DRAFT_FIELD.PROMPT] !== undefined}
-            onEscape={() => prompt.current?.blur()}
             onChange={(text) => onDraft({ prompt: text })}
+            onSave={onSave}
           />
           {/* What stops a save, said under the prompt once a save was pressed. */}
           {problems[DRAFT_FIELD.PROMPT] === undefined ? null : (
@@ -2753,7 +2756,10 @@ export function AutomationEditor({
     setDraft((was) => ({ ...was, ...patch }));
     setRefusal(undefined);
   };
+  // Note that a write out is held here as well as in state, so a second ⌘Enter pressed before the page draws again sends no second write.
+  const writing = useRef(false);
   const landed = (answer: AutomationWriteAnswer) => {
+    writing.current = false;
     setSaving(false);
     if ("failure" in answer) {
       setRefusal(SAVE_REFUSAL_WORDS[answer.failure]);
@@ -2768,6 +2774,7 @@ export function AutomationEditor({
     if (automation === undefined) placeLeave.pass(() => onCreated(answer.automation.id));
   };
   const save = () => {
+    if (writing.current) return;
     if (sentryWithheld(sentry, automation, draft)) {
       setRefusal(SENTRY_WITHHELD);
       return;
@@ -2777,6 +2784,7 @@ export function AutomationEditor({
       return;
     }
     if (workspace === undefined || (automation !== undefined && change === undefined)) return;
+    writing.current = true;
     setSaving(true);
     setRefusal(undefined);
     const saved =
@@ -2938,6 +2946,7 @@ export function AutomationEditor({
             slackBot={slackBot}
             onDraft={editDraft}
             onUnreadableTime={setUnreadableTime}
+            onSave={save}
           />
         </AutomationSetup>
       }

@@ -148,7 +148,7 @@ import {
   useDraft,
   useDraftWriter,
 } from "../composer-drafts.js";
-import { useCopyLinkItem } from "../copy-link-item.js";
+import { useLinkItems } from "../copy-link-item.js";
 import {
   COMPOSER_INPUT,
   type ComposerEditorHandle,
@@ -705,7 +705,7 @@ function CommentEntry({
     }),
     confirmFailure(FAILURE_SURFACE.DESCRIPTION_COMMENT_DELETE),
   );
-  const copyLink = useCopyLinkItem()({
+  const copies = useLinkItems()({
     kind: LINK_PLACE.COMMENT,
     planId: doors.control.planId,
     threadId: thread.id,
@@ -714,7 +714,6 @@ function CommentEntry({
   // Note that a page thread's first comment is drawn without the quote its quote line already says.
   const shown = first ? ownWordsOf(thread, entry.words ?? "") : (entry.words ?? "");
   // Note that a reply copies its thread's link, since a link names a comment thread and no comment of one (`LINK_PLACE.COMMENT`).
-  const copies: MenuAction[] = copyLink === undefined ? [] : [copyLink];
   const edits: MenuAction[] = mine
     ? [
         {

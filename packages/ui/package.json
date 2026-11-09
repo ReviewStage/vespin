@@ -28,7 +28,6 @@
     "./find-skip": "./src/find-skip.js",
     "./tokens.css": "./src/tokens/tokens.css",
     "./styles.css": "./src/styles.css",
-    "./search-tokens": "./src/search-tokens.js",
     "./microphone-access": "./src/microphone-access.js",
     "./search-score": "./src/search-score.js",
     "./reply-quote": "./src/reply-quote.js",

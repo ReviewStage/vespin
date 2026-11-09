@@ -1,4 +1,10 @@
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import {
+  acknowledgedOnOpen,
+  type InboxListed,
+  isUnread,
+  settledOnRead,
+} from "@repo/features/inbox-list-model";
 import { INBOX_REPLY, type InboxItem } from "@repo/features/inbox-wire";
 import { FAILURE_SURFACE, type FailureAbout } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
@@ -11,7 +17,6 @@ import { actMutation } from "../act-mutations.js";
 import { afterPaint } from "../after-paint.js";
 import { useAppCommand } from "../app-commands.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
-import { acknowledgedOnOpen, type InboxListed, isUnread, settledOnRead } from "./inbox-model.js";
 import { type InboxReminder, type RemindSaying, remindWords } from "./inbox-remind.js";
 import { acknowledgedNote, markedNote, REMIND_REFUSED, useInboxPresses } from "./inbox-writes.js";
 import type { TaskInboxControl } from "./use-task-inbox.js";

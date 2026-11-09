@@ -552,7 +552,7 @@ it.effect(
 );
 
 it.effect(
-  "a member makes, starts, messages, stops, changes, plans, comments, remembers, and runs nothing in a workspace they are not in",
+  "a member makes, starts, messages, stops, changes, shares a port of, plans, comments, remembers, and runs nothing in a workspace they are not in",
   () =>
     Effect.gen(function* () {
       const { auth, fetch, services } = yield* standing;
@@ -651,6 +651,8 @@ it.effect(
           [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello." }],
           [MEMBER_MCP_TOOL.STOP_AGENT, { agentId }],
           [MEMBER_MCP_TOOL.UPDATE_AGENT, { agentId, archived: true }],
+          [MEMBER_MCP_TOOL.LIST_AGENT_PORTS, { agentId }],
+          [MEMBER_MCP_TOOL.SHARE_AGENT_PORT, { agentId, port: 3000 }],
           [MEMBER_MCP_TOOL.READ_COMMENTS, { taskId }],
           [
             MEMBER_MCP_TOOL.COMMENT_ON_DESCRIPTION,

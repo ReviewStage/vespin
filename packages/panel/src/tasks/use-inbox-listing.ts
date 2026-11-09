@@ -1,15 +1,4 @@
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
-import type { InboxItem } from "@repo/features/inbox-wire";
-import type { AppInboxTaskHolding } from "@repo/host/app-state";
-import { useMinute } from "@repo/ui";
-import { searchTokens } from "@repo/ui/search-tokens";
-import { useCallback, useMemo, useRef, useState } from "react";
-import { afterPaint } from "../after-paint.js";
-import { useInboxViewChoices } from "../desktop/folded-groups.js";
-import { useInboxView } from "../inbox-route.js";
-import { useAutomationsDoor, useInboxDoor } from "../places/routed-doors.js";
-import { AUTOMATIONS_PAGE } from "./automations-place.js";
-import { useInboxResolver } from "./inbox-close.js";
 import {
   anyToMarkRead,
   EVERYONES,
@@ -18,20 +7,27 @@ import {
   INBOX_WHOSE,
   type InboxGroup,
   type InboxListed,
-  inboxAgentOf,
   inboxAtNow,
   inboxCounts,
+  inboxGroups,
   listedItems,
   taskGroups,
-} from "./inbox-model.js";
+} from "@repo/features/inbox-list-model";
+import type { InboxItem } from "@repo/features/inbox-wire";
+import { searchTokens } from "@repo/features/search-tokens";
+import type { AppInboxTaskHolding } from "@repo/host/app-state";
+import { useMinute } from "@repo/ui";
+import { useCallback, useMemo, useRef, useState } from "react";
+import { afterPaint } from "../after-paint.js";
+import { useInboxViewChoices } from "../desktop/folded-groups.js";
+import { useInboxView } from "../inbox-route.js";
+import { useAutomationsDoor, useInboxDoor } from "../places/routed-doors.js";
+import { AUTOMATIONS_PAGE } from "./automations-place.js";
+import { useInboxResolver } from "./inbox-close.js";
+import { inboxAgentOf } from "./inbox-model.js";
 import { useAgents } from "./use-agents.js";
 import { useHeldInboxList } from "./use-held-inbox-list.js";
-import {
-  agentHoldings,
-  inboxGroups,
-  taskHoldings,
-  useHolderInboxItems,
-} from "./use-holder-inbox-items.js";
+import { agentHoldings, taskHoldings, useHolderInboxItems } from "./use-holder-inbox-items.js";
 import { useInboxReadMarks } from "./use-inbox-read-marks.js";
 import {
   useInboxAgents,

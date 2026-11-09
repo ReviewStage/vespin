@@ -539,8 +539,10 @@ export function turnStatusOfWord(word: string): TurnStatus {
  * A coding agent's newest turn as its row records it, the one record of a
  * turn's state (`@repo/database`'s `turn-state.ts`): its id and when it was
  * queued, which order it against another turn, its status word as a reader
- * takes it (`turnStatusOfWord`), whether a Stop was asked of it, and why it
- * failed where it did, in the wire's word.
+ * takes it (`turnStatusOfWord`), whether a Stop was asked of it, why it
+ * failed where it did, in the wire's word, and, for a turn held open while
+ * its starter's every subscription is at a usage limit and no API key pays,
+ * when the soonest of those limits resets, which it waits for to run again.
  */
 const agentTurnSchema = EffectSchema.Struct({
   id: wireUuidSchema,
@@ -548,6 +550,7 @@ const agentTurnSchema = EffectSchema.Struct({
   status: wordReadingUnknown(Object.values(TURN_STATUS), turnStatusOfWord),
   stopAsked: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   failure: EffectSchema.optionalKey(agentFailureSchema),
+  waitsUntil: EffectSchema.optionalKey(countedNumber),
 });
 
 export type AgentTurn = typeof agentTurnSchema.Type;

@@ -5,7 +5,7 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import { createStore, useSelector } from "@tanstack/react-store";
 import { useEffect } from "react";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
-import { copyLinkItem } from "../copy-link-item.js";
+import { linkItems, openInTabOf } from "../copy-link-item.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 
 /**
@@ -16,7 +16,8 @@ import type { MenuAction } from "../desktop/action-menu.js";
  * item the same way, as the window's one list words and marks it
  * (`command-items.tsx`). The link is the task's own address on vespin.dev,
  * naming it by its number where it has one (`taskLinkStep`), so it opens the
- * task in the app as a mention's chip does.
+ * task in the app as a mention's chip does; in a browser, Open in new tab
+ * stands under Copy link and opens it in a tab of its own.
  * Mark as unread turns to Mark as read on a task already unread, as Mail,
  * Slack, and Linear offer it (`use-description-looks.ts`).
  */
@@ -30,21 +31,34 @@ export function taskLinkPlace(
   return { workspace: home?.slug ?? task.workspaceId, repository: task.repository };
 }
 
+/** A task's link: its own address, naming it by its number where it has one. */
+function taskLink(task: Pick<TaskSummary, "id" | "number">, place: MentionPlace): string {
+  return linkOf({ kind: LINK_PLACE.TASK, planId: taskLinkStep(task) }, place.workspace);
+}
+
+/** Opens a task in a tab of its own, which a middle-click on its row or card takes; none where the window opens no tabs. */
+export function openTaskInTab(
+  workspaces: readonly Workspace[],
+  task: Pick<TaskSummary, "id" | "number" | "workspaceId" | "repository">,
+): (() => void) | undefined {
+  return openInTabOf(taskLink(task, taskLinkPlace(workspaces, task)));
+}
+
 /**
- * Copy link, the plan's, through `copy`, the window's menu copy
- * (`useCopyToast`), which says so in a toast. Note that it prints ⇧⌘C only
- * while the chord would copy this link, because the chord copies the most
- * specific link at hand, an agent's tab's over its task's
+ * Copy link, the task's, through `copy`, the window's menu copy
+ * (`useCopyToast`), which says so in a toast, and Open in new tab under it
+ * where the window opens tabs (`linkItems`). Note that Copy link prints ⇧⌘C
+ * only while the chord would copy this link, because the chord copies the
+ * most specific link at hand, an agent's tab's over its task's
  * (`links-at-hand.ts`), so the open task's item need not be its target.
  */
-export function copyTaskLinkItem(
+export function taskLinkItems(
   copy: (words: string, label: string) => void,
   task: Pick<TaskSummary, "id" | "number">,
   place: MentionPlace,
   chord: readonly string[],
-): MenuAction {
-  const link = linkOf({ kind: LINK_PLACE.TASK, planId: taskLinkStep(task) }, place.workspace);
-  return copyLinkItem(copy, link, chord);
+): MenuAction[] {
+  return linkItems(copy, taskLink(task, place), chord);
 }
 
 /** Whether a task is unread, as its sidebar row's weight says, and the mark that makes it unread or read. */

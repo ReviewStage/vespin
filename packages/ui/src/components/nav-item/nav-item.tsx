@@ -6,7 +6,7 @@ import {
   type Ref,
   useContext,
 } from "react";
-import { middlePressOf } from "../../middle-press.js";
+import { middleOpensTab, middlePressOf } from "../../middle-press.js";
 import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { said } from "../../said.js";
 import { STATUS_TONE, type StatusTone } from "../../status-tone.js";
@@ -54,6 +54,12 @@ import { ListSelectionContext } from "../selection/list-selection.js";
  * as any link does, and its caller's `onClick` may take a plain one instead.
  * One that leaves the page (`newTab`) opens in a tab of its own, which
  * reaches nothing of this one.
+ *
+ * A row whose place has an address of its own but which is no link, since
+ * its press goes there in this window, opens that place in a tab of its own
+ * on a middle-click (`onOpenInTab`), as a link does, where its window can
+ * open one; the window that cannot hands it none, and the middle-click does
+ * nothing.
  *
  * A row that drops a menu takes the props `useMenu().trigger()` hands out
  * (`menu`), and is lit while its menu stands. A row whose place has acts of
@@ -167,6 +173,8 @@ export type NavItemProps = HintProps & {
   /** The menu it drops, from `useMenu().trigger()`, in place of `onClick`. */
   menu?: NavMenuTrigger | undefined;
   onClick?: ((event: MouseEvent<HTMLButtonElement>) => void) | undefined;
+  /** Opens its place in a tab of its own, which a middle-click does, as on a link; none where the window opens no tab. */
+  onOpenInTab?: (() => void) | undefined;
   /** The menu a right-click or a long press opens on it (`useMenu`'s `contextMenu`). */
   contextMenu?: ContextMenuProps | undefined;
   /** Its place's own acts, a `MoreButton`, standing over its end while it is hovered or reached for. */
@@ -305,6 +313,7 @@ export function NavItem({
   shortcut,
   menu,
   onClick,
+  onOpenInTab,
   keepFocus,
   roving,
   actions,
@@ -337,7 +346,7 @@ export function NavItem({
       onPointerEnter={props.onPointerEnter}
       onPointerLeave={props.onPointerLeave}
       // Note that the focus moves as a mousedown's default, so refusing it there is what keeps it.
-      onMouseDown={keepFocus === true ? preventFocusMove : undefined}
+      {...middleOpensTab(onOpenInTab, keepFocus === true ? preventFocusMove : undefined)}
       onFocus={props.onFocus}
       onBlur={props.onBlur}
       onClick={pulseOnPress(menu?.onClick ?? go, PRESS_PULSE.QUIET)}

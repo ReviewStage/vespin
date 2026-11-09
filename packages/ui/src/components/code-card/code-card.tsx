@@ -111,8 +111,8 @@ function runColors({ color, lightColor }: CodeToken): React.CSSProperties | unde
   return cssCustomProperties(colors);
 }
 
-/** One line's runs, each in its color where the host colored them. */
-function lineRuns(tokens: CodeLines[number]): ReactNode {
+/** One line's runs, each in its color where the host colored them, as a code card and a code editor draw them. */
+export function lineRuns(tokens: CodeLines[number]): ReactNode {
   return tokens.map((token, at) => (
     <span key={at} style={runColors(token)}>
       {token.text}

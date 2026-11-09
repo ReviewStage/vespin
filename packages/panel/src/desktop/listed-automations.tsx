@@ -1,9 +1,9 @@
+import { listedIn } from "@repo/features/inbox-list-model";
 import type { AppInboxTasklessItem } from "@repo/host/app-state";
 import { type ReactNode, useCallback } from "react";
 import { AutomationDirectory } from "../automation-directory.js";
 import { useAutomationsDoor } from "../places/routed-doors.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
-import { listedIn } from "../tasks/inbox-model.js";
 import { useInboxTaskless } from "../tasks/use-inbox-slices.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 

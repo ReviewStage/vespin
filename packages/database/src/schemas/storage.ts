@@ -352,6 +352,14 @@ export const turns = pgTable(
      */
     leaseUntil: timestamptz("lease_until"),
     /**
+     * When the usage limit an open turn waits on resets: it hit a limit with
+     * every subscription of its starter's at one and no API key to pay, so it
+     * is held open until then, its deadline pushed past it, and the minute
+     * sweep clears it and runs the turn again once it has passed
+     * (`../models/turn-state.ts`). Null for a turn waiting on nothing.
+     */
+    waitsUntil: timestamptz("waits_until"),
+    /**
      * The attempt the turn runs under: the launch of the runner that took it
      * (`agent.runner_launch`), set as it starts, 0 until then and for a turn
      * no launch runs. Every move of an open turn compares it, so a runner a

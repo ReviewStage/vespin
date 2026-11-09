@@ -85,12 +85,10 @@ merge controls at every width.
 The plug menu on an agent's box shares a port from the web app too, and
 `vespin agent ports` and `vespin agent share` list and share them from the
 terminal. A shared link opens at the agent's own `vespin.page` address, only for
-members signed in who can reach the agent, and reaches a Vite dev server
-without its blocked-host page.
+members signed in who can reach the agent.
 ([#7927](https://github.com/ReviewStage/vespin/pull/7927),
 [#7921](https://github.com/ReviewStage/vespin/pull/7921),
-[#7920](https://github.com/ReviewStage/vespin/pull/7920),
-[#7935](https://github.com/ReviewStage/vespin/pull/7935))
+[#7920](https://github.com/ReviewStage/vespin/pull/7920))
 
 ### Connect agents and GitHub in place
 

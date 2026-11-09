@@ -18,6 +18,7 @@ import { readConversationPicture } from "@repo/database/models/conversation-pict
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { readTaskDescription } from "@repo/database/models/task-store";
+import { releaseWaitedTurns } from "@repo/database/models/turn-state";
 import { readAccountNames } from "@repo/database/models/workspace-store";
 import {
   type AwaitingLineMetadata,
@@ -47,6 +48,7 @@ import {
   agentWorkspace,
   workspaceRepository,
 } from "../../github/workspace-repository.js";
+import { afterResponse } from "../../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import {
   credentialMissing,
@@ -682,6 +684,41 @@ export const turnRetried = /* @__PURE__ */ Effect.fn("web/turnRetried")(function
   const message = yield* lostLineMessage(target, agent.value, line.value);
   const sent = yield* (yield* reached.value).retry(sessionId, message);
   return sent.outcome === SESSION_SEND_OUTCOME.ACCEPTED;
+});
+
+/** How many turns waiting on a limit's reset one sweep has go on. */
+const WAITED_TURNS = { RESUME_LIMIT: 100 } as const;
+
+/**
+ * The turns held open for a usage limit's reset whose reset has passed at
+ * `now` (`releaseWaitedTurns`), each handed on to a launch as a limited
+ * turn's retry is (`turnRetried`), past the sweep's answer, since a launch
+ * may take most of a minute; a sweep's worth, answering how many. A launch
+ * its plan refuses again leaves the turn open to its progress deadline, which
+ * the sweep's reap then fails it at.
+ */
+export const resumeWaitedTurns = /* @__PURE__ */ Effect.fn("web/resumeWaitedTurns")(function* (
+  now: number,
+) {
+  const released = yield* releaseWaitedTurns(new Date(now), WAITED_TURNS.RESUME_LIMIT);
+  yield* Effect.forEach(
+    released,
+    (turn) =>
+      afterResponse(
+        "a waited turn's retry",
+        turnRetried(turn).pipe(
+          Effect.flatMap((went) =>
+            went ? Effect.void : Effect.logWarning("a turn past its limit's reset was not retried"),
+          ),
+          Effect.catch((failure) =>
+            Effect.logWarning(`a turn past its limit's reset was not retried: ${failure._tag}`),
+          ),
+          Effect.annotateLogs({ conversationId: turn.conversationId, turnId: turn.turnId }),
+        ),
+      ),
+    { discard: true },
+  );
+  return released.length;
 });
 
 /**

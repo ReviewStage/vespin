@@ -34,6 +34,7 @@ import { type FakeActPort, fakeActPort, fakeActPortCalls } from "../testing/app-
 import { handHostReads, handState } from "../testing/app-state.js";
 import { testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
 import { holdFrames, settleFrames } from "../testing/frames.js";
+import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { type AgentsControl, MODELS_READ, useAgents } from "./use-agents.js";
 
@@ -1181,4 +1182,40 @@ test("an agent's page stands on the list's row of it: a delete reads nothing aga
   assert.equal(tab.control().listFailed, true);
   act(() => tab.control().onRetryList());
   assert.deepEqual(retried, ["list"]);
+});
+
+test("several agents archived at once say so in one toast, whose one Undo brings every one back", async () => {
+  const resting = { ...STARTED, status: AGENT_STATUS.COMPLETED };
+  const other = { ...resting, id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b22" };
+  const tab = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [resting, other] });
+  const archived = [
+    { ...resting, archivedAt: 5 },
+    { ...other, archivedAt: 5 },
+  ];
+  tab.answer(ACT_KIND.AGENTS_ARCHIVE, ...archived.map((agent) => ({ agent })));
+  await tab.mount();
+
+  await act(async () => {
+    await new MutationObserver(testQueryClientNow(), tab.control().archiveAgents).mutate({
+      agentIds: [resting.id, other.id],
+      archived: true,
+    });
+  });
+  assert.equal(newestToastSays(), "2 agents archivedUndo");
+
+  // The host draws the archive on the list as it is asked, which the Undo reads to put back.
+  await tab.stand({ listedAgents: archived });
+  tab.answer(ACT_KIND.AGENTS_ARCHIVE, { agent: resting }, { agent: other });
+  act(() => newestToastAction()?.click());
+  await vi.waitFor(() =>
+    assert.deepEqual(
+      tab.asked.filter((each) => each.kind === ACT_KIND.AGENTS_ARCHIVE).map((each) => each.payload),
+      [
+        { agentId: resting.id, archived: true },
+        { agentId: other.id, archived: true },
+        { agentId: resting.id, archived: false },
+        { agentId: other.id, archived: false },
+      ],
+    ),
+  );
 });

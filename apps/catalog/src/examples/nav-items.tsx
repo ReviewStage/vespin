@@ -18,6 +18,8 @@ import {
   NavItemLink,
   SearchIcon,
   STATUS_TONE,
+  TEXT_TONE,
+  Text,
   useMenu,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
@@ -29,7 +31,8 @@ import { CatalogSection } from "../section";
  * nav-items.tsx -- a sidebar's places with their counts, marks, and chords,
  * the one shown, one unavailable, one unread; counts past 99 drawn 99+; a place whose ⋯ comes in
  * over its count under the pointer; an account's menu trigger;
- * links with addresses of their own; long names in a narrow column;
+ * links with addresses of their own; places a middle-click opens in a tab
+ * of their own; long names in a narrow column;
  * steps read in order, their names on two lines over a meta line; a
  * search's rows nested under the page holding them; and rows while the
  * places they list are read.
@@ -132,6 +135,34 @@ function Links(): React.JSX.Element {
   );
 }
 
+/** Places that are no links but have addresses of their own: a press goes there, a middle-click opens one in a tab, here said under them. */
+function OpenInTab(): React.JSX.Element {
+  const [shown, setShown] = useState("home");
+  const [tabbed, setTabbed] = useState<string | undefined>(undefined);
+  const place = (id: string, name: string) => ({
+    current: shown === id ? NAV_CURRENT.PAGE : undefined,
+    onClick: () => setShown(id),
+    onOpenInTab: () => setTabbed(name),
+  });
+  return (
+    <div className="catalog-narrow">
+      <NavItem icon={<FolderIcon />} {...place("home", "Home")}>
+        Home
+      </NavItem>
+      <NavItem
+        icon={<InboxIcon />}
+        count={{ value: 7, noun: "need you", tone: STATUS_TONE.ATTENTION }}
+        {...place("inbox", "Inbox")}
+      >
+        Inbox
+      </NavItem>
+      <Text tone={TEXT_TONE.MUTED}>
+        {tabbed === undefined ? "Middle-click a place" : `Opened ${tabbed} in a new tab`}
+      </Text>
+    </div>
+  );
+}
+
 /** A pull request's chapters as steps: a long title on two lines, its lines and threads under it, one viewed. */
 function Steps(): React.JSX.Element {
   const [shown, setShown] = useState(0);
@@ -228,6 +259,9 @@ function NavItems(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection id="nav-item-links" title="Links to places of their own">
         <Links />
+      </CatalogSection>
+      <CatalogSection id="nav-item-open-in-tab" title="Places a middle-click opens in a new tab">
+        <OpenInTab />
       </CatalogSection>
       <CatalogSection id="nav-item-narrow" title="Long names in a narrow column">
         <div className="catalog-narrow">

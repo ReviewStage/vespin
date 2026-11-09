@@ -130,6 +130,7 @@ import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { newTaskAction } from "../tasks/inbox-list.js";
+import { openTaskInTab } from "../tasks/task-menu-items.js";
 import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
 import {
@@ -178,7 +179,7 @@ import {
   OlderCompleted,
   type TasksViewFrame,
 } from "./tasks-page-options.js";
-import { type ChosenTasks, chosenRowMenu, useTasksSelection } from "./tasks-selection.js";
+import { type ChosenRows, chosenRowMenu, useTasksSelection } from "./tasks-selection.js";
 import { useHeldTasks } from "./use-held-tasks.js";
 import { useTaskDrag } from "./use-row-drag.js";
 
@@ -407,7 +408,7 @@ const TaskBoardCard = memo(function TaskBoardCard({
   subTasksFinished: number;
   subTasksTotal: number;
   /** The selection it stands in, where it is one of several chosen: how many, and what the bar does to them all. */
-  chosen: ChosenTasks | undefined;
+  chosen: ChosenRows | undefined;
   /** Opens a task by its id. */
   onSelect: (taskId: string) => void;
   onStanding: (task: TaskSummary, standing: TaskStanding) => void;
@@ -531,6 +532,7 @@ const TaskBoardCard = memo(function TaskBoardCard({
               menu.close(false);
               onOpen();
             }}
+            onOpenInTab={openTaskInTab(tasks.workspaces, task)}
           >
             <span id={nameId} className={BOARD_NAME}>
               <ReplayMask>{task.name}</ReplayMask>
@@ -740,7 +742,7 @@ function TaskBoardColumnView({
   /** How many of a task's sub-tasks are finished, of all of them, by its id; none for a task with none. */
   subTasksOf: ReadonlyMap<string, ChildTaskCount>;
   /** The selection a card of the task stands in, where it is one of several chosen (`useTasksSelection`). */
-  chosenOf: (taskId: string) => ChosenTasks | undefined;
+  chosenOf: (taskId: string) => ChosenRows | undefined;
   /** Whether a find bar stands open over the page, which draws every card so the find covers them. */
   finding: boolean;
   /** Holds the column's run of cards while it stands, so a card out of view can be brought in (`useVirtualRuns`). */

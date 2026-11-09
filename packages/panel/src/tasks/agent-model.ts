@@ -73,6 +73,7 @@ import {
   standardModelIdOf,
 } from "@repo/features/models-wire";
 import { formatCompact, formatUsd } from "@repo/features/number-format";
+import { plainWords } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   PROVIDER_KEY_KIND,
@@ -86,7 +87,7 @@ import {
 } from "@repo/features/repository-reach-wire";
 import { inPullRequestOrder } from "@repo/features/task-agents-model";
 import type { DescriptionEditor, TaskPullRequestLine } from "@repo/features/task-wire";
-import { dayAndTimeText } from "@repo/features/time-format";
+import { dayAndTimeText, dueText } from "@repo/features/time-format";
 import {
   ROW_PART,
   type RowReading,
@@ -94,7 +95,7 @@ import {
   type TurnRow,
   turnRows,
 } from "@repo/features/turn-rows";
-import { andList, readFailedWords } from "@repo/features/words";
+import { andList, countWords, readFailedWords, TERM } from "@repo/features/words";
 import type { FormerMember, WorkspaceMember } from "@repo/features/workspace-wire";
 import {
   ACTOR_KIND,
@@ -135,7 +136,7 @@ import { TOOL_STATE, type ToolState } from "../ai-elements/tool.js";
 import { devicePlatformOf } from "../device-platform.js";
 import { GLYPH_STATE, type GlyphState, glyphStateWords } from "../state-glyph.js";
 import { drawnCall } from "./native-tool-calls.js";
-import { plainWords, remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-model.js";
+import { remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-model.js";
 
 /**
  * agent-model.ts -- what the agent tabs, a Start, and an agent's transcript draw, decided from what the service answered.
@@ -830,6 +831,12 @@ export function archiveWords(archived: boolean): {
   readonly refused: string;
 } {
   return archived ? ARCHIVED_WORDS : UNARCHIVED_WORDS;
+}
+
+/** What the toast says once `count` agents' archive, or its undoing, landed: one agent's words for one, else how many. */
+export function archivedManyWords(count: number, archived: boolean): string {
+  if (count === 1) return archiveWords(archived).done;
+  return `${countWords(count, TERM.AGENT)} ${archived ? "archived" : "unarchived"}`;
 }
 
 /** A refused start or message as the view hears it: why, why the repository is out of reach where it is and the service said, when a plan's reached limit resets where it is that and the provider said, and the provider whose credential is missing where it is that. */
@@ -2600,6 +2607,8 @@ export const WORKING_PHASE = {
   WORKING: "working",
   /** A Stop was asked of its newest turn, which runs until its runner ends it. */
   STOPPING: "stopping",
+  /** Its newest turn is held open until a usage limit resets, its starter's every subscription at one and no API key to pay, and runs again then (`AgentTurn`'s `waitsUntil`). */
+  WAITING: "waiting",
 } as const;
 
 export type WorkingPhase = (typeof WORKING_PHASE)[keyof typeof WORKING_PHASE];
@@ -2610,11 +2619,18 @@ const WORKING_PHASE_WORDS = {
   [WORKING_PHASE.STARTING]: "Starting…",
   [WORKING_PHASE.WORKING]: "Working…",
   [WORKING_PHASE.STOPPING]: "Stopping…",
+  [WORKING_PHASE.WAITING]: "Waiting for your usage limit to reset…",
 } as const satisfies Record<WorkingPhase, string>;
 
-/** What the working line says in a phase. */
-export function workingLineWords(phase: WorkingPhase): string {
-  return WORKING_PHASE_WORDS[phase];
+/** What the working line says in a phase, a wait naming when the limit it waits on resets, as of `now`: "3:40 PM" today. */
+export function workingLineWords(
+  phase: WorkingPhase,
+  waitsUntil?: number,
+  now: number = Date.now(),
+): string {
+  if (phase !== WORKING_PHASE.WAITING || waitsUntil === undefined)
+    return WORKING_PHASE_WORDS[phase];
+  return `Waiting for your usage limit to reset at ${dueText(waitsUntil, now)}`;
 }
 
 /** What a tab reads its agent standing by (`tabTurnOf`). */
@@ -2623,6 +2639,8 @@ export interface TabTurn {
   readonly working: boolean;
   /** What the working line says the agent is doing. */
   readonly phase: WorkingPhase;
+  /** When the usage limit its open turn waits on resets; none where it waits on none. */
+  readonly waitsUntil: number | undefined;
   /** Where the agent stands by that turn, which the end row is drawn from once it no longer works. */
   readonly status: AgentStatus;
   /** Why that turn failed, in the wire's word; none where it did not. */
@@ -2661,6 +2679,7 @@ export function tabTurnOf(agent: Pick<AgentSummary, "status" | "turn">, sends: T
   return {
     working: open || sends.unanswered || sends.rewinding,
     phase: workingPhaseOf(turn, open, sends.rewinding),
+    waitsUntil: open ? turn?.waitsUntil : undefined,
     status,
     failure:
       turn === undefined
@@ -2671,7 +2690,7 @@ export function tabTurnOf(agent: Pick<AgentSummary, "status" | "turn">, sends: T
   };
 }
 
-/** What the working line says of the turn a tab reads: rewinding while a rewind is out, starting while no turn is open or it is still queued, then the open turn's state. */
+/** What the working line says of the turn a tab reads: rewinding while a rewind is out, starting while no turn is open or it is still queued, waiting while it is held open for a limit's reset, then the open turn's state. */
 function workingPhaseOf(
   turn: AgentTurn | undefined,
   open: boolean,
@@ -2680,6 +2699,7 @@ function workingPhaseOf(
   if (rewinding) return WORKING_PHASE.REWINDING;
   if (turn === undefined || !open) return WORKING_PHASE.STARTING;
   if (turn.stopAsked === true) return WORKING_PHASE.STOPPING;
+  if (turn.waitsUntil !== undefined) return WORKING_PHASE.WAITING;
   return turn.status === TURN_STATUS.QUEUED ? WORKING_PHASE.STARTING : WORKING_PHASE.WORKING;
 }
 

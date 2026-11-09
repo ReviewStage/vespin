@@ -1,8 +1,17 @@
 import { AGENT_CALL_FAILURE, type AgentInboxMessagedView } from "@repo/features/agent-view";
+import {
+  holderAutomationId,
+  INBOX_HOLDER,
+  type InboxHolder,
+  type InboxListed,
+  itemWorkspaceId,
+  NOTHING_HERE,
+} from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
 import type { DescriptionMention, MentionLines } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
+import { cardTitle } from "@repo/features/plain-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { CodeRef } from "@repo/features/task-wire";
 import { backToWords, readFailedWords } from "@repo/features/words";
@@ -40,14 +49,7 @@ import {
   INBOX_VIEW_ITEMS,
   useInboxColumns,
 } from "../tasks/inbox-columns.js";
-import { InboxList, InboxListNote, InboxPaneEmpty, NOTHING_HERE } from "../tasks/inbox-list.js";
-import {
-  holderAutomationId,
-  INBOX_HOLDER,
-  type InboxHolder,
-  type InboxListed,
-  itemWorkspaceId,
-} from "../tasks/inbox-model.js";
+import { InboxList, InboxListNote, InboxPaneEmpty } from "../tasks/inbox-list.js";
 import { useInboxPager } from "../tasks/inbox-pager.js";
 import { type InboxNewThread, InboxPane, type InboxPaneDoors } from "../tasks/inbox-pane.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
@@ -62,12 +64,7 @@ import {
   useSavedDescriptionText,
 } from "../tasks/task-mentions.js";
 import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
-import {
-  cardTitle,
-  placeOfTaskTarget,
-  TOOL_TARGET,
-  type ToolTarget,
-} from "../tasks/tool-call-model.js";
+import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { useInboxListing } from "../tasks/use-inbox-listing.js";
 import { useNodOnOpen, useReadOnOpen } from "../tasks/use-inbox-read-marks.js";

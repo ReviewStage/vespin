@@ -4,6 +4,7 @@ import type { Sandbox } from "@repo/sandbox";
 import { Effect, Layer } from "effect";
 import { HttpClient, HttpRouter } from "effect/http";
 import { keepRunningSandboxesUp, reconcileAgents } from "../agents/coder-host/reconcile.js";
+import { resumeWaitedTurns } from "../agents/coder-host/steer.js";
 import { republishQueuedTurns } from "../agents/coder-host/turn-delivery.js";
 import { HostedEnvironment } from "../environment.js";
 import { effectPassthrough, hostedNotFoundRoute } from "../http/http-effect.js";
@@ -42,6 +43,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
       Effect.provideService(reconcileAgents(now), HttpClient.HttpClient, http),
     republishTurns: republishQueuedTurns,
     keepSandboxesUp: keepRunningSandboxesUp,
+    resumeWaitedTurns,
   });
 });
 
