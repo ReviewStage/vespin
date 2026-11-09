@@ -95,6 +95,7 @@ import {
   carryTurn,
   dropAwaitingNothing,
   endTurn,
+  holdTurn,
   queueTurn,
   requeueUntaken,
   startTurn,
@@ -567,6 +568,15 @@ export interface StoreWriter {
   carryTurn(
     target: ConversationTarget,
     carry: { readonly turnId: string; readonly attempt: number },
+  ): Write<Result.Result<boolean, typeof NO_CONVERSATION>>;
+  /**
+   * Holds the running turn named open until the usage limit that cut it
+   * short resets, as one no other payer can go on with now waits for it
+   * (`turn-state.ts`'s `holdTurn`); answers whether it was held.
+   */
+  holdTurn(
+    target: ConversationTarget,
+    hold: { readonly turnId: string; readonly until: Date },
   ): Write<Result.Result<boolean, typeof NO_CONVERSATION>>;
 }
 
@@ -2700,6 +2710,10 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
     carryTurn: (target, carry) =>
       underConversation(target, (context) =>
         Effect.map(carryTurn(context.target, { ...carry, at: context.now }), Result.succeed),
+      ),
+    holdTurn: (target, hold) =>
+      underConversation(target, (context) =>
+        Effect.map(holdTurn(context.target, hold), Result.succeed),
       ),
   };
 

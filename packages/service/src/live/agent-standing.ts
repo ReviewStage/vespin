@@ -31,6 +31,7 @@ export function latestTurnOf(conversationId: SQLWrapper, name: string) {
       startedAt: turns.startedAt,
       settledAt: turns.settledAt,
       leaseUntil: turns.leaseUntil,
+      waitsUntil: turns.waitsUntil,
     })
     .from(turns)
     .where(eq(turns.conversationId, sql`${conversationId}`))

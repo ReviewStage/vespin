@@ -494,6 +494,29 @@ export const roomAfterLimit = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
+ * When the soonest limit among the account's other subscriptions of the
+ * plan resets, past the one named as `roomAfterLimit` passes it over, so a
+ * turn no payer has room for now knows the earliest it could go on; none
+ * where no other subscription is at a limit that names its reset.
+ */
+export const soonestResetBeside = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  provider: ModelProvider,
+  limitedSubscriptionId: string | undefined,
+): Effect.fn.Return<number | undefined, StoreFailure, DatabaseServices> {
+  const rows = yield* keyRowsOf(userId, undefined);
+  const environment = yield* deploymentEnvironment;
+  const now = yield* Clock.currentTimeMillis;
+  const plans = keptPlans(userId, provider, environment?.providerKeyEncryptionKeys, rows);
+  const limited = limitedSubscriptionId ?? plans[0]?.id;
+  const resets = plans.flatMap((row) => {
+    const resetsAt = row.id === limited ? undefined : planLimitResetsAt(row, now);
+    return resetsAt === undefined ? [] : [resetsAt];
+  });
+  return resets.length === 0 ? undefined : Math.min(...resets);
+});
+
+/**
  * The provider whose credential an agent lacks to take a message, or none
  * where it may: an agent last on its starter's API key needs a credential of
  * its model's provider, the key or a subscription its next launch turns to

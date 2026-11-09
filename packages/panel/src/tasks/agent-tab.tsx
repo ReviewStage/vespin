@@ -2276,6 +2276,7 @@ function AgentTranscriptView({
   failedWith,
   working,
   phase = WORKING_PHASE.WORKING,
+  waitsUntil,
   startedAt,
   ended,
   endReason = FAILURE_REASON.OTHER,
@@ -2319,6 +2320,8 @@ function AgentTranscriptView({
   working: boolean;
   /** What the agent is doing while it works, which its working line says (`tabTurnOf`); working where unsaid. */
   phase?: WorkingPhase;
+  /** When the usage limit its open turn waits on resets, which a waiting line names; none where it waits on none. */
+  waitsUntil?: number | undefined;
   /** When the run under way began, which the working line counts from; none where unknown, when the line only shimmers. */
   startedAt?: number | undefined;
   /** The line the transcript ends on once its turn was stopped or failed (`endLineParts`); nothing otherwise. */
@@ -2458,7 +2461,9 @@ function AgentTranscriptView({
       ? undefined
       : () => (
           <>
-            {working ? <WorkingLine startedAt={startedAt} words={workingLineWords(phase)} /> : null}
+            {working ? (
+              <WorkingLine startedAt={startedAt} words={workingLineWords(phase, waitsUntil)} />
+            ) : null}
             {ended === undefined && endTrail === undefined ? null : (
               <div
                 className="agent-end flex flex-col items-start gap-control-gap"
@@ -2966,6 +2971,7 @@ function AgentTabView({
                         failedWith={transcript.failedWith}
                         working={standing.working}
                         phase={standing.phase}
+                        waitsUntil={standing.waitsUntil}
                         // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
                         startedAt={
                           !counts

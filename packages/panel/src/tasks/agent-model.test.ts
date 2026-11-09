@@ -65,6 +65,7 @@ import {
   transcriptRowKey,
   unreadOpeningLine,
   unreadSentLines,
+  workingLineWords,
 } from "./agent-model.js";
 import { inboxNoteReading } from "./inbox-model.js";
 
@@ -523,6 +524,17 @@ test("a tab reads its agent from the newer of its summary's turn and its answere
   assert.deepEqual(
     read({ status: AGENT_STATUS.CANCELED, turn: { ...running, stopAsked: true } }).slice(0, 3),
     [true, "stopping", AGENT_STATUS.CANCELED],
+  );
+  // A turn held open for a usage limit's reset works, its line naming when the limit resets.
+  const resetsAt = new Date(2026, 10, 9, 15, 40).getTime();
+  const waiting = tabTurnOf(
+    { status: AGENT_STATUS.RUNNING, turn: { ...running, waitsUntil: resetsAt } },
+    idle,
+  );
+  assert.equal(waiting.working, true);
+  assert.equal(
+    workingLineWords(waiting.phase, waiting.waitsUntil, resetsAt - 60_000),
+    "Waiting for your usage limit to reset at 3:40 PM",
   );
   // A send not yet answered, or a rewind out, works past an ended turn until its call answers.
   assert.deepEqual(
