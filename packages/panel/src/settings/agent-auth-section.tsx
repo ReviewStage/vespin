@@ -117,8 +117,8 @@ import { ReadFailed } from "./marks.js";
  * what is being pasted: it stands in the open field alone, is sent once on
  * Save, and is cleared as soon as the service keeps it. Every answer is the
  * account's credentials whole, which the page holds once and hands to the
- * Default model row (`onKeys`) so its note follows a save at once. The list
- * and the dialog are kept out of the screen recording, which masks a
+ * Default model row (`onKeys`) so its note follows a save at once. The field
+ * a secret is pasted into is kept out of the screen recording, which masks a
  * field's characters but not their count.
  *
  * The ChatGPT plan connects through Codex's device-code login, which the
@@ -728,19 +728,21 @@ function PasteSteps({
           {first.body(() => setFirstDone(true))}
         </Step>
         <Step number={2} state={firstDone ? STEP_STATE.CURRENT : STEP_STATE.TO_DO}>
-          <SecretField
-            ref={field}
-            label={label}
-            description={secret.saving ? running : undefined}
-            error={refusedShown(secret.rejection, FAILURE_SURFACE.AGENT_KEY_SAVE)}
-            saved={held}
-            placeholder={placeholder}
-            disabled={secret.saving}
-            value={secret.pasted}
-            onEscape={held ? secret.cancel : undefined}
-            onChange={secret.change}
-            onPasted={secret.paste}
-          />
+          <div className={NO_CAPTURE}>
+            <SecretField
+              ref={field}
+              label={label}
+              description={secret.saving ? running : undefined}
+              error={refusedShown(secret.rejection, FAILURE_SURFACE.AGENT_KEY_SAVE)}
+              saved={held}
+              placeholder={placeholder}
+              disabled={secret.saving}
+              value={secret.pasted}
+              onEscape={held ? secret.cancel : undefined}
+              onChange={secret.change}
+              onPasted={secret.paste}
+            />
+          </div>
         </Step>
       </Steps>
     </Stack>
@@ -1449,24 +1451,22 @@ function AgentCredentialRows({
   const key = keyOf(answer, provider);
   const chosen = defaultOf(plan, key);
   return (
-    <div className={NO_CAPTURE}>
-      <Stack gap={GAP.SECTION}>
-        {/* With one credential saved, that one is used, so there is nothing to choose. */}
-        {plan === undefined || key === undefined || chosen === undefined ? null : (
-          <SettingsSection>
-            <DefaultRow provider={provider} chosen={chosen} />
-          </SettingsSection>
-        )}
+    <Stack gap={GAP.SECTION}>
+      {/* With one credential saved, that one is used, so there is nothing to choose. */}
+      {plan === undefined || key === undefined || chosen === undefined ? null : (
         <SettingsSection>
-          {provider === PROVIDER_KEY_PROVIDER.ANTHROPIC ? (
-            <ClaudePlanRow plan={plan} field={fields.token} />
-          ) : (
-            <ChatGptPlanRow plan={plan} connectButton={fields.signIn} />
-          )}
-          <ApiKeyRow provider={provider} stored={key} field={fields.key} />
+          <DefaultRow provider={provider} chosen={chosen} />
         </SettingsSection>
-      </Stack>
-    </div>
+      )}
+      <SettingsSection>
+        {provider === PROVIDER_KEY_PROVIDER.ANTHROPIC ? (
+          <ClaudePlanRow plan={plan} field={fields.token} />
+        ) : (
+          <ChatGptPlanRow plan={plan} connectButton={fields.signIn} />
+        )}
+        <ApiKeyRow provider={provider} stored={key} field={fields.key} />
+      </SettingsSection>
+    </Stack>
   );
 }
 
@@ -1699,7 +1699,7 @@ export function AgentAuthSection({
   const { held: drawn, onExited } = useHeldThroughExit(open);
 
   return (
-    <div className={NO_CAPTURE}>
+    <>
       <HarnessList signedIn={signedIn} credentials={credentials}>
         {(read) =>
           HARNESSES.map((provider) => {
@@ -1737,7 +1737,7 @@ export function AgentAuthSection({
           onExited={onExited}
         />
       )}
-    </div>
+    </>
   );
 }
 
@@ -1900,7 +1900,7 @@ export function AgentConnectSection({
     answer === undefined ? undefined : planOf(answer, PROVIDER_KEY_PROVIDER.OPENAI),
   );
   return (
-    <div className={NO_CAPTURE}>
+    <>
       <HarnessList signedIn credentials={credentials}>
         {(read) =>
           HARNESSES.map((provider) => (
@@ -1917,6 +1917,6 @@ export function AgentConnectSection({
         }
       </HarnessList>
       <ChatGptConnect chatGpt={chatGpt} />
-    </div>
+    </>
   );
 }

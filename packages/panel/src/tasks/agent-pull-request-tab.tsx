@@ -358,8 +358,8 @@ import {
  * view, the Conversation's ending in stage-cli's two filters, Hide resolved
  * and Hide bots, each counting what it leaves out; the filters and the folds
  * are kept across launches (`conversation-filters.ts`). Every name and word here is
- * the repository's, so the tab is left out of the screen recording
- * (`ph-no-capture`).
+ * the repository's, which the screen recording masks, and a diff's lines
+ * are left out of it whole (`file-diff.tsx`).
  */
 
 /** Whether the Chapters view's module has landed, so its boundary's Reload knows a failed chunk from a failed draw. */
@@ -3563,7 +3563,7 @@ function PullRequestTabBody({
         <AnchorsContext.Provider value={anchors.open}>
           <Fill
             ref={fold.root}
-            className="file-view pull-request-tab ph-no-capture"
+            className="file-view pull-request-tab"
             data-header-fold={phone ? "" : undefined}
             data-fold-lead={phone && fold.shape.lead ? "" : undefined}
             onScrollCapture={fold.onScrollCapture}

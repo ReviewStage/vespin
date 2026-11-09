@@ -346,9 +346,8 @@ import { WorkedFor, WorkingLine } from "./working-time.js";
  * where the pull request the agent opened lives; every other address is
  * drawn and goes nowhere. No line here names a price: a price in the
  * window is the whole run's, said only on the model menu's last line
- * (`agentPayerLine`). Every word here is the agent's or the description's, so the
- * root is left out of the screen recording (`ph-no-capture`) as a second
- * line behind the recording's text masking. Under the transcript stands
+ * (`agentPayerLine`). Every word here is the agent's or the description's,
+ * which the screen recording masks. Under the transcript stands
  * the composer (`agent-composer.tsx`), with no head above either: where
  * the agent stands is its tab's glyph and the transcript's own lines, what
  * it runs on is the model chip at the box's foot, and what it published

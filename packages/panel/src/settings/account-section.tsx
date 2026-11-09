@@ -46,7 +46,6 @@ import { useBusyPress } from "./busy-press.js";
 import { GitHubTokenDialog, TokenFacts } from "./github-dialog.js";
 
 /** The class PostHog's recorder leaves out of a recording, element and children alike. */
-const NO_CAPTURE = "ph-no-capture";
 
 /** The row's name. */
 const TOKEN_LABEL = "GitHub personal access token";
@@ -97,7 +96,7 @@ function GitHubTokenRow({ accountId }: { accountId: string | undefined }): React
   );
 
   return (
-    <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.GITHUB_ACCESS)} className={NO_CAPTURE}>
+    <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.GITHUB_ACCESS)}>
       <SettingsRow
         // Note that the row stands under the account's own, whose face is wider than a mark, so its words start where the account's do.
         lead={SETTINGS_ROW_LEAD.FACE}

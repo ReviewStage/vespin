@@ -276,7 +276,7 @@ async function searchFor(page: HTMLElement, query: string): Promise<void> {
   await settle();
 }
 
-test("what Vespin kept in the workspace is held for it and listed in the service's order, each memory's words whole and named by whose they are, and kept out of the screen recording", async () => {
+test("what Vespin kept in the workspace is held for it and listed in the service's order, each memory's words whole and named by whose they are", async () => {
   const { page } = await mount();
 
   assert.deepEqual(
@@ -290,10 +290,6 @@ test("what Vespin kept in the workspace is held for it and listed in the service
     rowOf(page, memory).querySelector(".ui-comment-head")?.textContent ?? "";
   assert.match(keeper(DEPLOYS), /^You/u);
   assert.match(keeper(TESTS), /^Dean/u);
-  assert.ok(
-    rowOf(page, DEPLOYS).closest(".ph-no-capture"),
-    "the rows are under the unrecorded class",
-  );
 });
 
 test("a memory's code in backticks is drawn as inline code, never as the backticks themselves", async () => {

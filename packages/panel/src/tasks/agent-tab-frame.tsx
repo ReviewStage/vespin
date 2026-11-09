@@ -7,8 +7,8 @@ import type { ReactNode, Ref } from "react";
  * Every agent's tab draws these, a started agent's, one still starting, a
  * draft's, a worker's, and so does the tab's skeleton while the agent is
  * read (`agent-tab-skeleton.tsx`), so the skeleton stands in the boxes the
- * tab lands in rather than in a copy of them. The tab is unrecorded
- * (`ph-no-capture`), since it holds the transcript's words.
+ * tab lands in rather than in a copy of them. The transcript's words are
+ * masked in the screen recording, and its pictures and code left out.
  */
 
 /** The tab: a section taking its column's room, named `label` to a reader. */
@@ -22,12 +22,7 @@ export function AgentTabFrame({
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <Fill
-      as={FILL_ELEMENT.SECTION}
-      ref={ref}
-      className="agent-tab ph-no-capture"
-      aria-label={label}
-    >
+    <Fill as={FILL_ELEMENT.SECTION} ref={ref} className="agent-tab" aria-label={label}>
       {children}
     </Fill>
   );

@@ -124,7 +124,7 @@ import { WholeFile, type WholeFileNote } from "./whole-file.js";
  * (`@repo/features/page-link`), which opens it as any link of the window
  * opens (`useOpenLink`), a site in the browser and a link of ours in the
  * window. Reload draws the page again. What the page draws is the
- * task's, so the pane is left out of the screen recording (`ph-no-capture`);
+ * task's, so the frame is left out of the screen recording (`ph-no-capture`);
  * the recording could not see into the frame in any case.
  *
  * The bar's code toggle shows the version's HTML in the frame's place, as a
@@ -462,7 +462,7 @@ function PageFrame({
   useFrameFocus(frame);
   const loaded = framedSrc === src;
   return (
-    <div ref={room} className="page-view-room relative flex min-h-0 flex-1">
+    <div ref={room} className="page-view-room ph-no-capture relative flex min-h-0 flex-1">
       <iframe
         ref={frame}
         className={cn("block min-h-0 w-full flex-1 border-0", !loaded && "invisible")}
@@ -910,7 +910,7 @@ export function PagePane({
       active={findActive}
       subject={{ task: pagePlaceId(place), tab: pageTab(page.id) }}
     >
-      <Fill className="page-view file-view ph-no-capture">
+      <Fill className="page-view file-view">
         {phone ? (
           settings.sheet
         ) : (

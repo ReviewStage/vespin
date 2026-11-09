@@ -217,8 +217,8 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * tab on a press, an archived agent's card saying so. Every time shows its
  * moment in the shared tooltip, and an agent this window does not list, one
  * started on another Mac, still leads with a glyph. The pane shows words an
- * agent wrote and pictures of what it rendered, so its thread is out of the
- * session recording (`ph-no-capture`), and the viewer, drawn over the
+ * agent wrote and pictures of what it rendered: the recording masks its
+ * words and leaves its pictures out (`ph-no-capture`), and the viewer, drawn over the
  * window outside it, is out of it on its own.
  *
  * Words selected anywhere in the thread but the draft reply stand Reply
@@ -1899,7 +1899,7 @@ export function InboxPane({
         {/* The thread is a log as an agent's transcript is: each item opens at its newest message, the box at its end, and keeps to it while the reader is there; scrolled up, the way back floats over its foot. */}
         <Conversation list={board}>
           <ConversationContent
-            className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} ph-no-capture flex flex-col pt-section-gap`}
+            className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} flex flex-col pt-section-gap`}
           >
             {/* The item's words are drawn as documents: its own pictures read through the Inbox, and a link alone on its line as its card. */}
             <ItemWords itemId={item.id} workspaceId={workspaceId} images={images} code={doors.code}>

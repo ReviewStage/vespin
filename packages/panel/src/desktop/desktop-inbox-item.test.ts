@@ -410,8 +410,6 @@ test("an item's Markdown draws its own pictures, read once its item's own read l
     )?.textContent,
     "#42",
   );
-  // What the item's words draw stands inside the pane's masked region.
-  assert.ok(page.querySelector(".ph-no-capture [data-lone-link]"));
 });
 
 test("a page's link alone on its line, naming its task by the task's number, is the page's row with the page itself drawn under it", async () => {
@@ -2302,9 +2300,6 @@ test("a thread draws every message, the agent's by its tile and name alone, no t
     "under them the note line on its own, and under it the row: +, the microphone, and Send",
   );
   assert.equal(footWords(pane), "", "and no line of help");
-  // What the thread draws stands inside the pane's masked region.
-  assert.ok(pane.querySelector(".ph-no-capture [data-inbox-draft-ask]"));
-  assert.ok(pane.querySelector(".ph-no-capture [data-inbox-message-text]"));
 });
 
 test("a plain reply sends no answer and leaves the ask open, the box's Send held until it holds words and nothing saying the ask stays open", async () => {
