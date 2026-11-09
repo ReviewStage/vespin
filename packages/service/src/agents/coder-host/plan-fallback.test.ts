@@ -270,12 +270,13 @@ const HARNESS = {
 } as const;
 type Harness = keyof typeof HARNESS;
 
-/** A launch's runner as a case reads it: how it reaches the events route, where it numbers its events from, and the developer's words of each message it is handed. */
+/** A launch's runner as a case reads it: how it reaches the events route, where it numbers its events from, the developer's words of each message it is handed, and whether each of those it is handed first was resent. */
 interface Launched {
   readonly bearer: string;
   readonly launch: number;
   readonly firstSequence: number;
   readonly texts: readonly string[];
+  readonly resent: readonly boolean[];
 }
 
 /** The developer's words of a message line, past the turn's own words that lead it. */
@@ -283,6 +284,10 @@ const wordsOf = (line: InputLine): readonly string[] =>
   line.type === INPUT_LINE.MESSAGE
     ? line.content.slice(1).flatMap((block) => (block.type === "text" ? [block.text] : []))
     : [];
+
+/** Whether a message line was resent to a session that holds it. */
+const resentOf = (line: InputLine): readonly boolean[] =>
+  line.type === INPUT_LINE.MESSAGE ? [line.resent === true] : [];
 
 /** The launch a runner's config names in its URLs. */
 const launchNamed = (config: RunnerConfig) =>
@@ -303,11 +308,13 @@ const sandboxLaunch = (
       after: 0,
       limit: 50,
     });
+    const lines = read.map((row) => JSON.parse(row.text) as InputLine);
     const launched: Launched = {
       bearer,
       launch: launchNamed(config),
       firstSequence: config.firstSequence,
-      texts: read.flatMap((row) => wordsOf(JSON.parse(row.text) as InputLine)),
+      texts: lines.flatMap(wordsOf),
+      resent: lines.flatMap(resentOf),
     };
     return launched;
   });
@@ -331,6 +338,7 @@ const macLaunch = (userId: string, deviceId: string, lineId: string) =>
       launch: launchNamed(config),
       firstSequence: config.firstSequence,
       texts: lines.flatMap(wordsOf),
+      resent: lines.flatMap(resentOf),
     };
     return launched;
   });
@@ -567,6 +575,8 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
         const [, second] = all;
         assert.ok(second !== undefined);
         assert.deepEqual(second.texts, ["Fix the invitations."]);
+        // The line goes to a session that already holds it, which drops a prompt under an id it holds.
+        assert.deepEqual(second.resent, [true]);
         const routing = Option.getOrThrow(yield* readAgentRouting(userId, agent.id));
         assert.deepEqual(
           [routing.payer, routing.subscriptionId === limitedOn.subscriptionId],

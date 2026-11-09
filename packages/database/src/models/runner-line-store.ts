@@ -116,13 +116,16 @@ const insertLine = SqlSchema.findAll({
         )
         // Note that a send repeated under its key is answered the line it queued first, in its
         // place. A message queued for whichever launch runs next (launch 0) is taken over by the
-        // launch that queues it again, as a Start's launch does its first message; any other line
-        // keeps its launch, so a repeat rewrites nothing the capture watches and notifies nothing.
+        // launch that queues it again, as a Start's launch does its first message, as that launch
+        // writes it, as a line resent to a session that holds it is (`requeueRunnerLine`); any
+        // other line keeps its launch and text, so a repeat rewrites nothing the capture watches
+        // and notifies nothing.
         .onConflictDoUpdate({
           target: [runnerLine.agentId, runnerLine.lineId],
           targetWhere: isNotNull(runnerLine.lineId),
           set: {
             launch: sql`case when ${runnerLine.launch} = ${ANY_LAUNCH} then excluded.launch else ${runnerLine.launch} end`,
+            text: sql`case when ${runnerLine.launch} = ${ANY_LAUNCH} then excluded.text else ${runnerLine.text} end`,
           },
         })
         .returning({ seq: runnerLine.seq }),
