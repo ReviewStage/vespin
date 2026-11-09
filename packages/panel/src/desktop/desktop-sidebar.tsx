@@ -518,6 +518,7 @@ function TaskRows({
             key={row.agent.id}
             agent={row.agent}
             agents={context.tasks.agents}
+            signedIn={context.tasks.signedIn}
             current={context.currentRow(row)}
             now={context.now}
             at={taskRowTime(row)}
@@ -924,6 +925,7 @@ function PinnedRows({
               <SidebarAgent
                 agent={agent}
                 agents={context.tasks.agents}
+                signedIn={context.tasks.signedIn}
                 current={context.currentRow(agentRow(agent))}
                 now={context.now}
                 at={agent.activityAt}
@@ -2373,6 +2375,7 @@ function SidebarColumn({
                               key={row.agent.id}
                               agent={row.agent}
                               agents={tasks.agents}
+                              signedIn={tasks.signedIn}
                               current={currentRow(row)}
                               now={now}
                               at={taskRowTime(row)}

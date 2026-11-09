@@ -96,6 +96,7 @@ function SidebarAgentCard({
 export function SidebarAgent({
   agent,
   agents,
+  signedIn,
   current,
   now,
   at,
@@ -110,6 +111,8 @@ export function SidebarAgent({
   agent: TasklessAgent;
   /** The window's agent control, whose archive and rename act on any agent by its id. */
   agents: AgentsControl;
+  /** Whether the reader is signed in, without which nothing waits on them. */
+  signedIn: boolean;
   /** Whether this agent's page is the one standing. */
   current: boolean;
   /** The time the row's time is counted back from. */
@@ -157,7 +160,7 @@ export function SidebarAgent({
   const drafted = useDraftedAgents().includes(agent.id) && !current;
   // A message to it that did not go wears the failed mark in the pencil's place.
   const sendFailed = useFailedAgents().includes(agent.id) && !current;
-  const needsYou = useAgentNeedsYou(agent.id, agents.me);
+  const needsYou = useAgentNeedsYou(signedIn, agent.id, agents.me);
   const { rename } = actions;
   const editing = rename?.editing ?? false;
   const endedByKey = useRefocusAfterEdit(editing, row);

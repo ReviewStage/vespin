@@ -144,8 +144,13 @@ export function useTaskNeedsYou(tasks: Pick<TasksControl, "signedIn">, taskId: s
   return tasks.signedIn && needsYouOf(waiting, [], undefined, now).tasks.has(taskId);
 }
 
-/** Whether a thread of the agent with no task waits on `readerId` now (`needsYouOf`). */
-export function useAgentNeedsYou(agentId: string, readerId: string | undefined): boolean {
+/** Whether a thread of the agent with no task waits on `readerId` now (`needsYouOf`); never while signed out, when a reader not known yet would match every thread. */
+export function useAgentNeedsYou(
+  signedIn: boolean,
+  agentId: string,
+  readerId: string | undefined,
+): boolean {
   const now = useMinute();
-  return needsYouOf([], useInboxTaskless(), readerId, now).agents.has(agentId);
+  const taskless = useInboxTaskless();
+  return signedIn && needsYouOf([], taskless, readerId, now).agents.has(agentId);
 }

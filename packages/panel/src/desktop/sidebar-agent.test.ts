@@ -159,6 +159,7 @@ function mount(
         createElement(SidebarAgent, {
           agent,
           agents,
+          signedIn: true,
           current: false,
           now: 3,
           at: agent.activityAt,
@@ -332,6 +333,7 @@ test("a draft waiting in the agent's box marks its row with the Draft pencil whi
             createElement(SidebarAgent, {
               agent: RUN,
               agents,
+              signedIn: true,
               current,
               now: 3,
               at: RUN.activityAt,
