@@ -69,6 +69,76 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.30.0 — 2026-11-09
+
+### Open pull requests on GitHub
+
+Settings › Account › Links › Open pull requests in sends every pull request
+row, chip, and link to GitHub when set to GitHub, and their menus offer Open in
+Vespin instead. The Pull request tab's header gains Open on GitHub beside its
+merge controls at every width.
+([#7913](https://github.com/ReviewStage/vespin/pull/7913),
+[#7909](https://github.com/ReviewStage/vespin/pull/7909))
+
+### Share an agent's port from the web and the CLI
+
+The plug menu on an agent's box shares a port from the web app too, and
+`vespin agent ports` and `vespin agent share` list and share them from the
+terminal. A shared link opens at the agent's own `vespin.page` address, only for
+members signed in who can reach the agent, and reaches a Vite dev server
+without its blocked-host page.
+([#7927](https://github.com/ReviewStage/vespin/pull/7927),
+[#7921](https://github.com/ReviewStage/vespin/pull/7921),
+[#7920](https://github.com/ReviewStage/vespin/pull/7920),
+[#7935](https://github.com/ReviewStage/vespin/pull/7935))
+
+### Connect agents and GitHub in place
+
+Setup's Connect an agent and Settings › Agents list each agent's plan and API
+key as rows that say how they stand, and connect, replace, or disconnect them in
+place, ChatGPT included. Setup's GitHub step and Settings › Workspace list the
+repositories Vespin reaches under one GitHub row with Add repositories, and
+every repository picker ends in a way to configure them.
+([#7915](https://github.com/ReviewStage/vespin/pull/7915),
+[#7910](https://github.com/ReviewStage/vespin/pull/7910),
+[#7890](https://github.com/ReviewStage/vespin/pull/7890))
+
+### Improvements
+
+- A turn whose plan has reached its limit runs on the saved API key, and is
+  refused with the limit and when it resets only where there is none
+  ([#7928](https://github.com/ReviewStage/vespin/pull/7928),
+  [#7926](https://github.com/ReviewStage/vespin/pull/7926),
+  [#7922](https://github.com/ReviewStage/vespin/pull/7922))
+- Every agent row, the Agents list atop a task's description included, offers
+  the same menu, and History mutes its archived rows ([#7917](https://github.com/ReviewStage/vespin/pull/7917))
+- An archived agent says only that it is archived, with Unarchive ([#7886](https://github.com/ReviewStage/vespin/pull/7886))
+- Agents name an automation as a chip you can press ([#7898](https://github.com/ReviewStage/vespin/pull/7898))
+- On a phone, a held merge keeps its reason on its chip and says when a required
+  review is missing ([#7907](https://github.com/ReviewStage/vespin/pull/7907))
+- On a phone, a settings row keeps its end on its name's line and drops its
+  controls under its words ([#7824](https://github.com/ReviewStage/vespin/pull/7824))
+- On a touch screen, a group head such as the sidebar's My tasks takes a
+  finger-sized press ([#7884](https://github.com/ReviewStage/vespin/pull/7884))
+- Sign-in's Cancel waits inside the button you pressed, so the card stays still ([#7723](https://github.com/ReviewStage/vespin/pull/7723))
+- Setup's team step stands on its title alone ([#7724](https://github.com/ReviewStage/vespin/pull/7724))
+- The sidebar's view menu reads Show completed sub-tasks, as the Tasks page does ([#7883](https://github.com/ReviewStage/vespin/pull/7883))
+- The sidebar groups tasks by repository or not at all, without Group by ›
+  Progress ([#7899](https://github.com/ReviewStage/vespin/pull/7899))
+
+### Fixes
+
+- Fixed opening an agent sometimes landing its transcript short of its newest
+  line ([#7908](https://github.com/ReviewStage/vespin/pull/7908))
+- Fixed a dragged sidebar row carrying the rows below it under the pointer ([#7894](https://github.com/ReviewStage/vespin/pull/7894))
+- Fixed a menu with no icons leaving an empty column for them ([#7902](https://github.com/ReviewStage/vespin/pull/7902))
+
+### Misc
+
+- Updated cloud agents' sandboxes to stop three minutes after their last use ([#7914](https://github.com/ReviewStage/vespin/pull/7914))
+- Updated session replay to record tabs, panes, dialogs, and Settings masked
+  rather than as blank boxes ([#7903](https://github.com/ReviewStage/vespin/pull/7903))
+
 ## 0.29.0 — 2026-11-09
 
 ### The sidebar, redesigned
