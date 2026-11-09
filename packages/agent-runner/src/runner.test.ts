@@ -1063,20 +1063,24 @@ it.effect(
       assert.equal(options.env?.PLAYWRIGHT_BROWSERS_PATH, "0");
       // The first turn waits on no server the CLI may connect in the background.
       assert.equal(options.env?.CLAUDE_CODE_MCP_STARTUP_WAIT_MS, "0");
-      // The hour-long prompt cache is on only where the config asks for it, whatever the runner's own environment holds.
-      const inherited = yield* launch(SHORT_TURN, fakeService(), {
+      // The main conversation alone keeps its prompt cache for an hour, and only where the config asks for it,
+      // whatever the runner's own environment holds.
+      const inheritedEnv = {
         ...ENV,
+        CLAUDE_CODE_PROMPT_CACHE_TTL: "1h",
         ENABLE_PROMPT_CACHING_1H: "1",
-      });
-      yield* inherited.write(CONFIG);
-      yield* inherited.write(FIRST_MESSAGE);
-      yield* Fiber.join(inherited.run);
-      assert.equal(inherited.cli.options?.env?.ENABLE_PROMPT_CACHING_1H, undefined);
-      const hour = yield* launch(SHORT_TURN, fakeService());
-      yield* hour.write({ ...CONFIG, promptCacheHour: true });
-      yield* hour.write(FIRST_MESSAGE);
-      yield* Fiber.join(hour.run);
-      assert.equal(hour.cli.options?.env?.ENABLE_PROMPT_CACHING_1H, "1");
+      };
+      const cacheEnvOf = (config: RunnerConfig) =>
+        Effect.gen(function* () {
+          const launched = yield* launch(SHORT_TURN, fakeService(), inheritedEnv);
+          yield* launched.write(config);
+          yield* launched.write(FIRST_MESSAGE);
+          yield* Fiber.join(launched.run);
+          const env = launched.cli.options?.env;
+          return [env?.CLAUDE_CODE_PROMPT_CACHE_TTL, env?.ENABLE_PROMPT_CACHING_1H];
+        });
+      assert.deepEqual(yield* cacheEnvOf(CONFIG), [undefined, undefined]);
+      assert.deepEqual(yield* cacheEnvOf({ ...CONFIG, promptCacheHour: true }), ["1h", undefined]);
     }),
 );
 

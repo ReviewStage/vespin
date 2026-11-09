@@ -118,8 +118,9 @@ function launchCredential(
 }
 
 /**
- * The half of Claude Code agents whose launches keep the CLI's prompt cache
- * for an hour rather than its default five minutes: those whose id, a UUID
+ * The half of Claude Code agents whose launches keep the main conversation's
+ * prompt cache for an hour rather than the CLI's default five minutes, its
+ * workers left on that default: those whose id, a UUID
  * as Postgres writes it, begins with one of these hex digits. Note that the
  * weekly agent audit reads this rule to tell the halves apart, recomputing it
  * from `agent.id` alone (`left(agent.id::text, 1) between '0' and '7'`), so
