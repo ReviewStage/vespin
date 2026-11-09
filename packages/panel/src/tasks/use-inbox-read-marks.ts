@@ -13,7 +13,7 @@ import { useAppCommand } from "../app-commands.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { acknowledgedOnOpen, type InboxListed, isUnread, settledOnRead } from "./inbox-model.js";
 import { type InboxReminder, type RemindSaying, remindWords } from "./inbox-remind.js";
-import { markedNote, REMIND_REFUSED, useInboxPresses } from "./inbox-writes.js";
+import { acknowledgedNote, markedNote, REMIND_REFUSED, useInboxPresses } from "./inbox-writes.js";
 import type { TaskInboxControl } from "./use-task-inbox.js";
 
 /**
@@ -116,7 +116,7 @@ export function useInboxReadMarks({
       void Promise.all(nods).then((taken) => {
         const landed = taken.filter((each) => each.kept).length;
         if (landed === nodding.length) return;
-        refused(markedNote(false, landed, nodding.length - landed), firstRefusal(taken), {
+        refused(acknowledgedNote(landed, nodding.length - landed), firstRefusal(taken), {
           workspaceId,
         });
       });
