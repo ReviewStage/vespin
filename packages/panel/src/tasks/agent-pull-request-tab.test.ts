@@ -2986,7 +2986,11 @@ function mergeCases() {
     [
       "review required",
       merging(MERGE_STATE.BLOCKED, { review: REVIEW_DECISION.REVIEW_REQUIRED }),
-      held("Review required", "attention", "A required review is missing"),
+      held(
+        "Review required",
+        "attention",
+        "A required review is missing, so it can't be merged yet",
+      ),
     ],
     ["checks failing", merging(MERGE_STATE.BLOCKED, { checks: CHECK_SUMMARY.FAILING }), undefined],
     [
@@ -2995,12 +2999,16 @@ function mergeCases() {
         checks: CHECK_SUMMARY.FAILING,
         review: REVIEW_DECISION.REVIEW_REQUIRED,
       }),
-      held("Review required", "attention", "A required review is missing"),
+      held(
+        "Review required",
+        "attention",
+        "A required review is missing, so it can't be merged yet",
+      ),
     ],
     [
       "changes requested",
       merging(MERGE_STATE.BLOCKED, { review: REVIEW_DECISION.CHANGES_REQUESTED }),
-      held("Changes requested", "danger", "Changes were requested"),
+      held("Changes requested", "danger", "Changes were requested, so it can't be merged yet"),
     ],
     [
       "blocked",
