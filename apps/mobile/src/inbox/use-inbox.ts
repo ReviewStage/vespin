@@ -23,6 +23,7 @@ import {
   waitsOnReaderNow,
 } from "@repo/features/inbox-list-model";
 import { searchTokens } from "@repo/features/search-tokens";
+import { MP4_TYPE, WEBM_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   INBOX_FEED,
@@ -209,15 +210,24 @@ export function useReadOnOpen(listed: InboxListed | undefined): void {
   }, [id]);
 }
 
+/** The extension each video the player reads is written under, which AVFoundation reads a file's container by. */
+const VIDEO_EXTENSION: Readonly<Record<string, string>> = {
+  [MP4_TYPE]: "mp4",
+  [WEBM_TYPE]: "webm",
+};
+
 /**
- * Where a file's bytes were written for the system's player to read: a file
- * of the app's caches, named by the attachment, so it is written once. Note
- * that the bytes are written beside it first and moved into place once the
- * write settles, so the player is never handed a file still being written,
- * and a write cut short never stands as the file a later read finds.
+ * Where a video's bytes were written for the system's player to read: a file
+ * of the app's caches, named by the attachment and its type's extension, so
+ * it is written once. Note that the bytes are written beside it first and
+ * moved into place once the write settles, so the player is never handed a
+ * file still being written, and a write cut short never stands as the file a
+ * later read finds.
  */
-async function cachedFile(attachmentId: string, base64: string): Promise<string> {
-  const name = `inbox-${attachmentId}`;
+async function cachedFile(attachmentId: string, contentType: string, base64: string): Promise<string> {
+  const extension = VIDEO_EXTENSION[contentType];
+  const name =
+    extension === undefined ? `inbox-${attachmentId}` : `inbox-${attachmentId}.${extension}`;
   const file = new File(Paths.cache, name);
   if (file.exists) return file.uri;
   const writing = new File(Paths.cache, `${name}.writing`);
@@ -230,8 +240,9 @@ async function cachedFile(attachmentId: string, base64: string): Promise<string>
 /**
  * What each of a thread's files is drawn from, by its attachment, read once
  * through the host as the panel reads one (`AGENTS_INBOX_ATTACHMENT`): a
- * picture as a `data:` address, and a video as a file of the app's caches,
- * since the system's player reads a file; one still on its way, or that
+ * picture as a `data:` address, and a video, asked for as its MP4 copy, as a
+ * file of the app's caches, since the system's player reads a file, which an
+ * older recording with no copy answers as a WebM the player cannot play; one still on its way, or that
  * could not be read, is absent. Note that each file is asked for once while
  * the thread stands, whatever `media` list names it, because the thread's
  * item is made anew on every change to it, its read mark as it opens among
@@ -264,14 +275,20 @@ export function useThreadMedia(
         if (asked.current.itemId === itemId) ids.delete(each.attachmentId);
         refused("Reading a thread's file")(error);
       };
-      acts[ACT_KIND.AGENTS_INBOX_ATTACHMENT]({ itemId, attachmentId: each.attachmentId })
+      // A video is asked for as the MP4 copy iOS's player plays, which an older recording kept without one answers as its WebM.
+      const playable = each.kind === INBOX_MEDIA.VIDEO ? ({ playable: MP4_TYPE } as const) : {};
+      acts[ACT_KIND.AGENTS_INBOX_ATTACHMENT]({
+        itemId,
+        attachmentId: each.attachmentId,
+        ...playable,
+      })
         .then(async (read) => {
           // A read that lands once another thread stands is that thread's no longer.
           if (asked.current.itemId !== itemId) return;
           if (!("base64" in read)) throw new Error(`The file was not read: ${read.failure}.`);
           const source =
             each.kind === INBOX_MEDIA.VIDEO
-              ? await cachedFile(each.attachmentId, read.base64)
+              ? await cachedFile(each.attachmentId, read.contentType, read.base64)
               : `data:${read.contentType};base64,${read.base64}`;
           if (asked.current.itemId !== itemId) return;
           setSources((held) => new Map(held).set(each.attachmentId, source));

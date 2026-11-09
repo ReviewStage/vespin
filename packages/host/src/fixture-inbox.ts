@@ -50,6 +50,7 @@ import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
 import { TASK_PRIORITY, TASK_STATUS, type Task, type TaskSummary } from "@repo/features/task-wire";
 import type { TasksView } from "@repo/features/tasks-view";
+import { MP4_TYPE } from "@repo/features/video-signature";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { ACT_KIND } from "./acts.js";
@@ -63,7 +64,11 @@ import {
 } from "./app-state.js";
 import type { PortActKind, PortActPayload, PortActResult } from "./contract/index.js";
 import { fixtureAgentPicture, fixtureAgentTranscript } from "./fixture-agent-transcript.js";
-import { FIXTURE_PICTURE_PNG, FIXTURE_VIDEO_WEBM } from "./fixture-inbox-media.js";
+import {
+  FIXTURE_PICTURE_PNG,
+  FIXTURE_VIDEO_MP4,
+  FIXTURE_VIDEO_WEBM,
+} from "./fixture-inbox-media.js";
 import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
 
 /**
@@ -1012,13 +1017,16 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   },
   // Note that a mark is taken as the service takes one, the item's state echoed, though nothing here moves, so its dot stays as staged: the host draws a mark, and none stands behind a fixture run's act door.
   [ACT_KIND.AGENTS_INBOX_READ_STATE]: ({ itemId, unread }) => ({ id: itemId, unread }),
-  [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId }) => {
+  // Note that the recording is answered as its MP4 copy to a reader that plays MP4, as the service answers one it keeps a copy of.
+  [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId, playable }) => {
     if (itemId !== RECORDED.ITEM) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     if (attachmentId === RECORDED.PICTURE) {
       return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
     }
     if (attachmentId === RECORDED.VIDEO) {
-      return { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
+      return playable === MP4_TYPE
+        ? { contentType: MP4_TYPE, base64: FIXTURE_VIDEO_MP4 }
+        : { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
     }
     return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
   },
