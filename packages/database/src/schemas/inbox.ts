@@ -10,7 +10,7 @@ import {
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import { timestamptz } from "./_helpers.js";
+import { literal, timestamptz } from "./_helpers.js";
 import { agentTable } from "./agent.js";
 import { organization, user } from "./auth.js";
 import { inboxMessage } from "./inbox-message.js";
@@ -135,9 +135,7 @@ export const inboxItem = pgTable(
     // DDL, which takes no bound parameter, so the status is inlined rather than passed.
     index("inbox_item_org_open_taskless_updated")
       .on(table.organizationId, table.updatedAt)
-      .where(
-        sql`${table.status} = ${sql.raw(`'${INBOX_STATUS.OPEN}'`)} and ${table.taskId} is null`,
-      ),
+      .where(sql`${table.status} = ${literal(INBOX_STATUS.OPEN)} and ${table.taskId} is null`),
     // What waits across the account is read on every look of a held read, its open items the latest changed first.
     index("inbox_item_user_status_updated").on(table.userId, table.status, table.updatedAt),
   ],
