@@ -59,6 +59,7 @@ export {
 export { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 export { LIST_LOOK, type ListLook, ListSection, RowList } from "./row-list.js";
 export { Screen, Spacer } from "./screen.js";
+export { SealedPage } from "./sealed-page.js";
 export {
   AccountRow,
   ActionRow,
@@ -100,4 +101,14 @@ export {
 export { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 export { MARK_SIZE, SPACE } from "./tokens/space.js";
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
+export { AgentHead, AgentTranscript } from "./transcript.js";
+export {
+  NO_TOGGLES,
+  shownMediaIds,
+  TRANSCRIPT_ITEM,
+  type TranscriptItem,
+  type TranscriptToggles,
+  toggledAt,
+  transcriptItems,
+} from "./transcript-model.js";
 export { Video } from "./video.js";
