@@ -1,6 +1,5 @@
 import { type AgentInboxScope, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import type { TaskSummary } from "@repo/features/task-wire";
 import type {
   AppInboxAgentHolding,
   AppInboxItems,
@@ -9,14 +8,6 @@ import type {
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { inboxItemsQuery, inboxItemsRetryMutation } from "../live-reads.js";
-import {
-  agentGroups,
-  type InboxGroup,
-  inboxGroup,
-  NO_ITEMS,
-  type TasklessInboxAgent,
-  taskHolder,
-} from "./inbox-model.js";
 
 /**
  * use-holder-inbox-items.ts -- every holder's inbox items for the window's Inbox, its search, and a person's page, drawn from the account's feed of every item the host holds for the session.
@@ -41,7 +32,7 @@ export interface InboxHolding {
 }
 
 /** One value for each kind of holder, a task's and an agent's apart, since each is keyed by its own id. */
-export type ByHolderKind<Value> = { readonly [Kind in ScopeKind]: Value };
+type ByHolderKind<Value> = { readonly [Kind in ScopeKind]: Value };
 
 /** What the window's Inbox lists from. */
 export interface HolderInboxItems {
@@ -77,37 +68,6 @@ export function agentHoldings(holdings: readonly AppInboxAgentHolding[]): readon
     id: agentId,
     updatedAt,
   }));
-}
-
-/**
- * Every holder as the Inbox groups it, with its items as `read` holds them:
- * each task main says holds items that the listed workspace's list holds,
- * so one not yet read, or another workspace's, is listed nowhere, and each
- * agent with no task of the listed workspace (`agentGroups`). Note that a
- * task's status never leaves it out: a task done or canceled is listed,
- * its items with it. Each holder's group is the one made last while its
- * items are (`inboxGroup`), so the page drawn again regroups nothing that
- * did not move.
- */
-export function inboxGroups(
-  read: ByHolderKind<ReadonlyMap<string, readonly InboxItem[]>>,
-  holders: {
-    readonly tasks: readonly AppInboxTaskHolding[];
-    readonly listed: readonly TaskSummary[];
-    readonly agents: readonly TasklessInboxAgent[];
-    readonly workspaceId: string | undefined;
-  },
-): readonly InboxGroup[] {
-  const listed = new Map(holders.listed.map((task) => [task.id, task]));
-  const ofTasks = holders.tasks.flatMap(({ taskId }) => {
-    const task = listed.get(taskId);
-    if (task === undefined) return [];
-    return [inboxGroup(taskHolder(task), read[INBOX_SCOPE_KIND.PLAN].get(taskId) ?? NO_ITEMS)];
-  });
-  return [
-    ...ofTasks,
-    ...agentGroups(holders.agents, read[INBOX_SCOPE_KIND.AGENT], holders.workspaceId),
-  ];
 }
 
 /** When the latest of the items changed; nothing for none. */

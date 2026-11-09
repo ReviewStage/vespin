@@ -1,5 +1,5 @@
 /**
- * app-state-reads.ts -- what a window reads of the host's document over its bridge: the one rule a delivery is adopted by, the following of the document from its first whole read, the selects a surface reads one slice through, and the Inbox's rows read from it.
+ * app-state-reads.ts -- what a window reads of the host's document over its bridge: the one rule a delivery is adopted by, the following of the document from its first whole read, the selects a surface reads one slice through, and the Inbox's rows and holders read from it.
  *
  * The panel reads these through `@repo/panel`'s `use-app-state.ts`, which
  * writes each reading into its Query client, and the Expo app through a
@@ -10,6 +10,7 @@
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/inbox-list-model";
 import { INBOX_ASK, type InboxMessage, recommendedLabels } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import {
@@ -368,4 +369,96 @@ export function inboxRowsOf(
       };
     }),
   );
+}
+
+/** No holder of either kind read: the feed before it first answers. */
+const NO_INBOX_READS: InboxReads = {
+  [INBOX_SCOPE_KIND.PLAN]: new Map(),
+  [INBOX_SCOPE_KIND.AGENT]: new Map(),
+};
+
+/** The account's feed of every item as the list model reads it: each holder's items by kind and then by id. */
+function feedReads(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): InboxReads {
+  const rows = feed.rows;
+  if (rows === undefined) return NO_INBOX_READS;
+  return {
+    [INBOX_SCOPE_KIND.PLAN]: new Map(Object.entries(rows[INBOX_SCOPE_KIND.PLAN])),
+    [INBOX_SCOPE_KIND.AGENT]: new Map(Object.entries(rows[INBOX_SCOPE_KIND.AGENT])),
+  };
+}
+
+/** Each workspace's select of its Inbox's holders as last made (`selectInboxGroupsIn`), by the workspace's id. */
+const inboxGroupSelects = new Map<
+  string | undefined,
+  (state: AppStateSnapshot) => readonly InboxGroup[]
+>();
+
+/**
+ * Every holder of Inbox items in one workspace as the window's Inbox groups
+ * them (`@repo/features/inbox-list-model`'s `inboxGroups`), as a `select`:
+ * each task of the workspace the host says holds items, and each of its
+ * agents with no task, with every item of theirs the account's feed holds,
+ * settled ones too, so a scope of the list model reads them as the panel's
+ * Inbox, which lists the chosen workspace's alone, does. No workspace named
+ * groups every workspace's. One select per workspace, made once and kept,
+ * each made anew only as the feed, the host's read of what waits, or the
+ * task list moves.
+ */
+export function selectInboxGroupsIn(
+  workspaceId: string | undefined,
+): (state: AppStateSnapshot) => readonly InboxGroup[] {
+  const held = inboxGroupSelects.get(workspaceId);
+  if (held !== undefined) return held;
+  const select = memoizedSelect(
+    (state: AppStateSnapshot) => [state[LIVE_READ.INBOX_ITEMS], state.inbox, state.tasks.tasks],
+    (feed, inbox, listed): readonly InboxGroup[] =>
+      inboxGroups(feedReads(feed), {
+        tasks: inbox.tasks,
+        listed:
+          workspaceId === undefined
+            ? listed
+            : listed.filter((task) => task.workspaceId === workspaceId),
+        agents: inbox.agents,
+        workspaceId,
+      }),
+  );
+  inboxGroupSelects.set(workspaceId, select);
+  return select;
+}
+
+/** The signed-in account's id, whose own open items alone need them, as `inboxList` reads its reader; none while nobody is signed in. */
+export function selectInboxReader(state: AppStateSnapshot): string | undefined {
+  return state.account.status === ACCOUNT_STATUS.SIGNED_IN ? state.account.id : undefined;
+}
+
+/** Every agent's title the task list holds, by the agent's id, as a `select`: the agents on its tasks and those with none, an agent with no title yet left out. Made anew only as the list moves. */
+export const selectAgentTitles = memoizedSelect(
+  (state: AppStateSnapshot) => [state.tasks],
+  (tasks): ReadonlyMap<string, string> =>
+    new Map(
+      [...(tasks.taskAgents ?? []), ...(tasks.tasklessAgents ?? [])].flatMap(({ id, title }) =>
+        title === null ? [] : [[id, title] as const],
+      ),
+    ),
+);
+
+/** Where the account's feed of Inbox threads stands: still on its first read, refused, or answered. */
+export const INBOX_FEED = {
+  READING: "reading",
+  FAILED: "failed",
+  ANSWERED: "answered",
+} as const;
+
+export type InboxFeed = (typeof INBOX_FEED)[keyof typeof INBOX_FEED];
+
+/**
+ * Where the account's feed of every Inbox thread stands, as a `select`: on
+ * its first read until it answers, which an Inbox says rather than standing
+ * empty, refused where that read failed, and answered once it holds rows,
+ * a later failure leaving the rows it held standing.
+ */
+export function selectInboxFeed(state: AppStateSnapshot): InboxFeed {
+  const feed = state[LIVE_READ.INBOX_ITEMS];
+  if (feed.rows !== undefined) return INBOX_FEED.ANSWERED;
+  return feed.failed === true ? INBOX_FEED.FAILED : INBOX_FEED.READING;
 }

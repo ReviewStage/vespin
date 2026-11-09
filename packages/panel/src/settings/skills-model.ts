@@ -17,12 +17,12 @@ import {
   type InstalledSkillSource,
 } from "@repo/features/installed-skill-wire";
 import { formatBytes } from "@repo/features/number-format";
+import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { SKILL_NAME_RULE } from "@repo/features/skill-file";
 import { TASK_SKILL_SOURCE, type TaskSkillSource } from "@repo/features/task-wire";
 import { readFailedWords } from "@repo/features/words";
 import type { Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
 import { CONFIRM_LOSS, type ConfirmLoss, STATUS_TONE } from "@repo/ui";
-import { matchesTokens, searchTokens } from "@repo/ui/search-tokens";
 import { fencedBlock } from "../tasks/markdown-fence.js";
 
 /**

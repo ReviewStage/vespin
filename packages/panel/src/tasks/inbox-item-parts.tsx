@@ -12,6 +12,20 @@
 
 import type { ListedAgent } from "@repo/features/agent-wire";
 import {
+  holderAutomationId,
+  holderName,
+  INBOX_HOLDER,
+  INBOX_LINE,
+  type InboxHolder,
+  type InboxLineKind,
+  type InboxListed,
+  inboxLineKind,
+  inboxSettledStanding,
+  itemWorkspaceId,
+  needsYou as needsYouOf,
+  readersItem,
+} from "@repo/features/inbox-list-model";
+import {
   INBOX_STATUS,
   type InboxItem,
   type InboxPerson,
@@ -19,6 +33,7 @@ import {
 } from "@repo/features/inbox-wire";
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
+import { cardTitle } from "@repo/features/plain-words";
 import {
   cn,
   DraftMark,
@@ -52,25 +67,10 @@ import { agentStillWriting, providerOf } from "./agent-model.js";
 import { AgentMarkRef, type AgentSubject, lineSubject, tasklessSubject } from "./agent-ref.js";
 import { AutomationChipCard, TaskChipCard } from "./chip-cards.js";
 import { HOME_ROW_META } from "./home-row.js";
-import {
-  holderAutomationId,
-  holderName,
-  INBOX_HOLDER,
-  INBOX_LINE,
-  type InboxHolder,
-  type InboxLineKind,
-  type InboxListed,
-  inboxLineKind,
-  inboxSettledStanding,
-  itemWorkspaceId,
-  NEEDS_YOU,
-  needsYou as needsYouOf,
-  readersItem,
-} from "./inbox-model.js";
+import { NEEDS_YOU } from "./inbox-model.js";
 import { ReadAgentModel } from "./mentioned-agent-card.js";
 import { PlanGlyph } from "./tab-look.js";
 import { TASK_CARD_STANDING, TASK_STATUS_WORDS, TaskKey } from "./task-standing.js";
-import { cardTitle } from "./tool-call-model.js";
 import { useOpenPlace } from "./use-open-link.js";
 import { useTaskAgent } from "./use-task-work.js";
 

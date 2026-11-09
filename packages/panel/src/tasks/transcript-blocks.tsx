@@ -14,6 +14,7 @@ import {
 } from "@repo/features/mention-link";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
 import { formatBytes } from "@repo/features/number-format";
+import { cardTitle } from "@repo/features/plain-words";
 import {
   agentCallLine,
   CALL_KIND,
@@ -181,7 +182,7 @@ import { linkChip, type MentionDoors } from "./mention-chip.js";
 import { ModelLabel } from "./model-label.js";
 import { SubagentMark } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
-import { cardTitle, type SentWords, todosCount } from "./tool-call-model.js";
+import { type SentWords, todosCount } from "./tool-call-model.js";
 import {
   TRANSCRIPT_CODE_AND_TABLE_COMPONENTS,
   TranscriptMarkdownSource,

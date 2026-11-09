@@ -21,6 +21,7 @@ import { DEVICE_LAUNCH_UNSTARTED } from "@repo/features/device-agent-wire";
 import { FAILURE_REASON, type FailureReason, remedyLabel } from "@repo/features/failure-remedy";
 import { threadLineWords } from "@repo/features/inbox-wire";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
+import { cardTitle } from "@repo/features/plain-words";
 import {
   FAILURE_CONDITION,
   FAILURE_SURFACE,
@@ -249,7 +250,6 @@ import { useMentionDoors } from "./task-mentions.js";
 import { type AgentThreads, ThreadsDock } from "./threads-dock.js";
 import {
   calledAgent,
-  cardTitle,
   delegationView,
   isServerCallTool,
   loadedSkill,

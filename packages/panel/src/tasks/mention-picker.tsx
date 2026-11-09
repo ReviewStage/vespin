@@ -25,6 +25,7 @@ import {
 } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
 import type { PageLine } from "@repo/features/page-wire";
+import { searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TASK_TREE_ENTRY, type TaskSummary } from "@repo/features/task-wire";
 import { thingOfMention } from "@repo/features/thing-kind";
@@ -78,7 +79,6 @@ import { type Actor, APP_ACTOR } from "@repo/ui/actor-model";
 import type { NamedServer } from "@repo/ui/agent-servers-model";
 import { GLYPH } from "@repo/ui/icons";
 import { hitRangesIn, LOOSE_FROM, type SearchSubject, searchHit } from "@repo/ui/search-score";
-import { searchTokens } from "@repo/ui/search-tokens";
 import { type SkillOption, skillWord } from "@repo/ui/skill-mention";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import {

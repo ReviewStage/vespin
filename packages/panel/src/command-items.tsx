@@ -1,3 +1,4 @@
+import { INBOX_READ_MARK } from "@repo/features/inbox-list-model";
 /**
  * command-items.tsx -- the window's commands as every place offering one words, marks, and keys it: the one list ⌘K and the action menus both read.
  *
@@ -114,8 +115,8 @@ export const PANEL_COMMAND = {
   PIN_AGENT: keyedAs(APP_COMMAND.PIN, "Pin", <GLYPH.PIN />, NOUN.AGENT),
   UNPIN_AGENT: keyedAs(APP_COMMAND.PIN, "Unpin", <GLYPH.UNPIN />, NOUN.AGENT),
   TOGGLE_READ: keyed(APP_COMMAND.TOGGLE_READ, <MailIcon />),
-  MARK_UNREAD: keyedAs(APP_COMMAND.TOGGLE_READ, "Mark as unread", <MailIcon />),
-  MARK_READ: keyedAs(APP_COMMAND.TOGGLE_READ, "Mark as read", <MailOpenIcon />),
+  MARK_UNREAD: keyedAs(APP_COMMAND.TOGGLE_READ, INBOX_READ_MARK.UNREAD, <MailIcon />),
+  MARK_READ: keyedAs(APP_COMMAND.TOGGLE_READ, INBOX_READ_MARK.READ, <MailOpenIcon />),
   RENAME: unkeyed("Rename", <GLYPH.RENAME />),
   RENAME_TASK: unkeyed("Rename", <GLYPH.RENAME />, NOUN.TASK),
   VERSION_HISTORY: keyed(APP_COMMAND.VERSION_HISTORY, <HistoryIcon />),

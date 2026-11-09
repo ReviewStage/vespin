@@ -5,6 +5,7 @@ import {
   automationTriggerText,
 } from "@repo/features/automation-list-model";
 import { AUTOMATION_SCOPE, type AutomationSummary } from "@repo/features/automation-wire";
+import { INBOX_HOLDER, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { inboxWaitsOn } from "@repo/features/inbox-wire";
 import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -91,7 +92,7 @@ import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { HOME_ROW_CONTEXT, HOME_ROW_META, HOME_ROW_PICTURE } from "../tasks/home-row.js";
 import { InboxItemRows } from "../tasks/inbox-item-rows.js";
 import { InboxListSkeleton } from "../tasks/inbox-list.js";
-import { INBOX_HOLDER, NEEDS_YOU, waitsOnReaderNow } from "../tasks/inbox-model.js";
+import { NEEDS_YOU } from "../tasks/inbox-model.js";
 import { readAgentById } from "../tasks/use-agents.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";

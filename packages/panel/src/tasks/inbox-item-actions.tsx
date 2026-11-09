@@ -1,9 +1,9 @@
+import { isUnread } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
 import { useCopyLinkItem } from "../copy-link-item.js";
 import type { MenuAction, MenuEntry } from "../desktop/action-menu.js";
 import { type InboxResolver, resolveAction } from "./inbox-close.js";
-import { isUnread } from "./inbox-model.js";
 import { type RemindDoors, remindEntries } from "./inbox-remind.js";
 import { markReadItem } from "./task-menu-items.js";
 

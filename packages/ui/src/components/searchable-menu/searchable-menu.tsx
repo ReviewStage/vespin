@@ -1,8 +1,8 @@
+import { searchTokens } from "@repo/features/search-tokens";
 import { APP_SHORTCUTS, type KeyedCommand } from "@repo/settings/shortcuts";
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
 import { type SearchSubject, searchHit } from "../../search-score.js";
-import { searchTokens } from "../../search-tokens.js";
 import { REPLAY_MASKED, ReplayWords } from "../../session-replay-marks.js";
 import {
   AnchoredPopover,

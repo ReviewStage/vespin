@@ -73,6 +73,7 @@ import {
   standardModelIdOf,
 } from "@repo/features/models-wire";
 import { formatCompact, formatUsd } from "@repo/features/number-format";
+import { plainWords } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   PROVIDER_KEY_KIND,
@@ -135,7 +136,7 @@ import { TOOL_STATE, type ToolState } from "../ai-elements/tool.js";
 import { devicePlatformOf } from "../device-platform.js";
 import { GLYPH_STATE, type GlyphState, glyphStateWords } from "../state-glyph.js";
 import { drawnCall } from "./native-tool-calls.js";
-import { plainWords, remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-model.js";
+import { remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-model.js";
 
 /**
  * agent-model.ts -- what the agent tabs, a Start, and an agent's transcript draw, decided from what the service answered.

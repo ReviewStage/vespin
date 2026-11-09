@@ -1,4 +1,6 @@
 import { AGENT_STATUS, type AgentAttachment, type AgentSummary } from "@repo/features/agent-wire";
+import { type InboxMissing, missingWords } from "@repo/features/inbox-ask-words";
+import { acknowledgedOnOpen, awaitsNod } from "@repo/features/inbox-list-model";
 import { INBOX_BOUNDS, type InboxItem, type InboxMessage } from "@repo/features/inbox-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { Checkbox, type ComposerNote, STATUS_TONE } from "@repo/ui";
@@ -9,15 +11,7 @@ import { failureShown } from "../failure-report.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { AgentComposer } from "./agent-composer.js";
 import { focusMissing } from "./inbox-ask-controls.js";
-import { type InboxMissing, missingWords } from "./inbox-ask-words.js";
-import {
-  acknowledgedOnOpen,
-  awaitsNod,
-  type InboxDraft,
-  inboxMissing,
-  inboxNoteReading,
-  inboxThreadSend,
-} from "./inbox-model.js";
+import { type InboxDraft, inboxMissing, inboxNoteReading, inboxThreadSend } from "./inbox-model.js";
 import { ReplyToSelection } from "./reply-to-selection.js";
 import type { SkillSource } from "./skill-picker.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";

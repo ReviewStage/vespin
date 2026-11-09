@@ -1,3 +1,11 @@
+import {
+  INLINE_MARK,
+  INLINE_SPAN,
+  type InlineMark,
+  type InlineMarkName,
+  readInline,
+  writeInline,
+} from "@repo/features/composer-markdown";
 import { WRITING_MARK } from "@repo/settings/shortcuts";
 import { TEXT_LINK_MARK_ATTRIBUTES } from "@repo/ui/link-face";
 import {
@@ -33,14 +41,6 @@ import {
 import type { EditorProps, EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import { enterKeyHint, enterSends } from "../enter-sends.js";
-import {
-  INLINE_MARK,
-  INLINE_SPAN,
-  type InlineMark,
-  type InlineMarkName,
-  readInline,
-  writeInline,
-} from "./composer-markdown.js";
 import {
   COMPOSER_INPUT,
   type ComposerEditorHandle,

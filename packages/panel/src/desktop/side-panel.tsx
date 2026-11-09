@@ -9,6 +9,7 @@ import {
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { type PageLine, type PagePlace, pagePlaceId } from "@repo/features/page-wire";
+import { cardTitle } from "@repo/features/plain-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { TERMINAL_ASK, TERMINAL_TARGET, terminalTarget } from "@repo/features/terminal-entry";
 import { readingWords } from "@repo/features/words";
@@ -161,7 +162,7 @@ import {
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND, type TerminalKind } from "../tasks/terminal-session.js";
 import { TerminalCount, TerminalTab } from "../tasks/terminal-tab.js";
-import { cardTitle, TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
+import { TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
 import {
   agentTranscript,
   readWholeTranscript,

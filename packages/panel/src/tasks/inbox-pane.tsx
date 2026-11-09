@@ -1,5 +1,19 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { dictationKeywords } from "@repo/features/dictation-keywords";
+import { askHeadWords } from "@repo/features/inbox-ask-words";
+import {
+  holderAutomationId,
+  holderName,
+  INBOX_HOLDER,
+  INBOX_SETTLED_STANDING,
+  type InboxHolder,
+  type InboxKnownAsk,
+  inboxSettledStanding,
+  itemWorkspaceId,
+  knownAsk,
+  readersItem,
+  sentStamp,
+} from "@repo/features/inbox-list-model";
 import {
   fieldValueWords,
   INBOX_ASK,
@@ -17,6 +31,7 @@ import {
   openAskOf,
 } from "@repo/features/inbox-wire";
 import { markdownLink } from "@repo/features/link-grammar";
+import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -110,7 +125,6 @@ import {
   WaitingMarker,
   WithdrawnWhy,
 } from "./inbox-ask-controls.js";
-import { askHeadWords } from "./inbox-ask-words.js";
 import { type InboxResolver, resolveAction } from "./inbox-close.js";
 import type { InboxCodeDoors } from "./inbox-code-card.js";
 import { INBOX_VIEW_ITEMS } from "./inbox-columns.js";
@@ -125,23 +139,7 @@ import {
   MessageWords,
   useMessageWriter,
 } from "./inbox-message.js";
-import {
-  answerOf,
-  askNumberedPick,
-  EMPTY_INBOX_DRAFT,
-  holderAutomationId,
-  holderName,
-  INBOX_HOLDER,
-  INBOX_SETTLED_STANDING,
-  type InboxDraft,
-  type InboxHolder,
-  type InboxKnownAsk,
-  inboxSettledStanding,
-  itemWorkspaceId,
-  knownAsk,
-  readersItem,
-  sentStamp,
-} from "./inbox-model.js";
+import { answerOf, askNumberedPick, EMPTY_INBOX_DRAFT, type InboxDraft } from "./inbox-model.js";
 import { type InboxPager, InboxPagerControls } from "./inbox-pager.js";
 import type { InboxReminder } from "./inbox-remind.js";
 import { InboxStamp } from "./inbox-stamp.js";
@@ -149,7 +147,6 @@ import { REPLY_SCOPE, ReplyDoorProvider } from "./reply-to-selection.js";
 import { SentWords } from "./skill-chip.js";
 import { TAB_KIND, tabLook } from "./tab-look.js";
 import { TaskMentions, type TaskMentionsValue } from "./task-mentions.js";
-import { cardTitle } from "./tool-call-model.js";
 import { INERT_LINK_CLASS, TranscriptWords } from "./transcript-blocks.js";
 import type { AgentsControl } from "./use-agents.js";
 import { opensAsLink } from "./use-open-link.js";
