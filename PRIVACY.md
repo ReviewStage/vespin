@@ -112,15 +112,17 @@ stored like any other. To tell your machines apart, each sends us a keyed hash
 of its hardware or machine id, never the id itself, and a Mac sends its model
 name.
 
-When such an agent starts, we send that machine the Anthropic or OpenAI
-credential it runs on, sealed until the machine picks it up, when we erase our
-copy. For an agent on your ChatGPT plan, the machine instead fetches an access
-token from us while the agent runs. For a Claude agent, the credential sits in
-the agent's environment for that run, so any command the agent runs can read
-it. A Codex agent keeps it out of the commands it runs, but its commands still
-have full access to that machine's account. We take exact copies of the
-credential out of what the agent sends back to us, so a command that prints it
-does not put it in the transcript.
+When such an agent starts, we send that machine a copy of the Anthropic or
+OpenAI credential it runs on, sealed until the machine picks it up, when we
+erase that copy; your saved credential stays saved. For an agent on your
+ChatGPT plan, the machine instead fetches an access token from us while the
+agent runs. For a Claude agent, the credential sits in the agent's environment
+for that run, so any command the agent runs can read it. A Codex agent keeps it
+out of the commands it runs, but its commands still have full access to that
+machine's account. We take exact copies of a credential sent with the launch
+out of what the agent sends back to us, so a command that prints it does not
+put it in the transcript. A ChatGPT plan's access token is not taken out this
+way.
 
 For a repository the Vespin GitHub App reaches, an agent on your machine gets
 a GitHub token from us that lasts an hour and works only for that repository.
