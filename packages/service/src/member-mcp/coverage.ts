@@ -35,7 +35,12 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.LIST_TASKS]: [plans.list, taskSections.list],
   [MEMBER_MCP_TOOL.READ_TASK]: [plans.open],
   [MEMBER_MCP_TOOL.LIST_AGENTS]: [agents.listOfWorkspace, agents.listOfTask],
-  [MEMBER_MCP_TOOL.READ_AGENT]: [agents.read, agentPullRequests.pullRequest, messages.agentNewest],
+  [MEMBER_MCP_TOOL.READ_AGENT]: [
+    agents.read,
+    agentPullRequests.pullRequest,
+    messages.agentNewest,
+    messages.agent,
+  ],
   [MEMBER_MCP_TOOL.READ_AGENT_CHANGES]: [agentPullRequests.pullRequest, agents.changes],
   [MEMBER_MCP_TOOL.LIST_MODELS]: [models.list, account.preferences],
   [MEMBER_MCP_TOOL.READ_PAGE]: [
