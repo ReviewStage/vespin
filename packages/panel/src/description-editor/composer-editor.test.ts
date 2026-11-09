@@ -800,3 +800,10 @@ test("a paste over part of a marked word is cut to fit the bound as the words wo
 
   assert.equal(box.drafts.at(-1), "abcd**t** ok");
 });
+
+test("a fenced block's lines are handed back as they were written once the words change, its code read into no marks", () => {
+  const box = mounted("Run this:\n```js\nconst s = ``hi`` + **x**;\n```\nThen");
+  typeInComposer(box.host, " stop");
+
+  assert.equal(box.drafts.at(-1), "Run this:\n```js\nconst s = ``hi`` + **x**;\n```\nThen stop");
+});

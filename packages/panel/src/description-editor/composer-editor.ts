@@ -1,3 +1,4 @@
+import { fenceAfter } from "@repo/features/description-document";
 import { WRITING_MARK } from "@repo/settings/shortcuts";
 import { TEXT_LINK_MARK_ATTRIBUTES } from "@repo/ui/link-face";
 import {
@@ -315,13 +316,27 @@ function schemaMark(schema: Schema, mark: InlineMark): Mark {
   return schema.mark(mark.name, mark.href === undefined ? null : { href: mark.href });
 }
 
-/** The paragraphs lines of words stand for: one per line, its Markdown read into marks, each `/name` of a known skill and each mention its chip. */
+/**
+ * The paragraphs lines of words stand for: one per line, its Markdown read
+ * into marks, each `/name` of a known skill and each mention its chip. Note
+ * that a fenced block's lines, its fences included, stand as the words they
+ * are, because code read into marks is written back changed, ``` ``a`` ```
+ * as `` `a` ``, and a prompt kept and opened again would be saved so.
+ */
 function paragraphsOf(schema: Schema, text: string, chipping: Chipping): PmNode[] {
   const tokens = chipTokens(text, chipping);
   const paragraphs: PmNode[] = [];
   let lineStart = 0;
+  let fence: string | undefined;
   for (const line of text.split(NEWLINE)) {
     const lineEnd = lineStart + line.length;
+    const fenceBefore = fence;
+    fence = fenceAfter(fence, line);
+    if (fenceBefore !== undefined || fence !== undefined) {
+      paragraphs.push(schema.node("paragraph", null, line === "" ? [] : [schema.text(line)]));
+      lineStart = lineEnd + NEWLINE.length;
+      continue;
+    }
     const chips = tokens.filter((each) => each.start >= lineStart && each.end <= lineEnd);
     const atoms = chips.map((each) => ({
       start: each.start - lineStart,
