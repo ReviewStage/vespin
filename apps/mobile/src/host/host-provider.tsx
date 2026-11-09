@@ -3,6 +3,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { type ReactNode, useEffect, useState } from "react";
+import { HostFailedScreen } from "../screens/host-failed.js";
 import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
 import { launchFixtureProfile } from "./launch-arguments.js";
@@ -11,21 +12,26 @@ import { type StandingMobileHost, startMobileHost } from "./mobile-runtime.js";
 /** The version a build that names none reports, which no shipped build is. */
 const UNVERSIONED = "0.0.0";
 
+/** Where the host's start stands: not yet answered, standing with its document in a client, or failed. */
+type Standing = { readonly client: QueryClient } | { readonly failed: true };
+
 /**
  * Starts the host once, follows its document into a Query client of the
  * app's own, and draws the screens once the first reading is in it, so no
- * screen draws an empty document first. A host that cannot stand is said
- * on the console, and the screens draw over an empty client, so the shell
- * still shows rather than nothing. The host is drained as the tree
- * unmounts, which on a device is the app ending.
+ * screen draws an empty document first. A host that cannot stand is said on
+ * the console and shown in the screens' place with Retry, which starts it
+ * again, rather than drawing an empty Inbox over nothing. The host is
+ * drained as the tree unmounts, which on a device is the app ending.
  */
 export function HostProvider({ children }: { readonly children: ReactNode }) {
-  // The Query client the screens are drawn over, once the document is in it.
-  const [client, setClient] = useState<QueryClient | undefined>(undefined);
+  const [standing, setStanding] = useState<Standing | undefined>(undefined);
+  // Each press of Retry starts the host anew.
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let live = true;
     let started: StandingMobileHost | undefined;
     let stopFollowing: (() => void) | undefined;
+    setStanding(undefined);
     startMobileHost({
       fixture: launchFixtureProfile(),
       appVersion: Constants.expoConfig?.version ?? UNVERSIONED,
@@ -38,12 +44,12 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
         const following = followAppStateInto(host.bridge, client);
         stopFollowing = following.stop;
         await following.written;
-        if (live) setClient(client);
+        if (live) setStanding({ client });
         else void host.close();
       },
       (error: unknown) => {
-        console.error("The app's host could not stand; its screens draw nothing of it.", error);
-        if (live) setClient(new QueryClient());
+        console.error("The app's host could not start.", error);
+        if (live) setStanding({ failed: true });
       },
     );
     return () => {
@@ -51,7 +57,10 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
       stopFollowing?.();
       void started?.close();
     };
-  }, []);
-  if (client === undefined) return null;
-  return <QueryClientProvider client={client}>{children}</QueryClientProvider>;
+  }, [attempt]);
+  if (standing === undefined) return null;
+  if ("failed" in standing) {
+    return <HostFailedScreen onRetry={() => setAttempt((count) => count + 1)} />;
+  }
+  return <QueryClientProvider client={standing.client}>{children}</QueryClientProvider>;
 }

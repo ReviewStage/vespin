@@ -112,7 +112,10 @@ function heard(): AppStateBridgeReads | undefined {
   try {
     const bridge = appBridge();
     if (typeof bridge.onAppState !== "function") return undefined;
-    return { requestAppState: () => bridge.requestAppState(), onAppState: bridge.onAppState };
+    return {
+      requestAppState: () => bridge.requestAppState(),
+      onAppState: (listener) => bridge.onAppState(listener),
+    };
   } catch {
     return undefined;
   }
