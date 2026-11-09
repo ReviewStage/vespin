@@ -519,7 +519,7 @@ function useScrollToOwnMessage(
     const was = seen.current;
     seen.current = { itemId: item.id, lastId: last?.id };
     const scroller = board.current;
-    if (!own || scroller === null || was.itemId !== item.id || was.lastId === last?.id) return;
+    if (!own || scroller === null || was.itemId !== item.id || was.lastId === last.id) return;
     const comment = scroller.querySelector(`[data-message-id="${CSS.escape(last.id)}"]`);
     if (comment === null) return;
     const room = scroller.getBoundingClientRect();

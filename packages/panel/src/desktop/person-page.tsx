@@ -264,7 +264,7 @@ function AgentRow({
       subject={subject}
       at={at}
       editor={
-        editing && rename !== undefined ? (
+        editing ? (
           <InlineEdit
             value={rename.asked ?? subject.name}
             label="Agent name"

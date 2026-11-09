@@ -293,7 +293,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   const { agentRepository, workspaceId: agentWorkspace } = agents;
   const holdingAgents = useMemo(
     () =>
-      settles && pageAgent !== undefined
+      settles
         ? [
             ...agentsHolding,
             inboxAgentOf({

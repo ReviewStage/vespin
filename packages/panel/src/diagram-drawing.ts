@@ -72,7 +72,7 @@ function keep(appearance: DiagramAppearance, code: string, answer: DiagramDrawin
   });
 }
 
-/** A code drawn in an appearance, joining the draw already running for it; a draw that fails is a refusal. */
+/** A code drawn in an appearance, joining the draw already running for it; a draw that fails answers a refusal, never a rejection (`DiagramModule`). */
 function drawnBy(
   module: DiagramModule,
   appearance: DiagramAppearance,
@@ -82,14 +82,11 @@ function drawnBy(
   if (running !== undefined) return running;
   const pending = drawing.get(appearance) ?? new Map<string, Promise<DiagramDrawing>>();
   drawing.set(appearance, pending);
-  const answer = module
-    .draw(code, appearance)
-    .catch((): DiagramDrawing => ({ kind: DIAGRAM_DRAWING.REFUSED }))
-    .then((settled) => {
-      keep(appearance, code, settled);
-      pending.delete(code);
-      return settled;
-    });
+  const answer = module.draw(code, appearance).then((settled) => {
+    keep(appearance, code, settled);
+    pending.delete(code);
+    return settled;
+  });
   pending.set(code, answer);
   return answer;
 }

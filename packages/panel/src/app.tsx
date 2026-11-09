@@ -369,7 +369,7 @@ function AppWindow(): React.JSX.Element {
         return;
       }
       if (!routedStanding) return;
-      const from = routedHere?.address;
+      const from = routedHere.address;
       const kept = stayed();
       arrive(() => {
         if (!kept && routerHistory.location.href === from) routedExits.leave();

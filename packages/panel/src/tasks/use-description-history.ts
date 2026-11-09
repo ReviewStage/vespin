@@ -186,7 +186,7 @@ function taskRevisionQueryOptions(
 function versionRead(version: UseQueryResult<TasksRevisionAnswer>): VersionRead {
   const failed = version.isError || (version.data !== undefined && "failure" in version.data);
   if (version.isPending || (version.isFetching && failed)) return { kind: HISTORY_READ.READING };
-  if (version.isError || version.data === undefined || "failure" in version.data) {
+  if (version.isError || "failure" in version.data) {
     return { kind: HISTORY_READ.FAILED };
   }
   return {

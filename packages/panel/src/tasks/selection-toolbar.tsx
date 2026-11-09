@@ -183,22 +183,21 @@ export function useSelectionToolbar({
     editor.current?.focus();
   };
   const words = () => editor.current?.selectionBox();
-  const drawnToolbar =
-    !standing || format === undefined ? null : (
-      <RectFloat
-        open
-        anchor={coarse ? () => pastHandle(words()) : words}
-        side={coarse ? POPOVER_SIDE.BELOW : POPOVER_SIDE.ABOVE}
-      >
-        <FormatToolbar
-          ref={toolbar}
-          marks={format.marks}
-          onMark={mark}
-          turnInto={blocks && !format.cell ? { current: format.block, onTurn: turn } : undefined}
-          onComment={onComment}
-        />
-      </RectFloat>
-    );
+  const drawnToolbar = !standing ? null : (
+    <RectFloat
+      open
+      anchor={coarse ? () => pastHandle(words()) : words}
+      side={coarse ? POPOVER_SIDE.BELOW : POPOVER_SIDE.ABOVE}
+    >
+      <FormatToolbar
+        ref={toolbar}
+        marks={format.marks}
+        onMark={mark}
+        turnInto={blocks && !format.cell ? { current: format.block, onTurn: turn } : undefined}
+        onComment={onComment}
+      />
+    </RectFloat>
+  );
   const href = linking?.href;
   const drawnField =
     linking === undefined ? null : (

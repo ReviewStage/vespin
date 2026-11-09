@@ -514,7 +514,7 @@ function PinnedAgentRow({
         groups={groups}
         rowRef={hold}
         editor={
-          editing && rename !== undefined ? (
+          editing ? (
             <InlineEdit
               value={rename.asked ?? pin.label}
               label="Agent name"

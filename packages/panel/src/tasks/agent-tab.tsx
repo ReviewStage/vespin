@@ -1015,7 +1015,7 @@ function MadeCallView({
           place={holder}
           pageId={shown.page}
           version={shown.version}
-          title={subject === undefined || subject === "" ? UNTITLED_PAGE : subject}
+          title={subject === "" ? UNTITLED_PAGE : subject}
         />
       )}
     </>
