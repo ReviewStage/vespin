@@ -86,10 +86,10 @@ const SIMULATOR: ComputerApp = {
 const TERMINAL: ComputerApp = { name: "Terminal", bundleId: "com.apple.Terminal", refused: true };
 
 /** An action an agent asks of an app, as the service queues it. */
-const computerCommand = (id: string, agentId: string, app: string): MacCommand => ({
+const computerCommand = (id: string, conversationId: string, app: string): MacCommand => ({
   id,
   kind: MAC_COMMAND_KIND.COMPUTER,
-  agentId,
+  conversationId,
   action: { op: COMPUTER_ACTION.CLICK, app, element_index: 3 },
   timeoutSeconds: 60,
 });

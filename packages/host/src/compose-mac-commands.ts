@@ -92,9 +92,9 @@ import type { RunMode } from "./run-mode.js";
  * through it under Settings › Let agents use apps on this Mac, whatever the
  * shell commands' setting says. The helper names the app first, launching
  * nothing: one agents are never offered is refused, one the developer
- * answered Always allow for, or allowed for this agent before, runs, and any
+ * answered Always allow for, or allowed for this agent's conversation before, runs, and any
  * other is asked about as an app (`MacAppAsk`), on the same terms as a shell
- * command's ask. Allow once holds the app for the agent that asked until the
+ * command's ask. Allow once holds the app for the conversation that asked until the
  * gate moves; Always allow adds it to the apps agents use without asking.
  * Listing the apps names none, so it asks nothing.
  *
@@ -279,7 +279,7 @@ export function composeMacCommands(
       computer === undefined
         ? [MAC_COMMAND_KIND.SHELL]
         : [MAC_COMMAND_KIND.SHELL, MAC_COMMAND_KIND.COMPUTER];
-    /** The apps each agent was allowed once, by the agent's id, until the gate moves. */
+    /** The apps each agent's conversation was allowed once, by its id, until the gate moves. */
     const allowedOnce = new Map<string, Set<string>>();
     /** The asks waiting on the developer, by the command's id, the earliest asked first, each with the account it was claimed for. */
     const asks = new Map<
@@ -424,7 +424,7 @@ export function composeMacCommands(
         if (app.refused) return neverOffered(app.name);
         const key = app.bundleId ?? app.name;
         const allowed = yield* use.allowedApps;
-        if (allowed.includes(key) || allowedOnce.get(command.agentId)?.has(key) === true) {
+        if (allowed.includes(key) || allowedOnce.get(command.conversationId)?.has(key) === true) {
           return undefined;
         }
         const asked: MacAppAsk = {
@@ -444,8 +444,8 @@ export function composeMacCommands(
           report("an app's Always allow could not be saved; the next agent asks again");
         }
         allowedOnce.set(
-          command.agentId,
-          new Set([...(allowedOnce.get(command.agentId) ?? []), key]),
+          command.conversationId,
+          new Set([...(allowedOnce.get(command.conversationId) ?? []), key]),
         );
         return undefined;
       });

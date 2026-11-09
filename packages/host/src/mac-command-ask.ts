@@ -54,7 +54,7 @@ export const macCommandAsksSchema = Schema.Struct({
 /**
  * What the developer answers an ask: run it this once, run it and every later
  * one without asking, or not at all. For an app, this once holds the app for
- * the agent that asked until the account or the setting moves, and every
+ * the conversation that asked until the account or the setting moves, and every
  * later one adds the app to the apps agents use without asking.
  */
 export const MAC_COMMAND_DECISION = {

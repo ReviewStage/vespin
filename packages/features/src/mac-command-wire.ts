@@ -254,14 +254,14 @@ export const macComputerActionSchema = EffectSchema.Union([
 export type MacComputerAction = typeof macComputerActionSchema.Type;
 
 /**
- * One action waiting for the Mac: its id, the agent that asked, which the
- * Mac's Allow once holds an app for, the action, and how long the developer
+ * One action waiting for the Mac: its id, the conversation of the agent that
+ * asked, which the Mac's Allow once holds an app for, the action, and how long the developer
  * may take to allow the app and the action to run, together.
  */
 const macComputerCommandSchema = EffectSchema.Struct({
   id: wireUuidSchema,
   kind: EffectSchema.Literal(MAC_COMMAND_KIND.COMPUTER),
-  agentId: wireUuidSchema,
+  conversationId: wireUuidSchema,
   action: macComputerActionSchema,
   timeoutSeconds: commandTimeout,
 });
@@ -276,10 +276,10 @@ export const macCommandSchema = EffectSchema.Union([
 
 /**
  * What a computer command asks, as the queue keeps it in the text a shell
- * command's command stands in: its agent and its action, as JSON.
+ * command's command stands in: its conversation and its action, as JSON.
  */
 const storedComputerRequestSchema = EffectSchema.fromJsonString(
-  EffectSchema.Struct({ agentId: wireUuidSchema, action: macComputerActionSchema }),
+  EffectSchema.Struct({ conversationId: wireUuidSchema, action: macComputerActionSchema }),
 );
 
 const decodeStoredComputerRequest = EffectSchema.decodeUnknownOption(storedComputerRequestSchema);
@@ -297,7 +297,10 @@ export interface StoredMacCommand {
 export function storedMacCommandText(command: MacCommand): string {
   return command.kind === MAC_COMMAND_KIND.SHELL
     ? command.command
-    : encodeStoredComputerRequest({ agentId: command.agentId, action: command.action });
+    : encodeStoredComputerRequest({
+        conversationId: command.conversationId,
+        action: command.action,
+      });
 }
 
 /** A command the queue kept, read back; none where a computer request no longer reads, which no Mac could run. */
@@ -306,7 +309,7 @@ export function macCommandOfStored(stored: StoredMacCommand): MacCommand | undef
   if (kind === MAC_COMMAND_KIND.SHELL) return { id, kind, command, timeoutSeconds };
   return Option.match(decodeStoredComputerRequest(command), {
     onNone: () => undefined,
-    onSome: ({ agentId, action }) => ({ id, kind, agentId, action, timeoutSeconds }),
+    onSome: ({ conversationId, action }) => ({ id, kind, conversationId, action, timeoutSeconds }),
   });
 }
 
