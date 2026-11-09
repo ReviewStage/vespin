@@ -19,6 +19,7 @@ import type { HostCapability } from "@repo/settings";
 import { SETTINGS_SEARCH_ANCHOR_ATTRIBUTE } from "@repo/settings/settings-anchors";
 import { SETTINGS_SECTION } from "@repo/settings/settings-views";
 import { SETTINGS_ROW_STATE } from "@repo/ui";
+import { ReplayUnmask, showsInReplay } from "@repo/ui/session-replay-marks";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -200,7 +201,14 @@ async function mount(
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(withQueryClient(createElement(AgentsPage, { signedIn: true }))));
+  // Note that the page stands under the unmask mark Settings draws every page under.
+  act(() =>
+    root.render(
+      withQueryClient(
+        createElement(ReplayUnmask, null, createElement(AgentsPage, { signedIn: true })),
+      ),
+    ),
+  );
   await settle();
   await vi.waitFor(() => assert.equal(harnessRowsStand(container), true));
   return container;
@@ -401,6 +409,15 @@ test("each harness's row names the credential in use, then what is wrong with it
       rowState(attention, "Claude"),
       connectedWith("Anthropic API key sk-ant-…wxyz"),
     ),
+  );
+  assert.equal(
+    showsInReplay(
+      rowButton(attention, "Claude")
+        .closest(".ui-settings-row")
+        ?.querySelector(".ui-settings-row-state"),
+    ),
+    false,
+    "the key's hint is masked in a screen recording",
   );
   assert.deepEqual(rowState(attention, "Codex"), needsHand("ChatGPT plan · Signed out"));
   assert.equal(rowButton(attention, "Codex").textContent, "Sign in again");

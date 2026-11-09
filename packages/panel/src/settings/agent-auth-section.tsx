@@ -74,6 +74,7 @@ import {
   TextLink,
   useConfirmDialog,
 } from "@repo/ui";
+import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -117,8 +118,10 @@ import { ReadFailed } from "./marks.js";
  * what is being pasted: it stands in the open field alone, is sent once on
  * Save, and is cleared as soon as the service keeps it. Every answer is the
  * account's credentials whole, which the page holds once and hands to the
- * Default model row (`onKeys`) so its note follows a save at once. The field
- * a secret is pasted into is kept out of the screen recording, which masks a
+ * Default model row (`onKeys`) so its note follows a save at once. The list
+ * and the dialog stand under the mask mark, since a saved key's hint names
+ * its last characters and Settings shows its own words, and the field a
+ * secret is pasted into is kept out of the screen recording, which masks a
  * field's characters but not their count.
  *
  * The ChatGPT plan connects through Codex's device-code login, which the
@@ -1451,22 +1454,24 @@ function AgentCredentialRows({
   const key = keyOf(answer, provider);
   const chosen = defaultOf(plan, key);
   return (
-    <Stack gap={GAP.SECTION}>
-      {/* With one credential saved, that one is used, so there is nothing to choose. */}
-      {plan === undefined || key === undefined || chosen === undefined ? null : (
-        <SettingsSection>
-          <DefaultRow provider={provider} chosen={chosen} />
-        </SettingsSection>
-      )}
-      <SettingsSection>
-        {provider === PROVIDER_KEY_PROVIDER.ANTHROPIC ? (
-          <ClaudePlanRow plan={plan} field={fields.token} />
-        ) : (
-          <ChatGptPlanRow plan={plan} connectButton={fields.signIn} />
+    <ReplayMask>
+      <Stack gap={GAP.SECTION}>
+        {/* With one credential saved, that one is used, so there is nothing to choose. */}
+        {plan === undefined || key === undefined || chosen === undefined ? null : (
+          <SettingsSection>
+            <DefaultRow provider={provider} chosen={chosen} />
+          </SettingsSection>
         )}
-        <ApiKeyRow provider={provider} stored={key} field={fields.key} />
-      </SettingsSection>
-    </Stack>
+        <SettingsSection>
+          {provider === PROVIDER_KEY_PROVIDER.ANTHROPIC ? (
+            <ClaudePlanRow plan={plan} field={fields.token} />
+          ) : (
+            <ChatGptPlanRow plan={plan} connectButton={fields.signIn} />
+          )}
+          <ApiKeyRow provider={provider} stored={key} field={fields.key} />
+        </SettingsSection>
+      </Stack>
+    </ReplayMask>
   );
 }
 
@@ -1699,7 +1704,7 @@ export function AgentAuthSection({
   const { held: drawn, onExited } = useHeldThroughExit(open);
 
   return (
-    <>
+    <ReplayMask>
       <HarnessList signedIn={signedIn} credentials={credentials}>
         {(read) =>
           HARNESSES.map((provider) => {
@@ -1737,7 +1742,7 @@ export function AgentAuthSection({
           onExited={onExited}
         />
       )}
-    </>
+    </ReplayMask>
   );
 }
 
@@ -1900,7 +1905,7 @@ export function AgentConnectSection({
     answer === undefined ? undefined : planOf(answer, PROVIDER_KEY_PROVIDER.OPENAI),
   );
   return (
-    <>
+    <ReplayMask>
       <HarnessList signedIn credentials={credentials}>
         {(read) =>
           HARNESSES.map((provider) => (
@@ -1917,6 +1922,6 @@ export function AgentConnectSection({
         }
       </HarnessList>
       <ChatGptConnect chatGpt={chatGpt} />
-    </>
+    </ReplayMask>
   );
 }
