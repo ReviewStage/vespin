@@ -5,7 +5,7 @@ import {
   isUnread,
   settledOnRead,
 } from "@repo/features/inbox-list-model";
-import { INBOX_REPLY, type InboxItem } from "@repo/features/inbox-wire";
+import { INBOX_REPLY, INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import { FAILURE_SURFACE, type FailureAbout } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -18,7 +18,13 @@ import { afterPaint } from "../after-paint.js";
 import { useAppCommand } from "../app-commands.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { type InboxReminder, type RemindSaying, remindWords } from "./inbox-remind.js";
-import { acknowledgedNote, markedNote, REMIND_REFUSED, useInboxPresses } from "./inbox-writes.js";
+import {
+  acknowledgedNote,
+  changedNote,
+  markedNote,
+  REMIND_REFUSED,
+  useInboxPresses,
+} from "./inbox-writes.js";
 import type { TaskInboxControl } from "./use-task-inbox.js";
 
 /**
@@ -103,7 +109,7 @@ export function useInboxReadMarks({
       }),
     [toast],
   );
-  // Note that each notice's nod goes on its own, at the revision the reader was shown, as Got it's does, so one the agent posted over since is not settled unseen; one settled already is not taken and says nothing.
+  // Note that each notice's nod goes on its own, at the revision the reader was shown, as Got it's does, so one the agent posted over since is not settled unseen and the reader is told it still waits; one settled already is not taken and says nothing.
   const nodAll = useCallback(
     (items: readonly InboxItem[]) => {
       const now = Date.now();
@@ -117,17 +123,30 @@ export function useInboxReadMarks({
           clientKey: crypto.randomUUID(),
         })
           .catch(unreached)
-          .then((answer) => ("failure" in answer ? notKept(answer) : KEPT)),
+          .then((answer) =>
+            "failure" in answer
+              ? { mark: notKept(answer), changed: false }
+              : { mark: KEPT, changed: !answer.taken && answer.item.status === INBOX_STATUS.OPEN },
+          ),
       );
-      void Promise.all(nods).then((taken) => {
-        const landed = taken.filter((each) => each.kept).length;
-        if (landed === nodding.length) return;
-        refused(acknowledgedNote(landed, nodding.length - landed), firstRefusal(taken), {
-          workspaceId,
+      void Promise.all(nods).then((answered) => {
+        const taken = answered.map((each) => each.mark);
+        const failed = taken.filter((each) => !each.kept).length;
+        const changed = answered.filter((each) => each.changed).length;
+        if (failed > 0) {
+          const acknowledged = nodding.length - failed - changed;
+          refused(acknowledgedNote(acknowledged, failed), firstRefusal(taken), { workspaceId });
+        }
+        if (changed === 0) return;
+        toast({
+          replayUnmasked: true,
+          words: changedNote(changed),
+          tone: STATUS_TONE.ATTENTION,
+          hold: TOAST_HOLD.FAILED,
         });
       });
     },
-    [sendNod, readerId, workspaceId, refused],
+    [sendNod, readerId, workspaceId, refused, toast],
   );
   const sendMark = useCallback(
     (item: InboxItem, unread: boolean, saying?: MarkSaying): Promise<Kept> =>
