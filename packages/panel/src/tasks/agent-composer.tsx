@@ -22,6 +22,8 @@ import type { ShortcutChord } from "@repo/settings/shortcuts";
 import {
   ComposerBody,
   ComposerFoot,
+  type ComposerNote,
+  type ComposerRefusal,
   MicrophoneIcon,
   MoreButton,
   moreLabel,
@@ -50,6 +52,7 @@ import { ActionMenu, type MenuEntry } from "../desktop/action-menu.js";
 import { modEnterSends } from "../enter-sends.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";
+import { PANEL_SPAN } from "../panel-spans.js";
 import { useAttachedFiles } from "../use-attached-files.js";
 import { AgentContextRing, ContextRingIcon } from "./agent-context.js";
 import { contextHint } from "./agent-context-model.js";
@@ -197,6 +200,15 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * opens as an agent's does, with no Built in section, since no agent has
  * started yet, and after them Task relation, which its owner hands the
  * menu (`plus`).
+ *
+ * An Inbox thread's reply is this same box too (`inbox-answer-box.tsx`),
+ * writing to the thread's agent, its model chip and + menu that agent's: its
+ * owner hands what only an answer has (`answer`), an open question's controls
+ * over the field, the checkbox that starts a new thread under the card, Send
+ * lit by a pick as by words and reading Got it or Start thread in words, what
+ * an unfinished answer lacks, and why a reply did not go. Its Send never
+ * stands Stop, and a File tab's mention is laid into the agent's own box
+ * rather than an answer's.
  */
 
 /** What the box's note says while the editor bundle could not be loaded. */
@@ -420,6 +432,22 @@ function ComposerMore({
   );
 }
 
+/** What a box that answers an Inbox thread lays over an agent's own (`inbox-answer-box.tsx`). */
+interface ComposerAnswer {
+  /** The open question's controls, the card's body over the field; nothing where none stand. */
+  readonly question: ReactNode;
+  /** What stands under the card in its room: the checkbox that sends as a new thread; nothing where the page offers none. */
+  readonly under: ReactNode;
+  /** Whether the box holds something to send, read off the answer as well as its words and files: a pick, a tick, a nod. */
+  readonly sendable: boolean;
+  /** Whether Send reads its label in words, where it settles something (Got it) or starts a thread. */
+  readonly inWords: boolean;
+  /** Why an empty Send sends nothing, told on its press and said under the bar; nothing where the answer lacks nothing. */
+  readonly refuses: ComposerRefusal | undefined;
+  /** What the owner says under the bar over the box's own notes: why a reply or a thread did not go; nothing where it has nothing to say. */
+  readonly note: ComposerNote | undefined;
+}
+
 /**
  * How an agent's box queues a message behind the turn under way, and edits
  * one queued already (`agent-queue-dock.tsx`); none for a box that queues
@@ -478,6 +506,7 @@ export function AgentComposer({
   takesFocus = true,
   listSide = MENTION_MENU_SIDE.ABOVE,
   queueing,
+  answer,
 }: {
   /** The agent the box writes to, which its `@` list does not offer; none for a draft not yet started. */
   agentId?: string | undefined;
@@ -506,9 +535,10 @@ export function AgentComposer({
   context?: AgentContext | undefined;
   /** What the agent was handed, which names the brief's part of the context. */
   brief?: AgentBrief | undefined;
-  /** What the agent published, once the service has said; nothing before. */
-  published: AgentPullRequestAnswer | undefined;
-  doors: PublishedDoors;
+  /** What the agent published, once the service has said; nothing before, or where the box draws no branch chip, as an Inbox answer's. */
+  published?: AgentPullRequestAnswer | undefined;
+  /** What the branch's chip opens and copies through; none where the box draws no branch chip. */
+  doors?: PublishedDoors | undefined;
   /** Stops the agent, answering whether the service took the Stop. */
   onStop: () => Promise<boolean>;
   /** Whether the conversation already holds a message, so the box takes a follow up rather than the first. */
@@ -547,6 +577,8 @@ export function AgentComposer({
   listSide?: MentionMenuSide;
   /** How the box queues behind the turn and edits a queued message; none where it queues nothing. */
   queueing?: ComposerQueueing | undefined;
+  /** What an Inbox thread's answer lays over the agent's box; none for a message to the agent. */
+  answer?: ComposerAnswer | undefined;
 }): React.JSX.Element {
   const connected = useConnected();
   const editor = useRef<ComposerEditorHandle | undefined>(undefined);
@@ -586,7 +618,11 @@ export function AgentComposer({
   const sendHeld = held || !sendable || files.reading;
   // Note that an edit's Save stands with the box emptied, since saving nothing gives the edit up.
   const empty =
-    !sendsEmpty && !editingQueued && !hasWordsOrFiles(composer.draft.trim(), composer.attachments);
+    answer === undefined
+      ? !sendsEmpty &&
+        !editingQueued &&
+        !hasWordsOrFiles(composer.draft.trim(), composer.attachments)
+      : !answer.sendable;
   const showsStop = empty && stoppable && !composer.sending && !editingQueued;
   // While a turn runs and the box holds a message it may go two ways; holding ⌘ says on Send which a send takes.
   const queues = queueing?.working && !empty && !held && !files.reading && !editingQueued;
@@ -719,7 +755,9 @@ export function AgentComposer({
   });
   const { dictation, dictating } = pickers;
   // A file's lines picked in a File tab on the page (⌥⌘K) are laid in here, where the caret stands.
-  useMentionBox((mention) => editor.current?.insertMention(mention));
+  useMentionBox(
+    answer === undefined ? (mention) => editor.current?.insertMention(mention) : undefined,
+  );
 
   const stop = () => {
     setStopping(true);
@@ -844,10 +882,11 @@ export function AgentComposer({
     >
       {/* A box closed for good wears the held look a box sending does, faded, so the note and Continue under it read as the way on. */}
       <PromptInput
-        className={closed ? "opacity-60" : undefined}
+        className={closed ? "opacity-60" : answer === undefined ? undefined : "inbox-answer"}
         dropping={files.drop.dropping}
         onSubmit={submit}
       >
+        {answer?.question}
         <ComposerBody
           files={
             <AttachedFileChips
@@ -857,6 +896,7 @@ export function AgentComposer({
           }
         >
           <ComposerField
+            keystrokeSpan={answer === undefined ? undefined : PANEL_SPAN.KEYSTROKE_INBOX_ANSWER}
             module={module}
             editor={editor}
             room={room}
@@ -905,11 +945,13 @@ export function AgentComposer({
                   more={plusRows}
                 />
               </ComposerAttach>
-              <BranchChip
-                published={published}
-                doors={doors}
-                narrow={folds(FOLD_WIDTH.PUBLISHED)}
-              />
+              {doors === undefined ? null : (
+                <BranchChip
+                  published={published}
+                  doors={doors}
+                  narrow={folds(FOLD_WIDTH.PUBLISHED)}
+                />
+              )}
               {tools?.(folds(FOLD_WIDTH.PUBLISHED))}
             </>
           }
@@ -943,6 +985,8 @@ export function AgentComposer({
           send={{
             label: sendWay?.label ?? sendLabel,
             ...(sendWay === undefined ? undefined : { icon: sendWay.icon }),
+            inWords: answer?.inWords,
+            refuses: answer?.refuses,
             chord: wording?.chord,
             // Note that a hold takes the other way than Send as it reads, which a held ⌘ may already have turned.
             onHold: queues || editingQueued ? () => sendOtherWay(queuesNow === true) : undefined,
@@ -957,7 +1001,8 @@ export function AgentComposer({
               : undefined
           }
           note={
-            note === undefined || noteFailure === undefined
+            answer?.note ??
+            (note === undefined || noteFailure === undefined
               ? undefined
               : {
                   words: note.text,
@@ -972,10 +1017,11 @@ export function AgentComposer({
                       ? composer.retry
                       : undefined,
                   mends: closed ? closedRemedy : undefined,
-                }
+                })
           }
         />
       </PromptInput>
+      {answer?.under}
     </ComposerCard>
   );
 }

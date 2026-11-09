@@ -446,18 +446,19 @@ export function useMentionLink(task?: MentionedTask): LinkDrawer {
   return useMemo(() => mentionLinkDrawer(doors), [doors]);
 }
 
-/** Makes the agent's message box the one a mention made elsewhere on the page is laid into, for as long as it is drawn. */
-export function useMentionBox(receive: MentionBox): void {
+/** Makes the agent's message box the one a mention made elsewhere on the page is laid into, for as long as it is drawn; none where the box takes none, as an Inbox answer's. */
+export function useMentionBox(receive: MentionBox | undefined): void {
   const stand = useContext(MentionBoxContext)?.stand;
   const latest = useRef(receive);
   latest.current = receive;
+  const takes = receive !== undefined;
   useEffect(() => {
-    if (stand === undefined) return;
-    const taking: MentionBox = (mention) => latest.current(mention);
+    if (stand === undefined || !takes) return;
+    const taking: MentionBox = (mention) => latest.current?.(mention);
     // Note that a box is set as a function's answer, since the box is itself a function.
     stand(() => taking);
     return () => stand((standing) => (standing === taking ? undefined : standing));
-  }, [stand]);
+  }, [stand, takes]);
 }
 
 /** Hands a mention to the agent's message box drawn on the page; nothing while no box stands there, or off a task's page. */

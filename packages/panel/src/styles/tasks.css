@@ -2204,10 +2204,7 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
 /* off-scale: 400px, a card under which the box folds its own presses into its ⋯ (composer-foot.css) */
 @container composer (width < 400px) {
   .agent-composer .agent-context-button,
-  .agent-composer
-    > form:not(.inbox-answer)
-    .agent-composer-actions:has(.agent-context-button)
-    .dictate-button {
+  .agent-composer > form .agent-composer-actions:has(.agent-context-button) .dictate-button {
     display: none;
   }
 
@@ -2228,7 +2225,7 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
    the ⋯, and Send. */
 @container composer (width < 240px) {
   .agent-composer .agent-composer-attach,
-  .agent-composer > form:not(.inbox-answer) .dictate-button {
+  .agent-composer > form .dictate-button {
     display: none;
   }
 

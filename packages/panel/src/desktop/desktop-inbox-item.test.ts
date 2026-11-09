@@ -2298,7 +2298,11 @@ test("a thread draws every message, the agent's by its tile and name alone, no t
   );
   assert.deepEqual(
     boxParts(pane),
-    ["controls", "line: Add a note", "row: Attach files, Dictate, Send"],
+    [
+      "controls",
+      "line: Add a note",
+      "row: Add files and more, Opus 5.5 High, Dictate, Composer actions, Send",
+    ],
     "under them the note line on its own, and under it the row: +, the microphone, and Send",
   );
   assert.equal(footWords(pane), "", "and no line of help");
