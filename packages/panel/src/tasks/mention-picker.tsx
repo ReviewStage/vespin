@@ -11,9 +11,10 @@ import {
   suggestedDates,
 } from "@repo/features/date-mention";
 import { descriptionSections } from "@repo/features/description-document";
+import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
-import { LINK_PLACE, type LinkPlace, linkOf } from "@repo/features/link-grammar";
+import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
 import {
   encodeMention,
   isMentionableTool,
@@ -443,16 +444,13 @@ type MentionRow = {
 } & (
   | { readonly mention: Mention }
   /** An Inbox thread, which no mention names: a pick writes its link, which every place draws as its chip. */
-  | { readonly thread: ThreadPlace; readonly item: InboxItem }
+  | { readonly thread: InboxItemPlace; readonly item: InboxItem }
   /** An automation, which no mention names either: a pick writes its link, drawn as its chip. */
   | { readonly automation: AutomationSummary }
   | { readonly skill: string }
   | { readonly from: MentionKind }
   | { readonly picksDate: true }
 );
-
-/** Where an Inbox thread stands: under the task that holds it, or under the agent on no task that posted it. */
-type ThreadPlace = Extract<LinkPlace, { readonly kind: typeof LINK_PLACE.INBOX_ITEM }>;
 
 interface MentionGroup {
   readonly label: string;
@@ -732,7 +730,7 @@ function personRows(
 }
 
 /** A thread's row, by its title, said by what holds it, found by both. */
-function threadRow(place: ThreadPlace, item: InboxItem, holder: string): MentionRow {
+function threadRow(place: InboxItemPlace, item: InboxItem, holder: string): MentionRow {
   return {
     thread: place,
     item,
@@ -763,7 +761,7 @@ function threadRows(
     const task = tasks.find((each) => each.id === planId && each.workspaceId === workspace.id);
     if (task === undefined) continue;
     for (const item of items) {
-      const place: ThreadPlace = { kind: LINK_PLACE.INBOX_ITEM, planId, itemId: item.id };
+      const place: InboxItemPlace = { kind: LINK_PLACE.INBOX_ITEM, planId, itemId: item.id };
       held.push({
         row: threadRow(place, item, task.name),
         own: planId === taskId,
@@ -775,7 +773,7 @@ function threadRows(
     const agent = agents.find((each) => each.id === agentId && each.workspaceId === workspace.id);
     if (agent === undefined) continue;
     for (const item of items) {
-      const place: ThreadPlace = { kind: LINK_PLACE.INBOX_ITEM, agentId, itemId: item.id };
+      const place: InboxItemPlace = { kind: LINK_PLACE.INBOX_ITEM, agentId, itemId: item.id };
       held.push({ row: threadRow(place, item, agentName(agent)), own: false, at: item.updatedAt });
     }
   }

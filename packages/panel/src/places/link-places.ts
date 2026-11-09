@@ -38,7 +38,7 @@ import type { HistoryLocation, RegisteredRouter, RouteIds } from "@tanstack/reac
 import { type PlaceParams, placeParamsOf } from "./place-params.js";
 
 /** A route of the panel's tree, by its id. */
-type PanelRouteId = RouteIds<RegisteredRouter["routeTree"]>;
+export type PanelRouteId = RouteIds<RegisteredRouter["routeTree"]>;
 
 /** What a link place reads of an address its route matched: its params, its query as its route's schema read it, and its fragment, without its `#`. */
 interface LinkAddress {

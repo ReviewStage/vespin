@@ -24,12 +24,7 @@ import { LINK_PLACE, type LinkPlace, taskLinkStep } from "@repo/features/link-gr
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { StripTab } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION } from "@repo/ui/tasks-model";
-import {
-  type HistoryLocation,
-  type RegisteredRouter,
-  type RouteIds,
-  useRouter,
-} from "@tanstack/react-router";
+import { type HistoryLocation, useRouter } from "@tanstack/react-router";
 import { useMemo, useSyncExternalStore } from "react";
 import { adminLinkFields } from "../admin/routing.js";
 import {
@@ -67,6 +62,7 @@ import type { SidePanelTab } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import type { OpenSurface } from "../use-surface-open.js";
 import type { RoutedViews } from "../workspace-routes.js";
+import type { PanelRouteId } from "./link-places.js";
 import { PLACE_BINDING, type PlaceBinding } from "./place-binding.js";
 import { type PlaceParams, placeParamsOf } from "./place-params.js";
 import { openPanelTab, type TaskStep } from "./task-step.js";
@@ -95,7 +91,6 @@ export interface NarrowInsteadDoors {
 }
 
 /** A route of the panel's tree, by its id. */
-type PanelRouteId = RouteIds<RegisteredRouter["routeTree"]>;
 
 /** What a declaration reads to name a step later: the task a version history's address names, the task an Inbox item is of, by the item's id, and what a task's step holds. */
 interface PlaceNaming {
