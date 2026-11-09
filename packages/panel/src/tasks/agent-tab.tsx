@@ -1,3 +1,19 @@
+import {
+  AGENT_PART,
+  type AgentPart,
+  type AgentPartCut,
+  agentPart,
+  agentParts,
+  agentRows,
+  delegates,
+  isTodos,
+  messageWords,
+  nativeSubagent,
+  type PlacedMessage,
+  placedMessages,
+  type TurnStretch,
+  turnStretches,
+} from "@repo/features/agent-parts";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
@@ -20,6 +36,7 @@ import {
 import { DEVICE_LAUNCH_UNSTARTED } from "@repo/features/device-agent-wire";
 import { FAILURE_REASON, type FailureReason, remedyLabel } from "@repo/features/failure-remedy";
 import { threadLineWords } from "@repo/features/inbox-wire";
+import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import {
@@ -27,10 +44,29 @@ import {
   FAILURE_SURFACE,
   type FailureAbout,
 } from "@repo/features/shown-failure";
+import { skillWord } from "@repo/features/skill-word";
 import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { KnownNames } from "@repo/features/thing-kind";
 import { workingTime } from "@repo/features/time-format";
+import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
+import {
+  calledAgent,
+  delegationView,
+  isServerCallTool,
+  loadedSkill,
+  sentWords,
+  shownPageVersion,
+  TARGET_HINT,
+  TOOL_TARGET,
+  type ToolTarget,
+  targetLink,
+  todoFocus,
+  todosSummary,
+  toolCallView,
+  toolTarget,
+  type WorkerJobs,
+} from "@repo/features/tool-call-model";
 import {
   CALL_KIND,
   CALL_WORDS,
@@ -74,7 +110,6 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { AlarmClockCheckIcon, GLYPH, ICON_SIZE } from "@repo/ui/icons";
-import { skillWord } from "@repo/ui/skill-mention";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
@@ -116,7 +151,6 @@ import {
   RECEIVED_MESSAGE_CLASS,
 } from "../ai-elements/message.js";
 import { Plan, PlanContent, PlanHeader, PlanIcon, PlanTitle } from "../ai-elements/plan.js";
-import { TOOL_BLOCK, TOOL_STATE } from "../ai-elements/tool.js";
 import { appPlatform } from "../app-platform.js";
 import { AutomationsWanted, useAutomation } from "../automation-directory.js";
 import { useConnected } from "../connection.js";
@@ -131,15 +165,9 @@ import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { ForwardChip, useForwardToast } from "./agent-forward.js";
 import {
-  AGENT_PART,
-  type AgentPart,
-  type AgentPartCut,
   agentLines,
   agentMessageOf,
   agentName,
-  agentPart,
-  agentParts,
-  agentRows,
   agentWorkingSince,
   CONTINUE_AGAIN_LABEL,
   CONTINUE_LABEL,
@@ -147,7 +175,6 @@ import {
   commentLineWords,
   continuedByIds,
   continuedByTitles,
-  delegates,
   dockedPullRequests,
   type EndLineParts,
   endLineOffersContinue,
@@ -156,16 +183,11 @@ import {
   endLineReason,
   finishedReplyLead,
   githubLineOf,
-  isTodos,
   isWakeupLine,
   lineSender,
   macOwnerOf,
   messageSender,
-  messageWords,
-  nativeSubagent,
   offersStop,
-  type PlacedMessage,
-  placedMessages,
   planPayerOf,
   providerOf,
   SENT_LINE_STATE,
@@ -173,12 +195,10 @@ import {
   slackLineOf,
   TRY_AGAIN_LABEL,
   TRYING_AGAIN_LABEL,
-  type TurnStretch,
   tabTurnOf,
   teammateStarter,
   threadLineOf,
   transcriptRowKey,
-  turnStretches,
   turnUnderWay,
   unreadOpeningLine,
   WORKING_PHASE,
@@ -228,7 +248,6 @@ import {
   TranscriptAgent,
 } from "./line-cards.js";
 import { CHIP_OR_LINK_FRAME, ChipOrLink, linkChip } from "./mention-chip.js";
-import type { MentionHolder } from "./mention-holder.js";
 import {
   agentMessagePlace,
   MESSAGE_GONE,
@@ -248,23 +267,6 @@ import { SkillCard } from "./skill-ref.js";
 import { PlanGlyph } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
 import { type AgentThreads, ThreadsDock } from "./threads-dock.js";
-import {
-  calledAgent,
-  delegationView,
-  isServerCallTool,
-  loadedSkill,
-  sentWords,
-  shownPageVersion,
-  TARGET_HINT,
-  TOOL_TARGET,
-  type ToolTarget,
-  targetLink,
-  todoFocus,
-  todosSummary,
-  toolCallView,
-  toolTarget,
-  type WorkerJobs,
-} from "./tool-call-model.js";
 import {
   MacOwnerProvider,
   TranscriptNote,

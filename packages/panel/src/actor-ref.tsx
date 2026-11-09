@@ -8,6 +8,7 @@ import {
   automationTriggerText,
 } from "@repo/features/automation-list-model";
 import type { AutomationRunSummary, AutomationSummary } from "@repo/features/automation-wire";
+import { GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import {
   AVATAR_SHAPE,
   AVATAR_SIZE,
@@ -56,7 +57,7 @@ import { useAutomation } from "./automation-directory.js";
 import { automationNextText, automationOwnerName } from "./desktop/automation-words.js";
 import { useCreator } from "./member-directory.js";
 import { useActorDoor, usePreloadedPerson } from "./person-door.js";
-import { GLYPH_STATE, type GlyphState, StateGlyph } from "./state-glyph.js";
+import { StateGlyph } from "./state-glyph.js";
 import { AgentHoverCard } from "./tasks/agent-ref.js";
 import { AgentMark } from "./tasks/tab-look.js";
 

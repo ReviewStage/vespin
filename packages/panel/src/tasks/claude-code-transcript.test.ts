@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { AGENT_PAYER, type AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
+import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { MESSAGE_ROLE, type WireRecord, type WireValue } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -12,7 +13,6 @@ import { withQueryClient } from "../testing/copy-feedback.js";
 import { agentPayerLine } from "./agent-model.js";
 import { AGENT_LEAD, AgentMessage } from "./agent-tab.js";
 import { newestTodos, taskTodos } from "./agent-todos.js";
-import { TOOL_TARGET, type ToolTarget } from "./tool-call-model.js";
 
 /**
  * claude-code-transcript.test.ts -- a coding agent on Claude Code stores its

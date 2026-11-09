@@ -1,3 +1,5 @@
+import { isRecord, isWireNumber, isWireString, type WireValue } from "@repo/wire";
+import { Option, Schema } from "effect";
 import {
   AGENT_TOOL,
   type AgentTool,
@@ -6,15 +8,12 @@ import {
   CONNECTION_TOOL,
   EVE_TOOL,
   RETIRED_TOOL,
-} from "@repo/features/agent-tools";
-import {
-  AGENT_TODO_STATUS,
-  type AgentTodos,
-  agentTodosInputSchema,
-} from "@repo/features/agent-wire";
-import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
-import type { DescriptionAgentEdit } from "@repo/features/description-notes";
-import { askHeadWords } from "@repo/features/inbox-ask-words";
+} from "./agent-tools.js";
+import { AGENT_TODO_STATUS, type AgentTodos, agentTodosInputSchema } from "./agent-wire.js";
+import { fileRefText, shortCommit } from "./code-ref-words.js";
+import { descriptionAttachmentOf } from "./description-attachment-link.js";
+import type { DescriptionAgentEdit } from "./description-notes.js";
+import { askHeadWords } from "./inbox-ask-words.js";
 import {
   INBOX_ASK,
   INBOX_BLOCK,
@@ -26,7 +25,7 @@ import {
   inboxPostInputSchema,
   inboxThreadPostInputSchema,
   recommendedLabels,
-} from "@repo/features/inbox-wire";
+} from "./inbox-wire.js";
 import {
   INTEGRATION_NAME,
   type IntegrationProvider,
@@ -34,24 +33,20 @@ import {
   integrationConnectionOf,
   integrationOfRemoteTool,
   integrationRemoteCallSchema,
-} from "@repo/features/integration-wire";
-import { LINK_PLACE, type LinkPlace, linkOf } from "@repo/features/link-grammar";
-import type { ModelChoice } from "@repo/features/models-wire";
-import { cardTitle } from "@repo/features/plain-words";
+} from "./integration-wire.js";
+import { LINK_PLACE, type LinkPlace, linkOf } from "./link-grammar.js";
+import { holderTaskId, type MentionHolder } from "./mention-holder.js";
+import type { ModelChoice } from "./models-wire.js";
+import { cardTitle } from "./plain-words.js";
+import { skillWord } from "./skill-word.js";
+import { TOOL_BLOCK, type ToolBlock } from "./tool-call-block.js";
 import {
   browserCallWords,
   CALL_KIND,
   type CallKind,
   commandDescription,
   pageName,
-} from "@repo/features/turn-rows";
-import { skillWord } from "@repo/ui/skill-mention";
-import { isRecord, isWireNumber, isWireString, type WireValue } from "@repo/wire";
-import { Option, Schema } from "effect";
-import { TOOL_BLOCK, type ToolBlock } from "../ai-elements/tool.js";
-import { fileRefText } from "./file-ref-model.js";
-import { shortCommit } from "./file-tab-model.js";
-import { holderTaskId, type MentionHolder } from "./mention-holder.js";
+} from "./turn-rows.js";
 
 /**
  * tool-call-model.ts -- what a coding agent's tool call says on its one row, and what its body shows, decided from the part's own input and output.

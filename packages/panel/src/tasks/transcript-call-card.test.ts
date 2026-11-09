@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { TOOL_BLOCK, TOOL_STATE, type ToolBlock } from "@repo/features/tool-call-block";
 import { CALL_KIND } from "@repo/features/turn-rows";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
-import { TOOL_BLOCK, TOOL_STATE, type ToolBlock } from "../ai-elements/tool.js";
 import { findRanges, reveal } from "../find-matches.js";
 import { copyingInto, fakeAppPlatform } from "../testing/app-platform.js";
 import { TranscriptTool, type TranscriptToolProps } from "./transcript-blocks.js";

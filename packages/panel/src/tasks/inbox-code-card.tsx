@@ -1,3 +1,4 @@
+import { fileRefText } from "@repo/features/code-ref-words";
 import type { InboxCodeBlock } from "@repo/features/inbox-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { CodeRef } from "@repo/features/task-wire";
@@ -10,7 +11,7 @@ import { unreadShown } from "../failure-report.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { CodeSnippet } from "./code-snippet.js";
 import { FileRef } from "./file-ref.js";
-import { copiedLines, fileRefText } from "./file-ref-model.js";
+import { copiedLines } from "./file-ref-model.js";
 import {
   CODE_READ,
   CODE_READ_FAILED,
