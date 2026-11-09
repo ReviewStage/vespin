@@ -476,9 +476,9 @@ function running(call: Call, threads: readonly string[]): readonly NativeMoment[
 
 /**
  * A subagent's thread finished its turn: the spawn it runs under settles,
- * failed where the turn did not complete, but answered with the limit
- * notice's words where the plan's usage limit stopped it, rather than
- * OpenAI's error.
+ * failed where the turn did not complete, but answered with the limit's
+ * notice where the plan's usage limit stopped it, rather than OpenAI's
+ * error.
  */
 function childTurnMoments(threadId: string, params: unknown): readonly NativeMoment[] {
   const read = readTurnCompleted(params);

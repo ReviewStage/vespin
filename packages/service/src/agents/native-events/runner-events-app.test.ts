@@ -2978,7 +2978,7 @@ const WORKERS_LIMITED = [
       ...claudeFinished,
     ],
     part: "tool-Agent",
-    said: "Claude usage limit reached",
+    limited: "Claude",
   },
   {
     name: "a foreground worker on Claude Code",
@@ -3008,7 +3008,7 @@ const WORKERS_LIMITED = [
       ...claudeFinished,
     ],
     part: "tool-Agent",
-    said: "Claude usage limit reached",
+    limited: "Claude",
   },
   {
     name: "a subagent on Codex",
@@ -3045,14 +3045,14 @@ const WORKERS_LIMITED = [
       { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
     ],
     part: "tool-collabAgentToolCall",
-    said: "Codex usage limit reached",
+    limited: "Codex",
   },
 ] as const;
 
 it.layer(SUITE)("the runner events route, for a worker its plan's limit stopped", (it) => {
   it.effect.each(WORKERS_LIMITED)(
-    "settles the worker's call with the limit notice's words, never the harness's error: $name",
-    ({ harness, events, part, said }) =>
+    "settles the worker's call with the limit's notice, never the harness's error: $name",
+    ({ harness, events, part, limited }) =>
       Effect.gen(function* () {
         const post = yield* standing;
         const agent = yield* agentOn(harness, ["Collect the menus."]);
@@ -3068,7 +3068,7 @@ it.layer(SUITE)("the runner events route, for a worker its plan's limit stopped"
         assert.deepEqual(worker === undefined ? undefined : drawn(worker), [
           part,
           "output-available",
-          said,
+          { usageLimit: { agent: limited, resetsAt: null } },
         ]);
       }),
   );

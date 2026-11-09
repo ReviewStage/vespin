@@ -41,7 +41,7 @@ import {
  * open instead and settled by the task notification its end posts. A
  * subagent that fails while the plan's limit refuses its calls (a rejected
  * `rate_limit_event`, which the CLI posts ahead of the subagent's failure)
- * failed for that limit, so its call answers with the limit notice's words
+ * failed for that limit, so its call answers with the limit's notice
  * rather than the CLI's error. A call to our
  * own MCP server is named as our tool (`mcp__workspace__read_inbox` is
  * `read_inbox`, as is the `mcp__luke__` a transcript stored before the

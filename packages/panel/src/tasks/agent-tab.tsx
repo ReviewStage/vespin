@@ -143,6 +143,7 @@ import {
   agentWorkingSince,
   CONTINUE_AGAIN_LABEL,
   CONTINUE_LABEL,
+  callUsageLimit,
   commentLineOf,
   commentLineWords,
   continuedByIds,
@@ -643,6 +644,8 @@ function ToolCallView({
   cut?: CutBody | undefined;
 }): ReactNode {
   const view = toolCallView({ ...part, jobs });
+  // A worker the plan's limit ended draws the limit's notice in its answer's place.
+  const limit = callUsageLimit(part);
   const server = useServerName(view);
   const known = useKnownNames();
   // Note that the chip of the agent a call is about hangs the card its tab hangs, which the place hands over by the agent's id.
@@ -667,11 +670,12 @@ function ToolCallView({
         agentCard={agentCard}
         made={made}
         input={view.input}
-        output={view.output}
+        output={limit === undefined ? view.output : undefined}
         errorText={part.errorText}
         cut={cut}
       />
       <CallPictures tool={part.tool} input={part.input} output={part.output} />
+      {limit === undefined ? null : <UsageLimitNotice notice={limit} />}
     </>
   );
 }
@@ -734,8 +738,10 @@ function DelegationRow({
   // Note that a row that opens no tab folds its task and answer open under its line instead: a native subagent's as
   // its call's own body reads them, and a worker's own worker's, whose transcript no tab reads, as its delegation says.
   const call = toolCallView(part);
+  // A worker the plan's limit ended draws the limit's notice in its answer's place.
+  const limit = callUsageLimit(part);
   const body = native
-    ? { input: call.input, output: call.output }
+    ? { input: call.input, output: limit === undefined ? call.output : undefined }
     : opens
       ? undefined
       : {
@@ -744,19 +750,22 @@ function DelegationRow({
             view.result === undefined ? undefined : { kind: TOOL_BLOCK.TEXT, text: view.result },
         };
   return (
-    <TranscriptSubagent
-      callId={part.callId}
-      job={view.title ?? (cardTitle(view.task) || CALL_WORDS[CALL_KIND.WORKER].verb)}
-      pair={choice === undefined ? undefined : { choice, models: doors?.models ?? [] }}
-      state={standing === undefined ? part.state : workerToolState(standing.status)}
-      startedAt={doors?.starts?.get(part.callId)}
-      errorText={part.errorText}
-      onOpen={opens ? () => onOpen(part.callId, view.task, status) : undefined}
-      card={
-        opens ? live?.cards?.worker({ callId: part.callId, task: view.task, status }) : undefined
-      }
-      body={body}
-    />
+    <>
+      <TranscriptSubagent
+        callId={part.callId}
+        job={view.title ?? (cardTitle(view.task) || CALL_WORDS[CALL_KIND.WORKER].verb)}
+        pair={choice === undefined ? undefined : { choice, models: doors?.models ?? [] }}
+        state={standing === undefined ? part.state : workerToolState(standing.status)}
+        startedAt={doors?.starts?.get(part.callId)}
+        errorText={part.errorText}
+        onOpen={opens ? () => onOpen(part.callId, view.task, status) : undefined}
+        card={
+          opens ? live?.cards?.worker({ callId: part.callId, task: view.task, status }) : undefined
+        }
+        body={body}
+      />
+      {limit === undefined ? null : <UsageLimitNotice notice={limit} />}
+    </>
   );
 }
 

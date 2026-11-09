@@ -133,6 +133,7 @@ import {
 import { sentLineId } from "@repo/wire/host-ids";
 import {
   USAGE_LIMIT_PART,
+  UsageLimitAnswerSchema,
   type UsageLimitNotice,
   UsageLimitNoticeSchema,
 } from "@repo/wire/ui-messages";
@@ -2292,6 +2293,14 @@ export function nativeSubagent(
   part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
 ): boolean {
   return part.tool === CLAUDE_CODE_TOOL.AGENT;
+}
+
+/** The usage limit's notice a worker's call answered with where the plan's limit ended it, which its row draws in its answer's place; none for any other answer. */
+export function callUsageLimit(
+  part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
+): UsageLimitNotice | undefined {
+  const answer = Schema.decodeUnknownOption(UsageLimitAnswerSchema)(part.output);
+  return Option.isSome(answer) ? answer.value.usageLimit : undefined;
 }
 
 /** Whether a part is a delegation to a worker (`delegates`). */
