@@ -151,6 +151,7 @@ import {
   dockedPullRequests,
   type EndLineParts,
   endLineOffersContinue,
+  endLineOffersOtherModel,
   endLineOffersTryAgain,
   endLineParts,
   endLineReason,
@@ -213,7 +214,12 @@ import {
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "./agent-todos.js";
 import { ArchivedComposerNote } from "./archived-note.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
-import { ContinueAgent, ContinuedComposerNote, ContinuedTrail } from "./continue-agent.js";
+import {
+  ContinueAgent,
+  ContinuedComposerNote,
+  ContinuedTrail,
+  RefusalContinue,
+} from "./continue-agent.js";
 import { CopyMessageAction } from "./copy-message.js";
 import { DescriptionPictures } from "./description-pictures.js";
 import { EditComposer } from "./edit-composer.js";
@@ -3406,6 +3412,8 @@ function AgentTabBody({
     boxClosed: composer.closed !== undefined,
   };
   const pressed = endLineOffersContinue(ending);
+  // Where the model refused the turn, the row offers a continue on another model, the box's words going with it.
+  const otherModel = endLineOffersOtherModel(ending);
   // Where a message carries the agent on, the row offers it as a line of the developer's own, unless the box is an archived task's note.
   const triesAgain = endLineOffersTryAgain(ending) && control.onUnarchive === undefined;
   // How the messages are named moves only when the agent's place or the messages read do, not with each page.
@@ -3475,6 +3483,8 @@ function AgentTabBody({
               carry={continued.length > 0 ? carry : undefined}
               label={continued.length > 0 ? CONTINUE_AGAIN_LABEL : CONTINUE_LABEL}
             />
+          ) : otherModel ? (
+            <RefusalContinue agent={agent} control={control} carry={carry} />
           ) : triesAgain ? (
             <TryAgainPress onPress={() => control.onRetry(agent.id, RETRY_LINE)} />
           ) : undefined

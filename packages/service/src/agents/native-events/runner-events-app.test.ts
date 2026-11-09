@@ -1019,45 +1019,53 @@ it.layer(SUITE)("the runner events route", (it) => {
     }),
   );
 
-  it.effect("a turn the model refused with no fallback ends as a refusal", () =>
-    Effect.gen(function* () {
-      const post = yield* standing;
-      const agent = yield* agentWithBearer;
-      const top = { parent_tool_use_id: null, session_id: SESSION };
-      const messagesOfTurn = [
-        { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
-        {
-          type: "system",
-          subtype: "model_refusal_no_fallback",
-          original_model: "claude-opus-5-5",
-          request_id: null,
-          api_refusal_category: "cyber",
-          content: "Claude declined to answer.",
-          ...top,
-        },
-        // The CLI's result need not say the model turn failed.
-        { type: "result", subtype: "success", is_error: false, ...top },
-        { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
-      ];
-      // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
-      yield* post(
-        agent.bearer,
-        messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent),
-      );
-      const db = yield* Database;
-      const ended = yield* db
-        .select({ status: turns.status, failure: turns.failure, detail: turns.failureDetail })
-        .from(turns)
-        .where(eq(turns.conversationId, agent.target.conversationId));
+  it.effect(
+    "a turn the model refused with no fallback ends as a refusal, and its agent reads as refused",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const messagesOfTurn = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          {
+            type: "system",
+            subtype: "model_refusal_no_fallback",
+            original_model: "claude-opus-5-5",
+            request_id: null,
+            api_refusal_category: "cyber",
+            content: "Claude declined to answer.",
+            ...top,
+          },
+          // The CLI's result need not say the model turn failed.
+          { type: "result", subtype: "success", is_error: false, ...top },
+          { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+        ];
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        yield* post(
+          agent.bearer,
+          messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent),
+        );
+        const db = yield* Database;
+        const ended = yield* db
+          .select({ status: turns.status, failure: turns.failure, detail: turns.failureDetail })
+          .from(turns)
+          .where(eq(turns.conversationId, agent.target.conversationId));
 
-      assert.deepEqual(ended, [
-        {
-          status: TURN_STATUS.FAILED,
-          failure: "refusal",
-          detail: "model_refusal_no_fallback cyber",
-        },
-      ]);
-    }),
+        assert.deepEqual(ended, [
+          {
+            status: TURN_STATUS.FAILED,
+            failure: "refusal",
+            detail: "model_refusal_no_fallback cyber",
+          },
+        ]);
+        // The agent reads as refused, which its tab offers a continue on another model for.
+        const [turn] = ended;
+        assert.equal(
+          agentFailureOf(turn && { ...turn, failureDetail: turn.detail }),
+          AGENT_FAILURE.REFUSAL,
+        );
+      }),
   );
 
   it.effect("a compaction that failed is why its failed turn says it failed", () =>
