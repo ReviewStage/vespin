@@ -217,7 +217,7 @@ interface Applying {
   readonly read: NativeReader;
   /** Who pays for the agent, as recorded as it started; none for an agent from before payers. */
   readonly payer: AgentPayer | undefined;
-  /** The subscription its latest launch put it on, which a plan payer's word is written to; none for the account's first. */
+  /** The subscription or API key its latest launch put it on, which the payer's word is written to; none for the account's first. */
   readonly subscriptionId: string | undefined;
   /** The description or prompt the agent was handed first, whose share of its context the ring estimates. */
   readonly brief: string;
@@ -581,27 +581,27 @@ function landWrite(
         }),
       );
     case NATIVE_WRITE.PLAN_STATUS: {
-      // Note that the row is the starter's credential that pays: the plan's subscription the agent ran on,
-      // or, for an agent its API key pays for, that key's, which a refusal marks invalid; a plan's limit
-      // is no key's.
-      const row =
-        applying.payer === AGENT_PAYER.API_KEY
-          ? write.status === PROVIDER_KEY_STATUS.LIMIT_REACHED
-            ? undefined
-            : apiKeyRowOf(applying.model)
-          : applying.payer === undefined
-            ? undefined
-            : PLAN_ROW[applying.payer];
+      // Note that the row is the starter's credential that pays, the one the agent ran on: the plan's
+      // subscription, or, for an agent its API key pays for, that key, which a refusal marks invalid and
+      // a limit, its provider's quota or credit refusing it, marks out of quota.
+      const ownKey = applying.payer === AGENT_PAYER.API_KEY;
+      const row = ownKey
+        ? apiKeyRowOf(applying.model)
+        : applying.payer === undefined
+          ? undefined
+          : PLAN_ROW[applying.payer];
       if (row === undefined) return Effect.void;
       return setPlanStatus(
         target.userId,
         row.provider,
         row.kind,
-        write.status,
+        ownKey && write.status === PROVIDER_KEY_STATUS.LIMIT_REACHED
+          ? PROVIDER_KEY_STATUS.QUOTA_EXCEEDED
+          : write.status,
         write.resetsAt === undefined ? undefined : new Date(write.resetsAt),
         new Date(write.turnOpenedAt ?? now),
         new Date(now),
-        applying.payer === AGENT_PAYER.API_KEY ? undefined : applying.subscriptionId,
+        applying.subscriptionId,
       );
     }
     case NATIVE_WRITE.PLAN_USAGE: {
@@ -703,17 +703,19 @@ function endsOnLimit(state: NativeProjection, moments: readonly NativeMoment[]):
 }
 
 /**
- * Whether a turn the plan's limit cut short may go on with the next payer
- * (`roomAfterLimit`), and where none has room, when the soonest limit
- * among the other subscriptions resets (`soonestResetBeside`), which it may
- * wait for: only for an agent its plan pays for, past the subscription it
- * ran on.
+ * Whether a turn the plan's limit, or its key's quota, cut short may go on
+ * with the next payer (`roomAfterLimit`), and where none has room, when the
+ * soonest limit among the other subscriptions resets (`soonestResetBeside`),
+ * which it may wait for: only for an agent its plan or its API key pays
+ * for, past the subscription or key it ran on.
  */
 function roomAfterLimitOf(applying: Applying) {
   return Effect.gen(function* () {
     const provider = providerModelOf(applying.model)?.provider;
     if (provider === undefined || applying.payer === undefined) return { room: false };
-    if (PLAN_ROW[applying.payer] === undefined) return { room: false };
+    if (applying.payer !== AGENT_PAYER.API_KEY && PLAN_ROW[applying.payer] === undefined) {
+      return { room: false };
+    }
     const { userId } = applying.target;
     if (yield* roomAfterLimit(userId, provider, applying.subscriptionId)) return { room: true };
     return {

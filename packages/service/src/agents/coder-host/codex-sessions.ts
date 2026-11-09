@@ -252,15 +252,15 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
     }));
 
   /**
-   * The account's OpenAI API key opened, declared as `OPENAI_API_KEY`, which
+   * The account's OpenAI API key the launch chose opened, declared as `OPENAI_API_KEY`, which
    * the runner names as app-server's provider `env_key` in place of the
    * plan's token command; a Preview's stand-in where the key is gone or
    * unreadable (`accounts/own-api-key.ts`); refused where neither is.
    */
-  const apiKeyEnv = (layout: Pick<MachineLayout, "codexHome">) =>
+  const apiKeyEnv = (keyId: string | undefined, layout: Pick<MachineLayout, "codexHome">) =>
     Effect.gen(function* () {
       const environment = yield* HostedEnvironment;
-      const key = yield* ownApiKeyOf(userId, PROVIDER_KEY_PROVIDER.OPENAI, environment);
+      const key = yield* ownApiKeyOf(userId, PROVIDER_KEY_PROVIDER.OPENAI, environment, keyId);
       if (key === undefined) {
         return yield* new LaunchRefused({ reason: "no API key", keyRefusal: KEY_REFUSAL.MISSING });
       }
@@ -294,7 +294,7 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
     Effect.gen(function* () {
       const turn = yield* turnPayerOf(userId, agent.id, MODEL_PROVIDER.OPENAI);
       return yield* turn.payer === AGENT_PAYER.API_KEY
-        ? apiKeyEnv(layout)
+        ? apiKeyEnv(turn.subscriptionId, layout)
         : planEnv(turn.subscriptionId, layout);
     });
 

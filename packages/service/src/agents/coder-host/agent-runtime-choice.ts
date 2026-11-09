@@ -32,11 +32,13 @@
  * changes. Who pays is chosen again at each launch, a message to a warm
  * runner among them (`turnPayerOf`): the first credential of the
  * provider's, in the one order the account keeps its subscriptions of the
- * harness's plan and its API key in, with room, a subscription having room
+ * harness's plan and its API keys in, with room, a subscription having room
  * where it is signed in and at no limit whose named reset is still ahead,
- * and a key always, so an agent goes back to the top subscription as soon
- * as its limit resets; where none has room, a Preview's stand-in key; and
- * where neither, the plan's refusal, naming when its soonest limit resets. The payer and the subscription it names are written on the
+ * and a key unless its provider last refused it for quota or credit, so an
+ * agent goes back to the top subscription as soon as its limit resets;
+ * where none has room, its first key, which a turn finds topped up or not;
+ * else a Preview's stand-in key; and where neither, the plan's refusal,
+ * naming when its soonest limit resets. The payer and the subscription it names are written on the
  * agent as each launch chooses them, so a turn's limit is written to the
  * subscription it ran on, and a runner launched on another credential than
  * the choice now names is launched again (`runner-sessions.ts`'s
@@ -150,7 +152,7 @@ const PLAN_PAYER = {
   [MODEL_PROVIDER.OPENAI]: AGENT_PAYER.CHATGPT_SUBSCRIPTION,
 } as const satisfies Record<ModelProvider, AgentPayer>;
 
-/** Who pays for an agent's turn, and which of its starter's subscriptions where a plan does; a key's payer names none. */
+/** Who pays for an agent's turn, and which of its starter's subscriptions or API keys, by its row's id; a Preview's stand-in names none. */
 export interface TurnPayer {
   readonly payer: AgentPayer;
   readonly subscriptionId: string | undefined;
@@ -213,9 +215,17 @@ function keptPlans(
   );
 }
 
-/** Whether a subscription has room for a turn at `now`: signed in, and at no limit that still stands. */
+/**
+ * Whether a credential has room for a turn at `now`: a subscription signed
+ * in and at no limit that still stands, and a key its provider did not last
+ * refuse for quota. Note that a key refused as invalid keeps its room, as it
+ * always had, since its refusal is the account's to mend by hand.
+ */
 const hasRoom = (row: ProviderKeyRow, now: number): boolean =>
-  !UNUSABLE_SIGN_IN.has(row.status) && planStanding(row, now) !== PROVIDER_KEY_STATUS.LIMIT_REACHED;
+  row.kind === PROVIDER_KEY_KIND.API_KEY
+    ? row.status !== PROVIDER_KEY_STATUS.QUOTA_EXCEEDED
+    : !UNUSABLE_SIGN_IN.has(row.status) &&
+      planStanding(row, now) !== PROVIDER_KEY_STATUS.LIMIT_REACHED;
 
 /**
  * The subscription a turn is refused on where none has room and no key
@@ -447,33 +457,54 @@ const signsInOwnGithub = (userId: string, deviceId: string) =>
 const byPlace = (a: ProviderKeyRow, b: ProviderKeyRow): number =>
   a.position - b.position || a.createdAt.getTime() - b.createdAt.getTime();
 
+/** The provider's API keys the account saved among `rows`, in the order they pay in. */
+const keysOf = (provider: ModelProvider, rows: AccountKeyRows): readonly ProviderKeyRow[] =>
+  rows
+    .filter((row) => row.kind === PROVIDER_KEY_KIND.API_KEY && row.provider === provider)
+    .toSorted(byPlace);
+
+/** The provider's subscriptions a launch may run on and its API keys, in the one order they pay in. */
+const payersOf = Effect.fnUntraced(function* (
+  userId: string,
+  provider: ModelProvider,
+): Effect.fn.Return<
+  {
+    readonly rows: AccountKeyRows;
+    readonly plans: readonly ProviderKeyRow[];
+    readonly ordered: readonly ProviderKeyRow[];
+    readonly environment: HostedEnvironmentValues | undefined;
+    readonly now: number;
+  },
+  StoreFailure,
+  DatabaseServices
+> {
+  const rows = yield* keyRowsOf(userId, undefined);
+  const environment = yield* deploymentEnvironment;
+  const now = yield* Clock.currentTimeMillis;
+  const plans = keptPlans(userId, provider, environment?.providerKeyEncryptionKeys, rows);
+  const ordered = [...plans, ...keysOf(provider, rows)].toSorted(byPlace);
+  return { rows, plans, ordered, environment, now };
+});
+
 /**
  * Who pays for the next turn of the account's agent on the provider's
  * harness, chosen now and written on the agent (`recordAgentPayer`), as
- * above: the first of its subscriptions and its saved API key, in the
- * account's order, with room, where a key always has room; else a
- * Preview's stand-in key; else the plan on the subscription whose limit
- * resets soonest, or its first, whose own refusal the harness answers in
- * the plan's words, as it would with no subscription at all.
+ * above: the first of its subscriptions and its saved API keys, in the
+ * account's order, with room; else its first key; else a Preview's
+ * stand-in key; else the plan on the subscription whose limit resets
+ * soonest, or its first, whose own refusal the harness answers in the
+ * plan's words, as it would with no subscription at all.
  */
 export const turnPayerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   agentId: string,
   provider: ModelProvider,
 ): Effect.fn.Return<TurnPayer, StoreFailure, DatabaseServices> {
-  const rows = yield* keyRowsOf(userId, undefined);
-  const environment = yield* deploymentEnvironment;
-  const now = yield* Clock.currentTimeMillis;
-  const plans = keptPlans(userId, provider, environment?.providerKeyEncryptionKeys, rows);
-  const keys = rows.filter(
-    (row) => row.kind === PROVIDER_KEY_KIND.API_KEY && row.provider === provider,
-  );
-  const first = [...plans, ...keys]
-    .toSorted(byPlace)
-    .find((row) => row.kind === PROVIDER_KEY_KIND.API_KEY || hasRoom(row, now));
+  const { rows, plans, ordered, environment, now } = yield* payersOf(userId, provider);
+  const first = ordered.find((row) => hasRoom(row, now)) ?? keysOf(provider, rows)[0];
   let chosen: TurnPayer =
     first?.kind === PROVIDER_KEY_KIND.API_KEY
-      ? { payer: AGENT_PAYER.API_KEY, subscriptionId: undefined }
+      ? { payer: AGENT_PAYER.API_KEY, subscriptionId: first.id }
       : { payer: PLAN_PAYER[provider], subscriptionId: first?.id };
   if (first === undefined) {
     chosen = (yield* keepsApiKey(userId, provider, rows, environment))
@@ -485,25 +516,38 @@ export const turnPayerOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
- * Whether a turn the plan's limit cut short on the subscription named, or
- * on the account's first where none is named, may go on with another payer
- * at once, as `turnPayerOf` would choose the next launch's: another
- * subscription of the plan with room, or the account's API key for the
- * provider. Note that the limited subscription is passed over by name,
- * since the turn's own word on it may not be written yet.
+ * The credential a turn cut short on the one named, a subscription at its
+ * limit or a key out of quota, or on the account's first subscription where
+ * none is named, goes on with at once, as `turnPayerOf` would choose the
+ * next launch's: the first other of the provider's subscriptions and API
+ * keys, in the account's order, with room; none where none has. Note that
+ * the one cut short is passed over by name, since the turn's own word on it
+ * may not be written yet.
+ */
+export const nextPayerRow = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  provider: ModelProvider,
+  limitedId: string | undefined,
+): Effect.fn.Return<ProviderKeyRow | undefined, StoreFailure, DatabaseServices> {
+  const { plans, ordered, now } = yield* payersOf(userId, provider);
+  const limited = limitedId ?? plans[0]?.id;
+  return ordered.find((row) => row.id !== limited && hasRoom(row, now));
+});
+
+/**
+ * Whether a turn cut short on the credential named may go on with another
+ * payer at once: the next with room (`nextPayerRow`), or, where the account
+ * saved no API key of the provider, a Preview's stand-in.
  */
 export const roomAfterLimit = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   provider: ModelProvider,
   limitedSubscriptionId: string | undefined,
 ): Effect.fn.Return<boolean, StoreFailure, DatabaseServices> {
+  if ((yield* nextPayerRow(userId, provider, limitedSubscriptionId)) !== undefined) return true;
   const rows = yield* keyRowsOf(userId, undefined);
-  const environment = yield* deploymentEnvironment;
-  const now = yield* Clock.currentTimeMillis;
-  const plans = keptPlans(userId, provider, environment?.providerKeyEncryptionKeys, rows);
-  const limited = limitedSubscriptionId ?? plans[0]?.id;
-  if (plans.some((row) => row.id !== limited && hasRoom(row, now))) return true;
-  return yield* keepsApiKey(userId, provider, rows, environment);
+  if (keysOf(provider, rows).length > 0) return false;
+  return yield* keepsApiKey(userId, provider, rows, yield* deploymentEnvironment);
 });
 
 /**

@@ -1385,7 +1385,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           false,
         ]);
 
-        // A key saved now joins the bottom of the one order, and pays first once it is moved to its top, since a key always has room.
+        // A key saved now joins the bottom of the one order, and pays first, named by its id, once it is moved to its top, since a key has room.
         const keyOwner = { ...owner, kind: PROVIDER_KEY_KIND.API_KEY };
         const key = yield* saveProviderKey(
           userId,
@@ -1404,7 +1404,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           [
             AGENT_PAYER.CLAUDE_SUBSCRIPTION,
             false,
-            { payer: AGENT_PAYER.API_KEY, subscriptionId: undefined },
+            { payer: AGENT_PAYER.API_KEY, subscriptionId: key },
           ],
         );
       }),

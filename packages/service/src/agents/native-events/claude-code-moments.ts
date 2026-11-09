@@ -48,7 +48,8 @@ import {
  * is no error ran on it, an answer the CLI flags `authentication_failed`
  * (a setup-token revoked, expired, or never one) refused it, and a
  * rejected `rate_limit_event` is its limit reached, until the reset the
- * CLI names. Each shape is read with a schema of the fields this reads alone, so
+ * CLI names, as is an answer flagged `billing_error`, an API key out of
+ * credit. Each shape is read with a schema of the fields this reads alone, so
  * a field the SDK adds changes nothing here, and a message no schema fits
  * is no moment.
  */
@@ -319,6 +320,14 @@ const CREDENTIAL_REFUSED: ReadonlySet<string> = new Set([
   "oauth_org_not_allowed",
 ]);
 
+/**
+ * The error an answer carries where the provider refused the work for the
+ * credential's billing, as `SDKAssistantMessageError` spells it: an API
+ * key's organization out of credit, which reads as the credential's limit,
+ * so the turn goes on with the next payer.
+ */
+const BILLING_REFUSED = "billing_error";
+
 /** What Claude Code puts before any MCP server's tool, the server's name and `__` following it (`mcp__linear__list_issues`). */
 const MCP_TOOL_PREFIX = "mcp__";
 const MCP_SERVER_SEPARATOR = "__";
@@ -418,6 +427,9 @@ function assistantMoments(message: WireValue): readonly NativeMoment[] {
   const { error } = read.value;
   if (error !== undefined && CREDENTIAL_REFUSED.has(error)) {
     moments.push({ kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.INVALID });
+  }
+  if (error === BILLING_REFUSED) {
+    moments.push({ kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.LIMIT_REACHED });
   }
   for (const block of content) {
     const text = readTextBlock(block);
