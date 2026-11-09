@@ -91,11 +91,12 @@ vespin inbox view "$t" --json     # read the ask
 vespin inbox answer "$t" Approve
 ```
 
-Continue an agent whose turn failed, with a note, and wait on the new one:
+Continue an agent whose turn failed or was stopped (exit 5 alone, since continuing stops it), with a note, and wait on the new one:
 
 ```sh
-vespin agent wait "$id" || id=$(echo "Pick up where it stopped" | vespin agent continue "$id" -F - -q)
-vespin agent wait "$id"
+vespin agent wait "$id"; if [ $? -eq 5 ]; then
+  next=$(echo "Pick up where it stopped" | vespin agent continue "$id" -F - -q) && vespin agent wait "$next"
+fi
 ```
 
 React to how a wait ended:
