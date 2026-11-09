@@ -38,7 +38,7 @@ import {
   type ProviderKeyProvider,
 } from "@repo/features/provider-key-wire";
 import { SANDBOX_IDLE, SANDBOX_TOUCH_EVERY, type Sandbox, touchSandbox } from "@repo/sandbox";
-import { HTTP_METHOD, isRecord, type WireValue, WireValueSchema } from "@repo/wire";
+import { HTTP_METHOD, type WireValue, WireValueSchema } from "@repo/wire";
 import {
   Cause,
   Clock,
@@ -99,7 +99,7 @@ import {
   turnProgressed,
   withTurnServers,
 } from "./native-projection.js";
-import { redactKeepingPlanCodes } from "./runner-moments.js";
+import { redactKeepingPlanCodes, withoutNul } from "./runner-moments.js";
 
 /**
  * runner-events-app.ts -- where a native harness's runner posts its events, which land in the agent's transcript.
@@ -176,28 +176,7 @@ type RunnerEventBatch = typeof RunnerEventBatchSchema.Type;
 
 const readBatch = Schema.decodeUnknownOption(RunnerEventBatchSchema);
 
-/** What a NUL in a runner's event is kept as, since no Postgres text or jsonb value holds one. */
-const NUL_KEPT_AS = "\uFFFD";
-
-/** A value with every NUL in its strings, keys included, kept as the replacement character. */
-function withoutNul(value: WireValue): WireValue {
-  if (Predicate.isString(value)) return value.replaceAll("\u0000", NUL_KEPT_AS);
-  if (Array.isArray(value)) return value.map(withoutNul);
-  if (!isRecord(value)) return value;
-  return Object.fromEntries(
-    Object.entries(value).map(([key, each]) => [
-      key.replaceAll("\u0000", NUL_KEPT_AS),
-      withoutNul(each),
-    ]),
-  );
-}
-
-/**
- * A batch as the store can keep it. Note that a NUL a command printed is
- * replaced rather than refused, because the store refuses it on every post of
- * the batch, which the runner posts again for as long as it runs, so every
- * event behind it would never land and its turn would stand frozen.
- */
+/** A batch as the store can keep it: every NUL its events carry replaced (`withoutNul`). */
 function storable(batch: RunnerEventBatch): RunnerEventBatch {
   return {
     events: batch.events.map(({ sequence, message }) => ({
