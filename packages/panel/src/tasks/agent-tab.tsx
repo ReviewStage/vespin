@@ -69,6 +69,7 @@ import {
   TEXT_VARIANT,
   Text,
   TurnEnd,
+  UsageLimitNotice,
   useAnnounce,
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
@@ -1075,6 +1076,8 @@ function AgentPartView({
   moving?: boolean;
 }): ReactNode {
   switch (part.kind) {
+    case AGENT_PART.USAGE_LIMIT:
+      return <UsageLimitNotice notice={part.notice} />;
     case AGENT_PART.TEXT:
       // The agent's words alone may be replied to, never a call's output or a thought.
       return (
@@ -2277,8 +2280,9 @@ function AgentTranscriptView({
   working,
   phase = WORKING_PHASE.WORKING,
   waitsUntil,
+  turnId,
   startedAt,
-  ended,
+  ended: turnEnded,
   endReason = FAILURE_REASON.OTHER,
   keyProvider,
   onOpenApiKeys,
@@ -2320,8 +2324,10 @@ function AgentTranscriptView({
   working: boolean;
   /** What the agent is doing while it works, which its working line says (`tabTurnOf`); working where unsaid. */
   phase?: WorkingPhase;
-  /** When the usage limit its open turn waits on resets, which a waiting line names; none where it waits on none. */
+  /** When the open turn waits on a usage reset, whose native notice replaces the working line. */
   waitsUntil?: number | undefined;
+  /** The current turn, whose own native notice replaces its generic failure line. */
+  turnId?: string | null | undefined;
   /** When the run under way began, which the working line counts from; none where unknown, when the line only shimmers. */
   startedAt?: number | undefined;
   /** The line the transcript ends on once its turn was stopped or failed (`endLineParts`); nothing otherwise. */
@@ -2368,6 +2374,14 @@ function AgentTranscriptView({
   const { members, former } = useMemberDirectory();
   const undelivered = useUndeliveredLines();
   const unsent = useUnsentLines();
+  const lastMessage = messages.at(-1);
+  const lastPart = lastMessage === undefined ? undefined : agentParts(lastMessage).at(-1);
+  const ended =
+    lastMessage?.id === turnId &&
+    lastPart?.kind === AGENT_PART.USAGE_LIMIT &&
+    lastPart.notice.resetsAt === null
+      ? undefined
+      : turnEnded;
   useTurnEndSaid(ended, working);
   // Note that the card stands alone in the end line's place, without its press, since its own presses answer the failure.
   const signInCard =
@@ -2461,7 +2475,7 @@ function AgentTranscriptView({
       ? undefined
       : () => (
           <>
-            {working ? (
+            {working && waitsUntil === undefined ? (
               <WorkingLine startedAt={startedAt} words={workingLineWords(phase, waitsUntil)} />
             ) : null}
             {ended === undefined && endTrail === undefined ? null : (
@@ -2972,6 +2986,7 @@ function AgentTabView({
                         working={standing.working}
                         phase={standing.phase}
                         waitsUntil={standing.waitsUntil}
+                        turnId={standing.turnId ?? agent.turnId}
                         // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
                         startedAt={
                           !counts

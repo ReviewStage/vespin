@@ -371,3 +371,27 @@ test("an agent paid for by a plan says the plan where an agent on a key names th
     "Using ChatGPT plan",
   );
 });
+
+test("a usage-limit notice stays visible between the work before a pause and the answer after it", () => {
+  const { container } = drawn([
+    storedPart("Read", { file_path: "/workspace/repository/README.md" }, "Read the guide."),
+    { type: "data-usage-limit", data: { agent: "Claude", resetsAt: Date.UTC(2026, 10, 9, 23) } },
+    storedPart("Bash", { command: "pnpm test" }, "Tests passed."),
+    { type: "text", text: "The work is complete." },
+  ]);
+  assert.ok(container.textContent?.includes("Paused at your Claude usage limit"));
+  assert.ok(container.textContent?.includes("Picks up again when it resets at"));
+  assert.ok(
+    (container.textContent ?? "").indexOf("Paused at") <
+      (container.textContent ?? "").indexOf("The work is complete."),
+  );
+});
+
+test("a usage limit with no known reset tells the reader to send a message", () => {
+  const { container } = drawn({
+    type: "data-usage-limit",
+    data: { agent: "Codex", resetsAt: null },
+  });
+  assert.ok(container.textContent?.includes("Stopped at your Codex usage limit"));
+  assert.ok(container.textContent?.includes("Send a message to carry on"));
+});

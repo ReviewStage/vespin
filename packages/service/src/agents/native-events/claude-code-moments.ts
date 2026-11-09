@@ -399,6 +399,8 @@ function contextOf(usage: typeof MessageUsageSchema.Type): NativeContextUsage {
 function assistantMoments(message: WireValue): readonly NativeMoment[] {
   const read = readAssistant(message);
   if (Option.isNone(read)) return [];
+  // Note that the CLI's synthetic limit answer is no model message; the launch's end leaves the native notice only if every payer is spent.
+  if (read.value.error === "rate_limit") return [];
   const { id, content, usage } = read.value.message;
   const moments: NativeMoment[] = [
     id === undefined ? { kind: NATIVE_MOMENT.STEP } : { kind: NATIVE_MOMENT.STEP, key: id },

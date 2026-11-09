@@ -131,6 +131,11 @@ import {
   type WireValue,
 } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
+import {
+  USAGE_LIMIT_PART,
+  type UsageLimitNotice,
+  UsageLimitNoticeSchema,
+} from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
 import { TOOL_STATE, type ToolState } from "../ai-elements/tool.js";
 import { devicePlatformOf } from "../device-platform.js";
@@ -1866,6 +1871,7 @@ export type AgentRun = Pick<AgentSummary, "status" | "runStartedAt">;
 
 /** The kinds of part a stored message holds that the tab draws apart. */
 export const AGENT_PART = {
+  USAGE_LIMIT: USAGE_LIMIT_PART,
   TEXT: "text",
   REASONING: "reasoning",
   TOOL: "tool",
@@ -1886,6 +1892,7 @@ export type AgentPartCut = Omit<PartCut, "field"> & { readonly messageId: string
 
 /** One part of a stored message as the tab draws it. */
 export type AgentPart =
+  | { readonly kind: typeof AGENT_PART.USAGE_LIMIT; readonly notice: UsageLimitNotice }
   | { readonly kind: typeof AGENT_PART.TEXT; readonly text: string }
   | {
       readonly kind: typeof AGENT_PART.REASONING;
@@ -1927,6 +1934,12 @@ export function agentPart(part: WireValue): AgentPart {
   if (part.type === AGENT_PART.TEXT || part.type === AGENT_PART.REASONING) {
     return isWireString(part.text)
       ? { kind: part.type, text: part.text }
+      : { kind: AGENT_PART.OTHER };
+  }
+  if (part.type === AGENT_PART.USAGE_LIMIT) {
+    const notice = Schema.decodeUnknownOption(UsageLimitNoticeSchema)(part.data);
+    return Option.isSome(notice)
+      ? { kind: AGENT_PART.USAGE_LIMIT, notice: notice.value }
       : { kind: AGENT_PART.OTHER };
   }
   if (part.type === AGENT_PART.STEP_START) return { kind: AGENT_PART.STEP_START };
@@ -2303,6 +2316,7 @@ const AGENT_READING: RowReading<AgentPart> = {
     return part.kind === AGENT_PART.ARRIVED ? part.line.id : String(index);
   },
   part: (part) => {
+    if (part.kind === AGENT_PART.USAGE_LIMIT) return ROW_PART.NOTICE;
     if (part.kind === AGENT_PART.TEXT) return ROW_PART.WORDS;
     if (part.kind === AGENT_PART.ARRIVED) return ROW_PART.ARRIVED;
     if (part.kind !== AGENT_PART.TOOL) return ROW_PART.NOTE;
@@ -2629,6 +2643,8 @@ export function workingLineWords(
 
 /** What a tab reads its agent standing by (`tabTurnOf`). */
 export interface TabTurn {
+  /** The turn whose status the tab draws, where one has been queued. */
+  readonly turnId: string | undefined;
   /** Whether the working line stands: the turn is open, a line sent has not been answered, or a rewind is out. */
   readonly working: boolean;
   /** What the working line says the agent is doing. */
@@ -2671,6 +2687,7 @@ export function tabTurnOf(agent: Pick<AgentSummary, "status" | "turn">, sends: T
       ? agent.status
       : turnAgentStatus({ status: turn.status, cancelRequested: turn.stopAsked === true });
   return {
+    turnId: turn?.id,
     working: open || sends.unanswered || sends.rewinding,
     phase: workingPhaseOf(turn, open, sends.rewinding),
     waitsUntil: open ? turn?.waitsUntil : undefined,

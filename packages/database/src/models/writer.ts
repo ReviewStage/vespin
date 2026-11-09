@@ -48,6 +48,7 @@ import {
   type StoredToolPart,
   type StoredUIMessage,
   TOOL_PART_STATE,
+  USAGE_LIMIT_PART,
 } from "@repo/wire/ui-messages";
 import {
   asSchema,
@@ -1670,6 +1671,21 @@ function moveJournalBehindWhatFollowed(context: WriterContext, id: string): Writ
   });
 }
 
+/** A pause stays among the journal's parts when the turn resumes below it. */
+const usageLimitReached = /* @__PURE__ */ Effect.fnUntraced(function* (
+  context: WriterContext,
+  event: Extract<RunEvent, { kind: typeof RUN_EVENT.USAGE_LIMIT_REACHED }>,
+): Effect.fn.Return<StoreWriteResult, StoreFailure, DatabaseServices> {
+  const opened = yield* journal(context, event.turnId);
+  if (Result.isFailure(opened)) return Result.fail(opened.failure);
+  const row = opened.success;
+  if (row.finishedAt !== null) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FINISHED });
+  return yield* amendJournal(context, event.turnId, row, [
+    ...row.parts,
+    { type: USAGE_LIMIT_PART, data: event.notice },
+  ]);
+});
+
 function consume(context: WriterContext, event: RunEvent): Write<StoreWriteResult> {
   switch (event.kind) {
     case RUN_EVENT.TURN_STARTED:
@@ -1688,6 +1704,8 @@ function consume(context: WriterContext, event: RunEvent): Write<StoreWriteResul
       return messageCompleted(context, event);
     case RUN_EVENT.TEXT_DRAFTED:
       return textDrafted(context, event);
+    case RUN_EVENT.USAGE_LIMIT_REACHED:
+      return usageLimitReached(context, event);
     // The rest of the stream is the relay's, about a run's moments rather
     // than the record.
     case RUN_EVENT.SLOW_STEP:
