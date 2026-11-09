@@ -59,7 +59,7 @@ import { isRecord, type WireRecord } from "@repo/wire";
 import { DateTime, Duration, Effect, Option, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import { CONNECTION_POLICY } from "../agents/agent-runtime/role.js";
-import { turnServers } from "../agents/agent-runtime/servers.js";
+import { type HandedConnection, turnServers } from "../agents/agent-runtime/servers.js";
 import { heldProjection, turnServersOf } from "../agents/native-events/native-projection.js";
 import type { AdmittedConversation } from "../agents/sessions/admitted-conversation.js";
 import { ACTION_RESULT_STATUS } from "../core.js";
@@ -119,14 +119,6 @@ export interface ConnectionRefusal {
   readonly error: string;
   readonly connection?: string;
   readonly requiresSignIn?: true;
-}
-
-/** One connection handed to the agent: which account at which provider, and, where the member holds more than one there, the note naming which account it is. */
-interface HandedConnection {
-  readonly provider: IntegrationProvider;
-  readonly connectionName: string;
-  readonly instanceKey: string;
-  readonly accountNote?: string;
 }
 
 /** What a call of a connection's tool answered: the provider's own MCP result, as it sent it, or why there is none. */

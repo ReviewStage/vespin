@@ -72,7 +72,7 @@ import type { ConversationAdmission } from "../sessions/admitted-conversation.js
 import { CONNECTION_POLICY, type ConnectionPolicy } from "./role.js";
 
 /** One connection a turn is handed: one account at a provider, by the name it goes by. */
-interface HandedConnection {
+export interface HandedConnection {
   readonly provider: IntegrationProvider;
   /** The name the connection goes by, and the switch and mention that name it. */
   readonly connectionName: string;

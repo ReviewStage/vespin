@@ -13,14 +13,10 @@
  */
 
 import { CHECKOUT_IDENTITY_VARIABLE } from "@repo/features/checkout-identity";
-import { type NetworkPolicy, OPEN_INTERNET } from "@repo/sandbox";
+import { type CommandRun, type NetworkPolicy, OPEN_INTERNET } from "@repo/sandbox";
 import { Effect } from "effect";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../agents/repository-sandbox-contract.js";
-import type {
-  CommandResult,
-  RepositorySandbox,
-  SandboxRunOptions,
-} from "../agents/repository-shell.js";
+import type { RepositorySandbox, SandboxRunOptions } from "../agents/repository-shell.js";
 import { composePolicy, type FirewallSources } from "../agents/sandbox-firewall.js";
 
 /** One run as the sandbox saw it. */
@@ -58,11 +54,11 @@ export interface SandboxDouble extends RepositorySandbox {
 }
 
 /** What a command in the checkout answers, from the test's own table; a command off the table exits 127. */
-export type CommandTable = (command: string) => CommandResult | undefined;
+export type CommandTable = (command: string) => CommandRun | undefined;
 
 const EXIT = { OK: 0, FAILED: 1, NOT_FOUND: 127 } as const;
 
-function result(exitCode: number, stdout = "", stderr = ""): CommandResult {
+function result(exitCode: number, stdout = "", stderr = ""): CommandRun {
   return { exitCode, stdout, stderr };
 }
 
