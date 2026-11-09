@@ -9,7 +9,6 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   AVATAR_SIZE,
-  BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
   CONFIRM_LOSS,
@@ -210,20 +209,10 @@ function EditActions({
 }): React.JSX.Element {
   return (
     <Inline gap={GAP.CONTROL}>
-      <Button
-        variant={BUTTON_VARIANT.QUIET}
-        size={BUTTON_SIZE.COMPACT}
-        disabled={saving}
-        onClick={onLeave}
-      >
+      <Button variant={BUTTON_VARIANT.QUIET} disabled={saving} onClick={onLeave}>
         {leave}
       </Button>
-      <Button
-        variant={BUTTON_VARIANT.PRIMARY}
-        size={BUTTON_SIZE.COMPACT}
-        disabled={!canSave || saving}
-        onClick={onSave}
-      >
+      <Button variant={BUTTON_VARIANT.PRIMARY} disabled={!canSave || saving} onClick={onSave}>
         {saving ? "Saving" : "Save"}
       </Button>
     </Inline>
