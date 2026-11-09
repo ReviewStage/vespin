@@ -45,6 +45,7 @@ import { FoldingButton } from "../folding-button/folding-button.js";
 import { GlyphSlot } from "../glyph-slot/glyph-slot.js";
 import { GROUP_HEADING, GroupHeader } from "../group-header/group-header.js";
 import { INLINE_REF_LOOK, InlineRef } from "../inline-ref/inline-ref.js";
+import { INLINE_REF_FIT, type InlineRefFit } from "../inline-ref/inline-ref-fit.js";
 import { LineRow } from "../line-button/line-button.js";
 import { LIST_MOTION_WAY, ListMotion } from "../list-motion/list-motion.js";
 import {
@@ -153,16 +154,24 @@ function agentAuthor(name: string): CommentAuthor {
   };
 }
 
-/** A pill naming an agent, its face before its name. */
+/** A pill naming an agent, its face before its name, wrapping where it stands in words (`fit`). */
 function AgentPill({
   name,
   look = INLINE_REF_LOOK.PILL,
+  fit,
 }: {
   name: string;
   look?: (typeof INLINE_REF_LOOK)[keyof typeof INLINE_REF_LOOK];
+  fit?: InlineRefFit | undefined;
 }): React.JSX.Element {
   return (
-    <InlineRef look={look} glyph={agentFace(name, AVATAR_SIZE.INLINE)} label={name} hint={false} />
+    <InlineRef
+      look={look}
+      fit={fit}
+      glyph={agentFace(name, AVATAR_SIZE.INLINE)}
+      label={name}
+      hint={false}
+    />
   );
 }
 
@@ -422,7 +431,8 @@ function DraftAnswer({ picked, note }: { picked: boolean; note: string }): React
       </ReplyComposer>
       <div className="ui-landing-new-thread">
         <Checkbox checked={false} onChange={still}>
-          Send as a new thread to <AgentPill name={QUESTION.AGENT} look={INLINE_REF_LOOK.WASH} />
+          Send as a new thread to{" "}
+          <AgentPill name={QUESTION.AGENT} look={INLINE_REF_LOOK.WASH} fit={INLINE_REF_FIT.FLOW} />
         </Checkbox>
       </div>
     </>

@@ -1,6 +1,7 @@
 import { type PointerEvent, type ReactNode, useRef } from "react";
 import { HoverCard, HoverCardContent } from "../../shadcn/hover-card.js";
 import { Tooltip, TooltipContent } from "../../shadcn/tooltip.js";
+import { INLINE_REF_FIT, InlineRefFitScope } from "../inline-ref/inline-ref-fit.js";
 
 /**
  * tooltip.tsx -- a hover hint as it is drawn: a small dark pill naming a control and its shortcut, or a light card saying more, hung beside the control it names.
@@ -147,7 +148,8 @@ export function TooltipCard({
           }
         }}
       >
-        {children}
+        {/* Note that a card hung from a chip in running words is drawn under that chip, so it says its own rows' fit rather than taking the words'. */}
+        <InlineRefFitScope fit={INLINE_REF_FIT.LINE}>{children}</InlineRefFitScope>
       </HoverCardContent>
     </HoverCard>
   );

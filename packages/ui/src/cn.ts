@@ -154,7 +154,6 @@ const CONTENT_TEXT = {
   spacing: ["glyph", "glyph-inset", "working-mark", "inline-ref-mark"],
   radius: ["text-link"],
   shadow: ["inline-ref-wash"],
-  container: ["inline-ref-pill", "inline-ref-pill-stated"],
 } as const;
 
 /**
@@ -591,7 +590,6 @@ const merge = extendTailwindMerge({
         "tooltip",
         "tooltip-card",
         ...FEEDBACK_DISPLAY.container,
-        ...CONTENT_TEXT.container,
         ...PANEL_WINDOW.container,
         ...PAGE_PATTERNS.container,
       ],

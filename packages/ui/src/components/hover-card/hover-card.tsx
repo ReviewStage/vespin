@@ -1,6 +1,7 @@
 import type { HTMLAttributes, ReactNode } from "react";
 import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import type { StatusTone } from "../../status-tone.js";
+import { INLINE_REF_FIT, InlineRefFitScope } from "../inline-ref/inline-ref-fit.js";
 import { GAP, LAYOUT_ELEMENT, Stack } from "../layout/layout.js";
 import { useLinkAddress } from "../menu/link-address.js";
 import { ClippedLine, ONE_LINE_ELEMENT, ONE_LINE_END } from "../one-line/clipped-line.js";
@@ -321,7 +322,7 @@ export function HoverCardRow({
     <>
       {glyph === undefined ? null : <span className={ROW_GLYPH}>{glyph}</span>}
       <ClippedLine className={ROW_LABEL} as={ONE_LINE_ELEMENT.SPAN} end={ONE_LINE_END.FADE}>
-        {label}
+        <InlineRefFitScope fit={INLINE_REF_FIT.LINE}>{label}</InlineRefFitScope>
       </ClippedLine>
       {end === undefined ? null : <span className={ROW_END}>{end}</span>}
     </>

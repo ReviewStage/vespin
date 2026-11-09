@@ -100,7 +100,10 @@ test("an agent's written mentions of a page, an agent, a section, and a file are
 
   const chips = [...container.querySelectorAll<HTMLElement>("[data-mention-ref]")];
   const page = chips.find((chip) => chip.dataset.kind === "page");
-  assert.ok(page instanceof HTMLButtonElement, "the page is a chip that opens");
+  assert.ok(
+    page !== undefined && page.getAttribute("role") === "button",
+    "the page is a chip that opens",
+  );
   act(() => page.click());
 
   assert.deepEqual(

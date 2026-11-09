@@ -115,7 +115,6 @@ import {
   WrenchIcon,
 } from "@repo/ui/icons";
 import { siteName } from "@repo/ui/link-face";
-import { gluedRun, LINK_GLUE } from "@repo/ui/link-glue";
 import {
   MARKDOWN_HTML_STEP,
   type MarkdownComponents,
@@ -307,7 +306,6 @@ const PICTURE_ROW_ELEMENT = {
 const MENTION_TAGS = {
   [MENTION_ELEMENT.TAG]: [MENTION_ELEMENT.TARGET],
   [PICTURE_ELEMENT.TAG]: [PICTURE_ELEMENT.ADDRESS, PICTURE_ELEMENT.WORDS, PICTURE_ELEMENT.CAPTION],
-  [LINK_GLUE.TAG]: [],
   [LONE_LINK_ELEMENT.TAG]: [LONE_LINK_ELEMENT.TARGET, LONE_LINK_ELEMENT.WORDS],
   [PICTURE_ROW_ELEMENT.TAG]: [],
 };
@@ -410,17 +408,6 @@ function markPictures(node: MarkdownNode, definitions: ReadonlyMap<string, Markd
     return;
   }
   for (const child of node.children ?? []) markPictures(child, definitions);
-}
-
-/** Holds each link marked as a mention with the punctuation written against it (`link-glue.ts`), under a node and every node below it. */
-function glueMentions(node: MarkdownNode): void {
-  if (node.children === undefined) return;
-  for (const child of node.children) glueMentions(child);
-  node.children = gluedRun<MarkdownNode>(node.children, {
-    held: (child) => child.data?.hName === MENTION_ELEMENT.TAG,
-    text: (value) => ({ type: "text", value }),
-    box: (inside) => ({ type: LINK_GLUE.TAG, data: { hName: LINK_GLUE.TAG }, children: inside }),
-  });
 }
 
 /** Whether a node of a paragraph says nothing: a run of whitespace, or a line break. */
@@ -560,12 +547,11 @@ function markTaskKeysStep(targets: ReadonlyMap<string, string>): (tree: Markdown
   return (tree) => markTaskKeys(tree, targets);
 }
 
-/** The step that marks a transcript's links and its pictures, a reference's read through its definition, and holds each mention with its punctuation. */
+/** The step that marks a transcript's links and its pictures, a reference's read through its definition. */
 function markLinks(tree: MarkdownNode): void {
   const definitions = definitionsIn(tree);
   markMentions(tree, definitions);
   markPictures(tree, definitions);
-  glueMentions(tree);
 }
 
 /** The step that marks words drawn as a document: a transcript's marks, then its rows of pictures and its links standing alone. */
@@ -575,7 +561,6 @@ function markDocument(tree: MarkdownNode): void {
   markPictures(tree, definitions);
   markPictureRows(tree);
   markLoneLinks(tree, definitions);
-  glueMentions(tree);
 }
 
 /** What a picture with no words of its own is called where it is named. */
@@ -693,11 +678,6 @@ function PictureRowElement({ children }: MarkdownNodeProps & { children?: ReactN
   );
 }
 
-/** A mention held with the punctuation written against it, in the box no line breaks inside (`link-glue.ts`). */
-function LinkGlueElement({ children }: MarkdownNodeProps & { children?: ReactNode }): ReactNode {
-  return <span className={LINK_GLUE.CLASS}>{children}</span>;
-}
-
 /**
  * How a transcript's markdown is drawn: at the panel's scale, its code and
  * tables as `transcript-markdown.tsx` draws them, its links as
@@ -715,7 +695,6 @@ const TRANSCRIPT_COMPONENTS: MarkdownComponents = {
   ),
   [MENTION_ELEMENT.TAG]: MentionElement,
   [PICTURE_ELEMENT.TAG]: PictureElement,
-  [LINK_GLUE.TAG]: LinkGlueElement,
   [LONE_LINK_ELEMENT.TAG]: LoneLinkElement,
   [PICTURE_ROW_ELEMENT.TAG]: PictureRowElement,
   img: () => null,

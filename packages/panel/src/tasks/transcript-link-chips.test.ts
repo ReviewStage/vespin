@@ -141,7 +141,9 @@ test("on a plan's page a plan's link, a file's lines, and a Linear page are chip
   );
   assert.equal(carriesTarget(container), false);
 
-  for (const chip of container.querySelectorAll<HTMLElement>(":is(button, a)[data-mention-ref]")) {
+  for (const chip of container.querySelectorAll<HTMLElement>(
+    ":is(button, a, [role='button'])[data-mention-ref]",
+  )) {
     act(() => chip.click());
   }
   assert.deepEqual(opened, [{ kind: MENTION_KIND.SECTION, taskId: TASK_ID, anchor: "rollout" }]);
@@ -184,7 +186,9 @@ test("a reference link is read through its definition, and a file's page far lon
     [MENTION_KIND.FILE, "the store"],
     [MENTION_KIND.FILE, "the long one"],
   ]);
-  for (const chip of container.querySelectorAll<HTMLElement>(":is(button, a)[data-mention-ref]")) {
+  for (const chip of container.querySelectorAll<HTMLElement>(
+    ":is(button, a, [role='button'])[data-mention-ref]",
+  )) {
     act(() => chip.click());
   }
   assert.deepEqual(

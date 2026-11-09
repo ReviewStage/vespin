@@ -65,22 +65,6 @@
   opacity: 1;
 }
 
-/* A chip held with its punctuation (`.link-glued`, `@repo/ui`'s prose.css) is capped
-   by its length alone, because the box it stands in is the one held to the
-   column, and the chip in it already gives way before it would push its
-   comma past the edge. Note that a share of the column would not do: the
-   box takes its width from the chip, so the share has nothing to resolve
-   against while it does, Chromium reads the cap as none, and the box keeps
-   the room of the whole name as a gap after the chip it then cuts, washed
-   where a version's change mark holds the chip. */
-.link-glued [data-mention-ref] {
-  max-width: var(--ui-inline-ref-pill-width);
-}
-
-.link-glued [data-mention-ref][data-stated] {
-  max-width: var(--ui-inline-ref-pill-stated-width);
-}
-
 /* A narrowed list stands under its kind's crumb; a kind typed with its
    colon has no back arrow, so its glyph keeps the rows' inset. */
 .mention-menu-crumb:not(:has(button)) {
@@ -1793,7 +1777,7 @@
    to the line's end; and with a preview after it, it keeps to half the line,
    so a long name never takes the preview's room. */
 .tool-chip:has(+ .tool-subject) {
-  max-width: min(50%, var(--ui-inline-ref-pill-width));
+  max-width: min(50%, var(--ui-tool-chip-width));
 }
 
 /* A chip that opens its agent from a line that folds open: lifted with the

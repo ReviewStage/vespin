@@ -642,7 +642,9 @@ test("a sent message's mention is drawn on a plan's page as the chip that opens 
     planPage(opened),
   );
 
-  const chip = container.querySelector<HTMLButtonElement>("button[data-mention-ref]");
+  const chip = container.querySelector<HTMLButtonElement>(
+    ":is(button, [role='button'])[data-mention-ref]",
+  );
   assert.ok(chip, "the mention is a chip");
   act(() => chip.click());
 
@@ -664,7 +666,9 @@ test("off a plan's page a sent message's mention is still its chip, which opens 
     undefined,
   );
 
-  const chip = container.querySelector<HTMLButtonElement>("button[data-mention-ref]");
+  const chip = container.querySelector<HTMLButtonElement>(
+    ":is(button, [role='button'])[data-mention-ref]",
+  );
   assert.ok(chip !== null, "the mention is a chip");
   act(() => chip.click());
 
@@ -992,7 +996,11 @@ test("a sent message's mention of a page or an agent is drawn as the chip that o
     taskPage(),
   );
 
-  const chips = [...container.querySelectorAll<HTMLButtonElement>("button[data-mention-ref]")];
+  const chips = [
+    ...container.querySelectorAll<HTMLButtonElement>(
+      ":is(button, [role='button'])[data-mention-ref]",
+    ),
+  ];
   for (const chip of chips) act(() => chip.click());
 
   assert.deepEqual(chips.map(chipName), [PAGE.title, STORE_AGENT.name]);
@@ -1931,7 +1939,9 @@ test("a sent message's mention of a person is drawn as the chip wearing their ma
   await settle();
   await peopleRead();
 
-  const chip = container.querySelector<HTMLButtonElement>("button[data-mention-ref]");
+  const chip = container.querySelector<HTMLButtonElement>(
+    ":is(button, [role='button'])[data-mention-ref]",
+  );
   assert.ok(chip);
   act(() => chip.click());
 
@@ -2023,7 +2033,9 @@ test("a date's chip in the box opens its picker, and the day picked there is the
     await settle();
     pressInComposer(container, "Enter");
     await settle();
-    const chip = composerEditor(container).querySelector<HTMLElement>("button[data-mention-ref]");
+    const chip = composerEditor(container).querySelector<HTMLElement>(
+      ":is(button, [role='button'])[data-mention-ref]",
+    );
     assert.ok(chip, "the date's chip is a button in the box");
     act(() => chip.click());
     await settle();

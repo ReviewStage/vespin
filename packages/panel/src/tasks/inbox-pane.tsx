@@ -32,6 +32,7 @@ import {
   Fill,
   GAP,
   IconButton,
+  INLINE_REF_FIT,
   INLINE_REF_LOOK,
   InlineRef,
   LAYOUT_ELEMENT,
@@ -1476,6 +1477,7 @@ function answerNewThread(offer: InboxNewThread, item: InboxItem, by: ItemAgent):
     agent: (
       <InlineRef
         look={INLINE_REF_LOOK.PILL}
+        fit={INLINE_REF_FIT.FLOW}
         glyph={<ActorMark actor={tile} size={ACTOR_SIZE.INLINE} />}
         label={name}
         card={<AgentCard subject={by.subject} models={by.models} />}

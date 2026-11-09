@@ -267,7 +267,7 @@ test("a plan's, a skill's, an agent tab's, and a pull request's cards each name 
     }),
   );
   await settleFrames();
-  const skill = hung(message, "button[data-skill-ref]");
+  const skill = hung(message, ":is(button, [role='button'])[data-skill-ref]");
   assert.deepEqual(headOf(skill), {
     glyph: true,
     name: "/release",

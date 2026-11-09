@@ -1222,7 +1222,9 @@ test("a skill a message names is its chip, which opens the skill's SKILL.md in a
 
   // The skills are read once a sent message first asks for them, a settle after the transcript lands.
   await settleFrames();
-  const chip = page.querySelector<HTMLButtonElement>("button[data-skill-ref]");
+  const chip = page.querySelector<HTMLButtonElement>(
+    ":is(button, [role='button'])[data-skill-ref]",
+  );
   assert.ok(chip, "the skill is its chip");
   act(() => chip.click());
   await settle();

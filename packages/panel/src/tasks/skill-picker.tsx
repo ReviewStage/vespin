@@ -6,6 +6,8 @@ import {
   ComboboxList,
   comboboxOptionId,
   GAP,
+  INLINE_REF_FIT,
+  InlineRefFitScope,
   MENU_SURFACE_INSET,
   type MenuKey,
   MenuKeys,
@@ -29,12 +31,12 @@ import {
   useMemo,
   useState,
 } from "react";
-import { SettingsPageLink } from "../open-settings.js";
 import type {
   ComposerChip,
   ComposerEditorHandle,
   ComposerTrigger,
 } from "../description-editor/contract.js";
+import { SettingsPageLink } from "../open-settings.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide, wordBox } from "./mention-picker.js";
 import { opensFile, SkillRef, type SkillWithFile, skillOption } from "./skill-ref.js";
 
@@ -200,14 +202,16 @@ function BoxChip({
   skill: SkillOption | undefined;
   onOpen: ((skill: SkillWithFile) => void) | undefined;
 }): React.JSX.Element {
-  // Note that an installed skill names no file of the repository's, so its chip opens nothing.
+  // Note that an installed skill names no file of the repository's, so its chip opens nothing, and that the chip stands in the words being written, so it wraps as they do.
   const file = skill !== undefined && opensFile(skill) ? skill : undefined;
   return (
-    <SkillRef
-      name={name}
-      skill={skill}
-      onOpen={file === undefined || onOpen === undefined ? undefined : () => onOpen(file)}
-    />
+    <InlineRefFitScope fit={INLINE_REF_FIT.FLOW}>
+      <SkillRef
+        name={name}
+        skill={skill}
+        onOpen={file === undefined || onOpen === undefined ? undefined : () => onOpen(file)}
+      />
+    </InlineRefFitScope>
   );
 }
 

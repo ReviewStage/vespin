@@ -1,6 +1,5 @@
 import { keySpansIn } from "@repo/features/workspace-key";
 import { SEARCH_MATCH_CLASS } from "@repo/ui";
-import { gluedRun, LINK_GLUE } from "@repo/ui/link-glue";
 import {
   MARKDOWN_LOOK,
   Markdown,
@@ -311,43 +310,6 @@ const linkTaskKeys =
     }
   };
 
-/** Whether a node is a link the place draws itself, a mention's chip say. */
-function isDrawnLink(node: HastElementChild, link: LinkDrawer): boolean {
-  if (node.type !== "element" || node.tagName !== "a") return false;
-  const href = node.properties.href;
-  // Note that a link whose label a change marks in part is drawn as words, which must still wrap (`drawnMarked`).
-  if (marksOf(node) === LINK_MARKS.MIXED) return false;
-  return isWireString(href) && link(href, labelOf(node)) !== undefined;
-}
-
-/** An element's children, and theirs, with each link the place draws itself held with the punctuation written against it (`link-glue.ts`). */
-function gluedChildren(element: HastElement, link: LinkDrawer): HastElementChild[] {
-  for (const child of element.children) {
-    if (child.type === "element" && !isDrawnLink(child, link))
-      child.children = gluedChildren(child, link);
-  }
-  return gluedRun<HastElementChild>(element.children, {
-    held: (child) => isDrawnLink(child, link),
-    text: (value) => ({ type: "text", value }),
-    box: (inside) => ({
-      type: "element",
-      tagName: "span",
-      properties: { className: [LINK_GLUE.CLASS] },
-      children: inside,
-    }),
-    markWords: (child) => (isMark(child) ? wordsOf(child) : undefined),
-  });
-}
-
-/** The rehype step that holds every drawn link with the punctuation written against it, so a comma never starts a line alone after a chip. */
-const glueDrawnLinks =
-  (link: LinkDrawer) =>
-  (tree: HastParent): void => {
-    for (const child of tree.children) {
-      if (child.type === "element") child.children = gluedChildren(child, link);
-    }
-  };
-
 /**
  * How each element is drawn where the library's default would say the wrong
  * thing on this surface.
@@ -402,8 +364,7 @@ function plainLink(
  * mention's chip (`tasks/mention-chip.tsx`) say, from its destination,
  * its label's words, and where the link is written in the words, which a
  * date's chip names to change it in place; nothing for one it leaves drawn
- * as any link is. Note that whether it draws a link never turns on `at`,
- * since the words are glued around its links before they are placed.
+ * as any link is.
  */
 export type LinkDrawer = (
   href: string,
@@ -655,7 +616,6 @@ export const MarkdownMessage = memo(function MarkdownMessage({
       plugins.push(markdownStep(linkTaskKeys, keyTargets));
     }
     if (found !== undefined && found.length > 0) plugins.push(markdownStep(markFound, found));
-    if (link !== undefined) plugins.push(markdownStep(glueDrawnLinks, link));
     return plugins;
   }, [edit, words, found, link, keyTargets]);
   // Note that a place drawing its own links is handed every destination,

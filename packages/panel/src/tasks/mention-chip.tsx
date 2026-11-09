@@ -5,6 +5,7 @@ import {
   dateWhole,
   readerZone,
 } from "@repo/features/date-mention";
+import { descriptionSections } from "@repo/features/description-document";
 import {
   issueAddressOf,
   LINK_PLACE,
@@ -18,6 +19,7 @@ import {
   withTaskId,
 } from "@repo/features/link-grammar";
 import {
+  type DescriptionMention,
   decodeMention,
   encodeMention,
   isBareLink,
@@ -28,13 +30,11 @@ import {
   type MentionPlace,
   mentionName,
   type NumberedTaskIdOf,
-  type DescriptionMention,
   pageRepositoryOf,
   pastedLinkMention,
   sectionAnchors,
 } from "@repo/features/mention-link";
 import { type KnownNames, placeChipLook } from "@repo/features/place-chip-model";
-import { descriptionSections } from "@repo/features/description-document";
 import { UNTITLED_TASK_NAME } from "@repo/features/task-wire";
 import {
   THING_KIND,
@@ -49,8 +49,10 @@ import {
   HoverCard,
   HoverCardHead,
   HoverCardNote,
+  INLINE_REF_FIT,
   INLINE_REF_LOOK,
   InlineRef,
+  InlineRefFitScope,
   OneLine,
   TEXT_LINK_LOOK,
   TextLink,
@@ -60,12 +62,12 @@ import type { Actor } from "@repo/ui/actor-model";
 import { CalendarIcon } from "@repo/ui/icons";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import type { ReactNode } from "react";
-import type { LinkDrawer, MarkdownSpan } from "../markdown-message.js";
 import type {
   HeadingsChange,
   MentionNode,
   MentionNodeDoors,
 } from "../description-editor/contract.js";
+import type { LinkDrawer, MarkdownSpan } from "../markdown-message.js";
 import { LinkAutomations, useSectionHeading } from "./chip-cards.js";
 import {
   DATE_PICKER_CLOSE,
@@ -1162,6 +1164,24 @@ export function MentionNodeChip({
   doors: MentionDoors;
   /** What changes the node; none where the editor hands nothing. */
   edit?: MentionNodeEdit | undefined;
+}): React.JSX.Element {
+  // Note that a node's chip stands in the words being written, so it wraps across lines as they do.
+  return (
+    <InlineRefFitScope fit={INLINE_REF_FIT.FLOW}>
+      <NodeChip mention={mention} doors={doors} edit={edit} />
+    </InlineRefFitScope>
+  );
+}
+
+/** A mention node's chip, as `MentionNodeChip` draws it. */
+function NodeChip({
+  mention,
+  doors,
+  edit,
+}: {
+  mention: MentionNode;
+  doors: MentionDoors;
+  edit: MentionNodeEdit | undefined;
 }): React.JSX.Element {
   const named = decodeMention(mention.target, doors.place.repository);
   if (named === undefined) {

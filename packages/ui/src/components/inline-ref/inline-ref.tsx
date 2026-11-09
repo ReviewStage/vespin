@@ -1,6 +1,7 @@
 import type {
   ComponentType,
   FocusEventHandler,
+  KeyboardEvent,
   MouseEvent,
   PointerEventHandler,
   ReactElement,
@@ -9,8 +10,10 @@ import type {
 import { middlePressOf } from "../../middle-press.js";
 import { pulseOnPress } from "../../press-pulse.js";
 import { useLinkAddress } from "../menu/link-address.js";
+import { ClippedLine, ONE_LINE_ELEMENT, ONE_LINE_END } from "../one-line/clipped-line.js";
 import { TEXT_ELEMENT, TEXT_FONT, TEXT_TRUNCATE, TEXT_VARIANT, Text } from "../text/text.js";
 import { Tooltip } from "../tooltip/hint.js";
+import { INLINE_REF_FIT, type InlineRefFit, useInlineRefFit } from "./inline-ref-fit.js";
 
 /**
  * inline-ref.tsx -- a thing named inside a line of words: its glyph, its name, and where it stands, as one target that hangs its card and, where it can, opens it.
@@ -31,9 +34,20 @@ import { Tooltip } from "../tooltip/hint.js";
  * does, words that wash under the pointer as a byline's actor does, or a
  * pill on a raised fill as a mention is drawn in prose. An inert pill on a
  * row that is itself a button lifts with that row's hover, since its fill
- * is the row's hover fill. The name gives way before anything else: ending
- * in an ellipsis where it is cut, at its end, or at its start for a path, so
- * a file's own name stays in sight.
+ * is the row's hover fill.
+ *
+ * How it takes its line is chosen by the place too (`INLINE_REF_FIT`),
+ * handed to the token or to every token under a surface at once
+ * (`InlineRefFitScope`), since the same chip stands in an agent's words and
+ * in a one-line row of them. In running words it wraps across lines as they do, its fill and corners
+ * carried onto each line it stands on, and is read whole: no cap and no
+ * ellipsis, since a name cut short in a sentence says less than the
+ * sentence does. In a slot one line tall, a row's, a byline's, or a head's,
+ * it keeps to one line and its name gives way before anything else, fading
+ * out at its end, or for a path cut at its start, so a file's own name
+ * stays in sight; a token whose place says neither keeps to one line. Note that a token that wraps and presses is a `span` in a
+ * button's role rather than a `button`, because a browser draws a button as
+ * one box that never breaks across lines.
  *
  * What is drawn here is the token. Its hint, the pill or card hung while the
  * pointer rests on it and when that shows and goes, is the window's tooltip
@@ -100,6 +114,8 @@ type DataAttributes = { readonly [name: `data-${string}`]: string | undefined };
 /** What a token says and does, beside how it is drawn. */
 interface InlineRefFace {
   look: InlineRefLook;
+  /** How it takes its line, where its place says: wrapping in running words, or kept to one line; the surface's (`InlineRefFitScope`) where none is said, and one line where neither says. */
+  fit?: InlineRefFit | undefined;
   /** The mark of what kind of thing it names, before the name; hidden from a screen reader, which hears `kind` in its place. */
   glyph?: ReactNode;
   /** What kind of thing it names, in words a screen reader hears before the name and nothing draws: "pull request". */
@@ -126,41 +142,57 @@ interface InlineRefFace {
   leaves?: boolean | undefined;
 }
 
-/** What every token is drawn with: one target that never outgrows its column, its words the line's own. */
-const ROOT =
-  "ui-inline-ref inline-flex min-w-0 max-w-full items-center p-0 border-0 text-left align-baseline [font:inherit] no-underline whitespace-nowrap";
+/** What every token is drawn with: one target, its words the line's own. */
+const ROOT = "ui-inline-ref p-0 border-0 text-left [font:inherit] no-underline";
+
+/**
+ * How a token takes its line: wrapping as words do, each line's piece drawn
+ * as if it were the whole, so a fill and its corners stand on every line; or
+ * one row that never outgrows its column.
+ */
+const FIT_ROOT = {
+  [INLINE_REF_FIT.FLOW]: "inline whitespace-normal wrap-break-word box-decoration-clone",
+  [INLINE_REF_FIT.LINE]:
+    "inline-flex min-w-0 max-w-full items-center align-baseline whitespace-nowrap",
+} as const satisfies Record<InlineRefFit, string>;
+
+/** The gap each look keeps between its glyph, its name, and its standing: a row's gap where it is one line, and a margin on either side of the name where it wraps, which no gap reaches. */
+const LOOK_GAP = {
+  [INLINE_REF_LOOK.LINK]: { row: "gap-icon-gap", glyph: "me-icon-gap", state: "ms-icon-gap" },
+  [INLINE_REF_LOOK.WASH]: { row: "gap-ui-4", glyph: "me-ui-4", state: "ms-ui-4" },
+  [INLINE_REF_LOOK.PILL]: { row: "gap-ui-4", glyph: "me-ui-4", state: "ms-ui-4" },
+} as const satisfies Record<InlineRefLook, { row: string; glyph: string; state: string }>;
 
 /** Each look's own box and ink at rest, a pill's type asked on its look so it outranks the line's own font the root takes. Note that a wash's name stands at least a 16px mark's height, so a mark beside it stays centered on it. */
 const LOOK_ROOT = {
-  [INLINE_REF_LOOK.LINK]: "gap-icon-gap bg-transparent",
+  [INLINE_REF_LOOK.LINK]: "bg-transparent",
   [INLINE_REF_LOOK.WASH]:
-    "gap-ui-4 rounded-ui-6 bg-transparent transition-[background-color,box-shadow,color] duration-(--ui-duration-hover) ease-motion-exit hover:bg-muted hover:text-foreground hover:shadow-inline-ref-wash hover:[--ui-inline-ref-wash:var(--ui-color-fill-hover)]",
+    "rounded-ui-6 bg-transparent transition-[background-color,box-shadow,color] duration-(--ui-duration-hover) ease-motion-exit hover:bg-muted hover:text-foreground hover:shadow-inline-ref-wash hover:[--ui-inline-ref-wash:var(--ui-color-fill-hover)]",
   [INLINE_REF_LOOK.PILL]:
-    "-my-[0.075em] gap-ui-4 rounded-ui-6 py-[0.075em] pr-ui-6 pl-ui-4 text-foreground data-[look=pill]:leading-[1.2] data-[look=pill]:font-tag transition-[background-color] duration-(--ui-duration-hover) ease-motion-exit",
+    "-my-[0.075em] rounded-ui-6 py-[0.075em] pr-ui-6 pl-ui-4 text-foreground data-[look=pill]:leading-[1.2] data-[look=pill]:font-tag transition-[background-color] duration-(--ui-duration-hover) ease-motion-exit",
 } as const satisfies Record<InlineRefLook, string>;
 
-/** How a token's root is drawn: its look, its ink, a pointer where it presses, and a pill's fill lifting under the pointer or the keyboard, or with the row it stands inert in, unless what it names is gone. */
+/** How a token's root is drawn: how it takes its line, its look, its ink, a pointer where it presses, and a pill's fill lifting under the pointer or the keyboard, or with the row it stands inert in, unless what it names is gone. */
 function rootClass({
   look,
+  fit,
   gone,
   pressable,
   leaving,
-  stated,
 }: {
   look: InlineRefLook;
+  fit: InlineRefFit;
   gone: boolean;
   pressable: boolean;
   /** Whether it is a link to another site, which keeps the pointing hand a control gives up on the desktop. */
   leaving: boolean;
-  stated: boolean;
 }): string {
   const pill = look === INLINE_REF_LOOK.PILL;
-  const parts: string[] = [ROOT, LOOK_ROOT[look]];
+  const parts: string[] = [ROOT, FIT_ROOT[fit], LOOK_ROOT[look]];
+  if (fit === INLINE_REF_FIT.LINE) parts.push(LOOK_GAP[look].row);
   if (!pill) parts.push(gone ? "text-muted-foreground" : "text-inherit");
   if (pressable) parts.push(leaving ? "cursor-link" : "cursor-press");
   if (pill) {
-    // Note that a pill saying its standing is let wider, so its name is read rather than cut at its first word.
-    parts.push(stated ? "max-w-inline-ref-pill-stated" : "max-w-inline-ref-pill");
     if (gone) parts.push("bg-transparent inset-ring inset-ring-border-strong");
     else if (pressable)
       parts.push("bg-fill-strong hover:bg-fill-selected focus-visible:bg-fill-selected");
@@ -179,26 +211,38 @@ function rootClass({
  * and a mark drawn at its own size (an agent's 16px tile, a pull request's
  * 12px mark) stands centered on it, spilling evenly above and below rather
  * than hanging from its corner, and widens it, so its name keeps its gap.
+ * Where the token wraps, the glyph's box is a line of words tall in every
+ * look and sits a little under the baseline, as an icon set in words does,
+ * so its middle meets the middle of the letters beside it.
  */
-function glyphClass(look: InlineRefLook): string {
-  const glyph =
-    "ui-inline-ref-glyph inline-flex flex-none items-center justify-center empty:hidden [&>svg]:size-[1em]";
-  return look === INLINE_REF_LOOK.PILL
-    ? `${glyph} h-[1em] min-w-[1em] text-muted-foreground`
-    : glyph;
+function glyphClass(look: InlineRefLook, fit: InlineRefFit): string {
+  const parts = [
+    "ui-inline-ref-glyph inline-flex flex-none items-center justify-center empty:hidden [&>svg]:size-[1em]",
+  ];
+  const pill = look === INLINE_REF_LOOK.PILL;
+  if (fit === INLINE_REF_FIT.FLOW || pill) parts.push("h-[1em]");
+  if (fit === INLINE_REF_FIT.FLOW) parts.push(`align-[-0.125em] ${LOOK_GAP[look].glyph}`);
+  if (pill) parts.push("min-w-[1em] text-muted-foreground");
+  return parts.join(" ");
 }
 
-/** A token's name, alone on the words' baseline: struck through where gone, a link's name underlined under the pointer, and a wash's at least a mark tall. */
+/** A token's name, alone on the words' baseline where it is one line: struck through where gone, a link's name underlined under the pointer, a wash's at least a mark tall, and a path broken anywhere where it wraps, since it holds no spaces to break at. */
 function labelClass({
   look,
+  fit,
+  name,
   gone,
   pressable,
 }: {
   look: InlineRefLook;
+  fit: InlineRefFit;
+  name: InlineRefName;
   gone: boolean;
   pressable: boolean;
 }): string {
-  const parts = ["ui-inline-ref-label self-baseline"];
+  const parts = ["ui-inline-ref-label"];
+  if (fit === INLINE_REF_FIT.LINE) parts.push("self-baseline");
+  else if (name === INLINE_REF_NAME.PATH) parts.push("wrap-anywhere");
   if (gone) parts.push("line-through");
   if (look === INLINE_REF_LOOK.LINK && pressable) {
     parts.push("group-hover/inline-ref:underline group-hover/inline-ref:underline-offset-2");
@@ -207,9 +251,11 @@ function labelClass({
   return parts.join(" ");
 }
 
-/** Where a token stands, after its name, never cut; a pill's set off by a hairline. */
-function stateClass(look: InlineRefLook): string {
-  const state = "ui-inline-ref-state flex-none self-baseline text-muted-foreground";
+/** Where a token stands, after its name, never cut or broken; a pill's set off by a hairline. */
+function stateClass(look: InlineRefLook, fit: InlineRefFit): string {
+  const state = `ui-inline-ref-state whitespace-nowrap text-muted-foreground ${
+    fit === INLINE_REF_FIT.LINE ? "flex-none self-baseline" : LOOK_GAP[look].state
+  }`;
   return look === INLINE_REF_LOOK.PILL
     ? `${state} border-l border-border-strong pl-ui-4 font-caption`
     : state;
@@ -241,9 +287,17 @@ function noFocus(element: HTMLElement | null): void {
   element?.removeAttribute("tabindex");
 }
 
+/** The keys a button answers, Enter and Space, pressing a span in a button's role as a click does, and Space not scrolling the page. */
+function pressOnKey(event: KeyboardEvent<HTMLElement>): void {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  event.preventDefault();
+  event.currentTarget.click();
+}
+
 /** The token itself, which takes what a hint hands it on its root. */
 function InlineRefRoot({
   look,
+  fit: ownFit,
   glyph,
   kind,
   label,
@@ -265,39 +319,50 @@ function InlineRefRoot({
     carded: boolean;
   }): React.JSX.Element {
   const linkAddress = useLinkAddress(linkHref);
+  const fit = useInlineRefFit(ownFit);
   const pressable = onPress !== undefined;
   const leaving = pressable && leaves && linkHref !== undefined;
   const stated = !(state === undefined || state === null || labelHidden);
+  const labelClassName = labelClass({ look, fit, name, gone, pressable });
   const face = (
     <>
       {kind === undefined ? null : <span className="ui-visually-hidden">{`${kind} `}</span>}
       {glyph === undefined ? null : (
-        <span className={glyphClass(look)} aria-hidden="true">
+        <span className={glyphClass(look, fit)} aria-hidden="true">
           {glyph}
         </span>
       )}
       {labelHidden ? (
         <span className="ui-visually-hidden">{label}</span>
+      ) : fit === INLINE_REF_FIT.LINE && name === INLINE_REF_NAME.NAME ? (
+        <ClippedLine
+          className={labelClassName}
+          as={ONE_LINE_ELEMENT.SPAN}
+          end={ONE_LINE_END.FADE}
+          words={label}
+        >
+          {label}
+        </ClippedLine>
       ) : (
         <Text
           as={TEXT_ELEMENT.SPAN}
           variant={TEXT_VARIANT.INHERIT}
           font={name === INLINE_REF_NAME.PATH ? TEXT_FONT.MONO : TEXT_FONT.SANS}
-          truncate={name === INLINE_REF_NAME.PATH ? TEXT_TRUNCATE.START : true}
-          className={labelClass({ look, gone, pressable })}
+          truncate={fit === INLINE_REF_FIT.LINE ? TEXT_TRUNCATE.START : false}
+          className={labelClassName}
         >
           {/* Note that a path is isolated, so the ellipsis at its start never reorders it. */}
           {name === INLINE_REF_NAME.PATH ? <bdi>{label}</bdi> : label}
         </Text>
       )}
-      {!stated ? null : <span className={stateClass(look)}>{state}</span>}
+      {!stated ? null : <span className={stateClass(look, fit)}>{state}</span>}
       {heard === undefined ? null : <span className="ui-visually-hidden">{heard}</span>}
       {gone ? <span className="ui-visually-hidden">{GONE_HEARD}</span> : null}
     </>
   );
   const own = {
     ...rest,
-    className: `${rootClass({ look, gone, pressable, leaving, stated })}${pressable ? " group/inline-ref" : ""}`,
+    className: `${rootClass({ look, fit, gone, pressable, leaving })}${pressable ? " group/inline-ref" : ""}`,
     "data-look": look,
   };
   const goneProps = gone ? { "data-gone": "true" } : {};
@@ -331,6 +396,24 @@ function InlineRefRoot({
       >
         {face}
       </a>
+    );
+  }
+  if (fit === INLINE_REF_FIT.FLOW) {
+    // Note that a token that wraps presses as a span in a button's role, because a browser draws a button as one box that never breaks across lines; the keys a button answers press it the same way.
+    return (
+      // biome-ignore lint/a11y/useSemanticElements: a token in running words wraps across lines as they do, and a browser draws a <button> as one box that never breaks.
+      <span
+        role="button"
+        tabIndex={0}
+        ref={linkAddress}
+        {...own}
+        {...goneProps}
+        aria-label={pressLabel}
+        onClick={pulseOnPress(onPress)}
+        onKeyDown={pressOnKey}
+      >
+        {face}
+      </span>
     );
   }
   return (

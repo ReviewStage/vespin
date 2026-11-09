@@ -173,7 +173,9 @@ test("a sent chip's hover card is the plan card: the skill's mark and name, what
   const { container, opened } = await mounted(
     createElement(SentWords, { text: "Cut it with /release now." }),
   );
-  const chip = container.querySelector<HTMLButtonElement>("button[data-skill-ref]");
+  const chip = container.querySelector<HTMLButtonElement>(
+    ":is(button, [role='button'])[data-skill-ref]",
+  );
   assert.ok(chip, "the skill is a chip");
   // The card hangs as the keyboard reaches the chip, as it does under a resting pointer.
   document.documentElement.dataset.keyboard = "true";
@@ -204,8 +206,8 @@ test("an installed skill's chip is no button, yet takes the focus for its card, 
   const [triage, release] = container.querySelectorAll<HTMLElement>("[data-skill-ref]");
   assert.ok(triage && release, "both skills are chips");
   assert.deepEqual(
-    [triage.tagName, release.tagName],
-    ["SPAN", "BUTTON"],
+    [triage.getAttribute("role"), release.getAttribute("role")],
+    [null, "button"],
     "only the skill with a file to open is a button",
   );
   document.documentElement.dataset.keyboard = "true";
@@ -253,7 +255,10 @@ test("a sent message naming a skill keeps its lines too, the skill still its chi
   const { container } = await mounted(
     createElement(SentWords, { text: "Cut it with /release\nthen tell me." }),
   );
-  assert.ok(container.querySelector("button[data-skill-ref]"), "the skill is a chip");
+  assert.ok(
+    container.querySelector(":is(button, [role='button'])[data-skill-ref]"),
+    "the skill is a chip",
+  );
   assert.deepEqual(drawnLines(container), ["Cut it with /release", "then tell me."]);
 });
 
@@ -303,7 +308,9 @@ test("a loaded skill's row in the transcript names the skill as its chip does, h
       createElement("div", { className: "turn" }, agentTurn(loadedTurn("release"))),
     ),
   );
-  const chip = container.querySelector<HTMLButtonElement>("button[data-skill-ref]");
+  const chip = container.querySelector<HTMLButtonElement>(
+    ":is(button, [role='button'])[data-skill-ref]",
+  );
   const row = container.querySelector<HTMLButtonElement>(".turn button[data-opens]");
   assert.ok(chip, "the sent message names the skill as its chip");
   assert.ok(row, "the loaded skill's row is one button");

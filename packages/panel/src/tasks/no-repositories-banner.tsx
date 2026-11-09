@@ -7,6 +7,8 @@ import {
   Banner,
   BUTTON_VARIANT,
   Button,
+  INLINE_REF_FIT,
+  InlineRefFitScope,
   MARK_PROVIDER,
   ProviderMark,
   TEXT_TONE,
@@ -112,11 +114,11 @@ function MemberDetail({
     items.length === 0
       ? ANY_OWNER
       : orListParts(items.length).map((part) => ("words" in part ? part.words : items[part.item]));
-  // Note that a person is the reader's teammate, so the chips stay masked while the rest is the app's own.
+  // Note that a person is the reader's teammate, so the chips stay masked while the rest is the app's own, and that the chips stand in a sentence, so they wrap as its words do.
   return (
-    <>
+    <InlineRefFitScope fit={INLINE_REF_FIT.FLOW}>
       Ask <ReplayMask>{whom}</ReplayMask> to {ask}, or add one with your own GitHub token.
-    </>
+    </InlineRefFitScope>
   );
 }
 

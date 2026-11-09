@@ -263,7 +263,9 @@ test("a press on a place's chip opens the place in the window", async () => {
     opened,
   );
 
-  for (const chip of container.querySelectorAll<HTMLButtonElement>("button[data-mention-ref]")) {
+  for (const chip of container.querySelectorAll<HTMLButtonElement>(
+    ":is(button, [role='button'])[data-mention-ref]",
+  )) {
     act(() => chip.click());
   }
   assert.deepEqual(opened, [

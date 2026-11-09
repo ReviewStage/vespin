@@ -77,7 +77,7 @@ function pressedEach(openPlace: ((link: ReadLink) => void) | undefined): void {
     ),
   );
   for (const link of container.querySelectorAll<HTMLElement>(
-    "a, .text-link-inert, button[data-mention-ref]",
+    "a, .text-link-inert, :is(button, [role='button'])[data-mention-ref]",
   )) {
     act(() => link.click());
   }

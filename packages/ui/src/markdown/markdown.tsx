@@ -49,6 +49,7 @@ import {
   type UrlTransform,
 } from "streamdown";
 import { cn } from "../cn.js";
+import { INLINE_REF_FIT, InlineRefFitScope } from "../components/inline-ref/inline-ref-fit.js";
 import { QUOTE_CLASS } from "../quote-face.js";
 import { MARKDOWN_CLASS, markdownClass } from "./markdown-class.js";
 import {
@@ -396,7 +397,8 @@ function WholeWords({
  * are drawn again only when what they are handed changes, since the words
  * are parsed afresh on every draw, and a description redrawn on a save would parse
  * every section; a place hands its components and steps memoised for the
- * same reason.
+ * same reason. A chip in the words wraps across lines as they do
+ * (`InlineRefFitScope`), but in a transcript's line, which keeps to one.
  */
 export const Markdown = memo(function Markdown({
   className,
@@ -434,28 +436,36 @@ export const Markdown = memo(function Markdown({
     // Note that a line's root keeps its words from wrapping, over Streamdown's own root, which wraps them, and a whole transcript's flows as a note's does.
     const root = line ? cn(className, "whitespace-nowrap") : cn(MARKDOWN_CLASS.FLOW, className);
     return (
-      <Streamdown
-        mode={streaming ? "streaming" : "static"}
-        {...(root === undefined ? {} : { className: root })}
-        components={transcriptComponents}
-        {...(steps === undefined ? {} : { remarkPlugins: steps })}
-        {...(line ? { parseMarkdownIntoBlocksFn: oneBlock } : {})}
-        {...(transcriptSteps === undefined ? {} : { rehypePlugins: transcriptSteps })}
-        {...(allowedTags === undefined ? {} : { allowedTags })}
-        {...(literalTagContent === undefined ? {} : { literalTagContent })}
-        {...(urlTransform === undefined ? {} : { urlTransform })}
-        {...(normalizeHtmlIndentation === undefined ? {} : { normalizeHtmlIndentation })}
-      >
-        {words}
-      </Streamdown>
+      <InlineRefFitScope fit={line ? INLINE_REF_FIT.LINE : INLINE_REF_FIT.FLOW}>
+        <Streamdown
+          mode={streaming ? "streaming" : "static"}
+          {...(root === undefined ? {} : { className: root })}
+          components={transcriptComponents}
+          {...(steps === undefined ? {} : { remarkPlugins: steps })}
+          {...(line ? { parseMarkdownIntoBlocksFn: oneBlock } : {})}
+          {...(transcriptSteps === undefined ? {} : { rehypePlugins: transcriptSteps })}
+          {...(allowedTags === undefined ? {} : { allowedTags })}
+          {...(literalTagContent === undefined ? {} : { literalTagContent })}
+          {...(urlTransform === undefined ? {} : { urlTransform })}
+          {...(normalizeHtmlIndentation === undefined ? {} : { normalizeHtmlIndentation })}
+        >
+          {words}
+        </Streamdown>
+      </InlineRefFitScope>
     );
   }
   if (look === MARKDOWN_LOOK.DOCUMENT || look === MARKDOWN_LOOK.INLINE) {
-    return <WholeWords {...whole} />;
+    return (
+      <InlineRefFitScope fit={INLINE_REF_FIT.FLOW}>
+        <WholeWords {...whole} />
+      </InlineRefFitScope>
+    );
   }
   return (
-    <div className={markdownClass(className)}>
-      <WholeWords {...whole} />
-    </div>
+    <InlineRefFitScope fit={INLINE_REF_FIT.FLOW}>
+      <div className={markdownClass(className)}>
+        <WholeWords {...whole} />
+      </div>
+    </InlineRefFitScope>
   );
 });

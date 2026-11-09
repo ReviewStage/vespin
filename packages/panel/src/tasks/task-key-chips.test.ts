@@ -172,7 +172,9 @@ test("in a transcript a listed task's key is its chip saying the key, which open
   assert.match(container.textContent ?? "", /STAG-7 names two tasks/);
   assert.equal(carriesTarget(container), false);
 
-  for (const chip of container.querySelectorAll<HTMLButtonElement>("button[data-mention-ref]")) {
+  for (const chip of container.querySelectorAll<HTMLButtonElement>(
+    ":is(button, [role='button'])[data-mention-ref]",
+  )) {
     act(() => chip.click());
   }
   assert.deepEqual(opened, [

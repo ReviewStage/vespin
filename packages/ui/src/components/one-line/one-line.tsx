@@ -15,6 +15,7 @@
  */
 
 import type { ReactNode } from "react";
+import { INLINE_REF_FIT, InlineRefFitScope } from "../inline-ref/inline-ref-fit.js";
 import { wholeWordsHint } from "../tooltip/hint.js";
 import {
   ClippedLine,
@@ -57,7 +58,7 @@ export function OneLine({
       {...(className === undefined ? {} : { className })}
       words={whole}
     >
-      {children}
+      <InlineRefFitScope fit={INLINE_REF_FIT.LINE}>{children}</InlineRefFitScope>
     </ClippedLine>
   );
 }

@@ -3,9 +3,11 @@ import {
   HoverCard,
   HoverCardHead,
   HoverCardNote,
+  INLINE_REF_FIT,
   INLINE_REF_LOOK,
   INLINE_REF_NAME,
   InlineRef,
+  InlineRefFitScope,
   SubjectLine,
   Text,
   UserIcon,
@@ -17,9 +19,11 @@ import { CatalogSection } from "../section";
  * inline-refs.tsx -- things named in a line of words: a link's words, a
  * byline's wash, and a mention's pill, each pressable and not; a pill
  * saying where its subject stands, one that leaves the app as a link, one
- * whose subject is gone, a path cut at its start, long names in a narrow
- * column, and a pill as the subject of a line, as wide as its name until
- * the line runs out. A screen reader hears each pill's kind before its name. Each hangs its card, or
+ * whose subject is gone, all in running words that they wrap across as the
+ * words do; long names wrapping in a narrow column, and the same names in a
+ * slot one line tall, fading out where they are cut, a path at its start;
+ * and a pill as the subject of a line, as wide as its name until the line
+ * runs out. A screen reader hears each pill's kind before its name. Each hangs its card, or
  * its name in a pill, in the window's tooltip, once the pointer rests on
  * it or the keyboard reaches it.
  */
@@ -38,7 +42,7 @@ function press(): void {}
 
 function InlineRefs(): React.JSX.Element {
   return (
-    <>
+    <InlineRefFitScope fit={INLINE_REF_FIT.FLOW}>
       <CatalogSection id="inline-ref-link" title="Link">
         <Text>
           Opened{" "}
@@ -116,13 +120,14 @@ function InlineRefs(): React.JSX.Element {
       <CatalogSection id="inline-ref-narrow" title="Long names in a narrow column">
         <div className="catalog-column">
           <Text>
+            Move{" "}
             <InlineRef
               look={INLINE_REF_LOOK.PILL}
               glyph={<DocumentIcon />}
               label="Move every scheduled automation onto the workspace's own timezone"
               onPress={press}
             />{" "}
-            and{" "}
+            after{" "}
             <InlineRef
               look={INLINE_REF_LOOK.LINK}
               glyph={<DocumentIcon />}
@@ -131,8 +136,33 @@ function InlineRefs(): React.JSX.Element {
               state="4–9"
               onPress={press}
             />
+            , then ship it.
           </Text>
         </div>
+      </CatalogSection>
+      <CatalogSection id="inline-ref-one-line" title="Long names on one line">
+        <InlineRefFitScope fit={INLINE_REF_FIT.LINE}>
+          <div className="catalog-column">
+            <Text>
+              <InlineRef
+                look={INLINE_REF_LOOK.PILL}
+                glyph={<DocumentIcon />}
+                label="Move every scheduled automation onto the workspace's own timezone"
+                onPress={press}
+              />
+            </Text>
+            <Text>
+              <InlineRef
+                look={INLINE_REF_LOOK.LINK}
+                glyph={<DocumentIcon />}
+                label="apps/desktop/src/renderer/tasks/a-very-long-folder-name/inline-ref.tsx"
+                name={INLINE_REF_NAME.PATH}
+                state="4–9"
+                onPress={press}
+              />
+            </Text>
+          </div>
+        </InlineRefFitScope>
       </CatalogSection>
       <CatalogSection id="inline-ref-subject" title="The subject of a line">
         <div className="catalog-column">
@@ -154,7 +184,7 @@ function InlineRefs(): React.JSX.Element {
           </SubjectLine>
         </div>
       </CatalogSection>
-    </>
+    </InlineRefFitScope>
   );
 }
 

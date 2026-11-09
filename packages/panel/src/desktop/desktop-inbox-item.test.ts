@@ -1335,7 +1335,7 @@ async function pressNoteSkill(page: HTMLElement, name: string): Promise<void> {
   const note = [
     ...itemPane(page).querySelectorAll('[data-inbox-comment="message"] [data-inbox-message-text]'),
   ].at(-1);
-  const chip = [...(note?.querySelectorAll<HTMLButtonElement>("button") ?? [])].find(
+  const chip = [...(note?.querySelectorAll<HTMLElement>("button, [role='button']") ?? [])].find(
     (button) => button.querySelector(".ui-inline-ref-label")?.textContent === name,
   );
   assert.ok(chip, "the skill is its chip");

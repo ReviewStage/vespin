@@ -154,9 +154,8 @@
   --ui-picture-row: 120px;
   --ui-picture-thumb: 112px;
 
-  /* How wide a pill naming something in prose stands, and one saying its standing too. */
-  --ui-inline-ref-pill-width: 240px;
-  --ui-inline-ref-pill-stated-width: 360px;
+  /* How wide a tool call's chip stands at most on its row, beside the preview after it. */
+  --ui-tool-chip-width: 240px;
   /* How far a wash bleeds past a name's box, by a ring of its own color. */
   --ui-inline-ref-bleed: 3px; /* off-scale: the wash's bleed */
 
@@ -425,9 +424,8 @@
   --ui-picture-row: 120px;
   --ui-picture-thumb: 112px;
 
-  /* How wide a pill naming something in prose stands, and one saying its standing too. */
-  --ui-inline-ref-pill-width: 240px;
-  --ui-inline-ref-pill-stated-width: 360px;
+  /* How wide a tool call's chip stands at most on its row, beside the preview after it. */
+  --ui-tool-chip-width: 240px;
   /* How far a wash bleeds past a name's box, by a ring of its own color. */
   --ui-inline-ref-bleed: 3px; /* off-scale: the wash's bleed */
 
