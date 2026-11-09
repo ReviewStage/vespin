@@ -12,7 +12,7 @@
 
 import { randomBytes } from "node:crypto";
 import { once } from "node:events";
-import { type AddressInfo, createServer } from "node:net";
+import { createServer } from "node:net";
 import { PgClient } from "@effect/sql-pg";
 import { Data, Effect, FileSystem, Path, Redacted, Schema, Stream } from "effect";
 import { ChildProcess } from "effect/process";
@@ -143,11 +143,13 @@ const freeLoopbackPort = Effect.tryPromise({
   try: async () => {
     const server = createServer().listen(0, CLUSTER.HOST);
     await once(server, "listening");
-    // SAFETY: a server listening on a TCP address answers an AddressInfo, never a pipe name.
-    const { port } = server.address() as AddressInfo;
+    const address = server.address();
     server.close();
     await once(server, "close");
-    return port;
+    if (address === null || typeof address === "string") {
+      throw new Error("the loopback server answered no TCP address");
+    }
+    return address.port;
   },
   catch: (cause) => new StepFailed({ step: "finding a free port", printed: String(cause) }),
 });
