@@ -107,31 +107,41 @@ describe("a move of the window", () => {
   const byDoor = { pressed: false, opened: true };
 
   test("onto a task records one stop for the screen, whatever both its panes show", () => {
-    const stops = moved([inbox], inbox, work, bySelf);
+    const stops = moved([inbox], inbox, work, bySelf, false);
     assert.deepEqual(stops, [work, inbox]);
   });
 
   test("a tab the window chose by itself takes the screen standing in place, so ⌃Tab goes back where you came from", () => {
-    const opening = moved([inbox], inbox, screen("a"), byHand);
-    const loaded = moved(opening, screen("a"), work, bySelf);
+    const opening = moved([inbox], inbox, screen("a"), byHand, false);
+    const loaded = moved(opening, screen("a"), work, bySelf, false);
     assert.deepEqual(loaded, [work, inbox]);
     assert.deepEqual(switcherTarget(pressed(loaded, work, SWITCH_STEP.ON)), inbox);
   });
 
   test("showing another thing on the page is a stop of its own where Back takes a step: a column tab pressed, or the panel opened by a door naming a thing, and not a tab pressed in the panel's strip", () => {
     const commented = screen("a", agentTab("x"), SIDE_PANEL_TAB.COMMENTS);
-    assert.deepEqual(moved([work, inbox], work, commented, byHand), [commented, inbox]);
-    assert.deepEqual(moved([work, inbox], work, commented, byDoor), [commented, work, inbox]);
+    assert.deepEqual(moved([work, inbox], work, commented, byHand, false), [commented, inbox]);
+    assert.deepEqual(moved([work, inbox], work, commented, byDoor, false), [
+      commented,
+      work,
+      inbox,
+    ]);
     const other = screen("a", agentTab("z"), SIDE_PANEL_TAB.DESCRIPTION);
-    assert.deepEqual(moved([work, inbox], work, other, byHand), [other, work, inbox]);
+    assert.deepEqual(moved([work, inbox], work, other, byHand, false), [other, work, inbox]);
+  });
+
+  test("in a narrow room, the panel opened over the plan by its toggle is a stop of its own, as it is a step of Back's", () => {
+    const plan = screen("a", agentTab("x"));
+    const over = screen("a", agentTab("x"), SIDE_PANEL_TAB.DESCRIPTION, true);
+    assert.deepEqual(moved([plan, inbox], plan, over, byHand, true), [over, plan, inbox]);
   });
 
   test("to another page is a stop, pressed or not", () => {
-    assert.deepEqual(moved([work], work, inbox, bySelf), [inbox, work]);
+    assert.deepEqual(moved([work], work, inbox, bySelf, false), [inbox, work]);
   });
 
   test("onto nothing, as Settings, keeps the stops as they are", () => {
-    assert.deepEqual(moved([work, inbox], work, undefined, byHand), [work, inbox]);
+    assert.deepEqual(moved([work, inbox], work, undefined, byHand, false), [work, inbox]);
   });
 });
 

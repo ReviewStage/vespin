@@ -259,28 +259,39 @@ export function shownStop(standing: WindowStanding): Stop | undefined {
   };
 }
 
-/** What a task's stop shows within its page, as a step of Back's holds it: the column's tab, and the side panel's, `null` while shut. */
-function shownOf(stop: Stop): StepShown {
-  return stop.kind === STOP_KIND.TASK ? { column: stop.column, side: stop.panel ?? null } : {};
+/**
+ * What a task's stop shows within its page, as a step of Back's holds it:
+ * the column's tab, and the side panel's, `null` while shut, or in a narrow
+ * room, which shows one pane at a time, the panel as a pane of its own over
+ * the plan.
+ */
+function shownOf(stop: Stop, narrow: boolean): StepShown {
+  if (stop.kind !== STOP_KIND.TASK) return {};
+  const { column, panel } = stop;
+  return narrow
+    ? { column, panel: { open: panel !== undefined, tab: panel } }
+    : { column, side: panel ?? null };
 }
 
 /**
  * The stops after the window moved from standing on `before` to `after`.
  * Another page is a stop visited, and so is another thing shown on the page
  * standing where Back takes a step of its own for it, by what led to it
- * (`led`); anything else shown there takes the stop standing in place.
+ * (`led`) and, in a narrow room (`narrow`), a pane opened over another;
+ * anything else shown there takes the stop standing in place.
  */
 export function moved(
   stops: readonly Stop[],
   before: Stop | undefined,
   after: Stop | undefined,
   led: StepLed,
+  narrow: boolean,
 ): readonly Stop[] {
   if (after === undefined) return stops;
   if (before === undefined || !samePage(before, after) || sameStop(before, after)) {
     return visited(stops, after);
   }
-  if (stepWithin(shownOf(before), shownOf(after), led) === STEP_WITHIN.VISIT) {
+  if (stepWithin(shownOf(before, narrow), shownOf(after, narrow), led) === STEP_WITHIN.VISIT) {
     return visited(stops, after);
   }
   const rest = stops.filter((stop) => !sameStop(stop, before) && !sameStop(stop, after));

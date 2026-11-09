@@ -59,7 +59,7 @@ import { STRIP_TAB_KIND, sameTab, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Effect } from "effect";
 import { HouseIcon, InboxIcon, ListTodoIcon, ZapIcon } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useContext, useEffect, useId, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { overlayHoldsKeyboard, useAppCommand, useOverlayHold } from "../app-commands.js";
@@ -76,6 +76,8 @@ import {
 } from "../places/routed-doors.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import type { StepTitle } from "../places/window-steps.js";
+import { SHELL_ROOM } from "../shell-room.js";
+import { ShellRoomContext } from "../stage-room.js";
 import { tasklessRowSubject } from "../tasks/agent-ref.js";
 import { stripTabLook } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, type KindLook, PlanGlyph, TAB_KIND, tabLook } from "../tasks/tab-look.js";
@@ -410,6 +412,8 @@ export function TabSwitcher({
     inbox: useInboxDoor(tasks),
   };
   const views = useRoutedViews();
+  // Note that a narrow room shows one pane at a time, so the side panel opened over the plan is a stop of its own, as it is a step of Back's.
+  const narrow = useContext(ShellRoomContext) === SHELL_ROOM.NARROW;
   const doors = useRef({ tab, tasks, onTabChange, places });
   doors.current = { tab, tasks, onTabChange, places };
   // The switcher's waits are called off as it leaves, since what they would do is draw it.
@@ -483,7 +487,7 @@ export function TabSwitcher({
     const opened = tasks.sidePanel.opened !== openedMoved.current;
     pressesMoved.current = presses.current;
     openedMoved.current = tasks.sidePanel.opened;
-    stops.current = moved(stops.current, before, now, { pressed, opened });
+    stops.current = moved(stops.current, before, now, { pressed, opened }, narrow);
     // A tab closed on its task's page is let go then, before a page standing in its place can hide the close.
     standing();
     titles.current = [
