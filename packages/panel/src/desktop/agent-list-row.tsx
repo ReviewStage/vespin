@@ -2,7 +2,6 @@ import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
 import type { CatalogModel, MacOffer } from "@repo/features/models-wire";
 import {
   type ListRowMenu,
-  OneLine,
   RowHint,
   RowHintOptions,
   TASK_ROW_CELL,
@@ -35,10 +34,8 @@ import { WaitingCount } from "./task-row-parts.js";
  * and its time where a task's time stands, lining up with the task rows
  * beside it. Its glyph is its tab's (`AgentGlyph`), which gives way to the
  * working mark while the agent works, and its name is masked in a screen
- * recording. Its trailing run holds, in turn: what the place says it is
- * about (`about`), such as the task a person's agent works on, muted where
- * a task's repository stands; how many of its threads wait on the
- * developer, as the sidebar's Inbox row counts them (`WaitingCount`); its
+ * recording; its task is its card's to name. Its trailing run holds, in
+ * turn: how many of its threads wait on the developer, as the sidebar's Inbox row counts them (`WaitingCount`); its
  * pull request, where it opened one, as a chip of GitHub's mark in GitHub's
  * color for where it stands and its number (`pull-request-chip.tsx`),
  * hanging the pull request's one card, the agent whose it is and who it
@@ -50,7 +47,7 @@ import { WaitingCount } from "./task-row-parts.js";
  * with the row, such as a rename refused, stands under the name (`note`).
  */
 
-/** The cells an agent's row draws, in a task's row's order. */
+/** The cells an agent's row draws, in a task's row's order: where a task's repository stands, a start's row says why it is unavailable (`AgentStartRow`). */
 export const AGENT_ROW_CELLS = [
   TASK_ROW_CELL.STATUS,
   TASK_ROW_CELL.REPOSITORY,
@@ -72,7 +69,6 @@ export function AgentListRow({
   pullRequest,
   waits = 0,
   note,
-  about,
   edges,
   place,
   pressRef,
@@ -99,8 +95,6 @@ export function AgentListRow({
   waits?: number | undefined;
   /** What went wrong with the row, said under its name. */
   note?: ReactNode;
-  /** What the place says the agent is about, leading its trailing run. */
-  about?: string | undefined;
   /** What room it keeps at its edges, its list's (`TaskRows`'s `edges`). */
   edges?: TaskRowEdges | undefined;
   /** Where it stands in its list's run of rows, where the list draws only those near the view (`VirtualRows`). */
@@ -129,12 +123,6 @@ export function AgentListRow({
             <AgentGlyph agent={agent} />
           </TaskRowGlyph>
         ),
-        [TASK_ROW_CELL.REPOSITORY]:
-          about === undefined ? null : (
-            <OneLine words={about}>
-              <ReplayMask>{about}</ReplayMask>
-            </OneLine>
-          ),
         [TASK_ROW_CELL.WAITING]: <WaitingCount count={waits} />,
         [TASK_ROW_CELL.PULL_REQUESTS]:
           pullRequest === undefined ? null : (

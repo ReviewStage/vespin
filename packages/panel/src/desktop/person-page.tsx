@@ -212,8 +212,7 @@ const AUTOMATION_THING = "Automation";
  * One of their agents as a row, the row the task's own agents stand in at
  * the head of its description (`agent-list-row.tsx`), in a task's row's
  * anatomy: its glyph wearing where it stands in the status column and its
- * name where a task's stands, then its trailing run, muted first the task
- * it works on where the agent goes by another name, its pull request's
+ * name where a task's stands, then its trailing run, its pull request's
  * chip, which opens its Pull request tab on that task, where it runs, and
  * its failed mark once its turn failed, and last when it last moved,
  * lining up with their tasks' rows above; its card hangs beside it; a press
@@ -283,8 +282,6 @@ function AgentRow({
       devices={macs}
       pullRequest={pullRequests.get(agent.id)}
       note={rename?.refused === true ? RENAME_FAILED : undefined}
-      // Note that the task is named only where the agent goes by another name, since most are named for their task.
-      about={task.name === subject.name ? undefined : task.name}
       edges={TASK_ROW_EDGES.UNCHOSEN}
       place={place}
       pressRef={press}
