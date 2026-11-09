@@ -53,6 +53,7 @@ import {
   HoverCardNote,
   INLINE_REF_FIT,
   INLINE_REF_LOOK,
+  INLINE_REF_NAME,
   InlineRef,
   InlineRefFitScope,
   OneLine,
@@ -560,8 +561,9 @@ function MentionChip({
     mention.kind === MENTION_KIND.TASK &&
     keyNames?.kind === MENTION_KIND.TASK &&
     keyNames.taskId === mention.taskId;
+  const github = githubName(mention, standing);
   const name =
-    githubName(mention, standing) ??
+    github ??
     (keyed
       ? written
       : chipName(mention, written, bare, known, standing, heading, doors.place.repository));
@@ -573,6 +575,8 @@ function MentionChip({
     pull === undefined
       ? name
       : (new RegExp(`^\\S*#${pull.number}(?=\\s)`, "u").exec(name)?.[0] ?? name);
+  // Note that a pull request GitHub answered for is called by its key alone, which is kept whole with its mark and state, since a key broken at its `/` or `-` reads as two things.
+  const whole = github !== undefined && pull !== undefined;
   const state = mentionState(mention, doors);
   const press = pressOf(mention, target, state, doors, openLink);
   const card = (
@@ -601,6 +605,7 @@ function MentionChip({
       }
       kind={thingWordHeard(thingOfMention(mention).kind, label)}
       label={label}
+      name={whole ? INLINE_REF_NAME.WHOLE : INLINE_REF_NAME.NAME}
       state={standing?.state}
       gone={state === MENTION_STATE.GONE}
       onPress={
@@ -654,6 +659,7 @@ function DateChip({
       glyph={<CalendarIcon aria-hidden="true" />}
       kind={THING_WORD[THING_KIND.DATE]}
       label={dateChipText(date, now, readerZone())}
+      name={INLINE_REF_NAME.WHOLE}
       card={<DateCard date={date} />}
       onPress={
         onPick === undefined

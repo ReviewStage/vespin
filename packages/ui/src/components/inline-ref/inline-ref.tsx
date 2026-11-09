@@ -44,7 +44,8 @@ import { INLINE_REF_FIT, type InlineRefFit, useInlineRefFit } from "./inline-ref
  * in a one-line row of them. In running words it wraps across lines as they do, its fill and corners
  * carried onto each line it stands on, breaking only inside its name, so
  * its glyph keeps to the name's first word and its standing to its last, and
- * a one-word name with them never parts, and it is read whole: no cap and no
+ * a one-word name with them never parts, nor a short name kept whole (a date,
+ * a pull request's key), and it is read whole: no cap and no
  * ellipsis, since a name cut short in a sentence says less than the
  * sentence does. In a slot one line tall, a row's, a byline's, or a head's,
  * it keeps to one line and its name gives way before anything else, fading
@@ -90,6 +91,8 @@ export const INLINE_REF_NAME = {
   NAME: "name",
   /** A path, in the code face and cut at its start, so its last part stays in sight. */
   PATH: "path",
+  /** A short name kept whole with its glyph and its standing, never wrapped: a date, a pull request's key. */
+  WHOLE: "whole",
 } as const;
 
 export type InlineRefName = (typeof INLINE_REF_NAME)[keyof typeof INLINE_REF_NAME];
@@ -126,7 +129,7 @@ interface InlineRefFace {
   kind?: string | undefined;
   /** The name it goes by. */
   label: string;
-  /** What the name is: a name, or a path cut at its start. */
+  /** What the name is: a name, a path cut at its start, or a short name kept whole. */
   name?: InlineRefName;
   /** Whether the name is drawn nowhere and said to a screen reader alone, for a line too short to hold it. */
   labelHidden?: boolean;
@@ -233,7 +236,22 @@ function glyphClass(look: InlineRefLook, fit: InlineRefFit): string {
   return parts.join(" ");
 }
 
-/** A token's name, alone on the words' baseline where it is one line: struck through where gone, a link's name underlined under the pointer, a wash's at least a mark tall, and where it wraps, the one part of the token that breaks, a path anywhere, since it holds no spaces to break at. */
+/** How a wrapping token's name breaks, by what it is. */
+const FLOW_NAME_WRAP = {
+  [INLINE_REF_NAME.NAME]: "whitespace-normal wrap-break-word",
+  [INLINE_REF_NAME.PATH]: "whitespace-normal wrap-anywhere",
+  [INLINE_REF_NAME.WHOLE]: "wrap-normal",
+} as const satisfies Record<InlineRefName, string>;
+
+/**
+ * A token's name, alone on the words' baseline where it is one line: struck
+ * through where gone, a link's name underlined under the pointer, a wash's at
+ * least a mark tall, and where it wraps, the one part of the token that
+ * breaks, unless it is kept whole. Note that a name breaks a word only where
+ * the word cannot fit a line (`wrap-break-word`), never to make its column
+ * narrower, because a table cell shrinks to one letter of a name that may
+ * break anywhere; a path, which holds no spaces, breaks anywhere.
+ */
 function labelClass({
   look,
   fit,
@@ -249,10 +267,7 @@ function labelClass({
 }): string {
   const parts = ["ui-inline-ref-label"];
   if (fit === INLINE_REF_FIT.LINE) parts.push("self-baseline");
-  else {
-    parts.push("whitespace-normal");
-    if (name === INLINE_REF_NAME.PATH) parts.push("wrap-anywhere");
-  }
+  else parts.push(FLOW_NAME_WRAP[name]);
   if (gone) parts.push("line-through");
   if (look === INLINE_REF_LOOK.LINK && pressable) {
     parts.push("group-hover/inline-ref:underline group-hover/inline-ref:underline-offset-2");
@@ -371,7 +386,7 @@ function InlineRefRoot({
       )}
       {labelHidden ? (
         <span className="ui-visually-hidden">{label}</span>
-      ) : fit === INLINE_REF_FIT.LINE && name === INLINE_REF_NAME.NAME ? (
+      ) : fit === INLINE_REF_FIT.LINE && name !== INLINE_REF_NAME.PATH ? (
         <ClippedLine
           className={labelClassName}
           as={ONE_LINE_ELEMENT.SPAN}

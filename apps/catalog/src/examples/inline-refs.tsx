@@ -12,6 +12,7 @@ import {
   Text,
   UserIcon,
 } from "@repo/ui";
+import { CalendarIcon } from "@repo/ui/icons";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -21,8 +22,8 @@ import { CatalogSection } from "../section";
  * saying where its subject stands, one that leaves the app as a link, one
  * whose subject is gone, all in running words that they wrap across as the
  * words do; long names wrapping in a narrow column, each glyph kept to its
- * name's first word, and a short name never parted from its glyph or its
- * standing there; the same long names in a slot one line tall, fading out
+ * name's first word, and a pull request's key and a date kept whole with
+ * their glyph and standing there; the same long names in a slot one line tall, fading out
  * where they are cut, a path at its start;
  * and a pill as the subject of a line, as wide as its name until the line
  * runs out. A screen reader hears each pill's kind before its name. Each hangs its card, or
@@ -143,11 +144,20 @@ function InlineRefs(): React.JSX.Element {
               look={INLINE_REF_LOOK.PILL}
               glyph={<DocumentIcon />}
               kind="pull request"
-              label="#7889"
+              label="smol-machines/smolvm#7889"
+              name={INLINE_REF_NAME.WHOLE}
               state="Open"
               onPress={press}
             />{" "}
-            and ship it.
+            and ship it by{" "}
+            <InlineRef
+              look={INLINE_REF_LOOK.PILL}
+              glyph={<CalendarIcon />}
+              kind="date"
+              label="Oct 20, 2026, 3:00 PM PDT"
+              name={INLINE_REF_NAME.WHOLE}
+            />
+            .
           </Text>
         </div>
       </CatalogSection>
