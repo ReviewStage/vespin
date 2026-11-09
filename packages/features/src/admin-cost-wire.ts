@@ -6,7 +6,7 @@
  * imports into the browser's bundle.
  */
 
-import type { AdminTrend } from "./admin-answer-wire.js";
+import type { AdminTrend, AdminWorkspaceOwner } from "./admin-answer-wire.js";
 
 /** Where a dollar went: the two kinds of model turns, and dictation's metered seconds. */
 export const COST_SOURCE = {
@@ -41,13 +41,7 @@ export const SECONDS_PER_MINUTE = 60;
 export const ADMIN_COST_TOP_ACCOUNTS_LIMIT = 10;
 
 /** An account the screen names: the user-row fields every admin table names. */
-export interface AdminCostAccountInfo {
-  id: string;
-  name: string;
-  email: string;
-  image: string | null;
-  admin: boolean;
-}
+export type AdminCostAccountInfo = AdminWorkspaceOwner;
 
 export interface AdminCostAccount extends AdminCostAccountInfo {
   spendUsd: number;
