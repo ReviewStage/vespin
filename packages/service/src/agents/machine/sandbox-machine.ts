@@ -220,6 +220,7 @@ const SANDBOX_LAYOUT: MachineLayout = {
   codexHome: CODEX_PIN.HOME,
   linesRead: true,
   transcriptsKept: true,
+  diskSessions: false,
 };
 
 /** The runner's bundle as the image carries it (`apps/web/agent-image/Dockerfile`), which each launch overwrites with the deploy's unit. */

@@ -16,7 +16,11 @@ import {
   takeAgentMentionedServers,
   updateAgentBranch,
 } from "@repo/database/models/agent-store";
-import { appendSessionEntries } from "@repo/database/models/claude-session-entries";
+import {
+  appendSessionEntries,
+  loadSessionEntries,
+} from "@repo/database/models/claude-session-entries";
+import { registerDevice } from "@repo/database/models/device-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { saveDescriptionText } from "@repo/database/models/task-store";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
@@ -24,7 +28,7 @@ import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, openedPullRequest, startTask } from "@repo/database/testing";
+import { DEVICE_LAYOUT, getTestDB, openedPullRequest, startTask } from "@repo/database/testing";
 import { HOSTED_API_ERROR } from "@repo/features";
 import {
   firstMessageParts,
@@ -39,6 +43,7 @@ import {
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
+  AGENT_MACHINE,
   AGENT_STATUS,
   agentAnswerSchema,
   agentListAnswerSchema,
@@ -296,6 +301,69 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           [continued.startedFrom?.session, continued.startedFrom?.cutBefore],
           [session, "dropped-line"],
         );
+      }),
+  );
+
+  it.effect(
+    "a continue of an agent on a Mac into the cloud carries its CLI session re-keyed to the sandbox's checkout, Codex's rows as they were, and tells it where the Mac's checkout stood",
+    () =>
+      Effect.gen(function* () {
+        const { owner, task, ask, agentSessions, source, stored } = yield* sourceAgent;
+        const deviceId = randomUUID();
+        yield* registerDevice(owner, { id: deviceId, name: "Studio", ...DEVICE_LAYOUT });
+        yield* Database.use((db) =>
+          db
+            .update(agentTable)
+            .set({ machine: AGENT_MACHINE.DEVICE, deviceId })
+            .where(eq(agentTable.id, source.id)),
+        );
+        const macCheckout = `/Users/fixture/.vespin/agents/${source.id}/repository`;
+        const session = randomUUID();
+        yield* recordAgentNativeSession(owner, source.id, session);
+        const opening = { type: "user", uuid: randomUUID(), parentUuid: null };
+        yield* appendSessionEntries(
+          owner,
+          stored.conversationId,
+          {
+            projectKey: `-Users-fixture--vespin-agents-${source.id}-repository`,
+            sessionId: session,
+          },
+          [opening],
+        );
+        const rollout = { type: "session_meta" };
+        const rolloutKey = {
+          projectKey: "codex",
+          sessionId: "thread",
+          subpath: "sessions/rollout.jsonl",
+        };
+        yield* appendSessionEntries(owner, stored.conversationId, rolloutKey, [rollout]);
+
+        const started = readAnswer(
+          agentAnswerSchema,
+          HOSTED_HTTP_STATUS.CREATED,
+          yield* ask(
+            startAs(owner, task.id, {
+              idempotencyKey: randomUUID(),
+              from: { agentId: source.id },
+              runsOn: { machine: AGENT_MACHINE.VERCEL },
+            }),
+          ),
+        ).agent;
+
+        const continued = Option.getOrThrow(yield* readAgent(owner, started.id));
+        assert.equal(continued.startedFrom?.session, session);
+        assert.deepEqual(
+          yield* loadSessionEntries(owner, continued.conversationId, {
+            projectKey: "-workspace-repository",
+            sessionId: session,
+          }),
+          Option.some([opening]),
+        );
+        assert.deepEqual(
+          yield* loadSessionEntries(owner, continued.conversationId, rolloutKey),
+          Option.some([rollout]),
+        );
+        assert.ok(openedParts(agentSessions).parts.replay?.preamble.includes(`\`${macCheckout}\``));
       }),
   );
 

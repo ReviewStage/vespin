@@ -18,10 +18,11 @@ import { mkdir, open, writeFile } from "node:fs/promises";
 import { dirname, join, relative } from "node:path";
 import type { SessionStoreEntry } from "@anthropic-ai/claude-agent-sdk";
 import { Effect } from "effect";
+import { RUNNER_TRANSCRIPTS } from "./protocol.js";
 import type { transcriptStore } from "./transcripts.js";
 
 /** The store's project Codex's threads are kept under. */
-const CODEX_PROJECT = "codex";
+const CODEX_PROJECT = RUNNER_TRANSCRIPTS.CODEX_PROJECT;
 
 type TranscriptStore = ReturnType<typeof transcriptStore>;
 

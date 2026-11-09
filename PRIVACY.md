@@ -47,7 +47,10 @@ For each turn an agent runs, we store your message, any files you attach, the
 agent's reply and reasoning summaries, each tool call with its input and
 output, and the model, token counts, and timing. Tool output can include files
 from your repository, command output, web pages, screenshots of the agent's
-browser, and answers from your integrations. Transcripts and descriptions are stored
+browser, and answers from your integrations. We also store the agent harness's
+own record of its session, Claude Code's transcript or Codex's thread, its
+thinking text included, so the agent can resume it and an agent continued or
+forked from it goes on from it. Transcripts and descriptions are stored
 as written, not end-to-end encrypted, and our operators can read them.
 
 ### Repository and GitHub data
@@ -111,7 +114,9 @@ token, key, or file contents, that goes too.
 If you turn on Bring your own host, agents can run directly on This Mac or on
 another machine you add, with full access to everything that machine's account
 can reach. Their work stays on that machine, though their transcripts are
-stored like any other. To tell your machines apart, each sends us a keyed hash
+stored like any other, and, on a machine running host 0.11.0 or later, so is
+their harness's own session, its thinking text included, as a cloud agent's
+is. To tell your machines apart, each sends us a keyed hash
 of its hardware or machine id, never the id itself, and a Mac sends its model
 name.
 

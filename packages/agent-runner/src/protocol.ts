@@ -277,7 +277,32 @@ export const RUNNER_TRANSCRIPTS = {
     DELETE: "delete",
     LIST_SUBKEYS: "listSubkeys",
   },
+  /** The project Codex's threads are kept under (`codex-rollout.ts`), which names no checkout. */
+  CODEX_PROJECT: "codex",
 } as const;
+
+/** How long a Claude Code project key runs before the SDK cuts it and adds the path's hash. */
+const CLAUDE_PROJECT_KEY_CHARS = 200;
+
+/**
+ * The project the Agent SDK keys a Claude Code session's transcript under
+ * for the checkout given, as it keys it from the session's resolved working
+ * folder: each character but an ASCII letter or digit as `-`, and past 200
+ * characters cut there with the path's 32-bit string hash after it in base
+ * 36. Note that a path is read as the SDK reads it on a Mac, composed (NFC),
+ * which changes no ASCII path.
+ */
+export function claudeProjectKey(checkoutPath: string): string {
+  const path = checkoutPath.normalize("NFC");
+  const key = path.replace(/[^a-zA-Z0-9]/g, "-");
+  if (key.length <= CLAUDE_PROJECT_KEY_CHARS) return key;
+  let hash = 0;
+  for (let index = 0; index < path.length; index += 1) {
+    hash = (hash << 5) - hash + path.charCodeAt(index);
+    hash |= 0;
+  }
+  return `${key.slice(0, CLAUDE_PROJECT_KEY_CHARS)}-${Math.abs(hash).toString(36)}`;
+}
 
 /** The SDK's `SessionKey`: a project, a session, and a subpath, absent for the main transcript. */
 const TranscriptKeySchema = Schema.Struct({

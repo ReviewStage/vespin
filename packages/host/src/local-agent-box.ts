@@ -1,4 +1,8 @@
-import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
+import {
+  DEVICE_PLATFORM,
+  type DevicePlatform,
+  deviceAgentHome,
+} from "@repo/features/device-agent-wire";
 import { shellQuoted } from "@repo/features/shell-quote";
 import { Effect, Exit } from "effect";
 import * as FileSystem from "effect/FileSystem";
@@ -48,8 +52,8 @@ import type { LocalAgentCommand } from "./effect/seams.js";
  * config, which Git reads over the box user's.
  */
 
-/** The folders under the agent's own its home and caches are kept in. */
-const AGENT_FOLDER = { HOME: "home", CACHE: "cache" } as const;
+/** The folder under the agent's own its caches are kept in, beside its home (`deviceAgentHome`). */
+const AGENT_FOLDER = { CACHE: "cache" } as const;
 
 /** Where under the agent's home pnpm and npm keep what a global install puts there, and gh its config. */
 const HOME_FOLDER = { PNPM: ".local/share/pnpm", NPM: ".npm-global", GH: ".config/gh" } as const;
@@ -109,7 +113,7 @@ function parentOf(file: string): string {
 
 /** The agent's own folders, inside its folder: its home, its caches, and pnpm's and npm's global folders. */
 export function agentFolders(folder: string) {
-  const home = [folder, AGENT_FOLDER.HOME].join("/");
+  const home = deviceAgentHome(folder);
   return {
     home,
     cache: [folder, AGENT_FOLDER.CACHE].join("/"),
