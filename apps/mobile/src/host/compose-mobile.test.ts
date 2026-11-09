@@ -11,8 +11,7 @@ import { THEME } from "@repo/settings";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
 import { Context, Effect, Layer } from "effect";
-import * as FetchHttpClient from "effect/http/FetchHttpClient";
-import { expect } from "vitest";
+import { expect, vi } from "vitest";
 import { composeMobile, type DeviceSeams, MobileHostTag } from "./compose-mobile.js";
 import { STUB_ACCOUNT, stubAuthFetch, stubAuthSession } from "./stub-auth-server.js";
 
@@ -131,6 +130,8 @@ it.effect(
     };
     return Effect.scoped(
       Effect.gen(function* () {
+        // Note that the stub stands as the global `fetch`, as the app stands it, because the session's launch renewal reads the global.
+        vi.spyOn(globalThis, "fetch").mockImplementation(recording);
         const root = yield* ownFolder;
         const answer = yield* Effect.scoped(
           Effect.gen(function* () {
@@ -155,6 +156,6 @@ it.effect(
           ["revoke", "ios"],
         ]);
       }),
-    ).pipe(Effect.provideService(FetchHttpClient.Fetch, recording));
+    ).pipe(Effect.ensuring(Effect.sync(() => vi.restoreAllMocks())));
   },
 );

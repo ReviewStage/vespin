@@ -7,9 +7,13 @@
  * stubbed run swaps both ends of the trip and nothing between them: the
  * sheet answers the authorization page with its own callback carrying a
  * code and the page's own state, as a provider that granted would, and
- * every request the host makes is answered by `stubAuthFetch`, handed to the
- * runtime as Effect's `FetchHttpClient.Fetch` so the host's own clients
- * call it in place of the network. The host itself runs as a live run
+ * every request the host makes is answered by `stubAuthFetch`, stood up as
+ * the global `fetch` (`standStubAuthServer`). Note that it replaces the
+ * global rather than being handed to the runtime as Effect's
+ * `FetchHttpClient.Fetch`, because a fiber the host forks outside the
+ * runtime's own context, as the session's launch renewal is, reads the
+ * global, and a renewal that reached the real service would sign the stub's
+ * account out. The host itself runs as a live run
  * signed in through the `ios` client: the code exchanged, the identity
  * read, the tokens sealed in the settings file by the Keychain's cipher,
  * read back at the next launch, and revoked at sign-out. Anything else the
@@ -124,3 +128,8 @@ export const stubAuthSession: AuthSession = {
   },
   dismiss: () => undefined,
 };
+
+/** Answers every request of this launch from the stub, in place of the network. */
+export function standStubAuthServer(): void {
+  globalThis.fetch = stubAuthFetch;
+}

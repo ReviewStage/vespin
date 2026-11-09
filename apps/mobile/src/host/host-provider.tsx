@@ -14,7 +14,7 @@ import {
   type StandingMobileHost,
   startMobileHost,
 } from "./mobile-runtime.js";
-import { stubAuthFetch, stubAuthSession } from "./stub-auth-server.js";
+import { standStubAuthServer, stubAuthSession } from "./stub-auth-server.js";
 
 /** The version a build that names none reports, which no shipped build is. */
 const UNVERSIONED = "0.0.0";
@@ -37,7 +37,8 @@ export function useHostActs(): ActPortClient {
 /**
  * What this launch starts the host on: the device, or, where a flow names
  * the stubbed account service, the device with its sign-in sheet and every
- * service call answered by the stub and its socket never reached.
+ * service call answered by the stub (`standStubAuthServer`) and its socket
+ * never reached.
  */
 function launchOptions(): MobileHostStartOptions {
   const device = deviceSeams();
@@ -47,6 +48,7 @@ function launchOptions(): MobileHostStartOptions {
     stateRoot: hostStateRoot(),
   };
   if (!launchStubsAuthServer()) return { ...base, device };
+  standStubAuthServer();
   return {
     ...base,
     device: {
@@ -54,7 +56,6 @@ function launchOptions(): MobileHostStartOptions {
       authSession: stubAuthSession,
       openSocket: () => Effect.succeed({ unreachable: true }),
     },
-    fetch: stubAuthFetch,
   };
 }
 
