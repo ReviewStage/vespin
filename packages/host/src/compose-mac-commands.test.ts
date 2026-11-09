@@ -272,10 +272,10 @@ const subject = (
   spawner: ReturnType<typeof scriptedSpawner>,
   gate: Gate,
 ) => {
-  const told: (
+  type ToldAsk =
     | { readonly id: string; readonly command: string }
-    | { readonly id: string; readonly app: string }
-  )[][] = [];
+    | { readonly id: string; readonly app: string };
+  const told: ToldAsk[][] = [];
   const written: MacCommandMode[] = [];
   const reported: string[] = [];
 
@@ -283,7 +283,7 @@ const subject = (
     if (kind !== GATEWAY_EVENT.MAC_COMMAND_ASKS_CHANGED || !isRecord(payload)) return;
     const asks = Array.isArray(payload.asks) ? payload.asks : [];
     told.push(
-      asks.flatMap((ask) => {
+      asks.flatMap((ask): ToldAsk[] => {
         if (!isRecord(ask) || typeof ask.id !== "string") return [];
         if (typeof ask.command === "string") return [{ id: ask.id, command: ask.command }];
         return isRecord(ask.app) && typeof ask.app.name === "string"
