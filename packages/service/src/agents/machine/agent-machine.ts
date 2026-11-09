@@ -13,7 +13,8 @@
  * the agent's place with its checkout, find it again and record the runner
  * it runs, set and take off what stands at its firewall, resume, stop,
  * and discard it, write files into it, launch the runner there and write
- * its stdin, read whether it ended, end it, and read one file. A runner on a
+ * its stdin, read whether it ended, end it, read one file, and make an MP4
+ * of a recording for a phone (`phone-video.ts`). A runner on a
  * machine whose layout says it reads its lines takes them from our store
  * instead (`../coder-host/runner-sessions.ts`), and its stdin carries only
  * its config. What a
@@ -451,6 +452,16 @@ export interface AgentMachineService {
     session: string,
     path: string,
     bound: number,
+  ) => Effect.Effect<Uint8Array | undefined, SandboxError>;
+  /**
+   * An H.264 MP4 of the WebM recording at the path, made on the session's
+   * place as the agent's own user (`phone-video.ts`), for a player that
+   * plays no WebM; nothing where the place has no encoder, as a Mac and a
+   * sandbox on an older image have none, or the copy would not fit.
+   */
+  readonly phoneVideo: (
+    session: string,
+    path: string,
   ) => Effect.Effect<Uint8Array | undefined, SandboxError>;
 }
 

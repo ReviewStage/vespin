@@ -24,11 +24,17 @@ import type { InboxImage } from "../../inbox/inbox-store.js";
  * naming the path, so the agent mends the block rather than the item.
  */
 
-/** The sandbox as the inbox reaches it: one file read as a stream of bytes, or nothing where there is no file. */
+/**
+ * The sandbox as the inbox reaches it: one file read as a stream of bytes,
+ * or nothing where there is no file; and, where the door can, an MP4 made
+ * of a WebM recording there (`../machine/phone-video.ts`), or nothing where
+ * it made none.
+ */
 interface InboxSandbox {
   readonly readFile: (options: {
     readonly path: string;
   }) => PromiseLike<ReadableStream<Uint8Array> | null>;
+  readonly phoneVideo?: (options: { readonly path: string }) => PromiseLike<Uint8Array | null>;
 }
 
 /** The door to the session's sandbox, opened on first use, or a test's double. */
@@ -157,13 +163,35 @@ export function readSandboxImage<Type extends string>(
   }).pipe(Effect.catch(() => Effect.succeed(refused<Type>(terms.refusals.UNREADABLE, path))));
 }
 
+/**
+ * The MP4 a phone plays of the recording at the path, made in the sandbox
+ * beside the WebM read from it, resolved from the checkout as the read
+ * was; nothing where the media is no recording, the door makes none, or
+ * making it failed, since a recording is kept whole without its copy and
+ * the reads answer its WebM.
+ */
+export function phoneVideoOfSandbox(
+  door: InboxSandboxDoor,
+  checkout: string,
+  path: string,
+  contentType: ConversationMediaType,
+): Effect.Effect<Uint8Array | undefined> {
+  if (!isVideoType(contentType)) return Effect.succeed(undefined);
+  const resolved = posix.resolve(checkout, path);
+  return Effect.tryPromise(async () => {
+    const sandbox = await door();
+    return (await sandbox.phoneVideo?.({ path: resolved })) ?? undefined;
+  }).pipe(Effect.catch(() => Effect.succeed(undefined)));
+}
+
 /** The most bytes a posted file of the type may be: a still's bound, or a recording's. */
 function postedBytesOf(type: ConversationMediaType): number {
   return isVideoType(type) ? INBOX_BOUNDS.MAX_VIDEO_BYTES : INBOX_BOUNDS.MAX_IMAGE_BYTES;
 }
 
 /**
- * A picture or a WebM recording a post draws, at the path, or the one
+ * A picture or a WebM recording a post draws, at the path, a recording with
+ * the MP4 its sandbox makes of it, or the one
  * sentence refusing it in the refusals' words: a still held to the picture
  * bound, and a recording to the video bound and refused where it states no
  * size, as `show_image` refuses one (`@repo/features/media-signature`).
@@ -178,7 +206,7 @@ export function readSandboxMedia(
   refusals: SandboxImageRefusals,
 ): Effect.Effect<Result.Result<InboxImage, string>> {
   const terms = { maxBytes: INBOX_BOUNDS.MAX_VIDEO_BYTES, refusals, sniff: sniffMediaType };
-  return Effect.map(
+  const read = Effect.map(
     readSandboxImage(door, checkout, path, terms),
     Result.flatMap((media) => {
       if (media.bytes.byteLength > postedBytesOf(media.contentType)) {
@@ -192,5 +220,13 @@ export function readSandboxMedia(
       }
       return Result.succeed(media);
     }),
+  );
+  return Effect.flatMap(read, (media) =>
+    Result.isFailure(media)
+      ? Effect.succeed<Result.Result<InboxImage, string>>(media)
+      : Effect.map(
+          phoneVideoOfSandbox(door, checkout, path, media.success.contentType),
+          (mp4Bytes) => Result.succeed({ ...media.success, mp4Bytes }),
+        ),
   );
 }

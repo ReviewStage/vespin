@@ -8,17 +8,25 @@ import {
   PICTURE_TYPE,
   type Picture,
 } from "@repo/features/picture-wire";
+import {
+  MP4_TYPE,
+  PLAYABLE_VIDEO_TYPE,
+  type PlayableVideoType,
+} from "@repo/features/video-signature";
 import { paddedTo, pngBytes, webmBytes } from "@repo/wire/testing";
+import { eq } from "drizzle-orm";
 import { Effect, Exit, Option } from "effect";
 import { Database } from "../../core/query.js";
+import { attachment } from "../../schemas/attachment.js";
 import { user } from "../../schemas/auth.js";
 import { getTestDB, joinWorkspace, openWorkspace } from "../../testing/index.js";
 import {
   DESCRIPTION_ATTACHMENT_KEEP,
   keepDescriptionAttachment,
   readDescriptionAttachment,
+  readServedDescriptionAttachment,
 } from "../description-attachments.js";
-import { createTask } from "../task-store.js";
+import { createTask, deleteTask } from "../task-store.js";
 
 /**
  * A description's pictures over a real dialect: kept by a member, read by every
@@ -37,6 +45,9 @@ const PICTURE: Picture = {
 
 /** A recording an agent made, as small as a WebM that states its size may be. */
 const VIDEO: Picture = { contentType: PICTURE_MEDIA_TYPE.WEBM, bytes: webmBytes(1280, 800) };
+
+/** The MP4 copy an agent's sandbox made of a recording: a file-type box's head, which is all the store holds of it. */
+const MP4 = Uint8Array.from([0, 0, 0, 16, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d]);
 
 const openAccount = Effect.gen(function* () {
   const db = yield* Database;
@@ -167,6 +178,38 @@ it.layer(getTestDB())("a description's pictures", (it) => {
           DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY_VIDEOS,
         );
         keptId(yield* keepDescriptionAttachment(owner, taskId, PICTURE));
+      }),
+  );
+
+  it.effect(
+    "a recording's MP4 copy is served to a member who plays MP4 and to nobody else, the WebM to one who plays WebM and in place of a copy never made, and goes with its plan",
+    () =>
+      Effect.gen(function* () {
+        const { owner, teammate, outsider, taskId } = yield* openSharedTask;
+        const id = keptId(
+          yield* keepDescriptionAttachment(owner, taskId, { ...VIDEO, mp4Bytes: MP4 }),
+        );
+        const older = keptId(yield* keepDescriptionAttachment(owner, taskId, VIDEO));
+        const served = (account: string, attachmentId: string, playable: PlayableVideoType) =>
+          Effect.map(
+            readServedDescriptionAttachment(account, taskId, attachmentId, playable),
+            Option.getOrUndefined,
+          );
+
+        assert.deepEqual(yield* served(teammate, id, PLAYABLE_VIDEO_TYPE.MP4), {
+          contentType: MP4_TYPE,
+          bytes: MP4,
+        });
+        assert.deepEqual(yield* served(teammate, id, PLAYABLE_VIDEO_TYPE.WEBM), VIDEO);
+        assert.deepEqual(yield* served(teammate, older, PLAYABLE_VIDEO_TYPE.MP4), VIDEO);
+        assert.equal(yield* served(outsider, id, PLAYABLE_VIDEO_TYPE.MP4), undefined);
+
+        assert.ok(yield* deleteTask(owner, taskId));
+        const db = yield* Database;
+        assert.deepEqual(
+          yield* db.select({ id: attachment.id }).from(attachment).where(eq(attachment.id, id)),
+          [],
+        );
       }),
   );
 });

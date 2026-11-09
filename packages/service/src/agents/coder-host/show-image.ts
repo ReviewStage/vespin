@@ -15,7 +15,7 @@ import { Effect, Option, Result, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { ACTION_RESULT_STATUS, type UnparsedWireValue, type WireRecord } from "../../core.js";
 import { logStoreFailure } from "../../http/store-failure.js";
-import { type InboxSandboxDoor, readSandboxImage } from "./inbox-image.js";
+import { type InboxSandboxDoor, phoneVideoOfSandbox, readSandboxImage } from "./inbox-image.js";
 
 /**
  * show-image.ts -- a coding agent or its worker shows the developer pictures from its sandbox, kept beside its transcript as one set.
@@ -24,7 +24,8 @@ import { type InboxSandboxDoor, readSandboxImage } from "./inbox-image.js";
  * the service reads each through the same door the agent's file tools reach
  * the sandbox by (`inbox-image.ts`), held to a picture's bound and the three
  * types, or a WebM video the agent recorded of what it did, which the
- * transcript plays in a picture's place, measures it, and keeps it beside the transcript the call is written
+ * transcript plays in a picture's place, with an MP4 of it made in the
+ * sandbox for a phone, measures it, and keeps it beside the transcript the call is written
  * to (`conversation-pictures.ts`), the agent's own or its worker's. The
  * answer names each kept picture by id, never by its bytes, so the record
  * carries an id, and the developer's window draws the set from it. The
@@ -100,16 +101,32 @@ export interface ShowImageBinding {
   readonly checkout: string;
 }
 
-/** One picture read and measured, ready to keep. */
+/** One picture read and measured, ready to keep, with a recording's MP4 where its sandbox made one. */
 interface ReadPicture {
   readonly bytes: Uint8Array;
   readonly contentType: KeptPicture["mediaType"];
   readonly width: number;
   readonly height: number;
+  readonly mp4Bytes?: Uint8Array | undefined;
+}
+
+/** The picture at the path, read, held to the bound, and measured, a recording with its MP4 made beside it; or the sentence refusing it. */
+function readPicture(
+  binding: ShowImageBinding,
+  path: string,
+): Effect.Effect<Result.Result<ReadPicture, string>> {
+  return Effect.flatMap(measuredPicture(binding, path), (read) =>
+    Result.isFailure(read)
+      ? Effect.succeed<Result.Result<ReadPicture, string>>(read)
+      : Effect.map(
+          phoneVideoOfSandbox(binding.sandbox, binding.checkout, path, read.success.contentType),
+          (mp4Bytes) => Result.succeed({ ...read.success, mp4Bytes }),
+        ),
+  );
 }
 
 /** The picture at the path, read, held to the bound, and measured; or the sentence refusing it. */
-function readPicture(
+function measuredPicture(
   binding: ShowImageBinding,
   path: string,
 ): Effect.Effect<Result.Result<ReadPicture, string>> {
