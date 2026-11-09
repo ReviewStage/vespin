@@ -711,6 +711,11 @@ const INVITES_TASK: TaskSummary = {
   createdBy: ADA,
 };
 
+/** The reference journey's task as the account's own: created by it, assigned to it, and its agent at work. */
+function ownInvites(task: TaskSummary): TaskSummary {
+  return { ...task, ownerId: ADA.userId, createdBy: ADA, assignee: ADA, ...agentsLine(task.id) };
+}
+
 /**
  * The list as these profiles draw it, from the list the tasks fixture draws:
  * the reference journey's task assigned to the account and its agent at
@@ -727,11 +732,7 @@ export function inboxTasksView(profile: string, list: TasksView): TasksView {
   const tasks = [
     ...listed
       .filter((task) => !STAGED_TASK_IDS.has(task.id))
-      .map((task) =>
-        task.id === TASK.INVITES
-          ? { ...task, ownerId: ADA.userId, createdBy: ADA, assignee: ADA, ...agentsLine(task.id) }
-          : task,
-      ),
+      .map((task) => (task.id === TASK.INVITES ? ownInvites(task) : task)),
     ...OWN_TASKS,
     ...LISTED_TASKS,
   ];
@@ -853,25 +854,38 @@ const INVITES_PAGES: readonly PageLine[] = [
   },
 ];
 
-/** Each held descriptions slice with the reference journey's laid over it, one object for each, so a slice staged is never staged anew. */
+/** A descriptions slice with the reference journey's laid over it, and the listed task it was laid from. */
+interface StagedDocuments {
+  readonly from: TaskSummary;
+  readonly laid: AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT];
+}
+
+/**
+ * Each held descriptions slice with the reference journey's laid over it, by
+ * the slice, so a slice staged is never staged anew while the task it was
+ * laid from stands as it was.
+ */
 const STAGED_DOCUMENTS = new WeakMap<
   AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT],
-  AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT]
+  StagedDocuments
 >();
 
+/**
+ * The descriptions slice with the reference journey's laid over it, its
+ * fields the task's as the list stands it (`ownInvites`), so its page and its
+ * row say the same; the stand-in where the document lists none of it, as the
+ * panel's fixture run, which lists its own on the window's side, does.
+ */
 function stagedDocuments(
   state: AppStateSnapshot,
 ): AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT] {
   const held = state[LIVE_READ.DESCRIPTION_DOCUMENT];
+  const from = state.tasks.tasks.find((task) => task.id === TASK.INVITES) ?? INVITES_TASK;
   const staged = STAGED_DOCUMENTS.get(held);
-  if (staged !== undefined) return staged;
-  const listed = [INVITES_TASK, ...state.tasks.tasks].find((task) => task.id === TASK.INVITES);
-  const laid = {
-    ...held,
-    [TASK.INVITES]: { rows: { task: invitesDocument(listed ?? INVITES_TASK) } },
-  };
-  STAGED_DOCUMENTS.set(held, laid);
-  STAGED_DOCUMENTS.set(laid, laid);
+  if (staged !== undefined && staged.from === from) return staged.laid;
+  const laid = { ...held, [TASK.INVITES]: { rows: { task: invitesDocument(ownInvites(from)) } } };
+  STAGED_DOCUMENTS.set(held, { from, laid });
+  STAGED_DOCUMENTS.set(laid, { from, laid });
   return laid;
 }
 
