@@ -1341,7 +1341,7 @@
   z-index: 1;
   box-sizing: border-box;
   height: var(--ui-scroll-band);
-  background: var(--ui-color-well);
+  background: var(--ui-color-ground);
 }
 
 .pull-request-page .pull-request-comment-box > .pull-request-heading {
@@ -1403,7 +1403,7 @@
   height: var(--ui-scroll-band);
   align-self: start;
   padding-inline-end: var(--ui-tight-gap);
-  background: var(--ui-color-well);
+  background: var(--ui-color-ground);
 }
 
 /* A tab's page (a `DetailPage` at the tabs' inset) opens its own gap under
