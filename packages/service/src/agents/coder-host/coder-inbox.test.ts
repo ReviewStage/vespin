@@ -162,11 +162,6 @@ const onlyItem = (agent: Pick<InboxAgent, "userId"> & { readonly taskId: string 
     return item;
   });
 
-/** The mention an agent writes a thread of its own as, by its id alone under its workspace, its link spelled out as the window reads one. */
-function mentionOf(agent: { readonly workspaceId: string }, title: string, itemId: string): string {
-  return `[@${title}](https://vespin.dev/workspace-${agent.workspaceId}/inbox/${itemId})`;
-}
-
 /** The message whose ask the thread holds open. */
 function openAsk(item: InboxItem) {
   const asking = item.thread?.find((message) => message.ask?.status === INBOX_ASK_STATUS.OPEN);
@@ -194,7 +189,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             {
               key: QUEUE.key,
               title: QUEUE.title,
-              mention: mentionOf(agent, QUEUE.title, first.id),
+              id: first.id,
               status: INBOX_STATUS.OPEN,
               thread: [
                 {
@@ -286,7 +281,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             {
               key: "pr-ready",
               title: "PR ready",
-              mention: mentionOf(agent, "PR ready", notice.id),
+              id: notice.id,
               status: INBOX_STATUS.OPEN,
               thread: [{ from: "you", text: "Opened." }],
             },
@@ -617,7 +612,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             {
               key: SETTINGS.key,
               title: SETTINGS.title,
-              mention: mentionOf(agent, SETTINGS.title, settings.id),
+              id: settings.id,
               status: INBOX_STATUS.CLOSED,
               thread: [
                 {
@@ -729,7 +724,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           {
             key: QUEUE.key,
             title: QUEUE.title,
-            mention: mentionOf(agent, QUEUE.title, asked.id),
+            id: asked.id,
             status: INBOX_STATUS.ANSWERED,
             earlier: 2,
             thread: [
@@ -859,7 +854,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             {
               key: "pr-merged",
               title: "PR merged",
-              mention: mentionOf(agent, "PR merged", merged.id),
+              id: merged.id,
               status: INBOX_STATUS.CLOSED,
               thread: [{ from: "you", text: "Merged." }],
               closedReason: "Merged by hand.",
@@ -867,7 +862,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             {
               key: "pr-ready",
               title: "PR ready",
-              mention: mentionOf(agent, "PR ready", ready.id),
+              id: ready.id,
               status: INBOX_STATUS.ANSWERED,
               thread: [{ from: "you", text: "Opened." }],
             },

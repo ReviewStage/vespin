@@ -23,9 +23,7 @@ import {
   keptInboxAsk,
   recommendedLabels,
 } from "@repo/features/inbox-wire";
-import { LINK_PLACE, linkOf, mentionMarkdownLink } from "@repo/features/link-grammar";
 import { decodeMention, MENTION_KIND, mentionLinksIn } from "@repo/features/mention-link";
-import { PAGE_OWNER, type PageOwner } from "@repo/features/page-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { readEither } from "@repo/wire/effect";
 import { Effect, Option, Result } from "effect";
@@ -43,7 +41,6 @@ import {
 } from "../../inbox/inbox-store.js";
 import { pushThreadPost, pushThreadSettled } from "../../push/inbox-pushes.js";
 import { dmThreadPost, settleThreadDms, threadStandsOpen } from "../../slack/thread-dms.js";
-import { pageStepOf } from "../written-mentions.js";
 import { CODER } from "./bounds.js";
 import {
   type InboxSandboxDoor,
@@ -122,7 +119,7 @@ const POST_THREAD_WORDS =
   `you may have at most ${INBOX_BOUNDS.MAX_OPEN_PER_AGENT} such posts waiting to be acknowledged, apart from your open asks. ` +
   "A thread holds one open ask, and a newer ask replaces it. " +
   "An answer to any ask, decide, do, or answer, always reaches you as a message. " +
-  `You may hold at most ${INBOX_BOUNDS.MAX_OPEN_PER_AGENT} open asks. The call answers with your threads as they stand, each with the mention you name it by.`;
+  `You may hold at most ${INBOX_BOUNDS.MAX_OPEN_PER_AGENT} open asks. The call answers with your threads as they stand.`;
 
 /** The tools as the model is shown them (`../tool-catalog/catalog.ts`): each one's name, words, and input. */
 export const INBOX_TOOLS = {
@@ -142,7 +139,7 @@ export const INBOX_TOOLS = {
   READ: {
     name: INBOX_TOOL.READ,
     description:
-      "Read your threads as they stand now, each with the mention you name it by: every one still asking, whole, and the latest settled ones by their last messages and their latest ask and answer; " +
+      "Read your threads as they stand now: every one still asking, whole, and the latest settled ones by their last messages and their latest ask and answer; " +
       `a thread longer than ${INBOX_BOUNDS.MAX_MESSAGES_READ} messages reads its first, its open ask, and its latest ${INBOX_BOUNDS.MAX_MESSAGES_READ}. ` +
       "Each message reads in order with who wrote it, you or a member by name, the ask it ends with and where that stands " +
       "(open, answered, replaced by a newer ask, or withdrawn, with your reason), and the answer a member's message carries. " +
@@ -173,12 +170,11 @@ export type AgentThreadLine = {
   readonly answers?: Omit<InboxAnswers, "ask">;
 };
 
-/** One thread as the agent reads it back: its key, title, its mention, where it stands, and its messages in order. */
+/** One thread as the agent reads it back: its key, its id, which its link names it by, its title, where it stands, and its messages in order. */
 interface AgentInboxLine {
   readonly key: string;
+  readonly id: string;
   readonly title: string;
-  /** The thread as the agent names it in its words, `[@title](link)`, which the app draws as its chip; none where the member reads its workspace no longer. */
-  readonly mention?: string;
   readonly status: InboxItem["status"];
   /** How many earlier messages a settled thread's read leaves out. */
   readonly earlier?: number;
@@ -339,15 +335,15 @@ export function settledMessages(messages: readonly InboxMessage[]): readonly Inb
  * agent still acts on it; a settled one carries what `settledMessages`
  * keeps, and how many it leaves out.
  */
-function lineOf(item: InboxItem, mention: string | undefined): AgentInboxLine {
+function lineOf(item: InboxItem): AgentInboxLine {
   const messages = item.thread ?? [];
   const open = item.status === INBOX_STATUS.OPEN;
   const told = open ? messages : settledMessages(messages);
   const earlier = messages.length - told.length;
   return {
     key: item.key,
+    id: item.id,
     title: item.title,
-    ...(mention === undefined ? undefined : { mention }),
     status: item.status,
     ...(earlier > 0 ? { earlier } : undefined),
     thread: told.map((message) => threadLineOf(message, writerOf(message))),
@@ -362,43 +358,15 @@ function lineOf(item: InboxItem, mention: string | undefined): AgentInboxLine {
  * closed threads are read last, because they are settled without an answer
  * and the open and answered ones are what it acts on.
  */
-function inboxOf(
-  items: readonly InboxItem[],
-  mention: (item: InboxItem) => string | undefined,
-): readonly AgentInboxLine[] {
+function inboxOf(items: readonly InboxItem[]): readonly AgentInboxLine[] {
   const order = [INBOX_STATUS.OPEN, INBOX_STATUS.ANSWERED, INBOX_STATUS.CLOSED];
-  return order.flatMap((status) =>
-    items.filter((item) => item.status === status).map((item) => lineOf(item, mention(item))),
-  );
+  return order.flatMap((status) => items.filter((item) => item.status === status).map(lineOf));
 }
 
-/** What the agent's items stand on, whose workspace their links are written under: its task, or the agent itself where it works on none. */
-function inboxOwner(agent: InboxAgent): PageOwner {
-  return agent.taskId === null
-    ? { kind: PAGE_OWNER.AGENT, agentId: agent.agentId }
-    : { kind: PAGE_OWNER.TASK, taskId: agent.taskId };
-}
-
-/** An item's mention under the workspace step given, by its id alone, whose agent and task a reader asks the service for. */
-function itemMention(step: string, item: InboxItem): string {
-  return mentionMarkdownLink(
-    item.title,
-    linkOf({ kind: LINK_PLACE.INBOX_ITEM, itemId: item.id }, step),
-  );
-}
-
-/** The agent's inbox as the call answers it, each thread by the mention the agent writes it as. */
+/** The agent's inbox as the call answers it. */
 function accepted(agent: InboxAgent): Effect.Effect<InboxToolResult, never, DatabaseServices> {
-  return Effect.zipWith(
-    agentInboxItems(agent),
-    pageStepOf(agent.userId, inboxOwner(agent)),
-    (items, step) => ({
-      status: ACTION_RESULT_STATUS.ACCEPTED,
-      inbox: inboxOf(items, (item) =>
-        Option.isNone(step) ? undefined : itemMention(step.value, item),
-      ),
-    }),
-  ).pipe(
+  return agentInboxItems(agent).pipe(
+    Effect.map((items) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, inbox: inboxOf(items) })),
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(inboxRejected(INBOX_REFUSAL.UNAVAILABLE))),
   );

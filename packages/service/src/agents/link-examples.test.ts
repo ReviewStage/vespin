@@ -7,6 +7,7 @@ import { standingFor } from "../testing/agent-standing.js";
 import { EDIT_DESCRIPTION_TOOL } from "./coder-host/description-edit.js";
 import { INBOX_TOOLS } from "./coder-host/inbox.js";
 import { coderInstructions } from "./coder-host/instructions.js";
+import { linkRuleWords } from "./link-rule.js";
 
 /**
  * link-examples.test.ts -- the link every author is shown how to write a
@@ -28,6 +29,8 @@ const FILLED: ReadonlyMap<string, string> = new Map([
   ["<number>", "7"],
   ["<agent-id>", "7c1d2e3f-4a5b-4c6d-8e9f-0a1b2c3d4e5f"],
   ["<automation-id>", "4e3d2c1b-0a9f-4e8d-9c7b-6a5f4e3d2c1b"],
+  ["<task-id>", "5f3c2a1e-9b8d-4c7a-8e6f-1a2b3c4d5e6f"],
+  ["<user-id>", "user-sam"],
   ["<issue-id>", "3f0e6f5c-7d1a-4f6e-9a55-000000000042"],
   ["<item-id>", "9b2e4c6a-1d3f-4e5a-8b7c-0d1e2f3a4b5c"],
 ]);
@@ -42,11 +45,13 @@ const TASK_ADDRESS = {
 function linksIn(words: string): { label: string; target: string }[] {
   return [...words.matchAll(/\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/gu)].map(([, label, target]) => ({
     label: label ?? "",
-    target: [...FILLED].reduce(
-      (filled, [hole, value]) => filled.replace(hole, value),
-      target ?? "",
-    ),
+    target: filled(target ?? ""),
   }));
+}
+
+/** Every placeholder of an address filled in as an author would. */
+function filled(target: string): string {
+  return [...FILLED].reduce((each, [hole, value]) => each.replace(hole, value), target);
 }
 
 /** Every Markdown link to a web page the words show, its placeholders filled in as an author would. */
@@ -61,10 +66,10 @@ function drawnAs(words: string): (string | undefined)[] {
   );
 }
 
-test("a coding agent is shown to name each kind as a mention Vespin draws as its chip, its task's own under its task's link and only where it has a task, and one on no task its own pages under its own link", () => {
+test("a coding agent is shown to name each kind as a mention Vespin draws as its chip, its task's own under its task's link and only where it has a task, and a thing of ours by the one link rule", () => {
   const shared = [MENTION_KIND.FILE, MENTION_KIND.FILE, MENTION_KIND.LINK, MENTION_KIND.LINK];
   // A task's own things are named by its number, a place the window draws as the task's chip once it finds the task.
-  const own = [LINK_PLACE.TASK, LINK_PLACE.SECTION, LINK_PLACE.PAGE];
+  const own = [LINK_PLACE.TASK, LINK_PLACE.SECTION];
   for (const brief of Object.values(AGENT_BRIEF)) {
     for (const onTask of [true, false]) {
       const words = coderInstructions(
@@ -76,14 +81,7 @@ test("a coding agent is shown to name each kind as a mention Vespin draws as its
       const told = words.slice(words.indexOf("## What your messages are"));
       assert.deepEqual(
         drawnAs(told),
-        [
-          ...shared,
-          ...(onTask ? own : [MENTION_KIND.PAGE]),
-          MENTION_KIND.AGENT,
-          LINK_PLACE.TASK,
-          LINK_PLACE.AUTOMATION,
-          LINK_PLACE.INBOX_ITEM,
-        ],
+        [...shared, ...(onTask ? own : []), LINK_PLACE.AUTOMATION],
         `${brief} ${onTask}`,
       );
       assert.deepEqual(
@@ -93,6 +91,29 @@ test("a coding agent is shown to name each kind as a mention Vespin draws as its
       );
     }
   }
+});
+
+test("every address the link rule shows an author how to build is one Vespin draws as its chip, a page under its task or under the agent on no task that showed it", () => {
+  // Note that only a shape with a placeholder to fill is an address an author builds; the workspace's own address stands alone.
+  const addresses = [
+    ...linkRuleWords("https://vespin.dev/acme").matchAll(/`(https:\/\/[^`\s]*<[^`\s]+)`/gu),
+  ];
+  assert.deepEqual(
+    addresses.map(
+      ([, target]) =>
+        decodeMention(filled(target ?? ""), REPOSITORY)?.kind ??
+        readLink(filled(target ?? ""))?.place.kind,
+    ),
+    [
+      MENTION_KIND.AGENT,
+      MENTION_KIND.TASK,
+      LINK_PLACE.AUTOMATION,
+      MENTION_KIND.PERSON,
+      LINK_PLACE.INBOX_ITEM,
+      LINK_PLACE.PAGE,
+      MENTION_KIND.PAGE,
+    ],
+  );
 });
 
 test("the thread post tool and the plan's edit tool show a file's link Vespin draws as its chip, written as a mention", () => {

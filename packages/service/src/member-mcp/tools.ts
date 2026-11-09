@@ -439,8 +439,7 @@ const MEMBER_LIST_TASKS_TOOL = memberMcpTool({
     `stands (its status: ${Object.values(TASK_STATUS).join(", ")}) and how much it matters (its ` +
     "priority), who it is assigned to (its assignee's mention link, null for no one), the " +
     "repository its agents work in (null for none yet), who started it, the sectionId of the " +
-    "sidebar section the member keeps it in (null for none), and its mention, the " +
-    "`[@name](link)` to name it by in your words, the newest first and at most " +
+    "sidebar section the member keeps it in (null for none), the newest first and at most " +
     `${TASKS_LIST_LIMIT} a page, with nextOffset where more stand; and beside them every ` +
     "section the member keeps in that workspace's sidebar, each with its id and title. Narrow " +
     "it by words of a task's name with nameContains, by where it stands with status, and by " +
@@ -456,9 +455,9 @@ const MEMBER_READ_TASK_TOOL = memberMcpTool({
   description:
     "Read one task the member can open, by its id, a teammate's included, in whichever of the " +
     "member's workspaces it stands: its key (such as ACME-42), name, where it stands (its " +
-    "status) and how much it matters (its priority), repository, who started it, its mention, " +
+    "status) and how much it matters (its priority), repository, who started it, " +
     "the brief it was started with (null for none), the tasks it is blocked by and the tasks it " +
-    "blocks (each with its id, name, status, and mention), and its description as last saved, cut on a " +
+    "blocks (each with its id, name, and status), and its description as last saved, cut on a " +
     `line at ${DESCRIPTION_TEXT_READ_CHARS} characters with how many were left out. ` +
     `${MEMBER_MCP_TOOL.LIST_AGENTS} with its taskId names the agents on it.`,
   input: READ_TASK_TOOL.inputSchema,
@@ -466,9 +465,9 @@ const MEMBER_READ_TASK_TOOL = memberMcpTool({
     description:
       "Read one task the member can open, by its id, a teammate's included, in whichever of the " +
       "member's workspaces it stands: its key (such as ACME-42), name, where it stands (its " +
-      "status) and how much it matters (its priority), repository, who started it, its mention, " +
+      "status) and how much it matters (its priority), repository, who started it, " +
       "the brief it was started with (null for none), and the tasks it is blocked by and the " +
-      "tasks it blocks (each with its id, name, status, and mention). " +
+      "tasks it blocks (each with its id, name, and status). " +
       `${MEMBER_MCP_TOOL.LIST_AGENTS} with its taskId names the agents on it.`,
     input: READ_TASK_TOOL.inputSchema,
   },
@@ -497,8 +496,8 @@ const MEMBER_LIST_AGENTS_TOOL = memberMcpTool({
     "model and effort it runs on with the model's name to say it by, its status " +
     `(${Object.values(AGENT_STATUS).join(", ")}) and why where it failed, its repository and the ` +
     "branch its sandbox is on if a turn has ended, one line of what it last did, its task (id " +
-    "and name; null for an agent on no task), whether it is archived, and its mention, the " +
-    "`[@title](link)` to name it by in your words; the newest started first, at most " +
+    "and name; null for an agent on no task), and whether it is archived; the newest started " +
+    "first, at most " +
     `${WORKSPACE_AGENTS_LIST_LIMIT} a page, with nextOffset where more stand, which offset ` +
     "reads the next page by. Pass words to search by words of an agent's title or its task's " +
     `name, or a taskId for one task's agents. ${WORKSPACE_WORDS} Failed covers a session that ` +
@@ -590,8 +589,8 @@ const MEMBER_READ_PAGE_TOOL = memberMcpTool({
     "Read a page an agent showed, by the page's id, on a task the member can open or on an " +
     "agent of theirs with no task, in whichever of the member's workspaces it stands: its " +
     "title, the version read (the newest unless you name one) and the newest there is, its " +
-    "task, or, for a page an agent on no task showed on itself, that agent, its mention ready " +
-    `to write, and its HTML as it stands, cut on a line at ${READ_PAGE_CHARS} characters with ` +
+    "task, or, for a page an agent on no task showed on itself, that agent, " +
+    `and its HTML as it stands, cut on a line at ${READ_PAGE_CHARS} characters with ` +
     "how many were left out.",
   input: ReadPageInputSchema,
   annotations: READ_ONLY,
@@ -725,7 +724,7 @@ function memberCreateTaskWords(startsWith: string): string {
     `task of the workspace in the same call. ${WORKSPACE_WORDS} Then start an agent on it ` +
     `with ${MEMBER_MCP_TOOL.START_AGENT}'s taskId. Each call makes a task of its own, so call ` +
     "it once for each. Answers `accepted` with the task's id, key, name, status, priority, " +
-    "assignee, repository, and mention, or `rejected` and why."
+    "assignee, and repository, or `rejected` and why."
   );
 }
 
@@ -994,7 +993,7 @@ function memberStartAgentWords(handed: string, newTaskPrompt: string): string {
     "instead: continue an agent that failed, ended, or ran out of context, which is handed " +
     "over and stopped, or fork one at a messageId to try another direction while it goes on. " +
     "Each call starts an agent of its own, so call it once for each. Answers `accepted` with " +
-    "the agent's id, model, the model's name to say it by, effort, status, and mention once " +
+    "the agent's id, title, model, the model's name to say it by, effort, and status once " +
     "its session is open, which may take a minute or two, or `rejected` and why nothing was " +
     `started; a rejected model or effort lists the choices. ${FOLLOW_WORDS}`
   );
@@ -1224,8 +1223,7 @@ const READ_INBOX_TOOL = memberMcpTool({
     "changed first. Each thread has its id, which the other inbox tools take, its title, where " +
     `it stands (${Object.values(INBOX_STATUS).join(", ")}) and its revision, the agent that ` +
     "posted it (agentId), who it waits on by name and whether that is the member " +
-    "(waitsOnMember), whether it is unread for them, its mention, the `[@title](link)` to name " +
-    "it by in your words, and its messages in order: who wrote each (agent, `you` for the " +
+    "(waitsOnMember), whether it is unread for them, and its messages in order: who wrote each (agent, `you` for the " +
     "member, or another member by name), its words, its files by name, the ask it ends with " +
     "and where that stands, and the answer a member's message carries. An open ask reads " +
     `whole: a ${INBOX_ASK.DECIDE}'s options, those recommended, and whether several may be ` +
@@ -1690,9 +1688,9 @@ const memberDescriptionComment = (writer: MemberCommentWriter, asked: CommentOnD
 
 /** How a comment tool tells the outside agent whom a comment reaches. */
 const MENTION_WORDS =
-  "Each agent of the task the words mention by its mention link, the `[@title](link)` " +
-  `${MEMBER_MCP_TOOL.LIST_AGENTS} answers, joins the thread and is sent it, as a mention typed ` +
-  "in the window does.";
+  "Each agent of the task the words mention by its link, built from the id " +
+  `${MEMBER_MCP_TOOL.LIST_AGENTS} answers as this server's instructions say, joins the thread ` +
+  "and is sent it, as a mention typed in the window does.";
 
 const MEMBER_COMMENT_ON_DESCRIPTION_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.COMMENT_ON_DESCRIPTION,

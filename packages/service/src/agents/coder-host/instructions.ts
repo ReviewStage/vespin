@@ -19,6 +19,7 @@ import { INTEGRATION_NAMES_SAID } from "../../integrations/integrations.js";
 import { SENDER_LABEL_LEAD } from "../attached-files.js";
 import { RECORDING_CURSOR_FILE } from "../browser/recording-cursor.js";
 import { COMMAND_DESCRIPTION_INSTRUCTION } from "../command-description.js";
+import { linkRuleWords } from "../link-rule.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { offers } from "../tool-catalog/catalog.js";
 import type { AgentStanding } from "../tool-catalog/gates.js";
@@ -440,9 +441,10 @@ ${read}${notes}`,
  * its own address, and the task's own things under the task's link, which
  * an agent on no task has none of. A pull request is named so every time,
  * its address spelled from its number where no tool answered it, since a
- * bare `#42` draws as no chip. Another agent, a page, a task, and an
- * automation are named by the mention the tool that made or listed it
- * answered, so no address is spelled by hand. An MCP server is named by its connection's
+ * bare `#42` draws as no chip. A thing of ours, an agent, a task, an
+ * automation, a member, a thread, or a page, is named by one rule
+ * (`../link-rule.ts`): its link built from the id a tool answered, under the
+ * agent's own workspace's address. An MCP server is named by its connection's
  * mention, and a skill as `/name`, since the app draws both as chips. A name
  * the app shows as a label is written in sentence case, with no period. An
  * agent with no repository is told of no file of one, and its pull request
@@ -452,32 +454,24 @@ function namingWords(
   repository: string | null,
   ownTask: OwnTask | null,
   describes: boolean,
+  workspace: string,
 ): string {
   const files =
     repository === null
       ? ""
       : `
 - A file of your repository: \`[@session-store.ts](https://github.com/${repository}/blob/HEAD/apps/web/session-store.ts)\`; a folder the same way with \`tree\` for \`blob\`; lines at a commit already on GitHub: \`[@session-store.ts:3–5](https://github.com/${repository}/blob/<commit>/apps/web/session-store.ts#L3-L5)\`.`;
-  const inboxItem = `${LINK_ORIGIN}/acme/inbox/<item-id>`;
   const taskWords =
-    ownTask === null
+    ownTask !== null && describes
       ? `
-- A page you showed, which stands on you since you work on no task, by the \`mention\` \`${AGENT_TOOL.SHOW_PAGE}\` or \`${AGENT_TOOL.READ_PAGE}\` answered: \`[@Invite funnel](${LINK_ORIGIN}/acme/agent/<agent-id>/page/<page-id>)\`.`
-      : `${
-          describes
-            ? `
 - Your task's description, whose link is \`${ownTask.link}\` and whose id is \`${ownTask.id}\`: \`[@<the task's name>](${ownTask.link})\`, and one of its sections by its heading's anchor, the heading as GitHub spells an anchor (lower case, spaces as hyphens, punctuation dropped): \`[@Rollout](${ownTask.link}#rollout)\`.`
-            : ""
-        }
-- A page shown on the task, by the \`mention\` \`${AGENT_TOOL.SHOW_PAGE}\` or \`${AGENT_TOOL.READ_PAGE}\` answered: \`[@Invite funnel](${ownTask.link}/page/<page-id>)\`.`;
+      : "";
   const where = describes
     ? "in a message, a thread, or the description. Keep a mention in the description exactly as it stands when you edit around it."
     : "in a message or a thread.";
-  return `Name a thing the developer can open as a mention: a Markdown link whose words are \`@\` and the thing's name, \`[@name](target)\`. ${PRODUCT_NAME} draws it as the thing's chip, which opens it, wherever you write it: ${where} Copy a target a tool answered rather than spelling one:${files}
+  return `Name a thing the developer can open as a mention: a Markdown link whose words are \`@\` and the thing's name, \`[@name](target)\`. ${PRODUCT_NAME} draws it as the thing's chip, which opens it, wherever you write it: ${where} Copy an address a tool answered rather than spelling one:${files}
 - A pull request or an issue on GitHub, or a Linear issue, by its own address: \`[@#42 Fix the refresh](https://github.com/${repository ?? EXAMPLE_REPOSITORY}/pull/42)\`, \`[@ACME-142 Token refresh fails](https://linear.app/acme/issue/ACME-142)\`. Write one so every time you name it, in passing and in a report to another agent among them, never as a bare \`#42\`, which draws as no chip; where no tool answered a pull request's address, spell it from its number, its repository's address with \`/pull/\` and the number.${taskWords}
-- Another agent, or another task, by the \`mention\` \`${AGENT_TOOL.LIST_AGENTS}\`, \`${AGENT_TOOL.START_AGENT}\`, or \`${AGENT_TOOL.LIST_TASKS}\` answered: \`[@Wire the desktop](${LINK_ORIGIN}/acme/agent/<agent-id>)\`, \`[@Teammate invitations](${LINK_ORIGIN}/acme/task/<number>)\`.
-- An automation, by the \`mention\` \`${AGENT_TOOL.LIST_AUTOMATIONS}\`, \`${AGENT_TOOL.CREATE_AUTOMATION}\`, or \`${AGENT_TOOL.UPDATE_AUTOMATION}\` answered, never its name in quotes: \`[@Nightly triage](${LINK_ORIGIN}/acme/automation/<automation-id>)\`.
-- One of your threads, by the \`mention\` each of your thread tools answered for it: \`[@Review the invite flow](${inboxItem})\`.
+- ${linkRuleWords(`${LINK_ORIGIN}/${workspace}`)}
 - A date, which opens nothing, by its day, or its time with the offset it is at, and a range by both ends joined by a slash, its words the date in full: \`[@Oct 20, 2026](mention://date/2026-10-20)\`, \`[@Oct 20, 2026, 3:00 PM PDT](mention://date/2026-10-20T15:00-07:00)\`, \`[@Oct 20, 2026 → Oct 24, 2026](mention://date/2026-10-20/2026-10-24)\`.
 - An MCP server, by its connection's name as your tools list it: \`[@Linear](mention://mcp/linear)\`, or \`[@Notion](mention://mcp/notion-2)\` for a second Notion account.
 
@@ -563,6 +557,9 @@ interface WorkWords {
 
 /** The repository named in the examples of an agent with none of its own. */
 const EXAMPLE_REPOSITORY = "acme/app";
+
+/** The workspace step an agent's links are written under where its caller names none, as the examples spell one. */
+const EXAMPLE_WORKSPACE = "acme";
 
 /**
  * Where an agent works: its own sandbox, or, for a local agent, straight on
@@ -912,6 +909,7 @@ export function coderInstructions(
   harness: CoderHarness = CODER_HARNESS.CLAUDE_CODE,
   machine: CoderMachine = SANDBOX_MACHINE,
   extras: readonly ExtraCheckout[] = [],
+  workspace: string = EXAMPLE_WORKSPACE,
 ): string {
   const words = BRIEF_WORDS[brief];
   const tools = toolsOn(TOOL_WORDS[harness], machine, standing);
@@ -975,7 +973,7 @@ ${memoryWords(standing)}## What your messages are
 
 ${sections.messages}
 
-${namingWords(repository, ownTask, describes)}
+${namingWords(repository, ownTask, describes, workspace)}
 
 Never print a credential, a token, or the contents of an environment file, in a message, a commit, or a pull request.`;
 }
@@ -1045,5 +1043,6 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
       sharedFiles: context.place?.sharedFiles ?? SANDBOX_MACHINE.sharedFiles,
     },
     context.extraRepositories,
+    context.workspace,
   );
 }
