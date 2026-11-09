@@ -91,6 +91,7 @@
 
 import { type ReactNode, useLayoutEffect, useRef } from "react";
 import { NotFoundIcon } from "../../icons/lucide-glyphs.js";
+import { said } from "../../said.js";
 import { ReplayMask, ReplayWords } from "../../session-replay-marks.js";
 import { type TitleSeat, useWrapWhenCut } from "../../use-wrap-when-cut.js";
 import { BREADCRUMBS_VARIANT, Breadcrumbs } from "../breadcrumbs/breadcrumbs.js";
@@ -261,11 +262,6 @@ export interface ToolbarProps {
   readonly folded?: boolean | undefined;
   /** Whether a bar that would cut the page's own name under the readable floor stands its heading on a row of its own under the lead and actions, and under 360px folds its lead to glyphs. */
   readonly wrapHeading?: boolean | undefined;
-}
-
-/** Whether a slot says anything: nothing, `null`, `false`, and an empty string say nothing. */
-function said(node: ReactNode): boolean {
-  return node !== undefined && node !== null && node !== false && node !== "";
 }
 
 /** The page's name as the bar's heading: words on one line, fading where cut and read whole by the hint; anything else as given. */

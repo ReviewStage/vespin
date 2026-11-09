@@ -8,6 +8,7 @@ import {
 } from "react";
 import { isComposingKey } from "../../composing-key.js";
 import { ChevronDownIcon } from "../../icons/lucide-glyphs.js";
+import { said } from "../../said.js";
 import { ShadcnInput } from "../../shadcn/input.js";
 import { STATUS_TONE } from "../../status-tone.js";
 import { CountFigure } from "../count-figure/count-figure.js";
@@ -263,11 +264,6 @@ const SUBGRID = {
   HEAD: "col-span-full",
   BODY: "grid col-span-full grid-cols-subgrid gap-y-ui-2 *:col-span-full",
 } as const;
-
-/** Whether a slot says anything: nothing, `null`, `false`, and an empty string say nothing. */
-function said(node: ReactNode): boolean {
-  return node !== undefined && node !== null && node !== false && node !== "";
-}
 
 /** The count after the label, read with its noun, at whatever value its caller gave, drawn "99+" past 99. */
 function Count({ count }: { count: NavCount }): React.JSX.Element {

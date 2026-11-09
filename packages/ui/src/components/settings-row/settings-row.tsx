@@ -2,6 +2,7 @@ import { type ReactNode, useId } from "react";
 import { cn } from "../../cn.js";
 import { AlertIcon, CheckIcon } from "../../icons/lucide-glyphs.js";
 import type { ShownError } from "../../reported-failure.js";
+import { said } from "../../said.js";
 import {
   Item,
   ItemActions,
@@ -154,11 +155,6 @@ export interface SettingsRowControl {
  * left out, since it cuts its words short where it is squeezed.
  */
 const ADORNED_TITLE_CLASS = "[&>.ui-badge:not([data-fill])]:flex-none";
-
-/** Whether a row's words say anything: nothing, `null`, `false`, and an empty string say nothing. */
-function said(words: ReactNode): boolean {
-  return words !== undefined && words !== null && words !== false && words !== "";
-}
 
 /**
  * The label's type at each density: a setting's name at a label's weight, a

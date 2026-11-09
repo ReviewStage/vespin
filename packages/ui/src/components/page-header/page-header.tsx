@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { said } from "../../said.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 
 /**
@@ -31,11 +32,6 @@ export const PAGE_HEADER_END = {
 } as const;
 
 export type PageHeaderEnd = (typeof PAGE_HEADER_END)[keyof typeof PAGE_HEADER_END];
-
-/** Whether a slot says anything: nothing, `null`, `false`, and an empty string say nothing. */
-function said(words: ReactNode): boolean {
-  return words !== undefined && words !== null && words !== false && words !== "";
-}
 
 /** A document's header: `title` as the page's `h1`, `description` under it, and `actions` at its end. */
 export function PageHeader({

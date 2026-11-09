@@ -1,4 +1,5 @@
 import { type ReactNode, type Ref, useCallback, useId, useRef, useState } from "react";
+import { said } from "../../said.js";
 import {
   PAGE_FRAME,
   PAGE_WIDTH,
@@ -97,11 +98,6 @@ const TOP_CLASS =
 
 /** An empty or failed collection's notice, centered in the room under the filters (its room above and below is the sheet's). */
 const NOTICE_CLASS = "flex flex-1 flex-col items-center text-center";
-
-/** Whether a slot says anything: nothing, `null`, `false`, and an empty string say nothing. */
-function said(words: ReactNode): boolean {
-  return words !== undefined && words !== null && words !== false && words !== "";
-}
 
 /**
  * Rows of blocks in a `ListRow`'s shape, a title over its line: what a read

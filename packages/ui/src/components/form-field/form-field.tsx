@@ -1,6 +1,7 @@
 import { FIELD_WORDS } from "@repo/features/words";
 import { type ReactNode, useId } from "react";
 import type { ShownError } from "../../reported-failure.js";
+import { said } from "../../said.js";
 import { Field, FieldDescription, FieldLabel } from "../../shadcn/field.js";
 import { ErrorLine } from "../error-line/error-line.js";
 import { LengthCounter } from "../length-counter/length-counter.js";
@@ -36,11 +37,6 @@ export interface FieldControl {
   readonly "aria-invalid": true | undefined;
   /** Whether the field is to be filled, which every field is unless it is `optional`. */
   readonly "aria-required": true | undefined;
-}
-
-/** Whether a field's words say anything: nothing, `null`, `false`, and an empty string say nothing. */
-function said(words: ReactNode): boolean {
-  return words !== undefined && words !== null && words !== false && words !== "";
 }
 
 /** The muted caption Optional is set in after a label, a short step off it. */
