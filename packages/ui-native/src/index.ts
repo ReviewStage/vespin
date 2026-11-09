@@ -1,4 +1,4 @@
-// index.ts -- @repo/ui-native: the iOS app's components over @expo/ui's SwiftUI, and the brand's tokens they draw with.
+// index.ts -- @repo/ui-native: the iOS app's components over @expo/ui's SwiftUI, its Markdown in React Native views, and the brand's tokens they draw with.
 
 export {
   BUTTON_LOOK,
@@ -24,6 +24,8 @@ export {
   type RowActionTone,
   TaskRow,
 } from "./list-row.js";
+export { Markdown, type MarkdownPlace } from "./markdown.js";
+export { MarkdownPage } from "./markdown-page.js";
 export { Avatar, TaskStatusMark, UnreadDot } from "./marks.js";
 export { monogramOf } from "./monogram.js";
 export { PageHeader } from "./page-header.js";
@@ -41,3 +43,4 @@ export {
   useColors,
 } from "./tokens/colors.js";
 export { MARK_SIZE, SPACE } from "./tokens/space.js";
+export { MONOSPACE_FONT, TEXT_SIZE } from "./tokens/type.js";

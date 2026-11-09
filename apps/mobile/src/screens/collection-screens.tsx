@@ -6,6 +6,7 @@ import {
   LIST_LOOK,
   type ListLook,
   ListRow,
+  MarkdownPage,
   PageHeader,
   ROW_ACTION_TONE,
   type RowAction,
@@ -18,6 +19,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   COLLECTION_ROUTE,
+  PLACEHOLDER_REPOSITORY,
   type PlaceholderCollection,
   type PlaceholderItem,
 } from "../placeholders.js";
@@ -88,8 +90,24 @@ function CollectionList({ collection, look, selected, onSelect }: CollectionList
   );
 }
 
+// Note that a place a description names opens nothing yet, since the
+// placeholder has no screen for one; the host's routes will take it.
+function openNothing() {}
+
 function ItemDetail({ item }: { readonly item: PlaceholderItem }) {
   const [picked, setPicked] = useState<readonly string[]>([]);
+  if (item.words !== undefined) {
+    return (
+      <MarkdownPage
+        title={item.title}
+        summary={item.summary}
+        status={item.status}
+        words={item.words}
+        repository={PLACEHOLDER_REPOSITORY}
+        onOpenPlace={openNothing}
+      />
+    );
+  }
   if (item.ask === undefined) {
     return <PageHeader title={item.title} summary={item.summary} status={item.status} />;
   }

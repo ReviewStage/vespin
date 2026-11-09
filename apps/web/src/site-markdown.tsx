@@ -9,13 +9,13 @@
  * visitor's words would be.
  */
 
+import { markdownTree } from "@repo/features/markdown-tree";
 import {
   MARKDOWN_HTML_STEP,
   MARKDOWN_LOOK,
   Markdown,
   type MarkdownComponents,
 } from "@repo/ui/markdown";
-import { markdownTree } from "@repo/ui/markdown-words";
 import type { Heading, Nodes, PhrasingContent, RootContent } from "mdast";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { Release, ReleaseImage } from "./changelog-releases";
