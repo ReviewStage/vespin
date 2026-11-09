@@ -1,0 +1,86 @@
+# inbox.yaml -- the Inbox's list under its scopes, its search, a row's swipe and long press, and a thread with a picture opened full screen and a video in the system's player.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as `skeleton.yaml` is, so the list
+# holds the fixture's threads and no server is reached; the fixture answers
+# each mark and each thread's file read (`@repo/host/fixture-inbox`).
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- waitForAnimationToEnd
+- takeScreenshot: inbox-list
+# View options: the scopes, Open checked, and Mark all as read under them. All
+# lists the settled threads too.
+- tapOn: "View options"
+- assertVisible: "Questions"
+- assertVisible: "Mark all as read"
+- takeScreenshot: inbox-view-options
+- tapOn: "All"
+- scrollUntilVisible:
+    element: "Which day the digest goes out"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: inbox-all
+- scrollUntilVisible:
+    element: "Search inbox"
+    direction: UP
+- waitForAnimationToEnd
+- tapOn: "View options"
+- tapOn: "Open"
+# A swipe from the leading edge reveals Mark as read or unread, which a full
+# swipe would press at once, so the flow swipes partway, where a compact
+# window stands a row; a long press offers the same in the row's menu.
+- swipe:
+    start: "8%, 79%"
+    end: "38%, 79%"
+    duration: 900
+- takeScreenshot: inbox-swipe
+- tapOn:
+    text: "Mark as .*"
+    optional: true
+- scrollUntilVisible:
+    element: "acceptInvite can add a member twice"
+    direction: DOWN
+- waitForAnimationToEnd
+- longPressOn: "acceptInvite can add a member twice"
+- assertVisible: "Mark as read"
+- takeScreenshot: inbox-menu
+- tapOn: "Mark as read"
+- scrollUntilVisible:
+    element: "Recorded the invite flow"
+    direction: UP
+# A thread opens on its path and subject, then each message as a comment: the
+# agent's tile, name and time over its words, its picture drawn where the
+# words name it, and its recording after the message that sent it.
+- tapOn: "Recorded the invite flow"
+- assertVisible: ".*walked the invite flow.*"
+- waitForAnimationToEnd
+- takeScreenshot: inbox-thread
+- tapOn: "The invite page"
+- assertVisible:
+    id: "markdown-picture-done"
+- takeScreenshot: inbox-picture
+- tapOn:
+    id: "markdown-picture-done"
+- scrollUntilVisible:
+    element: "invite-flow.webm.*"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: inbox-video
+# Back on the list, the search narrows it to the threads whose words hold
+# every word typed. It comes last, since its keyboard stands over the rows.
+- tapOn: "Inbox"
+- scrollUntilVisible:
+    element: "Search inbox"
+    direction: UP
+- waitForAnimationToEnd
+- tapOn: "Search inbox"
+- inputText: "digest"
+- assertVisible: "Verify the digest's sender domain"
+- assertNotVisible: "Invite limits"
+- takeScreenshot: inbox-search
