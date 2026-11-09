@@ -1,5 +1,5 @@
 /**
- * agent.ts -- `vespin agent start`, `list`, `view`, `logs`, `send`, `stop`, `wait`, and `checkout`: coding agents started, read, followed, messaged, stopped, waited on, and their work brought into the working folder.
+ * agent.ts -- `vespin agent start`, `list`, `view`, `logs`, `send`, `stop`, `wait`, `checkout`, `ports`, and `share`: coding agents started, read, followed, messaged, stopped, waited on, their work brought into the working folder, and the ports their sandbox listens on shared by link.
  *
  * A turn is followed on the held transcript read (`messages.agent`): asked
  * past the cursor the last answer handed back, the service holds it while
@@ -32,6 +32,7 @@ import { CLI_EXIT, cliExitOfAgentStatus } from "@repo/features/cli-exit";
 import { transcriptPartLines, transcriptSpeaker } from "@repo/features/cli-transcript";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { FORWARD_PORT } from "@repo/features/sandbox-tunnel-wire";
 import { Duration, Effect, Option, Ref, Result, Schedule } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { checkoutFromOrigin, originHasBranch, originRepository, treeIsClean } from "../git.js";
@@ -652,7 +653,103 @@ const checkoutCommand = Command.make("checkout", { agent: agentArgument }, ({ ag
   ]),
 );
 
-/** The agent group: start through checkout. */
+const portsCommand = Command.make("ports", { agent: agentArgument }, ({ agent: id }) =>
+  Effect.gen(function* () {
+    const { hosted } = yield* session;
+    const listed = yield* askService(hosted.agentPorts.list, { id });
+    // Note that a sandbox not running shares nothing, so its share is not read.
+    const { shared } = listed.running
+      ? yield* askService(hosted.agentPorts.shared, { id })
+      : { shared: null };
+    const portLines = columns(
+      listed.ports.map((port) => [String(port), port === shared?.port ? shared.url : ""]),
+    );
+    yield* answer({
+      json: { ...listed, shared },
+      lines: !listed.running
+        ? ["The agent's sandbox is not running."]
+        : listed.ports.length === 0
+          ? ["Nothing listens in the agent's sandbox."]
+          : portLines,
+      ids: listed.ports.map(String),
+    });
+  }),
+).pipe(
+  Command.withDescription(
+    "List the ports a server listens on in an agent's cloud sandbox, and the one shared by link",
+  ),
+  Command.withExamples([
+    { command: "vespin agent ports <id>", description: "The ports, the shared one with its link" },
+    { command: "vespin agent ports <id> -q", description: "The port numbers alone" },
+  ]),
+);
+
+/** What a share says of the port shared now: the port and its link, or that none is. */
+function sharedLines(shared: { readonly port: number; readonly url: string } | null): string[] {
+  return shared === null
+    ? ["No port is shared."]
+    : [`Port ${shared.port} is shared at ${shared.url}`];
+}
+
+const shareCommand = Command.make(
+  "share",
+  {
+    agent: agentArgument,
+    port: Argument.Int("port").pipe(
+      Argument.filter(
+        (port) => port >= FORWARD_PORT.MIN && port <= FORWARD_PORT.MAX,
+        () => `The port is a number from ${FORWARD_PORT.MIN} to ${FORWARD_PORT.MAX}`,
+      ),
+      Argument.withDescription("The port to share, replacing any shared before"),
+      Argument.optional,
+    ),
+    stop: Flag.Boolean("stop").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription("Stop sharing; the link closes"),
+    ),
+  },
+  ({ agent: id, port, stop }) =>
+    Effect.gen(function* () {
+      if (stop && Option.isSome(port)) {
+        return yield* new CommandFailed({
+          exit: CLI_EXIT.USAGE,
+          message: "Name a port to share, or --stop, not both.",
+        });
+      }
+      const { hosted } = yield* session;
+      if (stop) {
+        const stopped = yield* askService(hosted.agentPorts.unshare, { id });
+        yield* answer({ json: stopped, lines: ["Stopped sharing."], ids: [] });
+        return;
+      }
+      if (Option.isSome(port)) {
+        const { url } = yield* askService(hosted.agentPorts.share, {
+          params: { id },
+          body: { port: port.value },
+        });
+        const shared = { port: port.value, url };
+        yield* answer({ json: { shared }, lines: sharedLines(shared), ids: [url] });
+        return;
+      }
+      const { shared } = yield* askService(hosted.agentPorts.shared, { id });
+      yield* answer({
+        json: { shared },
+        lines: sharedLines(shared),
+        ids: shared === null ? [] : [shared.url],
+      });
+    }),
+).pipe(
+  Command.withDescription(
+    "Share a port of an agent's running cloud sandbox by public link, show the link, or stop sharing",
+  ),
+  Command.withExamples([
+    { command: "vespin agent share <id> 3000", description: "Share port 3000, printing its link" },
+    { command: "vespin agent share <id> -q", description: "The link shared now, alone" },
+    { command: "vespin agent share <id> --stop", description: "Close the link" },
+  ]),
+);
+
+/** The agent group: start through share. */
 export const agentCommand = Command.make("agent").pipe(
   Command.withDescription(`Start, follow, message, and stop ${PRODUCT_NAME}'s coding agents`),
   Command.withSubcommands([
@@ -664,6 +761,8 @@ export const agentCommand = Command.make("agent").pipe(
     stopCommand,
     waitCommand,
     checkoutCommand,
+    portsCommand,
+    shareCommand,
   ]),
   Command.withExamples([
     { command: "vespin agent start ACME-42 --wait", description: "Start an agent, and wait on it" },
