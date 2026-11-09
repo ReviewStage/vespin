@@ -155,7 +155,7 @@ export function Prototype(): React.JSX.Element {
                 size={CHOICE_BAR_SIZE.COMPACT}
                 items={Object.values(DESIGN).map((value) => ({
                   value,
-                  label: DESIGNS[value].label,
+                  label: onPhone ? value.toUpperCase() : DESIGNS[value].label,
                 }))}
                 value={view.design}
                 onChange={(next) => change({ design: next })}
@@ -174,31 +174,28 @@ export function Prototype(): React.JSX.Element {
                     onChange={(next) => change({ frame: next })}
                   />
                 )}
-                {onPhone ? null : themeToggle}
+                {themeToggle}
               </Inline>
             </Inline>
-            <Inline gap={GAP.TIGHT} justify={JUSTIFY.BETWEEN} wrap={false}>
-              <ChoiceBar<AgentState>
-                label="Agent state"
-                look={CHOICE_BAR_LOOK.FILL}
-                size={CHOICE_BAR_SIZE.COMPACT}
-                items={STATES.map((value) => ({
-                  value,
-                  label: onPhone ? AGENT_STATE_SHORT[value] : AGENT_STATE_LABEL[value],
-                }))}
-                value={view.state}
-                onChange={(next) => change({ state: next })}
-              />
-              {onPhone ? themeToggle : null}
-            </Inline>
-            {onPhone ? null : (
-              <Stack gap={GAP.NONE}>
-                <Text variant={TEXT_VARIANT.LABEL}>{design.title}</Text>
+            <ChoiceBar<AgentState>
+              label="Agent state"
+              look={CHOICE_BAR_LOOK.FILL}
+              size={CHOICE_BAR_SIZE.COMPACT}
+              items={STATES.map((value) => ({
+                value,
+                label: onPhone ? AGENT_STATE_SHORT[value] : AGENT_STATE_LABEL[value],
+              }))}
+              value={view.state}
+              onChange={(next) => change({ state: next })}
+            />
+            <Stack gap={GAP.NONE}>
+              <Text variant={TEXT_VARIANT.LABEL}>{design.title}</Text>
+              {onPhone ? null : (
                 <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
                   {design.summary}
                 </Text>
-              </Stack>
-            )}
+              )}
+            </Stack>
           </Stack>
         </header>
         <main className="inbox-proto-stage">
