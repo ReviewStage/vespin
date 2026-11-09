@@ -2827,12 +2827,16 @@ const MERGING: PullRequestMerging = {
   checks: CHECK_SUMMARY.PASSING,
 };
 
-/** The plan's agents, its pull request standing as given and merged as given. */
-function merging(merge: MergeState, merged: Partial<PullRequestMerging> = {}): AgentsControl {
+/** The plan's agents, its pull request standing as given and merged as given, the member reading it able to bypass its base's rules where said. */
+function merging(
+  merge: MergeState,
+  merged: Partial<PullRequestMerging> = {},
+  canBypassRules = false,
+): AgentsControl {
   return controlAnswering({
     pullRequest: () =>
       Promise.resolve({
-        pullRequest: { ...PULL_REQUEST, merge, merging: { ...MERGING, ...merged } },
+        pullRequest: { ...PULL_REQUEST, merge, canBypassRules, merging: { ...MERGING, ...merged } },
       }),
   });
 }
@@ -2895,6 +2899,7 @@ function mergeCases() {
             ...PULL_REQUEST,
             state: PULL_REQUEST_STATE.DRAFT,
             merge: MERGE_STATE.DRAFT,
+            canBypassRules: true,
             merging: MERGING,
           },
         }),
@@ -2922,8 +2927,8 @@ function mergeCases() {
       { ...none, press: "Merge pull request", look: "primary", chevron: false },
     ],
     [
-      "checks running",
-      merging(MERGE_STATE.BLOCKED, { checks: CHECK_SUMMARY.PENDING }),
+      "checks running, auto-merge offered before any bypass",
+      merging(MERGE_STATE.BLOCKED, { checks: CHECK_SUMMARY.PENDING }, true),
       { ...none, press: "Enable auto-merge", look: "outline", chevron: true },
     ],
     [
@@ -2969,8 +2974,8 @@ function mergeCases() {
       },
     ],
     [
-      "conflicts",
-      merging(MERGE_STATE.CONFLICTS),
+      "conflicts, which no bypass merges",
+      merging(MERGE_STATE.CONFLICTS, {}, true),
       held("Conflicts", "danger", "Conflicts with main"),
     ],
     [
@@ -2979,8 +2984,8 @@ function mergeCases() {
       held("Behind", "attention", "Behind main; it must be brought up to date"),
     ],
     [
-      "checking",
-      merging(MERGE_STATE.UNKNOWN),
+      "checking, which no bypass merges",
+      merging(MERGE_STATE.UNKNOWN, {}, true),
       held("Checking", "working", "GitHub is still checking whether it merges"),
     ],
     [
