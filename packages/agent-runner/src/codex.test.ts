@@ -517,7 +517,7 @@ it.effect("interrupts the running turn on a stop and ends the launch as stopped"
 );
 
 it.effect(
-  "a thread resumed in a sandbox that no longer holds its rollout has it written back from the service's store first",
+  "a thread resumed in a sandbox that no longer holds its rollout has it written back whole from the service's store first, across its pages",
   () =>
     Effect.gen(function* () {
       const home = mkdtempSync(join(tmpdir(), "codex-home-"));
@@ -526,13 +526,16 @@ it.effect(
         { type: "session_meta", payload: { id: THREAD } },
         { type: "response_item", payload: { type: "message", role: "user" } },
       ];
+      // The store answers the rollout a line a page, so the restore joins both pages in order.
       vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
         const call = JSON.parse(String(init?.body));
         const answer =
           call.call === "listSubkeys"
             ? { subkeys: [subpath] }
-            : call.call === "load"
-              ? { entries: kept }
+            : call.call === "loadPage"
+              ? call.after === null
+                ? { entries: kept.slice(0, 1), next: 1 }
+                : { entries: kept.slice(1), next: null }
               : {};
         return new Response(JSON.stringify(answer));
       });
