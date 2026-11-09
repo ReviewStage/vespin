@@ -388,7 +388,7 @@ function InlineRefRoot({
           truncate={fit === INLINE_REF_FIT.LINE ? TEXT_TRUNCATE.START : false}
           className={labelClassName}
         >
-          {/* Note that a path cut at its start is isolated, so the ellipsis never reorders it, and one that wraps is not, because a browser breaks at an isolate's edge, which would part it from its glyph. */}
+          {/* Note that a path cut at its start is isolated, so the ellipsis never reorders it; one that wraps is isolated with its whole token instead (`own`). */}
           {name === INLINE_REF_NAME.PATH && fit === INLINE_REF_FIT.LINE ? (
             <bdi>{label}</bdi>
           ) : (
@@ -401,10 +401,13 @@ function InlineRefRoot({
       {gone ? <span className="ui-visually-hidden">{GONE_HEARD}</span> : null}
     </>
   );
+  // Note that a path that wraps keeps its own order in words of either direction by isolating its whole token rather than its name, because a browser breaks wherever the direction's level changes, which would part the name from its glyph.
+  const isolated = name === INLINE_REF_NAME.PATH && fit === INLINE_REF_FIT.FLOW;
   const own = {
     ...rest,
     className: `${rootClass({ look, fit, gone, pressable, leaving })}${pressable ? " group/inline-ref" : ""}`,
     "data-look": look,
+    ...(isolated ? { dir: "ltr" } : {}),
   };
   const goneProps = gone ? { "data-gone": "true" } : {};
   if (onPress === undefined) {
