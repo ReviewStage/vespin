@@ -8,7 +8,7 @@ import { PAGE_OWNER, type PageOwner } from "@repo/features/page-wire";
 import { Effect, Option } from "effect";
 
 /**
- * written-mentions.ts -- the mentions a tool hands an agent ready to write: a task's, a page's, on a task or on an agent with no task, or another agent's, each `[@name](target)` under its workspace.
+ * written-mentions.ts -- the mentions a tool hands an agent ready to write: a task's, a page's, on a task or on an agent with no task, another agent's, or an automation's, each `[@name](target)` under its workspace.
  *
  * An agent names a thing of ours in its messages, its Inbox items, its
  * description notes, and its pages as a mention (`@repo/features/mention-link`),
@@ -121,6 +121,18 @@ export function writtenTaskMention(task: LinkedTask, name: string, workspace: st
   return mentionMarkdownLink(
     name,
     linkOf({ kind: LINK_PLACE.TASK, planId: taskLinkStep(task) }, workspace),
+  );
+}
+
+/** An automation's mention as an agent writes it, named and by its link under the workspace's step, which the window draws as the automation's chip. */
+export function writtenAutomationMention(
+  automationId: string,
+  name: string,
+  workspace: string,
+): string {
+  return mentionMarkdownLink(
+    name,
+    linkOf({ kind: LINK_PLACE.AUTOMATION, automationId }, workspace),
   );
 }
 
