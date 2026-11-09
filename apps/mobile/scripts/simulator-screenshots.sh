@@ -75,6 +75,31 @@ FLOW_ATTEMPTS=2
 # longer than Maestro's own default, which then fails every flow unread.
 export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
 
+# Boots the simulator `$1` and hands it the app.
+prepare_simulator() {
+    xcrun simctl bootstatus "$1" -b
+    xcrun simctl install "$1" "$app"
+}
+
+# Sets the simulator `$1`'s appearance to `$2`. Note that the simulator's own
+# appearance is set, because Maestro's `setDarkMode` leaves an iOS simulator
+# light.
+set_appearance() {
+    xcrun simctl ui "$1" appearance "$2"
+}
+
+# Shuts the simulator `$1` down, erases it to a freshly made device, boots it
+# with the app again, and sets its appearance back to `$2`. Note that a retry
+# starts here, because Maestro's XCUITest driver that failed to start on a
+# simulator (`IOSDriverTimeoutException`) failed the same way on a second try
+# over the state the first left, which an erase clears.
+erase_simulator() {
+    xcrun simctl shutdown "$1" 2>/dev/null || true
+    xcrun simctl erase "$1"
+    prepare_simulator "$1"
+    set_appearance "$1" "$2"
+}
+
 # Runs every flow under maestro/ once on the booted simulator `$1`, from a
 # clean app, its output under `$2`, which a run before it is cleared from.
 # Maestro's own debug output, the screenshot it takes when a step fails among
@@ -96,17 +121,16 @@ for name in "$@"; do
     device_output="$output/$slug"
     mkdir -p "$device_output"
     echo "==> $name ($udid)"
-    xcrun simctl bootstatus "$udid" -b
-    xcrun simctl install "$udid" "$app"
+    prepare_simulator "$udid"
     # Every flow runs once in each appearance, so the brand's light and dark
-    # colors are both seen. Note that the simulator's own appearance is set
-    # here, because Maestro's `setDarkMode` leaves an iOS simulator light.
+    # colors are both seen.
     for appearance in "${APPEARANCES[@]}"; do
-        xcrun simctl ui "$udid" appearance "$appearance"
+        set_appearance "$udid" "$appearance"
         appearance_output="$device_output/$appearance"
-        # Note that a device's flows run again once where they fail, because
-        # a slow boot or a system prompt that lands late fails a run that a
-        # second one passes, and costs nothing like a whole job's rerun.
+        # Note that a device's flows run again once where they fail, on the
+        # simulator erased and prepared afresh, because a slow boot, a system
+        # prompt that lands late, or a driver that never started fails a run
+        # that a second one passes, and costs nothing like a whole job's rerun.
         attempt=1
         until run_flows "$udid" "$appearance_output"; do
             if ((attempt == FLOW_ATTEMPTS)); then
@@ -115,7 +139,9 @@ for name in "$@"; do
                 break
             fi
             attempt=$((attempt + 1))
-            echo "the flows failed on $name in $appearance; running them again ($attempt of $FLOW_ATTEMPTS)" >&2
+            echo "the flows failed on $name in $appearance; erasing the simulator ($udid) and booting it again, so a driver or app state the failed try left cannot fail the next" >&2
+            erase_simulator "$udid" "$appearance"
+            echo "running the flows on $name in $appearance again, on the erased simulator ($attempt of $FLOW_ATTEMPTS)" >&2
         done
     done
     xcrun simctl shutdown "$udid"
