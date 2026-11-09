@@ -47,6 +47,7 @@ import {
   SLACK_LINE_SUBJECT,
   THREAD_LINE_DID,
 } from "./line-cards.js";
+import { fencedBlock } from "./markdown-fence.js";
 import {
   leftOutLine,
   replayCount,
@@ -386,7 +387,7 @@ export function agentTranscript(input: {
   };
 }
 
-/** The longest run of backticks in the text, which a fence or a span around it must outrun. */
+/** The longest run of backticks in the text, which a span around it must outrun. */
 function longestTicks(text: string): number {
   return Math.max(0, ...(text.match(/`+/gu) ?? []).map((run) => run.length));
 }
@@ -400,8 +401,7 @@ function inlineCode(text: string): string {
 
 /** The text as a fenced block in the language given, its fence outrunning any it holds. */
 function fenced(text: string, language: string): string {
-  const fence = "`".repeat(Math.max(3, longestTicks(text) + 1));
-  return `${fence}${language}\n${text.trimEnd()}\n${fence}`;
+  return fencedBlock(text.trimEnd(), language);
 }
 
 /** The text cut at the answer's bound, saying so where it was. */
