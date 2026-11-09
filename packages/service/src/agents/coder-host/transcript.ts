@@ -42,6 +42,7 @@ import {
   AGENT_DELEGATE_TOOL,
   AGENT_LAUNCH,
   AGENT_MACHINE,
+  AGENT_PAYER,
   AGENT_SENDER,
   AGENT_STATUS,
   type AgentContext,
@@ -198,6 +199,12 @@ type NewestTurn = LatestTurn | undefined;
 
 /** The agent whose own transcript a page is, as its context and its launch are read: its row. */
 type OwnAgent = Pick<Agent, "id" | "machine">;
+
+/** The payers that run on one of the starter's plans, which a page names by its subscription. */
+const PLAN_PAYERS_NAMED: ReadonlySet<AgentPayer> = new Set([
+  AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+  AGENT_PAYER.CHATGPT_SUBSCRIPTION,
+]);
 
 /** The statuses a read waits through: more may still land. */
 const WAITING_STATUSES: ReadonlySet<AgentStatus> = new Set([
@@ -550,6 +557,11 @@ const withUsage = (
         : undefined;
     // Note that an agent from before payers were recorded has none.
     const payer = Option.isNone(routing) ? null : routing.value.payer;
+    // Note that only a plan payer names a subscription, since a key or the app pays for no plan of the starter's.
+    const payerSubscriptionId =
+      Option.isNone(routing) || payer === null || !PLAN_PAYERS_NAMED.has(payer)
+        ? null
+        : routing.value.subscriptionId;
     const priced = usageOfTurns(rows, offered);
     // Note that the payer rides on the usage, because the one line that draws a price is the one that says who paid.
     const usage = priced === undefined || payer === null ? priced : { ...priced, payer };
@@ -558,6 +570,7 @@ const withUsage = (
       ...page,
       ...(usage === undefined ? undefined : { usage }),
       ...(payer === null ? undefined : { payer }),
+      ...(payerSubscriptionId === null ? undefined : { payerSubscriptionId }),
       ...(context === undefined ? undefined : { context }),
       ...(delegations.length === 0 ? undefined : { delegations }),
       ...(subagentTitles.length === 0 ? undefined : { subagentTitles }),

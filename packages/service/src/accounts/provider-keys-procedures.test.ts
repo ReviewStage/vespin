@@ -756,6 +756,8 @@ it.layer(getTestDB())("the provider keys route", (it) => {
           status: PROVIDER_KEY_STATUS.UNVERIFIED,
           statusAt: savedAt,
           forAgents: true,
+          id: keysOf(saved).subscriptions?.[0]?.id ?? "",
+          position: 0,
         };
         assert.deepEqual(keysOf(saved), { keys: [], subscriptions: [subscription] });
         assert.deepEqual(countedProviders(owner), [{ provider: PROVIDER_KEY_PROVIDER.ANTHROPIC }]);
@@ -1011,6 +1013,9 @@ it.layer(getTestDB())("the provider keys route", (it) => {
             status: PROVIDER_KEY_STATUS.UNVERIFIED,
             statusAt: startedAt,
             forAgents: true,
+            id: connected.keys?.subscriptions?.[0]?.id ?? "",
+            position: 0,
+            email: "person@example.test",
           },
         ]);
         assert.deepEqual(again, { outcome: CHATGPT_DEVICE_LOGIN.CONNECTED, keys: connected.keys });

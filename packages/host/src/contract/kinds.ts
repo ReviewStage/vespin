@@ -41,6 +41,10 @@ export const ACCOUNT_ASK_ACT_KIND = {
   PROVIDER_KEYS_REMOVE: "providerKeys.remove",
   /** A connected plan's default for the account's coding agents turned on or off, from beside its row in Settings. */
   PROVIDER_KEYS_FOR_AGENTS: "providerKeys.forAgents",
+  /** One of the account's subscriptions named, or its name cleared, from its row in Settings. */
+  SUBSCRIPTION_RENAME: "providerKeys.rename",
+  /** The account's subscriptions of a kind put in a new order, as their list in Settings was dragged. */
+  SUBSCRIPTIONS_REORDER: "providerKeys.reorder",
   /**
    * Settings › Agents › Codex › Connect: Codex's device-code login, run by
    * the service, begun, waited on while the host asks after it on its
@@ -841,6 +845,8 @@ export const PORT_ACT_USE = {
   PROVIDER_KEYS_SAVE: ACT_USE.WRITE,
   PROVIDER_KEYS_REMOVE: ACT_USE.WRITE,
   PROVIDER_KEYS_FOR_AGENTS: ACT_USE.WRITE,
+  SUBSCRIPTION_RENAME: ACT_USE.WRITE,
+  SUBSCRIPTIONS_REORDER: ACT_USE.WRITE,
   CHATGPT_DEVICE_START: ACT_USE.WRITE,
   CHATGPT_DEVICE_WAIT: ACT_USE.WRITE,
   CHATGPT_DEVICE_CANCEL: ACT_USE.WRITE,

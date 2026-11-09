@@ -455,6 +455,31 @@ const updateForAgents = SqlSchema.findAll({
     ),
 });
 
+const updateLabel = SqlSchema.void({
+  Request: Schema.Struct({
+    ...TargetSchema.fields,
+    subscriptionId: Schema.String,
+    label: Schema.NullOr(Schema.String),
+  }),
+  execute: (write) =>
+    Database.use((db) =>
+      db.update(accountProviderKey).set({ label: write.label }).where(targetRow(db, write)),
+    ),
+});
+
+const updatePosition = SqlSchema.void({
+  Request: Schema.Struct({ userId: Schema.String, id: Schema.String, position: Schema.Int }),
+  execute: (write) =>
+    Database.use((db) =>
+      db
+        .update(accountProviderKey)
+        .set({ position: write.position })
+        .where(
+          and(eq(accountProviderKey.userId, write.userId), eq(accountProviderKey.id, write.id)),
+        ),
+    ),
+});
+
 /** The wrap moved only where the row still holds the seal it was read with, so a key replaced meanwhile keeps its own. */
 const rewrapRow = SqlSchema.findAll({
   Request: Schema.Struct({
@@ -670,6 +695,50 @@ export function setProviderKeyForAgents(
       ...(subscriptionId === undefined ? {} : { subscriptionId }),
     }),
     (rows) => rows.length > 0,
+  );
+}
+
+/**
+ * Names the account's subscription of this kind and id, or clears its name
+ * where `label` is null, so it is shown by its default again; naming one it
+ * does not hold moves nothing.
+ */
+export function setSubscriptionLabel(
+  userId: string,
+  provider: ProviderKeyProvider,
+  kind: ProviderKeyKind,
+  subscriptionId: string,
+  label: string | null,
+): TaskStoreEffect<void> {
+  return updateLabel({ userId, provider, kind, subscriptionId, label });
+}
+
+/**
+ * Puts the account's subscriptions of a kind in the order `ids` names, the
+ * first paying first, under the kind's rows' locks. An id the account does
+ * not hold is passed over, and a subscription the order leaves out, such as
+ * one added meanwhile, keeps its place after those named.
+ */
+export function reorderSubscriptions(
+  userId: string,
+  provider: ProviderKeyProvider,
+  kind: ProviderKeyKind,
+  ids: readonly string[],
+): TaskStoreEffect<void> {
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        const rows = yield* lockKindRows({ userId, provider, kind });
+        const held = new Set(rows.map((row) => row.id));
+        const named = ids.filter((id) => held.has(id));
+        const left = rows.map((row) => row.id).filter((id) => !named.includes(id));
+        const ordered = [...named, ...left];
+        for (const [position, id] of ordered.entries()) {
+          if (rows.find((row) => row.id === id)?.position === position) continue;
+          yield* updatePosition({ userId, id, position });
+        }
+      }),
+    ),
   );
 }
 

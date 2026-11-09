@@ -15,11 +15,13 @@ import {
   listEveryProviderKeyRow,
   listProviderKeyRows,
   removeProviderKey,
+  reorderSubscriptions,
   resealProviderKey,
   saveProviderKey,
   setPlanStatus,
   setProviderKeyForAgents,
   setProviderKeyStatus,
+  setSubscriptionLabel,
   withProviderKeyLocked,
 } from "../provider-key-store.js";
 
@@ -498,6 +500,61 @@ it.layer(getTestDB())("the provider key store", (it) => {
           (yield* shownOf(other)).map(([seal]) => seal),
           ["theirs", "theirs-2"],
         );
+      }),
+  );
+
+  it.effect(
+    "a reorder puts the named subscriptions first in its order and the rest after, a rename names one, and neither reaches another account's",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+        const { ANTHROPIC } = PROVIDER_KEY_PROVIDER;
+        const { CLAUDE_SETUP_TOKEN } = PROVIDER_KEY_KIND;
+        const add = (account: string, seal: string) =>
+          saveProviderKey(
+            account,
+            ANTHROPIC,
+            CLAUDE_SETUP_TOKEN,
+            sealed(seal),
+            "sk-ant-oat…",
+            null,
+            new Date(1_000),
+            null,
+            { add: true },
+          );
+        const first = yield* add(owner, "first");
+        const second = yield* add(owner, "second");
+        const third = yield* add(owner, "third");
+        const theirs = yield* add(other, "theirs");
+        const shownOf = (account: string) =>
+          Effect.map(listProviderKeyRows(account, CLAUDE_SETUP_TOKEN), (rows) =>
+            rows.map((row) => [row.sealedKey, row.label]),
+          );
+
+        yield* reorderSubscriptions(owner, ANTHROPIC, CLAUDE_SETUP_TOKEN, [third, theirs, first]);
+        yield* setSubscriptionLabel(owner, ANTHROPIC, CLAUDE_SETUP_TOKEN, first, "Personal Max");
+        yield* setSubscriptionLabel(owner, ANTHROPIC, CLAUDE_SETUP_TOKEN, theirs, "Taken");
+        assert.deepEqual(yield* shownOf(owner), [
+          ["third", null],
+          ["first", "Personal Max"],
+          ["second", null],
+        ]);
+
+        yield* reorderSubscriptions(other, ANTHROPIC, CLAUDE_SETUP_TOKEN, [second, first]);
+        yield* setSubscriptionLabel(other, ANTHROPIC, CLAUDE_SETUP_TOKEN, first, "Theirs now");
+        assert.deepEqual(
+          (yield* shownOf(owner)).map(([seal, label]) => [seal, label]),
+          [
+            ["third", null],
+            ["first", "Personal Max"],
+            ["second", null],
+          ],
+          "another account's calls by the owner's ids move and name none of the owner's",
+        );
+        assert.deepEqual(yield* shownOf(other), [["theirs", null]]);
+
+        yield* setSubscriptionLabel(owner, ANTHROPIC, CLAUDE_SETUP_TOKEN, first, null);
+        assert.deepEqual((yield* shownOf(owner))[1], ["first", null]);
       }),
   );
 });

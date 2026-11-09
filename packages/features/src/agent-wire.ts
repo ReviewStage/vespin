@@ -2766,6 +2766,13 @@ export const agentMessagesAnswerSchema = EffectSchema.Struct({
    * before payers were recorded, and from a service older than it.
    */
   payer: EffectSchema.optionalKey(agentPayerSchema),
+  /**
+   * The starter's subscription a plan payer runs the agent on, by its id,
+   * which the starter's own Settings names it by, so the chip says which
+   * plan pays. Absent where no launch recorded one, for any other payer,
+   * on a worker's page, and from a service older than it.
+   */
+  payerSubscriptionId: EffectSchema.optionalKey(EffectSchema.String),
   context: EffectSchema.optionalKey(agentContextSchema),
   /**
    * The journal revision the agent's transcript was last rewound at, on

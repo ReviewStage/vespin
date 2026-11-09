@@ -141,6 +141,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     providerKeys: SECRET,
     saveProviderKey: SECRET,
     setProviderKeyForAgents: SECRET,
+    renameSubscription: SECRET,
+    reorderSubscriptions: SECRET,
     removeProviderKey: SECRET,
     memories: NOT_YET_BUILT,
     startChatGptDeviceLogin: NEEDS_BROWSER,

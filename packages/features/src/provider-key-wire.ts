@@ -144,6 +144,12 @@ export type ProviderKeyRejection =
 /** No subscription id we mint is longer; one past it is none of ours. */
 const SUBSCRIPTION_ID_MAX_CHARS = 64;
 
+/** No name the account gives a subscription is longer, which its row and the start chip draw whole. */
+export const SUBSCRIPTION_LABEL_MAX_CHARS = 60;
+
+/** No account holds more subscriptions of a kind than an order names. */
+const SUBSCRIPTION_ORDER_MAX = 50;
+
 const PROVIDER_KEY_BOUNDS = {
   /** No provider key is shorter; a paste this short is no key. */
   MIN_KEY_CHARS: 20,
@@ -189,6 +195,14 @@ export type ProviderKeySummary = typeof providerKeySummarySchema.Type;
 const subscriptionKeySummarySchema = EffectSchema.Struct({
   ...providerKeySummarySchema.fields,
   kind: providerKeyKindSchema,
+  /** The subscription's own id, which a rename, a reorder, a replace, and a removal name it by. */
+  id: EffectSchema.String,
+  /** Where it stands in the account's order of its kind, the first paying first; the answer lists them in this order. */
+  position: countedNumber,
+  /** The name the account gave it; absent for the name it is shown by default. */
+  label: EffectSchema.optionalKey(EffectSchema.String),
+  /** The email of the account a ChatGPT subscription signed in as, where its sign-in named one; absent for every other kind. */
+  email: EffectSchema.optionalKey(EffectSchema.String),
   /**
    * Whether the plan pays for the account's coding agents by default, as
    * "Use my Claude plan for coding agents" says; on once it is connected.
@@ -270,6 +284,40 @@ const subscriptionKindSchema = EffectSchema.Literals([
   PROVIDER_KEY_KIND.CHATGPT_OAUTH,
 ]);
 
+/** A subscription's name as the account gives it, or none to have it shown by its default name again. */
+const subscriptionLabelSchema = EffectSchema.NullOr(
+  EffectSchema.String.check(
+    EffectSchema.isMinLength(1),
+    EffectSchema.isMaxLength(SUBSCRIPTION_LABEL_MAX_CHARS),
+  ),
+);
+
+/**
+ * Naming one of the account's subscriptions (PUT): the provider, its kind,
+ * the subscription, and its new name, or none for its default. A
+ * subscription the account does not hold changes nothing.
+ */
+export const subscriptionLabelRequestSchema = EffectSchema.Struct({
+  provider: providerSchema,
+  kind: subscriptionKindSchema,
+  subscriptionId: subscriptionIdSchema,
+  label: subscriptionLabelSchema,
+});
+
+/**
+ * Reordering the account's subscriptions of a kind (PUT), first paying
+ * first: the ids in their new order. One the account does not hold is
+ * passed over, and one it holds that the order leaves out keeps its place
+ * after those named.
+ */
+export const subscriptionOrderRequestSchema = EffectSchema.Struct({
+  provider: providerSchema,
+  kind: subscriptionKindSchema,
+  subscriptionIds: EffectSchema.Array(subscriptionIdSchema).check(
+    EffectSchema.isMaxLength(SUBSCRIPTION_ORDER_MAX),
+  ),
+});
+
 /**
  * Turning a connected plan's default for the account's coding agents on or
  * off (PATCH): the provider and the subscription's kind, the subscription
@@ -346,6 +394,15 @@ export const chatGptDeviceStartAnswerSchema = EffectSchema.Struct({
 });
 
 export type ChatGptDeviceStartAnswer = typeof chatGptDeviceStartAnswerSchema.Type;
+
+/**
+ * A device-code connection begun (POST): whether it adds a subscription at
+ * the bottom of the account's order rather than replacing its first. A
+ * start that sends no body replaces, as every desktop before it does.
+ */
+export const chatGptDeviceStartRequestSchema = EffectSchema.Struct({
+  add: EffectSchema.optionalKey(EffectSchema.Boolean),
+});
 
 /** A poll or a cancel of a device-code connection (POST), by the login its start answered. */
 export const chatGptDeviceLoginRequestSchema = EffectSchema.Struct({

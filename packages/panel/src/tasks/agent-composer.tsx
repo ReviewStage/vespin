@@ -453,6 +453,7 @@ export function AgentComposer({
   readModels,
   usage,
   payer,
+  payerSubscriptionId,
   servers,
   plus = [],
   context,
@@ -498,6 +499,8 @@ export function AgentComposer({
   usage: AgentUsage | undefined;
   /** Who pays for the agent, which the chip's menu names where a plan does; nothing where the page said none. */
   payer?: AgentPayer | undefined;
+  /** The starter's subscription a plan payer runs the agent on, which the chip's menu names; nothing where the page named none. */
+  payerSubscriptionId?: string | undefined;
   /** The MCP servers the agent is handed and their switches, which the + menu opens; none where the box offers none, whose + opens the file picker itself. */
   servers: AgentServersControl | undefined;
   /** Rows the + menu offers after MCP servers, its owner's: New task's Task relation. */
@@ -925,6 +928,7 @@ export function AgentComposer({
                   readModels={readModels}
                   usage={usage}
                   payer={payer}
+                  payerSubscriptionId={payerSubscriptionId}
                   narrow={folds(FOLD_WIDTH.MODEL)}
                 />
               )}

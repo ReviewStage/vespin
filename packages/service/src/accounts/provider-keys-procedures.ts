@@ -54,8 +54,10 @@ import {
 import {
   listProviderKeyRows,
   removeProviderKey,
+  reorderSubscriptions,
   saveProviderKey,
   setProviderKeyForAgents,
+  setSubscriptionLabel,
 } from "@repo/database/models/provider-key-store";
 import {
   CHATGPT_DEVICE_FAILURE_MESSAGE,
@@ -160,7 +162,7 @@ const summariesOf = /* @__PURE__ */ Effect.fnUntraced(function* (
         ? { limitResetsAt: row.limitResetsAt.getTime() }
         : undefined),
     };
-    return { summary, forAgents: row.forAgents };
+    return { summary, row };
   });
 });
 
@@ -175,8 +177,16 @@ const keysAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   );
   const subscriptions: SubscriptionKeySummary[] = [];
   for (const kind of SUBSCRIPTION_KINDS) {
-    for (const { summary, forAgents } of yield* summariesOf(userId, kind, ring)) {
-      subscriptions.push({ ...summary, kind, forAgents });
+    for (const { summary, row } of yield* summariesOf(userId, kind, ring)) {
+      subscriptions.push({
+        ...summary,
+        kind,
+        id: row.id,
+        position: row.position,
+        forAgents: row.forAgents,
+        ...(row.label === null ? undefined : { label: row.label }),
+        ...(row.accountEmail === null ? undefined : { email: row.accountEmail }),
+      });
     }
   }
   return {
@@ -327,11 +337,39 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       return yield* keysAnswer(userId, ring);
     }),
 
-    /** A ChatGPT plan's connection through Codex's device-code login begun, braked with saves: the code to enter and the login to poll; what claims the sign-in stays sealed on the service. */
-    startChatGptDeviceLogin: keyed.startChatGptDeviceLogin.effect(function* ({ context }) {
+    /** One of the account's subscriptions named, or its name cleared; one it does not hold changes nothing. */
+    renameSubscription: keyed.renameSubscription.effect(function* ({ context, input }) {
+      const { userId, ring } = context;
+      // Note that a name is kept as typed but for its ends, and one left empty is the default's.
+      const label = input.label?.trim() ?? "";
+      yield* hostedStoreOrUnavailable(
+        setSubscriptionLabel(
+          userId,
+          input.provider,
+          input.kind,
+          input.subscriptionId,
+          label === "" ? null : label,
+        ),
+      );
+      return yield* keysAnswer(userId, ring);
+    }),
+
+    /** The account's subscriptions of a kind put in the order named, the first paying first. */
+    reorderSubscriptions: keyed.reorderSubscriptions.effect(function* ({ context, input }) {
+      const { userId, ring } = context;
+      yield* hostedStoreOrUnavailable(
+        reorderSubscriptions(userId, input.provider, input.kind, input.subscriptionIds),
+      );
+      return yield* keysAnswer(userId, ring);
+    }),
+
+    /** A ChatGPT plan's connection through Codex's device-code login begun, braked with saves: the code to enter and the login to poll; what claims the sign-in stays sealed on the service. A start that adds keeps the plan it connects at the bottom of the account's order. */
+    startChatGptDeviceLogin: keyed.startChatGptDeviceLogin.effect(function* ({ context, input }) {
       const { userId, ring } = context;
       if (!(yield* brake.check(userId))) return yield* Effect.fail(HOSTED_REFUSAL.QUOTA_EXHAUSTED);
-      const started = yield* hostedStoreOrUnavailable(startChatGptDeviceLogin(userId, ring));
+      const started = yield* hostedStoreOrUnavailable(
+        startChatGptDeviceLogin(userId, ring, input?.add === true),
+      );
       if (Option.isNone(started)) return yield* Effect.fail(HOSTED_REFUSAL.UPSTREAM_ERROR);
       return started.value;
     }),

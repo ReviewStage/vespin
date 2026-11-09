@@ -3060,6 +3060,7 @@ function AgentTabView({
             readModels={readModels}
             usage={transcript.usage}
             payer={transcript.payer}
+            payerSubscriptionId={transcript.payerSubscriptionId}
             servers={servers}
             context={transcript.context}
             brief={agent.brief}

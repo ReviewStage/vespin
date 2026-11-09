@@ -54,6 +54,7 @@ import {
   type ChatGptDeviceLoginParams,
   type ChatGptDevicePollAnswerView,
   type ChatGptDeviceStartAnswerView,
+  type ChatGptDeviceStartParams,
   type DevicePresenceAnswerView,
   type DictationTranscribeAnswerView,
   type DictationTranscribeParams,
@@ -68,6 +69,8 @@ import {
   type ProviderKeyRemoveParams,
   type ProviderKeySaveParams,
   type ProviderKeysAnswerView,
+  type SubscriptionLabelParams,
+  type SubscriptionOrderParams,
 } from "./agent-view.js";
 import {
   AGENT_LIST_ARCHIVED,
@@ -150,6 +153,8 @@ import {
   PROVIDER_KEY_QUERY,
   providerKeyForAgentsRequestSchema,
   providerKeySaveRequestSchema,
+  subscriptionLabelRequestSchema,
+  subscriptionOrderRequestSchema,
 } from "./provider-key-wire.js";
 import {
   PULL_REQUEST_CHAPTERS_RENAMES,
@@ -529,12 +534,14 @@ export class HostedAgentClient {
   }
 
   /** Codex's device-code login begun on the service: the code to enter, where, how often to ask again, and when it lapses. */
-  startChatGptDeviceLogin(): Effect.Effect<
-    ChatGptDeviceStartAnswerView,
-    never,
-    HttpClient.HttpClient
-  > {
-    return hostedCall(this.#hosted.account.startChatGptDeviceLogin, undefined);
+  startChatGptDeviceLogin(
+    params: ChatGptDeviceStartParams,
+  ): Effect.Effect<ChatGptDeviceStartAnswerView, never, HttpClient.HttpClient> {
+    // Note that a start that replaces sends no body, as every desktop before adding did.
+    return hostedCall(
+      this.#hosted.account.startChatGptDeviceLogin,
+      params?.add === true ? { add: true } : undefined,
+    );
   }
 
   /** How a device-code login stands, the keys once it connected; a login id the service would refuse by shape never travels. */
@@ -568,6 +575,24 @@ export class HostedAgentClient {
     return hostedCall(this.#hosted.account.setProviderKeyForAgents, admitted);
   }
 
+  /** One of the account's subscriptions named, or its name cleared, answering the keys as they then stand; a request the service would refuse by shape never travels. */
+  renameSubscription(
+    params: SubscriptionLabelParams,
+  ): Effect.Effect<ProviderKeysAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(subscriptionLabelRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.account.renameSubscription, admitted);
+  }
+
+  /** The account's subscriptions of a kind put in a new order, answering the keys as they then stand; a request the service would refuse by shape never travels. */
+  reorderSubscriptions(
+    params: SubscriptionOrderParams,
+  ): Effect.Effect<ProviderKeysAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(subscriptionOrderRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.account.reorderSubscriptions, admitted);
+  }
+
   /** One provider's key of the kind named, an API key where none is, removed, answering the keys as they then stand. */
   removeProviderKey(
     params: ProviderKeyRemoveParams,
@@ -577,6 +602,9 @@ export class HostedAgentClient {
       query: {
         [PROVIDER_KEY_QUERY.PROVIDER]: params.provider,
         ...(params.kind === undefined ? undefined : { [PROVIDER_KEY_QUERY.KIND]: params.kind }),
+        ...(params.subscriptionId === undefined
+          ? undefined
+          : { [PROVIDER_KEY_QUERY.SUBSCRIPTION_ID]: params.subscriptionId }),
       },
     });
   }

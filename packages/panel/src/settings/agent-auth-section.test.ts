@@ -37,9 +37,10 @@ import { AgentsPage } from "./agents-page.js";
 
 /**
  * Settings › Agents' credentials over a bridge answering as the service
- * would: each harness's plan and key as one radio list, each saying how it
- * stands, the radio sending what new agents use as the plan's `forAgents`,
- * and each credential set up, replaced, and removed under its own row.
+ * would: each harness's plans in the account's order and its key, each
+ * saying how it stands, the first plan with room said In use, the plans
+ * added, renamed, and reordered, and each credential set up, replaced, and
+ * removed under its own row.
  * Nothing pasted stands on the page once kept or reaches a log. Setup's
  * Connect an agent draws the same lists. Synthetic credentials throughout.
  */
@@ -66,6 +67,8 @@ const CLAUDE_PLAN: SubscriptionKeySummary = {
   addedAt: AT,
   statusAt: AT,
   forAgents: true,
+  id: "claude-1",
+  position: 0,
 };
 
 const CHATGPT_PLAN: SubscriptionKeySummary = {
@@ -76,6 +79,9 @@ const CHATGPT_PLAN: SubscriptionKeySummary = {
   addedAt: AT,
   statusAt: AT,
   forAgents: true,
+  id: "chatgpt-1",
+  position: 0,
+  email: "ana@work.test",
 };
 
 /** The code a Connect Codex start hands out. */
@@ -117,34 +123,64 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
   switch (request.kind) {
     case ACT_KIND.WEB_OPEN:
       return Promise.resolve(done(undefined));
-    case ACT_KIND.PROVIDER_KEYS_SAVE:
+    case ACT_KIND.PROVIDER_KEYS_SAVE: {
       if (refusal !== undefined) return Promise.resolve(done({ ...held, rejected: refusal }));
-      held =
-        request.payload.kind === PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN
-          ? { ...held, subscriptions: [...subscriptions, CLAUDE_PLAN] }
-          : {
-              ...held,
-              keys: [...held.keys, { ...ANTHROPIC_KEY, provider: request.payload.provider }],
-            };
+      const { kind, subscriptionId } = request.payload;
+      if (kind !== PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN) {
+        held = {
+          ...held,
+          keys: [...held.keys, { ...ANTHROPIC_KEY, provider: request.payload.provider }],
+        };
+        return written(held);
+      }
+      const added = {
+        ...CLAUDE_PLAN,
+        id: `claude-${subscriptions.length + 1}`,
+        position: subscriptions.length,
+        addedAt: AT + subscriptions.length,
+      };
+      held = {
+        ...held,
+        subscriptions:
+          subscriptionId === undefined
+            ? [...subscriptions, added]
+            : subscriptions.map((one) =>
+                one.id === subscriptionId
+                  ? { ...one, status: PROVIDER_KEY_STATUS.UNVERIFIED }
+                  : one,
+              ),
+      };
       return written(held);
+    }
     case ACT_KIND.PROVIDER_KEYS_REMOVE: {
-      const kind = request.payload.kind;
+      const { kind, subscriptionId } = request.payload;
       held =
         kind === undefined || kind === PROVIDER_KEY_KIND.API_KEY
           ? { ...held, keys: held.keys.filter((one) => one.provider !== request.payload.provider) }
-          : { ...held, subscriptions: subscriptions.filter((one) => one.kind !== kind) };
+          : { ...held, subscriptions: subscriptions.filter((one) => one.id !== subscriptionId) };
       return written(held);
     }
-    case ACT_KIND.PROVIDER_KEYS_FOR_AGENTS:
+    case ACT_KIND.SUBSCRIPTION_RENAME: {
+      const { subscriptionId, label } = request.payload;
       held = {
         ...held,
         subscriptions: subscriptions.map((one) =>
-          one.kind === request.payload.kind
-            ? { ...one, forAgents: request.payload.forAgents }
-            : one,
+          one.id === subscriptionId ? { ...one, ...(label === null ? {} : { label }) } : one,
         ),
       };
       return written(held);
+    }
+    case ACT_KIND.SUBSCRIPTIONS_REORDER: {
+      const order = request.payload.subscriptionIds;
+      held = {
+        ...held,
+        subscriptions: subscriptions.map((one) => ({
+          ...one,
+          position: order.includes(one.id) ? order.indexOf(one.id) : one.position,
+        })),
+      };
+      return written(held);
+    }
     case ACT_KIND.CHATGPT_DEVICE_START:
       return Promise.resolve(done(DEVICE_LOGIN));
     case ACT_KIND.CHATGPT_DEVICE_CANCEL: {
@@ -239,18 +275,20 @@ async function mountSetup(): Promise<{ page: HTMLElement; connected: boolean[] }
 
 /** Whether the harnesses' lists stand, which they do once the signed-in account's keys are read. */
 function harnessRowsStand(page: HTMLElement): boolean {
-  return page.querySelector('[role="radiogroup"][aria-label="New Claude agents use"]') !== null;
+  return labels(page).includes("Anthropic API key");
 }
 
-/** A credential's row, by the label its radio reads. */
-const credential = (page: Element, label: string) =>
-  [...page.querySelectorAll<HTMLElement>(".ui-choice-card")].find(
-    (each) => each.querySelector(".ui-choice-label")?.textContent === label,
-  ) ?? assert.fail(`no ${label} row`);
+/** Every row's name, in the order the page draws them. */
+const labels = (page: Element) =>
+  [...page.querySelectorAll<HTMLElement>(".ui-settings-row-label")].map(
+    (each) => each.textContent ?? "",
+  );
 
-/** A credential row's radio. */
-const radio = (row: Element) =>
-  row.querySelector<HTMLButtonElement>('[role="radio"]') ?? assert.fail("no radio");
+/** A credential's row, by its name. */
+const credential = (page: Element, label: string) =>
+  [...page.querySelectorAll<HTMLElement>(".ui-settings-row")].find(
+    (each) => each.querySelector(".ui-settings-row-label")?.textContent === label,
+  ) ?? assert.fail(`no ${label} row`);
 
 /** What a credential's row says of it under its name, and in which tint, or nothing where it says nothing. */
 const lineOf = (within: Element) => {
@@ -259,6 +297,7 @@ const lineOf = (within: Element) => {
 };
 
 const connectedLine = { words: "Connected", state: SETTINGS_ROW_STATE.CONNECTED };
+const readyLine = { words: "Ready", state: SETTINGS_ROW_STATE.CONNECTED };
 const needsHand = (words: string) => ({ words, state: SETTINGS_ROW_STATE.ATTENTION });
 
 const button = (within: Element | Document, words: string) =>
@@ -329,7 +368,7 @@ function leave(): void {
   for (const root of roots.splice(0)) act(() => root.unmount());
 }
 
-test("each credential says how it stands under its name, the radio on what new agents use; one not set up can't be picked and ends in its own Connect or Add key", async () => {
+test("each credential says how it stands under its name; one not set up ends in its own Connect or Add key", async () => {
   const empty = await mount();
   for (const [label, setUp] of [
     ["Claude plan", "Connect Claude plan"],
@@ -338,7 +377,6 @@ test("each credential says how it stands under its name, the radio on what new a
     ["OpenAI API key", "Add OpenAI API key"],
   ] as const) {
     const row = credential(empty, label);
-    assert.equal(radio(row).disabled, true, `${label} can't be picked`);
     assert.equal(lineOf(row), undefined);
     assert.ok(button(row, setUp));
   }
@@ -350,19 +388,17 @@ test("each credential says how it stands under its name, the radio on what new a
   };
   // Note that one client holds the test's worlds, so each later world waits for its own keys to replace the last one's.
   const connected = await mount();
-  await vi.waitFor(() =>
-    assert.deepEqual(lineOf(credential(connected, "Claude plan")), connectedLine),
-  );
-  assert.equal(radio(credential(connected, "Claude plan")).getAttribute("aria-checked"), "true");
+  await vi.waitFor(() => assert.deepEqual(lineOf(credential(connected, "Claude plan")), readyLine));
+  assert.match(credential(connected, "Claude plan").textContent ?? "", /In use/u);
+  assert.ok(button(credential(connected, "Add another Claude plan"), "Connect Claude plan"));
   assert.deepEqual(lineOf(credential(connected, "OpenAI API key")), connectedLine);
-  assert.equal(radio(credential(connected, "OpenAI API key")).getAttribute("aria-checked"), "true");
   leave();
 
-  // A plan set aside for a key leaves the key picked, whatever the plan's state; each lapse offers its fix.
+  // Each lapse offers its fix.
   held = {
     keys: [ANTHROPIC_KEY],
     subscriptions: [
-      { ...CLAUDE_PLAN, forAgents: false, status: PROVIDER_KEY_STATUS.INVALID },
+      { ...CLAUDE_PLAN, status: PROVIDER_KEY_STATUS.INVALID },
       { ...CHATGPT_PLAN, status: PROVIDER_KEY_STATUS.INVALID },
     ],
   };
@@ -374,33 +410,34 @@ test("each credential says how it stands under its name, the radio on what new a
       needsHand("Anthropic rejected this token. Paste a new one."),
     ),
   );
-  assert.equal(radio(claudePlan()).getAttribute("aria-checked"), "false");
-  assert.equal(
-    radio(credential(attention, "Anthropic API key")).getAttribute("aria-checked"),
-    "true",
-  );
+  assert.doesNotMatch(claudePlan().textContent ?? "", /In use/u, "a plan that lapsed is in no use");
   assert.ok(button(claudePlan(), "Replace token"));
   assert.deepEqual(
-    lineOf(credential(attention, "ChatGPT plan")),
+    lineOf(credential(attention, "ana@work.test")),
     needsHand("Signed out of ChatGPT."),
   );
-  assert.ok(button(credential(attention, "ChatGPT plan"), "Sign in again"));
+  assert.ok(button(credential(attention, "ana@work.test"), "Sign in again"));
   leave();
 
-  // A plan at its limit says so; only ChatGPT's offers Manage usage, which opens ChatGPT's usage settings.
+  // A plan at its limit says until when; only ChatGPT's offers Manage usage, which opens ChatGPT's usage settings.
   held = {
     keys: [],
     subscriptions: [
       { ...CLAUDE_PLAN, status: PROVIDER_KEY_STATUS.LIMIT_REACHED },
-      { ...CHATGPT_PLAN, status: PROVIDER_KEY_STATUS.LIMIT_REACHED },
+      {
+        ...CHATGPT_PLAN,
+        status: PROVIDER_KEY_STATUS.LIMIT_REACHED,
+        limitResetsAt: Date.UTC(2026, 9, 20, 15, 40),
+      },
     ],
   };
   const limited = await mount();
   await vi.waitFor(() =>
     assert.deepEqual(lineOf(credential(limited, "Claude plan")), needsHand("Usage limit reached")),
   );
+  assert.match(lineOf(credential(limited, "ana@work.test"))?.words ?? "", /^Limit until /u);
   const usage =
-    credential(limited, "ChatGPT plan").querySelector<HTMLAnchorElement>("a") ??
+    credential(limited, "ana@work.test").querySelector<HTMLAnchorElement>("a") ??
     assert.fail("no Manage usage");
   assert.equal(usage.textContent, "Manage usage");
   act(() => usage.click());
@@ -417,33 +454,64 @@ test("each harness's list stands where a link to its section lands", async () =>
   assert.ok(landed(SETTINGS_SECTION.CODEX).contains(credential(page, "ChatGPT plan")));
 });
 
-test("the radio picks the plan or the key for new agents, sent as the plan's forAgents", async () => {
-  held = { keys: [ANTHROPIC_KEY], subscriptions: [CLAUDE_PLAN] };
+test("another Claude plan joins the bottom, numbered by when it was added, In use on the first with room, renamed in place, and reordered from its menu", async () => {
+  held = {
+    keys: [],
+    subscriptions: [{ ...CLAUDE_PLAN, status: PROVIDER_KEY_STATUS.LIMIT_REACHED }],
+  };
   const page = await mount();
-  const key = () => radio(credential(page, "Anthropic API key"));
-  const plan = () => radio(credential(page, "Claude plan"));
-  assert.equal(plan().getAttribute("aria-checked"), "true");
-  act(() => key().click());
-  await settle();
-  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_FOR_AGENTS), [
+  await press(credential(page, "Add another Claude plan"), "Connect Claude plan");
+  await paste(
+    labeled(credential(page, "Add another Claude plan"), "Paste the token it prints"),
+    TOKEN,
+  );
+  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_SAVE), [
     {
       provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
       kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-      forAgents: false,
+      key: TOKEN,
+      add: true,
     },
   ]);
-  // Note that what the host lays after each act reaches the keys' query a notify later, so the pick is waited on.
-  await vi.waitFor(() => assert.equal(key().getAttribute("aria-checked"), "true"));
-  assert.equal(plan().getAttribute("aria-checked"), "false");
+  await vi.waitFor(() => assert.ok(labels(page).includes("Claude plan 2")));
+  assert.deepEqual(labels(page).slice(0, 3), [
+    "Claude plan 1",
+    "Claude plan 2",
+    "Add another Claude plan",
+  ]);
+  assert.match(
+    credential(page, "Claude plan 2").textContent ?? "",
+    /In use/u,
+    "the first plan with room is in use",
+  );
 
-  act(() => plan().click());
+  await choose(credential(page, "Claude plan 2"), "Claude plan 2", "Rename");
+  const field = page.querySelector<HTMLInputElement>('input[aria-label="Plan name"]');
+  assert.ok(field !== null, "the name opens in place");
+  type(field, "Personal Max");
+  act(() => field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
   await settle();
-  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_FOR_AGENTS).at(-1), {
-    provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
-    kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-    forAgents: true,
-  });
-  await vi.waitFor(() => assert.equal(plan().getAttribute("aria-checked"), "true"));
+  assert.deepEqual(sentOf(ACT_KIND.SUBSCRIPTION_RENAME), [
+    {
+      provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
+      kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+      subscriptionId: "claude-2",
+      label: "Personal Max",
+    },
+  ]);
+  await vi.waitFor(() => assert.ok(labels(page).includes("Personal Max")));
+
+  await choose(credential(page, "Personal Max"), "Personal Max", "Move up");
+  assert.deepEqual(sentOf(ACT_KIND.SUBSCRIPTIONS_REORDER), [
+    {
+      provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
+      kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+      subscriptionIds: ["claude-2", "claude-1"],
+    },
+  ]);
+  await vi.waitFor(() =>
+    assert.deepEqual(labels(page).slice(0, 2), ["Personal Max", "Claude plan 1"]),
+  );
 });
 
 test("an API key's Add key opens a masked field under its row, sent once, said as Connected, the field going and the focus back on the row's press; Remove asks first", async () => {
@@ -517,23 +585,6 @@ test("Replace key opens its field showing Saved where the key would be, and Canc
   assert.ok(document.activeElement === button(row(), "Anthropic API key actions"));
 });
 
-test("removing a key its harness's plan was set aside for turns the plan back on", async () => {
-  held = { keys: [ANTHROPIC_KEY], subscriptions: [{ ...CLAUDE_PLAN, forAgents: false }] };
-  const page = await mount();
-  await choose(credential(page, "Anthropic API key"), "Anthropic API key", "Remove key");
-  await press(question(), "Remove key");
-  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_FOR_AGENTS), [
-    {
-      provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
-      kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-      forAgents: true,
-    },
-  ]);
-  await vi.waitFor(() =>
-    assert.equal(radio(credential(page, "Claude plan")).getAttribute("aria-checked"), "true"),
-  );
-});
-
 test("a Claude setup-token is saved by its kind, refused with why, and disconnected after asking", async () => {
   refusal = PROVIDER_KEY_REJECTION.INVALID;
   const page = await mount();
@@ -558,8 +609,9 @@ test("a Claude setup-token is saved by its kind, refused with why, and disconnec
     provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
     kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
     key: TOKEN,
+    add: true,
   });
-  await vi.waitFor(() => assert.deepEqual(lineOf(row()), connectedLine));
+  await vi.waitFor(() => assert.deepEqual(lineOf(row()), readyLine));
   assert.ok(!document.body.innerHTML.includes(TOKEN));
 
   await choose(row(), "Claude plan", "Disconnect");
@@ -567,7 +619,11 @@ test("a Claude setup-token is saved by its kind, refused with why, and disconnec
   assert.equal(actLook("Disconnect Claude plan"), "danger", "a deleted token is past undoing");
   await press(question(), "Disconnect Claude plan");
   assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_REMOVE), [
-    { provider: PROVIDER_KEY_PROVIDER.ANTHROPIC, kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN },
+    {
+      provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
+      kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+      subscriptionId: "claude-1",
+    },
   ]);
   await vi.waitFor(() => assert.ok(button(row(), "Connect Claude plan")));
 });
@@ -598,7 +654,7 @@ test("the ChatGPT plan connects in place through Codex's code, which goes once c
   const row = () => credential(page, "ChatGPT plan");
   await press(row(), "Connect ChatGPT plan");
   assert.equal(document.querySelector('[role="dialog"]'), null, "it opens in place");
-  assert.equal(sentOf(ACT_KIND.CHATGPT_DEVICE_START).length, 1);
+  assert.deepEqual(sentOf(ACT_KIND.CHATGPT_DEVICE_START), [{ add: true }]);
   assert.match(row().textContent ?? "", /225Q-1343X/u);
   assert.match(row().textContent ?? "", /Waiting for Codex/u);
   assert.deepEqual(sentOf(ACT_KIND.CHATGPT_DEVICE_WAIT), [
@@ -610,15 +666,20 @@ test("the ChatGPT plan connects in place through Codex's code, which goes once c
   act(() => waitOpen?.resolve(done({ outcome: CHATGPT_DEVICE_LOGIN.CONNECTED, keys: held })));
   waitOpen = undefined;
   await settle();
-  await vi.waitFor(() => assert.deepEqual(lineOf(row()), connectedLine));
-  assert.doesNotMatch(row().textContent ?? "", /225Q-1343X/u, "the code goes");
+  const plan = () => credential(page, "ana@work.test");
+  await vi.waitFor(() => assert.deepEqual(lineOf(plan()), readyLine));
+  assert.doesNotMatch(page.textContent ?? "", /225Q-1343X/u, "the code goes");
   assert.deepEqual(sentOf(ACT_KIND.CHATGPT_DEVICE_CANCEL), []);
 
-  await choose(row(), "ChatGPT plan", "Disconnect");
+  await choose(plan(), "ana@work.test", "Disconnect");
   assert.equal(actLook("Disconnect ChatGPT plan"), "danger", "an ended sign-in is past undoing");
   await press(question(), "Disconnect ChatGPT plan");
   assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_REMOVE), [
-    { provider: PROVIDER_KEY_PROVIDER.OPENAI, kind: PROVIDER_KEY_KIND.CHATGPT_OAUTH },
+    {
+      provider: PROVIDER_KEY_PROVIDER.OPENAI,
+      kind: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+      subscriptionId: "chatgpt-1",
+    },
   ]);
   await vi.waitFor(() => assert.ok(button(row(), "Connect ChatGPT plan")));
 });
@@ -627,9 +688,9 @@ test("a ChatGPT plan OpenAI signed out offers Sign in again, which asks for a co
   waitOpen = Promise.withResolvers();
   held = { keys: [], subscriptions: [{ ...CHATGPT_PLAN, status: PROVIDER_KEY_STATUS.INVALID }] };
   const page = await mount();
-  await press(credential(page, "ChatGPT plan"), "Sign in again");
+  await press(credential(page, "ana@work.test"), "Sign in again");
   assert.equal(sentOf(ACT_KIND.CHATGPT_DEVICE_START).length, 1);
-  assert.match(credential(page, "ChatGPT plan").textContent ?? "", /225Q-1343X/u);
+  assert.match(page.textContent ?? "", /225Q-1343X/u);
 });
 
 test("Cancel withdraws a ChatGPT login still waiting", async () => {

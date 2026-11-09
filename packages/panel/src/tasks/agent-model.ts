@@ -75,6 +75,12 @@ import {
 import { formatCompact, formatUsd } from "@repo/features/number-format";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
+  PROVIDER_KEY_KIND,
+  PROVIDER_KEY_STATUS,
+  type ProviderKeyKind,
+  type SubscriptionKeySummary,
+} from "@repo/features/provider-key-wire";
+import {
   REPOSITORY_UNREACHED,
   type RepositoryUnreached,
 } from "@repo/features/repository-reach-wire";
@@ -156,6 +162,56 @@ const PAYER_WORDS = {
   [AGENT_PAYER.MAC_SIGN_IN]: "Using your Mac's sign-in",
 } as const satisfies Record<Exclude<AgentPayer, typeof AGENT_PAYER.API_KEY>, string>;
 
+/** Each plan payer as the model menu's last line leads a plan it names: "Using ChatGPT · ana@work.com". */
+const PLAN_PAYER_WORDS = {
+  [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: "Using Claude",
+  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Using ChatGPT",
+} as const satisfies Partial<Record<AgentPayer, string>>;
+
+type PlanPayer = keyof typeof PLAN_PAYER_WORDS;
+
+/** The kind of plan each plan payer runs on. */
+const PLAN_PAYER_KIND = {
+  [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+} as const satisfies Record<PlanPayer, ProviderKeyKind>;
+
+function planPayer(payer: AgentPayer | undefined): payer is PlanPayer {
+  return payer !== undefined && payer in PLAN_PAYER_WORDS;
+}
+
+/**
+ * The name of the reader's own plan that pays for the agent, for the model
+ * menu's last line: the subscription the page named, or, for one a new
+ * agent would start on (`next`), the first of the payer's kind in the
+ * reader's order with room left, as a turn picks it; by the name the reader
+ * gave it, else the ChatGPT account it signed in as. Nothing for a plan the
+ * reader does not hold, a teammate's, or one with neither name.
+ */
+export function payerPlanName(
+  payer: AgentPayer | undefined,
+  subscriptions: readonly SubscriptionKeySummary[] | undefined,
+  subscriptionId: string | undefined,
+  next: boolean,
+): string | undefined {
+  if (!planPayer(payer) || subscriptions === undefined) return undefined;
+  const kind = PLAN_PAYER_KIND[payer];
+  const plan =
+    subscriptionId !== undefined
+      ? subscriptions.find((one) => one.id === subscriptionId && one.kind === kind)
+      : next
+        ? subscriptions
+            .filter((one) => one.kind === kind)
+            .toSorted((a, b) => a.position - b.position)
+            .find(
+              (one) =>
+                one.status === PROVIDER_KEY_STATUS.VERIFIED ||
+                one.status === PROVIDER_KEY_STATUS.UNVERIFIED,
+            )
+        : undefined;
+  return plan?.label ?? plan?.email;
+}
+
 /** The member's own API key, named by the provider it is for. */
 export const API_KEY_WORDS = {
   [MODEL_PROVIDER.ANTHROPIC]: "Anthropic API key",
@@ -182,8 +238,13 @@ export function agentPayerLine(
   payer: AgentPayer | undefined,
   provider: ModelProvider | undefined,
   costUsd: number | undefined,
+  /** The plan that pays, by its name, where the reader's own keys name it (`payerPlanName`). */
+  planName?: string | undefined,
 ): string | undefined {
   if (payer === undefined) return undefined;
+  if (planPayer(payer) && planName !== undefined) {
+    return `${PLAN_PAYER_WORDS[payer]}${LINE_SEPARATOR}${planName}`;
+  }
   const words =
     payer === AGENT_PAYER.API_KEY
       ? provider === undefined

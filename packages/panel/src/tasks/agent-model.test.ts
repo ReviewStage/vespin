@@ -16,6 +16,12 @@ import {
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, remedyLabel } from "@repo/features/failure-remedy";
 import { MODEL_PROVIDER, MODEL_SPEED } from "@repo/features/models-wire";
+import {
+  PROVIDER_KEY_KIND,
+  PROVIDER_KEY_PROVIDER,
+  PROVIDER_KEY_STATUS,
+  type SubscriptionKeySummary,
+} from "@repo/features/provider-key-wire";
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
 import { MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
@@ -43,6 +49,7 @@ import {
   offeredModels,
   offersStop,
   openingLineOf,
+  payerPlanName,
   placedMessages,
   planPayerOf,
   publishedUrl,
@@ -887,4 +894,29 @@ test("a message to a teammate's agent its starter's own key refused names the st
       },
     ],
   );
+});
+
+test("a plan payer names the reader's plan the page named, a new agent's first with room left, and none of a plan the reader does not hold", () => {
+  const plan = (id: string, position: number, more: Partial<SubscriptionKeySummary>) => ({
+    provider: PROVIDER_KEY_PROVIDER.OPENAI,
+    kind: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+    hint: "ChatGPT",
+    addedAt: 0,
+    statusAt: 0,
+    status: PROVIDER_KEY_STATUS.VERIFIED,
+    id,
+    position,
+    ...more,
+  });
+  const plans: SubscriptionKeySummary[] = [
+    plan("third", 2, { email: "side@work.test" }),
+    plan("first", 0, { email: "ana@work.test", status: PROVIDER_KEY_STATUS.LIMIT_REACHED }),
+    plan("second", 1, { email: "ana@home.test", label: "Home" }),
+  ];
+  const { CHATGPT_SUBSCRIPTION, API_KEY } = AGENT_PAYER;
+  assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, "third", false), "side@work.test");
+  assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, undefined, true), "Home");
+  assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, "a-teammates", false), undefined);
+  assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, undefined, false), undefined);
+  assert.equal(payerPlanName(API_KEY, plans, "third", false), undefined);
 });
