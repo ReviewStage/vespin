@@ -14,7 +14,9 @@ import type { MainTabsControl } from "../tasks/use-main-tabs.js";
 import type { MenuAction } from "./action-menu.js";
 import { agentEntries } from "./agent-entries.js";
 import { AGENT_ROW_CELLS, AgentListRow, AgentStartRow } from "./agent-list-row.js";
+import { useAgentsSelection } from "./agents-selection.js";
 import type { AddEntry, HeldTranscripts } from "./strip-tabs.js";
+import type { ChosenRows } from "./tasks-selection.js";
 
 /**
  * plan-agents.tsx -- the open task's agents at the head of its description, as a group: one row each in a task's row's anatomy, its tab's glyph and name, its pull request, where it runs, its failure where it failed, and when it last moved.
@@ -46,6 +48,10 @@ import type { AddEntry, HeldTranscripts } from "./strip-tabs.js";
  * A row's ⋯, a right-click, a long press, and the menu key offer the
  * agent's one menu, as its row on a person's page and its tab offer it:
  * Copy link, Rename in the row's place, Archive, and Permanently delete.
+ * The agents are chosen together as a task's related tasks are, by the box
+ * in a row's gutter, ⌘-click, ⇧-click, and ⌘A, New agent never among them,
+ * and a row chosen among several offers Archive, or Unarchive, and
+ * Permanently delete on every one chosen (`agents-selection.tsx`).
  * Those agents come first, then those at work, then the newest started; an
  * archived agent is not listed. New agent follows them at every width, as
  * the strip's "+" offers it (`newAgentStarts`), so the group stands even on a
@@ -102,6 +108,7 @@ function PlanAgentRow({
   tab,
   shown,
   more,
+  chosen,
   onOpenPullRequest,
 }: {
   entry: AddEntry;
@@ -115,22 +122,25 @@ function PlanAgentRow({
   shown: boolean;
   /** Whether it draws its ⋯, as its list does. */
   more: boolean;
+  /** The selection it stands in, where it is one of several chosen. */
+  chosen: ChosenRows | undefined;
   onOpenPullRequest: () => void;
 }): React.JSX.Element | null {
   const { row, agent, card } = entry;
   if (agent === undefined) return null;
-  const chosen = tab !== undefined && sameTab(agentTab(row.id), tab);
+  const opened = tab !== undefined && sameTab(agentTab(row.id), tab);
   return (
     <AgentListRow
       agent={agent}
       agents={agents}
       shown={shown}
-      subject={agentSubject(agents, row.id, held, chosen)}
+      subject={agentSubject(agents, row.id, held, opened)}
       at={agentLastMovedAt(agent)}
       card={card}
       pullRequest={pullRequest}
       waits={waits}
       more={more}
+      chosen={chosen}
       onPress={entry.onPick}
       onOpenPullRequest={onOpenPullRequest}
     />
@@ -196,6 +206,12 @@ export function PlanAgents({
   for (const [agentId, items] of waiting) if (!listed.has(agentId)) unmarked += items.length;
   const inboxRow = phone !== undefined && unmarked > 0 ? phone : undefined;
   const more = !useCoarsePointer();
+  const ordered = listedOrder(entries, waiting);
+  const selection = useAgentsSelection(
+    agents,
+    ordered.flatMap(({ agent }) => (agent === undefined ? [] : [agent])),
+    shown,
+  );
   if (!grouped && inboxRow === undefined) return null;
   return (
     // Note that the group is pulled out by a row's inset on each side, so its marks stand on the title's edge and its fills hang past it.
@@ -217,8 +233,15 @@ export function PlanAgents({
             fold={{ defaultOpen: !folded }}
           >
             {entries.length + starts.length === 0 ? null : (
-              <TaskRows label={AGENTS_LIST} cells={AGENT_ROW_CELLS} more={more} moves>
-                {listedOrder(entries, waiting).map((entry) => (
+              <TaskRows
+                id={selection.regionId}
+                label={AGENTS_LIST}
+                cells={AGENT_ROW_CELLS}
+                more={more}
+                selection={{ selected: selection.selected, onChange: selection.onChange }}
+                moves
+              >
+                {ordered.map((entry) => (
                   <PlanAgentRow
                     key={entry.row.id}
                     entry={entry}
@@ -229,6 +252,7 @@ export function PlanAgents({
                     tab={tab}
                     shown={shown}
                     more={more}
+                    chosen={selection.chosenOf(entry.row.id)}
                     onOpenPullRequest={() => onOpenPullRequest(entry.row.id)}
                   />
                 ))}
@@ -248,6 +272,7 @@ export function PlanAgents({
           </GroupHeader>
         </ReplayUnmask>
       ) : null}
+      {selection.dialog}
       {inboxRow === undefined ? null : (
         <List label={NEEDS_YOU.LABEL} density={LIST_DENSITY.DENSE}>
           <ListRow

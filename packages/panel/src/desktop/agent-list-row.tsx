@@ -4,10 +4,8 @@ import {
   RowHint,
   RowHintOptions,
   TASK_ROW_CELL,
-  TASK_ROW_EDGES,
   TaskRow,
   type TaskRowCell,
-  type TaskRowEdges,
   TaskRowGlyph,
   Time,
 } from "@repo/ui";
@@ -27,6 +25,7 @@ import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { rowMenu } from "./action-menu.js";
 import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";
 import { WaitingCount } from "./task-row-parts.js";
+import { type ChosenRows, chosenRowMenu } from "./tasks-selection.js";
 
 /**
  * agent-list-row.tsx -- one agent as every list of agents draws it, at the head of a task's description and on a person's page alike, in a task's row's anatomy, offering the agent's one menu, so the lists never drift.
@@ -55,7 +54,10 @@ import { WaitingCount } from "./task-row-parts.js";
  * until the edit ends, Archive, asking first while a teammate's agent
  * still works, and Permanently delete, asked first. A rename refused is
  * said under the name. A finger's row draws no ⋯ (`more`), its menu a long
- * press away.
+ * press away. Its list chooses its rows together as a task list does, by
+ * the box in a row's gutter, ⌘-click, ⇧-click, and ⌘A, and a row chosen
+ * among several offers its list's acts on every one chosen instead, under
+ * how many (`agents-selection.tsx`).
  */
 
 /** The cells an agent's row draws, in a task's row's order: where a task's repository stands, a start's row says why it is unavailable (`AgentStartRow`). */
@@ -81,7 +83,7 @@ export function AgentListRow({
   card,
   pullRequest,
   waits = 0,
-  edges,
+  chosen,
   place,
   more,
   onPress,
@@ -101,8 +103,8 @@ export function AgentListRow({
   pullRequest: AgentPullRequest | undefined;
   /** How many of its threads wait on the developer. */
   waits?: number | undefined;
-  /** What room it keeps at its edges, its list's (`TaskRows`'s `edges`). */
-  edges?: TaskRowEdges | undefined;
+  /** The selection it stands in, where it is one of several its list chose (`AgentsSelection.chosenOf`), whose menu it offers instead of its own; none otherwise. */
+  chosen: ChosenRows | undefined;
   /** Where it stands in its list's run of rows, where the list draws only those near the view (`VirtualRows`). */
   place?: VirtualRowPlace | undefined;
   /** Whether it draws its ⋯, as its list does. */
@@ -182,10 +184,11 @@ export function AgentListRow({
       menu={
         editing
           ? undefined
-          : rowMenu(AGENT_THING, agentMenuGroups(rowDoors(actions.doors)), shown, true)
+          : chosen !== undefined
+            ? chosenRowMenu(AGENT_THING, chosen, shown)
+            : rowMenu(AGENT_THING, agentMenuGroups(rowDoors(actions.doors)), shown, true)
       }
       more={more}
-      edges={edges ?? TASK_ROW_EDGES.UNCHOSEN}
       hint={card === undefined || editing ? undefined : { Hint: RowHint, label: name }}
       onOpen={onPress}
       pressRef={press}
@@ -202,14 +205,14 @@ export function AgentListRow({
  * A start a list of agents offers after its agents, as New agent, in the
  * agents' own columns: its glyph where theirs stand and its label where
  * their names do, and, while it is unavailable, why, where an agent's
- * task stands.
+ * task stands. Its list never chooses it, though it keeps the gutter the
+ * agents' boxes stand in, so its glyph lines up with theirs.
  */
 export function AgentStartRow({
   label,
   glyph,
   detail,
   disabled = false,
-  edges,
   onStart,
 }: {
   label: string;
@@ -217,8 +220,6 @@ export function AgentStartRow({
   /** Why it is unavailable, where it is. */
   detail?: string | undefined;
   disabled?: boolean | undefined;
-  /** What room it keeps at its edges, its list's (`TaskRows`'s `edges`). */
-  edges?: TaskRowEdges | undefined;
   onStart: () => void;
 }): React.JSX.Element {
   return (
@@ -230,7 +231,7 @@ export function AgentStartRow({
         [TASK_ROW_CELL.STATUS]: <TaskRowGlyph>{glyph}</TaskRowGlyph>,
         [TASK_ROW_CELL.REPOSITORY]: detail,
       }}
-      edges={edges ?? TASK_ROW_EDGES.UNCHOSEN}
+      choosable={false}
       disabled={disabled}
       onOpen={onStart}
     />

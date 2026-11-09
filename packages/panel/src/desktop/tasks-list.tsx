@@ -152,7 +152,7 @@ import {
   OlderCompleted,
   type TasksViewFrame,
 } from "./tasks-page-options.js";
-import { type ChosenTasks, useTasksSelection } from "./tasks-selection.js";
+import { type ChosenRows, useTasksSelection } from "./tasks-selection.js";
 import { useHeldTasks } from "./use-held-tasks.js";
 import { useTaskDrag } from "./use-row-drag.js";
 
@@ -678,7 +678,7 @@ const TasksPageRow = memo(function TasksPageRow({
   subTasksFinished: number;
   subTasksTotal: number;
   /** The selection it stands in, where it is one of several chosen: how many, and what the bar does to them all. */
-  chosen: ChosenTasks | undefined;
+  chosen: ChosenRows | undefined;
   /** Whether it draws its menu's ⋯, which a finger's List leaves out. */
   more: boolean;
   /** Opens a task by its id. */

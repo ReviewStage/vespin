@@ -95,7 +95,7 @@ import {
   type TurnRow,
   turnRows,
 } from "@repo/features/turn-rows";
-import { andList, readFailedWords } from "@repo/features/words";
+import { andList, countWords, readFailedWords, TERM } from "@repo/features/words";
 import type { FormerMember, WorkspaceMember } from "@repo/features/workspace-wire";
 import {
   ACTOR_KIND,
@@ -831,6 +831,12 @@ export function archiveWords(archived: boolean): {
   readonly refused: string;
 } {
   return archived ? ARCHIVED_WORDS : UNARCHIVED_WORDS;
+}
+
+/** What the toast says once `count` agents' archive, or its undoing, landed: one agent's words for one, else how many. */
+export function archivedManyWords(count: number, archived: boolean): string {
+  if (count === 1) return archiveWords(archived).done;
+  return `${countWords(count, TERM.AGENT)} ${archived ? "archived" : "unarchived"}`;
 }
 
 /** A refused start or message as the view hears it: why, why the repository is out of reach where it is and the service said, when a plan's reached limit resets where it is that and the provider said, and the provider whose credential is missing where it is that. */
