@@ -61,7 +61,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { overlayHoldsKeyboard, useAppCommand, useOverlayHold } from "../app-commands.js";
-import { liveStepTitle, memberName, NAMED_STEP, stepTitle } from "../history-titles.js";
+import { liveStepTitle, memberName, NAMED_STEP, stepTitle, taskName } from "../history-titles.js";
 import { MemberDirectory, useMemberDirectory, usePerson } from "../member-directory.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
 import {
@@ -177,11 +177,6 @@ function automationDetail(
         detail: name,
         detailIcon: <AutomationGlyph workspaceId={workspaceId} automationId={agent.automationId} />,
       };
-}
-
-/** The task's name, as the window lists it. */
-function taskName(tasks: TasksControl, taskId: string): string | undefined {
-  return tasks.tasks.find((task) => task.id === taskId)?.name;
 }
 
 /** A person's page stop wears their face, read against the members around it as every person is drawn. */
