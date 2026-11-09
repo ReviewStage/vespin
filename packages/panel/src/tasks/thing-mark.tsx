@@ -1,6 +1,11 @@
 import { CHECK_SUMMARY } from "@repo/features/agent-wire";
-import type { KnownNames } from "@repo/features/place-chip-model";
-import { THING_KIND, type Thing, type ThingKind, type ThingOf } from "@repo/features/thing-kind";
+import {
+  type KnownNames,
+  THING_KIND,
+  type Thing,
+  type ThingKind,
+  type ThingOf,
+} from "@repo/features/thing-kind";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ProviderMark } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor, APP_ACTOR } from "@repo/ui/actor-model";

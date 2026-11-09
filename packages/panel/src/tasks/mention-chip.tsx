@@ -34,9 +34,10 @@ import {
   pastedLinkMention,
   sectionAnchors,
 } from "@repo/features/mention-link";
-import { type KnownNames, placeChipLook } from "@repo/features/place-chip-model";
+import { placeChipLook } from "@repo/features/place-chip-model";
 import { UNTITLED_TASK_NAME } from "@repo/features/task-wire";
 import {
+  type KnownNames,
   THING_KIND,
   THING_WORD,
   thingName,
