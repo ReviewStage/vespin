@@ -8,13 +8,19 @@ import {
   ListRow,
   PageHeader,
   ROW_ACTION_TONE,
+  type RowAction,
   RowList,
   Screen,
   SplitView,
+  TaskRow,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import type { PlaceholderCollection, PlaceholderItem } from "../placeholders.js";
+import {
+  COLLECTION_ROUTE,
+  type PlaceholderCollection,
+  type PlaceholderItem,
+} from "../placeholders.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
@@ -42,40 +48,57 @@ function CollectionList({ collection, look, selected, onSelect }: CollectionList
       onSelect={onSelect}
       title={look === LIST_LOOK.SIDEBAR ? collection.title : undefined}
     >
-      {items.map((item) => (
-        <ListRow
-          key={item.id}
-          id={item.id}
-          title={item.title}
-          preview={item.summary}
-          previewSymbol={item.symbol}
-          unread={item.unread}
-          status={item.status}
-          avatar={item.status === undefined ? item.from : undefined}
-          at={item.at}
-          trailingActions={[
-            {
-              label: "Mark done",
-              symbol: "checkmark",
-              tone: ROW_ACTION_TONE.ACCENT,
-              onPress: () => setDone(new Set([...done, item.id])),
-            },
-          ]}
-        />
-      ))}
+      {items.map((item) => {
+        const acts: readonly RowAction[] = [
+          {
+            label: "Mark done",
+            symbol: "checkmark",
+            tone: ROW_ACTION_TONE.ACCENT,
+            onPress: () => setDone(new Set([...done, item.id])),
+          },
+        ];
+        return collection.route === COLLECTION_ROUTE.TASKS && item.status !== undefined ? (
+          <TaskRow
+            key={item.id}
+            id={item.id}
+            name={item.title}
+            status={item.status}
+            unread={item.unread}
+            pullRequest={item.pullRequest}
+            at={item.at}
+            trailingActions={acts}
+          />
+        ) : (
+          <ListRow
+            key={item.id}
+            id={item.id}
+            title={item.title}
+            task={item.task}
+            line={item.line}
+            summary={item.summary}
+            unread={item.unread}
+            done={item.done}
+            face={item.face}
+            at={item.at}
+            trailingActions={acts}
+          />
+        );
+      })}
     </RowList>
   );
 }
 
 function ItemDetail({ item }: { readonly item: PlaceholderItem }) {
   const [picked, setPicked] = useState<readonly string[]>([]);
-  if (item.choices === undefined) return <PageHeader title={item.title} summary={item.summary} />;
+  if (item.ask === undefined) {
+    return <PageHeader title={item.title} summary={item.summary} status={item.status} />;
+  }
   return (
-    <RowList look={LIST_LOOK.INSET}>
+    <RowList look={LIST_LOOK.PLAIN}>
       <ChoiceList
-        title={item.summary}
-        choices={item.choices}
-        recommended={item.recommended}
+        title={item.ask.question}
+        choices={item.ask.choices}
+        recommended={item.ask.recommended}
         picked={picked}
         onChange={setPicked}
       />
@@ -97,7 +120,7 @@ function CollectionStackList({ collection }: { readonly collection: PlaceholderC
       <Screen>
         <CollectionList
           collection={collection}
-          look={LIST_LOOK.INSET}
+          look={LIST_LOOK.PLAIN}
           onSelect={(id) => router.push(itemHref(collection, id))}
         />
       </Screen>

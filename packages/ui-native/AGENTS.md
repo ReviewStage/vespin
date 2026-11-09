@@ -7,7 +7,7 @@ builds a control of its own.
 - **SwiftUI first.** A component wraps `@expo/ui`'s SwiftUI (`Host`, `List`,
   `Section`, swipe actions, `ContextMenu`, `NavigationSplitView`, the
   system's buttons and `ContentUnavailableView`) in the piece a screen asks
-  for: `Screen`, `RowList` and `ListSection`, `ListRow`, `SplitView`,
+  for: `Screen`, `RowList` and `ListSection`, `ListRow` and `TaskRow`, `SplitView`,
   `EmptyState`, `PageHeader`, `Button` and `Chip`, `ChoiceList`, and the
   marks (`UnreadDot`, `TaskStatusMark`, `Avatar`). `GlassBar` is a composer's
   bar of Liquid Glass through `expo-glass-effect`.
@@ -25,8 +25,17 @@ builds a control of its own.
   table, in the light theme and the dark; never edit it by hand, and
   `scripts/repository-checks.sh` fails when it drifts. `useColors()` picks the
   theme by the window's color scheme, since SwiftUI is handed plain values.
-  Every other color is the system's own: a list's grounds, a label's
-  hierarchy, a button's states.
+  The app reads as Vespin beside the desktop, not as iOS's defaults: a
+  screen, a list, and a sidebar stand on the brand's `GROUND` and `SIDEBAR`,
+  never the system's grays; lists stand plain, as the panel's do, never as
+  inset cards; and the tint is the brand's copper, never the system's blue.
+  Only a control's states and a label's hierarchy are the system's.
+- **Rows are the panel's rows.** `ListRow` is the panel's Inbox row (the
+  unread dot, the task's status ring and name with the time, the thread's
+  title, and the glyph of what it asks with its words), and `TaskRow` the
+  phone's task row; an avatar stands only where the panel's row has one. A
+  glyph is the SF Symbol closest to the panel's lucide glyph for the same
+  thing (`inbox-line-model.ts`, `status-mark-model.ts`), in the panel's ink.
 - **Words match the panel's** (`docs/DESIGN.md`): a row's time is
   `@repo/features/time-format`'s, a status's name the panel's.
 - **No DOM and no Electron.** React here is the `mobile` catalog's (React

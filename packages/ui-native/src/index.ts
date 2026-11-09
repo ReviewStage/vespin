@@ -11,7 +11,19 @@ export {
 export { type Choice, ChoiceList } from "./choice-list.js";
 export { EmptyState } from "./empty-state.js";
 export { GlassBar } from "./glass-bar.js";
-export { ListRow, ROW_ACTION_TONE, type RowAction, type RowActionTone } from "./list-row.js";
+export {
+  INBOX_LINE,
+  INBOX_LINE_LOOK,
+  type InboxLine,
+  PULL_REQUEST_LOOK,
+} from "./inbox-line-model.js";
+export {
+  ListRow,
+  ROW_ACTION_TONE,
+  type RowAction,
+  type RowActionTone,
+  TaskRow,
+} from "./list-row.js";
 export { Avatar, TaskStatusMark, UnreadDot } from "./marks.js";
 export { monogramOf } from "./monogram.js";
 export { PageHeader } from "./page-header.js";

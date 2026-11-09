@@ -1,7 +1,14 @@
 // choice-list.tsx -- the options of a decide ask, one row each, the recommended one badged.
 
 import { Button, HStack, Image, Spacer, Text, VStack } from "@expo/ui/swift-ui";
-import { background, clipShape, font, foregroundStyle, padding } from "@expo/ui/swift-ui/modifiers";
+import {
+  background,
+  clipShape,
+  font,
+  foregroundStyle,
+  listRowBackground,
+  padding,
+} from "@expo/ui/swift-ui/modifiers";
 import { ListSection } from "./row-list.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -72,6 +79,7 @@ export function ChoiceList(props: ChoiceListProps) {
           <Button
             key={choice.label}
             onPress={() => onChange(nextPicked(picked, choice.label, multiple))}
+            modifiers={[listRowBackground("clear")]}
           >
             <HStack spacing={SPACE.ROW}>
               <Image

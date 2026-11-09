@@ -13,9 +13,11 @@ export const SPACE = {
 /** The sizes the marks are drawn at, in points. */
 export const MARK_SIZE = {
   /** The unread dot. */
-  DOT: 8,
+  DOT: 7,
   /** A status mark or a preview's glyph beside a row's words. */
   GLYPH: 15,
-  /** A row's avatar. */
+  /** An avatar on its own, such as a person's on their page. */
   AVATAR: 28,
+  /** A teammate's face among a row's end marks. */
+  FACE: 18,
 } as const;

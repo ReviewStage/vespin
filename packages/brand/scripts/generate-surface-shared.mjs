@@ -90,16 +90,18 @@ const MOTION_PANE = "cubic-bezier(0.2, 0, 0, 1)";
 // The brand's colors live in brand-palette.mjs, which the asset generator
 // reads too; this script writes them onto @repo/ui's roles and as values.
 
-// The roles the iOS app draws with: the accent, the grounds, the inks, and
-// the status inks. The rest (a sidebar's, a chip's hover, a focus ring) are
-// the desktop's and the site's, which SwiftUI's own materials and states
-// stand in for on iOS.
+// The roles the iOS app draws with: the accent, the grounds a screen, a list,
+// and a sidebar stand on, the inks, and the status inks. The rest (a chip's
+// hover, a focus ring) are the desktop's and the site's, which SwiftUI's own
+// control states stand in for on iOS.
 const NATIVE_ROLES = [
   "ACCENT",
   "ON_ACCENT",
   "ACCENT_TEXT",
   "GROUND",
   "SURFACE",
+  "SIDEBAR",
+  "SIDEBAR_INK",
   "WELL",
   "CHIP_EDGE",
   "TEXT",
@@ -107,6 +109,7 @@ const NATIVE_ROLES = [
   "TEXT_MUTED",
   "DANGER",
   "ATTENTION",
+  "ATTENTION_FILL",
   "WORKING",
   "COMPLETE",
   "MERGED",

@@ -18,19 +18,28 @@ import { MARK_SIZE } from "./tokens/space.js";
 /** The share of an avatar's width its letters stand at. */
 const MONOGRAM_SCALE = 0.42;
 
+/** How faint a done row's dot stands, as the panel fades a done row's unread column. */
+const FADED_OPACITY = 0.45;
+
 /**
- * The accent dot an unread row leads with. Note that a read row draws it
- * clear rather than not at all, so its words stand in the same column as an
- * unread row's.
+ * The accent dot an unread row leads with, in the accent's ink as the
+ * panel's. Note that a read row draws it clear rather than not at all, so its
+ * words stand in the same column as an unread row's.
  */
-export function UnreadDot({ unread }: { readonly unread: boolean }) {
+export function UnreadDot({
+  unread,
+  faded = false,
+}: {
+  readonly unread: boolean;
+  readonly faded?: boolean;
+}) {
   const colors = useColors();
   return (
     <Circle
       modifiers={[
         frame({ width: MARK_SIZE.DOT, height: MARK_SIZE.DOT }),
-        foregroundStyle(colors.ACCENT),
-        opacity(unread ? 1 : 0),
+        foregroundStyle(colors.ACCENT_TEXT),
+        opacity(unread ? (faded ? FADED_OPACITY : 1) : 0),
         unread ? accessibilityLabel("Unread") : accessibilityHidden(),
       ]}
     />

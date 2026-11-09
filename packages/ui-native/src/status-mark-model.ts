@@ -14,7 +14,7 @@ type StatusMarkLook = { readonly symbol: SfSymbol; readonly tone: StatusTone };
 export const STATUS_MARK_LOOK = {
   [TASK_STATUS.BACKLOG]: { symbol: "circle.dashed", tone: STATUS_TONE.NEUTRAL },
   [TASK_STATUS.TODO]: { symbol: "circle", tone: STATUS_TONE.NEUTRAL },
-  [TASK_STATUS.IN_PROGRESS]: { symbol: "circle.lefthalf.filled", tone: STATUS_TONE.WORKING },
+  [TASK_STATUS.IN_PROGRESS]: { symbol: "circle.righthalf.filled", tone: STATUS_TONE.WORKING },
   [TASK_STATUS.DONE]: { symbol: "checkmark.circle.fill", tone: STATUS_TONE.COMPLETE },
   [TASK_STATUS.CANCELED]: { symbol: "xmark.circle.fill", tone: STATUS_TONE.NEUTRAL },
 } as const satisfies Record<TaskStatus, StatusMarkLook>;

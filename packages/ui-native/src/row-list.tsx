@@ -1,12 +1,21 @@
 // row-list.tsx -- a list of rows and its sections, as SwiftUI's own List draws them.
 
 import { List, Section, Text } from "@expo/ui/swift-ui";
-import { listStyle, navigationTitle } from "@expo/ui/swift-ui/modifiers";
+import {
+  background,
+  listStyle,
+  navigationTitle,
+  scrollContentBackground,
+} from "@expo/ui/swift-ui/modifiers";
 import type { ReactNode } from "react";
+import { type BrandColors, useColors } from "./tokens/colors.js";
 
-/** How a list stands: grouped cards on a screen of its own, or a split view's sidebar. */
+/**
+ * How a list stands: plain rows on a screen of its own, as the panel's lists
+ * stand rather than as grouped cards, or a split view's sidebar.
+ */
 export const LIST_LOOK = {
-  INSET: "insetGrouped",
+  PLAIN: "plain",
   SIDEBAR: "sidebar",
 } as const;
 
@@ -29,12 +38,18 @@ function selectedId(selection: readonly (string | number)[]): string | undefined
   return typeof first === "string" ? first : undefined;
 }
 
+/** The ground a list stands on: the brand's, the sidebar's for a sidebar, never the system's grays. */
+function listGround(colors: BrandColors, look: ListLook): string {
+  return look === LIST_LOOK.SIDEBAR ? colors.SIDEBAR : colors.GROUND;
+}
+
 /**
  * A list of `ListRow`s, each picked by its id. Note that a list on a screen
  * of its own keeps no selection, since a pick pushes the row's own screen and
  * the row should not stand selected on the way back.
  */
 export function RowList({ look, selected, onSelect, title, children }: RowListProps) {
+  const colors = useColors();
   return (
     <List
       selection={selected === undefined ? [] : [selected]}
@@ -42,7 +57,12 @@ export function RowList({ look, selected, onSelect, title, children }: RowListPr
         const id = selectedId(selection);
         if (id !== undefined) onSelect?.(id);
       }}
-      modifiers={[listStyle(look), ...(title === undefined ? [] : [navigationTitle(title)])]}
+      modifiers={[
+        listStyle(look),
+        scrollContentBackground("hidden"),
+        background(listGround(colors, look)),
+        ...(title === undefined ? [] : [navigationTitle(title)]),
+      ]}
     >
       {children}
     </List>

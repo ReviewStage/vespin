@@ -20,7 +20,7 @@ CI's macOS job below. Every command here runs from `apps/mobile`.
 | `pnpm ios -- --device "iPhone 18 Pro"` | Generate `ios/` if it is missing, build a Debug app, install it on that simulator, and start Metro for it |
 | `pnpm start` | Metro alone, for a Debug app already installed |
 | `scripts/simulator-build.sh` | Generate `ios/` and build a Release app for the simulator, its bundle embedded, naming the `.app` on its last line |
-| `scripts/simulator-screenshots.sh <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it with the screenshots under `<output>/<simulator slug>/`, and shut the simulator down |
+| `scripts/simulator-screenshots.sh <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
 | `xcrun simctl io booted screenshot shot.png` | One screenshot of the booted simulator by hand |
 | `pnpm export:ios` | Bundle the app with Metro, as CI's Linux job does; it catches a module Hermes cannot resolve |
 | `pnpm typecheck`, `pnpm test:vitest` | The TypeScript and the logic tests |
@@ -73,8 +73,10 @@ gh run list --branch <your branch> --workflow CI --limit 1 --json databaseId --j
 gh run download <run id> --name mobile-screenshots --dir /tmp/mobile-screenshots
 ```
 
-Each simulator's pictures are under `/tmp/mobile-screenshots/<slug>/takeScreenshot/`,
-named as the flow's `takeScreenshot` steps name them.
+Each simulator's pictures, in each appearance, are under
+`/tmp/mobile-screenshots/<slug>/<light|dark>/debug/<flow>/takeScreenshot/`,
+named as the flow's `takeScreenshot` steps name them; a failed step's own
+screenshot is under `debug/<flow>/screenshots/` beside them.
 
 ## Tests
 
@@ -88,8 +90,8 @@ pull request with UI shows its screenshots to the developer in a thread.
 
 - **Native components only.** The tab bar is expo-router's `NativeTabs`, a
   screen stack is its native `Stack` with the system's headers, search, and
-  toolbars, glass is `expo-glass-effect` (a dependency from the first screen
-  that needs it), and everything else is `@expo/ui`.
+  toolbars, glass is `expo-glass-effect` through `@repo/ui-native`'s
+  `GlassBar`, and everything else is `@expo/ui`.
   Never a tab bar or header drawn in JavaScript, never a hand-drawn copy of
   glass, and never a DOM component (`'use dom'`).
 - **SwiftUI first.** A screen is drawn by SwiftUI through `@expo/ui` (`Host`,
