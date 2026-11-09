@@ -245,6 +245,13 @@ export function retargetedMention(
   return { name: heading, target: encodeMention({ ...mention, anchor: now }, place) };
 }
 
+/** The mentions whose chip is kept whole in words, each a short name read as one thing. */
+const WHOLE_KINDS: ReadonlySet<Mention["kind"]> = new Set([
+  MENTION_KIND.PERSON,
+  MENTION_KIND.SERVER,
+  MENTION_KIND.TOOL,
+]);
+
 /** What a gone section's card says of it. */
 const GONE_WORDS = "No longer in the description";
 
@@ -575,8 +582,9 @@ function MentionChip({
     pull === undefined
       ? name
       : (new RegExp(`^\\S*#${pull.number}(?=\\s)`, "u").exec(name)?.[0] ?? name);
-  // Note that a pull request GitHub answered for is called by its key alone, which is kept whole with its mark and state, since a key broken at its `/` or `-` reads as two things.
-  const whole = github !== undefined && pull !== undefined;
+  // Note that a short name read as one thing is kept whole with its mark and state, since one broken at its `/`, `-`, or space reads as two things: a pull request GitHub answered for, called by its key alone; a task called by its key; a person; and a server or its tool.
+  const whole =
+    (github !== undefined && pull !== undefined) || keyed || WHOLE_KINDS.has(mention.kind);
   const state = mentionState(mention, doors);
   const press = pressOf(mention, target, state, doors, openLink);
   const card = (
