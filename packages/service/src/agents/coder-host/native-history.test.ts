@@ -3,6 +3,7 @@ import { it } from "@effect/vitest";
 import { REPLAY_STEP_KIND, type ReplayStep } from "@repo/features/agent-replay";
 import { Effect, Option } from "effect";
 import {
+  CLAUDE_SIDE,
   type ClaudeMessage,
   CODEX_SIDE,
   claudeSessionEntries,
@@ -600,11 +601,33 @@ it("fits a history by dropping its thinking before any turn", () => {
     ],
     undefined,
   );
-  assert.ok(turn !== undefined);
+  // Codex's reasoning shares the assistant's message with the call after it, so its block alone is dropped.
+  const [reasoned] = codexToClaude(
+    rollout([
+      said("user", "Go."),
+      item({ type: "reasoning", summary: [{ type: "summary_text", text: "x".repeat(3_000) }] }),
+      item({
+        type: "function_call",
+        name: "exec_command",
+        arguments: '{"cmd":"ls"}',
+        call_id: "c1",
+      }),
+      item({ type: "function_call_output", call_id: "c1", output: "a.ts" }),
+    ]),
+    undefined,
+    CWD,
+  );
+  assert.ok(turn !== undefined && reasoned !== undefined);
 
-  const fitted = fitHistory(CODEX_SIDE, [turn], 1_000);
-
-  assert.deepEqual(fitted, { kept: [codexTurn("Go.", "Done.")], dropped: [] });
+  assert.deepEqual(fitHistory(CODEX_SIDE, [turn], 1_000), {
+    kept: [codexTurn("Go.", "Done.")],
+    dropped: [],
+  });
+  assert.deepEqual(claudeWords(fitHistory(CLAUDE_SIDE, [reasoned], 1_000).kept), [
+    "user: Go.",
+    "assistant: tool_use",
+    "user: tool_result",
+  ]);
 });
 
 it.effect("keeps the newest turns that fit and puts the summary of the rest first", () =>

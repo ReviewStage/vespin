@@ -614,8 +614,7 @@ it.effect(
         "thread/inject_items",
         "turn/start",
       ]);
-      vi.restoreAllMocks();
-    }),
+    }).pipe(Effect.ensuring(Effect.sync(() => vi.restoreAllMocks()))),
 );
 
 it.effect(

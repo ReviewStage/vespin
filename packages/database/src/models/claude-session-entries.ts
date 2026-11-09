@@ -517,7 +517,9 @@ const WRITE_BATCH = 1_000;
 /**
  * Entries a Start wrote for the conversation given, rather than copied
  * (`copySessionEntries`), such as a session translated from the other
- * harness, appended under the key given in their order, a batch at a time.
+ * harness, appended under the key given in their order, a batch at a time,
+ * in one transaction: a batch that fails leaves none, since a session held
+ * from its first entry but cut short would be forked as whole.
  */
 export function writeSessionEntries(
   target: { readonly userId: string; readonly conversationId: string },
@@ -527,10 +529,14 @@ export function writeSessionEntries(
   const batches = Array.from({ length: Math.ceil(entries.length / WRITE_BATCH) }, (_, at) =>
     entries.slice(at * WRITE_BATCH, (at + 1) * WRITE_BATCH),
   );
-  return Effect.forEach(
-    batches,
-    (batch) => appendSessionEntries(target.userId, target.conversationId, key, batch),
-    { discard: true },
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.forEach(
+        batches,
+        (batch) => appendSessionEntries(target.userId, target.conversationId, key, batch),
+        { discard: true },
+      ),
+    ),
   );
 }
 

@@ -314,8 +314,8 @@ export interface FittedHistory<Item> {
 export interface HistorySide<Item> {
   /** The bytes the item takes of the window, in the replay's two to a token. */
   readonly bytes: (item: Item) => number;
-  /** Whether the item is thinking carried as text, dropped before any turn is. */
-  readonly thought: (item: Item) => boolean;
+  /** The item with its thinking carried as text taken out, which is dropped before any turn is; none where it held thinking alone. */
+  readonly withoutThought: (item: Item) => Item | undefined;
   /** Whether the item is a call's result alone, which may never open what is kept, since its call would be gone. */
   readonly result: (item: Item) => boolean;
   /** The item as a replay step, for the summary of the turns left out. */
@@ -732,7 +732,7 @@ export const CODEX_SIDE: HistorySide<ResponsesItem> = {
     const shown = output ? Math.min(text, tokensBytes(NATIVE_HISTORY.CODEX_OUTPUT_TOKENS)) : text;
     return shown + imagesBytes;
   },
-  thought: (item) => THOUGHT in item,
+  withoutThought: (item) => (THOUGHT in item ? undefined : item),
   result: (item) =>
     item.type === ITEM.FUNCTION_CALL_OUTPUT || item.type === ITEM.CUSTOM_TOOL_CALL_OUTPUT,
   step: (item) => {
@@ -1197,7 +1197,7 @@ function unmarkedBlocks(message: ClaudeMessage): ClaudeMessage {
 }
 
 /** How Claude messages are measured, told apart, and read for a summary as a Claude Code session's history. */
-const CLAUDE_SIDE: HistorySide<ClaudeMessage> = {
+export const CLAUDE_SIDE: HistorySide<ClaudeMessage> = {
   bytes: (message) =>
     message.content.reduce((sum, block) => {
       const json = JSON.stringify(block);
@@ -1208,8 +1208,11 @@ const CLAUDE_SIDE: HistorySide<ClaudeMessage> = {
       );
       return sum + utf8(json) - images.reduce((all, image) => all + image.length, 0) + imageBytes;
     }, 0),
-  thought: (message) =>
-    message.content.length > 0 && message.content.every((block) => THOUGHT in block),
+  // Note that a reasoning summary joins the assistant's message beside the call or words after it, so its blocks are taken out of the message rather than the message dropped.
+  withoutThought: (message) => {
+    const content = message.content.filter((block) => !(THOUGHT in block));
+    return content.length === 0 ? undefined : { ...message, content };
+  },
   result: (message) =>
     message.content.length > 0 && message.content.every((block) => block.type === "tool_result"),
   step: (message) => {
@@ -1323,7 +1326,9 @@ export function fitHistory<Item>(
 ): FittedHistory<Item> {
   if (historyBytes(side, turns) <= budgetBytes) return { kept: turns, dropped: [] };
   const thoughtless = turns
-    .map((turn) => turn.filter((item) => !side.thought(item)))
+    .map((turn) =>
+      turn.flatMap((item) => Option.toArray(Option.fromUndefinedOr(side.withoutThought(item)))),
+    )
     .filter((turn) => turn.length > 0);
   if (historyBytes(side, thoughtless) <= budgetBytes) return { kept: thoughtless, dropped: [] };
   // A summary is held to its output bound, so that is the room it is counted for before it is written.
