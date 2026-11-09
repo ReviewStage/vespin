@@ -92,7 +92,7 @@ import { DesktopInbox } from "./desktop-inbox.js";
 import type { SettingsStep } from "./desktop-settings.js";
 import { DesktopSidebar } from "./desktop-sidebar.js";
 import { DesktopHomePage, DesktopTasks } from "./desktop-tasks.js";
-import { useFloatDismiss } from "./hover-pane.js";
+import { KEY_LAYERS, useFloatDismiss } from "./hover-pane.js";
 import { MobileBar, mobileBarShown, useBarStanding } from "./mobile-bar.js";
 import { NewTaskButton } from "./new-task-button.js";
 import { NewWorkspaceOpener, useNewWorkspace } from "./new-workspace.js";
@@ -400,6 +400,8 @@ export interface DesktopGates {
  * wears a dot in the attention tone while anything waits on the developer
  * (`useInboxWaiting`), and says how many in its name, since the dot is
  * hidden from a reader; over a peek the row is in view again, so neither.
+ * Resting the pointer on it while the sidebar is away peeks the sidebar out,
+ * as the window's left edge does, and a press then shows it.
  */
 function SidebarToggle({
   sidebar,
@@ -421,10 +423,43 @@ function SidebarToggle({
           icon={<SidebarIcon />}
           label={marked ? `${label}, ${waiting} need you` : label}
           onClick={sidebar.onToggle}
+          onPointerEnter={(event) => {
+            // Note that a finger's arrival peeks nothing, because iOS plays a
+            // tap's arrival as a hover and would spend the tap on the peek.
+            if (!away || event.pointerType === "touch") return;
+            sidebar.onOverlay(SIDEBAR_OVERLAY.PEEK);
+          }}
         />
       </Tooltip>
     </CornerDot>
   );
+}
+
+/**
+ * Puts a peek away as the pointer leaves the title bar's buttons for anywhere
+ * but the sidebar floating under them or a layer they raised, so a peek the
+ * toggle opened goes as the pointer moves off it, as one the edge opened does.
+ * Note that where the pointer went is read against the sidebar's box where it
+ * names no element, because a drag strip in the sidebar's title row may
+ * answer none.
+ */
+function leaveTitleBar(sidebar: SidebarCollapse, event: React.PointerEvent<HTMLElement>): void {
+  if (sidebar.overlay !== SIDEBAR_OVERLAY.PEEK) return;
+  const pane = event.currentTarget.parentElement?.querySelector(".desktop-sidebar");
+  const to = event.relatedTarget;
+  if (to instanceof Element) {
+    if (pane?.contains(to) || to.closest(KEY_LAYERS) !== null) return;
+  } else {
+    const box = pane?.getBoundingClientRect();
+    const over =
+      box !== undefined &&
+      event.clientX >= box.left &&
+      event.clientX <= box.right &&
+      event.clientY >= box.top &&
+      event.clientY <= box.bottom;
+    if (over) return;
+  }
+  sidebar.onOverlay(SIDEBAR_OVERLAY.CLOSED);
 }
 
 /** The sidebar's chord alone, where its toggle is not drawn, as on a phone's task, whose header stands in its place, though the drawer is still there to open. */
@@ -1114,7 +1149,12 @@ export function ShellPlaces(): React.JSX.Element {
       {room === SHELL_ROOM.NARROW ? (
         <SidebarChord sidebar={sidebar} />
       ) : (
-        <PanePin as={PANE_PIN_ELEMENT.DIV} className="title-bar-controls" onPin={keepOverlay}>
+        <PanePin
+          as={PANE_PIN_ELEMENT.DIV}
+          className="title-bar-controls"
+          onPin={keepOverlay}
+          onPointerLeave={(event) => leaveTitleBar(sidebar, event)}
+        >
           <SidebarToggle sidebar={sidebar} tasks={tasks} />
           {sidebar.collapsed ? <NewTaskButton tasks={tasks} /> : null}
           {sidebar.collapsed ? (
