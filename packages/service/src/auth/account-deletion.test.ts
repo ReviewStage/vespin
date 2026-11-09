@@ -5,25 +5,42 @@ import {
   GITHUB_ACCOUNT_TYPE,
   GITHUB_INSTALLATION_STATUS,
 } from "@repo/database/github-installation-vocabulary";
+import {
+  deviceAgentLinesWaiting,
+  queueDeviceAgentLine,
+} from "@repo/database/models/device-agent-store";
+import { registerDevice } from "@repo/database/models/device-store";
 import { createTask, listTasks, readTask } from "@repo/database/models/task-store";
 import { workspaceSeams } from "@repo/database/models/workspace-seams";
 import { agentTable } from "@repo/database/schemas/agent";
-import { organization as organizationTable, session, user } from "@repo/database/schemas/auth";
+import {
+  member,
+  organization as organizationTable,
+  session,
+  user,
+} from "@repo/database/schemas/auth";
 import { automation } from "@repo/database/schemas/automation";
 import { githubInstallation } from "@repo/database/schemas/github-installation";
 import { conversations } from "@repo/database/schemas/storage";
-import { openMigratedPglite, openTaskAgent, sqlClientOverPglite } from "@repo/database/testing";
+import {
+  DEVICE_LAYOUT,
+  openMigratedPglite,
+  openTaskAgent,
+  sqlClientOverPglite,
+} from "@repo/database/testing";
+import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import {
   AUTOMATION_ACTION,
   AUTOMATION_DEFAULT_GUARDS,
   AUTOMATION_TRIGGER,
 } from "@repo/features/automation-wire";
+import { DEVICE_AGENT_LINE_KIND, DEVICE_CAPABILITY } from "@repo/features/device-agent-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { HTTP_METHOD } from "@repo/wire";
 import { jsonResponse, recordingHttpClient } from "@repo/wire/testing";
 import { betterAuth } from "better-auth";
 import { organization } from "better-auth/plugins";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { ConfigProvider, Effect, Layer, Option, Schema } from "effect";
 import { HttpRouter } from "effect/http";
@@ -32,6 +49,7 @@ import { accountDeletionSteps, workspaceDeletionSteps } from "../accounts/deleti
 import { onboardingEventsFromEnvironment } from "../accounts/onboarding-events.js";
 import { WELCOME_MAIL_ENVIRONMENT } from "../accounts/welcome-mail.js";
 import { SESSION_TAG } from "../agents/agent-sandbox-open.js";
+import { BASE_DRIVE, baseDriveName } from "../agents/base-drive.js";
 import { AutomationCadence } from "../automations/automation-cadence.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { accountDeletionTestServices } from "../testing/account-deletion-services.js";
@@ -62,6 +80,17 @@ const decodeSignedUp = Schema.decodeUnknownSync(
 );
 
 const decodeRefusal = Schema.decodeUnknownSync(Schema.Struct({ code: Schema.String }));
+
+/** The role the account holds in the workspace, as its member row stands. */
+const roleIn = (organizationId: string, userId: string) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const rows = yield* db
+      .select({ role: member.role })
+      .from(member)
+      .where(and(eq(member.organizationId, organizationId), eq(member.userId, userId)));
+    return rows.map((row) => row.role);
+  });
 
 /** The auth route over a Better Auth on the PGlite given, with our account deletion and organization policy. */
 const openAuthRoute = (client: Awaited<ReturnType<typeof openMigratedPglite>>) =>
@@ -151,7 +180,7 @@ const openAuthRoute = (client: Awaited<ReturnType<typeof openMigratedPglite>>) =
     return { auth, post, signUp, sandboxes, forgotten, resend };
   });
 
-/** A workspace of Ada's alone, holding a GitHub connection, an agent a member who has since left ran in a sandbox, and that member's scheduled automation, and one she shares with Grace, holding her own scheduled automation and a task she created that Grace has an agent on. */
+/** A workspace of Ada's alone, holding a GitHub connection, an agent a member who has since left ran in a sandbox on a repository whose base drive a fill is still filling, another of that member's on her Mac in the same repository with a stop line waiting, and that member's scheduled automation, and one she shares with Grace, holding her own scheduled automation and a task she created that Grace has an agent on. */
 const openWorkspaces = (
   route: Effect.Success<ReturnType<typeof openAuthRoute>>,
   ada: string,
@@ -192,10 +221,38 @@ const openWorkspaces = (
       .update(conversations)
       .set({ runtimeSessionId: "session-of-grace" })
       .where(eq(conversations.id, agent.conversationId));
+    yield* db
+      .update(agentTable)
+      .set({ repository: "acme/relay" })
+      .where(eq(agentTable.id, agentId));
     route.sandboxes.stand({
       name: "sandbox-of-grace",
       tags: { [SESSION_TAG]: "session-of-grace" },
     });
+    const baseDrive = baseDriveName({ workspaceId: solo.id, fullName: "acme/relay" });
+    route.sandboxes.state.drives.set(baseDrive, { name: baseDrive, forkedFrom: undefined });
+    route.sandboxes.stand({ name: baseDrive, drive: { name: baseDrive, at: BASE_DRIVE.MOUNT } });
+    const mac = "00000000-0000-4000-8000-00000000000a";
+    yield* registerDevice(grace, {
+      id: mac,
+      name: "Studio",
+      ...DEVICE_LAYOUT,
+      capabilities: [DEVICE_CAPABILITY.DISCARD],
+    });
+    const local = yield* openTaskAgent(grace, solo.id, null);
+    yield* db
+      .update(agentTable)
+      .set({ machine: AGENT_MACHINE.DEVICE, deviceId: mac, repository: "acme/relay" })
+      .where(eq(agentTable.id, local));
+    assert.ok(
+      Option.isSome(
+        yield* queueDeviceAgentLine(grace, {
+          agentId: local,
+          kind: DEVICE_AGENT_LINE_KIND.STOP,
+          payload: {},
+        }),
+      ),
+    );
     const [scheduled] = yield* db
       .insert(automation)
       .values({
@@ -232,13 +289,16 @@ const openWorkspaces = (
       sharedTask: sharedTask.id,
       sharedAgent,
       leftBehind: agent.conversationId,
+      baseDrive,
+      mac,
+      local,
       schedule: scheduled.id,
       sharedSchedule: sharedScheduled.id,
     };
   });
 
 it.effect(
-  "deleting an account at Better Auth's endpoint deletes the workspace it alone belongs to, with its GitHub connection, deletes the agents' conversations and sandboxes it left and its automations' schedules, and leaves a workspace others share, forgetting the account's own schedule there and keeping the tasks it created there for no one, with a teammate's agent on them",
+  "deleting an account at Better Auth's endpoint deletes the workspace it alone belongs to, with its GitHub connection, deletes the agents' conversations and sandboxes it left, its repositories' base drives, and its automations' schedules, tells a local agent's Mac to discard it in place of its waiting lines, and leaves a workspace others share, forgetting the account's own schedule there and keeping the tasks it created there for no one, with a teammate's agent on them",
   () =>
     Effect.gen(function* () {
       const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
@@ -249,8 +309,17 @@ it.effect(
         const route = yield* openAuthRoute(client);
         const ada = yield* route.signUp("ada");
         const grace = yield* route.signUp("grace");
-        const { shared, leftBehind, schedule, sharedSchedule, sharedTask, sharedAgent } =
-          yield* openWorkspaces(route, ada.id, grace.id);
+        const {
+          shared,
+          leftBehind,
+          baseDrive,
+          mac,
+          local,
+          schedule,
+          sharedSchedule,
+          sharedTask,
+          sharedAgent,
+        } = yield* openWorkspaces(route, ada.id, grace.id);
 
         const deleted = yield* route.post("delete-user", {}, ada.cookie);
 
@@ -258,6 +327,8 @@ it.effect(
         assert.deepEqual(yield* db.select({ id: organizationTable.id }).from(organizationTable), [
           { id: shared },
         ]);
+        // Grace, the shared workspace's one other member, is handed it.
+        assert.deepEqual(yield* roleIn(shared, grace.id), ["owner"]);
         assert.deepEqual(yield* db.select().from(githubInstallation), []);
         assert.deepEqual(
           yield* db.select({ id: user.id }).from(user).where(eq(user.id, ada.id)),
@@ -270,7 +341,16 @@ it.effect(
             .where(eq(conversations.id, leftBehind)),
           [],
         );
-        assert.deepEqual(route.sandboxes.state.deleted, ["sandbox-of-grace"]);
+        assert.deepEqual(route.sandboxes.state.deleted.toSorted(), [baseDrive, "sandbox-of-grace"]);
+        assert.deepEqual(route.sandboxes.state.deletedDrives, [baseDrive]);
+        // The agent's row is gone with the workspace, so its Mac reads the discard alone, not the stop queued before.
+        assert.deepEqual(
+          (yield* deviceAgentLinesWaiting(grace.id, mac)).map(({ agentId, kind }) => ({
+            agentId,
+            kind,
+          })),
+          [{ agentId: local, kind: DEVICE_AGENT_LINE_KIND.DISCARD }],
+        );
         // Ada's task in the shared workspace stays Grace's to read, created by no one, with Grace's agent on it.
         const kept = yield* readTask(grace.id, sharedTask);
         assert.equal(Option.getOrThrow(kept).ownerId, null);
@@ -291,6 +371,83 @@ it.effect(
           .filter((request) => request.method === HTTP_METHOD.DELETE)
           .map((request) => decodeURIComponent(request.pathname));
         assert.deepEqual(contactDeletes, ["/contacts/ada@example.com"]);
+      }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
+    }),
+);
+
+it.effect(
+  "an owner's account deletion hands a workspace others share to its longest-standing admin before a member who joined earlier",
+  () =>
+    Effect.gen(function* () {
+      const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
+        Effect.promise(() => opened.close()),
+      );
+      yield* Effect.gen(function* () {
+        const db = yield* Database;
+        const route = yield* openAuthRoute(client);
+        const ada = yield* route.signUp("ada");
+        const grace = yield* route.signUp("grace");
+        const alan = yield* route.signUp("alan");
+        const barbara = yield* route.signUp("barbara");
+        const acme = yield* Effect.promise(() =>
+          route.auth.api.createOrganization({
+            body: { name: "Acme", slug: "acme", userId: ada.id },
+          }),
+        );
+        assert.ok(acme);
+        // Grace joined first, then Alan, then Barbara, a day apart.
+        for (const [day, userId, role] of [
+          [1, grace.id, "member"],
+          [2, alan.id, "admin"],
+          [3, barbara.id, "admin"],
+        ] as const) {
+          yield* Effect.promise(() =>
+            route.auth.api.addMember({ body: { userId, organizationId: acme.id, role } }),
+          );
+          yield* db
+            .update(member)
+            .set({ createdAt: new Date(Date.UTC(2099, 0, day)) })
+            .where(and(eq(member.organizationId, acme.id), eq(member.userId, userId)));
+        }
+
+        const deleted = yield* route.post("delete-user", {}, ada.cookie);
+
+        assert.equal(deleted.status, HOSTED_HTTP_STATUS.OK);
+        assert.deepEqual(yield* roleIn(acme.id, alan.id), ["owner"]);
+        assert.deepEqual(yield* roleIn(acme.id, grace.id), ["member"]);
+        assert.deepEqual(yield* roleIn(acme.id, barbara.id), ["admin"]);
+      }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
+    }),
+);
+
+it.effect(
+  "a member left alone in a workspace with no owner deletes it with their own account",
+  () =>
+    Effect.gen(function* () {
+      const client = yield* Effect.acquireRelease(Effect.promise(openMigratedPglite), (opened) =>
+        Effect.promise(() => opened.close()),
+      );
+      yield* Effect.gen(function* () {
+        const db = yield* Database;
+        const route = yield* openAuthRoute(client);
+        const ada = yield* route.signUp("ada");
+        const grace = yield* route.signUp("grace");
+        const { shared } = yield* openWorkspaces(route, ada.id, grace.id);
+        // Ada's owner row went with her account before an heir was named.
+        yield* db
+          .delete(member)
+          .where(and(eq(member.organizationId, shared), eq(member.userId, ada.id)));
+
+        const deleted = yield* route.post("delete-user", {}, grace.cookie);
+
+        assert.equal(deleted.status, HOSTED_HTTP_STATUS.OK);
+        assert.deepEqual(
+          yield* db
+            .select({ id: organizationTable.id })
+            .from(organizationTable)
+            .where(eq(organizationTable.id, shared)),
+          [],
+        );
       }).pipe(Effect.provide(sqlClientOverPglite(client)), Effect.scoped);
     }),
 );

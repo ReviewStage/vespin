@@ -15,6 +15,7 @@ import {
   agentHoldingsOf,
   agentsControl,
   handInbox,
+  newTaskControl,
   tasksControl,
 } from "../testing/tasks-control.js";
 import { ArchivedAgents } from "./agent-archive.js";
@@ -156,22 +157,25 @@ test("a folded repository leaves the task that is open standing, and unfolds to 
   assert.deepEqual(names().sort(), ["Invite expiry", "Retry audit"]);
 });
 
-test("a repository's header folds on its name, says its pin, counts its plans folded, keeps its + outside the fold, and opens its menu on a right-click", () => {
+test("a repository's header folds on its name, says it is kept at top, counts its plans folded, keeps its + outside the fold, and opens its menu on a right-click", () => {
   const asked: string[] = [];
   writeListedTasks({ repositoryPins: [{ repository: "acme/relay", pinnedAt: 1 }] });
   const sidebar = mountSidebar(
     tasksControl({
-      tasks: [task("p-1", "Invite expiry", "acme/relay"), task("p-2", "Retry audit", "acme/relay")],
-      onNewTaskIn: (repository) => asked.push(repository),
+      tasks: [
+        { ...task("p-1", "Invite expiry", "acme/relay"), readThrough: 1 },
+        { ...task("p-2", "Retry audit", "acme/relay"), readThrough: 2 },
+      ],
+      newTask: newTaskControl({ onOpenIn: (repository) => asked.push(repository) }),
     }),
   );
   const relay = () => fold(sidebar, "relay");
   assert.equal(relay().getAttribute("aria-expanded"), "true");
-  assert.equal(relay().textContent, "relay(pinned)");
+  assert.equal(relay().textContent, "relay(kept at top)");
 
   act(() => relay().click());
   assert.equal(relay().getAttribute("aria-expanded"), "false");
-  assert.equal(relay().textContent, "relay(pinned)2 tasks");
+  assert.equal(relay().textContent, "relay(kept at top)2 tasks");
 
   const plus = sidebar.querySelector<HTMLButtonElement>('button[aria-label="New task in relay"]');
   assert.ok(plus, "the header offers a new plan in its repository");
@@ -186,7 +190,7 @@ test("a repository's header folds on its name, says its pin, counts its plans fo
   assert.ok(menu, "the right-click opens the repository's menu");
   assert.deepEqual(
     [...menu.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent),
-    ["Unpin", "Open on GitHub"],
+    ["Stop keeping at top", "Open on GitHub", "Mark all as read"],
   );
   const ellipsis = sidebar.querySelector('button[aria-label="relay actions"]');
   assert.equal(ellipsis?.getAttribute("aria-expanded"), "true");
@@ -325,6 +329,24 @@ test("a pinned parent's child tasks stand under it in Pinned, folded until opene
   act(() => childFold(sidebar, "Cleanup").click());
   assert.deepEqual(rowNames(sidebar, "Pinned"), ["Cleanup", "Probe", "Sweep"]);
   assert.deepEqual(rowNames(sidebar, "My tasks"), []);
+});
+
+test("a finished sub-task the view hides hands its open child tasks to the nearest parent the sidebar draws, which folds them", () => {
+  const sidebar = mountSidebar(
+    tasksControl({
+      tasks: [
+        family("Onboarding", undefined, { status: TASK_STATUS.IN_PROGRESS }),
+        family("Audit", "Onboarding", { status: TASK_STATUS.DONE }),
+        family("Delete", "Audit", { status: TASK_STATUS.IN_PROGRESS }),
+        family("Keep", "Delete", { status: TASK_STATUS.TODO }),
+      ],
+    }),
+  );
+  assert.deepEqual(rowNames(sidebar, "My tasks"), ["Onboarding"]);
+
+  act(() => childFold(sidebar, "Onboarding").click());
+  act(() => childFold(sidebar, "Delete").click());
+  assert.deepEqual(rowNames(sidebar, "My tasks"), ["Onboarding", "Delete", "Keep"]);
 });
 
 test("a canceled parent the view hides takes its child tasks to do out of the sidebar with it", () => {

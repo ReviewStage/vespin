@@ -14,10 +14,19 @@
  * in a sandbox is asked nothing. An agent unarchived after its discard
  * launches again on a fresh worktree of the shared clone, so what it never
  * pushed is gone with its folder.
+ *
+ * A workspace's delete lets its local agents go here once their rows are
+ * gone (`workspace-deletion.ts`), by the device each was pinned to as read
+ * before the delete: a line names its agent by id alone, so it outlives the
+ * row, and is queued with no lease or archive to read again, since nothing
+ * can bring the agent back.
  */
 
 import { type Agent, readAgent } from "@repo/database/models/agent-store";
-import { queueDeviceAgentLine } from "@repo/database/models/device-agent-store";
+import {
+  queueDeviceAgentLine,
+  queueGoneDeviceAgentDiscard,
+} from "@repo/database/models/device-agent-store";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { DEVICE_AGENT_LINE_KIND } from "@repo/features/device-agent-wire";
 import { Effect, Option } from "effect";
@@ -57,4 +66,29 @@ export const discardedOrLogged = (agent: Pick<Agent, "id" | "userId">) =>
         false,
       ),
     ),
+  );
+
+/**
+ * A deleted workspace's local agents let go of on their devices, each by
+ * the device it was pinned to, a failure logged by its kind alone, since
+ * the workspace is already gone.
+ */
+export const discardedWithWorkspace = (
+  agents: readonly {
+    readonly userId: string;
+    readonly agentId: string;
+    readonly deviceId: string;
+  }[],
+) =>
+  Effect.forEach(
+    agents,
+    ({ userId, ...agent }) =>
+      queueGoneDeviceAgentDiscard(userId, agent).pipe(
+        Effect.catch((failure) =>
+          Effect.logWarning(
+            `a deleted workspace's agent was not discarded from its device: ${failure._tag}`,
+          ),
+        ),
+      ),
+    { discard: true },
   );

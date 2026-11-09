@@ -19,12 +19,10 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { countWords, TERM } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { STATUS_TONE } from "@repo/ui";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { KEPT, type Kept, notKept } from "../act.js";
 import { actMutation } from "../act-mutations.js";
-import { TOAST_HOLD, type ToastNotice, undoToast } from "../toast.js";
 import { type PressedRows, pressRows, type RowWrite } from "../undo-stack.js";
 import { appStateIn } from "../use-app-state.js";
 import { isUnread } from "./inbox-model.js";
@@ -86,6 +84,7 @@ const INBOX_WRITE = {
     holds: (now, wanted) => now.unread === wanted.unread,
     kind: ACT_KIND.AGENTS_INBOX_READ_STATE,
     send: (send, itemId, { unread }) => inboxKept(send({ itemId, unread })),
+    unmasked: true,
     surface: FAILURE_SURFACE.INBOX_MARK,
     refused: (_itemId, { unread }, kept, refused) => ({ words: markedNote(unread, kept, refused) }),
   } satisfies RowWrite<InboxRows, MarkFields, typeof ACT_KIND.AGENTS_INBOX_READ_STATE>,
@@ -97,6 +96,7 @@ const INBOX_WRITE = {
     holds: (now, wanted) => now.remindAt === wanted.remindAt,
     kind: ACT_KIND.AGENTS_INBOX_REMIND,
     send: (send, itemId, { remindAt }) => inboxKept(send({ itemId, until: remindAt })),
+    unmasked: true,
     surface: FAILURE_SURFACE.INBOX_MARK,
     // Note that several items refused say it once, each refusal's words being the same.
     refused: (itemId, { remindAt }) => ({
@@ -137,11 +137,4 @@ export function useInboxPresses(): InboxPresses {
     }),
     [rows, sendMark, sendRemind],
   );
-}
-
-/** The toast a kept press says itself with: its Undo, which runs its entry, where one was kept, else its words alone. */
-export function keptToast(words: string, undo: (() => void) | undefined): ToastNotice {
-  return undo === undefined
-    ? { words, tone: STATUS_TONE.COMPLETE, hold: TOAST_HOLD.DONE, replayUnmasked: true }
-    : { ...undoToast(words, undo), replayUnmasked: true };
 }

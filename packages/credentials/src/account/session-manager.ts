@@ -308,19 +308,32 @@ export class AccountSessionManager {
     NoStoredAccount | DeletionUnconfirmed | AccountClientFailure
   > {
     return Effect.gen({ self: this }, function* () {
+      // Note that the account is held from before it is read: a sign-out or sign-in landing while the deletion runs stops it before it asks a session or a delete for whatever account stands then.
+      const generation = this.#generation;
+      const stillHeld = Effect.suspend(() =>
+        this.#isCurrent(generation)
+          ? Effect.void
+          : Effect.fail(
+              new DeletionUnconfirmed({
+                message: "The account this Mac holds changed while it was being deleted",
+              }),
+            ),
+      );
       const stored = yield* this.#options.store.readAccount();
       if (!stored) {
         return yield* Effect.fail(
           new NoStoredAccount({ message: "No stored account credential to delete with" }),
         );
       }
+      yield* stillHeld;
       // Note that Better Auth deletes the account under the Mac's own session, so one is asked for where none is held, and a fresh one where the service finds the one held too old, a sign-in through the browser's hand-off page each.
       const held = stored.sessionToken ?? (yield* this.#freshSession());
+      yield* stillHeld;
       const deleted = yield* Effect.result(this.#deleteHosted(held));
       if (Result.isFailure(deleted)) {
         if (deletionSessionRefused(deleted.failure)) {
           // Note that a session the service no longer takes may be one a lost answer's deletion ended, or one that lapsed, so the account is looked for first: a sign-in for an account that is gone would make a new one.
-          const standing = yield* this.#accountStanding(stored);
+          const standing = yield* this.#accountStanding(stored, generation);
           if (standing === ACCOUNT_STANDING.GONE) return yield* this.signOut();
           if (standing === ACCOUNT_STANDING.UNKNOWN) {
             return yield* new DeletionUnconfirmed({
@@ -331,7 +344,10 @@ export class AccountSessionManager {
         } else if (!deletionNeedsNewSession(deleted.failure)) {
           return yield* Effect.fail(deleted.failure);
         }
-        yield* this.#deleteHosted(yield* this.#freshSession());
+        yield* stillHeld;
+        const fresh = yield* this.#freshSession();
+        yield* stillHeld;
+        yield* this.#deleteHosted(fresh);
       }
       return yield* this.signOut();
     });
@@ -374,9 +390,10 @@ export class AccountSessionManager {
    */
   #renew(): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
-      const stored = yield* this.#options.store.readAccount();
-      if (!stored || !this.#options.requiresAccount) return;
+      // Note that the generation is taken before the read, so tokens read across a sign-in never pass for the account that signed in.
       const generation = this.#generation;
+      const stored = yield* this.#options.store.readAccount();
+      if (!stored || !this.#options.requiresAccount || !this.#isCurrent(generation)) return;
       const renewed = yield* Effect.result(this.#options.client.refresh(stored.refreshToken));
       if (Result.isFailure(renewed)) {
         if (
@@ -783,13 +800,14 @@ export class AccountSessionManager {
   /**
    * Whether the account a deletion was asked for still stands, as the Mac's
    * own tokens find it, and only while that account is still the one this
-   * Mac holds: a sign-out or a sign-in landing meanwhile makes the answer
-   * unknown, so nothing the caller does on it reaches another account.
+   * Mac held when the deletion began (`generation`): a sign-out or a sign-in
+   * landing since makes the answer unknown, so nothing the caller does on it
+   * reaches another account, even one under the same address.
    */
-  #accountStanding(stored: StoredAccount): Effect.Effect<AccountStanding> {
+  #accountStanding(stored: StoredAccount, generation: number): Effect.Effect<AccountStanding> {
     return Effect.gen({ self: this }, function* () {
-      const generation = this.#generation;
-      const standing = yield* this.#readStanding(stored);
+      if (!this.#isCurrent(generation)) return ACCOUNT_STANDING.UNKNOWN;
+      const standing = yield* this.#readStanding(stored, generation);
       return this.#isCurrent(generation) ? standing : ACCOUNT_STANDING.UNKNOWN;
     });
   }
@@ -805,7 +823,7 @@ export class AccountSessionManager {
    * token is a replay Better Auth answers by revoking every token the Mac
    * holds.
    */
-  #readStanding(stored: StoredAccount): Effect.Effect<AccountStanding> {
+  #readStanding(stored: StoredAccount, generation: number): Effect.Effect<AccountStanding> {
     return Effect.gen({ self: this }, function* () {
       const client = this.#options.client;
       const standingOf = (failure: AccountClientFailure) =>
@@ -816,6 +834,8 @@ export class AccountSessionManager {
       const read = yield* Effect.result(client.userInfo(held.accessToken, held.provider));
       if (Result.isSuccess(read)) return identityStanding(stored, read.success);
       if (!accessTokenNeedsRefresh(read.failure)) return standingOf(read.failure);
+      // Note that a renewal is never started for an account that replaced this one while its identity was read, since a refused one signs that account out.
+      if (!this.#isCurrent(generation)) return ACCOUNT_STANDING.UNKNOWN;
       yield* this.renewOnce();
       const renewed = yield* this.#options.store.readAccount();
       // A renewal that stored nothing new was refused or did not answer, which says nothing of the account.

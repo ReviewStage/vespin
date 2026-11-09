@@ -75,6 +75,8 @@ function mount(
               createElement(WorkspaceSwitcher, {
                 tasks: { ...tasksControl(), ...tasks },
                 inSight,
+                newTask: { shown: false, onOpen: () => undefined },
+                admin: { onOpen: () => undefined, onPreload: () => undefined },
               }),
             ),
           ),

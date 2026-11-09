@@ -854,11 +854,16 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
     agents: { total: 2, working: 1, pullRequestTotal: 0 },
   };
   const done: TaskSummary = { ...working, status: TASK_STATUS.DONE };
-  const settled: [string[], TaskStatus][] = [];
-  const tasks = tasksControl({
-    tasks: [working],
-    onSettleTasks: (taskIds, status) => settled.push([[...taskIds], status]),
+  const settled: [string, TaskStatus | undefined][] = [];
+  // Each status leaves on the act port, which the service keeps.
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_SET_STANDING]: ({ taskId, status }) => {
+      settled.push([taskId, status]);
+      return Promise.resolve(true);
+    },
   });
+  const tasks = tasksControl({ tasks: [working] });
   const asked: Asked = {
     opened: [],
     changed: [],
@@ -895,10 +900,11 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
   rightClick(rowButton, 40, 60);
   chooseIn("Status", "Canceled");
   assert.equal(asking(), false, "no status asks anything");
+  await act(async () => undefined);
   assert.deepEqual(settled, [
-    [[working.id], TASK_STATUS.DONE],
-    [[working.id], TASK_STATUS.DONE],
-    [[working.id], TASK_STATUS.CANCELED],
+    [working.id, TASK_STATUS.DONE],
+    [working.id, TASK_STATUS.DONE],
+    [working.id, TASK_STATUS.CANCELED],
   ]);
 
   unmountAll();

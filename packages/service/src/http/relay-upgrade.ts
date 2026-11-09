@@ -1,21 +1,28 @@
 /**
- * relay-upgrade.ts -- who a relay's WebSocket upgrade says it is, read before any socket stands: the desktop's bearer, sent with no `Origin`, or a page's session cookie, taken only from one of the deployment's own origins; and the server and service both relays stand on.
+ * relay-upgrade.ts -- who a relay's WebSocket upgrade says it is, read before any socket stands: a bearer, whatever `Origin` the upgrade names, or a page's session cookie, taken only from one of the deployment's own origins; and the server and service both relays stand on.
  *
  * Two relays stand on these terms, an agent's terminal (`terminal/service.ts`)
- * and a cloud Browser tab's live view (`browser-live/service.ts`). The
- * desktop connects from its main process, which names no `Origin`, under the
- * account's bearer. A browser names the page's origin on every upgrade, and
- * no page can set or drop it; it also carries the deployment's cookies on an
- * upgrade any page opens, and a WebSocket's handshake, unlike a fetch, asks
- * no CORS question first. So an upgrade naming an origin is taken only from
- * the deployment's own pages (`authDeployment`'s `ownOrigins`, the list
- * `origin-guard.ts` holds a cookie's writes to, never Better Auth's
- * `trustedOrigins`), and its account is then read from its cookie alone, as
- * every hosted route reads a browser's: another site's page that opens a
- * socket here, carrying the member's cookie, is refused before the cookie is
- * read. A page can set no `Authorization` on a WebSocket, so one beside a
- * page's origin is never read, and a cookie with no origin is no desktop's
- * credential. What the account may then reach is each relay's own rule.
+ * and a cloud Browser tab's live view (`browser-live/service.ts`), and the
+ * live socket beside them (`live/live-socket.ts`). The desktop connects from
+ * its main process, which names no `Origin`, under the account's bearer; the
+ * iPhone's app connects under the `ios` client's bearer, and its runtime may
+ * name an `Origin` of its own on the handshake, which says nothing about
+ * where the socket is opened from. A browser names the page's origin on
+ * every upgrade, and no page can set or drop it; it also carries the
+ * deployment's cookies on an upgrade any page opens, and a WebSocket's
+ * handshake, unlike a fetch, asks no CORS question first. But a page can set
+ * no `Authorization` on a WebSocket, so an upgrade carrying one is no page's,
+ * and is taken by its bearer alone, under any origin: a bearer that does
+ * not verify names nobody, and the cookie beside it is never read, as every
+ * hosted route reads a request (`auth/session-credential.ts`). An upgrade
+ * with no bearer that names an origin is taken only from the deployment's
+ * own pages (`authDeployment`'s `ownOrigins`, the list `origin-guard.ts`
+ * holds a cookie's writes to, never Better Auth's `trustedOrigins`), and its
+ * account is then read from its cookie alone, as every hosted route reads a
+ * browser's: another site's page that opens a socket here, carrying the
+ * member's cookie, is refused before the cookie is read. A cookie with no
+ * origin is no desktop's credential. What the account may then reach is
+ * each relay's own rule.
  */
 
 import http, { type IncomingHttpHeaders, type IncomingMessage } from "node:http";
@@ -30,7 +37,7 @@ import { type VoiceSocket, voiceSocket } from "./socket.js";
 export const RELAY_UPGRADE_STATUS = {
   BAD_REQUEST: HOSTED_HTTP_STATUS.BAD_REQUEST,
   UNAUTHORIZED: HOSTED_HTTP_STATUS.UNAUTHORIZED,
-  /** The handshake named an origin that is not one of the deployment's own: another site's page. */
+  /** The handshake carried no `Authorization` and named an origin that is not one of the deployment's own: another site's page. */
   FORBIDDEN: HOSTED_HTTP_STATUS.FORBIDDEN,
   NOT_FOUND: HOSTED_HTTP_STATUS.NOT_FOUND,
   SERVICE_UNAVAILABLE: HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
@@ -44,7 +51,7 @@ const GOING_AWAY = 1001;
 
 const BEARER_SCHEME = "Bearer ";
 
-/** Who an upgrade says it is: the desktop's bearer, or a page's session cookie, as the headers its session is read from. */
+/** Who an upgrade says it is: a bearer, the desktop's or the phone's, or a page's session cookie, as the headers its session is read from. */
 export type RelayCredential = { readonly bearer: string } | { readonly page: Headers };
 
 /** The headers a page's session is read from: its cookie alone, which is all a browser's socket can carry; none where it carries none. */
@@ -53,30 +60,35 @@ function pageHeaders(headers: IncomingHttpHeaders): Headers | undefined {
   return cookie ? new Headers({ [CREDENTIAL_HEADER.COOKIE]: cookie }) : undefined;
 }
 
-/** The desktop's bearer, where the upgrade carries one with something in it. */
-function bearerOf(headers: IncomingHttpHeaders): string | undefined {
-  const authorization = headers.authorization;
-  if (authorization === undefined || !authorization.startsWith(BEARER_SCHEME)) return undefined;
+/** The bearer an `Authorization` carries, where it is one with something in it. */
+function bearerOf(authorization: string): string | undefined {
+  if (!authorization.startsWith(BEARER_SCHEME)) return undefined;
   return authorization.slice(BEARER_SCHEME.length).trim() === "" ? undefined : authorization;
 }
 
 /**
  * The credential an upgrade carries, read from its headers alone against
- * the deployment's own origins, or the status it is refused with: a page of
- * another origin is forbidden whatever it carries, and a page with no
- * cookie, or a caller with no origin and no bearer, is unauthorized.
+ * the deployment's own origins, or the status it is refused with: an
+ * `Authorization` names the caller whatever origin stands beside it, so one
+ * that is no bearer is unauthorized rather than read past, and a cookie is
+ * read only with no `Authorization` beside it and from a page of the
+ * deployment's own; a page of another origin carrying only a cookie is
+ * forbidden, and a page with no cookie, or a caller with no origin and no
+ * `Authorization`, is unauthorized.
  */
 export function relayCredential(
   headers: IncomingHttpHeaders,
   ownOrigins: ReadonlySet<string>,
 ): RelayCredential | { readonly status: number } {
-  if (headers.origin !== undefined) {
-    if (!ownOrigins.has(headers.origin)) return { status: RELAY_UPGRADE_STATUS.FORBIDDEN };
-    const page = pageHeaders(headers);
-    return page === undefined ? { status: RELAY_UPGRADE_STATUS.UNAUTHORIZED } : { page };
+  const authorization = headers.authorization?.trim();
+  if (authorization) {
+    const bearer = bearerOf(authorization);
+    return bearer === undefined ? { status: RELAY_UPGRADE_STATUS.UNAUTHORIZED } : { bearer };
   }
-  const bearer = bearerOf(headers);
-  return bearer === undefined ? { status: RELAY_UPGRADE_STATUS.UNAUTHORIZED } : { bearer };
+  if (headers.origin === undefined) return { status: RELAY_UPGRADE_STATUS.UNAUTHORIZED };
+  if (!ownOrigins.has(headers.origin)) return { status: RELAY_UPGRADE_STATUS.FORBIDDEN };
+  const page = pageHeaders(headers);
+  return page === undefined ? { status: RELAY_UPGRADE_STATUS.UNAUTHORIZED } : { page };
 }
 
 /** Refuses one upgrade before any socket stands, with the status given. */

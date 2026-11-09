@@ -1,4 +1,12 @@
-import { type DisclosureControl, NAV_COUNT_SHOWN, type NavCount } from "@repo/ui";
+import {
+  type DisclosureControl,
+  GROUP_HEADING,
+  GROUP_LOOK,
+  type GroupHeading,
+  type GroupLook,
+  NAV_COUNT_SHOWN,
+  type NavCount,
+} from "@repo/ui";
 
 /**
  * sidebar-fold.ts -- how the sidebar's heads hand `GroupHeader` the fold and the count they keep.
@@ -8,6 +16,12 @@ import { type DisclosureControl, NAV_COUNT_SHOWN, type NavCount } from "@repo/ui
  * as the next state it is asked for. Note that a press the group already
  * stands in is ignored rather than toggled, since a toggle on a state the
  * keeper already holds would put it back.
+ *
+ * Every group the sidebar folds, Pinned, a section, or a repository, is
+ * headed alike (`sidebarHead`): a heading set apart over its rows, its
+ * chevron brought by the pointer or the keyboard, and, folded, its count at
+ * rest, so a fold still reads as folded with no chevron standing; open, it
+ * counts nothing.
  */
 
 /** What a group's count is read as, one and many. */
@@ -49,4 +63,33 @@ export function foldedCount(
   shown: NavCount["shown"] = NAV_COUNT_SHOWN.ON_HOVER,
 ): NavCount | undefined {
   return folded ? { value: count, noun: count === 1 ? noun.one : noun.many, shown } : undefined;
+}
+
+/** What a sidebar group's head is handed alike, Pinned's, a section's, and a repository's: spread onto its `GroupHeader`. */
+export interface SidebarHead {
+  readonly heading: GroupHeading;
+  readonly look: GroupLook;
+  readonly fold: DisclosureControl | undefined;
+  readonly count: NavCount | undefined;
+}
+
+/** What a group the sidebar keeps folded holds: whether it is folded, how it is toggled, and what it counts, as `noun`. */
+export interface SidebarHeadFold {
+  readonly folded: boolean;
+  readonly onToggle: () => void;
+  readonly count: number;
+  readonly noun: CountNoun;
+}
+
+/** A sidebar group's head: a heading set apart over its rows, folded as the sidebar keeps it and counted at rest while folded; with no `fold`, one that folds and counts nothing. */
+export function sidebarHead(fold: SidebarHeadFold | undefined): SidebarHead {
+  return {
+    heading: GROUP_HEADING.NONE,
+    look: GROUP_LOOK.HEADING,
+    fold: fold === undefined ? undefined : sidebarFold(fold.folded, fold.onToggle),
+    count:
+      fold === undefined
+        ? undefined
+        : foldedCount(fold.folded, fold.count, fold.noun, NAV_COUNT_SHOWN.ALWAYS),
+  };
 }

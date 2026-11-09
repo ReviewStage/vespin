@@ -10,7 +10,13 @@
  * twice, once by the toast and once by the key. Every run waits for the one
  * before it, so two quick presses never send their writes out of order.
  * The lists are this window's alone, in a store of its own, and go when the
- * account signed in changes, since a write is its presser's own.
+ * account signed in changes, since a write is its presser's own: a write
+ * still out then keeps nothing, and a run still waiting sends nothing. Only
+ * this module builds an Undo toast, so every Undo runs an entry, bar the
+ * writes `TOAST_ONLY_UNDO` declares; an entry pushed off a list past its
+ * bound withdraws its toast, whose Undo would find nothing. A toast's words
+ * are masked in session replay unless its declaration says they are all the
+ * app's own (`unmasked`), which every declaration must say.
  *
  * A row entry (`pressRows`) is built from a declaration of its write's kind
  * (`ROW_WRITE`): the fields the act sets, read off the rows its caller
@@ -65,10 +71,19 @@ import { Store, useSelector } from "@tanstack/react-store";
 import { type ActResult, type ActVariables, askKept, KEPT, type Kept, notKept } from "./act.js";
 import { priorityOf, statusOf } from "./desktop/task-row-parts.js";
 import type { ShownFailure } from "./failure-report.js";
-import { showToast, TOAST_HOLD, type ToastNotice, undoToast, withdrawToast } from "./toast.js";
+import {
+  showToast,
+  TOAST_HOLD,
+  type ToastNotice,
+  withdrawToast,
+  withdrawToastActing,
+} from "./toast.js";
 
 /** The most entries each list keeps; an older one leaves as a newer one comes. */
 const MAX_ENTRIES = 50;
+
+/** What a toast's action says when it takes back what the toast reports. */
+const UNDO_LABEL = "Undo";
 
 /** What a run of an entry came to. */
 export const UNDO_RAN = {
@@ -162,14 +177,47 @@ let turn: Promise<unknown> = Promise.resolve();
 /** How many times the lists were emptied, so a run that settles after its account left keeps nothing. */
 let generation = 0;
 
+/** Each entry's toast's Undo, by which its toast is withdrawn once the entry is pushed off the lists. */
+const undoPresses = new WeakMap<UndoEntry, () => void>();
+
 /** The lists as they stand. */
 function lineNow(): UndoLine {
   return undoLine.state;
 }
 
-/** `entry` laid on top of `entries`, the oldest leaving past the bound. */
+/**
+ * `entry` laid on top of `entries`, the oldest leaving past the bound. Note
+ * that one pushed off withdraws its toast, because that toast's Undo would
+ * no longer find it and so would do nothing.
+ */
 function stacked(entries: readonly UndoEntry[], entry: UndoEntry): readonly UndoEntry[] {
-  return [...entries, entry].slice(-MAX_ENTRIES);
+  const next = [...entries, entry];
+  for (const off of next.slice(0, -MAX_ENTRIES)) {
+    const press = undoPresses.get(off);
+    if (press !== undefined) withdrawToastActing(press);
+  }
+  return next.slice(-MAX_ENTRIES);
+}
+
+/**
+ * The toast an act that happened at once says it with, so the reader can
+ * take it back: its words in the success tone, with Undo, standing for the
+ * Undo hold. Pressing Undo dismisses it, then runs `undo`. Note that only
+ * this module builds one, so every Undo runs an entry through the lists,
+ * bar the writes `TOAST_ONLY_UNDO` names.
+ */
+function undoToast(words: string, undo: () => void): ToastNotice {
+  return {
+    words,
+    tone: STATUS_TONE.COMPLETE,
+    action: { label: UNDO_LABEL, onPress: undo, replayUnmasked: true },
+    hold: TOAST_HOLD.UNDO,
+  };
+}
+
+/** The toast a write that happened at once says it with where nothing is left to take back: its words alone. */
+function doneToast(words: string): ToastNotice {
+  return { words, tone: STATUS_TONE.COMPLETE, hold: TOAST_HOLD.DONE };
 }
 
 /** Says what a run came to: a refusal and a row changed since, always; a key's run that applied names its entry, and one from its own toast says nothing more. */
@@ -211,14 +259,19 @@ function ran(entry: UndoEntry, way: UndoWay, keyed: boolean): Promise<UndoRan | 
   if (way === UNDO_WAY.UNDO) entry.claim?.();
   undoLine.setState(() => ({ ...line, [way]: line[way].filter((each) => each !== entry) }));
   const asked = generation;
-  const run = turn.then(go).then((answered) => {
-    if (asked !== generation) return answered.ran;
-    const back = BACK_WAY[way];
-    if (answered.ran === UNDO_RAN.APPLIED && entry[back] !== undefined) {
-      undoLine.setState((now) => ({ ...now, [back]: stacked(now[back], entry) }));
-    }
-    said(entry, way, answered, keyed);
-    return answered.ran;
+  // Note that a run still waiting its turn as the account changes sends nothing, because it would send the last account's write on the next one's session.
+  const run = turn.then(() => {
+    if (asked !== generation) return undefined;
+    return go().then((answered) => {
+      if (asked !== generation) return answered.ran;
+      const back = BACK_WAY[way];
+      if (answered.ran === UNDO_RAN.APPLIED && entry[back] !== undefined) {
+        const now = lineNow();
+        undoLine.setState(() => ({ ...now, [back]: stacked(now[back], entry) }));
+      }
+      said(entry, way, answered, keyed);
+      return answered.ran;
+    });
   });
   turn = run.catch(() => undefined);
   return run;
@@ -230,10 +283,13 @@ function ranNewest(way: UndoWay): Promise<UndoRan | undefined> {
   return newest === undefined ? Promise.resolve(undefined) : ran(newest, way, true);
 }
 
-/** Keeps `entry` as the newest for ⌘Z, leaving nothing for ⇧⌘Z, and answers its toast's Undo, which runs it through the lists. */
-function undoable(entry: UndoEntry): () => void {
-  undoLine.setState((now) => ({ undo: stacked(now.undo, entry), redo: [] }));
-  return () => void ran(entry, UNDO_WAY.UNDO, false);
+/** Keeps `entry` as the newest for ⌘Z, leaving nothing for ⇧⌘Z, and answers its toast, whose Undo runs it through the lists. */
+function undoable(entry: UndoEntry): ToastNotice {
+  const press = () => void ran(entry, UNDO_WAY.UNDO, false);
+  undoPresses.set(entry, press);
+  const { undo } = lineNow();
+  undoLine.setState(() => ({ undo: stacked(undo, entry), redo: [] }));
+  return undoToast(entry.words, press);
 }
 
 /** ⌘Z: takes back the newest entry, answering what it came to, or nothing where none waits. */
@@ -266,6 +322,26 @@ export function withdrawUndo(subject: string): void {
   undoLine.setState((now) => ({ undo: now.undo.filter(kept), redo: now.redo.filter(kept) }));
 }
 
+/**
+ * The writes whose Undo stands on their toast alone, outside the lists, so
+ * ⌘Z never reaches them, each with whether its toast's words are the app's
+ * own: a version restored, whose Undo restores the version that stood
+ * before it, and an agent archived after a question was asked first, since
+ * ⌘Z must not put back what took a question, or with no row of it drawn to
+ * read what to put back. Every other Undo is an entry's.
+ */
+export const TOAST_ONLY_UNDO = {
+  VERSION_RESTORE: { replayUnmasked: true },
+  AGENT_ARCHIVE: { replayUnmasked: true },
+} as const;
+
+export type ToastOnlyUndo = (typeof TOAST_ONLY_UNDO)[keyof typeof TOAST_ONLY_UNDO];
+
+/** The toast one of the writes `TOAST_ONLY_UNDO` names says itself with, whose Undo runs `undo` and nothing on the lists. */
+export function toastOnlyUndo(write: ToastOnlyUndo, words: string, undo: () => void): ToastNotice {
+  return { ...undoToast(words, undo), replayUnmasked: write.replayUnmasked };
+}
+
 /** Both lists emptied, as the account signed in changes, so no write is taken back under another account. */
 export function forgetUndo(): void {
   generation += 1;
@@ -293,6 +369,8 @@ export interface RowWrite<Rows, Fields extends object, Kind extends PortActKind>
   readonly kind: Kind;
   /** Sends `id`'s row the fields `fields` names on `send`, answering whether the service kept it. */
   readonly send: (send: RowSend<Kind>, id: string, fields: Fields) => Promise<Kept>;
+  /** Whether the words its callers keep it with are all the app's own, which a screen recording shows as they read; one quoting a name leaves this false. */
+  readonly unmasked: boolean;
   /** What a refusal of it is reported as. */
   readonly surface: FailureSurface;
   /** What a run's refusal says and is about, of the first row refused, the fields sent it, and how many rows the run sent were kept and refused; the stack's own words where none. */
@@ -332,15 +410,18 @@ interface RowChange<Fields extends object> {
 
 /** A press's rows as they stood before its act was drawn, for an entry to keep once the service answers. */
 export interface PressedRows {
+  /** Whether the doors showed any of its rows as it was pressed, so there is something to put back. */
+  readonly drawn: boolean;
   /**
    * Keeps the rows the service kept, those `kept` says it kept or every one
    * where it says nothing, as the newest entry for ⌘Z, called `words`. Keep
    * it once the act answers kept, never at the press, so a write the
-   * service refused is never offered back. Answers the Undo its toast hands
-   * `undoToast`, which runs the entry through the lists, or none where no
-   * row is left to change.
+   * service refused is never offered back. Answers the toast to say it
+   * with: its Undo, which runs the entry through the lists, or its words
+   * alone where no row is left to change; none, and no entry, where the
+   * account signed in changed since the press.
    */
-  readonly keep: (words: string, kept?: (id: string) => boolean) => (() => void) | undefined;
+  readonly keep: (words: string, kept?: (id: string) => boolean) => ToastNotice | undefined;
 }
 
 /** Of `whole`, the fields `like` names. */
@@ -422,16 +503,19 @@ export function pressRows<Rows, Fields extends object, Kind extends PortActKind>
   doors: RowDoors<Rows, Kind>,
   asked: readonly RowAsked<Fields>[],
 ): PressedRows {
+  const since = generation;
   const rows = doors.rows();
   const changes = asked.flatMap(({ id, after }): readonly RowChange<Fields>[] => {
     const now = write.read(rows, id);
     return now === undefined ? [] : [{ id, before: fieldsLike(now, after), after }];
   });
   return {
+    drawn: changes.length > 0,
     keep: (words, kept = () => true) => {
+      if (since !== generation) return undefined;
       const landed = changes.filter((change) => kept(change.id));
-      if (landed.length === 0) return undefined;
-      return undoable({
+      if (landed.length === 0) return { ...doneToast(words), replayUnmasked: write.unmasked };
+      const toast = undoable({
         words,
         undo: () =>
           rowsRun(
@@ -450,6 +534,7 @@ export function pressRows<Rows, Fields extends object, Kind extends PortActKind>
             (each) => each.after,
           ),
       });
+      return { ...toast, replayUnmasked: write.unmasked };
     },
   };
 }
@@ -464,8 +549,8 @@ export function pressRows<Rows, Fields extends object, Kind extends PortActKind>
 export interface UndoWrite<Rows, Asked, Change, Kind extends PortActKind, Answer> {
   /** What its toast says once the act is kept, and what ⌘Z's toast calls it: the same for every press, or of what the press changed. */
   readonly words: string | ((change: Change) => string);
-  /** Whether its toast's words are all the app's own, for session replay to show; they are where it names none. */
-  readonly unmasked?: (change: Change) => boolean;
+  /** Whether its toast's words are all the app's own, which a screen recording shows as they read; one quoting a name answers false. */
+  readonly unmasked: (change: Change) => boolean;
   /** The act its write and its inverse are sent on, whose mutation a caller's doors send it on. */
   readonly kind: Kind;
   /** What `asked` changes as `rows` show it, read as the press is made; none where there is nothing to change. */
@@ -518,7 +603,9 @@ function answeredRun<Rows, Asked, Change, Kind extends PortActKind, Answer>(
  * The entry is taken back only while the rows still hold what the act set,
  * and put back only while they hold what its inverse set. Answers whether
  * the service kept it; not where there was nothing to change. Its toasts
- * are said on `say`, a working toast's settle where the press showed one.
+ * are said on `say`, a working toast's settle where the press showed one,
+ * and none keeps an entry once the account signed in changed while its act
+ * was out.
  */
 export function pressWrite<Rows, Asked, Change, Kind extends PortActKind, Answer>(
   write: UndoWrite<Rows, Asked, Change, Kind, Answer>,
@@ -528,6 +615,7 @@ export function pressWrite<Rows, Asked, Change, Kind extends PortActKind, Answer
 ): Promise<boolean> {
   const change = write.read(doors.rows(), asked);
   if (change === undefined) return Promise.resolve(false);
+  const keep = keepWrite(write, doors, say);
   return write.act(doors.send, change, doors.rows()).then((answer) => {
     const refusal = write.refused(answer);
     if (refusal !== undefined) {
@@ -540,24 +628,39 @@ export function pressWrite<Rows, Asked, Change, Kind extends PortActKind, Answer
       });
       return false;
     }
-    keepWrite(write, doors, change, say);
+    keep(change);
     return true;
   });
 }
 
 /**
- * Keeps a declared write its caller sent and the service kept as the newest
- * entry for ⌘Z, and says so with its toast's Undo, which runs that entry:
- * for a write whose change is read off its act's answer, which `pressWrite`
- * cannot read before it sends. The entry is taken back only while the rows
- * still hold what the act set, and put back only while they hold what its
- * inverse set. Its toast is said on `say`, as `pressWrite`'s are.
+ * Answers how to keep a declared write its caller sends as the newest entry
+ * for ⌘Z once the service kept it, saying so with its toast's Undo, which
+ * runs that entry: for a write whose change is read off its act's answer,
+ * which `pressWrite` cannot read before it sends. Call it as the press is
+ * made, before the act is sent, because a write whose act was still out as
+ * the account signed in changed keeps no entry and says nothing. The entry
+ * is taken back only while the rows still hold what the act set, and put
+ * back only while they hold what its inverse set. Its toast is said on
+ * `say`, as `pressWrite`'s are.
  */
 export function keepWrite<Rows, Asked, Change, Kind extends PortActKind, Answer>(
   write: UndoWrite<Rows, Asked, Change, Kind, Answer>,
   doors: RowDoors<Rows, Kind>,
-  change: Change,
   say: (notice: ToastNotice) => void = showToast,
+): (change: Change) => void {
+  const since = generation;
+  return (change) => {
+    if (since === generation) keptWrite(write, doors, change, say);
+  };
+}
+
+/** Keeps a declared write the service kept as the newest entry for ⌘Z, and says so on `say` with its toast's Undo (`keepWrite`). */
+function keptWrite<Rows, Asked, Change, Kind extends PortActKind, Answer>(
+  write: UndoWrite<Rows, Asked, Change, Kind, Answer>,
+  doors: RowDoors<Rows, Kind>,
+  change: Change,
+  say: (notice: ToastNotice) => void,
 ): void {
   const run = (
     due: (rows: Rows, change: Change) => boolean,
@@ -570,12 +673,12 @@ export function keepWrite<Rows, Asked, Change, Kind extends PortActKind, Answer>
         send(doors.send, each, doors.rows()).then((answer) => answeredRun(write, each, answer)),
     );
   const words = typeof write.words === "string" ? write.words : write.words(change);
-  const undo = undoable({
+  const toast = undoable({
     words,
     undo: () => run(write.holds, write.undo),
     redo: () => run(write.undone, write.act),
   });
-  say({ ...undoToast(words, undo), replayUnmasked: write.unmasked?.(change) ?? true });
+  say({ ...toast, replayUnmasked: write.unmasked(change) });
 }
 
 /** What a refusal of a held write says, and what it is reported as. */
@@ -690,9 +793,8 @@ export function pressHeld<Doors, Change, Answer, Released>(
         action: { label: retry.label, replayUnmasked: true, onPress: again },
       };
     });
-  const undo = undoable(entry);
   showToast({
-    ...undoToast(entry.words, undo),
+    ...undoable(entry),
     glyph: write.glyph,
     replayUnmasked: write.unmasked(change),
     onGone: letGo,
@@ -725,6 +827,8 @@ export function pressHeld<Doors, Change, Answer, Released>(
 export interface LocalWrite<Doors, Change> {
   /** What its toast says, and what ⌘Z's toast calls it. */
   readonly words: string;
+  /** Whether its toast's words are all the app's own, which a screen recording shows as they read; one quoting a name answers false. */
+  readonly unmasked: (change: Change) => boolean;
   /** Makes the write. */
   readonly act: (doors: Doors, change: Change) => void;
   /** Makes its inverse. */
@@ -762,15 +866,15 @@ export function pressLocal<Doors, Change>(
         return Promise.resolve(APPLIED_RUN);
       },
     );
-  const undo = undoable({
+  const toast = undoable({
     words: write.words,
     undo: () => run(write.holds, write.undo),
     redo: () => run(write.undone, write.act),
     subject,
   });
   showToast({
-    ...undoToast(write.words, undo),
-    replayUnmasked: true,
+    ...toast,
+    replayUnmasked: write.unmasked(change),
     ...(subject === undefined ? undefined : { subject }),
   });
 }
@@ -851,6 +955,7 @@ export const ROW_WRITE = {
     holds: holdsEach,
     kind: ACT_KIND.TASKS_RENAME,
     send: (send, taskId, { name }) => askKept(send({ taskId, name })),
+    unmasked: true,
     surface: FAILURE_SURFACE.TASK_RENAME,
   } satisfies RowWrite<TaskRows, { readonly name: string }, typeof ACT_KIND.TASKS_RENAME>,
   TASK_STANDING: {
@@ -880,6 +985,7 @@ export const ROW_WRITE = {
               : { assigneeId: assignee.userId, assigneeName: assignee.name }),
         }),
       ),
+    unmasked: true,
     surface: FAILURE_SURFACE.TASK_STANDING,
   } satisfies RowWrite<TaskRows, StandingFields, typeof ACT_KIND.TASKS_SET_STANDING>,
   TASK_PIN: {
@@ -891,6 +997,7 @@ export const ROW_WRITE = {
     holds: holdsEach,
     kind: ACT_KIND.TASKS_PIN,
     send: (send, taskId, pin) => askKept(send({ taskId, ...pinSent(pin) })),
+    unmasked: true,
     surface: FAILURE_SURFACE.TASK_MARK,
   } satisfies RowWrite<TaskRows, PinFields, typeof ACT_KIND.TASKS_PIN>,
   AGENT_PIN: {
@@ -898,6 +1005,7 @@ export const ROW_WRITE = {
     holds: holdsEach,
     kind: ACT_KIND.AGENTS_PIN,
     send: (send, agentId, pin) => agentKept(send({ agentId, ...pinSent(pin) })),
+    unmasked: true,
     surface: FAILURE_SURFACE.AGENT_PIN,
   } satisfies RowWrite<TaskRows, PinFields, typeof ACT_KIND.AGENTS_PIN>,
   AGENT_ARCHIVE: {
@@ -908,6 +1016,7 @@ export const ROW_WRITE = {
     holds: holdsEach,
     kind: ACT_KIND.AGENTS_ARCHIVE,
     send: (send, agentId, { archived }) => agentKept(send({ agentId, archived })),
+    unmasked: true,
     surface: FAILURE_SURFACE.AGENT_ARCHIVE,
   } satisfies RowWrite<
     readonly AgentSummary[],

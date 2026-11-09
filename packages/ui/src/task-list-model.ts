@@ -21,9 +21,11 @@ import { TASK_STATUS, type TaskStatus, type TaskSummary } from "@repo/features/t
  * that they created, so a task of theirs nobody picked up never leaves it.
  * It holds the tasks to do and in progress alone (`SHOWN_STATUSES`), so a
  * filed backlog and the settled tasks stay out of the way of the work under
- * way; an agent with no task, and a task from a service before statuses,
- * has no status to leave it out by and always stands. The Tasks page lays
- * the same tasks out its own way (`tasks-page-model.ts`).
+ * way, unless the reader asks for the finished sub-tasks back, which stand
+ * under their parents (`taskRowInView`); an agent with no task, and a task
+ * from a service before statuses, has no status to leave it out by and
+ * always stands. The Tasks page lays the same tasks out its own way
+ * (`tasks-page-model.ts`).
  */
 
 /** How the list groups its tasks. */
@@ -56,10 +58,12 @@ export type AssignedTo =
   | { readonly kind: typeof ASSIGNED_TO.ANYONE }
   | { readonly kind: typeof ASSIGNED_TO.MEMBER; readonly userId: string };
 
-/** How a workspace's list is drawn: by repository, the reader's own tasks, until it is changed. */
+/** How a workspace's list is drawn: by repository, the reader's own tasks, its finished sub-tasks left out, until it is changed. */
 export interface TaskListView {
   readonly grouping: TaskGrouping;
   readonly assignedTo: AssignedTo;
+  /** Whether a parent's finished sub-tasks stand under it (`taskRowInView`). */
+  readonly finishedSubTasks: boolean;
 }
 
 /** The statuses the list shows: the work to do and under way, the backlog and the settled left out. */
@@ -68,6 +72,7 @@ export const SHOWN_STATUSES: readonly TaskStatus[] = [TASK_STATUS.TODO, TASK_STA
 export const DEFAULT_TASK_LIST_VIEW: TaskListView = {
   grouping: TASK_GROUPING.REPOSITORY,
   assignedTo: { kind: ASSIGNED_TO.ME },
+  finishedSubTasks: false,
 };
 
 /** What a row of the list stands for: a task, or an agent with no task. */
@@ -281,6 +286,23 @@ export function taskRowsInStatuses(
   return rows.filter((row) => taskRowInStatuses(row, statuses));
 }
 
+/**
+ * Whether the view draws a row: one of a status the list shows
+ * (`SHOWN_STATUSES`), or, while it shows finished sub-tasks, a sub-task
+ * done or canceled, which stands under its parent wherever that is drawn
+ * and nowhere where it is not (`homedTaskRows`), so a finished task at the
+ * top stays out of the list.
+ */
+export function taskRowInView(row: TaskRow, view: Pick<TaskListView, "finishedSubTasks">): boolean {
+  if (taskRowInStatuses(row, SHOWN_STATUSES)) return true;
+  return (
+    view.finishedSubTasks &&
+    row.kind === TASK_ROW.TASK &&
+    row.task.parentTaskId !== undefined &&
+    taskFinished(row.task)
+  );
+}
+
 /** One row as a list nesting child tasks draws it: how deep it stands, and whether the child tasks under it stand open. */
 export interface DrawnTaskRow {
   readonly row: TaskRow;
@@ -296,13 +318,49 @@ interface TaskRowNode {
   readonly children: readonly TaskRowNode[];
 }
 
-/** The parent a row stands under where `rows` holds it: a task's parent task; none for an agent, a task at the top, one naming itself, or a pinned one, which stands on its own pin. */
-function parentIn(row: TaskRow, held: ReadonlySet<string>): string | undefined {
-  if (row.kind !== TASK_ROW.TASK || row.task.pinnedAt !== undefined) return undefined;
-  const { id, parentTaskId } = row.task;
-  return parentTaskId !== undefined && parentTaskId !== id && held.has(parentTaskId)
-    ? parentTaskId
-    : undefined;
+/** Every task of the workspace by its id, those no list draws among them, through which a task's ancestors are walked. */
+export type TasksById = ReadonlyMap<string, TaskSummary>;
+
+/** Every task of `tasks` by its id. */
+export function tasksById(tasks: readonly TaskSummary[]): TasksById {
+  return new Map(tasks.map((task) => [task.id, task]));
+}
+
+/**
+ * The nearest of a task's ancestors `held` holds, walked up through `every`
+ * past those it leaves out, as a finished parent the view hides; none for
+ * a task at the top, a pinned one, which stands on its own pin, or one
+ * none of whose ancestors `held` holds. Note that the walk ends where a
+ * loop of parents, which nothing writes, closes, and at a task out of the
+ * reader's sight, which `every` does not hold.
+ */
+function heldAncestor(
+  task: TaskSummary,
+  held: (taskId: string) => boolean,
+  every: TasksById,
+): string | undefined {
+  if (task.pinnedAt !== undefined) return undefined;
+  const walked = new Set([task.id]);
+  let at = task.parentTaskId;
+  while (at !== undefined && !walked.has(at)) {
+    if (held(at)) return at;
+    walked.add(at);
+    at = every.get(at)?.parentTaskId;
+  }
+  return undefined;
+}
+
+/** Whether a task stands under a parent, which the sidebar draws it under or nowhere: one not pinned, naming a parent other than itself. */
+function underParent(task: TaskSummary): boolean {
+  return (
+    task.pinnedAt === undefined && task.parentTaskId !== undefined && task.parentTaskId !== task.id
+  );
+}
+
+/** The row a row stands under where `rows` holds it: its task's nearest ancestor `rows` holds (`heldAncestor`); none for an agent. */
+function parentIn(row: TaskRow, held: ReadonlySet<string>, every: TasksById): string | undefined {
+  if (row.kind !== TASK_ROW.TASK) return undefined;
+  return heldAncestor(row.task, (taskId) => held.has(taskId), every);
 }
 
 /**
@@ -311,12 +369,12 @@ function parentIn(row: TaskRow, held: ReadonlySet<string>): string | undefined {
  * its first row is stood at the top, the loop cut where it closes, rather
  * than the loop leaving the list.
  */
-function taskRowTree(rows: readonly TaskRow[]): TaskRowNode[] {
+function taskRowTree(rows: readonly TaskRow[], every: TasksById): TaskRowNode[] {
   const held = new Set(rows.flatMap((row) => (row.kind === TASK_ROW.TASK ? [row.task.id] : [])));
   const childrenOf = new Map<string, TaskRow[]>();
   const tops: TaskRow[] = [];
   for (const row of rows) {
-    const parent = parentIn(row, held);
+    const parent = parentIn(row, held, every);
     if (parent === undefined) tops.push(row);
     else childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), row]);
   }
@@ -344,16 +402,19 @@ function holdsStanding(node: TaskRowNode, standing: (row: TaskRow) => boolean): 
  * then the child tasks under it while `opened` says it stands open, to any
  * depth, each in the order `rows` hands it. A task stands under its parent
  * where `rows` holds that parent, which the sidebar sees to across its
- * lists (`homedTaskRows`); one whose parent `rows` leaves out, as a fold
- * leaves out all but the open task, stands at the top, so it is never out
- * of reach, and no row stands twice. A row folded shut still draws the one
- * `standing` keeps (the open task), and the rows between it and that one,
- * so the task worked on never leaves the list, as a folded group keeps it.
+ * lists (`homedTaskRows`), or under its nearest ancestor `rows` holds where
+ * the parent is one the view hides, walked through `every`; one none of
+ * whose ancestors `rows` holds, as a fold leaves out all but the open task,
+ * stands at the top, so it is never out of reach, and no row stands twice.
+ * A row folded shut still draws the one `standing` keeps (the open task),
+ * and the rows between it and that one, so the task worked on never leaves
+ * the list, as a folded group keeps it.
  */
 export function drawnTaskRows(
   rows: readonly TaskRow[],
   opened: (taskId: string) => boolean,
   standing: (row: TaskRow) => boolean,
+  every: TasksById,
 ): DrawnTaskRow[] {
   const drawn: DrawnTaskRow[] = [];
   const draw = (node: TaskRowNode, depth: number) => {
@@ -365,7 +426,7 @@ export function drawnTaskRows(
       open === false ? children.filter((child) => holdsStanding(child, standing)) : children;
     for (const child of under) draw(child, depth + 1);
   };
-  for (const node of taskRowTree(rows)) draw(node, 0);
+  for (const node of taskRowTree(rows, every)) draw(node, 0);
   return drawn;
 }
 
@@ -374,12 +435,18 @@ export function drawnTaskRows(
  * group under Tasks. A child task stands only under its parent, wherever a
  * list holds that parent, so each is moved out of the list it would sort
  * into and into the list holding its top task, or its nearest pinned one,
- * after that list's own rows, where `drawnTaskRows` nests it; and one with
- * an ancestor no list holds, finished and hidden by the view, filtered out,
- * or out of the reader's sight, is drawn nowhere, never at the top. A
- * pinned task stays in Pinned, under no parent.
+ * after that list's own rows, where `drawnTaskRows` nests it. A parent no
+ * list holds, finished and hidden by the view, filtered out, or out of the
+ * reader's sight, is passed by, walked through `every`, so its child task
+ * stands under the nearest ancestor a list does hold, and its open work
+ * never leaves the sidebar; one none of whose ancestors any list holds is
+ * drawn nowhere, never at the top. A pinned task stays in Pinned, under no
+ * parent.
  */
-export function homedTaskRows(lists: readonly (readonly TaskRow[])[]): TaskRow[][] {
+export function homedTaskRows(
+  lists: readonly (readonly TaskRow[])[],
+  every: TasksById,
+): TaskRow[][] {
   const listOf = new Map<string, number>();
   const byId = new Map<string, TaskSummary>();
   lists.forEach((rows, list) => {
@@ -389,19 +456,20 @@ export function homedTaskRows(lists: readonly (readonly TaskRow[])[]): TaskRow[]
       byId.set(row.task.id, row.task);
     }
   });
+  const held = (taskId: string) => listOf.has(taskId);
   const homeOf = (row: TaskRow, list: number): number | undefined => {
     if (row.kind !== TASK_ROW.TASK) return list;
     const walked = new Set([row.task.id]);
     let at = row.task;
     // Note that a loop of parents, which nothing writes, ends the walk where it closes, at the last task it reached.
-    while (at.pinnedAt === undefined && at.parentTaskId !== undefined) {
-      const parent = byId.get(at.parentTaskId);
-      if (parent === undefined) return undefined;
-      if (walked.has(parent.id)) break;
+    for (let above = heldAncestor(at, held, every); above !== undefined; ) {
+      const parent = byId.get(above);
+      if (parent === undefined || walked.has(parent.id)) break;
       walked.add(parent.id);
       at = parent;
+      above = heldAncestor(at, held, every);
     }
-    return listOf.get(at.id);
+    return at === row.task && underParent(at) ? undefined : listOf.get(at.id);
   };
   const homed = lists.map((rows, list) => rows.map((row) => ({ row, home: homeOf(row, list) })));
   return lists.map((_, list) => [

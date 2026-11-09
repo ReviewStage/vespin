@@ -95,9 +95,6 @@ const ALERT_TONES: ReadonlySet<ToastTone> = new Set([STATUS_TONE.DANGER]);
 /** How long a toast stands, by what it reports: `@repo/ui`'s, which a copy button's check reads too. */
 export { TOAST_HOLD };
 
-/** What a toast's action says when it takes back what the toast reports. */
-const UNDO_LABEL = "Undo";
-
 /** What a failure toast's copy button copies, as "Copy details" names it. */
 const DETAILS_WHAT = "details";
 
@@ -192,7 +189,7 @@ const DISMISS_LABEL = "Dismiss";
 /** What the stack is called, as a landmark among the window's regions. */
 const STACK_LABEL = "Notifications";
 
-/** What can happen to the toasts: one shown, one working settled in place, one's hold paused, let run again, or the toast sent away, every toast about a subject withdrawn, or the room the window leaves changed. */
+/** What can happen to the toasts: one shown, one working settled in place, one's hold paused, let run again, or the toast sent away, every toast about a subject or acting by a press withdrawn, or the room the window leaves changed. */
 const TOAST_STEP = {
   SHOW: "show",
   SETTLE: "settle",
@@ -215,7 +212,7 @@ type ToastStep =
       readonly subject: string;
       readonly notice: KeptNotice;
     }
-  | { readonly kind: typeof TOAST_STEP.WITHDRAW; readonly subject: string }
+  | { readonly kind: typeof TOAST_STEP.WITHDRAW; readonly about: (notice: ToastNotice) => boolean }
   | { readonly kind: typeof TOAST_STEP.ROOM; readonly room: number }
   | { readonly kind: typeof TOAST_STEP.CLEAR };
 
@@ -403,8 +400,8 @@ function stepped(stack: ToastLine, step: ToastStep, now: number): ToastLine {
     case TOAST_STEP.DISMISS:
       return leave(stack, (toast) => toast.id === step.id, now);
     case TOAST_STEP.WITHDRAW: {
-      const waiting = stack.waiting.filter((notice) => notice.subject !== step.subject);
-      return leave({ ...stack, waiting }, (toast) => toast.notice.subject === step.subject, now);
+      const waiting = stack.waiting.filter((notice) => !step.about(notice));
+      return leave({ ...stack, waiting }, (toast) => step.about(toast.notice), now);
     }
     case TOAST_STEP.ROOM:
       return crowd({ ...stack, room: step.room }, now);
@@ -427,7 +424,7 @@ function reportSaid(step: ToastStep, at: number): ToastStep | undefined {
   const details = reportShownFailure(step.notice.failure, at);
   if (step.notice.action === undefined && failureOfConnection(step.notice.failure)) {
     return step.kind === TOAST_STEP.SETTLE
-      ? { kind: TOAST_STEP.WITHDRAW, subject: step.subject }
+      ? { kind: TOAST_STEP.WITHDRAW, about: (notice) => notice.subject === step.subject }
       : undefined;
   }
   return { ...step, notice: { ...step.notice, details } };
@@ -505,22 +502,6 @@ export function useToastsOwner(account: string | undefined): void {
 }
 
 /**
- * The toast an act that happened at once says it with, so the developer can
- * take it back: its words in the success tone, with Undo, standing for the
- * Undo hold. Pressing Undo dismisses it, then runs `undo`. It is a notice
- * rather than a show, so it is handed to whatever shows the act's answer:
- * `useToast`'s function, `showToast`, or a working toast's settle.
- */
-export function undoToast(words: string, undo: () => void): ToastNotice {
-  return {
-    words,
-    tone: STATUS_TONE.COMPLETE,
-    action: { label: UNDO_LABEL, onPress: undo, replayUnmasked: true },
-    hold: TOAST_HOLD.UNDO,
-  };
-}
-
-/**
  * Shows a toast from outside React: for a press whose answer lands after its
  * handler returned (`act.ts`'s `pressAct`).
  */
@@ -559,7 +540,12 @@ export function useWithdrawToast(): (subject: string) => void {
 
 /** Withdraws every toast standing or waiting about `subject` (`useWithdrawToast`), from outside React as `showToast` shows one. */
 export function withdrawToast(subject: string): void {
-  stepToasts({ kind: TOAST_STEP.WITHDRAW, subject });
+  stepToasts({ kind: TOAST_STEP.WITHDRAW, about: (notice) => notice.subject === subject });
+}
+
+/** Withdraws every toast standing or waiting whose action runs `onPress`, once pressing it would do nothing: an Undo whose entry has left the undo stack (`undo-stack.ts`). */
+export function withdrawToastActing(onPress: () => void): void {
+  stepToasts({ kind: TOAST_STEP.WITHDRAW, about: (notice) => notice.action?.onPress === onPress });
 }
 
 /** Whether a toast about `subject` stands in sight, not on its way out; the same answer while the stack holds it. */

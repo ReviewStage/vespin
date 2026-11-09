@@ -28,7 +28,7 @@ import { MENTION_MENU_SIDE } from "./mention-picker.js";
 import { NewTaskComposer } from "./new-task-composer.js";
 import type { NewTaskRelation } from "./new-task-relation.js";
 import { MODELS_READ, type ModelsRead } from "./use-agents.js";
-import type { NewTaskStart } from "./use-tasks-tab.js";
+import type { NewTaskStart } from "./use-new-task.js";
 
 /**
  * new-task-composer-runs-on.test.ts -- New task's Runs on, with Bring your own

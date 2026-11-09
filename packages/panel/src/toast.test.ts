@@ -22,12 +22,11 @@ import {
   TOAST_HOLD,
   ToastHost,
   type ToastNotice,
-  undoToast,
   useToast,
   useToastsOwner,
   useWorkingToast,
 } from "./toast.js";
-import { pressRows, ROW_WRITE, undoLast } from "./undo-stack.js";
+import { forgetUndo, type PressedRows, pressRows, ROW_WRITE, undoLast } from "./undo-stack.js";
 import { appStateIn } from "./use-app-state.js";
 
 /**
@@ -37,7 +36,7 @@ import { appStateIn } from "./use-app-state.js";
  * hold as its countdown; work under way settles into its own card in
  * place; an act's Undo toast takes the act back and stands for the Undo
  * hold, a row write's taken back once, as ⌘Z's entry, which the key then
- * finds gone; and a failure toast reports what failed to Sentry, which a recording
+ * finds gone, and leaving once its entry is pushed off the undo list; and a failure toast reports what failed to Sentry, which a recording
  * SDK stands in for, and copies the details of that report, but is not shown
  * where the connection already says why. jsdom lays nothing out, so the window's height is given. Synthetic
  * throughout.
@@ -54,6 +53,7 @@ let show: ((notice: ToastNotice) => void) | undefined;
 let work: ((words: string) => (notice: ToastNotice) => void) | undefined;
 
 afterEach(() => {
+  forgetUndo();
   vi.useRealTimers();
   act(() => root?.unmount());
   root = undefined;
@@ -164,6 +164,32 @@ function toastButton(label: string): HTMLButtonElement {
     ...document.querySelectorAll<HTMLButtonElement>(".ui-toast:not([data-leaving]) button"),
   ].find((button) => button.textContent === label);
   return found ?? assert.fail(`a toast button named ${label}`);
+}
+
+/** The task a pin is pressed on. */
+const PINNED_TASK = {
+  id: "3f2c8a51-6d0e-4b7a-9c14-2e5f7a9b0d36",
+  workspaceId: "workspace-personal",
+  name: "Teammate invitations",
+  createdAt: 1,
+  updatedAt: 2,
+  repository: null,
+} as const;
+
+/** A pin of the task pressed as its menu presses it and drawn as the host draws it once kept, each undo it is sent kept in `sent`. */
+function pinPressed(sent: TasksPinParams[] = []): PressedRows {
+  let drawn: TasksView = { ...IDLE_TASKS_VIEW, tasks: [PINNED_TASK] };
+  const sendPin = (payload: TasksPinParams) => {
+    sent.push(payload);
+    return Promise.resolve(true);
+  };
+  const pressed = pressRows(
+    ROW_WRITE.TASK_PIN,
+    { rows: () => ({ tasks: drawn, held: undefined }), send: sendPin },
+    [{ id: PINNED_TASK.id, after: { pinned: true, position: null } }],
+  );
+  drawn = { ...IDLE_TASKS_VIEW, tasks: [{ ...PINNED_TASK, pinnedAt: 3 }] };
+  return pressed;
 }
 
 /** The window grown or shrunk to `height`, as a drag of its edge reports it. */
@@ -520,71 +546,52 @@ test("an unexpected failure toast's Copy details copies what its report sent, wi
 test("another account signing in empties the stack at once, the last one's toasts gone without leaving in sight", () => {
   const signIn = mount(WINDOW.TALL, "ada");
   act(() => show?.(persisting("Retry the webhook finished")));
-  act(() => show?.(undoToast("Task archived", () => undefined)));
+  act(() => show?.(pinPressed().keep("Task pinned") ?? assert.fail("the pin's toast")));
 
   signIn("grace");
 
   assert.equal(document.querySelectorAll(".ui-toast").length, 0);
 });
 
-test("an Undo toast says the act in the success tone, and its Undo takes the act back and sends the toast away", () => {
+test("an Undo toast's Undo takes a row write back once and sends the toast away, leaving ⌘Z nothing to take back again", async () => {
   mount(WINDOW.TALL);
-  const undone: string[] = [];
-  act(() => show?.(undoToast("Task archived", () => undone.push("Task archived"))));
-
-  act(() => toastButton("Undo").click());
-
-  assert.deepEqual(undone, ["Task archived"]);
-  assert.deepEqual(standing(), []);
-});
-
-test("an Undo toast's Undo takes a row write back once, leaving ⌘Z nothing to take back again", async () => {
-  mount(WINDOW.TALL);
-  const taskId = "3f2c8a51-6d0e-4b7a-9c14-2e5f7a9b0d36";
-  const task = {
-    id: taskId,
-    workspaceId: "workspace-personal",
-    name: "Teammate invitations",
-    createdAt: 1,
-    updatedAt: 2,
-    repository: null,
-  };
-  let drawn: TasksView = { ...IDLE_TASKS_VIEW, tasks: [task] };
   const sent: TasksPinParams[] = [];
-  const sendPin = (payload: TasksPinParams) => {
-    sent.push(payload);
-    return Promise.resolve(true);
-  };
-  const pressed = pressRows(
-    ROW_WRITE.TASK_PIN,
-    { rows: () => ({ tasks: drawn, held: undefined }), send: sendPin },
-    [{ id: taskId, after: { pinned: true, position: null } }],
-  );
-  // The pin is kept and drawn, as the host draws it.
-  drawn = { ...IDLE_TASKS_VIEW, tasks: [{ ...task, pinnedAt: 3 }] };
-  const undo = pressed.keep("Task pinned") ?? assert.fail("the pin's entry");
-  act(() => show?.(undoToast("Task pinned", undo)));
+  const said = pinPressed(sent).keep("Task pinned") ?? assert.fail("the pin's toast");
+  act(() => show?.(said));
 
   act(() => toastButton("Undo").click());
   await vi.waitFor(() => assert.equal(sent.length, 1));
   const again = await undoLast();
 
   assert.equal(again, undefined);
-  assert.deepEqual(sent, [{ taskId, pinned: false }]);
+  assert.deepEqual(sent, [{ taskId: PINNED_TASK.id, pinned: false }]);
+  assert.deepEqual(standing(), []);
+});
+
+test("an Undo toast whose entry was pushed off the undo list leaves rather than offer an Undo that does nothing", () => {
+  mount(WINDOW.TALL);
+  act(() => show?.(pinPressed().keep("Task pinned") ?? assert.fail("the pin's toast")));
+
+  // Pins a drag keeps for ⌘Z say no toast of their own, so the first pin's toast still stands as they push its entry off.
+  act(() => {
+    for (let pinned = 0; pinned < 50; pinned += 1) pinPressed().keep("Task pinned");
+  });
+
+  assert.deepEqual(standing(), []);
 });
 
 test("an Undo toast nobody points at stands for the Undo hold, then leaves without taking the act back", () => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   mount(WINDOW.TALL);
   const hold = Duration.toMillis(TOAST_HOLD.UNDO);
-  const undone: string[] = [];
-  act(() => show?.(undoToast("Settings reset", () => undone.push("Settings reset"))));
+  const sent: TasksPinParams[] = [];
+  act(() => show?.(pinPressed(sent).keep("Task pinned") ?? assert.fail("the pin's toast")));
 
   pass(hold - 1);
   const justBefore = standing();
   pass(1);
 
-  assert.deepEqual(justBefore, ["Settings reset"]);
+  assert.deepEqual(justBefore, ["Task pinned"]);
   assert.deepEqual(standing(), []);
-  assert.deepEqual(undone, []);
+  assert.deepEqual(sent, []);
 });

@@ -595,11 +595,18 @@ test("a section holding no task offers only Rename, Add icon where it wears none
 });
 
 test("⌘-clicking a section's task and one under Tasks chooses both, opening neither, and a right-click on either offers Status for both, which S on the focused one opens", async () => {
-  const settled: [string[], string][] = [];
+  const settled: [string, string | undefined][] = [];
   const opened: string[] = [];
   const sidebar = await mountSidebar([], SECTIONS, {
     onResume: (taskId) => opened.push(taskId),
-    onSettleTasks: (taskIds, status) => settled.push([[...taskIds], status]),
+  });
+  // Each task's status leaves on the act port, which the service keeps.
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_SET_STANDING]: ({ taskId, status }) => {
+      settled.push([taskId, status]);
+      return Promise.resolve(true);
+    },
   });
   const rowOf = (name: string) =>
     [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].find((each) =>
@@ -631,7 +638,10 @@ test("⌘-clicking a section's task and one under Tasks chooses both, opening ne
   assert.equal(document.querySelector(".ui-menu-heading")?.textContent, "2 tasks");
   assert.ok(document.querySelector('[role="menu"][aria-label="Status"]'), "S opens Status");
   await act(async () => item("Done").click());
-  assert.deepEqual(settled, [[[INVITES.id, RETRIES.id], TASK_STATUS.DONE]]);
+  assert.deepEqual(settled, [
+    [INVITES.id, TASK_STATUS.DONE],
+    [RETRIES.id, TASK_STATUS.DONE],
+  ]);
 });
 
 test("a plain click on any row, with tasks chosen and no bar to let them go, opens it and chooses none", async () => {
@@ -1041,6 +1051,46 @@ const PINNED = {
   pinnedAt: 5,
   pinPosition: "a0",
 };
+
+test("Pinned's ⋯ stands while a pinned task is unread, and its Mark all as read asks the service to mark it read", async () => {
+  const marks: string[] = [];
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_MARK_READ]: ({ taskId, readMark }) => {
+      marks.push(`${readMark}:${taskId}`);
+      return Promise.resolve(true);
+    },
+  });
+  const read = await mountSidebar([], SECTIONS, {
+    tasks: [{ ...PINNED, readThrough: PINNED.updatedAt }],
+  });
+  assert.equal(read.querySelector('[aria-label="Pinned actions"]'), null);
+  read.remove();
+
+  const sidebar = await mountSidebar([], SECTIONS, {
+    tasks: [{ ...PINNED, readThrough: PINNED.updatedAt - 1 }],
+  });
+  openSectionMenu(sidebar, "Pinned");
+  await act(async () => item("Mark all as read").click());
+  await settle();
+
+  assert.deepEqual(marks, [`read:${PINNED.id}`]);
+});
+
+test("a task row in Pinned and in a section shows when its agents last did something, as a row in Tasks does", async () => {
+  const active = { agents: { total: 1, working: 0, activityAt: 9_000, pullRequestTotal: 0 } };
+  const sidebar = await mountSidebar([], SECTIONS, {
+    tasks: [
+      { ...PINNED, ...active },
+      { ...INVITES, ...active },
+    ],
+  });
+  const shown = (name: string) =>
+    rowPress(sidebar, name).querySelector("time")?.getAttribute("dateTime");
+
+  assert.equal(shown("Pin audit"), new Date(9_000).toISOString());
+  assert.equal(shown("Invite expiry"), new Date(9_000).toISOString());
+});
 
 test("a task dragged from Tasks into Pinned is pinned below the pin it was let go under", async () => {
   const asked = noneAsked();

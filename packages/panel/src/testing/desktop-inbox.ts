@@ -103,7 +103,13 @@ import { restOn } from "./hint-rest.js";
 import { relayout } from "./resize-observer.js";
 import { installScrollIntoView } from "./scroll-into-view.js";
 import { onSideBundles } from "./side-bundles.js";
-import { agentHoldingsOf, listedAgent, tasksControl, waitingOf } from "./tasks-control.js";
+import {
+  agentHoldingsOf,
+  listedAgent,
+  newTaskControl,
+  tasksControl,
+  waitingOf,
+} from "./tasks-control.js";
 import { holdingInboxChoice, leavingBy, windowRouter } from "./window-router.js";
 
 /** Where the window's router stands as the Inbox is drawn: Acme's Inbox. */
@@ -872,9 +878,11 @@ export function mount(
         onTaskAgents: () => undefined,
       },
       onShowTask: (taskId) => asked.shownTasks.push(taskId),
-      onNewTask: () => {
-        asked.newTasks += 1;
-      },
+      newTask: newTaskControl({
+        onOpen: () => {
+          asked.newTasks += 1;
+        },
+      }),
       onShowAgent: (taskId, agentId) => asked.shownAgents.push([taskId, agentId]),
     });
     const inbox =
@@ -1025,9 +1033,9 @@ export function openViewOptions(page: HTMLElement): void {
 /** The scopes the view's menu may offer, in their order, and Archived, which it offered while tasks were archived, so a menu offering it again is heard. */
 export const SCOPE_NAMES = ["Open", "Questions", "All", "Archived"] as const;
 
-/** The Inbox's name as the list's head says it. */
+/** The Inbox's name as the list's heading says it to a reader. */
 export function headTitle(page: HTMLElement): string | null | undefined {
-  return page.querySelector(".inbox-tasks .ui-toolbar-title")?.textContent;
+  return page.querySelector(".inbox-tasks h1")?.textContent;
 }
 
 /** Shows the scope `name` from the list's View options. */

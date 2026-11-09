@@ -60,7 +60,8 @@ import type { SkillWithFile } from "./skill-ref.js";
 import { TaskMentions, tasklessMentions, useMentionAgentsReader } from "./task-mentions.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
 import { MODELS_READ } from "./use-agents.js";
-import type { NewTaskAgent, NewTaskStart, TasksControl } from "./use-tasks-tab.js";
+import type { NewTaskAgent, NewTaskStart } from "./use-new-task.js";
+import type { TasksControl } from "./use-tasks-tab.js";
 
 /**
  * new-task-composer.tsx -- New task's composer card: the words a coding agent starts on, and the chips that say where and how the task starts.

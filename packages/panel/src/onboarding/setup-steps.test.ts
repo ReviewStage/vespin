@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
-import { SETTINGS_ACT_KIND } from "@repo/host/contract";
+import { SETTINGS_ACT_KIND, WORKSPACE_ACT_KIND } from "@repo/host/contract";
 import { appSettingsWire, settingsView } from "@repo/settings/testing";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { act, createElement } from "react";
@@ -17,7 +17,8 @@ import { SetupSteps } from "./setup-steps.js";
 /**
  * Setup's Welcome as the developer walks back to it: a team's workspace
  * made and then left for Just me lists the account's own workspace again,
- * so GitHub is not installed on the team's. And its survey, kept on the
+ * so GitHub is not installed on the team's, and is deleted while nobody
+ * else joined it, which the service checks. And its survey, kept on the
  * account once for each set of answers setup goes on with. Synthetic
  * throughout.
  */
@@ -73,10 +74,23 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-test("Just me after a team's workspace was made lists the account's own workspace again", () => {
+test("Just me after a team's workspace was made lists the account's own workspace again and deletes the team's while nobody joined it", async () => {
   // Setup stands at Welcome, for the team, whose workspace was made before Back, as the account keeps it.
   const place = JSON.stringify({ audience: "team", at: 0, team: PAPERSTAR.id });
   writeAppState(stateWith({}, { settings: appSettingsWire(settingsView({ setupPlace: place })) }));
+  const deleted: unknown[] = [];
+  const places: unknown[] = [];
+  fakeActPort({
+    [WORKSPACE_ACT_KIND.WORKSPACE_DELETE]: (payload) => {
+      deleted.push(payload);
+      return Promise.resolve();
+    },
+    [SETTINGS_ACT_KIND.SETTING_UPDATE]: ({ field, value }) => {
+      if (field === "setupPlace") places.push(JSON.parse(String(value)));
+      const settings = appSettingsWire(settingsView({ setupPlace: place }));
+      return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED, settings });
+    },
+  });
   const chosen: string[] = [];
   const base = tasksControl();
   const container = document.body.appendChild(document.createElement("div"));
@@ -99,8 +113,13 @@ test("Just me after a team's workspace was made lists the account's own workspac
   );
 
   act(() => buttonStarting(container, "Just me").click());
+  // Note that the delete's answer reaches setup a tick after the press, as a mutation's does.
+  await vi.waitFor(() => assert.equal(places.length, 2));
 
   assert.deepEqual(chosen, [OWN.id]);
+  // The service refuses the delete once anyone else is a member, so a workspace someone joined stays.
+  assert.deepEqual(deleted, [{ workspaceId: PAPERSTAR.id, ifAlone: true }]);
+  assert.deepEqual(places.at(-1), { audience: "me", at: 0 });
 });
 
 test("the survey keeps its answers on the account, Other's words among them, and again after a refusal", async () => {

@@ -195,6 +195,8 @@ export interface MenuAction {
   /** Where the detail stands: under the label where none is said, or beside it. */
   detailPlace?: MenuDetailPlace | undefined;
   onSelect: () => void;
+  /** Heard as the pointer comes onto it, as a place's item reads its page ahead of a press. */
+  onPoint?: (() => void) | undefined;
   /** Drawn red: the action cannot be taken back, or ends what it acts on, as closing a pull request or canceling a task does. */
   danger?: boolean;
   /** Printed muted at the item's end: the shortcut that takes the same action, as the app draws it. */
@@ -804,6 +806,7 @@ export function MenuItem({
     className: "ui-menu-item",
     "aria-disabled": action.disabled === true ? true : undefined,
     "data-detail": secondLine(action) ? "true" : undefined,
+    onPointerEnter: action.onPoint,
     // Note that the item's press is the menu's alone to answer (`Menu`'s
     // `choose`), which closes it or leaves it standing, because Base UI's
     // own would take focus back to the item after the menu handed it on.

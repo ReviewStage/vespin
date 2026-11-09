@@ -2731,12 +2731,19 @@ test('over an Inbox item of the open task, ⌘K\'s "This task" lists the pages t
 test("with a task on screen, ⌘K offers its Version history, Cancel task, and Change repository, each running on it what its ⋯ item runs", async () => {
   const task = { ...DOCUMENT_TASK, repository: "acme/relay" };
   const ran: string[] = [];
+  // Cancel task leaves on the act port as the task's status, which the service keeps.
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_SET_STANDING]: ({ taskId, status }) => {
+      ran.push(`settle:${taskId}:${String(status)}`);
+      return Promise.resolve(true);
+    },
+  });
   const tasks = tasksControl({
     tasks: [task],
     region: { kind: DOCUMENT_REGION.READY, task },
     activeTaskId: task.id,
     onOpenHistory: (taskId) => ran.push(`history:${taskId}`),
-    onSettleTasks: (taskIds, status) => ran.push(`settle:${taskIds.join()}:${status}`),
     onChangeRepository: (taskId) => ran.push(`repository:${taskId}`),
   });
   handState(experimentsOn(EXPERIMENT.DESCRIPTIONS));
@@ -2777,6 +2784,7 @@ test("with a task on screen, ⌘K offers its Version history, Cancel task, and C
     });
     chooseFilter("Commands");
     press(command);
+    await settle();
   }
   assert.deepEqual(ran, [
     `history:${task.id}`,

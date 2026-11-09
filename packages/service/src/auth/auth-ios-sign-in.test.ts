@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { oauthProvider } from "@better-auth/oauth-provider";
+import { it } from "@effect/vitest";
 import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { jwt } from "better-auth/plugins";
-import { Schema } from "effect";
+import { Effect, Option, Schema } from "effect";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import type { WireValue } from "../core.js";
+import { unparsedWire, type WireBoundaryInput, type WireValue } from "../core.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import {
   ACCOUNT_TOKEN_STORAGE,
@@ -14,6 +15,7 @@ import {
   denyOAuthClientPrivileges,
   JWT_KEY_STORAGE,
 } from "./auth-policy.js";
+import { oauthUserInfoFromAuthAnswer, requestUserId, type UserInfoEndpoint } from "./bearer.js";
 import { IOS_OAUTH_CLIENT, oauthClientRecord } from "./oauth-clients.js";
 
 /**
@@ -23,8 +25,10 @@ import { IOS_OAUTH_CLIENT, oauthClientRecord } from "./oauth-clients.js";
  * client with a PKCE challenge, the browser signs in through GitHub, and
  * the provider returns the code to the one universal link the client
  * registers, which the phone exchanges with its verifier. The tokens name
- * the account at userinfo, a refresh mints another, and a revocation ends
- * one; and no return address but the registered one is redirected to.
+ * the account at userinfo, and on the account routes' own read of a bearer
+ * (`bearer.ts`'s `requestUserId`, which every write the phone makes
+ * resolves its caller through), a refresh mints another, and a revocation
+ * ends one; and no return address but the registered one is redirected to.
  * Synthetic accounts throughout.
  */
 
@@ -279,6 +283,34 @@ test("the phone's PKCE sign-in returns its code to the universal link, and the t
   assert.equal(info.sub, await signedInUserId(auth, browser));
   assert.equal(info.email, GITHUB_EMAIL);
 });
+
+it.effect(
+  "the phone's token names its account on the account routes' own read, with no session asked for",
+  () =>
+    Effect.gen(function* () {
+      const auth = iosAuth();
+      const { browser, returned } = yield* Effect.promise(() => signIn(auth));
+      const tokens = yield* Effect.promise(() => exchange(auth, returned));
+      // The auth service's own endpoint, called in process as `bearer.ts` calls it.
+      const userInfo: UserInfoEndpoint = (input) =>
+        Effect.tryPromise(async () => {
+          // SAFETY: Better Auth hands back its parsed userinfo answer as structured-clone data; the wire guard reads the selected field.
+          const answer = (await auth.api.oauth2UserInfo(input)) as WireBoundaryInput;
+          return oauthUserInfoFromAuthAnswer(unparsedWire(answer));
+        });
+      const write = new Request(`${SERVICE_URL}/api/inbox`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${tokens.access_token}` },
+      });
+      const named = yield* requestUserId(write, userInfo, () =>
+        Effect.die("no session is asked for under a bearer"),
+      );
+      assert.deepEqual(
+        named,
+        Option.some(yield* Effect.promise(() => signedInUserId(auth, browser))),
+      );
+    }),
+);
 
 test("a refresh mints an access token that names the same account, and a revoked token names nobody", async () => {
   const auth = iosAuth();

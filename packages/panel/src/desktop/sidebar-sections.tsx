@@ -26,7 +26,6 @@ import {
   type DialogConfirm,
   FormField,
   GAP,
-  GROUP_HEADING,
   GroupHeader,
   type GroupHeaderEditEnd,
   GroupHeaderEditor,
@@ -51,7 +50,13 @@ import {
 } from "@repo/ui";
 import { FolderPlusIcon, MailOpenIcon, SmilePlusIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { type DrawnTaskRow, TASK_ROW, type TaskRow, taskRowKey } from "@repo/ui/task-list-model";
+import {
+  type DrawnTaskRow,
+  TASK_ROW,
+  type TaskRow,
+  type TasksById,
+  taskRowKey,
+} from "@repo/ui/task-list-model";
 import {
   memberSection,
   placeAllWrites,
@@ -77,7 +82,7 @@ import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { listedSlot, movedBeside, nestsOf, siblingsAt, useNestedRows } from "./nested-rows.js";
 import { type RowPlace, RowPlaced, useRowMoveKeys, withRowMoves } from "./row-moves.js";
 import { SectionIconWell, sectionGlyph } from "./section-icon-picker.js";
-import { foldedCount, SIDEBAR_SECTION_SLOT, sidebarFold, TASK_NOUN } from "./sidebar-fold.js";
+import { SIDEBAR_SECTION_SLOT, sidebarHead, TASK_NOUN } from "./sidebar-fold.js";
 import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
 import { useFormDialog } from "./use-form-dialog.js";
 import { useRowDrag, useRunRowDrag } from "./use-row-drag.js";
@@ -288,6 +293,7 @@ function sectionStands(sections: TaskSections, sectionId: string): boolean {
 const SECTION_UNDO = {
   DELETE: {
     words: SECTION_DELETED,
+    unmasked: () => true,
     kind: ACT_KIND.TASKS_WRITE_SECTION,
     read: (before, section) => ({ section, before }),
     act: (send, { section }) =>
@@ -670,6 +676,8 @@ interface SectionContext {
   readonly onToggle: (sectionId: string) => void;
   /** Whether a task's child tasks stand open under its row, folded until first opened. */
   readonly opened: (taskId: string) => boolean;
+  /** Every listed task by its id, through which a child task under a parent the view hides is walked to the ancestor it stands under. */
+  readonly every: TasksById;
   /** A task's row or an agent's, as it stands in any list of the sidebar, at the depth it stands nested at and in its place among its siblings (`nestsOf`). */
   readonly row: (
     row: DrawnTaskRow,
@@ -748,7 +756,7 @@ function SectionRows({
   rows: readonly TaskRow[];
   folded: boolean;
 }): React.JSX.Element {
-  const nested = useNestedRows(rows, context.opened, context.current);
+  const nested = useNestedRows(rows, context.opened, context.current, context.every);
   // Note that a row on its way out has no place among the rows a drag or a menu moves.
   const shown = useLeaving(nested, ({ row }) => taskRowKey(row));
   const keys = useMemo(() => shown.map(({ key }) => key), [shown]);
@@ -887,11 +895,14 @@ function SidebarSection({
             />
           )
         }
-        heading={GROUP_HEADING.NONE}
+        {...sidebarHead({
+          folded,
+          onToggle: () => context.onToggle(section.id),
+          count: drawn.rows.length,
+          noun: TASK_NOUN,
+        })}
         glyph={glyph}
         label={<ReplayMask>{section.title}</ReplayMask>}
-        fold={sidebarFold(folded, () => context.onToggle(section.id))}
-        count={foldedCount(folded, drawn.rows.length, TASK_NOUN)}
         menuOpen={menu.open !== undefined}
         contextMenu={menu.contextMenu(ellipsis)}
         standing={
@@ -985,7 +996,7 @@ export function SidebarSections({
     <nav className="sidebar-group" aria-label="Sections">
       <Stack
         as={LAYOUT_ELEMENT.UL}
-        gap={GAP.CONTROL}
+        gap={GAP.SECTION}
         className="sidebar-sections"
         moves
         onPointerDown={drag}

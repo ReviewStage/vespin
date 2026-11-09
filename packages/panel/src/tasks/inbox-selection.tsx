@@ -9,7 +9,7 @@ import { TOAST_HOLD, useToast } from "../toast.js";
 import { type InboxResolver, RESOLVE } from "./inbox-close.js";
 import { type InboxListed, isUnread } from "./inbox-model.js";
 import { type InboxRemindMany, REMIND_ME, remindManyGroups } from "./inbox-remind.js";
-import { keptToast, markedNote, useInboxPresses } from "./inbox-writes.js";
+import { markedNote, useInboxPresses } from "./inbox-writes.js";
 import type { MarkSaying } from "./use-inbox-read-marks.js";
 
 /**
@@ -87,12 +87,8 @@ export function useInboxSelection({
         const note = markedNote(unread, landed.length, marking.length - landed.length);
         if (landed.length > 0) {
           const kept = new Set(landed.map(({ item }) => item.id));
-          toast(
-            keptToast(
-              note,
-              pressed.keep(note, (id) => kept.has(id)),
-            ),
-          );
+          const said = pressed.keep(note, (id) => kept.has(id));
+          if (said !== undefined) toast(said);
           return;
         }
         toast({

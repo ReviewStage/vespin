@@ -11,10 +11,11 @@
  *
  * An upgrade is refused before any socket stands where it is not this
  * path, or carries neither credential the relays take
- * (`http/relay-upgrade.ts`): the desktop's bearer with no `Origin`, or the
- * session cookie of a page on one of the deployment's own origins. Then its
- * account is resolved once, and an upgrade nobody answers for is refused
- * too. Every ask is built with that upgrade's `Authorization` or cookie and
+ * (`http/relay-upgrade.ts`): a bearer, the desktop's or the iPhone's,
+ * whatever `Origin` the handshake names, or the session cookie of a page on
+ * one of the deployment's own origins, with no `Authorization` beside it.
+ * Then its account is resolved once, and an upgrade nobody answers for is
+ * refused too. Every ask is built with that upgrade's `Authorization` or cookie and
  * nothing of its frame but the path, and is resolved afresh by the
  * procedures' own middleware, so a session revoked while its socket stands
  * is refused at its next ask, and a read naming another account is signed

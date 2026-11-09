@@ -252,6 +252,17 @@ function placeOf(
   return { place: { kind, planId, agentId, itemId }, revision };
 }
 
+/** The element of a page a thread being started there is on, as its draft keeps it. */
+const pageElementSchema = Schema.Struct({
+  path: Schema.String,
+  quote: Schema.String,
+  section: Schema.String,
+  words: Schema.optionalKey(Schema.Literal(true)),
+});
+
+/** The element of a page a thread being started there is on: its path, its words, the heading it stands under, and whether the words are selected in it. */
+export type DraftPageElement = typeof pageElementSchema.Type;
+
 /** The drafts as storage keeps them: each place's words, a card's picks where it holds some, and the account that wrote them, the latest written last. */
 const storedDrafts = Schema.fromJsonString(
   Schema.Array(
@@ -265,6 +276,7 @@ const storedDrafts = Schema.fromJsonString(
       press: Schema.optionalKey(Schema.Literals(Object.values(INBOX_REPLY))),
       dropped: Schema.optionalKey(Schema.Array(Schema.String)),
       revision: Schema.optionalKey(Schema.Number),
+      element: Schema.optionalKey(pageElementSchema),
     }),
   ),
 );
@@ -286,6 +298,8 @@ export interface Draft {
   readonly dropped?: readonly string[] | undefined;
   /** The revision of the inbox item its picks were made on, so they never land on an ask changed since (`draftAt`). */
   readonly revision?: number | undefined;
+  /** The element of a page a thread being started there is on, so the page pins the draft where it was started; none on the page as a whole (`description-comments.tsx`). */
+  readonly element?: DraftPageElement | undefined;
 }
 
 /** One place's draft. */
@@ -343,7 +357,7 @@ function readDrafts(owner: Owner): readonly KeptDraft[] {
     .flatMap(({ place: storedPlace, text, choices = [], values = [], ...rest }) => {
       const read = placeOf(storedPlace);
       if (read === undefined) return [];
-      const { steps, press, dropped } = rest;
+      const { steps, press, dropped, element } = rest;
       const revision = rest.revision ?? read.revision;
       return [
         {
@@ -356,6 +370,7 @@ function readDrafts(owner: Owner): readonly KeptDraft[] {
           ...(press === undefined ? undefined : { press }),
           ...(dropped === undefined ? undefined : { dropped }),
           ...(revision === undefined ? undefined : { revision }),
+          ...(element === undefined ? undefined : { element }),
         },
       ];
     })
@@ -377,14 +392,15 @@ function storedAs(owner: Owner, kept: KeptDraft, entry: StoredDraft): boolean {
     Equal.equals(entry.steps ?? [], kept.steps ?? []) &&
     entry.press === kept.press &&
     Equal.equals(entry.dropped ?? [], kept.dropped ?? []) &&
-    entry.revision === kept.revision
+    entry.revision === kept.revision &&
+    Equal.equals(entry.element, kept.element)
   );
 }
 
 /** A draft as storage keeps it, a card's picks only where it holds some. */
 function entryOf(
   owner: Owner,
-  { place, text, choices, values, steps = [], press, dropped = [], revision }: KeptDraft,
+  { place, text, choices, values, steps = [], press, dropped = [], revision, element }: KeptDraft,
 ): StoredDraft {
   return {
     accountId: owner,
@@ -396,6 +412,7 @@ function entryOf(
     ...(press === undefined ? undefined : { press }),
     ...(dropped.length === 0 ? undefined : { dropped }),
     ...(revision === undefined ? undefined : { revision }),
+    ...(element === undefined ? undefined : { element }),
   };
 }
 
@@ -998,6 +1015,15 @@ export function useDraft(place: DraftPlace): DraftControl {
   );
   useStoreOnLeave();
   return { draft, update: (next) => changeOwned({ place, next }) };
+}
+
+/** What a place holds unsent, read without a box to write it in, as a page pinning its comment's draft reads it; nothing where no place is named. */
+export function useKeptDraft(place: DraftPlace | undefined): Draft {
+  return useSelector(draftsStore, (drafts) =>
+    place === undefined
+      ? EMPTY_DRAFT
+      : (drafts.find((kept) => Equal.equals(kept.place, place)) ?? EMPTY_DRAFT),
+  );
 }
 
 /** Whether a draft is a plan's draft agent's. */

@@ -44,7 +44,7 @@ import { type AssigneeFace, accountActor, assigneeFace, creatorActor } from "@re
 import { confirmAsked } from "@repo/ui/confirm-state";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { type ChildTaskCount, repositoryLabel } from "@repo/ui/task-list-model";
+import { type ChildTaskCount, repositoryLabel, taskFinished } from "@repo/ui/task-list-model";
 import {
   DOCUMENT_REGION,
   RENAME_FAILED_NOTE,
@@ -112,7 +112,9 @@ import {
   useAssigneeRows,
 } from "../tasks/task-standing.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
+import type { NewTask } from "../tasks/use-new-task.js";
 import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
+import { type StandingWrites, useStandingWrites } from "../tasks/use-standing-writes.js";
 import { useReadMark, useReadMarks } from "../tasks/use-task-looks.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
 import {
@@ -232,13 +234,12 @@ export interface TaskRowTab
     | "me"
     | "workspaces"
     | "drawnTasks"
-    | "onSettleTasks"
-    | "onSetTaskStanding"
-    | "onNewRelatedTask"
     | "onChangeRepository"
     | "onMoveTask"
     | "moveTask"
   > {
+  /** New task related to a task, as the add menu's New task asks (`NewTask`'s `onOpenRelated`). */
+  readonly onNewRelatedTask: NewTask["onOpenRelated"];
   /** The tab's tasks as they stand when read. */
   readonly tasksNow: () => readonly TaskSummary[];
   /** Copies the open description, as Copy description does. */
@@ -257,9 +258,7 @@ export function taskRowTab(
     me: tasks.me,
     workspaces: tasks.workspaces,
     drawnTasks: tasks.drawnTasks,
-    onSettleTasks: tasks.onSettleTasks,
-    onSetTaskStanding: tasks.onSetTaskStanding,
-    onNewRelatedTask: tasks.onNewRelatedTask,
+    onNewRelatedTask: tasks.newTask.onOpenRelated,
     onChangeRepository: tasks.onChangeRepository,
     onMoveTask: tasks.onMoveTask,
     moveTask: tasks.moveTask,
@@ -336,7 +335,7 @@ function pinMark(pins: Pick<PinWrites, "onMarkTask">, task: TaskSummary): PlaceM
 
 /** Pin, offered as whichever way the task is not yet, and Mark done, offered on a task not yet done. */
 function placeMarks(
-  tasks: TasksControl,
+  standing: Pick<StandingWrites, "onSettleTasks">,
   pins: Pick<PinWrites, "onMarkTask">,
   task: TaskSummary,
 ): PlaceMark[] {
@@ -344,7 +343,7 @@ function placeMarks(
   const done: PlaceMark = {
     key: SETTLED_STATUS.DONE,
     item: PANEL_COMMAND.MARK_TASK_DONE,
-    onSelect: () => tasks.onSettleTasks([task.id], SETTLED_STATUS.DONE),
+    onSelect: () => standing.onSettleTasks([task.id], SETTLED_STATUS.DONE),
   };
   return settleOffered(task, SETTLED_STATUS.DONE) ? [pin, done] : [pin];
 }
@@ -458,7 +457,8 @@ function SidebarTaskMarks({
   disabled: boolean;
 }): React.JSX.Element {
   const pins = usePinWrites(tasks.drawnTasks);
-  const marks = placeMarks(tasks, pins, task).map(
+  const standing = useStandingWrites(tasks.drawnTasks);
+  const marks = placeMarks(standing, pins, task).map(
     ({ key, item, onSelect }): RowMark => ({
       key,
       label: commandWords(item, COMMAND_PLACE.MENU),
@@ -486,7 +486,7 @@ export interface StandingChips {
  * the chip beside the name sets the same value one press away.
  */
 function standingSubmenus(
-  tasks: Pick<TasksControl, "onSettleTasks">,
+  standing: Pick<StandingWrites, "onSettleTasks">,
   task: TaskSummary,
   assignees: readonly MenuRow[],
   setStanding: ReturnType<typeof useStandingDoor>,
@@ -508,7 +508,7 @@ function standingSubmenus(
     pickAssignee,
   );
   return [
-    ...(chips?.status === true ? [] : [keyedStatusSubmenu(tasks, task.id, status, keyed)]),
+    ...(chips?.status === true ? [] : [keyedStatusSubmenu(standing, task.id, status, keyed)]),
     ...(chips?.priority === true
       ? []
       : [chipSubmenu(STANDING_WORDS.PRIORITY, PRIORITY_ROWS, priority, pickPriority)]),
@@ -815,6 +815,7 @@ export function useTaskMenuItems(
   const opened = openedAs(doors.opened, taskId);
   const task = rowTaskOf(tasks.tasksNow(), opened, taskId);
   const markRead = useReadMark();
+  const standingWrites = useStandingWrites(tasks.drawnTasks);
   // Note that a delete asked is drawn at once, which may take the row the question stands on with it.
   const heard = useRefusalHeard(task !== undefined && tasks.shown, {
     surface: FAILURE_SURFACE.TASK_DELETE,
@@ -833,7 +834,7 @@ export function useTaskMenuItems(
   // Mark done as the chord runs it: on a task not already done, and nothing otherwise.
   const markDone =
     task !== undefined && settleOffered(task, SETTLED_STATUS.DONE)
-      ? () => tasks.onSettleTasks([taskId], SETTLED_STATUS.DONE)
+      ? () => standingWrites.onSettleTasks([taskId], SETTLED_STATUS.DONE)
       : undefined;
   const moving = useMoveTaskDialog(tasks, task);
   const copy = useCopyToast();
@@ -853,7 +854,14 @@ export function useTaskMenuItems(
   const assignees = useAssigneeRows(task?.assignee);
   const standing =
     task !== undefined
-      ? standingSubmenus(tasks, task, assignees, setStanding, doors.rowKeys === true, doors.chips)
+      ? standingSubmenus(
+          standingWrites,
+          task,
+          assignees,
+          setStanding,
+          doors.rowKeys === true,
+          doors.chips,
+        )
       : [];
   const groups = (): readonly (readonly MenuEntry[])[] => [
     ...withRowMoves(
@@ -1001,19 +1009,20 @@ function SidebarTaskCard({
  * (`PlanGlyph`), its status's mark or the document where its service gives
  * it none, whose status the press says after the name, as a List row's does,
  * since the mark is decoration to a screen reader; its name, in the
- * body's weight unless the task is unread, and at the row's end how long ago
- * it was last updated, led by one mark for a repository that belongs to
- * another workspace, an agent at work, or a pull request (`task-card.tsx`),
- * the first named in the row's card; before that a stop
- * sign while a task it waits on is still open (`BlockedMark`), which the press says after
- * the status, before that a pencil while a draft
- * waits in one of its boxes and it is not the plan open, whose boxes show
- * their own words, or the failed mark in its place while a message sent to
- * one of its agents was not delivered (`draft-mark.tsx`), and before that the face of who
- * is on it (`rowFaceOf`, drawn as `AssigneeFaceMark`): its assignee's,
- * where someone other than the reader is assigned, read against the members of the directory around the
- * list, or the dashed unassigned mark where no one is; a task assigned to
- * the reader wears none. Its repository, its owner's picture and its name, muted, where the list hands one (in one run),
+ * body's weight unless the task is unread, and at the row's end its
+ * trailing run in the order every list of tasks draws it (`task-row.tsx`):
+ * a pencil while a draft waits in one of its boxes and it is not the plan
+ * open, whose boxes show their own words, or the failed mark in its place
+ * while a message sent to one of its agents was not delivered
+ * (`draft-mark.tsx`); a stop sign while a task it waits on is still open
+ * (`BlockedMark`), which the press says after the status; how many of its
+ * sub-tasks are finished; one mark for an agent at work, one failed, or a
+ * pull request (`task-card.tsx`); the face of who is on it (`rowFaceOf`,
+ * drawn as `AssigneeFaceMark`): its assignee's, where someone other than
+ * the reader is assigned, read against the members of the directory around
+ * the list, or the dashed unassigned mark where no one is, a task assigned
+ * to the reader wearing none; and how long ago it was last updated. A task
+ * done or canceled stands back (`muted`). Its repository, its owner's picture and its name, muted, where the list hands one (in one run),
  * and no face where its group is its creator's. Its time is the one the
  * list's order chooses. Pin
  * and Mark done stand in place of all of it while the row is hovered or
@@ -1165,7 +1174,6 @@ export function SidebarTask({
                     <ReplayMask>{repository}</ReplayMask>
                   </span>
                 )}
-                {worn === undefined ? null : <AssigneeFaceMark face={worn} heard={false} />}
                 {leftMark(sendFailed, drafted)}
                 {task.blocked === true ? <BlockedMark aria-hidden="true" /> : null}
                 {childCount === undefined ? null : (
@@ -1176,12 +1184,14 @@ export function SidebarTask({
                   />
                 )}
                 <TaskRowStatus task={task} />
+                {worn === undefined ? null : <AssigneeFaceMark face={worn} heard={false} />}
                 <Time at={at} now={now} hint={false} />
               </span>
             )
           }
           current={current ? LIST_ROW_CURRENT.PAGE : undefined}
           unread={unread}
+          muted={taskFinished(task)}
           disabled={actions.deletion.busy}
           hint={rename.editing ? undefined : { Hint: RowHint, label: task.name }}
           onPress={rename.editing ? undefined : onOpen}

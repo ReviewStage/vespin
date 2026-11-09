@@ -40,7 +40,7 @@ import {
   type DeviceLaunchStep,
   type DeviceLaunchUnstarted,
 } from "@repo/features/device-agent-wire";
-import { TURN_FAILURE, TURN_STATUS } from "../../core.js";
+import { TURN_FAILURE, TURN_STATUS, type TurnFailure } from "../../core.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import { CODER_REFUSAL } from "./bounds.js";
 
@@ -201,6 +201,23 @@ export const FAILURE_WORDS: readonly (readonly [AgentFailure, readonly string[]]
   [AGENT_FAILURE.OTHER, [HOST_AWAY_DETAIL, LAUNCH_STOPPED_DETAIL]],
 ];
 
+/**
+ * The failures the service settles a turn with itself, each read as the
+ * wire's word for it whatever the turn's detail says: the sweep's
+ * (`reconcile.ts`), a runner a newer launch replaced, and a session that
+ * ended for good. A turn past its cap reads as one that ran out of time,
+ * as an abandoned one does. Every failure word neither here nor the
+ * model's reads as `other`.
+ */
+export const SETTLED_FAILURES: readonly (readonly [TurnFailure, AgentFailure])[] = [
+  [TURN_FAILURE.ABANDONED, AGENT_FAILURE.ABANDONED],
+  [TURN_FAILURE.DEADLINE, AGENT_FAILURE.ABANDONED],
+  [TURN_FAILURE.SESSION_ENDED, AGENT_FAILURE.SESSION_ENDED],
+  [TURN_FAILURE.RUNNER_LOST, AGENT_FAILURE.RUNNER_LOST],
+  [TURN_FAILURE.NO_PROGRESS, AGENT_FAILURE.NO_PROGRESS],
+  [TURN_FAILURE.LINE_UNTAKEN, AGENT_FAILURE.LINE_UNTAKEN],
+];
+
 /** The host that lost a failed turn's run, by the name its turn records; nothing for any other turn. */
 export function hostLostOf(
   turn: Pick<AgentLatestTurn, "status" | "failure" | "failureDetail"> | undefined,
@@ -270,10 +287,8 @@ export function agentFailureOf(
 ): AgentFailure | undefined {
   if (turn === undefined) return AGENT_FAILURE.NOT_STARTED;
   if (turn.status !== TURN_STATUS.FAILED) return undefined;
-  if (turn.failure === TURN_FAILURE.ABANDONED) return AGENT_FAILURE.ABANDONED;
-  if (turn.failure === TURN_FAILURE.SESSION_ENDED) {
-    return AGENT_FAILURE.SESSION_ENDED;
-  }
+  const settled = SETTLED_FAILURES.find(([failure]) => failure === turn.failure);
+  if (settled !== undefined) return settled[1];
   if (turn.failure !== TURN_FAILURE.MODEL) return AGENT_FAILURE.OTHER;
   const detail = turn.failureDetail ?? "";
   const named = FAILURE_WORDS.find(([, words]) => words.some((word) => detail.includes(word)));

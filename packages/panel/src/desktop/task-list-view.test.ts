@@ -365,7 +365,12 @@ test("View options offers Group by repository, on at first, and Assigned to: Me,
   const button = sidebar.querySelector<HTMLButtonElement>('button[aria-label="View options"]');
   assert.ok(button, "the Tasks head offers View options");
   act(() => button.click());
-  assert.deepEqual(lastMenuItems(), ["Group by repository", "Assigned to"]);
+  assert.deepEqual(lastMenuItems(), [
+    "Group by repository",
+    "Show finished sub-tasks",
+    "Assigned to",
+  ]);
+  assert.equal(menuItem("Show finished sub-tasks").getAttribute("aria-checked"), "false");
   assert.equal(menuItem("Group by repository").getAttribute("aria-checked"), "true");
   act(() => menuItem("Assigned to").click());
   await vi.waitFor(() =>
@@ -448,7 +453,7 @@ test("a workspace nobody shares lists every task and offers Group by repository 
   assert.ok(button, "the Tasks head offers View options");
   assert.equal(button.getAttribute("aria-description"), null);
   act(() => button.click());
-  assert.deepEqual(lastMenuItems(), ["Group by repository"]);
+  assert.deepEqual(lastMenuItems(), ["Group by repository", "Show finished sub-tasks"]);
 });
 
 test("a list of your own that holds nothing says so, and Show all lists everyone's", async () => {
@@ -530,6 +535,54 @@ test("⌘K offers each view choice only while it would change the list, and runn
     runAppCommand(APP_COMMAND.SHOW_MY_TASKS);
   });
   assert.equal(headWords(sidebar), "My tasks");
+});
+
+test("Show finished sub-tasks stands a parent's finished sub-tasks under it, muted, never a finished task at the top, and ⌘K hides them again", async () => {
+  const of = (
+    id: string,
+    name: string,
+    status: TaskStatus,
+    parentTaskId?: string,
+  ): TaskSummary => ({
+    ...task(id, name, "acme/relay", DEAN, { createdAt: 1, updatedAt: 800 }),
+    assignee: { userId: DEAN, name: "Dean Stratakos" },
+    status,
+    ...(parentTaskId === undefined ? undefined : { parentTaskId }),
+  });
+  const names = (within: HTMLElement) =>
+    [...within.querySelectorAll(`${TASK_LIST} .ui-list-row-title`)].map(
+      (title) => title.firstChild?.textContent,
+    );
+  const sidebar = await mountRead(ACME, [
+    of("p", "Onboarding", TASK_STATUS.IN_PROGRESS),
+    of("a", "Audit", TASK_STATUS.DONE, "p"),
+    of("d", "Delete", TASK_STATUS.IN_PROGRESS, "a"),
+    of("s", "Shipped", TASK_STATUS.DONE),
+  ]);
+  const button = sidebar.querySelector<HTMLButtonElement>('button[aria-label="View options"]');
+  assert.ok(button, "the Tasks head offers View options");
+  act(() => button.click());
+  act(() => menuItem("Show finished sub-tasks").click());
+  const fold = sidebar.querySelector<HTMLButtonElement>(
+    'button[aria-label="Sub-tasks of Onboarding"]',
+  );
+  assert.ok(fold, "Onboarding folds its sub-tasks");
+  act(() => fold.click());
+  const audit = sidebar.querySelector<HTMLButtonElement>('button[aria-label="Sub-tasks of Audit"]');
+  assert.ok(audit, "Audit folds its sub-tasks");
+  act(() => audit.click());
+  assert.deepEqual(names(sidebar), ["Onboarding", "Audit", "Delete"]);
+  const muted = [...sidebar.querySelectorAll(`${TASK_LIST} li[data-muted="true"]`)].map(
+    (row) => row.querySelector(".ui-list-row-title")?.firstChild?.textContent,
+  );
+  assert.deepEqual(muted, ["Audit"]);
+
+  act(() => {
+    runAppCommand(APP_COMMAND.HIDE_FINISHED_SUB_TASKS);
+  });
+  assert.deepEqual(names(sidebar), ["Onboarding", "Delete"]);
+  assert.equal(appCommandOffered(APP_COMMAND.HIDE_FINISHED_SUB_TASKS), false);
+  assert.equal(appCommandOffered(APP_COMMAND.SHOW_FINISHED_SUB_TASKS), true);
 });
 
 test("a workspace nobody shares offers ⌘K no filtering by person", async () => {

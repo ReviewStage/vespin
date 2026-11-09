@@ -16,7 +16,7 @@ import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { NO_REPOSITORIES, tasksControl } from "../testing/tasks-control.js";
 import { MENTION_MENU_SIDE } from "./mention-picker.js";
 import { NewTaskComposer } from "./new-task-composer.js";
-import type { NewTaskStart } from "./use-tasks-tab.js";
+import type { NewTaskStart } from "./use-new-task.js";
 
 /**
  * new-task-composer-relation.test.ts -- New task's relations on the card:

@@ -24,6 +24,7 @@ import {
   taskRowName,
   taskRowsAssignedTo,
   taskRowsInStatuses,
+  tasksById,
   taskTime,
 } from "./task-list-model.js";
 
@@ -258,16 +259,18 @@ function childTask(name: string, updatedAt: number, parent?: string): TaskSummar
   };
 }
 
-/** The rows drawn, each as its name indented two spaces for each level it stands at. */
+/** The rows drawn, each as its name indented two spaces for each level it stands at, `every` the workspace's tasks the list is drawn from. */
 function drawnNames(
   tasks: readonly TaskSummary[],
   opened: readonly string[],
   standing?: string,
+  every: readonly TaskSummary[] = tasks,
 ): string[] {
   return drawnTaskRows(
     tasks.map(taskRow),
     (taskId) => opened.includes(taskId),
     (row) => taskRowName(row) === standing,
+    tasksById(every),
   ).map(({ row, depth }) => `${"  ".repeat(depth)}${taskRowName(row)}`);
 }
 
@@ -302,6 +305,16 @@ test("a parent folded shut draws none of its child tasks but the open one and th
 test("a child task whose parent the list leaves out stands at the top", () => {
   const filtered = TREE.filter((each) => each.name !== "parent");
   expect(drawnNames(filtered, ["child"])).toEqual(["child", "  grandchild", "sibling", "other"]);
+});
+
+test("a child task whose parent the list leaves out stands under the nearest ancestor the list holds, at the depth it is drawn", () => {
+  const hidden = TREE.filter((each) => each.name !== "child");
+  expect(drawnNames(hidden, ["parent"], undefined, TREE)).toEqual([
+    "parent",
+    "  grandchild",
+    "  sibling",
+    "other",
+  ]);
 });
 
 test("a pinned child task stands at the top, never under its parent, its own child tasks still under it", () => {

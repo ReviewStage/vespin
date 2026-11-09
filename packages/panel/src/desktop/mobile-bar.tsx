@@ -145,7 +145,7 @@ export function MobileBar({
           icon={<PlusIcon />}
           label="New task"
           disabled={!tasks.signedIn}
-          onPress={go(tasks.onNewTask)}
+          onPress={go(tasks.newTask.onOpen)}
         />
       </ReplayUnmask>
     </nav>

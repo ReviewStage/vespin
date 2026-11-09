@@ -13,6 +13,7 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import type { Task } from "@repo/features/task-wire";
+import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import type { AppHostRead, AppInboxItems } from "@repo/host/app-state";
 import { agentTab, draftTab, sameTab, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
@@ -818,18 +819,26 @@ async function newTaskDrafted(tasks: TasksControl, at?: string): Promise<boolean
     ),
   );
   await settle();
-  const row =
-    [...container.querySelectorAll<HTMLElement>("button")].find((button) =>
-      button.querySelector(".ui-nav-item-name")?.textContent?.startsWith("New task"),
-    ) ?? assert.fail("the sidebar draws New task");
-  const drafted = row.querySelector(`[role="img"][aria-label="${DRAFT_WORD}"]`) !== null;
+  const glyph =
+    container.querySelector('.sidebar-workspace button[aria-label="New task"]') ??
+    assert.fail("the sidebar draws New task");
+  const drafted = glyph.getAttribute("aria-description") === DRAFT_WORD;
   for (const each of roots.splice(0)) act(() => each.unmount());
   return drafted;
 }
 
-test("words left in New task's card mark its sidebar row with the Draft pencil while neither the card nor Home shows them", async () => {
+test("words left in New task's card mark its sidebar glyph with the Draft pencil while neither the card nor Home shows them", async () => {
+  const listed: Workspace = {
+    id: WORKSPACE,
+    name: "Personal",
+    slug: "personal",
+    role: WORKSPACE_ROLE.OWNER,
+    github: null,
+  };
   const inWorkspace = (overrides: Partial<TasksControl["newTask"]> = {}) =>
     tasksControl({
+      workspace: listed,
+      workspaces: [listed],
       page: TASKS_PAGE.DOCUMENT,
       tasks: [INVITES.plan],
       activeTaskId: INVITES.plan.id,

@@ -5,7 +5,7 @@ import type { TaskSummary } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW, type TasksPinParams, type TasksView } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { createElement } from "react";
-import { afterEach, test } from "vitest";
+import { afterEach, test, vi } from "vitest";
 import {
   forgetUndo,
   type HeldWrite,
@@ -124,6 +124,7 @@ test("⌘Z leaves a pin taken back since, on another Mac, as it stands, and send
 /** The pin as a declared write, its inverse an unpin of its own, held while the task drawn is pinned. */
 const PIN_WRITE = {
   words: "Task pinned",
+  unmasked: () => true,
   kind: ACT_KIND.TASKS_PIN,
   read: (_rows, taskId) => taskId,
   act: (send, taskId) => send({ taskId, pinned: true }),
@@ -145,15 +146,21 @@ test("⌘Z leaves a declared write's target changed since as it stands, and send
   assert.deepEqual(window.sent, [{ taskId: TASK_ID, pinned: true }]);
 });
 
-/** A held write that answers every send at once, each send named in `sent` in order. */
-function heldWrite(sent: string[]): HeldWrite<undefined, string, number, number> {
+/** A held write that answers every send at once, its undo once `undoing` settles, each send named in `sent` in order as it is sent. */
+function heldWrite(
+  sent: string[],
+  undoing: Promise<void> = Promise.resolve(),
+): HeldWrite<undefined, string, number, number> {
   return {
     words: (itemId) => `Resolved ${itemId}`,
     glyph: () => createElement("span"),
     unmasked: () => true,
     act: (_doors, itemId) => Promise.resolve(sent.push(`act ${itemId}`)),
     letGo: (_doors, itemId) => void sent.push(`let go ${itemId}`),
-    undo: (_doors, itemId) => Promise.resolve(sent.push(`undo ${itemId}`)),
+    undo: (_doors, itemId) => {
+      const at = sent.push(`undo ${itemId}`);
+      return undoing.then(() => at);
+    },
     refused: () => undefined,
     unheld: () => undefined,
   };
@@ -173,9 +180,43 @@ test("⌘Z takes a held write back once, without letting its hold go, and leaves
   assert.deepEqual(sent, ["act item-1", "undo item-1"]);
 });
 
+test("once the account changes, an undo queued behind another sends nothing, and a write still out keeps no entry", async () => {
+  const sent: string[] = [];
+  let open = () => {};
+  const gate = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  const window = standWindow();
+  await pressHeld(heldWrite(sent, gate), undefined, "item-1");
+  await pressHeld(heldWrite(sent, gate), undefined, "item-2");
+  const first = undoLast();
+  const queued = undoLast();
+  await vi.waitFor(() => assert.ok(sent.includes("undo item-2")));
+  const pinning = pressWrite(
+    { ...PIN_WRITE, act: (send, taskId) => gate.then(() => send({ taskId, pinned: true })) },
+    window.doors,
+    TASK_ID,
+  );
+  const pressed = pressRows(ROW_WRITE.TASK_PIN, window.doors, [
+    { id: TASK_ID, after: { pinned: true, position: null } },
+  ]);
+
+  forgetUndo();
+  open();
+  await Promise.all([first, queued, pinning]);
+  const said = pressed.keep("Task pinned");
+  const after = await undoLast();
+
+  assert.deepEqual(sent, ["act item-1", "act item-2", "undo item-2"]);
+  assert.equal(said, undefined);
+  assert.equal(after, undefined);
+  assert.deepEqual(window.sent, [{ taskId: TASK_ID, pinned: true }]);
+});
+
 /** A line of held words as a window holds them alone, and its removal of one by key. */
 const HELD_REMOVAL = {
   words: "Removed",
+  unmasked: () => true,
   act: (held, word) => held.delete(word),
   undo: (held, word) => held.add(word),
   holds: (held, word) => !held.has(word),

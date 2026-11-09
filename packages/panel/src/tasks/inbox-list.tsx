@@ -61,6 +61,8 @@ import {
   useMenu,
   useResizeEdge,
   useRovingKeys,
+  VISUALLY_HIDDEN_ELEMENT,
+  VisuallyHidden,
 } from "@repo/ui";
 import { actorName, personActor } from "@repo/ui/actor-model";
 import { CheckCheckIcon, GLYPH, InboxIcon, SlidersHorizontalIcon, UsersIcon } from "@repo/ui/icons";
@@ -965,16 +967,17 @@ export function InboxListSkeleton({
 const SEARCH_INBOX = "Search inbox";
 
 /**
- * The list's search under a page's head, on the window's Inbox and a task's
- * own, a phone's head's as a desk's: a field always standing, as Settings'
- * search does, so nothing in the head moves or hides as it is used. It
- * narrows the list as it is typed in, and Escape empties it; an empty one
- * leaves Escape to the surface behind it. Note that the field holds its own
- * words and hands them to the list in a transition, so a key paints in the
- * field at once and the list is ranked for it a render behind, in a render
- * the next key may cut short, as ⌘K ranks its rows.
+ * The list's search: a field always standing, as Settings' search does, so
+ * nothing beside it moves or hides as it is used. It narrows the list as it
+ * is typed in, and Escape empties it; an empty one leaves Escape to the
+ * surface behind it. Note that the field holds its own words and hands them
+ * to the list in a transition, so a key paints in the field at once and the
+ * list is ranked for it a render behind, in a render the next key may cut
+ * short, as ⌘K ranks its rows. It stays drawn, hidden, while the window's
+ * Inbox's head row stands for a selection, so its words are there as it
+ * comes back.
  */
-function ListSearch({ search }: { search: InboxSearchHead }): React.JSX.Element {
+function SearchWords({ search }: { search: InboxSearchHead }): React.JSX.Element {
   const [words, setWords] = useState(search.query);
   const { onQuery } = search;
   const type = (next: string) => {
@@ -982,31 +985,41 @@ function ListSearch({ search }: { search: InboxSearchHead }): React.JSX.Element 
     startTransition(() => onQuery(next));
   };
   return (
+    <SearchField
+      label={SEARCH_INBOX}
+      placeholder={SEARCH_INBOX}
+      value={words}
+      onChange={type}
+      onClear={() => type("")}
+      onEscape={words === "" ? undefined : () => type("")}
+    />
+  );
+}
+
+/** The list's search under a head of its own: a phone's, or a task's own Inbox tab's bar. */
+function ListSearch({ search }: { search: InboxSearchHead }): React.JSX.Element {
+  return (
     <search className="inbox-search block px-column-inset pb-row-inset">
-      <SearchField
-        label={SEARCH_INBOX}
-        placeholder={SEARCH_INBOX}
-        value={words}
-        onChange={type}
-        onClear={() => type("")}
-        onEscape={words === "" ? undefined : () => type("")}
-      />
+      <SearchWords search={search} />
     </search>
   );
 }
 
 /**
- * The list's head: the Inbox's name, whatever it lists, and
- * on the window's Inbox the view's menu at the list's top right, which
- * chooses the scope and whom the items are addressed to; a task's own
- * Inbox lists everything it holds, and offers no menu. On the window's Inbox its heading and its button glide as the
- * sidebar folds, the name moving to the list's middle, clear of the
- * sidebar's toggle, and the button keeping to the list's edge. Where the
- * list offers a search, its field stands under the head (`ListSearch`).
- * While items are chosen, but on a phone, the head says how many in the
- * name's place, led by a box whose press chooses none and a menu beside it
- * choosing all, none, the read, or the unread (`SelectionPicker`), the acts
- * on them in its buttons' (`SelectionToolbar`), as Gmail's does.
+ * The list's head. On the window's Inbox it is one row at the top of the
+ * list, under a title bar's row it leaves empty: the search taking the room
+ * Mark all as read and the view's menu leave it, the menu choosing the scope
+ * and whom the items are addressed to, and the Inbox's name read to a
+ * reader alone, as Mail's and Gmail's lists stand under their search. So
+ * nothing of it moves as the sidebar folds and its toggle comes into the
+ * title bar's row. A task's own Inbox tab, which lists everything its task
+ * holds and offers no menu, and an agent's card keep a bar naming the list,
+ * the search under it (`ListSearch`), as a phone's head does. While items
+ * are chosen, but on a phone, the head says how many, led by a box whose
+ * press chooses none and a menu beside it choosing all, none, the read, or
+ * the unread (`SelectionPicker`), the acts on them in its buttons' place
+ * (`SelectionToolbar`), as Gmail's does: on the window's Inbox in the
+ * search's place, its words kept for when the selection goes.
  */
 function ListHead({
   head,
@@ -1113,48 +1126,81 @@ function ListHead({
       />
     );
   // Note that the toolbar stays mounted while none is chosen, drawing nothing, so a focus it held as the last row went is handed back to the list.
-  const actions =
-    selecting === undefined ? (
-      options
-    ) : (
+  const toolbar =
+    selecting === undefined ? null : (
+      <SelectionToolbar
+        count={selecting.count}
+        acts={selecting.acts}
+        onClear={selecting.onClear}
+        controls={selecting.controls}
+      />
+    );
+  const actions = (
+    <>
+      {toolbar}
+      {choosing === undefined ? options : null}
+    </>
+  );
+  const chips =
+    view === undefined && head.task === undefined ? null : (
+      <FilterChips whose={narrowingWhose(view)} task={head.task} readerId={readerId} />
+    );
+  // Note that a task's own Inbox is a tab, whose bar is every tab's, and an agent's card heads its list with its way back, in a bar of its own inside the card.
+  if (head.tab === true || head.lead !== undefined) {
+    // Note that the count stands in the title's place in a label's type rather than the title's, so choosing reads as a passing mode rather than another place.
+    const heading = choosing === undefined ? title : selectedWords(choosing.count);
+    return (
       <>
-        <SelectionToolbar
-          count={selecting.count}
-          acts={selecting.acts}
-          onClear={selecting.onClear}
-          controls={selecting.controls}
-        />
-        {choosing === undefined ? options : null}
+        {head.tab === true ? (
+          <PaneBar mark={all} title={heading} titleReplayUnmasked actions={actions} />
+        ) : (
+          <Toolbar
+            lead={all ?? head.lead}
+            title={
+              choosing === undefined ? (
+                title
+              ) : (
+                <ReplayUnmask>
+                  <Text variant={TEXT_VARIANT.LABEL}>{heading}</Text>
+                </ReplayUnmask>
+              )
+            }
+            titleReplayUnmasked
+            actions={actions}
+            end={TOOLBAR_INSET.COLUMN}
+          />
+        )}
+        {search}
+        {chips}
       </>
     );
-  // Note that the count stands in the title's place in a label's type rather than the title's, so choosing reads as a passing mode rather than another place.
-  const heading = choosing === undefined ? title : selectedWords(choosing.count);
-  const barTitle =
-    choosing === undefined ? (
-      title
-    ) : (
-      <ReplayUnmask>
-        <Text variant={TEXT_VARIANT.LABEL}>{heading}</Text>
-      </ReplayUnmask>
-    );
+  }
+  // Note that the window's Inbox leaves the title bar's row over its list empty, the sidebar's toggle alone standing there while it is folded, and names itself to a reader alone, its search heading the list in its place, as Mail's and Gmail's do.
   return (
     <>
-      {/* Note that a task's own Inbox is a tab, whose bar is every tab's; the window's Inbox is a page, whose head glides with the sidebar. */}
-      {head.tab === true ? (
-        <PaneBar mark={all} title={heading} titleReplayUnmasked actions={actions} />
-      ) : (
-        <Toolbar
-          lead={all ?? head.lead}
-          title={barTitle}
-          titleReplayUnmasked
-          actions={actions}
-          end={TOOLBAR_INSET.COLUMN}
-        />
-      )}
-      {search}
-      {view === undefined && head.task === undefined ? null : (
-        <FilterChips whose={narrowingWhose(view)} task={head.task} readerId={readerId} />
-      )}
+      <Toolbar />
+      <ReplayUnmask>
+        <VisuallyHidden as={VISUALLY_HIDDEN_ELEMENT.H1}>{title}</VisuallyHidden>
+      </ReplayUnmask>
+      <div className="inbox-head-row flex items-center gap-control-gap px-column-inset pb-row-inset">
+        {head.search === undefined ? null : (
+          <search className="min-w-0 flex-1" hidden={choosing !== undefined}>
+            <SearchWords search={head.search} />
+          </search>
+        )}
+        {choosing === undefined ? null : (
+          <>
+            {all}
+            <span className="min-w-0 flex-1">
+              <ReplayUnmask>
+                <Text variant={TEXT_VARIANT.LABEL}>{selectedWords(choosing.count)}</Text>
+              </ReplayUnmask>
+            </span>
+          </>
+        )}
+        <div className="ml-auto flex flex-none items-center gap-control-gap">{actions}</div>
+      </div>
+      {chips}
     </>
   );
 }

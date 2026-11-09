@@ -40,6 +40,9 @@ const AGENT_FAILURE_WORDS = {
     "Fast mode isn't enabled for this Anthropic organization; choose the model with Fast off",
   [AGENT_FAILURE.CONTEXT_OVERFLOW]: "the conversation was too long for the model",
   [AGENT_FAILURE.SESSION_ENDED]: "the agent's session ended and cannot be reached again",
+  [AGENT_FAILURE.RUNNER_LOST]: "the agent's run was cut off before the turn ended",
+  [AGENT_FAILURE.NO_PROGRESS]: "the agent stopped responding",
+  [AGENT_FAILURE.LINE_UNTAKEN]: "no machine picked the turn up in time",
   [AGENT_FAILURE.OTHER]: undefined,
 } as const satisfies Record<AgentFailure, string | undefined>;
 

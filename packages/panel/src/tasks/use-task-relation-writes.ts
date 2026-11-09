@@ -131,6 +131,7 @@ function blockStands(rows: TaskRows, { taskId, relation, otherId }: BlockRemoved
 const RELATION_WRITE = {
   BLOCK_REMOVAL: {
     words: BLOCK_REMOVED_NOTE,
+    unmasked: () => true,
     kind: ACT_KIND.TASKS_BLOCK,
     read: (_rows, removed) => removed,
     act: (send, { taskId, relation, otherId }) =>
@@ -155,6 +156,7 @@ const RELATION_WRITE = {
   >,
   PARENT_REMOVAL: {
     words: PARENT_REMOVED_NOTE,
+    unmasked: () => true,
     kind: ACT_KIND.TASKS_SET_PARENT,
     read: (rows, { taskId }) => {
       const parentTaskId =

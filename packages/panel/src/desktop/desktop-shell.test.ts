@@ -52,7 +52,7 @@ import { DOCUMENT_NAME, DOCUMENT_TASK } from "../testing/document-task.js";
 import { restOn } from "../testing/hint-rest.js";
 import { pressInPhoneHead, readPhoneHead } from "../testing/phone-head.js";
 import { agentAt, personAt, SHELL_AT, shellRouterEachTest } from "../testing/shell-router.js";
-import { handInbox, tasksControl } from "../testing/tasks-control.js";
+import { handInbox, newTaskControl, tasksControl } from "../testing/tasks-control.js";
 import { holdingInboxChoice, leavingBy } from "../testing/window-router.js";
 import { DesktopShell } from "./desktop-shell.js";
 import { SIDEBAR_OVERLAY, type SidebarCollapse } from "./sidebar-collapse.js";
@@ -201,8 +201,12 @@ function mount(
       page: TASKS_PAGE.HOME,
       // Home stands where the router stands it, on no place over it, as the window's root reads it.
       atHome: home,
-      onNewTask: () => setAsked(true),
-      newTask: { ...control.newTask, open: asked, onClose: () => setAsked(false) },
+      newTask: {
+        ...control.newTask,
+        onOpen: () => setAsked(true),
+        open: asked,
+        onClose: () => setAsked(false),
+      },
       ...overrides,
     });
     return createElement(DesktopShell, shellProps(tasks, tab, onTabChange, sidebarPatch));
@@ -466,29 +470,12 @@ test("with the sidebar folded, New task stands beside its toggle over Home and t
   assert.deepEqual(titleBarButtons(mount(true)), ["Show sidebar", "New task"]);
 });
 
-test("with the sidebar folded away, its toggle tells a reader how many wait on them in the Inbox, and says nothing of it while the sidebar is shown", () => {
-  handInbox({
-    waiting: [
-      {
-        taskId: DOCUMENT_TASK.id,
-        items: ["Retry?", "Alert at 80%?", "Ship it?"].map((title, at) => ({
-          id: `item-${at}`,
-          agentId: "agent-1",
-          title,
-          postedAt: at,
-        })),
-      },
-    ],
+test("while the folded sidebar floats over the work, New task stands once, in its workspace row, and the title bar holds the toggle alone", () => {
+  const page = mount(false, { workspace: ACME, workspaces: [ACME] }, PANEL_TAB.TASKS, ignore, {
+    overlay: SIDEBAR_OVERLAY.OPEN,
   });
-  const waiting: Partial<TasksControl> = { tasks: [DOCUMENT_TASK] };
-  assert.deepEqual(titleBarButtons(mount(false, waiting)), [
-    "Show sidebar, 3 need you",
-    "New task",
-  ]);
-  act(() => root?.unmount());
-  root = undefined;
-  const shown = mount(false, waiting, PANEL_TAB.TASKS, ignore, { collapsed: false });
-  assert.deepEqual(titleBarButtons(shown), ["Hide sidebar"]);
+  assert.deepEqual(titleBarButtons(page), ["Hide sidebar"]);
+  assert.equal(page.querySelectorAll('button[aria-label="New task"]').length, 1);
 });
 
 test("the title bar's buttons, each wrapped in its hint, tell a reader the chord that reaches them on the button itself", () => {
@@ -811,7 +798,7 @@ test("⌘/ is offered in the installed app, where Keyboard shortcuts is a page, 
   assert.deepEqual(tabs, []);
 });
 
-test("New task, by its chord or the sidebar's row, opens its card over the Inbox and leaves nothing, and from Settings brings the Tasks tab forward", async () => {
+test("New task, by its chord or the sidebar's glyph, which stands at the app's head before a workspace is read, opens its card over the Inbox and leaves nothing, and from Settings brings the Tasks tab forward", async () => {
   const tabs: PanelTab[] = [];
   const card = () => document.querySelector('[role="dialog"][aria-modal="true"]');
   const page = mount(true, {}, PANEL_TAB.TASKS, (tab) => tabs.push(tab), { collapsed: false });
@@ -821,7 +808,11 @@ test("New task, by its chord or the sidebar's row, opens its card over the Inbox
   act(() => {
     card()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   });
-  act(() => placeRow(page, "New task")?.click());
+  act(() =>
+    page
+      .querySelector<HTMLButtonElement>('.sidebar-identity button[aria-label="New task"]')
+      ?.click(),
+  );
   const byRow = card() !== null;
 
   // Note that leaving would stand the window's state, a task or Home, behind the card in the Inbox's place.
@@ -927,7 +918,7 @@ test("on a phone the Tasks page stands over a bar of the window's places, its ow
     at: SHELL_AT.BOARD,
     workspaces: [ACME],
     workspace: ACME,
-    onNewTask: () => asked.push("new task"),
+    newTask: newTaskControl({ onOpen: () => asked.push("new task") }),
   });
   assert.deepEqual(barItems(page).map(barName), ["Inbox", "Tasks", "Search", "New task"]);
   assert.equal(barItem(page, "Tasks").getAttribute("aria-current"), "page");
@@ -1475,7 +1466,7 @@ test("⌘K's Admin opens the Admin place for an admin alone, and is offered noth
   assert.equal(routed().router.history.location.pathname, SHELL_AT.ADMIN);
 });
 
-test("Admin stands in the plan's place beside the sidebar, its row marked and no other, with no way back of its own, and the Inbox's row opens the Inbox by the router from it", async () => {
+test("Admin stands in the plan's place beside the sidebar, no row of it marked, with no way back of its own, and the Inbox's row opens the Inbox by the router from it", async () => {
   handState({}, { access: { admin: true } });
   const tabs: PanelTab[] = [];
   const page = mount(
@@ -1486,11 +1477,7 @@ test("Admin stands in the plan's place beside the sidebar, its row marked and no
   );
   await settle();
   assert.ok(page.querySelector("aside.desktop-sidebar"), "the sidebar stays");
-  // Note that the account's access lands through the app-state query, so its row is read once drawn.
-  await vi.waitFor(() =>
-    assert.equal(placeRow(page, "Admin")?.getAttribute("aria-current"), "page"),
-  );
-  assert.equal(placeRow(page, "Inbox")?.getAttribute("aria-current") ?? null, null);
+  assert.equal(page.querySelector('.sidebar-places [aria-current="page"]'), null);
   const main = page.querySelector(".desktop-main") ?? assert.fail("the work column");
   assert.ok(main.querySelector("section[aria-label=Admin]"), "Admin stands in the plan's place");
   assert.equal(

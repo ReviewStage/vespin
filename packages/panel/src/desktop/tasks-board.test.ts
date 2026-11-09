@@ -24,7 +24,6 @@ import {
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { askKept } from "../act.js";
 import { runAppCommand } from "../app-commands.js";
 import { MemberDirectory } from "../member-directory.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
@@ -115,6 +114,11 @@ beforeEach(() => {
       renamed.push([taskId, name]);
       return Promise.resolve(true);
     },
+    // Note that the name the reader knows a member by goes with them, which the board's own tests leave aside.
+    [ACT_KIND.TASKS_SET_STANDING]: ({ taskId, assigneeName: _named, ...standing }) => {
+      sent.push([taskId, standing]);
+      return Promise.resolve(keeps);
+    },
   });
   handMembers(() => ({ rows: { members: MEMBERS } }));
 });
@@ -185,10 +189,6 @@ async function mountBoard(
     me: DEAN,
     listRead: true,
     onSelect: (taskId) => opened.push(taskId),
-    onSetTaskStanding: (taskId, standing) => {
-      sent.push([taskId, standing]);
-      return askKept(Promise.resolve(keeps));
-    },
     ...overrides,
   });
   // The window's router, whose routed exits the Board's close leaves by, as the window's history does.
@@ -403,10 +403,7 @@ test("a press on a card opens its task", async () => {
 });
 
 test("a card's box chooses it without opening it, ⌘-click one in another column, and the bar's Status settles both at once", async () => {
-  const settled: [string[], string][] = [];
-  const board = await mountBoard(TASKS, SHELL_ROOM.WIDE, DEFAULT_BOARD_DISPLAY, {
-    onSettleTasks: (taskIds, status) => settled.push([[...taskIds], status]),
-  });
+  const board = await mountBoard();
   const box =
     board.querySelector<HTMLElement>('li[data-task-id="t-39"] [role="checkbox"]') ??
     assert.fail("the card of t-39 draws its box");
@@ -428,7 +425,12 @@ test("a card's box chooses it without opening it, ⌘-click one in another colum
     (each) => each.querySelector(".ui-menu-item-label")?.textContent === "Done",
   );
   act(() => (done ?? assert.fail("Status offers Done")).click());
-  assert.deepEqual(settled, [[["t-39", "t-42"], TASK_STATUS.DONE]]);
+  await vi.waitFor(() =>
+    assert.deepEqual(sent, [
+      ["t-39", { status: TASK_STATUS.DONE }],
+      ["t-42", { status: TASK_STATUS.DONE }],
+    ]),
+  );
   assert.equal(board.querySelector('[role="toolbar"]'), null, "the selection is let go");
 });
 
@@ -512,7 +514,7 @@ test("a Todo card dragged onto In progress is sent in progress, and one let go i
   dragCard(board, "t-39", { x: 750, y: 120 });
   dragCard(board, "t-40", { x: 450, y: 400 });
 
-  assert.deepEqual(sent, [["t-39", { status: TASK_STATUS.IN_PROGRESS }]]);
+  await vi.waitFor(() => assert.deepEqual(sent, [["t-39", { status: TASK_STATUS.IN_PROGRESS }]]));
   assert.deepEqual(opened, [], "a drag opens no task");
 });
 
@@ -525,17 +527,18 @@ test("with a draft standing over its column's cards, the card dragged onto anoth
 
   dragCard(board, "t-40", { x: 750, y: 120 });
 
-  assert.deepEqual(sent, [["t-40", { status: TASK_STATUS.IN_PROGRESS }]]);
+  await vi.waitFor(() => assert.deepEqual(sent, [["t-40", { status: TASK_STATUS.IN_PROGRESS }]]));
 });
 
 test("a column's + opens a draft there whose chips change it, and Return adds it with no agent and opens the next draft", async () => {
-  const added: [string, unknown][] = [];
-  const board = await mountBoard(TASKS, SHELL_ROOM.WIDE, DEFAULT_BOARD_DISPLAY, {
-    onQuickAdd: (name, into) => {
-      added.push([name, into]);
-      return Promise.resolve(undefined);
+  const added: unknown[] = [];
+  fakeActPort({
+    [ACT_KIND.TASKS_START]: (start) => {
+      added.push(start);
+      return Promise.resolve({ planId: "t-50" });
     },
   });
+  const board = await mountBoard();
   const draft = () => board.querySelector<HTMLInputElement>("[data-quick-add] input");
   act(() =>
     board.querySelector<HTMLButtonElement>('button[aria-label="New task in Backlog"]')?.click(),
@@ -552,10 +555,14 @@ test("a column's + opens a draft there whose chips change it, and Return adds it
   await act(async () => undefined);
 
   assert.deepEqual(added, [
-    [
-      "Export invoices as CSV",
-      { standing: { status: TASK_STATUS.BACKLOG, priority: TASK_PRIORITY.HIGH } },
-    ],
+    {
+      name: "Export invoices as CSV",
+      workspaceId: ACME.id,
+      status: TASK_STATUS.BACKLOG,
+      priority: TASK_PRIORITY.HIGH,
+      planning: false,
+      quiet: true,
+    },
   ]);
   assert.equal(draft()?.value, "", "the next draft stands, empty");
 });
@@ -569,7 +576,7 @@ test("by priority, a card dragged onto Urgent's column is sent urgent", async ()
 
   dragCard(board, "t-39", { x: 150, y: 120 });
 
-  assert.deepEqual(sent, [["t-39", { priority: TASK_PRIORITY.URGENT }]]);
+  await vi.waitFor(() => assert.deepEqual(sent, [["t-39", { priority: TASK_PRIORITY.URGENT }]]));
 });
 
 /** A task of `TASKS` assigned to Charles. */
@@ -598,10 +605,12 @@ test("by assignee, the reader's column stands first, then each teammate's, then 
   dragCard(board, "t-40", { x: 150, y: 120 });
   dragCard(board, "t-39", { x: 750, y: 120 });
 
-  assert.deepEqual(sent, [
-    ["t-40", { assigneeId: DEAN }],
-    ["t-39", { assigneeId: null }],
-  ]);
+  await vi.waitFor(() =>
+    assert.deepEqual(sent, [
+      ["t-40", { assigneeId: DEAN }],
+      ["t-39", { assigneeId: null }],
+    ]),
+  );
 });
 
 test("in a narrow room grouped by assignee, a card keeps its Assignee chip, which moves it without a drag", async () => {
@@ -624,7 +633,7 @@ test("in a narrow room grouped by assignee, a card keeps its Assignee chip, whic
   );
   pick("Charles Pan");
 
-  assert.deepEqual(sent, [["t-40", { assigneeId: CHARLES }]]);
+  await vi.waitFor(() => assert.deepEqual(sent, [["t-40", { assigneeId: CHARLES }]]));
 });
 
 test("a card's Assignee chip drops No assignee and the members, the reader first, and sends the one picked", async () => {
@@ -641,10 +650,12 @@ test("a card's Assignee chip drops No assignee and the members, the reader first
   act(() => chipOf(board, "t-39", "Assignee").click());
   pick("No assignee");
 
-  assert.deepEqual(sent, [
-    ["t-40", { assigneeId: CHARLES }],
-    ["t-39", { assigneeId: null }],
-  ]);
+  await vi.waitFor(() =>
+    assert.deepEqual(sent, [
+      ["t-40", { assigneeId: CHARLES }],
+      ["t-39", { assigneeId: null }],
+    ]),
+  );
   assert.deepEqual(opened, [], "a pick opens no task");
 });
 
@@ -656,7 +667,7 @@ test("a card dragged onto Done whose change the service refused says so", async 
   dragCard(board, "t-42", { x: 1050, y: 120 });
   await act(async () => undefined);
 
-  assert.deepEqual(sent, [["t-42", { status: TASK_STATUS.DONE }]]);
+  await vi.waitFor(() => assert.deepEqual(sent, [["t-42", { status: TASK_STATUS.DONE }]]));
   assert.match(newestToastSays() ?? "", /The task could not be changed\. Try again\./);
 });
 
@@ -731,7 +742,7 @@ test("in a narrow room a card's chips draw their marks alone, as the List's do, 
   act(() => chip.click());
   pick("In progress");
 
-  assert.deepEqual(sent, [["t-39", { status: TASK_STATUS.IN_PROGRESS }]]);
+  await vi.waitFor(() => assert.deepEqual(sent, [["t-39", { status: TASK_STATUS.IN_PROGRESS }]]));
   assert.deepEqual(opened, [], "a pick opens no task");
 });
 
@@ -752,10 +763,12 @@ test("a card's Priority chip sends the priority picked, and a Status chip the st
   act(() => chipOf(board, "t-36", "Status").click());
   pick("Todo");
 
-  assert.deepEqual(sent, [
-    ["t-39", { priority: TASK_PRIORITY.URGENT }],
-    ["t-36", { status: TASK_STATUS.TODO }],
-  ]);
+  await vi.waitFor(() =>
+    assert.deepEqual(sent, [
+      ["t-39", { priority: TASK_PRIORITY.URGENT }],
+      ["t-36", { status: TASK_STATUS.TODO }],
+    ]),
+  );
   assert.deepEqual(opened, [], "a pick opens no task");
 });
 
@@ -906,7 +919,7 @@ test("a task from a service before priorities offers No priority on its card, an
   act(() => chip.click());
   pick("High");
 
-  assert.deepEqual(sent, [["t-30", { priority: TASK_PRIORITY.HIGH }]]);
+  await vi.waitFor(() => assert.deepEqual(sent, [["t-30", { priority: TASK_PRIORITY.HIGH }]]));
 });
 
 test("a card wears one icon for how its agents stand, one at work among them", async () => {

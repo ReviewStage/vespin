@@ -37,6 +37,7 @@ import {
   openDeviceAgentLaunches,
   queueDeviceAgentLine,
   queueDeviceAgentRequest,
+  queueGoneDeviceAgentDiscard,
   settleDeviceAgentLine,
   settleLapsedDeviceAgentLine,
   stepDeviceAgentLaunch,
@@ -498,6 +499,38 @@ it.layer(getTestDB())("the Mac agent store", (it) => {
         [DEVICE_AGENT_LINE_KIND.DISCARD],
       );
     }),
+  );
+
+  it.effect(
+    "a gone agent's discard is queued to its account's own Mac, and another account's names none",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const owner = yield* openAccount();
+        const other = yield* openAccount();
+        for (const { userId, deviceId } of [owner, other]) {
+          yield* registerDevice(userId, {
+            id: deviceId,
+            name: "Studio",
+            ...DEVICE_LAYOUT,
+            capabilities: [DEVICE_CAPABILITY.DISCARD],
+          });
+        }
+        yield* db.delete(agentTable).where(eq(agentTable.id, owner.agentId));
+        const gone = { agentId: owner.agentId, deviceId: owner.deviceId };
+
+        const byOther = yield* queueGoneDeviceAgentDiscard(other.userId, gone);
+        const byOwner = yield* queueGoneDeviceAgentDiscard(owner.userId, gone);
+
+        assert.equal(byOther, false);
+        assert.equal(byOwner, true);
+        assert.deepEqual(
+          (yield* deviceAgentLinesWaiting(owner.userId, owner.deviceId)).map(
+            ({ agentId, kind }) => ({ agentId, kind }),
+          ),
+          [{ agentId: owner.agentId, kind: DEVICE_AGENT_LINE_KIND.DISCARD }],
+        );
+      }),
   );
 
   it.effect("a request is answered once, after its claim, and read back as given", () =>

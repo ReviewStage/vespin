@@ -4,6 +4,7 @@ import {
   GROUP_ACTION_STATE,
   GROUP_ACTIONS,
   GROUP_HEADING,
+  GROUP_LOOK,
   GROUP_SURFACE,
   GroupAction,
   GroupHeader,
@@ -31,8 +32,10 @@ import { CatalogSection } from "../section";
  * glyph, whose chevron stands at rest; heads that fold nothing; a list's head
  * with its buttons standing; a list's head whose buttons wait,
  * a filter that is on standing with its dot; the count on a wide page and
- * in a narrow column; and a group named in place, its glyph's button hanging
- * a panel and its field in the head's type over its rows.
+ * in a narrow column; the sidebar's heads, set apart over their rows, their
+ * chevrons brought only by the pointer, a folded one counted at rest; and a
+ * group named in place, its glyph's button hanging a panel and its field in
+ * the head's type over its rows.
  */
 
 const ignore = (): void => undefined;
@@ -186,6 +189,44 @@ function Filtered(): React.JSX.Element {
   );
 }
 
+/** The sidebar's heads: shorter than a row, the chevron brought by the pointer in the glyph's place or an empty cell, and a folded group counted at rest. */
+function Headings(): React.JSX.Element {
+  return (
+    <div className="catalog-narrow">
+      <GroupHeader
+        label="Pinned"
+        look={GROUP_LOOK.HEADING}
+        heading={GROUP_HEADING.NONE}
+        actions={<MoreButton thing="Pinned" size={BUTTON_SIZE.COMPACT} onClick={ignore} />}
+        fold={{ defaultOpen: true }}
+      >
+        <Rows names={TASKS} />
+      </GroupHeader>
+      <GroupHeader
+        label="acme/web"
+        glyph={<FolderIcon />}
+        look={GROUP_LOOK.HEADING}
+        heading={GROUP_HEADING.NONE}
+        count={{ value: TASKS.length, noun: "tasks", shown: NAV_COUNT_SHOWN.ALWAYS }}
+        actions={
+          <>
+            <MoreButton thing="acme/web" size={BUTTON_SIZE.COMPACT} onClick={ignore} />
+            <IconButton
+              label="New task in acme/web"
+              icon={<PlusIcon />}
+              size={BUTTON_SIZE.COMPACT}
+              onClick={ignore}
+            />
+          </>
+        }
+        fold={{ defaultOpen: false }}
+      >
+        <Rows names={TASKS} />
+      </GroupHeader>
+    </div>
+  );
+}
+
 function GroupHeaders(): React.JSX.Element {
   return (
     <>
@@ -212,6 +253,12 @@ function GroupHeaders(): React.JSX.Element {
         title="Counts on a wide page and in a narrow column"
       >
         <Surfaces />
+      </CatalogSection>
+      <CatalogSection
+        id="group-header-headings"
+        title="The sidebar's heads, set apart over their rows"
+      >
+        <Headings />
       </CatalogSection>
       <CatalogSection id="group-header-editing" title="A group named in place">
         <Renamed />

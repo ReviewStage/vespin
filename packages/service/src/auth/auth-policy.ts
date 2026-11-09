@@ -9,6 +9,7 @@
 import type { CimdOptions } from "@better-auth/cimd";
 import type { ClientMetadataResourceFetch, OAuthOptions, Scope } from "@better-auth/oauth-provider";
 import { DESKTOP_SESSION_CLIENT_ID } from "@repo/features/desktop-session-wire";
+import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
 import type { AdminOptions } from "better-auth/plugins";
 import { USER_ROLE } from "../admin/admin-access.js";
 import { MEMBER_MCP_SCOPE } from "../member-mcp/resource.js";
@@ -349,12 +350,23 @@ export interface OrganizationDeletionApi {
   listOrganizations(input: { headers: Headers }): Promise<readonly { id: string }[]>;
   listMembers(input: {
     headers: Headers;
-    query: { organizationId: string };
-  }): Promise<{ total: number }>;
+    query: {
+      organizationId: string;
+      filterField?: "role";
+      filterValue?: WorkspaceRole;
+      sortBy?: "createdAt";
+      sortDirection?: "asc";
+      limit?: number;
+    };
+  }): Promise<{ members: readonly { id: string; userId: string }[]; total: number }>;
   hasPermission(input: {
     headers: Headers;
     body: { organizationId: string; permissions: { organization: ["delete"] } };
   }): Promise<{ success: boolean }>;
+  updateMemberRole(input: {
+    headers: Headers;
+    body: { organizationId: string; memberId: string; role: typeof WORKSPACE_ROLE.OWNER };
+  }): Promise<unknown>;
   deleteOrganization(input: {
     headers: Headers;
     body: { organizationId: string };
@@ -364,7 +376,76 @@ export interface OrganizationDeletionApi {
 /** What the account's deletion does of its own around Better Auth's, as its hooks await it (`accounts/deletion-hooks.ts`). */
 export interface AccountDeletionSteps<Pending> {
   readonly before: (userId: string) => Promise<Pending>;
+  /** Makes the account the owner of a workspace it is the only member of (`claimSoleWorkspace`). */
+  readonly claim: (userId: string, organizationId: string) => Promise<void>;
   readonly after: (userId: string, pending: Pending) => Promise<void>;
+}
+
+/** One workspace of the account being deleted, under its session. */
+interface Leaving {
+  readonly api: OrganizationDeletionApi;
+  readonly headers: Headers;
+  readonly userId: string;
+  readonly organizationId: string;
+}
+
+/**
+ * Deletes a workspace the account is the only member of, whatever its role
+ * there. Note that a member who is no owner, left alone in a workspace whose
+ * owner deleted their account before heirs were named, is made its owner
+ * first by a write of our own (`claim`), because the plugin lets an owner
+ * alone delete a workspace and lets an owner alone make one; the write
+ * holds only while nobody else is a member, and the delete then runs the
+ * plugin's own permission check and hooks.
+ */
+async function deleteAlone<Pending>(
+  { api, headers, userId, organizationId }: Leaving,
+  steps: AccountDeletionSteps<Pending>,
+) {
+  const permissions: { organization: ["delete"] } = { organization: ["delete"] };
+  const { success } = await api.hasPermission({ headers, body: { organizationId, permissions } });
+  if (!success) await steps.claim(userId, organizationId);
+  await api.deleteOrganization({ headers, body: { organizationId } });
+}
+
+/** The longest-standing member of the workspace holding the role, where one does. */
+async function longestStanding({ api, headers, organizationId }: Leaving, role: WorkspaceRole) {
+  const { members } = await api.listMembers({
+    headers,
+    query: {
+      organizationId,
+      filterField: "role",
+      filterValue: role,
+      sortBy: "createdAt",
+      sortDirection: "asc",
+      limit: 1,
+    },
+  });
+  return members[0];
+}
+
+/**
+ * Hands a workspace others share to an heir when the account is its only
+ * owner: the longest-standing admin, or failing one the longest-standing
+ * member, made an owner through the plugin's own role change under the
+ * account's session, as an owner's own handover is, so a workspace with
+ * members always has an owner. A workspace with another owner keeps it.
+ */
+async function handOver(leaving: Leaving) {
+  const { api, headers, userId, organizationId } = leaving;
+  const owners = await api.listMembers({
+    headers,
+    query: { organizationId, filterField: "role", filterValue: WORKSPACE_ROLE.OWNER },
+  });
+  if (owners.total !== 1 || owners.members[0]?.userId !== userId) return;
+  const heir =
+    (await longestStanding(leaving, WORKSPACE_ROLE.ADMIN)) ??
+    (await longestStanding(leaving, WORKSPACE_ROLE.MEMBER));
+  if (heir === undefined) return;
+  await api.updateMemberRole({
+    headers,
+    body: { organizationId, memberId: heir.id, role: WORKSPACE_ROLE.OWNER },
+  });
 }
 
 /**
@@ -374,16 +455,18 @@ export interface AccountDeletionSteps<Pending> {
  * account's session, as `authClient.deleteUser()` does. Better Auth checks
  * the session is fresh, signed in within its `freshAge`, and refuses an older
  * one (`SESSION_EXPIRED`) before anything below runs. Its `beforeDelete` runs
- * the deletion's own steps first, then deletes every workspace the account is
- * the only member of and may delete through the organization plugin, under
- * the request's own session, so nothing stays behind that nobody can open;
- * a workspace others belong to keeps them. Better Auth then deletes the
- * account's sessions, sign-in accounts, and user row, and its `afterDelete`
- * settles what the steps read. Note that a workspace others belong to loses
- * more than the account's member row: the agents and automations the account
- * ran there cascade with its user row. The tasks it created there stay, with
- * their teammates' agents, their creator (`task.user_id`) cleared, as its
- * comments and memories stay without its name.
+ * the deletion's own steps first, then, under the request's own session,
+ * deletes every workspace the account is the only member of, whatever its
+ * role there (`deleteAlone`), so nothing stays behind that nobody can open,
+ * and hands every workspace others share that it alone owns to an heir
+ * (`handOver`), so none is left with no owner to delete it or change its
+ * slug. Better Auth then deletes the account's sessions, sign-in accounts,
+ * and user row, and its `afterDelete` settles what the steps read. Note that
+ * a workspace others belong to loses more than the account's member row: the
+ * agents and automations the account ran there cascade with its user row.
+ * The tasks it created there stay, with their teammates' agents, their
+ * creator (`task.user_id`) cleared, as its comments and memories stay
+ * without its name.
  * The email-verification callback is shut (`DISABLED_AUTH_PATHS`), since no
  * verification is configured.
  */
@@ -399,14 +482,10 @@ export function accountDeletion<Pending>(
       pending.set(request, await steps.before(user.id));
       const { headers } = request;
       for (const { id: organizationId } of await api().listOrganizations({ headers })) {
-        const { total } = await api().listMembers({ headers, query: { organizationId } });
-        if (total !== 1) continue;
-        const permissions: { organization: ["delete"] } = { organization: ["delete"] };
-        const { success } = await api().hasPermission({
-          headers,
-          body: { organizationId, permissions },
-        });
-        if (success) await api().deleteOrganization({ headers, body: { organizationId } });
+        const leaving = { api: api(), headers, userId: user.id, organizationId };
+        const { total } = await leaving.api.listMembers({ headers, query: { organizationId } });
+        if (total === 1) await deleteAlone(leaving, steps);
+        else await handOver(leaving);
       }
     },
     afterDelete: async (user: { id: string }, request?: Request) => {

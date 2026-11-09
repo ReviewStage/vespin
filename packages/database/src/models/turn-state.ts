@@ -34,11 +34,12 @@
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
 import { TURN_ORIGIN, TURN_STATUS, type TurnOrigin, type TurnStatus } from "@repo/wire";
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
+import { agentRunnerRecord } from "../schemas/agent-runner-record.js";
 import { messages, turns } from "../schemas/storage.js";
 import { TurnUsageColumnSchema } from "./columns.js";
 
@@ -563,6 +564,37 @@ const findLapsedAgents = SqlSchema.findAll({
     ),
 });
 
+const findRunningSandboxes = SqlSchema.findAll({
+  Request: Schema.Struct({ at: Schema.Date, limit: Schema.Int }),
+  Result: Schema.Struct({ sandboxName: Schema.String }),
+  execute: ({ at, limit }) =>
+    Database.use((db) =>
+      db
+        .select({ sandboxName: agentRunnerRecord.sandboxName })
+        .from(turns)
+        .innerJoin(agentTable, eq(agentTable.conversationId, turns.conversationId))
+        .innerJoin(
+          agentRunnerRecord,
+          and(
+            eq(agentRunnerRecord.userId, agentTable.userId),
+            eq(agentRunnerRecord.agentId, agentTable.id),
+          ),
+        )
+        .where(
+          and(
+            eq(turns.status, TURN_STATUS.RUNNING),
+            gt(turns.leaseUntil, at),
+            eq(agentTable.machine, AGENT_MACHINE.VERCEL),
+            isNotNull(agentRunnerRecord.sandboxSessionId),
+          ),
+        )
+        .groupBy(agentRunnerRecord.sandboxName)
+        // Note that the order is drawn afresh each sweep, so past the limit no sandbox is left out every minute.
+        .orderBy(sql`random()`)
+        .limit(limit),
+    ),
+});
+
 /** A turn of the conversation as a write names it: its id, and the conversation and account it stands in. */
 export interface TurnTarget {
   readonly userId: string;
@@ -892,6 +924,19 @@ export function lapsedTurnsOf(
 /** Whether the lapsed turn ran past its cap rather than its state's deadline. */
 export function pastCap(turn: Pick<LapsedTurn, "startedAt">, at: Date): boolean {
   return turn.startedAt !== null && at.getTime() - turn.startedAt.getTime() > TURN_DEADLINE.CAP_MS;
+}
+
+/**
+ * The sandboxes, among every account's, whose runner runs a cloud agent's
+ * turn still inside its progress deadline at `at`, at most `limit` of them:
+ * the ones the minute sweep keeps up while their turn runs, whatever their
+ * runner posts, since a sandbox stops its idle window after its last touch
+ * and a turn's deadline runs longer.
+ */
+export function runningTurnSandboxes(at: Date, limit: number): TurnStateEffect<readonly string[]> {
+  return Effect.map(findRunningSandboxes({ at, limit }), (rows) =>
+    rows.map((row) => row.sandboxName),
+  );
 }
 
 /** A coding agent with a turn lapsed: its ids, and where its runner lives. */

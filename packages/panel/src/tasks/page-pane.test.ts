@@ -519,7 +519,7 @@ test("on a phone the page draws no bar, and the task's header's ⋯ offers every
   assert.match(sheet.textContent ?? "", /View options.*Word wrap/);
 });
 
-test("Comment asks the frame for an element, an element holding threads is pinned, the element picked opens a comment quoting its words, and a press in the page lets go of it", async () => {
+test("Comment asks the frame for an element, an element holding threads is pinned, the element picked opens a comment quoting its words, and a press in the page lets go of it, pinning one left with words where it was started to open again", async () => {
   const path = "body > p:nth-of-type(1)";
   const thread: DescriptionCommentThread = {
     id: "8c1d3e5f-7a9b-4c2d-8e4f-6a8b0c2d4e61",
@@ -595,7 +595,49 @@ test("Comment asks the frame for an element, an element holding threads is pinne
     ".ui-rect-float:not([data-leaving]) .page-comment-float",
   );
   assert.ok(standing === null, "the comment being started goes");
+  assert.ok(
+    container.querySelector('button[aria-label="Draft comment"]') === null,
+    "a comment of no words of its own leaves no draft",
+  );
+
+  // A comment holding words of its own, let go, is pinned where it was started, and its pin opens it again as it was left.
+  const heading = "body > h2:nth-of-type(1)";
+  await press("Comment on the page");
+  postFrom(frame().contentWindow, {
+    type: PAGE_PICK_TYPE,
+    picked: { path: heading, quote: "Totals", section: "", box },
+  });
+  typeInto(container, "Add a comment", "Split by team?");
+  postFrom(frame().contentWindow, { type: PAGE_PICK_TYPE, pressed: true });
+  postFrom(frame().contentWindow, {
+    type: PAGE_PICK_TYPE,
+    marks: [
+      { path, box },
+      { path: heading, box: { left: 10, top: 60, right: 200, bottom: 80 } },
+    ],
+  });
+  await press("Draft comment");
+  const reopened = container.querySelector<HTMLTextAreaElement>(
+    '.ui-rect-float:not([data-leaving]) textarea[aria-label="Add a comment"]',
+  );
+  assert.equal(reopened?.value, "Split by team?");
+  assert.match(container.querySelector(".page-comment-float")?.textContent ?? "", /Totals/);
+  // Emptied, the draft goes, so no later test opens on its words.
+  typeInto(container, "Add a comment", "");
 });
+
+/** Types `words` into the field inside `within` named `label`, as the reader would. */
+function typeInto(within: ParentNode, label: string, words: string): void {
+  const field = within.querySelector<HTMLTextAreaElement>(`textarea[aria-label="${label}"]`);
+  assert.ok(field, `a field labeled ${label}`);
+  act(() => {
+    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(
+      field,
+      words,
+    );
+    field.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
 
 /** The page's pane over `control`, an element of it picked and `words` held on it in the reader's review, as the reader would. */
 function holdOnElement(control: DescriptionCommentsControl, words: string) {

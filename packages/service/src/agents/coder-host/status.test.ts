@@ -43,6 +43,16 @@ test("a prompt the provider refused as longer than the window reads as a context
   expect(agentFailureOf(overloaded)).toBe(AGENT_FAILURE.MODEL);
 });
 
+test("a turn the sweep failed as its runner lost reads as that, not as a run that said nothing", () => {
+  const lost = {
+    status: TURN_STATUS.FAILED,
+    failure: TURN_FAILURE.RUNNER_LOST,
+    failureDetail: "the agent's runner stopped before its turn ended",
+  };
+
+  expect(agentFailureOf(lost)).toBe(AGENT_FAILURE.RUNNER_LOST);
+});
+
 test("a local agent's summary names its Mac and when it last beat; an agent in a sandbox names none", () => {
   const DEVICE = "device-1";
   const line: AgentLine = {

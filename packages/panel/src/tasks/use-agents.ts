@@ -62,13 +62,15 @@ import { modelsRetryMutation } from "../live-reads.js";
 import type { RenameShape } from "../rename-write.js";
 import { rendererPause } from "../renderer-runtime.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
-import { TOAST_HOLD, undoToast, useToast } from "../toast.js";
+import { TOAST_HOLD, useToast } from "../toast.js";
 import {
   type LocalWrite,
   pressLocal,
   pressRows,
   ROW_WRITE,
   type RowDoors,
+  TOAST_ONLY_UNDO,
+  toastOnlyUndo,
   withdrawUndo,
 } from "../undo-stack.js";
 import {
@@ -690,6 +692,7 @@ function holdsWords(draft: AgentDraft, words: ClosedDraft["words"]): boolean {
  */
 const DRAFT_CLOSING = {
   words: DRAFT_CLOSED,
+  unmasked: () => true,
   act: ({ letGo }, { choices }) => letGo(choices.id),
   undo: ({ restore }, closed) => restore(closed),
   holds: ({ startsOn, draft }, { on, choices }) => on === startsOn && draft?.id !== choices.id,
@@ -1576,11 +1579,13 @@ export function useAgents(input: {
         cause: answer,
       };
     }
-    const undo =
-      (asked ? undefined : pressed.keep(words.done)) ??
-      (() =>
-        void archiveNow.current(agentId, !archived).then((result) => sayRefusal(result, agentId)));
-    toast({ ...undoToast(words.done, undo), replayUnmasked: true });
+    const unarchive = () =>
+      void archiveNow.current(agentId, !archived).then((result) => sayRefusal(result, agentId));
+    const said =
+      asked || !pressed.drawn
+        ? toastOnlyUndo(TOAST_ONLY_UNDO.AGENT_ARCHIVE, words.done, unarchive)
+        : pressed.keep(words.done);
+    if (said !== undefined) toast(said);
     return { status: ACTION_RESULT_STATUS.ACCEPTED };
   });
   const { mutateAsync: archive } = useMutation(archiveAgent);

@@ -23,8 +23,8 @@ import { CatalogSection } from "../section";
  * status and an action at a head's end, a line of what happened to the
  * thread, said after its writer's name, a draft not yet sent, which says
  * no time, a comment while it is read, and the pins of comments on what
- * they are on: one thread, a person's, three, an agent's first, and two
- * held in the reader's review, unsent.
+ * they are on: one thread, a person's, three, an agent's first, two
+ * held in the reader's review, unsent, and a draft the reader left.
  */
 
 /** A synthetic picture drawn in place, so the catalog renders offline. */
@@ -132,6 +132,14 @@ function Comments(): React.JSX.Element {
               preview="Say who the invite goes to."
               open={false}
               look={COMMENT_PIN_LOOK.HELD}
+              onPress={() => undefined}
+              onHover={() => undefined}
+            />
+            <CommentPin
+              look={COMMENT_PIN_LOOK.DRAFT}
+              label="Draft comment"
+              preview="Split the totals by team?"
+              open={false}
               onPress={() => undefined}
               onHover={() => undefined}
             />

@@ -37,7 +37,7 @@ import {
   type ProviderKeyKind,
   type ProviderKeyProvider,
 } from "@repo/features/provider-key-wire";
-import { SANDBOX_TOUCH_EVERY, type Sandbox, touchSandbox } from "@repo/sandbox";
+import { SANDBOX_IDLE, SANDBOX_TOUCH_EVERY, type Sandbox, touchSandbox } from "@repo/sandbox";
 import { HTTP_METHOD, type WireValue, WireValueSchema } from "@repo/wire";
 import {
   Cause,
@@ -645,6 +645,16 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       held.launch,
       now,
     );
+    // A sandbox stops its idle window after its last touch, so a turn that ran all along, whether or not
+    // this batch ends it, whose runner left it untouched past that window had it stop under the turn, and
+    // the gap is said. Note that it is measured from the last touch, not the last post, because the touch
+    // is what the stop counts from; one ending as the sandbox stopped tells that the runner went quiet.
+    const untouched = state.keptAliveAt === undefined ? 0 : now - state.keptAliveAt;
+    if (state.turn !== undefined && untouched > Duration.toMillis(SANDBOX_IDLE)) {
+      yield* Effect.logWarning(
+        `runner-events: a running turn's sandbox went ${Math.round(untouched / 1000)}s without a touch`,
+      ).pipe(Effect.annotateLogs({ agentId: applying.agentId, conversationId }));
+    }
     // The next turn the runner opens is the one its line queued, where one stands queued.
     let queuedTurnId = Option.getOrUndefined(yield* queuedTurnOf(conversationId));
     const { launch } = held;

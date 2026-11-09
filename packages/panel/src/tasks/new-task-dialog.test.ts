@@ -63,7 +63,7 @@ import { NO_REPOSITORIES, tasksControl } from "../testing/tasks-control.js";
 import { NewTaskDialog } from "./new-task-dialog.js";
 import { NEW_TASK_PURPOSE } from "./new-task-purpose.js";
 import type { RepositoryChooser } from "./repository-chip.js";
-import type { NewTaskAgent, NewTaskPreset, NewTaskStart } from "./use-tasks-tab.js";
+import type { NewTaskAgent, NewTaskPreset, NewTaskStart } from "./use-new-task.js";
 
 /**
  * New task as the developer meets it: a card over the window whose head row

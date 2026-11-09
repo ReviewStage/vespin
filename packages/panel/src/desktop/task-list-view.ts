@@ -11,7 +11,7 @@ import { Schema } from "effect";
 import { keptKey, useKept } from "../use-kept.js";
 
 /**
- * task-list-view.ts -- how each workspace's task list is grouped, and whose tasks it holds, in the sidebar, kept per workspace on this Mac.
+ * task-list-view.ts -- how each workspace's task list is grouped, whose tasks it holds, and whether it shows finished sub-tasks, in the sidebar, kept per workspace on this Mac.
  *
  * The view is the developer's reading of a workspace's list, kept in the
  * renderer's own storage as the folds are, so a list grouped in one run on
@@ -21,7 +21,9 @@ import { keptKey, useKept } from "../use-kept.js";
  * keeps nothing, so its frames never wear a developer's choices.
  *
  * Note that Assigned to is kept as Me where it is absent, so every reader
- * opens on their own tasks, and a later choice of Anyone is kept as one.
+ * opens on their own tasks, and a later choice of Anyone is kept as one;
+ * and that the finished sub-tasks are kept hidden where nothing is kept,
+ * so a view kept before the choice existed reads as it did.
  */
 
 /** A kept grouping. */
@@ -41,6 +43,7 @@ const storedViews = Schema.fromJsonString(
     Schema.Struct({
       grouping: storedGrouping,
       assignee: Schema.optionalKey(storedAssignedTo),
+      finished: Schema.optionalKey(Schema.Boolean),
     }),
   ),
 );
@@ -56,17 +59,20 @@ export interface TaskListViewControl {
   readonly onGrouping: (grouping: TaskGrouping) => void;
   /** Lists the reader's tasks, anyone's, or one teammate's. */
   readonly onAssignedTo: (assignedTo: AssignedTo) => void;
+  /** Shows each parent's finished sub-tasks under it, or leaves them out. */
+  readonly onFinishedSubTasks: (shown: boolean) => void;
 }
 
 /** A fixture run's views, which keep nothing. One for the window, so the sidebar and a person's page, which lists their tasks there, read and change the same view. */
 const stagedViewsStore = createStore<StoredViews>({});
 
-/** A view as kept, Me where no Assigned to is. */
+/** A view as kept, Me where no Assigned to is, and the finished sub-tasks hidden where nothing says. */
 function viewOf(kept: StoredViews[string] | undefined): TaskListView {
   if (kept === undefined) return DEFAULT_TASK_LIST_VIEW;
   return {
     grouping: kept.grouping,
     assignedTo: kept.assignee ?? DEFAULT_TASK_LIST_VIEW.assignedTo,
+    finishedSubTasks: kept.finished ?? DEFAULT_TASK_LIST_VIEW.finishedSubTasks,
   };
 }
 
@@ -84,7 +90,11 @@ export function useTaskListView(
     if (workspaceId === undefined) return;
     const all = {
       ...views,
-      [workspaceId]: { grouping: next.grouping, assignee: next.assignedTo },
+      [workspaceId]: {
+        grouping: next.grouping,
+        assignee: next.assignedTo,
+        finished: next.finishedSubTasks,
+      },
     };
     if (staged) {
       stagedViewsStore.setState(() => all);
@@ -96,5 +106,6 @@ export function useTaskListView(
     view,
     onGrouping: (grouping) => choose({ ...view, grouping }),
     onAssignedTo: (assignedTo) => choose({ ...view, assignedTo }),
+    onFinishedSubTasks: (finishedSubTasks) => choose({ ...view, finishedSubTasks }),
   };
 }

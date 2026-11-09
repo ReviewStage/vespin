@@ -12,8 +12,11 @@ import { usePageVisible } from "../use-page-visible.js";
  * The service keeps a cloud agent's sandbox and runner warm for five minutes
  * past its last warm call (`agentWarmAnswerSchema`), so the window calls at
  * once and then every `WARM_EVERY` while the agent stays on screen and the
- * page is visible. Leaving it, or hiding or closing the window, stops the
- * calls and sends nothing: the service's window runs out on its own.
+ * page is visible. Each call also asks this Mac for the agent's mirror,
+ * which makes one attempt where none runs, so the mirror follows the agent
+ * on screen and connects once its sandbox is up. Leaving it, or hiding or
+ * closing the window, stops the calls and sends nothing: the service's
+ * window runs out on its own.
  */
 
 /** How often an agent on screen is said to be there. */
@@ -29,7 +32,7 @@ function warmable(agent: AgentSummary): boolean {
   );
 }
 
-/** Calls the service's warm for `agent` at once and every minute while it is on screen and the page is visible; nothing for none. */
+/** Calls the service's warm, and asks for the mirror, for `agent` at once and every minute while it is on screen and the page is visible; nothing for none. */
 export function useWarmAgent(agent: AgentSummary | undefined): void {
   const visible = usePageVisible();
   const warmId = visible && agent !== undefined && warmable(agent) ? agent.id : undefined;
@@ -37,7 +40,11 @@ export function useWarmAgent(agent: AgentSummary | undefined): void {
     if (warmId === undefined) return undefined;
     return rendererFork(
       Effect.repeat(
-        Effect.sync(() => tellAct(ACT_KIND.AGENTS_WARM, { agentId: warmId })),
+        Effect.sync(() => {
+          tellAct(ACT_KIND.AGENTS_WARM, { agentId: warmId });
+          // Note that the mirror is asked beside the warm, so its worktree is made by the time a Local tab opens; a host that keeps no mirrors, as the web's, refuses it unheard.
+          tellAct(ACT_KIND.MAC_SHELL_MIRROR, { agentId: warmId });
+        }),
         Schedule.spaced(WARM_EVERY),
       ).pipe(Effect.asVoid),
     );
