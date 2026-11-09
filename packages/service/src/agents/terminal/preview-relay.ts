@@ -14,7 +14,7 @@
  * gone when it wakes. When a port is shared, the relay records how the
  * server on it was started, in a file on that disk (`RECORD_PATH`): the
  * command the agent's shell ran (the listener's ancestor whose parent is a
- * shell), its folder, its user, and its `PATH` and `HOME`, never the rest of
+ * shell, or the listener itself where no shell stands above it), its folder, its user, and its `PATH` and `HOME`, never the rest of
  * its environment, which may carry credentials. When a preview wakes the
  * sandbox, the relay is started from that record instead: it runs the
  * command again where nothing listens on the port, and answers 503 with
@@ -72,9 +72,12 @@ const listenerOf = (port) => {
   return undefined;
 };
 const record = (port) => {
-  let pid = listenerOf(port);
-  if (pid === undefined) return;
+  const listener = listenerOf(port);
+  if (listener === undefined) return;
+  let pid = listener;
   for (let parent = parentOf(pid); parent > 1 && !SHELLS.has(nameOf(parent)); parent = parentOf(pid)) pid = parent;
+  // With no shell above it, the walk reached whatever started the sandbox's processes, so the listener alone is kept.
+  if (!SHELLS.has(nameOf(parentOf(pid)))) pid = listener;
   const environ = Object.fromEntries(read("/proc/" + pid + "/environ").split("\\0").filter(Boolean).map((pair) => [pair.slice(0, pair.indexOf("=")), pair.slice(pair.indexOf("=") + 1)]));
   const kept = {
     port,
