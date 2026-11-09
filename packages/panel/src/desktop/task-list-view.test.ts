@@ -293,10 +293,8 @@ function groupNames(sidebar: HTMLElement): string[] {
   ].map(heardName);
 }
 
-/** The rows of the Tasks section: each name, the repository it says, and whether it wears a face. */
-function taskRows(
-  sidebar: HTMLElement,
-): { name: string; repository: string | undefined; face: boolean }[] {
+/** The rows of the Tasks section, each by its name. */
+function taskRows(sidebar: HTMLElement): { name: string }[] {
   const tasks = sidebar.querySelector(TASK_LIST);
   assert.ok(tasks, "the Tasks section stands");
   return [...tasks.querySelectorAll(".sidebar-tasks > li > button")].map((row) => ({

@@ -88,6 +88,33 @@ function waitingThreads(
   return [...ofTasks, ...taskless].filter((item) => dueBy(item, now));
 }
 
+/** The tasks, and the agents with no task, a thread of which waits on the developer at `now`: the threads the Inbox's row counts (`waitingThreads`). */
+export interface NeedsYou {
+  readonly tasks: ReadonlySet<string>;
+  readonly agents: ReadonlySet<string>;
+}
+
+/** Which tasks and agents with no task hold a thread waiting on `readerId` at `now` (`NeedsYou`). */
+export function needsYouOf(
+  waiting: readonly AppInboxTask[],
+  taskless: readonly AppInboxTasklessItem[],
+  readerId: string | undefined,
+  now: number,
+): NeedsYou {
+  return {
+    tasks: new Set(
+      waiting
+        .filter((task) => task.items.some((item) => dueBy(item, now)))
+        .map((task) => task.taskId),
+    ),
+    agents: new Set(
+      taskless
+        .filter((item) => waitsOnReader(item, readerId) && dueBy(item, now))
+        .map((item) => item.agentId),
+    ),
+  };
+}
+
 /** How many threads wait on the developer on each task, by task, as main counts them, less those reminded for later; a task where none waits is left out, and every one while signed out. */
 export function useTasksWaiting(tasks: TasksControl): ReadonlyMap<string, number> {
   const now = useMinute();
@@ -110,21 +137,15 @@ export function useInboxWaiting(tasks: TasksControl): number {
   return tasks.signedIn ? waitingThreads(tasks, waiting, taskless, now).length : 0;
 }
 
-/** Whether a thread of the task waits on the developer now, a thread the Inbox's row counts (`waitingThreads`); never while signed out. */
+/** Whether a thread of the task waits on the developer now (`needsYouOf`); never while signed out. */
 export function useTaskNeedsYou(tasks: Pick<TasksControl, "signedIn">, taskId: string): boolean {
   const now = useMinute();
   const waiting = useInboxWaitingTasks();
-  return (
-    tasks.signedIn &&
-    (waiting.find((task) => task.taskId === taskId)?.items.some((item) => dueBy(item, now)) ??
-      false)
-  );
+  return tasks.signedIn && needsYouOf(waiting, [], undefined, now).tasks.has(taskId);
 }
 
-/** Whether a thread of the agent with no task waits on `readerId` now, a thread the Inbox's row counts (`waitingThreads`). */
+/** Whether a thread of the agent with no task waits on `readerId` now (`needsYouOf`). */
 export function useAgentNeedsYou(agentId: string, readerId: string | undefined): boolean {
   const now = useMinute();
-  return useInboxTaskless().some(
-    (item) => item.agentId === agentId && waitsOnReader(item, readerId) && dueBy(item, now),
-  );
+  return needsYouOf([], useInboxTaskless(), readerId, now).agents.has(agentId);
 }
