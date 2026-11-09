@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { LIVE_READ } from "@repo/features/live-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { TASK_TREE_ENTRY, type Task } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
@@ -83,7 +84,10 @@ async function opened(page?: TaskMentionsValue, task: Task = TASK) {
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
-  writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
+  // The people of `acme`, the workspace the page's mentions are written under, which the `@` list reads as it opens, are nobody here.
+  writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS), {
+    [LIVE_READ.WORKSPACE_MEMBERS]: { "workspace-1": { rows: { members: [] } } },
+  });
   const body = createElement(DescriptionBody, {
     task: task,
     edit: descriptionEditMutation(task.id, () =>
