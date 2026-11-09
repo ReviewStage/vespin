@@ -164,6 +164,24 @@ export interface SettingsRowControl {
 const ADORNED_TITLE_CLASS = "[&>.ui-badge:not([data-fill])]:flex-none";
 
 /**
+ * The line of a row with no end, which holds its words and controls itself,
+ * and the box that holds them beside a row's end; each wrapping where the
+ * row is compact. Note that a row with no end stands its words and controls
+ * straight in its line rather than in a box of their own, because a level
+ * more under every row is a level more that every ancestor walk, a reader's
+ * and a test's, climbs through for each control.
+ */
+const LINE_CLASS = {
+  WRAPPING: "ui-settings-row-line ui-settings-row-main flex flex-wrap items-center",
+  PLAIN: "ui-settings-row-line ui-settings-row-main flex items-center",
+} as const;
+
+const MAIN_CLASS = {
+  WRAPPING: "ui-settings-row-main flex min-w-0 flex-1 flex-wrap items-center",
+  PLAIN: "ui-settings-row-main flex min-w-0 flex-1 items-center",
+} as const;
+
+/**
  * The label's type at each density: a setting's name at a label's weight, a
  * reference list's line at the body's, since it is read rather than set.
  */
@@ -268,6 +286,31 @@ export function SettingsRow({
       {label}
     </RowLabel>
   );
+  // Note that a compact row's controls wrap below its words only where they cannot fit at all, so its line wraps as plainly as it can.
+  const wraps = density === SETTINGS_ROW_DENSITY.COMPACT;
+  const words = (
+    <>
+      <div className="ui-settings-row-subject flex min-w-0 items-center gap-ui-12">
+        {led ? (
+          <ItemMedia className={lead === SETTINGS_ROW_LEAD.FACE ? FACE_LEAD : undefined}>
+            {leading}
+          </ItemMedia>
+        ) : null}
+        <ItemContent>
+          {said(adornment) ? (
+            <ItemTitle className={ADORNED_TITLE_CLASS}>
+              {name}
+              {adornment}
+            </ItemTitle>
+          ) : (
+            name
+          )}
+          {described ? <ItemDescription id={descriptionId}>{description}</ItemDescription> : null}
+        </ItemContent>
+      </div>
+      <ItemActions>{children?.(control)}</ItemActions>
+    </>
+  );
   return (
     <div
       className="ui-settings-row @container/ui-settings-row min-w-0 data-[indent=mark]:ms-settings-row-indent"
@@ -280,42 +323,16 @@ export function SettingsRow({
       {...landedMark(landed, LANDED.WITHIN)}
     >
       <Item size={density} className={indent === SETTINGS_ROW_INDENT.MARK ? "ps-0" : undefined}>
-        <div className="ui-settings-row-line flex items-center">
-          <div
-            className={
-              density === SETTINGS_ROW_DENSITY.COMPACT
-                ? "ui-settings-row-main flex min-w-0 flex-1 flex-wrap items-center"
-                : "ui-settings-row-main flex min-w-0 flex-1 items-center"
-            }
-          >
-            <div className="ui-settings-row-subject flex min-w-0 items-center gap-ui-12">
-              {led ? (
-                <ItemMedia className={lead === SETTINGS_ROW_LEAD.FACE ? FACE_LEAD : undefined}>
-                  {leading}
-                </ItemMedia>
-              ) : null}
-              <ItemContent>
-                {said(adornment) ? (
-                  <ItemTitle className={ADORNED_TITLE_CLASS}>
-                    {name}
-                    {adornment}
-                  </ItemTitle>
-                ) : (
-                  name
-                )}
-                {described ? (
-                  <ItemDescription id={descriptionId}>{description}</ItemDescription>
-                ) : null}
-              </ItemContent>
-            </div>
-            <ItemActions>{children?.(control)}</ItemActions>
-          </div>
-          {end === undefined ? null : (
+        {end === undefined ? (
+          <div className={wraps ? LINE_CLASS.WRAPPING : LINE_CLASS.PLAIN}>{words}</div>
+        ) : (
+          <div className="ui-settings-row-line flex items-center">
+            <div className={wraps ? MAIN_CLASS.WRAPPING : MAIN_CLASS.PLAIN}>{words}</div>
             <div className="ui-settings-row-end flex flex-none items-center gap-control-gap empty:hidden">
               {end(control)}
             </div>
-          )}
-        </div>
+          </div>
+        )}
         {below === undefined ? null : (
           <div
             className={
