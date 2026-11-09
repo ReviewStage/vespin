@@ -33,6 +33,7 @@ import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { Schema } from "effect";
 import { devicePlatformOf } from "../device-platform.js";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
+import { useIsLocalPrototype } from "../local-prototype.js";
 import { machineName, type ThisMac, useThisMac } from "../machine-name.js";
 import { Picker } from "../settings/picker-row.js";
 import { keptKey, useKept } from "../use-kept.js";
@@ -335,18 +336,28 @@ export function NewTaskRunsOnChip({
   // Note that a chip offering Cloud alone reads no beats, because it draws no device.
   const book = useDevicePresence(devices.length > 0);
   const thisMac = useThisMac();
+  // PROTOTYPE: Local runs agents on this Mac only, so Cloud is never offered.
+  const local = useIsLocalPrototype();
+  const macs: readonly MacOffer[] =
+    local && devices.length === 0
+      ? [{ deviceId: "00000000-0000-4000-8000-00000000a11c", name: "This Mac", providers: [] }]
+      : devices;
+  const shown = device ?? (local ? macs[0] : undefined);
+  const offered = runsOnRows(macs, book, thisMac).filter((row) => !local || row.id !== CLOUD_ROW);
   return (
     <Picker
       label={RUNS_ON_WORDS.LABEL}
-      value={device?.deviceId ?? CLOUD_ROW}
+      value={shown?.deviceId ?? CLOUD_ROW}
       valueLabel={
-        device === undefined
+        shown === undefined
           ? RUNS_ON_WORDS.CLOUD
-          : offerStateWords(device, book, machineName(device, devices, thisMac))
+          : local
+            ? "This Mac"
+            : offerStateWords(shown, book, machineName(shown, devices, thisMac))
       }
-      valueIcon={device === undefined ? <GLYPH.CLOUD /> : <DeviceGlyph device={device} />}
+      valueIcon={shown === undefined ? <GLYPH.CLOUD /> : <DeviceGlyph device={shown} />}
       iconOnly={narrow}
-      rows={runsOnRows(devices, book, thisMac)}
+      rows={offered}
       noMatch={RUNS_ON_WORDS.NO_MATCH}
       align={POPOVER_ALIGN.START}
       width={CHIP_WIDTH.AUTO}

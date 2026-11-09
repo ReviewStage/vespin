@@ -1,6 +1,7 @@
 import type { Workspace } from "@repo/features/workspace-wire";
 import { Schema } from "effect";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { setPrototypeListed } from "../local-prototype.js";
 import { keptKey, useKept } from "../use-kept.js";
 
 /**
@@ -58,7 +59,10 @@ export function useChosenWorkspace(
     }
     keep(workspaceId);
   };
-  return { chosen: resolveChoice(workspaces, staged ? stagedChoice : kept), choose };
+  const chosen = resolveChoice(workspaces, staged ? stagedChoice : kept);
+  // PROTOTYPE: tell the Local mockup which workspace is listed.
+  useEffect(() => setPrototypeListed(chosen?.id), [chosen?.id]);
+  return { chosen, choose };
 }
 
 /**

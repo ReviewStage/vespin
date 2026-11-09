@@ -124,6 +124,7 @@ import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { DraftMark } from "../draft-mark.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
+import { isLocalPrototype } from "../local-prototype.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
 import type { NavigationHistory } from "../navigation-history.js";
 import {
@@ -2255,13 +2256,16 @@ function SidebarColumn({
             onPreload={board.preload}
           />
         )}
-        <SidebarAutomationsRow
-          current={inAutomations}
-          failed={automationFailed}
-          running={automationsRunning}
-          disabled={!tasks.signedIn}
-          onOpen={chosen(openAutomations)}
-        />
+        {/* PROTOTYPE: Local hides cloud-only places. */}
+        {isLocalPrototype(tasks.workspace?.id) ? null : (
+          <SidebarAutomationsRow
+            current={inAutomations}
+            failed={automationFailed}
+            running={automationsRunning}
+            disabled={!tasks.signedIn}
+            onOpen={chosen(openAutomations)}
+          />
+        )}
         <SidebarAdminRow current={inAdmin} onOpen={chosen(openAdmin)} onPreload={admin.preload} />
       </SidebarPlaces>
       <SidebarRule />

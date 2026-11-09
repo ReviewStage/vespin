@@ -129,7 +129,16 @@ const FIXTURE_TEAM: Workspace = {
     chosen(EXPERIMENT.PILOT, false, FIXTURE_PERSON.MAYA, "2026-11-02T10:00:00Z"),
   ],
 };
-const FIXTURE_WORKSPACES: readonly Workspace[] = [FIXTURE_FIRST, FIXTURE_TEAM];
+// PROTOTYPE: Vespin Local's workspace, whose tasks and agents stay on this Mac.
+const FIXTURE_LOCAL: Workspace = {
+  id: "workspace-local",
+  name: "My work",
+  slug: "local",
+  role: WORKSPACE_ROLE.OWNER,
+  github: { login: "ada", active: true },
+  experiments: [],
+};
+const FIXTURE_WORKSPACES: readonly Workspace[] = [FIXTURE_FIRST, FIXTURE_TEAM, FIXTURE_LOCAL];
 
 /** The fixture's workspaces by id, which their automations' reads are held by. */
 export const FIXTURE_WORKSPACE_IDS: readonly string[] = FIXTURE_WORKSPACES.map(({ id }) => id);
@@ -358,6 +367,25 @@ const FIXTURE_OTHER_TASKS: readonly TaskSummary[] = [
     updatedAt: CALL_AT - DAY - 5 * HOUR,
     repository: "acme/relay",
     createdBy: FIXTURE_PERSON.MAYA,
+  },
+  // PROTOTYPE: the Local workspace's tasks, kept on this Mac.
+  {
+    id: "3c9d5f7b-1e40-4b62-8d80-4f5a6b7c8d93",
+    workspaceId: "workspace-local",
+    name: "Fix flaky login test",
+    createdAt: CALL_AT - 2 * DAY,
+    updatedAt: CALL_AT - 3 * HOUR,
+    repository: "ada/relay",
+    createdBy: FIXTURE_PERSON.ADA,
+  },
+  {
+    id: "4d0e6a8c-2f51-4c73-9e91-5a6b7c8d9ea4",
+    workspaceId: "workspace-local",
+    name: "Refactor billing module",
+    createdAt: CALL_AT - 3 * DAY,
+    updatedAt: CALL_AT - DAY,
+    repository: "ada/ledger",
+    createdBy: FIXTURE_PERSON.ADA,
   },
 ];
 

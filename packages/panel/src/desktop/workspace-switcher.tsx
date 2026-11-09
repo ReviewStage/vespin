@@ -1,6 +1,18 @@
 import type { Workspace } from "@repo/features/workspace-wire";
-import { ChevronDownIcon, dropBelowStart, GearIcon, NavItem, PlusIcon, useMenu } from "@repo/ui";
+import {
+  Badge,
+  ChevronDownIcon,
+  dropBelowStart,
+  GAP,
+  GearIcon,
+  Inline,
+  NavItem,
+  PlusIcon,
+  STATUS_TONE,
+  useMenu,
+} from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { isLocalPrototype } from "../local-prototype.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { ActionMenu, type MenuAction } from "./action-menu.js";
 import { sharedWords, WORKSPACE_REF_SIZE, WorkspaceCard, WorkspaceRef } from "./workspace-ref.js";
@@ -44,7 +56,10 @@ export function workspaceMenuGroups(listed: Workspace, tasks: TasksControl): Men
           <WorkspaceTile workspace={workspace} />
         </ReplayMask>
       ),
-      detail: sharedWords(workspace.memberCount, workspace.id === first),
+      // PROTOTYPE: the Local workspace says where its work lives.
+      detail: isLocalPrototype(workspace.id)
+        ? "Local · on this Mac only"
+        : sharedWords(workspace.memberCount, workspace.id === first),
       card: <WorkspaceCard workspace={workspace} personal={workspace.id === first} />,
       checked: workspace.id === listed.id,
       onSelect: () => tasks.onChooseWorkspace(workspace.id),
@@ -53,7 +68,12 @@ export function workspaceMenuGroups(listed: Workspace, tasks: TasksControl): Men
   return [
     choices,
     [
-      { label: "New workspace", icon: <PlusIcon />, onSelect: tasks.newWorkspace.onOpen },
+      {
+        label: "New workspace",
+        detail: "Local or Cloud",
+        icon: <PlusIcon />,
+        onSelect: tasks.newWorkspace.onOpen,
+      },
       { label: "Workspace settings", icon: <GearIcon />, onSelect: tasks.onOpenWorkspaceSettings },
     ],
   ];
@@ -82,7 +102,14 @@ export function WorkspaceSwitcher({
         menu={menu.trigger(dropBelowStart)}
         mark={<ChevronDownIcon />}
       >
-        <WorkspaceRef workspace={listed} size={WORKSPACE_REF_SIZE.HEAD} />
+        {isLocalPrototype(listed.id) ? (
+          <Inline gap={GAP.ICON}>
+            <WorkspaceRef workspace={listed} size={WORKSPACE_REF_SIZE.HEAD} />
+            <Badge tone={STATUS_TONE.COMPLETE}>Local</Badge>
+          </Inline>
+        ) : (
+          <WorkspaceRef workspace={listed} size={WORKSPACE_REF_SIZE.HEAD} />
+        )}
       </NavItem>
       {menu.drawn === undefined ? null : (
         <ActionMenu
