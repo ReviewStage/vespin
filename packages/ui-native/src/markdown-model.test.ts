@@ -79,6 +79,16 @@ describe("markdownBlocks", () => {
     });
   });
 
+  it("joins a paragraph's lines with a space, and keeps them where a person typed the words", () => {
+    const written = "A quote stands apart,\nand wraps.";
+    expect(markdownBlocks(written, READING)).toEqual([
+      { kind: MARKDOWN_BLOCK.PARAGRAPH, runs: [words("A quote stands apart, and wraps.")] },
+    ]);
+    expect(markdownBlocks(written, { ...READING, typed: true })).toEqual([
+      { kind: MARKDOWN_BLOCK.PARAGRAPH, runs: [words("A quote stands apart,\nand wraps.")] },
+    ]);
+  });
+
   it("draws a table as rows as wide as its header, each column aligned as written", () => {
     const [table] = markdownBlocks("| Name | Count |\n| :-- | --: |\n| a | 1 |\n| b |", READING);
     expect(table).toEqual({

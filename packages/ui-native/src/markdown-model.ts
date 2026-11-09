@@ -153,7 +153,17 @@ export interface MarkdownReading {
   readonly repository: string | null;
   readonly now: number;
   readonly zone: string;
+  /**
+   * Whether a person typed the words line by line, as into a composer whose
+   * Enter is a new line, so each line break they typed is kept, as the
+   * panel keeps a typed message's (`remark-breaks`); words an agent wrote
+   * join a paragraph's lines with a space, as Markdown reads them.
+   */
+  readonly typed?: boolean | undefined;
 }
+
+/** A line break inside a paragraph's words, which Markdown reads as a space. */
+const SOFT_BREAK = /\r?\n/gu;
 
 /** The schemes a link opens in Safari by. */
 const WEB_SCHEMES: ReadonlySet<string> = new Set(["https:", "http:", "mailto:"]);
@@ -274,7 +284,10 @@ function runsOf(node: PhrasingContent, marks: WordMarks, reader: Reader): Markdo
   switch (node.type) {
     case "text":
     case "html":
-      return wordsRun(node.value, marks);
+      return wordsRun(
+        reader.reading.typed === true ? node.value : node.value.replace(SOFT_BREAK, " "),
+        marks,
+      );
     case "inlineCode":
       return [{ kind: MARKDOWN_RUN.CODE, text: node.value }];
     case "break":

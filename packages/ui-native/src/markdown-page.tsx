@@ -21,6 +21,8 @@ type MarkdownPageProps = {
   readonly repository?: string | null | undefined;
   /** Routes a link or a chip naming a place in the app; every other link opens in Safari. */
   readonly onOpenPlace: (place: MarkdownPlace) => void;
+  /** Whether a person typed the words line by line, whose line breaks are kept. */
+  readonly typed?: boolean | undefined;
 };
 
 /**
@@ -36,6 +38,7 @@ export function MarkdownPage({
   words,
   repository,
   onOpenPlace,
+  typed,
 }: MarkdownPageProps) {
   return (
     <ScrollView>
@@ -47,7 +50,12 @@ export function MarkdownPage({
         <PageHeader title={title} summary={summary} status={status} />
         <RNHostView matchContents={{ vertical: true }}>
           <View style={WORDS_FRAME}>
-            <Markdown words={words} repository={repository} onOpenPlace={onOpenPlace} />
+            <Markdown
+              words={words}
+              repository={repository}
+              onOpenPlace={onOpenPlace}
+              typed={typed}
+            />
           </View>
         </RNHostView>
       </VStack>
