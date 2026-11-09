@@ -221,7 +221,7 @@ import { useTaskDrag } from "./use-row-drag.js";
  * while any is chosen, by X on the card in hand, and by ⌘-click, across
  * columns; a ⇧-click or ⇧↑↓ chooses a run within the card's own column
  * (`selectionRun`), as Linear's board does. While any is chosen, a bar at the
- * page's foot marks them done, sets their status, or moves them to a section,
+ * page's foot sets their status, moves them to a section, or deletes them,
  * as the List's does (`tasks-selection.tsx`), and a card chosen among
  * several offers those acts from its ⋯ and a right-click.
  *

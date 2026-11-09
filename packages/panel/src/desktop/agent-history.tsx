@@ -19,6 +19,7 @@ import {
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useRef, useState } from "react";
+import { useCoarsePointer } from "../coarse-pointer.js";
 import { agentName } from "../tasks/agent-model.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTabsControl } from "../tasks/use-main-tabs.js";
@@ -38,7 +39,9 @@ import type { AddEntry, HeldTranscripts } from "./strip-tabs.js";
  * Every row, a closed agent's and an archived one's alike, wears its tab's
  * look and hangs its tab's card (`agentEntries`), a right-click, a long
  * press, or the menu key opening the agent's menu as its tab's does, which
- * offers an archived agent's Unarchive; a press opens its tab again and
+ * offers an archived agent's Unarchive, an archived row muted and a
+ * finger's row drawing no ⋯, as the archived agents' fold draws them
+ * (`agent-archive.tsx`); a press opens its tab again and
  * chooses it, as its tab's own press does, an archived agent's read only,
  * since looking at an agent never unarchives it. Each press puts the
  * panel away. An agent whose tab stands open is in the bar already, so it
@@ -89,7 +92,9 @@ function HistoryAgentRow({
     shown,
     terminals: { onOpenTerminal: undefined },
   });
-  const thing = agent.archivedAt === undefined ? ROW_THING.AGENT : ROW_THING.ARCHIVED;
+  const archived = agent.archivedAt !== undefined;
+  const thing = archived ? ROW_THING.ARCHIVED : ROW_THING.AGENT;
+  const coarse = useCoarsePointer();
   return (
     <>
       <RowHintOptions card={card}>
@@ -98,6 +103,7 @@ function HistoryAgentRow({
           title={row.label}
           titleReplayMasked
           meta={endMark}
+          muted={archived}
           hint={card === undefined ? undefined : { Hint: RowHint, label: row.label }}
           onPress={onPick}
           menu={rowMenu(
@@ -106,6 +112,7 @@ function HistoryAgentRow({
             shown,
             true,
           )}
+          more={!coarse}
         />
       </RowHintOptions>
       {actions.dialog}
