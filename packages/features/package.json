@@ -23,6 +23,7 @@
     "./credential-redaction": "./src/credential-redaction.js",
     "./host-live": "./src/host-live.js",
     "./memory-live": "./src/memory-live.js",
+    "./member-mcp-tool": "./src/member-mcp-tool.js",
     "./memory-wire": "./src/memory-wire.js",
     "./sentry-account": "./src/sentry-account.js",
     "./sentry-addresses": "./src/sentry-addresses.js",
