@@ -160,7 +160,7 @@ function wordsOf(
  * carries a label (a name the provider gave it, its email, or the
  * developer's own), never "Account 1" for an account alone.
  */
-export function serverAccountName(
+function serverAccountName(
   connection: string,
   accounts: readonly IntegrationAccount[],
 ): string | undefined {

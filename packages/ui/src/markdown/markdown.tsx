@@ -61,7 +61,7 @@ import {
   taskInput,
 } from "./markdown-tasks.js";
 
-export type { MarkdownTaskBox, TaskBoxItem, TaskWrite } from "./markdown-tasks.js";
+export type { MarkdownTaskBox, TaskBoxItem } from "./markdown-tasks.js";
 export { TaskBox } from "./markdown-tasks.js";
 
 /** How a place's words are drawn: as a note, a transcript, or a site's document. */

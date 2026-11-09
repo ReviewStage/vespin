@@ -211,5 +211,3 @@ export const GLYPH = {
   OPEN_EXTERNALLY: ExternalIcon,
   OPEN_ON_GITHUB: GitHubMarkGlyph,
 } as const;
-
-export type Glyph = (typeof GLYPH)[keyof typeof GLYPH];

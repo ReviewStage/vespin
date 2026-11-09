@@ -180,7 +180,7 @@ export interface MarginView {
  * card whose words are scrolled out of the view, above or below, stays by
  * them.
  */
-export function keptInView(top: number, height: number, view: MarginView): number {
+function keptInView(top: number, height: number, view: MarginView): number {
   if (top + height <= view.bottom || top >= view.bottom) return top;
   return Math.max(Math.min(top, view.top), view.bottom - height);
 }
