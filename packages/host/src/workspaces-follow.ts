@@ -9,6 +9,7 @@ import { Effect, Option, Schema, Stream } from "effect";
 import {
   decodedLiveRows,
   LiveBroken,
+  type LiveFailure,
   liveRows,
   type SealedRead,
   type TxWait,
@@ -24,7 +25,7 @@ import {
  */
 
 /** A read answered, or why the service answered none, `gone` where it names nothing the account reaches any more. */
-type Sealed<Answer> = Answer | { readonly failure: string; readonly gone?: boolean };
+type Sealed<Answer> = Answer | LiveFailure;
 
 export interface LiveReadDependencies<Answer> {
   /** The read's rows inline, held until they move past `after`; a failure where the service answered none. */

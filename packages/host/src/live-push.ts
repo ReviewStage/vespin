@@ -1,6 +1,7 @@
 import { Effect, Option, Stream } from "effect";
 import {
   LiveBroken,
+  type LiveFailure,
   liveRows,
   resealWait,
   type SealedRead,
@@ -27,11 +28,10 @@ import {
  */
 
 /** A read the service did not answer, `gone` where the read names nothing the account reaches. */
-type SealFailure = { readonly failure: string; readonly gone?: boolean };
 
 export interface LivePushDependencies<Part extends string, Value> {
   /** The read with its rows inline at the poll address, held past `after` where it names one. */
-  readonly seal: (poll: boolean, after?: string) => Effect.Effect<SealedRead<Part> | SealFailure>;
+  readonly seal: (poll: boolean, after?: string) => Effect.Effect<SealedRead<Part> | LiveFailure>;
   /** The value a delivery's rows stand for, none where they do not decode. */
   readonly decode: (rows: Readonly<Record<Part, readonly unknown[]>>) => Option.Option<Value>;
   /** Takes the value as it now stands each time it moves, or that it could not be followed. */

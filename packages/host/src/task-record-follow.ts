@@ -4,7 +4,7 @@ import {
   type TaskRecordLiveRows,
 } from "@repo/features/task-record-live";
 import { type Effect, Stream } from "effect";
-import { decodedLiveRows, type LiveBroken, type TxWait } from "./live-follow.js";
+import { decodedLiveRows, type LiveBroken, type LiveFailure, type TxWait } from "./live-follow.js";
 
 /**
  * task-record-follow.ts -- where an open task's description stands, followed by the host over the service's held poll, so the description is read again only once its mark moved.
@@ -27,11 +27,10 @@ export interface TaskRecordMove {
 }
 
 /** A read the service did not answer, `gone` where the task is no longer the account's. */
-type Unsealed = { readonly failure: string; readonly gone?: boolean };
 
 export interface TaskRecordFollowDependencies {
   /** The record's rows inline, held past `after`; a failure where the service answered none. */
-  readonly poll: (after: string | undefined) => Effect.Effect<TaskRecordLiveAnswer | Unsealed>;
+  readonly poll: (after: string | undefined) => Effect.Effect<TaskRecordLiveAnswer | LiveFailure>;
   /** Handed how to wait for a write's transaction on the record once it hands one, and none once it is let go (`live-follow.ts`). */
   readonly onTxWait?: (wait: TxWait | undefined) => void;
 }

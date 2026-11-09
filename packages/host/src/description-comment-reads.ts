@@ -6,7 +6,7 @@ import { type EntityPool, fieldKind, type HeldRows } from "@repo/sync";
 import { Data, Effect, Option, Schema } from "effect";
 import { type AppDescriptionComments, NO_DESCRIPTION_COMMENTS } from "./app-state.js";
 import { type HeldAnswers, heldSlice } from "./live-collection.js";
-import { confirmWrite, type SealedRead, type TxWait } from "./live-follow.js";
+import { confirmWrite, type LiveFailure, type SealedRead, type TxWait } from "./live-follow.js";
 import { pushLive } from "./live-push.js";
 
 /**
@@ -63,7 +63,6 @@ function drawnThread({ taskId: _taskId, ...thread }: CommentThreadRow): Descript
 }
 
 /** A read the service did not answer, `gone` where it names nothing the account reaches. */
-type SealFailure = { readonly failure: string; readonly gone?: boolean };
 
 export interface DescriptionCommentReadsDependencies {
   /** The pool every subject's threads stand in. */
@@ -74,7 +73,7 @@ export interface DescriptionCommentReadsDependencies {
     userId: string,
     poll: boolean,
     after?: string,
-  ) => Effect.Effect<SealedRead<"threads" | "entries" | "files"> | SealFailure>;
+  ) => Effect.Effect<SealedRead<"threads" | "entries" | "files"> | LiveFailure>;
   /** The account signed in now, which a follow is read for from its first read on; none where nobody is. */
   readonly accountId: () => string | undefined;
   /** Whether the account gate stands open, so a follow may read. */

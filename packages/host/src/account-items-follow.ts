@@ -16,6 +16,7 @@ import { type AccountWideReads, INBOX_ITEM, type InboxChange } from "./inbox-col
 import {
   confirmWrite,
   followTakingRows,
+  type LiveFailure,
   restarting,
   type SyncStanding,
   syncIdOf,
@@ -52,7 +53,6 @@ import {
  */
 
 /** A read the service did not answer, `gone` where it never will again. */
-type SealFailure = { readonly failure: string; readonly gone?: boolean };
 
 /** The kind of holder an item is on: a plan, or an agent with no task. */
 type HolderKind = (typeof INBOX_SCOPE_KIND)[keyof typeof INBOX_SCOPE_KIND];
@@ -72,7 +72,7 @@ export interface AccountItemsDependencies {
   readonly seal: (
     userId: string,
     sync: string | undefined,
-  ) => Effect.Effect<AccountInboxItemsLiveAnswer | SealFailure>;
+  ) => Effect.Effect<AccountInboxItemsLiveAnswer | LiveFailure>;
   /** The sync engine's pool, which the items stand in while they are followed. */
   readonly pool: EntityPool;
   /** The account's own reads, among which the feed's wait stands while it is followed. */

@@ -10,7 +10,13 @@ import {
 import { Effect, Equal, FiberMap, Option, Queue, Schedule, type Scope, Stream } from "effect";
 import { type AppDescriptionDocuments, NO_KEYS_HELD } from "./app-state.js";
 import { type HeldAnswers, heldSlice } from "./live-collection.js";
-import { confirmWrite, FOLLOW_BACKOFF, FOLLOW_RESEAL, type TxWait } from "./live-follow.js";
+import {
+  confirmWrite,
+  FOLLOW_BACKOFF,
+  FOLLOW_RESEAL,
+  type LiveFailure,
+  type TxWait,
+} from "./live-follow.js";
 import { taskRecordMoves } from "./task-record-follow.js";
 
 /**
@@ -42,7 +48,6 @@ const DESCRIPTION_GONE: HeldDescriptionDocument = { gone: true };
 const OVERTAKEN = "overtaken";
 
 /** A record the service did not seal, `gone` where the task is no longer the account's or the session another's. */
-type Unsealed = { readonly failure: string; readonly gone?: boolean };
 
 /** One task's description as its follow stands. */
 interface Followed {
@@ -185,7 +190,7 @@ export const descriptionDocumentReads = /* @__PURE__ */ Effect.fn("host/descript
       const seal = (
         poll: boolean,
         after?: string,
-      ): Effect.Effect<TaskRecordLiveAnswer | Unsealed> =>
+      ): Effect.Effect<TaskRecordLiveAnswer | LiveFailure> =>
         userId === undefined
           ? Effect.succeed({ ...LIVE_SIGNED_OUT, gone: true })
           : Effect.map(dependencies.recordLive(taskId, userId, poll, after), (sealed) =>
@@ -221,7 +226,7 @@ export const descriptionDocumentReads = /* @__PURE__ */ Effect.fn("host/descript
           }),
         ).pipe(Effect.ignore);
         if (!delivered)
-          return yield* Effect.fail<Unsealed>({ failure: TASK_CALL_FAILURE.UNANSWERED });
+          return yield* Effect.fail<LiveFailure>({ failure: TASK_CALL_FAILURE.UNANSWERED });
         return true;
       });
       const followedRecord = attempt.pipe(

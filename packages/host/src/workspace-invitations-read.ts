@@ -55,7 +55,7 @@ import {
   type HeldSlice,
   heldSlice,
 } from "./live-collection.js";
-import { followTakingRows, restarting } from "./live-follow.js";
+import { followTakingRows, type LiveFailure, restarting } from "./live-follow.js";
 
 /** An invitation's row as the read's statement answers it: the plugin's role text, and when it expires in epoch milliseconds. */
 type InvitationRow = (typeof WORKSPACE_INVITATIONS_READ.rows.Type)["invitations"][number];
@@ -69,7 +69,6 @@ interface PooledInvitation extends InvitationRow {
 const WORKSPACE_INVITATION = fieldKind((row: PooledInvitation) => row.id);
 
 /** A seal the service did not answer, `gone` where the read names nothing the account reaches any more. */
-type Unsealed = { readonly failure: string; readonly gone?: boolean };
 
 /** What a cancel's service answered: the caller's answer, or the caller's answer for a refusal. */
 type InvitationCanceled<Answer> = { readonly answer: Answer } | { readonly refused: Answer };
@@ -84,7 +83,10 @@ export interface WorkspaceInvitationsDependencies {
    */
   readonly seal: (
     workspaceId: string,
-  ) => (poll: boolean, after?: string) => Effect.Effect<WorkspaceInvitationsLiveAnswer | Unsealed>;
+  ) => (
+    poll: boolean,
+    after?: string,
+  ) => Effect.Effect<WorkspaceInvitationsLiveAnswer | LiveFailure>;
   readonly tell: (held: AppWorkspaceInvitations) => void;
   /** The sync engine's pool, which each held workspace's invitations stand in while it is followed. */
   readonly pool: EntityPool;

@@ -22,6 +22,7 @@ import {
   confirmWrite,
   followTakingRows,
   LIVE_STATE,
+  type LiveFailure,
   restarting,
   type TxWait,
 } from "./live-follow.js";
@@ -60,7 +61,6 @@ const IDLE = Duration.seconds(30);
 type AnsweredPart = Exclude<keyof AccountInboxLiveAnswer["queries"], "agents">;
 
 /** A read the service did not answer, `gone` where it never will again. */
-type SealFailure = { readonly failure: string; readonly gone?: boolean };
 
 /** A follow before its first rows, with the answer they make, or stopped for good. */
 type LiveState =
@@ -82,7 +82,7 @@ export interface AccountInboxDependencies {
     userId: string,
     poll: boolean,
     after?: string,
-  ) => Effect.Effect<AccountInboxLiveAnswer | SealFailure>;
+  ) => Effect.Effect<AccountInboxLiveAnswer | LiveFailure>;
   /** The sync engine's pool, beside which each account's read stands while it is followed, drawing the inbox writes standing over its rows. */
   readonly pool: EntityPool;
   /** The account's own reads, among which each account's wait stands while it is followed. */
