@@ -4,13 +4,14 @@ import assert from "node:assert/strict";
 import { AGENT_PAYER, type AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
+import { ACTOR_KIND } from "@repo/ui/actor-model";
 import { MESSAGE_ROLE, type WireRecord, type WireValue } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { agentPayerLine } from "./agent-model.js";
+import { PayerValue } from "./agent-payer.js";
 import { AGENT_LEAD, AgentMessage } from "./agent-tab.js";
 import { newestTodos, taskTodos } from "./agent-todos.js";
 
@@ -353,23 +354,52 @@ test("Vespin's read_agent, called over its MCP server and stored under its own n
   assert.deepEqual(opened, [{ kind: TOOL_TARGET.AGENT, agent: "agent-7" }]);
 });
 
-test("an agent paid for by a plan says the plan where an agent on a key names the key and what it has cost", () => {
-  assert.equal(
-    agentPayerLine(AGENT_PAYER.API_KEY, MODEL_PROVIDER.OPENAI, 0.42),
-    "OpenAI API key · $0.42 so far",
+test("an agent's payer says whose it is: the reader's own, or the teammate who started it, by name", () => {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  const theo = {
+    kind: ACTOR_KIND.PERSON,
+    userId: "user-theo",
+    name: "Theo Lindqvist",
+    you: false,
+  } as const;
+  act(() =>
+    root.render(
+      withQueryClient(
+        createElement(
+          "div",
+          null,
+          createElement(
+            "p",
+            null,
+            createElement(PayerValue, {
+              payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+              provider: MODEL_PROVIDER.ANTHROPIC,
+              usage: { inputTokens: 10, outputTokens: 1, costUsd: 2.41 },
+              owner: undefined,
+            }),
+          ),
+          createElement(
+            "p",
+            null,
+            createElement(PayerValue, {
+              payer: AGENT_PAYER.API_KEY,
+              provider: MODEL_PROVIDER.ANTHROPIC,
+              usage: { inputTokens: 10, outputTokens: 1, costUsd: 0.42 },
+              owner: theo,
+            }),
+          ),
+        ),
+      ),
+    ),
   );
-  assert.equal(
-    agentPayerLine(AGENT_PAYER.API_KEY, MODEL_PROVIDER.ANTHROPIC, undefined),
-    "Anthropic API key",
-  );
-  assert.equal(
-    agentPayerLine(AGENT_PAYER.CLAUDE_SUBSCRIPTION, MODEL_PROVIDER.ANTHROPIC, 2.41),
-    "Using Claude plan",
-  );
-  assert.equal(
-    agentPayerLine(AGENT_PAYER.CHATGPT_SUBSCRIPTION, MODEL_PROVIDER.OPENAI, 2.41),
-    "Using Codex plan",
-  );
+  const [own, theirs] = [...container.querySelectorAll("p")].map((line) => line.textContent);
+  assert.equal(own, "Your Claude plan");
+  // Note that the chip's face draws the teammate's initial before their name.
+  assert.match(theirs ?? "", /Theo Lindqvist’s Anthropic API key · \$0\.42 so far$/);
+  assert.doesNotMatch(theirs ?? "", /Your/);
 });
 
 test("a usage-limit notice stays visible between the work before a pause and the answer after it", () => {

@@ -2,6 +2,7 @@ import { searchTokens } from "@repo/features/search-tokens";
 import { APP_SHORTCUTS, type KeyedCommand } from "@repo/settings/shortcuts";
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
+import { ICON_SIZE } from "../../icons/icon-size.js";
 import { type SearchSubject, searchHit } from "../../search-score.js";
 import { REPLAY_MASKED, ReplayWords } from "../../session-replay-marks.js";
 import {
@@ -24,6 +25,7 @@ import {
   comboboxOptionId,
 } from "../combobox/combobox.js";
 import { useComboboxField } from "../combobox/use-combobox-field.js";
+import { GLYPH_INK, GlyphSlot } from "../glyph-slot/glyph-slot.js";
 import { LIST_DENSITY, List, ListRow } from "../list-row/list-row.js";
 import { MENU_ITEM_MARK, MenuItem } from "../menu/menu.js";
 import { MenuReplayUnmasked } from "../menu/menu-replay.js";
@@ -231,7 +233,10 @@ export interface MenuHead {
 
 /** The menu's last line, pressed by nothing: who pays for the agent, and the link that manages it where its provider asks for one. */
 export interface MenuLastLine {
-  words: string;
+  /** The line's words, which may hold an inline reference among them: whose plan pays. */
+  words: React.ReactNode;
+  /** A mark before the words, set apart from them: the plan's harness, or a key. */
+  glyph?: React.ReactNode;
   /** Whether its words name a person's thing, a plan by its account's email, kept masked in a screen recording even in a menu that unmasks its own. */
   masked?: boolean | undefined;
   /** A link at the line's end, set apart from the words: Manage usage. */
@@ -301,10 +306,14 @@ const LAST_LINE =
 
 /** The last line's words and the link at its end, set apart: the words take the room, the link keeps to one line. */
 const LAST_LINE_BODY =
-  "ui-searchable-menu-last-line-body flex items-baseline justify-between gap-ui-8 px-row-inset";
+  "ui-searchable-menu-last-line-body flex items-center justify-between gap-ui-8 px-row-inset";
 
 /** The link at the last line's end, never broken across lines. */
 const LAST_LINE_END = "ui-searchable-menu-last-line-end flex-none whitespace-nowrap";
+
+/** The last line's mark and words, the mark centered on the words' first line. */
+const LAST_LINE_WORDS =
+  "ui-searchable-menu-last-line-words flex min-w-0 items-center gap-icon-gap text-muted-foreground";
 
 /**
  * The head over the field, its words inset as a row's are, or after the way
@@ -550,9 +559,16 @@ function LastLine({ line }: { line: MenuLastLine }): React.JSX.Element {
   return (
     <div className={LAST_LINE}>
       <div className={LAST_LINE_BODY}>
-        <Text as={TEXT_ELEMENT.P} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-          {line.masked === true ? <ReplayWords masked>{line.words}</ReplayWords> : line.words}
-        </Text>
+        <span className={LAST_LINE_WORDS}>
+          {line.glyph === undefined ? null : (
+            <GlyphSlot ink={GLYPH_INK.INHERIT} size={ICON_SIZE.SMALL}>
+              {line.glyph}
+            </GlyphSlot>
+          )}
+          <Text as={TEXT_ELEMENT.P} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+            {line.masked === true ? <ReplayWords masked>{line.words}</ReplayWords> : line.words}
+          </Text>
+        </span>
         {line.end === undefined ? null : (
           <span className={LAST_LINE_END}>
             <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
