@@ -45,6 +45,7 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppInboxItems, AppStateSnapshot } from "@repo/host/app-state";
 import { EXPERIMENT } from "@repo/settings";
+import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import {
   BackButton,
   type ComboboxGroup,
@@ -62,6 +63,7 @@ import {
   POPOVER_WIDTH,
   ProviderMark,
   RectFloat,
+  Shortcut,
   Spinner,
   TEXT_ELEMENT,
   TEXT_TONE,
@@ -1300,12 +1302,17 @@ function showMoreWordsOf(row: MentionRow): {
   };
 }
 
-/** The groups as the list draws them: each row its glyph, its name and detail marked where `query` found them, an agent's end, its card, and a chevron where it opens. */
+/** The key a highlighted folder's row says at its end walks into it, since choosing the row writes the folder. */
+const WALK_INTO_HINT = <Shortcut chord={{ key: SHORTCUT_KEY.RIGHT, plain: true }} />;
+
+/** The groups as the list draws them: each row its glyph, its name and detail marked where `query` found them, an agent's end, its card, a chevron where it opens, and → on the folder at `at`. */
 function comboboxGroups(
   groups: readonly MentionGroup[],
   query: string,
+  at: number,
   rowCard: RowCardOf,
 ): ComboboxGroup[] {
+  const highlighted = groups.flatMap((group) => group.rows)[at];
   return groups.map((group) => ({
     label: group.label,
     options: group.rows.map((row) => ({
@@ -1314,7 +1321,7 @@ function comboboxGroups(
       words: row.name,
       // A group's foot keeps the glyph's room empty, so its words stand in line with the rows above.
       icon: isShowMore(row) ? null : (row.look?.icon ?? <RowGlyph row={row} />),
-      hint: row.look?.end,
+      hint: row === highlighted && opens(row) && !("from" in row) ? WALK_INTO_HINT : row.look?.end,
       card: row.look?.card ?? row.card ?? rowCard(row),
       opens: "from" in row,
     })),
@@ -1411,7 +1418,7 @@ function MentionMenu({
       <ComboboxList
         id={id}
         label={MENU_LABEL}
-        groups={comboboxGroups(groups, query, rowCard)}
+        groups={comboboxGroups(groups, query, at, rowCard)}
         active={at}
         onActiveChange={onHover}
         onChoose={(index) => {
