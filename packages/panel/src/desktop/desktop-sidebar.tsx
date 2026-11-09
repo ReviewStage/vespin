@@ -19,7 +19,6 @@ import {
   AVATAR_SIZE,
   BUTTON_SIZE,
   Button,
-  ComposeIcon,
   commandKeyshortcuts,
   DropSlot,
   dropBelowStart,
@@ -79,7 +78,6 @@ import {
   HouseIcon,
   ListTodoIcon,
   MailOpenIcon,
-  ShieldUserIcon,
   ZapIcon,
 } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
@@ -120,14 +118,11 @@ import {
 } from "@repo/ui/task-sections-model";
 import { repositoryPageUrl, TASK_MARK } from "@repo/ui/tasks-model";
 import { useVirtualRuns, VIRTUAL_ROW_KEY_ATTRIBUTE } from "@repo/ui/virtual-rows";
-import { useQuery } from "@tanstack/react-query";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { runAppCommand, useAppCommand } from "../app-commands.js";
 import { useAutomationsPlace } from "../automations-route.js";
-import { useNewTaskDrafted } from "../composer-drafts.js";
 import { useConnected } from "../connection.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
-import { DraftMark } from "../draft-mark.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
@@ -167,7 +162,6 @@ import {
 import { useReadMark, useUnreadTasks } from "../tasks/use-task-looks.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { appStateQuery, selectAdminAccess } from "../use-app-state.js";
 import { IDLE_TIMEOUT_MS, useWhenIdle } from "../use-when-idle.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { runningRuns } from "./automation-runs-tab.js";
@@ -1554,7 +1548,7 @@ interface FloatingSidebar extends HoverPane {
   readonly inSight: boolean;
 }
 
-/** Where a sidebar opened from away takes the keyboard: the row it marks, else New task, the first of its places. */
+/** Where a sidebar opened from away takes the keyboard: the row or glyph it marks, else Search, the first of its places. */
 function sidebarFocus(sidebar: HTMLElement): HTMLElement | null {
   return (
     sidebar.querySelector<HTMLElement>('[aria-current="page"]') ??
@@ -1682,38 +1676,6 @@ function SidebarAutomationsRow({
   );
 }
 
-/**
- * The Admin row, after Automations' and drawn as it is, for an admin alone:
- * a non-admin is drawn nothing, not a row held back. A press opens the
- * window's Admin place (`desktop-admin.tsx`) in the task's place, as
- * Automations' row does, and the row is the place shown while it stands.
- * Note that the row is a convenience: the service's own gate decides every
- * read the place makes.
- */
-function SidebarAdminRow({
-  current,
-  onOpen,
-  onPreload,
-}: {
-  current: boolean;
-  onOpen: () => void;
-  onPreload: () => void;
-}): React.JSX.Element | null {
-  const admin = useQuery({ ...appStateQuery, select: selectAdminAccess }).data === true;
-  if (!admin) return null;
-  return (
-    <NavItem
-      icon={<ShieldUserIcon />}
-      current={current ? NAV_CURRENT.PAGE : undefined}
-      // The pointer on the row is the way to the place, so its chunk, charts and all, is read now rather than at the press.
-      onPointerEnter={onPreload}
-      onClick={onOpen}
-    >
-      Admin
-    </NavItem>
-  );
-}
-
 /** The listed workspace's sections as the sidebar draws them, and the tasks and agents standing in any of them, which Tasks leaves out. */
 interface SectionedTasks {
   readonly sections: readonly DrawnSection[];
@@ -1798,41 +1760,6 @@ interface DesktopSidebarProps {
 }
 
 /**
- * New task, heading the list: a press opens the New task dialog at once, as
- * the menu bar's and the chord's New task do, whose name field also
- * searches the workspace's Linear issues where Linear is connected
- * (`new-task-dialog.tsx`); on Home it hands Home's own composer the caret
- * instead (`desktop-home.tsx`). While words left in its card wait as the
- * workspace's draft, it wears the Draft pencil at its end, which its chord
- * takes the place of while it is hovered; none while the card or Home,
- * whose composer shows those words, is open, as a task open wears none.
- */
-function NewTaskButton({
-  tasks,
-  shown,
-  onNewTask,
-}: {
-  tasks: TasksControl;
-  /** Whether New task's words are in sight: its card open, or Home shown. */
-  shown: boolean;
-  onNewTask: () => void;
-}): React.JSX.Element {
-  const drafted = useNewTaskDrafted(tasks.newTask.workspaceId) && tasks.signedIn && !shown;
-  return (
-    <NavItem
-      icon={<ComposeIcon />}
-      mark={drafted ? <DraftMark /> : undefined}
-      aria-keyshortcuts={commandKeyshortcuts(APP_COMMAND.NEW_TASK)}
-      shortcut={<Shortcut chord={APP_SHORTCUTS[APP_COMMAND.NEW_TASK].chord} />}
-      disabled={!tasks.signedIn}
-      onClick={onNewTask}
-    >
-      New task
-    </NavItem>
-  );
-}
-
-/**
  * Times the window's first usable screen: its start to the sidebar's first
  * task list read answered, saying how many tasks the read answered, every
  * workspace's, since the workspace chosen may not stand yet. A window whose
@@ -1855,8 +1782,8 @@ function useFirstUsableSpan(tasks: TasksControl): void {
 /**
  * The window's left column: at its head the workspace chosen, by its tile
  * and name and who shares it, with the menu that chooses another
- * (`workspace-switcher.tsx`), or the app's identity while no workspace is read; the way to
- * a new task, Search, which opens the command palette, every task of the
+ * (`workspace-switcher.tsx`) and New task's glyph at its end, or the app's identity while no workspace is read;
+ * Search, which opens the command palette, every task of the
  * workspace chosen, and the account's
  * row, whose menu and gear lead to Settings and the rest. Home's row, the
  * Inbox's, and the Automations page's follow Search above the rule: Home's
@@ -1887,7 +1814,7 @@ function useFirstUsableSpan(tasks: TasksControl): void {
  * (`sidebar-collapse.ts`). A floating sidebar is put away by a choice in it,
  * by Escape, by a press outside, or once the pointer leaves a peek, a press
  * in it or not, though not for a menu it raised (`hover-pane.ts`). Opened
- * from away, it takes the keyboard at the row it marks, else at New plan,
+ * from away, it takes the keyboard at the row it marks, else at Search,
  * holds it there against Tab, and Escape gives the keyboard back where it
  * was. Floating, it has no edge to drag, since only a pinned sidebar is
  * resized.
@@ -2327,16 +2254,7 @@ function SidebarColumn({
       <SidebarPlaces>
         {phone ? null : (
           <>
-            <NewTaskButton
-              tasks={tasks}
-              // A person's page stands in Home's place without leaving its page, and draws no composer.
-              shown={
-                tasks.newTask.open || (atHome && tasks.signedIn && place !== ROUTED_PLACE.PERSON)
-              }
-              onNewTask={chosen(newTask)}
-            />
-            {/* Search is a second door to the command palette, drawn as New task
-                is, since it heads the list the same way. */}
+            {/* Search is a second door to the command palette, heading the list. */}
             <NavItem
               icon={<SearchIcon />}
               aria-keyshortcuts={commandKeyshortcuts(APP_COMMAND.COMMAND_PALETTE)}
@@ -2369,7 +2287,6 @@ function SidebarColumn({
           disabled={!tasks.signedIn}
           onOpen={chosen(openAutomations)}
         />
-        <SidebarAdminRow current={inAdmin} onOpen={chosen(openAdmin)} onPreload={admin.preload} />
       </SidebarPlaces>
       <SidebarRule />
     </>
@@ -2418,7 +2335,16 @@ function SidebarColumn({
           end={null}
         />
       ) : tasks.signedIn && tasks.workspace !== undefined ? (
-        <WorkspaceSwitcher tasks={tasks} inSight={overlay.inSight} />
+        <WorkspaceSwitcher
+          tasks={tasks}
+          inSight={overlay.inSight}
+          newTask={{
+            // A person's page stands in Home's place without leaving its page, and draws no composer.
+            shown: tasks.newTask.open || (atHome && place !== ROUTED_PLACE.PERSON),
+            onOpen: chosen(newTask),
+          }}
+          admin={{ onOpen: chosen(openAdmin), onPreload: admin.preload }}
+        />
       ) : (
         <ProductIdentity />
       )}
