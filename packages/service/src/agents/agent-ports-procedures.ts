@@ -12,10 +12,13 @@
  * is never woken here, and answers so with no ports; an agent on a Mac has
  * no sandbox, and answers the same.
  *
- * One port may be shared by a public link, the sandbox's own route to it,
- * only from a running sandbox: a share is refused as stopped otherwise, and
- * the link lives only while the sandbox runs. The share is read back from
- * the sandbox's routes.
+ * One port may be shared, only from a running sandbox: a share is refused as
+ * stopped otherwise, and the link lives only while the sandbox runs. The
+ * sandbox's own route to the port is never handed out: the link answered is
+ * the agent's preview host (`previews/preview-links.ts`), which only a
+ * signed-in member who reaches the agent can open, on a deployment with the
+ * page sandbox; one without it, a Preview or a local run, answers the route.
+ * The share is read back from the sandbox's routes.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
@@ -25,6 +28,8 @@ import { Effect, type Layer } from "effect";
 import type { HttpClient } from "effect/http";
 import { HOSTED_REFUSAL, type UserIdResolver } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
+import { PageLinks } from "../pages/page-links.js";
+import { previewOrigin } from "../previews/preview-links.js";
 import { AgentSandbox, type AgentSandboxService } from "./terminal/agent-sandbox.js";
 import { reachedAgentSession, sandboxOrUpstream } from "./terminal/sandbox-reach.js";
 
@@ -54,6 +59,12 @@ export function agentPortsProcedures(seams: AgentPortsProcedureSeams) {
       }),
       seams.sandbox,
     );
+  /** The link a member is handed for the agent's shared port: its preview host where the deployment has one, the route otherwise. */
+  const linkOf = (agentId: string, route: string) =>
+    Effect.gen(function* () {
+      const { sandbox } = yield* PageLinks;
+      return sandbox === undefined ? route : `${previewOrigin(sandbox, agentId)}/`;
+    });
   return {
     /** The ports listened on in the agent's sandbox, and whether it is running. */
     list: signedIn.list.effect(function* ({ input, context }) {
@@ -67,7 +78,7 @@ export function agentPortsProcedures(seams: AgentPortsProcedureSeams) {
       if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.SANDBOX_STOPPED);
       const url = yield* onSandbox((sandbox) => sandbox.share(sessionId, input.body.port));
       if (url === undefined) return yield* Effect.fail(HOSTED_REFUSAL.SANDBOX_STOPPED);
-      return { url };
+      return { url: yield* linkOf(input.params.id, url) };
     }),
     /** The shared port's link closed. */
     unshare: signedIn.unshare.effect(function* ({ input, context }) {
@@ -79,7 +90,9 @@ export function agentPortsProcedures(seams: AgentPortsProcedureSeams) {
     shared: signedIn.shared.effect(function* ({ input, context }) {
       const { sessionId } = yield* cloudSession(context.userId, input.id);
       if (sessionId === undefined) return { shared: null };
-      return { shared: yield* onSandbox((sandbox) => sandbox.shared(sessionId)) };
+      const shared = yield* onSandbox((sandbox) => sandbox.shared(sessionId));
+      if (shared === null) return { shared: null };
+      return { shared: { port: shared.port, url: yield* linkOf(input.id, shared.url) } };
     }),
   };
 }

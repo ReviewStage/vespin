@@ -188,6 +188,7 @@
     "./description-edit-model": "./src/description-edit-model.js",
     "./terminal-acts": "./src/terminal-acts.js",
     "./page-frame": "./src/page-frame.js",
+    "./preview-sign-in": "./src/preview-sign-in.js",
     "./browser-acts": "./src/browser-acts.js",
     "./browser-live-wire": "./src/browser-live-wire.js",
     "./browser-tabs-live": "./src/browser-tabs-live.js",
