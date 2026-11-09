@@ -20,7 +20,7 @@
  * entries hold a gap however they begin.
  */
 
-import { and, asc, desc, eq, isNotNull, isNull, max, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, isNotNull, isNull, max, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -28,6 +28,17 @@ import { claudeBrokenSessions, claudeSessionEntries } from "../schemas/claude-se
 import { conversations } from "../schemas/storage.js";
 
 type EntryEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
+
+/**
+ * The most entries one page of a transcript holds, and the most bytes its
+ * entries hold together, counted as Postgres writes each entry out, which is
+ * never less than the JSON a page is answered as. Note that the bytes are
+ * held well under the platform's 4.5 MB bound on a function's response; a
+ * page holds its first entry however large, which an append's own bound on
+ * its request already keeps under it.
+ */
+const PAGE_ENTRIES = 1_000;
+const PAGE_BYTES = 2 * 1024 * 1024;
 
 /** One transcript line, opaque but for its `type`, as the SDK's `SessionStoreEntry` is. */
 const EntrySchema = Schema.Record(Schema.String, Schema.Unknown);
@@ -38,6 +49,12 @@ export interface SessionEntryKey {
   readonly projectKey: string;
   readonly sessionId: string;
   readonly subpath?: string | undefined;
+}
+
+/** One page of a transcript: its entries in order, and the cursor the next page is read after, none past its last. */
+export interface SessionEntryPage {
+  readonly entries: readonly SessionEntry[];
+  readonly next: number | null;
 }
 
 /** A session of a project and when its main transcript was last appended to, in epoch milliseconds. */
@@ -115,6 +132,49 @@ const findEntries = SqlSchema.findAll({
         )
         .orderBy(asc(claudeSessionEntries.id)),
     ),
+});
+
+const findPage = SqlSchema.findAll({
+  Request: Schema.Struct({ ...KeyFields, after: Schema.NullOr(Schema.Number) }),
+  Result: Schema.Struct({ id: Schema.Number, entry: Schema.NullOr(EntrySchema) }),
+  execute: ({ userId, conversationId, projectKey, sessionId, subpath, after }) =>
+    Database.use((db) => {
+      const size = sql<number>`octet_length(${claudeSessionEntries.entry}::text)`;
+      // One row past the page's count, each with the bytes of its entry and of every entry before it.
+      const measured = db
+        .select({
+          id: claudeSessionEntries.id,
+          entry: claudeSessionEntries.entry,
+          size: size.as("size"),
+          running: sql<number>`sum(${size}) over (order by ${claudeSessionEntries.id})`.as(
+            "running",
+          ),
+        })
+        .from(claudeSessionEntries)
+        .innerJoin(conversations, eq(conversations.id, claudeSessionEntries.conversationId))
+        .where(
+          and(
+            ownConversation(userId, conversationId),
+            sessionRows(conversationId, projectKey, sessionId),
+            sql`${claudeSessionEntries.subpath} is not distinct from ${subpath}`,
+            after === null ? undefined : gt(claudeSessionEntries.id, after),
+          ),
+        )
+        .orderBy(asc(claudeSessionEntries.id))
+        .limit(PAGE_ENTRIES + 1)
+        .as("measured");
+      // Note that an entry past the page's bytes is answered as its id alone, so the page's end is told from the transcript's.
+      return db
+        .select({
+          id: measured.id,
+          entry:
+            sql<SessionEntry | null>`case when ${measured.running} <= ${PAGE_BYTES} or ${measured.running} = ${measured.size} then ${measured.entry} end`.mapWith(
+              claudeSessionEntries.entry,
+            ),
+        })
+        .from(measured)
+        .orderBy(asc(measured.id));
+    }),
 });
 
 const findSessions = SqlSchema.findAll({
@@ -310,6 +370,36 @@ export function loadSessionEntries(
     Effect.map((rows) =>
       rows.length > 0 ? Option.some(rows.map((row) => row.entry)) : Option.none(),
     ),
+  );
+}
+
+/**
+ * One page of the key's transcript in the account's conversation, from the
+ * entry after the cursor given, or from its first where none is: the entries
+ * in the order they were appended, held to a page's count and bytes, and the
+ * cursor the next page is read after, none where the page holds the last.
+ * A page holds at least one entry wherever one stands past the cursor.
+ */
+export function loadSessionEntryPage(
+  userId: string,
+  conversationId: string,
+  key: SessionEntryKey,
+  after: number | null,
+): EntryEffect<SessionEntryPage> {
+  return findPage({ ...keyFields(userId, conversationId, key), after }).pipe(
+    Effect.map((rows) => {
+      // Since the bytes only grow along the page, its entries are the leading rows that carry one.
+      const kept: Array<{ readonly id: number; readonly entry: SessionEntry }> = [];
+      for (const { id, entry } of rows.slice(0, PAGE_ENTRIES)) {
+        if (entry === null) break;
+        kept.push({ id, entry });
+      }
+      const last = kept.at(-1);
+      return {
+        entries: kept.map((row) => row.entry),
+        next: kept.length < rows.length && last !== undefined ? last.id : null,
+      };
+    }),
   );
 }
 
