@@ -1,12 +1,8 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
-  TASK_PRIORITY,
   TASK_PRIORITY_ORDER,
-  TASK_STATUS,
   TASK_STATUS_ORDER,
-  type TaskPriority,
   type TaskStanding,
-  type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
 import {
@@ -26,6 +22,7 @@ import {
 } from "@repo/ui";
 import { actorName, creatorActor } from "@repo/ui/actor-model";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { priorityOf, statusOf } from "@repo/ui/tasks-page-model";
 import type { ReactNode } from "react";
 import { ACTOR_SIZE, ActorMark, actorCard } from "../actor-ref.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
@@ -63,11 +60,6 @@ import { ActionMenu } from "./action-menu.js";
 /** What a change the service did not keep says. */
 const UNCHANGED_LINE = "The task could not be changed. Try again.";
 
-/** A task's status, Todo for one from a service before statuses. */
-export function statusOf(task: Pick<TaskSummary, "status">): TaskStatus {
-  return task.status ?? TASK_STATUS.TODO;
-}
-
 /**
  * A task as its menu is headed when it rises as a phone's sheet, the way
  * its row and card read: its status's mark, its name, and under it its
@@ -87,11 +79,6 @@ export function taskSubject(
 
 /** What a standing chip reads of a task: its status, priority, and assignee. */
 type ChipTask = Pick<TaskSummary, "status" | "priority" | "assignee">;
-
-/** A task's priority, No priority for one from a service before priorities. */
-export function priorityOf(task: ChipTask): TaskPriority {
-  return task.priority ?? TASK_PRIORITY.NONE;
-}
 
 /** Whether a task already stands where a standing would send it. */
 export function standsAt(task: TaskSummary, standing: TaskStanding): boolean {
