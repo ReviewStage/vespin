@@ -7,6 +7,7 @@ import type {
 import type { InstalledSkillRefusal } from "@repo/features/installed-skill-wire";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { RepositoryUnreached } from "@repo/features/repository-reach-wire";
+import { PLAYABLE_VIDEO_TYPE, type PlayableVideoType } from "@repo/features/video-signature";
 import { readEither } from "@repo/wire/effect";
 import { type Cause, Effect, type Layer, Option, Result, type Scope, Stream } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
@@ -326,6 +327,22 @@ export const HOSTED_BYTES_HEADERS = {
   "content-security-policy": "default-src 'none'; style-src 'unsafe-inline'; sandbox",
   "cross-origin-resource-policy": "same-origin",
 } as const;
+
+/**
+ * The video a byte route's caller plays, as its `Accept` names it: an MP4
+ * where it names `video/mp4`, as the iOS app does, whose player plays no
+ * WebM, and a WebM otherwise, as the web and the desktop ask nothing. A
+ * recording kept with an MP4 copy is then served that copy, and one kept
+ * without it its WebM, which the caller falls back from.
+ */
+export function playableVideoOf(request: Request): PlayableVideoType {
+  const accepted = (request.headers.get("accept") ?? "")
+    .split(",")
+    .map((range) => range.split(";")[0]?.trim().toLowerCase());
+  return accepted.includes(PLAYABLE_VIDEO_TYPE.MP4)
+    ? PLAYABLE_VIDEO_TYPE.MP4
+    : PLAYABLE_VIDEO_TYPE.WEBM;
+}
 
 /**
  * A store read or write the handler cannot answer without: its failure is

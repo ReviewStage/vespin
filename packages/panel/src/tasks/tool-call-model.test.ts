@@ -1,12 +1,11 @@
 import assert from "node:assert/strict";
+import { cardTitle, plainWords } from "@repo/features/plain-words";
 import { CALL_KIND, callLine, callPlace } from "@repo/features/turn-rows";
 import type { WireRecord } from "@repo/wire";
 import { test } from "vitest";
 import { TOOL_BLOCK } from "../ai-elements/tool.js";
 import {
   calledAgent,
-  cardTitle,
-  plainWords,
   sentWords,
   TOOL_TARGET,
   toolCallView,

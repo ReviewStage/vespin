@@ -61,14 +61,6 @@ import { useEffect, useId, useRef, useState } from "react";
 /** What the menu is called wherever it opens, New task's + among them. */
 export const TASK_RELATION_MENU = "Task relation";
 
-/** Each kind as the menu's kind row, its submenu, the task's menus, and a related row's pill name it. */
-export const TASK_RELATION_WORDS = {
-  [TASK_RELATION_KIND.SUB_TASK]: "Sub-task",
-  [TASK_RELATION_KIND.PARENT]: "Parent",
-  [TASK_RELATION_KIND.BLOCKED_BY]: "Blocked by",
-  [TASK_RELATION_KIND.BLOCKS]: "Blocks",
-} as const satisfies Record<TaskRelationKind, string>;
-
 /** The kinds in the order the kind submenu and the task's menus stand them. */
 export const TASK_RELATION_ORDER: readonly TaskRelationKind[] = [
   TASK_RELATION_KIND.SUB_TASK,

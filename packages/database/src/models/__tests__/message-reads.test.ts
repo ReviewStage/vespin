@@ -17,6 +17,7 @@ import { CONVERSATION_KIND } from "../../storage-vocabulary.js";
 import { getTestDB, plansOf } from "../../testing/index.js";
 import {
   listMessagesBefore,
+  listMessagesFrom,
   listMessagesPast,
   listTurnOpeners,
   messageCursorNow,
@@ -158,7 +159,7 @@ it.layer(getTestDB())("a conversation's reader", (it) => {
   );
 
   it.effect(
-    "a read back from the end answers the newest rows below the sequence asked, oldest first, and none of another account's conversation",
+    "a read back from the end answers the newest rows below the sequence asked, and a read on from a place the oldest at or above it, oldest first, and none of another account's conversation",
     () =>
       Effect.gen(function* () {
         const owner = yield* openAccount;
@@ -178,6 +179,10 @@ it.layer(getTestDB())("a conversation's reader", (it) => {
           seqsOf(yield* listMessagesBefore(other, conversation, {}, Number.MAX_SAFE_INTEGER, 2)),
           [],
         );
+        // A read on from a place answers the oldest rows at or above it, oldest first.
+        assert.deepEqual(seqsOf(yield* listMessagesFrom(owner, conversation, {}, 2, 2)), [2, 3]);
+        assert.deepEqual(seqsOf(yield* listMessagesFrom(owner, conversation, {}, 5, 2)), [5]);
+        assert.deepEqual(seqsOf(yield* listMessagesFrom(other, conversation, {}, 0, 2)), []);
       }),
   );
 

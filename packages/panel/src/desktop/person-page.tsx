@@ -5,9 +5,11 @@ import {
   automationTriggerText,
 } from "@repo/features/automation-list-model";
 import { AUTOMATION_SCOPE, type AutomationSummary } from "@repo/features/automation-wire";
+import { INBOX_HOLDER, NEEDS_YOU, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { inboxWaitsOn } from "@repo/features/inbox-wire";
 import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { ASSIGNED_TO } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { SETTINGS_SECTION, SETTINGS_VIEW } from "@repo/settings/settings-views";
@@ -35,7 +37,6 @@ import {
   ShowMoreRow,
   STATUS_TONE,
   Stack,
-  TASK_ROW_EDGES,
   TEXT_ELEMENT,
   TEXT_TONE,
   TEXT_VARIANT,
@@ -65,7 +66,6 @@ import {
 } from "@repo/ui/person-page-model";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { changesTab } from "@repo/ui/tab-strip-model";
-import { ASSIGNED_TO } from "@repo/ui/task-list-model";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useQueryClient } from "@tanstack/react-query";
 import { ListFilterIcon, MailIcon, UsersIcon } from "lucide-react";
@@ -75,10 +75,11 @@ import { useAppCommand } from "../app-commands.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useCopyToast } from "../copy-feedback.js";
 import {
-  copyLinkItem,
   LinkWorkspaceProvider,
+  linkItems,
   useChordLinks,
-  useCopyLinkItem,
+  useLinkItems,
+  useOpenInTab,
 } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
@@ -91,14 +92,14 @@ import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { HOME_ROW_CONTEXT, HOME_ROW_META, HOME_ROW_PICTURE } from "../tasks/home-row.js";
 import { InboxItemRows } from "../tasks/inbox-item-rows.js";
 import { InboxListSkeleton } from "../tasks/inbox-list.js";
-import { INBOX_HOLDER, NEEDS_YOU, waitsOnReaderNow } from "../tasks/inbox-model.js";
-import { readAgentById } from "../tasks/use-agents.js";
+import { type AgentsControl, readAgentById } from "../tasks/use-agents.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWaitingItems } from "../tasks/use-waiting-items.js";
 import { usePersonRoute } from "../workspace-routes.js";
 import { ActionMenu, type MenuAction, rowMenu } from "./action-menu.js";
 import { AGENT_ROW_CELLS, AgentListRow } from "./agent-list-row.js";
+import { useAgentsSelection } from "./agents-selection.js";
 import { STANDING_GLYPH } from "./automation-runs-panel.js";
 import { automationNextText } from "./automation-words.js";
 import {
@@ -117,6 +118,7 @@ import { PhoneBack, PhoneHead, phoneBar, phoneFindGroups } from "./phone-head.js
 import { RecentTasks, RecentTasksSkeleton } from "./recent-tasks.js";
 import { useTaskListView } from "./task-list-view.js";
 import type { TaskHeadBack } from "./task-pane-switcher.js";
+import type { ChosenRows } from "./tasks-selection.js";
 import { useAutomations } from "./use-automations.js";
 
 /**
@@ -206,43 +208,42 @@ const AUTOMATION_THING = "Automation";
  * the head of its description (`agent-list-row.tsx`), lining up with their
  * tasks' rows above, its menu the agent's own there too: a press opens its
  * tab, and its pull request's chip opens its Pull request tab on that task.
- * Note that the agent is read again by its own id before a teammate's is
- * archived, because the agents control reads only the open task's.
  */
 function AgentRow({
   each,
   tasks,
+  agents,
   pullRequests,
   more,
+  chosen,
   place,
 }: {
   each: PersonAgent;
   tasks: TasksControl;
+  /** The agents control its menu acts through (`PersonAgentsSection`'s). */
+  agents: AgentsControl;
   /** The pull request each listed agent opened, by agent. */
   pullRequests: ReadonlyMap<string, AgentPullRequest>;
   /** Whether it draws its ⋯, as its list does. */
   more: boolean;
+  /** The selection it stands in, where it is one of several chosen. */
+  chosen: ChosenRows | undefined;
   /** Where it stands in its section's run of rows (`VirtualTaskRows`). */
   place: VirtualRowPlace;
 }): React.JSX.Element {
   const { task, agent, at } = each;
-  const { models } = tasks.agents;
+  const { models } = agents;
   const subject = listedRowSubject(agent, at, { models, me: tasks.me, pullRequests });
-  const queryClient = useQueryClient();
-  const control = {
-    ...tasks.agents,
-    readAgent: (agentId: string) => readAgentById(queryClient, agentId),
-  };
   return (
     <AgentListRow
       agent={agent}
-      agents={control}
+      agents={agents}
       shown={tasks.shown}
       subject={subject}
       at={at}
       card={<AgentCard subject={subject} models={models} />}
       pullRequest={pullRequests.get(agent.id)}
-      edges={TASK_ROW_EDGES.UNCHOSEN}
+      chosen={chosen}
       place={place}
       more={more}
       onPress={() => tasks.onShowAgent(task.id, agent.id)}
@@ -263,7 +264,12 @@ const AGENT_ROWS_FIT = {};
  * A section of their agents: its name and count over its rows, each drawn
  * on after it is no longer listed until its exit has played (`useLeaving`),
  * drawing only those near the view of the page's scroller (`usePageScroll`),
- * every row while a find bar stands open (`VirtualTaskRows`' `overscan`).
+ * every row while a find bar stands open (`VirtualTaskRows`' `overscan`),
+ * chosen together as a task's related tasks are, a row chosen among several
+ * offering Archive, or Unarchive, and Permanently delete on every one chosen
+ * (`agents-selection.tsx`). Note that an agent is read again by its own id
+ * before a teammate's is archived, because the agents control reads only
+ * the open task's.
  */
 function PersonAgentsSection({
   title,
@@ -283,14 +289,25 @@ function PersonAgentsSection({
   // Note that the run draws every row while a find bar stands open over the page.
   const finding = useFindOpen();
   const more = !useCoarsePointer();
+  const queryClient = useQueryClient();
+  const control: AgentsControl = {
+    ...tasks.agents,
+    readAgent: (agentId: string) => readAgentById(queryClient, agentId),
+  };
+  const selection = useAgentsSelection(
+    control,
+    agents.map(({ agent }) => agent),
+    tasks.shown,
+  );
   return (
     <PersonSectionFrame label={title} title={title} count={agents.length}>
       <ReplayMask>
         <VirtualTaskRows
+          id={selection.regionId}
           label={title}
           cells={AGENT_ROW_CELLS}
           more={more}
-          edges={TASK_ROW_EDGES.UNCHOSEN}
+          selection={{ selected: selection.selected, onChange: selection.onChange }}
           moves
           scroller={scroller}
           shiftedBy={shiftedBy}
@@ -305,14 +322,17 @@ function PersonAgentsSection({
                 key={entry.key}
                 each={entry.value}
                 tasks={tasks}
+                agents={control}
                 pullRequests={pullRequests}
                 more={more}
+                chosen={selection.chosenOf(entry.key)}
                 place={place}
               />
             );
           }}
         </VirtualTaskRows>
       </ReplayMask>
+      {selection.dialog}
     </PersonSectionFrame>
   );
 }
@@ -373,7 +393,7 @@ function PersonActions({
   const link = slug === undefined ? undefined : linkOf({ kind: LINK_PLACE.PERSON, userId }, slug);
   const showTasks = you ? "Show my tasks in the sidebar" : "Show their tasks in the sidebar";
   const copies = [
-    ...(link === undefined ? [] : [copyLinkItem(copy, link, chord)]),
+    ...(link === undefined ? [] : linkItems(copy, link, chord)),
     ...(email === undefined
       ? []
       : [{ label: "Copy email", icon: <MailIcon />, onSelect: () => copy(email, "Email copied") }]),
@@ -475,7 +495,8 @@ function AutomationRow({
   const trigger = automationTriggerText(automation.trigger, automation.repositories ?? []);
   const state = STANDING_GLYPH[automationRunStanding(automation.lastRun)];
   const nextWords = automationNextText(automation, now);
-  const copyLink = useCopyLinkItem()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
+  const links = useLinkItems()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
+  const openInTab = useOpenInTab()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
   const coarse = useCoarsePointer();
   return (
     <RowHintOptions card={<AutomationCard automation={automation} workspaceName={workspaceName} />}>
@@ -508,11 +529,8 @@ function AutomationRow({
         }
         hint={{ Hint: RowHint, label: automation.name }}
         onPress={onOpen}
-        menu={
-          copyLink === undefined
-            ? undefined
-            : rowMenu(AUTOMATION_THING, [[copyLink]], undefined, true)
-        }
+        onOpenInTab={openInTab}
+        menu={links.length === 0 ? undefined : rowMenu(AUTOMATION_THING, [links], undefined, true)}
         more={!coarse}
       />
     </RowHintOptions>

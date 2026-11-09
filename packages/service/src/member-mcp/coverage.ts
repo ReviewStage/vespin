@@ -72,7 +72,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.READ_AGENT]: {
     agents: ["read"],
     agentPullRequests: ["pullRequest"],
-    messages: ["agentNewest"],
+    messages: ["agentNewest", "agent"],
   },
   [MEMBER_MCP_TOOL.READ_AGENT_CHANGES]: { agentPullRequests: ["pullRequest"], agents: ["changes"] },
   [MEMBER_MCP_TOOL.LIST_MODELS]: { models: ["list"], account: ["preferences"] },
@@ -86,6 +86,8 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.MESSAGE_AGENT]: { messages: ["send"] },
   [MEMBER_MCP_TOOL.STOP_AGENT]: { agents: ["stop"] },
   [MEMBER_MCP_TOOL.UPDATE_AGENT]: { agents: ["change"] },
+  [MEMBER_MCP_TOOL.LIST_AGENT_PORTS]: { agentPorts: ["list", "shared"] },
+  [MEMBER_MCP_TOOL.SHARE_AGENT_PORT]: { agentPorts: ["share", "unshare"] },
   [MEMBER_MCP_TOOL.READ_INBOX]: { inbox: ["account", "task", "agent"] },
   [MEMBER_MCP_TOOL.ANSWER_ASK]: { inbox: ["message"] },
   [MEMBER_MCP_TOOL.REPLY_TO_THREAD]: { inbox: ["message"] },
@@ -170,12 +172,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     handBack: NOT_YET_BUILT,
   },
   agentPages: { frame: SCREEN_ONLY },
-  agentPorts: {
-    list: NOT_YET_BUILT,
-    share: NOT_YET_BUILT,
-    unshare: NOT_YET_BUILT,
-    shared: NOT_YET_BUILT,
-  },
   agentPullRequests: {
     viewed: NOT_YET_BUILT,
     overviewPullRequest: NOT_YET_BUILT,
@@ -297,7 +293,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   macCommands: { waiting: INTERNAL, settle: INTERNAL, claim: INTERNAL, listening: INTERNAL },
   mcpClients: { list: NOT_YET_BUILT, revoke: NOT_YET_BUILT },
   messages: {
-    agent: NOT_YET_BUILT,
     queue: NOT_YET_BUILT,
     agentWorker: NOT_YET_BUILT,
     agentWorkerNewest: NOT_YET_BUILT,

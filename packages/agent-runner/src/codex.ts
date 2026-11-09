@@ -559,9 +559,14 @@ const SANDBOX_MODE = "danger-full-access";
  * server and each integration's beside it with the bearer read from the environment and their tools approved up
  * front (under `approval_policy = "never"` Codex 0.163.0 otherwise fails
  * every MCP call, as P16 found) and given as long as the service runs a call, no
- * sandbox (`SANDBOX_MODE`), and commands inheriting the core variables
+ * sandbox (`SANDBOX_MODE`), and commands inheriting the launch's whole
+ * environment, the workspace's variables among it whatever their names,
  * without the bearer or the key, and handed the image's tools' own
- * (`SANDBOX_TOOL_ENV`). Nothing in argv is secret.
+ * (`SANDBOX_TOOL_ENV`), as Claude Code's commands are (`runner.ts`). Note
+ * that Codex's default excludes, which drop every name holding `KEY`,
+ * `SECRET`, or `TOKEN`, are ignored, because a workspace's variables are
+ * mostly such names, and those a member set are its agents' to use. Nothing
+ * in argv is secret.
  */
 function appServerArgs(config: CodexConfig, auth: CodexAuth): string[] {
   const mcp = `mcp_servers.${MCP_SERVER}`;
@@ -595,10 +600,10 @@ function appServerArgs(config: CodexConfig, auth: CodexAuth): string[] {
     ...integrations,
     ["approval_policy", toml("never")],
     ["sandbox_mode", toml(SANDBOX_MODE)],
-    ["shell_environment_policy.inherit", toml("core")],
-    ["shell_environment_policy.ignore_default_excludes", "false"],
+    ["shell_environment_policy.inherit", toml("all")],
+    ["shell_environment_policy.ignore_default_excludes", "true"],
     ["shell_environment_policy.exclude", `[${excluded.map(toml).join(", ")}]`],
-    // Note that the image's tools are set apart, since a command inherits only the core variables.
+    // Note that the image's tools are set apart, since app-server's own environment does not hold them.
     [
       "shell_environment_policy.set",
       `{ ${Object.entries(SANDBOX_TOOL_ENV)
@@ -850,16 +855,23 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
       sandbox: SANDBOX_MODE,
       developerInstructions: config.developerInstructions,
     } satisfies ThreadStartParams;
-    const answer =
+    // Note that a resume refused for its provider forks the thread, so whether it forked is told with the answer.
+    const forking = (forkedId: string) =>
+      server.request(METHOD.THREAD_FORK, { ...thread, threadId: forkedId, excludeTurns: true });
+    const { answer, forked } =
       threadId === undefined
-        ? yield* server.request(METHOD.THREAD_START, thread)
+        ? { answer: yield* server.request(METHOD.THREAD_START, thread), forked: false }
         : fork
-          ? yield* server.request(METHOD.THREAD_FORK, { ...thread, threadId, excludeTurns: true })
+          ? { answer: yield* forking(threadId), forked: true }
           : yield* server
               .request(METHOD.THREAD_RESUME, { ...thread, threadId, excludeTurns: true })
               .pipe(
+                Effect.map((resumed) => ({ answer: resumed, forked: false })),
                 Effect.catchIf(providerMismatch, () =>
-                  server.request(METHOD.THREAD_FORK, { ...thread, threadId, excludeTurns: true }),
+                  Effect.map(forking(threadId), (forkedAnswer) => ({
+                    answer: forkedAnswer,
+                    forked: true,
+                  })),
                 ),
               );
     const opened = decodeThreadAnswer(answer);
@@ -870,13 +882,19 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
       });
     }
     seen.threadId = opened.value.thread.id;
-    return opened.value.thread;
+    return { ...opened.value.thread, forked };
   });
   const openedThread = yield* opened.pipe(
     (handshake) => launch.context.trace.step(RUNNER_SPAN.HANDSHAKE, handshake),
     Effect.tapError(() => Scope.close(serverScope, Exit.void)),
   );
-  return { server, serverScope, threadId: openedThread.id, path: openedThread.path ?? undefined };
+  return {
+    server,
+    serverScope,
+    threadId: openedThread.id,
+    path: openedThread.path ?? undefined,
+    forked: openedThread.forked,
+  };
 });
 
 /** How many turns a page of the rewind's read back from the thread's end holds. */
@@ -886,7 +904,9 @@ const TURNS_PAGE = 10;
  * The resumed thread reverted to before the turn that took the message a
  * rewind dropped, found by its client id reading back from the thread's
  * end; a thread no turn of which took it is left whole, as a rewind Codex
- * never heard of leaves nothing of its own to cut. A revert that fails is
+ * never heard of leaves nothing of its own to cut. Answers the path of the
+ * segment the revert began (`codex-rollout.ts`), where Codex named one,
+ * which the thread's later lines are written to. A revert that fails is
  * logged and the thread goes on whole, since the launch's message still
  * stands to be answered.
  */
@@ -894,7 +914,7 @@ const revertedBefore = Effect.fn("agent-runner/codex/revertedBefore")(function* 
   server: AppServer,
   threadId: string,
   rewindBefore: string,
-) {
+): Effect.fn.Return<string | undefined, AppServerError> {
   let cursor: string | null = null;
   for (;;) {
     const page = decodeTurnsPage(
@@ -906,15 +926,19 @@ const revertedBefore = Effect.fn("agent-runner/codex/revertedBefore")(function* 
         itemsView: "full",
       }),
     );
-    if (Option.isNone(page)) return;
+    if (Option.isNone(page)) return undefined;
     const taking = page.value.data.find((turn) =>
       turn.items.some((item) => item.type === "userMessage" && item.clientId === rewindBefore),
     );
     if (taking !== undefined) {
-      yield* server.request(METHOD.THREAD_REVERT, { threadId, beforeTurnId: taking.id });
-      return;
+      const answer = yield* server.request(METHOD.THREAD_REVERT, {
+        threadId,
+        beforeTurnId: taking.id,
+      });
+      const reverted = decodeThreadAnswer(answer);
+      return Option.isSome(reverted) ? (reverted.value.thread.path ?? undefined) : undefined;
     }
-    if (page.value.nextCursor === null) return;
+    if (page.value.nextCursor === null) return undefined;
     cursor = page.value.nextCursor;
   }
 });
@@ -1256,21 +1280,48 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
       failure._tag === "RolloutUnread" ? ROLLOUT_UNREAD : `${failure.method}: ${failure.detail}`,
     );
   }
-  const { path, ...server } = opened.success;
-  const mirror =
-    store === undefined || path === undefined
-      ? undefined
-      : yield* openRolloutMirror(store.store, store.codexHome, server.threadId, path).pipe(
-          Effect.option,
-          Effect.map(Option.getOrUndefined),
-        );
-  if (config.threadId !== undefined && config.rewindBefore !== undefined) {
-    yield* revertedBefore(opened.success.server, opened.success.threadId, config.rewindBefore).pipe(
-      Effect.catch((error) =>
-        Effect.logWarning(`agent-runner: the thread was not rewound: ${error.method}`),
-      ),
-    );
+  const { path, forked, ...server } = opened.success;
+  const reverting =
+    config.threadId !== undefined && config.rewindBefore !== undefined
+      ? revertedBefore(server.server, server.threadId, config.rewindBefore).pipe(
+          Effect.catch((error) =>
+            Effect.as(
+              Effect.logWarning(`agent-runner: the thread was not rewound: ${error.method}`),
+              undefined,
+            ),
+          ),
+        )
+      : Effect.succeed(undefined);
+  const segment = yield* reverting;
+  // Note that only a thread resumed as it was stands in the store whole: a fork's file, the fallback's for a provider among them, is Codex's new writing.
+  const resumed = config.threadId !== undefined && !forked;
+  // A fork cut by a revert stands on the file Codex forked it into, which the store holds none of, so it is sent whole before the mirror follows the thread.
+  if (store !== undefined && path !== undefined && segment !== undefined && !resumed) {
+    const forked = yield* openRolloutMirror(
+      store.store,
+      store.codexHome,
+      server.threadId,
+      path,
+      false,
+    ).pipe(Effect.option);
+    if (Option.isSome(forked)) {
+      yield* mirrorRollout(forked.value).pipe(
+        Effect.catch(() => Effect.logWarning("agent-runner: the forked rollout was not mirrored")),
+      );
+    }
   }
+  // The mirror follows the thread onto the segment a revert began, which the store holds none of yet.
+  const mirroredPath = segment ?? path;
+  const mirror =
+    store === undefined || mirroredPath === undefined
+      ? undefined
+      : yield* openRolloutMirror(
+          store.store,
+          store.codexHome,
+          server.threadId,
+          mirroredPath,
+          resumed && segment === undefined,
+        ).pipe(Effect.option, Effect.map(Option.getOrUndefined));
   const launch: CodexLaunch = {
     context,
     signals,

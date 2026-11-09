@@ -14,7 +14,7 @@ import {
 import { type DescriptionMention, MENTION_KIND } from "@repo/features/mention-link";
 import type { PageLine } from "@repo/features/page-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { agentMovedAt, agentsOfTask } from "@repo/features/task-agents-model";
+import { agentMovedAt, agentStillWriting, agentsOfTask } from "@repo/features/task-agents-model";
 import type {
   CodeRef,
   ListedPullRequest,
@@ -31,6 +31,7 @@ import {
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppInboxTask } from "@repo/host/app-state";
+import { workspaceExperimentChoices } from "@repo/host/app-state-reads";
 import { EXPERIMENT, experimentOn } from "@repo/settings";
 import type { SettingsLink } from "@repo/settings/settings-views";
 import { STATUS_TONE } from "@repo/ui";
@@ -111,14 +112,12 @@ import type { TaskRoute } from "../task-route.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { useVersionHistoryRoute } from "../version-history-route.js";
-import { workspaceExperimentChoices } from "../workspace-experiments.js";
 import {
   type HomeRoute,
   type UnknownWorkspaceRoute,
   useBoardRoute,
   usePersonRoute,
 } from "../workspace-routes.js";
-import { agentStillWriting } from "./agent-model.js";
 import { inboxItemHomeQueryOptions, taskByNumberQueryOptions } from "./agent-reads.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "./automations-place.js";
 import {

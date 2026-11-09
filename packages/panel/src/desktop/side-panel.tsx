@@ -9,6 +9,7 @@ import {
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { type PageLine, type PagePlace, pagePlaceId } from "@repo/features/page-wire";
+import { cardTitle } from "@repo/features/plain-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { TERMINAL_ASK, TERMINAL_TARGET, terminalTarget } from "@repo/features/terminal-entry";
 import { readingWords } from "@repo/features/words";
@@ -75,6 +76,7 @@ import {
   tabKey,
 } from "@repo/ui/tab-strip-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
+import { runHolding } from "@repo/ui/virtual-rows";
 import { useQueries, useQuery } from "@tanstack/react-query";
 import { createStore, useSelector } from "@tanstack/react-store";
 import { absurd } from "effect";
@@ -93,7 +95,7 @@ import { createPortal } from "react-dom";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
-import { useCopyLinkItem } from "../copy-link-item.js";
+import { useLinkItems } from "../copy-link-item.js";
 import { FindScope } from "../find-in-tab.js";
 import { drawnVisibly, focusSeek } from "../focus-seek.js";
 import { panelTabPlace } from "../links-at-hand.js";
@@ -101,7 +103,7 @@ import { pagesQuery, pullRequestPublishedQuery } from "../live-reads.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { LINK_ROUTED_PLACE } from "../places/link-places.js";
 import { ADDRESS, type Address } from "../places/pressed-address.js";
-import { centerWithin } from "../scroll-within.js";
+
 import { GLYPH_STATE, type GlyphState, stateEndMark } from "../state-glyph.js";
 import { useSteadyDoors } from "../steady-door.js";
 import {
@@ -161,7 +163,7 @@ import {
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND, type TerminalKind } from "../tasks/terminal-session.js";
 import { TerminalCount, TerminalTab } from "../tasks/terminal-tab.js";
-import { cardTitle, TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
+import { TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
 import {
   agentTranscript,
   readWholeTranscript,
@@ -1442,7 +1444,7 @@ function PanelTabs({
   const strip = inTaskOrder(kinds, panel.order, (entry) => entry.tab);
   // Note that only a task's panel hands its looks over, since an agent's page holds its panel under the agent's id.
   useStripLooks(LOOK_STRIP.PANEL, holder === SIDE_PANEL_HOLDER.TASK ? taskId : undefined, strip);
-  const copyLink = useCopyLinkItem();
+  const linkItemsOf = useLinkItems();
   // ⌘W closes the tab chosen, as its menu's Close does; with none, the key
   // falls through to the menu bar, which closes the window (`app-menu.ts`).
   // Close others closes every tab but the one at `at`, then shows it; none where there is no other.
@@ -1504,7 +1506,7 @@ function PanelTabs({
       onCloseOthers: closeOthersOf(entry, at),
       pin: pinOf(entry),
       onCopy: entry.copy,
-      copyLink: linked === undefined ? undefined : copyLink(linked),
+      links: linked === undefined ? undefined : linkItemsOf(linked),
       onOpenInTask:
         agent === undefined || transcriptDoors === undefined
           ? undefined
@@ -1899,9 +1901,14 @@ function seekCall(callId: string): void {
         `.desktop-task-column [role="log"] [data-call-id="${CSS.escape(callId)}"]`,
       ),
     ready: drawnVisibly,
+    // Note that the log's own virtualizer scrolls it (`runHolding`), so no write beside it undoes one of its own.
     act: (row) => {
       const log = row.closest<HTMLElement>('[role="log"]');
-      if (log !== null) centerWithin(log, row);
+      const run = runHolding(row);
+      if (log === null || run === undefined) return;
+      const room = log.getBoundingClientRect();
+      const line = row.getBoundingClientRect();
+      run.scrollBy(line.top + line.height / 2 - (room.top + room.height / 2));
     },
   });
 }

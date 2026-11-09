@@ -161,7 +161,7 @@ interface Harness {
   /** What its plan is called wherever a surface names the credential: its row's label, a disconnect's title. */
   readonly planName: string;
   readonly plan: SubscriptionKeySummary["kind"];
-  /** The logo its plan's row leads with. */
+  /** The logo its plans' rows and its key's row lead with. */
   readonly planMark: MarkProvider;
   readonly keyName: string;
   readonly keyUrl: string;

@@ -4,6 +4,7 @@ import {
   type AgentInboxAnsweredView,
 } from "@repo/features/agent-view";
 import { INBOX_STATUS, type InboxItem, type InboxStatus } from "@repo/features/inbox-wire";
+import { cardTitle } from "@repo/features/plain-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { countWords, TERM } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
@@ -17,7 +18,6 @@ import { actMutation } from "../act-mutations.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 import { type HeldWrite, pressHeld } from "../undo-stack.js";
 import { messageFailureWords } from "./agent-model.js";
-import { cardTitle } from "./tool-call-model.js";
 
 /**
  * inbox-close.tsx -- open Inbox items resolved without an answer, at once and with Undo, from every place that offers it: an item's menus, its question card, the list's head, a chosen row's menu, and E.

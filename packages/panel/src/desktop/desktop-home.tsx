@@ -1,4 +1,6 @@
+import { type InboxListed, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { TASK_ORDER, taskTime } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import {
   Arrival,
@@ -11,7 +13,6 @@ import {
 } from "@repo/ui";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
-import { TASK_ORDER, taskTime } from "@repo/ui/task-list-model";
 import { useRef, useState } from "react";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
@@ -19,7 +20,6 @@ import { MemberDirectory } from "../member-directory.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { NOTICE_LOOK } from "../tasks/connect-agent-banner.js";
 import { InboxItemRows } from "../tasks/inbox-item-rows.js";
-import { type InboxListed, waitsOnReaderNow } from "../tasks/inbox-model.js";
 import { MENTION_MENU_SIDE } from "../tasks/mention-picker.js";
 import { NewTaskComposer } from "../tasks/new-task-composer.js";
 import { useUnreadTasks } from "../tasks/use-task-looks.js";

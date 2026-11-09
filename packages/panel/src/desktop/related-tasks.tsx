@@ -1,4 +1,5 @@
 import { pullRequestsOfTask } from "@repo/features/task-agents-model";
+import { childTaskCounts } from "@repo/features/task-list-model";
 import type { TaskPullRequests, TaskSummary } from "@repo/features/task-wire";
 import { taskKey } from "@repo/features/workspace-key";
 import {
@@ -9,7 +10,6 @@ import {
   taskRowFit,
   VirtualTaskRows,
 } from "@repo/ui";
-import { childTaskCounts } from "@repo/ui/task-list-model";
 import { LIST_COLUMN, type ListColumn, TASK_PROPERTY } from "@repo/ui/tasks-page-model";
 import { type ReactNode, useMemo, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";

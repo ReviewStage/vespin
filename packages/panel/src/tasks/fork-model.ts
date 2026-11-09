@@ -27,11 +27,11 @@ import type {
   AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
 import type { ModelChoice } from "@repo/features/models-wire";
+import { cardTitle } from "@repo/features/plain-words";
 import type { ACT_KIND } from "@repo/host/acts";
 import type { PortActPayload } from "@repo/host/contract";
 import { isRecord, isWireString, MESSAGE_ROLE } from "@repo/wire";
 import { AGENT_PART, choiceRequest } from "./agent-model.js";
-import { cardTitle } from "./tool-call-model.js";
 
 /** The type a call's part opens with, followed by the tool's name. */
 const TOOL_PART_TYPE_PREFIX = "tool-";

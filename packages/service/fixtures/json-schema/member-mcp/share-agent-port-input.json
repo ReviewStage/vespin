@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "properties": {
+    "agentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "description": "The agent's id, as list_agents answered it."
+    },
+    "port": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The port to share, one a server listens on as list_agent_ports lists them; null to stop sharing."
+    }
+  },
+  "required": [
+    "agentId",
+    "port"
+  ],
+  "additionalProperties": false
+}

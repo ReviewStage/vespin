@@ -1,3 +1,4 @@
+import { listedIn } from "@repo/features/inbox-list-model";
 import type {
   AppInboxTask,
   AppInboxTaskHolding,
@@ -6,7 +7,7 @@ import type {
 } from "@repo/host/app-state";
 import { useMinute } from "@repo/ui";
 import { useMemo } from "react";
-import { listedIn, waitsOnReader } from "../tasks/inbox-model.js";
+import { waitsOnReader } from "../tasks/inbox-model.js";
 import {
   useInboxTaskHoldings,
   useInboxTaskless,

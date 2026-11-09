@@ -2,15 +2,15 @@ import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { fixedBearer, HOSTED_SERVICE_PATH } from "@repo/features";
 import { type LiveSocketAsk, liveSocketAskSchema } from "@repo/features/live-wire";
-import { type Cause, Deferred, Duration, Effect, Exit, Fiber, Queue, Schema, Stream } from "effect";
-import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
-import { TestClock } from "effect/testing";
-import { liveSocketClient } from "./live-socket.js";
 import type {
   OpenTerminalSocket,
   TerminalSocketArrival,
   TerminalSocketOpening,
-} from "./relay-socket.js";
+} from "@repo/features/relay-socket";
+import { type Cause, Deferred, Duration, Effect, Exit, Fiber, Queue, Schema, Stream } from "effect";
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/http";
+import { TestClock } from "effect/testing";
+import { liveSocketClient } from "./live-socket.js";
 
 /**
  * The host's client with its live reads over one socket, on a scripted

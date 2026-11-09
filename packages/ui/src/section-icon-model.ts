@@ -16,12 +16,12 @@
  * picker loads that data when it opens rather than with the window.
  */
 
+import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import {
   TASK_SECTION_GLYPH,
   TASK_SECTION_ICON_KIND,
   type TaskSectionIcon,
 } from "@repo/features/task-section-wire";
-import { matchesTokens, searchTokens } from "./search-tokens.js";
 
 /** The newest emoji version offered: one newer is not yet drawn by every macOS a Mac may run. */
 const NEWEST_EMOJI_VERSION = 15.1;

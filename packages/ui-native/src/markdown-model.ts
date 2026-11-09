@@ -139,11 +139,7 @@ export type MarkdownBlock =
       /** The header row first, then the body's, each cell its runs, every row as wide as the header. */
       readonly rows: readonly (readonly (readonly MarkdownRun[])[])[];
     }
-  | {
-      readonly kind: typeof MARKDOWN_BLOCK.CODE;
-      readonly language: string | undefined;
-      readonly text: string;
-    }
+  | { readonly kind: typeof MARKDOWN_BLOCK.CODE; readonly text: string }
   | { readonly kind: typeof MARKDOWN_BLOCK.RULE }
   | { readonly kind: typeof MARKDOWN_BLOCK.PICTURE; readonly source: string; readonly alt: string };
 
@@ -404,7 +400,7 @@ function blockOf(node: RootContent, reader: Reader): MarkdownBlock[] {
     case "table":
       return [tableBlock(node, reader)];
     case "code":
-      return [{ kind: MARKDOWN_BLOCK.CODE, language: node.lang ?? undefined, text: node.value }];
+      return [{ kind: MARKDOWN_BLOCK.CODE, text: node.value }];
     case "thematicBreak":
       return [{ kind: MARKDOWN_BLOCK.RULE }];
     case "html":

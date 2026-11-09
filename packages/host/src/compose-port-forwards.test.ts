@@ -2,17 +2,17 @@ import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { accountBearer } from "@repo/features";
 import { PORT_FORWARD_STATE } from "@repo/features/port-forward-acts";
+import type {
+  LoopbackConnection,
+  TerminalSocketArrival,
+  TerminalSocketFrame,
+} from "@repo/features/relay-socket";
 import { TUNNEL_CLOSE, TUNNEL_FRAME } from "@repo/features/sandbox-tunnel-wire";
 import { noNetwork } from "@repo/wire/testing";
 import { type Cause, Effect, Queue, Stream } from "effect";
 import { Base64 } from "effect/encoding";
 import { TestClock } from "effect/testing";
 import { composePortForwards, PORT_FORWARD } from "./compose-port-forwards.js";
-import type {
-  LoopbackConnection,
-  TerminalSocketArrival,
-  TerminalSocketFrame,
-} from "./relay-socket.js";
 
 /**
  * A coding agent's cloud ports forwarded to the Mac's loopback, over a

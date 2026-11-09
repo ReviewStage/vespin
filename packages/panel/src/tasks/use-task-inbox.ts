@@ -12,6 +12,7 @@ import {
   INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
 import type { AgentAttachment } from "@repo/features/agent-wire";
+import { awaitsNod } from "@repo/features/inbox-list-model";
 import { INBOX_REPLY, INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import type { AppInboxItems } from "@repo/host/app-state";
 import { useMinute } from "@repo/ui";
@@ -37,7 +38,6 @@ import { useSendQueue } from "../send-queue.js";
 import { messageFailureWords } from "./agent-model.js";
 import { useInboxArrivals } from "./inbox-arrivals.js";
 import {
-  awaitsNod,
   EMPTY_INBOX_DRAFT,
   type InboxBoardView,
   type InboxDraft,

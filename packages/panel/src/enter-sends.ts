@@ -46,9 +46,9 @@ export function modEnterSends(press: Pick<EnterPress, "key" | "metaKey" | "ctrlK
   return press.key === "Enter" && (press.metaKey || press.ctrlKey);
 }
 
-/** The return key's label as the pointer stands now. */
-export function enterKeyHint(): EnterKeyHint {
-  return coarsePointer() ? ENTER_KEY_HINT.NEW_LINE : ENTER_KEY_HINT.SEND;
+/** The return key's label as the pointer stands now; a new line always in a box whose bare Enter `writes`. */
+export function enterKeyHint(writes = false): EnterKeyHint {
+  return writes || coarsePointer() ? ENTER_KEY_HINT.NEW_LINE : ENTER_KEY_HINT.SEND;
 }
 
 /** The key a plain text area sends on, as `enterSends` reads a press: Return with a mouse, ⌘Return on a finger's keyboard. */

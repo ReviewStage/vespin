@@ -215,7 +215,7 @@ export const hostUpdateSchema = EffectSchema.Literals(Object.values(HOST_UPDATE)
 /** The most characters of the words a host says its update failed for. */
 export const HOST_UPDATE_FAILURE_MAX_CHARS = 200;
 
-/** A device's operating system, as Node's `process.platform` names it. */
+/** A device's operating system, as Node's `platform` of the process names it. */
 export const DEVICE_PLATFORM = {
   DARWIN: "darwin",
   LINUX: "linux",
@@ -223,7 +223,7 @@ export const DEVICE_PLATFORM = {
 
 export type DevicePlatform = (typeof DEVICE_PLATFORM)[keyof typeof DEVICE_PLATFORM];
 
-/** A device's CPU architecture, as Node's `process.arch` names it. */
+/** A device's CPU architecture, as Node's `arch` of the process names it. */
 export const DEVICE_ARCH = {
   ARM64: "arm64",
   X64: "x64",
@@ -299,6 +299,8 @@ const DEVICE_AGENT_FOLDER = {
   GITHUB_CONFIG: "gh",
   /** The agent's temp folder (`TMPDIR`), made `0700`, which its runner and its commands write to, and where it saves what we read back. */
   TEMP: "tmp",
+  /** The agent's own home (`HOME`), where its harnesses keep their sessions: Codex's `CODEX_HOME` at its default, `.codex`, among them. */
+  HOME: "home",
 } as const;
 
 /** Where a local agent's things stand on a Mac, every path absolute. */
@@ -309,6 +311,7 @@ export interface DeviceAgentLayout {
   readonly installedSkills: string;
   readonly githubConfig: string;
   readonly temp: string;
+  readonly home: string;
 }
 
 /** The folder every local agent's folder stands in, under the Mac's home folder given, which its host registers (`agentsFolder`). */
@@ -317,6 +320,11 @@ export function deviceAgentsFolder(home: string): string {
   // Note that the trailing slashes are counted off by hand, because a regular expression anchored at the end runs in quadratic time on a home of many slashes.
   while (end > 1 && home[end - 1] === "/") end -= 1;
   return [home.slice(0, end), DEVICE_AGENT_FOLDER.ROOT].join("/");
+}
+
+/** The agent's own home (`HOME`), in the agent's folder given, where the host starts each of its processes. */
+export function deviceAgentHome(folder: string): string {
+  return [folder, DEVICE_AGENT_FOLDER.HOME].join("/");
 }
 
 /** The agent's folder and what stands in it, under the Mac's home folder given. */
@@ -334,6 +342,7 @@ export function deviceAgentLayoutIn(agentsFolder: string, agentId: string): Devi
     installedSkills: [folder, DEVICE_AGENT_FOLDER.INSTALLED_SKILLS].join("/"),
     githubConfig: [folder, DEVICE_AGENT_FOLDER.GITHUB_CONFIG].join("/"),
     temp: [folder, DEVICE_AGENT_FOLDER.TEMP].join("/"),
+    home: deviceAgentHome(folder),
   };
 }
 

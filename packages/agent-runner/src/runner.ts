@@ -41,6 +41,7 @@ import type {
   Options,
   SDKMessage,
   SDKUserMessage,
+  SessionStore,
 } from "@anthropic-ai/claude-agent-sdk";
 import {
   Cause,
@@ -147,26 +148,45 @@ interface ResumePoint {
   readonly at?: string;
 }
 
+/** How long a launch waits on its session's chain before it gives the read up. */
+const CHAIN_READ = Duration.seconds(60);
+
+/** What a launch whose session's chain the service's store did not answer ends with. */
+const CHAIN_UNREAD = "the session to cut could not be read from the service";
+
 /**
  * Where the launch resumes: the config's session as it stands, or, where a
- * rewind dropped one of its prompts, cut at the entry just before that
- * prompt, and a fresh session where the prompt was its first. A session
- * holding no such prompt, or one that cannot be read, is resumed whole, as
- * a rewind the CLI never heard of leaves nothing of its own to cut.
+ * rewind or a fork at a message dropped one of its prompts, cut at the entry
+ * just before that prompt, and a fresh session where the prompt was its
+ * first. A session holding no such prompt is resumed whole, as a cut the CLI
+ * never heard of leaves nothing of its own to cut, and so is one on the disk
+ * that cannot be read. Note that one the store does not answer within
+ * `CHAIN_READ` fails the launch instead, because the CLI resumes from the
+ * store alone, which would hand it the session whole, past the cut.
  */
 const resumePointOf = Effect.fn("agent-runner/resumePointOf")(function* (
   claudeCode: ClaudeCodeShape,
   config: ClaudeCodeConfig,
+  store: SessionStore | undefined,
 ) {
   const { resume, rewindBefore } = config;
   if (resume === undefined) return {} satisfies ResumePoint;
   if (rewindBefore === undefined) return { resume } satisfies ResumePoint;
-  const unread: readonly string[] = [];
-  const chain = yield* Effect.tryPromise(() => claudeCode.sessionChain(resume, config.cwd)).pipe(
-    Effect.catch(() =>
-      Effect.as(Effect.logWarning("agent-runner: the session to rewind could not be read"), unread),
-    ),
+  const read = Effect.tryPromise(() => claudeCode.sessionChain(resume, config.cwd, store)).pipe(
+    Effect.timeout(CHAIN_READ),
   );
+  const unread: readonly string[] = [];
+  const chain =
+    store === undefined
+      ? yield* read.pipe(
+          Effect.catch(() =>
+            Effect.as(
+              Effect.logWarning("agent-runner: the session to rewind could not be read"),
+              unread,
+            ),
+          ),
+        )
+      : yield* read.pipe(Effect.mapError(() => CHAIN_UNREAD));
   const cut = chain.indexOf(rewindBefore);
   if (cut === 0) return {} satisfies ResumePoint;
   const at = cut > 0 ? chain[cut - 1] : undefined;
@@ -189,8 +209,7 @@ function queryOptions(
   servers: Readonly<Record<string, McpSdkServerConfigWithInstance>>,
   onStop: HookCallback,
   from: ResumePoint,
-  bearer: Redacted.Redacted,
-  traceHeaders: LaunchTrace["headers"],
+  store: SessionStore | undefined,
 ): Options {
   const options: Options = {
     cwd: config.cwd,
@@ -231,9 +250,7 @@ function queryOptions(
   if (from.at !== undefined) options.resumeSessionAt = from.at;
   if (config.fork === true) options.forkSession = true;
   // The SDK mirrors the transcript to the service as the CLI writes it, and loads it from there to resume.
-  if (config.transcriptsUrl !== undefined) {
-    options.sessionStore = transcriptStore(config.transcriptsUrl, bearer, traceHeaders);
-  }
+  if (store !== undefined) options.sessionStore = store;
   // The member's installed skills load as a local plugin, which leaves the checkout and the
   // settings Claude Code reads (`project` alone) as they stand; we hold its MCP servers.
   const manifest = installedSkillsPath(config.installedSkills, INSTALLED_SKILLS.MANIFEST);
@@ -617,10 +634,19 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     }),
   );
   const prompts = yield* Queue.unbounded<SDKUserMessage, Cause.Done>();
-  const from = yield* resumePointOf(claudeCode, config);
+  const store =
+    config.transcriptsUrl === undefined
+      ? undefined
+      : transcriptStore(config.transcriptsUrl, bearer, trace.headers);
+  const resumed = yield* resumePointOf(claudeCode, config, store).pipe(Effect.result);
+  if (Result.isFailure(resumed)) {
+    yield* Effect.logWarning(`agent-runner: ${resumed.failure}`);
+    return { end: RUNNER_END.FAILED, failure: resumed.failure } satisfies LaunchOutcome;
+  }
+  const from = resumed.success;
   // The CLI is spawned and initialized before the service's lines are taken, which wait in
   // their queue meanwhile, so its first message goes to a CLI ready for it.
-  const options = queryOptions(config, context.env, servers, onStop, from, bearer, trace.headers);
+  const options = queryOptions(config, context.env, servers, onStop, from, store);
   const started = yield* trace
     .step(
       RUNNER_SPAN.CLI,

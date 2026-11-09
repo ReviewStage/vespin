@@ -23,6 +23,7 @@ import {
 } from "./shared/press-guard.ts";
 import { PRESS_LISTENER_GUARD_RULE } from "./shared/press-listener-guard.ts";
 import { namesRetired, RETIRED_GUARD_RULE } from "./shared/retired.ts";
+import { ROW_BEHAVIOR_GUARD_RULE } from "./shared/row-behavior-guard.ts";
 import { SETTINGS_ROW_END_GUARD_RULE } from "./shared/settings-row-end-guard.ts";
 import { SHADCN_FOCUS_GUARD_RULE, SHADCN_SOURCE } from "./shared/shadcn-focus-guard.ts";
 import { SKELETON_GUARD_RULE } from "./shared/skeleton-guard.ts";
@@ -42,7 +43,8 @@ import {
  * `@repo/ui-native` holding one that would silence
  * `no-raw-press-outside-ui-native`, on any JSX-capable
  * file holding one that would silence `skeleton-through-components`,
- * `settings-row-end`, or `async-press-needs-busy`, whose baseline is the
+ * `settings-row-end`, `row-behavior-in-row`, whose list of row components
+ * is the only way past it, or `async-press-needs-busy`, whose baseline is the
  * only way past it, on a
  * JSX-capable file outside `@repo/ui` holding one that would silence
  * `no-open-page-from-button`, `no-raw-heading-outside-ui` or
@@ -110,6 +112,13 @@ const GUARDS = [
     watches: () => true,
     remedy:
       "Stand the ⋯, chevron, or other glyph-wide press in the row's `end`, which keeps to the name's line at any width",
+  },
+  {
+    rule: ROW_BEHAVIOR_GUARD_RULE,
+    sources: JSX_SOURCE,
+    watches: () => true,
+    remedy:
+      "Build the menu, rename, selection, or muted or unread state inside the row component every list of its kind draws, or name a new row component in tools/anti-slop/row-behavior.json with its reason",
   },
   {
     rule: SKELETON_GUARD_RULE,

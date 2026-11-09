@@ -74,7 +74,7 @@ import { useAppCommand } from "../app-commands.js";
 import { useAutomationsPlace } from "../automations-route.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useConfirmAct } from "../confirm-act.js";
-import { LinkWorkspaceProvider, useCopyLinkItem } from "../copy-link-item.js";
+import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { confirmFailure, unreadShown } from "../failure-report.js";
 import { workspaceIntegrationsQuery, workspaceIntegrationsRetryMutation } from "../live-reads.js";
 import { MemberDirectory, useCreator } from "../member-directory.js";
@@ -327,7 +327,8 @@ function AutomationRow({
   const state = STANDING_GLYPH[automationRunStanding(automation.lastRun)];
   const next = automationNext(automation);
   const nextWords = automationNextText(automation, now);
-  const copyLink = useCopyLinkItem()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
+  const links = useLinkItems()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
+  const openInTab = useOpenInTab()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
   // Note that the glyph is the row's decoration, so its working word is said in the row's words instead.
   const working = state === GLYPH_STATE.WORKING ? glyphStateWords(state, false) : undefined;
   const trigger = automationTriggerText(automation.trigger, automation.repositories ?? []);
@@ -390,10 +391,11 @@ function AutomationRow({
         actions={<AutomationSwitch automation={automation} write={onToggle} />}
         hint={{ Hint: RowHint, label: automation.name }}
         onPress={onOpen}
+        onOpenInTab={openInTab}
         menu={rowMenu(
           ROW_THING,
           automationActionGroups({
-            copyLink,
+            links,
             runNow: runNowAction(runNow.running, runNow.run),
             onDelete,
           }),

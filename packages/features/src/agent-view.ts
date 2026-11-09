@@ -62,6 +62,7 @@ import {
 import { pullRequestActionRequestSchema } from "./pull-request-write-wire.js";
 import { repositoryUnreachedSchema } from "./repository-reach-wire.js";
 import { countedNumber, HOSTED_API_ERROR, wireUuidSchema } from "./service-wire.js";
+import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
 
 /**
  * agent-view.ts -- a task's coding agents as one Mac's window hears them: each call's answer whole, or why there is none.
@@ -1025,6 +1026,8 @@ export type AgentAccountInboxAnswerView = typeof agentAccountInboxAnswerViewSche
 export const agentInboxAttachmentParamsSchema = EffectSchema.Struct({
   itemId: EffectSchema.NonEmptyString,
   attachmentId: EffectSchema.NonEmptyString,
+  /** The video the window plays: a recording is answered as its MP4 copy to one that plays MP4, as the iOS app's does, where one is kept; its WebM otherwise. */
+  playable: EffectSchema.optionalKey(playableVideoTypeSchema),
 });
 
 export type AgentInboxAttachmentParams = typeof agentInboxAttachmentParamsSchema.Type;
@@ -1034,6 +1037,8 @@ export const agentPictureParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
   pictureId: EffectSchema.NonEmptyString,
   callId: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
+  /** The video the window plays, as an inbox attachment's read takes it. */
+  playable: EffectSchema.optionalKey(playableVideoTypeSchema),
 });
 
 /** One part of a message of an agent's transcript, or one of its workers' where `callId` names the delegation call that started it, by the message's id and the part's index among its parts: what the page carried cut (`cutParts`). */
@@ -1060,10 +1065,11 @@ export type AgentPartView = typeof agentPartViewSchema.Type;
  */
 export const agentInboxAttachmentViewSchema = EffectSchema.Union([
   EffectSchema.Struct({
-    // A transcript's picture may be a WebM an agent recorded, read through this same view.
+    // A transcript's picture may be a WebM an agent recorded, read through this same view, or its MP4 copy to a window that plays MP4.
     contentType: EffectSchema.Literals([
       ...Object.values(AGENT_ATTACHMENT_TYPE),
       CONVERSATION_MEDIA_TYPE.WEBM,
+      MP4_TYPE,
     ]),
     base64: EffectSchema.String,
   }),

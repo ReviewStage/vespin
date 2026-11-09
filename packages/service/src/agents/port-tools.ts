@@ -10,7 +10,11 @@
  * agent in a sandbox of ours. Sharing answers the agent's members-only
  * preview host, as the member's own Share does, replaces any port shared
  * before, and lives only while the sandbox runs; a `share_port` of null
- * closes it. Every answer is data the model reads, never a credential.
+ * closes it. The member MCP server's `list_agent_ports` and
+ * `share_agent_port` run these same calls on an agent its input names, as
+ * the admitted member (`../member-mcp/tools.ts`); its list reads the shared
+ * link back beside the ports. Every answer is data the model reads, never a
+ * credential.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
@@ -27,7 +31,12 @@ import {
 } from "../core.js";
 import type { HostedRefusal } from "../http/http-effect.js";
 import type { PageLinks } from "../pages/page-links.js";
-import { listAgentPorts, shareAgentPort, unshareAgentPort } from "./agent-ports.js";
+import {
+  listAgentPorts,
+  shareAgentPort,
+  sharedAgentPort,
+  unshareAgentPort,
+} from "./agent-ports.js";
 import { agentToolRejected } from "./agent-tools.js";
 import type { AgentSandbox } from "./terminal/agent-sandbox.js";
 
@@ -110,6 +119,19 @@ export function runListPorts(
   reach: PortsReach,
 ): Effect.Effect<WireRecord, never, AgentSandbox | DatabaseServices | PageLinks> {
   return answered(listAgentPorts(reach.userId, reach.agentId));
+}
+
+/** One call of a member's `list_agent_ports`: the ports as `list_ports` answers them, and the port shared now with its link, so the link is read back. */
+export function runListPortsShared(
+  reach: PortsReach,
+): Effect.Effect<WireRecord, never, AgentSandbox | DatabaseServices | PageLinks> {
+  return answered(
+    Effect.zipWith(
+      listAgentPorts(reach.userId, reach.agentId),
+      sharedAgentPort(reach.userId, reach.agentId),
+      (listed, shared) => ({ ...listed, ...shared }),
+    ),
+  );
 }
 
 /** One call of `share_port`: the port shared by link, answering it with its link, or the share closed. */

@@ -539,8 +539,6 @@ type MarkdownProps = {
   readonly repository?: string | null | undefined;
   /** Routes a link or a chip naming a place in the app, a `vespin.dev` address; every other link opens in Safari. */
   readonly onOpenPlace: (place: MarkdownPlace) => void;
-  /** The moment a date's chip counts from; now where none is given. */
-  readonly now?: number | undefined;
   /** Whether a person typed the words line by line, whose line breaks are kept; an agent's join as Markdown reads them. */
   readonly typed?: boolean | undefined;
 };
@@ -552,12 +550,12 @@ type MarkdownProps = {
  * scheme and at the reader's Dynamic Type size. It draws no scroller of its
  * own, so a screen stands it in its own.
  */
-export function Markdown({ words, repository = null, onOpenPlace, now, typed }: MarkdownProps) {
+export function Markdown({ words, repository = null, onOpenPlace, typed }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
   const blocks = useMemo(
-    () => markdownBlocks(words, { repository, now: now ?? Date.now(), zone: readerZone(), typed }),
-    [words, repository, now, typed],
+    () => markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed }),
+    [words, repository, typed],
   );
   const drawing: Drawing = {
     colors,

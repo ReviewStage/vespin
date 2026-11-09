@@ -7,6 +7,7 @@ import { KEPT_STORAGE_BASELINE, NOT_VIEW_STORAGE } from "../shared/kept-guard.ts
 import { isDoorFile, LUCIDE_BASELINE } from "../shared/lucide-guard.ts";
 import { PRESS_LISTENER_BASELINE } from "../shared/press-listener-guard.ts";
 import { RETIRED } from "../shared/retired.ts";
+import { ROW_DRAWERS } from "../shared/row-behavior-guard.ts";
 import type { RepositoryGuard } from "./guard.ts";
 
 /**
@@ -59,6 +60,7 @@ async function antiSlopListProblems(root: string): Promise<readonly string[]> {
     { name: "press-listener-baseline.json", paths: Object.keys(PRESS_LISTENER_BASELINE) },
     { name: "arrow-keys.json's baseline", paths: Object.keys(ARROW_KEY_BASELINE) },
     { name: "arrow-keys.json's exemptions", paths: ARROW_KEY_EXEMPTIONS },
+    { name: "row-behavior.json's drawers", paths: Object.keys(ROW_DRAWERS) },
     ...RETIRED.map((retirement) => ({
       name: `retired/${retirement.file}'s baseline`,
       paths: Object.keys(retirement.baseline),

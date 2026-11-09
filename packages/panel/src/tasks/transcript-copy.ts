@@ -10,6 +10,7 @@ import {
   applyMessagesPage,
 } from "@repo/features/agent-wire";
 import { threadLineTitle, threadLineWords } from "@repo/features/inbox-wire";
+import { cardTitle, plainWords } from "@repo/features/plain-words";
 import {
   CALL_KIND,
   CALL_WORDS,
@@ -56,7 +57,7 @@ import {
   stepLine,
   summaryLine,
 } from "./replay-card-model.js";
-import { cardTitle, delegationView, plainWords, toolCallView } from "./tool-call-model.js";
+import { delegationView, toolCallView } from "./tool-call-model.js";
 import type { TranscriptReader } from "./use-agent-transcript.js";
 
 /**

@@ -1072,8 +1072,7 @@ test("an approve-or-request-changes ask is two small buttons in the draft reply,
       },
     ],
   );
-  const reply =
-    pane.querySelector(".inbox-thread > li:nth-last-child(2)") ?? assert.fail("the reply");
+  const reply = pane.querySelector(".inbox-thread > li:last-child") ?? assert.fail("the reply");
   assert.equal(answeredCard(reply), "ApproveRecommendedRequest changes");
   assert.equal(
     reply.querySelector('[aria-pressed="true"] .inbox-ask-pressed[data-tone="neutral"]')
@@ -1251,8 +1250,7 @@ test("a to-do's steps are ticked in the draft reply, Mark done needs none ticked
     sent.map(({ answers }) => answers),
     [{ ask: ASKING_ID, reply: INBOX_REPLY.DONE, steps: [0, 1] }],
   );
-  const reply =
-    pane.querySelector(".inbox-thread > li:nth-last-child(2)") ?? assert.fail("the reply");
+  const reply = pane.querySelector(".inbox-thread > li:last-child") ?? assert.fail("the reply");
   assert.equal(
     answeredCard(reply),
     "Open the repository's settingsAdd the secretMark doneCouldn't do it",

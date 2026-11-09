@@ -12,12 +12,12 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskSections, TaskSectionWrite } from "@repo/features/task-section-wire";
+import { NO_TASK_SECTIONS, SECTION_WRITE_FAILED_NOTE } from "@repo/features/task-sections-model";
 import type { RepositoryPin, TaskAgentPin } from "@repo/features/task-wire";
 import type { TasksView } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { STATUS_TONE } from "@repo/ui";
-import { NO_TASK_SECTIONS, SECTION_WRITE_FAILED_NOTE } from "@repo/ui/task-sections-model";
 import {
   AGENT_PIN_FAILED_NOTES,
   MARK_FAILED_NOTES,

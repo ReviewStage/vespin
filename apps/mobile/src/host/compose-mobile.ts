@@ -28,6 +28,7 @@ import { type AuthSession, authSessionConsent } from "@repo/credentials";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
 import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
 import { LINK_ORIGIN } from "@repo/features/link-home";
+import type { OpenTerminalSocket } from "@repo/features/relay-socket";
 import type { SecretCipher as SecretCipherSeam } from "@repo/host";
 import { runModeFor } from "@repo/host";
 import {
@@ -67,7 +68,6 @@ import {
   hostStandingLayer,
   IdSource,
   OAUTH_ACCOUNT_CLIENT,
-  type OpenTerminalSocket,
   oauthAccountSourceLayerFor,
   RunMode,
   reporterLayer,

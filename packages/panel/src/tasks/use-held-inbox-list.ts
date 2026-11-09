@@ -1,4 +1,3 @@
-import { useCallback, useLayoutEffect, useReducer, useRef } from "react";
 import {
   EVERYONES,
   INBOX_WHOSE,
@@ -10,7 +9,8 @@ import {
   inboxPlaces,
   listedItems,
   NO_PLACES,
-} from "./inbox-model.js";
+} from "@repo/features/inbox-list-model";
+import { useCallback, useLayoutEffect, useReducer, useRef } from "react";
 import { type HeldOrder, useHeldOrder } from "./use-held-order.js";
 
 /**

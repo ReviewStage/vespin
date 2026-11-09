@@ -3,9 +3,11 @@
  *
  * This is the one implementation every door runs: the hosted `agentPorts`
  * procedures a member's desktop and web call (`agent-ports-procedures.ts`),
- * and the agent's own `list_ports` and `share_port` (`port-tools.ts`), which
- * reach its sandbox as the member who started it. Each door adds only its
- * input, who is asking, and its words.
+ * the agent's own `list_ports` and `share_port` (`port-tools.ts`), which
+ * reach its sandbox as the member who started it, and the member MCP
+ * server's `list_agent_ports` and `share_agent_port` over them
+ * (`../member-mcp/tools.ts`), which reach it as the admitted member. Each
+ * door adds only its input, who is asking, and its words.
  *
  * The agent is reached by the Terminal tab's own rule
  * (`terminal/sandbox-reach.ts`): a member of its workspace, its starter

@@ -1,5 +1,33 @@
+import {
+  EVERYONES,
+  holderName,
+  INBOX_NOT_READ,
+  INBOX_SCOPES,
+  INBOX_SHOW,
+  INBOX_SHOW_EMPTY,
+  INBOX_SHOW_LABEL,
+  INBOX_WHOSE,
+  type InboxCounts,
+  type InboxListed,
+  type InboxListView,
+  type InboxShow,
+  type InboxWhose,
+  inboxLineKind,
+  inboxPreview,
+  inboxPreviewHeard,
+  isDone,
+  isUnread,
+  listedItems,
+  MARK_ALL_READ,
+  MINE,
+  NEEDS_YOU,
+  narrowedByWhose,
+  READING_INBOX,
+  SEARCH_INBOX,
+} from "@repo/features/inbox-list-model";
 import { INBOX_STATUS, type InboxItem, inboxAddressedTo } from "@repo/features/inbox-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
+import { cardTitle } from "@repo/features/plain-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { sameShape } from "@repo/features/turn-rows";
@@ -133,33 +161,11 @@ import {
   inboxLineGlyph,
   useInboxStanding,
 } from "./inbox-item-parts.js";
-import {
-  EVERYONES,
-  holderName,
-  INBOX_NOT_READ,
-  INBOX_SHOW,
-  INBOX_WHOSE,
-  type InboxCounts,
-  type InboxListed,
-  type InboxListView,
-  type InboxShow,
-  type InboxWhose,
-  inboxLineKind,
-  inboxPreview,
-  inboxPreviewHeard,
-  inboxShownTicks,
-  isDone,
-  isUnread,
-  listedItems,
-  MINE,
-  NEEDS_YOU,
-  narrowedByWhose,
-} from "./inbox-model.js";
+import { inboxShownTicks } from "./inbox-model.js";
 import { type InboxReminder, useRemindMany } from "./inbox-remind.js";
 import { useInboxRowActs } from "./inbox-row-acts.js";
 import { type InboxListMark, type InboxSelection, useInboxSelection } from "./inbox-selection.js";
 import { PlanGlyph } from "./tab-look.js";
-import { cardTitle } from "./tool-call-model.js";
 
 /**
  * inbox-list.tsx -- the Inbox's list of items: one row each, in one run, the latest changed first, with what the list shows at its head.
@@ -235,12 +241,6 @@ const READ = "Read";
 /** What an unread row says to a reader, its dot being drawn for the eye alone. */
 const UNREAD = "Unread";
 
-/** What a phone's ⋯ offers to clear every dot with, as the sidebar's rows offer it on a right-click. */
-const MARK_ALL_READ = "Mark all as read";
-
-/** What the list's placeholder rows say to a reader while its items are first read. */
-const READING_ITEMS = "Reading your inbox…";
-
 /** How wide each placeholder row's task line, the title under it, and the preview under that stand, as shares of their lines, so the rows read as items of their own. */
 const SKELETON_ROWS = [
   { task: "40%", title: "68%", preview: "84%" },
@@ -255,19 +255,11 @@ const SKELETON_TIME = "20px";
 
 /** What each scope is called, in the view's menu and the list's region's name, and its glyph in the menu. */
 const SCOPE_WORDS = {
-  [INBOX_SHOW.NEEDS_ME]: { label: "Questions", icon: <GLYPH.PERSON /> },
-  [INBOX_SHOW.OPEN]: { label: "Open", icon: <GLYPH.TODOS /> },
-  [INBOX_SHOW.ALL]: { label: "All", icon: <InboxIcon /> },
-  [INBOX_SHOW.REMINDERS]: { label: "Reminders", icon: <GLYPH.TIME /> },
+  [INBOX_SHOW.NEEDS_ME]: { label: INBOX_SHOW_LABEL[INBOX_SHOW.NEEDS_ME], icon: <GLYPH.PERSON /> },
+  [INBOX_SHOW.OPEN]: { label: INBOX_SHOW_LABEL[INBOX_SHOW.OPEN], icon: <GLYPH.TODOS /> },
+  [INBOX_SHOW.ALL]: { label: INBOX_SHOW_LABEL[INBOX_SHOW.ALL], icon: <InboxIcon /> },
+  [INBOX_SHOW.REMINDERS]: { label: INBOX_SHOW_LABEL[INBOX_SHOW.REMINDERS], icon: <GLYPH.TIME /> },
 } as const satisfies Record<InboxShow, { label: string; icon: React.JSX.Element }>;
-
-/** The scopes the window's Inbox's view's menu offers, in its order. */
-const INBOX_SCOPES = [
-  INBOX_SHOW.NEEDS_ME,
-  INBOX_SHOW.OPEN,
-  INBOX_SHOW.ALL,
-  INBOX_SHOW.REMINDERS,
-] as const satisfies readonly InboxShow[];
 
 /** The Inbox's name at its head, whatever it lists, the view's menu saying the rest. */
 const INBOX_TITLE = "Inbox";
@@ -310,40 +302,6 @@ function regionLabel(head: InboxListHead): string {
   if (!narrowedByWhose(view.show)) return `${INBOX_ITEMS} · ${SCOPE_WORDS[view.show].label}`;
   return `${INBOX_ITEMS} · ${SCOPE_WORDS[view.show].label} · ${whoseWords(view.whose)}`;
 }
-
-/** What a task's own Inbox says holding nothing at all. */
-export const NOTHING_HERE = "Nothing here";
-
-/** What the Reminders scope says holding no item the reader set a reminder on. */
-const NO_REMINDERS = "No reminders";
-
-/** What Open says holding no thread the reader is not done with. */
-const NOTHING_OPEN = "Nothing open";
-
-/** What Questions says holding no question that waits on the reader, whomever Addressed to names. */
-const NOTHING_QUESTIONS = "No questions wait on you";
-
-/** What the list says where its scope and Addressed to leave out every item it holds, by whom Addressed to names. */
-const SHOW_EMPTY = {
-  [INBOX_WHOSE.MINE]: {
-    [INBOX_SHOW.NEEDS_ME]: NOTHING_QUESTIONS,
-    [INBOX_SHOW.OPEN]: NOTHING_OPEN,
-    [INBOX_SHOW.ALL]: "Nothing addressed to you",
-    [INBOX_SHOW.REMINDERS]: NO_REMINDERS,
-  },
-  [INBOX_WHOSE.EVERYONE]: {
-    [INBOX_SHOW.NEEDS_ME]: NOTHING_QUESTIONS,
-    [INBOX_SHOW.OPEN]: NOTHING_OPEN,
-    [INBOX_SHOW.ALL]: NOTHING_HERE,
-    [INBOX_SHOW.REMINDERS]: NO_REMINDERS,
-  },
-  [INBOX_WHOSE.PERSON]: {
-    [INBOX_SHOW.NEEDS_ME]: NOTHING_QUESTIONS,
-    [INBOX_SHOW.OPEN]: "Nothing addressed to them",
-    [INBOX_SHOW.ALL]: "Nothing addressed to them",
-    [INBOX_SHOW.REMINDERS]: NO_REMINDERS,
-  },
-} as const satisfies Record<InboxWhose["kind"], Record<InboxShow, string>>;
 
 /** What the empty state's presses say: Open or All of whom Addressed to names, the reader's own again, or anyone's. */
 const SHOW_INSTEAD = {
@@ -543,7 +501,7 @@ export const InboxItemRow = memo(function InboxItemRow({
   const addressee = usePerson(addressedTo);
   const coarse = useCoarsePointer();
   // Note that U, H, and E act only on the chosen item, so only its row names their chords.
-  const { groups } = useInboxItemActions(item, {
+  const { groups, openInTab } = useInboxItemActions(item, {
     onMark: onMark === undefined ? undefined : (_item, next) => onMark(listed, next),
     onResolve,
     keyed: chosen,
@@ -600,6 +558,7 @@ export const InboxItemRow = memo(function InboxItemRow({
         selectKey={selectKey}
         selectBox={!coarse}
         onPress={() => onChoose(listed)}
+        onOpenInTab={openInTab}
         menu={
           several === undefined
             ? rowMenu(ITEM_THING, groups(), undefined, true)
@@ -909,7 +868,7 @@ function emptyWayOn(
   return undefined;
 }
 
-/** What the list stands where its scope and Addressed to leave out every item it holds: that nothing is there, in the words of whom it names (`SHOW_EMPTY`), and the press that shows what holds something (`emptyWayOn`), which keeps the list standing where the Inbox shows one column. */
+/** What the list stands where its scope and Addressed to leave out every item it holds: that nothing is there, in the words of whom it names (`INBOX_SHOW_EMPTY`), and the press that shows what holds something (`emptyWayOn`), which keeps the list standing where the Inbox shows one column. */
 function ShowEmpty({
   view,
   counts,
@@ -923,7 +882,7 @@ function ShowEmpty({
   return (
     <ReplayUnmask>
       <EmptyState replayUnmasked icon={<InboxIcon />} action={emptyWayOn(view, counts, onList)}>
-        {SHOW_EMPTY[view.whose.kind][view.show]}
+        {INBOX_SHOW_EMPTY[view.whose.kind][view.show]}
       </EmptyState>
     </ReplayUnmask>
   );
@@ -944,7 +903,7 @@ export function InboxListSkeleton({
   rows?: number;
 }): React.JSX.Element {
   return (
-    <SkeletonRegion label={READING_ITEMS}>
+    <SkeletonRegion label={READING_INBOX}>
       <List label={TAB_WORDS.INBOX}>
         {SKELETON_ROWS.slice(0, rows).map(({ task, title, preview }) => (
           <ListRow
@@ -962,9 +921,6 @@ export function InboxListSkeleton({
     </SkeletonRegion>
   );
 }
-
-/** The words naming the list's search. */
-const SEARCH_INBOX = "Search inbox";
 
 /**
  * The list's search: a field always standing, as Settings' search does, so

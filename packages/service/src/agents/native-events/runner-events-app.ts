@@ -106,7 +106,7 @@ import {
   turnProgressed,
   withTurnServers,
 } from "./native-projection.js";
-import { redactKeepingPlanCodes } from "./runner-moments.js";
+import { redactKeepingPlanCodes, withoutNul } from "./runner-moments.js";
 
 /**
  * runner-events-app.ts -- where a native harness's runner posts its events, which land in the agent's transcript.
@@ -182,6 +182,16 @@ const RunnerEventBatchSchema = Schema.Struct({
 type RunnerEventBatch = typeof RunnerEventBatchSchema.Type;
 
 const readBatch = Schema.decodeUnknownOption(RunnerEventBatchSchema);
+
+/** A batch as the store can keep it: every NUL its events carry replaced (`withoutNul`). */
+function storable(batch: RunnerEventBatch): RunnerEventBatch {
+  return {
+    events: batch.events.map(({ sequence, message }) => ({
+      sequence,
+      message: withoutNul(message),
+    })),
+  };
+}
 
 /**
  * The tokens of a value's JSON as a step's estimate tells them: its bytes
@@ -936,7 +946,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     withNativeProjection(
       target,
       runnerTokenDigest(bearer),
-      (held) => applyBatch(applying, batch.value, held),
+      (held) => applyBatch(applying, storable(batch.value), held),
       admitted.value.launch,
     ).pipe(Effect.provide(collecting)),
   );

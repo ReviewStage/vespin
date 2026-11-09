@@ -31,6 +31,8 @@ export const MEMBER_MCP_TOOL = {
   MESSAGE_AGENT: AGENT_TOOL.MESSAGE_AGENT,
   STOP_AGENT: AGENT_TOOL.STOP_AGENT,
   UPDATE_AGENT: AGENT_TOOL.UPDATE_AGENT,
+  LIST_AGENT_PORTS: "list_agent_ports",
+  SHARE_AGENT_PORT: "share_agent_port",
   READ_INBOX: "read_inbox",
   ANSWER_ASK: "answer_ask",
   REPLY_TO_THREAD: "reply_to_thread",
