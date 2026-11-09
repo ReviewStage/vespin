@@ -83,6 +83,15 @@ component named `*Skeleton`, in which an intrinsic element's class must be a
 literal naming itself a skeleton's (`…-skeleton…`); every other box is a
 component, factored out of the surface where it builds the box by hand.
 
+What a row does lives in its row component, never in the page that draws
+it: its menu, its rename, its selection, and its muted and unread states
+are built inside the one component every list of that kind draws
+(`TaskListRow`, `AgentListRow`), so a list that draws the row gets all of
+it, and no page hands a shared row a menu, an editor, or a selection of its
+own. A menu shows a shortcut exactly where pressing it would act on the
+menu's subject, so a key it prints always works and one it leaves out does
+not act there.
+
 Lint holds the iOS half too (`anti-slop/no-raw-press-outside-ui-native`,
 under the same no-suppression check): outside `packages/ui-native`, an
 import of React Native's `Pressable`, `TextInput`, `Switch`, `Button`, or a
