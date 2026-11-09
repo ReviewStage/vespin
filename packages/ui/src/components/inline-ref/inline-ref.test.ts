@@ -13,8 +13,8 @@ import { INLINE_REF_FIT } from "./inline-ref-fit.js";
  * words, or by what its press does where the place says so, and answers a
  * click and the keyboard, or a link where its press leaves the app, which a
  * middle-click opens through as a click does; in running words, where it
- * wraps and so is no `<button>`, still a button to a reader that Enter and
- * Space press; without
+ * wraps and so is no `<button>`, still a button to a reader that Enter
+ * presses, and Space once as it is let go however long it is held; without
  * one it is words a reader reaches no press on, which take the focus while
  * they hang a card. A name drawn nowhere is still heard, its kind is heard
  * before it, and a gone subject keeps its name and is heard to be gone. What its hint is handed is its words or its card, and what the
@@ -78,7 +78,7 @@ test("handed a press, it is a button named by its words that answers a click", (
   assert.equal(pressed, 1);
 });
 
-test("in running words its press is still a button to a reader, which Enter and Space each press", () => {
+test("in running words its press is still a button to a reader, which Enter presses, and Space once as it is let go", () => {
   let pressed = 0;
   const view = draw(
     createElement(InlineRef, {
@@ -92,12 +92,17 @@ test("in running words its press is still a button to a reader, which Enter and 
   );
   const token = view.querySelector<HTMLElement>("[role='button']") ?? assert.fail("a button");
   assert.equal(token.tabIndex, 0, "the keyboard reaches it");
-  for (const key of ["Enter", " "]) {
+  const key = (type: string, init: KeyboardEventInit) =>
     act(() => {
-      token.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
+      token.dispatchEvent(new KeyboardEvent(type, { ...init, bubbles: true }));
     });
-  }
-  assert.equal(pressed, 2);
+  key("keydown", { key: "Enter" });
+  assert.equal(pressed, 1, "Enter presses as it goes down");
+  key("keydown", { key: " " });
+  key("keydown", { key: " ", repeat: true });
+  assert.equal(pressed, 1, "Space held presses nothing yet");
+  key("keyup", { key: " " });
+  assert.equal(pressed, 2, "Space let go presses once");
 });
 
 test("a press that says more than the name is named by what it does", () => {

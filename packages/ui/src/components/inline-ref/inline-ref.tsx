@@ -1,11 +1,13 @@
-import type {
-  ComponentType,
-  FocusEventHandler,
-  KeyboardEvent,
-  MouseEvent,
-  PointerEventHandler,
-  ReactElement,
-  ReactNode,
+import {
+  type ComponentType,
+  type FocusEvent,
+  type FocusEventHandler,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEventHandler,
+  type ReactElement,
+  type ReactNode,
+  useRef,
 } from "react";
 import { middlePressOf } from "../../middle-press.js";
 import { pulseOnPress } from "../../press-pulse.js";
@@ -287,11 +289,37 @@ function noFocus(element: HTMLElement | null): void {
   element?.removeAttribute("tabindex");
 }
 
-/** The keys a button answers, Enter and Space, pressing a span in a button's role as a click does, and Space not scrolling the page. */
-function pressOnKey(event: KeyboardEvent<HTMLElement>): void {
-  if (event.key !== "Enter" && event.key !== " ") return;
-  event.preventDefault();
-  event.currentTarget.click();
+/**
+ * The keys a button answers, for a span in a button's role, each pressing it
+ * as a click does: Enter as it goes down, and Space once as it is let go, as
+ * a button's does, never again while it is held and not at all once the
+ * focus leaves first; neither scrolls the page. The blur a hint hands the
+ * token is still heard.
+ */
+function useButtonKeys(onBlur: FocusEventHandler<HTMLElement> | undefined): {
+  onKeyDown: (event: KeyboardEvent<HTMLElement>) => void;
+  onKeyUp: (event: KeyboardEvent<HTMLElement>) => void;
+  onBlur: (event: FocusEvent<HTMLElement>) => void;
+} {
+  const spaceHeld = useRef(false);
+  return {
+    onKeyDown: (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      if (event.key === "Enter") event.currentTarget.click();
+      else if (!event.repeat) spaceHeld.current = true;
+    },
+    onKeyUp: (event) => {
+      if (event.key !== " " || !spaceHeld.current) return;
+      event.preventDefault();
+      spaceHeld.current = false;
+      event.currentTarget.click();
+    },
+    onBlur: (event) => {
+      spaceHeld.current = false;
+      onBlur?.(event);
+    },
+  };
 }
 
 /** The token itself, which takes what a hint hands it on its root. */
@@ -320,6 +348,7 @@ function InlineRefRoot({
   }): React.JSX.Element {
   const linkAddress = useLinkAddress(linkHref);
   const fit = useInlineRefFit(ownFit);
+  const keys = useButtonKeys(rest.onBlur);
   const pressable = onPress !== undefined;
   const leaving = pressable && leaves && linkHref !== undefined;
   const stated = !(state === undefined || state === null || labelHidden);
@@ -410,7 +439,9 @@ function InlineRefRoot({
         {...goneProps}
         aria-label={pressLabel}
         onClick={pulseOnPress(onPress)}
-        onKeyDown={pressOnKey}
+        onKeyDown={keys.onKeyDown}
+        onKeyUp={keys.onKeyUp}
+        onBlur={keys.onBlur}
       >
         {face}
       </span>
