@@ -1420,19 +1420,15 @@
   margin-inline-start: calc(-1 * var(--ui-space-8));
 }
 
-/* The reviewers' faces stand a press's inset further from the pickers
-   after them, because a subtle press's words sit that inset inside its
-   fill: so the faces and the first picker's words stand as far apart as two
-   pickers' words do, and a picker's fill under the pointer or its open menu
-   never meets the faces. */
-.pull-request-reviewers > .actor-stack {
-  margin-inline-end: var(--ui-space-8);
+/* The labels and their picker at the end of the header's line of people,
+   as the reviewers and theirs stand before them: they keep to that line
+   while they fit, and wrap onto the next as one group where they do not,
+   the labels themselves wrapping before their picker leaves them. */
+.changes-people.pull-request-people > .pull-request-label-group {
+  min-width: 0;
 }
 
-/* The labels at the end of the header's line of people, after the
-   pickers: they keep to that line while they fit, and wrap onto the next
-   as one compact group where they do not. */
-.changes-people.pull-request-people > .pull-request-labels {
+.pull-request-label-group > .pull-request-labels {
   min-width: 0;
 }
 

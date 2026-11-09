@@ -15,6 +15,7 @@ import {
   BUTTON_VARIANT,
   Button,
   cssCustomProperties,
+  IconButton,
   MenuNoteRow,
   POPOVER_ALIGN,
   POPOVER_SIDE,
@@ -304,14 +305,17 @@ function LabelDot({ color }: { color: string }): React.JSX.Element {
 }
 
 /**
- * A picker's press, the same for both so they read as a pair: a plus and
- * the word for what it adds, quiet beside the faces and the labels, named
- * in full for a reader, opening its menu under it.
+ * A picker's press, the same for both so they read as a pair: it stands
+ * after what it edits, the faces or the labels, as a quiet plus alone,
+ * named for what it does ("Edit labels"), since what stands before it says
+ * what it adds; with nothing before it, a plus and the word for what it
+ * adds ("Label"), named by that word. It opens its menu under it.
  */
 function PickerButton({
   ref,
   label,
   word,
+  held,
   disabled,
   busy,
   busyLabel,
@@ -323,6 +327,8 @@ function PickerButton({
   label: string;
   /** What it adds, in a word: “Reviewer”, “Label”. */
   word: string;
+  /** Whether what it edits stands before it, which says what it adds in its place. */
+  held: boolean;
   disabled: boolean;
   /** Whether a change its menu sent is out, and what it is named meanwhile. */
   busy: boolean;
@@ -332,6 +338,28 @@ function PickerButton({
   menuId: string;
   onPress: () => void;
 }): React.JSX.Element {
+  const popup = {
+    "aria-haspopup": "dialog",
+    "aria-expanded": open,
+    "aria-controls": open ? menuId : undefined,
+  } as const;
+  if (held) {
+    return (
+      <Tooltip label={open ? undefined : label}>
+        <IconButton
+          ref={ref}
+          icon={<PlusIcon aria-hidden="true" />}
+          label={label}
+          variant={BUTTON_VARIANT.SUBTLE}
+          disabled={disabled}
+          busy={busy}
+          busyLabel={busyLabel}
+          {...popup}
+          onClick={onPress}
+        />
+      </Tooltip>
+    );
+  }
   return (
     <Tooltip label={open ? undefined : label}>
       <Button
@@ -343,9 +371,7 @@ function PickerButton({
         disabled={disabled}
         busy={busy}
         busyLabel={busyLabel}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-controls={open ? menuId : undefined}
+        {...popup}
         onClick={onPress}
       >
         {word}
@@ -364,6 +390,7 @@ function PickerButton({
 function OptionsPicker({
   label,
   word,
+  held,
   busyLabel,
   busyOn,
   search,
@@ -374,6 +401,8 @@ function OptionsPicker({
   label: string;
   /** What it adds, in a word: “Reviewer”, “Label”. */
   word: string;
+  /** Whether what it edits stands before it. */
+  held: boolean;
   /** What the button is named while a change of its own is out. */
   busyLabel: string;
   /** The changes its menu sends, any of which out makes its button busy. */
@@ -400,6 +429,7 @@ function OptionsPicker({
         ref={button}
         label={label}
         word={word}
+        held={held}
         // Note that a busy button takes no press of its own, so it is left to say so rather than drawn disabled.
         disabled={(writes.pending !== undefined && !busy) || refreshing}
         busy={busy}
@@ -437,6 +467,7 @@ function OptionsPicker({
  */
 export function ReviewerPicker({
   author,
+  held,
   picks,
   options,
   writes,
@@ -444,6 +475,8 @@ export function ReviewerPicker({
 }: {
   /** Who opened the pull request, whom GitHub asks no review of. */
   author: string | undefined;
+  /** Whether the reviewers' faces stand before it. */
+  held: boolean;
   /** Who is asked for a review, each choice drawn at once, and the doors that choose. */
   picks: PullRequestPicks;
   options: ReviewOptions;
@@ -459,6 +492,7 @@ export function ReviewerPicker({
     <OptionsPicker
       label={PICKER_WORDS.REVIEWERS}
       word={PICKER_WORDS.REVIEWER}
+      held={held}
       busyLabel={PICKER_WORDS.REVIEWERS_BUSY}
       busyOn={REVIEWER_ACTIONS}
       search={{
@@ -539,6 +573,7 @@ export function LabelPicker({
     <OptionsPicker
       label={PICKER_WORDS.LABELS}
       word={PICKER_WORDS.LABEL}
+      held={picks.labels.length > 0}
       busyLabel={PICKER_WORDS.LABELS_BUSY}
       busyOn={LABEL_ACTIONS}
       search={{

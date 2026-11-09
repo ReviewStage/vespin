@@ -1932,12 +1932,17 @@ function PullRequestHead({
           editing={editing}
         />
       )}
-      <PullRequestLabels labels={facts.labels} />
+      {pullRequest === undefined && facts.labels.length === 0 ? null : (
+        <span className="pull-request-label-group inline-flex min-w-0 max-w-full items-center gap-control-gap">
+          <PullRequestLabels labels={facts.labels} />
+          {pullRequest === undefined ? null : <LabelPicker writes={writes} {...editing} />}
+        </span>
+      )}
     </PeopleLine>
   );
 }
 
-/** The line's reviewers, where each stands, and the reviewer and label pickers, once the pull request's own read has landed. */
+/** The line's reviewers, where each stands, then the picker that edits them, once the pull request's own read has landed; nothing for one no review may be asked of that has no reviewers. */
 function HeadPeople({
   pullRequest,
   standings,
@@ -1952,16 +1957,18 @@ function HeadPeople({
     readonly picks: PullRequestPicks;
     readonly refreshing: boolean;
   };
-}): React.JSX.Element {
+}): React.JSX.Element | null {
   const author = pullRequest.author?.login;
   const reviewers = reviewersOf(editing.picks.requested, standings, author);
   const open =
     pullRequest.state === PULL_REQUEST_STATE.OPEN || pullRequest.state === PULL_REQUEST_STATE.DRAFT;
+  if (reviewers.length === 0 && !open) return null;
   return (
     <span className="pull-request-reviewers inline-flex items-center gap-control-gap">
       {reviewers.length === 0 ? null : <HeaderReviewers reviewers={reviewers} />}
-      {open ? <ReviewerPicker author={author} writes={writes} {...editing} /> : null}
-      <LabelPicker writes={writes} {...editing} />
+      {open ? (
+        <ReviewerPicker author={author} held={reviewers.length > 0} writes={writes} {...editing} />
+      ) : null}
     </span>
   );
 }

@@ -3399,7 +3399,7 @@ test("a press outside the review panel closes it, its words kept, and one on a s
   }
 });
 
-test("a pull request with no labels spends no line on them: its label picker stands beside the reviewers' picker, and its labels, once it has some, close that same line", async () => {
+test("a pull request's labels stand before the picker that edits them, as its reviewers do: with none, the picker says what it adds; once some stand, it is a plus named for editing them, the two closing the line of people", async () => {
   let labels: { name: string; color: string }[] = [];
   const tab = await draw(
     controlAnswering({
@@ -3409,21 +3409,27 @@ test("a pull request with no labels spends no line on them: its label picker sta
   const people = () =>
     tab.querySelector<HTMLElement>(".pull-request-header .pull-request-people") ??
     assert.fail("the line of people stands");
-  const pickers = () =>
-    [...people().querySelectorAll<HTMLButtonElement>(".pull-request-reviewers button")].map(
-      (button) => button.getAttribute("aria-label"),
-    );
+  const labelGroup = () =>
+    people().querySelector(".pull-request-label-group") ?? assert.fail("the labels' group stands");
+  const labelPicker = () => labelGroup().querySelector(".pull-request-picker button");
 
   assert.equal(tab.querySelector(".pull-request-header .pull-request-labels") === null, true);
-  assert.deepEqual(pickers(), ["Reviewer", "Label"]);
+  assert.equal(labelPicker()?.getAttribute("aria-label"), "Label");
 
   labels = [{ name: "bug", color: "d73a4a" }];
   await pressToolbar(tab, "Refresh");
   await settle();
-  const list = people().querySelector('[aria-label="Labels"]') ?? assert.fail("its labels stand");
+  const list =
+    labelGroup().querySelector('[aria-label="Labels"]') ?? assert.fail("its labels stand");
   assert.equal(list.textContent, "bug");
-  assert.equal(people().lastElementChild, list, "they close the line of people");
-  assert.deepEqual(pickers(), ["Reviewer", "Label"]);
+  assert.equal(
+    list.compareDocumentPosition(labelPicker() ?? assert.fail("its picker stands")) &
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    Node.DOCUMENT_POSITION_FOLLOWING,
+    "the picker follows the labels",
+  );
+  assert.equal(labelPicker()?.getAttribute("aria-label"), "Edit labels");
+  assert.equal(people().lastElementChild, labelGroup(), "they close the line of people");
 });
 
 it.effect(
@@ -3807,8 +3813,9 @@ test("the reviewer picker lists the repository's teams then its people, the auth
     }),
   );
   const picker = () =>
-    tab.querySelector<HTMLButtonElement>('.pull-request-reviewers [aria-label="Reviewer"]') ??
-    assert.fail("the reviewer picker stands beside the reviewers");
+    tab.querySelector<HTMLButtonElement>(
+      '.pull-request-reviewers [aria-label="Reviewer"], .pull-request-reviewers [aria-label="Edit reviewers"]',
+    ) ?? assert.fail("the reviewer picker stands beside the reviewers");
 
   await vi.waitFor(picker);
   act(() => picker().click());
@@ -3885,10 +3892,13 @@ test("a picker's choice shows its button busy once the change has waited the set
     }),
   );
   const picker = (name: string) =>
-    tab.querySelector<HTMLButtonElement>(`.pull-request-reviewers button[aria-label^="${name}"]`);
+    tab.querySelector<HTMLButtonElement>(
+      `.pull-request-header .pull-request-picker button[aria-label^="${name}"]`,
+    );
   const ringed = (name: string) => picker(name)?.querySelector(".ui-spinner-ring") != null;
-  const labels = () => picker("Label") ?? picker("Updating labels");
-  const reviewers = () => picker("Reviewer") ?? picker("Updating reviewers");
+  const labels = () => picker("Label") ?? picker("Edit labels") ?? picker("Updating labels");
+  const reviewers = () =>
+    picker("Reviewer") ?? picker("Edit reviewers") ?? picker("Updating reviewers");
 
   act(() => labels()?.click());
   await settle();
@@ -3945,11 +3955,13 @@ test("the label picker lists the repository's labels, those on the pull request 
     ),
   );
   assert.equal(tab.querySelector('[aria-label="Reviewer"]') === null, true);
-  const picker =
-    tab.querySelector<HTMLButtonElement>('.pull-request-reviewers [aria-label="Label"]') ??
-    assert.fail("the label picker stands beside the reviewers");
+  // Note that the picker is read again before each press, because taking off the last label turns its plus into the word "Label".
+  const picker = () =>
+    tab.querySelector<HTMLButtonElement>(
+      '.pull-request-label-group [aria-label="Label"], .pull-request-label-group [aria-label="Edit labels"]',
+    ) ?? assert.fail("the label picker stands after the labels");
 
-  act(() => picker.click());
+  act(() => picker().click());
   await settle();
   await vi.waitFor(() =>
     assert.deepEqual(pickerRows(), [
@@ -3958,7 +3970,7 @@ test("the label picker lists the repository's labels, those on the pull request 
     ]),
   );
   await pickRow("bug");
-  act(() => picker.click());
+  act(() => picker().click());
   await settle();
   await pickRow("docs");
 
@@ -3990,8 +4002,9 @@ test("a reviewer chosen stands in the header before GitHub answers, and goes bac
 
   act(() =>
     (
-      tab.querySelector<HTMLButtonElement>('.pull-request-reviewers [aria-label="Reviewer"]') ??
-      assert.fail("the reviewer picker stands beside the reviewers")
+      tab.querySelector<HTMLButtonElement>(
+        '.pull-request-reviewers [aria-label="Reviewer"], .pull-request-reviewers [aria-label="Edit reviewers"]',
+      ) ?? assert.fail("the reviewer picker stands beside the reviewers")
     ).click(),
   );
   await settle();
@@ -4036,8 +4049,9 @@ test("a label chosen stands under the title before GitHub answers, in the color 
 
   act(() =>
     (
-      tab.querySelector<HTMLButtonElement>('.pull-request-reviewers [aria-label="Label"]') ??
-      assert.fail("the label picker stands beside the reviewers")
+      tab.querySelector<HTMLButtonElement>(
+        '.pull-request-label-group [aria-label="Label"], .pull-request-label-group [aria-label="Edit labels"]',
+      ) ?? assert.fail("the label picker stands beside the reviewers")
     ).click(),
   );
   await settle();
@@ -4068,8 +4082,9 @@ test("a picker whose repository could not be read offers Retry in its menu, whic
 
   act(() =>
     (
-      tab.querySelector<HTMLButtonElement>('.pull-request-reviewers [aria-label="Reviewer"]') ??
-      assert.fail("the reviewer picker stands beside the reviewers")
+      tab.querySelector<HTMLButtonElement>(
+        '.pull-request-reviewers [aria-label="Reviewer"], .pull-request-reviewers [aria-label="Edit reviewers"]',
+      ) ?? assert.fail("the reviewer picker stands beside the reviewers")
     ).click(),
   );
   await settle();
