@@ -63,6 +63,10 @@ export function transcriptStore(
           await post({ call: RUNNER_TRANSCRIPTS.CALL.LOAD_PAGE, key: keyOf(key), after }),
         );
         for (const entry of page.entries) entries.push(entry as SessionStoreEntry);
+        // Note that a cursor that does not move on fails the load, which would otherwise never end.
+        if (page.next !== null && after !== null && page.next <= after) {
+          throw new Error("The transcript store answered a page that did not move on");
+        }
         after = page.next;
       } while (after !== null);
       // Note that a key never written is answered null, as the SDK's `load` answers it.
