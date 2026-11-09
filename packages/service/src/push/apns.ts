@@ -152,12 +152,29 @@ export interface PushDeviceAddress {
   readonly bundleId: string;
 }
 
+/** The `aps` dictionary Apple reads, as far as the service writes it. */
+export interface ApnsAps {
+  readonly alert?: { readonly title: string; readonly body?: string };
+  readonly badge?: number;
+  readonly sound?: string;
+  readonly category?: string;
+  readonly "thread-id"?: string;
+  readonly "mutable-content"?: 1;
+  readonly "content-available"?: 1;
+}
+
+/** The JSON Apple delivers: its `aps`, and the app's own keys at the top level. */
+export interface ApnsPayload {
+  readonly aps: ApnsAps;
+  readonly [key: string]: unknown;
+}
+
 /** One notification to one phone: who, what kind, what Apple delivers, and how Apple routes it. */
 export interface ApnsNotification {
   readonly device: PushDeviceAddress;
   readonly pushType: ApnsPushType;
   /** The JSON Apple delivers, `aps` and the app's own keys at its top level, as Apple documents it; nothing is added to it here. */
-  readonly payload: Readonly<Record<string, unknown>>;
+  readonly payload: ApnsPayload;
   /** Later notifications with the same id replace earlier ones still on the lock screen. */
   readonly collapseId?: string;
   /** How soon Apple delivers; the push type's own default where unset (`DEFAULT_PRIORITY`). */

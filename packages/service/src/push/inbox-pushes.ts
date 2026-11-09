@@ -55,7 +55,7 @@ import { agentName } from "@repo/features/model-label";
 import { TURN_STATUS } from "@repo/wire";
 import { Clock, Effect, Option } from "effect";
 import { inboxItemWaitsOn, inboxWaitingCount } from "../inbox/inbox-store.js";
-import { APNS_PUSH_TYPE, ApnsSender } from "./apns.js";
+import { APNS_PUSH_TYPE, type ApnsPayload, ApnsSender } from "./apns.js";
 
 /** What a push tells of, as the payload's `kind` names it. */
 export const PUSH_KIND = {
@@ -162,7 +162,7 @@ function pushToMember(
   userId: string,
   send: (badge: number) => {
     readonly pushType: typeof APNS_PUSH_TYPE.ALERT | typeof APNS_PUSH_TYPE.BACKGROUND;
-    readonly payload: Readonly<Record<string, unknown>>;
+    readonly payload: ApnsPayload;
     readonly collapseId?: string;
   },
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
