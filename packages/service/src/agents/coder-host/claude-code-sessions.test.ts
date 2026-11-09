@@ -2835,6 +2835,31 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a turn its plan's limit cut short, retried on the next payer, hands the line its runner already took to the relaunched runner",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sequence = { next: 3 };
+        const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+        const sent = yield* writtenLine(agent, "Fix the invitations.");
+        const opened = yield* deliveredOpen(sessions, sent);
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        // The runner took its message, and its plan's limit cut the turn short.
+        yield* runnerTook(agent.id);
+        sequence.next = 4;
+
+        const retried = yield* sessions.retry(opened.sessionId, sent);
+
+        assert.equal(retried.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal(api.commands.length, 2);
+        const [line] = yield* handedLines(userId, api.commands[1]);
+        assert.deepEqual(developerContent(line), [{ type: "text", text: "Fix the invitations." }]);
+      }),
+  );
+
+  it.effect(
     "two messages to a runner that ended both reach the one runner their turn's delivery launches, in order, however often it is delivered",
     () =>
       Effect.gen(function* () {

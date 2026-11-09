@@ -153,6 +153,7 @@ import {
   ANY_LAUNCH,
   clearRunnerLines,
   queueRunnerLine,
+  requeueRunnerLine,
   runnerLineWaitingSince,
   waitingRunnerFiles,
   withdrawRunnerLine,
@@ -2410,7 +2411,10 @@ export const runnerSessions = <
       // A turn its plan's limit cut short goes on with its own line in a launch on the next payer:
       // the runner, wherever it runs and whatever it holds, ended and launched again here under the
       // lease, as a message to a Mac's is, its payer chosen afresh as every launch's is
-      // (`turnPayerOf`) and the harness's session resumed (`resumedSessionWhen`).
+      // (`turnPayerOf`) and the harness's session resumed (`resumedSessionWhen`). Note that on a
+      // machine whose runner reads its lines, the line the ended launch took is put back untaken
+      // first, because the launch queues it again under the same id, and a line taken is never
+      // handed again (`requeueRunnerLine`).
       retry: (sessionId, message) =>
         Effect.gen(function* () {
           const after = yield* Effect.serviceOption(AfterResponse);
@@ -2420,7 +2424,12 @@ export const runnerSessions = <
             const sent = messageLine(message, layout);
             return yield* holdingRunner(
               agent.id,
-              sendHolding(sessionId, message, layout, sent, false, true),
+              Effect.andThen(
+                layout.linesRead
+                  ? requeueRunnerLine(userId, agent.id, sent.line.uuid)
+                  : Effect.void,
+                sendHolding(sessionId, message, layout, sent, false, true),
+              ),
               CODER.RUNNER_LEASE.SEND_WAIT,
             ).pipe(
               Effect.catch(failed("retry")),
