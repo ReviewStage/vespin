@@ -3,6 +3,7 @@ import {
   BookBookmark,
   BookOpen,
   Bot,
+  Bug,
   CircleArrowOutUpLeft,
   CircleDashed,
   CircleDot,
@@ -213,4 +214,6 @@ export const GLYPH = {
   DRAG_HANDLE: lucideGlyph(GripVertical),
   OPEN_EXTERNALLY: ExternalIcon,
   OPEN_ON_GITHUB: GitHubMarkGlyph,
+  // An agent started on a failure the app showed, to find its cause and fix it.
+  INVESTIGATE: lucideGlyph(Bug),
 } as const;

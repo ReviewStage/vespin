@@ -7,12 +7,16 @@ import {
   type ShownFailureSentry,
   sendShownFailure,
 } from "@repo/features/shown-failure";
+import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
+import { ACT_KIND } from "@repo/host/acts";
 import { ErrorState } from "@repo/ui";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
 import { failureShown, installShownFailureReporter, type ShownFailure } from "./failure-report.js";
+import { fakeActPort } from "./testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform } from "./testing/app-platform.js";
+import { writeListedTasks } from "./testing/app-state.js";
 import { testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js";
 
 /**
@@ -20,8 +24,11 @@ import { testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js"
  * as the panel hands it one, is reported once as it first stands: not again
  * as it is drawn anew or remounted, as a tab switched away and back, but
  * again for another failure, and again once it comes back after standing
- * unshown past the lapse. Its Copy details copies what its report sent. A
- * recording SDK stands in for Sentry. Synthetic throughout.
+ * unshown past the lapse. Its Copy details copies what its report sent.
+ * Investigate stands beside it only where the chosen workspace's GitHub is
+ * on the product's own repository's owner, and its press starts a task
+ * there with an agent handed the failure. A recording SDK stands in for
+ * Sentry. Synthetic throughout.
  */
 
 /** How long a failure no one shows stays the same one, as the panel keeps it. */
@@ -110,6 +117,57 @@ test("a failure drawn in place is reported once as it stands, again for another,
         "sentry.trace_id: trace-fixture",
       ].join("\n"),
     ]);
+  } finally {
+    uninstall();
+  }
+});
+
+/** A workspace whose GitHub is on `login`. */
+function workspaceOn(login: string): Workspace {
+  return {
+    id: `workspace-${login}`,
+    name: login,
+    slug: login,
+    role: WORKSPACE_ROLE.MEMBER,
+    github: { login, active: true },
+  };
+}
+
+test("Investigate stands only where the chosen workspace reaches the product's own repository, and its press starts a task there handed the failure", async () => {
+  const started: unknown[] = [];
+  fakeAppPlatform(copyingInto([]));
+  fakeActPort({
+    [ACT_KIND.TASKS_START]: (start) => {
+      started.push(start);
+      return Promise.resolve({ planId: "task-fixture" });
+    },
+  });
+  const uninstall = installShownFailureReporter(
+    () => ({ eventId: "event-fixture" }),
+    testQueryClientNow(),
+  );
+  const investigate = () =>
+    document.querySelector<HTMLButtonElement>('button[aria-label="Investigate"]');
+  try {
+    writeListedTasks({ workspaces: [workspaceOn("acme")] });
+    draw({ ...unreadTasks(), cause: new TypeError("outside") });
+    assert.equal(investigate(), null, "outside the team, it is not offered");
+
+    writeListedTasks({ workspaces: [workspaceOn("ReviewStage")] });
+    draw({ ...unreadTasks(), cause: new TypeError("inside") });
+    const pressed = investigate();
+    if (pressed === null) throw new Error("no Investigate");
+    await act(async () => pressed.click());
+    assert.equal(started.length, 1);
+    const [start] = started as {
+      workspaceId: string;
+      repository: string;
+      agent: { prompt: string };
+    }[];
+    assert.equal(start?.workspaceId, "workspace-ReviewStage");
+    assert.equal(start?.repository, "ReviewStage/vespin");
+    assert.ok(start?.agent.prompt.includes("TypeError: inside"), "the agent is handed the failure");
+    assert.ok(start?.agent.prompt.includes("`tasks.read`"), "and where it was shown");
   } finally {
     uninstall();
   }

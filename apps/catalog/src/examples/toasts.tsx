@@ -5,7 +5,8 @@
  * Undo one draining its countdown, paused under the pointer; then one whose
  * work is under way, turned in place into done or failed by a press, and
  * one to drag or sweep sideways away, shown again by a press; and failures
- * that offer their details to copy, alone and beside a Retry.
+ * that offer their details to copy, alone, beside a Retry, and after
+ * Investigate.
  */
 
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
@@ -136,7 +137,7 @@ function copyToClipboard(text: string): Promise<void> {
   return navigator.clipboard.writeText(text);
 }
 
-/** Failure toasts, each offering its details to copy: one with nothing else to press, and one beside its Retry. */
+/** Failure toasts, each offering its details to copy: one with nothing else to press, one beside its Retry, and one after Investigate. */
 function Failures(): React.JSX.Element {
   const copy = { text: FAILURE_DETAILS, what: "details", copy: copyToClipboard };
   return (
@@ -161,6 +162,18 @@ function Failures(): React.JSX.Element {
                 label="Retry"
                 onPress={noop}
                 copy={copy}
+                dismissLabel="Dismiss"
+                onDismiss={noop}
+              />
+            }
+          />
+          <Toast
+            tone={STATUS_TONE.DANGER}
+            words="The agent could not be started."
+            actions={
+              <ToastActions
+                copy={copy}
+                investigate={noop}
                 dismissLabel="Dismiss"
                 onDismiss={noop}
               />

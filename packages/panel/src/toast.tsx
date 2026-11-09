@@ -29,7 +29,9 @@
  * failure toast with nothing else to press takes the pointer for it, and so
  * pauses its hold under it, drains its bar, and may be dismissed. A refusal,
  * whose words already say what happened, and a window with nothing to report
- * through offer no copy (`reportShownFailure`). A failure that is not a
+ * through offer no copy (`reportShownOffers`). One offering its copy offers
+ * Investigate before it too, where the failure's report offers it as it is
+ * shown (`failure-investigation.ts`). A failure that is not a
  * refusal, shown while the app does not reach the service, is reported and
  * not shown at all, unless it carries an action, because the Offline mark
  * already says why (`failureOfConnection`).
@@ -80,7 +82,7 @@ import { Clock, Duration, Effect } from "effect";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import { appPlatform } from "./app-platform.js";
-import { failureOfConnection, reportShownFailure, type ShownFailure } from "./failure-report.js";
+import { failureOfConnection, reportShownOffers, type ShownFailure } from "./failure-report.js";
 
 /** The tones said in the polite region: all but a refusal, which is an alert. */
 const POLITE_TONES: ReadonlySet<ToastTone> = new Set([
@@ -168,8 +170,11 @@ export type ToastNotice = {
       }
   );
 
-/** A notice as the stack keeps it: one saying a failure with the details of its report a person may copy. */
-type KeptNotice = ToastNotice & { readonly details?: string | undefined };
+/** A notice as the stack keeps it: one saying a failure with the details of its report a person may copy, and Investigate's press where it was offered as it was shown. */
+type KeptNotice = ToastNotice & {
+  readonly details?: string | undefined;
+  readonly investigate?: (() => void) | undefined;
+};
 
 /** How long a toast takes to leave, as `--ui-duration-exit` says it. */
 const TOAST_EXIT = Duration.millis(MOTION_DURATION_MS.EXIT);
@@ -421,13 +426,14 @@ function stepped(stack: ToastLine, step: ToastStep, now: number): ToastLine {
 function reportSaid(step: ToastStep, at: number): ToastStep | undefined {
   if (step.kind !== TOAST_STEP.SHOW && step.kind !== TOAST_STEP.SETTLE) return step;
   if (step.notice.tone !== STATUS_TONE.DANGER) return step;
-  const details = reportShownFailure(step.notice.failure, at);
+  const offers = reportShownOffers(step.notice.failure, at);
   if (step.notice.action === undefined && failureOfConnection(step.notice.failure)) {
     return step.kind === TOAST_STEP.SETTLE
       ? { kind: TOAST_STEP.WITHDRAW, about: (notice) => notice.subject === step.subject }
       : undefined;
   }
-  return { ...step, notice: { ...step.notice, details } };
+  const investigate = offers?.investigation();
+  return { ...step, notice: { ...step.notice, details: offers?.details, investigate } };
 }
 
 /** The notices `before` held, standing or waiting, that `after` no longer holds. */
@@ -526,7 +532,7 @@ export function useWorkingToast(): (words: string) => (notice: ToastNotice) => v
 }
 
 /** Shows a toast saying work is under way, and answers how to settle it (`useWorkingToast`). */
-function showWorkingToast(words: string): (notice: ToastNotice) => void {
+export function showWorkingToast(words: string): (notice: ToastNotice) => void {
   const subject = crypto.randomUUID();
   stepToasts({ kind: TOAST_STEP.SHOW, notice: { words, tone: STATUS_TONE.WORKING, subject } });
   return (notice: ToastNotice) =>
@@ -603,7 +609,7 @@ function ToastCard({
   step: (step: ToastStep) => void;
 }): React.JSX.Element {
   const { id, notice, leaving } = shown;
-  const { action, details } = notice;
+  const { action, details, investigate } = notice;
   const hold = holdOf(notice);
   const dismiss = () => {
     step({ kind: TOAST_STEP.DISMISS, id });
@@ -632,6 +638,7 @@ function ToastCard({
               ? {}
               : { label: action.label, href: action.href, onPress: action.onPress })}
             copy={copy}
+            investigate={investigate}
             dismissLabel={DISMISS_LABEL}
             onDismiss={dismiss}
             replayUnmasked={action?.replayUnmasked}

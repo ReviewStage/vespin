@@ -8,7 +8,8 @@
  * the app hands a `ReportedFailure` it built over its own (the panel's
  * `failureShown`), and the component says it was shown once it stands,
  * which reports it where it was not yet reported, and offers the details
- * that answers to copy (`FailureCopy`).
+ * that answers to copy (`FailureCopy`), and Investigate beside them where the
+ * app offers one for it.
  *
  * Two kinds of words are drawn the same way and are no failure of the
  * app's, so each names itself as such rather than passing for one
@@ -38,7 +39,19 @@ export interface ReportedFailure {
   readonly hidden: () => void;
   /** The app's clipboard, which Copy details writes to; a rejection is a refused copy. */
   readonly copy: (text: string) => Promise<void>;
+  /**
+   * Investigate's press, which starts an agent to find the failure's cause
+   * and fix it, where the app offers one for it as it is said shown, beside
+   * the details it answered; nothing where it offers none, as for a refusal
+   * or a reader outside the team that works on the app. Note that it is
+   * asked each time `shown` is, since whether it is offered is the app's,
+   * and may change while the failure is kept.
+   */
+  readonly investigation?: (() => FailureInvestigate | undefined) | undefined;
 }
+
+/** Investigate's press on a failure, which the app answers on its own surfaces, as a toast. */
+export type FailureInvestigate = () => void;
 
 /** Words drawn as a failure's that are no failure of the app's, so nothing reports them and none offers its details. */
 export const UNREPORTED = {

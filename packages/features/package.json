@@ -21,6 +21,7 @@
     "./automation-wire": "./src/automation-wire.js",
     "./automation-view": "./src/automation-view.js",
     "./credential-redaction": "./src/credential-redaction.js",
+    "./failure-investigation": "./src/failure-investigation.js",
     "./host-live": "./src/host-live.js",
     "./memory-live": "./src/memory-live.js",
     "./member-mcp-tool": "./src/member-mcp-tool.js",

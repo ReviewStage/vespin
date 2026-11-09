@@ -1,7 +1,7 @@
 import type { Workspace } from "@repo/features/workspace-wire";
 import { Schema } from "effect";
 import { useState } from "react";
-import { keptKey, useKept } from "../use-kept.js";
+import { keptKey, keptNow, useKept } from "../use-kept.js";
 
 /**
  * chosen-workspace.ts -- which of the account's workspaces the sidebar lists and New task starts in, kept across launches.
@@ -72,4 +72,16 @@ export function useKeptChoice<Listed extends Pick<Workspace, "id">>(
 ): Listed | undefined {
   const [kept] = useKept(KEPT.CHOICE, "");
   return resolveChoice(workspaces, kept);
+}
+
+/**
+ * The chosen one of `workspaces` as the kept choice names it now, read by a
+ * caller outside React, as a failure's Investigate is asked as it is shown
+ * (`failure-investigation.ts`). Note that a fixture run's choice reads here
+ * as the first workspace, as `useKeptChoice` says.
+ */
+export function keptChoiceNow<Listed extends Pick<Workspace, "id">>(
+  workspaces: readonly Listed[],
+): Listed | undefined {
+  return resolveChoice(workspaces, keptNow(KEPT.CHOICE, ""));
 }

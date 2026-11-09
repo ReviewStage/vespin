@@ -2,6 +2,7 @@ import { CloseIcon } from "../../icons/lucide-glyphs.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, ButtonLink, IconButton } from "../button/button.js";
 import { CopyButton } from "../copy-button/copy-button.js";
+import { InvestigateButton } from "../investigate-button/investigate-button.js";
 import { Tooltip } from "../tooltip/hint.js";
 
 /**
@@ -23,6 +24,11 @@ import { Tooltip } from "../tooltip/hint.js";
  * toast's words keep their room. A press of it copies and answers on the
  * button itself, as every copy button does, and leaves the toast standing,
  * so an action beside it is never lost to a copy.
+ *
+ * Where the app offers Investigate on the failure (`investigate`), its glyph
+ * stands before the copy (`InvestigateButton`); a press of it dismisses the
+ * toast, as the action's does, since the app answers it with a toast of its
+ * own.
  */
 
 /** What a toast's copy button copies, named "Copy {what}", through its caller's clipboard (`CopyButton`). */
@@ -48,12 +54,15 @@ export function ToastActions({
   href,
   onPress,
   copy,
+  investigate,
   dismissLabel,
   onDismiss,
   replayUnmasked = false,
 }: ToastActionProps & {
   /** The details a press of its copy button copies, where it says a failure. */
   copy?: ToastCopy | undefined;
+  /** Investigate's press on the failure it says, where the app offers one. */
+  investigate?: (() => void) | undefined;
   /** What the × is called, for whoever cannot see it. */
   dismissLabel: string;
   onDismiss: () => void;
@@ -84,6 +93,14 @@ export function ToastActions({
         >
           <ReplayWords unmasked={replayUnmasked}>{label}</ReplayWords>
         </ButtonLink>
+      )}
+      {investigate === undefined ? null : (
+        <InvestigateButton
+          onPress={() => {
+            onDismiss();
+            investigate();
+          }}
+        />
       )}
       {copy === undefined ? null : (
         <CopyButton text={copy.text} what={copy.what} copy={copy.copy} />

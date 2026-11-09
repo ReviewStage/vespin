@@ -24,7 +24,9 @@
  * answered, so what they send with a report of the problem finds the very
  * line and issue that were sent. A refusal answers none, so it offers no
  * copy: its own words already say what happened, and nothing went wrong to
- * report.
+ * report. Each that answers details answers Investigate's offer beside them
+ * too, which stands only for the team that works on the app
+ * (`failure-investigation.ts`).
  *
  * A failure drawn in place (`@repo/ui`'s `ErrorState`, `FailureNote`,
  * `ErrorLine` and the rows and dialogs that draw one) is handed as
@@ -60,12 +62,13 @@ import { networkConnected } from "@repo/host/app-state";
 import { ACT_ERROR, type PortActKind } from "@repo/host/contract";
 import type { ConfirmFailure } from "@repo/ui/confirm-state";
 import type { PictureUnread } from "@repo/ui/picture-read";
-import type { ReportedFailure, ShownError } from "@repo/ui/reported-failure";
+import type { FailureInvestigate, ReportedFailure, ShownError } from "@repo/ui/reported-failure";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import type { QueryClient } from "@tanstack/react-query";
 import { Clock, Context, Predicate } from "effect";
 import type { ReactNode } from "react";
 import { appPlatform } from "./app-platform.js";
+import { investigationOffer } from "./failure-investigation.js";
 import { rendererServicesNow } from "./renderer-runtime.js";
 import type { SettingRefusal } from "./settings/row-write.js";
 import { appStateIn } from "./use-app-state.js";
@@ -85,6 +88,13 @@ export interface ShownFailure {
   readonly refused?: true;
   /** The live stream's state as it was shown, where one stands under the surface. */
   readonly live?: string;
+}
+
+/** What an unexpected failure just shown answers: the details a person may copy of it, and Investigate's offer beside them. */
+export interface ShownFailureOffers {
+  readonly details: string;
+  /** Investigate's press, where it is offered as it is asked; nothing where it is not. */
+  readonly investigation: () => FailureInvestigate | undefined;
 }
 
 /** What a shell reports a shown failure through, answering what Sentry answered where its SDK stands. */
@@ -206,23 +216,24 @@ function now(): number {
  * stands, and reported anew once it stood unshown for `LAPSE_MS`.
  */
 function keptFailure(failure: ShownFailure): ReportedFailure {
-  let details: { readonly copied: string | undefined } | undefined;
+  let offers: { readonly shown: ShownFailureOffers | undefined } | undefined;
   let standing = 0;
   let hiddenAt: number | undefined;
   return {
     shown: () => {
       const at = now();
       const lapsed = standing === 0 && hiddenAt !== undefined && at - hiddenAt >= LAPSE_MS;
-      if (details === undefined || lapsed) details = { copied: reportShownFailure(failure, at) };
+      if (offers === undefined || lapsed) offers = { shown: reportShownOffers(failure, at) };
       standing += 1;
       hiddenAt = undefined;
-      return details.copied;
+      return offers.shown?.details;
     },
     hidden: () => {
       standing = Math.max(0, standing - 1);
       if (standing === 0) hiddenAt = now();
     },
     copy: (text) => appPlatform().copyText(text),
+    investigation: () => offers?.shown?.investigation(),
   };
 }
 
@@ -322,17 +333,31 @@ function sent(report: ShownFailureReport): ShownFailureSent | undefined {
 /**
  * Hands one failure just shown at `at` to the window's reporter, with the
  * app's state now, and answers the details a person may copy of it, where it
- * was unexpected; a refusal answers none. A window with no reporter, such as the site's admin page, which installs no
- * clipboard either, reports nothing and answers no details, so nothing there
+ * was unexpected; a refusal answers none (`reportShownOffers`).
+ */
+export function reportShownFailure(failure: ShownFailure, at: number): string | undefined {
+  return reportShownOffers(failure, at)?.details;
+}
+
+/**
+ * Hands one failure just shown at `at` to the window's reporter, with the
+ * app's state now, and answers what it offers, where it was unexpected: the
+ * details a person may copy of it, and Investigate's offer beside them; a
+ * refusal answers nothing. A window with no reporter, such as the site's admin page, which installs no
+ * clipboard either, reports nothing and answers nothing, so nothing there
  * offers a copy that could only fail. Note that a report or a reading that throws is
- * let go with a line on the console, answering no details, because whoever
+ * let go with a line on the console, answering nothing, because whoever
  * showed the failure is showing it as this runs, and the person must still
  * see it.
  */
-export function reportShownFailure(failure: ShownFailure, at: number): string | undefined {
+export function reportShownOffers(
+  failure: ShownFailure,
+  at: number,
+): ShownFailureOffers | undefined {
   if (reporter === undefined) return undefined;
   try {
-    const state = appStateIn(reporter.client);
+    const { client } = reporter;
+    const state = appStateIn(client);
     const report: ShownFailureReport = {
       surface: failure.surface,
       kind: kindOf(failure),
@@ -346,7 +371,9 @@ export function reportShownFailure(failure: ShownFailure, at: number): string | 
       },
     };
     const told = { at, version: state?.run.appVersion, sent: sent(report) };
-    return report.kind === FAILURE_KIND.UNEXPECTED ? shownFailureDetails(report, told) : undefined;
+    if (report.kind !== FAILURE_KIND.UNEXPECTED) return undefined;
+    const details = shownFailureDetails(report, told);
+    return { details, investigation: investigationOffer(report, details, client) };
   } catch (error) {
     console.error("A failure shown could not be reported.", error);
     return undefined;

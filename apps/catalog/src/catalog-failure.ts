@@ -1,5 +1,5 @@
 /**
- * catalog-failure.ts -- the failure every catalog example of a failure drawn in place stands on: reported nowhere, its details a fixed block like the one the panel builds, copied to the browser's own clipboard.
+ * catalog-failure.ts -- the failure every catalog example of a failure drawn in place stands on: reported nowhere, its details a fixed block like the one the panel builds, copied to the browser's own clipboard; and the same failure with Investigate offered, as the panel offers it to the team that works on the app.
  */
 
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -19,4 +19,13 @@ export const CATALOG_FAILURE: ReportedFailure = {
   shown: () => FAILURE_DETAILS,
   hidden: () => undefined,
   copy: (text) => navigator.clipboard.writeText(text),
+};
+
+/** A press the catalog has nowhere to take. */
+function stay(): void {}
+
+/** The same failure with Investigate offered, whose press goes nowhere. */
+export const CATALOG_INVESTIGABLE_FAILURE: ReportedFailure = {
+  ...CATALOG_FAILURE,
+  investigation: () => stay,
 };

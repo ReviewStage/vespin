@@ -5,16 +5,19 @@
  * remedy, Remove, or Dismiss beside Retry, one whose place failed to draw,
  * the product's mark over its sentence and Reload, one on a toolbar short of
  * room, long words and a long remedy in a pane narrower than the line,
- * a list's foot that is itself the retry, and a failure's Retry on its own
- * beside its words, named for what it reads again.
+ * a list's foot that is itself the retry, a failure's Retry on its own
+ * beside its words, named for what it reads again, and one offering
+ * Investigate before Copy details, with Investigate alone at both sizes.
  */
 
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
+  BUTTON_SIZE,
   ERROR_STATE_PLACEMENT,
   ErrorState,
   GAP,
   Inline,
+  InvestigateButton,
   RetryButton,
   RetryRowLabel,
   TEXT_BUTTON_LINES,
@@ -22,7 +25,7 @@ import {
   TextButton,
 } from "@repo/ui";
 import { ReloadState } from "@repo/ui/error-boundary";
-import { CATALOG_FAILURE } from "../catalog-failure";
+import { CATALOG_FAILURE, CATALOG_INVESTIGABLE_FAILURE } from "../catalog-failure";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -65,6 +68,19 @@ function ErrorStates(): React.JSX.Element {
         <div className="catalog-frame catalog-reload-room">
           <ReloadState failure="This window could not be shown." onReload={stay} />
         </div>
+      </CatalogSection>
+      <CatalogSection id="error-state-investigate" title="Investigate offered">
+        <div className="catalog-frame">
+          <ErrorState failure={CATALOG_INVESTIGABLE_FAILURE} onRetry={stay}>
+            Your tasks could not be read.
+          </ErrorState>
+        </div>
+      </CatalogSection>
+      <CatalogSection id="error-state-investigate-button" title="Investigate, and compact">
+        <Inline gap={GAP.CONTROL}>
+          <InvestigateButton onPress={stay} />
+          <InvestigateButton onPress={stay} size={BUTTON_SIZE.COMPACT} />
+        </Inline>
       </CatalogSection>
       <CatalogSection id="error-state-alone" title="No Retry">
         <div className="catalog-frame">

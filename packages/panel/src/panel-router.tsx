@@ -61,6 +61,7 @@ import {
   UnknownWorkspacePlace,
   VersionHistoryRouteLoading,
 } from "./desktop/desktop-shell.js";
+import { holdWindowRouter } from "./failure-investigation.js";
 import {
   adminRouteStands,
   pathUnder,
@@ -657,10 +658,13 @@ export type PanelRouter = ReturnType<typeof createPanelRouter>;
  * The window's router, drawn as its root mounts it, handed the account's
  * access as it moves, so a gate (`route-gates.ts`) reads what the window
  * draws by; the routes standing are asked again as it moves, so a place a
- * gate no longer lets stand gives way.
+ * gate no longer lets stand gives way. It is held as the window's while it
+ * draws (`holdWindowRouter`), for a failure's Investigate to read the route
+ * it was shown on and open the agent it started.
  */
 export function PanelRouterProvider({ router }: { router: PanelRouter }): React.JSX.Element {
   const access = useRouteAccess();
+  useEffect(() => holdWindowRouter(router), [router]);
   const asked = useRef(access);
   useEffect(() => {
     if (asked.current === access) return;

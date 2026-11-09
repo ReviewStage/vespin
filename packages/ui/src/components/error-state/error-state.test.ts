@@ -8,7 +8,7 @@
  * sentence its hint; the glyph that marks it as a fault says nothing to a
  * reader; a row that is itself the retry says its failure as an alert and
  * is named by it and Retry. Every failure offers Copy details beside its
- * presses.
+ * presses, and Investigate before it where the app offers one.
  */
 
 // @vitest-environment jsdom
@@ -137,6 +137,25 @@ test("a failure among rows offers its remedy, Retry, Copy details, Remove, and D
   expect(alert.textContent).toBe(`${LINE}Connect GitHubRetryRemove`);
   for (const button of buttons) act(() => button.click());
   expect(pressed).toEqual(["remedy", "retry", "remove", "dismiss"]);
+});
+
+test("a failure the app offers Investigate on draws it before Copy details, and its press starts it", () => {
+  const investigable = recordedFailure(undefined, { investigable: true });
+  const alert = mountAlert(
+    createElement(ErrorState, {
+      onRetry: () => undefined,
+      failure: investigable.failure,
+      children: LINE,
+    }),
+  );
+  const buttons = [...alert.querySelectorAll("button")];
+  expect(buttons.map((button) => button.getAttribute("aria-label") ?? button.textContent)).toEqual([
+    "Retry",
+    "Investigate",
+    "Copy details",
+  ]);
+  act(() => buttons[1]?.click());
+  expect(investigable.investigated()).toBe(1);
 });
 
 test("a failure among rows offers only the presses it is given", () => {

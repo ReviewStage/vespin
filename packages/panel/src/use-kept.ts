@@ -100,3 +100,15 @@ export function useKept<A>(
   );
   return [value, choose, change];
 }
+
+/**
+ * The choice kept under `key` now, or `initial` where none was kept, it no
+ * longer reads, or storage refuses the read, for a caller outside React
+ * that reads it as it acts, as a failure's Investigate asks which workspace
+ * is chosen as the failure is shown. Note that a choice whose last write
+ * storage refused reads as storage holds it, since no surface's draw is in
+ * reach here.
+ */
+export function keptNow<A>(key: KeptKey<A>, initial: A): A {
+  return readKept(key.name, key.schema, initial);
+}

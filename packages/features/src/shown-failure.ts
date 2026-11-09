@@ -420,6 +420,9 @@ const UNNAMED_CODE = "unnamed";
 /** How long text read from a cause may be once redacted; past it, the rest is cut. */
 const TEXT_BOUND = 500;
 
+/** How long a cause's stack may be once redacted; past it, the rest is cut. */
+const STACK_BOUND = 4000;
+
 /** How deep a cause's chain is read: past it, the rest is left out. */
 const CHAIN_BOUND = 5;
 
@@ -576,7 +579,7 @@ function attributesOf(
  * does; one that opens otherwise, as Safari's and Firefox's frames alone
  * do, is kept as it is, since its frames carry no message.
  */
-function sendableStack(cause: Error, sent: Error): string | undefined {
+function sendableStack(cause: Error, sent: Pick<Error, "name" | "message">): string | undefined {
   const stack = cause.stack;
   if (stack === undefined) return undefined;
   const header = cause.message === "" ? cause.name : `${cause.name}: ${cause.message}`;
@@ -694,6 +697,43 @@ export function sendShownFailure(
     },
   });
   return { eventId: eventId === "" ? undefined : eventId, traceId };
+}
+
+/** A shown failure's code, as its issue is grouped by and its copied details name it. */
+export function shownFailureCode(report: ShownFailureReport): string {
+  return readReport(report).code;
+}
+
+/**
+ * Text naming paths, as a stack's frames or a route do, with every
+ * credential-shaped run replaced in each step between its `/`s on its own,
+ * since the redaction reads a `/` as part of a credential's run and would
+ * otherwise take a long path for one.
+ */
+export function redactedPathText(text: string): string {
+  return text.split("/").map(redactCredentials).join("/");
+}
+
+/**
+ * The stack of a shown failure's cause, as its issue sends it: the cause's
+ * own frames under the header its sendable error says, with every
+ * credential-shaped run replaced, each step of a frame's path on its own
+ * (`redactedPathText`), and cut at `STACK_BOUND`; nothing where no cause
+ * down its chain is an error with a stack, as a bare condition is not.
+ */
+export function shownFailureStack(report: ShownFailureReport): string | undefined {
+  const { chain, facts } = readReport(report);
+  // Note that the first error down the chain with frames it may send is the one read, as a wrapped fault's frames are where it was thrown.
+  for (const [depth, cause] of chain.entries()) {
+    if (!(cause instanceof Error)) continue;
+    const own = facts[depth];
+    const header = { name: own?.tag ?? own?.name ?? cause.name, message: own?.message ?? "" };
+    const stack = sendableStack(cause, header);
+    if (stack === undefined) continue;
+    const redacted = redactedPathText(stack);
+    return redacted.length > STACK_BOUND ? `${redacted.slice(0, STACK_BOUND)}…` : redacted;
+  }
+  return undefined;
 }
 
 /**
