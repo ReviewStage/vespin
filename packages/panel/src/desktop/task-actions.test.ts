@@ -434,10 +434,10 @@ test("the plan's ⋯ menu ends with who created the plan and who last edited it,
   assert.deepEqual(menuFooter(), ["Created by you", "Last edited by Dean Stratakos"]);
   unmountAll();
 
-  // A task the window has not opened, from a service that named no creator, says only when it was saved.
+  // A task the window has not opened, whose creator deleted their account since, names no one of theirs.
   const { asked } = openTab();
   rightClick(mountSidebarTask(sharedTab(DEAN.userId), OTHER, asked), 40, 60);
-  assert.deepEqual(menuFooter(), ["Created by someone", "Last edited"]);
+  assert.deepEqual(menuFooter(), ["Created by a deleted account", "Last edited"]);
 });
 
 test("a sidebar task Vespin or a coding agent made says in its ⋯ who made it for whom", () => {

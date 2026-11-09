@@ -164,6 +164,14 @@ const SOMEONE_WORDS = {
   [SOMEONE_REASON.EARLIER]: "Earlier",
 } as const satisfies Record<SomeoneReason, string>;
 
+/** The words for someone the window cannot name inside a sentence: "Created by a deleted account". */
+const SOMEONE_SENTENCE_WORDS = {
+  [SOMEONE_REASON.FORMER]: "former member",
+  [SOMEONE_REASON.DELETED]: "a deleted account",
+  [SOMEONE_REASON.UNNAMED]: "someone",
+  [SOMEONE_REASON.EARLIER]: "earlier",
+} as const satisfies Record<SomeoneReason, string>;
+
 /**
  * The hue an identity is drawn in, from 1, read off its id alone, so a
  * rename keeps the mark its members know it by: a workspace's tile and a
@@ -236,7 +244,10 @@ export function actorName(
       case ACTOR_KIND.APP:
         return PRODUCT_NAME;
       case ACTOR_KIND.SOMEONE:
-        return actor.name ?? inSentence(SOMEONE_WORDS[actor.reason], sentence);
+        return (
+          actor.name ??
+          (sentence ? SOMEONE_SENTENCE_WORDS[actor.reason] : SOMEONE_WORDS[actor.reason])
+        );
       case ACTOR_KIND.GITHUB:
         return githubName(actor);
     }
