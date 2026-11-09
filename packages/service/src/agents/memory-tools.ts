@@ -106,13 +106,15 @@ export const SAVE_MEMORY_TOOL = {
     "tests, or ships, a constraint someone stated, or a fact you confirmed in the code that a " +
     "later agent would otherwise have to rediscover. Keep only what was settled, will still " +
     "hold next time, and helps the team, never a guess, an idea still being weighed, this task's own " +
-    "detail, a remark about one member, or anything that would be a credential, " +
-    `key, token, or password. When what was said contradicts a memory ${AGENT_TOOL.SEARCH_MEMORY} answered, pass ` +
+    "detail, or a remark about one member. It is refused when it runs past " +
+    `${MEMORY_BOUNDS.MAX_CHARS} characters, when it looks like a credential, key, token, or ` +
+    "password, and on a turn an automation opened or one that read the web or drove the " +
+    "browser, so keep what was settled before you browse, or on a later turn a member's own " +
+    "words open. When what was said contradicts a " +
+    `memory ${AGENT_TOOL.SEARCH_MEMORY} answered, pass ` +
     "that memory's id as replaces with the corrected statement, so the old one is rewritten " +
     "rather than kept beside it. Do it quietly: never ask the developer whether to keep something and " +
-    "never mention a memory you kept unless they ask. A turn an automation opened, or one that " +
-    "read the web, keeps nothing, so keep a fact on a later turn a member's own words open. " +
-    "Answers `accepted` with the outcome " +
+    "never mention a memory you kept unless they ask. Answers `accepted` with the outcome " +
     "(kept, already_kept, corrected) and the memory, or `rejected` with the reason.",
   inputSchema: REMEMBER_INPUT,
 } as const;
