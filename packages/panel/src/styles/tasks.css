@@ -1566,6 +1566,16 @@
   position: relative;
 }
 
+/* A picker that leads its group, with no faces or labels before it, is a
+   borderless "+ Reviewer" or "+ Label" whose glyph stands a chip's inset in
+   from its box, so it stands that inset before the edge like the branch row,
+   and lines up with the words above where it wraps onto a line of its own.
+   Its separator moves to the box's edge, which is the middle of the room
+   the pull leaves, and a wrapped one stays in the line's clip. */
+.pull-request-people > * > .pull-request-picker:first-child {
+  margin-inline-start: calc(-1 * var(--ui-space-8));
+}
+
 .changes-people.pull-request-people > * + *::before {
   position: absolute;
   top: 50%;
@@ -1575,6 +1585,10 @@
   translate: -50% -50%;
   background: var(--ui-color-border-strong);
   content: "";
+}
+
+.pull-request-people > * + *:has(> .pull-request-picker:first-child)::before {
+  inset-inline-start: 0;
 }
 
 /* The merge control at the title row's end (`merge-box.tsx`), as
