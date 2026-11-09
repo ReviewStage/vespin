@@ -1098,8 +1098,9 @@ export const UPDATE_TASK_TOOL = {
     "done Done, with status done, as the menu's Mark done does, such as one whose pull requests " +
     "merged, or one the developer asked you to clean up; that withdraws every ask still open on its " +
     "threads, so mark it done only once you no longer need them, and archives every other " +
-    "agent on the task, an idle one at once and one still at work once its turn ends, until " +
-    "the task moves off Done, which brings them back; never a teammate's " +
+    "agent on the task, an idle one at once and one still at work once its turn ends; a " +
+    "change of its status off Done brings them back, while a turn that reopens the task " +
+    "does not; never a teammate's " +
     "task still in use unless the developer asked for it. A task is never archived: a settled " +
     `one stands Done or Canceled, which ${AGENT_TOOL.LIST_TASKS} lists by status. A block is ` +
     "Linear's: the blocker's work comes first and the task it blocks waits on it, as one child " +
