@@ -14,13 +14,21 @@ import {
   type ChoiceOption,
   type ChoiceSelect,
   GAP,
+  GlyphSlot,
   Inline,
+  MARK_PROVIDER,
+  PROVIDER_MARK_SIZE,
+  ProviderMark,
+  SETTINGS_ROW_STATE,
+  SettingsRowStateLine,
+  SettingsSection,
   STATUS_TONE,
   Stack,
   SteppedBack,
   Text,
   TextLink,
 } from "@repo/ui";
+import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -28,7 +36,7 @@ import { CatalogSection } from "../section";
 /**
  * choice-list.tsx -- a pick-one list with a recommended option and an
  * unavailable one, a pick-several list, both marked with their radios or
- * checkboxes and numbered, a yes and a no across, toned, pills, cards holding controls of their own, rows with a mark before their words, an
+ * checkboxes and numbered, a yes and a no across, toned, pills, cards holding controls of their own, settings rows holding the same, rows with a mark before their words, an
  * unavailable list, a settled record of what was picked, a marked list
  * stepped back beside a step and its presses, as an ask taken back, a list
  * and its presses on a tint laid over the column's ground, as a post that
@@ -112,6 +120,31 @@ const CREDENTIALS: readonly ChoiceOption<string>[] = [
     value: "desktop",
     label: "ChatGPT sign-in",
     detail: "Desktop only",
+    disabled: true,
+  },
+];
+
+/** A rows list's credentials, as Settings › Agents draws them: the plan connected, the key with its own Add key. */
+const CREDENTIAL_ROWS: readonly ChoiceOption<string>[] = [
+  {
+    value: "plan",
+    label: "Claude plan",
+    mark: <ProviderMark provider={MARK_PROVIDER.CLAUDE} size={PROVIDER_MARK_SIZE.ROW} />,
+    state: (
+      <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>Connected</SettingsRowStateLine>
+    ),
+    aside: <Button variant={BUTTON_VARIANT.QUIET}>Disconnect</Button>,
+  },
+  {
+    value: "key",
+    label: "Anthropic API key",
+    mark: (
+      <GlyphSlot size={ICON_SIZE.LARGE}>
+        <GLYPH.API_KEY />
+      </GlyphSlot>
+    ),
+    aside: <Button variant={BUTTON_VARIANT.OUTLINE}>Add key</Button>,
+    below: <Text>Create an API key, then paste it here.</Text>,
     disabled: true,
   },
 ];
@@ -212,6 +245,16 @@ function ChoiceLists(): React.JSX.Element {
           start={["subscription"]}
           look={CHOICE_LOOK.CARD}
         />
+      </CatalogSection>
+      <CatalogSection id="choice-list-rows" title="Settings rows holding controls">
+        <SettingsSection title="Claude">
+          <Held
+            legend="New Claude agents use"
+            options={CREDENTIAL_ROWS}
+            start={["plan"]}
+            look={CHOICE_LOOK.ROWS}
+          />
+        </SettingsSection>
       </CatalogSection>
       <CatalogSection id="choice-list-mark" title="With a mark">
         <Held legend="Workspace" options={WORKSPACES} start={["northwind"]} />

@@ -307,35 +307,40 @@ test("a settled list names each option, the pick beside its note and the rest wi
   assert.equal(rows(page).length, 0);
 });
 
-test("a card list holds each option's controls under its radio, and a key pressed in them is theirs", () => {
-  const container = render(
-    createElement(Held, {
-      look: CHOICE_LOOK.CARD,
-      start: ["three"],
-      options: [
-        {
-          value: "three",
-          label: "Subscription",
-          aside: createElement("a", { href: "#key" }, "Get key"),
-          below: createElement("input", { "aria-label": "Token" }),
-        },
-        { value: "never", label: "API key" },
-      ],
-    }),
-  );
-  const cards = [...container.querySelectorAll(".ui-choice-card")];
-  assert.equal(cards.length, 2);
-  assert.ok(cards[0]?.querySelector(".ui-choice-aside a"));
-  const input = cards[0]?.querySelector('input[aria-label="Token"]');
-  assert.ok(input);
-  assert.equal(input.closest('[role="radio"]'), null);
-  act(() => {
-    input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
-  });
-  const radios = [...container.querySelectorAll('[role="radio"]')];
-  assert.equal(radios[0]?.getAttribute("aria-checked"), "true");
-  assert.equal(radios[1]?.getAttribute("aria-checked"), "false");
-});
+test.each([CHOICE_LOOK.CARD, CHOICE_LOOK.ROWS])(
+  "a %s list holds each option's controls under its radio, and a key pressed in them is theirs",
+  (look) => {
+    const container = render(
+      createElement(Held, {
+        look,
+        start: ["three"],
+        options: [
+          {
+            value: "three",
+            label: "Subscription",
+            aside: createElement("a", { href: "#key" }, "Get key"),
+            below: createElement("input", { "aria-label": "Token" }),
+            state: "Connected",
+          },
+          { value: "never", label: "API key" },
+        ],
+      }),
+    );
+    const cards = [...container.querySelectorAll(".ui-choice-card")];
+    assert.equal(cards.length, 2);
+    assert.ok(cards[0]?.querySelector(".ui-choice-aside a"));
+    const input = cards[0]?.querySelector('input[aria-label="Token"]');
+    assert.ok(input);
+    assert.equal(input.closest('[role="radio"]'), null);
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
+    });
+    const radios = [...container.querySelectorAll('[role="radio"]')];
+    assert.equal(radios[0]?.getAttribute("aria-checked"), "true");
+    assert.equal(radios[1]?.getAttribute("aria-checked"), "false");
+    assert.equal(radios[0]?.textContent, "SubscriptionConnected");
+  },
+);
 
 test("Enter on a row is left to the row's button, which presses it as a button's Enter does", () => {
   for (const select of [CHOICE_SELECT.ONE, CHOICE_SELECT.MANY]) {

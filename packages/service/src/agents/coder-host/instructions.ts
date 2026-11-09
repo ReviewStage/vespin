@@ -437,9 +437,9 @@ ${read}${notes}`,
  * its own address, and the task's own things under the task's link, which
  * an agent on no task has none of. A pull request is named so every time,
  * its address spelled from its number where no tool answered it, since a
- * bare `#42` draws as no chip. Another agent, a page, and a task are
- * named by the mention the tool that made or listed it answered, so no
- * address is spelled by hand. An MCP server is named by its connection's
+ * bare `#42` draws as no chip. Another agent, a page, a task, and an
+ * automation are named by the mention the tool that made or listed it
+ * answered, so no address is spelled by hand. An MCP server is named by its connection's
  * mention, and a skill as `/name`, since the app draws both as chips. A name
  * the app shows as a label is written in sentence case, with no period. An
  * agent with no repository is told of no file of one, and its pull request
@@ -473,6 +473,7 @@ function namingWords(
   return `Name a thing the developer can open as a mention: a Markdown link whose words are \`@\` and the thing's name, \`[@name](target)\`. ${PRODUCT_NAME} draws it as the thing's chip, which opens it, wherever you write it: ${where} Copy a target a tool answered rather than spelling one:${files}
 - A pull request or an issue on GitHub, or a Linear issue, by its own address: \`[@#42 Fix the refresh](https://github.com/${repository ?? EXAMPLE_REPOSITORY}/pull/42)\`, \`[@ACME-142 Token refresh fails](https://linear.app/acme/issue/ACME-142)\`. Write one so every time you name it, in passing and in a report to another agent among them, never as a bare \`#42\`, which draws as no chip; where no tool answered a pull request's address, spell it from its number, its repository's address with \`/pull/\` and the number.${taskWords}
 - Another agent, or another task, by the \`mention\` \`${AGENT_TOOL.LIST_AGENTS}\`, \`${AGENT_TOOL.START_AGENT}\`, or \`${AGENT_TOOL.LIST_TASKS}\` answered: \`[@Wire the desktop](${LINK_ORIGIN}/acme/agent/<agent-id>)\`, \`[@Teammate invitations](${LINK_ORIGIN}/acme/task/<number>)\`.
+- An automation, by the \`mention\` \`${AGENT_TOOL.LIST_AUTOMATIONS}\`, \`${AGENT_TOOL.CREATE_AUTOMATION}\`, or \`${AGENT_TOOL.UPDATE_AUTOMATION}\` answered, never its name in quotes: \`[@Nightly triage](${LINK_ORIGIN}/acme/automation/<automation-id>)\`.
 - One of your threads, by the \`mention\` each of your thread tools answered for it: \`[@Review the invite flow](${inboxItem})\`.
 - A date, which opens nothing, by its day, or its time with the offset it is at, and a range by both ends joined by a slash, its words the date in full: \`[@Oct 20, 2026](mention://date/2026-10-20)\`, \`[@Oct 20, 2026, 3:00 PM PDT](mention://date/2026-10-20T15:00-07:00)\`, \`[@Oct 20, 2026 → Oct 24, 2026](mention://date/2026-10-20/2026-10-24)\`.
 - An MCP server, by its connection's name as your tools list it: \`[@Linear](mention://mcp/linear)\`, or \`[@Notion](mention://mcp/notion-2)\` for a second Notion account.

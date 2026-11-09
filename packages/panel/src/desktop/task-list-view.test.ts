@@ -22,7 +22,7 @@ import { handHostReads, handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { restOn } from "../testing/hint-rest.js";
-import { handInbox, tasksControl } from "../testing/tasks-control.js";
+import { tasksControl } from "../testing/tasks-control.js";
 import { newestToastSays } from "../testing/toast.js";
 import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
@@ -448,7 +448,17 @@ test("each workspace keeps its own view on this Mac across launches", () => {
   assert.deepEqual(groupNames(mountSidebar(other, elsewhere)), ["console", "relay"]);
 });
 
-test("a workspace nobody shares lists every task and offers no Assigned to, Group by choosing Repository, Progress, or None, Repository at first", () => {
+test("a view kept grouped by progress, before that grouping was removed, opens by repository and keeps the rest of its choices", () => {
+  window.localStorage.setItem(
+    "app.sidebarTaskViews",
+    JSON.stringify({ [ACME.id]: { grouping: "progress", assignee: { kind: "anyone" } } }),
+  );
+  const sidebar = mountSidebar(ACME);
+  assert.deepEqual(groupNames(sidebar), ["console", "relay"]);
+  assert.equal(headWords(sidebar), "Everyone's tasks");
+});
+
+test("a workspace nobody shares lists every task and offers no Assigned to, Group by choosing Repository or None, Repository at first", () => {
   const sidebar = mountSidebar(PERSONAL);
   assert.equal(taskRows(sidebar).length, 3);
   assert.equal(headWords(sidebar), "My tasks");
@@ -457,10 +467,8 @@ test("a workspace nobody shares lists every task and offers no Assigned to, Grou
   assert.deepEqual(lastMenuItems(), ["Group by", "Show completed sub-tasks", "New section"]);
   act(() => menuItem("Group by").click());
   assert.deepEqual(
-    ["Repository", "Progress", "None"].map((choice) =>
-      menuItem(choice).getAttribute("aria-checked"),
-    ),
-    ["true", "false", "false"],
+    ["Repository", "None"].map((choice) => menuItem(choice).getAttribute("aria-checked")),
+    ["true", "false"],
   );
 });
 
@@ -482,55 +490,6 @@ test("by repository, the headings stand only where the tasks span two repositori
     "relay",
     "No repository",
   ]);
-});
-
-test("by progress, each task stands in the first group it qualifies for, in the groups' order, an empty group left out, its fold kept across launches", async () => {
-  const agents = (working: number, failed: number) => ({
-    total: working + failed,
-    working,
-    failed,
-    pullRequestTotal: 0,
-  });
-  const listed = [
-    task("t-1", "Answer the schema question", "acme/relay", DEAN, { createdAt: 1, updatedAt: 10 }),
-    {
-      ...task("t-2", "Rerun the migration", "acme/relay", DEAN, { createdAt: 1, updatedAt: 20 }),
-      agents: agents(0, 1),
-    },
-    {
-      ...task("t-3", "Retry webhooks", "acme/console", DEAN, { createdAt: 1, updatedAt: 30 }),
-      agents: agents(1, 0),
-    },
-    task("t-4", "Release checklist", "acme/relay", DEAN, { createdAt: 1, updatedAt: 40 }),
-  ].map((each) => ({ ...each, workspaceId: PERSONAL.id }));
-  handInbox({
-    waiting: [
-      {
-        taskId: "t-1",
-        items: [{ id: "item-1", agentId: "agent-1", title: "Which schema?", postedAt: 1 }],
-      },
-    ],
-  });
-  const sidebar = await mountRead(PERSONAL, listed);
-  groupBy(sidebar, "Progress");
-  assert.deepEqual(groupNames(sidebar), ["Needs you", "Working", "Up next"]);
-  assert.deepEqual(
-    taskRows(sidebar).map((row) => row.name),
-    ["Rerun the migration", "Answer the schema question", "Retry webhooks", "Release checklist"],
-  );
-  const upNext = () =>
-    [
-      ...sidebar.querySelectorAll<HTMLButtonElement>(".ui-group-header-head button[aria-expanded]"),
-    ].find((button) => heardName(button) === "Up next") ?? assert.fail("Up next's fold stands");
-  act(() => upNext().click());
-  unmountAll();
-
-  const again = await mountRead(PERSONAL, listed);
-  assert.deepEqual(groupNames(again), ["Needs you", "Working", "Up next"]);
-  assert.ok(
-    !taskRows(again).some((row) => row.name === "Release checklist"),
-    "Up next stands folded",
-  );
 });
 
 test("a list of your own that holds nothing says so, and Show all lists everyone's", async () => {
@@ -593,9 +552,9 @@ test("⌘K offers each view choice only while it would change the list, and runn
   assert.equal(appCommandOffered(APP_COMMAND.GROUP_TASKS_BY_REPOSITORY), true);
 
   act(() => {
-    runAppCommand(APP_COMMAND.GROUP_TASKS_BY_PROGRESS);
+    runAppCommand(APP_COMMAND.GROUP_TASKS_BY_REPOSITORY);
   });
-  assert.equal(appCommandOffered(APP_COMMAND.GROUP_TASKS_BY_PROGRESS), false);
+  assert.equal(appCommandOffered(APP_COMMAND.GROUP_TASKS_BY_REPOSITORY), false);
   assert.equal(appCommandOffered(APP_COMMAND.LIST_TASKS_UNGROUPED), true);
 
   act(() => {

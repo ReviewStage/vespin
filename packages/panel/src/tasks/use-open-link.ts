@@ -37,6 +37,7 @@ import {
 } from "../places/pressed-address.js";
 import { type Holding, pullRequestBeside } from "../places/pull-request-beside.js";
 import { useSteadyDoor } from "../steady-door.js";
+import { pullRequestsOnGitHubNow } from "./pull-request-opens.js";
 import { numberedTaskIdNow } from "./use-link-standing.js";
 
 /**
@@ -73,7 +74,10 @@ import { numberedTaskIdNow } from "./use-link-standing.js";
  * a pull request any listed task's agent opened in that agent's Pull request
  * tab, on its task (`ListedPullRequests`), wherever it is pressed:
  * a thread, a version, a task's card, or another task. Inside a pull
- * request's own tab, a link leaves for GitHub (`PullRequestsOnGitHub`).
+ * request's own tab, a link leaves for GitHub (`PullRequestsOnGitHub`), and
+ * everywhere it does where the account chose to open pull requests on
+ * GitHub (`pull-request-opens.ts`), but for a link to one of a pull
+ * request's own comments pressed in its tab, which that tab still opens.
  * Where each opens is each surface's own answer (`../places/pressed-address.ts`
  * states them together), which each place, then the window
  * (`throughWindow`), asks of the link's address, a place in the app matched
@@ -317,8 +321,9 @@ function external(address: Address): Route {
 /**
  * An address no surface took: a place in the app goes there, a listed
  * task's or agent's pull request to its Pull request tab, on the place its
- * link matches on the route tree, and anything else, or everything outside
- * the window (`opensPlaces`), leaves for the browser.
+ * link matches on the route tree, unless the account opens pull requests on
+ * GitHub, and anything else, or everything outside the window
+ * (`opensPlaces`), leaves for the browser.
  */
 export function throughWindow(
   address: Address,
@@ -329,7 +334,7 @@ export function throughWindow(
   if (!opensPlaces) return external(address);
   if (address.kind === ADDRESS.PLACE) return go(address.link);
   const opened =
-    address.kind === ADDRESS.PULL_REQUEST && listed !== undefined
+    address.kind === ADDRESS.PULL_REQUEST && address.onGitHub !== true && listed !== undefined
       ? listedPullRequestOf(address.href, listed.tasks, listed.agents)
       : undefined;
   if (opened === undefined) return external(address);
@@ -346,11 +351,14 @@ export function throughWindow(
  * The address with the listed agent that opened the pull request it names,
  * however its page is spelled, among the tasks and the agents on no task the
  * window lists, so a place asked of it first leaves another task's to the
- * window; any other address, or none listed, as it is.
+ * window, and with whether the account opens pull requests on GitHub; any
+ * other address as it is.
  */
-function withListedAgent(address: Address, listed: Listed | undefined): Address {
-  if (address.kind !== ADDRESS.PULL_REQUEST || listed === undefined) return address;
-  return { ...address, listed: listedPullRequestOf(address.href, listed.tasks, listed.agents) };
+function withListedAgent(address: Address, listed: Listed | undefined, onGitHub: boolean): Address {
+  if (address.kind !== ADDRESS.PULL_REQUEST) return address;
+  const named = { ...address, onGitHub };
+  if (listed === undefined) return named;
+  return { ...named, listed: listedPullRequestOf(address.href, listed.tasks, listed.agents) };
 }
 
 /** Opens an address where the place it is pressed on opens it, else where the window does (`throughWindow`): a place in the app there, a listed task's or a listed agent's on no task's pull request in its Pull request tab, anything else in the browser. */
@@ -361,12 +369,15 @@ function openAddress(
     readonly openHere: OpenAddressHere | undefined;
     readonly listed: ListedTasksReader | undefined;
     readonly router: LinkRouter | undefined;
+    /** Whether the account opens pull requests on GitHub, read as the press lands. */
+    readonly onGitHub: boolean;
   },
 ): void {
-  const { openPlace, openHere, listed, router } = doors;
+  const { openPlace, openHere, listed, router, onGitHub } = doors;
   const listing = listed?.();
-  if (openHere?.(withListedAgent(address, listing)) === true) return;
-  const routed = throughWindow(address, openPlace !== undefined, listing, router);
+  const named = withListedAgent(address, listing, onGitHub);
+  if (openHere?.(named) === true) return;
+  const routed = throughWindow(named, openPlace !== undefined, listing, router);
   if (routed.kind === ROUTE.GO) {
     openPlace?.(routed.link);
   } else if (routed.kind !== ROUTE.EXTERNAL) {
@@ -411,6 +422,7 @@ export function useOpenPlace(): ((place: LinkPlace) => void) | undefined {
               openHere,
               listed: undefined,
               router,
+              onGitHub: false,
             }),
     [openPlace, openHere, router],
   );
@@ -436,7 +448,7 @@ export function useOpenLink(): (href: string) => void {
     (href: string) =>
       openAddress(
         addressOf(href, router, (link) => byListedTaskId(link, queryClient)),
-        { openPlace, openHere, listed, router },
+        { openPlace, openHere, listed, router, onGitHub: pullRequestsOnGitHubNow(queryClient) },
       ),
     [openPlace, openHere, listed, queryClient, router],
   );

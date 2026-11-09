@@ -4209,6 +4209,11 @@ test("list_automations, create_automation, update_automation, and delete_automat
   );
   assert.ok(isWireString(automation.id));
   const id = automation.id;
+  // It is answered with the mention it is named by, its link drawn as its chip.
+  assert.equal(
+    automation.mention,
+    `[@Agent audit](https://vespin.dev/workspace-${workspaceId}/automation/${id})`,
+  );
   // The same call run again names the automation it made, and makes no second one.
   assert.equal(automationOf(await call(AGENT_TOOL.CREATE_AUTOMATION, made, "call-make")).id, id);
   // Counted once, as the agent's automation rather than its starter's own.

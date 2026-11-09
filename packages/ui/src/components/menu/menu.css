@@ -1,8 +1,9 @@
 /* menu.css -- what of a menu's look its Tailwind classes cannot say
    (`menu.tsx`, drawn in `../../shadcn/dropdown-menu.tsx`): the keyframes
    its entrance and exit run, which the window's other surfaces that open
-   as a menu does run too; the hold a long press opens a menu by; the rows'
-   own way of marking focus; what a finger is shown that a mouse is
+   as a menu does run too; the hold a long press opens a menu by; the
+   glyph column a list keeps only where a row of it draws a glyph; the
+   rows' own way of marking focus; what a finger is shown that a mouse is
    not; and the sheet a menu rises as on a phone (`menu-sheet.tsx`), an
    action menu's and a searchable menu's alike. */
 
@@ -28,6 +29,22 @@
   .ui-menu-item:focus-visible,
   .ui-menu:focus-visible {
     outline: none; /* no ring: the row's fill marks it */
+  }
+
+  /* A list none of whose rows draws a glyph keeps no glyph column: every
+     row's empty slot takes no room, so the words start at the row's inset
+     rather than after a gap that waits for a glyph. One row with a glyph
+     keeps the column for them all, so their words still start at one edge.
+     Each list decides for itself: a menu, a submenu, a sheet's page, and a
+     surface an app hangs its own rows on. The slot's display is set here
+     rather than by a utility, which would outrank this layer. */
+  .ui-menu-item-glyph {
+    display: inline-flex;
+  }
+
+  :is(.ui-menu, .ui-menu-surface, .ui-menu-sheet-rows):not(:has(.ui-menu-item-glyph:not(:empty)))
+    .ui-menu-item-glyph:empty {
+    display: none;
   }
 
   /* A row that cannot be chosen dims its glyph, words, and end, but not

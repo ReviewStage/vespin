@@ -29,7 +29,7 @@ import type { TaskListViewControl } from "./task-list-view.js";
  * and the list: "My tasks ▾", "Everyone's tasks ▾", or one member's, in the
  * label's ink, so it reads as the switch it is rather than one more group.
  * Its menu holds, in a shared workspace, Assigned to: Me, Anyone, or each
- * member by face; Group by, a choice of Repository, Progress, or None;
+ * member by face; Group by, a choice of Repository or None;
  * Show completed sub-tasks, a switch that stands each parent's completed
  * sub-tasks back under it, muted, as Linear's Always hide completed
  * sub-issues turned off does; and, while
@@ -52,7 +52,6 @@ const GROUP_BY = "Group by";
 /** What each grouping is called among Group by's choices, in the order they are offered. */
 const GROUPING_WORDS = {
   [TASK_GROUPING.REPOSITORY]: "Repository",
-  [TASK_GROUPING.PROGRESS]: "Progress",
   [TASK_GROUPING.NONE]: "None",
 } as const satisfies Record<TaskGrouping, string>;
 
@@ -240,7 +239,7 @@ function offer(offered: boolean, changes: boolean, run: () => void): (() => void
 
 /**
  * The view's choices as ⌘K offers them, each only while it would change
- * the list: Group tasks by repository or by progress, or in one list; Show or Hide
+ * the list: Group tasks by repository, or in one list; Show or Hide
  * finished sub-tasks; and in a shared workspace Show my tasks and Show
  * everyone's tasks. They act as the View options menu's choices do.
  */
@@ -260,7 +259,6 @@ export function useTaskViewCommands({
   const assign = (to: AssignedTo) =>
     offer(offered && shared, assignedTo.kind !== to.kind, () => control.onAssignedTo(to));
   useAppCommand(APP_COMMAND.GROUP_TASKS_BY_REPOSITORY, group(TASK_GROUPING.REPOSITORY));
-  useAppCommand(APP_COMMAND.GROUP_TASKS_BY_PROGRESS, group(TASK_GROUPING.PROGRESS));
   useAppCommand(APP_COMMAND.LIST_TASKS_UNGROUPED, group(TASK_GROUPING.NONE));
   const finished = (shown: boolean) =>
     offer(offered, finishedSubTasks !== shown, () => control.onFinishedSubTasks(shown));

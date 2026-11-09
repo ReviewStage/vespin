@@ -8,7 +8,6 @@ import {
   pinPositionsForMove,
 } from "@repo/features/pin-order";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskSectionWrite } from "@repo/features/task-section-wire";
 import { isAgentEntry, type SectionMember } from "@repo/features/task-section-writes";
 import type { TaskAgentPin, TaskSummary } from "@repo/features/task-wire";
@@ -89,23 +88,18 @@ import {
   homedTaskRows,
   NO_REPOSITORY,
   orderTaskRows,
-  type ProgressGroup,
-  progressGroups,
   type RepositoryGroup,
   repositoryGroups,
   repositoryHeadingsDrawn,
   repositoryLabel,
   TASK_GROUPING,
-  TASK_PROGRESS_LABEL,
   TASK_ROW,
   type TaskListView,
-  type TaskProgress,
   type TaskRow,
   type TasksById,
   taskRow,
   taskRowInView,
   taskRowKey,
-  taskRowProgress,
   taskRowRepository,
   taskRowsAssignedTo,
   taskRowTime,
@@ -1307,78 +1301,26 @@ function RepositorySection({
   );
 }
 
-/** A progress group's key, by which it leaves the list. */
-function progressGroupKey(group: ProgressGroup): string {
-  return group.progress;
-}
-
-/**
- * One group of By progress under its heading, folded and counted as a
- * repository's group is (`sidebarHead`), the fold kept on this Mac, with no
- * glyph and no actions, since a group of progress is no place to start a
- * task in. A fold still stands the open row and the rows that need the
- * reader (`standsFolded`).
- */
-function ProgressSection({
-  group,
-  folds,
-  context,
-}: {
-  group: ProgressGroup;
-  folds: FoldedGroups;
-  context: RowContext;
-}): React.JSX.Element {
-  const { progress } = group;
-  const standing = group.rows.filter(context.standsFolded);
-  return (
-    <div className="sidebar-progress" {...motionKey(progressGroupKey(group))}>
-      <GroupHeader
-        {...sidebarHead({
-          folded: folds.progressFolded(progress),
-          onToggle: () => folds.toggleProgress(progress),
-          count: group.rows.length,
-          noun: TASK_NOUN,
-        })}
-        label={TASK_PROGRESS_LABEL[progress]}
-        standing={
-          standing.length === 0 ? undefined : <TaskRows rows={standing} context={context} />
-        }
-      >
-        {group.rows.length === 0 ? null : <TaskRows rows={group.rows} context={context} />}
-      </GroupHeader>
-    </div>
-  );
-}
-
-/** The listed tasks as the view groups them: by repository, by progress, or in one run. */
+/** The listed tasks as the view groups them: by repository, or in one run. */
 type TaskSections =
   | {
       readonly grouping: typeof TASK_GROUPING.REPOSITORY;
       readonly groups: readonly RepositoryGroup[];
-    }
-  | {
-      readonly grouping: typeof TASK_GROUPING.PROGRESS;
-      readonly groups: readonly ProgressGroup[];
     }
   | { readonly grouping: typeof TASK_GROUPING.NONE; readonly rows: readonly TaskRow[] };
 
 /**
  * The tasks under Tasks as the view groups them, newest updated first.
  * Grouped by repository, the pinned repositories' groups stand above the
- * rest, newest pinned first, and the rest keep the order's. By progress,
- * each row stands in the group `progressOf` names it.
+ * rest, newest pinned first, and the rest keep the order's.
  */
 function taskSections(
   rows: readonly TaskRow[],
   grouping: TaskSections["grouping"],
   tasks: SidebarTasks,
-  progressOf: (row: TaskRow) => TaskProgress,
 ): TaskSections {
   if (grouping === TASK_GROUPING.NONE) {
     return { grouping, rows: orderTaskRows(rows) };
-  }
-  if (grouping === TASK_GROUPING.PROGRESS) {
-    return { grouping, groups: progressGroups(rows, progressOf) };
   }
   const grouped = repositoryGroups(rows);
   const pinnedAt = (group: RepositoryGroup) =>
@@ -1413,10 +1355,6 @@ function drawnTasks(
             current,
             every,
           );
-    case TASK_GROUPING.PROGRESS:
-      return sections.groups.flatMap((group) =>
-        under(folds.progressFolded(group.progress), group.rows),
-      );
     case TASK_GROUPING.NONE:
       return nestedRows(sections.rows, folds, current, every);
   }
@@ -1437,13 +1375,6 @@ function withTaskLists(
   const rowsAt = (at: number) => lists[at] ?? [];
   switch (sections.grouping) {
     case TASK_GROUPING.REPOSITORY:
-      return {
-        ...sections,
-        groups: sections.groups
-          .map((group, at) => ({ ...group, rows: rowsAt(at) }))
-          .filter((group) => group.rows.length > 0),
-      };
-    case TASK_GROUPING.PROGRESS:
       return {
         ...sections,
         groups: sections.groups
@@ -1496,27 +1427,16 @@ function liveSections(sections: TaskSections, live: ReadonlyMap<string, TaskRow>
         ...sections,
         groups: sections.groups.map((group) => ({ ...group, rows: now(group.rows) })),
       };
-    case TASK_GROUPING.PROGRESS:
-      return {
-        ...sections,
-        groups: sections.groups.map((group) => ({ ...group, rows: now(group.rows) })),
-      };
     case TASK_GROUPING.NONE:
       return { ...sections, rows: now(sections.rows) };
   }
 }
 
-/** The group a row stands in under a grouping, by what keys it: its repository, its progress (`progressOf`), or the one run's. */
-function groupOf(
-  row: TaskRow,
-  grouping: TaskSections["grouping"],
-  progressOf: (row: TaskRow) => TaskProgress,
-): string | null | undefined {
+/** The group a row stands in under a grouping, by what keys it: its repository, or the one run's. */
+function groupOf(row: TaskRow, grouping: TaskSections["grouping"]): string | null | undefined {
   switch (grouping) {
     case TASK_GROUPING.REPOSITORY:
       return taskRowRepository(row);
-    case TASK_GROUPING.PROGRESS:
-      return progressOf(row);
     case TASK_GROUPING.NONE:
       return null;
   }
@@ -1536,7 +1456,6 @@ function taskPlaces(
   held: ReadonlyMap<string, TaskRow>,
   view: Pick<TaskOrderView, "grouping"> & {
     readonly pending: ReadonlySet<string> | undefined;
-    readonly progressOf: (row: TaskRow) => TaskProgress;
   },
 ): ReadonlyMap<string, TaskRow> {
   const placeOf = (row: TaskRow) => {
@@ -1544,7 +1463,7 @@ function taskPlaces(
     const pending = row.kind === TASK_ROW.TASK && view.pending?.has(row.task.id) === true;
     return was === undefined ||
       pending ||
-      groupOf(was, view.grouping, view.progressOf) !== groupOf(row, view.grouping, view.progressOf)
+      groupOf(was, view.grouping) !== groupOf(row, view.grouping)
       ? row
       : was;
   };
@@ -1595,17 +1514,6 @@ function TaskGroups({
         />
       );
     }
-    case TASK_GROUPING.PROGRESS:
-      return (
-        <LeavingGroups
-          key={sections.grouping}
-          groups={sections.groups}
-          keyOf={progressGroupKey}
-          group={(group) => (
-            <ProgressSection key={group.progress} group={group} folds={folds} context={context} />
-          )}
-        />
-      );
     case TASK_GROUPING.NONE:
       return sections.rows.length === 0 ? null : (
         <TaskRows rows={sections.rows} context={context} />
@@ -2247,17 +2155,7 @@ function SidebarColumn({
     grouping: taskView.view.grouping,
     assignedTo,
   };
-  // By progress, a row stands in the first group it qualifies for: needing the reader, at work, in review, or up next.
-  const progressOf = (row: TaskRow) =>
-    taskRowProgress(row, {
-      needsYou: (each) =>
-        tasks.signedIn &&
-        (each.kind === TASK_ROW.TASK
-          ? needsYou.tasks.has(each.task.id)
-          : needsYou.agents.has(each.agent.id)),
-      pullRequests: (taskId) => pullRequestsOfTask(listedPullRequests, taskId),
-    });
-  const placing = { grouping: orderView.grouping, pending: tasks.pendingTasks, progressOf };
+  const placing = { grouping: orderView.grouping, pending: tasks.pendingTasks };
   // While the pointer is over the sidebar each task keeps the place it was
   // first drawn in, so one an update would sort elsewhere stays under the
   // reader's hand. Note that the hold is the pointer's and not the sidebar's
@@ -2267,7 +2165,7 @@ function SidebarColumn({
     sameOrder: sameTaskOrder,
     draw: (places: ReadonlyMap<string, TaskRow>) => {
       const placed = taskPlaces(statusRows, places, placing);
-      const held = taskSections([...placed.values()], orderView.grouping, tasks, progressOf);
+      const held = taskSections([...placed.values()], orderView.grouping, tasks);
       return liveSections(held, new Map(statusRows.map((row) => [taskRowKey(row), row])));
     },
     placesOf: (_drawn, held) => taskPlaces(statusRows, held, placing),

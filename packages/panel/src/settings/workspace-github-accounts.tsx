@@ -9,18 +9,14 @@ import { countWords, readFailedWords, readingWords, TERM } from "@repo/features/
 import type { WorkspaceGithubInstallation } from "@repo/features/workspace-wire";
 import {
   ANNOUNCE,
+  type RepositoryLineEntry,
+  RepositoryLines,
   SETTINGS_ROW_INDENT,
-  SettingsFoldFoot,
-  SettingsFoldLine,
   SettingsRowMark,
-  TEXT_BUTTON_TONE,
-  TextButton,
-  usePageScroll,
 } from "@repo/ui";
 import { githubAccountPictureUrl } from "@repo/ui/tasks-model";
-import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { type ReactNode, useState } from "react";
+import type { ReactNode } from "react";
 import type { MenuAction } from "../desktop/action-menu.js";
 import { TILE_SIZE, WorkspaceTile } from "../desktop/workspace-tile.js";
 import {
@@ -28,6 +24,7 @@ import {
   repositoryListsRetryMutation,
   repositoryScope,
 } from "../live-reads.js";
+import { useRepositoryPictures } from "../repository-pictures.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
@@ -60,14 +57,11 @@ const WORDS = {
   NOT_READ: readFailedWords(TERM.REPOSITORY.many),
 } as const;
 
-/** How many repositories a long list shows before Show all. */
-const FIRST_SHOWN = 6;
-
 /** No repositories, for an account the list names none of. */
 const NONE: readonly GitHubRepository[] = [];
 
-/** No names, for a row whose repositories are not yet known. */
-const NO_NAMES: readonly string[] = [];
+/** No lines, for a row whose repositories are not yet known. */
+const NO_LINES: readonly RepositoryLineEntry[] = [];
 
 /** One connected GitHub account as the page lists it: its login, whether its installation is active, and its id where the service named it. */
 export type ShownConnection = Pick<WorkspaceGithubInstallation, "login" | "active"> &
@@ -120,44 +114,25 @@ function AccountMark({ login }: { login: string }): React.JSX.Element {
 }
 
 /**
- * One GitHub account's row, every account's alike, the names of its
- * repositories folded under its words and capped with Show all where they
- * are many. Show all draws only the names near the view (`VirtualRows`), so
- * an account's thousands stay quick.
+ * One GitHub account's row, every account's alike, its repositories folded
+ * under its words as the setup's GitHub step lists them (`RepositoryLines`):
+ * each one's owner's picture and whole name, a Token mark on one a member's
+ * token reaches, in a list that scrolls past six.
  */
 export function GitHubOwnerRow({
   login,
   line,
-  names,
+  repositories,
   actions = [],
 }: {
   login: string;
   line: ReactNode;
-  /** Its repositories' names, without the owner; none where not yet known. */
-  names: readonly string[];
+  /** Its repositories; none where not yet known. */
+  repositories: readonly RepositoryLineEntry[];
   actions?: readonly MenuAction[];
 }): React.JSX.Element {
-  const [whole, setWhole] = useState(false);
-  const count = names.length;
-  const cut = !whole && count > FIRST_SHOWN;
-  const shown = cut ? names.slice(0, FIRST_SHOWN) : names;
-  const { scroller, shiftedBy } = usePageScroll();
-  const keys = shown.map((name) => name.toLowerCase());
-  const foot = cut ? (
-    <SettingsFoldFoot>
-      <TextButton tone={TEXT_BUTTON_TONE.ACCENT} onClick={() => setWhole(true)}>
-        {`Show all ${count}`}
-      </TextButton>
-    </SettingsFoldFoot>
-  ) : undefined;
-  const run = {
-    scroller,
-    shiftedBy,
-    keys,
-    line: (index: number, place: VirtualRowPlace) => (
-      <SettingsFoldLine place={place}>{shown[index] ?? ""}</SettingsFoldLine>
-    ),
-  };
+  const pictures = useRepositoryPictures();
+  const label = `${login}'s repositories`;
   return (
     <MenuRow
       thing={login}
@@ -167,10 +142,16 @@ export function GitHubOwnerRow({
         leading: <AccountMark login={login} />,
         label: login,
         description: line,
-        ...(count === 0
+        ...(repositories.length === 0
           ? {}
           : {
-              fold: { run, lines: foot, label: `${login}'s repositories`, defaultOpen: false },
+              fold: {
+                body: (
+                  <RepositoryLines label={label} repositories={repositories} pictures={pictures} />
+                ),
+                label,
+                defaultOpen: false,
+              },
             }),
       }}
     />
@@ -222,7 +203,7 @@ function ListedAccountRows({
               key={key}
               login={connection.login}
               line={reading ? WORDS.READING : undefined}
-              names={NO_NAMES}
+              repositories={NO_LINES}
             />
           );
         }
@@ -238,7 +219,7 @@ function ListedAccountRows({
               repositories.length,
               listed?.repositorySelection === GITHUB_REPOSITORY_SELECTION.ALL,
             )}
-            names={repositories.map((repository) => repository.name)}
+            repositories={repositories.map(({ fullName }) => ({ repository: fullName }))}
           />
         );
       })}

@@ -1,4 +1,4 @@
-import { AGENT_STATUS, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { AGENT_STATUS } from "@repo/features/agent-wire";
 import {
   TASK_PRIORITY,
   TASK_STATUS,
@@ -13,18 +13,15 @@ import {
   childTaskCounts,
   createdByOnly,
   drawnTaskRows,
-  progressGroups,
   type RepositoryGroup,
   repositoryGroups,
   repositoryLabel,
   repositoryParts,
   SHOWN_STATUSES,
   TASK_ORDER,
-  TASK_PROGRESS,
   type TaskRow,
   taskRow,
   taskRowName,
-  taskRowProgress,
   taskRowsAssignedTo,
   taskRowsInStatuses,
   tasksById,
@@ -175,47 +172,6 @@ test("a one-off agent stands among the tasks of its repository by its last activ
   expect(names(repositoryGroups(rows))).toEqual([
     ["Sweep flaky tests"],
     ["Triage overnight issues", "Billing export", "Retry webhooks"],
-  ]);
-});
-
-test("by progress, a row stands in the first group it qualifies for, the groups in their order and an empty one left out, each newest first", () => {
-  const agents = (working: number, failed: number) => ({
-    total: working + failed,
-    working,
-    failed,
-    pullRequestTotal: 0,
-  });
-  const asked = task("Answer the schema question", "acme/relay", 1, 10);
-  const failed = { ...task("Rerun the migration", "acme/relay", 1, 20), agents: agents(1, 1) };
-  const working = { ...task("Retry webhooks", "acme/relay", 1, 30), agents: agents(1, 0) };
-  const reviewed = task("Billing export", "acme/relay", 1, 40);
-  const drafted = task("Draft the onboarding copy", "acme/relay", 1, 50);
-  const idle = task("Release checklist", "acme/relay", 1, 5);
-  const pullRequests = new Map([
-    [reviewed.id, [{ state: PULL_REQUEST_STATE.OPEN }]],
-    [drafted.id, [{ state: PULL_REQUEST_STATE.DRAFT }]],
-    [working.id, [{ state: PULL_REQUEST_STATE.OPEN }]],
-  ]);
-  const signals = {
-    needsYou: (row: TaskRow) => taskRowName(row) === asked.name,
-    pullRequests: (taskId: string) => pullRequests.get(taskId) ?? [],
-  };
-  const rows = [asked, failed, working, reviewed, drafted, idle].map(taskRow);
-  const groups = progressGroups(rows, (row) => taskRowProgress(row, signals));
-  expect(groups.map((group) => group.progress)).toEqual([
-    TASK_PROGRESS.NEEDS_YOU,
-    TASK_PROGRESS.WORKING,
-    TASK_PROGRESS.IN_REVIEW,
-    TASK_PROGRESS.UP_NEXT,
-  ]);
-  expect(names(groups)).toEqual([
-    ["Rerun the migration", "Answer the schema question"],
-    ["Retry webhooks"],
-    ["Billing export"],
-    ["Draft the onboarding copy", "Release checklist"],
-  ]);
-  expect(names(progressGroups([taskRow(idle)], (row) => taskRowProgress(row, signals)))).toEqual([
-    ["Release checklist"],
   ]);
 });
 
