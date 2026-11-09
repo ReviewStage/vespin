@@ -711,7 +711,7 @@ function sectionActionGroups(
   const { section } = drawn;
   const { dialogs, edits } = context;
   const edit: MenuEntry[] = [
-    commandAction(PANEL_COMMAND.RENAME, () => edits.beginEdit(section.id, false), false),
+    commandAction(PANEL_COMMAND.RENAME, () => edits.beginEdit(section.id, false), undefined),
     {
       label: section.icon === undefined ? ICON_ACT.ADD : ICON_ACT.CHANGE,
       icon: <SmilePlusIcon />,

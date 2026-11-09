@@ -8,6 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
 import { useAppCommand, useAppKeymap, useMenuCommands, useMenuOffers } from "./app-commands.js";
 import { useFocusedRowKeys } from "./desktop/task-actions.js";
+import { SHORTCUT_SUBJECT, shortcutSubject } from "./shortcut-target.js";
 import { fakeAppPlatform } from "./testing/app-platform.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
 
@@ -156,6 +157,7 @@ function FocusableRow({ presses }: { presses: string[] }): ReactElement {
   const row = useRef<HTMLDivElement | null>(null);
   useFocusedRowKeys(
     row,
+    shortcutSubject(SHORTCUT_SUBJECT.TASK, "row"),
     () => presses.push("row read"),
     () => presses.push("row pin"),
     () => presses.push("row status"),

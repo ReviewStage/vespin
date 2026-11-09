@@ -103,7 +103,7 @@ import { pagesQuery, pullRequestPublishedQuery } from "../live-reads.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { LINK_ROUTED_PLACE } from "../places/link-places.js";
 import { ADDRESS, type Address } from "../places/pressed-address.js";
-
+import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
 import { GLYPH_STATE, type GlyphState, stateEndMark } from "../state-glyph.js";
 import { useSteadyDoors } from "../steady-door.js";
 import {
@@ -202,6 +202,7 @@ import { PhoneBack, PhoneHead, PlaceMore, phoneFindGroups } from "./phone-head.j
 import {
   type AddEntry,
   AddTabButton,
+  CHOSEN_TAB_KEYS,
   DoorsTab,
   entryRow,
   HandTabActionsContext,
@@ -1457,6 +1458,9 @@ function PanelTabs({
     };
   };
   const chosen = strip.find((entry) => entry.look.selected);
+  const tabSubject = (entry: DrawnTab) => shortcutSubject(SHORTCUT_SUBJECT.TAB, tabKey(entry.tab));
+  // The chosen tab is what the panel's keys act on, so its menu prints them.
+  useShortcutTarget(chosen === undefined ? undefined : tabSubject(chosen), CHOSEN_TAB_KEYS);
   useAppCommand(APP_COMMAND.CLOSE_TAB, keys ? chosen?.close : undefined);
   // ⌥⌘W, ⌥⌘C, ⇧⌥⌘C, and ⇧⌘O act on the chosen tab while the panel holds the keys, the copies over the open task's own.
   const closeOthers =
@@ -1502,6 +1506,7 @@ function PanelTabs({
         : panelTabPlace(holderPlaceOf(holder, taskId), entry.tab);
     return {
       chosen: entry.look.selected,
+      subject: tabSubject(entry),
       onClose: entry.close,
       onCloseOthers: closeOthersOf(entry, at),
       pin: pinOf(entry),
@@ -3117,7 +3122,7 @@ function PanelPhoneHead({
                   ? []
                   : [
                       {
-                        ...commandAction(PANEL_COMMAND.CLOSE_TAB, onCloseShown, true),
+                        ...commandAction(PANEL_COMMAND.CLOSE_TAB, onCloseShown, shown?.subject),
                         detail: shown?.label ?? title,
                         replayMasked: true,
                       },

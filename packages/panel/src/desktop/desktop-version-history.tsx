@@ -60,13 +60,14 @@ import { useAppCommand } from "../app-commands.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useListEdge, useScreenRef, useScreenSplit } from "../column-split.js";
 import { useCopyToast } from "../copy-feedback.js";
-import { linkItems, openInTabOf, useChordLinks } from "../copy-link-item.js";
+import { linkItems, openInTabOf } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
 import { FIND_PAGE, PageFind } from "../find-in-tab.js";
 import { workspaceMembersQuery } from "../live-reads.js";
 import type { NavigationHistory } from "../places/window-history.js";
 import { centerWithin } from "../scroll-within.js";
 import { hiddenColumns, SHELL_ROOM, type ShellRoom } from "../shell-room.js";
+import { useShortcutTargetsOf } from "../shortcut-target.js";
 import {
   type ChangedSection,
   changedSections,
@@ -806,7 +807,8 @@ export function DesktopVersionHistory({
   const people = useQuery(workspaceMembersQuery(subject.workspace?.id)).data;
   // A version of a description has a link of its own, its description's under its revision; another history's has none.
   const copy = useCopyToast();
-  const chord = useChordLinks();
+  // Note that a row's Copy link prints ⇧⌘C as the chord's link changes, so the row is drawn again as it does.
+  useShortcutTargetsOf(APP_COMMAND.COPY_LINK);
   const numbered = useNumberedPlace();
   const linked = subject.task;
   const versionLink = (revision: number): string | undefined =>
@@ -821,7 +823,7 @@ export function DesktopVersionHistory({
         );
   const versionLinks = (revision: number): MenuAction[] => {
     const link = versionLink(revision);
-    return link === undefined ? [] : linkItems(copy, link, chord);
+    return link === undefined ? [] : linkItems(copy, link);
   };
   const versionInTab = (revision: number): (() => void) | undefined => {
     const link = versionLink(revision);

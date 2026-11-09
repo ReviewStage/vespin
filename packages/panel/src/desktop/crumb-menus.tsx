@@ -114,6 +114,7 @@ export function AgentCrumbMenu({
   const own = useAgentOwnDoors(tasks, agent, shown);
   const groups = agentMenuGroups({
     ...actions.doors,
+    subject: actions.subject,
     read: own.read,
     agentPin: own.agentPin,
     section: own.section,

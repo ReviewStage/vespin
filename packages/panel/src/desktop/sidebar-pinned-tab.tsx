@@ -237,7 +237,7 @@ function pinAgentId({ tab }: SidebarPin): string | undefined {
 
 /** Unpin, the pin's own keeping, which leads its menu as a tab's keeping leads a tab's. */
 function unpinItem(onUnpin: () => void): MenuAction {
-  return commandAction(PANEL_COMMAND.UNPIN_TAB, onUnpin, false);
+  return commandAction(PANEL_COMMAND.UNPIN_TAB, onUnpin, undefined);
 }
 
 /**
