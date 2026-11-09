@@ -18,7 +18,7 @@ import {
   type PortActKind,
   type PortActPayload,
   type PortActResult,
-  type TERMINAL_ACT_KIND,
+  type TerminalActKind,
 } from "@repo/host/contract";
 import type { TerminalStripTab } from "@repo/ui/tab-strip-model";
 import { terminalTab } from "@repo/ui/tab-strip-model";
@@ -115,12 +115,10 @@ interface HostPort {
   readonly say: (message: TerminalPortOutbound | UnparsedWireValue) => void;
 }
 
-type TerminalKind = (typeof TERMINAL_ACT_KIND)[keyof typeof TERMINAL_ACT_KIND];
-
 /** One terminal act as it rides the act port: its kind, and the payload the kind takes. */
 type TerminalAct = {
-  [Kind in TerminalKind]: { readonly kind: Kind; readonly payload: PortActPayload<Kind> };
-}[TerminalKind];
+  [Kind in TerminalActKind]: { readonly kind: Kind; readonly payload: PortActPayload<Kind> };
+}[TerminalActKind];
 
 /** Any act the tab sends on its act port. */
 type SentAct = AnyAct | TerminalAct;
@@ -130,7 +128,7 @@ interface Main {
   /** Every act the tab sent, by kind and payload, in order. */
   readonly sent: SentAct[];
   /** The kinds main refuses outright, as it does when the service cannot be reached. */
-  readonly down: Set<PortActKind | TerminalKind>;
+  readonly down: Set<PortActKind | TerminalActKind>;
   /** What `terminal.create` answers in place of a shell, where the sandbox refuses one. */
   createRefused: TerminalRefusal | undefined;
   /** What `terminal.resume` answers in place of the sandbox, where the service refuses it. */
@@ -154,7 +152,7 @@ beforeEach(() => {
   keep([{ shell: TAB.shell, title: TAB.title }]);
   const sent: SentAct[] = [];
   let made = 0;
-  const answer = (request: TerminalAct): PortActResult<TerminalKind> => {
+  const answer = (request: TerminalAct): PortActResult<TerminalActKind> => {
     switch (request.kind) {
       case ACT_KIND.TERMINAL_CREATE:
         if (main.createRefused !== undefined) return { failure: main.createRefused };
@@ -206,7 +204,7 @@ beforeEach(() => {
     },
   };
   /** A terminal act answered as main's procedure would: refused, or answered now. */
-  const respond = (request: TerminalAct): Promise<PortActResult<TerminalKind>> => {
+  const respond = (request: TerminalAct): Promise<PortActResult<TerminalActKind>> => {
     sent.push(request);
     if (main.down.has(request.kind)) {
       return Promise.reject(
@@ -384,7 +382,7 @@ async function mount(shown = true, still = true, account?: string) {
 }
 
 /** The payload of the act of the kind the tab sent last. */
-function lastPayload(kind: TerminalKind) {
+function lastPayload(kind: TerminalActKind) {
   const request = main.sent.findLast((each) => each.kind === kind);
   assert.ok(request && "payload" in request, `the tab sent ${kind}`);
   return request.payload;
