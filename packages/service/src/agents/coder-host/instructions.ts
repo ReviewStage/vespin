@@ -607,7 +607,7 @@ function toolsOn(tools: ToolWords, machine: CoderMachine, standing: AgentStandin
  * it reaches. A local agent is told none of it, since it is offered no
  * `run_on_mac`.
  */
-const RUN_ON_MAC_WORDS = `\`${AGENT_TOOL.RUN_ON_MAC}\` runs a command on the developer's own Mac instead, the Mac of your task's assignee or, on a task assigned to no one or on none, of the member who started you, from their home folder, where the developer may be asked to allow the command, for what only their Mac has: their local checkouts, uncommitted work, installed tools, and running servers.`;
+const RUN_ON_MAC_WORDS = `\`${AGENT_TOOL.RUN_ON_MAC}\` runs a command on the developer's own Mac instead, the Mac of your task's assignee or, on a task assigned to no one or to a member who left, or on none, of the member who started you, from their home folder, where the developer may be asked to allow the command, for what only their Mac has: their local checkouts, uncommitted work, installed tools, and running servers.`;
 
 /** Where a local agent run straight on its device runs, and what of it it reaches. */
 const DEVICE_DIRECT_WORDS =
