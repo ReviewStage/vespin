@@ -56,9 +56,10 @@ Two jobs in `.github/workflows/ci.yml` cover the app.
 
 - **Linux** runs the typecheck, the lint, the vitest tests, and `export:ios`
   on every pull request, through the same turbo tasks as every workspace.
-- **macOS** (`mobile`, on GitHub's `xcode-27` image) runs only when
-  `apps/mobile/**`, `packages/ui-native/**`, or the workflow itself changes,
-  in the merge queue too; a run that skips it keeps the `CI` gate green. It
+- **macOS** (`mobile`, on GitHub's `xcode-27` image) runs only on a pull
+  request that changes `apps/mobile/**`, `packages/ui-native/**`, or the
+  workflow itself, never in the merge queue, whose 30-minute status check
+  timeout the job outlasts; a run that skips it keeps the `CI` gate green. It
   generates the native project, builds the Release simulator app, runs the
   Maestro flows on the iPhone 18 Pro, the iPhone Duo as it boots, and the iPad
   Pro 11-inch, and uploads their screenshots as the `mobile-screenshots`

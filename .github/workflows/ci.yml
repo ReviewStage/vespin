@@ -228,14 +228,18 @@ jobs:
           image: ${{ steps.stage.outputs.image }}
           timeout-seconds: 1800
 
-  # Whether a run touches what the iOS app is built from: the app, its design
-  # system, or this workflow. The simulator job below runs only then, since a
-  # Mac runner costs ten times a Linux one and most pull requests leave the
-  # app alone. A pull request is compared with its base's merge base, and a
-  # merge group with the base its head stands on, so a group holding one
-  # mobile change runs the job for the whole group.
+  # Whether a pull request touches what the iOS app is built from: the app,
+  # its design system, or this workflow. The simulator job below runs only
+  # then, since a Mac runner costs ten times a Linux one and most pull
+  # requests leave the app alone, and it is compared with its base's merge
+  # base. Note that neither job runs in the merge queue, because the queue
+  # waits 30 minutes for the `CI` gate to report (the ruleset's status check
+  # timeout) and the simulator job takes about 50, so a group holding it was
+  # counted failed and dropped after its run had passed: the pull request's
+  # own run is the app's gate, and the queue reruns the portable checks.
   mobile-changed:
     name: iOS app changed
+    if: ${{ github.event_name == 'pull_request' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
@@ -246,18 +250,12 @@ jobs:
           fetch-depth: 0
       - id: diff
         run: |
-          case "$GITHUB_EVENT_NAME" in
-            pull_request) base=$(git merge-base "origin/$GITHUB_BASE_REF" HEAD) ;;
-            merge_group) base=$MERGE_GROUP_BASE ;;
-            *) echo "::error::$GITHUB_EVENT_NAME is not an event this workflow runs on"; exit 1 ;;
-          esac
+          base=$(git merge-base "origin/$GITHUB_BASE_REF" HEAD)
           if git diff --quiet "$base" HEAD -- apps/mobile packages/ui-native .github/workflows/ci.yml; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
-        env:
-          MERGE_GROUP_BASE: ${{ github.event.merge_group.base_sha }}
 
   # The iOS app built and driven on the simulators, which only a Mac can do:
   # Expo generates the native project from `apps/mobile/app.config.ts`, Xcode
@@ -304,11 +302,11 @@ jobs:
 
   # The one check the ruleset requires, so a job or slice added above is
   # required without a ruleset edit. It passes only where every job it needs
-  # succeeded or was skipped by its own `if`, which is the simulator job's on
-  # a run that leaves the app alone. Note that it runs whatever became of
-  # them, because a job skipped behind a failed `needs` reports skipped too,
-  # and a skipped required check counts as passed; the failed job it stood
-  # behind is what fails this one.
+  # succeeded or was skipped by its own `if`, which is the iOS app's jobs' on
+  # a run that leaves the app alone or in the merge queue. Note that it runs
+  # whatever became of them, because a job skipped behind a failed `needs`
+  # reports skipped too, and a skipped required check counts as passed; the
+  # failed job it stood behind is what fails this one.
   ci:
     name: CI
     if: ${{ always() }}
