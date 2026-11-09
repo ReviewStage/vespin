@@ -7,7 +7,7 @@ import {
 } from "@repo/features/agent-wire";
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
-import { agentMovedAt } from "@repo/features/task-agents-model";
+import { agentMovedAt, agentStillWriting } from "@repo/features/task-agents-model";
 import {
   HoverCard,
   HoverCardHead,
@@ -24,7 +24,6 @@ import {
   agentActor,
   agentName,
   agentStateWords,
-  agentStillWriting,
   archivedByReading,
   providerOf,
   teammateRef,

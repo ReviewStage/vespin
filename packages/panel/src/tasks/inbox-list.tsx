@@ -20,6 +20,7 @@ import {
   listedItems,
   MARK_ALL_READ,
   MINE,
+  NEEDS_YOU,
   narrowedByWhose,
   READING_INBOX,
   SEARCH_INBOX,
@@ -160,7 +161,7 @@ import {
   inboxLineGlyph,
   useInboxStanding,
 } from "./inbox-item-parts.js";
-import { inboxShownTicks, NEEDS_YOU } from "./inbox-model.js";
+import { inboxShownTicks } from "./inbox-model.js";
 import { type InboxReminder, useRemindMany } from "./inbox-remind.js";
 import { useInboxRowActs } from "./inbox-row-acts.js";
 import { type InboxListMark, type InboxSelection, useInboxSelection } from "./inbox-selection.js";

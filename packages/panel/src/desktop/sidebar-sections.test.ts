@@ -11,11 +11,15 @@ import {
   type TaskSectionWrite,
 } from "@repo/features/task-section-wire";
 import { applySectionWrite, memberOf } from "@repo/features/task-section-writes";
+import {
+  sectionOrder,
+  sectionTaskIds,
+  workspaceSections,
+} from "@repo/features/task-sections-model";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import { sectionOrder, sectionTaskIds, workspaceSections } from "@repo/ui/task-sections-model";
 import { type PinMove, TASK_MARK, type TaskMark } from "@repo/ui/tasks-model";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";

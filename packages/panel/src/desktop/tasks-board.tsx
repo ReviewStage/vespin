@@ -1,5 +1,17 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
+  type ChildTaskCount,
+  childTaskCounts,
+  repositoryLabel,
+  TASK_ORDER,
+  taskTime,
+} from "@repo/features/task-list-model";
+import {
+  NO_ASSIGNEE_WORDS,
+  TASK_PRIORITY_WORDS,
+  TASK_STATUS_WORDS,
+} from "@repo/features/task-standing-words";
+import {
   TASK_BOUNDS,
   TASK_STATUS,
   type TaskStanding,
@@ -85,13 +97,6 @@ import {
 import { actorName } from "@repo/ui/actor-model";
 import { FIND_SKIP_ATTRIBUTE } from "@repo/ui/find-skip";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import {
-  type ChildTaskCount,
-  childTaskCounts,
-  repositoryLabel,
-  TASK_ORDER,
-  taskTime,
-} from "@repo/ui/task-list-model";
 import { RENAME_FAILED_NOTE, repositoryPageUrl } from "@repo/ui/tasks-model";
 import {
   COMPLETED_WINDOW,
@@ -133,12 +138,7 @@ import { newTaskAction } from "../tasks/inbox-list.js";
 import { openTaskInTab } from "../tasks/task-menu-items.js";
 import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
-import {
-  NO_ASSIGNEE_WORDS,
-  TASK_PRIORITY_WORDS,
-  TASK_STATUS_WORDS,
-  TaskKey,
-} from "../tasks/task-standing.js";
+import { TaskKey } from "../tasks/task-standing.js";
 import { linkPressOf } from "../tasks/use-open-link.js";
 import { useMarkedUnread } from "../tasks/use-task-looks.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";

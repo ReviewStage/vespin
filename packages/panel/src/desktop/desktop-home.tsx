@@ -1,5 +1,6 @@
 import { type InboxListed, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { TASK_ORDER, taskTime } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import {
   Arrival,
@@ -12,7 +13,6 @@ import {
 } from "@repo/ui";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
-import { TASK_ORDER, taskTime } from "@repo/ui/task-list-model";
 import { useRef, useState } from "react";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";

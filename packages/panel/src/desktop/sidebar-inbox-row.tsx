@@ -1,7 +1,7 @@
+import { NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import { commandKeyshortcuts, NAV_CURRENT, NavItem, Shortcut, STATUS_TONE } from "@repo/ui";
 import { InboxIcon } from "@repo/ui/icons";
-import { NEEDS_YOU } from "../tasks/inbox-model.js";
 import { groupCount } from "./sidebar-fold.js";
 
 /**

@@ -1,3 +1,4 @@
+import { repositoryLabel } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import {
   SKELETON_SHAPE,
@@ -11,7 +12,6 @@ import {
   useMinute,
 } from "@repo/ui";
 import { assigneeFace } from "@repo/ui/actor-model";
-import { repositoryLabel } from "@repo/ui/task-list-model";
 import { type ListColumn, TASK_PROPERTY } from "@repo/ui/tasks-page-model";
 import { type ReactNode, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";

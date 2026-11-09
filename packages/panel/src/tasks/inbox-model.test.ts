@@ -32,6 +32,7 @@ import {
   openItems,
   sentStamp,
   taskHolder,
+  waitingByAgent,
   waitsOnReaderNow,
 } from "@repo/features/inbox-list-model";
 import {
@@ -69,7 +70,6 @@ import {
   inboxThreadSend,
   shownTicks,
   stepParts,
-  waitingByAgent,
   waitsOnReader,
   withChoice,
   withDoPress,

@@ -1,5 +1,6 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import {
   ArchiveIcon,
   BUTTON_SIZE,
@@ -30,7 +31,7 @@ import { commandAction, commandHead, PANEL_COMMAND } from "../command-items.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { useBusyPress } from "../settings/busy-press.js";
-import { agentName, agentStillWriting, teammateStarter } from "../tasks/agent-model.js";
+import { agentName, teammateStarter } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { AgentGlyph, agentEndMark } from "../tasks/tab-look.js";
 import type { AgentsControl } from "../tasks/use-agents.js";

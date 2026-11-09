@@ -5,7 +5,7 @@ import {
   TASK_GROUPING,
   type TaskGrouping,
   type TaskListView,
-} from "@repo/ui/task-list-model";
+} from "@repo/features/task-list-model";
 import { createStore, useSelector } from "@tanstack/react-store";
 import { Schema } from "effect";
 import { keptKey, useKept } from "../use-kept.js";

@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
+import { describe, it } from "vitest";
 import {
   TASK_SECTION_GLYPH,
   TASK_SECTION_ICON_KIND,
   TASK_SECTION_WRITE,
   type TaskSections,
   type TaskSectionWrite,
-} from "@repo/features/task-section-wire";
-import { applySectionWrite, memberOf } from "@repo/features/task-section-writes";
-import { describe, it } from "vitest";
+} from "./task-section-wire.js";
+import { applySectionWrite, memberOf } from "./task-section-writes.js";
 import {
   entryMoveWrites,
   NO_TASK_SECTIONS,

@@ -22,6 +22,7 @@ import {
 } from "@repo/features/pull-request-chapters-view";
 import { SENTRY_SEND_SPAN } from "@repo/features/sentry-tracing";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { ListedPullRequest } from "@repo/features/task-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
@@ -81,7 +82,6 @@ import {
 } from "../use-app-state.js";
 import {
   ARCHIVE_NOT_READY,
-  agentStillWriting,
   archivedManyWords,
   archiveWords,
   choiceRequest,

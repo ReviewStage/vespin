@@ -85,7 +85,7 @@ import {
   REPOSITORY_UNREACHED,
   type RepositoryUnreached,
 } from "@repo/features/repository-reach-wire";
-import { inPullRequestOrder } from "@repo/features/task-agents-model";
+import { agentStillWriting, inPullRequestOrder } from "@repo/features/task-agents-model";
 import type { DescriptionEditor, TaskPullRequestLine } from "@repo/features/task-wire";
 import { dayAndTimeText, dueText } from "@repo/features/time-format";
 import {
@@ -532,17 +532,6 @@ export function endLineReason(failure: AgentFailure | undefined, starter?: strin
   return failure === AGENT_FAILURE.PROVIDER_KEY && starter === undefined
     ? FAILURE_REASON.API_KEY
     : FAILURE_REASON.OTHER;
-}
-
-/** The statuses an agent may still write under, which is when it can be stopped. */
-const FOLLOWED_STATUSES: ReadonlySet<AgentStatus> = new Set([
-  AGENT_STATUS.STARTING,
-  AGENT_STATUS.RUNNING,
-]);
-
-/** Whether an agent in this status may still write more. */
-export function agentStillWriting(status: AgentStatus): boolean {
-  return FOLLOWED_STATUSES.has(status);
 }
 
 /**

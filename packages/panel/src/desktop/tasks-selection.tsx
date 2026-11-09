@@ -1,5 +1,11 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskSections } from "@repo/features/task-section-wire";
+import {
+  placeAllWrites,
+  sectionEntries,
+  unplaceAllWrites,
+  workspaceSections,
+} from "@repo/features/task-sections-model";
 import { countWords, IRREVERSIBLE_WORDS, type Noun, TERM } from "@repo/features/words";
 import {
   CONFIRM_LOSS,
@@ -11,12 +17,6 @@ import {
   useConfirmDialog,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import {
-  placeAllWrites,
-  sectionEntries,
-  unplaceAllWrites,
-  workspaceSections,
-} from "@repo/ui/task-sections-model";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { type Store, useCreateStore, useSelector } from "@tanstack/react-store";

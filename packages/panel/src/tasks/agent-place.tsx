@@ -5,6 +5,7 @@ import {
   DEVICE_STANDING,
   type DeviceStanding,
 } from "@repo/features/agent-wire";
+import { RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import { RUN_ON_MAC_REASON_WORDS } from "@repo/features/workspace-tools-model";
 import {
   MAC_COMMAND_MODE_LABEL,
@@ -40,7 +41,7 @@ import { presenceStanding, useDevicePresence } from "../device-presence.js";
 import { machineName, useThisMac } from "../machine-name.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { type RunOnMacRead, useRunOnMac } from "./run-on-mac.js";
-import { DeviceGlyph, RUNS_ON_WORDS } from "./runs-on.js";
+import { DeviceGlyph } from "./runs-on.js";
 
 /**
  * agent-place.tsx -- the chip an agent's message box wears saying where the agent runs: its device by name, or the cloud.

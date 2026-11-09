@@ -1,4 +1,6 @@
+import { NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { TASK_PRIORITY_WORDS, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import {
   TASK_PRIORITY_ORDER,
   TASK_STATUS_ORDER,
@@ -27,13 +29,7 @@ import type { ReactNode } from "react";
 import { ACTOR_SIZE, ActorMark, actorCard } from "../actor-ref.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { useActorDoor } from "../person-door.js";
-import { NEEDS_YOU } from "../tasks/inbox-model.js";
-import {
-  NO_ASSIGNEE,
-  TASK_PRIORITY_WORDS,
-  TASK_STATUS_WORDS,
-  useAssigneeRows,
-} from "../tasks/task-standing.js";
+import { NO_ASSIGNEE, useAssigneeRows } from "../tasks/task-standing.js";
 import { useStandingWrites } from "../tasks/use-standing-writes.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";

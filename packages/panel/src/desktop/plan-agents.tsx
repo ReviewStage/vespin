@@ -1,14 +1,13 @@
 import type { AgentPullRequest } from "@repo/features/agent-wire";
+import { NEEDS_YOU, threadsWaitingWords } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { agentLastMovedAt } from "@repo/features/task-agents-model";
+import { agentLastMovedAt, inAgentListOrder } from "@repo/features/task-agents-model";
 import { GROUP_HEADING, GroupHeader, LIST_DENSITY, List, ListRow, TaskRows } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, STRIP_TAB_KIND, sameTab } from "@repo/ui/tab-strip-model";
 import { useCoarsePointer } from "../coarse-pointer.js";
-import { agentStillWriting } from "../tasks/agent-model.js";
 import { agentSubject } from "../tasks/agent-ref.js";
-import { NEEDS_YOU, threadsWaitingWords } from "../tasks/inbox-model.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTabsControl } from "../tasks/use-main-tabs.js";
 import type { MenuAction } from "./action-menu.js";
@@ -80,23 +79,6 @@ const AGENTS_LIST = "Agents";
 
 /** What the group's count counts, said to a reader beside the figure. */
 const AGENTS_NOUN = { one: "agent", many: "agents" } as const;
-
-/** The agents in the order the list draws them: those waiting on the developer first, then those still writing, then the newest started, each group's order otherwise kept. */
-function listedOrder(
-  entries: readonly AddEntry[],
-  waiting: ReadonlyMap<string, readonly InboxItem[]>,
-): readonly AddEntry[] {
-  const waits = (entry: AddEntry) => waiting.has(entry.row.id);
-  const writing = (entry: AddEntry) =>
-    entry.agent !== undefined && agentStillWriting(entry.agent.status);
-  const started = (entry: AddEntry) => entry.agent?.createdAt ?? 0;
-  return entries.toSorted(
-    (a, b) =>
-      Number(waits(b)) - Number(waits(a)) ||
-      Number(writing(b)) - Number(writing(a)) ||
-      started(b) - started(a),
-  );
-}
 
 /** One agent's row (`AgentListRow`), offering the agent's menu as a person's page does: its tab's look and card, how many of its threads wait on the developer, its pull request's chip where it opened one, where it runs, its failed mark, and when it last moved. */
 function PlanAgentRow({
@@ -206,7 +188,11 @@ export function PlanAgents({
   for (const [agentId, items] of waiting) if (!listed.has(agentId)) unmarked += items.length;
   const inboxRow = phone !== undefined && unmarked > 0 ? phone : undefined;
   const more = !useCoarsePointer();
-  const ordered = listedOrder(entries, waiting);
+  const ordered = inAgentListOrder(
+    entries,
+    (entry) => entry.agent,
+    (entry) => waiting.has(entry.row.id),
+  );
   const selection = useAgentsSelection(
     agents,
     ordered.flatMap(({ agent }) => (agent === undefined ? [] : [agent])),

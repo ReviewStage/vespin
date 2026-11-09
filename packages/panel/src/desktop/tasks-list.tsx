@@ -5,12 +5,26 @@ import {
   pinPositionsForMove,
 } from "@repo/features/pin-order";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { childTaskCounts, NO_REPOSITORY, repositoryLabel } from "@repo/features/task-list-model";
 import {
   TASK_SECTION_ICON_KIND,
   TASK_SECTION_WRITE,
   type TaskSectionWrite,
 } from "@repo/features/task-section-wire";
 import { isAgentEntry } from "@repo/features/task-section-writes";
+import {
+  placeWrites,
+  restoreWrites,
+  sectionEntries,
+  sectionOrder,
+  sectionTaskIds,
+  workspaceSections,
+} from "@repo/features/task-sections-model";
+import {
+  NO_ASSIGNEE_WORDS,
+  TASK_PRIORITY_WORDS,
+  TASK_STATUS_WORDS,
+} from "@repo/features/task-standing-words";
 import {
   TASK_PRIORITY_ORDER,
   TASK_STATUS_ORDER,
@@ -71,15 +85,6 @@ import {
 import { actorName, creatorActor, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
 import { GLYPH, ListTodoIcon, PinIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { childTaskCounts, NO_REPOSITORY, repositoryLabel } from "@repo/ui/task-list-model";
-import {
-  placeWrites,
-  restoreWrites,
-  sectionEntries,
-  sectionOrder,
-  sectionTaskIds,
-  workspaceSections,
-} from "@repo/ui/task-sections-model";
 import { TASK_MARK } from "@repo/ui/tasks-model";
 import {
   COMPLETED_WINDOW,
@@ -126,11 +131,6 @@ import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { newTaskAction } from "../tasks/inbox-list.js";
-import {
-  NO_ASSIGNEE_WORDS,
-  TASK_PRIORITY_WORDS,
-  TASK_STATUS_WORDS,
-} from "../tasks/task-standing.js";
 import { type Pins, usePins } from "../tasks/use-pin-writes.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";

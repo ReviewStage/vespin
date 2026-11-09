@@ -17,8 +17,8 @@ import {
   patchHunks,
 } from "@repo/features/diff-hunks";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
+import { repositoryParts } from "@repo/features/task-list-model";
 import { isSecretFile } from "@repo/features/task-wire";
-import { repositoryParts } from "@repo/ui/task-list-model";
 import {
   DIFF_SELECTION_SIDE,
   type DiffFileTexts,

@@ -1,6 +1,14 @@
 import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { TASK_AGENTS_STATUS, taskAgentsStatus } from "@repo/features/task-agents-model";
 import {
+  type ChildTaskCount,
+  repositoryLabel,
+  TASK_ORDER,
+  taskFinished,
+  taskTime,
+} from "@repo/features/task-list-model";
+import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
+import {
   TASK_BOUNDS,
   type TaskPullRequestLine,
   type TaskStanding,
@@ -29,13 +37,6 @@ import {
 } from "@repo/ui";
 import { FIND_SKIP_ATTRIBUTE } from "@repo/ui/find-skip";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
-import {
-  type ChildTaskCount,
-  repositoryLabel,
-  TASK_ORDER,
-  taskFinished,
-  taskTime,
-} from "@repo/ui/task-list-model";
 import { RENAME_FAILED_NOTE } from "@repo/ui/tasks-model";
 import { statusOf } from "@repo/ui/tasks-page-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
@@ -48,7 +49,7 @@ import { PullRequestCard } from "../tasks/pull-request-card.js";
 import { PullRequestChip } from "../tasks/pull-request-chip.js";
 import { openTaskInTab } from "../tasks/task-menu-items.js";
 import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
-import { TASK_STATUS_WORDS, TaskKey } from "../tasks/task-standing.js";
+import { TaskKey } from "../tasks/task-standing.js";
 import { openerOf } from "../tasks/use-link-standing.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { useMarkedUnread } from "../tasks/use-task-looks.js";

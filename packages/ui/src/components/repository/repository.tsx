@@ -1,7 +1,7 @@
+import { NO_REPOSITORY, repositoryParts } from "@repo/features/task-list-model";
 import { Fragment, useRef, useState } from "react";
 import { ICON_SIZE } from "../../icons/icon-size.js";
 import { FolderXIcon, GLYPH } from "../../icons/icons.js";
-import { NO_REPOSITORY, repositoryParts } from "../../task-list-model.js";
 import { repositoryOwnerPictureUrl } from "../../tasks-model.js";
 import { AVATAR_SHAPE, AVATAR_SIZE, Avatar, type AvatarSize } from "../avatar/avatar.js";
 import { Badge } from "../badge/badge.js";

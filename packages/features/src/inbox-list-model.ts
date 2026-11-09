@@ -1321,3 +1321,41 @@ export function inboxThreadMessages(
     };
   });
 }
+
+/**
+ * The Inbox's one name for an item waiting on the developer's answer, in
+ * each form its surfaces say it: the list's filter, a count's words after
+ * its figure, and the line where nothing is listed. A settled item reads
+ * as answered. Every surface reads its words here, so the name is changed in
+ * this one place.
+ */
+export const NEEDS_YOU = {
+  LABEL: "Needs you",
+  COUNT: { one: "needs you", many: "need you" } satisfies {
+    readonly one: string;
+    readonly many: string;
+  },
+  NONE: "Nothing needs you",
+} as const;
+
+/** A count of what waits on the developer with its words, as a card's corner or a badge says it: "1 needs you", "3 need you". */
+export function needsYouWords(count: number): string {
+  return `${count} ${count === 1 ? NEEDS_YOU.COUNT.one : NEEDS_YOU.COUNT.many}`;
+}
+
+/** What a line of threads waiting on the developer says: "1 thread needs you", "3 threads need you". */
+export function threadsWaitingWords(waiting: number): string {
+  return waiting === 1
+    ? `1 thread ${NEEDS_YOU.COUNT.one}`
+    : `${waiting} threads ${NEEDS_YOU.COUNT.many}`;
+}
+
+/** The items given that wait on the developer, by the agent that posted each, in their order. */
+export function waitingByAgent(
+  waiting: readonly InboxItem[],
+): ReadonlyMap<string, readonly InboxItem[]> {
+  const byAgent = new Map<string, InboxItem[]>();
+  for (const item of waiting)
+    byAgent.set(item.agentId, [...(byAgent.get(item.agentId) ?? []), item]);
+  return byAgent;
+}

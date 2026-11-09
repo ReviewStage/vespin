@@ -27,7 +27,7 @@ import {
   FAILURE_SURFACE,
   type FailureAbout,
 } from "@repo/features/shown-failure";
-import { pullRequestsOfTask } from "@repo/features/task-agents-model";
+import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { KnownNames } from "@repo/features/thing-kind";
 import { workingTime } from "@repo/features/time-format";
@@ -139,7 +139,6 @@ import {
   agentPart,
   agentParts,
   agentRows,
-  agentStillWriting,
   agentWorkingSince,
   CONTINUE_AGAIN_LABEL,
   CONTINUE_LABEL,

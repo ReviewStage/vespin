@@ -1,5 +1,6 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import { countWords, IRREVERSIBLE_WORDS, TERM } from "@repo/features/words";
 import {
   CONFIRM_LOSS,
@@ -16,7 +17,7 @@ import { useState } from "react";
 import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
-import { agentStillWriting, teammateStarter } from "../tasks/agent-model.js";
+import { teammateStarter } from "../tasks/agent-model.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { type ChosenRows, useChosen, useChosenOf } from "./tasks-selection.js";
