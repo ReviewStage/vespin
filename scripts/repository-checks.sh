@@ -57,9 +57,10 @@ fi
 # It crosses into `@repo/sync` too, since every row the host holds lives in
 # its pool. The relay sockets and port-forward tunnel the host composes from
 # `@repo/features` (`/relay-socket`, `/relay-credential`,
-# `/port-forward-tunnel`) are walked as doors of their own, for their imports
-# alone, since their Node seams sit behind `@repo/features/node`. Every other package a walk reaches
-# is still left unchecked here.
+# `/port-forward-tunnel`) are walked as doors of their own, held to the same
+# imports and globals, since their Node seams sit behind
+# `@repo/features/node`. Every other package a walk reaches is still left
+# unchecked here.
 node --input-type=module -e '
   import { readFile } from "node:fs/promises";
   import path from "node:path";
@@ -99,6 +100,7 @@ node --input-type=module -e '
       root: "packages/features/src",
       entries: ["relay-socket.ts", "relay-credential.ts", "port-forward-tunnel.ts"],
       forbidden: /^(node:|ws$|electron$|@effect\/platform-node|@repo\/features\/node)/,
+      globals: /\b(Buffer|process)\.\w+/,
     },
   ];
   const repository = process.argv[1];

@@ -215,7 +215,7 @@ export const hostUpdateSchema = EffectSchema.Literals(Object.values(HOST_UPDATE)
 /** The most characters of the words a host says its update failed for. */
 export const HOST_UPDATE_FAILURE_MAX_CHARS = 200;
 
-/** A device's operating system, as Node's `process.platform` names it. */
+/** A device's operating system, as Node's `platform` of the process names it. */
 export const DEVICE_PLATFORM = {
   DARWIN: "darwin",
   LINUX: "linux",
@@ -223,7 +223,7 @@ export const DEVICE_PLATFORM = {
 
 export type DevicePlatform = (typeof DEVICE_PLATFORM)[keyof typeof DEVICE_PLATFORM];
 
-/** A device's CPU architecture, as Node's `process.arch` names it. */
+/** A device's CPU architecture, as Node's `arch` of the process names it. */
 export const DEVICE_ARCH = {
   ARM64: "arm64",
   X64: "x64",
