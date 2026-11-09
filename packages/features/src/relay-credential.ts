@@ -1,9 +1,9 @@
 /**
- * relay-credential.ts -- a service relay's socket opened under the account's call credential, as the terminals and a cloud Browser tab's live view open theirs: the desktop's bearer as the handshake's header, or nothing of the host's own where the credential is a page's cookie, which the browser carries itself.
+ * relay-credential.ts -- a service relay's socket opened under the account's call credential, as the terminals, port forwards, and a cloud Browser tab's live view open theirs: the desktop's bearer as the handshake's header, or nothing of the host's own where the credential is a page's cookie, which the browser carries itself.
  */
 
-import { type CallCredential, resolvedCredential } from "@repo/features";
 import { Effect, type Scope } from "effect";
+import { type CallCredential, resolvedCredential } from "./account-call.js";
 import type { OpenTerminalSocket, TerminalSocketOpening } from "./relay-socket.js";
 
 /** The status a relay refuses an upgrade with for want of an account it answers for. */

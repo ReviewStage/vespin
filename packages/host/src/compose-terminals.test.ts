@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { accountBearer, type CallCredential } from "@repo/features";
+import type {
+  TerminalSocket,
+  TerminalSocketArrival,
+  TerminalSocketFrame,
+  TerminalSocketOpening,
+} from "@repo/features/relay-socket";
 import {
   TERMINAL_CONNECTION,
   TERMINAL_REFUSAL,
@@ -30,12 +36,6 @@ import {
   TERMINAL_RECONNECT,
   type TerminalClient,
 } from "./compose-terminals.js";
-import type {
-  TerminalSocket,
-  TerminalSocketArrival,
-  TerminalSocketFrame,
-  TerminalSocketOpening,
-} from "./relay-socket.js";
 
 /**
  * A coding agent's terminals as the host answers the desktop for them, over

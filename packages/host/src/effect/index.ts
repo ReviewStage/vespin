@@ -27,13 +27,6 @@ export {
   oauthAccountSourceLayer,
   oauthAccountSourceLayerFor,
 } from "../oauth-account-source.js";
-export type {
-  ListenOnLoopback,
-  LoopbackConnection,
-  OpenTerminalSocket,
-  TerminalSocketArrival,
-  TerminalSocketOpening,
-} from "../relay-socket.js";
 export { type ConnectWebSocket, openTerminalSocketOver } from "../web-socket-terminal.js";
 export { layersInOrder } from "./composer.js";
 export { HostAssemblyTag, HostTag, hostStandingLayer } from "./host.js";
