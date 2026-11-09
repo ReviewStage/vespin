@@ -1578,16 +1578,22 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
   );
 
   it.effect(
-    "the pull request's header says whether the member reading may edit its description, as GitHub answers on their own token, and not where they hold no sign-in or GitHub would not answer",
+    "the pull request's header says whether the member reading may edit its description and merge it past its base's rules, as GitHub answers on their own token, and not where they hold no sign-in or GitHub would not answer",
     () =>
       Effect.gen(function* () {
         const canUpdate = (call: GraphqlCall) => {
-          if (!call.query.includes("ViewerCanUpdate")) return Response.json({ data: null });
+          if (!call.query.includes("ViewerRights")) return Response.json({ data: null });
           if (call.authorization === "Bearer ghu_broken") {
             return Response.json({ message: "Server Error" }, { status: 502 });
           }
-          const viewerCanUpdate = call.authorization === "Bearer ghu_teammate";
-          return Response.json({ data: { repository: { pullRequest: { viewerCanUpdate } } } });
+          const theirs = call.authorization === "Bearer ghu_teammate";
+          return Response.json({
+            data: {
+              repository: {
+                pullRequest: { viewerCanUpdate: theirs, viewerCanMergeAsAdmin: theirs },
+              },
+            },
+          });
         };
         const header = (
           opened: { readonly ask: (request: Request) => Effect.Effect<Answer> },
@@ -1606,10 +1612,11 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
 
         const teammate = yield* header(two, two.other, two.agent.id);
         assert.deepEqual(
-          [teammate?.canEditDescription, teammate?.body],
-          [true, "Invitations expire."],
+          [teammate?.canEditDescription, teammate?.canBypassRules, teammate?.body],
+          [true, true, "Invitations expire."],
         );
-        assert.equal((yield* header(two, two.owner, two.agent.id))?.canEditDescription, false);
+        const owner = yield* header(two, two.owner, two.agent.id);
+        assert.deepEqual([owner?.canEditDescription, owner?.canBypassRules], [false, false]);
         assert.equal(
           (yield* header(unsigned, unsigned.other, unsigned.agent.id))?.canEditDescription,
           false,
@@ -1620,11 +1627,11 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         );
         assert.deepEqual(
           two.calls
-            .filter((call) => call.query.includes("ViewerCanUpdate"))
+            .filter((call) => call.query.includes("ViewerRights"))
             .map((call) => call.authorization),
           ["Bearer ghu_teammate", "Bearer ghu_standing"],
         );
-        assert.ok(unsigned.calls.every((call) => !call.query.includes("ViewerCanUpdate")));
+        assert.ok(unsigned.calls.every((call) => !call.query.includes("ViewerRights")));
       }),
   );
 

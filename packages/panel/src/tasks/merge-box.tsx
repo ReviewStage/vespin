@@ -73,7 +73,12 @@ import { type PullRequestWrites, QUEUE_WARNING } from "./pull-request-writes.js"
  *   the method chosen, its chevron choosing it too;
  * - with auto-merge on, Disable auto-merge;
  * - in the merge queue, Remove from queue, asked first, since leaving the
- *   queue may hold up the pull requests behind it.
+ *   queue may hold up the pull requests behind it;
+ * - blocked by a rule or behind its base, with nothing else to offer, Bypass
+ *   rules and merge by the method chosen, its chevron choosing it too, for a
+ *   member GitHub lets merge past the base's rules as it lets an admin
+ *   (`canBypassRules`, read on their own sign-in), asked first, naming what
+ *   it bypasses, as `gh pr merge --admin` merges.
  *
  * The method is kept per repository across launches, in this window's own
  * storage as the sidebar's folds are (`folded-groups.ts`); the first the
@@ -90,6 +95,7 @@ const MERGE_ACTION = {
   ENABLE_AUTO_MERGE: "enable-auto-merge",
   DISABLE_AUTO_MERGE: "disable-auto-merge",
   DEQUEUE: "dequeue",
+  BYPASS: "bypass",
 } as const;
 
 type MergeAction = (typeof MERGE_ACTION)[keyof typeof MERGE_ACTION];
@@ -121,6 +127,7 @@ const BOX_WORDS = {
   ENABLE_AUTO_MERGE: "Enable auto-merge",
   DISABLE_AUTO_MERGE: "Disable auto-merge",
   DEQUEUE: "Remove from queue",
+  BYPASS: "Bypass rules and merge",
   CHOOSE_METHOD: "Choose how to merge",
   autoMerge: (method: MergeMethod | null) =>
     method === null ? "Auto-merge is on" : `Auto-merge is on (${METHOD_NOUNS[method]})`,
@@ -144,8 +151,20 @@ function isMergeWrite(action: PullRequestAction | undefined): action is MergeWri
 /** The states GitHub would merge in now: ready, or with checks nothing requires short of passing. */
 const MERGEABLE: ReadonlySet<MergeState> = new Set([MERGE_STATE.CLEAN, MERGE_STATE.UNSTABLE]);
 
-/** The one thing the control offers from where the pull request stands, or nothing. */
-function mergeActionOf(merge: MergeState, merging: PullRequestMerging): MergeAction | undefined {
+/** The states a member GitHub lets bypass the base's rules may merge in past them: held by a required review or check, or behind a base that must be merged in first. */
+const BYPASSABLE: ReadonlySet<MergeState> = new Set([MERGE_STATE.BLOCKED, MERGE_STATE.BEHIND]);
+
+/**
+ * The one thing the control offers from where the pull request stands, or
+ * nothing. Note that the bypass is offered only where nothing else would be,
+ * so a member who may bypass still turns auto-merge on while checks run, and
+ * a base merged through a queue still queues.
+ */
+function mergeActionOf(
+  merge: MergeState,
+  merging: PullRequestMerging,
+  canBypassRules: boolean,
+): MergeAction | undefined {
   if (merging.queued !== null) return MERGE_ACTION.DEQUEUE;
   if (merging.autoMerge !== null) return MERGE_ACTION.DISABLE_AUTO_MERGE;
   if (merge === MERGE_STATE.CONFLICTS || merge === MERGE_STATE.DRAFT) return undefined;
@@ -153,14 +172,15 @@ function mergeActionOf(merge: MergeState, merging: PullRequestMerging): MergeAct
   if (merging.methods.length === 0) return undefined;
   if (MERGEABLE.has(merge)) return MERGE_ACTION.MERGE;
   const waiting = merging.checks === CHECK_SUMMARY.PENDING;
-  return merging.autoMergeAllowed && waiting ? MERGE_ACTION.ENABLE_AUTO_MERGE : undefined;
+  if (merging.autoMergeAllowed && waiting) return MERGE_ACTION.ENABLE_AUTO_MERGE;
+  return canBypassRules && BYPASSABLE.has(merge) ? MERGE_ACTION.BYPASS : undefined;
 }
 
 /** The press a pull request offers as it stands: none for one not open, or whose merge read has not landed. */
 function actionFor(pullRequest: AgentOverviewPullRequest): MergeAction | undefined {
   const { merging } = pullRequest;
   if (merging === undefined || pullRequest.state !== PULL_REQUEST_STATE.OPEN) return undefined;
-  return mergeActionOf(pullRequest.merge, merging);
+  return mergeActionOf(pullRequest.merge, merging, pullRequest.canBypassRules === true);
 }
 
 /** Whether a pull request may still merge: open, or a draft. */
@@ -415,6 +435,80 @@ function MethodPress({
   );
 }
 
+/** The question Bypass rules and merge asks first: what it bypasses, GitHub's sentence for the merge, and how it merges. */
+function bypassQuestion(
+  pullRequest: AgentOverviewPullRequest,
+  method: MergeMethod,
+): DialogQuestion {
+  const { base } = pullRequest;
+  return {
+    title: "Merge without waiting for requirements?",
+    body: `${sentenceOf(pullRequest)}. This merges it into ${base} now by ${METHOD_NOUNS[method]}, as you on GitHub, bypassing the rules ${base} requires.`,
+    verb: BOX_WORDS.BYPASS,
+    running: BUSY_WORDS[PULL_REQUEST_ACTION.MERGE],
+    loss: CONFIRM_LOSS.IRREVERSIBLE,
+    replayUnmasked: true,
+    // Note that the body names the base branch, which is the repository's, not the app's.
+    bodyReplayMasked: true,
+  };
+}
+
+/**
+ * Bypass rules and merge: a press by the method chosen, as a merge's is,
+ * which asks first and then merges at the head it asked about, so GitHub
+ * refuses a head pushed since. The question goes once a read finds another
+ * head, so it never merges one the member was not asked about, and goes
+ * with its panel; one already answered finishes.
+ */
+function BypassPress({
+  pullRequest,
+  methods,
+  method,
+  busy,
+  busyLabel,
+  shown,
+  writes,
+  onChoose,
+}: {
+  pullRequest: AgentOverviewPullRequest;
+  methods: readonly MergeMethod[];
+  method: MergeMethod;
+  busy: boolean;
+  busyLabel: string | undefined;
+  shown: boolean;
+  writes: PullRequestWrites;
+  onChoose: (method: MergeMethod) => void;
+}): React.JSX.Element {
+  const headSha = pullRequest.merging?.headSha ?? "";
+  // The head the question was asked about; none while it asks nothing.
+  const [askedAt, setAskedAt] = useState<string | undefined>(undefined);
+  const standing = askedAt !== undefined && askedAt === headSha;
+  const confirm = useConfirmDialog(
+    { subject: standing, surfaceOpen: shown },
+    writes.confirmAct({ action: PULL_REQUEST_ACTION.MERGE, method, headSha: askedAt ?? headSha }),
+    confirmFailure(FAILURE_SURFACE.PULL_REQUEST_WRITE),
+  );
+  if ((!shown || !standing) && askedAt !== undefined && !confirm.busy) setAskedAt(undefined);
+  return (
+    <>
+      <MethodPress
+        variant={BUTTON_VARIANT.DANGER_OUTLINE}
+        words={BOX_WORDS.BYPASS}
+        methods={methods}
+        method={method}
+        busy={busy}
+        busyLabel={busyLabel}
+        onChoose={onChoose}
+        onPress={() => {
+          setAskedAt(headSha);
+          confirm.ask();
+        }}
+      />
+      <ConfirmDialog open confirm={confirm} question={bypassQuestion(pullRequest, method)} />
+    </>
+  );
+}
+
 /** The question Remove from queue asks first, as stage-cli's does. */
 const DEQUEUE_QUESTION: DialogQuestion = {
   title: "Remove from the merge queue?",
@@ -546,6 +640,20 @@ export function MergeControl({
       case MERGE_ACTION.DEQUEUE:
         return plain(BUTTON_VARIANT.OUTLINE, BOX_WORDS.DEQUEUE, PULL_REQUEST_ACTION.DEQUEUE, () =>
           askDequeue(),
+        );
+      case MERGE_ACTION.BYPASS:
+        if (method === undefined) return null;
+        return (
+          <BypassPress
+            pullRequest={pullRequest}
+            methods={methods}
+            method={method}
+            busy={busy}
+            busyLabel={busyAs(PULL_REQUEST_ACTION.MERGE)}
+            shown={shown}
+            writes={writes}
+            onChoose={choose}
+          />
         );
       default:
         return null;
