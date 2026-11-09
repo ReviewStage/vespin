@@ -1,5 +1,12 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
+  type DrawnTaskRow,
+  TASK_ROW,
+  type TaskRow,
+  type TasksById,
+  taskRowKey,
+} from "@repo/features/task-list-model";
+import {
   TASK_SECTION_BOUNDS,
   TASK_SECTION_ICON_KIND,
   TASK_SECTION_WRITE,
@@ -11,9 +18,19 @@ import {
 import {
   applySectionWrite,
   memberOf,
-  type SectionEntry,
   type SectionMember,
 } from "@repo/features/task-section-writes";
+import {
+  type DrawnSection,
+  memberSection,
+  placeAllWrites,
+  placeWrites,
+  restoreWrites,
+  sectionMoveWrites,
+  sectionOrder,
+  unplaceAllWrites,
+  workspaceSections,
+} from "@repo/features/task-sections-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { countWords, TERM } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
@@ -50,23 +67,6 @@ import {
 } from "@repo/ui";
 import { FolderPlusIcon, MailOpenIcon, SmilePlusIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import {
-  type DrawnTaskRow,
-  TASK_ROW,
-  type TaskRow,
-  type TasksById,
-  taskRowKey,
-} from "@repo/ui/task-list-model";
-import {
-  memberSection,
-  placeAllWrites,
-  placeWrites,
-  restoreWrites,
-  sectionMoveWrites,
-  sectionOrder,
-  unplaceAllWrites,
-  workspaceSections,
-} from "@repo/ui/task-sections-model";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
@@ -646,13 +646,6 @@ export function moveToSectionEntry(
       ...remove,
     ],
   };
-}
-
-/** One section's rows as the sidebar draws them: the entries in its order, each with the task's or the agent's row the list holds, one for one. */
-export interface DrawnSection {
-  readonly section: TaskSection;
-  readonly entries: readonly SectionEntry[];
-  readonly rows: readonly TaskRow[];
 }
 
 /** The tasks among a section's rows, in its order. */

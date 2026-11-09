@@ -22,7 +22,8 @@ import { CatalogSection } from "../section";
  * composer-frames.tsx -- a composer's frame at each look: the window's
  * message box on the sidebar's ground, a field in a card's well, and bare,
  * where the card around it is the frame; then a box with files dragged over
- * it, its edge brightened.
+ * it, its edge brightened; then a text field's box whose words stop its
+ * form, its edge in the danger ink.
  */
 
 const ignore = () => undefined;
@@ -31,15 +32,18 @@ const ignore = () => undefined;
 function Box({
   look,
   dropping = false,
+  invalid = false,
 }: {
   look: ComposerLook;
   dropping?: boolean;
+  invalid?: boolean;
 }): React.JSX.Element {
   return (
     <ComposerFrame
       as={COMPOSER_ELEMENT.FORM}
       look={look}
       dropping={dropping}
+      invalid={invalid}
       onSubmit={(event) => event.preventDefault()}
     >
       <div className="catalog-composer">
@@ -75,6 +79,11 @@ function ComposerFrames(): React.JSX.Element {
       <CatalogSection id="composer-dropping" title="Files dragged over it">
         <div className="catalog-column">
           <Box look={COMPOSER_LOOK.CARD} dropping />
+        </div>
+      </CatalogSection>
+      <CatalogSection id="composer-invalid" title="Stopping its form">
+        <div className="catalog-column">
+          <Box look={COMPOSER_LOOK.INPUT} invalid />
         </div>
       </CatalogSection>
     </>

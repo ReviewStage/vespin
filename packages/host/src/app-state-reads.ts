@@ -21,6 +21,10 @@ import {
   experimentOn,
   type HostCapability,
   NO_EXPERIMENTS,
+  NO_WORKSPACE_EXPERIMENTS,
+  type WorkspaceExperiment,
+  type WorkspaceExperimentChoices,
+  workspaceExperimentChoicesFrom,
 } from "@repo/settings";
 import { type AppSettingsView, appSettingsView } from "@repo/settings/wire";
 import { type AppStateDelivery, type AppStateSnapshot, withAppStateDelivery } from "./app-state.js";
@@ -461,4 +465,40 @@ export function selectInboxFeed(state: AppStateSnapshot): InboxFeed {
   const feed = state[LIVE_READ.INBOX_ITEMS];
   if (feed.rows !== undefined) return INBOX_FEED.ANSWERED;
   return feed.failed === true ? INBOX_FEED.FAILED : INBOX_FEED.READING;
+}
+
+/** What a workspace's choices are read from: its entry on the account's list. */
+interface ChoosingWorkspace {
+  readonly id: string;
+  readonly experiments?: readonly { readonly experiment: string; readonly on: boolean }[];
+}
+
+/** The choices of the workspace `workspaceId` names among `workspaces`; every one off where none is named or listed. */
+export function workspaceExperimentChoices(
+  workspaces: readonly ChoosingWorkspace[],
+  workspaceId: string | undefined,
+): WorkspaceExperimentChoices {
+  if (workspaceId === undefined) return NO_WORKSPACE_EXPERIMENTS;
+  const workspace = workspaces.find((each) => each.id === workspaceId);
+  return workspace === undefined
+    ? NO_WORKSPACE_EXPERIMENTS
+    : workspaceExperimentChoicesFrom(workspace.experiments);
+}
+
+/** Whether the workspace `workspaceId` names has `experiment` on, as main's document lists it now; for a callback that cannot wait a render. */
+export function workspaceExperimentOnIn(
+  state: AppStateSnapshot | undefined,
+  workspaceId: string | undefined,
+  experiment: WorkspaceExperiment,
+): boolean {
+  const workspaces = state?.tasks.workspaces ?? [];
+  return experimentOn(workspaceExperimentChoices(workspaces, workspaceId), experiment);
+}
+
+/** Whether the workspace `workspaceId` names has `experiment` on, as a `select`: off while it names none, or a workspace not yet read. */
+export function selectWorkspaceExperiment(
+  workspaceId: string | undefined,
+  experiment: WorkspaceExperiment,
+): (state: AppStateSnapshot) => boolean {
+  return (state) => workspaceExperimentOnIn(state, workspaceId, experiment);
 }

@@ -5,6 +5,7 @@ import type { LoopbackConsentOptions } from "@repo/credentials";
 import { loopbackConsent } from "@repo/credentials/node";
 import type { ServiceReach } from "@repo/features";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
+import { listenOnLoopbackOverNet, openTerminalSocketOverWs } from "@repo/features/node";
 import type { SecretCipher as SecretCipherSeam } from "@repo/host";
 import { serviceReachLayer } from "@repo/host/client";
 import {
@@ -28,7 +29,7 @@ import {
   StateRoot,
   TerminalSocket,
 } from "@repo/host/effect";
-import { listenOnLoopbackOverNet, mirrorPlatform, openTerminalSocketOverWs } from "@repo/host/node";
+import { mirrorPlatform } from "@repo/host/node";
 import { ConfigProvider, Layer } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { net } from "electron";

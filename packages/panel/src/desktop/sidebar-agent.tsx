@@ -1,5 +1,6 @@
 import { AGENT_BOUNDS, type TasklessAgent } from "@repo/features/agent-wire";
 import { tasklessAgentStatus } from "@repo/features/task-agents-model";
+import { agentRow, taskRowName } from "@repo/features/task-list-model";
 import {
   InlineEdit,
   LIST_DENSITY,
@@ -16,7 +17,6 @@ import {
   VisuallyHidden,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { agentRow, taskRowName } from "@repo/ui/task-list-model";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef } from "react";

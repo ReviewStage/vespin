@@ -48,20 +48,15 @@ import { fetch as streamingFetch } from "expo/fetch";
 import { CryptoDigestAlgorithm, digest, getRandomValues, randomUUID } from "expo-crypto";
 import { getCalendars } from "expo-localization";
 
-/** The device's zone, as `expo-localization` names it; null where it names none. */
-function deviceTimeZone(): string | null {
-  return getCalendars()[0]?.timeZone ?? null;
-}
-
 // FormatJS's `Intl.DateTimeFormat` knows no zone of its own and starts in
-// UTC, so it is handed the device's. Note that a zone it cannot place, such as
-// `GMT`, the name iOS gives a clock set to UTC, leaves it in UTC.
-if ("polyfilled" in Intl.DateTimeFormat) {
-  // SAFETY: a polyfilled `Intl.DateTimeFormat` is FormatJS's, which adds `__setDefaultTimeZone`.
-  const formatJs = Intl.DateTimeFormat as unknown as FormatJsDateTimeFormat;
-  const zone = deviceTimeZone();
+// UTC, so it is handed the device's, as `expo-localization` names it. Note
+// that a zone it cannot place, such as `GMT`, the name iOS gives a clock set
+// to UTC, leaves it in UTC, which is the same clock.
+const deviceZone = getCalendars()[0]?.timeZone;
+if (deviceZone && "polyfilled" in Intl.DateTimeFormat) {
   try {
-    if (zone !== null) formatJs.__setDefaultTimeZone(zone);
+    // SAFETY: a polyfilled `Intl.DateTimeFormat` is FormatJS's, which adds `__setDefaultTimeZone`.
+    (Intl.DateTimeFormat as unknown as FormatJsDateTimeFormat).__setDefaultTimeZone(deviceZone);
   } catch {
     // The zone is one FormatJS cannot place, and UTC stands.
   }

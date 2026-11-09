@@ -336,13 +336,15 @@
   }
 }
 
-/* A log's room at its end (../ai-elements/conversation.tsx) is worn by its
-   last row, never by the log, so the virtualizer measures it with the rows
-   and nothing stands after them in the scroll box, as TanStack Virtual's
-   chat guide has a log. It stands outside the layers, so it wins over a
-   row's own padding at its foot (an Inbox comment's `last:pb-0`). */
-.conversation-rows > [data-row-last] {
-  padding-block-end: var(--conversation-log-end);
+/* A log's room at its end (../ai-elements/conversation.tsx), which the log
+   hands its virtualizer as its own (`paddingEnd`) rather than wearing it, so
+   nothing the virtualizer does not measure stands after the rows, as
+   TanStack Virtual's chat guide has a log. It is registered as a length, so
+   the log reads it in pixels whatever it is written in. */
+@property --conversation-log-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
 }
 
 /* A message's actions, their glyphs the control icon whichever way each is
@@ -1567,10 +1569,17 @@
    borderless "+ Reviewer" or "+ Label" whose glyph stands a chip's inset in
    from its box, so it stands that inset before the edge like the branch row,
    and lines up with the words above where it wraps onto a line of its own.
-   Its separator moves to the box's edge, which is the middle of the room
-   the pull leaves, and a wrapped one stays in the line's clip. */
+   Note that the group before it gives back that inset at its end, because
+   the pull would otherwise draw the box over the separator: the separator
+   stands outside the box, half the gap from each side, as it stands between
+   any two groups. Where it wraps, that room ends the line above, and the
+   separator falls outside the line's clip. */
 .pull-request-people > * > .pull-request-picker:first-child {
   margin-inline-start: calc(-1 * var(--ui-space-8));
+}
+
+.pull-request-people > *:has(+ * > .pull-request-picker:first-child) {
+  margin-inline-end: var(--ui-space-8);
 }
 
 .changes-people.pull-request-people > * + *::before {
@@ -1585,7 +1594,7 @@
 }
 
 .pull-request-people > * + *:has(> .pull-request-picker:first-child)::before {
-  inset-inline-start: 0;
+  inset-inline-start: calc(var(--people-gap) / -2 - var(--ui-space-8));
 }
 
 /* The merge control at the title row's end (`merge-box.tsx`), as

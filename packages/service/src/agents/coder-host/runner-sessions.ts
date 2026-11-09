@@ -153,6 +153,7 @@ import {
   ANY_LAUNCH,
   clearRunnerLines,
   queueRunnerLine,
+  requeueRunnerLine,
   runnerLineWaitingSince,
   waitingRunnerFiles,
   withdrawRunnerLine,
@@ -436,7 +437,11 @@ function besideBytes(turnText: string | undefined, content: readonly ContentBloc
  */
 interface ResumedSession {
   readonly resume?: string;
+  /** Whether the session resumes from the CLI's own files with the store left out of the launch, as one the store does not hold whole on a machine whose disk keeps it (`MachineLayout`'s `diskSessions`). */
+  readonly fromDisk?: boolean;
   readonly fork?: boolean;
+  /** The client id of the source's line a forked session is cut just before (`StoredStartedFrom`'s `cutBefore`); none where it is forked whole. */
+  readonly cut?: string;
   readonly replay?: boolean;
 }
 
@@ -991,12 +996,13 @@ export const runnerSessions = <
             return yield* new LaunchRefused({ reason: "no agent" });
           const named = (url: string) => launchUrl(url, recordedLaunch.value);
           // A rewind's cut is handed to the launch that resumes the harness's session, and let go
-          // once the runner has it; a fresh session never heard the line it names.
+          // once the runner has it; a fresh session never heard the line it names. A forked session
+          // is cut where the Start cut it, through the same cut, since the line it names is the source's.
           const read = Effect.gen(function* () {
             const rewind = Option.getOrUndefined(
               yield* readNativeRewind({ userId, conversationId: agent.conversationId }),
             );
-            const rewindBefore = resumed.resume === undefined ? undefined : rewind;
+            const rewindBefore = resumed.resume === undefined ? undefined : (resumed.cut ?? rewind);
             const config = yield* harness
               .config(agent, layout, resumed.resume, firstSequence, rewindBefore)
               .pipe(Effect.withSpan("web/runnerConfig"));
@@ -1012,7 +1018,7 @@ export const runnerSessions = <
                 eventsUrl: named(config.eventsUrl),
                 ...("tokenUrl" in config ? { tokenUrl: named(config.tokenUrl) } : undefined),
                 ...(layout.linesRead ? { linesUrl: named(options.linesUrl) } : undefined),
-                ...(layout.transcriptsKept
+                ...(layout.transcriptsKept && resumed.fromDisk !== true
                   ? { transcriptsUrl: named(options.transcriptsUrl) }
                   : undefined),
                 ...(resumed.fork === true ? { fork: true } : undefined),
@@ -1469,15 +1475,19 @@ export const runnerSessions = <
      * a send queues for one, and a warm call ask. On a machine that keeps the
      * CLI's transcript (`MachineLayout`'s `transcriptsKept`), the harness
      * resumes from the store whenever it holds any entry of the session, and
-     * from those alone, whatever the disk holds, so a session resumes only
-     * where the store holds it from its first entry (`holdsSession`); one it
-     * holds a tail of, or none of, as a session begun before it kept
-     * transcripts, is let go, and the fresh session that opens in its place
-     * is handed the agent's steps so far (`replay`). On a machine that keeps
-     * none, the session resumes from the disk alone, so not in a place made
-     * anew (`created`), whose disk is gone. A continued or forked agent with
+     * from those alone, whatever the disk holds, so a session resumes from
+     * the store only where it holds it from its first entry
+     * (`holdsSession`). One it holds a tail of, or none of, as a session
+     * begun before it kept transcripts, is let go in a sandbox, and the fresh
+     * session that opens in its place is handed the agent's steps so far
+     * (`replay`); on a Mac, whose disk keeps it (`diskSessions`), it resumes
+     * from the disk with the store left out of the launch (`fromDisk`), so
+     * the store never comes to hold a tail it would load alone. On a machine
+     * that keeps none, the session resumes from the disk alone, so not in a
+     * place made anew (`created`), whose disk is gone. A continued or forked agent with
      * no session of its own yet forks its source's in a new place, where the
-     * Start copied a transcript the store holds from its first entry.
+     * Start copied a transcript the store holds from its first entry, cut
+     * where the Start cut it.
      * Whether the place was made anew is read only where it decides the
      * session, so a launch prepared beside its place's resume waits on that
      * resume only there.
@@ -1494,15 +1504,20 @@ export const runnerSessions = <
         );
         const { conversationId } = agent;
         if (own !== undefined) {
-          const resumes = layout.transcriptsKept
-            ? yield* holdsSession(userId, conversationId, own)
-            : !(yield* created);
-          return (resumes ? { resume: own } : { replay: true }) satisfies ResumedSession;
+          if (layout.transcriptsKept && (yield* holdsSession(userId, conversationId, own))) {
+            return { resume: own } satisfies ResumedSession;
+          }
+          const fromDisk = (!layout.transcriptsKept || layout.diskSessions) && !(yield* created);
+          return (fromDisk ? { resume: own, fromDisk } : { replay: true }) satisfies ResumedSession;
         }
         const source = agent.startedFrom?.session;
         if (!layout.transcriptsKept || source === undefined || !(yield* created)) return {};
         const held = yield* holdsSession(userId, conversationId, source);
-        return (held ? { resume: source, fork: true } : {}) satisfies ResumedSession;
+        if (!held) return {} satisfies ResumedSession;
+        const cut = agent.startedFrom?.cutBefore;
+        return (
+          cut === undefined ? { resume: source, fork: true } : { resume: source, fork: true, cut }
+        ) satisfies ResumedSession;
       });
 
     /** The session a launch resumes in a place known made anew or not (`resumedSessionWhen`). */
@@ -2410,7 +2425,10 @@ export const runnerSessions = <
       // A turn its plan's limit cut short goes on with its own line in a launch on the next payer:
       // the runner, wherever it runs and whatever it holds, ended and launched again here under the
       // lease, as a message to a Mac's is, its payer chosen afresh as every launch's is
-      // (`turnPayerOf`) and the harness's session resumed (`resumedSessionWhen`).
+      // (`turnPayerOf`) and the harness's session resumed (`resumedSessionWhen`). Note that on a
+      // machine whose runner reads its lines, the line the ended launch took is put back untaken
+      // first, because the launch queues it again under the same id, and a line taken is never
+      // handed again (`requeueRunnerLine`).
       retry: (sessionId, message) =>
         Effect.gen(function* () {
           const after = yield* Effect.serviceOption(AfterResponse);
@@ -2420,7 +2438,12 @@ export const runnerSessions = <
             const sent = messageLine(message, layout);
             return yield* holdingRunner(
               agent.id,
-              sendHolding(sessionId, message, layout, sent, false, true),
+              Effect.andThen(
+                layout.linesRead
+                  ? requeueRunnerLine(userId, agent.id, sent.line.uuid)
+                  : Effect.void,
+                sendHolding(sessionId, message, layout, sent, false, true),
+              ),
               CODER.RUNNER_LEASE.SEND_WAIT,
             ).pipe(
               Effect.catch(failed("retry")),

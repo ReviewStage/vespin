@@ -85,7 +85,7 @@ import {
   REPOSITORY_UNREACHED,
   type RepositoryUnreached,
 } from "@repo/features/repository-reach-wire";
-import { inPullRequestOrder } from "@repo/features/task-agents-model";
+import { agentStillWriting, inPullRequestOrder } from "@repo/features/task-agents-model";
 import type { DescriptionEditor, TaskPullRequestLine } from "@repo/features/task-wire";
 import { dayAndTimeText, dueText } from "@repo/features/time-format";
 import {
@@ -95,7 +95,7 @@ import {
   type TurnRow,
   turnRows,
 } from "@repo/features/turn-rows";
-import { andList, readFailedWords } from "@repo/features/words";
+import { andList, countWords, readFailedWords, TERM } from "@repo/features/words";
 import type { FormerMember, WorkspaceMember } from "@repo/features/workspace-wire";
 import {
   ACTOR_KIND,
@@ -539,17 +539,6 @@ export function endLineReason(failure: AgentFailure | undefined, starter?: strin
     : FAILURE_REASON.OTHER;
 }
 
-/** The statuses an agent may still write under, which is when it can be stopped. */
-const FOLLOWED_STATUSES: ReadonlySet<AgentStatus> = new Set([
-  AGENT_STATUS.STARTING,
-  AGENT_STATUS.RUNNING,
-]);
-
-/** Whether an agent in this status may still write more. */
-export function agentStillWriting(status: AgentStatus): boolean {
-  return FOLLOWED_STATUSES.has(status);
-}
-
 /**
  * Whether the agent's tab offers Stop: whenever it may still write, starting
  * or with a line awaiting its turn included. Note that we offer it where no
@@ -836,6 +825,12 @@ export function archiveWords(archived: boolean): {
   readonly refused: string;
 } {
   return archived ? ARCHIVED_WORDS : UNARCHIVED_WORDS;
+}
+
+/** What the toast says once `count` agents' archive, or its undoing, landed: one agent's words for one, else how many. */
+export function archivedManyWords(count: number, archived: boolean): string {
+  if (count === 1) return archiveWords(archived).done;
+  return `${countWords(count, TERM.AGENT)} ${archived ? "archived" : "unarchived"}`;
 }
 
 /** A refused start or message as the view hears it: why, why the repository is out of reach where it is and the service said, when a plan's reached limit resets where it is that and the provider said, and the provider whose credential is missing where it is that. */

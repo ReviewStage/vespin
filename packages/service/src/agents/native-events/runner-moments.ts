@@ -43,6 +43,29 @@ const END_DETAIL_CHARS = 1000;
  */
 const PLAN_CODE_SPLIT = /((?<![^\s"'])(?:subscription_sharing|chatpass_v2)_[a-z_]+(?![^\s"',;]))/;
 
+/** What a NUL a runner's event carries is kept as, since no Postgres text or jsonb value holds one. */
+const NUL_KEPT_AS = "\uFFFD";
+
+/**
+ * A value with every NUL in its strings, keys included, kept as the
+ * replacement character: a runner's event as it arrives, and our own tool's
+ * answer once read as JSON, whose `\u0000` its reading makes a NUL. Note that
+ * a NUL is replaced rather than refused, because the store refuses it on every
+ * post of its batch, which the runner posts again for as long as it runs, so
+ * every event behind it would never land and its turn would stand frozen.
+ */
+export function withoutNul(value: WireValue): WireValue {
+  if (isWireString(value)) return value.replaceAll("\u0000", NUL_KEPT_AS);
+  if (Array.isArray(value)) return value.map(withoutNul);
+  if (!isRecord(value)) return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, each]) => [
+      key.replaceAll("\u0000", NUL_KEPT_AS),
+      withoutNul(each),
+    ]),
+  );
+}
+
 /** What a picture in a tool's answer is kept as: the bytes went to the model once, and a transcript carries every byte it holds into each read. */
 export const PICTURE_STAND_IN = "[image]";
 
@@ -158,7 +181,7 @@ export function toolAnswerSettlement(
   isError: boolean,
 ): ToolCallSettlement {
   const output: UnparsedWireValue = answer.workspaceTool
-    ? valueFromJsonText(answer.text)
+    ? withoutNul(valueFromJsonText(answer.text))
     : answer.output;
   if (isError) {
     return {
@@ -170,5 +193,6 @@ export function toolAnswerSettlement(
   }
   if (!answer.workspaceTool) return toolCallSettlementOf(JSON.stringify(answer.output), undefined);
   const status = isRecord(output) && isWireString(output.status) ? output.status : undefined;
-  return toolCallSettlementOf(answer.text, status);
+  // Note that the settlement is handed the answer as read, since it reads its JSON again and would make its NUL anew.
+  return toolCallSettlementOf(JSON.stringify(output), status);
 }

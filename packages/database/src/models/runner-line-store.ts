@@ -286,6 +286,23 @@ const writeAccepted = SqlSchema.findAll({
     ),
 });
 
+const writeRequeued = SqlSchema.void({
+  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String, lineId: Schema.String }),
+  execute: ({ userId, agentId, lineId }) =>
+    Database.use((db) =>
+      db
+        .update(runnerLine)
+        .set({ acceptedAt: null, launch: ANY_LAUNCH })
+        .where(
+          and(
+            eq(runnerLine.userId, userId),
+            eq(runnerLine.agentId, agentId),
+            eq(runnerLine.lineId, lineId),
+          ),
+        ),
+    ),
+});
+
 /** The files of the agent's message lines no launch took whose turn still waits on them, in the order they were queued. */
 const findWaitingFiles = SqlSchema.findAll({
   Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
@@ -444,6 +461,23 @@ export function acceptRunnerLine(
       Option.fromNullishOr(rows[0]?.handed),
     ),
   );
+}
+
+/**
+ * The account's agent's message line under its id put back as no launch's
+ * and untaken, as a turn its plan's limit cut short is handed on to a launch
+ * on the next payer (`retry`): the line it queues again under the same id
+ * then takes the row over for that launch (`insertLine`), which a line taken
+ * would otherwise keep from it. Nothing where no such line stands, or the id
+ * is none a line could carry.
+ */
+export function requeueRunnerLine(
+  userId: string,
+  agentId: string,
+  lineId: string,
+): RunnerLineEffect<void> {
+  if (!LINE_ID.test(lineId)) return Effect.void;
+  return writeRequeued({ userId, agentId, lineId });
 }
 
 /**

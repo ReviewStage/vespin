@@ -1,4 +1,6 @@
 import { type HostedTerminalClient, terminalRelayAddress, webSocketOrigin } from "@repo/features";
+import { openedUnderCredential } from "@repo/features/relay-credential";
+import type { OpenTerminalSocket, TerminalSocket } from "@repo/features/relay-socket";
 import {
   TERMINAL_CONNECTION,
   TERMINAL_FLOW,
@@ -41,8 +43,6 @@ import { type BrowserLiveConcern, browserLiveConcern } from "./compose-browser-l
 import type { Composer } from "./composer.js";
 import type { HOST_PLATFORM_CONCERN, PlatformConcernMethods } from "./host-concerns.js";
 import type { HostKernel } from "./host-kernel.js";
-import { openedUnderCredential } from "./relay-credential.js";
-import type { OpenTerminalSocket, TerminalSocket } from "./relay-socket.js";
 import type { RunMode } from "./run-mode.js";
 
 /**

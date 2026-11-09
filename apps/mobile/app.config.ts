@@ -181,6 +181,11 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // the distribution profile release-ios.yml exports it with allows; a
       // simulator build is unsigned and carries no entitlement at all.
       entitlements: { "aps-environment": "production" },
+      // Declared exempt from US export rules, so App Store Connect stops
+      // asking on every build: the app's one cipher of its own (the host's
+      // sealed files, `keychain-cipher.ts`) protects only its own data at
+      // rest, and everything on the wire is the system's HTTPS.
+      infoPlist: { ITSAppUsesNonExemptEncryption: false },
     },
     plugins: [
       "expo-router",

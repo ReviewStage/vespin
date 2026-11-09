@@ -1,7 +1,7 @@
 import { AGENT_STATUS, type ListedAgent } from "@repo/features/agent-wire";
 import { agentLastMovedAt } from "@repo/features/task-agents-model";
+import { createdByOnly, TASK_ORDER, taskTime } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
-import { createdByOnly, TASK_ORDER, taskTime } from "./task-list-model.js";
 
 /**
  * person-page-model.ts -- a person's page in the listed workspace: what of theirs the window already holds, grouped as the page lists it.

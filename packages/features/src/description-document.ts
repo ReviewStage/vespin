@@ -63,7 +63,7 @@ const CLOSING_FENCE_LINE = /^ {0,3}(`{3,}|~{3,})[ \t]*$/u;
 const SECTION_OPENER = /^ {0,3}#{1,2}(?=[ \t]|$)/u;
 
 /** The fence open after a line, given the one open before it: a line opens one outside a fence and closes the one it matches inside it. */
-function fenceAfter(open: string | undefined, line: string): string | undefined {
+export function fenceAfter(open: string | undefined, line: string): string | undefined {
   const fence = (open === undefined ? FENCE_LINE : CLOSING_FENCE_LINE).exec(line)?.[1];
   if (fence === undefined) return open;
   if (open === undefined) return fence;

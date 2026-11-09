@@ -72,7 +72,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.READ_AGENT]: {
     agents: ["read"],
     agentPullRequests: ["pullRequest"],
-    messages: ["agentNewest"],
+    messages: ["agentNewest", "agent"],
   },
   [MEMBER_MCP_TOOL.READ_AGENT_CHANGES]: { agentPullRequests: ["pullRequest"], agents: ["changes"] },
   [MEMBER_MCP_TOOL.LIST_MODELS]: { models: ["list"], account: ["preferences"] },
@@ -293,7 +293,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   macCommands: { waiting: INTERNAL, settle: INTERNAL, claim: INTERNAL, listening: INTERNAL },
   mcpClients: { list: NOT_YET_BUILT, revoke: NOT_YET_BUILT },
   messages: {
-    agent: NOT_YET_BUILT,
     queue: NOT_YET_BUILT,
     agentWorker: NOT_YET_BUILT,
     agentWorkerNewest: NOT_YET_BUILT,

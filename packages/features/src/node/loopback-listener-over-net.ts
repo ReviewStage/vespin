@@ -1,11 +1,11 @@
 /**
- * loopback-listener-over-net.ts -- one forwarded port's listener on this Mac's `127.0.0.1`, over `node:net`: the seam the port-forward composer listens through.
+ * loopback-listener-over-net.ts -- one forwarded port's listener on this machine's `127.0.0.1`, over `node:net`: the seam a forwarded port listens through (`port-forward-tunnel.ts`).
  *
  * The server is the scope's: made, listened on, and closed with every
  * connection it accepted when the scope closes. It binds `127.0.0.1` alone,
  * never every interface, so the forward is the developer's and no other
  * machine's. A port another listener holds answers nothing rather than
- * failing, for the composer to try the next. What a connection receives is
+ * failing, for the forward to try the next. What a connection receives is
  * handed on unbounded, since the tunnel it crosses has no backpressure; no
  * byte of it is read, logged, or kept here.
  */

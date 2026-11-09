@@ -1,5 +1,5 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
-import { NO_ITEMS } from "@repo/features/inbox-list-model";
+import { NO_ITEMS, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import type { MentionLines } from "@repo/features/mention-link";
@@ -75,7 +75,7 @@ import {
 } from "../tasks/description-body.js";
 import { CommentFocusScope } from "../tasks/description-comments.js";
 import { useDescriptionEdit, useDescriptionRetry } from "../tasks/description-doors.js";
-import { keyedItem, waitingByAgent } from "../tasks/inbox-model.js";
+import { keyedItem } from "../tasks/inbox-model.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { TAB_KIND } from "../tasks/tab-look.js";

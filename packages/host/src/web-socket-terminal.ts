@@ -16,12 +16,12 @@
  * pause lasts only as long as the screen takes to catch up.
  */
 
-import { type Cause, Effect, Latch, Queue, Stream } from "effect";
 import type {
   OpenTerminalSocket,
   TerminalSocketArrival,
   TerminalSocketOpening,
-} from "./relay-socket.js";
+} from "@repo/features/relay-socket";
+import { type Cause, Effect, Latch, Queue, Stream } from "effect";
 
 /** How the shell ends a socket it no longer wants: normally, the shell going on in tmux. */
 const NORMAL_CLOSE = 1000;

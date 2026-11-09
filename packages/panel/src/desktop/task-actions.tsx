@@ -1,5 +1,7 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { repositoryLabel, taskFinished } from "@repo/features/task-list-model";
+import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import {
   DESCRIPTION_ACTOR,
   TASK_BOUNDS,
@@ -43,7 +45,6 @@ import { accountActor, creatorActor } from "@repo/ui/actor-model";
 import { confirmAsked } from "@repo/ui/confirm-state";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { repositoryLabel, taskFinished } from "@repo/ui/task-list-model";
 import {
   DOCUMENT_REGION,
   RENAME_FAILED_NOTE,
@@ -104,12 +105,7 @@ import {
 } from "../tasks/task-relation-menu.js";
 import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
 import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
-import {
-  NO_ASSIGNEE,
-  PRIORITY_ROWS,
-  TASK_STATUS_WORDS,
-  useAssigneeRows,
-} from "../tasks/task-standing.js";
+import { NO_ASSIGNEE, PRIORITY_ROWS, useAssigneeRows } from "../tasks/task-standing.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { NewTask } from "../tasks/use-new-task.js";
 import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";

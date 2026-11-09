@@ -508,6 +508,7 @@ function sandboxRecorder(call: BrowserCall): BrowserRecorder<AgentBrowser | Data
           bytes: read.bytes,
           contentType: CONVERSATION_MEDIA_TYPE.WEBM,
           ...dimensions,
+          mp4Bytes: read.mp4Bytes,
         }).pipe(
           Effect.tapError(logStoreFailure),
           Effect.mapError(() => RECORDING_REFUSAL.UNKEPT),

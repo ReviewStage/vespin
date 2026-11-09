@@ -56,14 +56,12 @@
     "@shikijs/themes": "4.5.0",
     "@tanstack/db": "0.15.2",
     "effect": "catalog:",
-    "shiki": "4.5.0",
-    "ws": "catalog:"
+    "shiki": "4.5.0"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@orpc/client": "catalog:",
     "@types/node": "catalog:",
-    "@types/ws": "8.18.1",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

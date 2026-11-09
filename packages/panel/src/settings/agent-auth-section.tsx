@@ -99,7 +99,8 @@ import { ReadFailed } from "./marks.js";
  * harness is a section of its own, named for it: its plans first, in the
  * account's order, each led by its provider's logo and dragged up and down
  * by its grip (`@repo/ui`'s `SettingsOrderedRows`) or moved from its ⋯; then
- * a row to add another; then the key, led by a key, which pays once every
+ * a row to add another, led by the same logo whether or not a plan is
+ * connected; then the key, led by a key, which pays once every
  * plan is at its limit. A turn starts on the first plan with room left, and
  * that one says In use. A plan is named by the name the account gave it,
  * renamed in place for a Claude plan, whose token names no account; else by
@@ -152,7 +153,7 @@ interface Harness {
   /** What its plan is called wherever a surface names the credential: its row's label, a disconnect's title. */
   readonly planName: string;
   readonly plan: SubscriptionKeySummary["kind"];
-  /** The logo its plan's row leads with. */
+  /** The logo its plans' rows and its add row lead with. */
   readonly planMark: MarkProvider;
   readonly keyName: string;
   readonly keyUrl: string;
@@ -1217,11 +1218,7 @@ function HarnessCredentials({
           />
         )}
         <SettingsRow
-          leading={
-            <GlyphSlot size={ICON_SIZE.LARGE}>
-              <GLYPH.ADD />
-            </GlyphSlot>
-          }
+          leading={<ProviderMark provider={harness.planMark} size={PROVIDER_MARK_SIZE.ROW} />}
           label={addWords}
           controls={SETTINGS_ROW_CONTROLS.BESIDE}
           below={

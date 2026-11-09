@@ -76,6 +76,14 @@ import {
 } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
+  agentRow,
+  orderTaskRows,
+  repositoryLabel,
+  TASK_ROW,
+  type TaskRow,
+  taskRow,
+} from "@repo/features/task-list-model";
+import {
   TASK_CREATE_RELATION_KIND,
   TASK_RELATION_KIND,
   TASK_TREE_BOUNDS,
@@ -143,14 +151,6 @@ import {
 } from "@repo/ui/search-score";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
 import { fileTab, inTaskOrder } from "@repo/ui/tab-strip-model";
-import {
-  agentRow,
-  orderTaskRows,
-  repositoryLabel,
-  TASK_ROW,
-  type TaskRow,
-  taskRow,
-} from "@repo/ui/task-list-model";
 import { DOCUMENT_REGION, SETTLED_STATUS, settleOffered, TASK_MARK } from "@repo/ui/tasks-model";
 import { type UseQueryResult, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {

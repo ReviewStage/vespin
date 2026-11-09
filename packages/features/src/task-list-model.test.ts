@@ -1,12 +1,5 @@
-import { AGENT_STATUS } from "@repo/features/agent-wire";
-import {
-  TASK_PRIORITY,
-  TASK_STATUS,
-  type TaskPriority,
-  type TaskStatus,
-  type TaskSummary,
-} from "@repo/features/task-wire";
 import { expect, test } from "vitest";
+import { AGENT_STATUS } from "./agent-wire.js";
 import {
   ASSIGNED_TO,
   agentRow,
@@ -27,6 +20,13 @@ import {
   tasksById,
   taskTime,
 } from "./task-list-model.js";
+import {
+  TASK_PRIORITY,
+  TASK_STATUS,
+  type TaskPriority,
+  type TaskStatus,
+  type TaskSummary,
+} from "./task-wire.js";
 
 const DEAN = "user-dean";
 const CHARLES = "user-charles";

@@ -13,7 +13,8 @@
  *   as the events route records it, for `thread/resume`.
  * - The launch's environment carries `CODEX_HOME` where its machine names
  *   one (`MachineLayout`'s `codexHome`): a sandbox's, on its persisted disk
- *   where the image made it, so a thread outlives a stop.
+ *   where the image made it, so a thread outlives a stop, and a Mac's
+ *   default under the agent's home where its runner mirrors the thread.
  * - On the plan, the runner asks our token route for the token
  *   (`../native-events/runner-token-app.ts`), so the launch declares no
  *   credential of the plan's and no token travels through a launch's
@@ -49,7 +50,7 @@
  *   ahead of every message, as on Claude Code.
  * - The runner runs the Codex its machine names (`MachineLayout`'s
  *   `codexExecutable`): the image's in a sandbox, and on a Mac the one its
- *   host checked against the pin, `CODEX_HOME` left at its default under the
+ *   host checked against the pin, `CODEX_HOME` at its default under the
  *   agent's own home there; a Mac that checked none runs no Codex agent.
  */
 

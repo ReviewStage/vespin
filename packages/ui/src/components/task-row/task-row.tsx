@@ -612,6 +612,7 @@ export function TaskRow({
   menu,
   more = true,
   edges = TASK_ROW_EDGES.LIST,
+  choosable = true,
   disabled = false,
   onOpen,
   onOpenInTab,
@@ -647,6 +648,8 @@ export function TaskRow({
   more?: boolean | undefined;
   /** What room it keeps at its edges, its list's (`TaskRows`'s `edges`): a bare row keeps no gutter for a box and draws no ⋯, its menu still a right-click and the menu key away. */
   edges?: TaskRowEdges | undefined;
+  /** Whether a choosing list may choose it; a start the list offers after its rows may not, its gutter still standing so its cells line up with theirs. */
+  choosable?: boolean | undefined;
   /** Whether its press is unavailable, as while the task is deleted. */
   disabled?: boolean | undefined;
   onOpen: () => void;
@@ -701,7 +704,7 @@ export function TaskRow({
     <CardPress
       ref={press}
       disabled={disabled}
-      selectKey={taskId}
+      selectKey={choosable ? taskId : undefined}
       selectBox={edges === TASK_ROW_EDGES.LIST ? SELECT_BOX_PLACE.GUTTER : undefined}
       roving
       onKeyDown={fold === undefined ? undefined : foldKeys}

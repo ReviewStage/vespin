@@ -27,7 +27,7 @@ import {
   FAILURE_SURFACE,
   type FailureAbout,
 } from "@repo/features/shown-failure";
-import { pullRequestsOfTask } from "@repo/features/task-agents-model";
+import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { KnownNames } from "@repo/features/thing-kind";
 import { workingTime } from "@repo/features/time-format";
@@ -140,7 +140,6 @@ import {
   agentPart,
   agentParts,
   agentRows,
-  agentStillWriting,
   agentWorkingSince,
   CONTINUE_AGAIN_LABEL,
   CONTINUE_LABEL,
@@ -2465,57 +2464,56 @@ function AgentTranscriptView({
     const carded = !blank && (brief !== AGENT_BRIEF.PROMPT || origin !== undefined);
     const description = carded ? first : undefined;
     const task = carded || blank ? undefined : first;
-    // What stands after the messages is the log's last row, so the virtualizer measures it as it does a message (`ConversationRows`' `foot`).
-    // Note that it stands too while a line not yet sent does, which stays last as the agent's lines land before it, so their landing changes the foot's key, which the virtualizer follows.
-    const footed =
-      working ||
-      ended !== undefined ||
-      endTrail !== undefined ||
-      (failed && connected) ||
-      undelivered.size > 0 ||
-      unsent.size > 0;
-    const foot = !footed
-      ? undefined
-      : () => (
-          <>
-            {working && !waitingNotice ? (
-              <WorkingLine startedAt={startedAt} words={workingLineWords(phase, waitsUntil)} />
-            ) : null}
-            {ended === undefined && endTrail === undefined ? null : (
-              <div
-                className="agent-end flex flex-col items-start gap-control-gap"
-                data-ended={ended === undefined ? undefined : ""}
-              >
-                {ended === undefined
-                  ? null
-                  : (signInCard ?? (
-                      <AgentEndRow
-                        ended={ended}
-                        endReason={endReason}
-                        keyProvider={keyProvider}
-                        onOpenApiKeys={onOpenApiKeys}
-                        about={failureAbout ?? { agentId, taskId }}
-                        press={endPress}
-                      />
-                    ))}
-                {endTrail}
-              </div>
-            )}
-            {/* Note that the messages held keep standing with no line under them while the app is offline, since the Offline mark says why. */}
-            {failed && connected ? (
-              <ErrorState
-                failure={failureShown({
-                  surface: FAILURE_SURFACE.AGENT_TRANSCRIPT_READ,
-                  cause: failedWith ?? FAILURE_CONDITION.UNREAD,
-                  about: { agentId },
-                })}
-                onRetry={onRetry}
-              >
-                {TRANSCRIPT_FAILED_LINE}
-              </ErrorState>
-            ) : null}
-          </>
-        );
+    // What stands after the messages is drawn inside the last of them, which grows as TanStack's streaming reply does, so the virtualizer measures it with the row and the log holds nothing past its rows.
+    const trailing =
+      !working && ended === undefined && endTrail === undefined && !(failed && connected) ? null : (
+        <>
+          {working && !waitingNotice ? (
+            <WorkingLine startedAt={startedAt} words={workingLineWords(phase, waitsUntil)} />
+          ) : null}
+          {ended === undefined && endTrail === undefined ? null : (
+            <div
+              className="agent-end flex flex-col items-start gap-control-gap"
+              data-ended={ended === undefined ? undefined : ""}
+            >
+              {ended === undefined
+                ? null
+                : (signInCard ?? (
+                    <AgentEndRow
+                      ended={ended}
+                      endReason={endReason}
+                      keyProvider={keyProvider}
+                      onOpenApiKeys={onOpenApiKeys}
+                      about={failureAbout ?? { agentId, taskId }}
+                      press={endPress}
+                    />
+                  ))}
+              {endTrail}
+            </div>
+          )}
+          {/* Note that the messages held keep standing with no line under them while the app is offline, since the Offline mark says why. */}
+          {failed && connected ? (
+            <ErrorState
+              failure={failureShown({
+                surface: FAILURE_SURFACE.AGENT_TRANSCRIPT_READ,
+                cause: failedWith ?? FAILURE_CONDITION.UNREAD,
+                about: { agentId },
+              })}
+              onRetry={onRetry}
+            >
+              {TRANSCRIPT_FAILED_LINE}
+            </ErrorState>
+          ) : null}
+        </>
+      );
+    // The newest line the reader wrote, which takes the log to its end as it lands, as TanStack's example does on a send: one of the developer's lines that names no other sender.
+    const ownLast = rowKeys.findLast((_, at) => {
+      const message = entries[at]?.row.message;
+      return (
+        message?.role === MESSAGE_ROLE.USER &&
+        messageSender(message, readerId, members, former) === undefined
+      );
+    });
     return (
       <TranscriptAgent value={agentId}>
         <LiveDoors value={live}>
@@ -2545,7 +2543,7 @@ function AgentTranscriptView({
                   gap={0}
                   rowClassName={rowClassOf}
                   handle={rowsHandle}
-                  foot={foot}
+                  ownLast={ownLast}
                 >
                   {(at) => {
                     const entry = entries[at];
@@ -2606,6 +2604,7 @@ function AgentTranscriptView({
                         {earlierOmitted && message === description ? (
                           <TranscriptNote>Earlier steps are not shown.</TranscriptNote>
                         ) : null}
+                        {at === entries.length - 1 ? trailing : null}
                       </>
                     );
                   }}

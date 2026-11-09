@@ -60,6 +60,7 @@ import { LIVE_READ, type LiveRead } from "@repo/features/live-wire";
 import type { ModelsAnswer } from "@repo/features/models-wire";
 import { PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
 import { markedAs } from "@repo/features/read-mark";
+import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
 import { carried, GATEWAY_EVENT, GATEWAY_METHOD } from "@repo/gateway";
 import {
@@ -1278,16 +1279,16 @@ function composed(
     AGENTS_INBOX_REMIND: declaredWrite(dependencies.pool, reminded),
     AGENTS_INBOX_ITEM_HOME: ({ itemId }) => asked(client.inboxItemHome(itemId)),
     AGENTS_INBOX_READ_ALL: declaredWrite(dependencies.pool, markedAll),
-    AGENTS_INBOX_ATTACHMENT: ({ itemId, attachmentId }) =>
+    AGENTS_INBOX_ATTACHMENT: ({ itemId, attachmentId, playable = PLAYABLE_VIDEO_TYPE.WEBM }) =>
       keptAsked(
-        new InboxAttachmentKey({ itemId, attachmentId }),
-        client.inboxAttachment(itemId, attachmentId),
+        new InboxAttachmentKey({ itemId, attachmentId, playable }),
+        client.inboxAttachment(itemId, attachmentId, playable),
         (attachment) => ("base64" in attachment ? attachment : undefined),
       ),
-    AGENTS_PICTURE: ({ agentId, pictureId, callId }) =>
+    AGENTS_PICTURE: ({ agentId, pictureId, callId, playable = PLAYABLE_VIDEO_TYPE.WEBM }) =>
       keptAsked(
-        new AgentPictureKey({ agentId, pictureId, callId }),
-        client.agentPicture(agentId, pictureId, callId),
+        new AgentPictureKey({ agentId, pictureId, callId, playable }),
+        client.agentPicture(agentId, pictureId, callId, playable),
         (picture) => ("base64" in picture ? picture : undefined),
       ),
     // An agent's origin is held for a window while its page shows it.

@@ -9,8 +9,41 @@ import {
   pinPositionsForMove,
 } from "@repo/features/pin-order";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import {
+  ASSIGNED_TO,
+  type AssignedTo,
+  agentRow,
+  type DrawnTaskRow,
+  drawnTaskRows,
+  homedTaskRows,
+  NO_REPOSITORY,
+  type RepositoryGroup,
+  repositoryHeadingsDrawn,
+  repositoryLabel,
+  TASK_GROUPING,
+  TASK_ROW,
+  type TaskRow,
+  type TaskSections,
+  type TasksById,
+  taskRow,
+  taskRowInView,
+  taskRowKey,
+  taskRowRepository,
+  taskRowsAssignedTo,
+  taskRowTime,
+  taskSections,
+  tasksById,
+} from "@repo/features/task-list-model";
 import type { TaskSectionWrite } from "@repo/features/task-section-wire";
-import { isAgentEntry, type SectionMember } from "@repo/features/task-section-writes";
+import type { SectionMember } from "@repo/features/task-section-writes";
+import {
+  type DrawnSection,
+  memberSection,
+  placeWrites,
+  sectionedTasks,
+  sectionInView,
+  unplaceAllWrites,
+} from "@repo/features/task-sections-model";
 import type { TaskAgentPin, TaskSummary } from "@repo/features/task-wire";
 import type { UpdateControl } from "@repo/settings/settings-controls";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
@@ -80,39 +113,6 @@ import {
 } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, STRIP_TAB_KIND, sameTab } from "@repo/ui/tab-strip-model";
-import {
-  ASSIGNED_TO,
-  type AssignedTo,
-  agentRow,
-  type DrawnTaskRow,
-  drawnTaskRows,
-  homedTaskRows,
-  NO_REPOSITORY,
-  orderTaskRows,
-  type RepositoryGroup,
-  repositoryGroups,
-  repositoryHeadingsDrawn,
-  repositoryLabel,
-  TASK_GROUPING,
-  TASK_ROW,
-  type TaskListView,
-  type TaskRow,
-  type TasksById,
-  taskRow,
-  taskRowInView,
-  taskRowKey,
-  taskRowRepository,
-  taskRowsAssignedTo,
-  taskRowTime,
-  tasksById,
-} from "@repo/ui/task-list-model";
-import {
-  memberSection,
-  placeWrites,
-  sectionOrder,
-  unplaceAllWrites,
-  workspaceSections,
-} from "@repo/ui/task-sections-model";
 import { repositoryPageUrl, TASK_MARK } from "@repo/ui/tasks-model";
 import { useVirtualRuns, VIRTUAL_ROW_KEY_ATTRIBUTE } from "@repo/ui/virtual-rows";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
@@ -188,7 +188,6 @@ import { SidebarInboxRow } from "./sidebar-inbox-row.js";
 import { SidebarPinnedTab } from "./sidebar-pinned-tab.js";
 import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
 import {
-  type DrawnSection,
   moveToSectionEntry,
   PINNED_DROP_ZONE,
   rowMember,
@@ -1302,39 +1301,6 @@ function RepositorySection({
   );
 }
 
-/** The listed tasks as the view groups them: by repository, or in one run. */
-type TaskSections =
-  | {
-      readonly grouping: typeof TASK_GROUPING.REPOSITORY;
-      readonly groups: readonly RepositoryGroup[];
-    }
-  | { readonly grouping: typeof TASK_GROUPING.NONE; readonly rows: readonly TaskRow[] };
-
-/**
- * The tasks under Tasks as the view groups them, newest updated first.
- * Grouped by repository, the pinned repositories' groups stand above the
- * rest, newest pinned first, and the rest keep the order's.
- */
-function taskSections(
-  rows: readonly TaskRow[],
-  grouping: TaskSections["grouping"],
-  tasks: SidebarTasks,
-): TaskSections {
-  if (grouping === TASK_GROUPING.NONE) {
-    return { grouping, rows: orderTaskRows(rows) };
-  }
-  const grouped = repositoryGroups(rows);
-  const pinnedAt = (group: RepositoryGroup) =>
-    group.repository === null ? -1 : tasks.pinnedRepositories.indexOf(group.repository);
-  return {
-    grouping,
-    groups: [
-      ...grouped.filter((group) => pinnedAt(group) >= 0).sort((a, b) => pinnedAt(a) - pinnedAt(b)),
-      ...grouped.filter((group) => pinnedAt(group) < 0),
-    ],
-  };
-}
-
 /** The rows the sections draw, in their order: each group's unless folded, the rows standing under its fold (`stands`). */
 function drawnTasks(
   sections: TaskSections,
@@ -1688,72 +1654,6 @@ function SidebarAutomationsRow({
   );
 }
 
-/** The listed workspace's sections as the sidebar draws them, and the tasks and agents standing in any of them, which Tasks leaves out. */
-interface SectionedTasks {
-  readonly sections: readonly DrawnSection[];
-  readonly taskIds: ReadonlySet<string>;
-  readonly agentIds: ReadonlySet<string>;
-}
-
-/**
- * The account's sections in the workspace, each with the tasks of `free`,
- * the listed tasks no pin holds, and the agents of `freeAgents`, the listed
- * agents with no task no pin holds, it keeps, in its order. A row in a
- * section that stands elsewhere, pinned or archived, is no row of it, and
- * comes back to it once it stands free again. None while the account keeps
- * no sections here.
- */
-function sectionedTasks(
-  tasks: SidebarTasks,
-  workspaceId: string | undefined,
-  free: readonly TaskSummary[],
-  freeAgents: readonly TasklessAgent[],
-): SectionedTasks {
-  if (workspaceId === undefined) return { sections: [], taskIds: new Set(), agentIds: new Set() };
-  const state = tasks.taskSections;
-  const byId = new Map(free.map((task) => [task.id, task]));
-  const agentsById = new Map(freeAgents.map((agent) => [agent.id, agent]));
-  const sections = workspaceSections(state, workspaceId).map((section): DrawnSection => {
-    const held = sectionOrder(state, section.id).flatMap((entry) => {
-      const agent = isAgentEntry(entry) ? agentsById.get(entry.agentId) : undefined;
-      const task = isAgentEntry(entry) ? undefined : byId.get(entry.taskId);
-      if (agent !== undefined) return [{ entry, row: agentRow(agent) }];
-      return task === undefined ? [] : [{ entry, row: taskRow(task) }];
-    });
-    return { section, entries: held.map(({ entry }) => entry), rows: held.map(({ row }) => row) };
-  });
-  const rows = sections.flatMap((drawn) => drawn.rows);
-  const taskIds = new Set(rows.flatMap((row) => (row.kind === TASK_ROW.TASK ? [row.task.id] : [])));
-  const agentIds = new Set(
-    rows.flatMap((row) => (row.kind === TASK_ROW.AGENT ? [row.agent.id] : [])),
-  );
-  return { sections, taskIds, agentIds };
-}
-
-/**
- * A section as the view leaves it: its tasks to do and in progress, its
- * finished sub-tasks while the view shows them (`taskRowInView`), and any
- * with no status, an agent's among them, of those Assigned to holds, each
- * with its entry, in its order.
- */
-function sectionInView(
-  drawn: DrawnSection,
-  view: TaskListView,
-  readerId: string | undefined,
-): DrawnSection {
-  const held = new Set(taskRowsAssignedTo(drawn.rows, view.assignedTo, readerId));
-  const shown = (row: TaskRow) => held.has(row) && taskRowInView(row, view);
-  const kept = drawn.rows.flatMap((row, at) => {
-    const entry = drawn.entries[at];
-    return entry !== undefined && shown(row) ? [{ entry, row }] : [];
-  });
-  return {
-    ...drawn,
-    entries: kept.map(({ entry }) => entry),
-    rows: kept.map(({ row }) => row),
-  };
-}
-
 /** What the sidebar is drawn from. */
 interface DesktopSidebarProps {
   sidebar: SidebarCollapse;
@@ -2002,7 +1902,7 @@ function SidebarColumn({
   // The account's own sections stand while a workspace is listed.
   const sectionsShown = tasks.signedIn && tasks.workspace !== undefined;
   const sectioned = sectionedTasks(
-    tasks,
+    tasks.taskSections,
     sectionsShown ? tasks.workspace?.id : undefined,
     tasks.listed.tasks.filter((task) => task.pinnedAt === undefined),
     listedAgents.standing.filter((agent) => agent.pinnedAt === undefined),
@@ -2178,7 +2078,7 @@ function SidebarColumn({
     sameOrder: sameTaskOrder,
     draw: (places: ReadonlyMap<string, TaskRow>) => {
       const placed = taskPlaces(statusRows, places, placing);
-      const held = taskSections([...placed.values()], orderView.grouping, tasks);
+      const held = taskSections([...placed.values()], orderView.grouping, tasks.pinnedRepositories);
       return liveSections(held, new Map(statusRows.map((row) => [taskRowKey(row), row])));
     },
     placesOf: (_drawn, held) => taskPlaces(statusRows, held, placing),

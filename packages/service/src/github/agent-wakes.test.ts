@@ -1190,7 +1190,8 @@ it.layer(SUITE)("a delivery told to the agents on its pull request", (it) => {
         ).pipe(Effect.provide(failing));
 
         const [named, told] = agentSessions.sent;
-        const close = "Read why with `gh`, fix the cause, and push, as you watch your own checks.";
+        const close =
+          "Read why with `gh`, fix the cause, and push, then wait on your checks as your instructions say.";
         assert.equal(
           sentText(named?.message.message),
           `A check failed on your branch \`${read.ref}\`: https://github.com/${RELAY_FULL_NAME}/commit/${HEAD}/checks\n\nFailed:\n- test (${runPage(2)})\n\n${close}`,

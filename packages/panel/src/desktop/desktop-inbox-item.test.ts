@@ -1586,7 +1586,11 @@ test("words selected in a thread stand Reply over them, which quotes them into t
   await settle();
   assert.equal(replyPress(), undefined, "Reply goes once pressed");
   assert.equal(document.activeElement, composerEditor(pane), "the box takes the caret");
-  assert.equal(board.scrollTop, 2_000, "the thread is taken to its end, the whole box in view");
+  assert.equal(
+    board.scrollTop,
+    400,
+    "the thread stays where the reader reads, the box docked under it",
+  );
   typeInComposer(pane, "Page at night for a full outage.");
   pressInComposer(pane, "Enter");
   await settle();
@@ -1648,7 +1652,7 @@ test("words selected in an open item's question quote into its box, its reply ca
   );
 });
 
-test("a message written on a settled item's thread from its box goes as a message, never an answer, and lands on the thread in place, scrolled into view with the draft reply under it, the item still answered and the box emptied", async () => {
+test("a message written on a settled item's thread from its box goes as a message, never an answer, and lands on the thread in place, the thread taken to its end, the item still answered and the box emptied", async () => {
   const { page } = mount();
   await settle();
   act(() => rowNamed(page, "How is a failed email retried?").click());
@@ -1658,14 +1662,10 @@ test("a message written on a settled item's thread from its box goes as a messag
   const pane = itemPane(page);
   const board =
     pane.querySelector<HTMLElement>(".inbox-board")?.parentElement ?? assert.fail("the thread");
-  // The thread is taller than its board, so the new comment lands under its foot, the draft reply under it.
-  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
-    if (this === board) return DOMRect.fromRect({ y: 0, height: 400 });
-    if (this.matches("[data-message-id]")) return DOMRect.fromRect({ y: 900, height: 60 });
-    if (this.matches('[data-inbox-comment="draft"]')) {
-      return DOMRect.fromRect({ y: 960, height: 200 });
-    }
-    return DOMRect.fromRect();
+  // The thread is taller than its board, and the reader has scrolled up it, so the new comment lands under its foot.
+  layScrollerOut(board, 400, 1_400);
+  act(() => {
+    board.scrollTop = 200;
   });
 
   typeInComposer(pane, "Page on-call at night too.");
@@ -1686,11 +1686,7 @@ test("a message written on a settled item's thread from its box goes as a messag
   ]);
   assert.deepEqual(subjectOf(page), ["How is a failed email retried?"]);
   assert.equal(composerEditor(pane).textContent, "", "the box lets its words go");
-  assert.equal(
-    board.scrollTop,
-    760,
-    "the board scrolls its own new comment, and the draft reply's foot under it, into view",
-  );
+  assert.equal(board.scrollTop, 1_000, "the reader's own message takes the thread to its end");
 });
 
 test("a message refused says why under the box, which keeps its words, and leaves nothing on the thread", async () => {
@@ -2185,15 +2181,17 @@ test.each([
 
 /** Each comment of the shown thread as its head draws its writer: its kind, then the kind of each face it draws, and the marks drawn anywhere but in its head or its body. */
 function commentHeads(pane: HTMLElement): (string | undefined | (string | undefined)[])[][] {
-  return [...pane.querySelectorAll<HTMLElement>(".inbox-thread > .inbox-comment")].map(
-    (comment) => [
-      comment.dataset.inboxComment,
-      [...comment.querySelectorAll<HTMLElement>(".ui-comment-face")].map(faceKind),
-      [...comment.querySelectorAll<HTMLElement>(".actor-mark")]
-        .filter((mark) => mark.closest(".ui-comment-head, .inbox-comment-body") === null)
-        .map((mark) => mark.dataset.kind),
-    ],
-  );
+  return [
+    ...pane.querySelectorAll<HTMLElement>(
+      ".inbox-thread > .inbox-comment, .inbox-draft-dock > .inbox-comment",
+    ),
+  ].map((comment) => [
+    comment.dataset.inboxComment,
+    [...comment.querySelectorAll<HTMLElement>(".ui-comment-face")].map(faceKind),
+    [...comment.querySelectorAll<HTMLElement>(".actor-mark")]
+      .filter((mark) => mark.closest(".ui-comment-head, .inbox-comment-body") === null)
+      .map((mark) => mark.dataset.kind),
+  ]);
 }
 
 test("each comment of a thread is headed by its writer's face and name, its face the thread's gutter with no face drawn apart from it; the draft reply's head is the reader's, \"You\", with nothing after it", async () => {
@@ -2223,7 +2221,7 @@ test("each comment of a thread is headed by its writer's face and name, its face
   );
 });
 
-test("a thread draws every message, the agent's by its tile and name alone, no tag after its chip, and a member's by their face and name, under its title alone; its open ask is a marker ending the agent's message, its options standing in the reader's draft reply at the thread's end, over the note", async () => {
+test("a thread draws every message, the agent's by its tile and name alone, no tag after its chip, and a member's by their face and name, under its title alone; its open ask is a marker ending the agent's message, its options standing in the reader's draft reply docked under the thread, over the note", async () => {
   const shown = threadItem([
     askingMessage(EXPIRY_ASK),
     threadMessage(
@@ -2261,7 +2259,11 @@ test("a thread draws every message, the agent's by its tile and name alone, no t
     ["message", "agent", "Alerts", "That is the default elsewhere."],
   ]);
   assert.deepEqual(
-    [...pane.querySelectorAll(".inbox-thread .ui-comment-head")].map((head) =>
+    [
+      ...pane.querySelectorAll(
+        ".inbox-thread .ui-comment-head, .inbox-draft-dock .ui-comment-head",
+      ),
+    ].map((head) =>
       [...head.children].map((part) =>
         [...part.classList].find((name) => name.startsWith("ui-comment-")),
       ),
@@ -2290,7 +2292,7 @@ test("a thread draws every message, the agent's by its tile and name alone, no t
   );
   assert.ok(
     pane.querySelector(
-      '.inbox-thread > li:last-child form.inbox-answer > [data-inbox-draft-ask] [role="radio"]',
+      '.inbox-draft-dock form.inbox-answer > [data-inbox-draft-ask] [role="radio"]',
     ),
     "the options stand in the draft's box, as its body",
   );

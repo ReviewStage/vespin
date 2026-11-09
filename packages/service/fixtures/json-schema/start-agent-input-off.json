@@ -166,7 +166,7 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 36,
-          "description": "One of that agent's messages, by the messageId read_agent names on an entry of its tail, to fork it there; leave it out to continue the agent from where it stands."
+          "description": "One of that agent's messages, by the messageId read_agent names on an entry of its transcript, to fork it there; leave it out to continue the agent from where it stands."
         }
       },
       "required": [

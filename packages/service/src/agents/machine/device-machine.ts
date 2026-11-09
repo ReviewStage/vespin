@@ -13,7 +13,13 @@
  * trip: the agent's folder there holds
  * its worktree, which the Mac makes as it takes the launch line, the files
  * a message carries, and the skills its member installed into the app
- * (`deviceAgentLayout`). `launchRunner` queues the launch line, its runner's
+ * (`deviceAgentLayout`). A Mac whose release bundles a runner that keeps the
+ * CLI's transcript at the service (`MAC_MACHINE.TRANSCRIPTS_SINCE`), by the
+ * host version it last called with, has it kept there, as a sandbox's is,
+ * Codex's threads at their default under the agent's home named for the
+ * mirror; an older one keeps its sessions on its disk alone. Either resumes
+ * a session the store does not hold whole from its disk (`diskSessions`).
+ * `launchRunner` queues the launch line, its runner's
  * environment and first lines sealed together under the deployment's key
  * ring (`sealMacLaunchSecrets`) and opened again only by the Mac's claim,
  * which clears the row's copy. `writeLine`, `writeFiles`, and `kill` queue a
@@ -92,6 +98,7 @@ import {
   deviceAgentsFolder,
 } from "@repo/features/device-agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import { hostVersionMeets } from "@repo/features/host-wire";
 import {
   COMMAND_GONE,
   type CommandExit,
@@ -140,7 +147,17 @@ export const MAC_MACHINE = {
   POLL: Duration.millis(250),
   /** How long a read of a runner's exit waits where its caller names no wait, as a sandbox's does. */
   EXIT_WAIT: Duration.seconds(2),
+  /**
+   * The first host release whose bundled runner keeps the CLI's transcript
+   * at the service where its config names `transcriptsUrl`, and reads a
+   * session's chain through that store for a cut; a Mac on an older one
+   * keeps its sessions on its disk alone, as before.
+   */
+  TRANSCRIPTS_SINCE: "0.11.0",
 } as const;
+
+/** Codex's own folder under a home, where it keeps its threads unless `CODEX_HOME` names another. */
+const CODEX_DEFAULT_HOME = ".codex";
 
 /**
  * The machine over the Mac, and whether a session is a local agent's, which
@@ -170,6 +187,36 @@ const nameOfAgent = Brand.nominal<MachineName>();
 const encodeFilesPayload = Schema.encodeSync(deviceAgentFilesPayloadSchema);
 const encodeLaunchPayload = Schema.encodeSync(deviceAgentLaunchPayloadSchema);
 const encodeSecrets = Schema.encodeSync(Schema.fromJsonString(deviceAgentLaunchSecretsSchema));
+
+/** Whether the Mac's host, by the version it last called with, runs a runner that keeps the CLI's transcript at the service (`MAC_MACHINE.TRANSCRIPTS_SINCE`). */
+function keepsTranscripts(version: string | null): boolean {
+  return version !== null && hostVersionMeets(version, MAC_MACHINE.TRANSCRIPTS_SINCE);
+}
+
+/** The agent's things on the Mac its layout was read off, under the agents folder that Mac registered, or its home folder where it named none. */
+function macFolders(
+  device: { readonly home: string; readonly agentsFolder: string | null },
+  agentId: string,
+) {
+  // Note that a Mac's own word for its agents folder is taken over this build's root, so a release that moves the root on either side still lays a launch out where its Mac looks.
+  return deviceAgentLayoutIn(device.agentsFolder ?? deviceAgentsFolder(device.home), agentId);
+}
+
+/**
+ * Whether the account's Mac given keeps its runners' CLI transcripts at the
+ * service, and where an agent's checkout stands on it, by the agent's id;
+ * none where the account holds no such Mac standing, which no launch lays
+ * out either. A continue or fork reads this to carry a session to or from a
+ * Mac (`../coder-host/takeover.ts`).
+ */
+export const macCheckoutsOf = (userId: string, deviceId: string) =>
+  Effect.map(
+    deviceLayout(userId, deviceId),
+    Option.map((device) => ({
+      transcriptsKept: keepsTranscripts(device.version),
+      checkoutPathOf: (agentId: string) => macFolders(device, agentId).checkoutPath,
+    })),
+  );
 
 /** A local agent's place on its Mac, under our session given: the agent itself, since it has one place. */
 function macPlace(session: string, agentId: string): MachinePlace {
@@ -268,11 +315,8 @@ function deviceMachineOver(
           ? new LaunchRefused({ reason: "host removed", deviceRemoved: true })
           : new LaunchRefused({ reason: "no mac" });
       }
-      // Note that a Mac's own word for its agents folder is taken over this build's root, so a release that moves the root on either side still lays a launch out where its Mac looks.
-      const folders = deviceAgentLayoutIn(
-        device.value.agentsFolder ?? deviceAgentsFolder(device.value.home),
-        agentId,
-      );
+      const folders = macFolders(device.value, agentId);
+      const kept = keepsTranscripts(device.value.version);
       const layout: MachineLayout = {
         checkoutPath: folders.checkoutPath,
         installedSkills: folders.installedSkills,
@@ -283,11 +327,13 @@ function deviceMachineOver(
         sharedFiles: folders.temp,
         claudeExecutable: device.value.claudeExecutable,
         codexExecutable: device.value.codexExecutable ?? undefined,
-        // Note that a Mac's Codex keeps its threads at its default under the agent's own home.
-        codexHome: undefined,
+        // Note that a Mac's Codex keeps its threads at its default under the agent's own home, named
+        // only where the runner mirrors them, since the runner finds them by `CODEX_HOME` alone.
+        codexHome: kept ? [folders.home, CODEX_DEFAULT_HOME].join("/") : undefined,
         // Note that the Mac's follower writes its lines to the stdin of the runner its release bundled.
         linesRead: false,
-        transcriptsKept: false,
+        transcriptsKept: kept,
+        diskSessions: true,
       };
       return layout;
     });
@@ -630,6 +676,9 @@ function deviceMachineOver(
             ? answer.bytes
             : undefined,
       ),
+
+    // Note that a Mac is asked for no MP4, because nothing says it has an H.264 encoder, so its recordings keep their WebM alone.
+    phoneVideo: () => Effect.succeed(undefined),
   };
 }
 

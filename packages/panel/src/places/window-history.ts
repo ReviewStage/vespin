@@ -130,6 +130,14 @@
  * says (`narrowInstead`): a phone has no Home, so where the window would
  * stand on it, the Inbox's list takes its step in place, so a phone opens on
  * the Inbox and Back never lands on Home.
+ *
+ * ⌃Tab steps through these same steps, most recent first rather than in the
+ * history's order (`StepRecord.recent`, `recentAfter`): a step written or
+ * landed on comes first, one written in another's place takes that one's
+ * place there too, and one the window can no longer reach is passed over,
+ * so ⌃Tab and Back never disagree on what a screen is. Going to one is a
+ * visit after the step standing (`RecentSteps.onVisitStep`), which stands it
+ * as a move along the history stands the step it lands on.
  */
 
 import { LINK_PLACE, type ReadLink, taskLinkStep, withTaskId } from "@repo/features/link-grammar";
@@ -176,6 +184,7 @@ import {
   type Place,
   pathOf,
   readingOf,
+  recentAfter,
   routedPlace,
   STEP_WRITE,
   type StepEntry,
@@ -244,6 +253,32 @@ export interface NavigationHistory {
   onGoTo: (number: number) => void;
 }
 
+/** A step the window stood on, as ⌃Tab's cards wear it: the step, what Back's lists call it now, and the routed place its address stands on, with the params its routes read there. */
+export interface RecentStep {
+  readonly place: Place;
+  /** Whether it is the step the window stands on. */
+  readonly standing: boolean;
+  readonly title: StepTitle | undefined;
+  /** The routed place the step's address stands on, a task's own among them; none where no route claims it. */
+  readonly routed: RoutedPlace | undefined;
+  readonly params: PlaceParams;
+}
+
+/** The window's steps as ⌃Tab steps through them, which the root hands the switcher. */
+export interface RecentSteps {
+  /**
+   * The steps the window stood on that it can still go to, most recent
+   * first, whichever way it came to each, so the step standing is first:
+   * the screens ⌃Tab steps through, each a step of Back's, kept and passed
+   * over by the same rules.
+   */
+  recent: () => readonly RecentStep[];
+  /** The step the window stands on, where it stands on one, read without naming every step stood on. */
+  standingStep: () => Place | undefined;
+  /** Goes to a step the window stood on as a visit after the one standing, asking first as any move does, and stands it as Back stands a step it lands on. */
+  onVisitStep: (to: Place) => void;
+}
+
 /** The window's history, with the way a restore leaves a description's version history and a page's way out. */
 export interface WindowHistory extends NavigationHistory {
   /** Leaves the version history for its task: a step back where the task is the step behind, else a visit. */
@@ -307,6 +342,8 @@ interface StepRecord {
   known: KnownSteps;
   /** The number of the step a task's start moved the window to for its page, which the move to the task it starts takes in place (`TaskVisits.onLeaveStart`); none once the history stands elsewhere. */
   standIn: number | undefined;
+  /** The steps the window stood on, most recent first, whichever way it came to each (`recentAfter`), as ⌃Tab steps through them. */
+  recent: readonly Place[];
   readonly listeners: Set<(heard: StepsHeard) => void>;
 }
 
@@ -338,6 +375,7 @@ function standAlone(record: StepRecord, location: HistoryLocation, number: numbe
       address: location.href,
       place: saved.place,
     });
+    record.recent = recentAfter(record.recent, saved.place, undefined);
   }
 }
 
@@ -379,7 +417,10 @@ function hear(
       record.history.replace(location.href, { step }, PAST_BLOCKER);
       return;
     }
+    // Note that a replace takes the place of the step it wrote over among the steps stood on last, as it does in the history.
+    const replaced = pushed ? undefined : record.steps.get(number)?.place;
     record.steps.set(number, { number, address: location.href, place: saved.place });
+    record.recent = recentAfter(record.recent, saved.place, replaced);
     tell(record, { moved: false });
     return;
   }
@@ -393,6 +434,7 @@ function hear(
       address: location.href,
       place: saved.place,
     });
+    record.recent = recentAfter(record.recent, saved.place, undefined);
   } else {
     standAlone(record, location, Number.isFinite(landed) ? landed : from);
   }
@@ -410,6 +452,7 @@ function recordOf(history: RouterHistory): StepRecord {
     state: history.location.state,
     known: { entries: [], at: -1 },
     standIn: undefined,
+    recent: [],
     listeners: new Set(),
   };
   standAlone(record, history.location, 0);
@@ -497,7 +540,7 @@ function useWindowSteps(input: {
   named: (place: Place) => StepTitle | undefined;
   stand: (place: Place) => void;
   /** The leave's door for a move along the history, which asks first while a page holds unsaved work, and its way past it. */
-  placeLeave: Pick<PlaceLeave, "along" | "pass">;
+  placeLeave: Pick<PlaceLeave, "along" | "pass" | "arrive">;
   /** How many times a door naming a thing opened it in the side panel (`SidePanelControl.opened`). */
   opened: number;
   /** Whether an address is on a task's own place. */
@@ -517,6 +560,12 @@ function useWindowSteps(input: {
   standIn: () => void;
   /** Answers whether the window stands on a task's start's page, letting it go. */
   leaveStandIn: () => boolean;
+  /** The steps the window stood on that it can still go to, most recent first (`StepRecord.recent`). */
+  recent: () => readonly Place[];
+  /** The step the window stands on, where it stands on one. */
+  standingPlace: () => Place | undefined;
+  /** Goes to `to` as a visit after the step standing, asking first as any move does, and stands it as a move along the history stands the step it lands on. */
+  visitStep: (to: Place) => void;
 } {
   const { record, place, address, reachable, named, placeLeave, opened, onTaskRoute } = input;
   // Note that the presses read the steps known as they land, because a key can land between a move and the render that
@@ -732,6 +781,20 @@ function useWindowSteps(input: {
     stand();
   };
 
+  // Note that the step is written through the router's blocker, so a page holding unsaved work asks first, and stood only once it lands.
+  const visitStep = (to: Place) => {
+    const { placeLeave: leave, stand } = latest.current;
+    leave.arrive(
+      () => {
+        const pushes = standingStep(record) !== undefined;
+        const step = { place: to, index: pushes ? record.standing + 1 : record.standing };
+        if (pushes) record.history.push(to.address, { step });
+        else record.history.replace(to.address, { step });
+      },
+      () => stand(to),
+    );
+  };
+
   return {
     canGoBack: reading.canGoBack,
     canGoForward: reading.canGoForward,
@@ -753,6 +816,9 @@ function useWindowSteps(input: {
       record.standIn = undefined;
       return standsIn;
     },
+    recent: () => record.recent.filter((each) => latest.current.reachable(each)),
+    standingPlace: () => standingStep(record)?.place,
+    visitStep,
   };
 }
 
@@ -807,7 +873,7 @@ export function useWindowHistory(input: {
     | "pages"
     | "workspaces"
   >;
-}): WindowHistory & TaskVisits & HistoryBehind {
+}): WindowHistory & TaskVisits & HistoryBehind & RecentSteps {
   const { tasks } = input;
   // The routed place standing over the task's own place, none on the task's own place itself, which the window stands as the task bound for.
   const routed = input.routed?.place === ROUTED_PLACE.TASK ? undefined : input.routed;
@@ -1019,18 +1085,29 @@ export function useWindowHistory(input: {
       routedPlaceOf(router.matchRoutes(pathOf(address)), access) === ROUTED_PLACE.TASK,
     [router, access],
   );
-  const { backTo, upTo, stepBack, stepAway, visit, standIn, leaveStandIn, ...history } =
-    useWindowSteps({
-      record,
-      place,
-      address: routedAddress ?? taskAddress ?? NO_LINK_ADDRESS,
-      reachable,
-      named,
-      stand,
-      placeLeave: tasks.placeLeave,
-      opened: tasks.sidePanel.opened,
-      onTaskRoute,
-    });
+  const {
+    backTo,
+    upTo,
+    stepBack,
+    stepAway,
+    visit,
+    standIn,
+    leaveStandIn,
+    recent,
+    standingPlace,
+    visitStep,
+    ...history
+  } = useWindowSteps({
+    record,
+    place,
+    address: routedAddress ?? taskAddress ?? NO_LINK_ADDRESS,
+    reachable,
+    named,
+    stand,
+    placeLeave: tasks.placeLeave,
+    opened: tasks.sidePanel.opened,
+    onTaskRoute,
+  });
   // A place a narrow room stands another in the place of, as a phone has no Home, stands that one as its declaration says.
   const instead =
     narrow && tasks.signedIn && untitled !== undefined && !isTaskPlace(untitled)
@@ -1052,6 +1129,21 @@ export function useWindowHistory(input: {
   const { versionHistory } = input;
   return useSteadyDoors({
     ...history,
+    recent: () => {
+      const standingNow = standingPlace();
+      return recent().map((place) => {
+        const matches = router.matchRoutes(pathOf(place.address));
+        return {
+          place,
+          standing: place === standingNow,
+          title: named(place),
+          routed: routedPlaceOf(matches, access),
+          params: placeParamsOf(matches),
+        };
+      });
+    },
+    standingStep: standingPlace,
+    onVisitStep: visitStep,
     onLeaveVersionHistory: () => {
       const task =
         boundFor === undefined

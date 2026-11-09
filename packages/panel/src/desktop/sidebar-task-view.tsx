@@ -1,15 +1,16 @@
+import {
+  ASSIGNED_TO,
+  type AssignedTo,
+  TASK_GROUPING,
+  TASKS_HEAD_WORDS,
+  type TaskGrouping,
+} from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { noMatchWords, TERM } from "@repo/features/words";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { GROUP_HEADING, GROUP_LOOK, GroupHeader, MENU_ITEM_MARK, useMenu } from "@repo/ui";
 import { ACTOR_KIND, type Actor, actorName, creatorActor, memberActor } from "@repo/ui/actor-model";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import {
-  ASSIGNED_TO,
-  type AssignedTo,
-  TASK_GROUPING,
-  type TaskGrouping,
-} from "@repo/ui/task-list-model";
 import { FolderPlusIcon, ListChecksIcon, Rows3Icon } from "lucide-react";
 import { useRef } from "react";
 import { useAppCommand } from "../app-commands.js";
@@ -57,12 +58,6 @@ const GROUPING_WORDS = {
 
 /** The switch that stands each parent's completed sub-tasks under it, or leaves them out, in the words the Tasks page's Show completed uses for the same Done and Canceled tasks. */
 const SHOW_COMPLETED_SUB_TASKS = "Show completed sub-tasks";
-
-/** What the scope switcher says for Me and Anyone; a member's list is called by their name (`tasksHeadWords`). */
-const TASKS_HEAD_WORDS = {
-  [ASSIGNED_TO.ME]: "My tasks",
-  [ASSIGNED_TO.ANYONE]: "Everyone's tasks",
-} as const;
 
 /** Who the list is filtered to, as the window draws them: a member as read, else as a listed task names them, else someone. */
 function filteredActor(

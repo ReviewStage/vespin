@@ -580,6 +580,8 @@ export function request(
     number?: string;
     /** A browser's session cookie, sent beside the bearer or, with no account named, in its place. */
     cookie?: string;
+    /** The media types the caller takes, as the iOS app names the video it plays. */
+    accept?: string;
   } = {},
 ): Request {
   // A path the hosted oRPC router answers names its id as a segment; an old group's reads it from the query.
@@ -601,6 +603,7 @@ export function request(
   if (init.number !== undefined) url.searchParams.set("number", init.number);
   const headers = new Headers();
   if (bearer !== undefined) headers.set("authorization", `Bearer ${bearer}`);
+  if (init.accept !== undefined) headers.set("accept", init.accept);
   // Every client of the service names its JSON body so, which the hosted oRPC router reads a body by.
   if (init.body !== undefined) headers.set("content-type", "application/json");
   if (init.cookie !== undefined) headers.set("cookie", init.cookie);
