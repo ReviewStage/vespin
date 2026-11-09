@@ -6,6 +6,7 @@ import {
   buttonStyle,
   controlSize,
   disabled as disabledModifier,
+  foregroundStyle,
   frame,
   resizable,
   tint,
@@ -38,9 +39,10 @@ type ProviderButtonProps = {
 };
 
 /**
- * One provider's way in. Note that it stands bordered in the ink rather than
- * the accent, as the web's ways in stand outlined on the card, so the
- * provider's mark, not the brand's copper, is what tells the two apart.
+ * One provider's way in: the system's bordered button on the brand's copper
+ * wash, never iOS's gray, with its words and GitHub's mark in the ink, as the
+ * web's ways in stand neutral on their card, so the provider's mark is what
+ * tells the two apart.
  */
 export function ProviderButton({ label, mark, disabled = false, onPress }: ProviderButtonProps) {
   const colors = useColors();
@@ -50,11 +52,14 @@ export function ProviderButton({ label, mark, disabled = false, onPress }: Provi
       modifiers={[
         buttonStyle(BUTTON_LOOK.BORDERED),
         controlSize(BUTTON_SIZE.LARGE),
-        tint(colors.TEXT),
+        tint(colors.ACCENT),
         disabledModifier(disabled),
       ]}
     >
-      <HStack spacing={SPACE.ROW} modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY })]}>
+      <HStack
+        spacing={SPACE.ROW}
+        modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY }), foregroundStyle(colors.TEXT)]}
+      >
         <Image
           assetName={mark}
           modifiers={[

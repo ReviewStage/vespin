@@ -31,7 +31,8 @@ type AuthPageProps = {
 };
 
 /**
- * The column centered on the screen's ground: the mark, the title in the
+ * The column centered on the screen's ground, a phone's width at most on a
+ * wider window, such as an iPad's, and centered there too: the mark, the title in the
  * system's title type, the buttons a person signs in with, and a line under
  * them where the last attempt went wrong. It stands inside a `Screen`.
  */
@@ -40,7 +41,11 @@ export function AuthPage({ title, children, error, footnote }: AuthPageProps) {
   return (
     <VStack
       spacing={SPACE.PAGE}
-      modifiers={[frame({ maxWidth: AUTH_COLUMN_WIDTH }), padding({ horizontal: SPACE.PAGE })]}
+      modifiers={[
+        frame({ maxWidth: AUTH_COLUMN_WIDTH }),
+        padding({ horizontal: SPACE.PAGE }),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+      ]}
     >
       <Spacer />
       <BrandMark size={AUTH_MARK_SIZE} />
