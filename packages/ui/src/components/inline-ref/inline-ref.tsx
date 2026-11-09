@@ -429,6 +429,8 @@ function InlineRefRoot({
   }
   if (fit === INLINE_REF_FIT.FLOW) {
     // Note that a token that wraps presses as a span in a button's role, because a browser draws a button as one box that never breaks across lines; the keys a button answers press it the same way.
+    // Its click is canceled, because a label holding it, a checkbox's words say, would tick its box on a press of a span where it ignores a button's.
+    const press = pulseOnPress(onPress);
     return (
       // biome-ignore lint/a11y/useSemanticElements: a token in running words wraps across lines as they do, and a browser draws a <button> as one box that never breaks.
       <span
@@ -438,7 +440,10 @@ function InlineRefRoot({
         {...own}
         {...goneProps}
         aria-label={pressLabel}
-        onClick={pulseOnPress(onPress)}
+        onClick={(event) => {
+          event.preventDefault();
+          press(event);
+        }}
         onKeyDown={keys.onKeyDown}
         onKeyUp={keys.onKeyUp}
         onBlur={keys.onBlur}
