@@ -1,6 +1,6 @@
 import { chipBase64, type FileChip } from "@repo/features/attachment-model";
 import { fileMarkers, isPictureName } from "@repo/features/file-marker";
-import { FileRef, PictureRef } from "@repo/ui";
+import { AttachmentRef } from "@repo/ui";
 import { createContext, type ReactNode, useState } from "react";
 import { AttachmentViewer } from "./attachment-viewer.js";
 import { FileTypeIcon } from "./file-type-icon.js";
@@ -49,10 +49,13 @@ export function WordFileChip({
   const open = here ? () => onOpen(name) : undefined;
   // Note that a file whose type is not here yet is drawn by its name, a picture's as a picture's.
   const picture = file === undefined ? isPictureName(name) : file.mediaType.startsWith("image/");
-  return picture ? (
-    <PictureRef name={name} image={here ? file.url : undefined} onOpen={open} />
-  ) : (
-    <FileRef name={name} glyph={<FileTypeIcon name={name} />} onOpen={open} />
+  return (
+    <AttachmentRef
+      name={name}
+      image={picture && here ? file.url : undefined}
+      glyph={picture ? undefined : <FileTypeIcon name={name} />}
+      onOpen={open}
+    />
   );
 }
 
@@ -77,7 +80,7 @@ export function useWordFileViewer(files: readonly FileChip[]): {
 }
 
 /** The files among a message's that its words name, in the order they first name each. */
-export function filesInWords(files: readonly FileChip[], words: string): readonly FileChip[] {
+function filesInWords(files: readonly FileChip[], words: string): readonly FileChip[] {
   const named = [...new Set(fileMarkers(words).map((marker) => marker.name))];
   return named.flatMap((name) => {
     const file = files.find((each) => namedBy(each, name));

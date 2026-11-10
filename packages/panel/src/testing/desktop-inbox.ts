@@ -1320,7 +1320,7 @@ export function itemPane(page: HTMLElement): HTMLElement {
   return page.querySelector<HTMLElement>(".inbox-view-items") ?? assert.fail("the pane is drawn");
 }
 
-/** What a file's and a picture's chip in the words is heard as before its name (`FileRef`, `PictureRef`). */
+/** What a file's and a picture's chip in the words is heard as before its name (`AttachmentRef`). */
 const FILE_KINDS: ReadonlySet<string> = new Set(["file ", "picture "]);
 
 /** The names of the files attached in `within`, as each chip names its file: those in the row over the words, then those the words name. */

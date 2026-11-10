@@ -1,14 +1,14 @@
 import {
   ATTACHMENT_CHIP_STATE,
   AttachmentChip,
+  AttachmentRef,
   BUTTON_VARIANT,
   Button,
-  FileRef,
+  DocumentIcon,
   ImageIcon,
   LIST_MOTION_WAY,
   ListMotion,
   motionRows,
-  PictureRef,
   useLeaving,
 } from "@repo/ui";
 import { type RefObject, useRef, useState } from "react";
@@ -151,12 +151,20 @@ function PicturesInWords(): React.JSX.Element {
     <>
       <p>
         Make this{" "}
-        <PictureRef name="Picture 1" image={PICTURE} onOpen={() => setOpened("Picture 1")} /> look
-        like this{" "}
-        <PictureRef name="Picture 2" image={WIDE_PICTURE} onOpen={() => setOpened("Picture 2")} />,
-        not like <PictureRef name="Picture 3" />, as{" "}
-        <FileRef name="spec.pdf" onOpen={() => setOpened("spec.pdf")} /> says, not{" "}
-        <FileRef name="notes.txt" />.
+        <AttachmentRef name="Picture 1" image={PICTURE} onOpen={() => setOpened("Picture 1")} />{" "}
+        look like this{" "}
+        <AttachmentRef
+          name="Picture 2"
+          image={WIDE_PICTURE}
+          onOpen={() => setOpened("Picture 2")}
+        />
+        , not like <AttachmentRef name="Picture 3" />, as{" "}
+        <AttachmentRef
+          name="spec.pdf"
+          glyph={<DocumentIcon />}
+          onOpen={() => setOpened("spec.pdf")}
+        />{" "}
+        says, not <AttachmentRef name="notes.txt" glyph={<DocumentIcon />} />.
       </p>
       <p>{opened === undefined ? "Nothing opened" : `Opened ${opened}`}</p>
     </>
@@ -192,7 +200,7 @@ function AttachmentChips(): React.JSX.Element {
       <CatalogSection id="attachment-chip-uploading" title="Going up">
         <UploadingRow />
       </CatalogSection>
-      <CatalogSection id="picture-ref-words" title="Files in a message's words">
+      <CatalogSection id="attachment-ref-words" title="Files in a message's words">
         <PicturesInWords />
       </CatalogSection>
       <CatalogSection id="attachment-chip-narrow" title="Narrow column, long names">

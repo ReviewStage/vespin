@@ -899,11 +899,11 @@
   --spacing-attachment-chip-remove-out: 9px; /* off-scale: half the disc past the corner */
   --spacing-attachment-chip-check: 10px; /* off-scale: the landed check's glyph */
   --spacing-attachment-chip-meter: 2px; /* off-scale: a hairline bar */
-  /* A picture named in a line of words (`components/picture-ref/`): its
+  /* A picture named in a line of words (`components/attachment-ref/`): its
      thumbnail on the line, a hair taller than the words' glyphs, and the
      preview its card hangs, no wider and no taller than this. */
-  --spacing-picture-ref-thumb: 1.25em;
-  --spacing-picture-ref-preview: 240px; /* off-scale: a preview's longest side */
+  --spacing-attachment-ref-thumb: 1.25em;
+  --spacing-attachment-ref-preview: 240px; /* off-scale: a preview's longest side */
   --radius-attachment-chip-face: calc(var(--ui-radius-8) - 1px);
   --shadow-attachment-chip-disc: inset 0 0 0 1px var(--ui-color-border-strong);
   /* A video played in place (`components/video-player/`): no taller than a
