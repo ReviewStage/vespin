@@ -41,7 +41,6 @@ import {
   type Agent,
   type AgentCommitted,
   type AgentLine,
-  deleteAgent,
   hasRepository,
   listAgentLines,
   listWorkspaceAgentLines,
@@ -87,6 +86,12 @@ import {
 import { accountMiddleware, hosted, writeReceiptMiddleware } from "../orpc/base.js";
 import type { ModelChoiceRefused } from "../providers/model-catalog.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
+import {
+  deletedAgent,
+  resumedAgentSandbox,
+  rewoundAgentById,
+  warmedAgent,
+} from "./agent-lifecycle.js";
 import { controlsAgent, reachedAgentById } from "./agent-reach.js";
 import {
   askedPullRequest,
@@ -104,8 +109,7 @@ import {
   type PublishedReach,
 } from "./coder-host/published.js";
 import { productionSummaryModel, type SummaryModelOf } from "./coder-host/replay-summary.js";
-import { rewoundAgent } from "./coder-host/rewind.js";
-import { routedSessions, runnerWarmed } from "./coder-host/runtime-sessions.js";
+import { routedSessions } from "./coder-host/runtime-sessions.js";
 import {
   acceptedAgentChoice,
   placeOfAgent,
@@ -116,21 +120,12 @@ import {
   agentPage,
   agentSummary,
   pageAccounts,
-  startedBlank,
   summaryAccounts,
   summaryDevices,
 } from "./coder-host/status.js";
-import {
-  continuedByOf,
-  standingsOf,
-  standsStopped,
-  stoppedAgent,
-  stoppedForGood,
-  summaryOf,
-} from "./coder-host/stop.js";
+import { continuedByOf, standingsOf, stoppedAgent, summaryOf } from "./coder-host/stop.js";
 import { startedFromBefore } from "./coder-host/takeover.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
-import { retiredBeforeDelete, retiringReach } from "./retire-sessions.js";
 import type { SandboxDeleteReach } from "./session-sandboxes.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
 import { AgentSandbox, SHELL_REFUSAL, type ShellRefusal } from "./terminal/agent-sandbox.js";
@@ -224,18 +219,6 @@ const listedShells = /* @__PURE__ */ Effect.fnUntraced(function* (sessionId: str
   const sandbox = yield* AgentSandbox;
   return yield* sandboxOrUpstream(sandbox.terminals(sessionId));
 });
-
-/** Whether the agent, read again under its conversation's lock, still stands as a Stop left it, as a task's archive reads each of its own. */
-function agentStandsStopped(agent: Agent) {
-  return standsStopped([
-    {
-      id: agent.id,
-      conversationId: agent.conversationId,
-      createdAt: agent.createdAt,
-      blank: startedBlank(agent),
-    },
-  ]);
-}
 
 /**
  * A pull request's changes: its files, who it names (`github-people.ts`),
@@ -567,30 +550,9 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       const changed = yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { choice }));
       return yield* committedAgent(userId, changed);
     }),
-    /**
-     * The agent deleted for good, by the steps a task's delete takes for
-     * each of its agents (`tasks-procedures.ts`): stopped for good first,
-     * then, under its conversation's lock, its session retired
-     * (`retire-sessions.ts`), the words said on its calls deleted, its row
-     * deleted, and its conversation stamped deleted for the purge. Any
-     * member who reaches the agent may delete it, as any member may delete
-     * a task. A harness that refuses the Stop, an agent with a turn still
-     * coming that no Stop can name yet, or one a message woke after the
-     * Stop, stands and is refused as not ready.
-     */
+    /** The agent deleted for good (`agent-lifecycle.ts`), stopped for good first, by any member who reaches it. */
     delete: signedIn.delete.effect(function* ({ input, context }) {
-      const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
-      const retiring = yield* retiringReach(userId);
-      yield* stoppedForGood(writer, userId, agent);
-      const deleted = yield* hostedStoreOrUnavailable(
-        deleteAgent(userId, agent.id, {
-          standsStopped: agentStandsStopped,
-          beforeDelete: retiredBeforeDelete(retiring),
-        }).pipe(Effect.catchTag("TaskAgentUnstopped", () => Effect.succeed(undefined))),
-      );
-      if (deleted === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
-      if (Option.isNone(deleted)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-      return { deleted: true as const, txid: deleted.value.txid };
+      return yield* deletedAgent(writer, context.userId, input.id);
     }),
     /** One ask the agent's runner holds answered by a member who controls it, written to the runner and settled (`approval-answer.ts`). */
     answerApproval: signedIn.answerApproval.effect(function* ({ input, context }) {
@@ -603,21 +565,16 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       yield* stoppedAgent(writer, userId, agent);
       return { agent: yield* summaryOf(userId, agent) };
     }),
-    /**
-     * The agent on screen kept warm (`runnerWarmed`): answered at once, its runner launched past
-     * the answer where none runs. Kept for a member who may message it alone, whose message the
-     * warm runner would take; anyone else is answered the same, and nothing is kept.
-     */
+    /** The agent on screen kept warm (`agent-lifecycle.ts`): answered at once, its runner launched past the answer where none runs. */
     warm: signedIn.warm.effect(function* ({ input, context }) {
-      const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
-      if (controlsAgent(userId, agent)) yield* runnerWarmed(agent);
+      yield* warmedAgent(context.userId, input.id);
       return { warm: true as const };
     }),
-    /** The agent taken back to just before one of the developer's lines (`rewind.ts`), answered as it then stands. */
+    /** The agent taken back to just before one of the developer's lines (`agent-lifecycle.ts`), answered as it then stands. */
     rewind: signedIn.rewind.effect(function* ({ input, context }) {
-      const { userId, agent } = yield* reachedAgentById(context.userId, input.params.id);
-      yield* rewoundAgent(userId, agent, input.body.messageId);
-      return { agent: yield* summaryOf(userId, agent) };
+      return {
+        agent: yield* rewoundAgentById(context.userId, input.params.id, input.body.messageId),
+      };
     }),
     /**
      * The agent's changes: the files of the pull request its kept published
@@ -657,16 +614,9 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     workspaceTools: signedIn.workspaceTools.effect(function* ({ input, context }) {
       return yield* workspaceToolsOf(context.userId, input.id);
     }),
-    /** The agent's sandbox resumed from its snapshot, the developer's click and nothing else, answering where it stands after. */
+    /** The agent's sandbox resumed from its snapshot (`agent-lifecycle.ts`), the developer's click and nothing else, answering where it stands after. */
     sandboxResume: signedIn.sandboxResume.effect(function* ({ input, context }) {
-      const sessionId = yield* reachedSession(context.userId, input.id);
-      if (sessionId === undefined) return { sandbox: SANDBOX_STATE.STARTING };
-      return yield* inSandbox(
-        Effect.gen(function* () {
-          const sandbox = yield* AgentSandbox;
-          return { sandbox: yield* sandboxOrUpstream(sandbox.resume(sessionId)) };
-        }),
-      );
+      return { sandbox: yield* inSandbox(resumedAgentSandbox(context.userId, input.id)) };
     }),
     /** The agent's shells and where its sandbox stands. */
     terminals: signedIn.terminals.effect(function* ({ input, context }) {

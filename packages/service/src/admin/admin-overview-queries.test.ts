@@ -118,6 +118,7 @@ const MERGED_PULL_REQUEST: StoredPullRequest = {
 const startAgent = (
   userId: string,
   organizationId: string,
+  taskId: string,
   createdAt: string,
   extra: Partial<typeof agentTable.$inferInsert> = {},
 ) =>
@@ -132,6 +133,7 @@ const startAgent = (
       id,
       organizationId,
       userId,
+      taskId,
       conversationId,
       model: "anthropic/claude-opus-5.5",
       effort: "high",
@@ -244,11 +246,11 @@ const seedService = Effect.gen(function* () {
   });
   const adaTask = yield* createTask(ada, adaWorkspace, "2026-10-20T10:00:00Z");
   yield* writeRevision(adaTask, ada, DESCRIPTION_ACTOR.DEVELOPER, "2026-10-18T10:00:00Z");
-  const merged = yield* startAgent(ada, adaWorkspace, "2026-10-20T11:00:00Z");
+  const merged = yield* startAgent(ada, adaWorkspace, adaTask, "2026-10-20T11:00:00Z");
   yield* openedPullRequest(ada, merged, MERGED_PULL_REQUEST);
   yield* fireAutomation(ada, adaWorkspace, "2026-10-20T02:00:00Z");
   // Note that the agent's automation is deleted since, so its row keeps the run's origin and no id.
-  yield* startAgent(ada, adaWorkspace, "2026-10-19T02:00:00Z", {
+  yield* startAgent(ada, adaWorkspace, adaTask, "2026-10-19T02:00:00Z", {
     automationOrigin: {
       name: "Synthetic automation",
       firing: { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: Date.parse("2026-10-19T02:00:00Z") },
@@ -371,6 +373,7 @@ it.layer(getTestDB())("the overview's reads", (it) => {
     Effect.gen(function* () {
       const dee = yield* openAccount("dee", "2026-09-01T09:00:00Z");
       const workspace = yield* openWorkspace(dee);
+      const deeTask = yield* createTask(dee, workspace, "2026-09-01T09:00:00Z");
       // Every agent here starts on 10-16, a day the shared seed leaves empty.
       const day = "2026-10-16";
       const when = `${day}T10:00:00Z`;
@@ -380,13 +383,13 @@ it.layer(getTestDB())("the overview's reads", (it) => {
         firing: { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: Date.parse(when) },
         prompt: "",
       };
-      const starter = yield* startAgent(dee, workspace, when);
+      const starter = yield* startAgent(dee, workspace, deeTask, when);
       const startedByAgent = { startedByAgentId: starter };
-      yield* startAgent(dee, workspace, when, { automationOrigin, ...slack });
-      yield* startAgent(dee, workspace, when, slack);
-      yield* startAgent(dee, workspace, when, { ...slack, ...startedByAgent });
-      yield* startAgent(dee, workspace, when, startedByAgent);
-      yield* startAgent(dee, workspace, when);
+      yield* startAgent(dee, workspace, deeTask, when, { automationOrigin, ...slack });
+      yield* startAgent(dee, workspace, deeTask, when, slack);
+      yield* startAgent(dee, workspace, deeTask, when, { ...slack, ...startedByAgent });
+      yield* startAgent(dee, workspace, deeTask, when, startedByAgent);
+      yield* startAgent(dee, workspace, deeTask, when);
 
       const source = yield* readAdminOverviewSource({
         now: NOW,

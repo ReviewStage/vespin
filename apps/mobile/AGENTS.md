@@ -112,8 +112,11 @@ claims for the app; any other opens in Safari.
 
 A `-fixture <profile>` launch argument (`src/host/launch-arguments.ts`)
 stands the host on the desktop's synthetic data instead of the service, the
-Inbox profile's threads among it (`@repo/host/fixture-inbox`), which is how
-the Maestro flows run with no server. A `-authServer stub` launch argument
+Inbox profile's threads and the tasks holding them among it
+(`@repo/host/fixture-inbox`), the acts the profile stages, such as a mark
+or a thread's file read, answered by the fixture (`fixtureActs` in
+`src/host/fixture-host.ts`), which is how the Maestro flows run with no
+server. A `-authServer stub` launch argument
 instead signs in against an account service the app answers itself
 (`src/host/stub-auth-server.ts`), whose authorization page grants at once,
 which is how `maestro/sign-in.yaml` signs in, relaunches signed in, and

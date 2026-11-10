@@ -260,8 +260,10 @@ export const agentTable = pgTable(
   "agent",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    /** The task the agent works on; null for an agent an automation started with no task. */
-    taskId: uuid("task_id").references(() => task.id, { onDelete: "cascade" }),
+    /** The task the agent works on; every agent works on one, and leaves with it. */
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => task.id, { onDelete: "cascade" }),
     /** The workspace the agent belongs to, its task's or its automation's. */
     organizationId: text("organization_id")
       .notNull()
@@ -384,13 +386,8 @@ export const agentTable = pgTable(
     // Every tool call of ours, runner event, and session route finds the agent its conversation is;
     // one agent per conversation, since an agent is started on a conversation of its own.
     uniqueIndex("agent_conversation").on(table.conversationId),
-    // A workspace's agents with no task are read newest first.
+    // A workspace's agents are read newest first.
     index("agent_org_created").on(table.organizationId, table.createdAt),
-    // The agents with no task, which the sidebar lists across the account's workspaces, are read
-    // by workspace newest first, apart from the task agents that outnumber them.
-    index("agent_org_taskless_created")
-      .on(table.organizationId, table.createdAt)
-      .where(sql`${table.taskId} is null`),
     // A run reads the agents it made, by the run's id; most agents belong to no run.
     index("agent_automation_run")
       .on(table.automationRunId)

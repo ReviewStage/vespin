@@ -210,8 +210,6 @@ export const AGENT_ACT_KIND = {
   AGENTS_PORT_UNSHARE: "agents.portUnshare",
   AGENTS_ARCHIVE: "agents.archive",
   AGENTS_PIN: "agents.pin",
-  /** The reader's own read mark of an agent with no task moved, kept on the account (`read-mark.ts`). */
-  AGENTS_MARK_READ: "agents.markRead",
   AGENTS_DELETE: "agents.delete",
   /**
    * Which agent's tab the panel shows, or none: what an agent's end leaves no
@@ -761,6 +759,8 @@ export const WINDOW_SURFACE_ACT_KIND = {
   WINDOW_COPY_TEXT: "window.copyText",
   /** A picture put on the clipboard as a PNG, as a copy from Preview puts one. */
   WINDOW_COPY_IMAGE: "window.copyImage",
+  /** Words put on the clipboard as rich text, their HTML and their plain text together, as a copy from Mail puts them. */
+  WINDOW_COPY_RICH: "window.copyRich",
   WINDOW_SAVE_FILE: "window.saveFile",
   /**
    * A downscaled still of part of the asking panel, as ⌃Tab's card previews a
@@ -906,7 +906,6 @@ export const PORT_ACT_USE = {
   AGENTS_PORT_UNSHARE: ACT_USE.WRITE,
   AGENTS_ARCHIVE: ACT_USE.WRITE,
   AGENTS_PIN: ACT_USE.WRITE,
-  AGENTS_MARK_READ: ACT_USE.WRITE,
   AGENTS_DELETE: ACT_USE.WRITE,
   AGENTS_SHOWN: ACT_USE.WRITE,
   AGENTS_SEEN: ACT_USE.WRITE,
@@ -1061,6 +1060,7 @@ export const PORT_ACT_USE = {
   WINDOW_FOCUS_PANEL: ACT_USE.WRITE,
   WINDOW_COPY_TEXT: ACT_USE.WRITE,
   WINDOW_COPY_IMAGE: ACT_USE.WRITE,
+  WINDOW_COPY_RICH: ACT_USE.WRITE,
   WINDOW_SAVE_FILE: ACT_USE.WRITE,
   WINDOW_CAPTURE: ACT_USE.FETCH,
   WINDOW_UNSAVED_WORK: ACT_USE.WRITE,

@@ -3,22 +3,16 @@ import { readAgent } from "@repo/database/models/agent-store";
 import { isRunTask } from "@repo/database/models/automation-store";
 import { isSlackTask } from "@repo/database/models/slack-installation-store";
 import {
-  archiveAgentOfDoneTask,
   beginTaskWork,
   finishTaskWork,
   isStartTask,
   readTaskWorkspace,
-  type TaskArchivedAgent,
 } from "@repo/database/models/task-store";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import { failureKind } from "@repo/runtime/effect";
 import { Effect, Option } from "effect";
-import {
-  idleStandingAgents,
-  standsFinishedWell,
-  standsStopped,
-} from "../agents/coder-host/stop.js";
-import { discardedOrLogged } from "../agents/device-discard.js";
+import { archivedWithDoneTask } from "../agents/agent-change.js";
+import { standsFinishedWell, standsStopped } from "../agents/coder-host/stop.js";
 import {
   recordServerEventIn,
   SERVER_EVENT,
@@ -126,11 +120,6 @@ function finishCounted(userId: string, taskId: string) {
   });
 }
 
-/** The agents a task's Done archived let go of on their devices, under the members who started them; each failure logged. */
-function letGo(archived: readonly TaskArchivedAgent[]) {
-  return Effect.forEach(archived, discardedOrLogged, { discard: true });
-}
-
 /** The task moved to done where its work is finished, as the account reaches it; nothing otherwise, and a failure logged. */
 export function settleTaskIfFinished(
   userId: string,
@@ -152,10 +141,7 @@ export function settleTaskAfterTurn(
 ): Effect.Effect<void, never, DatabaseServices> {
   return Effect.andThen(
     settleTaskIfFinished(userId, taskId),
-    logged(
-      "a done task's agent archive",
-      Effect.flatMap(archiveAgentOfDoneTask(userId, taskId, agentId, idleStandingAgents), letGo),
-    ),
+    logged("a done task's agent archive", archivedWithDoneTask(userId, taskId, agentId)),
   );
 }
 

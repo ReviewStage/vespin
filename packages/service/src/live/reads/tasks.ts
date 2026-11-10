@@ -178,7 +178,8 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
       ordered: false,
       columns: {
         id: agentTable.id,
-        planId: agentTable.taskId,
+        // Note that the row still declares a plan that may be none, because a released desktop decodes it so.
+        planId: sql<string | null>`${agentTable.taskId}`,
         workspaceId: agentTable.organizationId,
         model: agentTable.model,
         effort: agentTable.effort,

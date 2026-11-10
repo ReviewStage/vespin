@@ -58,6 +58,7 @@ import { LaunchRefused, type MachineLayout } from "../machine/agent-machine.js";
 import { SKILL_ROOT } from "../repository-skills.js";
 import { LAUNCH_SWAP } from "../sandbox-firewall.js";
 import { KEY_REFUSAL, PLAN_REFUSAL, type SessionTurn } from "../sessions/agent-sessions.js";
+import { WORKER_DENIED_TOOLS } from "../tool-catalog/catalog.js";
 import { BEARER_PREFIX } from "../workspace-mcp/bearer.js";
 import { roomAfterLimit, turnPayerOf } from "./agent-runtime-choice.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
@@ -268,6 +269,7 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
         firstSequence,
         eventsUrl: options.eventsUrl,
         mcpUrl: options.mcpUrl,
+        workerDenied: WORKER_DENIED_TOOLS,
         integrations: yield* options.integrations(agent),
         // Note that a host's older runner, bundled before Claude Code's command sandbox was removed, refuses a config without domains.
         allowedDomains: [],

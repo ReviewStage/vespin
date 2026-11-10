@@ -63,6 +63,22 @@ export function copyPng(png: Promise<string>): Promise<void> {
   return navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
 }
 
+/** Puts words on the browser's clipboard as rich text, their HTML beside their plain text. */
+export function copyRichText({
+  html,
+  text,
+}: {
+  readonly html: string;
+  readonly text: string;
+}): Promise<void> {
+  return navigator.clipboard.write([
+    new ClipboardItem({
+      "text/html": new Blob([html], { type: "text/html" }),
+      "text/plain": new Blob([text], { type: "text/plain" }),
+    }),
+  ]);
+}
+
 /**
  * Opens a page in a tab of its own, which reaches nothing of this one, where
  * its address is an http or https one, as the desktop's `web.open` takes it.
@@ -177,6 +193,7 @@ export function webPlatform(
     commandKey,
     copyText: (words) => navigator.clipboard.writeText(words),
     copyImage: copyPng,
+    copyRich: copyRichText,
     saveFile: downloadText,
     focusPanel: () => window.focus(),
     pageFrameUrl: (page) => new URL(hostedPageFramePath(page), location.origin).href,

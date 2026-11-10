@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "80cdb7e6-039f-43f2-a329-c00edf8d8e03",
-  "prevIds": ["f7174574-d0d0-4f13-942d-c515b2a0858c"],
+  "id": "1c40ee28-9ae2-4014-b786-aa5a6529505c",
+  "prevIds": ["9a0b9f10-c738-48b3-ac55-7a4b15689014", "f7174574-d0d0-4f13-942d-c515b2a0858c"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -1042,7 +1042,7 @@
     {
       "type": "uuid",
       "typeSchema": null,
-      "notNull": false,
+      "notNull": true,
       "dimensions": 0,
       "default": null,
       "generated": null,
@@ -12795,34 +12795,6 @@
       "method": "btree",
       "concurrently": false,
       "name": "agent_org_created",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "agent"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "organization_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "created_at",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": "\"task_id\" is null",
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "agent_org_taskless_created",
       "entityType": "indexes",
       "schema": "public",
       "table": "agent"

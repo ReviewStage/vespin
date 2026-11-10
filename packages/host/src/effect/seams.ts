@@ -268,7 +268,13 @@ export interface LocalAgentPlatformSeam {
     readonly home: string;
     readonly repository: string;
     readonly worktree: string;
+    readonly agentId: string;
     readonly branch: string | null;
+  }) => string;
+  /** The script that saves an archived agent's work in its worktree as a snapshot its next launch rebuilds from, exiting 0 only where nothing is left unsaved (`node/open-on-mac.ts`'s `agentSnapshotScript`). */
+  readonly snapshotScript: (input: {
+    readonly worktree: string;
+    readonly agentId: string;
   }) => string;
   /** The script that exits 0 only where the Git it runs as reaches the repository given, as `owner/name`, prompting for nothing: the check of the box's own GitHub sign-in an agent on its starter's own token launches on. */
   readonly repositoryReachedScript: (repository: string) => string;
