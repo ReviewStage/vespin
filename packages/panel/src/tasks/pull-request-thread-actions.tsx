@@ -29,12 +29,9 @@ import { TaskMentions } from "./task-mentions.js";
  * member's. Whatever GitHub answered, the tab reads the conversation
  * again, so the thread says where it stands now.
  *
- * The controls stand where a description's thread has them: Resolve or
- * Reopen at the head's end under the pointer, and the reply on the one
- * message box (`message-box.tsx`), a line open under the comments, its
- * words kept in the drafts store by the thread's id. The box offers no `@`,
- * since GitHub names people by their logins, and no files, since GitHub
- * takes none from a review's reply.
+ * They stand where a description thread's do: Resolve at the head's end,
+ * and the reply on the one message box, its words kept by the thread's id,
+ * with no `@` (GitHub names logins) and no files (GitHub takes none).
  *
  * The controls are the thread's own, so a thread drawn anywhere in the tab,
  * in the Conversation or on its line in Files changed, carries them: the
