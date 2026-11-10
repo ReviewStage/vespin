@@ -32,6 +32,8 @@ export const SANDBOX_RELEASE = {
   DELETE_TIMEOUT: Duration.seconds(30),
   /** How long a publish is waited on before it is given up and said in the log; the sweep publishes again next minute. */
   PUBLISH_WAIT: Duration.seconds(5),
+  /** How many releases one sweep publishes at once, so a queue that hangs holds the sweep for a few `PUBLISH_WAIT`s, not one per row. */
+  PUBLISH_CONCURRENCY: 10,
   /** The environment variable that turns deleting on, and back off as a kill switch: only `DELETES_ON` deletes; unset, the sweep logs what it would release. */
   DELETES_ENVIRONMENT: "AGENT_SANDBOX_RELEASE_DELETES",
   DELETES_ON: "on",

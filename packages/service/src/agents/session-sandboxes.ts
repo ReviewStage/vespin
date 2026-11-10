@@ -397,7 +397,9 @@ export const consumeSandboxRelease = /* @__PURE__ */ Effect.fn("web/consumeSandb
 /**
  * The sweep: the sandboxes due or still RELEASING read from the ledger
  * alone, the oldest used first and at most `SANDBOX_RELEASE.SWEEP_LIMIT`;
- * with deleting on, each due one marked RELEASING and each published, and
+ * with deleting on, each due one marked RELEASING and each published,
+ * `SANDBOX_RELEASE.PUBLISH_CONCURRENCY` at a time so a slow queue holds the
+ * minute's other sweeps back by a few publishes' bounds at most, and
  * with it off, what it would release said in one log line and nothing
  * written or published.
  */
@@ -416,18 +418,23 @@ export const releaseUnusedSandboxes = /* @__PURE__ */ Effect.fn("web/releaseUnus
       }
       return { due: rows.length, published: 0 };
     }
-    let published = 0;
-    for (const { sandboxName, state } of rows) {
-      // Note that a row another sweep marked or an open took since the read is left to them.
-      if (
-        state === AGENT_SANDBOX_STATE.LIVE &&
-        !(yield* markAgentSandboxReleasing(sandboxName, usedBy))
-      ) {
-        continue;
-      }
-      yield* releases.publish(sandboxName);
-      published += 1;
-    }
+    const sent = yield* Effect.forEach(
+      rows,
+      ({ sandboxName, state }) =>
+        Effect.gen(function* () {
+          // Note that a row another sweep marked or an open took since the read is left to them.
+          if (
+            state === AGENT_SANDBOX_STATE.LIVE &&
+            !(yield* markAgentSandboxReleasing(sandboxName, usedBy))
+          ) {
+            return false;
+          }
+          yield* releases.publish(sandboxName);
+          return true;
+        }),
+      { concurrency: SANDBOX_RELEASE.PUBLISH_CONCURRENCY },
+    );
+    const published = sent.filter(Boolean).length;
     if (rows.length > 0) {
       yield* Effect.logInfo(
         `${published} unused sandboxes' releases published of ${rows.length} read`,
