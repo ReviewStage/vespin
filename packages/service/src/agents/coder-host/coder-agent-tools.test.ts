@@ -23,6 +23,7 @@ import { keepConversationPicture } from "@repo/database/models/conversation-pict
 import { listRevisions } from "@repo/database/models/description-revisions";
 import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
 import { registerDevice } from "@repo/database/models/device-store";
+import { childConversationId } from "@repo/database/models/ids";
 import { linkIntegrationInstallation } from "@repo/database/models/integration-installation-store";
 import { listMemories } from "@repo/database/models/memory-store";
 import {
@@ -43,12 +44,16 @@ import {
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { type ConversationTarget, storeWriter } from "@repo/database/models/writer";
 import { agentPin } from "@repo/database/schemas";
-import { agentTable } from "@repo/database/schemas/agent";
+import { agentDelegationTable, agentTable } from "@repo/database/schemas/agent";
 import { attachment } from "@repo/database/schemas/attachment";
 import { device } from "@repo/database/schemas/device";
-import { messages, turns } from "@repo/database/schemas/storage";
+import { conversations, messages, turns } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
-import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
+import {
+  CONVERSATION_KIND,
+  CONVERSATION_RUNTIME,
+  MESSAGE_SENDER,
+} from "@repo/database/storage-vocabulary";
 import {
   DEVICE_LAYOUT,
   joinWorkspace,
@@ -157,6 +162,7 @@ import { LOCAL_AGENT_ENVIRONMENT } from "../../testing/local-agent.js";
 import { scriptedHarness } from "../../testing/native-harness-fake.js";
 import { SentryApp, sentryAppService } from "../../triggers/sentry/sentry-app-config.js";
 import {
+  AGENT_CALLER,
   AGENT_TOOL_BOUNDS,
   AGENT_TOOL_REFUSAL,
   LIST_MODELS_REFUSAL,
@@ -168,6 +174,7 @@ import {
   UPDATE_AGENT_REFUSAL,
   UPDATE_TASK_REFUSAL,
 } from "../agent-tools.js";
+import { runReadAgentTranscript } from "../agent-transcript-tool.js";
 import { AUTOMATION_TOOL_REFUSAL } from "../automation-tools.js";
 import { AgentBrowser } from "../browser/agent-browser.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
@@ -1085,6 +1092,105 @@ test("read_agent reads a transcript longer than one read of the store whole, eac
   assert.deepEqual(
     tailTexts(await call(AGENT_TOOL.READ_AGENT, { agentId, from: "start", entries })),
     expected,
+  );
+});
+
+test("read_agent_transcript pages through a worker's transcript, naming each call's callId, reads one call's output whole, and refuses a worker no call started", async () => {
+  const { workspaceId, agents } = await openWorkspaces();
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const { teammates } = agents;
+  const callId = "call-worker";
+  const worker = childConversationId(teammates.conversationId, callId);
+  await database.run(
+    Database.use((db) =>
+      Effect.gen(function* () {
+        yield* db.insert(conversations).values({
+          id: worker,
+          userId: teammates.userId,
+          kind: CONVERSATION_KIND.CHILD,
+          parentConversationId: teammates.conversationId,
+        });
+        yield* db.insert(agentDelegationTable).values({
+          childConversationId: worker,
+          callId,
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+        });
+      }),
+    ),
+  );
+  // The output runs past the bound a page cuts an entry to, so only the whole read carries its end.
+  const log = Array.from({ length: 2_000 }, (_, line) => `line ${line + 1}`).join("\n");
+  const answer = new AssistantMessageBuilder();
+  answer.stepStart();
+  answer.toolCall(
+    { callId: "call-bash", name: AGENT_TOOL.BASH, argumentsJson: "{}" },
+    unparsedWire({ command: "pnpm test" }),
+  );
+  answer.toolResult("call-bash", {
+    state: TOOL_CALL_SETTLEMENT.OUTPUT_AVAILABLE,
+    output: unparsedWire(log),
+  });
+  await answeredTurnOn({ ...teammates, conversationId: worker }, answer);
+  const read = (input: WireBoundaryInput) =>
+    database.run(
+      runReadAgentTranscript(
+        {
+          caller: {
+            kind: AGENT_CALLER.MEMBER,
+            userId: agents.caller.userId,
+            workspaceId,
+            clientId: "client-1",
+          },
+        },
+        unparsedWire(input),
+      ).pipe(
+        Effect.provide(
+          Layer.mergeAll(
+            agentSessions.services,
+            modelCatalogOf(CATALOG),
+            ANALYTICS.layer,
+            SENTRY_CONFIGURED,
+            UNREACHED,
+            memorySandbox().layer,
+          ),
+        ),
+      ),
+    );
+
+  const page = await read({ agentId: teammates.id, worker: callId });
+  assert.deepEqual(
+    tailOf(page).map(({ callId: named, text }) => [named, text]),
+    [["call-bash", "Ran: pnpm test"]],
+  );
+  const [entry] = tailOf(page);
+  const whole = await read({
+    agentId: teammates.id,
+    worker: callId,
+    call: { messageId: entry?.messageId, callId: "call-bash" },
+  });
+  assert.deepEqual(whole, {
+    status: ACTION_RESULT_STATUS.ACCEPTED,
+    call: {
+      tool: AGENT_TOOL.BASH,
+      state: "output-available",
+      input: { text: JSON.stringify({ command: "pnpm test" }), leftOutChars: 0 },
+      output: { text: log, leftOutChars: 0 },
+    },
+  });
+  // The agent's own transcript holds no such call, and no call of the agent started another worker.
+  assert.equal(
+    (
+      await read({
+        agentId: teammates.id,
+        call: { messageId: entry?.messageId, callId: "call-bash" },
+      })
+    ).status,
+    ACTION_RESULT_STATUS.REJECTED,
+  );
+  assert.equal(
+    (await read({ agentId: teammates.id, worker: "call-other" })).status,
+    ACTION_RESULT_STATUS.REJECTED,
   );
 });
 

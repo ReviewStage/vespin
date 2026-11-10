@@ -34,6 +34,7 @@ import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
+import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
 import { DocumentIcon } from "@repo/ui";
 import { Effect } from "effect";
@@ -41,6 +42,7 @@ import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, beforeEach, onTestFinished, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
+import { runAppCommand } from "../app-commands.js";
 import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import {
   type AnyAct,
@@ -246,7 +248,7 @@ test("the pane's crumbs lead with their tabs' glyphs, the plan's document and th
   assert.deepEqual(asked.previewedAgents, [], "no transcript opens beside the item");
 });
 
-test("a right-click on the pane's task crumb opens the task's one menu, Change repository among it, whose Rename turns the crumb into the task's name field, and on its agent's crumb the agent's menu, whose Rename turns that crumb into the agent's name field", async () => {
+test("a right-click on the pane's task crumb opens the task's one menu, Change repository among it, printing the keys the thread hands its task but U and P, which stay the thread's, whose Rename turns the crumb into the task's name field, and on its agent's crumb the agent's menu, whose Rename turns that crumb into the agent's name field; ⌘⌫ asks to delete the thread's task", async () => {
   const { page } = mount([], { chosen: ON_THRESHOLD });
   await settle();
   const crumb = (at: number) =>
@@ -260,11 +262,24 @@ test("a right-click on the pane's task crumb opens the task's one menu, Change r
       );
     });
   const offered = () => menuItems().map((item) => item.label);
+  const chords = () =>
+    [...document.querySelectorAll('[role="menu"]:not([data-leaving]) .ui-menu-item')].flatMap(
+      (item) => {
+        const keys = item.querySelector(".ui-shortcut")?.textContent;
+        return keys === undefined
+          ? []
+          : [[item.querySelector(".ui-menu-item-label")?.textContent, keys]];
+      },
+    );
 
   rightClick(crumb(0));
   for (const item of ["Copy link", "Rename", "Change repository", "Permanently delete"]) {
     assert.ok(offered().includes(item), `the task's crumb offers ${item}`);
   }
+  assert.deepEqual(chords(), [
+    ["Version history", "⌥⇧⌘H"],
+    ["Permanently delete", "⌘⌫"],
+  ]);
   chooseMenuItem("Rename");
   await settle();
   assert.ok(
@@ -287,6 +302,21 @@ test("a right-click on the pane's task crumb opens the task's one menu, Change r
   assert.ok(
     page.querySelector('.inbox-view-items nav[aria-label="Path"] input[aria-label="Agent name"]'),
     "the agent's crumb stands as its name field",
+  );
+  act(() =>
+    document.activeElement?.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true }),
+    ),
+  );
+  await settle();
+
+  act(() => {
+    assert.ok(runAppCommand(APP_COMMAND.DELETE), "⌘⌫ is offered");
+  });
+  assert.match(
+    document.querySelector('[role="alertdialog"]')?.textContent ?? "",
+    new RegExp(BILLING.name, "u"),
+    "⌘⌫ asks first, about the thread's task",
   );
 });
 
@@ -1586,11 +1616,7 @@ test("words selected in a thread stand Reply over them, which quotes them into t
   await settle();
   assert.equal(replyPress(), undefined, "Reply goes once pressed");
   assert.equal(document.activeElement, composerEditor(pane), "the box takes the caret");
-  assert.equal(
-    board.scrollTop,
-    400,
-    "the thread stays where the reader reads, the box docked under it",
-  );
+  assert.equal(board.scrollTop, 2_000, "the thread is taken to its end, the whole box in view");
   typeInComposer(pane, "Page at night for a full outage.");
   pressInComposer(pane, "Enter");
   await settle();
@@ -2181,17 +2207,15 @@ test.each([
 
 /** Each comment of the shown thread as its head draws its writer: its kind, then the kind of each face it draws, and the marks drawn anywhere but in its head or its body. */
 function commentHeads(pane: HTMLElement): (string | undefined | (string | undefined)[])[][] {
-  return [
-    ...pane.querySelectorAll<HTMLElement>(
-      ".inbox-thread > .inbox-comment, .inbox-draft-dock > .inbox-comment",
-    ),
-  ].map((comment) => [
-    comment.dataset.inboxComment,
-    [...comment.querySelectorAll<HTMLElement>(".ui-comment-face")].map(faceKind),
-    [...comment.querySelectorAll<HTMLElement>(".actor-mark")]
-      .filter((mark) => mark.closest(".ui-comment-head, .inbox-comment-body") === null)
-      .map((mark) => mark.dataset.kind),
-  ]);
+  return [...pane.querySelectorAll<HTMLElement>(".inbox-thread > .inbox-comment")].map(
+    (comment) => [
+      comment.dataset.inboxComment,
+      [...comment.querySelectorAll<HTMLElement>(".ui-comment-face")].map(faceKind),
+      [...comment.querySelectorAll<HTMLElement>(".actor-mark")]
+        .filter((mark) => mark.closest(".ui-comment-head, .inbox-comment-body") === null)
+        .map((mark) => mark.dataset.kind),
+    ],
+  );
 }
 
 test("each comment of a thread is headed by its writer's face and name, its face the thread's gutter with no face drawn apart from it; the draft reply's head is the reader's, \"You\", with nothing after it", async () => {
@@ -2221,7 +2245,7 @@ test("each comment of a thread is headed by its writer's face and name, its face
   );
 });
 
-test("a thread draws every message, the agent's by its tile and name alone, no tag after its chip, and a member's by their face and name, under its title alone; its open ask is a marker ending the agent's message, its options standing in the reader's draft reply docked under the thread, over the note", async () => {
+test("a thread draws every message, the agent's by its tile and name alone, no tag after its chip, and a member's by their face and name, under its title alone; its open ask is a marker ending the agent's message, its options standing in the reader's draft reply at the thread's end, over the note", async () => {
   const shown = threadItem([
     askingMessage(EXPIRY_ASK),
     threadMessage(
@@ -2259,11 +2283,7 @@ test("a thread draws every message, the agent's by its tile and name alone, no t
     ["message", "agent", "Alerts", "That is the default elsewhere."],
   ]);
   assert.deepEqual(
-    [
-      ...pane.querySelectorAll(
-        ".inbox-thread .ui-comment-head, .inbox-draft-dock .ui-comment-head",
-      ),
-    ].map((head) =>
+    [...pane.querySelectorAll(".inbox-thread .ui-comment-head")].map((head) =>
       [...head.children].map((part) =>
         [...part.classList].find((name) => name.startsWith("ui-comment-")),
       ),
@@ -2292,7 +2312,7 @@ test("a thread draws every message, the agent's by its tile and name alone, no t
   );
   assert.ok(
     pane.querySelector(
-      '.inbox-draft-dock form.inbox-answer > [data-inbox-draft-ask] [role="radio"]',
+      '.inbox-thread > li:last-child form.inbox-answer > [data-inbox-draft-ask] [role="radio"]',
     ),
     "the options stand in the draft's box, as its body",
   );

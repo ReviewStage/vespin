@@ -990,7 +990,7 @@ export function useTaskMenuItems(
       {sections.dialog}
     </>
   );
-  return { deletion, markDone, groups, footer, subject: menuSubject, dialog };
+  return { deletion, markDone, groups, footer, subject: menuSubject, keysOn: subject, dialog };
 }
 
 /** One task's menu items, its delete question, and the dialogs its items open, as `useTaskMenuItems` answers them. */

@@ -29,6 +29,8 @@ export const PREVIEW_LINK = {
   PROXY_PATH: "/api/previews/proxy",
   /** The preview host's own path that trades a handoff token for its cookie. */
   SESSION_PATH: "/__vespin/session",
+  /** The preview host's own path the waking page asks whether the preview is ready. */
+  STATUS_PATH: "/__vespin/status",
   QUERY: { AGENT: "agent", RETURN: "return", TOKEN: "token" },
   /** The preview host's session cookie, held to that host alone by its prefix. */
   COOKIE: "__Host-vespin-preview",

@@ -71,9 +71,8 @@ import { DeviceGlyph } from "./runs-on.js";
  * A device the read does not name is a teammate's, which the window cannot
  * speak for, so its label is its name alone. Nothing is drawn for an agent
  * on a device the service no longer names, since it is neither in the cloud
- * nor anywhere that can be named. In a box too narrow for its words, where
- * the branch's chip draws its mark alone too, the chip draws its glyph alone
- * in a square and keeps the words for a reader and its hint.
+ * nor anywhere that can be named. In a box too narrow for its words, the
+ * chip draws its glyph alone in a square and keeps the words for a reader and its hint.
  */
 
 /** What a reader hears before the name, which the glyph says to the eye. */

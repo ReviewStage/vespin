@@ -26,7 +26,6 @@ import {
 import { confirmFailure } from "../failure-report.js";
 import { AgentComposer } from "./agent-composer.js";
 import { type LineAttachment, useLineAttachments } from "./agent-pictures.js";
-import type { PublishedDoors } from "./agent-published.js";
 import type { SkillSource } from "./skill-picker.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
 
@@ -71,10 +70,9 @@ function sendQuestion(takes: string | undefined): DialogQuestion {
   };
 }
 
-/** What the box hands on as it sends, and the doors it is drawn with beside the tab's own box. */
+/** What the box hands on as it sends, and what it is drawn with beside the tab's own box. */
 export interface EditComposerDoors {
   readonly agentId: string;
-  readonly doors: PublishedDoors;
   readonly keywords?: readonly string[] | undefined;
   readonly skills?: SkillSource | undefined;
   /** Whether messages follow the line, which its send drops, so Send asks first. */
@@ -230,8 +228,6 @@ export function EditComposer({
         readModels={noop}
         usage={undefined}
         servers={undefined}
-        published={undefined}
-        doors={edit.doors}
         onStop={() => Promise.resolve(false)}
         followsUp
         keywords={edit.keywords}

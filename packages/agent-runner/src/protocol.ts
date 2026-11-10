@@ -584,12 +584,17 @@ const UuidSchema = Schema.String.check(
  * A message for the session, in the Messages API's own block shapes. `uuid`
  * is the service's id for the message, handed to the SDK as the prompt's own, so
  * the ACCEPTED event and the `result` that answers it name it; the runner
- * mints one where a line names none.
+ * mints one where a line names none. `resent` marks a message handed again
+ * to a session that already holds it, as a turn its plan's limit cut short
+ * is on the next payer: Claude Code drops a resumed session's prompt under
+ * a uuid the session holds, answering nothing, so the runner hands the SDK
+ * the prompt under a uuid of its own, and ACCEPTED still names the service's.
  */
 const MessageLineSchema = Schema.Struct({
   type: Schema.Literal(INPUT_LINE.MESSAGE),
   uuid: Schema.optionalKey(UuidSchema),
   content: Schema.Array(ContentBlockSchema),
+  resent: Schema.optionalKey(Schema.Boolean),
 });
 /**
  * Stop the running turn. `launch` names the launch the stop is for by its

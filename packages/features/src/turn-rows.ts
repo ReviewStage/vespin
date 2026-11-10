@@ -406,6 +406,8 @@ export const ROW_PART = {
   NOTE: "note",
   /** A message that reached the turn while it ran, from whoever sent it: it ends a run of calls, and a finished turn's fold splits around it, so it stands where it arrived. */
   ARRIVED: "arrived",
+  /** A native notice at a pause, kept in place between stretches of work. */
+  NOTICE: "notice",
 } as const;
 
 type RowPart = (typeof ROW_PART)[keyof typeof ROW_PART];
@@ -732,7 +734,8 @@ function splitAtArrivals<B>(lead: readonly Keyed<B>[], read: RowReading<B>): rea
   const runs: LeadRun<B>[] = [];
   let blocks: Keyed<B>[] = [];
   for (const each of lead) {
-    if (read.part(each.block) !== ROW_PART.ARRIVED) {
+    const part = read.part(each.block);
+    if (part !== ROW_PART.ARRIVED && part !== ROW_PART.NOTICE) {
       blocks.push(each);
       continue;
     }

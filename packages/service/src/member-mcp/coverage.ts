@@ -45,7 +45,7 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
   SCREEN_ONLY: "screen-only",
   /** A sign-in or connect flow that finishes in a browser, or a link only a person opens; a disconnect is no such flow. */
   NEEDS_BROWSER: "needs-browser",
-  /** It reads or writes a secret, which no tool ever carries. */
+  /** It reads or writes a secret, which no tool ever carries: a provider key or the GitHub token goes in through the CLI's stdin alone. */
   SECRET: "secret",
   /** It hands a person trust in the account, a decision the member makes in the app alone and never through an agent. */
   SECURITY: "security",
@@ -66,6 +66,8 @@ const { SCREEN_ONLY, NEEDS_BROWSER, SECRET, SECURITY, DESTRUCTIVE, INTERNAL, NOT
 /** Each tool's procedures: at least one, so no row stands empty. */
 export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.LIST_WORKSPACES]: { workspaces: ["list"] },
+  [MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS]: { workspaces: ["members"] },
+  [MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG]: { workspaces: ["setSlug"] },
   [MEMBER_MCP_TOOL.LIST_TASKS]: { plans: ["list"], taskSections: ["list"] },
   [MEMBER_MCP_TOOL.READ_TASK]: { plans: ["open"] },
   [MEMBER_MCP_TOOL.LIST_AGENTS]: { agents: ["listOfWorkspace", "listOfTask"] },
@@ -75,8 +77,20 @@ export const MEMBER_MCP_COVERAGE = {
     messages: ["agentNewest", "agent"],
   },
   [MEMBER_MCP_TOOL.READ_AGENT_CHANGES]: { agentPullRequests: ["pullRequest"], agents: ["changes"] },
+  [MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT]: {
+    messages: [
+      "agent",
+      "agentNewest",
+      "agentWorker",
+      "agentWorkerNewest",
+      "agentPart",
+      "agentWorkerPart",
+    ],
+  },
   [MEMBER_MCP_TOOL.LIST_MODELS]: { models: ["list"], account: ["preferences"] },
   [MEMBER_MCP_TOOL.READ_PAGE]: { taskFiles: ["pages", "page"], agentPages: ["list", "version"] },
+  [MEMBER_MCP_TOOL.READ_TASK_FILE]: { taskFiles: ["file"] },
+  [MEMBER_MCP_TOOL.LIST_TASK_FOLDER]: { taskFiles: ["tree"] },
   [MEMBER_MCP_TOOL.CREATE_TASK]: { plans: ["create", "editDescription"] },
   [MEMBER_MCP_TOOL.UPDATE_TASK]: { plans: ["update", "parent", "block"], taskSections: ["write"] },
   [MEMBER_MCP_TOOL.EDIT_DESCRIPTION]: { plans: ["open", "editDescription"] },
@@ -93,12 +107,20 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.REPLY_TO_THREAD]: { inbox: ["message"] },
   [MEMBER_MCP_TOOL.CLOSE_THREAD]: { inbox: ["close"] },
   [MEMBER_MCP_TOOL.AGENT_PULL_REQUEST_ACTION]: { agentPullRequests: ["action"] },
+  [MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS]: {
+    agentPullRequests: ["pullRequest"],
+    pullRequestChapters: ["read", "repositoryRead"],
+  },
+  [MEMBER_MCP_TOOL.GENERATE_PULL_REQUEST_CHAPTERS]: {
+    pullRequestChapters: ["generate", "repositoryGenerate"],
+  },
   [MEMBER_MCP_TOOL.READ_COMMENTS]: { descriptionComments: ["read"] },
   [MEMBER_MCP_TOOL.COMMENT_ON_DESCRIPTION]: { plans: ["open"], descriptionComments: ["start"] },
   [MEMBER_MCP_TOOL.REPLY_TO_COMMENT]: { descriptionComments: ["act"] },
   [MEMBER_MCP_TOOL.UPDATE_COMMENT]: { descriptionComments: ["act"] },
   [MEMBER_MCP_TOOL.SEARCH_MEMORY]: { account: ["searchMemories"] },
   [MEMBER_MCP_TOOL.SAVE_MEMORY]: { account: ["saveMemory"] },
+  [MEMBER_MCP_TOOL.LIST_MEMORIES]: { account: ["memories"] },
   [MEMBER_MCP_TOOL.FORGET_MEMORY]: { account: ["forgetMemory"] },
   [MEMBER_MCP_TOOL.LIST_AUTOMATIONS]: { automations: ["list", "read", "runs"] },
   [MEMBER_MCP_TOOL.CREATE_AUTOMATION]: { automations: ["create"] },
@@ -139,6 +161,7 @@ type MemberMcpExclusions = {
 export const MEMBER_MCP_EXCLUSIONS = {
   account: {
     access: INTERNAL,
+    active: INTERNAL,
     writePreferences: NOT_YET_BUILT,
     providerKeys: SECRET,
     saveProviderKey: SECRET,
@@ -146,7 +169,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     renameSubscription: SECRET,
     reorderSubscriptions: SECRET,
     removeProviderKey: SECRET,
-    memories: NOT_YET_BUILT,
     startChatGptDeviceLogin: NEEDS_BROWSER,
     pollChatGptDeviceLogin: NEEDS_BROWSER,
     cancelChatGptDeviceLogin: NEEDS_BROWSER,
@@ -294,10 +316,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   mcpClients: { list: NOT_YET_BUILT, revoke: NOT_YET_BUILT },
   messages: {
     queue: NOT_YET_BUILT,
-    agentWorker: NOT_YET_BUILT,
-    agentWorkerNewest: NOT_YET_BUILT,
-    agentPart: NOT_YET_BUILT,
-    agentWorkerPart: NOT_YET_BUILT,
   },
   plans: {
     find: NOT_YET_BUILT,
@@ -306,12 +324,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     descriptionRevisions: NOT_YET_BUILT,
     descriptionRevision: NOT_YET_BUILT,
     restoreDescription: NOT_YET_BUILT,
-  },
-  pullRequestChapters: {
-    read: NOT_YET_BUILT,
-    generate: NOT_YET_BUILT,
-    repositoryRead: NOT_YET_BUILT,
-    repositoryGenerate: NOT_YET_BUILT,
   },
   pullRequests: {
     pullRequest: NOT_YET_BUILT,
@@ -323,12 +335,10 @@ export const MEMBER_MCP_EXCLUSIONS = {
     overviewChecks: NOT_YET_BUILT,
     overviewConversation: NOT_YET_BUILT,
   },
-  pushDevices: { register: INTERNAL, unregister: INTERNAL },
+  pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },
   repositoryPins: { list: NOT_YET_BUILT, set: NOT_YET_BUILT },
   supportAccess: { grant: SECURITY, revoke: SECURITY },
   taskFiles: {
-    file: NOT_YET_BUILT,
-    tree: NOT_YET_BUILT,
     skills: SCREEN_ONLY,
     keepPicture: SCREEN_ONLY,
     pageFrame: SCREEN_ONLY,
@@ -362,10 +372,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   workspaces: {
     create: NOT_YET_BUILT,
     rename: NOT_YET_BUILT,
-    setSlug: NOT_YET_BUILT,
     setPhoto: NOT_YET_BUILT,
     setExperiment: INTERNAL,
-    members: NOT_YET_BUILT,
     removeMember: NOT_YET_BUILT,
     changeRole: NOT_YET_BUILT,
     transfer: DESTRUCTIVE,

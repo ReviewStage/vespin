@@ -341,15 +341,17 @@ const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, t
       const content = value.content;
       // SAFETY: a line's uuid is checked against the UUID pattern as the line is read.
       const uuid = (value.uuid as UUID | undefined) ?? randomUUID();
+      // A message resent to a session that holds it goes to the CLI under a uuid of its own, which the CLI would drop.
+      const prompt = value.resent === true ? randomUUID() : uuid;
       return yield* launch.admission.withPermit(
         Effect.gen(function* () {
           yield* launch.trace.taken;
           const running = yield* Ref.getAndSet(launch.turnRunning, true);
           yield* Ref.set(launch.warm, false);
-          yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(uuid));
+          yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(prompt));
           // Posted ahead of the hand-off, so it is numbered before anything the CLI says of the message.
           yield* launch.sink.emit({ type: RUNNER_EVENT.ACCEPTED, uuid });
-          yield* Queue.offer(launch.prompts, userMessage(uuid, content, running));
+          yield* Queue.offer(launch.prompts, userMessage(prompt, content, running));
         }),
       );
     }

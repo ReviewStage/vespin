@@ -604,40 +604,84 @@ it.layer(getTestDB())("the provider keys route", (it) => {
   );
 
   it.effect(
-    "a save replaces the provider's key, and a removal takes it out, for the bearer's account alone",
+    "a save adds a key at the bottom of its provider's keys or replaces the one it names in place, a rename names one, and a removal takes one out, for the bearer's account alone",
     () =>
       Effect.gen(function* () {
+        const second = "sk-ant-api03-second-key-000000000000000scnd";
         const replacement = "sk-ant-api03-replacement-00000000000000repl";
         const { owner, other, ask } = yield* openAccounts({
           ring: KEK.ONE,
-          provider: new Map([...ACCEPTING, [replacement, HTTP_STATUS.OK]]),
+          provider: new Map([
+            ...ACCEPTING,
+            [second, HTTP_STATUS.OK],
+            [replacement, HTTP_STATUS.OK],
+          ]),
         });
         keysOf(yield* ask(save(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, KEY.ANTHROPIC)));
         keysOf(yield* ask(save(owner, PROVIDER_KEY_PROVIDER.OPENAI, KEY.OPENAI)));
+        const added = keysOf(yield* ask(save(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, second)));
+        const [firstId, secondId] = added.keys.map((key) => key.id ?? "");
         yield* TestClock.adjust("1 day");
 
         const replaced = keysOf(
-          yield* ask(save(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC, replacement)),
+          yield* ask(
+            request(owner, {
+              method: "PUT",
+              body: {
+                provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
+                key: replacement,
+                subscriptionId: firstId ?? "",
+              },
+            }),
+          ),
         );
+        const named = (userId: string, id: string) =>
+          ask(
+            request(userId, {
+              method: "PUT",
+              path: "/api/account/provider-keys/label",
+              body: {
+                provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
+                kind: PROVIDER_KEY_KIND.API_KEY,
+                subscriptionId: id,
+                label: "Team credits",
+              },
+            }),
+          );
+        const removing = (userId: string, id: string) =>
+          request(userId, {
+            method: "DELETE",
+            query: `provider=${PROVIDER_KEY_PROVIDER.ANTHROPIC}&subscriptionId=${id}`,
+          });
         const othersRead = keysOf(yield* ask(request(other)));
-        const othersRemoval = keysOf(yield* ask(remove(other, PROVIDER_KEY_PROVIDER.OPENAI)));
-        const removed = keysOf(yield* ask(remove(owner, PROVIDER_KEY_PROVIDER.OPENAI)));
-        const removedTwice = keysOf(yield* ask(remove(owner, PROVIDER_KEY_PROVIDER.OPENAI)));
+        const othersRename = keysOf(yield* named(other, secondId ?? ""));
+        const othersRemoval = keysOf(yield* ask(removing(other, secondId ?? "")));
+        const renamed = keysOf(yield* named(owner, secondId ?? ""));
+        const removed = keysOf(yield* ask(removing(owner, firstId ?? "")));
 
         assert.deepEqual(
-          replaced.keys.map(({ provider, hint }) => [provider, hint]),
+          replaced.keys.map(({ provider, hint, id }) => [provider, hint, id]),
           [
-            [PROVIDER_KEY_PROVIDER.ANTHROPIC, "sk-ant-…repl"],
-            [PROVIDER_KEY_PROVIDER.OPENAI, "sk-proj-…abcd"],
+            [PROVIDER_KEY_PROVIDER.ANTHROPIC, "sk-ant-…repl", firstId],
+            [PROVIDER_KEY_PROVIDER.ANTHROPIC, "sk-ant-…scnd", secondId],
+            [PROVIDER_KEY_PROVIDER.OPENAI, "sk-proj-…abcd", replaced.keys[2]?.id],
           ],
         );
         assert.deepEqual(othersRead.keys, [], "another account holds none");
+        assert.deepEqual(othersRename.keys, [], "another account names none of the owner's");
         assert.deepEqual(othersRemoval.keys, [], "another account removes none of the owner's");
         assert.deepEqual(
-          removed.keys.map(({ provider }) => provider),
-          [PROVIDER_KEY_PROVIDER.ANTHROPIC],
+          renamed.keys.map(({ hint, label }) => [hint, label]),
+          [
+            ["sk-ant-…repl", undefined],
+            ["sk-ant-…scnd", "Team credits"],
+            ["sk-proj-…abcd", undefined],
+          ],
         );
-        assert.deepEqual(removedTwice, removed);
+        assert.deepEqual(
+          removed.keys.map(({ hint }) => hint),
+          ["sk-ant-…scnd", "sk-proj-…abcd"],
+        );
       }),
   );
 

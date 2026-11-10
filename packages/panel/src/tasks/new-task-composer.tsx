@@ -83,8 +83,8 @@ import type { TasksControl } from "./use-tasks-tab.js";
  * since the card says what it is, and an automation's drawn before it; on a
  * phone the row wraps, each chip cut short rather than overflowing.
  * The Runs on chip stands after the box's "+", as an agent's box draws where its
- * agent runs, its glyph alone where the card is too narrow for its words,
- * as the agent's branch chip draws its mark alone there: Cloud, and while Bring your own host is on the member's
+ * agent runs, its glyph alone where the card is too narrow for its words:
+ * Cloud, and while Bring your own host is on the member's
  * devices, which the agent it starts runs on (`runs-on.tsx`); an automation's
  * card draws none. While the experiment is off the chip offers
  * Cloud alone, the card reads no devices, and every agent it starts runs in
@@ -812,8 +812,6 @@ export function NewTaskComposer({
         servers={servers}
         plus={relationPlus}
         skills={skills}
-        published={undefined}
-        doors={{ openGitHub: () => undefined, copy: () => undefined }}
         onStop={() => Promise.resolve(false)}
         followsUp={false}
         onKey={onKey}

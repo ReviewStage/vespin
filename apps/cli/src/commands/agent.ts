@@ -1,5 +1,5 @@
 /**
- * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `stop`, `wait`, `checkout`, `ports`, and `share`: coding agents started, continued, read, followed, messaged, stopped, waited on, their work brought into the working folder, and the ports their sandbox listens on shared by link.
+ * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `stop`, `wait`, `checkout`, `diff` and `pr` (`agent-pull-request.ts`), `ports`, `share`, `forward` (`agent-forward.ts`), and `shell` and `shells` (`agent-shell.ts`): coding agents started, continued, read, followed, messaged, stopped, waited on, their work brought into the working folder, their pull request read and changed, the ports their sandbox listens on shared by link and served on localhost, and its shells attached here.
  *
  * A turn is followed on the held transcript read (`messages.agent`): asked
  * past the cursor the last answer handed back, the service holds it while
@@ -30,7 +30,12 @@ import {
   agentStartRequestOnWire,
 } from "@repo/features/agent-wire";
 import { CLI_EXIT, cliExitOfAgentStatus } from "@repo/features/cli-exit";
-import { transcriptPartLines, transcriptSpeaker } from "@repo/features/cli-transcript";
+import {
+  transcriptCallPlace,
+  transcriptPartLines,
+  transcriptSpeaker,
+  wholeCallLines,
+} from "@repo/features/cli-transcript";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { FORWARD_PORT } from "@repo/features/sandbox-tunnel-wire";
@@ -41,6 +46,9 @@ import { answer, CommandFailed, columns, note, readInput, streamLines } from "..
 import { askService, session } from "../session.js";
 import { resolveTaskId } from "../tasks.js";
 import { resolveWorkspace } from "../workspace.js";
+import { forwardCommand } from "./agent-forward.js";
+import { diffCommand, prCommand } from "./agent-pull-request.js";
+import { shellCommand, shellsCommand } from "./agent-shell.js";
 
 /** How long after a held read answers the next is asked, so a read that answers at once never spins. */
 const FOLLOW_SPACING = Duration.seconds(1);
@@ -158,21 +166,51 @@ function runsOnOf(cloud: boolean, on: Option.Option<string>) {
   });
 }
 
-/** The whole transcript, oldest first: the newest page, and every page below it. */
-function wholeTranscript(agentId: string) {
+/** The whole transcript, oldest first, of the agent or, by the call that started it, one of its workers: the newest page, and every page below it. */
+function wholeTranscript(agentId: string, worker?: string) {
   return Effect.gen(function* () {
     const { hosted } = yield* session;
-    const newest = yield* askService(hosted.messages.agentNewest, { id: agentId });
+    const page = (before: string | undefined) => {
+      const below = before === undefined ? undefined : { before };
+      return worker === undefined
+        ? askService(hosted.messages.agentNewest, { id: agentId, ...below })
+        : askService(hosted.messages.agentWorkerNewest, { id: agentId, call: worker, ...below });
+    };
+    const newest = yield* page(undefined);
     let messages = newest.messages;
     let before = newest.before;
     while (before !== undefined) {
-      const older = yield* askService(hosted.messages.agentNewest, { id: agentId, before });
+      const older = yield* page(before);
       messages = [...older.messages, ...messages];
       before = older.before;
     }
     const cursor = "cursor" in newest ? newest.cursor : AGENT_CURSOR_START;
     const status = "status" in newest ? newest.status : undefined;
     return { messages, cursor, status };
+  });
+}
+
+/** One call of the agent's or its worker's transcript, by its id, printed whole: its input, and its output or its error. */
+function printWholeCall(agentId: string, worker: string | undefined, callId: string) {
+  return Effect.gen(function* () {
+    const { hosted } = yield* session;
+    const { messages } = yield* wholeTranscript(agentId, worker);
+    const place = transcriptCallPlace(messages, callId);
+    if (place === undefined) {
+      return yield* new CommandFailed({
+        exit: CLI_EXIT.USAGE,
+        message: `No call ${callId} in that transcript; agent logs --json names each call's toolCallId.`,
+      });
+    }
+    const at = { id: agentId, message: place.messageId, index: String(place.index) };
+    const { part } = yield* worker === undefined
+      ? askService(hosted.messages.agentPart, at)
+      : askService(hosted.messages.agentWorkerPart, { ...at, call: worker });
+    yield* answer({
+      json: { id: agentId, callId, part },
+      lines: wholeCallLines(part),
+      ids: [agentId],
+    });
   });
 }
 
@@ -642,9 +680,33 @@ const logsCommand = Command.make(
       Flag.withDefault(false),
       Flag.withDescription("Stream the turn under way until it ends"),
     ),
+    worker: Flag.String("worker").pipe(
+      Flag.optional,
+      Flag.withDescription(
+        "Read one of its workers' transcript instead, by the toolCallId of the call that started it (agent logs --json)",
+      ),
+    ),
+    call: Flag.String("call").pipe(
+      Flag.optional,
+      Flag.withDescription(
+        "Print one call whole, its input and its output, by its toolCallId (agent logs --json)",
+      ),
+    ),
   },
-  ({ agent: id, follow }) =>
+  ({ agent: id, follow, worker: workerFlag, call: callFlag }) =>
     Effect.gen(function* () {
+      const worker = Option.getOrUndefined(workerFlag);
+      const callId = Option.getOrUndefined(callFlag);
+      if (follow && (worker !== undefined || callId !== undefined)) {
+        return yield* new CommandFailed({
+          exit: CLI_EXIT.USAGE,
+          message: "--follow streams the agent's own turn; leave out --worker and --call.",
+        });
+      }
+      if (callId !== undefined) {
+        yield* printWholeCall(id, worker, callId);
+        return;
+      }
       if (follow) {
         const following = yield* followTurn(id, true);
         yield* answer({
@@ -659,20 +721,30 @@ const logsCommand = Command.make(
         });
         return;
       }
-      const { messages, status } = yield* wholeTranscript(id);
+      const { messages, status } = yield* wholeTranscript(id, worker);
       yield* answer({
-        json: { id, status: status ?? null, messages },
+        json: {
+          id,
+          ...(worker === undefined ? undefined : { worker }),
+          status: status ?? null,
+          messages,
+        },
         lines: pageLines(messages, new Map(), true).lines,
         ids: [id],
       });
     }),
 ).pipe(
   Command.withDescription(
-    "Print an agent's transcript; --follow streams the turn under way (with --json, the whole transcript once it ends)",
+    "Print an agent's transcript, or one of its workers' with --worker, or one call of it whole with --call; --follow streams the turn under way (with --json, the whole transcript once it ends)",
   ),
   Command.withExamples([
     { command: "vespin agent logs <id>", description: "The transcript so far" },
     { command: "vespin agent logs <id> --follow", description: "Stream the turn live" },
+    { command: "vespin agent logs <id> --worker <callId>", description: "A worker's transcript" },
+    {
+      command: "vespin agent logs <id> --call <callId>",
+      description: "One call, its output whole",
+    },
   ]),
 );
 
@@ -896,7 +968,7 @@ const shareCommand = Command.make(
   ]),
 );
 
-/** The agent group: start, continue, and the rest through share. */
+/** The agent group: start, continue, and the rest through share, with diff, pr, forward, and the shells from their own files. */
 export const agentCommand = Command.make("agent").pipe(
   Command.withDescription(
     `Start, continue, follow, message, and stop ${PRODUCT_NAME}'s coding agents`,
@@ -909,10 +981,15 @@ export const agentCommand = Command.make("agent").pipe(
     logsCommand,
     sendCommand,
     stopCommand,
+    forwardCommand,
     waitCommand,
     checkoutCommand,
+    diffCommand,
+    prCommand,
     portsCommand,
     shareCommand,
+    shellCommand,
+    shellsCommand,
   ]),
   Command.withExamples([
     { command: "vespin agent start ACME-42 --wait", description: "Start an agent, and wait on it" },

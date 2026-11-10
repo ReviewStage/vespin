@@ -2428,14 +2428,16 @@ export const runnerSessions = <
       // (`turnPayerOf`) and the harness's session resumed (`resumedSessionWhen`). Note that on a
       // machine whose runner reads its lines, the line the ended launch took is put back untaken
       // first, because the launch queues it again under the same id, and a line taken is never
-      // handed again (`requeueRunnerLine`).
+      // handed again (`requeueRunnerLine`). The line is resent, since the session it resumes
+      // already holds it under its id.
       retry: (sessionId, message) =>
         Effect.gen(function* () {
           const after = yield* Effect.serviceOption(AfterResponse);
           return yield* Effect.gen(function* () {
             const agent = yield* agentOf(message.conversationId);
             const layout = yield* machine.layout(agent);
-            const sent = messageLine(message, layout);
+            const first = messageLine(message, layout);
+            const sent = { ...first, line: { ...first.line, resent: true } };
             return yield* holdingRunner(
               agent.id,
               Effect.andThen(

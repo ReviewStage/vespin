@@ -276,6 +276,22 @@ const iosColor = (hex) => {
   written.push(`${IOS_ICON.name}/icon.json`);
 }
 
+// iOS marketing icon: the bundle's light look flattened, the copper tile full
+// bleed and opaque under the white mark at ICON_MARK of the canvas. App Store
+// Connect and TestFlight read no Icon Composer bundle, so the app's asset
+// catalog carries this beside it under the bundle's name, cut to a 1024 PNG
+// with no alpha channel, which App Store Connect refuses (ITMS-90717).
+{
+  const { tile, ink } = TILES.light;
+  const disc = IOS_ICON.canvas * ICON_MARK;
+  const at = (IOS_ICON.canvas - disc) / 2;
+  emit(
+    "icon/icon-ios.svg",
+    `${svgOpen(IOS_ICON.canvas, IOS_ICON.canvas)}<rect width="${IOS_ICON.canvas}" height="${IOS_ICON.canvas}" fill="${tile}"/>${markAt(at, at, disc, ink)}</svg>`,
+    `${PRODUCT_NAME} app icon`,
+  );
+}
+
 // Web app icon: the dark mode's tile, full bleed, for the platform to round
 // or mask itself, the disc spanning ICON_MARK of it. The site's
 // apple-touch-icon and its manifest's icons, as is and maskable, are cut from

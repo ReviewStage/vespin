@@ -15,10 +15,9 @@
  * A subscription credential, a Claude setup-token, is braked and sealed as
  * a key is but never sent to its provider: it is kept unverified, and a
  * credential spelled as no credential of its kind is refused as invalid.
- * Until a provider's API key and subscription may stand side by side, a
- * save of one kind where the provider holds the other is refused and
- * replaces nothing. The answer's `keys` are API keys alone, and the
- * subscriptions stand apart beside them.
+ * An account may keep several API keys of a provider: a save adds one at
+ * the bottom of its order, or replaces the one its id names. The answer's
+ * `keys` are API keys alone, and the subscriptions stand apart beside them.
  *
  * A ChatGPT plan (`chatgpt_oauth`) is the one credential that is not a
  * pasted key: the service connects it through Codex's device-code login
@@ -174,6 +173,7 @@ const summariesOf = /* @__PURE__ */ Effect.fnUntraced(function* (
       statusAt: row.statusAt.getTime(),
       id: row.id,
       position: row.position,
+      ...(row.label === null ? undefined : { label: row.label }),
       ...(status === PROVIDER_KEY_STATUS.LIMIT_REACHED && row.limitResetsAt !== null
         ? { limitResetsAt: row.limitResetsAt.getTime() }
         : undefined),
@@ -200,7 +200,6 @@ const keysAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
         id: row.id,
         position: row.position,
         forAgents: row.forAgents,
-        ...(row.label === null ? undefined : { label: row.label }),
         ...(row.accountEmail === null ? undefined : { email: row.accountEmail }),
         ...(usage === undefined ? undefined : { usage }),
       });
@@ -304,6 +303,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       if (checked !== PROVIDER_KEY_CHECK.ACCEPTED) return yield* keysAnswer(userId, ring, checked);
       const sealed = sealProviderKey(ring, { userId, provider, kind }, key);
       const now = yield* DateTime.nowAsDate;
+      // Note that a key is added at the bottom of the order unless the save names the one it replaces.
       yield* hostedStoreOrUnavailable(
         saveProviderKey(
           userId,
@@ -313,6 +313,8 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
           providerKeyHint(key),
           fastAccess ?? null,
           now,
+          null,
+          input.subscriptionId === undefined ? {} : { subscriptionId: input.subscriptionId },
         ),
       );
       yield* recordServerEvent(SERVER_EVENT.PROVIDER_KEY_CREATE, { userId }, { provider });
@@ -354,7 +356,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       return yield* keysAnswer(userId, ring);
     }),
 
-    /** One of the account's subscriptions named, or its name cleared; one it does not hold changes nothing. */
+    /** One of the account's subscriptions or API keys named, or its name cleared; one it does not hold changes nothing. */
     renameSubscription: keyed.renameSubscription.effect(function* ({ context, input }) {
       const { userId, ring } = context;
       // Note that a name is kept as typed but for its ends, and one left empty is the default's.

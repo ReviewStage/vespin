@@ -42,7 +42,9 @@ function stopHookOf(options: Options) {
  * Each `result` names the prompts its turn took, as the CLI's does, but one
  * whose step says it names none. `chain`
  * is the stored session's entries, which every session it is asked for
- * reads as, or none where the read is refused. A CLI that stops `answering` records each control request
+ * reads as, or none where the read is refused; a resumed session drops a
+ * prompt under a uuid its entries hold, answering nothing, as the CLI
+ * (2.1.304) does. A CLI that stops `answering` records each control request
  * (a model change, an interrupt) and never answers it.
  */
 export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function* (
@@ -71,10 +73,12 @@ export const fakeClaudeCode = Effect.fn("agent-runner/fakeClaudeCode")(function*
   }): ClaudeCodeSession => {
     // The prompts the running turn has taken, which its `result` names.
     const taken: string[] = [];
+    const held = new Set(params.options.resume === undefined ? [] : (chain ?? []));
 
     // Note that the prompts are read for as long as the service sends them, as the
     // CLI reads its stdin, while the script plays beside them.
     const prompts = Stream.fromAsyncIterable(params.prompt, (cause) => cause).pipe(
+      Stream.filter((prompt) => prompt.uuid === undefined || !held.has(prompt.uuid)),
       Stream.tap((prompt) =>
         Effect.sync(() => record.prompts.push(prompt)).pipe(
           Effect.andThen(Queue.offer(prompted, prompt)),

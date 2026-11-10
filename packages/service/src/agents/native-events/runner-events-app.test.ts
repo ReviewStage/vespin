@@ -52,6 +52,7 @@ import { Clock, Duration, Effect, ErrorReporter, Layer, Option } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
+import { TURN_FAILURE } from "../../core.js";
 import {
   recordingProductAnalytics,
   SERVER_EVENT,
@@ -978,10 +979,21 @@ it.layer(SUITE)("the runner events route", (it) => {
         const { turns: ended } = yield* transcriptOf(agent.target.conversationId);
         const context = yield* readAgentContext(agent.userId, agent.agentId);
 
+        const failures = yield* Effect.flatMap(Database, (db) =>
+          db
+            .select({ failure: turns.failure, detail: turns.failureDetail })
+            .from(turns)
+            .where(eq(turns.conversationId, agent.target.conversationId)),
+        );
         assert.deepEqual(ended.map((turn) => [turn.status, turn.failureDetail]).sort(), [
           [TURN_STATUS.FAILED, "error_during_execution; rate_limit_rejected five_hour"],
           [TURN_STATUS.FAILED, "input_closed"],
         ]);
+        // The turn its plan's limit cut short failed for that limit, not as a model call that failed.
+        assert.equal(
+          failures.find(({ detail }) => detail?.includes("rate_limit_rejected") === true)?.failure,
+          TURN_FAILURE.PLAN_LIMIT,
+        );
         assert.notEqual(Option.getOrThrow(context).compactedAt, null);
         // Only the last turn's kind stands, so the next message says the call's words no longer hold and hands the task again.
         assert.deepEqual(yield* readNativeTurnHanded(agent.target), { spoken: true });
@@ -1019,45 +1031,53 @@ it.layer(SUITE)("the runner events route", (it) => {
     }),
   );
 
-  it.effect("a turn the model refused with no fallback ends as a refusal", () =>
-    Effect.gen(function* () {
-      const post = yield* standing;
-      const agent = yield* agentWithBearer;
-      const top = { parent_tool_use_id: null, session_id: SESSION };
-      const messagesOfTurn = [
-        { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
-        {
-          type: "system",
-          subtype: "model_refusal_no_fallback",
-          original_model: "claude-opus-5-5",
-          request_id: null,
-          api_refusal_category: "cyber",
-          content: "Claude declined to answer.",
-          ...top,
-        },
-        // The CLI's result need not say the model turn failed.
-        { type: "result", subtype: "success", is_error: false, ...top },
-        { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
-      ];
-      // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
-      yield* post(
-        agent.bearer,
-        messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent),
-      );
-      const db = yield* Database;
-      const ended = yield* db
-        .select({ status: turns.status, failure: turns.failure, detail: turns.failureDetail })
-        .from(turns)
-        .where(eq(turns.conversationId, agent.target.conversationId));
+  it.effect(
+    "a turn the model refused with no fallback ends as a refusal, and its agent reads as refused",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const messagesOfTurn = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          {
+            type: "system",
+            subtype: "model_refusal_no_fallback",
+            original_model: "claude-opus-5-5",
+            request_id: null,
+            api_refusal_category: "cyber",
+            content: "Claude declined to answer.",
+            ...top,
+          },
+          // The CLI's result need not say the model turn failed.
+          { type: "result", subtype: "success", is_error: false, ...top },
+          { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+        ];
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        yield* post(
+          agent.bearer,
+          messagesOfTurn.map((message, sequence) => ({ sequence, message }) as RunnerEvent),
+        );
+        const db = yield* Database;
+        const ended = yield* db
+          .select({ status: turns.status, failure: turns.failure, detail: turns.failureDetail })
+          .from(turns)
+          .where(eq(turns.conversationId, agent.target.conversationId));
 
-      assert.deepEqual(ended, [
-        {
-          status: TURN_STATUS.FAILED,
-          failure: "refusal",
-          detail: "model_refusal_no_fallback cyber",
-        },
-      ]);
-    }),
+        assert.deepEqual(ended, [
+          {
+            status: TURN_STATUS.FAILED,
+            failure: "refusal",
+            detail: "model_refusal_no_fallback cyber",
+          },
+        ]);
+        // The agent reads as refused, which its tab offers a continue on another model for.
+        const [turn] = ended;
+        assert.equal(
+          agentFailureOf(turn && { ...turn, failureDetail: turn.detail }),
+          AGENT_FAILURE.REFUSAL,
+        );
+      }),
   );
 
   it.effect("a compaction that failed is why its failed turn says it failed", () =>
@@ -1671,7 +1691,11 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
             // An interrupted subagent did not do its work: its call settles as an error.
             "output-error",
           ],
+          ["data-usage-limit"],
         ]);
+        const limitNotice = rows.at(-1)?.parts.at(-1);
+        assert.ok(limitNotice?.type === "data-usage-limit");
+        assert.deepEqual(limitNotice.data, { agent: "Codex", resetsAt: null });
         assert.ok(!JSON.stringify(rows).includes("iVBORw0K"));
         assert.deepEqual(
           ended.map((turn) => [turn.status, turn.failureDetail]),
@@ -2323,12 +2347,31 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
     messagesOfLaunch.map((message, index) => ({ sequence: from + index, message }) as RunnerEvent);
 
   /** One launch whose one turn Claude Code ended in error, with what it said first. */
-  const failedClaudeLaunch = (lineId: string, said: readonly WireValue[]): readonly unknown[] => {
+  const failedClaudeLaunch = (
+    lineId: string,
+    said: readonly WireValue[],
+    limitReply = false,
+  ): readonly unknown[] => {
     const top = { parent_tool_use_id: null, session_id: SESSION };
     return [
       { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
       { type: "system", subtype: "init", ...top },
       ...said,
+      ...(limitReply
+        ? [
+            {
+              type: "assistant",
+              error: "rate_limit",
+              message: {
+                id: "msg_limit",
+                content: [
+                  { type: "text", text: "You've hit your session limit · resets 11pm (UTC)" },
+                ],
+              },
+              ...top,
+            },
+          ]
+        : []),
       { type: "result", subtype: "success", is_error: true, ...top },
       { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
     ];
@@ -2432,18 +2475,22 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         const top = { parent_tool_use_id: null, session_id: SESSION };
         const limited = numberedFrom(
           0,
-          failedClaudeLaunch(agent.lineId, [
-            {
-              type: "rate_limit_event",
-              rate_limit_info: {
-                status: "rejected",
-                rateLimitType: "five_hour",
-                resetsAt: resetsAt / 1000,
+          failedClaudeLaunch(
+            agent.lineId,
+            [
+              {
+                type: "rate_limit_event",
+                rate_limit_info: {
+                  status: "rejected",
+                  rateLimitType: "five_hour",
+                  resetsAt: resetsAt / 1000,
+                },
+                uuid: randomUUID(),
+                ...top,
               },
-              uuid: randomUUID(),
-              ...top,
-            },
-          ]),
+            ],
+            true,
+          ),
         );
         yield* post(agent.bearer, limited);
         const waiting = (yield* latestTurnsOfReached([agent.target.conversationId])).get(
@@ -2461,6 +2508,13 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         yield* post(bearer, numberedFrom(limited.length, ran), launch);
         const finished = yield* transcriptOf(agent.target.conversationId);
 
+        assert.deepEqual(
+          finished.rows.flatMap((row) =>
+            row.parts.flatMap((part) => (part.type === "data-usage-limit" ? [part.data] : [])),
+          ),
+          [{ agent: "Claude", resetsAt }],
+        );
+        assert.ok(!JSON.stringify(finished.rows).includes("You've hit your session limit"));
         assert.equal(waiting?.status, TURN_STATUS.RUNNING);
         assert.equal(waiting?.waitsUntil?.getTime(), resetsAt);
         assert.ok((waiting?.leaseUntil?.getTime() ?? 0) > resetsAt);
@@ -2483,7 +2537,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
   );
 
   it.effect(
-    "a turn the plan's limit cuts short, with another subscription standing, stays open for the next launch, which finishes it with the line shown once",
+    "a turn the plan's limit cuts short, with another subscription standing, says which plan it moves to and stays open for the next launch, which finishes it with the line shown once",
     () =>
       Effect.gen(function* () {
         const post = yield* standing;
@@ -2496,9 +2550,9 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           { keyVersion: 1, sealedDataKey: "sealed-data-key", sealedKey: "sealed-second-token" },
           "sk-ant-oat01…second",
           null,
-          new Date(0),
+          new Date(1000),
           null,
-          { add: true },
+          { add: true, label: "Personal plan" },
         );
         yield* recordAgentPayer(
           agent.userId,
@@ -2509,21 +2563,38 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         const top = { parent_tool_use_id: null, session_id: SESSION };
         const limited = numberedFrom(
           0,
-          failedClaudeLaunch(agent.lineId, [
-            {
-              type: "rate_limit_event",
-              rate_limit_info: {
-                status: "rejected",
-                rateLimitType: "five_hour",
-                resetsAt: Date.UTC(2026, 9, 21, 15, 40) / 1000,
+          failedClaudeLaunch(
+            agent.lineId,
+            [
+              {
+                type: "rate_limit_event",
+                rate_limit_info: {
+                  status: "rejected",
+                  rateLimitType: "five_hour",
+                  resetsAt: Date.UTC(2026, 9, 21, 15, 40) / 1000,
+                },
+                uuid: randomUUID(),
+                ...top,
               },
-              uuid: randomUUID(),
-              ...top,
-            },
-          ]),
+            ],
+            true,
+          ),
         );
         yield* post(agent.bearer, limited);
         const cut = yield* transcriptOf(agent.target.conversationId);
+        assert.ok(!JSON.stringify(cut.rows).includes("You've hit your session limit"));
+        assert.deepEqual(
+          cut.rows.flatMap((row) =>
+            row.parts.flatMap((part) => (part.type === "data-usage-limit" ? [part.data] : [])),
+          ),
+          [
+            {
+              agent: "Claude",
+              resetsAt: null,
+              moved: { from: "Claude plan 1", to: "Personal plan" },
+            },
+          ],
+        );
 
         // The launch on the next subscription, handed the turn's own line again.
         const bearer = randomBytes(32).toString("base64url");
@@ -2784,5 +2855,233 @@ it.layer(SUITE)("the runner events route, as it keeps an agent", (it) => {
       assert.notEqual(answeredUntitled, "Fix the flaky invite test");
       assert.equal(named.title, "Fix the flaky invite test");
     }),
+  );
+});
+
+/** The CLI's words for a subagent the plan's limit stopped, which its call's error and task notification both carry, as the pinned Claude Code (2.1.304) wrote them. */
+const WORKER_LIMIT_WORDS =
+  "Agent terminated early due to an API error: You've hit your session limit · resets 4am (UTC) (error type rate_limit, HTTP 429, request id req_fixture, model sent to the API: claude-opus-5-5)";
+
+/** The plan's limit as the CLI reports it, refused or lifted. */
+const claudeRateLimit = (status: "allowed" | "rejected") => ({
+  type: "rate_limit_event",
+  rate_limit_info: {
+    status,
+    resetsAt: 1_794_269_818,
+    ...(status === "rejected" ? { rateLimitType: "five_hour" } : undefined),
+  },
+  uuid: randomUUID(),
+  session_id: SESSION,
+});
+
+/** A worker's call, on Claude Code, as its model asks for it. */
+const claudeWorker = (background: boolean) => ({
+  type: "assistant",
+  message: {
+    id: "msg_1",
+    content: [
+      {
+        type: "tool_use",
+        id: "toolu_worker",
+        name: "Agent",
+        input: {
+          description: "Collect real menu items",
+          prompt: "List the menus.",
+          subagent_type: "general-purpose",
+          ...(background ? undefined : { run_in_background: false }),
+        },
+      },
+    ],
+  },
+  parent_tool_use_id: null,
+  session_id: SESSION,
+});
+
+/** The worker's task failing, as the CLI says it: its state, then its notification. */
+const claudeWorkerFailed = [
+  {
+    type: "system",
+    subtype: "task_updated",
+    task_id: "a1",
+    patch: { status: "failed", error: WORKER_LIMIT_WORDS },
+    session_id: SESSION,
+  },
+  {
+    type: "system",
+    subtype: "task_notification",
+    task_id: "a1",
+    tool_use_id: "toolu_worker",
+    status: "failed",
+    output_file: "/tmp/a1.output",
+    summary: WORKER_LIMIT_WORDS,
+    session_id: SESSION,
+  },
+];
+
+/** The main thread going on past its worker and finishing its turn. */
+const claudeFinished = [
+  {
+    type: "assistant",
+    message: { id: "msg_2", content: [{ type: "text", text: "Done." }] },
+    parent_tool_use_id: null,
+    session_id: SESSION,
+  },
+  { type: "result", subtype: "success", is_error: false, parent_tool_use_id: null },
+  { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+];
+
+/** A spawn on Codex, and its subagent's thread. */
+const codexSpawn = {
+  type: "collabAgentToolCall",
+  id: "call_spawn",
+  tool: "spawnAgent",
+  status: "inProgress",
+  senderThreadId: THREAD,
+  receiverThreadIds: [],
+  prompt: null,
+  model: null,
+  reasoningEffort: null,
+  agentsStates: {},
+};
+
+/**
+ * Each way a worker the plan's usage limit stopped reaches the route, as
+ * the pinned harnesses emit it: on Claude Code, the rejected limit the CLI
+ * reports ahead of the worker's failure, which a background worker's task
+ * notification and a foreground worker's error answer each follow; on
+ * Codex, the subagent's thread failing with `usageLimitExceeded`.
+ */
+const WORKERS_LIMITED = [
+  {
+    name: "a background worker on Claude Code",
+    harness: HARNESS.CLAUDE_CODE,
+    events: (lineId: string): readonly WireValue[] => [
+      { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
+      claudeWorker(true),
+      {
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_worker",
+              content: "Async agent launched successfully. agentId: a1",
+            },
+          ],
+        },
+        tool_use_result: { status: "async_launched", agentId: "a1" },
+        parent_tool_use_id: null,
+        session_id: SESSION,
+      },
+      claudeRateLimit("allowed"),
+      claudeRateLimit("rejected"),
+      {
+        type: "assistant",
+        message: {
+          id: "msg_limit",
+          model: "<synthetic>",
+          content: [{ type: "text", text: "You've hit your session limit · resets 4am (UTC)" }],
+        },
+        error: "rate_limit",
+        parent_tool_use_id: "toolu_worker",
+        session_id: SESSION,
+      },
+      ...claudeWorkerFailed,
+      ...claudeFinished,
+    ],
+    part: "tool-Agent",
+    limited: "Claude",
+  },
+  {
+    name: "a foreground worker on Claude Code",
+    harness: HARNESS.CLAUDE_CODE,
+    events: (lineId: string): readonly WireValue[] => [
+      { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
+      claudeWorker(false),
+      claudeRateLimit("allowed"),
+      claudeRateLimit("rejected"),
+      ...claudeWorkerFailed,
+      {
+        type: "user",
+        message: {
+          content: [
+            {
+              type: "tool_result",
+              tool_use_id: "toolu_worker",
+              content: WORKER_LIMIT_WORDS,
+              is_error: true,
+            },
+          ],
+        },
+        tool_use_result: `Error: ${WORKER_LIMIT_WORDS}`,
+        parent_tool_use_id: null,
+        session_id: SESSION,
+      },
+      ...claudeFinished,
+    ],
+    part: "tool-Agent",
+    limited: "Claude",
+  },
+  {
+    name: "a subagent on Codex",
+    harness: HARNESS.CODEX,
+    events: (lineId: string): readonly WireValue[] => [
+      { method: "thread/started", params: { thread: { id: THREAD, parentThreadId: null } } },
+      { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
+      notification("turn/started", { turn: { id: "turn-1" } }),
+      notification("item/started", { item: codexSpawn }),
+      notification("item/completed", {
+        item: {
+          ...codexSpawn,
+          status: "completed",
+          receiverThreadIds: ["thread-sub"],
+          prompt: "List the menus.",
+        },
+      }),
+      {
+        method: "turn/completed",
+        params: {
+          threadId: "thread-sub",
+          turn: {
+            id: "turn-sub",
+            status: "failed",
+            error: {
+              message: 'unexpected status 429: {"error":{"code":"usage_limit_reached"}}',
+              codexErrorInfo: "usageLimitExceeded",
+              additionalDetails: null,
+            },
+          },
+        },
+      },
+      notification("turn/completed", { turn: { id: "turn-1", status: "completed" } }),
+      { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+    ],
+    part: "tool-collabAgentToolCall",
+    limited: "Codex",
+  },
+] as const;
+
+it.layer(SUITE)("the runner events route, for a worker its plan's limit stopped", (it) => {
+  it.effect.each(WORKERS_LIMITED)(
+    "settles the worker's call with the limit's notice, never the harness's error: $name",
+    ({ harness, events, part, limited }) =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(harness, ["Collect the menus."]);
+        // SAFETY: each message is one the pinned harness or the runner emits, written in its JSON shape.
+        const posted = events(agent.lineId).map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, posted);
+        const { rows } = yield* transcriptOf(agent.target.conversationId);
+
+        const worker = rows.at(-1)?.parts.find((each) => each.type === part);
+        assert.deepEqual(worker === undefined ? undefined : drawn(worker), [
+          part,
+          "output-available",
+          { usageLimit: { agent: limited, resetsAt: null } },
+        ]);
+      }),
   );
 });

@@ -7,6 +7,7 @@ import { type ComponentProps, createContext, type ReactNode, useContext, useMemo
 import { colorable, coloringQueryOptions } from "../code-coloring.js";
 import { codeLanguage, codeTitle } from "../code-language.js";
 import { copyThroughShell } from "../copy-feedback.js";
+import { DescriptionDiagram } from "../description-diagram.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 
 /**
@@ -38,6 +39,9 @@ const SUGGESTION = {
   LANGUAGE: "suggestion",
   LABEL: "Suggested change",
 } as const;
+
+/** The language a fence names to be drawn as its diagram once it is whole. */
+const MERMAID_LANGUAGE = "mermaid";
 
 /** The language a diff is fenced in, whose rows are tinted by what they do. */
 const DIFF_LANGUAGE = "diff";
@@ -197,6 +201,23 @@ export function TranscriptCodeBlock({
 }
 
 /**
+ * A transcript's fence: a whole Mermaid one as its diagram (`DescriptionDiagram`,
+ * the renderer a description draws with), over the code card it falls back to
+ * while the diagram draws or where Mermaid refuses it, and any other as a code
+ * card. Note that a fence still streaming stays a code card, so a half-written
+ * diagram is never handed to Mermaid.
+ */
+function TranscriptFence(props: ComponentProps<"code"> & MarkdownNodeProps): ReactNode {
+  const openTail = useContext(OpenFenceTail);
+  const language = LANGUAGE_CLASS.exec(props.className ?? "")?.[1] ?? "";
+  const code = blockText(props.node).replace(/\n$/u, "");
+  const source = <TranscriptCodeBlock {...props} />;
+  const streaming = openTail !== undefined && openTail.endsWith(code.split("\n").at(-1) ?? "");
+  if (language !== MERMAID_LANGUAGE || streaming) return source;
+  return <DescriptionDiagram code={code} source={source} />;
+}
+
+/**
  * How a transcript's markdown draws code and tables: a fenced block in the
  * window's one code card, an inline span on a subtle fill, and a table bare,
  * as a note's is, its look the flow's (`@repo/ui`'s prose.css), each part
@@ -205,7 +226,7 @@ export function TranscriptCodeBlock({
  * it, which Streamdown hands on as the cell's style.
  */
 export const TRANSCRIPT_CODE_AND_TABLE_COMPONENTS: MarkdownComponents = {
-  code: TranscriptCodeBlock,
+  code: TranscriptFence,
   inlineCode: ({ children }) => <code className="transcript-inline-code">{children}</code>,
   table: ({ children }) => <table>{children}</table>,
   thead: ({ children }) => <thead>{children}</thead>,

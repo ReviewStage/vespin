@@ -69,6 +69,8 @@ import {
   TEXT_VARIANT,
   Text,
   TurnEnd,
+  USAGE_LIMIT_NOTICE_LOOK,
+  UsageLimitNotice,
   useAnnounce,
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
@@ -142,6 +144,7 @@ import {
   agentWorkingSince,
   CONTINUE_AGAIN_LABEL,
   CONTINUE_LABEL,
+  callUsageLimit,
   commentLineOf,
   commentLineWords,
   continuedByIds,
@@ -150,6 +153,7 @@ import {
   dockedPullRequests,
   type EndLineParts,
   endLineOffersContinue,
+  endLineOffersOtherModel,
   endLineOffersTryAgain,
   endLineParts,
   endLineReason,
@@ -180,6 +184,7 @@ import {
   turnStretches,
   turnUnderWay,
   unreadOpeningLine,
+  usageLimitAgentOf,
   WORKING_PHASE,
   type WorkingPhase,
   wakeupDelayOf,
@@ -212,7 +217,12 @@ import {
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "./agent-todos.js";
 import { ArchivedComposerNote } from "./archived-note.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
-import { ContinueAgent, ContinuedComposerNote, ContinuedTrail } from "./continue-agent.js";
+import {
+  ContinueAgent,
+  ContinuedComposerNote,
+  ContinuedTrail,
+  RefusalContinue,
+} from "./continue-agent.js";
 import { CopyMessageAction } from "./copy-message.js";
 import { DescriptionPictures } from "./description-pictures.js";
 import { EditComposer } from "./edit-composer.js";
@@ -351,8 +361,7 @@ import { WorkedFor, WorkingLine } from "./working-time.js";
  * the agent stands is its tab's glyph and the transcript's own lines, what
  * it runs on is the model chip at the box's foot, and what it published
  * is the pull request's row pinned over the box, under the docked to-do
- * list, or the branch's chip at the box's foot before a pull request
- * stands (`agent-published.tsx`). A line the developer sends joins the transcript at
+ * list, once a pull request stands (`agent-published.tsx`). A line the developer sends joins the transcript at
  * once as theirs and is read back from the service's own row, and the
  * Stop is the composer's, the one the tab has. A worker's tab draws the
  * worker's transcript the same way, under the agent and the call that
@@ -637,6 +646,8 @@ function ToolCallView({
   cut?: CutBody | undefined;
 }): ReactNode {
   const view = toolCallView({ ...part, jobs });
+  // A worker the plan's limit ended draws the limit's notice in its answer's place.
+  const limit = callUsageLimit(part);
   const server = useServerName(view);
   const known = useKnownNames();
   // Note that the chip of the agent a call is about hangs the card its tab hangs, which the place hands over by the agent's id.
@@ -661,11 +672,14 @@ function ToolCallView({
         agentCard={agentCard}
         made={made}
         input={view.input}
-        output={view.output}
+        output={limit === undefined ? view.output : undefined}
         errorText={part.errorText}
         cut={cut}
       />
       <CallPictures tool={part.tool} input={part.input} output={part.output} />
+      {limit === undefined ? null : (
+        <UsageLimitNotice notice={limit} look={USAGE_LIMIT_NOTICE_LOOK.TITLE} />
+      )}
     </>
   );
 }
@@ -728,8 +742,10 @@ function DelegationRow({
   // Note that a row that opens no tab folds its task and answer open under its line instead: a native subagent's as
   // its call's own body reads them, and a worker's own worker's, whose transcript no tab reads, as its delegation says.
   const call = toolCallView(part);
+  // A worker the plan's limit ended draws the limit's notice in its answer's place.
+  const limit = callUsageLimit(part);
   const body = native
-    ? { input: call.input, output: call.output }
+    ? { input: call.input, output: limit === undefined ? call.output : undefined }
     : opens
       ? undefined
       : {
@@ -738,19 +754,24 @@ function DelegationRow({
             view.result === undefined ? undefined : { kind: TOOL_BLOCK.TEXT, text: view.result },
         };
   return (
-    <TranscriptSubagent
-      callId={part.callId}
-      job={view.title ?? (cardTitle(view.task) || CALL_WORDS[CALL_KIND.WORKER].verb)}
-      pair={choice === undefined ? undefined : { choice, models: doors?.models ?? [] }}
-      state={standing === undefined ? part.state : workerToolState(standing.status)}
-      startedAt={doors?.starts?.get(part.callId)}
-      errorText={part.errorText}
-      onOpen={opens ? () => onOpen(part.callId, view.task, status) : undefined}
-      card={
-        opens ? live?.cards?.worker({ callId: part.callId, task: view.task, status }) : undefined
-      }
-      body={body}
-    />
+    <>
+      <TranscriptSubagent
+        callId={part.callId}
+        job={view.title ?? (cardTitle(view.task) || CALL_WORDS[CALL_KIND.WORKER].verb)}
+        pair={choice === undefined ? undefined : { choice, models: doors?.models ?? [] }}
+        state={standing === undefined ? part.state : workerToolState(standing.status)}
+        startedAt={doors?.starts?.get(part.callId)}
+        errorText={part.errorText}
+        onOpen={opens ? () => onOpen(part.callId, view.task, status) : undefined}
+        card={
+          opens ? live?.cards?.worker({ callId: part.callId, task: view.task, status }) : undefined
+        }
+        body={body}
+      />
+      {limit === undefined ? null : (
+        <UsageLimitNotice notice={limit} look={USAGE_LIMIT_NOTICE_LOOK.TITLE} />
+      )}
+    </>
   );
 }
 
@@ -1074,6 +1095,8 @@ function AgentPartView({
   moving?: boolean;
 }): ReactNode {
   switch (part.kind) {
+    case AGENT_PART.USAGE_LIMIT:
+      return <UsageLimitNotice notice={part.notice} />;
     case AGENT_PART.TEXT:
       // The agent's words alone may be replied to, never a call's output or a thought.
       return (
@@ -2276,8 +2299,9 @@ function AgentTranscriptView({
   working,
   phase = WORKING_PHASE.WORKING,
   waitsUntil,
+  turnId,
   startedAt,
-  ended,
+  ended: turnEnded,
   endReason = FAILURE_REASON.OTHER,
   keyProvider,
   onOpenApiKeys,
@@ -2319,8 +2343,10 @@ function AgentTranscriptView({
   working: boolean;
   /** What the agent is doing while it works, which its working line says (`tabTurnOf`); working where unsaid. */
   phase?: WorkingPhase;
-  /** When the usage limit its open turn waits on resets, which a waiting line names; none where it waits on none. */
+  /** When the open turn waits on a usage reset, whose native notice replaces the working line. */
   waitsUntil?: number | undefined;
+  /** The current turn, whose own native notice replaces its generic failure line. */
+  turnId?: string | null | undefined;
   /** When the run under way began, which the working line counts from; none where unknown, when the line only shimmers. */
   startedAt?: number | undefined;
   /** The line the transcript ends on once its turn was stopped or failed (`endLineParts`); nothing otherwise. */
@@ -2367,6 +2393,22 @@ function AgentTranscriptView({
   const { members, former } = useMemberDirectory();
   const undelivered = useUndeliveredLines();
   const unsent = useUnsentLines();
+  const lastMessage = messages.at(-1);
+  const currentParts =
+    lastMessage !== undefined && lastMessage.id === turnId ? agentParts(lastMessage) : [];
+  const lastPart = currentParts.at(-1);
+  const waitingNotice = currentParts.some(
+    (part) => part.kind === AGENT_PART.USAGE_LIMIT && part.notice.resetsAt === waitsUntil,
+  );
+  const endsOnNotice =
+    lastPart?.kind === AGENT_PART.USAGE_LIMIT && lastPart.notice.resetsAt === null;
+  // A turn the plan's limit ended, as the sweep fails one no launch took up, ends on the limit's notice rather than a failure line.
+  const limitEnded = turnEnded?.failure === AGENT_FAILURE.PLAN_LIMIT;
+  const ended = endsOnNotice || limitEnded ? undefined : turnEnded;
+  const limitNotice =
+    limitEnded && !endsOnNotice ? (
+      <UsageLimitNotice notice={{ agent: usageLimitAgentOf(keyProvider), resetsAt: null }} />
+    ) : undefined;
   useTurnEndSaid(ended, working);
   // Note that the card stands alone in the end line's place, without its press, since its own presses answer the failure.
   const signInCard =
@@ -2449,11 +2491,16 @@ function AgentTranscriptView({
     const task = carded || blank ? undefined : first;
     // What stands after the messages is drawn inside the last of them, which grows as TanStack's streaming reply does, so the virtualizer measures it with the row and the log holds nothing past its rows.
     const trailing =
-      !working && ended === undefined && endTrail === undefined && !(failed && connected) ? null : (
+      !working &&
+      ended === undefined &&
+      limitNotice === undefined &&
+      endTrail === undefined &&
+      !(failed && connected) ? null : (
         <>
-          {working ? (
+          {working && !waitingNotice ? (
             <WorkingLine startedAt={startedAt} words={workingLineWords(phase, waitsUntil)} />
           ) : null}
+          {limitNotice}
           {ended === undefined && endTrail === undefined ? null : (
             <div
               className="agent-end flex flex-col items-start gap-control-gap"
@@ -2786,7 +2833,7 @@ function AgentTabView({
       sameEntries(a.revertTakes, b.revertTakes) &&
       sameEntries(a.editTakes, b.editTakes),
   );
-  const editorNow = { agentId: agent.id, doors, keywords, skills };
+  const editorNow = { agentId: agent.id, keywords, skills };
   const editorProps = useRef(editorNow);
   editorProps.current = editorNow;
   const editor = useCallback(() => editorProps.current, []);
@@ -2971,6 +3018,7 @@ function AgentTabView({
                         working={standing.working}
                         phase={standing.phase}
                         waitsUntil={standing.waitsUntil}
+                        turnId={standing.turnId ?? agent.turnId}
                         // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
                         startedAt={
                           !counts
@@ -3069,8 +3117,6 @@ function AgentTabView({
             servers={servers}
             context={transcript.context}
             brief={agent.brief}
-            published={published}
-            doors={doors}
             tools={(narrow) => (
               <>
                 <AgentPlace agent={agent} readerId={readerId} narrow={narrow} />
@@ -3388,6 +3434,8 @@ function AgentTabBody({
     boxClosed: composer.closed !== undefined,
   };
   const pressed = endLineOffersContinue(ending);
+  // Where the model refused the turn, the row offers a continue on another model, the box's words going with it.
+  const otherModel = endLineOffersOtherModel(ending);
   // Where a message carries the agent on, the row offers it as a line of the developer's own, unless the box is an archived task's note.
   const triesAgain = endLineOffersTryAgain(ending) && control.onUnarchive === undefined;
   // How the messages are named moves only when the agent's place or the messages read do, not with each page.
@@ -3457,6 +3505,8 @@ function AgentTabBody({
               carry={continued.length > 0 ? carry : undefined}
               label={continued.length > 0 ? CONTINUE_AGAIN_LABEL : CONTINUE_LABEL}
             />
+          ) : otherModel ? (
+            <RefusalContinue agent={agent} control={control} carry={carry} />
           ) : triesAgain ? (
             <TryAgainPress onPress={() => control.onRetry(agent.id, RETRY_LINE)} />
           ) : undefined

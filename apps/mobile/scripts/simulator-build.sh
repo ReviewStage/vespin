@@ -42,4 +42,21 @@ xcodebuild \
     CODE_SIGN_IDENTITY=- \
     build | "${beautify[@]}"
 
-echo "$derived_data/Build/Products/Release-iphonesimulator/Vespin.app"
+app="$derived_data/Build/Products/Release-iphonesimulator/Vespin.app"
+
+# What the app's icon came out as, on stderr so the last line stays the app:
+# the icon name its Info.plist gives the system, and every rendition of that
+# name the compiled asset catalog holds, the Icon Composer bundle's and the
+# flat 1024 marketing icon App Store Connect reads among them. It reports and
+# never fails the build.
+{
+    echo "--- CFBundleIcons"
+    plutil -extract CFBundleIcons json -o - "$app/Info.plist" || true
+    echo
+    icon_name=$(plutil -extract CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName raw -o - "$app/Info.plist" || true)
+    echo "--- Assets.car renditions named ${icon_name:-?}"
+    xcrun --sdk iphonesimulator assetutil --info "$app/Assets.car" |
+        jq -c --arg name "$icon_name" '.[] | select(.Name? == $name) | del(.SHA1Digest, .Sizes)' || true
+} >&2
+
+echo "$app"

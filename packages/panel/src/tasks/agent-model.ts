@@ -1,6 +1,7 @@
 import {
   agentFailureWords,
   hostLostWords,
+  LIMIT_REACHED_WORDS,
   launchStoppedWords,
   mendedByNewAgent,
 } from "@repo/features/agent-failure-words";
@@ -131,6 +132,13 @@ import {
   type WireValue,
 } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
+import {
+  USAGE_LIMIT_AGENT,
+  USAGE_LIMIT_PART,
+  UsageLimitAnswerSchema,
+  type UsageLimitNotice,
+  UsageLimitNoticeSchema,
+} from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
 import { TOOL_STATE, type ToolState } from "../ai-elements/tool.js";
 import { devicePlatformOf } from "../device-platform.js";
@@ -148,7 +156,7 @@ import { remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-model.js";
  * than in the transcript, what its working line says it is doing, when a
  * line the developer sent has been read back, what a Start or a message
  * that did not land says, and what its
- * branch chip and the pull request's row say and open, and how what an agent or a turn cost is told.
+ * pull request's row says and opens, and how what an agent or a turn cost is told.
  * Nothing here asks anything.
  */
 
@@ -526,6 +534,19 @@ export function endLineParts(
   }
 }
 
+/** The harness a usage limit's notice names, by the provider of the agent's model: Codex for OpenAI's, Claude for any other. */
+export function usageLimitAgentOf(provider: ModelProvider | undefined): UsageLimitNotice["agent"] {
+  return provider === MODEL_PROVIDER.OPENAI ? USAGE_LIMIT_AGENT.CODEX : USAGE_LIMIT_AGENT.CLAUDE;
+}
+
+/** Whether a refusal a note keeps is the plan's usage limit's (`AGENT_PLAN_LIMIT_REACHED`). */
+export function refusedAtLimit(refusal: unknown): boolean {
+  return (
+    Predicate.hasProperty(refusal, "failure") &&
+    refusal.failure === AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED
+  );
+}
+
 /** What mends a failed turn from its end line: the API keys' page for a key refused; nothing else there is the developer's to mend. */
 export function endLineReason(failure: AgentFailure | undefined, starter?: string): FailureReason {
   // A teammate's key is theirs to mend, so the reader is offered no Settings of their own.
@@ -583,9 +604,6 @@ export const UNHEARD_OFFLINE = {
   BESIDE_RETRY: "You're offline.",
   ALONE: "You're offline. Try again once you're back online.",
 } as const;
-
-/** What a plan's reached limit says where no reset is known; with one, `limitResetsWords`. */
-const LIMIT_REACHED_WORDS = "Usage limit reached";
 
 /** What the refusals a Start and a message meet alike say, worded once. */
 const SHARED_FAILURE_NOTE = {
@@ -710,13 +728,32 @@ export function endLineOffersContinue(input: {
 /**
  * The failures a message sent again would only meet again, since what mends
  * them is a choice the line's words name: a teammate's key, which only they
- * replace, or Fast, which a model chosen with it off mends.
+ * replace, Fast, which a model chosen with it off mends, or the model's
+ * refusal, which a continue on another model mends (`endLineOffersOtherModel`).
  */
 const MENDED_BY_CHOICE: ReadonlySet<AgentFailure> = new Set([
   AGENT_FAILURE.PROVIDER_KEY,
   AGENT_FAILURE.FAST_ON_OWN_KEY,
   AGENT_FAILURE.FAST_NOT_ENABLED,
+  AGENT_FAILURE.REFUSAL,
 ]);
+
+/**
+ * Whether the failed end line's row ends on the offer to continue on another
+ * model (`RefusalContinue`): where the model refused the turn, so a message
+ * only meets the refusal again, and until another agent continued it, when
+ * Continue again stands in its place (`endLineOffersContinue`).
+ */
+export function endLineOffersOtherModel(input: {
+  readonly status: AgentStatus;
+  readonly endReason: FailureReason;
+  readonly failure: AgentFailure | undefined;
+  readonly continued: boolean;
+  readonly boxClosed: boolean;
+}): boolean {
+  if (!endLineContinues(input.status, input.endReason)) return false;
+  return !input.continued && !input.boxClosed && input.failure === AGENT_FAILURE.REFUSAL;
+}
 
 /**
  * Whether the failed end line's row ends on Try again, which sends the
@@ -1861,6 +1898,7 @@ export type AgentRun = Pick<AgentSummary, "status" | "runStartedAt">;
 
 /** The kinds of part a stored message holds that the tab draws apart. */
 export const AGENT_PART = {
+  USAGE_LIMIT: USAGE_LIMIT_PART,
   TEXT: "text",
   REASONING: "reasoning",
   TOOL: "tool",
@@ -1881,6 +1919,7 @@ export type AgentPartCut = Omit<PartCut, "field"> & { readonly messageId: string
 
 /** One part of a stored message as the tab draws it. */
 export type AgentPart =
+  | { readonly kind: typeof AGENT_PART.USAGE_LIMIT; readonly notice: UsageLimitNotice }
   | { readonly kind: typeof AGENT_PART.TEXT; readonly text: string }
   | {
       readonly kind: typeof AGENT_PART.REASONING;
@@ -1922,6 +1961,12 @@ export function agentPart(part: WireValue): AgentPart {
   if (part.type === AGENT_PART.TEXT || part.type === AGENT_PART.REASONING) {
     return isWireString(part.text)
       ? { kind: part.type, text: part.text }
+      : { kind: AGENT_PART.OTHER };
+  }
+  if (part.type === AGENT_PART.USAGE_LIMIT) {
+    const notice = Schema.decodeUnknownOption(UsageLimitNoticeSchema)(part.data);
+    return Option.isSome(notice)
+      ? { kind: AGENT_PART.USAGE_LIMIT, notice: notice.value }
       : { kind: AGENT_PART.OTHER };
   }
   if (part.type === AGENT_PART.STEP_START) return { kind: AGENT_PART.STEP_START };
@@ -2262,6 +2307,14 @@ export function nativeSubagent(
   return part.tool === CLAUDE_CODE_TOOL.AGENT;
 }
 
+/** The usage limit's notice a worker's call answered with where the plan's limit ended it, which its row draws in its answer's place; none for any other answer. */
+export function callUsageLimit(
+  part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
+): UsageLimitNotice | undefined {
+  const answer = Schema.decodeUnknownOption(UsageLimitAnswerSchema)(part.output);
+  return Option.isSome(answer) ? answer.value.usageLimit : undefined;
+}
+
 /** Whether a part is a delegation to a worker (`delegates`). */
 export function isDelegation(
   part: AgentPart,
@@ -2298,6 +2351,7 @@ const AGENT_READING: RowReading<AgentPart> = {
     return part.kind === AGENT_PART.ARRIVED ? part.line.id : String(index);
   },
   part: (part) => {
+    if (part.kind === AGENT_PART.USAGE_LIMIT) return ROW_PART.NOTICE;
     if (part.kind === AGENT_PART.TEXT) return ROW_PART.WORDS;
     if (part.kind === AGENT_PART.ARRIVED) return ROW_PART.ARRIVED;
     if (part.kind !== AGENT_PART.TOOL) return ROW_PART.NOTE;
@@ -2624,6 +2678,8 @@ export function workingLineWords(
 
 /** What a tab reads its agent standing by (`tabTurnOf`). */
 export interface TabTurn {
+  /** The turn whose status the tab draws, where one has been queued. */
+  readonly turnId: string | undefined;
   /** Whether the working line stands: the turn is open, a line sent has not been answered, or a rewind is out. */
   readonly working: boolean;
   /** What the working line says the agent is doing. */
@@ -2666,6 +2722,7 @@ export function tabTurnOf(agent: Pick<AgentSummary, "status" | "turn">, sends: T
       ? agent.status
       : turnAgentStatus({ status: turn.status, cancelRequested: turn.stopAsked === true });
   return {
+    turnId: turn?.id,
     working: open || sends.unanswered || sends.rewinding,
     phase: workingPhaseOf(turn, open, sends.rewinding),
     waitsUntil: open ? turn?.waitsUntil : undefined,
@@ -2982,18 +3039,6 @@ function shellWord(word: string): string {
 export function checkoutCommand(branch: string): string {
   const name = shellWord(branch);
   return `git fetch origin ${name} && git switch ${name}`;
-}
-
-/** A branch or a file's path as a GitHub address spells it: every character encoded but the slashes GitHub reads as the name's own. */
-function githubPath(name: string): string {
-  return encodeURIComponent(name).replaceAll("%2F", "/");
-}
-
-/** Where the chip opens on GitHub: the pull request, or the branch compared against the repository's default where there is no pull request yet. */
-export function publishedUrl(published: AgentPullRequestAnswer): string | undefined {
-  if (published.pullRequest !== null) return published.pullRequest.url;
-  if (published.branch === null || published.repository === null) return undefined;
-  return `https://github.com/${published.repository}/compare/${githubPath(published.branch)}?expand=1`;
 }
 
 /** What the agent's dock draws of a pull request: the parts its row reads, and its page. */
