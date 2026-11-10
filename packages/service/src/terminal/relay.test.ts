@@ -338,7 +338,7 @@ it.effect("the shell's exit reaches the desktop as exited, and ends the connecti
 );
 
 it.effect(
-  "a connected terminal touches the agent's sandbox from its attach for as long as it stands, typed in or not, and no longer once it closes",
+  "a connected terminal touches the agent's sandbox at its attach and then only once it is used, never for standing open, and no longer once it closes",
   () =>
     Effect.gen(function* () {
       const pty = yield* scriptedSocket;
@@ -350,11 +350,15 @@ it.effect(
         Effect.scoped(relayTerminal(device.socket, ASK, open.deps)),
       );
       yield* settle;
-      // Nobody types for two touch intervals.
+      // Nobody types and nothing prints for two touch intervals, then a key is typed.
       for (let minute = 0; minute < 2 * every; minute += 60_000) {
         yield* TestClock.adjust(Duration.minutes(1));
         yield* settle;
       }
+      yield* device.push({ bytes: encode("x") });
+      yield* settle;
+      yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
+      yield* settle;
       const closedWhileOpen = [...device.closed];
       yield* device.leave;
       yield* Fiber.join(relay);
@@ -364,7 +368,7 @@ it.effect(
       assert.deepEqual(closedWhileOpen, [], "nobody typing never closes the terminal");
       assert.deepEqual(
         open.asked.touched,
-        [0, every, 2 * every].map((at) => ({ sessionId: "wrun_1", at })),
+        [0, 3 * every].map((at) => ({ sessionId: "wrun_1", at })),
       );
     }),
 );

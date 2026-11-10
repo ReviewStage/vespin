@@ -13,8 +13,11 @@
  * A run stops `SANDBOX_IDLE` after its last touch: every open and create
  * runs for that long, and whatever holds a sandbox in use touches it
  * (`touch`, `touchSandbox`) about every `SANDBOX_TOUCH_EVERY`, which no
- * caller times any other way. A stopped sandbox keeps its disk as a
- * snapshot, so an idle one bills nothing but that.
+ * caller times any other way. A connection that holds a sandbox open (a
+ * terminal, a tunnel, a live view) touches it only once it was used since
+ * its last touch (`touchedWhileUsed`), never for standing open alone. A
+ * stopped sandbox keeps its disk as a snapshot, so an idle one bills
+ * nothing but that.
  *
  * A sandbox may open with a drive (`SandboxDrive`): a base drive it fills,
  * or a drive of its own forked from one. Every drive call is the package's,
@@ -24,7 +27,7 @@
  * fill's sandbox that holds it (`deletedFilledDrive`).
  */
 
-import { Context, Duration, Effect, Option, Schedule, type Scope } from "effect";
+import { Clock, Context, Duration, Effect, Option, Ref, Schedule, type Scope } from "effect";
 import type { WebSocket } from "ws";
 import {
   type CommandAsk,
@@ -195,14 +198,13 @@ export class Sandbox extends Context.Service<Sandbox, SandboxService>()("@repo/s
 /**
  * How long a sandbox runs past its last touch: what every open and create
  * runs for, and how far ahead of now each touch puts its end, so this alone
- * decides when an idle sandbox stops. Three minutes, because an idle sandbox
- * bills its memory until it stops, and a resume from its snapshot is quick:
- * measured over a week of cloud agents, cutting five minutes to three left
- * nine in a hundred next messages to a resume, about eleven seconds each,
- * and below three each resume saved half as much. An agent on screen is
- * touched every minute whatever this is (`use-warm-agent.ts`).
+ * decides when an idle sandbox stops. Five minutes with no agent or
+ * terminal activity, the one rule every sandbox follows: an idle sandbox
+ * bills its memory until it stops, and a resume from its snapshot takes
+ * about eleven seconds. An agent on screen is touched every minute
+ * whatever this is (`use-warm-agent.ts`).
  */
-export const SANDBOX_IDLE = Duration.minutes(3);
+export const SANDBOX_IDLE = Duration.minutes(5);
 
 /**
  * How often whatever holds a sandbox in use touches it: a minute, well
@@ -243,6 +245,30 @@ export const touchSandbox = (name: string): Effect.Effect<void, never, Sandbox> 
   Effect.flatMap(Sandbox, (sandbox) => sandbox.touch(name)).pipe(
     Effect.catch((failure) => Effect.logWarning(`a sandbox was not touched: ${failure.message}`)),
   );
+
+/**
+ * A sandbox a connection holds touched only while the connection is used:
+ * every `SANDBOX_TOUCH_EVERY`, from at once, where `lastUsedAt` (an epoch
+ * millisecond the caller moves on every sign of use) is no older than the
+ * last touch, for the caller's scope. A connection left open and unused so
+ * lets its sandbox stop `SANDBOX_IDLE` after its last use, or at most one
+ * touch interval later, as every sandbox does.
+ */
+export const touchedWhileUsed = (
+  touch: Effect.Effect<void>,
+  lastUsedAt: Effect.Effect<number>,
+): Effect.Effect<void, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    const touchedAt = yield* Ref.make(Number.NEGATIVE_INFINITY);
+    const touchIfUsed = Effect.gen(function* () {
+      if ((yield* lastUsedAt) <= (yield* Ref.get(touchedAt))) return;
+      yield* Ref.set(touchedAt, yield* Clock.currentTimeMillis);
+      yield* touch;
+    });
+    yield* Effect.forkScoped(
+      Effect.repeat(touchIfUsed, { schedule: Schedule.spaced(SANDBOX_TOUCH_EVERY) }),
+    );
+  });
 
 /**
  * What a base drive is filled as: the fill's sandbox's name, which is its

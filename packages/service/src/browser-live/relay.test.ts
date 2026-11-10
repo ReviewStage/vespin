@@ -686,7 +686,7 @@ it.effect("a socket that closes hands back the takeover it took", () =>
 );
 
 it.effect(
-  "a watched coding agent's sandbox is touched once its browser is reached, every touch interval while the panel acts, and no longer once it closes",
+  "a watched coding agent's sandbox is touched once its browser is reached, then a touch interval after the panel acts, never for watching alone, and no longer once it closes",
   () =>
     Effect.gen(function* () {
       const coder = yield* liveBrowser();
@@ -698,19 +698,23 @@ it.effect(
         coder.commands,
         Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), store.deps)),
       );
-      // The panel resizing every minute, inside the idle bound, for two touch intervals.
-      for (let acted = 0; acted < 2 * every; acted += Duration.toMillis(Duration.minutes(1))) {
-        yield* TestClock.adjust(Duration.minutes(1));
-        yield* panel.push({ ...VIEWPORT, width: VIEWPORT.width + acted / 60_000 });
+      // The panel says it is watching for two touch intervals, then resizes once.
+      for (let watched = 0; watched < 2 * every; watched += every) {
+        yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
+        yield* panel.push({ type: BROWSER_LIVE_CLIENT.WATCHING });
         yield* settle;
       }
+      yield* panel.push({ ...VIEWPORT, width: VIEWPORT.width + 1 });
+      yield* settle;
+      yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
+      yield* settle;
       yield* panel.leave;
       yield* Fiber.join(fiber);
       yield* TestClock.adjust(SANDBOX_TOUCH_EVERY);
 
       assert.deepEqual(
         store.touched,
-        [0, every, 2 * every].map((at) => ({ sessionId: SESSION, at })),
+        [0, 3 * every].map((at) => ({ sessionId: SESSION, at })),
       );
     }),
 );
@@ -972,7 +976,7 @@ it.effect(
 );
 
 it.effect(
-  "a panel saying it is watching once a minute stays open past the idle bound, until the member has sent no input for the input bound",
+  "a panel saying it is watching once a minute still closes as idle once the member has sent no input for the input bound",
   () =>
     Effect.gen(function* () {
       const { peer, browser, commands } = yield* liveBrowser();
@@ -991,14 +995,14 @@ it.effect(
             yield* settle;
           }
         });
-      yield* watchFor(10);
+      yield* watchFor(3);
       assert.deepEqual(panel.closed, [], "a watched panel stays open");
       assert.deepEqual(panel.ofType(BROWSER_LIVE_SERVER.REFUSED), [], "watching drives nothing");
 
       // A resize is the member's input, so the input bound runs from it.
       yield* panel.push({ ...VIEWPORT, width: VIEWPORT.width + 1 });
       yield* settle;
-      yield* watchFor(14);
+      yield* watchFor(4);
       assert.deepEqual(panel.closed, [], "input moved the input bound on");
       yield* watchFor(2);
       yield* Fiber.join(fiber);

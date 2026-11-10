@@ -1,5 +1,5 @@
 /**
- * relay.ts -- one tunnel: the desktop's socket piped to a bridge in the PTY of the agent's running sandbox, touching the sandbox while it stands and closing when no bytes have crossed it for ten minutes.
+ * relay.ts -- one tunnel: the desktop's socket piped to a bridge in the PTY of the agent's running sandbox, touching the sandbox while bytes cross it and closing when none have for `SANDBOX_IDLE`.
  *
  * A connection reaches its agent through the one rule every agent route
  * keeps, as a Terminal's does, then opens a PTY only on a sandbox that is
@@ -14,10 +14,10 @@
  * counted, here or anywhere the relay writes.
  *
  * Where the bridge's kind holds the sandbox (`TUNNEL_HOLDS_SANDBOX`), the
- * connection touches the sandbox (`@repo/sandbox`'s `touch`) every
- * `SANDBOX_TOUCH_EVERY` for as long as it stands. A connection closes
- * as idle once no byte has crossed it either way for the idle bound, which
- * ends its touches, so the sandbox's idle stop takes it from there.
+ * connection touches the sandbox (`@repo/sandbox`'s `touchedWhileUsed`)
+ * from its open and then while bytes cross it either way. A connection
+ * closes as idle once none has for the idle bound, `SANDBOX_IDLE`, as the
+ * sandbox it held stops then too.
  *
  * How the connection ended is the close code the desktop reads as the
  * tunnel's state (`@repo/features/sandbox-tunnel-wire`'s `TUNNEL_CLOSE`).
@@ -32,8 +32,9 @@ import { SANDBOX_STATE } from "@repo/features/terminal-wire";
 import {
   type InteractiveShell,
   ptyLinesOf,
-  SANDBOX_TOUCH_EVERY,
+  SANDBOX_IDLE,
   type SandboxError,
+  touchedWhileUsed,
 } from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
@@ -64,8 +65,8 @@ import {
 import { MIRROR_BRIDGE_STEP, type MirrorBridgeStep } from "./mirror-bridge.js";
 
 const TUNNEL_RELAY_BOUNDS = {
-  /** How long a tunnel stays connected past the last byte that crossed it either way. */
-  IDLE: Duration.minutes(10),
+  /** How long a tunnel stays connected past the last byte that crossed it either way: as long as the sandbox it holds runs past its last use. */
+  IDLE: SANDBOX_IDLE,
   /** How often a connection asks whether it has gone the idle bound without traffic. */
   IDLE_CHECK_EVERY: Duration.seconds(30),
   /** How long the bridge may take to say it is ready once its PTY is open. */
@@ -287,15 +288,11 @@ export function relayTunnel(
     if (sandbox.state !== SANDBOX_STATE.RUNNING) {
       return yield* close(TUNNEL_CLOSE.NOT_RUNNING, CLOSE_WHY.NOT_RUNNING);
     }
-    // An open is the developer using the sandbox: where the kind holds it, it is touched from here.
+    // An open is the developer using the sandbox, and so is every byte that crosses after it: where the kind holds it, it is touched while the tunnel is used.
     const openedAt = yield* DateTime.nowAsDate;
     const lastCrossed = yield* Ref.make(openedAt.getTime());
     if (TUNNEL_HOLDS_SANDBOX[ask.bridge.kind]) {
-      yield* Effect.forkScoped(
-        Effect.repeat(deps.touch(sessionId), {
-          schedule: Schedule.spaced(SANDBOX_TOUCH_EVERY),
-        }),
-      );
+      yield* touchedWhileUsed(deps.touch(sessionId), Ref.get(lastCrossed));
     }
     const pty = yield* Effect.result(
       deps.connect(sandbox.shell).pipe(Effect.withSpan(TUNNEL_SPAN.CONNECT)),

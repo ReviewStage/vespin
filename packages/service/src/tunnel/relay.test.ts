@@ -22,8 +22,7 @@ import { relayTunnel, type TunnelDependencies } from "./relay.js";
  * from a script, on the test clock: a stopped sandbox is never woken, for
  * any kind, and the tunnel closes as not running; a running one starts the port bridge,
  * and once it is ready frames cross both ways, the sandbox touched while
- * it stands, until ten minutes without a byte close the tunnel as idle and
- * end its touches.
+ * they cross, until five minutes without a byte close the tunnel as idle.
  */
 
 const ASK = {
@@ -110,7 +109,7 @@ it.effect.each([
 );
 
 it.effect(
-  "frames cross once the bridge is ready, touching the sandbox, until ten idle minutes close it",
+  "frames cross once the bridge is ready, touching the sandbox while they cross, until five idle minutes close it",
   () =>
     Effect.gen(function* () {
       const device = yield* scriptedSocket;
@@ -134,20 +133,22 @@ it.effect(
       assert.deepEqual(lines(pty.sent), [`${OPEN}\n`]);
       assert.deepEqual(device.sent, [{ text: DATA }]);
 
-      // Traffic five minutes on moves the idle bound on.
-      yield* TestClock.adjust(Duration.minutes(5));
+      // Touched at the open; three quiet minutes on, open but unused, it is not touched again.
+      yield* TestClock.adjust(Duration.minutes(3));
+      assert.equal(asked.touched.length, 1);
+
+      // Traffic then moves the idle bound on and touches the sandbox once more.
       yield* device.push({ text: DATA });
       yield* settle;
-      yield* TestClock.adjust(Duration.minutes(9));
+      yield* TestClock.adjust(Duration.minutes(4));
       assert.deepEqual(device.closed, []);
+      assert.equal(asked.touched.length, 2);
 
       yield* TestClock.adjust(Duration.minutes(2));
       yield* Fiber.join(relay);
-      const touched = asked.touched.length;
       yield* TestClock.adjust(Duration.minutes(30));
 
       assert.deepEqual(device.closed, [TUNNEL_CLOSE.IDLE]);
-      assert.equal(asked.touched.length, touched);
-      assert.ok(touched >= 3);
+      assert.equal(asked.touched.length, 2);
     }),
 );
