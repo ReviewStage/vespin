@@ -246,3 +246,19 @@
 .inbox-proto-sheet[data-open="true"] .inbox-proto-sheet-card {
   transform: none;
 }
+
+/* Design E's chat beside its Highlights on a desktop. */
+.inbox-proto-split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.inbox-proto-side {
+  flex: none;
+  width: 300px;
+  padding: var(--ui-space-16);
+  overflow-y: auto;
+  border-left: 1px solid var(--ui-color-border);
+  background: var(--ui-color-sidebar);
+}

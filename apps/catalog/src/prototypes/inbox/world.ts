@@ -57,8 +57,8 @@ export interface World {
   /** The threads opened at least once, which read as seen. */
   readonly seen: ReadonlySet<ThreadId>;
   readonly reply: (id: ThreadId, text: string) => void;
-  /** Writes in the chat itself, on no thread. */
-  readonly say: (text: string) => void;
+  /** Writes in the chat itself, on no thread, the agent answering `answer` where given. */
+  readonly say: (text: string, answer?: string) => void;
   readonly decide: (id: ThreadId, label: string) => void;
   readonly fork: (messageId: string) => void;
   readonly see: (id: ThreadId) => void;
@@ -142,7 +142,7 @@ export function useWorld(state: AgentState): World {
     forked,
     seen,
     reply: (id, text) => send(id, text, AGENT_ANSWER[state]),
-    say: (text) => send(undefined, text, AGENT_ANSWER[state]),
+    say: (text, answer) => send(undefined, text, answer ?? AGENT_ANSWER[state]),
     decide: (id, label) => {
       setChoices((was) => new Map(was).set(id, label));
       send(id, `Chose “${label}”.`, decidedAnswer(label));

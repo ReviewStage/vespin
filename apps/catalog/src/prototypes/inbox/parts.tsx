@@ -22,6 +22,7 @@ import {
   CARD_ELEMENT,
   CARD_LOOK,
   CARD_PADDING,
+  CARD_SHADOW,
   Card,
   CHIP_LOOK,
   Chip,
@@ -362,6 +363,38 @@ export function DecideBlock({
   );
 }
 
+/** A sheet risen from the foot of the frame's screen over a scrim, its title and Done over what it holds: a phone's peek or Highlights. */
+export function FrameSheet({
+  open,
+  title,
+  onClose,
+  children,
+}: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <div className="inbox-proto-sheet" data-open={open ? "true" : "false"} inert={!open}>
+      <div className="inbox-proto-scrim" />
+      <div className="inbox-proto-sheet-card">
+        <Card look={CARD_LOOK.RAISED} padding={CARD_PADDING.REGULAR} shadow={CARD_SHADOW.MENU}>
+          <Stack gap={GAP.FIELD}>
+            <Inline justify={JUSTIFY.BETWEEN} wrap={false}>
+              <Text variant={TEXT_VARIANT.LABEL}>{title}</Text>
+              <Button variant={BUTTON_VARIANT.QUIET} onClick={onClose}>
+                Done
+              </Button>
+            </Inline>
+            {children}
+          </Stack>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 /** The model chip of the agent's composer, and its menu: approximated from `Chip` and `Menu`. */
 export function ModelChip(): React.JSX.Element {
   const menu = useMenu(true);
@@ -396,9 +429,12 @@ export function ModelChip(): React.JSX.Element {
 export function AgentMenu({
   state,
   onFork,
+  onHighlights,
 }: {
   state: AgentState;
   onFork: () => void;
+  /** Opens design E's Highlights, which a phone's head reaches through this menu. */
+  onHighlights?: (() => void) | undefined;
 }): React.JSX.Element {
   const menu = useMenu(true);
   const ignore = () => undefined;
@@ -411,6 +447,9 @@ export function AgentMenu({
           label="Agent actions"
           menu={menu.drawn}
           groups={[
+            ...(onHighlights === undefined
+              ? []
+              : [[{ label: "Highlights", icon: <GLYPH.PIN />, onSelect: onHighlights }]]),
             [
               { label: "Fork to new agent", icon: <Split />, onSelect: onFork },
               { label: "Copy link", icon: <CopyIcon />, onSelect: ignore },
@@ -480,6 +519,8 @@ export function ReplyBox({
   placeholder,
   state,
   under,
+  over,
+  sendsEmpty = false,
   onSend,
   onFork,
 }: {
@@ -488,6 +529,10 @@ export function ReplyBox({
   placeholder: string;
   state: AgentState;
   under?: ReactNode;
+  /** What stands over the field inside the box: design E's Needs you or Done card. */
+  over?: ReactNode;
+  /** Whether Send takes an empty box, as one carrying picks from a card above it does. */
+  sendsEmpty?: boolean;
   onSend: (text: string) => void;
   onFork?: (() => void) | undefined;
 }): React.JSX.Element {
@@ -495,7 +540,7 @@ export function ReplyBox({
   const working = state === AGENT_STATE.WORKING;
   const send = () => {
     const words = text.trim();
-    if (words === "") return;
+    if (words === "" && !sendsEmpty) return;
     onSend(words);
     setText("");
   };
@@ -516,6 +561,7 @@ export function ReplyBox({
   return (
     <Stack gap={GAP.TIGHT}>
       {label}
+      {over}
       <ComposerFrame
         as={COMPOSER_ELEMENT.FORM}
         look={COMPOSER_LOOK.CARD}
@@ -541,8 +587,13 @@ export function ReplyBox({
           actions={look === REPLY_LOOK.AGENT ? <ModelChip /> : undefined}
           send={
             working
-              ? { label: "Steer", icon: <GLYPH.STEER />, empty: text.trim() === "", onHold: send }
-              : { label: "Reply", empty: text.trim() === "" }
+              ? {
+                  label: "Steer",
+                  icon: <GLYPH.STEER />,
+                  empty: text.trim() === "" && !sendsEmpty,
+                  onHold: send,
+                }
+              : { label: "Reply", empty: text.trim() === "" && !sendsEmpty }
           }
         />
       </ComposerFrame>

@@ -33,6 +33,7 @@ import { DesignA } from "./design-a";
 import { DesignB } from "./design-b";
 import { DesignC } from "./design-c";
 import { DesignD } from "./design-d";
+import { DesignE } from "./design-e";
 import { FRAME, type Frame } from "./inbox-list";
 import { APPROXIMATIONS } from "./parts";
 
@@ -41,6 +42,7 @@ const DESIGN = {
   B: "b",
   C: "c",
   D: "d",
+  E: "e",
 } as const;
 
 type Design = (typeof DESIGN)[keyof typeof DESIGN];
@@ -76,6 +78,13 @@ const DESIGNS: Record<
     summary:
       "The earlier proposal: a row opens the chat narrowed to the thread's card and its replies. Show everything widens it to the whole chat at the card, to judge the jump.",
     Render: DesignD,
+  },
+  [DESIGN.E]: {
+    label: "E · Threadbear",
+    title: "E · Threadbear model",
+    summary:
+      "No separate threads: the Inbox lists agents in Inbox, Running, Hibernating and Archived. A row opens the chat at its newest line; asks sit in a Needs you card over the message box, paged, picks going with your next message; Highlights keeps every ask; a finished turn ends in a Done card.",
+    Render: DesignE,
   },
 };
 

@@ -9,10 +9,6 @@
 import {
   BUTTON_VARIANT,
   Button,
-  CARD_LOOK,
-  CARD_PADDING,
-  CARD_SHADOW,
-  Card,
   DISCLOSURE_LOOK,
   Disclosure,
   DisclosureBody,
@@ -35,7 +31,7 @@ import { useState } from "react";
 import { AGENT, AGENT_STATE, type AgentState, CHAT_KIND, STATE_WORDS } from "./data";
 import { ChatPlace, type DesignProps, PLACE, TicketThread, usePlace } from "./design-a";
 import { FRAME, FrameLayout, InboxList } from "./inbox-list";
-import { LiveRun, useLiveSteps } from "./parts";
+import { FrameSheet, LiveRun, useLiveSteps } from "./parts";
 import { useWorld, type World } from "./world";
 
 const PEEK_TITLE = `What ${AGENT.name} is doing now`;
@@ -134,22 +130,9 @@ function PeekSheet({
           />
         </List>
       </div>
-      <div className="inbox-proto-sheet" data-open={open ? "true" : "false"} inert={!open}>
-        <div className="inbox-proto-scrim" />
-        <div className="inbox-proto-sheet-card">
-          <Card look={CARD_LOOK.RAISED} padding={CARD_PADDING.REGULAR} shadow={CARD_SHADOW.MENU}>
-            <Stack gap={GAP.FIELD}>
-              <Inline justify={JUSTIFY.BETWEEN} wrap={false}>
-                <Text variant={TEXT_VARIANT.LABEL}>{PEEK_TITLE}</Text>
-                <Button variant={BUTTON_VARIANT.QUIET} onClick={() => setOpen(false)}>
-                  Done
-                </Button>
-              </Inline>
-              <PeekBody state={state} world={world} onOpenChat={onOpenChat} />
-            </Stack>
-          </Card>
-        </div>
-      </div>
+      <FrameSheet open={open} title={PEEK_TITLE} onClose={() => setOpen(false)}>
+        <PeekBody state={state} world={world} onOpenChat={onOpenChat} />
+      </FrameSheet>
     </>
   );
 }

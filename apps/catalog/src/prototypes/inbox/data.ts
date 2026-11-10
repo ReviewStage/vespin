@@ -378,3 +378,164 @@ export function momentOf(at: number): string {
     minute: "2-digit",
   });
 }
+
+/*
+ * Design E (Threadbear's model) lists agents rather than threads, and puts
+ * the agent's asks in a Needs you card over the message box. What follows is
+ * the rest of that world: the other agents in the list, the asks, the ones
+ * answered before, and what a done turn leaves open.
+ */
+
+/** Where an agent stands in E's list. */
+export const LIST_SECTION = {
+  INBOX: "Inbox",
+  RUNNING: "Running",
+  HIBERNATING: "Hibernating",
+  ARCHIVED: "Archived",
+} as const;
+
+export type ListSection = (typeof LIST_SECTION)[keyof typeof LIST_SECTION];
+
+/** What a row says at its right. */
+export const ROW_MARK = {
+  /** Done, waiting on the member, unread: the blue dot. */
+  NEEDS_YOU: "needs-you",
+  /** Done, nothing needed, unread: the tick. */
+  DONE: "done",
+  /** Working now: a spinner and a timer. */
+  WORKING: "working",
+  /** The turn ended, its helpers are still going. */
+  SUB_AGENTS: "sub-agents",
+  /** A booked wakeup. */
+  WAKES: "wakes",
+  /** Put away. */
+  ARCHIVED: "archived",
+} as const;
+
+export type RowMark = (typeof ROW_MARK)[keyof typeof ROW_MARK];
+
+export interface ListedAgent {
+  readonly id: string;
+  readonly name: string;
+  readonly project: string;
+  readonly section: ListSection;
+  readonly mark: RowMark;
+  /** What the row says at its right: a time, a timer's start, "2 sub-agents", "wakes 11:40 PM". */
+  readonly detail: string;
+}
+
+/** The other agents in E's list; the prototype's own agent is placed by its state. */
+export const OTHER_AGENTS: readonly ListedAgent[] = [
+  {
+    id: "agent-secrets",
+    name: "Audit secrets",
+    project: "Observability",
+    section: LIST_SECTION.INBOX,
+    mark: ROW_MARK.DONE,
+    detail: "8:52 PM",
+  },
+  {
+    id: "agent-binbin",
+    name: "Tracking BinBin He support for smol machines",
+    project: AGENT.task,
+    section: LIST_SECTION.RUNNING,
+    mark: ROW_MARK.WORKING,
+    detail: "",
+  },
+  {
+    id: "agent-webkit",
+    name: "Fix the flaky WebKit spec",
+    project: "Panel",
+    section: LIST_SECTION.RUNNING,
+    mark: ROW_MARK.SUB_AGENTS,
+    detail: "2 sub-agents",
+  },
+  {
+    id: "agent-ci",
+    name: "Watch smolvm CI on main",
+    project: AGENT.task,
+    section: LIST_SECTION.HIBERNATING,
+    mark: ROW_MARK.WAKES,
+    detail: "wakes 11:40 PM",
+  },
+  {
+    id: "agent-notes",
+    name: "Write the 0.4 release notes",
+    project: AGENT.task,
+    section: LIST_SECTION.ARCHIVED,
+    mark: ROW_MARK.ARCHIVED,
+    detail: "Oct 28",
+  },
+  {
+    id: "agent-flag",
+    name: "Rename the sandbox flag",
+    project: "Sandbox",
+    section: LIST_SECTION.ARCHIVED,
+    mark: ROW_MARK.ARCHIVED,
+    detail: "Oct 21",
+  },
+];
+
+/** One thing the agent asked: its question, its answers, and which it recommends. */
+export interface CardAsk {
+  readonly id: string;
+  readonly topic: string;
+  readonly question: string;
+  readonly options: readonly string[];
+  readonly recommended: string;
+}
+
+/** The asks open on the agent's last reply, which the Needs you card pages through. */
+export const OPEN_ASKS: readonly CardAsk[] = [
+  {
+    id: "ask-merge",
+    topic: "Merge #2126?",
+    question: MERGE_ASK.question,
+    options: MERGE_ASK.options.map((option) => option.label),
+    recommended: MERGE_ASK.recommended,
+  },
+  {
+    id: "ask-review",
+    topic: "#7887 ready for review",
+    question: "#7887 adds smolvm to the sandbox picker. Who reviews it?",
+    options: ["I'll review it", "Ask grace"],
+    recommended: "Ask grace",
+  },
+  {
+    id: "ask-notes",
+    topic: "smolvm 0.5 release notes",
+    question:
+      "The 0.5 notes are drafted in CHANGELOG.md, 2 entries flagged. Ship them as they are?",
+    options: ["Ship them", "Hold for my edits"],
+    recommended: "Hold for my edits",
+  },
+];
+
+/** Asks answered before, which Highlights keeps beside the open ones. */
+export const ANSWERED_ASKS: readonly {
+  readonly id: string;
+  readonly topic: string;
+  readonly answer: string;
+  readonly at: string;
+}[] = [
+  { id: "ask-version", topic: "Which smolvm version to target?", answer: "0.4.x", at: "Nov 5" },
+  { id: "ask-split", topic: "One PR for #2101 and #2104, or two?", answer: "One PR", at: "Nov 5" },
+];
+
+/** What a done turn leaves open, as the Done card lists it. */
+export const STILL_OPEN: readonly string[] = [
+  "#2131: 1 failing check (vm-macos)",
+  "2 unpushed commits on fix/smolvm-review",
+  "1 sub-agent running: retest #2104 on 0.4.2",
+  "Wakes 11:40 PM to check grace's review",
+];
+
+/** Follow-ups a done turn offers, each ticked to go with the next message. */
+export const CARRY_ON: readonly string[] = [
+  "Close #2119 as a duplicate of #2101",
+  "Draft the smolvm 0.5 announcement",
+];
+
+/** What the agent answers once the member sends their picks. */
+export const PICKS_ANSWER =
+  "Thanks. I've acted on your picks and posted on each PR. Nothing else needs you for now.";
