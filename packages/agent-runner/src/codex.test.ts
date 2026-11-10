@@ -25,6 +25,7 @@ import { vi } from "vitest";
 import { CODEX_BUNDLED_MODELS_JSON } from "./codex-protocol/bundled-models.js";
 import { codexToken } from "./codex-token.js";
 import type { RunnerSelf } from "./launch.js";
+import { CODEX_PIN } from "./pins.js";
 import {
   APPROVAL_BY,
   APPROVAL_DECISION,
@@ -1166,7 +1167,8 @@ it.effect(
         `model_providers.chatgpt_backend_plan.auth.args=["${SELF.script}", "codex-token", "${TOKEN_URL}"]`,
         "model_providers.chatgpt_backend_plan.auth.timeout_ms=30000",
         "model_providers.chatgpt_backend_plan.auth.refresh_interval_ms=300000",
-        'model_providers.chatgpt_backend_plan.http_headers={ "ChatGPT-Account-ID" = "chatgpt-workspace-fixture", "version" = "0.163.0" }',
+        // The version is the pinned Codex's, which a bump moves (`scripts/bump-agent-pins.mjs`).
+        `model_providers.chatgpt_backend_plan.http_headers={ "ChatGPT-Account-ID" = "chatgpt-workspace-fixture", "version" = "${CODEX_PIN.VERSION}" }`,
         'model_providers.chatgpt_backend_plan.wire_api="responses"',
         "model_providers.chatgpt_backend_plan.requires_openai_auth=false",
         "model_providers.chatgpt_backend_plan.supports_websockets=false",
