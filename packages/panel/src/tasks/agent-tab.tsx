@@ -7,6 +7,7 @@ import {
   agentRows,
   callUsageLimit,
   delegates,
+  followUpsWords,
   isTodos,
   messageWords,
   nativeSubagent,
@@ -169,6 +170,7 @@ import { appPlatform } from "../app-platform.js";
 import { AutomationsWanted, useAutomation } from "../automation-directory.js";
 import { useConnected } from "../connection.js";
 import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
+import { useAgentArchive } from "../desktop/agent-archive.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
@@ -212,6 +214,7 @@ import {
   finishedReplyLead,
   githubLineOf,
   isWakeupLine,
+  lastTurnEnding,
   lineSender,
   macOwnerOf,
   messageSender,
@@ -301,7 +304,7 @@ import type { SkillSource } from "./skill-picker.js";
 import { SkillCard } from "./skill-ref.js";
 import { PlanGlyph } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
-import { type AgentThreads, ThreadsDock } from "./threads-dock.js";
+import { type AgentThreads, ThreadsDock, type TurnDone } from "./threads-dock.js";
 import {
   MacOwnerProvider,
   TranscriptNote,
@@ -2844,6 +2847,7 @@ function AgentTabView({
   endPress,
   endTrail,
   closedRemedy,
+  sendsEmpty = false,
   continuedNote,
   continuable = false,
   onMoveToCloud,
@@ -2910,6 +2914,8 @@ function AgentTabView({
   endTrail?: ReactNode;
   /** What mends the box once it closed for good (`continue-agent.tsx`). */
   closedRemedy?: ReactNode;
+  /** Whether Send stands with the box empty, as while follow-ups are ticked in the bar over it, which a send carries alone. */
+  sendsEmpty?: boolean;
   /** What stands in the box's place once another agent continued this one (`ContinuedComposerNote`); none while none has. */
   continuedNote?: ReactNode;
   /** Whether the tab offers Continue somewhere, or another agent continued this one, so the end line tells no one to start a new one. */
@@ -3272,6 +3278,7 @@ function AgentTabView({
             skills={skills}
             replyDoor={replyDoor}
             closedRemedy={closedRemedy}
+            sendsEmpty={sendsEmpty}
             queueing={
               agent.runtime === undefined || !controlsQueue
                 ? undefined
@@ -3326,6 +3333,9 @@ type AgentTabProps = AgentTabDoors &
 
 /** Nothing to retry on a tab whose agent is not made yet. */
 const NO_RETRY = () => undefined;
+
+/** No follow-up ticked. */
+const NO_TICKS: readonly number[] = [];
 
 /**
  * The tab of an agent New task or a Start is still starting, before the
@@ -3462,7 +3472,22 @@ function AgentTabBody({
     },
     [messageSent, onMessage],
   );
+  // With Done and follow-ups on, an agent whose last turn ended done offers its follow-ups in the bar over its box, the ticked ones going out with the box's next send.
+  const endsTurns = threads?.turnEnd === true && !agentStillWriting(agent.status);
+  const turnEnding = useMemo(
+    () => (endsTurns ? lastTurnEnding(messages) : undefined),
+    [endsTurns, messages],
+  );
+  const [ticks, setTicks] = useState<{ readonly at: string; readonly ticked: readonly number[] }>();
+  const ticked =
+    turnEnding !== undefined && ticks?.at === turnEnding.messageId ? ticks.ticked : NO_TICKS;
+  const lead =
+    turnEnding === undefined
+      ? undefined
+      : followUpsWords(turnEnding.followUps.filter((_, at) => ticked.includes(at)));
   const composer = useAgentComposer({
+    lead,
+    onLeadSent: () => setTicks(undefined),
     agentId: agent.id,
     taskId: agent.planId,
     messages: transcript.messages,
@@ -3593,6 +3618,25 @@ function AgentTabBody({
   const otherModel = endLineOffersOtherModel(ending);
   // Where a message carries the agent on, the row offers it as a line of the developer's own, unless the box is an archived task's note.
   const triesAgain = endLineOffersTryAgain(ending) && control.onUnarchive === undefined;
+  const archive = useAgentArchive(agent, control, shown);
+  const doneThreads = useMemo(() => {
+    if (threads === undefined || turnEnding === undefined) return threads;
+    const onTick = (at: number) =>
+      setTicks({
+        at: turnEnding.messageId,
+        ticked: ticked.includes(at) ? ticked.filter((each) => each !== at) : [...ticked, at],
+      });
+    const done: TurnDone = {
+      followUps: turnEnding.followUps,
+      ticked,
+      onTick,
+      archive:
+        agent.archivedAt === undefined
+          ? { onSelect: archive.action.onSelect, busy: archive.reading }
+          : undefined,
+    };
+    return { ...threads, done };
+  }, [threads, turnEnding, ticked, agent.archivedAt, archive.action.onSelect, archive.reading]);
   // How the messages are named moves only when the agent's place or the messages read do, not with each page.
   const readIds = useKept(
     messages.map((message) => message.id),
@@ -3622,7 +3666,8 @@ function AgentTabBody({
         mode={mode}
         approvals={approvals}
         published={published}
-        threads={threads}
+        threads={doneThreads}
+        sendsEmpty={lead !== undefined}
         doors={{
           openGitHub,
           copy: copyWithToast,
@@ -3690,6 +3735,7 @@ function AgentTabBody({
         }
         closedRemedy={<ContinueAgent agentId={agent.id} control={control} carry={carry} />}
       />
+      {archive.dialog}
     </MessagePlaceProvider>
   );
 }

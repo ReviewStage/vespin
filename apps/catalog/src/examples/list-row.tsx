@@ -233,6 +233,26 @@ const INBOX_TINT_ROWS = [
   },
 ] as const;
 
+/** Follow-ups a reader ticks to send, one ticked. */
+function TickedRows(): React.JSX.Element {
+  const [ticked, setTicked] = useState<readonly string[]>(["resend"]);
+  const turn = (key: string) =>
+    setTicked((was) => (was.includes(key) ? was.filter((each) => each !== key) : [...was, key]));
+  return (
+    <List label="Follow-ups" variant={LIST_VARIANT.CARD}>
+      <ListRow
+        title="Send the invite through Resend rather than the log"
+        checked={ticked.includes("resend")}
+        onPress={() => turn("resend")}
+      />
+      <ListRow
+        title="Show pending invitations on the Members page"
+        checked={ticked.includes("pending")}
+        onPress={() => turn("pending")}
+      />
+    </List>
+  );
+}
 function ListRows(): React.JSX.Element {
   return (
     <>
@@ -471,6 +491,11 @@ function ListRows(): React.JSX.Element {
       <CatalogSection id="list-row-card" title="Rows in a card">
         <div className="catalog-column">
           <Automations />
+        </div>
+      </CatalogSection>
+      <CatalogSection id="list-row-checked" title="Rows that tick a box, in a card">
+        <div className="catalog-column">
+          <TickedRows />
         </div>
       </CatalogSection>
       <CatalogSection id="list-row-finger" title="A finger's height on a coarse pointer">

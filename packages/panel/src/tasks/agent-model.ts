@@ -9,6 +9,7 @@ import {
   AGENT_PART,
   type AgentPart,
   agentParts,
+  endTurnOf,
   endTurnSummary,
   messageWords,
 } from "@repo/features/agent-parts";
@@ -2056,6 +2057,21 @@ export function finishedReplyLead(
   const lead =
     cut.length <= REPLY_LEAD_WORDS ? sentence : `${cut.slice(0, REPLY_LEAD_WORDS).join(" ")}…`;
   return { messageId: reply.id, lead };
+}
+
+/**
+ * The follow-ups of the newest turn, where it ended with an `end_turn` that
+ * was taken: the turn's message, which ticks are kept against so a later
+ * turn starts with none ticked, and what it offered; none where the newest
+ * turn ended another way.
+ */
+export function lastTurnEnding(
+  messages: readonly AgentTranscriptMessage[],
+): { readonly messageId: string; readonly followUps: readonly string[] } | undefined {
+  const last = messages.at(-1);
+  if (last?.role !== MESSAGE_ROLE.ASSISTANT) return undefined;
+  const ending = endTurnOf(agentParts(last));
+  return ending === undefined ? undefined : { messageId: last.id, followUps: ending.followUps };
 }
 
 /** Where a line the developer sent stands, before the service's row for it lands. */

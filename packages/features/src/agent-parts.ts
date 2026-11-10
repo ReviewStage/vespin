@@ -446,26 +446,54 @@ function afterStepOf(line: AgentTranscriptMessage): number {
   return line.arrivedIn?.afterStep ?? 0;
 }
 
+/** How a turn ended where it ended with `end_turn`: the summary its developer reads as its reply, and the follow-ups it offered, at most three. */
+export interface TurnEnding {
+  readonly summary: string;
+  readonly followUps: readonly string[];
+}
+
 /**
- * The summary of a turn's last `end_turn`, where that call was taken, which
- * is what its developer reads as the turn's reply; none where the turn ended
- * no other way than in its own words, or the call was refused or has not answered.
+ * A turn's last `end_turn`, where that call was taken: its summary, which is
+ * what its developer reads as the turn's reply, and its follow-ups; none where
+ * the turn ended no other way than in its own words, or the call was refused
+ * or has not answered.
  */
-export function endTurnSummary(parts: readonly AgentPart[]): string | undefined {
+export function endTurnOf(parts: readonly AgentPart[]): TurnEnding | undefined {
   // Note that the last call stands for the turn, so a later refused one hides an earlier one taken.
   const ended = parts.findLast(
     (part) => part.kind === AGENT_PART.TOOL && part.tool === AGENT_TOOL.END_TURN,
   );
-  return ended?.kind === AGENT_PART.TOOL &&
-    ended.state === TOOL_STATE.OUTPUT_AVAILABLE &&
+  if (
+    ended?.kind !== AGENT_PART.TOOL ||
+    ended.state !== TOOL_STATE.OUTPUT_AVAILABLE ||
     // Note that a call a turn ended before it answered is kept as available too, so only an answer that took it counts.
-    isRecord(ended.output) &&
-    ended.output.status === ACTION_RESULT_STATUS.ACCEPTED &&
-    isRecord(ended.input) &&
-    isWireString(ended.input.summary) &&
-    ended.input.summary.trim() !== ""
-    ? ended.input.summary.trim()
-    : undefined;
+    !isRecord(ended.output) ||
+    ended.output.status !== ACTION_RESULT_STATUS.ACCEPTED ||
+    !isRecord(ended.input)
+  ) {
+    return undefined;
+  }
+  const { summary, followUps } = ended.input;
+  if (!isWireString(summary) || summary.trim() === "") return undefined;
+  const offered = Array.isArray(followUps)
+    ? followUps.flatMap((each) => (isWireString(each) && each.trim() !== "" ? [each.trim()] : []))
+    : [];
+  return { summary: summary.trim(), followUps: offered };
+}
+
+/** The summary of a turn's last `end_turn` that was taken (`endTurnOf`), its reply. */
+export function endTurnSummary(parts: readonly AgentPart[]): string | undefined {
+  return endTurnOf(parts)?.summary;
+}
+
+/** What a message carries of the follow-ups ticked to send, under the developer's own words. */
+export const FOLLOW_UPS_HEAD = "Follow-ups:";
+
+/** The follow-ups ticked, as the lines a message sends them in; none where none is ticked. */
+export function followUpsWords(chosen: readonly string[]): string | undefined {
+  return chosen.length === 0
+    ? undefined
+    : [FOLLOW_UPS_HEAD, ...chosen.map((each) => `- ${each}`)].join("\n");
 }
 
 /**
