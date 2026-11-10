@@ -526,6 +526,7 @@ function markOf(record: AgentRunnerRecord): RunnerMark {
   return {
     firstSequence: record.firstSequence,
     ...(record.fingerprint === null ? {} : { fingerprint: record.fingerprint }),
+    ...(record.permissionMode === null ? {} : { permissionMode: record.permissionMode }),
     linesRead: true,
   };
 }
@@ -544,6 +545,7 @@ function storedRecord(
     sandboxName: name,
     firstSequence: mark.firstSequence,
     fingerprint: mark.fingerprint ?? null,
+    permissionMode: mark.permissionMode ?? null,
     sandboxSessionId: runner?.running ?? null,
     commandId: runner?.command ?? null,
   };

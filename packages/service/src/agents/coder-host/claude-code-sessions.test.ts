@@ -3403,6 +3403,51 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a message sent while another call holds the lease waits on it where the warm runner was launched in another mode, and goes to a launch in the agent's mode",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sequence = { next: 1 };
+        const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        yield* runnerTook(agent.id);
+        sequence.next = 2;
+        // The member asks for approvals while another instance's call holds the lease.
+        yield* updateAgentPermissionModeCommitted(userId, agent.id, AGENT_PERMISSION_MODE.ASK);
+        const now = new Date(yield* Clock.currentTimeMillis);
+        const elsewhere = randomUUID();
+        const until = new Date(now.getTime() + Duration.toMillis(CODER.RUNNER_LEASE.HOLD));
+        assert.equal(yield* claimAgentRunnerLease(agent.id, elsewhere, now, until), true);
+
+        const sending = yield* Effect.forkChild(
+          sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails."),
+        );
+        yield* turnsPass;
+        yield* TestClock.adjust(CODER.RUNNER_LEASE.POLL);
+        yield* turnsPass;
+        // Nothing is queued for the runner launched with full access while the lease stands.
+        const [first] = api.commands;
+        assert.ok(first !== undefined);
+        assert.ok(!JSON.stringify(yield* handedLines(userId, first)).includes("Now the emails."));
+        yield* releaseAgentRunnerLease(agent.id, elsewhere);
+        yield* TestClock.adjust(CODER.RUNNER_LEASE.POLL);
+
+        assert.equal((yield* Fiber.join(sending)).outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const second = api.commands[1];
+        assert.ok(second !== undefined);
+        const [config] = (yield* launchLines(second)) as [ClaudeCodeConfig];
+        assert.equal(config.permissionMode, PERMISSION_MODE.ASK);
+        assert.ok(JSON.stringify(yield* handedLines(userId, second)).includes("Now the emails."));
+      }),
+  );
+
+  it.effect(
     "reset deletes the sandbox and retires the runner's bearer; a session gone answers retired",
     () =>
       Effect.gen(function* () {
