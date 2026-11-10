@@ -4,6 +4,7 @@ import {
   type SchemaPath,
   type SchemaRead,
   type SchemaRefusal,
+  TURN_OPEN,
   TURN_ORIGIN,
   TURN_STATUS,
   unparsedWire,
@@ -703,7 +704,7 @@ const findRunningChildTurns = SqlSchema.findAll({
           and(
             eq(conversations.parentConversationId, options.parentConversationId),
             eq(conversations.userId, options.userId),
-            inArray(turns.status, [TURN_STATUS.QUEUED, TURN_STATUS.RUNNING]),
+            inArray(turns.status, [...TURN_OPEN]),
           ),
         )
         .orderBy(asc(turns.id)),
