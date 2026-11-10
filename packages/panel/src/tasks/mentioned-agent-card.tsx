@@ -1,5 +1,5 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
-import { LINK_PLACE, pullRequestAddressOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, pullRequestAddressOf } from "@repo/features/link-grammar";
 import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { listedPullRequestOf } from "@repo/ui/pull-request-link";
@@ -215,7 +215,7 @@ function OwnedPullRequestCard({
     people: undefined,
     onOpenAgent: () =>
       openPlace?.({
-        kind: LINK_PLACE.AGENT,
+        kind: LINK_DESTINATION.AGENT,
         ...(taskId === undefined ? undefined : { planId: taskId }),
         agentId,
       }),

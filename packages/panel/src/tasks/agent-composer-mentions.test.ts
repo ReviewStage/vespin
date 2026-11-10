@@ -18,7 +18,7 @@ import {
   type IntegrationProvider,
   type IntegrationStatus,
 } from "@repo/features/integration-wire";
-import { LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import {
   encodeMention,
@@ -678,7 +678,10 @@ test("off a plan's page a sent message's mention is still its chip, which opens 
 
   assert.equal(container.textContent, "Follow section Rollout.");
   assert.deepEqual(opened, [
-    { workspace: "", place: { kind: LINK_PLACE.SECTION, planId: TASK_ID, anchor: "rollout" } },
+    {
+      workspace: "",
+      place: { kind: LINK_DESTINATION.SECTION, planId: TASK_ID, anchor: "rollout" },
+    },
   ]);
   assert.equal(carryingTarget(container), undefined);
 });
@@ -1013,10 +1016,10 @@ test("a sent message's mention of a page or an agent is drawn as the chip that o
 
   assert.deepEqual(chips.map(chipName), [PAGE.title, STORE_AGENT.name]);
   assert.deepEqual(opened, [
-    { workspace: "acme", place: { kind: LINK_PLACE.PAGE, planId: TASK_ID, pageId: PAGE.id } },
+    { workspace: "acme", place: { kind: LINK_DESTINATION.PAGE, planId: TASK_ID, pageId: PAGE.id } },
     {
       workspace: "acme",
-      place: { kind: LINK_PLACE.AGENT, agentId: STORE_AGENT.id },
+      place: { kind: LINK_DESTINATION.AGENT, agentId: STORE_AGENT.id },
     },
   ]);
   assert.equal(carryingTarget(container), undefined);
@@ -1986,7 +1989,7 @@ test("a sent message's mention of a person is drawn as the chip wearing their ma
   assert.equal(chip.dataset.kind, MENTION_KIND.PERSON);
   assert.equal(chip.querySelector(".actor-mark")?.getAttribute("data-kind"), ACTOR_KIND.PERSON);
   assert.deepEqual(opened, [
-    { workspace: "acme", place: { kind: LINK_PLACE.PERSON, userId: DANA_ID } },
+    { workspace: "acme", place: { kind: LINK_DESTINATION.PERSON, userId: DANA_ID } },
   ]);
   assert.equal(carryingTarget(container), undefined);
 });

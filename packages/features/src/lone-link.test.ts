@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { LINK_PLACE, linkOf } from "./link-grammar.js";
+import { LINK_DESTINATION, linkOf } from "./link-grammar.js";
 import { LONE_LINK, loneLinkOf } from "./lone-link.js";
 
 /**
@@ -27,7 +27,7 @@ test("a pull request's page, or a page under it, is its pull request's card", ()
 });
 
 test("a page an agent showed on a plan is the page's card", () => {
-  const address = linkOf({ kind: LINK_PLACE.PAGE, planId: TASK_ID, pageId: PAGE_ID }, "acme");
+  const address = linkOf({ kind: LINK_DESTINATION.PAGE, planId: TASK_ID, pageId: PAGE_ID }, "acme");
   assert.deepEqual(loneLinkOf(address), {
     kind: LONE_LINK.PAGE,
     taskId: TASK_ID,
@@ -66,7 +66,7 @@ test("a file on a branch or at an abbreviated commit, a file with no lines, line
     `https://github.com/acme/relay/blob/${COMMIT}/../secrets.ts#L1`,
     `https://github.com/acme/relay/tree/${COMMIT}/apps#L1`,
     "https://github.com/acme/relay/issues/7",
-    linkOf({ kind: LINK_PLACE.TASK, planId: TASK_ID }, "acme"),
+    linkOf({ kind: LINK_DESTINATION.TASK, planId: TASK_ID }, "acme"),
     "https://example.com/acme/relay/pull/42",
     "not a link",
   ]) {

@@ -106,8 +106,8 @@ import {
   openTaskInTab,
   type ReadMark,
   renameTaskItem,
+  taskLinkDestination,
   taskLinkItems,
-  taskLinkPlace,
   versionHistoryItem,
 } from "../tasks/task-menu-items.js";
 import {
@@ -721,7 +721,7 @@ function taskActionGroups(
   const link: MenuAction[] =
     task === undefined
       ? []
-      : taskLinkItems(doors.copy, task, taskLinkPlace(tasks.workspaces, task));
+      : taskLinkItems(doors.copy, task, taskLinkDestination(tasks.workspaces, task));
   const read: MenuAction[] = task === undefined ? [] : [markReadItem(doors.read, subject)];
   const rename = renameTaskItem(doors.rename);
   // Note that the open task relates as the document holds it, whose blocks the list's row does not carry.

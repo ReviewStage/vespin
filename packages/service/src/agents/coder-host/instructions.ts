@@ -12,7 +12,7 @@ import {
 } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { INBOX_ANSWER_LEAD, INBOX_MESSAGE_LEAD } from "@repo/features/inbox-wire";
-import { LINK_PLACE, linkOf, taskLinkStep } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf, taskLinkStep } from "@repo/features/link-grammar";
 import { LINK_HOME, LINK_ORIGIN } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { INTEGRATION_NAMES_SAID } from "../../integrations/integrations.js";
@@ -1042,7 +1042,7 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
           id: agent.taskId,
           link: linkOf(
             {
-              kind: LINK_PLACE.TASK,
+              kind: LINK_DESTINATION.TASK,
               planId: taskLinkStep({ id: agent.taskId, number: context.taskNumber }),
             },
             context.workspace,

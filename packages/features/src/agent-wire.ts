@@ -10,6 +10,11 @@ import {
 } from "@repo/wire";
 import { readEither, verbatimJsonSchema, wireKeys } from "@repo/wire/effect";
 import { Schema as EffectSchema, Result, SchemaTransformation } from "effect";
+import {
+  agentPendingApprovalSchema,
+  agentPermissionModeSchema,
+  permissionModeAppliesSchema,
+} from "./agent-approval-wire.js";
 import { AGENT_QUEUE_BOUNDS, agentQueueSchema } from "./agent-queue-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
 import { integrationConnectionNameSchema, integrationConnectionOf } from "./integration-wire.js";
@@ -476,6 +481,8 @@ export const AGENT_FAILURE = {
   PLAN_LIMIT: "plan_limit",
   /** The model refused the turn, as a provider's safeguards do, and no other model retried it; a continue on another model goes on. */
   REFUSAL: "refusal",
+  /** The harness lost its connection to the model's provider, and the provider's host never answered again within the runner's wait, or was lost again at once. */
+  CONNECTION_LOST: "connection_lost",
   OTHER: "other",
 } as const;
 
@@ -1296,6 +1303,21 @@ export const agentSummarySchema = EffectSchema.Struct({
   /** The MCP servers switched off for the agent; absent where none is, and from a service before the switch. */
   disabledServers: EffectSchema.optionalKey(disabledServersSchema),
   /**
+   * How the agent's tool calls are answered (`AGENT_PERMISSION_MODE`), which
+   * a change moves from its next turn (`PERMISSION_MODE_APPLIES`); absent
+   * for full access, and from a service before modes, which ran every agent
+   * on it.
+   */
+  permissionMode: EffectSchema.optionalKey(agentPermissionModeSchema),
+  /**
+   * The tool calls the agent's runner holds for a member's answer, the oldest
+   * first, each with its input as the runner cut it, which a member who
+   * controls the agent answers; absent where none waits, from a read that
+   * does not name them (a change's or a Start's answer), which a reader
+   * reads as not known, and from a service before modes.
+   */
+  pendingApprovals: EffectSchema.optionalKey(EffectSchema.Array(agentPendingApprovalSchema)),
+  /**
    * The member who started the agent, whose provider key pays for it and
    * whose Mac its commands run on, whichever member messages it; absent once
    * their account is gone, and from a service before it.
@@ -1372,6 +1394,8 @@ export const agentAnswerSchema = EffectSchema.Struct({
   txid: EffectSchema.optionalKey(agentTxidSchema),
   /** Where a repository a change added was checked out: in the place the agent runs now, or at its next turn; none for any other change. */
   addedCheckout: EffectSchema.optionalKey(addedRepositoryCheckoutSchema),
+  /** When a change of permission mode reaches the agent: from its next turn; none for any other change. */
+  permissionModeApplies: EffectSchema.optionalKey(permissionModeAppliesSchema),
 });
 
 /**

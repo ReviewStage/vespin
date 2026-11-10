@@ -98,13 +98,13 @@ function EmptyDetail({ collection }: { readonly collection: PlaceholderCollectio
   return <EmptyState title={collection.emptyDetail} symbol={collection.symbol} />;
 }
 
-// A compact window: the list under the Stack's large title, each row pushing
+// A compact window: the list under the Stack's inline title, each row pushing
 // its detail as the Stack's next screen.
 function CollectionStackList({ collection, barAction }: CollectionScreenProps) {
   const router = useRouter();
   return (
     <>
-      <Stack.Screen options={{ title: collection.title, headerLargeTitle: true }} />
+      <Stack.Screen options={{ title: collection.title }} />
       {barAction === undefined ? null : (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button

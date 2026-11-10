@@ -7,7 +7,7 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -220,7 +220,7 @@ test("a line the service has not read back yet has no link of its own", () => {
 
   assert.equal(place("sent-0f0e"), undefined);
   assert.deepEqual(place("msg-7"), {
-    kind: LINK_PLACE.MESSAGE,
+    kind: LINK_DESTINATION.MESSAGE,
     agentId: AGENT.id,
     messageId: "msg-7",
   });

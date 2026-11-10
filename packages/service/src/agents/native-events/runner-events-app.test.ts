@@ -2,8 +2,15 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { it } from "@effect/vitest";
-import { RUNNER_END, RUNNER_EVENT, type RunnerEvent } from "@repo/agent-runner/protocol";
+import {
+  APPROVAL_BY,
+  APPROVAL_DECISION,
+  RUNNER_END,
+  RUNNER_EVENT,
+  type RunnerEvent,
+} from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
+import { listPendingApprovals, readApproval } from "@repo/database/models/agent-approvals";
 import {
   createAgent,
   latestTurnsOfReached,
@@ -27,6 +34,7 @@ import { user } from "@repo/database/schemas/auth";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, startTask } from "@repo/database/testing";
+import { APPROVAL_STATUS } from "@repo/features/agent-approval-wire";
 import { AGENT_FAILURE, AGENT_KIND, AGENT_PAYER, type AgentPayer } from "@repo/features/agent-wire";
 import {
   PROVIDER_KEY_KIND,
@@ -55,6 +63,7 @@ import {
 import { type AfterResponse, keptAfterResponse } from "../../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
+import { NO_GITHUB } from "../../testing/github-app-fake.js";
 import { agentFailureOf } from "../coder-host/status.js";
 import { titleAgent } from "../coder-host/title.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
@@ -105,6 +114,7 @@ const standingWith = (
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
       ANALYTICS.layer,
       after,
+      NO_GITHUB,
     );
     const web = HttpRouter.toWebHandler(
       runnerEventsApp(options).pipe(HttpRouter.provideRequest(services)),
@@ -975,6 +985,63 @@ it.layer(SUITE)("the runner events route", (it) => {
         assert.notEqual(Option.getOrThrow(context).compactedAt, null);
         // Only the last turn's kind stands, so the next message says the call's words no longer hold and hands the task again.
         assert.deepEqual(yield* readNativeTurnHanded(agent.target), { spoken: true });
+      }),
+  );
+
+  it.effect(
+    "an ask its runner holds lands under the running turn, half a character in its input made whole, its runner's word settles it, and one left pending expires as the turn ends",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const ask = (requestId: string) => ({
+          type: RUNNER_EVENT.APPROVAL_REQUESTED,
+          requestId,
+          toolUseId: `toolu_${requestId}`,
+          toolName: "Bash",
+          title: "Run git push --force?",
+          // A runner's cut inside a surrogate pair leaves half a character, which Postgres refuses in a JSON value.
+          input: { command: "git push --force", note: "cut at \uD83D" },
+        });
+        const asking = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          { type: "system", subtype: "init", ...top },
+          ask("a"),
+          ask("b"),
+          {
+            type: RUNNER_EVENT.APPROVAL_RESOLVED,
+            requestId: "a",
+            decision: APPROVAL_DECISION.DENY,
+            by: APPROVAL_BY.MESSAGE,
+          },
+        ];
+        const ending = [
+          { type: "result", subtype: "success", is_error: false, ...top },
+          { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+        ];
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        const numbered = [...asking, ...ending].map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, numbered.slice(0, asking.length));
+        const waiting = yield* listPendingApprovals(agent.userId, agent.agentId);
+        yield* post(agent.bearer, numbered.slice(asking.length));
+        const standingOf = (approvalId: string) =>
+          Effect.map(
+            readApproval(agent.userId, agent.agentId, approvalId),
+            (read) => Option.getOrThrow(read).status,
+          );
+
+        assert.deepEqual(
+          waiting.map((each) => [each.requestId, each.toolUseId, each.ask.input]),
+          [["b", "toolu_b", { command: "git push --force", note: "cut at \uFFFD" }]],
+        );
+        const [b] = waiting;
+        assert.ok(b !== undefined);
+        assert.equal(yield* standingOf(b.id), APPROVAL_STATUS.EXPIRED);
+        assert.deepEqual(yield* listPendingApprovals(agent.userId, agent.agentId), []);
       }),
   );
 

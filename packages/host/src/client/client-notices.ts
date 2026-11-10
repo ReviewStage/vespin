@@ -3,7 +3,7 @@
  */
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import type { AgentAccountInboxAnswerView } from "@repo/features/agent-view";
-import type { LinkPlace } from "@repo/features/link-grammar";
+import type { LinkDestination } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { APP_SETTING_DEFAULTS } from "@repo/settings";
 import { Effect, FiberSet, Queue, type Scope, Stream } from "effect";
@@ -23,7 +23,7 @@ interface NoticePresenter {
   /** Brings the app's window forward, where the prompt for a command stands: a command ask's notification's click. */
   openMacCommandAsk: () => void;
   /** Brings the app's window forward on a place, an agent's tab or an Inbox item: the click of a notification of news. */
-  openPlace: (place: LinkPlace) => void;
+  openPlace: (place: LinkDestination) => void;
 }
 
 /** What the notification of a command waiting says: nothing of the command, which the prompt shows. */

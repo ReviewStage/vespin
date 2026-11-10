@@ -1,6 +1,6 @@
 import {
-  LINK_PLACE,
-  type LinkPlace,
+  LINK_DESTINATION,
+  type LinkDestination,
   type ReadLink,
   taskNumberOf,
   withTaskId,
@@ -21,7 +21,7 @@ import {
   useMemo,
 } from "react";
 import { appPlatform } from "../app-platform.js";
-import type { LinkPlaceName, LinkRouter } from "../places/link-places.js";
+import type { LinkDestinationName, LinkRouter } from "../places/link-places.js";
 import {
   ADDRESS,
   type Address,
@@ -215,7 +215,7 @@ export function PullRequestsOnGitHub({ children }: { children: ReactNode }): Rea
 }
 
 /** What a place of the app pressed on a task's page or an agent's opens beside it, read as its declaration reads it. */
-type PagePlaceBeside = (place: LinkPlace, here: PagesHere) => Route;
+type PagePlaceBeside = (place: LinkDestination, here: PagesHere) => Route;
 
 /**
  * Each place of the app a task's page or an agent's opens beside it, by the
@@ -224,10 +224,10 @@ type PagePlaceBeside = (place: LinkPlace, here: PagesHere) => Route;
  * read on its own place; its own is the window's, which opens it as the
  * panel's. Every other place is the window's.
  */
-const PAGE_BESIDE: { readonly [Name in LinkPlaceName]?: PagePlaceBeside } = {
+const PAGE_BESIDE: { readonly [Name in LinkDestinationName]?: PagePlaceBeside } = {
   PAGE: (at, here) => {
     // Note that a task named by a number no one found the task for is no place a page reads on, so the window finds it on the service.
-    if (at.kind !== LINK_PLACE.PAGE || taskNumberOf(at) !== undefined) return NOTHING;
+    if (at.kind !== LINK_DESTINATION.PAGE || taskNumberOf(at) !== undefined) return NOTHING;
     const place: PagePlace = "planId" in at ? { taskId: at.planId } : { agentId: at.agentId };
     const own =
       here.kind === HERE.TASK
@@ -287,10 +287,10 @@ export function openPullRequestsHere(
 }
 
 /** The place a mention of a plan, or of one of its sections, names. */
-export function placeOfMention(mention: DescriptionMention): LinkPlace {
+export function placeOfMention(mention: DescriptionMention): LinkDestination {
   return mention.kind === MENTION_KIND.TASK
-    ? { kind: LINK_PLACE.TASK, planId: mention.taskId }
-    : { kind: LINK_PLACE.SECTION, planId: mention.taskId, anchor: mention.anchor };
+    ? { kind: LINK_DESTINATION.TASK, planId: mention.taskId }
+    : { kind: LINK_DESTINATION.SECTION, planId: mention.taskId, anchor: mention.anchor };
 }
 
 /**
@@ -336,7 +336,7 @@ export function throughWindow(
   if (opened === undefined) return external(address);
   const changes: ReadLink = {
     workspace: "",
-    place: { kind: LINK_PLACE.CHANGES, planId: opened.taskId, agentId: opened.agentId },
+    place: { kind: LINK_DESTINATION.CHANGES, planId: opened.taskId, agentId: opened.agentId },
   };
   // Note that the window goes to the Pull request tab's place as its route reads it, as a link to it would.
   return go(placeAddress(changes, router).routed?.link ?? changes);
@@ -402,7 +402,7 @@ export function useOpenTask(): ((mention: DescriptionMention) => void) | undefin
 }
 
 /** The opener for a place in the app a part names rather than a link writes, as a link to it would open it, one of an agent's messages among them: where the place it is pressed on opens it, else in the window; nothing outside the window. */
-export function useOpenPlace(): ((place: LinkPlace) => void) | undefined {
+export function useOpenPlace(): ((place: LinkDestination) => void) | undefined {
   const openPlace = useContext(OpenLinkContext);
   const openHere = useContext(OpenHereContext);
   const router = useLinkRouter();
@@ -410,7 +410,7 @@ export function useOpenPlace(): ((place: LinkPlace) => void) | undefined {
     () =>
       openPlace === undefined
         ? undefined
-        : (place: LinkPlace) =>
+        : (place: LinkDestination) =>
             openAddress(placeAddress({ workspace: "", place }, router), {
               openPlace,
               openHere,

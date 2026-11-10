@@ -3,11 +3,11 @@
 import { dateChipText } from "@repo/features/date-mention";
 import {
   type EntityKind,
+  entityOfDestination,
   entityOfMention,
-  entityOfPlace,
   entityWordHeard,
 } from "@repo/features/entity-kind";
-import { type LinkPlace, readLink } from "@repo/features/link-grammar";
+import { type LinkDestination, readLink } from "@repo/features/link-grammar";
 import { markdownTooDeep } from "@repo/features/markdown-nesting";
 import { markdownTree } from "@repo/features/markdown-tree";
 import { isBareLink, linkMention, MENTION_KIND, mentionName } from "@repo/features/mention-link";
@@ -81,7 +81,7 @@ export type LinkTarget =
   | {
       readonly kind: typeof LINK_TARGET.PLACE;
       readonly workspace: string;
-      readonly place: LinkPlace;
+      readonly place: LinkDestination;
       readonly href: string;
     }
   | { readonly kind: typeof LINK_TARGET.WEB; readonly href: string }
@@ -246,7 +246,7 @@ function linkChip(href: string, label: string, reading: MarkdownReading): Markdo
   if (read === undefined) return undefined;
   const written = isBareLink(label, href) ? undefined : mentionName(label.trim());
   const look = placeChipLook(read.place, written, NO_NAMES);
-  return chipOf(entityOfPlace(read.place).kind, look.name, linkTarget(href));
+  return chipOf(entityOfDestination(read.place).kind, look.name, linkTarget(href));
 }
 
 function linkRun(

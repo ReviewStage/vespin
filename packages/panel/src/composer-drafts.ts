@@ -78,6 +78,7 @@ export const DRAFT_PLACE = {
   NEW_AUTOMATION: "newAutomation",
   DESCRIPTION_COMMENT: "descriptionComment",
   LINE_COMMENT: "lineComment",
+  REVIEW_REPLY: "reviewReply",
   EDIT: "edit",
 } as const;
 
@@ -170,6 +171,13 @@ const draftPlaceSchema = Schema.Union([
     side: Schema.Literals(Object.values(DIFF_SIDE)),
     /** The comment's last line, under which it stands. */
     line: Schema.Number,
+  }),
+  Schema.Struct({
+    kind: Schema.Literal(DRAFT_PLACE.REVIEW_REPLY),
+    /** The agent whose pull request the review thread is on. */
+    agentId: Schema.String,
+    /** GitHub's own id for the thread, which names it across every pull request. */
+    threadId: Schema.String,
   }),
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.EDIT),
@@ -321,6 +329,9 @@ export type DescriptionCommentPlace = Extract<
 
 /** A line comment in Files changed: the agent, the file, and the side and last line it stands under. */
 export type LineCommentPlace = Extract<DraftPlace, { kind: typeof DRAFT_PLACE.LINE_COMMENT }>;
+
+/** A reply to a review thread on an agent's pull request: the agent and GitHub's id for the thread. */
+export type ReviewReplyPlace = Extract<DraftPlace, { kind: typeof DRAFT_PLACE.REVIEW_REPLY }>;
 
 /** An agent's line written again: the agent and the line. */
 export type EditPlace = Extract<DraftPlace, { kind: typeof DRAFT_PLACE.EDIT }>;

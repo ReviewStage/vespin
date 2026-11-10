@@ -1,4 +1,4 @@
-import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { land } from "@repo/ui/landed";
 import { createContext, useContext, useEffect, useRef } from "react";
 import { centerWithin, scrollerOf } from "../scroll-within.js";
@@ -36,14 +36,14 @@ const MESSAGE_ID_ATTRIBUTE = "data-message-id";
 export const MESSAGE_GONE = "That message is no longer in the agent's transcript.";
 
 const MessagePlaceContext = createContext<
-  ((messageId: string) => LinkPlace | undefined) | undefined
+  ((messageId: string) => LinkDestination | undefined) | undefined
 >(undefined);
 
 /** Hands down how the transcript drawn names its messages. */
 export const MessagePlaceProvider = MessagePlaceContext.Provider;
 
 /** The place a message drawn here is named by; none where no transcript names its messages. */
-export function useMessagePlace(messageId: string): LinkPlace | undefined {
+export function useMessagePlace(messageId: string): LinkDestination | undefined {
   return useContext(MessagePlaceContext)?.(messageId);
 }
 
@@ -51,10 +51,10 @@ export function useMessagePlace(messageId: string): LinkPlace | undefined {
 export function agentMessagePlace(
   agentId: string,
   read: readonly { readonly id: string }[],
-): (messageId: string) => LinkPlace | undefined {
+): (messageId: string) => LinkDestination | undefined {
   const ids = new Set(read.map((message) => message.id));
   return (messageId) =>
-    ids.has(messageId) ? { kind: LINK_PLACE.MESSAGE, agentId, messageId } : undefined;
+    ids.has(messageId) ? { kind: LINK_DESTINATION.MESSAGE, agentId, messageId } : undefined;
 }
 
 const MessageRevealContext = createContext<

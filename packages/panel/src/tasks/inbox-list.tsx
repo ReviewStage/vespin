@@ -1,3 +1,4 @@
+import { inboxShownTicks } from "@repo/features/inbox-draft";
 import {
   EVERYONES,
   holderName,
@@ -162,7 +163,6 @@ import {
   inboxLineGlyph,
   useInboxStanding,
 } from "./inbox-item-parts.js";
-import { inboxShownTicks } from "./inbox-model.js";
 import { type InboxReminder, useRemindMany } from "./inbox-remind.js";
 import { useInboxRowActs } from "./inbox-row-acts.js";
 import { type InboxListMark, type InboxSelection, useInboxSelection } from "./inbox-selection.js";

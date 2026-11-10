@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace to invite them to, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "email": {
+      "type": "string",
+      "maxLength": 254,
+      "description": "The address to invite, whose account alone may accept."
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "member"
+      ],
+      "description": "The role it offers: member, or admin, which only the owner may offer."
+    }
+  },
+  "required": [
+    "email",
+    "role"
+  ],
+  "additionalProperties": false
+}

@@ -1,7 +1,7 @@
 // settings.tsx -- the app's Settings, a SwiftUI Form in a sheet: the account, the workspace the app works in, notifications, Manage on vespin.dev for the rest of the settings, and Sign out.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LINK_ORIGIN } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { SOCIAL_PROVIDER_LABEL } from "@repo/features/sign-in-provider";
@@ -10,6 +10,7 @@ import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   AccountRow,
   ActionRow,
+  BAR_TITLE,
   ListSection,
   PickRows,
   Screen,
@@ -58,7 +59,7 @@ export default function SettingsScreen() {
   const manage =
     chosen === undefined
       ? LINK_ORIGIN
-      : linkOf({ kind: LINK_PLACE.SETTINGS }, chosen.slug ?? chosen.id);
+      : linkOf({ kind: LINK_DESTINATION.SETTINGS }, chosen.slug ?? chosen.id);
   const signOut = () => {
     acts[ACT_KIND.ACCOUNT_SIGN_OUT]().catch((error: unknown) =>
       console.error("The sign-out did not finish.", error),
@@ -71,7 +72,7 @@ export default function SettingsScreen() {
           headerShown: true,
           title: "Settings",
           headerTintColor: colors.ACCENT,
-          headerTitleStyle: { color: colors.TEXT },
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerStyle: { backgroundColor: colors.SIDEBAR },
           headerShadowVisible: false,
         }}

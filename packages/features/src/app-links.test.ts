@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import { appLinkClaim, appLinkInArguments, appLinkInbox, placeOfAppLink } from "./app-links.js";
-import { LINK_PLACE, type ReadLink, type ShownLink } from "./link-grammar.js";
+import { LINK_DESTINATION, type ReadLink, type ShownLink } from "./link-grammar.js";
 
 /**
  * A link of ours the system hands the app: read only as a place in the app, in
@@ -17,20 +17,23 @@ const AGENT_ID = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
 
 const SECTION: ReadLink = {
   workspace: "acme",
-  place: { kind: LINK_PLACE.SECTION, planId: TASK_ID, anchor: "rollout" },
+  place: { kind: LINK_DESTINATION.SECTION, planId: TASK_ID, anchor: "rollout" },
 };
-const TASK: ReadLink = { workspace: "acme", place: { kind: LINK_PLACE.TASK, planId: TASK_ID } };
+const TASK: ReadLink = {
+  workspace: "acme",
+  place: { kind: LINK_DESTINATION.TASK, planId: TASK_ID },
+};
 
 test("a link in the app's own scheme names its place: a task, its section, an agent, an Inbox item", () => {
   assert.deepEqual(placeOfAppLink(SECTION_LINK), SECTION);
   assert.deepEqual(placeOfAppLink(TASK_LINK), TASK);
   assert.deepEqual(placeOfAppLink(`vespin://vespin.dev/acme/agent/${AGENT_ID}`), {
     workspace: "acme",
-    place: { kind: LINK_PLACE.AGENT, agentId: AGENT_ID },
+    place: { kind: LINK_DESTINATION.AGENT, agentId: AGENT_ID },
   });
   assert.deepEqual(placeOfAppLink(`vespin://vespin.dev/acme/plan/${TASK_ID}/inbox/${AGENT_ID}`), {
     workspace: "acme",
-    place: { kind: LINK_PLACE.INBOX_ITEM, planId: TASK_ID, itemId: AGENT_ID },
+    place: { kind: LINK_DESTINATION.INBOX_ITEM, planId: TASK_ID, itemId: AGENT_ID },
   });
 });
 

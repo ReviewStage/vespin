@@ -14,7 +14,7 @@
  * it is hung, as a chip's is. A search finds it by its name and its detail.
  */
 
-import type { AgentPullRequest } from "@repo/features/agent-wire";
+import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
 import type { MenuRow } from "@repo/ui";
 import { ACTOR_KIND, type EditReader, teammateCreator } from "@repo/ui/actor-model";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
@@ -85,13 +85,18 @@ function agentCard(agent: MentionableAgent, place: AgentRowPlace): React.ReactNo
   );
 }
 
-/** The row's end: a teammate's face where the reader did not start the agent, then the failed mark where its turn failed. */
-function agentRowEnd(agent: MentionableAgent, place: AgentRowPlace): React.ReactNode {
-  const { summary } = agent;
-  if (summary === undefined) return undefined;
+/**
+ * An agent row's end, wherever an agent is listed (this menu, ⌘K, Agent
+ * history): a teammate's face where the reader did not start the agent,
+ * then the failed mark where its turn failed.
+ */
+export function agentSummaryEnd(
+  summary: AgentSummary,
+  directory: EditReader,
+): React.JSX.Element | undefined {
   const starter = teammateCreator(
     { createdBy: summary.startedBy, ownerId: summary.startedBy?.userId },
-    place.directory,
+    directory,
   );
   const failed = agentEndMark(summary, true);
   if (starter === undefined && failed === undefined) return undefined;
@@ -149,7 +154,7 @@ export function agentMenuRow(agent: MentionableAgent, place: AgentRowPlace): Men
     label,
     icon,
     detail,
-    end: agentRowEnd(agent, place),
+    end: summary === undefined ? undefined : agentSummaryEnd(summary, place.directory),
     card: agentCard(agent, place),
     terms: detail === undefined ? [label] : [label, detail],
   };

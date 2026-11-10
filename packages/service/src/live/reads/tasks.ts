@@ -14,12 +14,14 @@ import {
   taskRead,
 } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
+import { agentApproval } from "@repo/database/schemas/agent-approval";
 import { user } from "@repo/database/schemas/auth";
 import { automationRun } from "@repo/database/schemas/automation";
 import { task } from "@repo/database/schemas/task";
 import { taskBlock } from "@repo/database/schemas/task-block";
 import { TOPIC } from "@repo/database/sync/notification";
 import {
+  agentApprovalSync,
   agentPinSync,
   agentPullRequestSync,
   agentReadSync,
@@ -214,6 +216,8 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         turnFailure: sql<AgentFailure | null>`case when ${latest.id} is null then null else ${failureWordOf(latest)} end`,
         turnSessionEnded: sessionEndedOf(latest),
         sandboxOpen: sql<boolean>`${conversations.runtimeSessionId} is not null`,
+        permissionMode: agentTable.permissionMode,
+        pendingApprovals: PENDING_APPROVALS_OF_AGENT,
         markedUnread: sql<boolean>`coalesce(${agentRead.markedUnread}, false)`,
       },
       instants: {
@@ -255,6 +259,17 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
   );
 }
 
+/**
+ * The asks the agent's runner holds for a member's answer, the oldest first,
+ * each as its row keeps it in the wire's shape (`agent_approval.ask`), so
+ * the statement calls no function Realtime refuses. Note that the input is
+ * carried as its row keeps it, the agent's transcript content, to the
+ * members who see the agent alone.
+ */
+const PENDING_APPROVALS_OF_AGENT = sql<
+  AgentRow["pendingApprovals"]
+>`array(select ${agentApproval.ask} from ${agentApproval} where ${agentApproval.agentId} = ${agentTable.id} and ${agentApproval.settledAt} is null order by ${agentApproval.createdAt}, ${agentApproval.id})`;
+
 /** The plans what moved could move: their own rows, the reader's pins and read marks, a block either way, a plan a moved plan blocks, and a plan naming a moved member. */
 function movedPlans(moved: SyncMoved): SQL {
   const plans = moved.keys(taskSync, task.id);
@@ -293,6 +308,7 @@ function movedAgents(moved: SyncMoved): SQL {
         ...moved.keys(agentPinSync, agentPin.agentId),
         ...moved.keys(agentReadSync, agentRead.agentId),
         ...moved.keys(agentPullRequestSync, agentPullRequest.agentId),
+        ...moved.topics(agentApprovalSync, TOPIC.AGENT),
         ...moved.topics(turnsSync, TOPIC.AGENT),
       ]),
       liveKeysIn(agentTable.conversationId, [
@@ -338,6 +354,7 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
     agentPinSync,
     agentReadSync,
     agentPullRequestSync,
+    agentApprovalSync,
     automationSync,
     automationRunSync,
     userSync,

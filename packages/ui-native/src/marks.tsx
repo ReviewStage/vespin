@@ -1,4 +1,4 @@
-// marks.tsx -- the small marks a row leads with: the unread dot, a task's status, a person's avatar, and an agent's tile.
+// marks.tsx -- the small marks a row leads with: the unread dot, a task's status, a person's avatar, an agent's tile, and a glyph in its tone.
 
 import { Circle, Image, RoundedRectangle, Text, ZStack } from "@expo/ui/swift-ui";
 import {
@@ -10,10 +10,12 @@ import {
   opacity,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
+import { type Glyph, isLucideSymbol } from "./glyph.js";
 import { monogramOf } from "./monogram.js";
 import { STATUS_MARK_LABEL, STATUS_MARK_LOOK } from "./status-mark-model.js";
-import { toneColor, useColors } from "./tokens/colors.js";
+import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE } from "./tokens/space.js";
+import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The share of an avatar's width its letters stand at. */
 const MONOGRAM_SCALE = 0.42;
@@ -22,9 +24,10 @@ const MONOGRAM_SCALE = 0.42;
 const FADED_OPACITY = 0.45;
 
 /**
- * The accent dot an unread row leads with, in the accent's ink as the
- * panel's. Note that a read row draws it clear rather than not at all, so its
- * words stand in the same column as an unread row's.
+ * The copper dot an unread row carries in its margin, one of the few things
+ * drawn in the accent, since it wants you. Note that a read row draws it
+ * clear rather than not at all, so its mark and words stand in the same
+ * columns as an unread row's.
  */
 export function UnreadDot({
   unread,
@@ -38,7 +41,7 @@ export function UnreadDot({
     <Circle
       modifiers={[
         frame({ width: MARK_SIZE.DOT, height: MARK_SIZE.DOT }),
-        foregroundStyle(colors.ACCENT_TEXT),
+        foregroundStyle(colors.ACCENT),
         opacity(unread ? (faded ? FADED_OPACITY : 1) : 0),
         unread ? accessibilityLabel("Unread") : accessibilityHidden(),
       ]}
@@ -46,7 +49,39 @@ export function UnreadDot({
   );
 }
 
-/** A task's status as its ring, in its tone's ink, heard as the status's name. */
+/**
+ * A glyph in a tone's ink at a text style's size, the caption's unless
+ * another is named, so it grows with Dynamic Type beside the words it leads:
+ * an SF Symbol from the system, or one of Lucide's from the asset catalog's
+ * symbol sets, which SwiftUI sizes, weighs, and sets on the baseline alike.
+ * A glyph whose words beside it say what it marks is never heard.
+ */
+export function ToneGlyph({
+  glyph,
+  tone,
+  textStyle = TYPE_ROLE.TIME,
+  hidden = false,
+}: {
+  readonly glyph: Glyph;
+  readonly tone: StatusTone;
+  readonly textStyle?: (typeof TYPE_ROLE)[keyof typeof TYPE_ROLE];
+  readonly hidden?: boolean;
+}) {
+  const colors = useColors();
+  const drawn = isLucideSymbol(glyph) ? { assetName: glyph } : { systemName: glyph };
+  return (
+    <Image
+      {...drawn}
+      color={toneColor(colors, tone)}
+      modifiers={[font({ textStyle }), ...(hidden ? [accessibilityHidden()] : [])]}
+    />
+  );
+}
+
+/**
+ * A task's status as its ring, in its tone's ink, heard as the status's
+ * name: the one mark a status tone stands on.
+ */
 export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
   const colors = useColors();
   const look = STATUS_MARK_LOOK[status];

@@ -5,7 +5,7 @@ import {
   type AgentStatus,
   type AgentSummary,
 } from "@repo/features/agent-wire";
-import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { TASK_BOUNDS, type TaskSummary } from "@repo/features/task-wire";
 import type { ToolTarget } from "@repo/features/tool-call-model";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -665,8 +665,10 @@ export function MainTabBars({
   };
   const doorsOf = (entry: DrawnTab): TabDoors => {
     // An agent's link is its own action (`agent-actions.tsx`).
-    const linked: LinkPlace | undefined =
-      entry.agent === undefined ? undefined : { kind: LINK_PLACE.AGENT, agentId: entry.agent.id };
+    const linked: LinkDestination | undefined =
+      entry.agent === undefined
+        ? undefined
+        : { kind: LINK_DESTINATION.AGENT, agentId: entry.agent.id };
     const { agent } = entry;
     return {
       chosen: entry.look.selected,

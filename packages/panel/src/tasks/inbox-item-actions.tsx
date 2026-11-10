@@ -1,6 +1,6 @@
 import { isUnread } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import { useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import type { MenuAction, MenuEntry } from "../desktop/action-menu.js";
@@ -58,8 +58,8 @@ interface InboxItemActions {
 }
 
 /** The place an item is linked by: its id alone, whose agent and task its reader asks the service for. */
-function inboxItemPlace(item: InboxItem): LinkPlace {
-  return { kind: LINK_PLACE.INBOX_ITEM, itemId: item.id };
+function inboxItemPlace(item: InboxItem): LinkDestination {
+  return { kind: LINK_DESTINATION.INBOX_ITEM, itemId: item.id };
 }
 
 /** One item's acts. */

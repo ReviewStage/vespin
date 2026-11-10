@@ -5,7 +5,7 @@ import {
   type ListedAgent,
 } from "@repo/features/agent-wire";
 import { agentStateWords } from "@repo/features/glyph-state";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { agentMovedAt, agentStillWriting } from "@repo/features/task-agents-model";
 import {
@@ -442,7 +442,7 @@ export function SendingAgent({
       ? undefined
       : () =>
           openPlace({
-            kind: LINK_PLACE.AGENT,
+            kind: LINK_DESTINATION.AGENT,
             ...(taskId === undefined ? undefined : { planId: taskId }),
             agentId,
           });

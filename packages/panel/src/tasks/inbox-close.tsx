@@ -3,6 +3,7 @@ import {
   type AgentCallFailure,
   type AgentInboxAnsweredView,
 } from "@repo/features/agent-view";
+import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { INBOX_STATUS, type InboxItem, type InboxStatus } from "@repo/features/inbox-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { FAILURE_SURFACE, type FailureSurface } from "@repo/features/shown-failure";
@@ -44,14 +45,6 @@ import { messageFailureWords } from "./agent-model.js";
 
 /** What a close the act channel refused hears, as the service not answering, with the error beneath. */
 const unreached = unreachedAs(AGENT_CALL_FAILURE.UNANSWERED);
-
-/**
- * What the act is called wherever it is offered. Note that it is not called
- * Close, because the bar of a side panel or a window standing it full screen
- * already holds a Close that only puts the panel away, and its mark is never
- * Close's ×.
- */
-export const RESOLVE = "Resolve";
 
 /** What a toast says of a close the service did not take, by what had become of the item: still open, the agent having changed it; answered; or resolved. */
 const NOT_TAKEN = {

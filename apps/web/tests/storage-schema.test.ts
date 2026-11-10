@@ -40,6 +40,7 @@ const DECLARED_TABLES = [
   "account_provider_key",
   "admin_favorite",
   "agent",
+  "agent_approval",
   "agent_browser_tab",
   "agent_delegation",
   "agent_pin",

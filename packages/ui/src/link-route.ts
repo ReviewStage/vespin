@@ -1,4 +1,4 @@
-import { LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import {
   SETTINGS_PAGE_LIST,
@@ -45,7 +45,7 @@ export function linkRoute(
   },
 ): LinkRoute {
   switch (place.kind) {
-    case LINK_PLACE.SETTINGS: {
+    case LINK_DESTINATION.SETTINGS: {
       const home = workspaceOfSlug(window.workspaces, workspace);
       const known = SETTINGS_PAGE_LIST.find((each) => each === place.page);
       // Note that a link naming no page this window knows names the page list, which stands on its first page.
@@ -58,7 +58,7 @@ export function linkRoute(
         settings: home === undefined ? page : { ...page, workspaceId: home.id },
       };
     }
-    case LINK_PLACE.ADMIN:
+    case LINK_DESTINATION.ADMIN:
       return window.adminOn ? { kind: LINK_ROUTE.TASKS } : { kind: LINK_ROUTE.NOT_PERMITTED };
     default:
       return { kind: LINK_ROUTE.TASKS };

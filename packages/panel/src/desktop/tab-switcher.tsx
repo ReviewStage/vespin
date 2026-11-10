@@ -42,28 +42,21 @@
  */
 
 import type { AgentSummary } from "@repo/features/agent-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { agentName, automationRun } from "@repo/features/model-label";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND, commandForKey, type KeyedCommand } from "@repo/settings/shortcuts";
-import {
-  DIALOG_SIZE,
-  Dialog,
-  GearIcon,
-  makeWait,
-  TabCard,
-  TabCards,
-  VisuallyHidden,
-} from "@repo/ui";
-import { InboxIcon, ShieldUserIcon } from "@repo/ui/icons";
+import { DIALOG_SIZE, Dialog, makeWait, TabCard, TabCards, VisuallyHidden } from "@repo/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Effect } from "effect";
-import { HistoryIcon, HouseIcon, ListTodoIcon, ZapIcon } from "lucide-react";
+import { HistoryIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { overlayHoldsKeyboard, useAppCommand, useOverlayHold } from "../app-commands.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { HOME_WORDS, INBOX_WORDS, VERSION_HISTORY_WORDS } from "../history-titles.js";
 import { MemberDirectory, usePerson } from "../member-directory.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
@@ -114,12 +107,15 @@ const PLACE_LOOKS: ReadonlyMap<
   RoutedPlace,
   { readonly icon: React.JSX.Element; readonly word: string }
 > = new Map<RoutedPlace, { readonly icon: React.JSX.Element; readonly word: string }>([
-  [ROUTED_PLACE.HOME, { icon: <HouseIcon />, word: HOME_WORDS }],
-  [ROUTED_PLACE.INBOX, { icon: <InboxIcon />, word: INBOX_WORDS }],
-  [ROUTED_PLACE.BOARD, { icon: <ListTodoIcon />, word: "Tasks" }],
-  [ROUTED_PLACE.AUTOMATIONS, { icon: <ZapIcon />, word: "Automations" }],
-  [ROUTED_PLACE.SETTINGS, { icon: <GearIcon />, word: "Settings" }],
-  [ROUTED_PLACE.ADMIN, { icon: <ShieldUserIcon />, word: "Admin" }],
+  [ROUTED_PLACE.HOME, { icon: <EntityGlyph kind={ENTITY_KIND.HOME} />, word: HOME_WORDS }],
+  [ROUTED_PLACE.INBOX, { icon: <EntityGlyph kind={ENTITY_KIND.INBOX} />, word: INBOX_WORDS }],
+  [ROUTED_PLACE.BOARD, { icon: <EntityGlyph kind={ENTITY_KIND.BOARD} />, word: "Tasks" }],
+  [
+    ROUTED_PLACE.AUTOMATIONS,
+    { icon: <EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />, word: "Automations" },
+  ],
+  [ROUTED_PLACE.SETTINGS, { icon: <EntityGlyph kind={ENTITY_KIND.SETTINGS} />, word: "Settings" }],
+  [ROUTED_PLACE.ADMIN, { icon: <EntityGlyph kind={ENTITY_KIND.ADMIN} />, word: "Admin" }],
   [ROUTED_PLACE.VERSION_HISTORY, { icon: <HistoryIcon />, word: VERSION_HISTORY_WORDS }],
 ]);
 
@@ -238,7 +234,7 @@ function cardLook(step: RecentStep, tasks: TasksControl): CardLook {
   }
   const look = routed === undefined ? undefined : PLACE_LOOKS.get(routed);
   return {
-    icon: look?.icon ?? <HouseIcon />,
+    icon: look?.icon ?? <EntityGlyph kind={ENTITY_KIND.HOME} />,
     label: title?.label ?? look?.word ?? SCREEN_WORDS,
     labelReplayUnmasked: title?.label === undefined,
     detail: title?.detail,

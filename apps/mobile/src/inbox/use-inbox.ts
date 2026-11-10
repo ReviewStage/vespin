@@ -23,18 +23,23 @@ import {
   waitsOnReaderNow,
 } from "@repo/features/inbox-list-model";
 import { searchTokens } from "@repo/features/search-tokens";
+import { TASKS_READ } from "@repo/features/tasks-view";
+import { MP4_TYPE, WEBM_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
+import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
   INBOX_FEED,
   type InboxFeed,
+  inboxFeedHolds,
   selectInboxFeed,
   selectInboxGroupsIn,
   selectInboxReader,
+  selectTaskListStatus,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
 import { File, Paths } from "expo-file-system";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -141,19 +146,35 @@ export function useInboxBadge(): number {
 
 /**
  * One thread by its id, with what holds it, wherever it stands in the
- * account's feed; none where the feed holds no such thread. Note that every
+ * account's feed, and where that feed stands; none where the feed holds no
+ * such thread, or has not answered yet. Note that a thread the feed holds
+ * whose task the task list has not read yet stands as still reading, and as
+ * refused where that read failed, rather than as missing; once the list is
+ * read, one still with no holder is missing, as a holder an older service
+ * leaves out is. Note too that every
  * workspace's threads are searched, not only the chosen workspace's the list
  * shows, so a link to a thread of another workspace still opens it.
  */
 export function useInboxThread(id: string | undefined): {
   readonly listed: InboxListed | undefined;
   readonly readerId: string | undefined;
+  readonly feed: InboxFeed;
 } {
   const { data: groups = NO_GROUPS } = useQuery({
     ...appStateQuery,
     select: selectInboxGroupsIn(undefined),
   });
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
+  const { data: answered = INBOX_FEED.READING } = useQuery({
+    ...appStateQuery,
+    select: selectInboxFeed,
+  });
+  const holds = useCallback((state: AppStateSnapshot) => inboxFeedHolds(state, id), [id]);
+  const { data: held = false } = useQuery({ ...appStateQuery, select: holds });
+  const { data: tasksRead = TASKS_READ.IDLE } = useQuery({
+    ...appStateQuery,
+    select: selectTaskListStatus,
+  });
   const listed = useMemo(() => {
     for (const { holder, items } of groups) {
       const item = items.find((each) => each.id === id);
@@ -161,7 +182,13 @@ export function useInboxThread(id: string | undefined): {
     }
     return undefined;
   }, [groups, id]);
-  return { listed, readerId };
+  const feed =
+    listed !== undefined || !held || tasksRead === TASKS_READ.READY
+      ? answered
+      : tasksRead === TASKS_READ.FAILED
+        ? INBOX_FEED.FAILED
+        : INBOX_FEED.READING;
+  return { listed, readerId, feed };
 }
 
 /** Says on the console an act the host refused, which the next delivery of the document corrects. */
@@ -169,11 +196,12 @@ function refused(what: string): (error: unknown) => void {
   return (error) => console.error(`${what} did not go.`, error);
 }
 
-/** The Inbox's own acts, as the panel's sends them: a thread marked read or unread, every thread listed marked read, and the feed read again. */
+/** The Inbox's own acts, as the panel's sends them: a thread marked read or unread, every thread listed marked read, the feed read again, and the task list that holds its threads read again. */
 export function useInboxActs(): {
   readonly mark: (itemId: string, unread: boolean) => void;
   readonly markAll: (itemIds: readonly string[]) => void;
   readonly refresh: () => Promise<void>;
+  readonly refreshTasks: () => Promise<void>;
 } {
   const acts = useHostActs();
   return useMemo(
@@ -189,6 +217,8 @@ export function useInboxActs(): {
       },
       refresh: () =>
         acts[ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]().catch(refused("Reading the inbox again")),
+      refreshTasks: () =>
+        acts[ACT_KIND.TASKS_REFRESH]().catch(refused("Reading the task list again")),
     }),
     [acts],
   );
@@ -209,15 +239,28 @@ export function useReadOnOpen(listed: InboxListed | undefined): void {
   }, [id]);
 }
 
+/** The extension each video the player reads is written under, which AVFoundation reads a file's container by. */
+const VIDEO_EXTENSION: Readonly<Record<string, string>> = {
+  [MP4_TYPE]: "mp4",
+  [WEBM_TYPE]: "webm",
+};
+
 /**
- * Where a file's bytes were written for the system's player to read: a file
- * of the app's caches, named by the attachment, so it is written once. Note
- * that the bytes are written beside it first and moved into place once the
- * write settles, so the player is never handed a file still being written,
- * and a write cut short never stands as the file a later read finds.
+ * Where a video's bytes were written for the system's player to read: a file
+ * of the app's caches, named by the attachment and its type's extension, so
+ * it is written once. Note that the bytes are written beside it first and
+ * moved into place once the write settles, so the player is never handed a
+ * file still being written, and a write cut short never stands as the file a
+ * later read finds.
  */
-async function cachedFile(attachmentId: string, base64: string): Promise<string> {
-  const name = `inbox-${attachmentId}`;
+async function cachedFile(
+  attachmentId: string,
+  contentType: string,
+  base64: string,
+): Promise<string> {
+  const extension = VIDEO_EXTENSION[contentType];
+  const name =
+    extension === undefined ? `inbox-${attachmentId}` : `inbox-${attachmentId}.${extension}`;
   const file = new File(Paths.cache, name);
   if (file.exists) return file.uri;
   const writing = new File(Paths.cache, `${name}.writing`);
@@ -230,8 +273,9 @@ async function cachedFile(attachmentId: string, base64: string): Promise<string>
 /**
  * What each of a thread's files is drawn from, by its attachment, read once
  * through the host as the panel reads one (`AGENTS_INBOX_ATTACHMENT`): a
- * picture as a `data:` address, and a video as a file of the app's caches,
- * since the system's player reads a file; one still on its way, or that
+ * picture as a `data:` address, and a video, asked for as its MP4 copy, as a
+ * file of the app's caches, since the system's player reads a file, which an
+ * older recording with no copy answers as a WebM the player cannot play; one still on its way, or that
  * could not be read, is absent. Note that each file is asked for once while
  * the thread stands, whatever `media` list names it, because the thread's
  * item is made anew on every change to it, its read mark as it opens among
@@ -264,14 +308,20 @@ export function useThreadMedia(
         if (asked.current.itemId === itemId) ids.delete(each.attachmentId);
         refused("Reading a thread's file")(error);
       };
-      acts[ACT_KIND.AGENTS_INBOX_ATTACHMENT]({ itemId, attachmentId: each.attachmentId })
+      // A video is asked for as the MP4 copy iOS's player plays, which an older recording kept without one answers as its WebM.
+      const playable = each.kind === INBOX_MEDIA.VIDEO ? ({ playable: MP4_TYPE } as const) : {};
+      acts[ACT_KIND.AGENTS_INBOX_ATTACHMENT]({
+        itemId,
+        attachmentId: each.attachmentId,
+        ...playable,
+      })
         .then(async (read) => {
           // A read that lands once another thread stands is that thread's no longer.
           if (asked.current.itemId !== itemId) return;
           if (!("base64" in read)) throw new Error(`The file was not read: ${read.failure}.`);
           const source =
             each.kind === INBOX_MEDIA.VIDEO
-              ? await cachedFile(each.attachmentId, read.base64)
+              ? await cachedFile(each.attachmentId, read.contentType, read.base64)
               : `data:${read.contentType};base64,${read.base64}`;
           if (asked.current.itemId !== itemId) return;
           setSources((held) => new Map(held).set(each.attachmentId, source));

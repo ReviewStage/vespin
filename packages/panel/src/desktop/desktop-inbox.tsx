@@ -8,7 +8,7 @@ import {
   NOTHING_HERE,
 } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import type { DescriptionMention } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
 import { cardTitle } from "@repo/features/plain-words";
@@ -339,7 +339,7 @@ export const DesktopInbox = memo(function DesktopInbox({
     // An agent of the item's task goes to the task on its own tab, where its transcript reads, never beside the item.
     if (routed.kind === ROUTE.GO) {
       const { place: at } = routed.link;
-      if (at.kind !== LINK_PLACE.AGENT || at.planId === undefined) return false;
+      if (at.kind !== LINK_DESTINATION.AGENT || at.planId === undefined) return false;
       tasks.onShowAgent(at.planId, at.agentId);
       return true;
     }
@@ -383,7 +383,7 @@ export const DesktopInbox = memo(function DesktopInbox({
         sidePanel.onPullRequestView(tab, thing.view);
         openPanelTab(tab);
         tasks.onRevealThread(tab.changes, {
-          kind: LINK_PLACE.PULL_REQUEST_THREAD,
+          kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
           agentId: thing.agentId,
           threadId: thing.threadId,
           view: thing.view,
@@ -422,7 +422,7 @@ export const DesktopInbox = memo(function DesktopInbox({
     }
   };
   // A place a part of the item or the panel beside it names opens as a link to it would (`openHere`), and through the door given where it opens nothing there.
-  const openPlaceHere = (at: LinkPlace, elsewhere: () => void) => {
+  const openPlaceHere = (at: LinkDestination, elsewhere: () => void) => {
     if (!openHere(placeAddress({ workspace: "", place: at }, router))) elsewhere();
   };
   // A task or a section a mention names opens as a link to it would.
@@ -844,7 +844,7 @@ function InboxSidePanel({
 }: {
   tasks: TasksControl;
   /** Opens a place a row names as a link to it would beside the item, else through the door given. */
-  openPlace: (place: LinkPlace, elsewhere: () => void) => void;
+  openPlace: (place: LinkDestination, elsewhere: () => void) => void;
   drawing: SidePanelDrawing & { panel: SidePanelControl };
   focused: boolean;
   /** The chosen item's task, none for an item of an agent with no task. */
@@ -881,16 +881,18 @@ function InboxSidePanel({
       case TOOL_TARGET.AGENT: {
         const { agent } = target;
         return taskId === undefined
-          ? openPlace({ kind: LINK_PLACE.AGENT, agentId: agent }, () =>
+          ? openPlace({ kind: LINK_DESTINATION.AGENT, agentId: agent }, () =>
               tasks.agentView.onOpen(agent),
             )
-          : openPlace({ kind: LINK_PLACE.AGENT, planId: taskId, agentId: agent }, () =>
+          : openPlace({ kind: LINK_DESTINATION.AGENT, planId: taskId, agentId: agent }, () =>
               tasks.onShowAgent(taskId, agent),
             );
       }
       case TOOL_TARGET.DESCRIPTION:
         if (taskId === undefined) return;
-        return openPlace({ kind: LINK_PLACE.TASK, planId: taskId }, () => tasks.onShowTask(taskId));
+        return openPlace({ kind: LINK_DESTINATION.TASK, planId: taskId }, () =>
+          tasks.onShowTask(taskId),
+        );
       case TOOL_TARGET.INBOX:
       case TOOL_TARGET.PULL_REQUEST:
         return;
@@ -1029,7 +1031,7 @@ export function paneDoors(
     /** The task, or the agent, the panel beside the Inbox stands for. */
     panelFor: string | undefined;
     /** Opens a place a part of the item names as a link to it would beside the item (`inbox-item-links.ts`), else through the door given. */
-    openPlace: (place: LinkPlace, elsewhere: () => void) => void;
+    openPlace: (place: LinkDestination, elsewhere: () => void) => void;
     /** Where the item's words are read (`answerPlace`), whose repository an agent with no task reads its files through; none until known. */
     place: TasklessPlace | undefined;
     /** Opens an Automations page (`places/routed-doors.ts`). */
@@ -1041,12 +1043,14 @@ export function paneDoors(
     // An agent the item or its task's card names reads beside it, as a link to it does.
     // Note that an archived agent's tab is not drawn beside the item, so the window opens it on its task.
     const openAgent = (taskId: string, agentId: string) =>
-      seams.openPlace({ kind: LINK_PLACE.AGENT, planId: taskId, agentId }, () =>
+      seams.openPlace({ kind: LINK_DESTINATION.AGENT, planId: taskId, agentId }, () =>
         tasks.onShowAgent(taskId, agentId),
       );
     // A task the card names, its parent or a sub-task, opens as a link to it does.
     const openTask = (taskId: string) =>
-      seams.openPlace({ kind: LINK_PLACE.TASK, planId: taskId }, () => tasks.onSelect(taskId));
+      seams.openPlace({ kind: LINK_DESTINATION.TASK, planId: taskId }, () =>
+        tasks.onSelect(taskId),
+      );
     return {
       tasks,
       onOpenHolder: () => tasks.onShowTask(task.id),
@@ -1077,7 +1081,9 @@ export function paneDoors(
         : undefined,
     taskCard: undefined,
     onOpenAgent: (agentId) =>
-      seams.openPlace({ kind: LINK_PLACE.AGENT, agentId }, () => tasks.agentView.onOpen(agentId)),
+      seams.openPlace({ kind: LINK_DESTINATION.AGENT, agentId }, () =>
+        tasks.agentView.onOpen(agentId),
+      ),
     code: tasklessCode(tasks, seams.place),
   };
 }

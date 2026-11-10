@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import {
-  ACCOUNT_PLACE,
+  ACCOUNT_DESTINATION,
   ADMIN_LINK_SECTION,
   appLinkOf,
   GITHUB_PAGE,
   type GitHubPage,
   gitHubPageLink,
-  LINK_PLACE,
-  type LinkPlace,
+  LINK_DESTINATION,
+  type LinkDestination,
   linkOf,
   markdownLink,
   mentionMarkdownLink,
@@ -35,31 +35,43 @@ const OTHER = "0c9a3f1e-6b2d-4e8f-a1c7-3d5e7f9a1b2c";
 const HOME = "https://vespin.dev/acme";
 
 /** Every kind of place, and the link it is shared by, spelled out. */
-const LINKS: readonly (readonly [LinkPlace, string])[] = [
-  [{ kind: LINK_PLACE.HOME }, HOME],
-  [{ kind: LINK_PLACE.BOARD }, `${HOME}/tasks`],
-  [{ kind: LINK_PLACE.TASK, planId: TASK }, `${HOME}/task/${TASK}`],
-  [{ kind: LINK_PLACE.SECTION, planId: TASK, anchor: "rollout" }, `${HOME}/task/${TASK}#rollout`],
+const LINKS: readonly (readonly [LinkDestination, string])[] = [
+  [{ kind: LINK_DESTINATION.HOME }, HOME],
+  [{ kind: LINK_DESTINATION.BOARD }, `${HOME}/tasks`],
+  [{ kind: LINK_DESTINATION.TASK, planId: TASK }, `${HOME}/task/${TASK}`],
   [
-    { kind: LINK_PLACE.COMMENT, planId: TASK, threadId: OTHER },
+    { kind: LINK_DESTINATION.SECTION, planId: TASK, anchor: "rollout" },
+    `${HOME}/task/${TASK}#rollout`,
+  ],
+  [
+    { kind: LINK_DESTINATION.COMMENT, planId: TASK, threadId: OTHER },
     `${HOME}/task/${TASK}?comment=${OTHER}`,
   ],
-  [{ kind: LINK_PLACE.VERSION, planId: TASK, revision: 12 }, `${HOME}/task/${TASK}/version/12`],
-  [{ kind: LINK_PLACE.PAGE, planId: TASK, pageId: OTHER }, `${HOME}/task/${TASK}/page/${OTHER}`],
-  [{ kind: LINK_PLACE.AGENT, planId: TASK, agentId: AGENT }, `${HOME}/task/${TASK}/agent/${AGENT}`],
-  [{ kind: LINK_PLACE.AGENT, agentId: AGENT }, `${HOME}/agent/${AGENT}`],
   [
-    { kind: LINK_PLACE.WORKER, planId: TASK, agentId: AGENT, callId: "toolu_01" },
+    { kind: LINK_DESTINATION.VERSION, planId: TASK, revision: 12 },
+    `${HOME}/task/${TASK}/version/12`,
+  ],
+  [
+    { kind: LINK_DESTINATION.PAGE, planId: TASK, pageId: OTHER },
+    `${HOME}/task/${TASK}/page/${OTHER}`,
+  ],
+  [
+    { kind: LINK_DESTINATION.AGENT, planId: TASK, agentId: AGENT },
+    `${HOME}/task/${TASK}/agent/${AGENT}`,
+  ],
+  [{ kind: LINK_DESTINATION.AGENT, agentId: AGENT }, `${HOME}/agent/${AGENT}`],
+  [
+    { kind: LINK_DESTINATION.WORKER, planId: TASK, agentId: AGENT, callId: "toolu_01" },
     `${HOME}/task/${TASK}/agent/${AGENT}/worker/toolu_01`,
   ],
   [
-    { kind: LINK_PLACE.WORKER, agentId: AGENT, callId: "toolu_02" },
+    { kind: LINK_DESTINATION.WORKER, agentId: AGENT, callId: "toolu_02" },
     `${HOME}/agent/${AGENT}/worker/toolu_02`,
   ],
-  [{ kind: LINK_PLACE.CHANGES, agentId: AGENT }, `${HOME}/agent/${AGENT}/changes`],
+  [{ kind: LINK_DESTINATION.CHANGES, agentId: AGENT }, `${HOME}/agent/${AGENT}/changes`],
   [
     {
-      kind: LINK_PLACE.PULL_REQUEST_THREAD,
+      kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
       agentId: AGENT,
       threadId: "PRRT_1",
       view: PULL_REQUEST_THREAD_VIEW.FILES,
@@ -67,12 +79,12 @@ const LINKS: readonly (readonly [LinkPlace, string])[] = [
     `${HOME}/agent/${AGENT}/changes/files/thread/PRRT_1`,
   ],
   [
-    { kind: LINK_PLACE.CHANGES, planId: TASK, agentId: AGENT },
+    { kind: LINK_DESTINATION.CHANGES, planId: TASK, agentId: AGENT },
     `${HOME}/task/${TASK}/agent/${AGENT}/changes`,
   ],
   [
     {
-      kind: LINK_PLACE.PULL_REQUEST_THREAD,
+      kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
       planId: TASK,
       agentId: AGENT,
       threadId: "PRRT_kwDOAbc-_12",
@@ -82,7 +94,7 @@ const LINKS: readonly (readonly [LinkPlace, string])[] = [
   ],
   [
     {
-      kind: LINK_PLACE.PULL_REQUEST_THREAD,
+      kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
       planId: TASK,
       agentId: AGENT,
       threadId: "PRRT_kwDOAbc-_12",
@@ -91,43 +103,43 @@ const LINKS: readonly (readonly [LinkPlace, string])[] = [
     `${HOME}/task/${TASK}/agent/${AGENT}/changes/files/thread/PRRT_kwDOAbc-_12`,
   ],
   [
-    { kind: LINK_PLACE.MESSAGE, planId: TASK, agentId: AGENT, messageId: OTHER },
+    { kind: LINK_DESTINATION.MESSAGE, planId: TASK, agentId: AGENT, messageId: OTHER },
     `${HOME}/task/${TASK}/agent/${AGENT}/message/${OTHER}`,
   ],
   [
-    { kind: LINK_PLACE.MESSAGE, agentId: AGENT, messageId: OTHER },
+    { kind: LINK_DESTINATION.MESSAGE, agentId: AGENT, messageId: OTHER },
     `${HOME}/agent/${AGENT}/message/${OTHER}`,
   ],
   [
-    { kind: LINK_PLACE.PAGE, agentId: AGENT, pageId: OTHER },
+    { kind: LINK_DESTINATION.PAGE, agentId: AGENT, pageId: OTHER },
     `${HOME}/agent/${AGENT}/page/${OTHER}`,
   ],
-  [{ kind: LINK_PLACE.INBOX }, `${HOME}/inbox`],
-  [{ kind: LINK_PLACE.INBOX, planId: TASK }, `${HOME}/inbox/task/${TASK}`],
+  [{ kind: LINK_DESTINATION.INBOX }, `${HOME}/inbox`],
+  [{ kind: LINK_DESTINATION.INBOX, planId: TASK }, `${HOME}/inbox/task/${TASK}`],
   [
-    { kind: LINK_PLACE.INBOX_ITEM, planId: TASK, itemId: OTHER },
+    { kind: LINK_DESTINATION.INBOX_ITEM, planId: TASK, itemId: OTHER },
     `${HOME}/task/${TASK}/inbox/${OTHER}`,
   ],
   [
-    { kind: LINK_PLACE.INBOX_ITEM, agentId: AGENT, itemId: OTHER },
+    { kind: LINK_DESTINATION.INBOX_ITEM, agentId: AGENT, itemId: OTHER },
     `${HOME}/agent/${AGENT}/inbox/${OTHER}`,
   ],
-  [{ kind: LINK_PLACE.INBOX_ITEM, itemId: OTHER }, `${HOME}/inbox/${OTHER}`],
-  [{ kind: LINK_PLACE.AUTOMATIONS }, `${HOME}/automations`],
-  [{ kind: LINK_PLACE.AUTOMATION, automationId: OTHER }, `${HOME}/automation/${OTHER}`],
+  [{ kind: LINK_DESTINATION.INBOX_ITEM, itemId: OTHER }, `${HOME}/inbox/${OTHER}`],
+  [{ kind: LINK_DESTINATION.AUTOMATIONS }, `${HOME}/automations`],
+  [{ kind: LINK_DESTINATION.AUTOMATION, automationId: OTHER }, `${HOME}/automation/${OTHER}`],
   [
-    { kind: LINK_PLACE.AUTOMATION_RUN, automationId: OTHER, runId: AGENT },
+    { kind: LINK_DESTINATION.AUTOMATION_RUN, automationId: OTHER, runId: AGENT },
     `${HOME}/automation/${OTHER}/run/${AGENT}`,
   ],
-  [{ kind: LINK_PLACE.SETTINGS }, `${HOME}/settings`],
-  [{ kind: LINK_PLACE.SETTINGS, page: "agents" }, `${HOME}/settings/agents`],
-  [{ kind: LINK_PLACE.PERSON, userId: "user_9Fq2-x" }, `${HOME}/person/user_9Fq2-x`],
-  [{ kind: LINK_PLACE.ADMIN }, `${HOME}/admin`],
-  [{ kind: LINK_PLACE.ADMIN, section: ADMIN_LINK_SECTION.COST }, `${HOME}/admin/cost`],
-  [{ kind: LINK_PLACE.ADMIN, section: ADMIN_LINK_SECTION.USERS }, `${HOME}/admin/users`],
-  [{ kind: LINK_PLACE.ADMIN, userId: "user_9Fq2-x" }, `${HOME}/admin/user/user_9Fq2-x`],
-  [{ kind: LINK_PLACE.ADMIN, workspaceId: "org_4kT1" }, `${HOME}/admin/workspace/org_4kT1`],
-  [{ kind: LINK_PLACE.ADMIN, day: "2026-10-12" }, `${HOME}/admin/day/2026-10-12`],
+  [{ kind: LINK_DESTINATION.SETTINGS }, `${HOME}/settings`],
+  [{ kind: LINK_DESTINATION.SETTINGS, page: "agents" }, `${HOME}/settings/agents`],
+  [{ kind: LINK_DESTINATION.PERSON, userId: "user_9Fq2-x" }, `${HOME}/person/user_9Fq2-x`],
+  [{ kind: LINK_DESTINATION.ADMIN }, `${HOME}/admin`],
+  [{ kind: LINK_DESTINATION.ADMIN, section: ADMIN_LINK_SECTION.COST }, `${HOME}/admin/cost`],
+  [{ kind: LINK_DESTINATION.ADMIN, section: ADMIN_LINK_SECTION.USERS }, `${HOME}/admin/users`],
+  [{ kind: LINK_DESTINATION.ADMIN, userId: "user_9Fq2-x" }, `${HOME}/admin/user/user_9Fq2-x`],
+  [{ kind: LINK_DESTINATION.ADMIN, workspaceId: "org_4kT1" }, `${HOME}/admin/workspace/org_4kT1`],
+  [{ kind: LINK_DESTINATION.ADMIN, day: "2026-10-12" }, `${HOME}/admin/day/2026-10-12`],
 ];
 
 test("every place is shared as its kind's address under its workspace, by its ids alone", () => {
@@ -148,7 +160,7 @@ test("every place's link, by the web's scheme or the desktop's, names that place
 });
 
 test("a workspace written by id, or by a slug that must be encoded, is read back as written", () => {
-  const place = { kind: LINK_PLACE.AGENT, agentId: AGENT } as const;
+  const place = { kind: LINK_DESTINATION.AGENT, agentId: AGENT } as const;
   const link = linkOf(place, "personal-u_1 (Dean)");
 
   assert.equal(link, `https://vespin.dev/personal-u_1%20%28Dean%29/agent/${AGENT}`);
@@ -158,22 +170,22 @@ test("a workspace written by id, or by a slug that must be encoded, is read back
 test("a link pasted with a trailing slash, a query, or a fragment its kind has no use for still names its place", () => {
   assert.deepEqual(readLink(`${HOME}/?from=slack#top`), {
     workspace: "acme",
-    place: { kind: LINK_PLACE.HOME },
+    place: { kind: LINK_DESTINATION.HOME },
   });
   assert.deepEqual(readLink(`${HOME}/agent/${AGENT}/inbox/${OTHER}/?from=slack#top`), {
     workspace: "acme",
-    place: { kind: LINK_PLACE.INBOX_ITEM, agentId: AGENT, itemId: OTHER },
+    place: { kind: LINK_DESTINATION.INBOX_ITEM, agentId: AGENT, itemId: OTHER },
   });
 });
 
 test("a task's link names one of its comment threads by its comment query alone, any other query being the address's own", () => {
   assert.deepEqual(readLink(`${HOME}/task/${TASK}/?from=slack&comment=${OTHER}#rollout`)?.place, {
-    kind: LINK_PLACE.COMMENT,
+    kind: LINK_DESTINATION.COMMENT,
     planId: TASK,
     threadId: OTHER,
   });
   assert.deepEqual(readLink(`${HOME}/plan/${TASK}?comment=${OTHER}&comment=${AGENT}`)?.place, {
-    kind: LINK_PLACE.TASK,
+    kind: LINK_DESTINATION.TASK,
     planId: TASK,
   });
   assert.equal(
@@ -190,7 +202,10 @@ test("a task's own link, or a section's, is read under /task/ and with a slash a
   ]) {
     assert.deepEqual(
       readLink(target),
-      { workspace: "acme", place: { kind: LINK_PLACE.SECTION, planId: TASK, anchor: "rollout" } },
+      {
+        workspace: "acme",
+        place: { kind: LINK_DESTINATION.SECTION, planId: TASK, anchor: "rollout" },
+      },
       target,
     );
   }
@@ -199,12 +214,12 @@ test("a task's own link, or a section's, is read under /task/ and with a slash a
 
 test("a section headed by the longest heading a plan takes, percent-encoded, is still its link", () => {
   const anchor = "語".repeat(1_000);
-  const link = linkOf({ kind: LINK_PLACE.SECTION, planId: TASK, anchor }, "acme");
+  const link = linkOf({ kind: LINK_DESTINATION.SECTION, planId: TASK, anchor }, "acme");
 
   assert.ok(link.length > 4_000);
   assert.deepEqual(readLink(link), {
     workspace: "acme",
-    place: { kind: LINK_PLACE.SECTION, planId: TASK, anchor },
+    place: { kind: LINK_DESTINATION.SECTION, planId: TASK, anchor },
   });
   assert.equal(appLinkOf(link), link.replace("https:", "vespin:"));
 });
@@ -212,15 +227,15 @@ test("a section headed by the longest heading a plan takes, percent-encoded, is 
 test("a task's places written under /plan/, as every link before /task/ was, are read as under /task/", () => {
   assert.deepEqual(readLink(`${HOME}/plan/${TASK}/agent/${AGENT}`), {
     workspace: "acme",
-    place: { kind: LINK_PLACE.AGENT, planId: TASK, agentId: AGENT },
+    place: { kind: LINK_DESTINATION.AGENT, planId: TASK, agentId: AGENT },
   });
   assert.deepEqual(readLink(`${HOME}/plan/${TASK}/version/3`), {
     workspace: "acme",
-    place: { kind: LINK_PLACE.VERSION, planId: TASK, revision: 3 },
+    place: { kind: LINK_DESTINATION.VERSION, planId: TASK, revision: 3 },
   });
   assert.deepEqual(readLink(`${HOME}/inbox/plan/${TASK}`), {
     workspace: "acme",
-    place: { kind: LINK_PLACE.INBOX, planId: TASK },
+    place: { kind: LINK_DESTINATION.INBOX, planId: TASK },
   });
 });
 
@@ -237,11 +252,11 @@ test("a task named by its number in the workspace, or by its key, names it by th
     [42, 42, 42, 42],
   );
   assert.deepEqual(places[2] && withTaskId(places[2], TASK), {
-    kind: LINK_PLACE.VERSION,
+    kind: LINK_DESTINATION.VERSION,
     planId: TASK,
     revision: 3,
   });
-  assert.equal(taskNumberOf({ kind: LINK_PLACE.TASK, planId: TASK }), undefined);
+  assert.equal(taskNumberOf({ kind: LINK_DESTINATION.TASK, planId: TASK }), undefined);
 });
 
 test("a turn of Vespin's work, or a worker of Vespin's, once written under its task, names the task, since neither is drawn now", () => {
@@ -251,7 +266,7 @@ test("a turn of Vespin's work, or a worker of Vespin's, once written under its t
   ]) {
     assert.deepEqual(
       readLink(target),
-      { workspace: "acme", place: { kind: LINK_PLACE.TASK, planId: TASK } },
+      { workspace: "acme", place: { kind: LINK_DESTINATION.TASK, planId: TASK } },
       target,
     );
   }
@@ -262,7 +277,7 @@ test("a picture in a plan's address names its task, and nothing of the picture",
 
   assert.deepEqual(readLink(`${HOME}/plan/${TASK}/files/${picture}`), {
     workspace: "acme",
-    place: { kind: LINK_PLACE.TASK, planId: TASK },
+    place: { kind: LINK_DESTINATION.TASK, planId: TASK },
   });
   assert.equal(readLink(`${HOME}/plan/${TASK}/files/not-an-id`), undefined);
 });
@@ -357,7 +372,7 @@ test("a link is handed to the desktop in its own scheme, written again from the 
 });
 
 test("a box's pairing link names its code under no workspace, read whatever its case and dash, and is handed to the desktop as the box shows it", () => {
-  const place = { kind: ACCOUNT_PLACE.CONNECT, code: "BCDFGHJK" } as const;
+  const place = { kind: ACCOUNT_DESTINATION.CONNECT, code: "BCDFGHJK" } as const;
   for (const target of [
     "https://vespin.dev/connect/BCDF-GHJK",
     "https://vespin.dev/connect/bcdfghjk/?from=box#top",
@@ -380,7 +395,7 @@ test("a box's pairing link names its code under no workspace, read whatever its 
   }
   assert.deepEqual(readShownLink(`https://vespin.dev/connect/plan/${TASK}`), {
     workspace: "connect",
-    place: { kind: LINK_PLACE.TASK, planId: TASK },
+    place: { kind: LINK_DESTINATION.TASK, planId: TASK },
   });
 });
 

@@ -7,9 +7,9 @@
  * every surface answers by).
  */
 
-import { LINK_PLACE, type LinkPlace, taskNumberOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination, taskNumberOf } from "@repo/features/link-grammar";
 import type { PagePlace } from "@repo/features/page-wire";
-import type { LinkPlaceName } from "./places/link-places.js";
+import type { LinkDestinationName } from "./places/link-places.js";
 import {
   ADDRESS,
   type Address,
@@ -33,7 +33,7 @@ export type InboxItemHere = {
 } & Holding;
 
 /** What a place of the app pressed on an Inbox item opens, read as its declaration reads it, under the link's workspace. */
-type ItemPlaceBeside = (place: LinkPlace, workspace: string, here: InboxItemHere) => Route;
+type ItemPlaceBeside = (place: LinkDestination, workspace: string, here: InboxItemHere) => Route;
 
 /** Whether an agent a link names is one of what holds the item: by the task an older link names it under, else by the agent itself, among the agents given. */
 function holdsAgent(
@@ -49,10 +49,10 @@ function holdsAgent(
  * declaration its route matched (`LINK_ROUTED_PLACE`); every other place is
  * the window's.
  */
-const ITEM_BESIDE: { readonly [Name in LinkPlaceName]?: ItemPlaceBeside } = {
+const ITEM_BESIDE: { readonly [Name in LinkDestinationName]?: ItemPlaceBeside } = {
   PAGE: (at, _workspace, here) => {
     // A page under a task named by a number no one found the task for is the window's, which finds it on the service.
-    if (at.kind !== LINK_PLACE.PAGE || taskNumberOf(at) !== undefined) return NOTHING;
+    if (at.kind !== LINK_DESTINATION.PAGE || taskNumberOf(at) !== undefined) return NOTHING;
     // A page of the item's own task, or of the agent on no task that holds it, opens beside the item;
     // another's opens there too, read on its own place, so the reader stays on the item.
     const own =
@@ -68,19 +68,20 @@ const ITEM_BESIDE: { readonly [Name in LinkPlaceName]?: ItemPlaceBeside } = {
   },
   // An archived agent's Changes still opens beside the item, as its older link under the task did.
   CHANGES: (at, _workspace, here) =>
-    at.kind === LINK_PLACE.CHANGES && holdsAgent(at, here.taskId, here.heldIds ?? here.agentIds)
+    at.kind === LINK_DESTINATION.CHANGES &&
+    holdsAgent(at, here.taskId, here.heldIds ?? here.agentIds)
       ? beside({ kind: THING.CHANGES, agentId: at.agentId })
       : NOTHING,
   // A review thread of an agent's pull request opens beside the item as its Changes does.
   PULL_REQUEST_THREAD: (at, _workspace, here) =>
-    at.kind === LINK_PLACE.PULL_REQUEST_THREAD &&
+    at.kind === LINK_DESTINATION.PULL_REQUEST_THREAD &&
     holdsAgent(at, here.taskId, here.heldIds ?? here.agentIds)
       ? beside({ kind: THING.THREAD, agentId: at.agentId, threadId: at.threadId, view: at.view })
       : NOTHING,
   // An Inbox item is chosen in the Inbox the item stands in: one under its task, or one under an agent the item's task
   // holds or the agent on no task that holds the item; any other the window finds by its agent, or by the item alone.
   INBOX_ITEM: (at, _workspace, here) => {
-    if (at.kind !== LINK_PLACE.INBOX_ITEM) return NOTHING;
+    if (at.kind !== LINK_DESTINATION.INBOX_ITEM) return NOTHING;
     const { itemId } = at;
     if ("planId" in at) {
       return beside({ kind: THING.INBOX_ITEM, itemId, taskId: at.planId, agentId: undefined });
@@ -100,13 +101,13 @@ const ITEM_BESIDE: { readonly [Name in LinkPlaceName]?: ItemPlaceBeside } = {
   // An agent of the item's own task, archived or not, opens in its own tab on the task, never in the panel
   // beside the item, so a transcript reads in one place; one on no task, or another task's, is the window's to open.
   AGENT: (at, workspace, here) => {
-    if (at.kind !== LINK_PLACE.AGENT) return NOTHING;
+    if (at.kind !== LINK_DESTINATION.AGENT) return NOTHING;
     if (here.taskId === undefined || !holdsAgent(at, here.taskId, here.heldIds ?? here.agentIds)) {
       return NOTHING;
     }
     return go({
       workspace,
-      place: { kind: LINK_PLACE.AGENT, planId: here.taskId, agentId: at.agentId },
+      place: { kind: LINK_DESTINATION.AGENT, planId: here.taskId, agentId: at.agentId },
     });
   },
 };

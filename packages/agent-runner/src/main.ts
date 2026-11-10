@@ -25,6 +25,7 @@ import { claudeCodeLive } from "./claude-code.js";
 import { codexToken } from "./codex-token.js";
 import { RunnerUnconfigured } from "./launch.js";
 import { CODEX_TOKEN_COMMAND, RUNNER_END, RUNNER_EXIT } from "./protocol.js";
+import { providerProbeLive } from "./reconnect.js";
 import { runAgent } from "./runner.js";
 
 // Note that the interface is made only as the stream starts, and iterated at
@@ -58,6 +59,7 @@ const launch = runAgent({
   Effect.provide(
     Layer.mergeAll(
       claudeCodeLive,
+      providerProbeLive,
       FetchHttpClient.layer,
       // Codex's app-server, spawned as the runner's own child (codex.ts).
       NodeChildProcessSpawner.layer.pipe(

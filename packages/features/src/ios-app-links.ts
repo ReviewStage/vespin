@@ -16,7 +16,7 @@
  */
 
 import { IOS_OAUTH_CALLBACK_PATH } from "./ios-sign-in-wire.js";
-import { LINK_PLACE, type LinkPlace } from "./link-grammar.js";
+import { LINK_DESTINATION, type LinkDestination } from "./link-grammar.js";
 
 /** One path pattern of the association's `applinks` components, as Apple's format names its keys. */
 export interface AppLinkComponent {
@@ -52,15 +52,15 @@ const IOS_ROUTE = {
  * web. A task is routed as the link names it, by id or by number, for the
  * task's screen to find.
  */
-export function iosAppRouteOf(place: LinkPlace): string | undefined {
+export function iosAppRouteOf(place: LinkDestination): string | undefined {
   switch (place.kind) {
-    case LINK_PLACE.INBOX:
+    case LINK_DESTINATION.INBOX:
       return IOS_ROUTE.INBOX;
-    case LINK_PLACE.INBOX_ITEM:
+    case LINK_DESTINATION.INBOX_ITEM:
       return `${IOS_ROUTE.INBOX}/${encodeURIComponent(place.itemId)}`;
-    case LINK_PLACE.BOARD:
+    case LINK_DESTINATION.BOARD:
       return IOS_ROUTE.TASKS;
-    case LINK_PLACE.TASK:
+    case LINK_DESTINATION.TASK:
       return `${IOS_ROUTE.TASKS}/${encodeURIComponent(place.planId)}`;
     default:
       return undefined;

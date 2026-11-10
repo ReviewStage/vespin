@@ -191,6 +191,9 @@ export const selectSessionReplay = (state: AppStateSnapshot) => state.sessionRep
 export const selectPortForwarding = (state: AppStateSnapshot) => state.portForwarding;
 export const selectMirrors = (state: AppStateSnapshot) => state.mirrors;
 
+/** Where the task list's read stands: not yet asked, on its way, read, or refused. */
+export const selectTaskListStatus = (state: AppStateSnapshot) => state.tasks.listStatus;
+
 /** The account's workspaces, which tell their readers only as the list moves, not as the tasks beside it do. */
 export const selectWorkspaces = (state: AppStateSnapshot) => state.tasks.workspaces;
 
@@ -375,6 +378,19 @@ export function selectInboxFeed(state: AppStateSnapshot): InboxFeed {
   const feed = state[LIVE_READ.INBOX_ITEMS];
   if (feed.rows !== undefined) return INBOX_FEED.ANSWERED;
   return feed.failed === true ? INBOX_FEED.FAILED : INBOX_FEED.READING;
+}
+
+/**
+ * Whether the account's feed holds a thread, whatever holds it: true for one
+ * the feed read before the task list that holds it, which `inboxGroups`
+ * cannot group until that list is read (`selectTaskListStatus`).
+ */
+export function inboxFeedHolds(state: AppStateSnapshot, itemId: string | undefined): boolean {
+  const rows = state[LIVE_READ.INBOX_ITEMS].rows;
+  if (rows === undefined || itemId === undefined) return false;
+  return [INBOX_SCOPE_KIND.PLAN, INBOX_SCOPE_KIND.AGENT].some((kind) =>
+    Object.values(rows[kind]).some((items) => items.some((item) => item.id === itemId)),
+  );
 }
 
 /** What a workspace's choices are read from: its entry on the account's list. */

@@ -15,7 +15,7 @@ import {
   INBOX_WIRE_VERSION,
   type InboxItem,
 } from "@repo/features/inbox-wire";
-import type { LinkPlace, ReadLink } from "@repo/features/link-grammar";
+import type { LinkDestination, ReadLink } from "@repo/features/link-grammar";
 import type { Task } from "@repo/features/task-wire";
 import { agentTab } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
@@ -197,7 +197,7 @@ async function mount(onOpen: (link: ReadLink) => void): Promise<HTMLElement> {
 }
 
 test("a post's chip opens the item the agent posted under its key, not another agent's under the same key", async () => {
-  const opened: LinkPlace[] = [];
+  const opened: LinkDestination[] = [];
   const container = await mount((link) => opened.push(link.place));
 
   const chip =
