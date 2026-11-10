@@ -36,6 +36,7 @@ import { afterResponse } from "../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import {
   HOSTED_REFUSAL,
+  HOSTED_REFUSAL_STATUS,
   type HostedRefusal,
   hostedNotFoundRoute,
   hostedRefusing,
@@ -223,9 +224,14 @@ function sessionStep(sandbox: PageSandbox, agentId: string, address: URL, now: n
   });
 }
 
+/** Whether the request is a browser's page load, which is answered a page rather than bare text or JSON. */
+function isPageLoad(request: Request): boolean {
+  return request.headers.get("sec-fetch-mode") === "navigate";
+}
+
 /** A request without a member's cookie: a page load sent to sign in on the app, anything else refused. */
 function signInFirst(sandbox: PageSandbox, agentId: string, request: Request, asked: string) {
-  if (request.method !== HTTP_METHOD.GET || request.headers.get("sec-fetch-mode") !== "navigate") {
+  if (request.method !== HTTP_METHOD.GET || !isPageLoad(request)) {
     return HttpServerResponse.text(NOT_SIGNED_IN, {
       status: HOSTED_HTTP_STATUS.UNAUTHORIZED,
       headers: NEVER_KEPT,
@@ -241,24 +247,28 @@ function signInFirst(sandbox: PageSandbox, agentId: string, request: Request, as
   });
 }
 
-/** What a visit is answered where nothing is shared from the agent now, its server stopped, or the preview is refused: a page for a page load, bare text for anything else. */
-function noPreview(request: Request) {
-  const page = request.headers.get("sec-fetch-mode") === "navigate";
+/** What a visit is answered where nothing is shared from the agent now, or its server stopped: a page for a page load, bare text for anything else, under the status given. */
+function noPreview(request: Request, status: number = HOSTED_HTTP_STATUS.NOT_FOUND) {
+  const page = isPageLoad(request);
   return HttpServerResponse.text(page ? NO_PREVIEW_PAGE : NO_PREVIEW, {
-    status: HOSTED_HTTP_STATUS.NOT_FOUND,
+    status,
     ...(page ? { contentType: "text/html; charset=utf-8" } : {}),
     headers: NEVER_KEPT,
   });
 }
 
-/** A refusal a page load meets drawn as the no-preview page, never the API's JSON; anything else keeps the refusal. */
+/**
+ * A refusal a page load meets drawn as the no-preview page, never the API's
+ * JSON, under the refusal's own status, so an outage still reads as one to
+ * whatever retries; anything else keeps the refusal.
+ */
 const refusedAsPage = <R>(
   endpoint: Effect.Effect<HttpServerResponse.HttpServerResponse, HostedRefusal, R>,
 ) =>
   Effect.catch(endpoint, (refusal) =>
     Effect.flatMap(webRequest, (request) =>
-      request.headers.get("sec-fetch-mode") === "navigate"
-        ? Effect.succeed(noPreview(request))
+      isPageLoad(request)
+        ? Effect.succeed(noPreview(request, HOSTED_REFUSAL_STATUS[refusal.error]))
         : Effect.fail(refusal),
     ),
   );
@@ -266,7 +276,7 @@ const refusedAsPage = <R>(
 /** What a visit is answered while the sandbox or its server comes up: a page that reloads itself for a page load, a bare 503 for anything else. */
 function wakingPage(request: Request) {
   const headers = { ...NEVER_KEPT, "Retry-After": String(WAKING_POLL_SECONDS) };
-  if (request.headers.get("sec-fetch-mode") !== "navigate") {
+  if (!isPageLoad(request)) {
     return HttpServerResponse.text(WAKING, {
       status: HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE,
       headers,

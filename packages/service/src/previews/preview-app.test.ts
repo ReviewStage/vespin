@@ -11,15 +11,16 @@ import { Clock, Effect, Layer, Redacted } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { AgentSandbox, type AgentSandboxService } from "../agents/terminal/agent-sandbox.js";
-import { HOSTED_HTTP_STATUS } from "../http/http.js";
+import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
 import { PageLinks, type PageSandbox } from "../pages/page-links.js";
 import { previewProxyApp } from "./preview-app.js";
 import { mintPreviewSession, PREVIEW_LINK, previewOrigin } from "./preview-links.js";
 
 /**
  * A shared port's preview host, over a real dialect: a member's page load of
- * an archived agent's preview is drawn the no-preview page, never the API's
- * refusal as JSON.
+ * an archived agent's preview is drawn the no-preview page under the
+ * refusal's status, never the API's refusal as JSON, while a request that is
+ * no page load still gets the refusal.
  *
  * Synthetic accounts, workspaces, tasks, agents, and keys throughout.
  */
@@ -38,7 +39,7 @@ const openAccount = Effect.gen(function* () {
   return id;
 });
 
-/** The preview host's route over the test's own database and clock, its member's page load of the agent's preview as the routing hands it on. */
+/** The preview host's route over the test's own database and clock, its member's visit of the agent's preview as the routing hands it on, a page load unless said. */
 const standing = Effect.gen(function* () {
   const services = Layer.mergeAll(
     Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
@@ -54,7 +55,7 @@ const standing = Effect.gen(function* () {
     { disableLogger: true },
   );
   yield* Effect.addFinalizer(() => Effect.promise(() => route.dispose()));
-  return (userId: string, agentId: string) =>
+  return (userId: string, agentId: string, pageLoad = true) =>
     Effect.gen(function* () {
       const cookie = mintPreviewSession(
         SANDBOX,
@@ -65,7 +66,10 @@ const standing = Effect.gen(function* () {
       return yield* Effect.promise(() =>
         route.handler(
           new Request(address, {
-            headers: { cookie: `${PREVIEW_LINK.COOKIE}=${cookie}`, "sec-fetch-mode": "navigate" },
+            headers: {
+              cookie: `${PREVIEW_LINK.COOKIE}=${cookie}`,
+              ...(pageLoad ? { "sec-fetch-mode": "navigate" } : {}),
+            },
           }),
         ),
       );
@@ -73,19 +77,26 @@ const standing = Effect.gen(function* () {
 });
 
 it.layer(getTestDB())("a shared port's preview host", (it) => {
-  it.effect("a page load of an archived agent's preview is drawn the no-preview page", () =>
-    Effect.gen(function* () {
-      const visit = yield* standing;
-      const member = yield* openAccount;
-      const task = yield* startTask(member, { name: "Teammate invitations" });
-      const agentId = yield* openTaskAgent(member, task.workspaceId, task.id);
-      yield* archiveAgent(member, agentId, true);
+  it.effect(
+    "an archived agent's preview is drawn the no-preview page on a page load, and refused otherwise",
+    () =>
+      Effect.gen(function* () {
+        const visit = yield* standing;
+        const member = yield* openAccount;
+        const task = yield* startTask(member, { name: "Teammate invitations" });
+        const agentId = yield* openTaskAgent(member, task.workspaceId, task.id);
+        yield* archiveAgent(member, agentId, true);
 
-      const answer = yield* visit(member, agentId);
+        const page = yield* visit(member, agentId);
+        const fetched = yield* visit(member, agentId, false);
 
-      assert.equal(answer.status, HOSTED_HTTP_STATUS.NOT_FOUND);
-      assert.equal(answer.headers.get("content-type"), "text/html; charset=utf-8");
-      assert.ok((yield* Effect.promise(() => answer.text())).includes("Nothing running here"));
-    }),
+        assert.equal(page.status, HOSTED_HTTP_STATUS.CONFLICT);
+        assert.equal(page.headers.get("content-type"), "text/html; charset=utf-8");
+        assert.ok((yield* Effect.promise(() => page.text())).includes("Nothing running here"));
+        assert.equal(fetched.status, HOSTED_HTTP_STATUS.CONFLICT);
+        assert.deepEqual(yield* Effect.promise(() => fetched.json()), {
+          error: HOSTED_API_ERROR.AGENT_RETIRED,
+        });
+      }),
   );
 });
