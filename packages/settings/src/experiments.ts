@@ -20,7 +20,7 @@ export const EXPERIMENT = {
   DESCRIPTIONS: "descriptions",
   /** Done and follow-ups: an agent ends a turn with a short summary, and the bar over its box says what it needs from you, or that it is done, with what is still open and the follow-ups it offers. */
   TURN_END: "turn-end",
-  /** Run actions: each repository's commands, kept in Settings › Cloud setup, that a member runs in a cloud agent's sandbox from the Run menu in its message box. */
+  /** Run actions: each repository's commands, kept in Settings › Cloud environment, that a member runs in a cloud agent's sandbox from the Run menu in its message box. */
   RUN_ACTIONS: "run-actions",
 } as const;
 
@@ -93,7 +93,7 @@ export const EXPERIMENTS = [
     key: EXPERIMENT.RUN_ACTIONS,
     name: "Run actions",
     detail:
-      "Keep each repository's commands, such as its dev server, in Cloud setup, " +
+      "Keep each repository's commands, such as its dev server, in Cloud environment, " +
       "and run one in a cloud agent's sandbox from the Run menu in its message box.",
     owner: "Dean",
     since: "2026-11-10",

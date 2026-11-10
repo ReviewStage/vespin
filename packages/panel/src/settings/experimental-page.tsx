@@ -94,9 +94,9 @@ const WORDS = {
 const FLIP_WORDS = {
   [EXPERIMENT.RUN_ACTIONS]: {
     on: (workspace: string) =>
-      `Lets owners and admins of ${workspace} keep each repository's run actions in Cloud setup, and shows a Run menu in every cloud agent's message box that runs one in the agent's sandbox when pressed.`,
+      `Lets owners and admins of ${workspace} keep each repository's run actions in Cloud environment, and shows a Run menu in every cloud agent's message box that runs one in the agent's sandbox when pressed.`,
     off: (workspace: string) =>
-      `Hides the Run menu and the run actions in Cloud setup for everyone in ${workspace}, and stops any from being run.`,
+      `Hides the Run menu and the run actions in Cloud environment for everyone in ${workspace}, and stops any from being run.`,
   },
   [EXPERIMENT.DESCRIPTIONS]: {
     on: (workspace: string) =>
