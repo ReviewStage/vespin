@@ -1,54 +1,38 @@
 /**
- * node-link-reach.ts -- how the deployment's link previews reach the web: the system resolver for the check, and a connection pinned to the checked addresses for the fetch.
+ * node-link-reach.ts -- how the deployment's link previews reach the web: one hop over Node's HTTPS client through an agent that refuses any socket to an address inside a network.
  *
- * The resolver answers every address a name resolves to, so the guard sees
- * the whole set rather than the one a connection would take; a name that
- * resolves to nothing, or a resolver that fails, answers none, which the
- * guard refuses as it refuses a private address. The transport sends one
- * hop over Node's own HTTP client with a `lookup` of its own that answers
- * the checked addresses and never asks the resolver, so the socket goes
- * where the check looked and nowhere else, while the name stays the
- * server's: its TLS server name and its `Host` header are the address's
- * own host. Note that the global `fetch` is not used, because it resolves
- * the name again on its own and exposes no way to hand it a resolver. The
- * hop follows no redirect itself, sends no cookie, and reads the body
- * only up to the bound asked, ending the response there. An interrupted
- * hop, as a deadline ends one, destroys its request.
+ * The agent (`request-filtering-agent`) checks the address a socket is
+ * about to be made to, a literal host as it stands and a name as the
+ * resolver answers it inside the connection, and refuses every address
+ * that is not a public unicast one: private, loopback, link-local (the
+ * cloud metadata address among it), carrier-grade NAT, unique-local,
+ * multicast, reserved, unspecified, and an IPv4 carried inside an IPv6
+ * address. Because the check is the connection's own, a resolver that
+ * answers one address to a check and another to the connection (DNS
+ * rebinding) has nothing to rebind. Note that the global `fetch` is not
+ * used, because it takes no agent. The hop follows no redirect itself,
+ * sends no cookie, and reads the body only up to the bound asked, ending
+ * the response there. An interrupted hop, as a deadline ends one,
+ * destroys its request.
  */
 
-import { lookup } from "node:dns/promises";
-import { request as httpRequest, type IncomingMessage } from "node:http";
-import { request as httpsRequest } from "node:https";
-import { isIPv6, type LookupFunction } from "node:net";
+import type { IncomingMessage } from "node:http";
+import { request } from "node:https";
 import { Effect } from "effect";
-import type { AddressResolver, HopAnswer, HopTransport } from "./link-preview-read.js";
+import { RequestFilteringHttpsAgent } from "request-filtering-agent";
+import { HOP_FAILURE, type HopAnswer, type HopTransport } from "./link-preview-read.js";
 
-/** The system resolver's answer for a host name, every address of it. */
-const nodeAddressResolver: AddressResolver = (hostname) =>
-  Effect.tryPromise(() => lookup(hostname, { all: true, verbatim: true })).pipe(
-    Effect.map((found) => found.map((each) => each.address)),
-    Effect.orElseSucceed((): readonly string[] => []),
-  );
+/** The one agent every hop goes through, refusing every address but a public unicast one. */
+const agent = new RequestFilteringHttpsAgent({ keepAlive: false });
 
-/** A `lookup` that answers the checked addresses alone, whatever name it is asked, as the family each is. */
-function pinnedLookup(addresses: readonly string[]): LookupFunction {
-  const answered = addresses.map((address) => ({ address, family: isIPv6(address) ? 6 : 4 }));
-  return (_hostname, options, callback) => {
-    const first = answered[0];
-    if (first === undefined) {
-      callback(new Error("no checked address to connect to"), "", undefined);
-      return;
-    }
-    if (options.all === true) callback(null, answered);
-    else callback(null, first.address, first.family);
-  };
-}
+/** What the agent says of an address it refused, which no other failure of a request says. */
+const REFUSED_BY_AGENT = /is not allowed/u;
 
 /** The response's body up to `maxBytes`, the response ended there, with whether more stood past them. */
 function boundedBody(
   response: IncomingMessage,
   maxBytes: number,
-  done: (answer: HopAnswer | undefined) => void,
+  done: (answer: HopAnswer | typeof HOP_FAILURE.UNREAD) => void,
 ): void {
   const chunks: Buffer[] = [];
   let total = 0;
@@ -60,7 +44,7 @@ function boundedBody(
     done({
       status: response.statusCode ?? 0,
       headers: Object.fromEntries(
-        Object.entries(response.headers).map(([name, value]) => [
+        Object.entries(response.headers).map(([name, value]): [string, string | undefined] => [
           name,
           Array.isArray(value) ? value.join(", ") : value,
         ]),
@@ -81,24 +65,24 @@ function boundedBody(
   response.on("error", () => {
     if (!settled) {
       settled = true;
-      done(undefined);
+      done(HOP_FAILURE.UNREAD);
     }
   });
 }
 
-/** One hop sent over Node's HTTP client, its socket pinned to the checked addresses. */
-const nodeHopTransport: HopTransport = ({ url, addresses, headers, maxBytes }) =>
-  Effect.callback<HopAnswer | undefined>((resume) => {
-    const send = url.protocol === "https:" ? httpsRequest : httpRequest;
-    const request = send(
-      url,
-      { method: "GET", headers, lookup: pinnedLookup(addresses), servername: url.hostname },
-      (response) => boundedBody(response, maxBytes, (answer) => resume(Effect.succeed(answer))),
+/** One hop sent over Node's HTTPS client through the filtering agent: its answer, refused where the agent refused the address, unread where anything else failed. */
+export const nodeLinkReach: HopTransport = ({ url, headers, maxBytes }) =>
+  Effect.callback<HopAnswer | typeof HOP_FAILURE.REFUSED | typeof HOP_FAILURE.UNREAD>((resume) => {
+    const sent = request(url, { method: "GET", headers, agent }, (response) =>
+      boundedBody(response, maxBytes, (answer) => resume(Effect.succeed(answer))),
     );
-    request.on("error", () => resume(Effect.succeed(undefined)));
-    request.end();
-    return Effect.sync(() => request.destroy());
+    sent.on("error", (error: Error) =>
+      resume(
+        Effect.succeed(
+          REFUSED_BY_AGENT.test(error.message) ? HOP_FAILURE.REFUSED : HOP_FAILURE.UNREAD,
+        ),
+      ),
+    );
+    sent.end();
+    return Effect.sync(() => sent.destroy());
   });
-
-/** How the deployment's link previews reach the web. */
-export const nodeLinkReach = { resolve: nodeAddressResolver, connect: nodeHopTransport } as const;

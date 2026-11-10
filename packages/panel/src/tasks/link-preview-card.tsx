@@ -1,4 +1,5 @@
 import type { LinkPreviewPicture } from "@repo/features/link-preview-wire";
+import { siteName } from "@repo/features/turn-rows";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   HOVER_CARD_ROW_LOOK,
@@ -10,7 +11,6 @@ import {
   PageThumb,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import { siteName } from "@repo/ui/link-face";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { askAct } from "../act.js";
 import { QUERY_ROOT } from "../query-keys.js";

@@ -6,7 +6,7 @@
  * has no preview, inside the answer. The read is the service's own, from
  * its network, so the member's machine contacts no third party; what the
  * service may reach is held by `link-address.ts` before any byte is sent.
- * The connection goes to the addresses the guard checked and no other
+ * An address inside a network is refused as the socket is made
  * (`node-link-reach.ts`), so a name cannot point the fetch elsewhere.
  * An answer is kept for a while per address, a few minutes where the page
  * answered and a moment where it did not, so a link many members hover
@@ -25,12 +25,12 @@ import { HOSTED_REFUSAL, type UserIdResolver } from "../http/http-effect.js";
 import { makeRateBrake } from "../http/rate-brake.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
 import { webPageAddressOf } from "./link-address.js";
-import { type LinkPreviewReach, readLinkPreview } from "./link-preview-read.js";
+import { type HopTransport, readLinkPreview } from "./link-preview-read.js";
 
 export interface LinkPreviewsProcedureSeams {
   resolveUserId: UserIdResolver;
-  /** How the reads reach the web: the resolver the guard checks every host by, and the transport pinned to what it admitted. */
-  linkReach: LinkPreviewReach;
+  /** How the reads reach the web: the transport that refuses an address inside a network as the socket is made. */
+  linkReach: HopTransport;
 }
 
 /** How previews are kept on one instance. */
@@ -70,13 +70,13 @@ function previewKept(exit: Exit.Exit<LinkPreviewAnswer>): Duration.Duration {
  * (`agents/coder-host/published.ts`), since the procedures are built with
  * no Effect to build one in.
  */
-function instanceLinkPreviewCache(reach: LinkPreviewReach): Effect.Effect<LinkPreviewCache> {
+function instanceLinkPreviewCache(connect: HopTransport): Effect.Effect<LinkPreviewCache> {
   const reads = Semaphore.makeUnsafe(PREVIEWS_KEPT.CONCURRENT_READS);
   const made = Cache.makeWith(
     (address: string): Effect.Effect<LinkPreviewAnswer> =>
       Effect.map(
         Effect.timeoutOption(
-          reads.withPermits(1)(readLinkPreview(address, reach)),
+          reads.withPermits(1)(readLinkPreview(address, connect)),
           PREVIEWS_KEPT.ASK_DEADLINE,
         ),
         Option.getOrElse((): LinkPreviewAnswer => ({ refused: LINK_PREVIEW_REFUSAL.UNREAD })),

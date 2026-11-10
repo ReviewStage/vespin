@@ -236,6 +236,7 @@
     "drizzle-orm": "catalog:",
     "effect": "catalog:",
     "pg": "8.23.0",
+    "request-filtering-agent": "3.2.1",
     "ws": "catalog:"
   },
   "devDependencies": {
