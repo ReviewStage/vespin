@@ -109,7 +109,8 @@ const NONE_STANDING = () => false;
  * first view: Pinned in the order dragged, each section with its tasks to do
  * and in progress in its own order, and the reader's other tasks to do and
  * in progress grouped by repository, each child task moved under its parent
- * wherever a list holds it (`homedTaskRows`) and nested there.
+ * wherever a list holds it (`homedTaskRows`) and nested there, but one
+ * pinned or put in a section of its own, which stays where it was put.
  */
 export function taskTree(input: TaskTreeInput): TaskTree {
   const { view, workspaceId, readerId } = input;
@@ -138,6 +139,7 @@ export function taskTree(input: TaskTreeInput): TaskTree {
   const homed = homedTaskRows(
     [pinned, ...sections.map((drawn) => drawn.tasks), ...groups.map((group) => group.tasks)],
     every,
+    1 + sections.length,
   );
   const drawn = (at: number) => drawnTaskRows(homed[at] ?? [], ALL_OPEN, NONE_STANDING, every);
   const headings = repositoryHeadingsDrawn(groups);

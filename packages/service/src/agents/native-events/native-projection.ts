@@ -279,6 +279,8 @@ export type NativeWrite =
       readonly kind: typeof NATIVE_WRITE.PLAN_USAGE;
       readonly usedPercent: number;
       readonly windowMins?: number;
+      /** The model the window alone counts; none for a window on every model. */
+      readonly model?: string;
       /** When the window resets, in epoch milliseconds, where the harness said. */
       readonly resetsAt?: number;
       /** When the turn that heard it opened, so a credential saved since is not given it. */

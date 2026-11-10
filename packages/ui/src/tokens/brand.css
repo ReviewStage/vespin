@@ -33,6 +33,7 @@
   --ui-color-attention: light-dark(#8e5323, #f19a4b);
   --ui-color-attention-fill: #a7611b;
   --ui-color-working: light-dark(#1666aa, #76bafe);
+  --ui-color-starting: light-dark(#8a6a00, #f2c94c);
   --ui-color-complete: light-dark(#067040, #56d089);
   --ui-color-merged: light-dark(#744caf, #c29fff);
   --ui-color-avatar-tile: #171412;
@@ -69,6 +70,7 @@
   --ui-color-attention: #8e5323;
   --ui-color-attention-fill: #a7611b;
   --ui-color-working: #1666aa;
+  --ui-color-starting: #8a6a00;
   --ui-color-complete: #067040;
   --ui-color-merged: #744caf;
   --ui-color-avatar-tile: #171412;
@@ -104,6 +106,7 @@
   --ui-color-attention: #f19a4b;
   --ui-color-attention-fill: #a7611b;
   --ui-color-working: #76bafe;
+  --ui-color-starting: #f2c94c;
   --ui-color-complete: #56d089;
   --ui-color-merged: #c29fff;
   --ui-color-avatar-tile: #171412;

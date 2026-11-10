@@ -1,6 +1,6 @@
 import { RUN_EVENT, RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
 import { sessionKey } from "@repo/runtime/vocabulary";
-import { TURN_STATUS } from "@repo/wire";
+import { TURN_OPEN } from "@repo/wire";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { Effect, Result, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
@@ -83,7 +83,7 @@ const endedSessionTurns = SqlSchema.findAll({
           and(
             eq(conversations.runtimeSessionId, request.runtimeSessionId),
             eq(conversations.kind, CONVERSATION_KIND.AGENT),
-            inArray(turns.status, [TURN_STATUS.QUEUED, TURN_STATUS.RUNNING]),
+            inArray(turns.status, [...TURN_OPEN]),
           ),
         )
         .orderBy(asc(turns.queuedAt), asc(turns.id))
@@ -131,7 +131,7 @@ const agentRunningTurns = SqlSchema.findAll({
           and(
             eq(turns.conversationId, conversationId),
             eq(conversations.kind, CONVERSATION_KIND.AGENT),
-            inArray(turns.status, [TURN_STATUS.QUEUED, TURN_STATUS.RUNNING]),
+            inArray(turns.status, [...TURN_OPEN]),
           ),
         )
         .orderBy(asc(turns.queuedAt), asc(turns.id)),

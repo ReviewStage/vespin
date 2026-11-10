@@ -1,4 +1,5 @@
 import {
+  Activity,
   AppWindow,
   BookBookmark,
   BookOpen,
@@ -14,6 +15,7 @@ import {
   Clock,
   Cloud,
   CornerDownRight,
+  Cpu,
   Eye,
   EyeOff,
   File,
@@ -38,6 +40,7 @@ import {
   ListTodo,
   ListTree,
   Lock,
+  MemoryStick,
   MessageSquareHeart,
   MessagesSquare,
   PhoneOff,
@@ -174,6 +177,10 @@ export const GLYPH = {
   CLOUD: lucideGlyph(Cloud),
   DESKTOP: LaptopIcon,
   HOST: lucideGlyph(Server),
+  // A cloud sandbox's state, its processors, and its memory, as its Cloud chip's popover lists them.
+  SANDBOX_STATE: lucideGlyph(Activity),
+  CPU: lucideGlyph(Cpu),
+  RAM: lucideGlyph(MemoryStick),
   // A task's or an item's status as a field: what a filter or a grouping is by.
   STATUS: lucideGlyph(CircleDotDashed),
   // An agent's to-do list, the same ticked list a description's to-do block wears.

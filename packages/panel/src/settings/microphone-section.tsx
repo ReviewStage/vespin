@@ -18,7 +18,7 @@ import {
   Tooltip,
 } from "@repo/ui";
 import { microphoneAccessRow } from "@repo/ui/microphone-access";
-import { useBusyPress } from "./busy-press.js";
+import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { SchemaSettingRows } from "./schema-rows.js";
 import type { SettingsWrites } from "./writes.js";
 
@@ -27,13 +27,13 @@ const OPEN_PRIVACY = "Open Privacy & Security in System Settings";
 
 /** Allow, which waits on the system's answer to the request. */
 function AllowMicrophone({ microphone }: { microphone: MicrophoneControl }): React.JSX.Element {
-  const request = useBusyPress(microphone.onRequest);
+  const request = useAsyncAction(rejectionWords);
   return (
     <Button
       variant={BUTTON_VARIANT.OUTLINE}
-      busy={request.busy}
+      busy={request.running}
       busyLabel="Asking for access"
-      onClick={request.onPress}
+      onClick={() => void request.run(microphone.onRequest)}
     >
       Allow
     </Button>

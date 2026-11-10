@@ -85,6 +85,7 @@ import {
 } from "@repo/ui/icons";
 import { inputProblem } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { VIRTUAL_ROWS_ANCHOR, VirtualRows } from "@repo/ui/virtual-rows";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
@@ -1119,10 +1120,12 @@ function connectionsOf(workspace: Workspace): readonly ShownConnection[] {
 
 /**
  * The workspace's GitHub, for an owner or an admin: Connect while none is,
- * and once one is, Manage on GitHub, which opens the same page. GitHub lists
- * every account there, to install the App on another or to configure one it
- * is on, so one door does both. The connect's return to the app adds the
- * installation to this workspace.
+ * and once one is, a ⋯ whose menu holds Manage on GitHub, which opens the
+ * same page, so the row ends as Integrations' rows do, in at most one
+ * button (Add repository) and a ⋯. GitHub lists every account there, to
+ * install the App on another or to configure one it is on, so one door does
+ * both. The connect's return to the app adds the installation to this
+ * workspace.
  */
 function ManagedGitHub({
   workspace,
@@ -1144,60 +1147,53 @@ function ManagedGitHub({
     actMutation(ACT_KIND.WORKSPACE_GITHUB_CONNECT),
   );
   const workspaceId = workspace.id;
-  const [refusal, setRefusal] = useState<string>();
   // Note that a second press while the browser is being sent is taken as none, because an install begun again replaces the first one's intent.
-  const [opening, setOpening] = useState(false);
-  const underWay = useRef(false);
-  const open = () => {
-    if (underWay.current) return;
-    underWay.current = true;
-    setOpening(true);
-    setRefusal(undefined);
-    sendWorkspaceGithubConnect({ workspaceId })
-      .catch((refused: Error) => setRefusal(refused.message))
-      .finally(() => {
-        underWay.current = false;
-        setOpening(false);
-      });
-  };
+  const opening = useAsyncAction(rejectionWords);
+  const open = () =>
+    void opening.run(() => sendWorkspaceGithubConnect({ workspaceId }).then(() => undefined));
   const connected = connections.length > 0;
+  const actions = connected
+    ? [
+        [
+          {
+            label: "Manage on GitHub",
+            icon: <ExternalLinkIcon />,
+            disabled: opening.running,
+            onSelect: open,
+          },
+        ],
+      ]
+    : [];
   return (
     <Stack gap={GAP.NONE}>
-      <SettingsRow
-        leading={GITHUB_MARK}
-        label="GitHub"
-        description={connectionLine(connected, true)}
-        error={replayMaskedError(
-          refusedShown(refusal ?? addRefusal, FAILURE_SURFACE.WORKSPACE_GITHUB),
-        )}
-        end={() => chevron}
-      >
-        {() => (
-          <>
-            {add}
-            {connected ? (
-              <Button
-                variant={BUTTON_VARIANT.OUTLINE}
-                icon={<ExternalLinkIcon aria-hidden="true" />}
-                busy={opening}
-                busyLabel="Opening GitHub"
-                onClick={open}
-              >
-                Manage on GitHub
-              </Button>
-            ) : (
-              <Button
-                variant={BUTTON_VARIANT.OUTLINE}
-                busy={opening}
-                busyLabel="Connecting"
-                onClick={open}
-              >
-                {CONNECT}
-              </Button>
-            )}
-          </>
-        )}
-      </SettingsRow>
+      <MenuRow
+        thing="GitHub"
+        actions={actions}
+        row={{
+          leading: GITHUB_MARK,
+          label: "GitHub",
+          description: connectionLine(connected, true),
+          error: replayMaskedError(
+            refusedShown(opening.refusal ?? addRefusal, FAILURE_SURFACE.WORKSPACE_GITHUB),
+          ),
+          control: (
+            <>
+              {add}
+              {connected ? null : (
+                <Button
+                  variant={BUTTON_VARIANT.OUTLINE}
+                  busy={opening.running}
+                  busyLabel="Connecting"
+                  onClick={open}
+                >
+                  {CONNECT}
+                </Button>
+              )}
+            </>
+          ),
+          end: chevron,
+        }}
+      />
     </Stack>
   );
 }
@@ -1285,22 +1281,10 @@ function ManagedSentry({
     actMutation(ACT_KIND.WORKSPACE_SENTRY_DISCONNECT),
   );
   const workspaceId = workspace.id;
-  const [refusal, setRefusal] = useState<string>();
-  const [installing, setInstalling] = useState(false);
-  const underWay = useRef(false);
+  const installing = useAsyncAction(rejectionWords);
   const [leaving, setLeaving] = useState<WorkspaceSentryInstallation>();
-  const install = () => {
-    if (underWay.current) return;
-    underWay.current = true;
-    setInstalling(true);
-    setRefusal(undefined);
-    sendWorkspaceSentryInstall({ workspaceId })
-      .catch((refused: Error) => setRefusal(refused.message))
-      .finally(() => {
-        underWay.current = false;
-        setInstalling(false);
-      });
-  };
+  const install = () =>
+    void installing.run(() => sendWorkspaceSentryInstall({ workspaceId }).then(() => undefined));
   // Note that the question stands only while its installation is still listed, so a read that drops it dismisses it.
   const stillListed =
     leaving !== undefined &&
@@ -1338,19 +1322,20 @@ function ManagedSentry({
     <Stack gap={GAP.NONE}>
       <MenuRow
         thing="Sentry"
-        // Note that a lone installation's Disconnect draws as a button of its own, and several share the ⋯.
-        alone
+        // Note that one installation's Disconnect stands in the ⋯ as several do, never as a glyph of its own beside the row's end, as Integrations' rows keep theirs.
         actions={actions}
         row={{
           leading: SENTRY_MARK,
           label: "Sentry",
           description: connectionLine(sentry.installations.length > 0, true),
-          error: replayMaskedError(refusedShown(refusal, FAILURE_SURFACE.WORKSPACE_SENTRY)),
+          error: replayMaskedError(
+            refusedShown(installing.refusal, FAILURE_SURFACE.WORKSPACE_SENTRY),
+          ),
           control:
             sentry.installations.length > 0 ? null : (
               <Button
                 variant={BUTTON_VARIANT.OUTLINE}
-                busy={installing}
+                busy={installing.running}
                 busyLabel="Opening Sentry"
                 onClick={install}
               >
@@ -1442,22 +1427,10 @@ function ManagedSlackBot({
     actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_DISCONNECT),
   );
   const workspaceId = workspace.id;
-  const [refusal, setRefusal] = useState<string>();
   const [addRefusal, setAddRefusal] = useState<string>();
-  const [connecting, setConnecting] = useState(false);
-  const underWay = useRef(false);
-  const connect = () => {
-    if (underWay.current) return;
-    underWay.current = true;
-    setConnecting(true);
-    setRefusal(undefined);
-    sendWorkspaceSlackBotConnect({ workspaceId })
-      .catch((refused: Error) => setRefusal(refused.message))
-      .finally(() => {
-        underWay.current = false;
-        setConnecting(false);
-      });
-  };
+  const connecting = useAsyncAction(rejectionWords);
+  const connect = () =>
+    void connecting.run(() => sendWorkspaceSlackBotConnect({ workspaceId }).then(() => undefined));
   const disconnectAct = useConfirmAct(slackLeaving, {
     send: () => sendWorkspaceSlackBotDisconnect({ workspaceId }),
     answered: () => ANSWER_ACCEPTED,
@@ -1485,14 +1458,13 @@ function ManagedSlackBot({
     <Stack gap={GAP.NONE}>
       <MenuRow
         thing="Slack"
-        alone
         actions={actions}
         row={{
           leading: SLACK_MARK,
           label: "Slack",
           description: connectionLine(slack.team !== undefined, true),
           error: replayMaskedError(
-            refusedShown(refusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT) ??
+            refusedShown(connecting.refusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT) ??
               refusedShown(addRefusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT_CHANNEL),
           ),
           control:
@@ -1507,7 +1479,7 @@ function ManagedSlackBot({
             ) : (
               <Button
                 variant={BUTTON_VARIANT.OUTLINE}
-                busy={connecting}
+                busy={connecting.running}
                 busyLabel="Connecting"
                 onClick={connect}
               >

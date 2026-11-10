@@ -7,9 +7,9 @@
  * the CLI's own id for it (`request_id`), unique within the agent's
  * conversation. It is settled once: by a member's answer, which the
  * service writes to the runner as an `approval` line; by the runner's own
- * word of how it was settled (`APPROVAL_RESOLVED`), a message sent while it
- * waited, a Stop's withdrawal, or the launch's end among it; or by its
- * turn's end, which expires every ask the turn left pending
+ * word of how it was settled (`APPROVAL_RESOLVED`, which also stamps
+ * `confirmed_at`), a message sent while it waited, a Stop's withdrawal, or
+ * the launch's end among it; or by its turn's end, which expires every ask the turn left pending
  * (`models/agent-approvals.ts`). A settled row stays, so a late answer is
  * refused with how it stands, and goes with its turn, its agent, and its
  * conversation, however that conversation is removed.
@@ -81,6 +81,13 @@ export const agentApproval = pgTable(
     createdAt: createdAt(),
     /** When it was settled; null while it is pending. */
     settledAt: timestamptz("settled_at"),
+    /**
+     * When the runner's word of how it was settled landed; null until then.
+     * A member's answer settles the row as their claim before its line
+     * reaches the runner, and only a claim the runner has not confirmed may
+     * be handed back where that line was not written.
+     */
+    confirmedAt: timestamptz("confirmed_at"),
   },
   (table) => [
     // An ask lands once however often its runner posts it, by the CLI's id within the conversation.

@@ -19,8 +19,8 @@ import { settleTaskAfterTurn } from "./task-finish.js";
 
 /**
  * An agent archived with its task moved to Done, against a real dialect: an
- * idle one at once, one still at work once its turn ends, and never the
- * agent that moved the task itself.
+ * idle one at once, and one still at work, the agent that moved the task
+ * among them, once its turn ends.
  *
  * Synthetic accounts, tasks, and words throughout.
  */
@@ -126,7 +126,7 @@ it.layer(getTestDB())("an agent archived with its task's Done", (it) => {
   );
 
   it.effect(
-    "an agent moving its own task to Done archives its idle teammate, and stands itself once its turn ends",
+    "an agent moving its own task to Done archives its idle teammate at once, and itself once its turn ends",
     () =>
       Effect.gen(function* () {
         const userId = yield* openUser;
@@ -151,7 +151,7 @@ it.layer(getTestDB())("an agent archived with its task's Done", (it) => {
 
         yield* settle(answering);
         yield* settleTaskAfterTurn(userId, task.id, finisher.id);
-        assert.equal(yield* archived(userId, finisher.id), false);
+        assert.equal(yield* archived(userId, finisher.id), true);
       }),
   );
 });

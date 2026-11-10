@@ -1104,7 +1104,7 @@ export interface RunnerEventBatch {
  * for as long as it runs, on its own timer whatever its harness says. A harness
  * may say nothing for an hour while a background command or a wakeup it waits
  * on runs, and the service touches the sandbox during a turn only on what the
- * runner posts, about once a minute, against a sandbox that stops three idle
+ * runner posts, about once a minute, against a sandbox that stops five idle
  * minutes after its last touch, so a minute leaves room for heartbeats the
  * service did not take, and costs one small post each.
  */

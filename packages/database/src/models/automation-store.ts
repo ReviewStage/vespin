@@ -24,7 +24,20 @@ import {
 } from "@repo/features/automation-wire";
 import type { SentryTriggerEvent, TriggerProvider } from "@repo/features/trigger-catalog";
 import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
-import { and, asc, desc, eq, exists, gte, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  exists,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
@@ -726,7 +739,12 @@ const writeClaim = SqlSchema.findAll({
     Database.use((db) =>
       db
         .update(automationRun)
-        .set({ status: AUTOMATION_RUN_STATUS.STARTED, claimedAgentId, settledAt: now })
+        .set({
+          status: AUTOMATION_RUN_STATUS.STARTED,
+          claimedAgentId,
+          claimedAt: now,
+          settledAt: now,
+        })
         .where(
           and(eq(automationRun.id, id), eq(automationRun.status, AUTOMATION_RUN_STATUS.QUEUED)),
         )
@@ -734,10 +752,14 @@ const writeClaim = SqlSchema.findAll({
     ),
 });
 
-/** A run claimed for its start and not yet holding the agent it started: started, with no agent. */
+/**
+ * A run claimed for its start and not yet holding the agent it started:
+ * started, with its claim standing. Note that a started run with no agent is
+ * no claim, because its agent may have been deleted since.
+ */
 const CLAIMED = and(
   eq(automationRun.status, AUTOMATION_RUN_STATUS.STARTED),
-  isNull(automationRun.agentId),
+  isNotNull(automationRun.claimedAt),
 );
 
 const writeAgent = SqlSchema.findAll({
@@ -752,7 +774,13 @@ const writeAgent = SqlSchema.findAll({
     Database.use((db) =>
       db
         .update(automationRun)
-        .set({ status: AUTOMATION_RUN_STATUS.STARTED, agentId, reason, settledAt: now })
+        .set({
+          status: AUTOMATION_RUN_STATUS.STARTED,
+          agentId,
+          reason,
+          claimedAt: null,
+          settledAt: now,
+        })
         .where(
           and(
             eq(automationRun.id, id),
@@ -798,7 +826,7 @@ const writeClaimFailed = SqlSchema.findAll({
     Database.use((db) =>
       db
         .update(automationRun)
-        .set({ status: AUTOMATION_RUN_STATUS.FAILED, reason, settledAt: now })
+        .set({ status: AUTOMATION_RUN_STATUS.FAILED, reason, claimedAt: null, settledAt: now })
         .where(and(eq(automationRun.id, id), CLAIMED))
         .returning({ id: automationRun.id }),
     ),

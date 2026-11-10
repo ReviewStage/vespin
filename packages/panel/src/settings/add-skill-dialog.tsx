@@ -44,6 +44,7 @@ import {
   TextField,
 } from "@repo/ui";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
+import { useAsyncAction } from "@repo/ui/use-async-action";
 import { queryOptions, type UseQueryResult, useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { askAct } from "../act.js";
@@ -203,6 +204,7 @@ function TextFields({
 export function AddSkillDialog({
   open = true,
   workspace,
+  scope: chosenScope = INSTALLED_SKILL_SCOPE.PERSONAL,
   onInstalled,
   onClose,
   onExited,
@@ -211,6 +213,8 @@ export function AddSkillDialog({
   /** Whether the card stands; falling, it fades out, then tells its owner it is gone. Standing while mounted where it is left out. */
   open?: boolean | undefined;
   workspace: Workspace;
+  /** Whom it installs for as it opens, the group whose Add opened it; the account alone where it is left out. */
+  scope?: InstalledSkillScope | undefined;
   /** The skills an install made, in the order asked. */
   onInstalled: (skills: readonly InstalledSkillSummary[]) => void;
   onClose: () => void;
@@ -227,10 +231,12 @@ export function AddSkillDialog({
   const [settled, setSettled] = useState<string | undefined>(undefined);
   const [ticked, setTicked] = useState<ReadonlySet<string>>(new Set());
   const [fill, setFill] = useState<TextFill>(() => textFill(undefined));
-  const [scope, setScope] = useState<InstalledSkillScope>(INSTALLED_SKILL_SCOPE.PERSONAL);
+  const [scope, setScope] = useState<InstalledSkillScope>(chosenScope);
   const [query, setQuery] = useState("");
-  const [installing, setInstalling] = useState(false);
-  const [refusal, setRefusal] = useState<string | undefined>(undefined);
+  const adding = useAsyncAction(() =>
+    failureLine({ failure: INSTALLED_SKILL_CALL_FAILURE.UNANSWERED }),
+  );
+  const installing = adding.running;
   const box = useRef<HTMLTextAreaElement | null>(null);
   const scopes = installScopes(workspace);
 
@@ -283,20 +289,15 @@ export function AddSkillDialog({
   };
 
   const install = () => {
-    if (request === undefined || installing) return;
-    setInstalling(true);
-    setRefusal(undefined);
-    void sendInstalledSkillsInstall(request)
-      .catch(() => undefined)
-      .then((answer) => {
-        setInstalling(false);
-        if (answer === undefined) {
-          return setRefusal(failureLine({ failure: INSTALLED_SKILL_CALL_FAILURE.UNANSWERED }));
-        }
-        if ("failure" in answer) return setRefusal(failureLine(answer));
+    if (request === undefined) return;
+    void adding.run(() =>
+      sendInstalledSkillsInstall(request).then((answer) => {
+        if ("failure" in answer) return failureLine(answer);
         onInstalled(answer.skills);
         onClose();
-      });
+        return undefined;
+      }),
+    );
   };
 
   return (
@@ -352,7 +353,7 @@ export function AddSkillDialog({
         <FormField
           label={SKILLS_LINE.PASTE_LABEL}
           description={SKILLS_LINE.PASTE_HINT}
-          error={replayMaskedError(refusedShown(refusal, FAILURE_SURFACE.SKILL_ADD))}
+          error={replayMaskedError(refusedShown(adding.refusal, FAILURE_SURFACE.SKILL_ADD))}
         >
           {(field) => (
             <TextArea
@@ -368,7 +369,7 @@ export function AddSkillDialog({
               placeholder="npx skills add vercel-labs/agent-skills --skill frontend-design"
               onChange={(next) => {
                 setText(next);
-                setRefusal(undefined);
+                adding.clear();
               }}
             />
           )}

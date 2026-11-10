@@ -74,8 +74,8 @@ import { SwitchRow } from "./switch-row.js";
  * The page opens on one line of what it is for, then the harnesses' rows,
  * each saying how Claude Code or Codex is connected and opening the dialog
  * that connects it with a plan or an API key (`agent-auth-section.tsx`),
- * then this file's Default model, then the page's schema rows. The
- * harnesses and the Default model share the one read of the keys, so a
+ * then this file's New agents section, then the page's schema rows. The
+ * harnesses and the New agents section share the one read of the keys, so a
  * key saved or removed above is what the model row says at once. The default model's one value is the account's, kept
  * on the service beside the settings preferences and written by this page
  * alone; the page draws it, and the models, from what the host holds for
@@ -123,7 +123,7 @@ const PAGE_LINE = {
 } as const;
 
 /**
- * The rows that stand in the Default model group's place while it is read:
+ * The rows that stand in the New agents section's place while it is read:
  * the model's picker over its note, Fast's switch over its own, and effort's
  * segments, which every model draws; context's stands only for a model with a
  * long window, so none stands for it.
@@ -226,7 +226,7 @@ function DefaultRows({
       <PickerRow
         // Note that the models are the service's catalog, the app's own words.
         replayUnmasked
-        label="Default model"
+        label="Model"
         labelReplayUnmasked
         detail={note}
         saves={modelWrite.savedAt}
@@ -379,7 +379,7 @@ function DefaultRows({
 }
 
 /**
- * The Default model group: the model, Fast, effort, and context rows, or why
+ * The New agents section: the model, Fast, effort, and context rows, or why
  * they cannot be drawn, over the default and the models the host holds for
  * the account (`account-choices.ts`), which a key saved or removed moves on
  * its own, since the host asks the models again as the keys move.
@@ -426,7 +426,7 @@ function AgentsSection({
 }
 
 /**
- * The harnesses and the Default model group, over the keys the harnesses'
+ * The harnesses and the New agents section, over the keys the harnesses'
  * rows hold: Fast's link to ask Anthropic for fast mode stands on the account's
  * own key, so it reads them from the rows that change them rather than from
  * a read of its own that a save there would leave behind.

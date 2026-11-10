@@ -1,0 +1,41 @@
+# live-activity.yaml -- the Live Activity of the member's running agents: the Dynamic Island's compact and expanded presentations, and the Lock Screen's as Notification Center shows it.
+#
+# No push reaches a simulator, so the launch asks the fixture run for an
+# activity of its own (`-liveActivity true`, `src/live-activity/`), three
+# agents working and an ask waiting. The minimal presentation shows only
+# beside another app's activity, so its preview stands for it
+# (`live-activity/AgentsLiveActivity.swift`). An iPad has no Live
+# Activities, so its shots show the Home Screen.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      liveActivity: "true"
+- assertVisible: "Recorded the invite flow"
+# The island draws the app's activity only once the app is in the background.
+- pressKey: Home
+- waitForAnimationToEnd
+- takeScreenshot: live-activity-compact
+# A long press on the island expands it.
+- longPressOn:
+    point: "50%,2%"
+- waitForAnimationToEnd
+- takeScreenshot: live-activity-expanded
+- pressKey: Home
+- waitForAnimationToEnd
+# A swipe down from the top's left opens Notification Center, which draws the
+# Lock Screen's presentation.
+- swipe:
+    start: "20%,1%"
+    end: "20%,60%"
+- waitForAnimationToEnd
+- takeScreenshot: live-activity-lock-screen
+- pressKey: Home
+# Launched again without the argument, the fixture run ends its activity, so
+# no other flow draws it.
+- launchApp:
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"

@@ -1941,11 +1941,12 @@ function SidebarColumn({
     },
     placesOf: (_drawn, held) => taskPlaces(statusTasks, held, placing),
   });
-  // A child task stands only under its parent, wherever a list draws it, and nowhere where none does (`homedTaskRows`).
+  // A child task stands under its parent, wherever a list draws it, unless pinned or put in a section of its own, and nowhere where none does (`homedTaskRows`).
   const pinnedOwn = pinnedHeld(pinnedSection);
   const homed = homedTaskRows(
     [pinnedOwn, ...shownSections.map((drawn) => drawn.tasks), ...taskSectionLists(sections)],
     everyTask,
+    1 + shownSections.length,
   );
   const pinnedAdopted = (homed[0] ?? []).slice(pinnedOwn.length);
   const homedSections = shownSections.map((drawn, at) => homedSection(drawn, homed[at + 1] ?? []));

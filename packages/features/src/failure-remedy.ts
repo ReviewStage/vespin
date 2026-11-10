@@ -77,6 +77,14 @@ function connectLabel(provider: ModelProvider | undefined): string {
   return provider === undefined ? "Open Settings" : `Connect ${harnessNameOf(provider)}`;
 }
 
+/** A press's rejection as a failure only Retry answers: an `Error`'s message, else the value itself. */
+export function rejectedFailure(rejected: unknown): Failure {
+  return {
+    reason: FAILURE_REASON.OTHER,
+    text: rejected instanceof Error ? rejected.message : String(rejected),
+  };
+}
+
 /** The remedy's label; none where only Retry answers. */
 export function remedyLabel(failure: Failure): string | undefined {
   switch (failure.reason) {

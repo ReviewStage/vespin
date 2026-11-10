@@ -37,7 +37,14 @@
 
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
-import { TURN_ORIGIN, TURN_STATUS, type TurnOrigin, type TurnStatus } from "@repo/wire";
+import {
+  TURN_OPEN,
+  TURN_ORIGIN,
+  TURN_STATUS,
+  type TurnOrigin,
+  type TurnStatus,
+  type TurnTerminalStatus,
+} from "@repo/wire";
 import {
   and,
   asc,
@@ -63,8 +70,22 @@ import { TurnUsageColumnSchema } from "./columns.js";
 
 type TurnStateEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
-/** The statuses of a turn still open: queued for its runner, or running. */
-const OPEN_STATUSES = [TURN_STATUS.QUEUED, TURN_STATUS.RUNNING] as const;
+/**
+ * Whether the rewind may settle the turn it keeps from each status. Note that
+ * every status may be settled, because the kept turn's work is gone whatever
+ * it stood at: a stop the rewind asked may not have landed yet, and a failure
+ * or cancel is of work the cut dropped. Declared per status so a status added
+ * later is decided here rather than settled unread.
+ */
+const REWIND_SETTLES = {
+  [TURN_STATUS.QUEUED]: true,
+  [TURN_STATUS.RUNNING]: true,
+  [TURN_STATUS.SETTLED]: true,
+  [TURN_STATUS.CANCELED]: true,
+  [TURN_STATUS.FAILED]: true,
+} as const satisfies Record<TurnStatus, boolean>;
+
+const REWIND_SETTLES_FROM = Object.values(TURN_STATUS).filter((status) => REWIND_SETTLES[status]);
 
 const TurnOriginSchema = Schema.Literals(Object.values(TURN_ORIGIN));
 
@@ -91,7 +112,7 @@ const TurnCheckoutSnapshotSchema = Schema.Struct({
  */
 function lapsedAt(at: Date) {
   return and(
-    inArray(turns.status, [...OPEN_STATUSES]),
+    inArray(turns.status, [...TURN_OPEN]),
     or(
       lt(turns.leaseUntil, at),
       lt(turns.startedAt, new Date(at.getTime() - TURN_DEADLINE.CAP_MS)),
@@ -253,7 +274,7 @@ const endOpen = SqlSchema.findAll({
           and(
             eq(turns.id, row.turnId),
             eq(turns.conversationId, row.conversationId),
-            inArray(turns.status, [...OPEN_STATUSES]),
+            inArray(turns.status, [...TURN_OPEN]),
             eq(turns.attempt, row.attempt),
             row.lapsedAt === null ? undefined : lapsedAt(row.lapsedAt),
           ),
@@ -372,7 +393,13 @@ const settleKept = SqlSchema.void({
           failure: null,
           failureDetail: null,
         })
-        .where(and(eq(turns.conversationId, conversationId), eq(turns.id, turnId))),
+        .where(
+          and(
+            eq(turns.conversationId, conversationId),
+            eq(turns.id, turnId),
+            inArray(turns.status, REWIND_SETTLES_FROM),
+          ),
+        ),
     ),
 });
 
@@ -388,7 +415,7 @@ const findJoinable = SqlSchema.findOneOption({
         .where(
           and(
             eq(turns.conversationId, conversationId),
-            inArray(turns.status, [...OPEN_STATUSES]),
+            inArray(turns.status, [...TURN_OPEN]),
             isNull(turns.cancelRequestedAt),
             // Not lapsed at `at`, as `lapsedAt` reads it: a turn with no deadline, or not started, is not.
             or(isNull(turns.leaseUntil), gte(turns.leaseUntil, at)),
@@ -412,9 +439,7 @@ const findOpen = SqlSchema.findOneOption({
       db
         .select({ id: turns.id })
         .from(turns)
-        .where(
-          and(eq(turns.conversationId, conversationId), inArray(turns.status, [...OPEN_STATUSES])),
-        )
+        .where(and(eq(turns.conversationId, conversationId), inArray(turns.status, [...TURN_OPEN])))
         .limit(1),
     ),
 });
@@ -863,7 +888,7 @@ export interface TurnEnd {
   readonly attempt: number;
   /** Where the end is a reap, the instant the turn was read lapsed at, at which it must still stand lapsed. */
   readonly lapsedAt: Date | null;
-  readonly status: (typeof TURN_STATUS)[keyof typeof TURN_STATUS];
+  readonly status: TurnTerminalStatus;
   readonly settledAt: Date;
   readonly failure: string | null;
   readonly failureDetail: string | null;

@@ -35,6 +35,7 @@ import { CatalogSection } from "../section";
 const SAYS = {
   [STATUS_TONE.NEUTRAL]: "Draft",
   [STATUS_TONE.WORKING]: "Working",
+  [STATUS_TONE.STARTING]: "Starting",
   [STATUS_TONE.ATTENTION]: "Needs you",
   [STATUS_TONE.COMPLETE]: "Connected",
   [STATUS_TONE.MERGED]: "Merged",

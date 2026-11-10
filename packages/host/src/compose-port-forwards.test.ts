@@ -56,6 +56,8 @@ const scriptedConnection = Effect.gen(function* () {
 function subject(options: { taken?: number[] } = {}) {
   return Effect.gen(function* () {
     const ports = new Map<string, number[]>([[AGENT_ID, []]]);
+    /** What the service reads as serving each port, by agent. */
+    const labels = new Map<string, { port: number; label: string }[]>();
     const stopped = new Set<string>();
     /** The port the service reads as shared, by agent, with its link. */
     const shares = new Map<string, { port: number; url: string }>();
@@ -91,6 +93,7 @@ function subject(options: { taken?: number[] } = {}) {
           Effect.sync(() => ({
             running: !stopped.has(agentId),
             ports: stopped.has(agentId) ? [] : (ports.get(agentId) ?? []),
+            labels: stopped.has(agentId) ? [] : (labels.get(agentId) ?? []),
           })),
         share: (agentId, port) =>
           Effect.sync(() => {
@@ -124,7 +127,13 @@ function subject(options: { taken?: number[] } = {}) {
           if (taken.has(port) || listeners.has(port)) return undefined;
           const accepted = yield* Queue.unbounded<LoopbackConnection, Cause.Done>();
           listeners.set(port, accepted);
-          yield* Effect.addFinalizer(() => Effect.sync(() => void listeners.delete(port)));
+          // Note that a listener closes asynchronously, as `node:net`'s server.close does.
+          yield* Effect.addFinalizer(() =>
+            Effect.andThen(
+              Effect.yieldNow,
+              Effect.sync(() => void listeners.delete(port)),
+            ),
+          );
           return Stream.fromQueue(accepted);
         }),
     }).pipe(Effect.provide(noNetwork));
@@ -143,7 +152,13 @@ function subject(options: { taken?: number[] } = {}) {
       listeners,
       tunnels,
       /** The ports the service reads in an agent's sandbox from now on. */
-      serve: (agentId: string, listening: number[]) => void ports.set(agentId, listening),
+      serve: (agentId: string, listening: number[], served: Record<number, string> = {}) => {
+        ports.set(agentId, listening);
+        labels.set(
+          agentId,
+          Object.entries(served).map(([port, label]) => ({ port: Number(port), label })),
+        );
+      },
       /** The agent's sandbox stopped, as the service reads it from now on. */
       stop: (agentId: string) => void stopped.add(agentId),
       /** A connection made to a local port, as a browser on the Mac would. */
@@ -214,41 +229,50 @@ it.effect("a shared port's link is told beside the ports until the service close
   }),
 );
 
-it.effect("the forwarded ports follow each read, for one agent at a time", () =>
-  Effect.gen(function* () {
-    const { set, serve, listeners, told } = yield* subject();
-    serve(AGENT_ID, [3000, 5173]);
-    serve(OTHER_AGENT_ID, [8080]);
+it.effect(
+  "the forwarded ports follow each read, each with what serves it, for one agent at a time",
+  () =>
+    Effect.gen(function* () {
+      const { set, serve, listeners, told } = yield* subject();
+      serve(AGENT_ID, [3000, 5173]);
+      serve(OTHER_AGENT_ID, [8080], { 8080: "storybook dev" });
 
-    yield* set({ agentId: AGENT_ID, on: true });
-    yield* settle;
-    assert.deepEqual([...listeners.keys()].sort(), [3000, 5173]);
+      yield* set({ agentId: AGENT_ID, on: true });
+      yield* settle;
+      assert.deepEqual([...listeners.keys()].sort(), [3000, 5173]);
 
-    // The server on 3000 stopped and one on 4000 started: the next read lets one go and listens on the other.
-    serve(AGENT_ID, [4000, 5173]);
-    yield* TestClock.adjust(PORT_FORWARD.LOOK_EVERY);
-    yield* settle;
-    assert.deepEqual([...listeners.keys()].sort(), [4000, 5173]);
+      // The server on 3000 stopped and one on 4000 started: the next read lets one go and listens on the other.
+      serve(AGENT_ID, [4000, 5173]);
+      yield* TestClock.adjust(PORT_FORWARD.LOOK_EVERY);
+      yield* settle;
+      assert.deepEqual([...listeners.keys()].sort(), [4000, 5173]);
 
-    // Forwarding another agent lets every port of the first go.
-    const other = yield* set({
-      agentId: OTHER_AGENT_ID,
-      on: true,
-    });
-    yield* settle;
-    assert.deepEqual([...listeners.keys()], [8080]);
-    assert.deepEqual(told(), {
-      agentId: OTHER_AGENT_ID,
-      on: true,
-      running: true,
-      ports: [{ port: 8080, localPort: 8080, state: PORT_FORWARD_STATE.LISTENING }],
-    });
-    assert.deepEqual(other, { on: true, running: false, ports: [] });
+      // Forwarding another agent lets every port of the first go.
+      const other = yield* set({
+        agentId: OTHER_AGENT_ID,
+        on: true,
+      });
+      yield* settle;
+      assert.deepEqual([...listeners.keys()], [8080]);
+      assert.deepEqual(told(), {
+        agentId: OTHER_AGENT_ID,
+        on: true,
+        running: true,
+        ports: [
+          {
+            port: 8080,
+            localPort: 8080,
+            state: PORT_FORWARD_STATE.LISTENING,
+            label: "storybook dev",
+          },
+        ],
+      });
+      assert.deepEqual(other, { on: true, running: false, ports: [] });
 
-    yield* set({ agentId: OTHER_AGENT_ID, on: false });
-    assert.deepEqual([...listeners.keys()], []);
-    assert.equal(told(), null);
-  }),
+      yield* set({ agentId: OTHER_AGENT_ID, on: false });
+      assert.deepEqual([...listeners.keys()], []);
+      assert.equal(told(), null);
+    }),
 );
 
 it.effect("forwarding is let go once a sandbox seen running stops", () =>
@@ -330,5 +354,28 @@ it.effect("turning forwarding off keeps the agent's public link", () =>
     yield* set({ agentId: AGENT_ID, on: false });
 
     assert.deepEqual(shared(AGENT_ID), { port: 3000, url: "https://sb-3000.share.test" });
+  }),
+);
+
+it.effect("two turn-ons that interleave leave one agent's ports forwarded", () =>
+  Effect.gen(function* () {
+    const { set, serve, listeners, told } = yield* subject();
+    const THIRD_AGENT_ID = "5e7b9c1d-2a3f-4e8b-9c0d-1f2e3a4b5c6d";
+    serve(AGENT_ID, [3000]);
+    serve(OTHER_AGENT_ID, [4000]);
+    serve(THIRD_AGENT_ID, [5000]);
+    yield* set({ agentId: AGENT_ID, on: true });
+    yield* settle;
+
+    // Two windows ask at once: the second must not slip in while the first lets the agent before go.
+    yield* Effect.all(
+      [set({ agentId: OTHER_AGENT_ID, on: true }), set({ agentId: THIRD_AGENT_ID, on: true })],
+      { concurrency: "unbounded" },
+    );
+    yield* TestClock.adjust(PORT_FORWARD.LOOK_EVERY);
+    yield* settle;
+
+    const { agentId } = told() as { agentId: string };
+    assert.deepEqual([...listeners.keys()], [agentId === OTHER_AGENT_ID ? 4000 : 5000]);
   }),
 );

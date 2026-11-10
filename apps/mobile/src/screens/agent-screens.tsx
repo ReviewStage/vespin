@@ -1,7 +1,6 @@
 // agent-screens.tsx -- one agent's page, its transcript live under the system's header, and a page it showed, opened whole.
 
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
-import { iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
@@ -25,7 +24,6 @@ import {
   DOCK_ROOM,
   EmptyState,
   GlassDock,
-  type MarkdownPlace,
   NO_TOGGLES,
   PATH_PART,
   QueuedLines,
@@ -40,7 +38,6 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { openURL } from "expo-linking";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import {
@@ -53,6 +50,7 @@ import {
 } from "../agents/use-agent.js";
 import { type AgentComposer, useAgentComposer } from "../agents/use-agent-composer.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
 
 /** What an agent is called where the list holds no title for it yet. */
@@ -76,20 +74,6 @@ const PAGE_WORDS = {
   READING: "Reading the page",
   FAILED: "The page could not be read.",
 } as const;
-
-function opened(address: string): void {
-  openURL(address).catch((error: unknown) => console.error("The address did not open.", error));
-}
-
-/** A link a message names opened where it goes: a place the app draws on its own screen, and anything else in Safari. */
-function useOpenPlace(): (place: MarkdownPlace) => void {
-  const router = useRouter();
-  return (place) => {
-    const route = iosAppRouteOf(place.place);
-    if (route === undefined) opened(place.href);
-    else router.push(route);
-  };
-}
 
 /** The name of the task the agent works on, by its id, as the list holds it; none for an agent on no task, or before the list holds it. */
 function useTaskName(taskId: string | null | undefined): string | undefined {
@@ -212,7 +196,7 @@ function AgentComposerBar({ composer }: { readonly composer: AgentComposer }) {
 export function AgentScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const openPlace = useOpenPlace();
+  const openLink = useOpenLink();
   const colors = useColors();
   const agent = useFollowedAgent(id);
   const pullRequests = useAgentPullRequests(id);
@@ -266,7 +250,7 @@ export function AgentScreen() {
       />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel="More">
-          <Stack.Toolbar.MenuAction icon="safari" onPress={() => opened(address)}>
+          <Stack.Toolbar.MenuAction icon="safari" onPress={() => openInSafari(address)}>
             {OPEN_ON_WEB}
           </Stack.Toolbar.MenuAction>
         </Stack.Toolbar.Menu>
@@ -289,12 +273,12 @@ export function AgentScreen() {
             />
           }
           repository={agent?.repository}
-          onOpenPlace={openPlace}
+          onOpenLink={openLink}
           onToggle={(item) => setToggles((held) => toggledAt(held, item))}
           onOpenPage={openPage}
           mediaSource={(pictureId) => media.get(pictureId)}
-          onOpenElsewhere={() => opened(address)}
-          onOpenAddress={opened}
+          onOpenElsewhere={() => openInSafari(address)}
+          onOpenAddress={openInSafari}
           onOpenPullRequest={(item) =>
             router.push({
               pathname: "/tasks/agent/[id]/pull/[number]",

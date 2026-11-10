@@ -25,6 +25,7 @@ import {
 } from "@repo/ui";
 import { accountLabel } from "@repo/ui/account-initials";
 import { signInMethodLabel } from "@repo/ui/admin-format";
+import { useAsyncAction } from "@repo/ui/use-async-action";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { NOT_FOUND_THING, NotFound } from "../../not-found.js";
@@ -281,18 +282,9 @@ function ImpersonateControl({
   impersonate: (userId: string) => Promise<string | undefined>;
   userId: string;
 }): React.JSX.Element {
-  const [busy, setBusy] = useState(false);
-  const [refusal, setRefusal] = useState<string>();
-  const press = () => {
-    setBusy(true);
-    setRefusal(undefined);
-    void impersonate(userId)
-      .catch(() => IMPERSONATE_FAILED)
-      .then((refused) => {
-        setBusy(false);
-        setRefusal(refused);
-      });
-  };
+  const signingIn = useAsyncAction(() => IMPERSONATE_FAILED);
+  const refusal = signingIn.refusal;
+  const press = () => void signingIn.run(() => impersonate(userId));
   return (
     <Inline>
       {refusal === undefined ? null : (
@@ -302,7 +294,7 @@ function ImpersonateControl({
       )}
       <Button
         variant={BUTTON_VARIANT.OUTLINE}
-        busy={busy}
+        busy={signingIn.running}
         busyLabel="Signing in as this account"
         onClick={press}
       >
