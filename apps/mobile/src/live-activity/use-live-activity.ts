@@ -9,7 +9,8 @@
  * (`registeredPushDevice`), since the service names the phone by its APNs
  * token, and the latest of each again on every launch, since iOS may hand a
  * new one; an activity ended or dismissed on the phone is told too, so the
- * service push-to-starts a fresh one next time. A Stop pressed on an agent's row reaches the app's native module, which
+ * service push-to-starts a fresh one next time, and a sign-out ends it on
+ * the phone. A Stop pressed on an agent's row reaches the app's native module, which
  * hands it here; the host stops the agent as the agent page's Stop does, and
  * the request is answered whatever the host said, since the activity's next
  * push says how it went. A fixture run, which no push reaches, starts an
@@ -25,7 +26,7 @@ import {
 } from "@repo/features/live-activity-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { Schema } from "effect";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import { launchLiveActivity } from "../host/launch-arguments.js";
 import { registeredPushDevice, useFixtureRun, usePushDeviceKey } from "../push-device.js";
@@ -130,8 +131,11 @@ export function useLiveActivity(signedIn: boolean): void {
         console.error("The Live Activity's token was not sent.", error),
       );
   }, [acts, phone, activity]);
+  // The count of ends already told, so a change of phone never tells one again and clears the token of an activity standing since.
+  const told = useRef(0);
   useEffect(() => {
-    if (phone === undefined || ended === 0) return;
+    if (phone === undefined || ended === told.current) return;
+    told.current = ended;
     acts[ACT_KIND.LIVE_ACTIVITY_ENDED]({
       deviceToken: phone.token,
       environment: phone.environment,
@@ -139,6 +143,16 @@ export function useLiveActivity(signedIn: boolean): void {
       console.error("The Live Activity's end was not told.", error),
     );
   }, [acts, phone, ended]);
+  // Whether an account was signed in at the last render, so a sign-out is told from a launch still reading the account.
+  const wasSignedIn = useRef(false);
+  useEffect(() => {
+    // Note that a sign-out ends the activity on the phone, so none of the account's agents stay on the Lock Screen with a Stop nothing answers.
+    if (wasSignedIn.current && !signedIn)
+      liveActivityModule
+        ?.endAll()
+        .catch((error: unknown) => console.error("The Live Activity was not ended.", error));
+    wasSignedIn.current = signedIn;
+  }, [signedIn]);
   useEffect(() => {
     if (liveActivityModule === null || !signedIn) return undefined;
     const module = liveActivityModule;
