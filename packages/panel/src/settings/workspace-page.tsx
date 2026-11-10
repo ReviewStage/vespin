@@ -85,9 +85,11 @@ import {
 } from "@repo/ui/icons";
 import { inputProblem } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { useInlineRename } from "@repo/ui/use-inline-rename";
 import { VIRTUAL_ROWS_ANCHOR, VirtualRows } from "@repo/ui/virtual-rows";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
+import type { ActResult, ActVariables } from "../act.js";
 import { actMutation, pressMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark, actorMarkWidth, YouBadge } from "../actor-ref.js";
 import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "../confirm-act.js";
@@ -109,6 +111,7 @@ import {
 } from "../live-reads.js";
 import { memberRows } from "../member-rows.js";
 import { useOpenPerson } from "../person-door.js";
+import { type RenameShape, renameWrite } from "../rename-write.js";
 import { useToast } from "../toast.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { PHOTO_ACCEPT, photoOfFile } from "../workspace-photo.js";
@@ -1725,6 +1728,16 @@ function useSlugDialog(workspace: Workspace): SlugAsk {
   };
 }
 
+/** A workspace's rename as its mutation is asked; refused where the service refuses the call. */
+const WORKSPACE_RENAME_SHAPE: RenameShape<
+  ActResult<typeof ACT_KIND.WORKSPACE_RENAME>,
+  ActVariables<typeof ACT_KIND.WORKSPACE_RENAME>
+> = {
+  ask: (workspaceId, name) => ({ workspaceId, name }),
+  asked: ({ workspaceId, name }) => ({ subjectId: workspaceId, name }),
+  refused: () => false,
+};
+
 /**
  * The page's first row, drawn as Account's account row is: the workspace's
  * tile, its name, and who shares it. An account's first workspace is named
@@ -1737,11 +1750,11 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
   const { mutateAsync: sendWorkspacePhotoSet } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_PHOTO_SET),
   );
-  const { mutateAsync: sendWorkspaceRename } = useMutation(actMutation(ACT_KIND.WORKSPACE_RENAME));
   const workspaceId = workspace.id;
   const manages = managesWorkspace(workspace);
   const renamable = manages && workspace.personal !== true;
-  const [editing, setEditing] = useState(false);
+  const renaming = useMutation(actMutation(ACT_KIND.WORKSPACE_RENAME));
+  const rename = useInlineRename(workspaceId, renameWrite(renaming, WORKSPACE_RENAME_SHAPE));
   const [uploading, setUploading] = useState(false);
   const [refusal, setRefusal] = useState<string>();
   const button = useRef<HTMLButtonElement | null>(null);
@@ -1758,18 +1771,10 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
     confirmFailure(FAILURE_SURFACE.WORKSPACE_WRITE),
   );
   // Note that focus goes back to Rename once the edit ends, since the host draws the new name on the press.
-  const endedByKey = useRefocusAfterEdit(editing, button);
-  /** How many renames were asked, so a refusal of one a newer rename followed is not said under the newer name. */
-  const renames = useRef(0);
+  const endedByKey = useRefocusAfterEdit(rename.editing, button);
   const end = ({ value: name, byKey }: InlineEditEnd) => {
     endedByKey(byKey);
-    setEditing(false);
-    if (name === undefined) return;
-    renames.current += 1;
-    const asked = renames.current;
-    sendWorkspaceRename({ workspaceId, name }).catch((refused: Error) => {
-      if (renames.current === asked) setRefusal(refused.message);
-    });
+    rename.end(name);
   };
   const upload = (file: File) => {
     setRefusal(undefined);
@@ -1798,16 +1803,9 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
       : [];
   // Note that the photo's acts are its tile's own (`PhotoPick`), as setup and New workspace draw it, so the ⋯ holds the slug alone.
   const actions = slugActs.length === 0 ? [] : [slugActs];
-  const rename =
-    renamable && !editing ? (
-      <Button
-        ref={button}
-        variant={BUTTON_VARIANT.OUTLINE}
-        onClick={() => {
-          setRefusal(undefined);
-          setEditing(true);
-        }}
-      >
+  const renamePress =
+    renamable && !rename.editing ? (
+      <Button ref={button} variant={BUTTON_VARIANT.OUTLINE} onClick={rename.begin}>
         Rename
       </Button>
     ) : null;
@@ -1844,9 +1842,9 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
           label: (
             <ReplayMask>
               <InlineEdit
-                value={workspace.name}
+                value={rename.asked ?? workspace.name}
                 label="Workspace name"
-                editing={editing}
+                editing={rename.editing}
                 maxLength={WORKSPACE_BOUNDS.MAX_NAME_CHARS}
                 look={INLINE_EDIT_LOOK.INPUT}
                 onEnd={end}
@@ -1854,8 +1852,14 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
             </ReplayMask>
           ),
           description: sharedWords(workspace.memberCount, workspace.personal === true),
-          error: replayMaskedError(refusedShown(refusal, FAILURE_SURFACE.WORKSPACE_WRITE)),
-          control: rename,
+          // Note that a rename's refusal is the rename's own, so a photo picked meanwhile does not erase it.
+          error: replayMaskedError(
+            refusedShown(
+              rename.refused ? renaming.error?.message : refusal,
+              FAILURE_SURFACE.WORKSPACE_WRITE,
+            ),
+          ),
+          control: renamePress,
         }}
       />
       <ConfirmDialog
