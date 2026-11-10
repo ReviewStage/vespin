@@ -61,6 +61,9 @@ const MESSAGE: Noun = { one: "message", many: "messages" };
 /** What the choice to put the files back too says, on either rewind. */
 export const RESTORE_FILES_WORDS = "Also restore the agent's files to this point";
 
+/** The same choice where the box is too narrow for its words, at the Edit box's foot. */
+export const RESTORE_FILES_SHORT_WORDS = "Restore the files too";
+
 /** What a rewind says of the files where it puts them back too, after what it drops. */
 export const FILES_RESTORED_WORDS =
   "The agent's files also go back to how they were here; its commits, and anything pushed, stay as they are.";

@@ -27,7 +27,11 @@ import {
 import { confirmFailure } from "../failure-report.js";
 import { AgentComposer } from "./agent-composer.js";
 import { type LineAttachment, useLineAttachments } from "./agent-pictures.js";
-import { FILES_RESTORED_WORDS, RESTORE_FILES_WORDS } from "./rewind-action.js";
+import {
+  FILES_RESTORED_WORDS,
+  RESTORE_FILES_SHORT_WORDS,
+  RESTORE_FILES_WORDS,
+} from "./rewind-action.js";
 import type { SkillSource } from "./skill-picker.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
 
@@ -249,21 +253,18 @@ export function EditComposer({
         skills={edit.skills}
         sendable={!line.reading}
         onLeave={edit.onCancel}
+        // The choice to put the files back stands at the foot's left, where it wraps as the box narrows, so Cancel and Send stay together at its right.
+        tools={(narrow) =>
+          edit.restorable ? (
+            <Checkbox checked={restoreFiles} onChange={setRestoreFiles}>
+              {narrow ? RESTORE_FILES_SHORT_WORDS : RESTORE_FILES_WORDS}
+            </Checkbox>
+          ) : undefined
+        }
         beforeSend={() => (
-          <>
-            <Button
-              variant={BUTTON_VARIANT.QUIET}
-              size={BUTTON_SIZE.COMPACT}
-              onClick={edit.onCancel}
-            >
-              {CANCEL_WORDS}
-            </Button>
-            {edit.restorable ? (
-              <Checkbox checked={restoreFiles} onChange={setRestoreFiles}>
-                {RESTORE_FILES_WORDS}
-              </Checkbox>
-            ) : undefined}
-          </>
+          <Button variant={BUTTON_VARIANT.QUIET} size={BUTTON_SIZE.COMPACT} onClick={edit.onCancel}>
+            {CANCEL_WORDS}
+          </Button>
         )}
       />
       <ConfirmDialog open confirm={confirm} question={sendQuestion(edit.takes, restoring)} />
