@@ -16,13 +16,7 @@ import {
   pinPositionsForInsert,
   pinPositionsForMove,
 } from "./pin-order.js";
-import {
-  type TaskListView,
-  type TaskRow,
-  taskRow,
-  taskRowInView,
-  taskRowsAssignedTo,
-} from "./task-list-model.js";
+import { type TaskListView, taskInView, tasksAssignedTo } from "./task-list-model.js";
 import {
   TASK_SECTION_WRITE,
   type TaskSection,
@@ -234,11 +228,11 @@ export function unplaceAllWrites(taskIds: readonly string[]): TaskSectionWrite[]
   return taskIds.map((taskId) => placeWrite(taskId, null));
 }
 
-/** One section's rows as the sidebar draws them: the entries in its order, each with the task's row the list holds, one for one. */
+/** One section's rows as the sidebar draws them: the entries in its order, each with the task the list holds, one for one. */
 export interface DrawnSection {
   readonly section: TaskSection;
   readonly entries: readonly TaskSectionEntry[];
-  readonly rows: readonly TaskRow[];
+  readonly tasks: readonly TaskSummary[];
 }
 
 /** The listed workspace's sections as the sidebar draws them, and the tasks standing in any of them, which Tasks leaves out. */
@@ -264,17 +258,21 @@ export function sectionedTasks(
   const sections = workspaceSections(state, workspaceId).map((section): DrawnSection => {
     const held = sectionOrder(state, section.id).flatMap((entry) => {
       const task = byId.get(entry.taskId);
-      return task === undefined ? [] : [{ entry, row: taskRow(task) }];
+      return task === undefined ? [] : [{ entry, task }];
     });
-    return { section, entries: held.map(({ entry }) => entry), rows: held.map(({ row }) => row) };
+    return {
+      section,
+      entries: held.map(({ entry }) => entry),
+      tasks: held.map(({ task }) => task),
+    };
   });
-  const taskIds = new Set(sections.flatMap((drawn) => drawn.rows.map((row) => row.task.id)));
+  const taskIds = new Set(sections.flatMap((drawn) => drawn.tasks.map((task) => task.id)));
   return { sections, taskIds };
 }
 
 /**
  * A section as the view leaves it: its tasks to do and in progress, its
- * finished sub-tasks while the view shows them (`taskRowInView`), and any
+ * finished sub-tasks while the view shows them (`taskInView`), and any
  * with no status, of those Assigned to holds, each
  * with its entry, in its order.
  */
@@ -283,15 +281,15 @@ export function sectionInView(
   view: TaskListView,
   readerId: string | undefined,
 ): DrawnSection {
-  const held = new Set(taskRowsAssignedTo(drawn.rows, view.assignedTo, readerId));
-  const shown = (row: TaskRow) => held.has(row) && taskRowInView(row, view);
-  const kept = drawn.rows.flatMap((row, at) => {
+  const held = new Set(tasksAssignedTo(drawn.tasks, view.assignedTo, readerId));
+  const shown = (task: TaskSummary) => held.has(task) && taskInView(task, view);
+  const kept = drawn.tasks.flatMap((task, at) => {
     const entry = drawn.entries[at];
-    return entry !== undefined && shown(row) ? [{ entry, row }] : [];
+    return entry !== undefined && shown(task) ? [{ entry, task }] : [];
   });
   return {
     ...drawn,
     entries: kept.map(({ entry }) => entry),
-    rows: kept.map(({ row }) => row),
+    tasks: kept.map(({ task }) => task),
   };
 }

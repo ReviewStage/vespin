@@ -75,12 +75,7 @@ import {
   searchTokens,
 } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import {
-  orderTaskRows,
-  repositoryLabel,
-  type TaskRow,
-  taskRow,
-} from "@repo/features/task-list-model";
+import { orderTasks, repositoryLabel } from "@repo/features/task-list-model";
 import {
   TASK_CREATE_RELATION_KIND,
   TASK_RELATION_KIND,
@@ -810,7 +805,7 @@ function taskDetail(
 /**
  * Every plan and every agent with no task, as the sidebar lists them among
  * each other (`task-list-model.ts`'s rows): the pinned first, then the rest
- * by their last activity (`taskRowTime`), then the archived agents, each in
+ * by their last activity (`taskTime`), then the archived agents, each in
  * its tab's look, an archived one saying so in its detail. Within each, the
  * listed workspace's come first and every other workspace's tasks after
  * them, naming its workspace and found by its name, since opening one
@@ -904,16 +899,13 @@ function taskRows(
   const listed = (task: TaskSummary) => listedId === undefined || task.workspaceId === listedId;
   // The pinned stand first, as the sidebar's; the rest by their last
   // activity, as the sidebar, Home's Recent, and the row's time read it.
-  const pinnedFirst = (rows: readonly TaskRow[]) => [
-    ...rows.filter((row) => row.task.pinnedAt !== undefined),
-    ...orderTaskRows(rows.filter((row) => row.task.pinnedAt === undefined)),
+  const pinnedFirst = (each: readonly TaskSummary[]) => [
+    ...each.filter((task) => task.pinnedAt !== undefined),
+    ...orderTasks(each.filter((task) => task.pinnedAt === undefined)),
   ];
-  const here = tasks.tasks.filter(listed).map(taskRow);
-  const elsewhere = tasks.tasks.filter((task) => !listed(task)).map(taskRow);
-  return [
-    ...pinnedFirst(here).map((row) => taskOf(row.task)),
-    ...pinnedFirst(elsewhere).map((row) => taskOf(row.task)),
-  ];
+  const here = tasks.tasks.filter(listed);
+  const elsewhere = tasks.tasks.filter((task) => !listed(task));
+  return [...pinnedFirst(here).map(taskOf), ...pinnedFirst(elsewhere).map(taskOf)];
 }
 
 /** What the "+" rules read that only a hook can: the door a new shell is asked through where the platform runs terminals. */
