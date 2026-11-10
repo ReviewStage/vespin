@@ -6,6 +6,9 @@ import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wir
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { File, Paths } from "expo-file-system";
 
+/** What a video's file is named with while its bytes are still being written, so no read takes it for the whole file. */
+const WRITING_SUFFIX = ".writing";
+
 /** The extension each video type a read answers is written under. */
 const VIDEO_EXTENSION: Readonly<Record<string, string>> = {
   [MP4_TYPE]: "mp4",
@@ -15,21 +18,25 @@ const VIDEO_EXTENSION: Readonly<Record<string, string>> = {
 /**
  * Where a video's bytes were written for the system's player to read: a
  * file of the app's caches named `<prefix>-<id>.<extension>`, written once,
- * so a recording read again is the file already written. Note that an MP4
- * plays only under its extension, and a WebM, which iOS's player cannot
- * read, says so in the player's place.
+ * so a recording read again is the file already written, and answered only
+ * once its bytes are all on disk. Note that the bytes are written under a
+ * name of their own and moved into place, so a write cut short, as the app
+ * is closed, never stands as the file a later read finds; that an MP4 plays
+ * only under its extension; and that a WebM, which iOS's player cannot read,
+ * says so in the player's place.
  */
-export function cachedVideo(
+export async function cachedVideo(
   prefix: string,
   id: string,
   contentType: string,
   base64: string,
-): string {
+): Promise<string> {
   const extension = VIDEO_EXTENSION[contentType];
-  const file = new File(
-    Paths.cache,
-    extension === undefined ? `${prefix}-${id}` : `${prefix}-${id}.${extension}`,
-  );
-  if (!file.exists) file.write(base64, { encoding: "base64" });
+  const name = extension === undefined ? `${prefix}-${id}` : `${prefix}-${id}.${extension}`;
+  const file = new File(Paths.cache, name);
+  if (file.exists) return file.uri;
+  const writing = new File(Paths.cache, `${name}${WRITING_SUFFIX}`);
+  await writing.write(base64, { encoding: "base64" });
+  await writing.move(file, { overwrite: true });
   return file.uri;
 }
