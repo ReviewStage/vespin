@@ -25,8 +25,8 @@ import UniformTypeIdentifiers
 ///   `perform_secondary_action`: act on the app by an element's number or by
 ///   a point in the first screenshot's pixels.
 ///
-/// The agent's own cursor, a small arrow of its own color drawn over the
-/// app in a window that takes no clicks, glides to each point an action
+/// The agent's own cursor, the browser's pointer drawn over the app in a
+/// window that takes no clicks, glides to each point an action
 /// lands on just before it lands, and fades once the agent rests, so the
 /// developer sees where it works without losing their own cursor. It stands
 /// in no screenshot, since a read captures the app's window alone.
@@ -514,27 +514,81 @@ private let CURSOR_REST_SECONDS = 2.5
 private let CURSOR_BOX = CGSize(width: 36, height: 36)
 private let CURSOR_TIP = CGPoint(x: 8, y: 6)
 
-/// The arrow the agent's cursor draws: the system's shape, in a color of its own, ringed so it reads on any window.
+/// The pointer's copper over a light window and the brighter amber over a dark one: the brand's accent in either theme (`@repo/brand`'s `BRAND_PALETTE`), as the browser's pointer is drawn (`recording-cursor.ts`).
+private let POINTER_LIGHT = NSColor(srgbRed: 0xa7 / 255, green: 0x61 / 255, blue: 0x1b / 255, alpha: 1)
+private let POINTER_DARK = NSColor(srgbRed: 0xcf / 255, green: 0x7b / 255, blue: 0x26 / 255, alpha: 1)
+
+/// The pointer's color for the Mac's appearance, which the windows under it follow.
+private func pointerColor() -> NSColor {
+    NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? POINTER_DARK : POINTER_LIGHT
+}
+
+/**
+ The agent's pointer as the browser's is drawn: the same rounded arrow in a
+ 16-point box, its tip at the box's top left, in the accent with a white
+ edge and a soft shadow, and a ring that ripples out from its tip as a press
+ lands.
+ */
 private final class AgentCursorView: NSView {
+    override var isFlipped: Bool { true }
+
+    /// The browser pointer's path (`recording-cursor.ts`), its tip at the origin.
+    private static func arrow() -> NSBezierPath {
+        let path = NSBezierPath()
+        path.move(to: CGPoint(x: 0, y: 0))
+        path.line(to: CGPoint(x: 12.07, y: 4.16))
+        path.curve(to: CGPoint(x: 12.56, y: 5.58), controlPoint1: CGPoint(x: 13.49, y: 4.65), controlPoint2: CGPoint(x: 13.65, y: 5.12))
+        path.line(to: CGPoint(x: 7.64, y: 7.64))
+        path.line(to: CGPoint(x: 5.58, y: 12.56))
+        path.curve(to: CGPoint(x: 4.16, y: 12.07), controlPoint1: CGPoint(x: 5.12, y: 13.65), controlPoint2: CGPoint(x: 4.65, y: 13.49))
+        path.close()
+        return path
+    }
+
     override func draw(_ dirtyRect: NSRect) {
-        let tip = CGPoint(x: CURSOR_TIP.x, y: bounds.height - CURSOR_TIP.y)
-        let halo = NSBezierPath(ovalIn: NSRect(x: tip.x - 6, y: tip.y - 26, width: 26, height: 26))
-        NSColor.systemPurple.withAlphaComponent(0.18).setFill()
-        halo.fill()
-        let arrow = NSBezierPath()
-        arrow.move(to: tip)
-        arrow.line(to: CGPoint(x: tip.x, y: tip.y - 20))
-        arrow.line(to: CGPoint(x: tip.x + 5, y: tip.y - 15))
-        arrow.line(to: CGPoint(x: tip.x + 9, y: tip.y - 23))
-        arrow.line(to: CGPoint(x: tip.x + 12, y: tip.y - 21.5))
-        arrow.line(to: CGPoint(x: tip.x + 8, y: tip.y - 14))
-        arrow.line(to: CGPoint(x: tip.x + 14, y: tip.y - 14))
-        arrow.close()
-        NSColor.systemPurple.setFill()
-        arrow.fill()
+        let arrow = Self.arrow()
+        arrow.transform(using: AffineTransform(translationByX: CURSOR_TIP.x, byY: CURSOR_TIP.y))
+        arrow.lineJoinStyle = .round
+        arrow.lineWidth = 2.4
+        NSGraphicsContext.saveGraphicsState()
+        let shadow = NSShadow()
+        shadow.shadowOffset = NSSize(width: 0, height: -1)
+        shadow.shadowBlurRadius = 1.5
+        shadow.shadowColor = NSColor.black.withAlphaComponent(0.35)
+        shadow.set()
         NSColor.white.setStroke()
-        arrow.lineWidth = 1.5
         arrow.stroke()
+        NSGraphicsContext.restoreGraphicsState()
+        pointerColor().setFill()
+        arrow.fill()
+    }
+
+    /// A ring rippling out from the tip, as the browser's pointer ripples as a press lands.
+    func ripple() {
+        wantsLayer = true
+        guard let layer else { return }
+        let ring = CAShapeLayer()
+        ring.path = CGPath(ellipseIn: CGRect(x: -12, y: -12, width: 24, height: 24), transform: nil)
+        ring.position = CURSOR_TIP
+        ring.fillColor = nil
+        ring.strokeColor = pointerColor().cgColor
+        ring.lineWidth = 1.5
+        layer.addSublayer(ring)
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { ring.removeFromSuperlayer() }
+        let grow = CABasicAnimation(keyPath: "transform.scale")
+        grow.fromValue = 0.4
+        grow.toValue = 1.4
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 1
+        fade.toValue = 0
+        let both = CAAnimationGroup()
+        both.animations = [grow, fade]
+        both.duration = CURSOR_GLIDE_SECONDS * 1.6
+        both.timingFunction = CAMediaTimingFunction(name: .easeOut)
+        ring.opacity = 0
+        ring.add(both, forKey: "ripple")
+        CATransaction.commit()
     }
 }
 
@@ -561,6 +615,11 @@ private final class AgentCursor {
     }
 
     /// The cursor glided to a point on the screen, in the window server's coordinates, its top left the main display's.
+    /// The press landing where the cursor stands, its ring rippling out.
+    func press() {
+        (panel?.contentView as? AgentCursorView)?.ripple()
+    }
+
     func glide(to point: CGPoint) {
         let panel = made()
         let height = NSScreen.screens.first?.frame.height ?? 0
@@ -590,10 +649,11 @@ private final class AgentCursor {
 
 @MainActor private let agentCursor = AgentCursor()
 
-/// The agent's cursor glided to `point`, and a moment let pass so it has arrived as the action lands.
+/// The agent's cursor glided to `point`, and a moment let pass so it has arrived as the action lands, which its ring ripples for.
 private func cursorTo(_ point: CGPoint) async {
     await MainActor.run { agentCursor.glide(to: point) }
     try? await Task.sleep(nanoseconds: UInt64(CURSOR_GLIDE_SECONDS * 1_000_000_000))
+    await MainActor.run { agentCursor.press() }
 }
 
 // MARK: - Input
