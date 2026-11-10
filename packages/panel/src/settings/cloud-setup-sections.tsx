@@ -3,19 +3,28 @@ import { readingWords } from "@repo/features/words";
 import { managesWorkspace } from "@repo/features/workspace-role";
 import {
   REPOSITORY_SCRIPT_KIND,
+  type RepositoryRunActions,
   type RepositoryScriptKind,
+  type RunAction,
   WORKSPACE_SANDBOX_SETUP_BOUNDS,
   type WorkspaceSandboxSetupAnswer,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
+import { EXPERIMENT } from "@repo/settings";
 import {
+  ArrowDownIcon,
+  ArrowUpIcon,
   AVATAR_SIZE,
   BUTTON_VARIANT,
   Button,
   CONFIRM_LOSS,
   CodeEditor,
   ConfirmDialog,
+  DIALOG_TONE,
+  Dialog,
+  DialogActions,
+  FormField,
   GAP,
   GlyphSlot,
   Inline,
@@ -24,15 +33,19 @@ import {
   POPOVER_ALIGN,
   RepositoryPicture,
   SETTINGS_ROW_CONTROLS,
+  SETTINGS_ROW_INDENT,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
   SettingsRowControlHold,
   type SettingsRowSkeletonShape,
   SettingsRowsSkeleton,
   SettingsSection,
+  Stack,
+  TextField,
   TrashIcon,
   useConfirmDialog,
 } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
@@ -47,11 +60,13 @@ import { useState } from "react";
 import { actFailureWords, askAct, sendAct } from "../act.js";
 import { useTypedCodeColoring } from "../code-coloring.js";
 import { useConfirmAct } from "../confirm-act.js";
+import { useFormDialog } from "../desktop/use-form-dialog.js";
 import { confirmFailure, refusalShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { useRepositoryMenu } from "../tasks/repository-chip.js";
 import { useRepositoriesIn } from "../tasks/task-repository-menus.js";
+import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 
@@ -410,18 +425,21 @@ function ScriptRow({
 }
 
 /**
- * A repository scripts section's Add script, which drops the repository menu a
- * task's repository is picked in (`useRepositoryMenu`): the repositories the
- * workspace's GitHub reaches, less those `taken`. A pick adds that
- * repository's row, and the press stands for the next one.
+ * A repository section's Add, which drops the repository menu a task's
+ * repository is picked in (`useRepositoryMenu`): the repositories the
+ * workspace's GitHub reaches, less those `taken`. A pick adds to that
+ * repository, and the press stands for the next one.
  */
-function AddSetupButton({
+function AddRepositoryButton({
   workspaceId,
+  label,
   taken,
   onPick,
 }: {
   workspaceId: string;
-  /** The repositories with a script of the section's kind saved or being added, which the menu leaves out. */
+  /** The press's words: Add script, Add action. */
+  label: string;
+  /** The repositories the menu leaves out: those with a script of the section's kind saved or being added. */
   taken: readonly string[];
   onPick: (repository: string) => void;
 }): React.JSX.Element {
@@ -445,7 +463,7 @@ function AddSetupButton({
         aria-controls={menu.open ? menu.menuId : undefined}
         onClick={(event) => toggleMenu(event.currentTarget)}
       >
-        Add script
+        {label}
       </Button>
       {menu.menu}
     </div>
@@ -499,7 +517,12 @@ function RepositoryScriptsSection({
       caption={words.caption}
       action={
         manages ? (
-          <AddSetupButton workspaceId={workspaceId} taken={taken} onPick={add} />
+          <AddRepositoryButton
+            workspaceId={workspaceId}
+            label="Add script"
+            taken={taken}
+            onPick={add}
+          />
         ) : undefined
       }
     >
@@ -524,9 +547,380 @@ function RepositoryScriptsSection({
   );
 }
 
-/** The scripts over one workspace: its install script, then each repository's setup script, then each one's archive script. */
+/** Which run action the dialog writes: a new one at the end of a repository's list, or the one at `index` in it. */
+interface RunActionTarget {
+  readonly repository: string;
+  readonly index?: number | undefined;
+}
+
+/** Every repository's run actions as the setup answers them. */
+type RunActionLists = readonly RepositoryRunActions[];
+
+/** A run action as a save writes it: one already in the list with its id, or a new one with none. */
+interface RunActionWritten {
+  readonly id: string | undefined;
+  readonly label: string;
+  readonly command: string;
+}
+
+/** A repository's run actions as the answer holds them; none where it holds no list. */
+function runActionsOf(lists: RunActionLists, repository: string): readonly RunAction[] {
+  return lists.find((each) => sameRepository(each.repository, repository))?.actions ?? [];
+}
+
+/** Whether an action may be saved as typed: a label and a command, each within its bound. */
+function runActionSavable(label: string, command: string): boolean {
+  const name = label.trim();
+  return (
+    name !== "" &&
+    name.length <= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_LABEL_CHARS &&
+    command.trim() !== "" &&
+    command.length <= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_COMMAND_CHARS
+  );
+}
+
+/** A save of a repository's whole list of run actions, an empty one removing it, its answer drawn over the page at once. */
+function useSaveRunActions(workspaceId: string) {
+  const queries = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      repository,
+      actions,
+    }: {
+      repository: string;
+      actions: readonly RunActionWritten[];
+    }) =>
+      sendAct(ACT_KIND.WORKSPACE_RUN_ACTIONS_PUT, {
+        workspaceId,
+        repository,
+        // An action new to the list names no id, and the service names it.
+        actions: actions.map(({ id, label, command }) =>
+          id === undefined ? { label, command } : { id, label, command },
+        ),
+      }),
+    onSuccess: (answer) => drawAnswer(queries, workspaceId, answer),
+  });
+}
+
+/**
+ * The card that adds a run action to a repository, or edits one: its label
+ * and its command, the command colored as Bash. Saving writes the
+ * repository's whole list with the action added at its end or changed in
+ * its place.
+ */
+function useRunActionDialog(workspaceId: string, lists: RunActionLists) {
+  const [target, setTarget] = useState<RunActionTarget | undefined>(undefined);
+  const [label, setLabel] = useState("");
+  const [command, setCommand] = useState("");
+  const saving = useSaveRunActions(workspaceId);
+  const lines = useTypedCodeColoring(SCRIPT_LANGUAGE, command);
+  const act = useConfirmAct(saving, {
+    send: () => {
+      const repository = target?.repository ?? "";
+      const standing = runActionsOf(lists, repository);
+      const typed = { label: label.trim(), command };
+      const index = target?.index;
+      const actions =
+        index === undefined
+          ? [...standing, { id: undefined, ...typed }]
+          : standing.map((each, at) => (at === index ? { ...each, ...typed } : each));
+      return saving.mutateAsync({ repository, actions });
+    },
+    answered: () => ACCEPTED,
+    failed: rejected,
+  });
+  const confirm = useConfirmDialog(
+    { subject: true, surfaceOpen: true },
+    act,
+    confirmFailure(FAILURE_SURFACE.WORKSPACE_SANDBOX_SETUP_SAVE),
+  );
+  const form = useFormDialog(confirm, target !== undefined && runActionSavable(label, command));
+  const edited =
+    target?.index === undefined ? undefined : runActionsOf(lists, target.repository)[target.index];
+  const open = (next: RunActionTarget) => {
+    const shown =
+      next.index === undefined ? undefined : runActionsOf(lists, next.repository)[next.index];
+    setTarget(next);
+    setLabel(shown?.label ?? "");
+    setCommand(shown?.command ?? "");
+    confirm.ask();
+  };
+  const dialog = (
+    <Dialog
+      open={form.open}
+      title={edited === undefined ? "Add run action" : `Edit ${edited.label}`}
+      replayUnmasked
+      titleReplayMasked={edited !== undefined}
+      busy={form.settling}
+      refused={form.refusal !== undefined}
+      onDismiss={form.dismiss}
+      actions={
+        <DialogActions
+          onCancel={form.dismiss}
+          act={{ verb: "Save", tone: DIALOG_TONE.PRIMARY, running: "Saving", ...form.act }}
+        />
+      }
+    >
+      <Stack>
+        <FormField label="Label">
+          {(control) => (
+            <ReplayMask>
+              <TextField
+                field={control}
+                placeholder="Dev server"
+                maxLength={WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTION_LABEL_CHARS}
+                disabled={form.settling}
+                value={label}
+                onChange={setLabel}
+                onEnter={form.submit}
+              />
+            </ReplayMask>
+          )}
+        </FormField>
+        <FormField
+          label="Command"
+          description="Runs from the checkout with the workspace's environment variables."
+          error={replayMaskedError(form.refusal)}
+        >
+          {(control) => (
+            <ReplayMask>
+              <CodeEditor
+                id={control.id}
+                label="Command"
+                describedBy={control["aria-describedby"]}
+                invalid={control["aria-invalid"]}
+                value={command}
+                onChange={setCommand}
+                lines={lines}
+                placeholder="pnpm dev"
+                rows={MIN_SCRIPT_LINES}
+                readOnly={form.settling}
+              />
+            </ReplayMask>
+          )}
+        </FormField>
+      </Stack>
+    </Dialog>
+  );
+  return { open, dialog };
+}
+
+/**
+ * One run action's row, under its repository's: its label, its command
+ * under it, and for an owner or admin a ⋯ with Edit, Move up, Move down,
+ * and Remove, a removal asking first.
+ */
+function RunActionRow({
+  workspaceId,
+  repository,
+  actions,
+  index,
+  manages,
+  onEdit,
+}: {
+  workspaceId: string;
+  repository: string;
+  /** The repository's whole list, which every change saves anew. */
+  actions: readonly RunAction[];
+  index: number;
+  manages: boolean;
+  onEdit: () => void;
+}): React.JSX.Element | null {
+  const saving = useSaveRunActions(workspaceId);
+  const action = actions[index];
+  const save = (next: readonly RunActionWritten[]) => saving.mutate({ repository, actions: next });
+  const moved = (by: number) => {
+    const next = [...actions];
+    const [taken] = next.splice(index, 1);
+    if (taken !== undefined) next.splice(index + by, 0, taken);
+    return next;
+  };
+  const removeAct = useConfirmAct(saving, {
+    send: () =>
+      saving.mutateAsync({ repository, actions: actions.filter((_, at) => at !== index) }),
+    answered: () => ACCEPTED,
+    failed: rejected,
+  });
+  const removal = useConfirmDialog(
+    { subject: true, surfaceOpen: true },
+    removeAct,
+    confirmFailure(FAILURE_SURFACE.WORKSPACE_SANDBOX_SETUP_SAVE),
+  );
+  if (action === undefined) return null;
+  const busy = saving.isPending;
+  const menu = manages
+    ? [
+        [
+          { label: "Edit", icon: <GLYPH.RENAME />, disabled: busy, onSelect: onEdit },
+          {
+            label: "Move up",
+            icon: <ArrowUpIcon />,
+            disabled: busy || index === 0,
+            onSelect: () => save(moved(-1)),
+          },
+          {
+            label: "Move down",
+            icon: <ArrowDownIcon />,
+            disabled: busy || index === actions.length - 1,
+            onSelect: () => save(moved(1)),
+          },
+        ],
+        [{ label: "Remove", icon: <TrashIcon />, danger: true, onSelect: removal.ask }],
+      ]
+    : [];
+  return (
+    <>
+      <MenuRow
+        thing={action.label}
+        actions={menu}
+        row={{
+          label: <ReplayMask>{action.label}</ReplayMask>,
+          description: <ReplayMask>{action.command}</ReplayMask>,
+          indent: SETTINGS_ROW_INDENT.MARK,
+          error: saveRefusal(saving.error),
+        }}
+      />
+      {manages ? (
+        <ConfirmDialog
+          open
+          confirm={removal}
+          question={{
+            title: `Remove ${action.label}?`,
+            verb: "Remove",
+            running: "Removing",
+            loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+            replayUnmasked: true,
+            titleReplayMasked: true,
+          }}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * Each repository's run actions, behind the Run actions experiment: a row
+ * for the repository with its Add action, and a row for each action under
+ * it, in its order. An owner or admin adds one from Add action, to a
+ * repository already listed or one picked in the repository menu, and
+ * edits, moves, or removes one from its ⋯; every change saves the
+ * repository's whole list.
+ */
+function RunActionsSection({
+  workspaceId,
+  lists,
+  read,
+  manages,
+  pictures,
+}: {
+  workspaceId: string;
+  lists: RunActionLists;
+  /** What stands in the rows' place while the setup is read, or why it could not be; nothing once it is. */
+  read: React.JSX.Element | undefined;
+  manages: boolean;
+  pictures: boolean;
+}): React.JSX.Element {
+  const dialog = useRunActionDialog(workspaceId, lists);
+  return (
+    <SettingsSection
+      title="Run actions"
+      caption="Listed in each cloud agent's Run menu, the first on its button. Each runs in a Terminal tab of the agent's sandbox when pressed."
+      action={
+        manages ? (
+          <AddRepositoryButton
+            workspaceId={workspaceId}
+            label="Add action"
+            taken={[]}
+            onPick={(repository) => dialog.open({ repository })}
+          />
+        ) : undefined
+      }
+    >
+      {read ?? (
+        <>
+          {lists.length === 0 ? <SettingsLine>No run actions yet.</SettingsLine> : null}
+          {lists.map((list) => (
+            <RunActionsOfRepository
+              key={list.repository.toLowerCase()}
+              workspaceId={workspaceId}
+              repository={list.repository}
+              actions={list.actions}
+              manages={manages}
+              pictures={pictures}
+              onAdd={() => dialog.open({ repository: list.repository })}
+              onEdit={(index) => dialog.open({ repository: list.repository, index })}
+            />
+          ))}
+        </>
+      )}
+      {manages ? dialog.dialog : null}
+    </SettingsSection>
+  );
+}
+
+/** One repository's row and its run actions' rows under it. */
+function RunActionsOfRepository({
+  workspaceId,
+  repository,
+  actions,
+  manages,
+  pictures,
+  onAdd,
+  onEdit,
+}: {
+  workspaceId: string;
+  repository: string;
+  actions: readonly RunAction[];
+  manages: boolean;
+  pictures: boolean;
+  onAdd: () => void;
+  onEdit: (index: number) => void;
+}): React.JSX.Element {
+  const full = actions.length >= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS;
+  return (
+    <>
+      <MenuRow
+        thing={repository}
+        alone
+        actions={
+          manages
+            ? [{ label: "Add action", icon: <PlusIcon />, disabled: full, onSelect: onAdd }]
+            : []
+        }
+        row={{
+          label: (
+            <Inline gap={GAP.ICON}>
+              <GlyphSlot line>
+                <RepositoryPicture
+                  repository={repository}
+                  pictures={pictures}
+                  size={AVATAR_SIZE.GLYPH}
+                />
+              </GlyphSlot>
+              <ReplayMask>{repository}</ReplayMask>
+            </Inline>
+          ),
+        }}
+      />
+      {actions.map((action, index) => (
+        <RunActionRow
+          key={action.id}
+          workspaceId={workspaceId}
+          repository={repository}
+          actions={actions}
+          index={index}
+          manages={manages}
+          onEdit={() => onEdit(index)}
+        />
+      ))}
+    </>
+  );
+}
+
+/** The scripts over one workspace: its install script, then each repository's setup script, then each one's archive script, then each one's run actions where the workspace has Run actions on. */
 export function CloudSetupSections({ workspace }: { workspace: Workspace }): React.JSX.Element {
   const manages = managesWorkspace(workspace);
+  const runActionsOn = useWorkspaceExperiment(workspace.id, EXPERIMENT.RUN_ACTIONS);
   const pictures = useRepositoryPictures();
   const setup = useQuery(setupQuery(workspace.id));
   const answer = setup.data;
@@ -575,6 +969,15 @@ export function CloudSetupSections({ workspace }: { workspace: Workspace }): Rea
         manages={manages}
         pictures={pictures}
       />
+      {runActionsOn ? (
+        <RunActionsSection
+          workspaceId={workspace.id}
+          lists={answer?.runActions ?? []}
+          read={read}
+          manages={manages}
+          pictures={pictures}
+        />
+      ) : null}
     </>
   );
 }
