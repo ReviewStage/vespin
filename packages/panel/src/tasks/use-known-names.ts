@@ -94,23 +94,9 @@ function heldNamesOf(
       automations.set(agent.automationId, agent.automationName);
     }
   }
-  // Note that an item's brief names its agent as its row does now, so a title there stands over the list's.
-  for (const item of inbox?.taskless ?? []) {
-    if (item.agentTitle === null && agents.has(item.agentId)) continue;
-    agents.set(
-      item.agentId,
-      agentName({
-        title: item.agentTitle,
-        model: item.agentModel,
-        automationName: item.automationName ?? undefined,
-      }),
-    );
-  }
   const pages = new Map(activePages?.map((page) => [page.id, page.title]));
   const inboxItems = new Map(
-    [...(inbox?.waiting ?? []).flatMap((task) => task.items), ...(inbox?.taskless ?? [])].map(
-      (item) => [item.id, item.title],
-    ),
+    (inbox?.waiting ?? []).flatMap((task) => task.items).map((item) => [item.id, item.title]),
   );
   return {
     tasks,

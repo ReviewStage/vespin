@@ -2,7 +2,7 @@ import {
   DESCRIPTION_COMMENT_SCOPE,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import {
   PAGE_FIND_ACT,
   PAGE_FIND_KEY,
@@ -864,8 +864,8 @@ export function PagePane({
       : [
           openPageInBrowserItem(
             "taskId" in place
-              ? { kind: LINK_PLACE.PAGE, planId: place.taskId, pageId: page.id }
-              : { kind: LINK_PLACE.PAGE, agentId: place.agentId, pageId: page.id },
+              ? { kind: LINK_DESTINATION.PAGE, planId: place.taskId, pageId: page.id }
+              : { kind: LINK_DESTINATION.PAGE, agentId: place.agentId, pageId: page.id },
             workspace,
           ),
         ];

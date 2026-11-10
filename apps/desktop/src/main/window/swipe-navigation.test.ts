@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { PUSH, type PushEvent } from "@repo/host/contract";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import type { WebContents } from "electron";
@@ -9,7 +9,7 @@ import { followSwipes } from "./swipe-navigation";
 import { windowPushes } from "./window-pushes";
 
 /** An app link to a task, as the system hands one to the app. */
-const LINK = { workspace: "workspace-1", place: { kind: LINK_PLACE.TASK, planId: "task-1" } };
+const LINK = { workspace: "workspace-1", place: { kind: LINK_DESTINATION.TASK, planId: "task-1" } };
 
 /**
  * A panel window's swipes as its page meets them: the swipe Logi Options+

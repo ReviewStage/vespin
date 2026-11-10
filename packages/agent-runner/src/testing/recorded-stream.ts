@@ -278,6 +278,56 @@ export const WARM_TURNS: readonly Step[] = [
   { emit: result("success") },
 ];
 
+/**
+ * The `result` the CLI puts out once its own retries of a model call it
+ * could not deliver run out, as the Agent SDK words it: a success by
+ * subtype, an error by flag, the connection error as its text, and no API
+ * status, since nothing answered.
+ */
+const CONNECTION_LOST_RESULT = {
+  ...result("success"),
+  is_error: true,
+  result: "API Error: Connection error.",
+} as const;
+
+/** The `result` of a model call the API refused for its credential: the same shape, with the API's status. */
+const CREDENTIAL_REFUSED_RESULT = {
+  ...result("success"),
+  is_error: true,
+  result: "API Error: 401 Invalid API key · Please run /login",
+  api_error_status: 401,
+} as const;
+
+/**
+ * A turn the CLI gave up on for want of the API, then the carry-on the
+ * service sends once the host answers, which the CLI runs as a turn that
+ * finishes with nothing pending.
+ */
+export const CONNECTION_LOST_TURN: readonly Step[] = [
+  { emit: INIT },
+  { emit: said("Working on it.") },
+  { emit: CONNECTION_LOST_RESULT },
+  { awaitPrompt: true },
+  { emit: said("Done.") },
+  { stopHook: NOTHING_IN_FLIGHT },
+  { emit: result("success") },
+];
+
+/** A turn the CLI gave up on for want of the API, and the carry-on's turn lost the same way before the model said anything. */
+export const CONNECTION_LOST_TWICE: readonly Step[] = [
+  { emit: INIT },
+  { emit: said("Working on it.") },
+  { emit: CONNECTION_LOST_RESULT },
+  { awaitPrompt: true },
+  { emit: CONNECTION_LOST_RESULT },
+];
+
+/** A turn the API refused for its credential, which no probe mends. */
+export const CREDENTIAL_REFUSED_TURN: readonly Step[] = [
+  { emit: INIT },
+  { emit: CREDENTIAL_REFUSED_RESULT },
+];
+
 /** A turn that schedules a wakeup and ends its model turn waiting on it alone, the CLI then held up until the launch ends. */
 export const WAKEUP_WAIT: readonly Step[] = [
   { emit: INIT },

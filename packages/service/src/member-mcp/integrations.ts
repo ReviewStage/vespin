@@ -5,7 +5,7 @@
  * member, so it answers what Settings › Integrations and Settings › MCP
  * answer them and refuses what those refuse: the integrations read and
  * settled as the desktop's bearer reads them (`statusesAnswer`), an account
- * at a provider signed in, named, or disconnected
+ * at a provider signed in, its tools listed, named, or disconnected
  * (`integrations-procedures.ts`), the clients listed and one revoked
  * (`clients-procedures.ts`), and a workspace's Sentry installations read by
  * any member of it and one disconnected by an owner or an admin
@@ -32,6 +32,8 @@ import {
   renameAccount,
   requestedAccount,
   statusesAnswer,
+  type ToolsCache,
+  toolsAnswer,
   type UnnamedHold,
 } from "../integrations/integrations-procedures.js";
 import {
@@ -49,6 +51,9 @@ import { memberMcpResourceUrl } from "./resource.js";
  */
 const UNNAMED: UnnamedHold = new Map();
 
+/** The tools read lately, held for as long as this instance stands, as the procedures' own are, so a read asked again soon does not ask the provider's server again. */
+const TOOLS: ToolsCache = new Map();
+
 /** Why a call did nothing, in words for one acting for the member. */
 const MEMBER_INTEGRATION_REFUSAL = {
   NO_ACCOUNT: `Not done: the member holds no such account; ${MEMBER_MCP_TOOL.LIST_INTEGRATIONS} names theirs, each by its connection.`,
@@ -56,6 +61,7 @@ const MEMBER_INTEGRATION_REFUSAL = {
     "Not done: that integration is not offered to the member on this deployment, it holds as " +
     "many accounts as it takes, it is GitHub, whose sign-in is the member's own, or it could " +
     "not be reached just now.",
+  TOOLS_UNAVAILABLE: `Not done: that integration is not offered to the member on this deployment, the account is not connected (${MEMBER_MCP_TOOL.CONNECT_INTEGRATION} signs it in again), or it could not be reached just now.`,
   NO_WORKSPACE: "Not done: the member belongs to no such workspace.",
   NOT_PERMITTED: "Not done: only an owner or an admin of the workspace may disconnect its Sentry.",
   NO_INSTALLATION: `Not done: the workspace holds no such Sentry installation; ${MEMBER_MCP_TOOL.LIST_SENTRY_INSTALLATIONS} names its installations.`,
@@ -130,6 +136,20 @@ export const connectIntegrationAsMember = ({
       Effect.map(work, ({ url, connection: signedIn }) => ({ url, connection: signedIn })),
       MEMBER_INTEGRATION_REFUSAL.NO_ACCOUNT,
       MEMBER_INTEGRATION_REFUSAL.UNAVAILABLE,
+    );
+  });
+
+/** The tools one of the member's accounts offers their agents, as Settings › Integrations lists them, or why its server listed none. */
+export const listIntegrationToolsAsMember = (provider: string, connection: string) =>
+  Effect.gen(function* () {
+    const member = yield* AdmittedMember;
+    const work = Effect.flatMap(namedAccount(provider, connection), (asked) =>
+      toolsAnswer(integrationAccountSeams(), TOOLS, member.userId, asked),
+    );
+    return yield* accepted(
+      Effect.map(work, (answer) => ({ connection, ...answer })),
+      MEMBER_INTEGRATION_REFUSAL.NO_ACCOUNT,
+      MEMBER_INTEGRATION_REFUSAL.TOOLS_UNAVAILABLE,
     );
   });
 

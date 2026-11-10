@@ -8,6 +8,7 @@ import {
   EDITABLE_TEXT_BLOCK_SELECTOR,
   EditableBlock,
   EditableHeading,
+  headingCaretAtEnd,
   PageHeader,
   RetryButton,
   useWait,
@@ -504,27 +505,9 @@ export function EmptyDocumentBlock({
   );
 }
 
-/** The caret at the end of an element's words. */
-function caretAtEnd(element: HTMLElement): void {
-  element.focus();
-  const range = document.createRange();
-  range.selectNodeContents(element);
-  range.collapse(false);
-  window.getSelection()?.removeAllRanges();
-  window.getSelection()?.addRange(range);
-}
-
 /** The title's words as a name: trimmed, and cut to the bound as the name field's own `maxLength` cuts a paste. */
 function typedName(element: HTMLElement): string {
   return element.textContent.trim().slice(0, TASK_BOUNDS.MAX_NAME_CHARS).trim();
-}
-
-/** The title's words held to the bound as they are typed, as the name field's `maxLength` holds its own, so no word stands past what is saved. */
-function boundTitle(element: HTMLElement): void {
-  const words = element.textContent;
-  if (words.length <= TASK_BOUNDS.MAX_NAME_CHARS) return;
-  element.textContent = words.slice(0, TASK_BOUNDS.MAX_NAME_CHARS);
-  caretAtEnd(element);
 }
 
 /**
@@ -569,7 +552,7 @@ export function EditableTitle({
   const stamp = useRef(0);
   // ↑ on the text's first line comes back into the title, its caret at the end.
   useSelectedOnClose(editing, EDITOR_PLACE.TITLE, () => {
-    if (text.current !== null) caretAtEnd(text.current);
+    if (text.current !== null) headingCaretAtEnd(text.current);
   });
   // Whether the words as they stand were saved as the title was left, so a blur that follows renames nothing again.
   const saved = useRef(true);
@@ -593,7 +576,7 @@ export function EditableTitle({
     if (typing && echo.current === undefined) return;
     echo.current = undefined;
     element.textContent = name;
-    if (typing) caretAtEnd(element);
+    if (typing) headingCaretAtEnd(element);
   }, [name]);
   // Note that a refusal is judged by what was typed since the ask, not by
   // the words, because words typed away and back are a newer edit of their own.
@@ -657,7 +640,7 @@ export function EditableTitle({
           if (event.target === event.currentTarget) editing.select(EDITOR_PLACE.TITLE);
         }}
         onOpen={() => {
-          if (text.current !== null) caretAtEnd(text.current);
+          if (text.current !== null) headingCaretAtEnd(text.current);
         }}
       >
         <PageHeader
@@ -665,6 +648,7 @@ export function EditableTitle({
             <EditableHeading
               ref={text}
               label="Task name"
+              maxLength={TASK_BOUNDS.MAX_NAME_CHARS}
               onFocus={() => {
                 saved.current = false;
               }}
@@ -674,7 +658,6 @@ export function EditableTitle({
                   typed.current = true;
                   tellUnsaved();
                 }
-                boundTitle(event.currentTarget);
                 const next = typedName(event.currentTarget);
                 echo.current = next === "" ? undefined : next;
                 onDraft(echo.current);

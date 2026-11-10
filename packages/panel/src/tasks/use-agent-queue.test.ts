@@ -5,6 +5,7 @@ import type { AgentQueue } from "@repo/features/agent-queue-wire";
 import { AGENT_CALL_FAILURE, type AgentQueueAnswerView } from "@repo/features/agent-view";
 import {
   AGENT_ATTACHMENT_TYPE,
+  AGENT_BOUNDS,
   type AgentQueueChange,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
@@ -16,6 +17,7 @@ import { afterEach, beforeEach, test, vi } from "vitest";
 import { pictureNow } from "../picture-query.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
+import { ToastHost } from "../toast.js";
 import { useAgentPictureDoor } from "./agent-pictures.js";
 import { type AgentComposerControl, useAgentComposer } from "./use-agent-composer.js";
 import {
@@ -140,6 +142,52 @@ test("a message the queue refused comes back into the box it was queued from", a
   await answer(refused);
 
   assert.equal(now().composer.draft, "Please update the tests");
+});
+
+test("a message the queue refused comes back ahead of the words and files written while it was out, in the tab drawn afresh meanwhile", async () => {
+  act(() => now().composer.setDraft("Please update the tests"));
+  act(() => now().composer.setAttachments(() => [SHOT]));
+  act(() => now().editing.queue());
+  // The tab is closed and opened again while the message is out.
+  await act(async () =>
+    roots[0]?.render(withQueryClient(createElement(Tab, { key: "opened again" }))),
+  );
+  act(() => now().composer.setDraft("And the docs"));
+  act(() => now().composer.setAttachments(() => [SPEC]));
+  await answer(refused);
+
+  assert.equal(now().composer.draft, "Please update the tests\nAnd the docs");
+  assert.deepEqual(now().composer.attachments, [SHOT, SPEC]);
+});
+
+test("a refused message that would pass a message's bound beside the box's newer words leaves the box as it is, and Put back lays it in ahead once there is room", async () => {
+  const toasts = createRoot(document.body.appendChild(document.createElement("div")));
+  roots.push(toasts);
+  act(() => toasts.render(withQueryClient(createElement(ToastHost))));
+  const long = "a".repeat(AGENT_BOUNDS.MAX_MESSAGE_CHARS - 4);
+  act(() => now().composer.setDraft(long));
+  act(() => now().editing.queue());
+  act(() => now().composer.setDraft("And the docs"));
+  await answer(refused);
+  assert.equal(now().composer.draft, "And the docs");
+
+  act(() => now().composer.setDraft("Ok"));
+  const putBack = [...document.querySelectorAll<HTMLButtonElement>(".ui-toast button")].find(
+    (button) => button.textContent === "Put back",
+  );
+  const press = putBack ?? assert.fail("a toast keeps the message with Put back");
+  // Note that a second press lands while the toast pressed is still leaving.
+  act(() => press.click());
+  act(() => press.click());
+
+  assert.equal(now().composer.draft, `${long}\nOk`);
+  assert.deepEqual(
+    [...document.querySelectorAll(".ui-toast:not([data-leaving]) button")]
+      .map((button) => button.textContent)
+      .filter((label) => label === "Put back"),
+    [],
+    "no toast keeps the message once it is back",
+  );
 });
 
 test("an edit the queue refused to save stays open with its new words, the box's own still kept aside", async () => {

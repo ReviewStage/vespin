@@ -88,7 +88,11 @@ const DIFFERS_EXIT = 1;
  * The dependencies installed in the checkout: with pnpm where its lockfile
  * is pnpm's, with npm where it has a `package.json` and no such lockfile,
  * and nothing in a repository that has neither, which has none to install;
- * written group-writable, as the clone is (`GROUP_WRITES`).
+ * written group-writable, as the clone is (`GROUP_WRITES`). Note that it is
+ * the default user's, pnpm's store at the drive's root among it, which each
+ * agent's launch hands to its `agent` user (`machine/sandbox-machine.ts`'s
+ * readying), because an install chmods what it installed and only a file's
+ * owner may.
  */
 const INSTALL_SCRIPT = [
   "set -e",

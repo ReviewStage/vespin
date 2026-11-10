@@ -3,6 +3,7 @@ import { ACCOUNT_WORDS_EXAMPLE } from "./examples/account-words";
 import { ADDRESS_FIELDS_EXAMPLE } from "./examples/address-fields";
 import { ANCHORED_POPOVER_EXAMPLE } from "./examples/anchored-popover";
 import { ANNOUNCER_EXAMPLE } from "./examples/announcer";
+import { APPROVAL_ACTIONS_EXAMPLE } from "./examples/approval-actions";
 import { ARRIVALS_EXAMPLE } from "./examples/arrivals";
 import { ARTWORK_EXAMPLE } from "./examples/artwork";
 import { ATTACHMENT_CHIPS_EXAMPLE } from "./examples/attachment-chips";
@@ -20,6 +21,7 @@ import { CALENDAR_EXAMPLE } from "./examples/calendar";
 import { CARD_PRESSES_EXAMPLE } from "./examples/card-presses";
 import { CARDS_EXAMPLE } from "./examples/cards";
 import { CHECKBOXES_EXAMPLE } from "./examples/checkboxes";
+import { CHIP_POPOVERS_EXAMPLE } from "./examples/chip-popovers";
 import { CHIPS_EXAMPLE } from "./examples/chips";
 import { CHOICE_BAR_EXAMPLE } from "./examples/choice-bar";
 import { CHOICE_LIST_EXAMPLE } from "./examples/choice-list";
@@ -164,6 +166,7 @@ export const EXAMPLES: readonly Example[] = [
   ARTWORK_EXAMPLE,
   ANCHORED_POPOVER_EXAMPLE,
   ANNOUNCER_EXAMPLE,
+  APPROVAL_ACTIONS_EXAMPLE,
   ARRIVALS_EXAMPLE,
   TYPOGRAPHY_EXAMPLE,
   LAYOUT_EXAMPLE,
@@ -189,6 +192,7 @@ export const EXAMPLES: readonly Example[] = [
   BLOCK_LISTS_EXAMPLE,
   COMPOSER_FRAMES_EXAMPLE,
   COMPOSER_FOOTS_EXAMPLE,
+  CHIP_POPOVERS_EXAMPLE,
   CHIPS_EXAMPLE,
   BAR_ITEMS_EXAMPLE,
   CHOICE_BAR_EXAMPLE,

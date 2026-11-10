@@ -1,5 +1,5 @@
 import type { AgentAttachment, AgentSummary } from "@repo/features/agent-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import {
   CARD_CORNER,
@@ -257,8 +257,8 @@ export function ForkChip({
       : () =>
           openPlace(
             messageId === undefined
-              ? { kind: LINK_PLACE.AGENT, ...task, agentId }
-              : { kind: LINK_PLACE.MESSAGE, ...task, agentId, messageId },
+              ? { kind: LINK_DESTINATION.AGENT, ...task, agentId }
+              : { kind: LINK_DESTINATION.MESSAGE, ...task, agentId, messageId },
           );
   const quote = `“${fork.opening}”`;
   const drop = messageId === undefined ? FORK_WORDS.DROP_CONTINUE : FORK_WORDS.DROP;

@@ -64,3 +64,28 @@ export function missingWords(missing: InboxMissing): string {
       return `${WRITE_AN_ANSWER}.`;
   }
 }
+
+/** What the presses closing an open `do` ask say, the one going ahead first. */
+export const ASK_PRESS = {
+  DONE: "Mark done",
+  NOT_DONE: "Couldn't do it",
+} as const;
+
+/**
+ * What a thread's box says: its line under an open question's controls,
+ * which are the answer, its note going beside it; its line where no
+ * controls stand over it, a reply's own words; and its round Send.
+ */
+export const INBOX_BOX_WORDS = {
+  NOTE_PLACEHOLDER: "Add a note",
+  REPLY_PLACEHOLDER: "Reply",
+  SEND: "Send",
+} as const;
+
+/**
+ * What a member's close of a thread without an answer is called wherever it
+ * is offered. Note that it is not called Close, because the bar of a side
+ * panel or a window standing it full screen already holds a Close that only
+ * puts the panel away, and its mark is never Close's ×.
+ */
+export const RESOLVE = "Resolve";

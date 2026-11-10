@@ -1,3 +1,4 @@
+import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import {
   HOST_PAIRING_CALL_FAILURE,
   type HostPairingFailed,
@@ -32,7 +33,6 @@ import { createStore, useSelector } from "@tanstack/react-store";
 import { useCallback, useState } from "react";
 import { askAct } from "../act.js";
 import { actMutation } from "../act-mutations.js";
-import { DEVICE_PLATFORM_NAME } from "../device-platform.js";
 import { unreadShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { DeviceGlyph } from "../tasks/runs-on.js";
@@ -52,14 +52,14 @@ import { DeviceGlyph } from "../tasks/runs-on.js";
  * so focus rests on the card. Connect makes the host at once and closes onto the list, which
  * reads it; Deny ends the pairing and says so. A code no pending pairing has,
  * lapsed, used, mistyped, or held after too many such codes, reads as that,
- * with what to do: run the command on the host again for a new code.
+ * with what to do: run the command on the machine again for a new code.
  */
 
 /** The code a window was handed to approve, which Settings › Hosts draws its dialog for until it is put away. */
 const hostConnectStore = createStore<string | undefined>(undefined);
 
 const WORDS = {
-  TITLE: "Connect a host",
+  TITLE: "Connect a machine",
   MATCH: "Connect it only if you ran the command on it, and this code matches the one it shows.",
   CONNECT: "Connect",
   CONNECTING: "Connecting",
@@ -67,11 +67,11 @@ const WORDS = {
   DENYING: "Denying",
   DENIED:
     "It isn't connected to your account, and its command stops waiting. To connect it, run the command on it again.",
-  AGAIN: "Run the command on the host again for a new code.",
+  AGAIN: "Run the command on the machine again for a new code.",
   NOT_FOUND_TITLE: "This code can't be used",
   NOT_FOUND: "It may have expired, been used already, or been typed wrong.",
   HELD_TITLE: "Too many codes tried",
-  HELD: "Your account tried too many codes that match no host.",
+  HELD: "Your account tried too many codes that match no machine.",
   HELD_SOON: "Try again in a few minutes.",
   UNREAD: readFailedWords("the code"),
   UNANSWERED: "Could not connect. Check your internet connection and try again.",

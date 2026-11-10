@@ -12,6 +12,12 @@ import {
 } from "./account-call.js";
 import type { AccountPreferencesAnswerWire } from "./account-wire.js";
 import {
+  type AgentPermissionModeRequest,
+  type ApprovalAnswerRequest,
+  agentPermissionModeRequestSchema,
+  approvalAnswerRequestSchema,
+} from "./agent-approval-wire.js";
+import {
   AGENT_ADD_REPOSITORY_RENAMES,
   AGENT_ARCHIVE_RENAMES,
   AGENT_CALL_FAILURE,
@@ -22,6 +28,7 @@ import {
   AGENT_RENAMES,
   AGENT_START_RENAMES,
   type AgentAgentAnswer,
+  type AgentApprovalAnswerView,
   type AgentCallFailure,
   type AgentChangesAnswerView,
   type AgentDefaultAnswer,
@@ -33,6 +40,7 @@ import {
   type AgentInboxMessagedView,
   type AgentInboxReadAllView,
   type AgentInboxReadStateView,
+  type AgentInboxTakenBackView,
   type AgentListAnswer,
   type AgentMessageAnswerView,
   type AgentMessagesAnswerView,
@@ -63,12 +71,22 @@ import {
   githubImageTypeSchema,
   type HostDoneAnswerView,
   type HostsAnswerView,
+  type LiveActivityEndedAnswerView,
+  type LiveActivityEndedParams,
+  type LiveActivityTokenAnswerView,
+  type LiveActivityTokenParams,
   type MemoriesAnswerView,
   type MemoryForgetParams,
   type ProviderKeyForAgentsParams,
   type ProviderKeyRemoveParams,
   type ProviderKeySaveParams,
   type ProviderKeysAnswerView,
+  type PushDeviceDoneAnswerView,
+  type PushDeviceKeyParams,
+  type PushDeviceNotifyAnswerView,
+  type PushDeviceNotifyParams,
+  type PushDeviceRegisterParams,
+  type PushDeviceStatusAnswerView,
   type SubscriptionLabelParams,
   type SubscriptionOrderParams,
 } from "./agent-view.js";
@@ -132,12 +150,18 @@ import {
   type InboxMessageRequest,
   type InboxReadAllRequest,
   type InboxStartRequest,
+  type InboxTakeBackRequest,
   inboxAcknowledgeRequestSchema,
   inboxCloseRequestSchema,
   inboxMessageRequestSchema,
   inboxReadAllRequestSchema,
   inboxStartRequestSchema,
+  inboxTakeBackRequestSchema,
 } from "./inbox-wire.js";
+import {
+  liveActivityEndedRequestSchema,
+  liveActivityTokenRequestSchema,
+} from "./live-activity-wire.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import { TRANSCRIPT_NOW_QUERY, type TranscriptNowAnswer } from "./live-wire.js";
 import { MEMORY_QUERY } from "./memory-wire.js";
@@ -163,6 +187,12 @@ import {
   type PullRequestActionRequest,
   pullRequestActionRequestSchema,
 } from "./pull-request-write-wire.js";
+import {
+  pushDeviceNotifyRequestSchema,
+  pushDeviceRegisterRequestSchema,
+  pushDeviceStatusRequestSchema,
+  pushDeviceUnregisterRequestSchema,
+} from "./push-device-wire.js";
 import type { RepositoryUnreached } from "./repository-reach-wire.js";
 import { agentGitHubImagePath, agentPicturePath, inboxAttachmentPath } from "./service-paths.js";
 import {
@@ -614,6 +644,69 @@ export class HostedAgentClient {
     });
   }
 
+  /** The phone the app runs on registered for pushes under the account; a registration the service would refuse by shape never travels. */
+  registerPushDevice(
+    params: PushDeviceRegisterParams,
+  ): Effect.Effect<PushDeviceDoneAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(pushDeviceRegisterRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.pushDevices.register, admitted);
+  }
+
+  /** The phone unregistered from the account's pushes, as a sign-out does; a key the service would refuse by shape never travels. */
+  unregisterPushDevice(
+    params: PushDeviceKeyParams,
+  ): Effect.Effect<PushDeviceDoneAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(pushDeviceUnregisterRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.pushDevices.unregister, admitted);
+  }
+
+  /** The phone's "Notify me" and how its pushes fared; not found where the account holds no such phone. */
+  pushDeviceStatus(
+    params: PushDeviceKeyParams,
+  ): Effect.Effect<PushDeviceStatusAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(pushDeviceStatusRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.pushDevices.status, admitted);
+  }
+
+  /** The phone's "Notify me" set; not found where the account holds no such phone. */
+  setPushDeviceNotify(
+    params: PushDeviceNotifyParams,
+  ): Effect.Effect<PushDeviceNotifyAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(pushDeviceNotifyRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.pushDevices.notify, admitted);
+  }
+
+  /** The phone's Live Activity push-to-start token registered; not found until the account holds the phone, and a token the service would refuse by shape never travels. */
+  registerLiveActivityStartToken(
+    params: LiveActivityTokenParams,
+  ): Effect.Effect<LiveActivityTokenAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(liveActivityTokenRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.liveActivities.startToken, admitted);
+  }
+
+  /** The update token of the Live Activity standing on the phone registered; not found until the account holds the phone. */
+  registerLiveActivityToken(
+    params: LiveActivityTokenParams,
+  ): Effect.Effect<LiveActivityTokenAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(liveActivityTokenRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.liveActivities.activityToken, admitted);
+  }
+
+  /** The phone's Live Activity ended or dismissed on the phone, so the service drops its update token. */
+  endLiveActivity(
+    params: LiveActivityEndedParams,
+  ): Effect.Effect<LiveActivityEndedAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(liveActivityEndedRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.liveActivities.ended, admitted);
+  }
+
   /** Tells the service the member used this client just now, which holds their phone's pushes (`presence-wire.ts`); its answer is read by no one. */
   markActive(): Effect.Effect<void, never, HttpClient.HttpClient> {
     return Effect.asVoid(hostedCall(this.#hosted.account.active, undefined));
@@ -909,6 +1002,40 @@ export class HostedAgentClient {
         { as: AGENT_NOT_FOUND_RENAMES },
       ),
       rowWritten,
+    );
+  }
+
+  /** Changes one agent's permission mode, which reaches it from its next turn, answering it as it then stands; a mode the service would refuse by shape is refused here without traveling. */
+  choosePermissionMode(
+    agentId: string,
+    request: AgentPermissionModeRequest,
+  ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(agentPermissionModeRequestSchema)(request));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return Effect.map(
+      hostedCall(
+        this.#hosted.agents.change,
+        { params: { id: agentId }, body: admitted },
+        { as: AGENT_NOT_FOUND_RENAMES },
+      ),
+      rowWritten,
+    );
+  }
+
+  /** Answers one ask of an agent, answering how it then stands, or how it already stood where it no longer waited; an answer the service would refuse by shape is refused here without traveling. */
+  answerApproval(
+    agentId: string,
+    approvalId: string,
+    request: ApprovalAnswerRequest,
+  ): Effect.Effect<AgentApprovalAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(approvalAnswerRequestSchema)(request));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return Effect.map(
+      hostedCall(this.#hosted.agents.answerApproval, {
+        params: { id: agentId, approval: approvalId },
+        body: admitted,
+      }),
+      unansweredBare,
     );
   }
 
@@ -1278,6 +1405,29 @@ export class HostedAgentClient {
     return Effect.map(
       hostedCall(
         this.#hosted.inbox.close,
+        { params: { id: itemId }, body },
+        inboxWrite(HOSTED_DEADLINE.STEER, key),
+      ),
+      writtenAlreadyKept,
+    );
+  }
+
+  /**
+   * Takes back the account's own nod or close on one item, by the key it
+   * went under, however long since, under the idempotency key given where
+   * one is. It answers the item as it then stands with what came of it:
+   * taken back, refused as told to its agent, or refused as moved on.
+   */
+  takeBackInbox(
+    itemId: string,
+    request: InboxTakeBackRequest,
+    key?: string,
+  ): Effect.Effect<AgentInboxTakenBackView, never, HttpClient.HttpClient> {
+    const body = wireRequestOf(inboxTakeBackRequestSchema, request);
+    if (body === undefined) return Effect.succeed(UNANSWERED);
+    return Effect.map(
+      hostedCall(
+        this.#hosted.inbox.takeBack,
         { params: { id: itemId }, body },
         inboxWrite(HOSTED_DEADLINE.STEER, key),
       ),

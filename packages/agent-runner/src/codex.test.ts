@@ -29,7 +29,9 @@ import {
   CODEX_EFFORT,
   CODEX_PLAN_BACKEND,
   CODEX_TOKEN_COMMAND,
+  CONNECTION_LOST_DETAIL,
   type CodexConfig,
+  connectionLostFailure,
   IMAGE_MEDIA_TYPE,
   INPUT_LINE,
   INSTALLED_SKILLS,
@@ -39,6 +41,7 @@ import {
   RUNNER_EVENT,
   RUNNER_HARNESS,
   RUNNER_PLACE,
+  RUNNER_RECONNECT,
   type RunnerEvent,
 } from "./protocol.js";
 import { runAgent } from "./runner.js";
@@ -52,6 +55,7 @@ import {
   type Spawned,
 } from "./testing/fake-app-server.js";
 import { fakeClaudeCode } from "./testing/fake-claude-code.js";
+import { fakeProbe } from "./testing/fake-probe.js";
 import { makeFakeService } from "./testing/fake-service.js";
 
 const BEARER = "runner-bearer-for-tests";
@@ -216,13 +220,16 @@ function launch(
   scripts: readonly Script[],
   service: ReturnType<typeof makeFakeService>,
   env: Record<string, string> = ENV,
-  extra: { readonly self?: RunnerSelf; readonly http?: Layer.Layer<HttpClient.HttpClient> } = {
-    self: SELF,
-  },
+  extra: {
+    readonly self?: RunnerSelf;
+    readonly http?: Layer.Layer<HttpClient.HttpClient>;
+    readonly probe?: ReturnType<typeof fakeProbe>;
+  } = { self: SELF },
 ) {
   return Effect.gen(function* () {
     const server = fakeAppServer(scripts);
     const claude = yield* fakeClaudeCode([]);
+    const probe = extra.probe ?? fakeProbe();
     const logged: string[] = [];
     const recorder = Logger.make(({ message: logMessage }) => {
       logged.push(JSON.stringify(logMessage));
@@ -236,12 +243,20 @@ function launch(
           server.layer,
           extra.http ?? service.layer,
           claude.layer,
+          probe.layer,
           Logger.layer([recorder]),
         ),
       ),
       Effect.forkScoped,
     );
-    return { spawned: server.spawned, write, closeStdin: Queue.end(stdin), run, logged };
+    return {
+      spawned: server.spawned,
+      write,
+      closeStdin: Queue.end(stdin),
+      run,
+      logged,
+      probed: probe.record,
+    };
   });
 }
 
@@ -513,6 +528,28 @@ it.effect("interrupts the running turn on a stop and ends the launch as stopped"
       type: RUNNER_EVENT.END,
       reason: RUNNER_END.STOPPED,
     });
+  }),
+);
+
+it.effect("runs a message sent while a stop's interrupt is in flight as the next turn", () =>
+  Effect.gen(function* () {
+    const service = fakeService("sleep 600");
+    // The interrupt is answered before its turn completes, as P16 recorded it; the message then starts the next turn.
+    const script: Script = { exchanges: [...STOPPED.exchanges, RESUMED_TURN] };
+    const { spawned, write, run } = yield* launch([script], service);
+    yield* write(CONFIG);
+    yield* write(message("Run `sleep 600` and wait for it to finish.", LINE.FIRST));
+    yield* service.seen;
+    yield* write({ type: INPUT_LINE.STOP });
+    yield* write(message("What exact line did you first write to PROBE.md?", LINE.STEERED));
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    const [process] = spawned;
+    assert.deepEqual(process?.unexpected, []);
+    assert.deepEqual(received(process, "turn/start")[1]?.input, [
+      { type: "text", text: "What exact line did you first write to PROBE.md?", text_elements: [] },
+    ]);
+    assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST, LINE.STEERED]);
   }),
 );
 
@@ -1303,4 +1340,142 @@ it.effect("resumes a thread whole where no turn took the line the rewind dropped
     assert.deepEqual(process?.unexpected, []);
     assert.deepEqual(received(process, "thread/revert"), []);
   }),
+);
+
+/** The carry-on line the service sends once the provider's host answers. */
+const CARRY_ON = "Your previous turn was interrupted; carry on.";
+
+/**
+ * The resumed turn, failed as app-server reports a stream it lost to the
+ * network: Codex's own kind for it, with no HTTP status since nothing
+ * answered; or refused with a status, which no probe mends.
+ */
+function lostTurn(httpStatusCode: number | null): Exchange {
+  const completed = RESUMED_TURN.reply.at(-1);
+  assert.ok(completed?.method === "turn/completed");
+  const params = completed.params;
+  assert.ok(typeof params === "object" && params !== null && "turn" in params);
+  const turn = params.turn;
+  assert.ok(typeof turn === "object" && turn !== null);
+  return {
+    method: "turn/start",
+    reply: [
+      ...RESUMED_TURN.reply.slice(0, -1),
+      {
+        ...completed,
+        params: {
+          ...params,
+          turn: {
+            ...turn,
+            status: "failed",
+            error: {
+              message: "stream disconnected before completion: connection reset",
+              codexErrorInfo: { responseStreamDisconnected: { httpStatusCode } },
+              additionalDetails: null,
+            },
+          },
+        },
+      },
+    ],
+  };
+}
+
+/** Waits, without moving the clock, until the service has taken an event of the type given. */
+function untilPosted(service: ReturnType<typeof fakeService>, type: string) {
+  return Effect.gen(function* () {
+    const posted = () =>
+      service.applied.some(({ message }) => "type" in message && message.type === type);
+    for (let step = 0; step < 5_000 && !posted(); step += 1) yield* Effect.yieldNow;
+    assert.ok(posted(), `the service took no ${type}`);
+  });
+}
+
+it.effect(
+  "keeps the launch up when app-server loses its provider, probes the host, and runs the carry-on as the next turn once it answers",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const script: Script = { exchanges: [...RESUME, lostTurn(null), RESUMED_TURN] };
+      const { spawned, write, run, probed } = yield* launch([script], service, ENV, {
+        self: SELF,
+        probe: fakeProbe(1),
+      });
+      yield* write({ ...CONFIG, threadId: THREAD });
+      yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
+      yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
+      assert.equal(run.pollUnsafe(), undefined, "the launch stays up");
+
+      // Refused at once, answered after the first wait.
+      yield* TestClock.adjust(RUNNER_RECONNECT.FIRST_WAIT_MS);
+      yield* untilPosted(service, RUNNER_EVENT.CONNECTION_RESTORED);
+      assert.equal(probed.targets.length, 2);
+      const restored = service.applied.find(
+        ({ message: posted }) =>
+          "type" in posted && posted.type === RUNNER_EVENT.CONNECTION_RESTORED,
+      )?.message;
+      assert.ok(restored !== undefined && "type" in restored);
+      assert.deepEqual(restored, {
+        type: RUNNER_EVENT.CONNECTION_RESTORED,
+        host: probed.targets[0]?.host,
+        carryOn: true,
+      });
+
+      yield* write(message(CARRY_ON, LINE.STEERED));
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      const [process] = spawned;
+      assert.deepEqual(process?.unexpected, []);
+      assert.deepEqual(received(process, "turn/start")[1]?.input, [
+        { type: "text", text: CARRY_ON, text_elements: [] },
+      ]);
+      assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST, LINE.STEERED]);
+    }),
+);
+
+it.effect(
+  "ends the launch failed, saying why, once the provider's host stays silent past the wait",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const script: Script = { exchanges: [...RESUME, lostTurn(null)] };
+      const { write, run, probed } = yield* launch([script], service, ENV, {
+        self: SELF,
+        probe: fakeProbe(Number.POSITIVE_INFINITY),
+      });
+      yield* write({ ...CONFIG, threadId: THREAD });
+      yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
+      yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
+
+      for (;;) {
+        if (run.pollUnsafe() !== undefined) break;
+        yield* TestClock.adjust(RUNNER_RECONNECT.LONGEST_WAIT_MS);
+      }
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      assert.deepEqual(service.applied.at(-1)?.message, {
+        type: RUNNER_EVENT.END,
+        reason: RUNNER_END.FAILED,
+        detail: connectionLostFailure(
+          probed.targets[0]?.host ?? "",
+          CONNECTION_LOST_DETAIL.GAVE_UP,
+        ),
+      });
+    }),
+);
+
+it.effect(
+  "ends the launch failed as before on a stream the provider refused with a status, probing nothing",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const script: Script = { exchanges: [...RESUME, lostTurn(401)] };
+      const { write, run, probed } = yield* launch([script], service);
+      yield* write({ ...CONFIG, threadId: THREAD });
+      yield* write(message("What exact line did you first write to PROBE.md?", LINE.FIRST));
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      assert.equal(probed.targets.length, 0);
+      assert.deepEqual(service.applied.at(-1)?.message, {
+        type: RUNNER_EVENT.END,
+        reason: RUNNER_END.FAILED,
+        detail: "stream disconnected before completion: connection reset",
+      });
+    }),
 );

@@ -1,5 +1,5 @@
 /**
- * agents.ts -- a coding agent as the desktop lists, starts, reads, changes, and stops it, its changes and review options, and its shells (`agent-wire.ts`, `terminal-wire.ts`).
+ * agents.ts -- a coding agent as the desktop lists, starts, reads, changes, and stops it, answers its asks, its changes and review options, and its shells (`agent-wire.ts`, `agent-approval-wire.ts`, `terminal-wire.ts`).
  *
  * Every path names the task or the agent it is about as `{id}`, and a shell
  * as `{terminal}`, which the handler reads as an id: one that is no UUID
@@ -22,6 +22,11 @@
 import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
+import {
+  agentPermissionModeRequestSchema,
+  approvalAnswerAnswerSchema,
+  approvalAnswerRequestSchema,
+} from "../agent-approval-wire.js";
 import {
   AGENT_LIST_QUERY,
   AGENT_WORKSPACE_QUERY,
@@ -117,9 +122,10 @@ const AGENT_STOP_REFUSALS = [
 
 /**
  * What one change of an agent refuses: an archive's Stop, a key already
- * written under (`writeReceiptMiddleware`), and a repository added refused
+ * written under (`writeReceiptMiddleware`), a repository added refused
  * by why (`agent-repository-add.ts`), out of reach, unread off GitHub, or
- * its branch gone. A choice the catalog refuses is an invalid request.
+ * its branch gone, and a permission mode that asks for an agent whose
+ * harness never asks. A choice the catalog refuses is an invalid request.
  */
 const CHANGE_REFUSALS = [
   ...STOP_REFUSALS,
@@ -128,6 +134,20 @@ const CHANGE_REFUSALS = [
   HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE,
   HOSTED_API_ERROR.GITHUB_UNANSWERED,
   HOSTED_API_ERROR.BRANCH_NOT_FOUND,
+  HOSTED_API_ERROR.PERMISSION_MODE_REFUSED,
+] as const;
+
+/**
+ * What an answer to an ask refuses (`coder-host/approval-answer.ts`): an
+ * agent or an ask not found or not the caller's to answer, an ask that no
+ * longer waits, by how it stands, and a runner the service could not reach
+ * just now, to be tried again.
+ */
+const APPROVAL_ANSWER_REFUSALS = [
+  HOSTED_API_ERROR.NOT_FOUND,
+  HOSTED_API_ERROR.NOT_PERMITTED,
+  HOSTED_API_ERROR.APPROVAL_SETTLED,
+  HOSTED_API_ERROR.UNAVAILABLE,
 ] as const;
 
 /**
@@ -172,6 +192,15 @@ export const AGENT_START_STATUS = { CREATED: 201, STARTED_BEFORE: 200 } as const
 /** The task or the agent a path names, read as an id by the handler. */
 const idParams = EffectSchema.Struct({ id: EffectSchema.String });
 
+/** One ask of an agent a path names, read as ids by the handler. */
+const approvalParams = EffectSchema.Struct({
+  id: EffectSchema.String,
+  approval: EffectSchema.String,
+});
+
+/** An answer and the words of a denial at their widest escape, so a body past this is no answer. */
+const APPROVAL_BODY_BYTES = 32_768;
+
 /** One shell of an agent a path names. */
 const terminalParams = EffectSchema.Struct({
   id: EffectSchema.String,
@@ -189,7 +218,7 @@ const archivedQuery = EffectSchema.optionalKey(EffectSchema.String);
 /**
  * One change of an agent (PATCH): its title, its archive, its pin, the
  * reader's read mark, its MCP servers, a repository added beside its own,
- * or its model and effort, tried in that order.
+ * its permission mode, or its model and effort, tried in that order.
  */
 const agentChangeRequestSchema = EffectSchema.Union([
   agentRenameRequestSchema,
@@ -198,6 +227,7 @@ const agentChangeRequestSchema = EffectSchema.Union([
   agentReadRequestSchema,
   agentServersRequestSchema,
   agentAddRepositoryRequestSchema,
+  agentPermissionModeRequestSchema,
   modelChoiceSchema,
 ]);
 
@@ -274,6 +304,19 @@ export const agentsContract = {
     .meta(openapi({ method: HTTP_METHOD.PATCH, path: AGENT_PATH, inputStructure: "detailed" }))
     .input(exactBodyInput(idParams, agentChangeRequestSchema))
     .output(EffectSchema.flip(agentAnswerSchema)),
+  /** One ask of an agent answered, and the answer written to its runner. */
+  answerApproval: declaredProcedure
+    .errors(refuses(...APPROVAL_ANSWER_REFUSALS))
+    .meta(bodyCap(APPROVAL_BODY_BYTES))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: `${AGENT_PATH}/approvals/{approval}`,
+        inputStructure: "detailed",
+      }),
+    )
+    .input(exactBodyInput(approvalParams, approvalAnswerRequestSchema))
+    .output(EffectSchema.flip(approvalAnswerAnswerSchema)),
   /** One agent deleted for good, stopped first where it still works. */
   delete: declaredProcedure
     .errors(refuses(...STOP_REFUSALS))

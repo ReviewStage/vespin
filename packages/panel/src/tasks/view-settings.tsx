@@ -36,17 +36,12 @@ import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { SlidersHorizontalIcon } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import type { MenuAction } from "../desktop/action-menu.js";
-import { ChangedMark } from "../settings/marks.js";
 import { PickerRow } from "../settings/picker-row.js";
 import { useSettingRowWrite } from "../settings/row-write.js";
 import { SelectRow } from "../settings/select-row.js";
 import { SwitchRow } from "../settings/switch-row.js";
 import { CHANGES_WORDS } from "./changes-model.js";
-import {
-  DEFAULT_SETTINGS,
-  type FileViewSettings,
-  useFileViewSettings,
-} from "./file-view-settings.js";
+import { type FileViewSettings, useFileViewSettings } from "./file-view-settings.js";
 
 /**
  * view-settings.tsx -- the View options button in a bar over lines, and the popover under it: on Files changed every diff setting stage-cli offers, in our own controls, grouped by what a reader changes; over a File tab's or a page's source only those its lines follow.
@@ -102,29 +97,22 @@ function optionOf<Value extends string>(
   return options.find((option) => option.value === raw)?.value;
 }
 
-/** A setting's row of segments, as compact as the popover's other rows: its name, the settings' mark while changed, why it is so where it says, and the segments. */
+/** A setting's row of segments, as compact as the popover's other rows: its name, why it is so where it says, and the segments. */
 function SegmentedRow<Value extends string>({
   label,
   detail,
   value,
   options,
-  changed,
   onChange,
 }: {
   label: string;
   detail?: string | undefined;
   value: Value;
   options: readonly { readonly value: Value; readonly label: string }[];
-  changed: boolean;
   onChange: (value: Value) => void;
 }): React.JSX.Element {
   return (
-    <SettingsRow
-      density={SETTINGS_ROW_DENSITY.COMPACT}
-      label={label}
-      adornment={changed ? <ChangedMark /> : null}
-      description={detail}
-    >
+    <SettingsRow density={SETTINGS_ROW_DENSITY.COMPACT} label={label} description={detail}>
       {() => (
         <ChoiceBar
           label={label}
@@ -143,13 +131,11 @@ function ThemeRow<Id extends string>({
   label,
   themes,
   value,
-  changed,
   onChange,
 }: {
   label: string;
   themes: readonly { readonly id: Id; readonly label: string }[];
   value: Id;
-  changed: boolean;
   onChange: (id: Id) => void;
 }): React.JSX.Element {
   const chosen = themes.find((theme) => theme.id === value);
@@ -158,7 +144,6 @@ function ThemeRow<Id extends string>({
       density={SETTINGS_ROW_DENSITY.COMPACT}
       label={label}
       labelReplayUnmasked
-      changed={changed}
       value={value}
       valueLabel={chosen?.label ?? value}
       rows={themes.map((theme) => ({ id: theme.id, label: theme.label }))}
@@ -226,7 +211,6 @@ function LinesRows({ notes }: { notes: boolean }): React.JSX.Element {
     switchDrawn,
     true,
   );
-  const changed = (key: keyof FileViewSettings) => settings[key] !== DEFAULT_SETTINGS[key];
   return (
     <>
       <SwitchRow
@@ -234,7 +218,6 @@ function LinesRows({ notes }: { notes: boolean }): React.JSX.Element {
         label="Word wrap"
         labelReplayUnmasked
         checked={settings.wordWrap}
-        changed={changed("wordWrap")}
         write={wordWrapWrite}
       />
       <SwitchRow
@@ -242,7 +225,6 @@ function LinesRows({ notes }: { notes: boolean }): React.JSX.Element {
         label="Line numbers"
         labelReplayUnmasked
         checked={settings.lineNumbers}
-        changed={changed("lineNumbers")}
         write={lineNumbersWrite}
       />
       {notes ? (
@@ -258,7 +240,6 @@ function LinesRows({ notes }: { notes: boolean }): React.JSX.Element {
             </>
           }
           checked={settings.diffMinimizeComments}
-          changed={changed("diffMinimizeComments")}
           write={diffMinimizeCommentsWrite}
         />
       ) : null}
@@ -274,14 +255,12 @@ function LinesRows({ notes }: { notes: boolean }): React.JSX.Element {
 function ThemeRows(): React.JSX.Element {
   const { settings, change } = useFileViewSettings();
   const [appearance, setAppearance] = useState(currentAppearance);
-  const changed = (key: keyof FileViewSettings) => settings[key] !== DEFAULT_SETTINGS[key];
   return (
     <>
       <SegmentedRow
         label="Syntax theme"
         value={appearance}
         options={APPEARANCE_OPTIONS}
-        changed={false}
         onChange={setAppearance}
       />
       {appearance === APPEARANCE.DARK ? (
@@ -289,7 +268,6 @@ function ThemeRows(): React.JSX.Element {
           label="For dark mode"
           themes={DIFF_THEMES.DARK}
           value={settings.diffDarkTheme}
-          changed={changed("diffDarkTheme")}
           onChange={(diffDarkTheme) => change("diffDarkTheme", diffDarkTheme)}
         />
       ) : (
@@ -297,7 +275,6 @@ function ThemeRows(): React.JSX.Element {
           label="For light mode"
           themes={DIFF_THEMES.LIGHT}
           value={settings.diffLightTheme}
-          changed={changed("diffLightTheme")}
           onChange={(diffLightTheme) => change("diffLightTheme", diffLightTheme)}
         />
       )}
@@ -321,7 +298,6 @@ function TypeRows(): React.JSX.Element {
     (value: FileViewSettings["diffLineHeight"]) => value,
   );
   const diffLigaturesWrite = useSettingRowWrite("diffLigatures", switchStored, switchDrawn, true);
-  const changed = (key: keyof FileViewSettings) => settings[key] !== DEFAULT_SETTINGS[key];
   return (
     <>
       <SelectRow
@@ -331,7 +307,6 @@ function TypeRows(): React.JSX.Element {
         value={settings.diffFont}
         options={FONT_OPTIONS}
         parse={(raw) => optionOf(FONT_OPTIONS, raw)}
-        changed={changed("diffFont")}
         write={diffFontWrite}
       />
       <SelectRow
@@ -341,7 +316,6 @@ function TypeRows(): React.JSX.Element {
         value={settings.diffFontSize}
         options={FONT_SIZE_OPTIONS}
         parse={(raw) => optionOf(FONT_SIZE_OPTIONS, raw)}
-        changed={changed("diffFontSize")}
         write={diffFontSizeWrite}
       />
       <SelectRow
@@ -351,7 +325,6 @@ function TypeRows(): React.JSX.Element {
         value={settings.diffLineHeight}
         options={LINE_HEIGHT_OPTIONS}
         parse={(raw) => optionOf(LINE_HEIGHT_OPTIONS, raw)}
-        changed={changed("diffLineHeight")}
         write={diffLineHeightWrite}
       />
       <SwitchRow
@@ -359,7 +332,6 @@ function TypeRows(): React.JSX.Element {
         label="Ligatures"
         labelReplayUnmasked
         checked={settings.diffLigatures}
-        changed={changed("diffLigatures")}
         write={diffLigaturesWrite}
       />
     </>
@@ -379,7 +351,6 @@ function DiffRows({ roomy }: { roomy: boolean }): React.JSX.Element {
     switchDrawn,
     true,
   );
-  const changed = (key: keyof FileViewSettings) => settings[key] !== DEFAULT_SETTINGS[key];
   return (
     <>
       <SegmentedRow
@@ -387,7 +358,6 @@ function DiffRows({ roomy }: { roomy: boolean }): React.JSX.Element {
         detail={roomy ? undefined : CHANGES_WORDS.TOO_NARROW_TO_SPLIT}
         value={settings.diffLayout}
         options={LAYOUT_OPTIONS}
-        changed={changed("diffLayout")}
         onChange={(diffLayout) => change("diffLayout", diffLayout)}
       />
       <SelectRow
@@ -397,14 +367,12 @@ function DiffRows({ roomy }: { roomy: boolean }): React.JSX.Element {
         value={settings.inlineDiff}
         options={INLINE_DIFF_OPTIONS}
         parse={(raw) => optionOf(INLINE_DIFF_OPTIONS, raw)}
-        changed={changed("inlineDiff")}
         write={inlineDiffWrite}
       />
       <SegmentedRow
         label="Indicators"
         value={settings.diffIndicators}
         options={INDICATOR_OPTIONS}
-        changed={changed("diffIndicators")}
         onChange={(diffIndicators) => change("diffIndicators", diffIndicators)}
       />
       <SwitchRow
@@ -412,7 +380,6 @@ function DiffRows({ roomy }: { roomy: boolean }): React.JSX.Element {
         label="Backgrounds"
         labelReplayUnmasked
         checked={settings.diffBackgrounds}
-        changed={changed("diffBackgrounds")}
         write={diffBackgroundsWrite}
       />
     </>

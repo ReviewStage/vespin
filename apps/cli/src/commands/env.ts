@@ -1,7 +1,7 @@
 /**
  * env.ts -- `vespin env list`, `set`, and `delete`: the environment variables of the workspace the command acts in, which every cloud agent its members start is handed.
  *
- * Each is one `workspaceEnvironment` procedure, as Settings › Environment
+ * Each is one `workspaceEnvironment` procedure, as Settings › Cloud environment
  * calls it: `list` reads the names to any member, and `set` and `delete`
  * write as an owner or admin, which the service holds. A value goes in
  * once, read by `set` from stdin alone (`readSecret`), never from an

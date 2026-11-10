@@ -95,6 +95,25 @@ export const ACCOUNT_ASK_ACT_KIND = {
    * Carries nothing.
    */
   ACCOUNT_ACTIVE: "account.active",
+  /**
+   * The phone the iOS app runs on, as it registers itself for pushes once
+   * iOS lets it notify, unregisters before a sign-out, and reads and sets
+   * its "Notify me" in Settings: its APNs token and gateway pass through to
+   * the service and are kept nowhere on the way.
+   */
+  PUSH_DEVICE_REGISTER: "pushDevice.register",
+  PUSH_DEVICE_UNREGISTER: "pushDevice.unregister",
+  PUSH_DEVICE_STATUS: "pushDevice.status",
+  PUSH_DEVICE_NOTIFY: "pushDevice.notify",
+  /**
+   * The tokens of the phone's Live Activity of its member's running agents,
+   * as ActivityKit hands them to the app, and the activity's end on the
+   * phone: each passes through to the service beside the phone's APNs token
+   * and gateway, and is kept nowhere on the way.
+   */
+  LIVE_ACTIVITY_START_TOKEN: "liveActivity.startToken",
+  LIVE_ACTIVITY_TOKEN: "liveActivity.token",
+  LIVE_ACTIVITY_ENDED: "liveActivity.ended",
 } as const;
 
 /** The Automations pages' asks: the account's automations made, changed, deleted, and run now, and a workspace's automations, its runs, or one's runs held and read again. */
@@ -195,6 +214,10 @@ export const AGENT_ACT_KIND = {
   AGENTS_CHOOSE: "agents.choose",
   AGENTS_RENAME: "agents.rename",
   AGENTS_SERVERS: "agents.servers",
+  /** One agent's permission mode changed, which reaches it from its next turn (`agent-approval-wire.ts`). */
+  AGENTS_PERMISSION_MODE: "agents.permissionMode",
+  /** One tool call an agent holds answered: allowed, allowed for the agent, or denied with words (`agent-approval-wire.ts`). */
+  AGENTS_ANSWER_APPROVAL: "agents.answerApproval",
   /** A repository added to one agent beside the ones it works in (`agent-repository-add.ts`). */
   AGENTS_ADD_REPOSITORY: "agents.addRepository",
   AGENTS_QUEUE: "agents.queue",
@@ -282,8 +305,8 @@ export const AGENT_INBOX_ACT_KIND = {
   AGENTS_INBOX_ANSWER: "agents.inboxAnswer",
   /** One open item closed without an answer against the revision the panel drew, under the panel's own key. */
   AGENTS_INBOX_CLOSE: "agents.inboxClose",
-  /** A held close or nod let go once its Undo can no longer be pressed, sent to the service, or taken back by its Undo. */
-  AGENTS_INBOX_RELEASE: "agents.inboxRelease",
+  /** The reader's own nod or close taken back by the key it went under, as its Undo asks. */
+  AGENTS_INBOX_TAKE_BACK: "agents.inboxTakeBack",
   /** A message on one item's thread, open or settled, under the panel's own key; it never answers the item. */
   AGENTS_INBOX_MESSAGE: "agents.inboxMessage",
   /** A new thread with one agent, its subject and first message, under the panel's own key. */
@@ -469,6 +492,8 @@ export const TASKS_ACT_KIND = {
   TASKS_FILE: "tasks.file",
   /** A File tab's tree listing one folder of the open task's repository, read from GitHub through the service; answered to the tree, never on the document. */
   TASKS_TREE: "tasks.tree",
+  /** What a web page a plain link names says of itself, for the card the link hangs: fetched as the card shows, and kept by the window alone. */
+  TASKS_LINK_PREVIEW: "tasks.linkPreview",
   /** The skills a developer may choose of a task's repository, read from GitHub through the service; answered to the asker, never on the document. */
   TASKS_SKILLS: "tasks.skills",
   /**
@@ -726,11 +751,11 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_TOKEN_REPOSITORIES_FOLLOW: "workspace.tokenRepositoriesFollow",
   WORKSPACE_TOKEN_REPOSITORIES_RETRY: "workspace.tokenRepositoriesRetry",
   WORKSPACE_TOKEN_REPOSITORY_SET: "workspace.tokenRepositorySet",
-  /** A workspace's environment variables by name, read once as Settings › Environment opens and again after each write; no answer carries a value. */
+  /** A workspace's environment variables by name, read once as Settings › Cloud environment opens and again after each write; no answer carries a value. */
   WORKSPACE_ENVIRONMENT_LIST: "workspace.environmentList",
   WORKSPACE_ENVIRONMENT_PUT: "workspace.environmentPut",
   WORKSPACE_ENVIRONMENT_DELETE: "workspace.environmentDelete",
-  /** A workspace's cloud sandbox setup, its install script and each repository's setup script, read once as Settings › Cloud setup opens; a save answers the setup as it then stands. */
+  /** A workspace's cloud sandbox setup, its install script and each repository's setup script, read once as Settings › Cloud environment opens; a save answers the setup as it then stands. */
   WORKSPACE_SANDBOX_SETUP_READ: "workspace.sandboxSetupRead",
   WORKSPACE_INSTALL_SCRIPT_PUT: "workspace.installScriptPut",
   WORKSPACE_REPOSITORY_SETUP_PUT: "workspace.repositorySetupPut",
@@ -868,6 +893,13 @@ export const PORT_ACT_USE = {
   MEMORIES_FORGET: ACT_USE.WRITE,
   DICTATION_TRANSCRIBE: ACT_USE.FETCH,
   ACCOUNT_ACTIVE: ACT_USE.WRITE,
+  PUSH_DEVICE_REGISTER: ACT_USE.WRITE,
+  PUSH_DEVICE_UNREGISTER: ACT_USE.WRITE,
+  PUSH_DEVICE_STATUS: ACT_USE.FETCH,
+  PUSH_DEVICE_NOTIFY: ACT_USE.WRITE,
+  LIVE_ACTIVITY_START_TOKEN: ACT_USE.WRITE,
+  LIVE_ACTIVITY_TOKEN: ACT_USE.WRITE,
+  LIVE_ACTIVITY_ENDED: ACT_USE.WRITE,
 
   AGENTS_MODELS_FOLLOW: ACT_USE.READ,
   AGENTS_MODELS_RETRY: ACT_USE.READ,
@@ -895,6 +927,8 @@ export const PORT_ACT_USE = {
   AGENTS_CHOOSE: ACT_USE.WRITE,
   AGENTS_RENAME: ACT_USE.WRITE,
   AGENTS_SERVERS: ACT_USE.WRITE,
+  AGENTS_PERMISSION_MODE: ACT_USE.WRITE,
+  AGENTS_ANSWER_APPROVAL: ACT_USE.WRITE,
   AGENTS_ADD_REPOSITORY: ACT_USE.WRITE,
   AGENTS_QUEUE: ACT_USE.WRITE,
   AGENTS_STOP: ACT_USE.WRITE,
@@ -925,7 +959,7 @@ export const PORT_ACT_USE = {
   AGENTS_INBOX_ITEMS_RETRY: ACT_USE.READ,
   AGENTS_INBOX_ANSWER: ACT_USE.WRITE,
   AGENTS_INBOX_CLOSE: ACT_USE.WRITE,
-  AGENTS_INBOX_RELEASE: ACT_USE.WRITE,
+  AGENTS_INBOX_TAKE_BACK: ACT_USE.WRITE,
   AGENTS_INBOX_MESSAGE: ACT_USE.WRITE,
   AGENTS_INBOX_START: ACT_USE.WRITE,
   AGENTS_INBOX_READ_STATE: ACT_USE.WRITE,
@@ -1016,6 +1050,7 @@ export const PORT_ACT_USE = {
   TASKS_SET_STANDING: ACT_USE.WRITE,
   TASKS_FILE: ACT_USE.FETCH,
   TASKS_TREE: ACT_USE.FETCH,
+  TASKS_LINK_PREVIEW: ACT_USE.FETCH,
   TASKS_SKILLS: ACT_USE.FETCH,
   TASKS_LINK_STANDING_FOLLOW: ACT_USE.READ,
   TASKS_BROWSER_TAB_OPEN: ACT_USE.WRITE,

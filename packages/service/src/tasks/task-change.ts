@@ -19,7 +19,7 @@ import { isWorkspaceMember } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
 import type { StoredArchive } from "@repo/database/schemas/agent";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
-import { TASK_STATUS, type TaskUpdateRequest } from "@repo/features/task-wire";
+import { isTaskSettled, type TaskUpdateRequest } from "@repo/features/task-wire";
 import type { Sandbox } from "@repo/sandbox";
 import { Data, Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
@@ -193,7 +193,7 @@ export const taskChangeSettled = /* @__PURE__ */ Effect.fnUntraced(function* (
   { task, archived, statusMoved }: TaskChanged,
 ) {
   yield* archivedWithTaskLetGo(reach, archived);
-  if (statusMoved && (task.status === TASK_STATUS.DONE || task.status === TASK_STATUS.CANCELED)) {
+  if (statusMoved && isTaskSettled(task.status)) {
     yield* recordServerEvent(
       SERVER_EVENT.TASK_FINISH,
       { userId, workspaceId: task.workspaceId },

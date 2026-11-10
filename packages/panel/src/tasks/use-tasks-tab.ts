@@ -4,8 +4,8 @@ import { dictationKeywords } from "@repo/features/dictation-keywords";
 import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import type { InboxItemHome } from "@repo/features/inbox-wire";
 import {
-  LINK_PLACE,
-  type LinkPlace,
+  LINK_DESTINATION,
+  type LinkDestination,
   type ReadLink,
   taskLinkStep,
   taskNumberOf,
@@ -22,6 +22,20 @@ import type {
   TaskRelationKind,
   TaskSummary,
 } from "@repo/features/task-wire";
+import {
+  DOCUMENT_REGION,
+  type DocumentRegion,
+  documentRegion,
+  renamedRegion,
+  renamedView,
+  sidebarTasks,
+  TASK_MARK,
+  TASKS_PAGE,
+  type TaskMark,
+  type TaskNames,
+  type TasksPage,
+  tasksPage,
+} from "@repo/features/tasks-model";
 import { TASK_CALL_FAILURE, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -41,20 +55,6 @@ import {
   sameTab,
   subagentTab,
 } from "@repo/ui/tab-strip-model";
-import {
-  DOCUMENT_REGION,
-  type DocumentRegion,
-  documentRegion,
-  renamedRegion,
-  renamedView,
-  sidebarTasks,
-  TASK_MARK,
-  TASKS_PAGE,
-  type TaskMark,
-  type TaskNames,
-  type TasksPage,
-  tasksPage,
-} from "@repo/ui/tasks-model";
 import { useStateWithRef } from "@repo/ui/use-state-with-ref";
 import {
   mutationOptions,
@@ -209,13 +209,11 @@ import { sayRestored } from "./version-view.js";
  * the window's toast. The side panel stands as it was behind it.
  */
 
-/** The item chosen in the window's Inbox, and the task it belongs to. */
-/** The item chosen in the window's Inbox, by the task it stands on, or, for an agent with no task, by its agent. */
+/** The item chosen in the window's Inbox, by the task it stands on. */
 export type InboxChoice =
-  // Note that an item of a task names the agent that posted it too, which its link is written under, but for one an older link named under its task alone; not as `agentId`, which tells a choice on no task.
+  // Note that an item of a task names the agent that posted it too, which its link is written under, but for one an older link named under its task alone.
   (
     | { readonly taskId: string; readonly itemAgentId?: string; readonly itemId: string }
-    | { readonly agentId: string; readonly itemId: string }
     // An item a link named by its id alone that the account may not read, which the Inbox says is missing.
     | { readonly itemId: string }
   ) & {
@@ -273,41 +271,51 @@ interface AgentViewControl {
 
 /** The places that are an agent's own, which open on its task where it has one, else on its page. */
 type AgentPlaceKind =
-  | typeof LINK_PLACE.AGENT
-  | typeof LINK_PLACE.MESSAGE
-  | typeof LINK_PLACE.WORKER
-  | typeof LINK_PLACE.CHANGES
-  | typeof LINK_PLACE.PULL_REQUEST_THREAD;
+  | typeof LINK_DESTINATION.AGENT
+  | typeof LINK_DESTINATION.MESSAGE
+  | typeof LINK_DESTINATION.WORKER
+  | typeof LINK_DESTINATION.CHANGES
+  | typeof LINK_DESTINATION.PULL_REQUEST_THREAD;
 
-type AgentPlaceOf<K extends AgentPlaceKind> = Extract<LinkPlace, { readonly kind: K }>;
+type AgentPlaceOf<K extends AgentPlaceKind> = Extract<LinkDestination, { readonly kind: K }>;
 
 type AgentPlace = AgentPlaceOf<AgentPlaceKind>;
 
-const AGENT_PLACE_KINDS: ReadonlySet<LinkPlace["kind"]> = new Set<AgentPlaceKind>([
-  LINK_PLACE.AGENT,
-  LINK_PLACE.MESSAGE,
-  LINK_PLACE.WORKER,
-  LINK_PLACE.CHANGES,
-  LINK_PLACE.PULL_REQUEST_THREAD,
+const AGENT_PLACE_KINDS: ReadonlySet<LinkDestination["kind"]> = new Set<AgentPlaceKind>([
+  LINK_DESTINATION.AGENT,
+  LINK_DESTINATION.MESSAGE,
+  LINK_DESTINATION.WORKER,
+  LINK_DESTINATION.CHANGES,
+  LINK_DESTINATION.PULL_REQUEST_THREAD,
 ]);
 
 /** Whether a place is an agent's own. */
-function isAgentPlace(place: LinkPlace): place is AgentPlace {
+function isAgentPlace(place: LinkDestination): place is AgentPlace {
   return AGENT_PLACE_KINDS.has(place.kind);
 }
 
 /** A place the task's Overview shows: the task itself, one of its description's sections, or one of its comments. */
 type OverviewPlace = Extract<
-  LinkPlace,
-  { readonly kind: typeof LINK_PLACE.TASK | typeof LINK_PLACE.SECTION | typeof LINK_PLACE.COMMENT }
+  LinkDestination,
+  {
+    readonly kind:
+      | typeof LINK_DESTINATION.TASK
+      | typeof LINK_DESTINATION.SECTION
+      | typeof LINK_DESTINATION.COMMENT;
+  }
 >;
 
 /** A place of a task's own that its side panel draws as a tab, named under the task. */
 type TaskTabPlace =
   | (AgentPlaceOf<
-      typeof LINK_PLACE.WORKER | typeof LINK_PLACE.CHANGES | typeof LINK_PLACE.PULL_REQUEST_THREAD
+      | typeof LINK_DESTINATION.WORKER
+      | typeof LINK_DESTINATION.CHANGES
+      | typeof LINK_DESTINATION.PULL_REQUEST_THREAD
     > & { readonly planId: string })
-  | Extract<LinkPlace, { readonly kind: typeof LINK_PLACE.PAGE; readonly planId: string }>;
+  | Extract<
+      LinkDestination,
+      { readonly kind: typeof LINK_DESTINATION.PAGE; readonly planId: string }
+    >;
 
 /** The step a workspace's address names it by: its slug, or its id where an older service answered none, as `linkOf` writes it. */
 function stepOf(workspace: Pick<Workspace, "id" | "slug">): string {
@@ -417,7 +425,7 @@ export interface TasksControl {
   /** The agent's tab answered the ask, so a later visit to the agent does not answer it again. */
   onMessageRevealed: (ask: number) => void;
   /** Asks the agent's transcript, wherever it is drawn, to bring one of its messages into view, going nowhere: what a link to it opened beside an Inbox item asks. */
-  onRevealMessage: (place: AgentPlaceOf<typeof LINK_PLACE.MESSAGE>) => void;
+  onRevealMessage: (place: AgentPlaceOf<typeof LINK_DESTINATION.MESSAGE>) => void;
   /** The last ask to bring one review thread of an agent's pull request into view, which a link to it makes; let go once its Pull request tab takes it (`thread-reveal.tsx`). */
   threadReveal: ThreadReveal | undefined;
   /** The agent's Pull request tab took the ask, so a later visit to the tab does not answer it again. */
@@ -425,7 +433,7 @@ export interface TasksControl {
   /** Asks the Pull request tab of `changes`, wherever it is drawn, to bring one review thread into view, going nowhere: what a link to it opened beside an Inbox item asks. */
   onRevealThread: (
     changes: string,
-    place: AgentPlaceOf<typeof LINK_PLACE.PULL_REQUEST_THREAD>,
+    place: AgentPlaceOf<typeof LINK_DESTINATION.PULL_REQUEST_THREAD>,
   ) => void;
   /** The last ask to show a section, under the task it was asked of, so a section of a task not yet open is shown once it is drawn; let go once shown. */
   sectionReveal: { readonly taskId: string; readonly reveal: SectionReveal } | undefined;
@@ -675,25 +683,12 @@ function sidebarList(tasks: readonly TaskSummary[]): readonly TaskSummary[] {
   return [...pinned, ...rest];
 }
 
-/** The Inbox's choice of the item a link names: under its task, its agent, or by its id alone. */
-function inboxChoiceOf(place: InboxItemPlace): InboxChoice {
-  if ("planId" in place) return { taskId: place.planId, itemId: place.itemId };
-  return "agentId" in place
-    ? { agentId: place.agentId, itemId: place.itemId }
-    : { itemId: place.itemId };
-}
-
-/** The task an Inbox choice stands on; none for one on no task, or named by its id alone. */
+/** The task an Inbox choice stands on; none for one named by its id alone. */
 function choiceTaskOf(choice: InboxChoice): string | undefined {
   return "taskId" in choice ? choice.taskId : undefined;
 }
 
-/** The agent with no task an Inbox choice stands on; none for one on a task, or named by its id alone. */
-function choiceAgentOf(choice: InboxChoice): string | undefined {
-  return "agentId" in choice ? choice.agentId : undefined;
-}
-
-/** The agent that posted an item of a task an Inbox choice stands on; none for one on no task, or named by its task alone. */
+/** The agent that posted an item of a task an Inbox choice stands on; none for one named by its task alone, or by its id alone. */
 function choiceItemAgentOf(choice: InboxChoice): string | undefined {
   return "taskId" in choice ? choice.itemAgentId : undefined;
 }
@@ -1099,27 +1094,18 @@ export function useTasksTab(input: {
     [pageAgent],
   );
   // The Inbox lists the listed workspace's items alone, so a choice another workspace's list made gives way with it.
-  // Note that an agent's with no task is held to the listed workspace by the list itself, which lists its workspace's alone.
   const inboxChosen = listedInboxChoice(inboxView?.chosen, {
     tasks: tasks.tasks,
     workspace: listedWorkspace,
   });
-  // While the Inbox stands, the panel beside it is the chosen item's task's, or its agent's where it
-  // has no task, as that agent's page's is: what the item opens there, its files, its task's pages,
-  // and its agents' pull requests, and none of the fixed kinds, which the task's page draws.
+  // While the Inbox stands, the panel beside it is the chosen item's task's: what the item opens
+  // there, its files, its task's pages, and its agents' pull requests, and none of the fixed kinds,
+  // which the task's page draws.
   const inboxTask = inboxChosen === undefined ? undefined : choiceTaskOf(inboxChosen);
-  const inboxAgent = inboxChosen === undefined ? undefined : choiceAgentOf(inboxChosen);
-  // Note that an item of an agent on no task opens that agent's own pages beside it (`inbox-item-links.ts`), and that the
-  // pages are held in the host while drawn and a while after, so choosing another item of the task, or the task again, reads none anew.
+  // Note that the pages are held in the host while drawn and a while after, so choosing another item of the task, or the task again, reads none anew.
   const inboxPages = useQuery(
     pagesQuery(
-      inboxView === undefined
-        ? undefined
-        : inboxTask !== undefined
-          ? { taskId: inboxTask }
-          : inboxAgent !== undefined
-            ? { agentId: inboxAgent }
-            : undefined,
+      inboxView === undefined || inboxTask === undefined ? undefined : { taskId: inboxTask },
     ),
   ).data;
   // An agent on no task shows its pages on itself, which its page's panel draws as a task's draws its own.
@@ -1130,10 +1116,6 @@ export function useTasksTab(input: {
   ).data;
   const agentPageIds = useMemo(() => (agentPages ?? NO_PAGES).map((page) => page.id), [agentPages]);
   const inboxPageIds = useMemo(() => (inboxPages ?? NO_PAGES).map((page) => page.id), [inboxPages]);
-  const inboxAgents = useMemo(
-    () => (inboxAgent === undefined ? NO_IDS : [inboxAgent]),
-    [inboxAgent],
-  );
   const inboxTaskAgents = useInboxTaskAgents(inboxView === undefined ? undefined : inboxTask);
   // The cloud Browser tabs, which the panel draws by its holder: an agent's page its agent's,
   // on a task or on none, and a task's own panel its agents', never the Inbox's.
@@ -1175,7 +1157,7 @@ export function useTasksTab(input: {
         : { place: { taskId: panelTaskId }, repository: panelRepository },
     [panelTaskId, panelRepository],
   );
-  const panelPagesAgent = inboxView !== undefined ? inboxAgent : pageAgent;
+  const panelPagesAgent = inboxView !== undefined ? undefined : pageAgent;
   const panelPages = useMemo(
     () =>
       panelTaskId !== undefined
@@ -1207,7 +1189,7 @@ export function useTasksTab(input: {
     stagedPanel,
     inboxView !== undefined
       ? {
-          id: inboxTask ?? inboxAgent,
+          id: inboxTask,
           holds: NO_HOLDS,
           bare: true,
           files: panelFileReads,
@@ -1226,23 +1208,15 @@ export function useTasksTab(input: {
             agent: columnAgent,
           }
         : { id: pageAgent, holds: NO_HOLDS, pages: panelPages },
-    inboxView !== undefined ? inboxAgents : (pageAgents ?? mainTabs.openAgents),
+    inboxView !== undefined ? NO_IDS : (pageAgents ?? mainTabs.openAgents),
     NO_IDS,
     inboxView !== undefined ? inboxPageIds : pageAgents === undefined ? pages : agentPageIds,
     // Note that the task's agents in the Inbox are its own read's (`desktop-inbox.tsx`), which the panel draws a Pull request tab by (`use-inbox-task-agents.ts`).
-    inboxView !== undefined
-      ? inboxAgent === undefined
-        ? inboxTaskAgents.agentIds
-        : inboxAgents
-      : (pageAgents ?? agents.agentIds),
+    inboxView !== undefined ? inboxTaskAgents.agentIds : (pageAgents ?? agents.agentIds),
     input.room,
     cloudBrowsers,
     // Every agent of the task, an archived one among them, whose Pull request tab stands as a live agent's does.
-    inboxView !== undefined
-      ? inboxAgent === undefined
-        ? inboxTaskAgents.heldIds
-        : inboxAgents
-      : (pageAgents ?? agents.heldIds),
+    inboxView !== undefined ? inboxTaskAgents.heldIds : (pageAgents ?? agents.heldIds),
     cloudBrowserAgents,
   );
   const { keys: tabKeys, onKeys, onKeysTaken } = useColumnKeys();
@@ -1440,7 +1414,7 @@ export function useTasksTab(input: {
   const routedNumber =
     routedStep === undefined
       ? undefined
-      : taskNumberOf({ kind: LINK_PLACE.TASK, planId: routedStep });
+      : taskNumberOf({ kind: LINK_DESTINATION.TASK, planId: routedStep });
   const routedHome =
     historyRoute.workspace === undefined
       ? undefined
@@ -2038,7 +2012,7 @@ export function useTasksTab(input: {
     if (!descriptionsOnFor(taskId, opening.workspace)) {
       linkArrive(
         () => standLinkedTask(taskId),
-        () => showOverview({ kind: LINK_PLACE.TASK, planId: taskId }),
+        () => showOverview({ kind: LINK_DESTINATION.TASK, planId: taskId }),
       );
       return;
     }
@@ -2170,7 +2144,7 @@ export function useTasksTab(input: {
       showTaskAgents(mention.taskId);
       return;
     }
-    showOverview({ kind: LINK_PLACE.SECTION, planId: mention.taskId, anchor });
+    showOverview({ kind: LINK_DESTINATION.SECTION, planId: mention.taskId, anchor });
     sectionAsks.current += 1;
     setSectionReveal({ taskId: mention.taskId, reveal: { anchor, ask: sectionAsks.current } });
   };
@@ -2217,7 +2191,7 @@ export function useTasksTab(input: {
   // A review thread's ask, taken by its agent's Pull request tab once drawn; each ask is its own.
   const revealThread = (
     changes: string,
-    place: AgentPlaceOf<typeof LINK_PLACE.PULL_REQUEST_THREAD>,
+    place: AgentPlaceOf<typeof LINK_DESTINATION.PULL_REQUEST_THREAD>,
   ) =>
     setThreadReveal((last) => ({
       agentId: changes,
@@ -2226,7 +2200,7 @@ export function useTasksTab(input: {
       ask: (last?.ask ?? 0) + 1,
     }));
   // A message's ask, which its agent's tab or page takes; each ask is its own, so the same message asked twice is brought into view twice.
-  const revealMessage = (place: AgentPlaceOf<typeof LINK_PLACE.MESSAGE>) => {
+  const revealMessage = (place: AgentPlaceOf<typeof LINK_DESTINATION.MESSAGE>) => {
     messageAsks.current += 1;
     setMessageReveal({
       agentId: place.agentId,
@@ -2247,7 +2221,7 @@ export function useTasksTab(input: {
     // A tab of the side panel a link opens, and the link a narrow room's step on it stands at (`places/task-step.ts`).
     const sideOf = (tab: SidePanelTab) => ({ tab, link: stripTabLink(tab, { taskId: planId }) });
     switch (place.kind) {
-      case LINK_PLACE.WORKER: {
+      case LINK_DESTINATION.WORKER: {
         const tab = subagentTab(place.callId, { agent: place.agentId, task: "" });
         linkOnTask({ taskId: planId, column, side: sideOf(tab) }, () => {
           showColumnTab(planId, column);
@@ -2255,7 +2229,7 @@ export function useTasksTab(input: {
         });
         return;
       }
-      case LINK_PLACE.CHANGES: {
+      case LINK_DESTINATION.CHANGES: {
         const tab = changesTab(sharedChangesAgent(planId, place.agentId));
         linkOnTask({ taskId: planId, side: sideOf(tab) }, () =>
           linkPanelTab({ ...place, planId }, tab),
@@ -2263,7 +2237,7 @@ export function useTasksTab(input: {
         return;
       }
       // A review thread opens its agent's Pull request tab on the view the link names.
-      case LINK_PLACE.PULL_REQUEST_THREAD: {
+      case LINK_DESTINATION.PULL_REQUEST_THREAD: {
         const changes = sharedChangesAgent(planId, place.agentId);
         const tab = changesTab(changes);
         linkOnTask({ taskId: planId, side: sideOf(tab) }, () => {
@@ -2273,10 +2247,10 @@ export function useTasksTab(input: {
         });
         return;
       }
-      case LINK_PLACE.AGENT:
+      case LINK_DESTINATION.AGENT:
         linkOnTask({ taskId: planId, column }, () => showColumnTab(planId, column));
         return;
-      case LINK_PLACE.MESSAGE:
+      case LINK_DESTINATION.MESSAGE:
         linkOnTask({ taskId: planId, column }, () => {
           showColumnTab(planId, column);
           revealMessage(place);
@@ -2346,7 +2320,7 @@ export function useTasksTab(input: {
         linkArrive(() => openAgentPage(agentId, home), NOTHING);
         return;
       }
-      const onTask = { kind: LINK_PLACE.PAGE, planId: agent.planId, pageId } as const;
+      const onTask = { kind: LINK_DESTINATION.PAGE, planId: agent.planId, pageId } as const;
       const tab = pageTab(pageId);
       linkOnTask({ taskId: agent.planId, side: { tab, link: onTask } }, () =>
         linkPanelTab(onTask, tab),
@@ -2396,15 +2370,16 @@ export function useTasksTab(input: {
     // An item of a task the account lists is shown in the task's own workspace, whatever the slug says.
     const holder = planId === null ? undefined : viewed.tasks.find((task) => task.id === planId);
     const linked = linkedHome(holder?.workspaceId ?? workspace);
+    // Note that an item whose task was not found, its agent read as standing on none, is named by its id alone, which the Inbox says is missing where no read holds it.
     const chosen: InboxChoice =
-      holder !== undefined
-        ? {
-            taskId: holder.id,
+      planId === null
+        ? { itemId: place.itemId, opened: true }
+        : {
+            taskId: planId,
             ...("agentId" in place ? { itemAgentId: place.agentId } : undefined),
             itemId: place.itemId,
             opened: true,
-          }
-        : { ...inboxChoiceOf(place), opened: true };
+          };
     // Note that only the narrowing of the Inbox standing is kept, so a link opened from elsewhere opens on every task's list.
     const narrowed = inboxView?.standingIn === undefined ? undefined : inboxView.narrowed;
     standInbox(inboxIn(linked.id, narrowed), chosen, linked.list);
@@ -2422,13 +2397,11 @@ export function useTasksTab(input: {
     // Note that the item the Inbox already stands on, once asked after, stands again at once, so the door keeps it standing rather than waiting on the service while the window leaves it;
     // one the service did not find is asked after again below, as a link to it always asks.
     const standing = inboxView?.chosen;
-    const asked =
-      standing !== undefined &&
-      ("taskId" in standing || "agentId" in standing || standing.opened === true);
+    const asked = standing !== undefined && ("taskId" in standing || standing.opened === true);
     if (inboxView?.standingIn !== undefined && asked && standing.itemId === place.itemId) {
       const at = { workspace: inboxView.standingIn, narrowed: inboxView.narrowed };
       standInbox(at, { ...standing, opened: true });
-      if ("taskId" in standing || "agentId" in standing) return;
+      if ("taskId" in standing) return;
     }
     const current = linkRead();
     const opening = keepLinkLanded();
@@ -2442,7 +2415,11 @@ export function useTasksTab(input: {
           });
           return;
         }
-        const found = { kind: LINK_PLACE.INBOX_ITEM, agentId: home.agentId, itemId: place.itemId };
+        const found = {
+          kind: LINK_DESTINATION.INBOX_ITEM,
+          agentId: home.agentId,
+          itemId: place.itemId,
+        };
         openInboxItemOn(home.workspaceId, found, home.planId);
       });
     });
@@ -2568,7 +2545,7 @@ export function useTasksTab(input: {
     const { workspace, place } = link;
     switch (declared) {
       case LINK_ROUTED_PLACE.COMMENT: {
-        if (place.kind !== LINK_PLACE.COMMENT) return;
+        if (place.kind !== LINK_DESTINATION.COMMENT) return;
         const { planId } = place;
         if (!descriptionsOnFor(planId, workspace)) {
           linkOnTask({ taskId: planId }, () => showTaskAgents(planId));
@@ -2582,7 +2559,7 @@ export function useTasksTab(input: {
         return;
       }
       case LINK_ROUTED_PLACE.SECTION: {
-        if (place.kind !== LINK_PLACE.SECTION) return;
+        if (place.kind !== LINK_DESTINATION.SECTION) return;
         const { planId, anchor } = place;
         const column = descriptionsOnFor(planId) ? MAIN_TAB.OVERVIEW : undefined;
         linkOnTask({ taskId: planId, column }, () =>
@@ -2591,7 +2568,7 @@ export function useTasksTab(input: {
         return;
       }
       case LINK_ROUTED_PLACE.PAGE: {
-        if (place.kind !== LINK_PLACE.PAGE) return;
+        if (place.kind !== LINK_DESTINATION.PAGE) return;
         const tab = pageTab(place.pageId);
         // A page an agent showed on itself while it stood on no task, as an older link names it, stands on
         // the task that agent was given since, so it opens there, found by the agent.
@@ -2624,12 +2601,12 @@ export function useTasksTab(input: {
           return;
         }
         linkArrive(() => {
-          if (place.kind === LINK_PLACE.HOME) goHome();
+          if (place.kind === LINK_DESTINATION.HOME) goHome();
           else openBoard(workspaceOfSlug(viewed.workspaces, workspace));
         }, linkedHome(workspace).list);
         return;
       case LINK_ROUTED_PLACE.TASK: {
-        if (place.kind !== LINK_PLACE.TASK) return;
+        if (place.kind !== LINK_DESTINATION.TASK) return;
         const taskId = place.planId;
         linkArrive(
           () => standLinkedTask(taskId),
@@ -2638,40 +2615,40 @@ export function useTasksTab(input: {
         return;
       }
       case LINK_ROUTED_PLACE.VERSION:
-        if (place.kind !== LINK_PLACE.VERSION) return;
+        if (place.kind !== LINK_DESTINATION.VERSION) return;
         openHistory(place.planId, {
           spot: { revision: place.revision, opened: undefined, listed: false },
           workspace,
         });
         return;
       case LINK_ROUTED_PLACE.PERSON: {
-        if (place.kind !== LINK_PLACE.PERSON) return;
+        if (place.kind !== LINK_DESTINATION.PERSON) return;
         // A person's page is theirs in the workspace the link names, listed first; one the reader is not in names nobody they can see.
         openPerson(place.userId, undefined, workspaceOfSlug(viewed.workspaces, workspace));
         return;
       }
       // Note that a link to the Inbox opens it as its sidebar row does, on nothing chosen, narrowed to the task it names or to none.
       case LINK_ROUTED_PLACE.INBOX: {
-        if (place.kind !== LINK_PLACE.INBOX) return;
+        if (place.kind !== LINK_DESTINATION.INBOX) return;
         const linked = linkedHome(workspace);
         standInbox(inboxIn(linked.id, place.planId), undefined, linked.list);
         return;
       }
       case LINK_ROUTED_PLACE.INBOX_ITEM:
-        if (place.kind === LINK_PLACE.INBOX_ITEM) openInboxItem(workspace, place);
+        if (place.kind === LINK_DESTINATION.INBOX_ITEM) openInboxItem(workspace, place);
         return;
       case LINK_ROUTED_PLACE.AUTOMATIONS:
         openAutomations({ kind: AUTOMATIONS_PAGE.LIST }, workspace);
         return;
       case LINK_ROUTED_PLACE.AUTOMATION:
-        if (place.kind !== LINK_PLACE.AUTOMATION) return;
+        if (place.kind !== LINK_DESTINATION.AUTOMATION) return;
         openAutomations(
           { kind: AUTOMATIONS_PAGE.EDIT, automationId: place.automationId },
           workspace,
         );
         return;
       case LINK_ROUTED_PLACE.AUTOMATION_RUN:
-        if (place.kind !== LINK_PLACE.AUTOMATION_RUN) return;
+        if (place.kind !== LINK_DESTINATION.AUTOMATION_RUN) return;
         openAutomations(
           { kind: AUTOMATIONS_PAGE.EDIT, automationId: place.automationId, runId: place.runId },
           workspace,
@@ -2680,7 +2657,7 @@ export function useTasksTab(input: {
       // Note that an Admin link's workspace is only the one it was copied in, since the place reads every
       // workspace's accounts, so it lists nothing; one naming the place alone opens on its Overview.
       case LINK_ROUTED_PLACE.ADMIN:
-        if (place.kind === LINK_PLACE.ADMIN) {
+        if (place.kind === LINK_DESTINATION.ADMIN) {
           const view = adminViewOfLink(place);
           linkArrive(() => routedAdmin.onOpen(view), NOTHING);
         }
@@ -3107,7 +3084,7 @@ export function useTasksTab(input: {
     // the blocker.
     onShowAgent: (taskId, agentId) =>
       arriveAt(taskId, () =>
-        openOnTask(taskId, { kind: LINK_PLACE.AGENT, planId: taskId, agentId }),
+        openOnTask(taskId, { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId }),
       ),
     onShowColumnTab: (taskId, tab, over) =>
       arriveAt(taskId, () => showColumnTab(taskId, tab), over),
@@ -3195,7 +3172,11 @@ export function useTasksTab(input: {
             return;
           }
           // An agent's pin opens as its row's card does (`onShowAgent`).
-          openOnTask(pin.task, { kind: LINK_PLACE.AGENT, planId: pin.task, agentId: tab.agent });
+          openOnTask(pin.task, {
+            kind: LINK_DESTINATION.AGENT,
+            planId: pin.task,
+            agentId: tab.agent,
+          });
         },
       ),
     chosenPin: chosenPinOf(chosen, boundFor),

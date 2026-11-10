@@ -1,8 +1,7 @@
-// index.tsx -- the Tasks list.
+// index.tsx -- the Tasks list: the chosen workspace's tasks as the panel's phone Tasks stands them, read from the host's document.
 
-import { TASKS_PLACEHOLDER } from "../../../placeholders.js";
-import { CollectionListScreen } from "../../../screens/collection-screens.js";
+import { TasksListScreen } from "../../../screens/task-screens.js";
 
 export default function TasksScreen() {
-  return <CollectionListScreen collection={TASKS_PLACEHOLDER} />;
+  return <TasksListScreen />;
 }

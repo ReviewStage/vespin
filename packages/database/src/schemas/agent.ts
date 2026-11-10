@@ -1,4 +1,8 @@
 import {
+  AGENT_PERMISSION_MODE,
+  type AgentPermissionMode,
+} from "@repo/features/agent-approval-wire";
+import {
   AGENT_KIND,
   AGENT_MACHINE,
   type AgentArchiver,
@@ -132,6 +136,12 @@ import { task } from "./task.js";
  * local agent is pinned to and every line and request for it goes to
  * (`./device-agent.ts`); null for an agent in a sandbox, and once its Mac's row
  * is gone, which leaves the agent with no Mac to run on.
+ *
+ * `permission_mode` is how the agent's tool calls are answered
+ * (`AGENT_PERMISSION_MODE`): all unasked, as every row from before the
+ * column reads, or asked of a member first, which only a Claude Code agent
+ * takes. Each launch reads it, so a change reaches the agent from its next
+ * turn; its asks are `agent_approval`'s rows.
  *
  * `idempotency_key` is the Start request's own key, unique per account, so a
  * network retry of one Start finds the agent it already made rather than
@@ -354,15 +364,13 @@ export const agentTable = pgTable(
     machine: text("machine").$type<AgentMachineKind>().notNull().default(AGENT_MACHINE.VERCEL),
     /** The Mac a local agent is pinned to; null for one in a sandbox. */
     deviceId: uuid("device_id").references(() => device.id, { onDelete: "set null" }),
+    /** How the agent's tool calls are answered (`AGENT_PERMISSION_MODE`); full access for every row from before the column. */
+    permissionMode: text("permission_mode")
+      .$type<AgentPermissionMode>()
+      .notNull()
+      .default(AGENT_PERMISSION_MODE.FULL_ACCESS),
     idempotencyKey: text("idempotency_key").notNull(),
     createdAt: createdAt(),
-    /**
-     * The instant every member without a read mark of their own
-     * (`agent-read.ts`) has read the agent through, as a task's
-     * `read_through` is (`task.ts`): stamped on the agents that stood as
-     * read marks moved to the service, null on one started since.
-     */
-    readThrough: timestamptz("read_through"),
   },
   (table) => [
     // One agent per Start: a retry carrying the same key finds this row.

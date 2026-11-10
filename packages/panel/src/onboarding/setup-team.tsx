@@ -16,6 +16,7 @@ import {
 } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { useMutation } from "@tanstack/react-query";
 import { type Ref, useEffect, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
@@ -112,12 +113,21 @@ export function useTeamForm({
   const [name, setName] = useState(made?.name ?? "");
   const named = useRef(made?.name !== undefined);
   // Note that a press out keeps the words it was pressed under, because the workspace it makes stands before its invitations have gone.
-  const [pressing, setPressing] = useState<Press | undefined>(undefined);
-  const busy = pressing !== undefined;
-  const [refusal, setRefusal] = useState<string | undefined>(undefined);
+  const [pressed, setPressed] = useState<Press | undefined>(undefined);
+  // Note that each of the step's writes holds its own refusal, and the form says the newest: a removal's, a create's, or a pick's.
+  const creating = useAsyncAction(rejectionWords);
+  const removing = useAsyncAction(rejectionWords);
+  const [pickRefusal, setPickRefusal] = useState<string | undefined>(undefined);
+  const busy = creating.running;
+  const pressing = busy ? pressed : undefined;
+  const refusal = removing.refusal ?? creating.refusal ?? pickRefusal;
   const [setPhoto, setSetPhoto] = useState<string | undefined>(undefined);
   const invitees = useInvitees(signedIn?.email);
-  const { photo, reading, picker, clear } = useWorkspacePhotoPick(setRefusal);
+  const { photo, reading, picker, clear } = useWorkspacePhotoPick((picked) => {
+    setPickRefusal(picked);
+    creating.clear();
+    removing.clear();
+  });
   // Note that a workspace made before a reload is named once the list holds it, unless something was typed meanwhile.
   useEffect(() => {
     if (made?.name === undefined || named.current) return;
@@ -133,21 +143,22 @@ export function useTeamForm({
   // Note that the photo and the invitations follow the name, and one refused leaves the rest standing.
   const write = async (workspaceId: string, emails: readonly string[]) => {
     const refused: string[] = [];
+    // Note that a refused photo is said under the fields, as a refused address is beside its chip.
+    let photoRefusal: string | undefined;
     if (newPhoto) {
       await setWorkspacePhoto({ workspaceId, photo }).then(
         () => setSetPhoto(photo),
-        // Note that a refused photo is said under the fields, as a refused address is beside its chip.
         (why: Error) => {
           refused.push(why.message);
-          setRefusal(why.message);
+          photoRefusal = why.message;
         },
       );
     }
     refused.push(...(await invitees.send(workspaceId, emails)));
-    setPressing(undefined);
     onDone(refused);
+    return photoRefusal;
   };
-  const create = async () => {
+  const create = () => {
     if (!ready || busy) return;
     // Note that an address typed and never ended is read as the press lands, and one typed wrong is left unsent, its chip saying why.
     const { pending } = invitees.commit();
@@ -155,22 +166,19 @@ export function useTeamForm({
       onDone([]);
       return;
     }
-    setPressing(made === undefined ? PRESS.CREATE : PRESS.SAVE);
-    setRefusal(undefined);
-    let workspaceId = made?.id;
-    try {
+    setPressed(made === undefined ? PRESS.CREATE : PRESS.SAVE);
+    setPickRefusal(undefined);
+    removing.clear();
+    void creating.run(async () => {
+      let workspaceId = made?.id;
       if (workspaceId === undefined) {
         workspaceId = (await createWorkspace({ name: trimmed })).id;
         onCreated(workspaceId);
       } else if (renamed) {
         await renameWorkspace({ workspaceId, name: trimmed });
       }
-    } catch (refused) {
-      setPressing(undefined);
-      setRefusal(refused instanceof Error ? refused.message : String(refused));
-      return;
-    }
-    await write(workspaceId, pending);
+      return write(workspaceId, pending);
+    });
   };
   return {
     name,
@@ -188,9 +196,10 @@ export function useTeamForm({
         : () => {
             clear();
             if (made === undefined || setPhoto === undefined) return;
-            void setWorkspacePhoto({ workspaceId: made.id, photo: null }).then(
-              () => setSetPhoto(undefined),
-              (why: Error) => setRefusal(why.message),
+            void removing.run(() =>
+              setWorkspacePhoto({ workspaceId: made.id, photo: null }).then(() =>
+                setSetPhoto(undefined),
+              ),
             );
           },
     busy,
@@ -201,7 +210,7 @@ export function useTeamForm({
         ? pressWords(made !== undefined, changed)
         : PRESS_WORDS[pressing].label,
     busyLabel: PRESS_WORDS[pressing ?? (made === undefined ? PRESS.CREATE : PRESS.SAVE)].busy,
-    create: () => void create(),
+    create,
   };
 }
 

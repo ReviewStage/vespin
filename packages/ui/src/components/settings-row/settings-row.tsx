@@ -17,6 +17,7 @@ import { LANDED, landedMark } from "../landed/landed.js";
 import { GAP, type Gap, Inline } from "../layout/layout.js";
 import { PROGRESS_SIZE, Progress, type ProgressTone } from "../progress/progress.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
+import { type UsageMeterRow, UsageMeters } from "../usage-meters/usage-meters.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
 
 /**
@@ -62,7 +63,7 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * narrow as a card's row does, but at a list's tighter block inset and least
  * height and with its label at body weight.
  *
- * What rides the label's line without being its name, a Modified word or a
+ * What rides the label's line without being its name, a Saved tick or a
  * mark that something needs a hand, is the row's `adornment`: it stands after
  * the label, a short step off it, and the label alone still names the
  * control. What the row itself grows under its line, a control that needs
@@ -242,7 +243,7 @@ export function SettingsRow({
   description?: ReactNode;
   /** The face or mark the row leads with, before its words, where it stands for something of its own. */
   leading?: ReactNode;
-  /** What rides the label's line after it without naming the control: a Modified word, a mark. */
+  /** What rides the label's line after it without naming the control: a Saved tick, a mark. */
   adornment?: ReactNode;
   /** What went wrong with the last write, and the failure beneath it, or nothing while none did. */
   error?: ShownError | undefined;
@@ -385,6 +386,24 @@ export function SettingsRowMeter({
   );
 }
 
+/** How much of each of its usage windows a row's plan has used, as meters under its state line (`UsageMeters`). */
+export function SettingsRowUsage({
+  rows,
+  heard,
+  alignWith,
+}: {
+  rows: readonly UsageMeterRow[];
+  heard?: string | undefined;
+  /** Every row of the meters in the rows around it, which these line up with as one table (`UsageMeters`). */
+  alignWith?: readonly UsageMeterRow[] | undefined;
+}): React.JSX.Element {
+  return (
+    <span className="ui-settings-row-usage mt-ui-6 block">
+      <UsageMeters rows={rows} heard={heard} alignWith={alignWith} />
+    </span>
+  );
+}
+
 /** Where a row's subject stands, as its line under the name says it. */
 export const SETTINGS_ROW_STATE = {
   CONNECTED: "connected",
@@ -457,6 +476,17 @@ export function SettingsRowActSlot(): React.JSX.Element {
   return <span className="ui-settings-row-act-slot w-control flex-none" aria-hidden="true" />;
 }
 
+/**
+ * A row's control standing in for presses not yet shown: no wider than
+ * nothing, but as tall as a control, so the row's line already stands as tall
+ * as the Discard and Save an edit will bring, and their arrival moves nothing.
+ */
+export function SettingsRowControlHold(): React.JSX.Element {
+  return (
+    <span className="ui-settings-row-control-hold h-control w-0 flex-none" aria-hidden="true" />
+  );
+}
+
 /** What is true of a saved credential, on one muted line beside its presses: its hint, its login, its status, wrapping between facts, never inside one. */
 export function SettingsFacts({
   gap = GAP.CONTROL,
@@ -477,15 +507,6 @@ export function SettingsSavedMark(): React.JSX.Element {
   return (
     <span className="ui-settings-saved-mark inline-flex text-complete in-[.ui-button]:ml-ui-4">
       <CheckIcon />
-    </span>
-  );
-}
-
-/** The word beside a row's name while its value differs from the default: a fact about a preference, never an urgency. */
-export function SettingsChangedMark(): React.JSX.Element {
-  return (
-    <span className="ui-settings-changed-mark text-caption leading-tag font-tag text-muted-foreground">
-      Modified
     </span>
   );
 }

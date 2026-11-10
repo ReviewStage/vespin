@@ -25,6 +25,8 @@ import {
   QueuedTurnListener,
   type SettledAgentTurn,
   SettledTurnListener,
+  type StartedAgentTurn,
+  StartedTurnListener,
   type StoreWriter,
   storeWriter,
 } from "@repo/database/models/writer";
@@ -38,7 +40,7 @@ import {
   type ProviderKeyProvider,
 } from "@repo/features/provider-key-wire";
 import { SANDBOX_IDLE, SANDBOX_TOUCH_EVERY, type Sandbox } from "@repo/sandbox";
-import { HTTP_METHOD, type WireValue, WireValueSchema } from "@repo/wire";
+import { CARRY_ON_REASON, HTTP_METHOD, type WireValue, WireValueSchema } from "@repo/wire";
 import type { UsageLimitMove } from "@repo/wire/ui-messages";
 import {
   Cause,
@@ -60,7 +62,9 @@ import {
   HttpServerRequest,
   type HttpServerResponse,
 } from "effect/http";
+import type * as HttpClient from "effect/http/HttpClient";
 import { RUN_EVENT, type RunEvent, TURN_FAILURE, TURN_ORIGIN } from "../../core.js";
+import type { GitHubApp } from "../../github/github-app.js";
 import { afterResponse } from "../../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import {
@@ -79,7 +83,9 @@ import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { reopenTaskForWork, settleTaskAfterTurn } from "../../tasks/task-finish.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
 import { roomAfterLimit, soonestResetBeside } from "../coder-host/agent-runtime-choice.js";
+import { carriedOn } from "../coder-host/carry-on.js";
 import { RUNNER_ENDED, runnerEnded, runnerIdled } from "../coder-host/runner-sessions.js";
+import { routedSessions } from "../coder-host/runtime-sessions.js";
 import { turnRetried } from "../coder-host/steer.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
 import { TURN_PUBLISH, TurnQueue } from "../coder-host/turn-delivery.js";
@@ -108,6 +114,7 @@ import {
   turnProgressed,
   withTurnServers,
 } from "./native-projection.js";
+import { isApprovalEvent, landApprovalEvent } from "./runner-approvals.js";
 import { redactKeepingPlanCodes, withoutNul } from "./runner-moments.js";
 
 /**
@@ -151,6 +158,10 @@ import { redactKeepingPlanCodes, withoutNul } from "./runner-moments.js";
  * launch, and a turn still running under an older launch, whose runner this
  * one replaced, is failed as its runner lost before anything else is
  * applied, so its end, which is not coming, waits on no deadline.
+ *
+ * An ask a launch whose mode asks holds for a member, and its runner's word
+ * of how one was settled, land beside the transcript in the same
+ * transaction (`runner-approvals.ts`).
  *
  * The route also keeps what
  * the newest model call read on the agent's row for its context ring, the
@@ -548,6 +559,8 @@ function landWrite(
         ),
         (result) => reportRefused("a line's taking", result),
       );
+    case NATIVE_WRITE.APPROVAL:
+      return landApprovalEvent(target.conversationId, write.turnId, write.message, now);
     case NATIVE_WRITE.SESSION:
       return Effect.asVoid(
         recordAgentNativeSession(target.userId, applying.agentId, write.sessionId),
@@ -574,6 +587,7 @@ function landWrite(
     case NATIVE_WRITE.FAILED:
       // Said once the batch has landed, so a turn is said failed only once its row is.
       return Effect.void;
+    case NATIVE_WRITE.CARRY_ON:
     case NATIVE_WRITE.RETRY:
       // Launched once the batch has landed, so the plan's limit is written before the next launch chooses its payer.
       return Effect.void;
@@ -620,8 +634,10 @@ function landWrite(
         {
           usedPercent: write.usedPercent,
           ...(write.windowMins === undefined ? {} : { windowMins: write.windowMins }),
-          ...(write.resetsAt === undefined ? {} : { resetsAt: new Date(write.resetsAt) }),
+          ...(write.model === undefined ? {} : { model: write.model }),
+          ...(write.resetsAt === undefined ? {} : { resetsAt: write.resetsAt }),
         },
+        new Date(now),
         new Date(write.turnOpenedAt ?? now),
         applying.subscriptionId,
       );
@@ -791,6 +807,10 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       });
       state = projected.state;
       writes.push(...projected.writes);
+      // An ask the runner holds lands under the turn that runs, after the writes that open that turn and before any that end it.
+      if (isApprovalEvent(message)) {
+        writes.push({ kind: NATIVE_WRITE.APPROVAL, turnId: state.turn?.id, message });
+      }
       // A turn starting takes the servers mentioned to the agent since its last turn started
       // (`agent-runtime/servers.ts`), and keeps them for its calls at our own
       // MCP server, which hands them whatever the switches say (`integrations/connection-door.ts`).
@@ -844,6 +864,11 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       turns: turnsMovedBy(writes),
       failed: writes.filter((write): write is FailedTurn => write.kind === NATIVE_WRITE.FAILED),
       retried: writes.flatMap((write) => (write.kind === NATIVE_WRITE.RETRY ? [write] : [])),
+      carriedOn: writes.flatMap((write) =>
+        write.kind === NATIVE_WRITE.CARRY_ON
+          ? [{ turnId: write.turnId, lostSequence: write.lostSequence }]
+          : [],
+      ),
       keepsAlive,
     };
     return sequence === null || (last === undefined && !keepsAlive)
@@ -884,7 +909,13 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
 ): Effect.fn.Return<
   HttpServerResponse.HttpServerResponse,
   HostedRefusal,
-  HttpServerRequest.HttpServerRequest | DatabaseServices | Scope.Scope | Sandbox | R
+  | HttpServerRequest.HttpServerRequest
+  | DatabaseServices
+  | Scope.Scope
+  | Sandbox
+  | GitHubApp
+  | HttpClient.HttpClient
+  | R
 > {
   const { read, ended, idled, alive, title } = options;
   const incoming = yield* HttpServerRequest.HttpServerRequest;
@@ -944,9 +975,13 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   // writer's savepoint inside it ends, so what a listener reads of a turn (its final words, for
   // the Slack thread and the agent's starter) is what the batch wrote, and a rolled back batch
   // tells nobody.
+  const started: StartedAgentTurn[] = [];
   const settled: SettledAgentTurn[] = [];
   const queued: QueuedAgentTurn[] = [];
-  const collecting = Layer.merge(
+  const collecting = Layer.mergeAll(
+    Layer.succeed(StartedTurnListener, {
+      heard: (turn) => Effect.sync(() => void started.push(turn)),
+    }),
     Layer.succeed(SettledTurnListener, {
       heard: (turn) => Effect.sync(() => void settled.push(turn)),
     }),
@@ -962,6 +997,10 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
       admitted.value.launch,
     ).pipe(Effect.provide(collecting)),
   );
+  const starting = yield* Effect.serviceOption(StartedTurnListener);
+  if (Option.isSome(starting)) {
+    yield* Effect.forEach(started, starting.value.heard, { discard: true });
+  }
   const listener = yield* Effect.serviceOption(SettledTurnListener);
   if (Option.isSome(listener)) {
     yield* Effect.forEach(settled, listener.value.heard, { discard: true });
@@ -980,7 +1019,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     yield* sayTurnFailed(failed, harness, applying.payer, {
       agentId: agent.value.id,
       conversationId: target.conversationId,
-      ...(taskId === null ? undefined : { taskId }),
+      taskId,
       ...(runtimeSessionId === undefined ? undefined : { sandboxSessionId: runtimeSessionId }),
     });
   }
@@ -1005,13 +1044,32 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
       ),
     );
   }
+  // A turn whose runner waited for the model's provider goes on by a carry-on line, once the wait's end is written.
+  for (const { turnId, lostSequence } of applied.value.carriedOn) {
+    yield* afterResponse(
+      "a reconnected turn's carry-on",
+      carriedOn(
+        routedSessions,
+        agent.value,
+        turnId,
+        CARRY_ON_REASON.CONNECTION_LOST,
+        lostSequence,
+      ).pipe(
+        Effect.annotateLogs({
+          agentId: agent.value.id,
+          conversationId: target.conversationId,
+          turnId,
+        }),
+      ),
+    );
+  }
   // The task follows the turns the batch moved, once their rows are written: a turn starting takes
   // it up, and a turn's end archives the agent with a task moved to Done while it worked
   // (`tasks/task-finish.ts`).
-  if (taskId !== null && applied.value.turns.started) {
+  if (applied.value.turns.started) {
     yield* reopenTaskForWork(target.userId, taskId);
   }
-  if (taskId !== null && applied.value.turns.ended) {
+  if (applied.value.turns.ended) {
     yield* settleTaskAfterTurn(target.userId, taskId, agent.value.id);
   }
   // Note that the title runs after the answer, kept awake past it, because the runner need not wait on a model.
@@ -1042,10 +1100,10 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   return hostedJsonResponse(HOSTED_HTTP_STATUS.OK, applied.value.applied);
 });
 
-/** The group: the one events path, read as the conversation's harness's unless told otherwise, and the hosted vocabulary's own refusal for any other. */
+/** The group: the one events path, read as the conversation's harness's unless told otherwise, and the hosted vocabulary's own refusal for any other. Note that a carry-on line is a message to the agent (`carriedOn`), which reaches what any message does. */
 export function runnerEventsApp<R = never>(
   options: RunnerEventsOptions<R> = {},
-): WebRoutes<DatabaseServices | Sandbox | R> {
+): WebRoutes<DatabaseServices | Sandbox | GitHubApp | HttpClient.HttpClient | R> {
   const endpoint = runnerEventsEndpoint(options);
   return Layer.mergeAll(
     HttpRouter.add(ANY_METHOD, RUNNER_EVENTS_PATH, hostedRefusing(endpoint)),

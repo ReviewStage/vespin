@@ -6,6 +6,7 @@ import type {
 import { ADMIN_USERS_SEARCH_MAX_LENGTH } from "@repo/features/admin-wire";
 import { formatCount, formatPercent } from "@repo/features/number-format";
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
+import { githubAccountPageUrl } from "@repo/features/tasks-model";
 import { formatDate } from "@repo/features/time-format";
 import {
   type Noun,
@@ -37,7 +38,6 @@ import {
   type DataTableColumns,
   DataTableSkeleton,
 } from "@repo/ui/data-table";
-import { githubAccountPageUrl } from "@repo/ui/tasks-model";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { AccountCell, AccountCellSkeleton } from "../accounts-table/accounts-table.js";

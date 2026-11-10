@@ -1,5 +1,4 @@
 import type { HostedAgentClient, HostedAgentPortsClient } from "@repo/features";
-import { ACCOUNT_INBOX_REPOSITORYLESS } from "@repo/features/account-inbox-wire";
 import { ACCOUNT_PREFERENCES_READ } from "@repo/features/account-preferences-live";
 import { AGENT_ORIGIN_READ } from "@repo/features/agent-origin-live";
 import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
@@ -20,6 +19,9 @@ import {
   type AgentInboxReadStateParams,
   type AgentInboxReadStateView,
   type AgentInboxRemindParams,
+  type AgentInboxTakeBackParams,
+  type AgentInboxTakenBackView,
+  type AgentPermissionModeParams,
   type AgentPinParams,
   type AgentRenameParams,
   type AgentServersParams,
@@ -51,6 +53,7 @@ import {
   asksOpen,
   closedNow,
   type InboxReader,
+  takenBackNow,
 } from "@repo/features/inbox-writes";
 import { WRITE_UNTAKEN, writeUntakenOf } from "@repo/features/keyed-write";
 import { commitShaSchema } from "@repo/features/link-grammar";
@@ -69,17 +72,7 @@ import {
   ROW_GONE,
   type WriteDeclaration,
 } from "@repo/sync";
-import {
-  Deferred,
-  Duration,
-  Effect,
-  FiberHandle,
-  Option,
-  RcMap,
-  Schema,
-  type Scope,
-  Stream,
-} from "effect";
+import { Effect, FiberHandle, Option, RcMap, Schema, type Scope, Stream } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import {
   type AccountGateDependencies,
@@ -239,6 +232,8 @@ export type AgentClient = Pick<
   | "choose"
   | "rename"
   | "switchServers"
+  | "choosePermissionMode"
+  | "answerApproval"
   | "addRepository"
   | "changeQueue"
   | "archive"
@@ -260,6 +255,7 @@ export type AgentClient = Pick<
   | "pullRequestViewed"
   | "answerInbox"
   | "closeInbox"
+  | "takeBackInbox"
   | "messageInbox"
   | "startInboxThread"
   | "markInboxItemRead"
@@ -321,35 +317,7 @@ export interface AgentsComposer extends Composer {
   readonly reset: Effect.Effect<void>;
   /** The row writes this composer declares that may wait for the service, which a queue kept on disk is laid back by. */
   readonly queueable: readonly AnyWrite[];
-  /** Every settle, a close or a nod, a window still holds for its Undo let go as sent, answering once each is answered, so a quit drops none. */
-  readonly flushHeldSettles: Effect.Effect<void>;
-  /**
-   * Every held settle let go as sent under the account that held it, as that
-   * account leaves, answering once each is answered or
-   * `HELD_SETTLE_LEAVE_BOUND` has passed; what is still out then is dropped,
-   * so none goes under whoever signs in next.
-   */
-  readonly letGoHeldSettles: Effect.Effect<void>;
 }
-
-/**
- * The longest a held settle waits for the window that holds it to let it go
- * before it goes by itself: well past the Undo toast's hold, which a pointer
- * over the toast pauses, so it stands for a window that closed, or a tab
- * reloaded, while its Undo stood.
- */
-const HELD_SETTLE_BOUND = Duration.minutes(1);
-
-/**
- * The longest an account's departure waits for the settles it held to be
- * answered before it drops what is still out: a sign-out waits on it, and a
- * settle still out past it would be sent again under the next account's
- * credential, which each attempt reads afresh.
- */
-const HELD_SETTLE_LEAVE_BOUND = Duration.seconds(5);
-
-/** What a held settle its window took back answers: refused, so the pool takes back what it drew and keeps nothing to send again, and the window that undid it reads nothing of it. */
-const SETTLE_UNDONE: AgentInboxAnsweredView = { failure: AGENT_CALL_FAILURE.UNANSWERED };
 
 /**
  * The names the Inbox's writes that may wait are queued under, which were
@@ -477,16 +445,7 @@ export function composeAgents(
     });
     const accounts = yield* accountInboxes({
       seal: (userId, poll, after) =>
-        asked(
-          client.liveRead(
-            ACCOUNT_INBOX_READ,
-            {
-              userId,
-              [ACCOUNT_INBOX_REPOSITORYLESS.QUERY]: ACCOUNT_INBOX_REPOSITORYLESS.INCLUDE,
-            },
-            poll ? { after } : undefined,
-          ),
-        ),
+        asked(client.liveRead(ACCOUNT_INBOX_READ, { userId }, poll ? { after } : undefined)),
       pool: dependencies.pool,
       accountWide,
     });
@@ -752,6 +711,11 @@ function composed(
     (request) => () => ({ disabledServers: request.disabledServers }),
     ({ agentId, ...request }) => asked(client.switchServers(agentId, request)),
   );
+  /** A change of permission mode, drawn on the agent's row at once, which the agent takes from its next turn. */
+  const moded = agentWrite<AgentPermissionModeParams>(
+    (request) => () => ({ permissionMode: request.permissionMode }),
+    ({ agentId, ...request }) => asked(client.choosePermissionMode(agentId, request)),
+  );
   /**
    * An archive, drawn on the agent's row at once, stamped now by the member,
    * a dialog's that asked first among them. Note that an agent archived
@@ -906,162 +870,8 @@ function composed(
     const item = dependencies.pool.row(INBOX_ITEM, itemId);
     return item === undefined ? { failure: AGENT_CALL_FAILURE.UNANSWERED } : { item, taken: true };
   };
-  /**
-   * A settle a window holds for its Undo: told once whether it goes to the
-   * service, answered once it has, dropped where its account left before it
-   * was answered, and the account that held it, which alone may send it.
-   */
-  interface HeldSettle {
-    readonly told: Deferred.Deferred<boolean>;
-    readonly answered: Deferred.Deferred<void>;
-    readonly dropped: Deferred.Deferred<void>;
-    readonly holder: string | undefined;
-  }
-  /** The settles windows hold for their Undo, by each settle's key, until each is told. */
-  const heldSettles = new Map<string, HeldSettle>();
-  /** The held settles told to go and not yet answered, which an account's departure drops. */
-  const sendingSettles = new Set<HeldSettle>();
-  /**
-   * The account each held settle was asked under, by its key, until it comes
-   * to be sent. Note that an account's departure keeps it, because a settle
-   * still waiting behind another write comes to be sent only after, and
-   * must not read as one laid back from disk under whoever is signed in then.
-   */
-  const heldBy = new Map<string, string | undefined>();
-  /** A settle as its window asked it, the account it was asked under kept by its key where it is held (`heldBy`). */
-  const heldAsked = <
-    Asked extends { readonly clientKey: string; readonly held?: boolean | undefined },
-  >(
-    input: Asked,
-  ): Effect.Effect<Asked> =>
-    Effect.sync(() => {
-      if (input.held === true) heldBy.set(input.clientKey, dependencies.accountId());
-      return input;
-    });
-  /** The account the settle under `clientKey` was asked under, taken so it is read once; the account signed in now where this host did not see it asked, as one laid back from disk. */
-  const takeHolder = (clientKey: string): string | undefined => {
-    const holder = heldBy.has(clientKey) ? heldBy.get(clientKey) : dependencies.accountId();
-    heldBy.delete(clientKey);
-    return holder;
-  };
-  /**
-   * What a window decided of a held settle before the settle came to wait, by
-   * its key, with when: as an Undo pressed while an earlier write on the same
-   * item was still out, or while the settle waited behind writes the service
-   * had not answered. The settle reads it once it comes to be sent.
-   */
-  const decidedEarly = new Map<string, { readonly send: boolean; readonly at: number }>();
-  /** The held settles already let go, by key, with when, so an Undo that comes after hears it came too late. */
-  const letGoAt = new Map<string, number>();
-  /** Every early decision and let-go older than `HELD_SETTLE_BOUND` forgotten, since no window asks after one that old. */
-  const forgetStale = (now: number) => {
-    const bound = Duration.toMillis(HELD_SETTLE_BOUND);
-    for (const [key, { at }] of decidedEarly) if (now - at > bound) decidedEarly.delete(key);
-    for (const [key, at] of letGoAt) if (now - at > bound) letGoAt.delete(key);
-  };
-  /** The early decision on the settle under `clientKey`, taken so it is read once; none where its window said nothing yet. */
-  const takeDecided = (clientKey: string): boolean | undefined => {
-    const early = decidedEarly.get(clientKey);
-    decidedEarly.delete(clientKey);
-    return early?.send;
-  };
-  /**
-   * The held settle under `clientKey`, `send` once its window lets it go,
-   * once its Undo can no longer be pressed, or is; or, past
-   * `HELD_SETTLE_BOUND` with no word from its window, as sent. What `send`
-   * answers, or `undone`, it answers. Note that it is answered to a quit's
-   * flush however it ends, interrupted too, so the quit never waits on it.
-   * Note too that it goes only under the account that held it: one let go
-   * once another is signed in, or dropped as its account leaves while it is
-   * still out, answers `undone`, so its item stands open again.
-   */
-  const released = <Answer>(
-    clientKey: string,
-    holder: string | undefined,
-    send: Effect.Effect<Answer>,
-    undone: Answer,
-  ): Effect.Effect<Answer> =>
-    Effect.gen(function* () {
-      const held: HeldSettle = {
-        told: yield* Deferred.make<boolean>(),
-        answered: yield* Deferred.make<void>(),
-        dropped: yield* Deferred.make<void>(),
-        holder,
-      };
-      heldSettles.set(clientKey, held);
-      const settled = Effect.sync(() => {
-        heldSettles.delete(clientKey);
-        sendingSettles.delete(held);
-        letGoAt.set(clientKey, kernel.now());
-      }).pipe(Effect.andThen(Deferred.succeed(held.answered, undefined)));
-      return yield* Effect.gen(function* () {
-        const heard = yield* Effect.timeoutOption(Deferred.await(held.told), HELD_SETTLE_BOUND);
-        heldSettles.delete(clientKey);
-        const goes = Option.getOrElse(heard, () => true);
-        if (!goes || dependencies.accountId() !== held.holder) return undone;
-        sendingSettles.add(held);
-        return yield* Effect.raceFirst(send, Effect.as(Deferred.await(held.dropped), undone));
-      }).pipe(Effect.ensuring(settled));
-    });
-  // Note that the settles are read before they are told, since telling one takes it out of the map.
-  const flushHeldSettles = Effect.suspend(() => {
-    const held = [...heldSettles.values()];
-    heldSettles.clear();
-    return Effect.forEach(
-      held,
-      ({ told, answered }) =>
-        Effect.andThen(Deferred.succeed(told, true), Deferred.await(answered)),
-      { concurrency: "unbounded", discard: true },
-    );
-  });
-  /** Every held settle not yet answered dropped: told to stay, or, where it is already out, cut off and answered as undone. */
-  const dropHeldSettles = Effect.suspend(() => {
-    const held = [...heldSettles.values(), ...sendingSettles];
-    heldSettles.clear();
-    sendingSettles.clear();
-    return Effect.forEach(
-      held,
-      ({ told, dropped }) =>
-        Effect.andThen(Deferred.succeed(told, false), Deferred.succeed(dropped, undefined)),
-      { discard: true },
-    );
-  });
-  // Note that the settles already out are waited for beside those let go, since each attempt reads the credential afresh and one still out past the departure would go under the next account.
-  const letGoHeldSettles = Effect.suspend(() => {
-    const out = [...sendingSettles];
-    return Effect.timeoutOption(
-      Effect.andThen(
-        flushHeldSettles,
-        Effect.forEach(out, ({ answered }) => Deferred.await(answered), { discard: true }),
-      ),
-      HELD_SETTLE_LEAVE_BOUND,
-    ).pipe(Effect.andThen(dropHeldSettles));
-  });
-  /**
-   * A settle sent as its window asks: at once, or, where the window holds it
-   * for its Undo (`held`), only once released, so an Undo takes back what was
-   * drawn before the service, the agent, or another member hears of it. Note
-   * that only its first attempt waits: one sent again from the writes that
-   * waited for the service goes by what its window decided meanwhile, if
-   * anything, as one its window decided before it came to be sent does.
-   */
-  const heldSend = (
-    { clientKey, held }: { readonly clientKey: string; readonly held?: boolean | undefined },
-    waited: boolean,
-    send: Effect.Effect<AgentInboxAnsweredView>,
-  ): Effect.Effect<AgentInboxAnsweredView> =>
-    Effect.suspend(() => {
-      if (held !== true) return send;
-      // Note that a decision its window made before the settle came to be sent is the one it goes by, and only under the account that asked it.
-      const holder = takeHolder(clientKey);
-      const decided = takeDecided(clientKey);
-      if (decided === undefined && !waited) return released(clientKey, holder, send, SETTLE_UNDONE);
-      letGoAt.set(clientKey, kernel.now());
-      const goes = decided !== false && holder === dependencies.accountId();
-      return goes ? send : Effect.succeed(SETTLE_UNDONE);
-    });
   // Note that who and when are read once a write is asked, since its change is drawn again over each answer a read takes while it stands.
-  /** A nod to an item, settling it, held for its window's Undo where it asks (`heldSend`). */
+  /** A nod to an item, settling it. */
   const nodded = inboxWrite<AgentInboxAnswerParams, AgentInboxAnsweredView>(
     ({ itemId }) => [itemId],
     ({ itemId, revision }) => {
@@ -1072,15 +882,14 @@ function composed(
         item: (item) => (item.revision === revision ? acknowledgedNow(item, by, at) : undefined),
       };
     },
-    ({ itemId, held, ...request }, key, waited) =>
-      heldSend({ ...request, held }, waited, asked(client.answerInbox(itemId, request, key))),
+    ({ itemId, ...request }, key) => asked(client.answerInbox(itemId, request, key)),
     {
       name: INBOX_QUEUED_WRITE.ANSWER,
       input: agentInboxAnswerParamsSchema,
       queued: settledAs,
     },
   );
-  /** An open item closed without an answer, settling it, held for its window's Undo where it asks (`heldSend`). */
+  /** An open item closed without an answer, settling it. Note that a close an older build queued held names `held`, which goes no further. */
   const closed = inboxWrite<AgentInboxCloseParams, AgentInboxAnsweredView>(
     ({ itemId }) => [itemId],
     ({ itemId, revision }) => {
@@ -1091,13 +900,26 @@ function composed(
         item: (item) => (item.revision === revision ? closedNow(item, by, at) : undefined),
       };
     },
-    ({ itemId, held, ...request }, key, waited) =>
-      heldSend({ ...request, held }, waited, asked(client.closeInbox(itemId, request, key))),
+    ({ itemId, held: _held, ...request }, key) => asked(client.closeInbox(itemId, request, key)),
     {
       name: INBOX_QUEUED_WRITE.CLOSE,
       input: agentInboxCloseParamsSchema,
       queued: settledAs,
     },
+  );
+  /**
+   * The reader's own nod or close taken back, as their Undo asks, drawn open
+   * at once and landing as the service answers it: still settled where it
+   * refused, its agent told or the item moved on. It is keyed by its item,
+   * so it goes after the nod or close it takes back where that is still out.
+   */
+  const tookBack = inboxWrite<AgentInboxTakeBackParams, AgentInboxTakenBackView>(
+    ({ itemId }) => [itemId],
+    ({ itemId }) => {
+      const at = kernel.now();
+      return { kind: INBOX_CHANGE.REOPENED, itemId, item: (item) => takenBackNow(item, at) };
+    },
+    ({ itemId, ...request }, key) => asked(client.takeBackInbox(itemId, request, key)),
   );
   /**
    * A message on an item's thread. Note that a reply carrying an answer
@@ -1214,6 +1036,10 @@ function composed(
     AGENTS_CHOOSE: declaredWrite(dependencies.pool, chosen),
     AGENTS_RENAME: declaredWrite(dependencies.pool, renamed),
     AGENTS_SERVERS: declaredWrite(dependencies.pool, switched),
+    AGENTS_PERMISSION_MODE: declaredWrite(dependencies.pool, moded),
+    // Note that an answer draws nothing on the agent's row, whose ask the service takes off as it settles, so it is asked and answered alone.
+    AGENTS_ANSWER_APPROVAL: ({ agentId, approvalId, ...request }) =>
+      asked(client.answerApproval(agentId, approvalId, request)),
     AGENTS_QUEUE: declaredWrite(dependencies.pool, queued, {
       read: (read) =>
         Effect.sync((): QueueWrite => ({ ...read, queuedBy: dependencies.accountId() ?? "" })),
@@ -1247,24 +1073,9 @@ function composed(
     AGENTS_PART: ({ agentId, messageId, index, callId }) =>
       asked(client.agentPart(agentId, messageId, index, callId)),
     // The Inbox's acts (`AGENT_INBOX_ACTS`): each row write drawn over the pool the moment it is asked.
-    // Note that a held nod's or close's account is read as it is asked, since it may come to be sent only after another has signed in.
-    AGENTS_INBOX_ANSWER: declaredWrite(dependencies.pool, nodded, { read: heldAsked }),
-    AGENTS_INBOX_CLOSE: declaredWrite(dependencies.pool, closed, { read: heldAsked }),
-    AGENTS_INBOX_RELEASE: ({ clientKey, send }) =>
-      Effect.gen(function* () {
-        const held = heldSettles.get(clientKey);
-        if (held !== undefined) {
-          heldSettles.delete(clientKey);
-          yield* Deferred.succeed(held.told, send);
-          return { held: true };
-        }
-        if (letGoAt.has(clientKey)) return { held: false };
-        // Note that a settle not yet come to be sent, behind an earlier write on its item or among those waiting for the service, goes by this decision once it is.
-        const now = kernel.now();
-        forgetStale(now);
-        decidedEarly.set(clientKey, { send, at: now });
-        return { held: true };
-      }),
+    AGENTS_INBOX_ANSWER: declaredWrite(dependencies.pool, nodded),
+    AGENTS_INBOX_CLOSE: declaredWrite(dependencies.pool, closed),
+    AGENTS_INBOX_TAKE_BACK: declaredWrite(dependencies.pool, tookBack),
     AGENTS_INBOX_MESSAGE: declaredWrite(dependencies.pool, messaged),
     AGENTS_INBOX_START: (start) =>
       Effect.tap(asked(client.startInboxThread(start)), (answer) =>
@@ -1352,8 +1163,6 @@ function composed(
 
   // Note that the windows' holds stand through a sign-out, so a session signing in follows them anew (`open`).
   const reset = Effect.gen(function* () {
-    // Note that a settle the leaving account held is never sent under whoever comes next.
-    yield* dropHeldSettles;
     yield* transcriptSlice.end;
     yield* holders.end;
     yield* chapters.end;
@@ -1400,7 +1209,5 @@ function composed(
       anyWrite(reminded),
       anyWrite(markedAll),
     ],
-    flushHeldSettles,
-    letGoHeldSettles,
   };
 }

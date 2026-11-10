@@ -80,6 +80,13 @@ export type AccountAsksClient = Pick<
   | "forgetMemory"
   | "transcribeDictation"
   | "markActive"
+  | "registerPushDevice"
+  | "unregisterPushDevice"
+  | "pushDeviceStatus"
+  | "setPushDeviceNotify"
+  | "registerLiveActivityStartToken"
+  | "registerLiveActivityToken"
+  | "endLiveActivity"
 >;
 
 export interface AccountAsksDependencies extends AccountGateDependencies {
@@ -387,6 +394,14 @@ function actsOf(
     DICTATION_TRANSCRIBE: (clip) => asked(client.transcribeDictation(clip)),
     // Note that the beat carries nothing and its answer is read by no one, so a signed-out window's is dropped at the gate.
     ACCOUNT_ACTIVE: () => Effect.asVoid(asked(client.markActive())),
+    // Note that a phone's token passes through once and is noted nowhere, as the service keeps it alone.
+    PUSH_DEVICE_REGISTER: (device) => asked(client.registerPushDevice(device)),
+    PUSH_DEVICE_UNREGISTER: (device) => asked(client.unregisterPushDevice(device)),
+    PUSH_DEVICE_STATUS: (device) => asked(client.pushDeviceStatus(device)),
+    PUSH_DEVICE_NOTIFY: (choice) => asked(client.setPushDeviceNotify(choice)),
+    LIVE_ACTIVITY_START_TOKEN: (token) => asked(client.registerLiveActivityStartToken(token)),
+    LIVE_ACTIVITY_TOKEN: (token) => asked(client.registerLiveActivityToken(token)),
+    LIVE_ACTIVITY_ENDED: (phone) => asked(client.endLiveActivity(phone)),
     // A removal is drawn gone over the held hosts the moment it is asked.
     HOSTS_REMOVE: declaredWrite(
       pool,

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
@@ -50,7 +51,6 @@ import {
   endLineOffersTryAgain,
   endLineParts,
   endLineReason,
-  messageFailureWords,
   startFailureNote,
 } from "./agent-model.js";
 import { AgentTab } from "./agent-tab.js";
@@ -421,7 +421,7 @@ test("a failed agent whose host settled its launch unstarted ends on the step it
   const line = tab.endLine() ?? assert.fail("the turn ends on its line");
   assert.match(
     line.textContent ?? "",
-    /The host couldn't start this agent: it failed while starting Codex\. Send a message to try again\./,
+    /The machine couldn't start this agent: it failed while starting Codex\. Send a message to try again\./,
   );
   assert.doesNotMatch(line.textContent ?? "", /Failed:/);
 });

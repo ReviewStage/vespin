@@ -1,6 +1,7 @@
 import { repositoryParts, TASK_ORDER, taskTime } from "@repo/features/task-list-model";
 import {
   DESCRIPTION_ACTOR,
+  isTaskSettled,
   TASK_PRIORITY,
   TASK_PRIORITY_ORDER,
   TASK_STATUS,
@@ -464,11 +465,6 @@ export function valueCounts(
   return counts;
 }
 
-/** Whether a status is settled: Done or Canceled. */
-function isSettled(status: TaskStatus): boolean {
-  return status === TASK_STATUS.DONE || status === TASK_STATUS.CANCELED;
-}
-
 /** When a settled task was finished: as the service kept it, else its last save, for one from a service before it kept that. */
 function finishedAt(task: TaskSummary): number {
   return task.completedAt ?? task.updatedAt;
@@ -518,7 +514,7 @@ function standingTasks(
     if (!inFilter(task, filter)) continue;
     const status = statusOf(task);
     if (
-      !isSettled(status) ||
+      !isTaskSettled(status) ||
       namedByFilter(filter, status) ||
       inWindow(display.completed, finishedAt(task), now)
     ) {
@@ -596,7 +592,7 @@ function groupingRule(grouping: TasksGrouping, context: GroupingContext): Groupi
         statusOrder,
         filterValues(filter, TASKS_FILTER_FIELD.STATUS),
         (status) =>
-          !isSettled(status) ||
+          !isTaskSettled(status) ||
           namedByFilter(filter, status) ||
           display.completed !== COMPLETED_WINDOW.NONE,
       );

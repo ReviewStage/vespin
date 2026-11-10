@@ -12,10 +12,18 @@
  * the host wrote it, and a document already staged is handed nothing new.
  */
 
+import { ACT_KIND } from "@repo/host/acts";
 import { type AppStateSnapshot, RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
 import type { AppStateStore } from "@repo/host/client";
 import type { ActPortClient, PortActKind, PortActPayload } from "@repo/host/contract";
-import { inboxActAnswer, inboxAppState, inboxTasksView } from "@repo/host/fixture-inbox";
+import {
+  inboxActAnswer,
+  inboxAppState,
+  inboxTasksView,
+  type PullRequestMove,
+  pullRequestMoveOf,
+  pullRequestPartsAppState,
+} from "@repo/host/fixture-inbox";
 import { FIXTURE_IDS } from "@repo/host/fixture-stage";
 
 /** The one workspace a fixture run's account is in. */
@@ -31,6 +39,12 @@ function stagedTasks(held: AppStateSnapshot): AppStateSnapshot["tasks"] {
   stagedLists.add(staged);
   return staged;
 }
+
+/** The moves each run's changes made to the fixture's pull requests, by the store the run stages, each map replaced whole as a change lands so a staging reads it anew. */
+const MOVES = new WeakMap<object, ReadonlyMap<number, PullRequestMove>>();
+
+/** No pull request moved yet. */
+const NO_MOVES: ReadonlyMap<number, PullRequestMove> = new Map();
 
 /** What the store is handed: whole slices of the document. */
 type StorePatch = Parameters<AppStateStore["update"]>[0];
@@ -53,18 +67,41 @@ export function stageFixture(state: Pick<AppStateStore, "snapshot" | "update">):
   const held: AppStateSnapshot = { ...snapshot, window: { fullScreen: false } };
   const inbox = inboxAppState(held, FIXTURE_WORKSPACE_IDS);
   if (inbox === held) return;
-  const staged = { ...inbox, tasks: stagedTasks(held) };
+  const parts = pullRequestPartsAppState(inbox, MOVES.get(state) ?? NO_MOVES);
+  const staged = { ...parts, tasks: stagedTasks(held) };
   state.update(stagedPatch(held, staged));
+}
+
+/** Keeps how a change the fixture took moved its pull request, and lays it over the document at once; nothing for any other act. */
+function keepMove(
+  state: Pick<AppStateStore, "snapshot" | "update">,
+  kind: PortActKind,
+  payload: PortActPayload<PortActKind>,
+): void {
+  if (kind !== ACT_KIND.AGENTS_PULL_REQUEST_ACTION) return;
+  // SAFETY: the payload is the kind's, which the guard above names.
+  const { number, request } = payload as PortActPayload<typeof ACT_KIND.AGENTS_PULL_REQUEST_ACTION>;
+  const move = pullRequestMoveOf(request);
+  if (number === undefined || move === undefined) return;
+  MOVES.set(state, new Map(MOVES.get(state) ?? NO_MOVES).set(number, move));
+  stageFixture(state);
 }
 
 /**
  * The act port a fixture run's screens act through: each act the profile
- * answers, such as a mark or a thread's file read (`inboxActAnswer`),
+ * answers, such as a mark, a thread's file read, or a reply or a resolve on
+ * a thread, one of them refused (`inboxActAnswer`),
  * answered by the fixture, as the panel's fixture run answers it on the
  * window's side, and every other act sent to the host. Note that a mark is
- * echoed and moves no dot, as on the panel's.
+ * echoed and moves no dot, as on the panel's, but a change to one of the
+ * fixture's pull requests moves it on the document of `state`, as GitHub
+ * would, so a screen draws it merged or out of the queue.
  */
-export function fixtureActs(acts: ActPortClient, profile: RunProfile): ActPortClient {
+export function fixtureActs(
+  acts: ActPortClient,
+  profile: RunProfile,
+  state: Pick<AppStateStore, "snapshot" | "update">,
+): ActPortClient {
   return new Proxy(acts, {
     get(target, kind, receiver) {
       const sent: unknown = Reflect.get(target, kind, receiver);
@@ -76,9 +113,10 @@ export function fixtureActs(acts: ActPortClient, profile: RunProfile): ActPortCl
           kind as PortActKind,
           payload as PortActPayload<PortActKind>,
         );
-        return staged === undefined
-          ? Reflect.apply(sent, target, [payload, ...rest])
-          : Promise.resolve(staged.answer);
+        if (staged === undefined) return Reflect.apply(sent, target, [payload, ...rest]);
+        // SAFETY: as above.
+        keepMove(state, kind as PortActKind, payload as PortActPayload<PortActKind>);
+        return Promise.resolve(staged.answer);
       };
     },
   });

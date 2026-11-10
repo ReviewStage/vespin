@@ -23,8 +23,8 @@
  */
 
 import { taskLinkStep } from "@repo/features/link-grammar";
+import { DOCUMENT_REGION } from "@repo/features/tasks-model";
 import type { Workspace } from "@repo/features/workspace-wire";
-import { DOCUMENT_REGION } from "@repo/ui/tasks-model";
 import { useAdminRoute } from "../admin/admin-route.js";
 import type { AdminView } from "../admin/routing.js";
 import { useAutomationsRoute } from "../automations-route.js";

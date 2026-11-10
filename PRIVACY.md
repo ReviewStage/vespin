@@ -53,6 +53,18 @@ thinking text included, so the agent can resume it and an agent continued or
 forked from it goes on from it. Transcripts and descriptions are stored
 as written, not end-to-end encrypted, and our operators can read them.
 
+### Link previews
+
+When you rest the pointer on a plain web link in a conversation, a thread, or
+a description, Vespin shows a card of the page it opens: its title,
+description, site name, icon, and picture. To draw it, the Service fetches
+that page, and the icon and picture it names, from our servers over HTTPS
+only, so the site
+sees a request from Vespin and never from your Mac or browser, with no cookie
+or credential of yours. The Service refuses addresses inside a network and
+keeps what a page answered for a few minutes, keyed by the address alone and
+under no one's name; it does not record which links you hovered.
+
 ### Repository and GitHub data
 
 Through your workspace's GitHub App installation, we access repository
@@ -78,7 +90,7 @@ with a server-only secret held outside the database. We keep a short hint
 as, the name you give a plan, and whether the provider accepts it. We never
 log a saved credential or include it in analytics, error reports, or screen
 recordings. We never send one to your devices, except to run an agent on your
-own machine with Bring your own host (see Agents on your own machines below).
+own machine with Bring your own machine (see Agents on your own machines below).
 
 A workspace's owners and admins can save environment variables for the
 workspace, which we store sealed the same way. Each of the workspace's cloud
@@ -112,7 +124,7 @@ token, key, or file contents, that goes too.
 
 ### Agents on your own machines
 
-If you turn on Bring your own host, agents can run directly on This Mac or on
+If you turn on Bring your own machine, agents can run directly on This Mac or on
 another machine you add, with full access to everything that machine's account
 can reach. Their work stays on that machine, though their transcripts are
 stored like any other, and, on a machine running host 0.11.0 or later, so is
@@ -222,6 +234,16 @@ Apple tells us the phone will no longer take pushes on it, and it is deleted
 with your account. Beside the token we keep each phone's "Notify me" choice,
 when a push to it last reached Apple, and, while its pushes fail, since when
 and Apple's reason, which the phone's Settings shows.
+
+If your iPhone allows the app's Live Activities, the app also registers the
+two tokens Apple hands it for the one Live Activity that shows your running
+agents: one that lets the Service start the activity, and one for the
+activity while it stands on the phone. We keep them with your phone's row,
+beside when the Service last pushed the activity and what that push showed,
+and the Service sends Apple a token with each push to the activity: **your
+agents' titles and their current steps**, how many of them run, and how many
+threads wait on you. We forget the activity's token once it ends, or Apple
+says it is gone, and both tokens leave with the phone's row or your account.
 
 So your phone stays quiet while you're at your desk, the Service notes when
 a desktop or web client of yours was last active: while you use one, it

@@ -30,6 +30,7 @@ import {
   type TaskStanding,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { TASK_MARK } from "@repo/features/tasks-model";
 import {
   noneYetWords,
   REFRESH_FAILED_WORDS,
@@ -69,7 +70,6 @@ import {
   Stack,
   TaskPriorityMark,
   type TaskRowCell,
-  TaskRowDraft,
   TaskStatusMark,
   TEXT_ELEMENT,
   TEXT_TONE,
@@ -84,7 +84,6 @@ import {
 import { actorName, creatorActor, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
 import { GLYPH, ListTodoIcon, PinIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { TASK_MARK } from "@repo/ui/tasks-model";
 import {
   COMPLETED_WINDOW,
   LIST_COLUMN,
@@ -110,7 +109,6 @@ import {
 } from "@repo/ui/virtual-rows";
 import { Schema } from "effect";
 import {
-  Fragment,
   memo,
   type ReactNode,
   type RefObject,
@@ -137,7 +135,7 @@ import { keptKey, useKept } from "../use-kept.js";
 import { useFittedColumns } from "./fitted-columns.js";
 import { groupNewTaskWords, NewTaskInButton, quickAddInto } from "./new-task-button.js";
 import { useTasksWaiting } from "./places-waiting.js";
-import { type DraftParts, type QuickAddLine, QuickAddLines, useQuickAdd } from "./quick-add.js";
+import { QuickAddLines, rowQuickAddLine, useQuickAdd } from "./quick-add.js";
 import { sectionGlyph } from "./section-icon-picker.js";
 import { groupCount, sidebarFold } from "./sidebar-fold.js";
 import { type OpenedTask, openedTaskOf, type TaskRowTab, useTaskRowTab } from "./task-actions.js";
@@ -723,54 +721,6 @@ const TasksPageRow = memo(function TasksPageRow({
   );
 });
 
-/** The chips a quick add's draft draws in the cells of the properties the List draws, by the property each says. */
-const DRAFT_CELLS = [TASK_PROPERTY.PRIORITY, TASK_PROPERTY.STATUS, TASK_PROPERTY.ASSIGNEE] as const;
-
-/** The draft's chip for a property, where it has one. */
-function draftChip(draft: DraftParts, property: TaskRowCell): ReactNode {
-  if (property === TASK_PROPERTY.PRIORITY) return draft.priority;
-  if (property === TASK_PROPERTY.STATUS) return draft.status;
-  if (property === TASK_PROPERTY.ASSIGNEE) return draft.assignee;
-  return null;
-}
-
-/**
- * A List group's quick add line: a row of the list's own cells, raised as a
- * card off the page as a Board's draft is, so it reads as one being written, the draft's
- * chips in the cells of its priority, status, and assignee and its bare
- * title in the name's, so it reads as the row it is about to be; a chip
- * whose column the List does not draw stands after the title, so each
- * stays in reach. An add still out stands as its row, its name muted, and
- * why one was refused in the name's cell.
- */
-function listQuickAddLine(properties: readonly TaskRowCell[]): QuickAddLine {
-  return ({ draft, pending, refused }) => (
-    <TaskRowDraft
-      cells={properties}
-      content={
-        draft === undefined
-          ? {}
-          : Object.fromEntries(
-              DRAFT_CELLS.map((property) => [property, draftChip(draft, property)]),
-            )
-      }
-      name={
-        <>
-          <ReplayMask>{draft?.title ?? pending}</ReplayMask>
-          {draft === undefined
-            ? null
-            : DRAFT_CELLS.filter((property) => !properties.includes(property)).map((property) => (
-                <Fragment key={property}>{draftChip(draft, property)}</Fragment>
-              ))}
-        </>
-      }
-      note={refused === undefined ? undefined : <ReplayMask>{refused}</ReplayMask>}
-      drafting={draft !== undefined}
-      pending={pending !== undefined}
-    />
-  );
-}
-
 /**
  * Where the List's runs of rows stand: the page's scroller they stand in,
  * the List's grid, whose resizing moves the runs below a group that grew or
@@ -867,7 +817,7 @@ function TasksListGroup({
             moves
             className={`tasks-list-adds ${ROWS_GRID}`}
           >
-            <QuickAddLines quick={quick} line={listQuickAddLine(properties)} />
+            <QuickAddLines quick={quick} line={rowQuickAddLine(properties)} />
           </Stack>
         ) : null}
         {drawn.length === 0 ? null : (

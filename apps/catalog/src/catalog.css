@@ -255,6 +255,11 @@ body {
   padding-top: 120px;
 }
 
+/* Room above a chip for the popover it hangs over itself, a menu section's places among it. */
+.catalog-chip-popover-stage {
+  padding-top: 380px;
+}
+
 .catalog-popover {
   padding: var(--ui-space-12);
   border: 1px solid var(--ui-color-border);

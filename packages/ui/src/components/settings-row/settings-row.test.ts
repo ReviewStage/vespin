@@ -151,14 +151,14 @@ test("an adornment rides the label's line but names nothing: the label alone nam
   const container = mount(
     createElement(SettingsRow, {
       label: "Theme",
-      adornment: createElement("span", null, "Modified"),
+      adornment: createElement("span", null, "Saved"),
       children: (control) =>
         createElement("input", { type: "checkbox", "aria-labelledby": control.labelId }),
     }),
   );
   const box = container.querySelector('input[type="checkbox"]');
   if (box === null) throw new Error("no checkbox");
-  expect(container.textContent).toContain("Modified");
+  expect(container.textContent).toContain("Saved");
   expect(wordsOf(box, "aria-labelledby")).toBe("Theme");
 });
 
@@ -228,7 +228,7 @@ function LabeledSwitchRow({ adornment }: { adornment?: string | undefined }): Re
 }
 
 test("a press on a switch row's words sets its switch, as a press on the switch does, with or without an adornment", () => {
-  for (const adornment of [undefined, "Modified"]) {
+  for (const adornment of [undefined, "Saved"]) {
     const container = mount(createElement(LabeledSwitchRow, { adornment }));
     const control = container.querySelector<HTMLButtonElement>('button[role="switch"]');
     const words = [...container.querySelectorAll("*")].find(

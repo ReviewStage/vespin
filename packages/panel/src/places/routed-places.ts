@@ -20,10 +20,10 @@
  */
 
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
-import { LINK_PLACE, type LinkPlace, taskLinkStep } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination, taskLinkStep } from "@repo/features/link-grammar";
+import { DOCUMENT_REGION } from "@repo/features/tasks-model";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { StripTab } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION } from "@repo/ui/tasks-model";
 import { type HistoryLocation, useRouter } from "@tanstack/react-router";
 import { useMemo, useSyncExternalStore } from "react";
 import { adminLinkFields } from "../admin/routing.js";
@@ -195,12 +195,12 @@ function everyAddress(): boolean {
 }
 
 /** A link that names the step the window stands on. */
-function stepLink(place: LinkPlace, thing: LinkThing, workspace: string): LinkAtHand {
+function stepLink(place: LinkDestination, thing: LinkThing, workspace: string): LinkAtHand {
   return { link: { workspace, place }, thing, step: true };
 }
 
 /** A link of something open within the step the window stands on. */
-function withinLink(place: LinkPlace, thing: LinkThing, workspace: string): LinkAtHand {
+function withinLink(place: LinkDestination, thing: LinkThing, workspace: string): LinkAtHand {
   return { link: { workspace, place }, thing };
 }
 
@@ -213,7 +213,7 @@ function versionLinks({ tasks, at }: PlaceLinks): readonly LinkAtHand[] {
   // Note that the task's links name it by its number, where it has one, as every link to it is written.
   const planId = taskLinkStep(drawn);
   const task: LinkAtHand = {
-    link: { workspace, place: { kind: LINK_PLACE.TASK, planId } },
+    link: { workspace, place: { kind: LINK_DESTINATION.TASK, planId } },
     thing: LINK_THING.TASK,
     name: drawn.name,
   };
@@ -222,7 +222,7 @@ function versionLinks({ tasks, at }: PlaceLinks): readonly LinkAtHand[] {
   const listedAlone = at.narrow === true && tasks.history.listed;
   if (revision === undefined || listedAlone) return [{ ...task, step: true }];
   return [
-    stepLink({ kind: LINK_PLACE.VERSION, planId, revision }, LINK_THING.VERSION, workspace),
+    stepLink({ kind: LINK_DESTINATION.VERSION, planId, revision }, LINK_THING.VERSION, workspace),
     task,
   ];
 }
@@ -277,10 +277,10 @@ export const ROUTED_PLACE = {
       const { view, workspace } = at.settings;
       const slug = workspace === undefined ? listed : slugOf(tasks.workspaces, workspace.id);
       // A narrow room's page list stands alone, so its link names no page.
-      const place: LinkPlace =
+      const place: LinkDestination =
         at.narrow === true && at.settings.listed === true
-          ? { kind: LINK_PLACE.SETTINGS }
-          : { kind: LINK_PLACE.SETTINGS, page: view };
+          ? { kind: LINK_DESTINATION.SETTINGS }
+          : { kind: LINK_DESTINATION.SETTINGS, page: view };
       return [stepLink(place, LINK_THING.SETTINGS, slug)];
     },
     narrowBack: NARROW_BACK.NARROW_ROOM,
@@ -303,7 +303,7 @@ export const ROUTED_PLACE = {
     // Its workspace is only the one listed, since the place reads every workspace's accounts.
     links: ({ at, listed, under }) => {
       if (at.admin === undefined) return under();
-      const root = { kind: LINK_PLACE.ADMIN } as const;
+      const root = { kind: LINK_DESTINATION.ADMIN } as const;
       const fields = adminLinkFields(at.admin);
       if (Object.keys(fields).length === 0) return [stepLink(root, LINK_THING.ADMIN, listed)];
       return [
@@ -328,7 +328,9 @@ export const ROUTED_PLACE = {
     title: (_tasks, under, views) => (views.board ? { label: "Tasks" } : under()),
     named: () => undefined,
     links: ({ views, listed, under }) =>
-      views.board ? [stepLink({ kind: LINK_PLACE.BOARD }, LINK_THING.BOARD, listed)] : under(),
+      views.board
+        ? [stepLink({ kind: LINK_DESTINATION.BOARD }, LINK_THING.BOARD, listed)]
+        : under(),
     narrowBack: undefined,
     narrowInstead: undefined,
     surfaces: () => [{ surface: PRODUCT_SURFACE.BOARD }],
@@ -356,7 +358,7 @@ export const ROUTED_PLACE = {
         workspace === undefined ? undefined : workspaceOfSlug(tasks.workspaces, workspace);
       return [
         stepLink(
-          { kind: LINK_PLACE.PERSON, userId },
+          { kind: LINK_DESTINATION.PERSON, userId },
           LINK_THING.PERSON,
           home === undefined ? listed : (home.slug ?? home.id),
         ),
@@ -384,10 +386,10 @@ export const ROUTED_PLACE = {
     links: ({ views, listed, under }) => {
       const place = views.automations;
       if (place === undefined) return under();
-      const list: LinkPlace = { kind: LINK_PLACE.AUTOMATIONS };
+      const list: LinkDestination = { kind: LINK_DESTINATION.AUTOMATIONS };
       if (place.kind === AUTOMATIONS_PAGE.EDIT) {
-        const automation: LinkPlace = {
-          kind: LINK_PLACE.AUTOMATION,
+        const automation: LinkDestination = {
+          kind: LINK_DESTINATION.AUTOMATION,
           automationId: place.automationId,
         };
         return [
@@ -506,7 +508,7 @@ export const ROUTED_PLACE = {
     listedOnly: false,
     title: () => ({ label: HOME_WORDS }),
     named: () => undefined,
-    links: ({ listed }) => [stepLink({ kind: LINK_PLACE.HOME }, LINK_THING.HOME, listed)],
+    links: ({ listed }) => [stepLink({ kind: LINK_DESTINATION.HOME }, LINK_THING.HOME, listed)],
     narrowBack: undefined,
     // A phone has no Home: wherever the window would stand on it, the Inbox's list takes its step in place (`mobile-bar.tsx`), so Back never lands on a Home that would only leave again.
     narrowInstead: ({ workspace, openInbox }) =>
@@ -566,10 +568,10 @@ export const ROUTED_PLACE = {
     links: ({ tasks, views, at, listed, under }) => {
       if (!views.inbox.open) return under();
       // An Inbox narrowed to a task is linked by it, so a copied link or a reload opens it narrowed again.
-      const inboxPlace: LinkPlace =
+      const inboxPlace: LinkDestination =
         at.inboxTask === undefined
-          ? { kind: LINK_PLACE.INBOX }
-          : { kind: LINK_PLACE.INBOX, planId: at.inboxTask };
+          ? { kind: LINK_DESTINATION.INBOX }
+          : { kind: LINK_DESTINATION.INBOX, planId: at.inboxTask };
       const inbox = stepLink(inboxPlace, LINK_THING.INBOX, listed);
       const chosen = listedInboxChoice(views.inbox.chosen, tasks);
       if (chosen === undefined) return [inbox];

@@ -25,6 +25,8 @@ import {
   Spinner,
   TEXT_LINK_LOOK,
   TextLink,
+  USAGE_METERS_WIDTH,
+  UsageMeters,
 } from "@repo/ui";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useEffect, useId, useRef, useState } from "react";
@@ -61,13 +63,22 @@ import { CatalogSection } from "../section";
  * sheet's place and Fast switching where it stands.
  */
 
-/** The last line a ChatGPT-paid agent's model menu ends on: who pays, Manage usage set apart at its end. */
+/** The last line a ChatGPT-paid agent's model menu ends on: who pays, Manage usage set apart at its end, and the plan's usage under it, full width. */
 const PLAN_LINE: MenuLastLine = {
-  words: "Using Codex plan",
+  words: "Your Codex plan",
   end: (
     <TextLink href="https://chatgpt.com/settings/usage" look={TEXT_LINK_LOOK.UNDERLINED} external>
       Manage usage
     </TextLink>
+  ),
+  below: (
+    <UsageMeters
+      width={USAGE_METERS_WIDTH.FILL}
+      rows={[
+        { label: "5-hour", usedPercent: 12, resets: "in 4h" },
+        { label: "Weekly", usedPercent: 64, resets: "in 5d" },
+      ]}
+    />
   ),
 };
 

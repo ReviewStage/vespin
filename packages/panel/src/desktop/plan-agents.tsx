@@ -1,12 +1,28 @@
 import type { AgentPullRequest } from "@repo/features/agent-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { NEEDS_YOU, threadsWaitingWords } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { agentLastMovedAt, inAgentListOrder } from "@repo/features/task-agents-model";
-import { GROUP_HEADING, GroupHeader, LIST_DENSITY, List, ListRow, TaskRows } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
+import { APP_COMMAND } from "@repo/settings/shortcuts";
+import {
+  BUTTON_SIZE,
+  GROUP_ACTIONS,
+  GROUP_HEADING,
+  GroupAction,
+  GroupHeader,
+  IconButton,
+  LIST_DENSITY,
+  List,
+  ListRow,
+  TaskRows,
+  Tooltip,
+} from "@repo/ui";
+import { GLYPH, PlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, STRIP_TAB_KIND, sameTab } from "@repo/ui/tab-strip-model";
 import { useCoarsePointer } from "../coarse-pointer.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
+import { useMemberDirectory } from "../member-directory.js";
 import { agentSubject } from "../tasks/agent-ref.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTabsControl } from "../tasks/use-main-tabs.js";
@@ -48,14 +64,16 @@ import type { ChosenRows } from "./tasks-selection.js";
  * agent's one menu, as its row on a person's page and its tab offer it:
  * Copy link, Rename in the row's place, Archive, and Permanently delete.
  * The agents are chosen together as a task's related tasks are, by the box
- * in a row's gutter, ⌘-click, ⇧-click, and ⌘A, New agent never among them,
- * and a row chosen among several offers Archive, or Unarchive, and
- * Permanently delete on every one chosen (`agents-selection.tsx`).
+ * in a row's gutter, ⌘-click, ⇧-click, and ⌘A, and a row chosen among
+ * several offers Archive, or Unarchive, and Permanently delete on every one
+ * chosen (`agents-selection.tsx`).
  * Those agents come first, then those at work, then the newest started; an
- * archived agent is not listed. New agent follows them at every width, as
- * the strip's "+" offers it (`newAgentStarts`), so the group stands even on a
- * task with no agent, a fresh plan's one next step; an archived task with no
- * agent draws no group.
+ * archived agent is not listed. New agent stands on the group's head at
+ * every width, a + at rest as Sub-tasks' is, the strip's "+" by another
+ * place (`newAgentStarts`), so it stands while the group is folded too. A
+ * task with no agent listed draws no group: its New agent stands under the
+ * task's title instead (`plan-head.tsx`), as Linear offers a first
+ * sub-issue under an issue's description.
  *
  * On a phone, Overview is the task's one page, with no strip, summary, or
  * Inbox tab beside it (`task-pane-switcher.tsx`), so the group holds the rest
@@ -79,6 +97,24 @@ const AGENTS_LIST = "Agents";
 
 /** What the group's count counts, said to a reader beside the figure. */
 const AGENTS_NOUN = { one: "agent", many: "agents" } as const;
+
+/** New agent as the group's +, standing at rest on its head, its chord in its tooltip as the strip's "+" says it, and why it is unavailable where it is. */
+function NewAgentAction({ start }: { start: MenuAction }): React.JSX.Element {
+  return (
+    <GroupAction>
+      <Tooltip label={start.detail ?? start.label} command={APP_COMMAND.NEW_TAB}>
+        <IconButton
+          icon={start.icon ?? <PlusIcon />}
+          label={start.label}
+          size={BUTTON_SIZE.COMPACT}
+          disabled={start.disabled}
+          focusableWhenDisabled
+          onClick={start.onSelect}
+        />
+      </Tooltip>
+    </GroupAction>
+  );
+}
 
 /** One agent's row (`AgentListRow`), offering the agent's menu as a person's page does: its tab's look and card, how many of its threads wait on the developer, its pull request's chip where it opened one, where it runs, its failed mark, and when it last moved. */
 function PlanAgentRow({
@@ -145,6 +181,7 @@ export function PlanAgents({
   shown,
   onOpenAgent,
   onOpenPullRequest,
+  newAgent,
   starts,
   phone,
 }: {
@@ -161,12 +198,15 @@ export function PlanAgents({
   shown: boolean;
   onOpenAgent: (agentId: string) => void;
   onOpenPullRequest: (agentId: string) => void;
-  /** What the group offers after its agents: New agent (`newAgentStarts`), and on a phone the agents' read again too (`phoneAgentStarts`). */
+  /** New agent, the + standing at rest on the group's head as the strip's "+" offers it (`newAgentStarts`); none on a task that starts no agent. */
+  newAgent: MenuAction | undefined;
+  /** What the group offers after its agents: on a phone, the agents' read again where it never landed (`agentsRetry`). */
   starts: readonly MenuAction[];
   /** A phone's additions; none elsewhere. */
   phone?: PlanAgentsPhone | undefined;
 }): React.JSX.Element | null {
   // Note that an entry's pick chooses its agent's tab, which a row hands the page as that agent's id.
+  const directory = useMemberDirectory();
   const entries = agentEntries(
     {
       tab,
@@ -177,6 +217,7 @@ export function PlanAgents({
       },
     },
     agents,
+    directory,
     held,
   );
   // Note that a phone's group stands for its archived agents too, on a task whose every agent is archived, which starts none.
@@ -207,7 +248,10 @@ export function PlanAgents({
           <GroupHeader
             heading={GROUP_HEADING.NONE}
             label={AGENTS_LIST}
-            // Note that a group over no agent, standing for New agent, counts none.
+            glyph={<EntityGlyph kind={ENTITY_KIND.AGENT} />}
+            actions={newAgent === undefined ? undefined : <NewAgentAction start={newAgent} />}
+            actionsShown={GROUP_ACTIONS.AT_REST}
+            // Note that a group over no agent, standing for its read again or its archived agents, counts none.
             count={
               entries.length === 0
                 ? undefined

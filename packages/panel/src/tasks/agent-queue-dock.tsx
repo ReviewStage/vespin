@@ -1,4 +1,5 @@
 import { QUEUE_PAUSE, type QueuedMessage, type QueuePaused } from "@repo/features/agent-queue-wire";
+import { pausedWords, QUEUE_WORDS } from "@repo/features/agent-queue-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { IRREVERSIBLE_WORDS } from "@repo/features/words";
 import {
@@ -53,20 +54,6 @@ import { SentWords } from "./skill-chip.js";
  * danger one, with Resume. Nothing is drawn while none is queued.
  */
 
-/** What the dock says. */
-const WORDS = {
-  LIST: "Queued messages",
-  STEER: "Steer",
-  EDIT: "Edit",
-  DELETE: "Delete",
-  CANCEL: "Cancel",
-  RESUME: "Resume",
-  STOPPED: "Queue paused because you interrupted",
-  TURN_FAILED: "Queue paused because the turn failed",
-  REFUSED: "Queue paused: the next message could not be sent",
-  PAUSED: "Queue paused",
-} as const;
-
 /** A queued message's files as a line's chips: each by its name, read by the id the queue names it under where it names one. */
 function queuedFileChips(message: QueuedMessage) {
   return (message.files ?? []).map((file) => ({
@@ -86,23 +73,6 @@ const DELETE_QUESTION: DialogQuestion = {
   loss: CONFIRM_LOSS.IRREVERSIBLE,
   replayUnmasked: true,
 };
-
-/** Why a refused hand-off did not go, by the service's word for it, where the dock has words for it. */
-const REFUSAL_WORDS: Readonly<Record<string, string>> = {
-  "agent-plan-limit-reached": "your plan's usage limit was reached",
-  "agent-credential-missing": "the agent's credential is missing",
-  "agent-retired": "the agent's session has ended",
-  "not-permitted": "only the agent's starter can message it",
-  unavailable: "Could not reach the agent",
-};
-
-/** What the paused header says. */
-function pausedWords(paused: QueuePaused): string {
-  if (paused.because === QUEUE_PAUSE.STOPPED) return WORDS.STOPPED;
-  if (paused.because === QUEUE_PAUSE.TURN_FAILED) return WORDS.TURN_FAILED;
-  const why = paused.refusal === undefined ? undefined : REFUSAL_WORDS[paused.refusal];
-  return why === undefined ? WORDS.REFUSED : `${WORDS.PAUSED}: ${why}`;
-}
 
 /** The dock: the paused header where the queue stands paused, then a row per queued message. */
 export function AgentQueueDock({
@@ -161,7 +131,7 @@ export function AgentQueueDock({
                 icon={<PlayIcon />}
                 onClick={onResume}
               >
-                {WORDS.RESUME}
+                {QUEUE_WORDS.RESUME}
               </Button>
             ) : undefined
           }
@@ -171,7 +141,7 @@ export function AgentQueueDock({
       )}
       <div className="agent-queue-rows">
         <List
-          label={WORDS.LIST}
+          label={QUEUE_WORDS.LIST}
           variant={LIST_VARIANT.CARD}
           density={LIST_DENSITY.DENSE}
           moves
@@ -217,7 +187,7 @@ export function AgentQueueDock({
                       variant={BUTTON_VARIANT.QUIET}
                       onClick={() => onCancelEdit(message)}
                     >
-                      {WORDS.CANCEL}
+                      {QUEUE_WORDS.CANCEL}
                     </Button>
                   ) : (
                     <>
@@ -227,17 +197,17 @@ export function AgentQueueDock({
                         icon={<GLYPH.STEER />}
                         onClick={() => onSteer(message)}
                       >
-                        {WORDS.STEER}
+                        {QUEUE_WORDS.STEER}
                       </Button>
                       <IconButton
                         size={BUTTON_SIZE.COMPACT}
-                        label={WORDS.EDIT}
+                        label={QUEUE_WORDS.EDIT}
                         icon={<GLYPH.RENAME />}
                         onClick={() => onEdit(message)}
                       />
                       <IconButton
                         size={BUTTON_SIZE.COMPACT}
-                        label={WORDS.DELETE}
+                        label={QUEUE_WORDS.DELETE}
                         icon={<GLYPH.DELETE />}
                         onClick={() => {
                           setDoomed(message);

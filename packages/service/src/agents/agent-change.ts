@@ -5,10 +5,13 @@
  * name several, so a change is a partial (`AgentChanges`) written in one
  * transaction, either every change standing or none. A model and effort
  * moved are handed to a native runner that runs at once and counted for each
- * of the two that moved. An archive stops a turn still running first, as a
- * Stop does, then stamps the agent, lets its sandbox and its device go once
- * the archive stands, and is counted where it archived an agent standing
- * unarchived; bringing one back clears whichever archive stands.
+ * of the two that moved; a permission mode is read by the agent's next
+ * launch, so it reaches the agent from its next turn. An archive stops a
+ * turn still running first, as a Stop does, then stamps the agent, runs its
+ * archive script and lets its device go once the archive stands, its cloud
+ * sandbox left to its release once unused (`session-sandboxes.ts`), and is
+ * counted where it archived an agent standing unarchived; bringing one back
+ * clears whichever archive stands.
  *
  * Every other archive writes through here too, each deciding which agents
  * it puts away and why: a task moved to Done or Canceled archives its idle agents in
@@ -32,6 +35,7 @@ import {
   pinAgentCommitted,
   renameAgentCommitted,
   updateAgentChoiceCommitted,
+  updateAgentPermissionModeCommitted,
   updateAgentServersCommitted,
 } from "@repo/database/models/agent-store";
 import {
@@ -41,6 +45,7 @@ import {
 } from "@repo/database/models/task-store";
 import type { StoreWriter } from "@repo/database/models/writer";
 import type { StoredArchive } from "@repo/database/schemas/agent";
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import { AGENT_ARCHIVER } from "@repo/features/agent-wire";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { Data, Effect, Option } from "effect";
@@ -50,7 +55,7 @@ import { hostedStoreOrUnavailable } from "../http/http-effect.js";
 import { runnerChoiceApplied } from "./coder-host/runtime-sessions.js";
 import { idleStandingAgents, stoppedForGood } from "./coder-host/stop.js";
 import { discardedOrLogged } from "./device-discard.js";
-import { deletedInBackground, type SandboxDeleteReach } from "./session-sandboxes.js";
+import { archivedInBackground, type SandboxDeleteReach } from "./session-sandboxes.js";
 
 /** Why the app archived an agent on its own, as its banner says beneath who archived it. */
 export const AUTOMATIC_ARCHIVE_REASON = {
@@ -70,6 +75,8 @@ export interface AgentChanges {
   readonly pinned?: boolean | undefined;
   readonly position?: string | undefined;
   readonly disabledServers?: readonly string[] | undefined;
+  /** How its tool calls are answered from its next turn, already held to what its harness takes. */
+  readonly permissionMode?: AgentPermissionMode | undefined;
 }
 
 /** A change that found no row to write: the agent left the account's reach as it was changed, which takes every change back. */
@@ -92,7 +99,7 @@ const writtenChanges = (userId: string, agent: Agent, changes: AgentChanges) =>
           Option.isSome(changed)
             ? Effect.succeed(changed.value)
             : Effect.fail(new AgentChangeLost());
-        const { title, choice, pinned, position, disabledServers } = changes;
+        const { title, choice, pinned, position, disabledServers, permissionMode } = changes;
         let last: AgentCommitted = { agent };
         if (title !== undefined) {
           last = yield* kept(
@@ -107,6 +114,11 @@ const writtenChanges = (userId: string, agent: Agent, changes: AgentChanges) =>
         }
         if (disabledServers !== undefined) {
           last = yield* kept(yield* updateAgentServersCommitted(userId, agent.id, disabledServers));
+        }
+        if (permissionMode !== undefined) {
+          last = yield* kept(
+            yield* updateAgentPermissionModeCommitted(userId, agent.id, permissionMode),
+          );
         }
         return last;
       }),
@@ -146,9 +158,9 @@ export const changedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
  * The agent archived by who the stamp names, or brought back. An archived
  * agent works on unseen, so a turn still running is stopped before the
  * stamp, refused where none can be stopped yet (`stoppedForGood`); once the
- * archive stands its sandbox is deleted with the drive it owns, so an
- * unarchive opens one afresh from its repository's base drive and its pushed
- * branch, and a local agent is let go of on its device.
+ * archive stands its repository's archive script runs in its sandbox, which
+ * is left standing until it goes unused long enough to be released
+ * (`session-sandboxes.ts`), and a local agent is let go of on its device.
  * Nothing where the agent left the account's reach.
  */
 export const archivedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
@@ -164,7 +176,7 @@ export const archivedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
     archiveAgentCommitted(userId, agent.id, archived, archivedBy),
   );
   if (!archived || Option.isNone(written)) return written;
-  yield* deletedInBackground(reach, [agent]);
+  yield* archivedInBackground(reach, [agent]);
   // Counted only where this write archived an agent standing unarchived, under the member it archived for.
   if (written.value.archivedNow) {
     yield* recordServerEvent(
@@ -180,11 +192,11 @@ export const archivedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
 export const doneTaskArchive = (archivedBy: StoredArchive) =>
   ({ archivedBy, idle: idleStandingAgents }) satisfies TaskDoneArchive<DatabaseServices>;
 
-/** The agents a task's Done or Canceled archived with it let go of once it commits, as an archive by hand lets one go: their sandboxes deleted and a local one discarded on its device. */
+/** The agents a task's Done or Canceled archived with it let go of once it commits, as an archive by hand lets one go: their archive scripts run and a local one discarded on its device. */
 export const archivedWithTaskLetGo = (
   reach: SandboxDeleteReach,
   archived: readonly TaskArchivedAgent[],
-) => (archived.length > 0 ? deletedInBackground(reach, archived) : Effect.void);
+) => (archived.length > 0 ? archivedInBackground(reach, archived) : Effect.void);
 
 /**
  * The agent archived with its task where a member or an agent moved the

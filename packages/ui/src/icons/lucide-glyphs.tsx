@@ -65,6 +65,9 @@ import {
   Search,
   SearchX,
   Settings,
+  ShieldCheck,
+  ShieldOff,
+  ShieldQuestionMark,
   SkipBack,
   SkipForward,
   Square,
@@ -132,6 +135,15 @@ export const AlertIcon = lucideGlyph(CircleAlert, "ui-glyph");
 
 /** A magnifier struck through: a place the window cannot show, gone or not the reader's. */
 export const NotFoundIcon = lucideGlyph(SearchX, "ui-glyph");
+
+/** A shield struck through: an agent runs every tool call without asking. */
+export const FullAccessIcon = lucideGlyph(ShieldOff, "ui-glyph");
+
+/** A shield round a question mark: an agent asks before it edits a file or runs a command, and a call it holds for an answer. */
+export const AskFirstIcon = lucideGlyph(ShieldQuestionMark, "ui-glyph");
+
+/** A shield round a check: an agent's tool calls left to its CLI's own judgment, which asks where it is unsure. */
+export const AutoApproveIcon = lucideGlyph(ShieldCheck, "ui-glyph");
 
 /** A ring round a check: something was done. */
 export const CircleCheckIcon = lucideGlyph(CircleCheck, "ui-glyph");

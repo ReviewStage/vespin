@@ -1,5 +1,6 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskSummary } from "@repo/features/task-wire";
+import { strandedTaskHome, workspaceReaches } from "@repo/features/tasks-model";
 import { countWords, TERM } from "@repo/features/words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import {
@@ -16,7 +17,6 @@ import {
 } from "@repo/ui";
 import { CONFIRM_STAGE, confirmAsked } from "@repo/ui/confirm-state";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { strandedTaskHome, workspaceReaches } from "@repo/ui/tasks-model";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { type ReactNode, useRef, useState } from "react";

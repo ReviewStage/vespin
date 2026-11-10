@@ -7,6 +7,7 @@ import {
   placedMessages,
   startedAgentOf,
 } from "@repo/features/agent-parts";
+import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
 import {
   AGENT_FAILURE,
@@ -23,6 +24,7 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, remedyLabel } from "@repo/features/failure-remedy";
+import { effortFor } from "@repo/features/model-effort";
 import { MODEL_PROVIDER, MODEL_SPEED } from "@repo/features/models-wire";
 import {
   PROVIDER_KEY_KIND,
@@ -45,9 +47,7 @@ import {
   choiceOn,
   continueFailureNote,
   dockedPullRequests,
-  effortFor,
   messageFailureNote,
-  messageFailureWords,
   modelLabel,
   noteWhileOffline,
   offeredModels,
@@ -953,7 +953,7 @@ test("a message to a teammate's agent its starter's own key refused names the st
   );
 });
 
-test("a plan payer names the reader's plan the page named, a new agent's first with room left, and none of a plan the reader does not hold", () => {
+test("a plan payer names the reader's plan the page named, a new agent's first with room left, and none of a plan the reader does not hold or a teammate's agent", () => {
   const plan = (id: string, position: number, more: Partial<SubscriptionKeySummary>) => ({
     provider: PROVIDER_KEY_PROVIDER.OPENAI,
     kind: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
@@ -975,5 +975,6 @@ test("a plan payer names the reader's plan the page named, a new agent's first w
   assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, undefined, true), "Home");
   assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, "a-teammates", false), undefined);
   assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, undefined, false), undefined);
+  assert.equal(payerPlanName(CHATGPT_SUBSCRIPTION, plans, undefined, true, true), undefined);
   assert.equal(payerPlanName(API_KEY, plans, "third", false), undefined);
 });

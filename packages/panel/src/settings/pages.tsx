@@ -8,7 +8,13 @@ import {
   type SettingsView,
 } from "@repo/settings/settings-views";
 import { DisplayIcon, KeyboardIcon, LaptopIcon, PlugIcon, ProductMark } from "@repo/ui";
-import { CloudCogIcon, FlaskConicalIcon, GLYPH, InfoIcon, KeyRoundIcon } from "@repo/ui/icons";
+import {
+  CloudCogIcon,
+  FlaskConicalIcon,
+  GLYPH,
+  InfoIcon,
+  SlidersHorizontalIcon,
+} from "@repo/ui/icons";
 import { settingsPageShown } from "./settings-rows.js";
 
 /** A page's name and glyph. */
@@ -23,21 +29,21 @@ interface SettingsPage {
  * disagree about its name. The name and the glyph are the whole row: what a
  * page holds is one press away. Account's own page is Account, because it is
  * where the account itself is kept, and "Your profile" in the account menu
- * opens the person page; the Workspace page's row is Workspace under the
+ * opens the person page; Preferences beside it holds how the app works for
+ * the account; the Workspace page's row is Workspace under the
  * listed workspace's name, and its head names that workspace.
  */
 const SETTINGS_PAGE = {
   [SETTINGS_VIEW.ACCOUNT]: { title: "Account", icon: <GLYPH.PERSON /> },
+  [SETTINGS_VIEW.PREFERENCES]: { title: "Preferences", icon: <SlidersHorizontalIcon /> },
   [SETTINGS_VIEW.WORKSPACE]: { title: "Workspace", icon: <GLYPH.PEOPLE /> },
-  [SETTINGS_VIEW.ENVIRONMENT]: { title: "Environment", icon: <KeyRoundIcon /> },
-  [SETTINGS_VIEW.CLOUD_SETUP]: { title: "Cloud setup", icon: <CloudCogIcon /> },
+  // Note that the cloud agents' variables and scripts stand on one page, since both exist only for those agents.
+  [SETTINGS_VIEW.ENVIRONMENT]: { title: "Cloud environment", icon: <CloudCogIcon /> },
   [SETTINGS_VIEW.AGENTS]: { title: "Agents", icon: <GLYPH.AGENT /> },
-  [SETTINGS_VIEW.HOSTS]: { title: "Hosts", icon: <GLYPH.HOST /> },
+  [SETTINGS_VIEW.HOSTS]: { title: "Machines", icon: <GLYPH.HOST /> },
   [SETTINGS_VIEW.INTEGRATIONS]: { title: "Integrations", icon: <PlugIcon /> },
-  // Note that the outside agents' page is named and marked for the product, never the protocol alone, because the MCP glyph and "MCP servers" are what the window calls the servers its own agents use.
-  [SETTINGS_VIEW.MCP]: { title: `${PRODUCT_NAME} MCP`, icon: <ProductMark small glyph /> },
-  // Note that the command's page is named for the product as its MCP page is, so the two read as a pair.
-  [SETTINGS_VIEW.CLI]: { title: `${PRODUCT_NAME} CLI`, icon: <GLYPH.TERMINAL /> },
+  // Note that the outside agents' and the command's page is named and marked for the product, never the protocol alone, because the MCP glyph and "MCP servers" are what the window calls the servers its own agents use.
+  [SETTINGS_VIEW.MCP]: { title: `${PRODUCT_NAME} MCP & CLI`, icon: <ProductMark small glyph /> },
   [SETTINGS_VIEW.SKILLS]: { title: "Skills", icon: <GLYPH.SKILL /> },
   [SETTINGS_VIEW.MEMORY]: { title: "Memory", icon: <GLYPH.MEMORY /> },
   [SETTINGS_VIEW.APPEARANCE]: { title: "Appearance", icon: <DisplayIcon /> },

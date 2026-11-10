@@ -19,7 +19,7 @@ import {
   ProgressCount,
   Tooltip,
 } from "@repo/ui";
-import { GLYPH, NetworkIcon, PlusIcon } from "@repo/ui/icons";
+import { GLYPH, LinkIcon, NetworkIcon, PlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useRef, useState } from "react";
@@ -37,6 +37,7 @@ import {
 } from "../tasks/use-task-relation-writes.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import type { MenuEntry } from "./action-menu.js";
+import type { QuickAdd } from "./quick-add.js";
 import { type RelatedTaskRow, RelatedTasks } from "./related-tasks.js";
 import { chipSubmenu } from "./standing-submenus.js";
 
@@ -62,10 +63,15 @@ import { chipSubmenu } from "./standing-submenus.js";
  * row moved to Parent leaves for the path's crumb, where a parent stands.
  * A related row's ⋯, right-click, and menu key lead its task's menu with
  * the same: Change relation, its four kinds, and Remove relation, which
- * acts at once and offers Undo in a toast. Each group's +, standing at rest
- * on its head, drops the add menu (`task-relation-menu.tsx`): Sub-tasks' on
- * Add sub-task's search, Task relations' on the kinds. A refusal, a loop or
- * another repository, is the service's, said in the toast its door raises.
+ * acts at once and offers Undo in a toast. Sub-tasks' head stands two
+ * buttons at rest, as Linear's sub-issues do: Link existing task, dropping
+ * the add menu (`task-relation-menu.tsx`) on Add sub-task's search, and
+ * New sub-task's +, which opens the group where it is folded and starts
+ * the quick add (`quick-add.tsx`) at the end of its rows, Return adding a
+ * sub-task and opening the next, so the group stands while its draft does
+ * even before it holds a row. Task relations' +, standing at rest on its
+ * head, drops the add menu on the kinds. A refusal, a loop or another
+ * repository, is the service's, said in the toast its door raises.
  */
 
 /** What each group is called, and its list for a reader moving between lists. */
@@ -74,11 +80,15 @@ const GROUP_WORDS = {
   RELATIONS: "Task relations",
 } as const;
 
-/** What each group's + is called, said beside its glyph. */
+/** What each group's buttons are called, said beside their glyphs: Sub-tasks' link and +, and Task relations' +. */
 const ADD_WORDS = {
-  SUB_TASK: "Add sub-task",
+  LINK_SUB_TASK: "Link existing task",
+  NEW_SUB_TASK: "New sub-task",
   RELATION: "Add task relation",
 } as const;
+
+/** What the list of sub-tasks being added is called, for a reader moving between lists. */
+const ADDING_LIST = "New sub-tasks";
 
 /** What the Task relations group's count counts, said to a reader beside the figure. */
 const RELATIONS_NOUN = { one: "task relation", many: "task relations" } as const;
@@ -153,20 +163,23 @@ function relationMenu(kind: TaskRelationKind, doors: RelationDoors): readonly Me
 }
 
 /**
- * A group's +, standing at rest on its head: a glyph's button dropping the
- * add menu on `kind`, or on the kinds where none is said, the menu hanging
- * from the button and handing focus back to it once closed.
+ * A group's button standing at rest on its head, Sub-tasks' link or Task
+ * relations' +: a glyph's button dropping the add menu on `kind`, or on the
+ * kinds where none is said, the menu hanging from the button and handing
+ * focus back to it once closed.
  */
 function RelationAdd({
   task,
   door,
   kind,
   label,
+  icon,
 }: {
   task: Task;
   door: TaskRelationDoor;
   kind?: TaskRelationKind | undefined;
   label: string;
+  icon: React.ReactNode;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const drawn = useDisclosure(open);
@@ -183,7 +196,7 @@ function RelationAdd({
         <Tooltip label={open ? undefined : label}>
           <IconButton
             ref={button}
-            icon={<PlusIcon />}
+            icon={icon}
             label={label}
             size={BUTTON_SIZE.COMPACT}
             aria-haspopup="dialog"
@@ -301,18 +314,27 @@ export function PlanRelations({
   task,
   tasks,
   door,
+  quick,
   room,
   onOpenTask,
 }: {
   task: Task;
   tasks: TasksControl;
   door: TaskRelationDoor;
+  /** The quick add of the task's sub-tasks (`useQuickAdd` into the task), which Sub-tasks' + opens and its list draws after its rows. */
+  quick: QuickAdd;
   /** Where the description's head stands, whose scroller its lists draw only the rows near the view of. */
   room: DescriptionRoom;
   /** Opens a row's task, as the description's head opens a task. */
   onOpenTask: (taskId: string) => void;
 }): React.JSX.Element | null {
   const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
+  const [subTasksOpen, setSubTasksOpen] = useState(true);
+  // Note that + opens a folded group before its draft, so a draft never stands where it cannot be seen.
+  const newSubTask = () => {
+    setSubTasksOpen(true);
+    quick.open();
+  };
   const fold = (taskId: string) =>
     setOpened((held) => {
       const next = new Set(held);
@@ -357,32 +379,48 @@ export function PlanRelations({
       };
     }),
   );
-  if (subTasks.length === 0 && relations.length === 0) return null;
+  const subTasksShown = subTasks.length > 0 || quick.shown;
+  if (!subTasksShown && relations.length === 0) return null;
   return (
     // Note that the groups are pulled out by a row's inset on each side, so their marks stand on the title's edge, as the Agents group's do.
     <div className="plan-relations -mx-row-inset mb-block-gap flex flex-col gap-block-gap">
-      {subTasks.length === 0 ? null : (
+      {!subTasksShown ? null : (
         <ReplayUnmask>
           <GroupHeader
             heading={GROUP_HEADING.NONE}
             label={GROUP_WORDS.SUB_TASKS}
             glyph={<GLYPH.SUB_TASK />}
             mark={
-              <ProgressCount
-                done={count.finished}
-                total={count.total}
-                label={`${count.finished} of ${count.total} sub-tasks finished`}
-                look={PROGRESS_COUNT_LOOK.BADGE}
-              />
+              count.total === 0 ? undefined : (
+                <ProgressCount
+                  done={count.finished}
+                  total={count.total}
+                  label={`${count.finished} of ${count.total} sub-tasks finished`}
+                  look={PROGRESS_COUNT_LOOK.BADGE}
+                />
+              )
             }
-            fold={{ defaultOpen: true }}
+            fold={{ open: subTasksOpen || quick.drafting, onOpenChange: setSubTasksOpen }}
             actions={
-              <RelationAdd
-                task={task}
-                door={door}
-                kind={TASK_RELATION_KIND.SUB_TASK}
-                label={ADD_WORDS.SUB_TASK}
-              />
+              <>
+                <RelationAdd
+                  task={task}
+                  door={door}
+                  kind={TASK_RELATION_KIND.SUB_TASK}
+                  label={ADD_WORDS.LINK_SUB_TASK}
+                  icon={<LinkIcon />}
+                />
+                <GroupAction>
+                  <Tooltip label={ADD_WORDS.NEW_SUB_TASK}>
+                    <IconButton
+                      icon={<PlusIcon />}
+                      label={ADD_WORDS.NEW_SUB_TASK}
+                      size={BUTTON_SIZE.COMPACT}
+                      onClick={newSubTask}
+                    />
+                  </Tooltip>
+                </GroupAction>
+              </>
             }
             actionsShown={GROUP_ACTIONS.AT_REST}
           >
@@ -390,6 +428,7 @@ export function PlanRelations({
               tasks={tasks}
               label={GROUP_WORDS.SUB_TASKS}
               rows={subTasks}
+              adding={{ quick, label: ADDING_LIST }}
               room={room}
               onOpenTask={onOpenTask}
             />
@@ -407,7 +446,9 @@ export function PlanRelations({
               noun: relations.length === 1 ? RELATIONS_NOUN.one : RELATIONS_NOUN.many,
             }}
             fold={{ defaultOpen: true }}
-            actions={<RelationAdd task={task} door={door} label={ADD_WORDS.RELATION} />}
+            actions={
+              <RelationAdd task={task} door={door} label={ADD_WORDS.RELATION} icon={<PlusIcon />} />
+            }
             actionsShown={GROUP_ACTIONS.AT_REST}
           >
             <RelatedTasks

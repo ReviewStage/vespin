@@ -1,9 +1,10 @@
 import { MESSAGE_ROLE } from "@repo/wire";
 import { and, asc, eq, gt, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
-import { Effect, Option, Result, Schema } from "effect";
+import { Clock, Effect, Option, Result, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { conversations, messages, turns } from "../schemas/storage.js";
+import { expireTurnApprovals } from "./agent-approvals.js";
 import {
   DISPATCH_CLAIM,
   DispatchClaimHeld,
@@ -362,7 +363,11 @@ const cut = (target: ConversationTarget, messageId: string, place: number) =>
     const keepsFirst =
       first !== undefined && (yield* findTurnBefore({ conversationId, from })).length === 0;
     const dropped = keepsFirst ? later : turnIds;
-    if (keepsFirst) yield* settleKeptTurn(conversationId, first);
+    if (keepsFirst) {
+      yield* settleKeptTurn(conversationId, first);
+      // The kept turn's asks expire with its work, since no runner holds them now; a dropped turn's go with its row.
+      yield* expireTurnApprovals(conversationId, first, new Date(yield* Clock.currentTimeMillis));
+    }
     if (dropped.length > 0) yield* deleteTurns({ conversationId, turnIds: dropped });
     // Note that a worker a dropped turn delegated is deleted with it, its own workers by the cascade.
     yield* deleteWorkersFrom({ conversationId, from });

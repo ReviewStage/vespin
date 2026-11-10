@@ -29,7 +29,7 @@ import {
   AUTOMATION_TRIGGER,
   type AutomationSummary,
 } from "@repo/features/automation-wire";
-import { LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { pageFrameUrl } from "@repo/features/page-frame";
 import { PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
@@ -626,7 +626,7 @@ test("a fork's draft on the page names its source's message, whose press opens i
 
   assert.deepEqual(
     links.map((link) => link.place),
-    [{ kind: LINK_PLACE.MESSAGE, agentId: AGENT_ID, messageId: "answer" }],
+    [{ kind: LINK_DESTINATION.MESSAGE, agentId: AGENT_ID, messageId: "answer" }],
   );
   assert.equal(
     page.querySelector(`.desktop-agent section[aria-label="${TAB_WORDS.NEW_AGENT}"]`),
@@ -900,7 +900,7 @@ test("an agent on a task, an archived one's page among them, opens on its descri
   act(() => named.click());
   assert.deepEqual(
     links.map((link) => link.place),
-    [{ kind: LINK_PLACE.TASK, planId: PAGE_TASK }],
+    [{ kind: LINK_DESTINATION.TASK, planId: PAGE_TASK }],
   );
 });
 
@@ -1323,9 +1323,10 @@ test("on a phone an agent that is not found still leads with its way back", asyn
   assert.deepEqual(left, ["away"]);
 });
 
-test("an archived agent's page offers Unarchive in its composer's place, which brings the agent back", async () => {
+test("an archived agent's page opens where it stands and offers Unarchive in its composer's place, which brings the agent back", async () => {
   listed = { ...PAGE, archivedAt: 2 };
-  const page = mount();
+  let home = 0;
+  const page = mount(tasksControl({ onGoHome: () => (home += 1) }));
   await settle();
 
   const unarchive = [...page.querySelectorAll("button")].find(
@@ -1336,6 +1337,7 @@ test("an archived agent's page offers Unarchive in its composer's place, which b
   await settle();
 
   assert.deepEqual(archives, [{ agentId: AGENT_ID, archived: false }]);
+  assert.equal(home, 0, "an agent opened archived is read where it stands");
 });
 
 test("an Unarchive the service refuses says why, and the agent stays archived", async () => {
@@ -1691,8 +1693,9 @@ test("an archived agent's page offers no terminal, from its ⋯ or ⌘J, its san
   assert.deepEqual(chosen, []);
 });
 
-test("Archive on the page's ⋯ reads an agent at rest again and archives it unasked", async () => {
-  const page = mount();
+test("Archive on the page's ⋯ reads an agent at rest again and archives it unasked, and the page leaves for Home", async () => {
+  let home = 0;
+  const page = mount(tasksControl({ onGoHome: () => (home += 1) }));
   await settle();
   const archive = pageMenuItem(page, "Archive");
   await act(async () => archive.click());
@@ -1700,6 +1703,10 @@ test("Archive on the page's ⋯ reads an agent at rest again and archives it una
 
   assert.deepEqual(archives, [{ agentId: AGENT_ID, archived: true }]);
   assert.equal(document.querySelector('[role="alertdialog"]'), null, "nothing was asked");
+  // The task list carries the agent archived, as it does once the service answers.
+  page.relist();
+  await settle();
+  assert.equal(home, 1, "the agent archived while its page stood leaves it for Home");
 });
 
 test("Archive on the page's ⋯ archives the reader's own agent at once while it works, asking nothing", async () => {

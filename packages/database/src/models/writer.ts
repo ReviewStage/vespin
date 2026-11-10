@@ -35,14 +35,18 @@ import {
   type ThreadLineMetadata,
   TURN_ORIGIN,
   TURN_STATUS,
+  TURN_TERMINAL,
   type TurnOrigin,
   type TurnStatus,
+  type TurnTerminalStatus,
   type TypedAskMetadata,
   UNKNOWN_ACTION_STATUS,
   type UnparsedWireValue,
 } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import {
+  CONNECTION_LOST_PART,
+  type ConnectionLostNotice,
   isSettledToolPartState,
   isStoredToolPart,
   readStoredUIMessages,
@@ -79,6 +83,7 @@ import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from
 import { CURRENT_TXID } from "../core/txid.js";
 import { conversations, messages, turnlessUserLine, turns } from "../schemas/storage.js";
 import { CONVERSATION_KIND, MESSAGE_SENDER, messageSenderSchema } from "../storage-vocabulary.js";
+import { expireTurnApprovals } from "./agent-approvals.js";
 import { type HandedFile, lineParts, receivedPartsOf } from "./attached-file-parts.js";
 import { EpochMillisColumnSchema, InstantColumnSchema, nullable } from "./columns.js";
 import {
@@ -222,6 +227,26 @@ export class SettledTurnListener extends Context.Service<
   SettledTurnListener,
   { readonly heard: (turn: SettledAgentTurn) => Effect.Effect<void, never, DatabaseServices> }
 >()("SettledTurnListener") {}
+
+/** A coding agent's turn a write started running, as the writer tells `StartedTurnListener`. */
+export interface StartedAgentTurn {
+  readonly userId: string;
+  readonly conversationId: string;
+  readonly turnId: string;
+}
+
+/**
+ * What hears of each coding agent turn the writer started running, once the
+ * write's transaction is done: the Live Activity of its member's phones
+ * (`@repo/service`'s `push/live-activities.ts`). A turn is heard once, by the
+ * write that moved it to running; a start delivered again is not heard.
+ * Read optionally, as `SettledTurnListener` is, and on the same terms for a
+ * write inside a caller's transaction.
+ */
+export class StartedTurnListener extends Context.Service<
+  StartedTurnListener,
+  { readonly heard: (turn: StartedAgentTurn) => Effect.Effect<void, never, DatabaseServices> }
+>()("StartedTurnListener") {}
 
 /** A coding agent's turn a write left queued for a runner, as the writer tells `QueuedTurnListener`. */
 export interface QueuedAgentTurn {
@@ -590,7 +615,7 @@ const TURN_ORIGIN_OF_RUN_ORIGIN = {
   [RUN_TURN_ORIGIN.CHILD]: TURN_ORIGIN.CHILD,
 } as const satisfies Record<RunTurnOrigin, TurnOrigin>;
 
-function turnStatusOf(status: RunStatus): TurnStatus {
+function turnStatusOf(status: RunStatus): TurnTerminalStatus {
   switch (status) {
     case RUN_STATUS.SUCCEEDED:
       return TURN_STATUS.SETTLED;
@@ -608,11 +633,7 @@ function turnStatusOf(status: RunStatus): TurnStatus {
 /** The longest a failed turn's detail is kept, in characters, cut from the end here whatever its teller sent. */
 const TURN_FAILURE_DETAIL = { CHARS: 2000 } as const;
 
-const TERMINAL_TURN_STATUSES: ReadonlySet<TurnStatus> = new Set([
-  TURN_STATUS.SETTLED,
-  TURN_STATUS.CANCELED,
-  TURN_STATUS.FAILED,
-]);
+const TERMINAL_TURN_STATUSES: ReadonlySet<TurnStatus> = new Set(TURN_TERMINAL);
 
 type ToolPart = ToolUIPart<UITools>;
 
@@ -1050,10 +1071,16 @@ interface WriterContext {
    * (`queuedAfterCommit`).
    */
   readonly queued: QueuedAgentTurn[];
+  /**
+   * The coding agent turns this write started running, each told the
+   * runtime's `StartedTurnListener` once the write's transaction is done
+   * (`startedAfterCommit`).
+   */
+  readonly started: StartedAgentTurn[];
 }
 
 /** What a locked write leaves for once its transaction is done. */
-type AfterCommit = Pick<WriterContext, "settled" | "queued">;
+type AfterCommit = Pick<WriterContext, "settled" | "queued" | "started">;
 
 /** What one of this writer's statements answers: an effect over the transaction it runs in. */
 type Write<Result> = Effect.Effect<Result, StoreFailure, DatabaseServices>;
@@ -1332,6 +1359,10 @@ const turnStarted = /* @__PURE__ */ Effect.fnUntraced(function* (
     },
     yield* turnRow(context, event.turnId),
   );
+  // A coding agent's own turn this write started is told the runtime's listener, once the write is done.
+  if (started && context.kind === CONVERSATION_KIND.AGENT) {
+    context.started.push({ ...context.target, turnId: event.turnId });
+  }
   return Result.succeed(started ? STORE_WRITE_EFFECT.WRITTEN : STORE_WRITE_EFFECT.REPEATED);
 });
 
@@ -1368,6 +1399,10 @@ const turnEnded = /* @__PURE__ */ Effect.fnUntraced(function* (
     responseIds: event.responseIds,
   });
   if (!ended) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FENCED });
+  // A coding agent's asks its turn left pending expire with it, whatever ended it, since no runner answers them now.
+  if (context.kind === CONVERSATION_KIND.AGENT) {
+    yield* expireTurnApprovals(context.target.conversationId, event.turnId, settledAt);
+  }
   // A turn that ended well hands the lines it never took to a turn queued for them; one a Stop was asked of leaves them awaiting nothing, and a failed one keeps them to resend.
   if (
     context.kind === CONVERSATION_KIND.AGENT &&
@@ -1692,6 +1727,49 @@ const usageLimitReached = /* @__PURE__ */ Effect.fnUntraced(function* (
   ]);
 });
 
+/** A lost connection stays among the journal's parts where it happened, saying it waits until its restore says when the host answered. */
+const connectionLost = /* @__PURE__ */ Effect.fnUntraced(function* (
+  context: WriterContext,
+  event: Extract<RunEvent, { kind: typeof RUN_EVENT.CONNECTION_LOST }>,
+): Effect.fn.Return<StoreWriteResult, StoreFailure, DatabaseServices> {
+  const opened = yield* journal(context, event.turnId);
+  if (Result.isFailure(opened)) return Result.fail(opened.failure);
+  const row = opened.success;
+  const id = String(event.sequence);
+  if (row.parts.some((part) => part.type === CONNECTION_LOST_PART && part.id === id)) {
+    return Result.succeed(STORE_WRITE_EFFECT.REPEATED);
+  }
+  if (row.finishedAt !== null) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FINISHED });
+  return yield* amendJournal(context, event.turnId, row, [
+    ...row.parts,
+    { type: CONNECTION_LOST_PART, id, data: event.notice },
+  ]);
+});
+
+/** The host answered again: the loss's notice says when, so it reads as a wait that ended rather than one still on. */
+const connectionRestored = /* @__PURE__ */ Effect.fnUntraced(function* (
+  context: WriterContext,
+  event: Extract<RunEvent, { kind: typeof RUN_EVENT.CONNECTION_RESTORED }>,
+): Effect.fn.Return<StoreWriteResult, StoreFailure, DatabaseServices> {
+  const opened = yield* journal(context, event.turnId);
+  if (Result.isFailure(opened)) return Result.fail(opened.failure);
+  const row = opened.success;
+  const id = String(event.lostSequence);
+  const lost = row.parts.find((part) => part.type === CONNECTION_LOST_PART && part.id === id);
+  if (lost === undefined || !("data" in lost)) return Result.succeed(STORE_WRITE_EFFECT.REPEATED);
+  // SAFETY: a part of this type was written with its notice as `data`, which the read back holds to the vocabulary.
+  const notice = lost.data as ConnectionLostNotice;
+  if (notice.restoredAt !== null) return Result.succeed(STORE_WRITE_EFFECT.REPEATED);
+  if (row.finishedAt !== null) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FINISHED });
+  const restored = { ...lost, data: { ...notice, restoredAt: event.restoredAt } };
+  return yield* amendJournal(
+    context,
+    event.turnId,
+    row,
+    row.parts.map((part) => (part === lost ? restored : part)),
+  );
+});
+
 function consume(context: WriterContext, event: RunEvent): Write<StoreWriteResult> {
   switch (event.kind) {
     case RUN_EVENT.TURN_STARTED:
@@ -1712,6 +1790,10 @@ function consume(context: WriterContext, event: RunEvent): Write<StoreWriteResul
       return textDrafted(context, event);
     case RUN_EVENT.USAGE_LIMIT_REACHED:
       return usageLimitReached(context, event);
+    case RUN_EVENT.CONNECTION_LOST:
+      return connectionLost(context, event);
+    case RUN_EVENT.CONNECTION_RESTORED:
+      return connectionRestored(context, event);
     // The rest of the stream is the relay's, about a run's moments rather
     // than the record.
     case RUN_EVENT.SLOW_STEP:
@@ -2575,6 +2657,22 @@ function queuedAfterCommit(
 }
 
 /**
+ * The coding agent turns a write started running, told the runtime's
+ * listener once the write's transaction is done, as `settledAfterCommit`
+ * tells its settles; a runtime with no listener tells no one.
+ */
+function startedAfterCommit(
+  started: readonly StartedAgentTurn[],
+): Effect.Effect<void, never, DatabaseServices> {
+  if (started.length === 0) return Effect.void;
+  return Effect.flatMap(Effect.serviceOption(StartedTurnListener), (listener) =>
+    Option.isNone(listener)
+      ? Effect.void
+      : Effect.forEach(started, listener.value.heard, { discard: true }),
+  );
+}
+
+/**
  * Composes the writer over one catalog, which is where the catalog is held to
  * the unknown outcome's envelope: a tool whose declared output schema refuses
  * it would leave a dispatched call's row unreadable, so the writer refuses to
@@ -2615,7 +2713,7 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
     absent: () => A,
   ): Effect.Effect<A, StoreFailure | E, DatabaseServices> {
     return Effect.flatMap(SqlClient.SqlClient, (client) => {
-      const after: AfterCommit = { settled: [], queued: [] };
+      const after: AfterCommit = { settled: [], queued: [], started: [] };
       return client
         .withTransaction(
           Effect.gen(function* () {
@@ -2625,7 +2723,14 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
         )
         .pipe(
           Effect.tap(() =>
-            Effect.andThen(settledAfterCommit(after.settled), queuedAfterCommit(after.queued)),
+            Effect.all(
+              [
+                startedAfterCommit(after.started),
+                settledAfterCommit(after.settled),
+                queuedAfterCommit(after.queued),
+              ],
+              { discard: true },
+            ),
           ),
         );
     });

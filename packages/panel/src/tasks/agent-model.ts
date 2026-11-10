@@ -6,7 +6,21 @@ import {
   mendedByNewAgent,
 } from "@repo/features/agent-failure-words";
 import { AGENT_PART, type AgentPart, agentParts, messageWords } from "@repo/features/agent-parts";
-import { harnessNameOf } from "@repo/features/agent-runtime-models";
+import {
+  ACTION,
+  credentialMissingWords,
+  extraRepositoryRefusalWords,
+  HOST_REMOVED,
+  keyUnreadableWords,
+  localAgentRefusalWords,
+  MESSAGE_NOT_SENT,
+  messageFailureWords,
+  NOT_HEARD_BACK,
+  type RefusedCall,
+  type RefusingDevice,
+  SHARED_FAILURE_NOTE,
+  startFailureWords,
+} from "@repo/features/agent-refusal-words";
 import { newerTurn, turnAgentStatus, turnOpen } from "@repo/features/agent-status";
 import { AGENT_TOOL, CLAUDE_CODE_TOOL } from "@repo/features/agent-tools";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
@@ -29,23 +43,14 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
   type AgentTurn,
+  type AgentUsage,
   CONTEXT_WINDOW,
   type ContextWindow,
-  EXTRA_REPOSITORY_REFUSAL,
-  type ExtraRepositoryRefusal,
   LOCAL_AGENT_REFUSAL,
-  type LocalAgentRefusal,
   type NativeAgentRuntime,
   PULL_REQUEST_STATE,
-  type PullRequestState,
-  type RefusedDevice,
 } from "@repo/features/agent-wire";
-import {
-  DEVICE_PLATFORM,
-  type DeviceLaunchStep,
-  type DeviceLaunchUnstarted,
-  type DevicePlatform,
-} from "@repo/features/device-agent-wire";
+import type { DeviceLaunchStep, DeviceLaunchUnstarted } from "@repo/features/device-agent-wire";
 import {
   FAILURE_REASON,
   type Failure,
@@ -53,6 +58,7 @@ import {
   remedyLabel,
 } from "@repo/features/failure-remedy";
 import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
+import { effortLabel } from "@repo/features/model-effort";
 import { agentName, CATALOG_ID_SEPARATOR, modelLabel } from "@repo/features/model-label";
 import {
   type CatalogModel,
@@ -74,6 +80,7 @@ import {
   type ProviderKeyKind,
   type SubscriptionKeySummary,
 } from "@repo/features/provider-key-wire";
+import { PULL_REQUEST_STATE_LABEL, QUEUED_LABEL } from "@repo/features/pull-request-model";
 import {
   REPOSITORY_UNREACHED,
   type RepositoryUnreached,
@@ -118,7 +125,6 @@ import {
 import { sentLineId } from "@repo/wire/host-ids";
 import { USAGE_LIMIT_AGENT, type UsageLimitNotice } from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
-import { devicePlatformOf } from "../device-platform.js";
 
 /**
  * agent-model.ts -- what the agent tabs, a Start, and an agent's transcript draw, decided from what the service answered.
@@ -137,61 +143,71 @@ import { devicePlatformOf } from "../device-platform.js";
 /** The words that separate the parts of a line. */
 const LINE_SEPARATOR = " · ";
 
-/** Each payer as the model menu's last line names it; a key's line goes on to what the agent has cost. */
+/** Each payer as its line names it, after whose it is; a key's line goes on to what the agent has cost. */
 const PAYER_WORDS = {
-  [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: "Using Claude plan",
-  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Using Codex plan",
+  [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: "Claude plan",
+  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Codex plan",
   [AGENT_PAYER.APP]: `${PRODUCT_NAME}'s API key`,
-  [AGENT_PAYER.MAC_SIGN_IN]: "Using your Mac's sign-in",
+  [AGENT_PAYER.MAC_SIGN_IN]: "Mac's sign-in",
 } as const satisfies Record<Exclude<AgentPayer, typeof AGENT_PAYER.API_KEY>, string>;
-
-/** Each plan payer as the model menu's last line leads a plan it names: "Using Codex · ana@work.com". */
-const PLAN_PAYER_WORDS = {
-  [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: "Using Claude",
-  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Using Codex",
-} as const satisfies Partial<Record<AgentPayer, string>>;
-
-type PlanPayer = keyof typeof PLAN_PAYER_WORDS;
 
 /** The kind of plan each plan payer runs on. */
 const PLAN_PAYER_KIND = {
   [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
   [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
-} as const satisfies Record<PlanPayer, ProviderKeyKind>;
+} as const satisfies Partial<Record<AgentPayer, ProviderKeyKind>>;
+
+type PlanPayer = keyof typeof PLAN_PAYER_KIND;
 
 function planPayer(payer: AgentPayer | undefined): payer is PlanPayer {
-  return payer !== undefined && payer in PLAN_PAYER_WORDS;
+  return payer !== undefined && payer in PLAN_PAYER_KIND;
 }
 
 /**
- * The name of the reader's own plan that pays for the agent, for the model
- * menu's last line: the subscription the page named, or, for one a new
- * agent would start on (`next`), the first of the payer's kind in the
- * reader's order with room left, as a turn picks it; by the name the reader
- * gave it, else the ChatGPT account it signed in as. Nothing for a plan the
- * reader does not hold, a teammate's, or one with neither name.
+ * The reader's own plan that pays for the agent, for the model menu's last
+ * line: the subscription the page named, or, for one a new agent would
+ * start on (`next`), the first of the payer's kind in the reader's order
+ * with room left, as a turn picks it. Nothing for a plan the reader does not
+ * hold or a teammate's agent (`teammate`), whose starter's plan pays and
+ * whose page may name none yet, since the reader's own next plan is never
+ * the one that pays there.
  */
+export function payerPlanOf(
+  payer: AgentPayer | undefined,
+  subscriptions: readonly SubscriptionKeySummary[] | undefined,
+  subscriptionId: string | undefined,
+  next: boolean,
+  teammate = false,
+): SubscriptionKeySummary | undefined {
+  if (teammate || !planPayer(payer) || subscriptions === undefined) return undefined;
+  const kind = PLAN_PAYER_KIND[payer];
+  return subscriptionId !== undefined
+    ? subscriptions.find((one) => one.id === subscriptionId && one.kind === kind)
+    : next
+      ? subscriptions
+          .filter((one) => one.kind === kind)
+          .toSorted((a, b) => a.position - b.position)
+          .find(
+            (one) =>
+              one.status === PROVIDER_KEY_STATUS.VERIFIED ||
+              one.status === PROVIDER_KEY_STATUS.UNVERIFIED,
+          )
+      : undefined;
+}
+
+/** The reader's own plan that pays (`payerPlanOf`) by its name: the one the reader gave it, else the ChatGPT account it signed in as; nothing for one with neither. */
 export function payerPlanName(
   payer: AgentPayer | undefined,
   subscriptions: readonly SubscriptionKeySummary[] | undefined,
   subscriptionId: string | undefined,
   next: boolean,
+  teammate = false,
 ): string | undefined {
-  if (!planPayer(payer) || subscriptions === undefined) return undefined;
-  const kind = PLAN_PAYER_KIND[payer];
-  const plan =
-    subscriptionId !== undefined
-      ? subscriptions.find((one) => one.id === subscriptionId && one.kind === kind)
-      : next
-        ? subscriptions
-            .filter((one) => one.kind === kind)
-            .toSorted((a, b) => a.position - b.position)
-            .find(
-              (one) =>
-                one.status === PROVIDER_KEY_STATUS.VERIFIED ||
-                one.status === PROVIDER_KEY_STATUS.UNVERIFIED,
-            )
-        : undefined;
+  return planNameOf(payerPlanOf(payer, subscriptions, subscriptionId, next, teammate));
+}
+
+/** A plan by its name: the one the reader gave it, else the ChatGPT account it signed in as. */
+export function planNameOf(plan: SubscriptionKeySummary | undefined): string | undefined {
   return plan?.label ?? plan?.email;
 }
 
@@ -207,36 +223,62 @@ const ANY_API_KEY = "API key";
 /** The payers billed by the token, whose line says what the agent has cost so far. */
 const PRICED_PAYERS: ReadonlySet<AgentPayer> = new Set([AGENT_PAYER.API_KEY, AGENT_PAYER.APP]);
 
+/** How a payer's line marks it: its plan's harness, a key, or the Mac it signed in on. */
+export const PAYER_MARK = {
+  PLAN: "plan",
+  KEY: "key",
+  MAC: "mac",
+} as const;
+
+export type PayerMark = (typeof PAYER_MARK)[keyof typeof PAYER_MARK];
+
+/** Who pays for an agent, as its line draws it: the mark, whether a member owns it, and the words after whose. */
+export interface PayerParts {
+  readonly mark: PayerMark;
+  /** Whether it is a member's own, so the line says whose: "Your", or the teammate who started the agent. */
+  readonly owned: boolean;
+  /** "Claude plan", the plan by its name, "Codex plan (ana@work.com)", or a key and what the run has cost on it: "Anthropic API key · $0.42 so far". */
+  readonly words: string;
+  /** Whether the words name the plan, whose name may be its account's email, so a screen recording masks them. */
+  readonly masked: boolean;
+}
+
 /**
- * Who pays for the agent, for the model menu's last line: "Using ChatGPT
- * plan", "Using Claude plan", or a key by its provider and what the run has
- * cost on it, "OpenAI API key · $0.42 so far", the key alone where the
- * service could not price every step; nothing where no payer is named.
- * Note that a plan's line names no tokens, since the composer's context
- * ring already says how full the window is and a subscription has no bill
- * per token, and that the price is the whole run's, the agent's own turns
- * and its workers', at the catalog's list prices.
+ * Who pays for the agent, in parts for its line: "Claude plan", "ChatGPT
+ * plan", or a key by its provider and what the run has cost on it,
+ * "Anthropic API key · $0.42 so far", the key alone where the service could
+ * not price every step; nothing where no payer is named. Every payer but the
+ * app's own key is a member's, the agent's starter's, so its line says whose
+ * before the words. Note that a plan's line names no tokens, since the
+ * composer's context ring already says how full the window is and a
+ * subscription has no bill per token, and that the price is the whole run's,
+ * the agent's own turns and its workers', at the catalog's list prices.
  */
-export function agentPayerLine(
+export function agentPayerParts(
   payer: AgentPayer | undefined,
   provider: ModelProvider | undefined,
   costUsd: number | undefined,
   /** The plan that pays, by its name, where the reader's own keys name it (`payerPlanName`). */
   planName?: string | undefined,
-): string | undefined {
+): PayerParts | undefined {
   if (payer === undefined) return undefined;
-  if (planPayer(payer) && planName !== undefined) {
-    return `${PLAN_PAYER_WORDS[payer]}${LINE_SEPARATOR}${planName}`;
-  }
-  const words =
+  const plan =
     payer === AGENT_PAYER.API_KEY
       ? provider === undefined
         ? ANY_API_KEY
         : API_KEY_WORDS[provider]
       : PAYER_WORDS[payer];
-  return PRICED_PAYERS.has(payer) && costUsd !== undefined
-    ? `${words}${LINE_SEPARATOR}${formatUsd(costUsd)} so far`
-    : words;
+  const named = planPayer(payer) && planName !== undefined ? `${plan} (${planName})` : plan;
+  const words =
+    PRICED_PAYERS.has(payer) && costUsd !== undefined
+      ? `${named}${LINE_SEPARATOR}${formatUsd(costUsd)} so far`
+      : named;
+  const mark = planPayer(payer)
+    ? PAYER_MARK.PLAN
+    : payer === AGENT_PAYER.MAC_SIGN_IN
+      ? PAYER_MARK.MAC
+      : PAYER_MARK.KEY;
+  return { mark, owned: payer !== AGENT_PAYER.APP, words, masked: named !== plan };
 }
 
 /**
@@ -468,7 +510,7 @@ export interface LaunchStopped {
  * whose host settled its launch unstarted (`launchStopped`) names the step
  * the launch stopped at and that a message tries again.
  * Note that it names no price, because a price in the window means the
- * whole run's, which the model menu's last line says (`agentPayerLine`).
+ * whole run's, which the model menu's last line says (`agent-payer.tsx`).
  */
 export function endLineParts(
   status: AgentStatus,
@@ -546,52 +588,14 @@ export function turnUnderWay(agent: Pick<AgentSummary, "status" | "stoppable">):
   return agent.status === AGENT_STATUS.RUNNING && agent.stoppable !== false;
 }
 
-/** What a Start refused for want of a repository says. */
-const START_NEEDS_REPOSITORY = "Choose a repository";
-
 /** Why a Start cannot run where neither a task nor an agent is open, which no draft is drawn without. */
 export const START_NEEDS_TASK = "Open a task to start an agent";
-
-/** What a call refused for a repository out of the workspace's reach says, wherever it is refused. */
-export const REPOSITORY_UNREACHED_NOTE = `${PRODUCT_NAME} cannot reach this task's repository on GitHub.`;
-
-/** What a message no answer came back for says, which may have reached the agent all the same. */
-const NOT_HEARD_BACK = "No answer came back.";
 
 /** What a message no answer came back for says while the app does not reach the service, in place of `NOT_HEARD_BACK`: in the composer, whose Retry stands again once the app does (`RetryOffered`), and alone where only the words are drawn, as an Inbox answer's are. */
 export const UNHEARD_OFFLINE = {
   BESIDE_RETRY: "You're offline.",
   ALONE: "You're offline. Try again once you're back online.",
 } as const;
-
-/** What the refusals a Start and a message meet alike say, worded once. */
-const SHARED_FAILURE_NOTE = {
-  [AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE]: REPOSITORY_UNREACHED_NOTE,
-  [AGENT_CALL_FAILURE.GITHUB_UNANSWERED]: "GitHub didn't answer.",
-  [AGENT_CALL_FAILURE.MESSAGE_TOO_LONG]: "That message is too long.",
-  [AGENT_CALL_FAILURE.AGENT_NOT_READY]: "The agent is still starting. Try again in a moment.",
-  [AGENT_CALL_FAILURE.NOT_PERMITTED]: "Only the member who started this agent can do this.",
-  [AGENT_CALL_FAILURE.NATIVE_AGENT_NOT_HERE]: "This agent cannot be reached from here yet.",
-  [AGENT_CALL_FAILURE.AGENT_PLAN_SIGNED_OUT]:
-    "The plan paying for this agent is signed out. Its starter signs in again in Settings.",
-  [AGENT_CALL_FAILURE.AGENT_PLAN_UNREACHABLE]:
-    "The plan's provider didn't answer. Try again in a moment.",
-  [AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED]: LIMIT_REACHED_WORDS,
-  [AGENT_CALL_FAILURE.AGENT_PLAN_INELIGIBLE]:
-    "The plan paying for this agent isn't eligible to run it.",
-} as const;
-
-/** What a Start from an agent whose session has ended says. */
-const START_RETIRED = "This agent has ended. Start a new one.";
-
-/** What a message to an agent whose session has ended says where only the words are drawn, as an Inbox answer's are. */
-const MESSAGE_RETIRED = "This agent has ended. Continue in a new one.";
-
-/** What a message to an agent whose host its starter removed says, and a Start that would run there, wherever it is drawn: only a new agent in the cloud or the host added again goes on from here. */
-const HOST_REMOVED = "This host was removed. Start a new agent in the cloud or add it again.";
-
-/** What a message that did not reach the agent says of itself, which a surface without Retry follows with Try again. */
-const MESSAGE_NOT_SENT = "The message could not be sent.";
 
 /** What the agent's own box says once a message closed it on an ended agent, beside the press that continues it in a new one (`ContinueAgent`), which says the rest. */
 const BOX_RETIRED = "This agent has ended.";
@@ -768,18 +772,13 @@ export function chooseFailureNote(failure: AgentCallFailure): string {
     case AGENT_CALL_FAILURE.AGENT_API_KEY_UNREADABLE:
     case AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED:
     case AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED:
+    case AGENT_CALL_FAILURE.PERMISSION_MODE_REFUSED:
       return MODEL_CHANGE_FAILED;
   }
 }
 
 /** What the toast says when a Start the developer left the task behind did not start; the task's own note says why. */
 export const START_FAILED_AWAY = "The agent could not be started.";
-
-/** What the toast says when the service did not stop an agent. */
-export const STOP_FAILED = "The agent could not be stopped. Try again.";
-
-/** What the toast says when the agent a Stop answered still reads at work: it found no turn open to cancel, and no runner gone quiet to settle. */
-export const STOP_NOTHING_YET = "There's nothing to stop yet. Try again once the agent is working.";
 
 /** What the toast says when the service took no Try again on a failed turn's end line, which then offers it again. */
 export const RETRY_FAILED = "The message could not be sent again.";
@@ -824,153 +823,6 @@ export function archivedManyWords(count: number, archived: boolean): string {
   return `${countWords(count, TERM.AGENT)} ${archived ? "archived" : "unarchived"}`;
 }
 
-/** A refused start or message as the view hears it: why, why the repository is out of reach where it is and the service said, when a plan's reached limit resets where it is that and the provider said, and the provider whose credential is missing where it is that. */
-export interface RefusedCall {
-  readonly failure: AgentCallFailure;
-  readonly unreached?: RepositoryUnreached | undefined;
-  readonly resetsAt?: number | undefined;
-  readonly provider?: ModelProvider | undefined;
-  readonly localAgentRefusal?: LocalAgentRefusal | undefined;
-  readonly refusedDevice?: RefusedDevice | undefined;
-  readonly extraRepositoryRefusal?: ExtraRepositoryRefusal | undefined;
-  readonly refusedRepository?: string | undefined;
-}
-
-/** The device a Start would run its agent on, as a refusal names it: its name, its platform where the service said, and its owner where it is another member's and the service said. */
-export interface RefusingDevice {
-  readonly name: string;
-  readonly platform?: DevicePlatform | undefined;
-  readonly owner?: string | undefined;
-}
-
-/** What a device refusing a Start is called where its name is not known. */
-const UNNAMED_DEVICE = "Your device";
-
-/** The way out every device refusal ends on, since the cloud takes any agent: the same start with Runs on on Cloud. */
-const RUN_IN_CLOUD = "or start it in the cloud";
-
-/** How a device that went quiet is brought back, by its platform: a Mac woken and logged in on, since its host runs in its user's login session, or a Linux server's own `vespin-host` checked. */
-const DEVICE_WAKE = {
-  [DEVICE_PLATFORM.DARWIN]: "Wake it and log in on it",
-  [DEVICE_PLATFORM.LINUX]: "Check that it's on, connected, and running vespin-host",
-} as const satisfies Record<DevicePlatform, string>;
-
-/** How a device whose setup failed tries it again, by its platform: Bring your own host turned off and on in Settings › Hosts on a Mac, whose desktop app keeps its host running, or a Linux server's own `vespin-host` restarted. */
-const SETUP_RETRY = {
-  [DEVICE_PLATFORM.DARWIN]:
-    "Open Settings › Hosts on that Mac and turn Bring your own host off and on",
-  [DEVICE_PLATFORM.LINUX]: "Run systemctl --user restart vespin-host on that host",
-} as const satisfies Record<DevicePlatform, string>;
-
-/**
- * Why the device a Start would run its agent on would not take it, as New
- * task and an agent's Start alike say it, naming the device where the
- * panel knows it and ending on the way out, the cloud. A refusal the
- * service named no reason for says the device would not take it.
- */
-export function localAgentRefusalWords(
-  refusal: LocalAgentRefusal | undefined,
-  device: RefusingDevice | undefined,
-): string {
-  const name = device?.name ?? UNNAMED_DEVICE;
-  switch (refusal) {
-    case LOCAL_AGENT_REFUSAL.MAC_AWAY:
-      return `${name} is offline, so this agent can't start there. ${DEVICE_WAKE[devicePlatformOf(device ?? {})]}, ${RUN_IN_CLOUD}.`;
-    case LOCAL_AGENT_REFUSAL.CODEX:
-      return `${name} can't run Codex agents yet. Wait for its Codex download to finish, choose a Claude model, ${RUN_IN_CLOUD}.`;
-    case LOCAL_AGENT_REFUSAL.NO_HARNESS:
-      return `${name} can't run this model's agents. Choose a Claude or Codex model, ${RUN_IN_CLOUD}.`;
-    case LOCAL_AGENT_REFUSAL.PREPARING:
-      return `${name} is still getting ready for local agents. Try again in a few minutes.`;
-    case LOCAL_AGENT_REFUSAL.SETUP_FAILED:
-      return `${name} couldn't set up local agents. ${SETUP_RETRY[devicePlatformOf(device ?? {})]} to try again, ${RUN_IN_CLOUD}.`;
-    // Note that no way out is offered, because the cloud is the owner's to set and a teammate can change nothing here.
-    case LOCAL_AGENT_REFUSAL.NOT_OWNER:
-      return `This task runs on ${device?.name ?? "another member's device"}. Only ${device?.owner ?? "its owner"} can start agents on it.`;
-    case LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN:
-      return `${name} runs an older vespin-host, which can't work in a repository reached on your own GitHub token. Update its host, ${RUN_IN_CLOUD}.`;
-    case undefined:
-      return `${name} couldn't take this agent. Try again, ${RUN_IN_CLOUD}.`;
-  }
-}
-
-/** Why a repository beside an agent's own is refused, as New task and Add repository… both say it. */
-const EXTRA_REPOSITORY_WHY = {
-  token: (named: string) =>
-    `${named} is reached on your own GitHub token. An agent's repositories must all be reached through the GitHub App.`,
-  otherInstallation: (named: string) =>
-    `${named} is on another GitHub account than the agent's repository. An agent's repositories must share one.`,
-} as const;
-
-/** What Add repository… says where the service answered no reason it names. */
-const NOT_ADDED = "The repository couldn't be added. Try again.";
-
-/**
- * Why a repository added to a running agent was refused, as Add
- * repository… says it under its chooser, naming the repository where the
- * service named one; a refusal it named no reason for says it was not
- * added. The words a Start's extras are refused with stand for what both
- * are refused for (`EXTRA_REPOSITORY_WHY`).
- */
-export function addRepositoryFailureWords(refused: RefusedCall): string {
-  const named = refused.refusedRepository ?? "That repository";
-  if (refused.failure === AGENT_CALL_FAILURE.NOT_PERMITTED) {
-    return "Only the member who started this agent can add a repository to it.";
-  }
-  if (refused.failure === AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE) {
-    return "The workspace's GitHub App doesn't reach that repository.";
-  }
-  if (refused.failure !== AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED) return NOT_ADDED;
-  switch (refused.extraRepositoryRefusal) {
-    case EXTRA_REPOSITORY_REFUSAL.NO_REPOSITORY:
-      return "This agent works in no repository of its own. Start an agent in that repository instead.";
-    case EXTRA_REPOSITORY_REFUSAL.DEVICE:
-      return "Only an agent in the cloud works in several repositories.";
-    case EXTRA_REPOSITORY_REFUSAL.TOKEN:
-      return EXTRA_REPOSITORY_WHY.token(named);
-    case EXTRA_REPOSITORY_REFUSAL.OTHER_INSTALLATION:
-      return EXTRA_REPOSITORY_WHY.otherInstallation(named);
-    case EXTRA_REPOSITORY_REFUSAL.ALREADY:
-      return `${named} is already among this agent's repositories.`;
-    case EXTRA_REPOSITORY_REFUSAL.FULL:
-      return "This agent already works in as many repositories as it can.";
-    case EXTRA_REPOSITORY_REFUSAL.HEARD_ANOTHER_ACCOUNT:
-    case undefined:
-      return NOT_ADDED;
-  }
-}
-
-/**
- * Why the repositories a Start named beside its agent's own were refused, as
- * New task says it, naming the repository where the service named one. A
- * refusal the service named no reason for says they could not be used.
- */
-function extraRepositoryRefusalWords(
-  refusal: ExtraRepositoryRefusal | undefined,
-  repository: string | undefined,
-): string {
-  const named = repository ?? "One of the other repositories";
-  switch (refusal) {
-    case EXTRA_REPOSITORY_REFUSAL.NO_REPOSITORY:
-      return "Choose the agent's repository before adding others.";
-    case EXTRA_REPOSITORY_REFUSAL.DEVICE:
-      return "An agent in several repositories runs only in the cloud. Start it in the cloud, or remove the other repositories.";
-    case EXTRA_REPOSITORY_REFUSAL.TOKEN:
-      return EXTRA_REPOSITORY_WHY.token(named);
-    case EXTRA_REPOSITORY_REFUSAL.OTHER_INSTALLATION:
-      return EXTRA_REPOSITORY_WHY.otherInstallation(named);
-    // Note that a Start is refused none of these, which only a repository added to a running agent is.
-    case EXTRA_REPOSITORY_REFUSAL.ALREADY:
-    case EXTRA_REPOSITORY_REFUSAL.FULL:
-    case EXTRA_REPOSITORY_REFUSAL.HEARD_ANOTHER_ACCOUNT:
-    case undefined:
-      return "These repositories can't be used together. Remove the others to start the agent.";
-  }
-}
-
-/** What a missing credential keeps the developer from: starting an agent, or messaging one. */
-const ACTION = { START: "start an agent", MESSAGE: "message this agent" } as const;
-
 /** A model nothing pays for, as a failure whose press connects its provider at its harness's row. */
 export interface ConnectFailure {
   readonly reason: typeof FAILURE_REASON.CONNECT_AGENTS;
@@ -1007,7 +859,7 @@ export function modelConnectWords(model: CatalogModel): string | undefined {
 
 /**
  * Why a choice cannot run, and the press that connects what would run it:
- * the note a model menu and Settings' Default model stand under the choice
+ * the note a model menu and Settings' Model row stand under the choice
  * where no plan or API key of the account's pays for its model, as
  * an account finds the Claude default it stored once its Claude credential
  * is gone; none for a choice something pays for, or one the catalog no
@@ -1020,15 +872,6 @@ export function unrunnableChoice(
   const { base } = readModelChoice(models, choice.model);
   const model = models.find((each) => each.id === base);
   return model === undefined ? undefined : modelConnectFailure(model);
-}
-
-/** The one sentence a missing credential says: the harness to connect, by the provider the service named, and what it unblocks. */
-function credentialMissingWords(
-  provider: ModelProvider | undefined,
-  action: (typeof ACTION)[keyof typeof ACTION],
-): string {
-  const harness = provider === undefined ? "Claude or Codex" : harnessNameOf(provider);
-  return `Connect ${harness} in Settings to ${action}.`;
 }
 
 /** What a Start refused by the plan that would pay says, to its own member, beside the press that opens Settings. */
@@ -1048,11 +891,6 @@ const START_PLAN_REFUSAL_ALONE = {
 
 /** What an unreadable API key says beside the press that opens Settings. */
 const KEY_UNREADABLE_NOTE = "Your saved API key can't be read. Save it again.";
-
-/** What an unreadable API key says where no press beside it opens Settings: that saving it again there unblocks the action. */
-function keyUnreadableWords(action: (typeof ACTION)[keyof typeof ACTION]): string {
-  return `Your saved API key can't be read. Save it again in Settings to ${action}.`;
-}
 
 /**
  * The note of a refusal Settings › Agents mends, whose press opens it: a
@@ -1096,6 +934,15 @@ function credentialMissingFailure(
  * its plan runs (`agent-runtime-choice.ts`); none for an agent on the
  * retired runtime, which a key paid for.
  */
+/** Who pays for the agent: the page's payer, then the settled turns', then the plan its harness runs on where neither names one. */
+export function paidByOf(
+  payer: AgentPayer | undefined,
+  usage: AgentUsage | undefined,
+  runtime: AgentRuntime | undefined,
+): AgentPayer | undefined {
+  return payer ?? usage?.payer ?? planPayerOf(runtime);
+}
+
 export function planPayerOf(runtime: AgentRuntime | undefined): AgentPayer | undefined {
   if (runtime === AGENT_RUNTIME.CLAUDE_CODE) return AGENT_PAYER.CLAUDE_SUBSCRIPTION;
   if (runtime === AGENT_RUNTIME.CODEX) return AGENT_PAYER.CHATGPT_SUBSCRIPTION;
@@ -1275,47 +1122,6 @@ function unreachedFailure(
   }
 }
 
-/** What a Start that did not start says, by why. */
-function startFailureWords(failure: AgentCallFailure): string {
-  switch (failure) {
-    case AGENT_CALL_FAILURE.NO_REPOSITORY:
-      return START_NEEDS_REPOSITORY;
-    case AGENT_CALL_FAILURE.INVALID_CHOICE:
-      return "That model isn't offered any more. Choose another.";
-    case AGENT_CALL_FAILURE.NOT_FOUND:
-      return "This task no longer exists.";
-    // Note that only a dictated clip is refused for want of an OpenAI key, and only a ChatGPT sign-in braked or given no code, so a Start never hears them.
-    case AGENT_CALL_FAILURE.UNANSWERED:
-    case AGENT_CALL_FAILURE.OPENAI_KEY_MISSING:
-    case AGENT_CALL_FAILURE.QUOTA_EXHAUSTED:
-    case AGENT_CALL_FAILURE.UPSTREAM_ERROR:
-      return "The agent could not be started.";
-    case AGENT_CALL_FAILURE.AGENT_RETIRED:
-      return START_RETIRED;
-    case AGENT_CALL_FAILURE.DEVICE_REMOVED:
-      return HOST_REMOVED;
-    case AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE:
-    case AGENT_CALL_FAILURE.GITHUB_UNANSWERED:
-    case AGENT_CALL_FAILURE.MESSAGE_TOO_LONG:
-    case AGENT_CALL_FAILURE.AGENT_NOT_READY:
-    case AGENT_CALL_FAILURE.NOT_PERMITTED:
-    case AGENT_CALL_FAILURE.NATIVE_AGENT_NOT_HERE:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_SIGNED_OUT:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_UNREACHABLE:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_INELIGIBLE:
-      return SHARED_FAILURE_NOTE[failure];
-    case AGENT_CALL_FAILURE.AGENT_CREDENTIAL_MISSING:
-      return credentialMissingWords(undefined, ACTION.START);
-    case AGENT_CALL_FAILURE.AGENT_API_KEY_UNREADABLE:
-      return keyUnreadableWords(ACTION.START);
-    case AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED:
-      return localAgentRefusalWords(undefined, undefined);
-    case AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED:
-      return extraRepositoryRefusalWords(undefined, undefined);
-  }
-}
-
 /** What a teammate's agent says to a message its starter's own key refused: theirs to save in their Settings, which the reader's mend nothing of. */
 function starterKeyWords(failure: AgentCallFailure, starter: string): string | undefined {
   if (failure === AGENT_CALL_FAILURE.AGENT_API_KEY_UNREADABLE) {
@@ -1393,48 +1199,6 @@ function messageNoteWords(failure: AgentCallFailure): string {
       return NOT_HEARD_BACK;
     default:
       return messageFailureWords(failure);
-  }
-}
-
-/** What a message that did not reach the agent says, by why, where only the words are drawn, as an Inbox answer's are, so a refusal trying again mends says so. */
-export function messageFailureWords(failure: AgentCallFailure): string {
-  switch (failure) {
-    case AGENT_CALL_FAILURE.NOT_FOUND:
-      return "This agent no longer exists.";
-    // A message names no repository, no model, no clip, and no sign-in, so none of these refusals is its own.
-    case AGENT_CALL_FAILURE.NO_REPOSITORY:
-    case AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED:
-    case AGENT_CALL_FAILURE.INVALID_CHOICE:
-    case AGENT_CALL_FAILURE.OPENAI_KEY_MISSING:
-    case AGENT_CALL_FAILURE.QUOTA_EXHAUSTED:
-    case AGENT_CALL_FAILURE.UPSTREAM_ERROR:
-      return `${MESSAGE_NOT_SENT} Try again.`;
-    // A message is refused by a device only while it is away, in the words a Start on it is.
-    case AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED:
-      return localAgentRefusalWords(LOCAL_AGENT_REFUSAL.MAC_AWAY, undefined);
-    // No answer is not a refusal: the words may have reached the agent, and Retry carries the same key, so they reach it once.
-    case AGENT_CALL_FAILURE.UNANSWERED:
-      return `${NOT_HEARD_BACK} Try again.`;
-    case AGENT_CALL_FAILURE.AGENT_RETIRED:
-      return MESSAGE_RETIRED;
-    case AGENT_CALL_FAILURE.DEVICE_REMOVED:
-      return HOST_REMOVED;
-    case AGENT_CALL_FAILURE.GITHUB_UNANSWERED:
-      return `${SHARED_FAILURE_NOTE[failure]} Try again.`;
-    case AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE:
-    case AGENT_CALL_FAILURE.MESSAGE_TOO_LONG:
-    case AGENT_CALL_FAILURE.AGENT_NOT_READY:
-    case AGENT_CALL_FAILURE.NOT_PERMITTED:
-    case AGENT_CALL_FAILURE.NATIVE_AGENT_NOT_HERE:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_SIGNED_OUT:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_UNREACHABLE:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED:
-    case AGENT_CALL_FAILURE.AGENT_PLAN_INELIGIBLE:
-      return SHARED_FAILURE_NOTE[failure];
-    case AGENT_CALL_FAILURE.AGENT_CREDENTIAL_MISSING:
-      return credentialMissingWords(undefined, ACTION.MESSAGE);
-    case AGENT_CALL_FAILURE.AGENT_API_KEY_UNREADABLE:
-      return keyUnreadableWords(ACTION.MESSAGE);
   }
 }
 
@@ -1798,58 +1562,6 @@ export function choiceWords(choice: ModelChoice, models: readonly CatalogModel[]
 export function choiceLabel(choice: ModelChoice, models: readonly CatalogModel[]): string {
   const words = choiceWords(choice, models);
   return `${words.model}${CHOICE_WORD_SEPARATOR}${words.detail}`;
-}
-
-/** The efforts a model lists, or nothing for a model the catalog does not offer now. */
-export function effortsOf(models: readonly CatalogModel[], modelId: string): readonly string[] {
-  return models.find((model) => model.id === modelId)?.efforts ?? [];
-}
-
-/** The standard effort scale, lowest first, which a fallback across models walks. */
-const EFFORT_SCALE: readonly string[] = [
-  "none",
-  "minimal",
-  "low",
-  "medium",
-  "high",
-  "xhigh",
-  "max",
-];
-
-/** Where an effort stands on the scale; nothing for a name the scale does not know. */
-function effortRank(effort: string): number | undefined {
-  const rank = EFFORT_SCALE.indexOf(effort);
-  return rank === -1 ? undefined : rank;
-}
-
-/**
- * The effort a model keeps across a change of model or of its fast version:
- * the one chosen where the model lists it; else the nearest the model lists
- * at or below it on the scale, so Extra high lands on High rather than on
- * Low; else, with nothing below, the lowest it lists above; else the model's
- * first, for a name the scale does not know.
- */
-export function effortFor(
-  efforts: readonly string[],
-  chosen: string | undefined,
-): string | undefined {
-  if (chosen !== undefined && efforts.includes(chosen)) return chosen;
-  const wanted = chosen === undefined ? undefined : effortRank(chosen);
-  if (wanted === undefined) return efforts[0];
-  const ranked = efforts
-    .map((effort) => ({ effort, rank: effortRank(effort) }))
-    .filter((each): each is { effort: string; rank: number } => each.rank !== undefined)
-    .sort((a, b) => a.rank - b.rank);
-  const below = ranked.filter((each) => each.rank < wanted).at(-1);
-  return below?.effort ?? ranked[0]?.effort ?? efforts[0];
-}
-
-/** The catalog's effort names a sentence-case label does not spell by capitalizing. */
-const EFFORT_LABEL: ReadonlyMap<string, string> = new Map([["xhigh", "Extra high"]]);
-
-/** The catalog's effort names are lowercase words; a menu and a segment read them in sentence case. */
-export function effortLabel(effort: string): string {
-  return EFFORT_LABEL.get(effort) ?? `${effort.charAt(0).toUpperCase()}${effort.slice(1)}`;
 }
 
 /** Where a worker stands as a page of its transcript read it: its status, and when the run under way began where the service said. */
@@ -2490,14 +2202,6 @@ export function agentLines(
   return [...messages, ...sent.map(sentLineMessage)];
 }
 
-/** What each pull request state is called, on the chip's label and, where it changes what the developer would do, on the row; the one map every place that says a state reads. */
-export const PULL_REQUEST_STATE_LABEL = {
-  [PULL_REQUEST_STATE.OPEN]: "Open",
-  [PULL_REQUEST_STATE.DRAFT]: "Draft",
-  [PULL_REQUEST_STATE.MERGED]: "Merged",
-  [PULL_REQUEST_STATE.CLOSED]: "Closed",
-} as const satisfies Record<PullRequestState, string>;
-
 /** The characters a branch name may hold and still stand bare in a shell; anything else is quoted. */
 const BARE_SHELL_WORD = /^[\w./-]+$/u;
 
@@ -2562,14 +2266,6 @@ export function pullRequestStateWord(
   const { state } = pullRequest;
   if (state !== PULL_REQUEST_STATE.OPEN) return PULL_REQUEST_STATE_LABEL[state];
   return pullRequest.queued === true ? QUEUED_LABEL : undefined;
-}
-
-/** What the row says of an open pull request GitHub's merge queue holds, as its tab's pill says it. */
-export const QUEUED_LABEL = "Queued";
-
-/** How a pull request the merge queue holds is said where its place is known: "Queued #3", else "Queued". */
-export function queuedLabel(position: number | undefined): string {
-  return position === undefined ? QUEUED_LABEL : `${QUEUED_LABEL} #${position}`;
 }
 
 /** Where a pull request stands in one word, as its card heads it: Queued for an open one the merge queue holds, else its state's label. */

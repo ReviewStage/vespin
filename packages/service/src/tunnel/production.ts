@@ -1,9 +1,8 @@
 /**
- * production.ts -- the tunnel's dependencies as the deployment stands them: the agent read by the one rule, its sandbox's PTY minted through `Sandbox` and reached by WebSocket (`sandbox-pty.ts`), and the touch.
+ * production.ts -- the tunnel's dependencies as the deployment stands them: the agent read by the one rule, its sandbox's PTY minted through `Sandbox` and reached by WebSocket (`sandbox-pty.ts`).
  *
  * Each dependency answers over the services the function's runtime holds,
  * captured once as the service stands, so the relay itself requires none.
- * A touch the sandbox did not confirm is logged, since the next tries again.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
@@ -13,10 +12,8 @@ import { Sandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
 import { controlsAgent } from "../agents/agent-reach.js";
-import { agentSandboxName } from "../agents/agent-sandbox-open.js";
 import type { AgentImage } from "../agents/coder-host/agent-image.js";
 import { connectPty } from "../agents/sandbox-pty.js";
-import { touchAgentSandbox } from "../agents/sandbox-use.js";
 import { AgentSandbox, agentSandboxLayer } from "../agents/terminal/agent-sandbox.js";
 import type { TunnelDependencies } from "./relay.js";
 
@@ -53,6 +50,5 @@ export const tunnelDependencies: Effect.Effect<TunnelDependencies, never, Tunnel
         ),
       open: (sessionId) => sandbox.open(sessionId),
       connect: (shell) => connectPty(sandboxes, shell),
-      touch: (sessionId) => run(touchAgentSandbox(agentSandboxName(sessionId))),
     };
   });

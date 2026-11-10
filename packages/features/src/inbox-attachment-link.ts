@@ -1,4 +1,4 @@
-import { type LINK_PLACE, type LinkPlace, linkOf } from "./link-grammar.js";
+import { type LINK_DESTINATION, type LinkDestination, linkOf } from "./link-grammar.js";
 import { isLinkHome, LINK_HOME_PATTERN } from "./link-home.js";
 import { insideCode } from "./mention-link.js";
 import { parsedUrl } from "./parsed-url.js";
@@ -63,7 +63,10 @@ export const INBOX_PICTURE_IN_WORDS =
 const SCHEMED = /^[A-Za-z][A-Za-z0-9+.-]*:/u;
 
 /** An item of the Inbox as its link names it: under its task, or under its agent with no task. */
-export type InboxItemPlace = Extract<LinkPlace, { readonly kind: typeof LINK_PLACE.INBOX_ITEM }>;
+export type InboxItemPlace = Extract<
+  LinkDestination,
+  { readonly kind: typeof LINK_DESTINATION.INBOX_ITEM }
+>;
 
 /** One picture of one Inbox item. */
 export interface InboxAttachmentRef {

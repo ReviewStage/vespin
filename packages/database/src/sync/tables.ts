@@ -24,11 +24,12 @@
  */
 
 import { agentDelegationTable, agentTable } from "../schemas/agent.js";
+import { agentApproval } from "../schemas/agent-approval.js";
 import { agentBrowserTab } from "../schemas/agent-browser-tab.js";
 import { agentPin } from "../schemas/agent-pin.js";
 import { agentPullRequest } from "../schemas/agent-pull-request.js";
 import { agentQueue } from "../schemas/agent-queue.js";
-import { agentRead } from "../schemas/agent-read.js";
+import { agentSandboxTable } from "../schemas/agent-sandbox.js";
 import { attachment } from "../schemas/attachment.js";
 import { invitation, member, organization, user } from "../schemas/auth.js";
 import { automation, automationRun } from "../schemas/automation.js";
@@ -60,7 +61,7 @@ import { taskBlock } from "../schemas/task-block.js";
 import { taskPageVersion } from "../schemas/task-page.js";
 import { taskPin } from "../schemas/task-pin.js";
 import { taskRead } from "../schemas/task-read.js";
-import { agentSectionEntry, taskSection, taskSectionEntry } from "../schemas/task-section.js";
+import { taskSection, taskSectionEntry } from "../schemas/task-section.js";
 import { workspaceExperiment } from "../schemas/workspace-experiment.js";
 import { workspaceFormerSlug } from "../schemas/workspace-former-slug.js";
 import { TOPIC } from "./notification.js";
@@ -138,6 +139,52 @@ export const agentPullRequestSync = defineSyncTable(agentPullRequest, {
       through: agentTable,
       key: agentTable.id,
       by: agentPullRequest.agentId,
+      topics: [
+        { kind: TOPIC.TASK, column: agentTable.taskId },
+        { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
+      ],
+    },
+  ],
+  log: LOG.EVERY,
+});
+
+/**
+ * A tool call an agent's runner held for a member's answer, on its agent's
+ * topic and, through its agent, that agent's task's and workspace's, so the
+ * task list hears an ask arrive and settle as it hears the agent move. Note
+ * that what the ask says is watched though it is written once as the ask
+ * lands, because the task list's live read carries it.
+ */
+export const agentApprovalSync = defineSyncTable(agentApproval, {
+  topics: [
+    { kind: TOPIC.AGENT, column: agentApproval.agentId },
+    {
+      through: agentTable,
+      key: agentTable.id,
+      by: agentApproval.agentId,
+      topics: [
+        { kind: TOPIC.TASK, column: agentTable.taskId },
+        { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
+      ],
+    },
+  ],
+  log: LOG.EVERY,
+});
+
+/**
+ * A cloud agent's sandbox, on its agent's topic and, through its agent, that
+ * agent's task's and workspace's, so the task list hears it boot, come up,
+ * and go as it hears the agent move. A sandbox in use moves its last use at
+ * most once a minute (`../models/agent-sandboxes.ts`), so every write is
+ * logged.
+ */
+export const agentSandboxSync = defineSyncTable(agentSandboxTable, {
+  topics: [
+    { kind: TOPIC.AGENT, column: agentSandboxTable.agentId },
+    {
+      through: agentTable,
+      key: agentTable.id,
+      by: agentSandboxTable.agentId,
       topics: [
         { kind: TOPIC.TASK, column: agentTable.taskId },
         { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
@@ -301,11 +348,6 @@ export const taskSectionEntrySync = defineSyncTable(taskSectionEntry, {
   topics: [{ kind: TOPIC.ACCOUNT, column: taskSectionEntry.userId }],
 });
 
-/** An agent with no task an account keeps in one of its sections, on the account's topic. */
-export const agentSectionEntrySync = defineSyncTable(agentSectionEntry, {
-  topics: [{ kind: TOPIC.ACCOUNT, column: agentSectionEntry.userId }],
-});
-
 /** A repository an account pinned to its sidebar, on the account's topic. */
 export const repositoryPinSync = defineSyncTable(repositoryPin, {
   topics: [{ kind: TOPIC.ACCOUNT, column: repositoryPin.userId }],
@@ -317,7 +359,7 @@ export const taskPinSync = defineSyncTable(taskPin, {
   log: LOG.EVERY,
 });
 
-/** An agent with no task an account pinned, on the account's topic. */
+/** An agent an account pinned, on the account's topic. */
 export const agentPinSync = defineSyncTable(agentPin, {
   topics: [{ kind: TOPIC.ACCOUNT, column: agentPin.userId }],
   log: LOG.EVERY,
@@ -326,12 +368,6 @@ export const agentPinSync = defineSyncTable(agentPin, {
 /** How far an account read a task, or that it marked it unread, on the account's topic. */
 export const taskReadSync = defineSyncTable(taskRead, {
   topics: [{ kind: TOPIC.ACCOUNT, column: taskRead.userId }],
-  log: LOG.EVERY,
-});
-
-/** How far an account read an agent with no task, or that it marked it unread, on the account's topic. */
-export const agentReadSync = defineSyncTable(agentRead, {
-  topics: [{ kind: TOPIC.ACCOUNT, column: agentRead.userId }],
   log: LOG.EVERY,
 });
 
@@ -753,6 +789,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   taskBlockSync,
   agentSync,
   agentPullRequestSync,
+  agentApprovalSync,
   memberSync,
   userSync,
   deviceSync,
@@ -767,17 +804,16 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   githubRepositoryReadSync,
   taskSectionSync,
   taskSectionEntrySync,
-  agentSectionEntrySync,
   repositoryPinSync,
   taskPinSync,
   agentPinSync,
   taskReadSync,
-  agentReadSync,
   macCommandSync,
   accountPreferenceSync,
   integrationConnectionSync,
   runnerLineSync,
   agentQueueSync,
+  agentSandboxSync,
   deviceAgentLineSync,
   deviceAgentRequestSync,
   descriptionCommentThreadSync,

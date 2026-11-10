@@ -19,12 +19,12 @@ import {
   SETTINGS_ROW_INDENT,
   SETTINGS_ROW_STATE,
   SettingsAttentionMark,
-  SettingsChangedMark,
   SettingsFacts,
   SettingsFoldRow,
   SettingsRow,
   SettingsRowActSlot,
   type SettingsRowControl,
+  SettingsRowControlHold,
   SettingsRowMark,
   SettingsRowStateLine,
   SettingsRowsFold,
@@ -36,7 +36,6 @@ import {
   TEXT_ELEMENT,
   TEXT_FIELD_TYPE,
   TEXT_FONT,
-  TEXT_TONE,
   TEXT_VARIANT,
   Text,
   TextField,
@@ -56,7 +55,7 @@ import { CatalogSection } from "../section";
  * words, beside a row whose one press still fits; compact rows in a
  * popover narrower than 380px, whose controls stay beside their words; and
  * list rows, a reference list's lines in a card, each a command and its chord;
- * and the slots: a Modified word riding a label, a key's field grown under
+ * and the slots: a mark riding a label, a key's field grown under
  * its row with a refusal under that, and accounts indented under their
  * provider's row; and accounts that fold their repositories open under
  * their words, one open from the start with a long name among them, one
@@ -150,11 +149,7 @@ function SlottedRows(): React.JSX.Element {
     <SettingsSection>
       <SettingsRow
         label="Show captions"
-        adornment={
-          <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} as={TEXT_ELEMENT.SPAN}>
-            Modified
-          </Text>
-        }
+        adornment={<SettingsAttentionMark note="Needs a microphone" />}
       >
         {(control) => <HeldSwitch label="Show captions" control={control} />}
       </SettingsRow>
@@ -227,7 +222,7 @@ function PressRows(): React.JSX.Element {
   );
 }
 
-/** What a row's line says about its subject, a mark led by its own box, and a value ending in a column. */
+/** What a row's line says about its subject, a mark led by its own box, a value ending in a column, and a line held a control tall for presses an edit will bring. */
 function StateRows(): React.JSX.Element {
   return (
     <SettingsSection>
@@ -261,15 +256,7 @@ function StateRows(): React.JSX.Element {
       >
         {() => <Button variant={BUTTON_VARIANT.OUTLINE}>Reconnect</Button>}
       </SettingsRow>
-      <SettingsRow
-        label="Voice"
-        adornment={
-          <>
-            <SettingsChangedMark />
-            <SettingsAttentionMark note="Needs an API key" />
-          </>
-        }
-      >
+      <SettingsRow label="Voice" adornment={<SettingsAttentionMark note="Needs an API key" />}>
         {() => null}
       </SettingsRow>
       <SettingsRow
@@ -279,6 +266,7 @@ function StateRows(): React.JSX.Element {
       >
         {() => <SettingsRowValue>Admin</SettingsRowValue>}
       </SettingsRow>
+      <SettingsRow label="Install script">{() => <SettingsRowControlHold />}</SettingsRow>
     </SettingsSection>
   );
 }

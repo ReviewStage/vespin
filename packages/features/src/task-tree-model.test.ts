@@ -1,5 +1,4 @@
 import { expect, test } from "vitest";
-import { TASK_ROW } from "./task-list-model.js";
 import { searchedTasks, type TaskTree, taskTree } from "./task-tree-model.js";
 import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
 
@@ -50,10 +49,7 @@ function drawn(tree: TaskTree): readonly (readonly string[])[] {
   return [...(tree.pinned === undefined ? [] : [tree.pinned]), ...tree.sections, ...tree.tasks].map(
     (group) => [
       group.title ?? "",
-      ...group.rows.map(
-        ({ row, depth }) =>
-          `${"  ".repeat(depth)}${row.kind === TASK_ROW.TASK ? row.task.name : ""}`,
-      ),
+      ...group.rows.map(({ task: each, depth }) => `${"  ".repeat(depth)}${each.name}`),
     ],
   );
 }
@@ -77,6 +73,34 @@ test("the tree stands each open task once: pinned, sectioned, nested, then by re
     ["Pinned", "Digest"],
     ["Launch", "Launch notes"],
     ["relay", "Invites", "  Invite copy"],
+    ["ledger", "Usage alerts"],
+  ]);
+});
+
+test("a child task put in a section stands there with its own child tasks, not under its parent", () => {
+  const tree = taskTree({
+    view: {
+      tasks: [
+        ...TASKS,
+        task("Invite copy review", TASK_STATUS.TODO, "ada/relay", 10, {
+          parentTaskId: "Invite copy",
+        }),
+      ],
+      taskSections: {
+        sections: [{ id: "section-launch", workspaceId: WORKSPACE, title: "Launch", createdAt: 1 }],
+        entries: [{ taskId: "Invite copy", sectionId: "section-launch", addedAt: 1 }],
+        agentEntries: [],
+      },
+    },
+    workspaceId: WORKSPACE,
+    readerId: READER,
+    noRepository: "No repository",
+    tasksHead: "My tasks",
+  });
+  expect(drawn(tree)).toEqual([
+    ["Pinned", "Digest"],
+    ["Launch", "Invite copy", "  Invite copy review"],
+    ["relay", "Invites", "Launch notes"],
     ["ledger", "Usage alerts"],
   ]);
 });

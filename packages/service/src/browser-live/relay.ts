@@ -44,9 +44,9 @@
  * only until the last write lapses, and the tab's screencast is stopped as
  * the view ends.
  *
- * While the browser is reached, the connection touches the sandbox
- * (`@repo/sandbox`'s `touch`) every `SANDBOX_TOUCH_EVERY`, so a member
- * watching after the agent's turn ended is never cut off by its idle stop.
+ * The view never holds its sandbox up: only agent or terminal activity
+ * does, and an agent open in a focused window is that (`@repo/sandbox`'s
+ * `SANDBOX_IDLE`), so a sandbox the view reaches stops on that rule alone.
  * The panel says it is watching while it is shown, and a viewport counts
  * only where it resizes the view, since an older panel sends the same size
  * again whether shown or not. The socket closes as idle once the panel has
@@ -76,7 +76,6 @@ import {
   type BrowserLiveServerMessage,
   browserLiveClientMessageSchema,
 } from "@repo/features/browser-live-wire";
-import { SANDBOX_TOUCH_EVERY } from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
   type Cause,
@@ -161,8 +160,6 @@ export interface BrowserLiveDependencies {
     targetId: string,
     page: { readonly address: string; readonly title: string },
   ) => Effect.Effect<void>;
-  /** Touches the session's sandbox where it runs; a touch that fails is logged, for the next to touch it again. */
-  readonly touch: (sessionId: string) => Effect.Effect<void>;
 }
 
 /** The panel left: it is sent no close. */
@@ -948,12 +945,6 @@ function watchBrowser(view: LiveView): Effect.Effect<LiveEnd, never, Scope.Scope
         : BROWSER_LIVE_CLOSE_REASON.UNAVAILABLE;
     }
     const cdp = connected.success;
-    // The connect resumed the sandbox where it was stopped, so it is touched from here for as long as the view stands.
-    yield* Effect.forkScoped(
-      Effect.repeat(deps.touch(session.success.value), {
-        schedule: Schedule.spaced(SANDBOX_TOUCH_EVERY),
-      }),
-    );
     // The tab is read again, since a browser that started afresh reopened it on a new target.
     const current = yield* Effect.result(
       deps.readTab(view.ask.userId, view.ask.place, view.ask.tabId),

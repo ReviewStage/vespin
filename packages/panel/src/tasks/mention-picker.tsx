@@ -12,11 +12,11 @@ import {
   suggestedDates,
 } from "@repo/features/date-mention";
 import { descriptionSections } from "@repo/features/description-document";
-import { entityOfMention } from "@repo/features/entity-kind";
+import { ENTITY_KIND, type EntityKind, entityOfMention } from "@repo/features/entity-kind";
 import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { holderTaskId, type MentionHolder } from "@repo/features/mention-holder";
 import {
   encodeMention,
@@ -72,13 +72,11 @@ import {
   TEXT_VARIANT,
   Text,
   Time,
-  UserIcon,
   useComboboxField,
   useMinute,
 } from "@repo/ui";
-import { type Actor, APP_ACTOR } from "@repo/ui/actor-model";
+import type { Actor } from "@repo/ui/actor-model";
 import type { NamedServer } from "@repo/ui/agent-servers-model";
-import { GLYPH } from "@repo/ui/icons";
 import { hitRangesIn, LOOSE_FROM, type SearchSubject, searchHit } from "@repo/ui/search-score";
 import type { SkillOption } from "@repo/ui/skill-mention";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
@@ -91,15 +89,7 @@ import {
 } from "@tanstack/react-query";
 import { useCreateStore, useSelector } from "@tanstack/react-store";
 import { Duration, Effect } from "effect";
-import {
-  AppWindowIcon,
-  BookOpenIcon,
-  CalendarIcon,
-  FolderIcon,
-  GitPullRequestIcon,
-  HashIcon,
-  UsersIcon,
-} from "lucide-react";
+import { UsersIcon } from "lucide-react";
 import { type RefObject, useEffect, useId, useMemo, useState } from "react";
 import { askAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark, AutomationCard, actorCard, automationActor } from "../actor-ref.js";
@@ -111,6 +101,8 @@ import {
 } from "../description-editor/contract.js";
 import { useAutomations } from "../desktop/use-automations.js";
 import { entityCard } from "../entities/entity-card.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
+import { entityMark } from "../entities/entity-mark.js";
 import { unreadShown } from "../failure-report.js";
 import { type IntegrationToolsReads, useIntegrationTools } from "../integration-tools.js";
 import { inboxItemsQuery, inboxItemsRetryMutation } from "../live-reads.js";
@@ -129,14 +121,13 @@ import {
   useDatePicker,
 } from "./date-picker.js";
 import { fileFolder } from "./file-ref-model.js";
-import { FileTypeIcon } from "./file-type-icon.js";
 import { InboxItemChipCard } from "./inbox-item-chip.js";
 import { inboxItemGlyph } from "./inbox-item-parts.js";
 import { PageCard } from "./page-card.js";
 import { PullRequestMark } from "./pull-request-mark.js";
 import { skillOption } from "./skill-ref.js";
-import { AgentMark, PlanGlyph } from "./tab-look.js";
-import { useTaskStatus } from "./use-known-names.js";
+import { TaskKey } from "./task-standing.js";
+import { useKnownNames } from "./use-known-names.js";
 
 /**
  * mention-picker.tsx -- the list an `@` opens: the workspace's agents, tasks, and people, the description and its sections, and the repository's files and folders, grouped by kind, narrowed as the word is typed, the pick written as its mention.
@@ -291,6 +282,26 @@ const MENTION_FROM = {
 
 type MentionFrom = (typeof MENTION_FROM)[keyof typeof MENTION_FROM];
 
+/** The entity each kind of the list lists, whose glyph its row and its crumb wear (`../entities/entity-glyph.tsx`). */
+const KIND_ENTITY = {
+  [MENTION_FROM.FILES]: ENTITY_KIND.REPOSITORY,
+  [MENTION_FROM.TASKS]: ENTITY_KIND.PLAN,
+  [MENTION_FROM.PAGES]: ENTITY_KIND.PAGE,
+  [MENTION_FROM.AGENTS]: ENTITY_KIND.AGENT,
+  [MENTION_FROM.THREADS]: ENTITY_KIND.INBOX_ITEM,
+  [MENTION_FROM.AUTOMATIONS]: ENTITY_KIND.AUTOMATION,
+  [MENTION_FROM.PULL_REQUESTS]: ENTITY_KIND.PULL_REQUEST,
+  [MENTION_FROM.SKILLS]: ENTITY_KIND.SKILL,
+  [MENTION_FROM.DATES]: ENTITY_KIND.DATE,
+  [MENTION_FROM.SERVERS]: ENTITY_KIND.SERVER,
+} as const satisfies Record<
+  Exclude<
+    MentionFrom,
+    typeof MENTION_FROM.DESCRIPTION | typeof MENTION_FROM.PEOPLE | typeof MENTION_FROM.SERVER
+  >,
+  EntityKind
+>;
+
 /** Words that narrow the list as a kind's own word does: `plan`, the description's word before it was renamed. */
 const MENTION_FROM_ALIAS: ReadonlyMap<string, MentionFrom> = new Map([
   ["plan", MENTION_FROM.DESCRIPTION],
@@ -419,6 +430,8 @@ type MentionRow = {
   readonly terms: string;
   /** A task's key, as `ACME-42`, which typed whole finds the task first. */
   readonly key?: string | undefined;
+  /** What a task's key is drawn from at the row's end (`TaskKey`), as ⌘K's and the Tasks list's rows draw it; none for any other row. */
+  readonly taskKey?: { readonly workspaceName: string; readonly number: number } | undefined;
   /** A person's picture, which their row wears; none for any other row. */
   readonly actor?: Actor | undefined;
   /** An agent's row as every agent menu draws it (`agent-menu-row.tsx`), or a skill's as the `/` list does (`skill-ref.tsx`): its glyph, its end, and its card; none for any other row. */
@@ -450,11 +463,11 @@ interface RepositoryPath {
   readonly folder: boolean;
 }
 
-/** The highlight as it was moved, held against the word it was moved in. */
+/** The highlight, held against the word it stands in by the key of the row it stands on (`rowKey`), so a row read late never takes its place. */
 interface Highlight {
   readonly start: number;
   readonly query: string;
-  readonly at: number;
+  readonly key: string;
 }
 
 /** A folder the list walked into: its path, and the words as they stood then, past which the words typed search it. */
@@ -642,9 +655,14 @@ function workspaceTaskRows(
       {
         mention: { kind: MENTION_KIND.TASK, taskId: task.id },
         name: task.name,
-        detail: key,
+        // Note that the key stands at the row's end in TaskKey's words, as ⌘K and the Tasks list set it, never as the detail's plain words.
+        detail: undefined,
         terms: key === undefined ? task.name : `${key} ${task.name}`,
         key,
+        taskKey:
+          task.number === undefined
+            ? undefined
+            : { workspaceName: workspace.name, number: task.number },
       },
     ];
   });
@@ -741,7 +759,7 @@ function threadRows(
     const task = tasks.find((each) => each.id === planId && each.workspaceId === workspace.id);
     if (task === undefined) continue;
     for (const item of items) {
-      const place: InboxItemPlace = { kind: LINK_PLACE.INBOX_ITEM, planId, itemId: item.id };
+      const place: InboxItemPlace = { kind: LINK_DESTINATION.INBOX_ITEM, planId, itemId: item.id };
       held.push({
         row: threadRow(place, item, task.name),
         own: planId === taskId,
@@ -1171,78 +1189,55 @@ function groupsFor(
 
 /** A kind's glyph, as its rows wear theirs. */
 function KindGlyph({ kind }: { kind: MentionKind }): React.JSX.Element {
-  switch (kind.narrow.from) {
-    case MENTION_FROM.FILES:
-      return <FolderIcon aria-hidden="true" />;
-    case MENTION_FROM.DESCRIPTION:
-      return <DocumentIcon />;
-    case MENTION_FROM.TASKS:
-      return <GLYPH.TASK />;
-    case MENTION_FROM.PAGES:
-      return <AppWindowIcon aria-hidden="true" />;
-    case MENTION_FROM.AGENTS:
-      return <AgentMark provider={undefined} />;
-    case MENTION_FROM.PEOPLE:
-      return <UsersIcon aria-hidden="true" />;
-    case MENTION_FROM.THREADS:
-      return <GLYPH.THREAD />;
-    case MENTION_FROM.AUTOMATIONS:
-      return <GLYPH.AUTOMATION />;
-    case MENTION_FROM.PULL_REQUESTS:
-      return <GitPullRequestIcon aria-hidden="true" />;
-    case MENTION_FROM.SKILLS:
-      return <BookOpenIcon aria-hidden="true" />;
-    case MENTION_FROM.DATES:
-      return <CalendarIcon aria-hidden="true" />;
-    case MENTION_FROM.SERVERS:
-      return <GLYPH.MCP_SERVER />;
-    case MENTION_FROM.SERVER:
-      return <ProviderMark provider={kind.narrow.provider} />;
-  }
+  const { narrow } = kind;
+  if (narrow.from === MENTION_FROM.SERVER) return <ProviderMark provider={narrow.provider} />;
+  // Note that the description and the people are no one entity's kind, so they keep glyphs of their own.
+  if (narrow.from === MENTION_FROM.DESCRIPTION) return <DocumentIcon />;
+  if (narrow.from === MENTION_FROM.PEOPLE) return <UsersIcon aria-hidden="true" />;
+  return <EntityGlyph kind={KIND_ENTITY[narrow.from]} />;
 }
 
-/** A row's glyph, as its chip wears it. */
-function RowGlyph({ row }: { row: MentionRow }): React.JSX.Element {
-  const planned = "mention" in row && row.mention.kind === MENTION_KIND.TASK;
-  const taskStatus = useTaskStatus(planned ? row.mention.taskId : undefined);
-  if ("skill" in row) return <BookOpenIcon aria-hidden="true" />;
+/**
+ * A mention row's mark: its entity's (`../entities/entity-mark.tsx`), drawn
+ * as the chip a pick writes draws it, so the row and the chip it becomes
+ * can never wear two marks.
+ */
+function MentionRowMark({
+  mention,
+  name,
+  workspace,
+}: {
+  mention: Mention;
+  name: string;
+  workspace: string;
+}): React.JSX.Element {
+  const known = useKnownNames();
+  return (
+    <>
+      {entityMark(entityOfMention(mention), {
+        name,
+        known,
+        workspace,
+        tiles: undefined,
+        standing: undefined,
+      })}
+    </>
+  );
+}
+
+/** A row's glyph: a mention's its entity's mark, a pull request's its mark for where it stands, and a kind's, a skill's, a thread's, or an automation's its own. */
+function RowGlyph({ row, workspace }: { row: MentionRow; workspace: string }): React.JSX.Element {
+  if ("skill" in row) return <EntityGlyph kind={ENTITY_KIND.SKILL} />;
   if ("from" in row) return <KindGlyph kind={row.from} />;
-  if ("picksDate" in row) return <CalendarIcon aria-hidden="true" />;
+  if ("picksDate" in row) return <EntityGlyph kind={ENTITY_KIND.DATE} />;
   if ("thread" in row) return inboxItemGlyph(row.item);
   if ("automation" in row) {
     return <ActorMark actor={automationActor(row.automation)} size={ACTOR_SIZE.INLINE} />;
   }
   if (row.pullRequest !== undefined) return <PullRequestMark pullRequest={row.pullRequest} />;
-  const { mention } = row;
-  switch (mention.kind) {
-    case MENTION_KIND.FILE:
-      return <FileTypeIcon name={fileName(mention.path)} />;
-    case MENTION_KIND.FOLDER:
-      return <FolderIcon aria-hidden="true" />;
-    case MENTION_KIND.SECTION:
-      return <HashIcon aria-hidden="true" />;
-    case MENTION_KIND.TASK:
-      return <PlanGlyph status={taskStatus} />;
-    case MENTION_KIND.SERVER:
-    case MENTION_KIND.TOOL:
-      return <ProviderMark provider={mention.provider} />;
-    case MENTION_KIND.LINK:
-      return <ProviderMark provider={"site" in mention ? mention.site : mention.provider} />;
-    case MENTION_KIND.PAGE:
-      return <AppWindowIcon aria-hidden="true" />;
-    case MENTION_KIND.AGENT:
-      return <AgentMark provider={undefined} />;
-    case MENTION_KIND.PERSON:
-      return row.actor === undefined ? (
-        <UserIcon />
-      ) : (
-        <ActorMark actor={row.actor} size={ACTOR_SIZE.INLINE} />
-      );
-    case MENTION_KIND.APP:
-      return <ActorMark actor={APP_ACTOR} size={ACTOR_SIZE.INLINE} />;
-    case MENTION_KIND.DATE:
-      return <CalendarIcon aria-hidden="true" />;
-  }
+  return (
+    <MentionRowMark mention={row.mention} name={row.written ?? row.name} workspace={workspace} />
+  );
 }
 
 /** A row's key, stable while it stands: its skill's name, its kind's narrowing, or its mention. */
@@ -1257,6 +1252,9 @@ function rowKey(row: MentionRow): string {
 
 /** The card a row hangs where it hangs none of its own: the card the chip a pick writes hangs; none for a row that writes no mention. */
 type RowCardOf = (row: MentionRow) => React.ReactNode;
+
+/** The glyph a row leads with where it brings none of its own (`RowGlyph`), drawn under the workspace the list writes in. */
+type RowGlyphOf = (row: MentionRow) => React.ReactNode;
 
 /** A row's name and detail, each marked where the words found it, as ⌘K marks its rows. */
 function markedWords(
@@ -1301,8 +1299,10 @@ function comboboxGroups(
   query: string,
   at: number,
   rowCard: RowCardOf,
+  rowGlyph: RowGlyphOf,
 ): ComboboxGroup[] {
   const highlighted = groups.flatMap((group) => group.rows)[at];
+  const tokens = searchTokens(query);
   return groups.map((group) => ({
     label: group.label,
     options: group.rows.map((row) => ({
@@ -1310,8 +1310,18 @@ function comboboxGroups(
       ...(isShowMore(row) ? showMoreWordsOf(row) : markedWords(row, query)),
       words: row.name,
       // A group's foot keeps the glyph's room empty, so its words stand in line with the rows above.
-      icon: isShowMore(row) ? null : (row.look?.icon ?? <RowGlyph row={row} />),
-      hint: row === highlighted && opens(row) && !("from" in row) ? WALK_INTO_HINT : row.look?.end,
+      icon: isShowMore(row) ? null : (row.look?.icon ?? rowGlyph(row)),
+      hint:
+        row === highlighted && opens(row) && !("from" in row)
+          ? WALK_INTO_HINT
+          : (row.look?.end ??
+            (row.taskKey === undefined ? undefined : (
+              <TaskKey
+                workspaceName={row.taskKey.workspaceName}
+                number={row.taskKey.number}
+                tokens={tokens}
+              />
+            ))),
       card: row.look?.card ?? row.card ?? rowCard(row),
       opens: "from" in row,
     })),
@@ -1341,7 +1351,11 @@ function MentionCrumb({ crumb }: { crumb: Crumb }): React.JSX.Element {
         />
       )}
       <MenuGlyph>
-        {folder === undefined ? <KindGlyph kind={kind} /> : <FolderIcon aria-hidden="true" />}
+        {folder === undefined ? (
+          <KindGlyph kind={kind} />
+        ) : (
+          <EntityGlyph kind={ENTITY_KIND.FOLDER} />
+        )}
       </MenuGlyph>
       <Text
         as={TEXT_ELEMENT.SPAN}
@@ -1386,6 +1400,7 @@ function MentionMenu({
   reading,
   failures,
   rowCard,
+  rowGlyph,
   onHover,
   onChoose,
 }: {
@@ -1400,6 +1415,7 @@ function MentionMenu({
   /** The reads that failed, which the list says could not be read, with Retry, in place of "no match". */
   failures: readonly MentionReadFailure[];
   rowCard: RowCardOf;
+  rowGlyph: RowGlyphOf;
   onHover: (index: number) => void;
   onChoose: (row: MentionRow) => void;
 }): React.JSX.Element {
@@ -1413,7 +1429,7 @@ function MentionMenu({
         key={crumb === undefined ? WIDE_LIST : JSON.stringify([crumb.kind.narrow, crumb.folder])}
         id={id}
         label={MENU_LABEL}
-        groups={comboboxGroups(groups, query, at, rowCard)}
+        groups={comboboxGroups(groups, query, at, rowCard, rowGlyph)}
         active={at}
         onActiveChange={onHover}
         onChoose={(index) => {
@@ -1939,19 +1955,44 @@ export function useMentionPicker({
     : [];
   // Words typed past a space that match nothing are prose, not a mention: the list stands aside, and comes back only if they match again.
   const shown = open && (rows.length > 0 || !/\s/u.test(term.trim()));
-  const held =
+  const heldKey =
     highlight !== undefined &&
     trigger !== undefined &&
     highlight.start === trigger.start &&
     highlight.query === trigger.query
-      ? highlight.at
-      : 0;
-  const at = Math.min(held, Math.max(rows.length - 1, 0));
+      ? highlight.key
+      : undefined;
+  // A row no longer listed gives the highlight back to the first row, as new words do.
+  const at = Math.max(
+    heldKey === undefined ? 0 : rows.findIndex((row) => rowKey(row) === heldKey),
+    0,
+  );
+  // Note that the row drawn highlighted is held by its key, the first row's
+  // too, because a read that lands late (the workspace's agents, its
+  // people) lays rows above it, and Enter must write the row the developer
+  // saw highlighted rather than whichever row slid into its place.
+  const shownKey = rows[at] === undefined ? undefined : rowKey(rows[at]);
+  const wordStart = trigger?.start;
+  const wordQuery = trigger?.query;
+  useEffect(() => {
+    if (shownKey === undefined || wordStart === undefined || wordQuery === undefined) return;
+    setHighlight((held) =>
+      held?.start === wordStart && held.query === wordQuery && held.key === shownKey
+        ? held
+        : { start: wordStart, query: wordQuery, key: shownKey },
+    );
+  }, [shownKey, wordStart, wordQuery]);
+  // A key or the pointer moves the highlight onto the row at `index`.
+  const highlightRow = (index: number) => {
+    const row = rows[index];
+    if (trigger !== undefined && row !== undefined)
+      setHighlight({ start: trigger.start, query: trigger.query, key: rowKey(row) });
+  };
   // The list narrowed or widened by a key starts again at its first row.
   const narrowTo = (next: Held | undefined) => {
     if (trigger === undefined) return;
     setNarrowing(next);
-    setHighlight({ start: trigger.start, query: trigger.query, at: 0 });
+    setHighlight(undefined);
   };
   // A kind's row narrows the list to it; a folder's walks into it, narrowing a wide list to files and folders.
   const openRow = (row: MentionRow) => {
@@ -2004,10 +2045,13 @@ export function useMentionPicker({
       if (trigger !== undefined) pickNewDate(trigger);
     } else if ("thread" in row) {
       // A thread is written by its id alone, whose agent and task its reader asks the service for.
-      const thread = { kind: LINK_PLACE.INBOX_ITEM, itemId: row.thread.itemId } as const;
+      const thread = { kind: LINK_DESTINATION.INBOX_ITEM, itemId: row.thread.itemId } as const;
       onChoose({ name: row.name, target: linkOf(thread, place.workspace) });
     } else if ("automation" in row) {
-      const automation = { kind: LINK_PLACE.AUTOMATION, automationId: row.automation.id } as const;
+      const automation = {
+        kind: LINK_DESTINATION.AUTOMATION,
+        automationId: row.automation.id,
+      } as const;
       onChoose({ name: row.name, target: linkOf(automation, place.workspace) });
     } else onChoose({ name: row.written ?? row.name, target: encodeMention(row.mention, place) });
   };
@@ -2026,10 +2070,7 @@ export function useMentionPicker({
     count: rows.length,
     controls: listId,
     activeId,
-    onActiveChange: (index) => {
-      if (trigger !== undefined)
-        setHighlight({ start: trigger.start, query: trigger.query, at: index });
-    },
+    onActiveChange: highlightRow,
     onChoose: (index) => {
       const row = rows[index];
       if (row !== undefined) choose(row);
@@ -2073,12 +2114,13 @@ export function useMentionPicker({
     return field.onKeyDown(event);
   };
 
+  const rowGlyph: RowGlyphOf = (row) => <RowGlyph row={row} workspace={place.workspace} />;
   // Note that a row's card is the chip's, made as the row is drawn, because the repository's paths are thousands and only the few listed hang one.
   const rowCard: RowCardOf = (row) => {
     if (!("mention" in row)) return undefined;
     return entityCard(entityOfMention(row.mention), {
       own: undefined,
-      glyph: <RowGlyph row={row} />,
+      glyph: rowGlyph(row),
       name: row.written ?? row.name,
       workspace: place.workspace,
       wordsWorkspaceId: tasksWorkspaceId,
@@ -2101,7 +2143,8 @@ export function useMentionPicker({
       reading={reading}
       failures={failures}
       rowCard={rowCard}
-      onHover={(index) => setHighlight({ start: trigger.start, query: trigger.query, at: index })}
+      rowGlyph={rowGlyph}
+      onHover={highlightRow}
       onChoose={choose}
     />
   );

@@ -36,6 +36,8 @@ import { confirmWrite, type TxWait } from "./live-follow.js";
 export const INBOX_CHANGE = {
   /** The item settled by the reader: nodded to, answered, or closed. */
   SETTLED: "settled",
+  /** The reader's own nod or close taken back, the item open again. */
+  REOPENED: "reopened",
   /** Items marked read or unread, as a reply of the reader's marks its item read. */
   MARKED: "marked",
   /** The item's reminder set by the reader for an instant, or canceled; whether it is read stands as it was. */
@@ -51,6 +53,12 @@ export type InboxChange =
       readonly itemId: string;
       /** What the item becomes, from the item as the read holds it; none where the agent has posted over what the reader settled since. */
       readonly item: (item: InboxItem) => InboxItem | undefined;
+    }
+  | {
+      readonly kind: typeof INBOX_CHANGE.REOPENED;
+      readonly itemId: string;
+      /** What the item becomes, from the item as the read holds it. */
+      readonly item: (item: InboxItem) => InboxItem;
     }
   | {
       readonly kind: typeof INBOX_CHANGE.MARKED;
@@ -86,7 +94,7 @@ function remindedItem(
 /**
  * The item as the change leaves it, from the item as a read holds it; none
  * where it leaves it alone. Note that a settle leaves an item no longer
- * open alone, and one the agent has posted over since, as an answered item
+ * open alone, and a take-back one still open, and a settle one the agent has posted over since, as an answered item
  * the agent's next post opens again, and the service's item one changed
  * since, because a change is drawn again over each answer while it stands,
  * and the service's own newer item is what it draws.
@@ -95,6 +103,10 @@ function changedItem(change: InboxChange, item: InboxItem): InboxItem | undefine
   switch (change.kind) {
     case INBOX_CHANGE.SETTLED:
       return item.id === change.itemId && item.status === INBOX_STATUS.OPEN
+        ? change.item(item)
+        : undefined;
+    case INBOX_CHANGE.REOPENED:
+      return item.id === change.itemId && item.status !== INBOX_STATUS.OPEN
         ? change.item(item)
         : undefined;
     case INBOX_CHANGE.MARKED:
@@ -116,6 +128,7 @@ function changedItem(change: InboxChange, item: InboxItem): InboxItem | undefine
 export function changedIds(change: InboxChange): readonly string[] {
   switch (change.kind) {
     case INBOX_CHANGE.SETTLED:
+    case INBOX_CHANGE.REOPENED:
       return [change.itemId];
     case INBOX_CHANGE.MARKED:
       return [...change.itemIds];

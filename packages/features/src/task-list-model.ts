@@ -1,4 +1,4 @@
-import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
+import { isTaskSettled, TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
 
 /**
  * task-list-model.ts -- how the sidebar's task list is grouped and filtered: the view a workspace keeps, the groups it draws, and the time each row shows.
@@ -17,7 +17,7 @@ import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
  * It holds the tasks to do and in progress alone (`SHOWN_STATUSES`), so a
  * filed backlog and the settled tasks stay out of the way of the work under
  * way, unless the reader asks for the finished sub-tasks back, which stand
- * under their parents (`taskRowInView`); a task from a service before
+ * under their parents (`taskInView`); a task from a service before
  * statuses has no status to leave it out by and always stands. The Tasks page lays the same tasks out its own way
  * (`tasks-page-model.ts`).
  */
@@ -56,7 +56,7 @@ export type AssignedTo =
 export interface TaskListView {
   readonly grouping: TaskGrouping;
   readonly assignedTo: AssignedTo;
-  /** Whether a parent's finished sub-tasks stand under it (`taskRowInView`). */
+  /** Whether a parent's finished sub-tasks stand under it (`taskInView`). */
   readonly finishedSubTasks: boolean;
 }
 
@@ -75,41 +75,10 @@ export const DEFAULT_TASK_LIST_VIEW: TaskListView = {
   finishedSubTasks: false,
 };
 
-/** What a row of the list stands for: a task. */
-export const TASK_ROW = {
-  TASK: "task",
-} as const;
-
-/** One row of the list: a task. */
-export interface TaskRow {
-  readonly kind: typeof TASK_ROW.TASK;
-  readonly task: TaskSummary;
-}
-
-/** The rows of one repository, as the sidebar groups them under its header; null is the rows with none. */
+/** The tasks of one repository, as the sidebar groups them under its header; null is the tasks with none. */
 export interface RepositoryGroup {
   readonly repository: string | null;
-  readonly rows: readonly TaskRow[];
-}
-
-/** The key a row is followed by, out of one list and into another: its task's id. */
-export function taskRowKey(row: TaskRow): string {
-  return row.task.id;
-}
-
-/** A task as a row of the list. */
-export function taskRow(task: TaskSummary): TaskRow {
-  return { kind: TASK_ROW.TASK, task };
-}
-
-/** The row's name: its task's. */
-export function taskRowName(row: TaskRow): string {
-  return row.task.name;
-}
-
-/** The repository the row works in; null for a task with none chosen yet. */
-export function taskRowRepository(row: TaskRow): string | null {
-  return row.task.repository;
+  readonly tasks: readonly TaskSummary[];
 }
 
 /** Who created a plan, by account id: the creator the wire names, else its owner. */
@@ -131,31 +100,34 @@ export function taskTime(task: TaskSummary, order: TaskOrder): number {
   return Math.max(task.updatedAt, task.agents?.activityAt ?? 0);
 }
 
-/** The time a row shows and is ordered by: its task's last activity (`taskTime`). */
-export function taskRowTime(row: TaskRow): number {
-  return taskTime(row.task, TASK_ORDER.UPDATED);
+/** The time a task last saw activity (`taskTime`). */
+function activityTime(task: TaskSummary): number {
+  return taskTime(task, TASK_ORDER.UPDATED);
 }
 
-/** The rows newest active first. */
-export function orderTaskRows(rows: readonly TaskRow[]): TaskRow[] {
-  return rows.toSorted((a, b) => taskRowTime(b) - taskRowTime(a));
+/** The tasks newest active first. */
+export function orderTasks(tasks: readonly TaskSummary[]): TaskSummary[] {
+  return tasks.toSorted((a, b) => activityTime(b) - activityTime(a));
 }
 
-/** The rows split by a key, each run kept in the order it was handed. */
-function grouped<K>(rows: readonly TaskRow[], keyOf: (row: TaskRow) => K): Map<K, TaskRow[]> {
-  const groups = new Map<K, TaskRow[]>();
-  for (const row of rows) {
-    const key = keyOf(row);
+/** The tasks split by a key, each run kept in the order it was handed. */
+function grouped<K>(
+  tasks: readonly TaskSummary[],
+  keyOf: (task: TaskSummary) => K,
+): Map<K, TaskSummary[]> {
+  const groups = new Map<K, TaskSummary[]>();
+  for (const task of tasks) {
+    const key = keyOf(task);
     const group = groups.get(key);
-    if (group === undefined) groups.set(key, [row]);
-    else group.push(row);
+    if (group === undefined) groups.set(key, [task]);
+    else group.push(task);
   }
   return groups;
 }
 
-/** The latest time among a group's rows. */
-function latest(rows: readonly TaskRow[]): number {
-  return Math.max(...rows.map(taskRowTime));
+/** The latest time among a group's tasks. */
+function latest(tasks: readonly TaskSummary[]): number {
+  return Math.max(...tasks.map(activityTime));
 }
 
 /** What every surface calls the state of naming no repository: a task's, a group's, a filter's, a pick's. */
@@ -180,19 +152,19 @@ function nameOf(repository: string): string {
 }
 
 /**
- * The rows grouped by their repository, newest updated first: the group
- * holding the latest row first, and the rows with none last whatever their
- * age.
+ * The tasks grouped by their repository, newest updated first: the group
+ * holding the latest task first, and the tasks with none last whatever
+ * their age.
  */
-export function repositoryGroups(rows: readonly TaskRow[]): readonly RepositoryGroup[] {
-  const groups = [...grouped(orderTaskRows(rows), taskRowRepository)].map(
-    ([repository, members]) => ({ repository, rows: members }),
+export function repositoryGroups(tasks: readonly TaskSummary[]): readonly RepositoryGroup[] {
+  const groups = [...grouped(orderTasks(tasks), (task) => task.repository)].map(
+    ([repository, members]) => ({ repository, tasks: members }),
   );
   return groups.sort((a, b) => {
     if (a.repository === null || b.repository === null) {
       return Number(a.repository === null) - Number(b.repository === null);
     }
-    return latest(b.rows) - latest(a.rows);
+    return latest(b.tasks) - latest(a.tasks);
   });
 }
 
@@ -232,75 +204,73 @@ export function createdByOnly(
   return createdBy === undefined ? tasks : tasks.filter((task) => creatorIdOf(task) === createdBy);
 }
 
-/** Who the row is assigned to, by account id: its task's assignee, none for a task no one is on. */
-function taskRowAssigneeId(row: TaskRow): string | undefined {
-  return row.task.assignee?.userId;
-}
-
 /**
- * The rows the view's Assigned to holds: every row for Anyone; one
- * teammate's (`taskRowAssigneeId`); and for Me the reader's, and the tasks
- * no one is on that the reader created, so their own unassigned work never
- * leaves the list. A reader not yet known filters nothing.
+ * The tasks the view's Assigned to holds: every task for Anyone; one
+ * teammate's; and for Me the reader's, and the tasks no one is on that the
+ * reader created, so their own unassigned work never leaves the list. A
+ * reader not yet known filters nothing.
  */
-export function taskRowsAssignedTo(
-  rows: readonly TaskRow[],
+export function tasksAssignedTo(
+  tasks: readonly TaskSummary[],
   assignedTo: AssignedTo,
   readerId: string | undefined,
-): readonly TaskRow[] {
+): readonly TaskSummary[] {
   switch (assignedTo.kind) {
     case ASSIGNED_TO.ANYONE:
-      return rows;
+      return tasks;
     case ASSIGNED_TO.MEMBER:
-      return rows.filter((row) => taskRowAssigneeId(row) === assignedTo.userId);
+      return tasks.filter((task) => task.assignee?.userId === assignedTo.userId);
     case ASSIGNED_TO.ME:
-      if (readerId === undefined) return rows;
-      return rows.filter((row) => {
-        const assignee = taskRowAssigneeId(row);
-        return assignee === undefined ? creatorIdOf(row.task) === readerId : assignee === readerId;
+      if (readerId === undefined) return tasks;
+      return tasks.filter((task) => {
+        const assignee = task.assignee?.userId;
+        return assignee === undefined ? creatorIdOf(task) === readerId : assignee === readerId;
       });
   }
 }
 
-/** Whether the view draws a row: one of a status shown, or one with no status to leave it out by, a task from a service before statuses. */
-function taskRowInStatuses(row: TaskRow, statuses: readonly TaskStatus[]): boolean {
-  const status = row.task.status;
+/** Whether the view draws a task: one of a status shown, or one with no status to leave it out by, a task from a service before statuses. */
+function taskInStatuses(task: TaskSummary, statuses: readonly TaskStatus[]): boolean {
+  const status = task.status;
   return status === undefined || statuses.includes(status);
 }
 
-/** The rows the view draws by status (`taskRowInStatuses`). */
-export function taskRowsInStatuses(
-  rows: readonly TaskRow[],
+/** The tasks the view draws by status (`taskInStatuses`). */
+export function tasksInStatuses(
+  tasks: readonly TaskSummary[],
   statuses: readonly TaskStatus[],
-): readonly TaskRow[] {
-  return rows.filter((row) => taskRowInStatuses(row, statuses));
+): readonly TaskSummary[] {
+  return tasks.filter((task) => taskInStatuses(task, statuses));
 }
 
 /**
- * Whether the view draws a row: one of a status the list shows
+ * Whether the view draws a task: one of a status the list shows
  * (`SHOWN_STATUSES`), or, while it shows finished sub-tasks, a sub-task
  * done or canceled, which stands under its parent wherever that is drawn
  * and nowhere where it is not (`homedTaskRows`), so a finished task at the
  * top stays out of the list.
  */
-export function taskRowInView(row: TaskRow, view: Pick<TaskListView, "finishedSubTasks">): boolean {
-  if (taskRowInStatuses(row, SHOWN_STATUSES)) return true;
-  return view.finishedSubTasks && row.task.parentTaskId !== undefined && taskFinished(row.task);
+export function taskInView(
+  task: TaskSummary,
+  view: Pick<TaskListView, "finishedSubTasks">,
+): boolean {
+  if (taskInStatuses(task, SHOWN_STATUSES)) return true;
+  return view.finishedSubTasks && task.parentTaskId !== undefined && taskFinished(task);
 }
 
-/** One row as a list nesting child tasks draws it: how deep it stands, and whether the child tasks under it stand open. */
+/** One task as a list nesting child tasks draws its row: how deep it stands, and whether the child tasks under it stand open. */
 export interface DrawnTaskRow {
-  readonly row: TaskRow;
+  readonly task: TaskSummary;
   /** How deep it stands: 0 at the top, one more for each parent above it. */
   readonly depth: number;
   /** Whether its child tasks stand open under it; undefined where the list holds none of them. */
   readonly open: boolean | undefined;
 }
 
-/** One row and the rows standing under it, each a tree of its own. */
-interface TaskRowNode {
-  readonly row: TaskRow;
-  readonly children: readonly TaskRowNode[];
+/** One task and the tasks standing under it, each a tree of its own. */
+interface TaskNode {
+  readonly task: TaskSummary;
+  readonly children: readonly TaskNode[];
 }
 
 /** Every task of the workspace by its id, those no list draws among them, through which a task's ancestors are walked. */
@@ -342,74 +312,78 @@ function underParent(task: TaskSummary): boolean {
   );
 }
 
-/** The row a row stands under where `rows` holds it: its task's nearest ancestor `rows` holds (`heldAncestor`). */
-function parentIn(row: TaskRow, held: ReadonlySet<string>, every: TasksById): string | undefined {
-  return heldAncestor(row.task, (taskId) => held.has(taskId), every);
+/** The task a task stands under where `tasks` holds it: its nearest ancestor `tasks` holds (`heldAncestor`). */
+function parentIn(
+  task: TaskSummary,
+  held: ReadonlySet<string>,
+  every: TasksById,
+): string | undefined {
+  return heldAncestor(task, (taskId) => held.has(taskId), every);
 }
 
 /**
- * The rows as a tree, each in the order `rows` hands it. Note that a loop
- * of parents, which nothing writes, is reached from no row at the top, so
- * its first row is stood at the top, the loop cut where it closes, rather
+ * The tasks as a tree, each in the order `tasks` hands it. Note that a loop
+ * of parents, which nothing writes, is reached from no task at the top, so
+ * its first task is stood at the top, the loop cut where it closes, rather
  * than the loop leaving the list.
  */
-function taskRowTree(rows: readonly TaskRow[], every: TasksById): TaskRowNode[] {
-  const held = new Set(rows.map((row) => row.task.id));
-  const childrenOf = new Map<string, TaskRow[]>();
-  const tops: TaskRow[] = [];
-  for (const row of rows) {
-    const parent = parentIn(row, held, every);
-    if (parent === undefined) tops.push(row);
-    else childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), row]);
+function taskNodes(tasks: readonly TaskSummary[], every: TasksById): TaskNode[] {
+  const held = new Set(tasks.map((task) => task.id));
+  const childrenOf = new Map<string, TaskSummary[]>();
+  const tops: TaskSummary[] = [];
+  for (const task of tasks) {
+    const parent = parentIn(task, held, every);
+    if (parent === undefined) tops.push(task);
+    else childrenOf.set(parent, [...(childrenOf.get(parent) ?? []), task]);
   }
   const reached = new Set<string>();
-  const node = (row: TaskRow): TaskRowNode => {
-    reached.add(taskRowKey(row));
-    const children = childrenOf.get(row.task.id) ?? [];
+  const node = (task: TaskSummary): TaskNode => {
+    reached.add(task.id);
+    const children = childrenOf.get(task.id) ?? [];
     return {
-      row,
-      children: children.filter((child) => !reached.has(taskRowKey(child))).map(node),
+      task,
+      children: children.filter((child) => !reached.has(child.id)).map(node),
     };
   };
   const tree = tops.map(node);
-  for (const row of rows) if (!reached.has(taskRowKey(row))) tree.push(node(row));
+  for (const task of tasks) if (!reached.has(task.id)) tree.push(node(task));
   return tree;
 }
 
-/** Whether a row or any row under it is one `standing` keeps drawn. */
-function holdsStanding(node: TaskRowNode, standing: (row: TaskRow) => boolean): boolean {
-  return standing(node.row) || node.children.some((child) => holdsStanding(child, standing));
+/** Whether a task or any task under it is one `standing` keeps drawn. */
+function holdsStanding(node: TaskNode, standing: (task: TaskSummary) => boolean): boolean {
+  return standing(node.task) || node.children.some((child) => holdsStanding(child, standing));
 }
 
 /**
  * The rows as a list nesting child tasks draws them, in order: each row,
  * then the child tasks under it while `opened` says it stands open, to any
- * depth, each in the order `rows` hands it. A task stands under its parent
- * where `rows` holds that parent, which the sidebar sees to across its
- * lists (`homedTaskRows`), or under its nearest ancestor `rows` holds where
+ * depth, each in the order `tasks` hands it. A task stands under its parent
+ * where `tasks` holds that parent, which the sidebar sees to across its
+ * lists (`homedTaskRows`), or under its nearest ancestor `tasks` holds where
  * the parent is one the view hides, walked through `every`; one none of
- * whose ancestors `rows` holds, as a fold leaves out all but the open task,
+ * whose ancestors `tasks` holds, as a fold leaves out all but the open task,
  * stands at the top, so it is never out of reach, and no row stands twice.
  * A row folded shut still draws the one `standing` keeps (the open task),
  * and the rows between it and that one, so the task worked on never leaves
  * the list, as a folded group keeps it.
  */
 export function drawnTaskRows(
-  rows: readonly TaskRow[],
+  tasks: readonly TaskSummary[],
   opened: (taskId: string) => boolean,
-  standing: (row: TaskRow) => boolean,
+  standing: (task: TaskSummary) => boolean,
   every: TasksById,
 ): DrawnTaskRow[] {
   const drawn: DrawnTaskRow[] = [];
-  const draw = (node: TaskRowNode, depth: number) => {
-    const { row, children } = node;
-    const open = children.length === 0 ? undefined : opened(row.task.id);
-    drawn.push({ row, depth, open });
+  const draw = (node: TaskNode, depth: number) => {
+    const { task, children } = node;
+    const open = children.length === 0 ? undefined : opened(task.id);
+    drawn.push({ task, depth, open });
     const under =
       open === false ? children.filter((child) => holdsStanding(child, standing)) : children;
     for (const child of under) draw(child, depth + 1);
   };
-  for (const node of taskRowTree(rows, every)) draw(node, 0);
+  for (const node of taskNodes(tasks, every)) draw(node, 0);
   return drawn;
 }
 
@@ -424,40 +398,48 @@ export function drawnTaskRows(
  * stands under the nearest ancestor a list does hold, and its open work
  * never leaves the sidebar; one none of whose ancestors any list holds is
  * drawn nowhere, never at the top, and so is every task under it, however
- * deep. A pinned task stays in Pinned, under no parent.
+ * deep. A task the member put in a list by hand, a pinned one in Pinned
+ * or a sectioned one in its section, the first `placed` lists, stays there
+ * with every task under it, and nests under its parent only where that
+ * list holds the parent too, so a child task dragged into a section stands
+ * in it rather than going back under its parent.
  */
 export function homedTaskRows(
-  lists: readonly (readonly TaskRow[])[],
+  lists: readonly (readonly TaskSummary[])[],
   every: TasksById,
-): TaskRow[][] {
+  placed: number,
+): TaskSummary[][] {
   const listOf = new Map<string, number>();
   const byId = new Map<string, TaskSummary>();
-  lists.forEach((rows, list) => {
-    for (const row of rows) {
-      if (listOf.has(row.task.id)) continue;
-      listOf.set(row.task.id, list);
-      byId.set(row.task.id, row.task);
+  lists.forEach((tasks, list) => {
+    for (const task of tasks) {
+      if (listOf.has(task.id)) continue;
+      listOf.set(task.id, list);
+      byId.set(task.id, task);
     }
   });
   const held = (taskId: string) => listOf.has(taskId);
-  const homeOf = (row: TaskRow): number | undefined => {
-    const walked = new Set([row.task.id]);
-    let at = row.task;
+  const putByHand = (taskId: string) => (listOf.get(taskId) ?? placed) < placed;
+  const homeOf = (task: TaskSummary): number | undefined => {
+    const walked = new Set([task.id]);
+    let at = task;
     let above = heldAncestor(at, held, every);
     // Note that a loop of parents, which nothing writes, ends the walk where it closes, at the last task it reached, `above` still set.
-    while (above !== undefined && !walked.has(above)) {
+    while (above !== undefined && !walked.has(above) && !putByHand(at.id)) {
       walked.add(above);
       at = byId.get(above) ?? at;
       above = heldAncestor(at, held, every);
     }
+    // The walk ends at a task put in its list by hand, which every task under it follows.
+    if (putByHand(at.id)) return listOf.get(at.id);
     // The top of the walk is drawn nowhere where it stands under a parent no list holds, so neither is anything under it.
     return above === undefined && underParent(at) ? undefined : listOf.get(at.id);
   };
-  const homed = lists.map((rows) => rows.map((row) => ({ row, home: homeOf(row) })));
+  const homed = lists.map((tasks) => tasks.map((task) => ({ task, home: homeOf(task) })));
   return lists.map((_, list) => [
-    ...(homed[list] ?? []).flatMap(({ row, home }) => (home === list ? [row] : [])),
-    ...homed.flatMap((rows, from) =>
-      from === list ? [] : rows.flatMap(({ row, home }) => (home === list ? [row] : [])),
+    ...(homed[list] ?? []).flatMap(({ task, home }) => (home === list ? [task] : [])),
+    ...homed.flatMap((tasks, from) =>
+      from === list ? [] : tasks.flatMap(({ task, home }) => (home === list ? [task] : [])),
     ),
   ]);
 }
@@ -470,7 +452,7 @@ export interface ChildTaskCount {
 
 /** Whether a task has settled: done, or canceled, which is as settled as done. */
 export function taskFinished(task: TaskSummary): boolean {
-  return task.status === TASK_STATUS.DONE || task.status === TASK_STATUS.CANCELED;
+  return isTaskSettled(task.status);
 }
 
 /** A task's direct sub-tasks, oldest first, so they read in the order they were made; never itself, which no one writes. */
@@ -517,7 +499,7 @@ export type TaskSections =
       readonly grouping: typeof TASK_GROUPING.REPOSITORY;
       readonly groups: readonly RepositoryGroup[];
     }
-  | { readonly grouping: typeof TASK_GROUPING.NONE; readonly rows: readonly TaskRow[] };
+  | { readonly grouping: typeof TASK_GROUPING.NONE; readonly tasks: readonly TaskSummary[] };
 
 /**
  * The tasks under Tasks as the view groups them, newest updated first.
@@ -526,14 +508,14 @@ export type TaskSections =
  * and the rest keep the order's.
  */
 export function taskSections(
-  rows: readonly TaskRow[],
+  tasks: readonly TaskSummary[],
   grouping: TaskSections["grouping"],
   pinnedRepositories: readonly string[],
 ): TaskSections {
   if (grouping === TASK_GROUPING.NONE) {
-    return { grouping, rows: orderTaskRows(rows) };
+    return { grouping, tasks: orderTasks(tasks) };
   }
-  const grouped = repositoryGroups(rows);
+  const grouped = repositoryGroups(tasks);
   const pinnedAt = (group: RepositoryGroup) =>
     group.repository === null ? -1 : pinnedRepositories.indexOf(group.repository);
   return {

@@ -26,6 +26,7 @@ import {
   type Task,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { IDLE_TASKS_VIEW, type TasksTreeAnswer } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -35,7 +36,6 @@ import { SETTINGS_VIEW, type SettingsView } from "@repo/settings/settings-views"
 import { APP_COMMAND, type AppCommand } from "@repo/settings/shortcuts";
 import { experimentsOn, settingsView } from "@repo/settings/testing";
 import { agentTab, changesTab, fileTab, pageTab } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement, Fragment, useState } from "react";
 import { flushSync } from "react-dom";
@@ -353,13 +353,12 @@ function press(listed: string): void {
 /** The Settings pages by their names, in the order the palette lists them with no experiment on: Account's own page is Account, and the Workspace page, whose head names the listed workspace, is Workspace here. */
 const SETTINGS_PAGES = [
   "Account",
+  "Preferences",
   "Workspace",
-  "Environment",
-  "Cloud setup",
+  "Cloud environment",
   "Agents",
   "Integrations",
-  "Vespin MCP",
-  "Vespin CLI",
+  "Vespin MCP & CLI",
   "Appearance",
   "This Mac",
   "Experimental",
@@ -374,7 +373,7 @@ test("the Settings filter lists every Settings page by its name, ahead of the se
   assert.deepEqual(rows().slice(0, SETTINGS_PAGES.length), SETTINGS_PAGES);
 });
 
-test("the Settings filter lists Memory after Environment only while the listed workspace has the Memory experiment on", async () => {
+test("the Settings filter lists Memory after Cloud environment only while the listed workspace has the Memory experiment on", async () => {
   const acme = { id: "workspace-acme", name: "Acme", role: WORKSPACE_ROLE.OWNER, github: null };
   handState(experimentsOn(EXPERIMENT.MEMORY));
   await paletteUnderState(tasksControl({ workspaces: [acme], workspace: acme }));
@@ -382,9 +381,9 @@ test("the Settings filter lists Memory after Environment only while the listed w
 
   assert.deepEqual(rows().slice(0, 5), [
     "Account",
+    "Preferences",
     "Workspace",
-    "Environment",
-    "Cloud setup",
+    "Cloud environment",
     "Memory",
   ]);
   for (const root of roots.splice(0)) act(() => root.unmount());
@@ -855,12 +854,12 @@ test("an archived agent of the open task is still found, after the standing ones
     "Inbox · Billing usage alerts",
     "Invoice export · Billing usage alerts",
     "New browser tab · Billing usage alerts",
-    "Refund export · Archived · Billing usage alerts",
+    "Refund export · Billing usage alerts · Archived",
   ]);
 
   type("refund");
-  assert.deepEqual(rows(), ["Refund export · Archived · Billing usage alerts"]);
-  press("Refund export · Archived · Billing usage alerts");
+  assert.deepEqual(rows(), ["Refund export · Billing usage alerts · Archived"]);
+  press("Refund export · Billing usage alerts · Archived");
   assert.deepEqual(shown, ["plan-1:agent-8"]);
 });
 
@@ -2856,7 +2855,7 @@ type FedInbox = { readonly items: readonly InboxItem[] } | { readonly failure: s
 function fedOf(inbox: FedInbox): AppHostRead<AppInboxItems> {
   if ("failure" in inbox) return { failed: true };
   return {
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [ROTATION.id]: inbox.items }, [INBOX_SCOPE_KIND.AGENT]: {} },
+    rows: { [INBOX_SCOPE_KIND.PLAN]: { [ROTATION.id]: inbox.items } },
   };
 }
 
@@ -2891,7 +2890,7 @@ test("the Inbox searched lists what needs you first, each item beside its task",
   );
 });
 
-test("an Inbox item is the Inbox's own row: its agent's tile, the marks of its Inbox row and its time at its end, and its card hung beside it", async () => {
+test("an Inbox item is the Inbox's own row: the marks of its Inbox row and its time at its end, and its card hung beside it", async () => {
   paletteOverInbox({ items: [PREVIEWS, ROTATE] });
   chooseFilter("Inbox");
   await settle();
@@ -2901,7 +2900,6 @@ test("an Inbox item is the Inbox's own row: its agent's tile, the marks of its I
   );
   const [needs, answered] = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
   assert.ok(needs, "the item that needs you is listed");
-  assert.ok(needs.querySelector('.actor-mark[data-kind="agent"]'), "the agent's tile leads");
   assert.match(
     needs.querySelector(".ui-combobox-option-hint")?.textContent ?? "",
     /Needs you/u,

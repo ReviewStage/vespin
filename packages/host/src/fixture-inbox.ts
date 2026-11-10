@@ -26,12 +26,14 @@ import { ACCOUNT_PROVIDER, ACCOUNT_STATUS, type AccountSnapshot } from "@repo/cr
 import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import {
   AGENT_ATTACHMENT_TYPE,
+  AGENT_RUNTIME,
   AGENT_STATUS,
   type AgentSummary,
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
   INBOX_APPROVAL_OPTION,
@@ -45,11 +47,16 @@ import {
   type InboxItem,
   type InboxMessage,
 } from "@repo/features/inbox-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { closedNow, INBOX_SENDING, inboxSendingDrawn } from "@repo/features/inbox-writes";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { MODEL_PROVIDER, type ModelsAnswer } from "@repo/features/models-wire";
 import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
+import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
+import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
 import { TASK_PRIORITY, TASK_STATUS, type Task, type TaskSummary } from "@repo/features/task-wire";
 import type { TasksView } from "@repo/features/tasks-view";
+import { MP4_TYPE } from "@repo/features/video-signature";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { ACT_KIND } from "./acts.js";
@@ -58,13 +65,27 @@ import {
   type AppInboxTask,
   type AppInboxTaskHolding,
   type AppStateSnapshot,
+  type AppTranscript,
   OWN_TRANSCRIPT,
   RUN_PROFILE,
 } from "./app-state.js";
 import type { PortActKind, PortActPayload, PortActResult } from "./contract/index.js";
 import { fixtureAgentPicture, fixtureAgentTranscript } from "./fixture-agent-transcript.js";
-import { FIXTURE_PICTURE_PNG, FIXTURE_VIDEO_WEBM } from "./fixture-inbox-media.js";
+import {
+  FIXTURE_PICTURE_PNG,
+  FIXTURE_VIDEO_MP4,
+  FIXTURE_VIDEO_WEBM,
+} from "./fixture-inbox-media.js";
 import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
+
+export {
+  FIXTURE_PULL_REQUEST,
+  PULL_REQUEST_MOVE,
+  type PullRequestMove,
+  type PullRequestMoves,
+  pullRequestMoveOf,
+  pullRequestPartsAppState,
+} from "./fixture-pull-requests.js";
 
 /**
  * When the fixture landed, from which every instant here is counted back.
@@ -195,9 +216,16 @@ const RECORDED = {
   VIDEO: "a3f4c647-8fb0-4cd9-b4f1-2b3c4d5e6f70",
 } as const;
 
+/**
+ * The thread whose answer the fixture refuses, as a send no answer came back
+ * for: the migration's approval, so a flow sees an answer drawn at once and
+ * taken back.
+ */
+const REFUSED_ITEM = fixtureId(2);
+
 /** Where the recorded thread's words draw its still from: the still's address on the thread, as an agent's post names a picture it attached. */
 const RECORDED_PICTURE_ADDRESS = inboxAttachmentAddress(
-  { kind: LINK_PLACE.INBOX_ITEM, planId: TASK.INVITES, itemId: RECORDED.ITEM },
+  { kind: LINK_DESTINATION.INBOX_ITEM, planId: TASK.INVITES, itemId: RECORDED.ITEM },
   RECORDED.PICTURE,
   FIXTURE_WORKSPACE_SLUG,
 );
@@ -524,6 +552,7 @@ function agentOn(
     turnId: null,
     runStartedAt: LANDED - startedAgo,
     startedBy: ADA,
+    runtime: AGENT_RUNTIME.CLAUDE_CODE,
   };
 }
 
@@ -938,11 +967,21 @@ function noneHeldIn(workspaceIds: readonly string[]): AppHeldById<readonly never
 }
 
 /** The invitations agent's transcript as the host holds one read, its run begun as its agent was started. */
-const INVITES_TRANSCRIPT = fixtureAgentTranscript(
-  LANDED - 3 * DAY,
-  ADA,
-  "Build teammate invitations",
+const INVITES_TRANSCRIPT = withQueued(
+  fixtureAgentTranscript(LANDED - 3 * DAY, ADA, "Build teammate invitations"),
 );
+
+/** A transcript with one message of the account's queued behind its turn, which the agent's composer lists over its field with Steer and Delete. */
+function withQueued(transcript: AppTranscript): AppTranscript {
+  const queued = {
+    id: fixtureId(90),
+    text: "Then add a Resend button beside each pending invite.",
+    queuedBy: ADA.userId,
+  };
+  const { word } = transcript;
+  if (word === undefined) return transcript;
+  return { ...transcript, word: { ...word, queue: { messages: [queued], revision: 1 } } };
+}
 
 /** The transcripts main holds with the invitations agent's laid over them, one object for each of main's. */
 const STAGED_TRANSCRIPTS = new WeakMap<
@@ -963,6 +1002,49 @@ function stagedTranscripts(
   return staged;
 }
 
+/** The models the account may start an agent on, as the service's catalog lists them, and no device of its own. */
+const MODELS: ModelsAnswer = {
+  models: [
+    {
+      id: MODEL,
+      name: "Anthropic Claude Opus 5.5",
+      provider: MODEL_PROVIDER.ANTHROPIC,
+      efforts: ["low", "medium", "high", "xhigh", "max"],
+    },
+    {
+      id: "anthropic/claude-sonnet-5.5",
+      name: "Anthropic Claude Sonnet 5.5",
+      provider: MODEL_PROVIDER.ANTHROPIC,
+      efforts: ["low", "medium", "high"],
+    },
+    {
+      id: "openai/gpt-6.1-sol",
+      name: "OpenAI GPT-6.1 Sol",
+      provider: MODEL_PROVIDER.OPENAI,
+      efforts: ["low", "medium", "high", "xhigh"],
+    },
+  ],
+};
+
+/** A repository of the fixture's workspace, as GitHub lists it. */
+function listedRepository(fullName: string, name: string) {
+  return {
+    owner: "ada",
+    name,
+    fullName,
+    defaultBranch: "main",
+    private: true,
+    updatedAt: LANDED - DAY,
+  };
+}
+
+/** The repositories the fixture's workspace reaches, the two its tasks are about. */
+const REPOSITORIES: GitHubRepositoriesAnswer = {
+  installed: true,
+  repositories: [listedRepository("ada/relay", "relay"), listedRepository("ada/ledger", "ledger")],
+  installationUrl: "https://github.com/apps/vespin/installations/new",
+};
+
 /**
  * Main's document as these profiles draw it: the account signed in, its
  * read of what waits naming the tasks holding items, and each of
@@ -982,17 +1064,31 @@ export function inboxAppState(
     account: ACCOUNT,
     inbox: stagedInbox(state.inbox),
     [LIVE_READ.INBOX_ITEMS]: {
-      rows: { [INBOX_SCOPE_KIND.PLAN]: fed, [INBOX_SCOPE_KIND.AGENT]: {} },
+      rows: { [INBOX_SCOPE_KIND.PLAN]: fed },
     },
     [LIVE_READ.DESCRIPTION_DOCUMENT]: stagedDocuments(state),
     [LIVE_READ.PAGES]: stagedPages(state),
     [LIVE_READ.AUTOMATIONS]: noneHeldIn(workspaceIds),
     [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: noneHeldIn(workspaceIds),
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
+    [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
+    [LIVE_READ.REPOSITORY_LISTS]: Object.fromEntries(
+      workspaceIds.map((id) => [id, { rows: REPOSITORIES }]),
+    ),
   };
 }
 
 /* ----- The act door ----- */
+
+/** One staged item by its id, in whichever task's inbox holds it. */
+function stagedItem(itemId: string): InboxItem | undefined {
+  return [...INBOXES.values()].flat().find((each) => each.id === itemId);
+}
+
+/** One staged agent by its id, on whichever task it works. */
+function stagedAgent(agentId: string): AgentSummary | undefined {
+  return [...AGENTS.values()].find((each) => each.id === agentId);
+}
 
 /** One kind's staged answer: its result. */
 type StagedAnswer<Kind extends PortActKind> = (
@@ -1012,13 +1108,16 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   },
   // Note that a mark is taken as the service takes one, the item's state echoed, though nothing here moves, so its dot stays as staged: the host draws a mark, and none stands behind a fixture run's act door.
   [ACT_KIND.AGENTS_INBOX_READ_STATE]: ({ itemId, unread }) => ({ id: itemId, unread }),
-  [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId }) => {
+  // Note that the recording is answered as its MP4 copy to a reader that plays MP4, as the service answers one it keeps a copy of.
+  [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId, playable }) => {
     if (itemId !== RECORDED.ITEM) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     if (attachmentId === RECORDED.PICTURE) {
       return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
     }
     if (attachmentId === RECORDED.VIDEO) {
-      return { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
+      return playable === MP4_TYPE
+        ? { contentType: MP4_TYPE, base64: FIXTURE_VIDEO_MP4 }
+        : { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
     }
     return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
   },
@@ -1027,9 +1126,63 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
   [ACT_KIND.AGENTS_PICTURE]: ({ pictureId }) => fixtureAgentPicture(pictureId),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
+  // Note that a reply and a resolve are taken as the service takes them, answered with the item as it then stands, though nothing here moves, so the window draws its own send; the migration's approval is refused.
+  [ACT_KIND.AGENTS_INBOX_MESSAGE]: ({ itemId, clientKey, text, answers }) => {
+    const held = stagedItem(itemId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    if (itemId === REFUSED_ITEM) return { failure: AGENT_CALL_FAILURE.UNANSWERED };
+    const sent = { kind: INBOX_SENDING.REPLY, key: clientKey, text, answers, at: Date.now() };
+    return { item: inboxSendingDrawn(held, [sent], ADA) };
+  },
+  [ACT_KIND.AGENTS_INBOX_CLOSE]: ({ itemId }) => {
+    const held = stagedItem(itemId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { item: closedNow(held, ADA, Date.now()), taken: true };
+  },
+  // Note that a change to one of the invitations agent's pull requests is taken as GitHub takes one, and the run lays how it moved it over the parts (`pullRequestPartsAppState`).
+  [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
+  // Note that a message, a queue change, and a Stop are taken as the service takes them, answered with the agent or the queue as it then stands, though nothing here moves, so the transcript reads as staged.
+  [ACT_KIND.AGENTS_MESSAGE]: ({ agentId }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, status: AGENT_STATUS.RUNNING } };
+  },
+  [ACT_KIND.AGENTS_QUEUE]: ({ agentId }) => {
+    if (stagedAgent(agentId) === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { queue: { messages: [], revision: 2 } };
+  },
+  [ACT_KIND.AGENTS_STOP]: ({ agentId }) => {
+    const held = stagedAgent(agentId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { agent: { ...held, status: AGENT_STATUS.CANCELED } };
+  },
+  // A Start, and a task's start with its agent, answered with a new agent starting on the words, as the service answers one.
+  [ACT_KIND.AGENTS_START]: ({ taskId, prompt }) => ({
+    agent: agentOn(fixtureId(91), taskId ?? TASK.INVITES, prompt ?? "", AGENT_STATUS.STARTING, 0),
+  }),
+  [ACT_KIND.TASKS_START]: ({ agent }) => ({
+    planId: fixtureId(92),
+    agentStart: {
+      agent: agentOn(fixtureId(93), fixtureId(92), agent?.prompt ?? "", AGENT_STATUS.STARTING, 0),
+    },
+  }),
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,
   }),
+  // The phone's registration is taken, and its pushes stand working, the last reaching Apple a few minutes before the run landed; a "Notify me" set is taken though nothing here moves, so the screen draws the choice it made itself.
+  [ACT_KIND.PUSH_DEVICE_REGISTER]: () => ({ done: true }),
+  [ACT_KIND.PUSH_DEVICE_UNREGISTER]: () => ({ done: true }),
+  [ACT_KIND.PUSH_DEVICE_STATUS]: () => ({
+    notify: PUSH_NOTIFY.AWAY,
+    lastDeliveredAt: LANDED - 4 * MINUTE,
+    failingSince: null,
+    failureReason: null,
+  }),
+  [ACT_KIND.PUSH_DEVICE_NOTIFY]: () => ({ done: true }),
+  // The Live Activity's tokens and end are taken, as a phone the service holds would have them.
+  [ACT_KIND.LIVE_ACTIVITY_START_TOKEN]: () => ({ done: true }),
+  [ACT_KIND.LIVE_ACTIVITY_TOKEN]: () => ({ done: true }),
+  [ACT_KIND.LIVE_ACTIVITY_ENDED]: () => ({ done: true }),
 };
 
 /**

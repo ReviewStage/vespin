@@ -270,6 +270,27 @@ test("Escape puts the palette away, hands focus back, and reaches no window behi
   expect(heard.keys).toEqual([]);
 });
 
+test("⌘W puts the palette away, but not while an input method composes with it", () => {
+  openPalette();
+  const closeTab = (composing: boolean) =>
+    act(() => {
+      field().dispatchEvent(
+        new KeyboardEvent("keydown", {
+          key: "w",
+          code: "KeyW",
+          metaKey: true,
+          isComposing: composing,
+          bubbles: true,
+          cancelable: true,
+        }),
+      );
+    });
+  closeTab(true);
+  expect(dialog()).not.toBeNull();
+  closeTab(false);
+  expect(dialog()).toBeNull();
+});
+
 test("the palette opens again with its words cleared", () => {
   openPalette();
   type("login");

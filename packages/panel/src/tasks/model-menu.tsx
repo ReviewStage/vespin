@@ -1,5 +1,6 @@
 import { CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { remedyLabel } from "@repo/features/failure-remedy";
+import { effortFor, effortLabel, effortsOf } from "@repo/features/model-effort";
 import {
   type CatalogModel,
   MODEL_SPEED,
@@ -29,9 +30,6 @@ import {
   choiceOn,
   choiceWords,
   contextWindowsOf,
-  effortFor,
-  effortLabel,
-  effortsOf,
   FAST_WORD,
   fastRestingNote,
   longWindowNote,

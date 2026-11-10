@@ -12,7 +12,6 @@ import {
   localAgentRefusalSchema,
   PULL_REQUEST_STATE,
   startBrief,
-  tasklessAgentSchema,
 } from "./agent-wire.js";
 import { DEVICE_KIND, DEVICE_PLATFORM } from "./device-agent-wire.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
@@ -111,6 +110,20 @@ export const TASK_STATUS = {
 } as const;
 
 export type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
+
+/**
+ * The statuses a task's work is settled in, finished or cut: the two a
+ * finish stamps `completedAt` for and counts, an archive keeps, and a
+ * blocker holds nothing up in. Every reader takes this one set.
+ */
+export const TASK_SETTLED = [TASK_STATUS.DONE, TASK_STATUS.CANCELED] as const;
+
+export type TaskSettledStatus = (typeof TASK_SETTLED)[number];
+
+/** Whether a task standing in `status` is settled (`TASK_SETTLED`); none, from a service before statuses, is not. */
+export function isTaskSettled(status: TaskStatus | undefined): status is TaskSettledStatus {
+  return TASK_SETTLED.some((settled) => settled === status);
+}
 
 /** The order a menu lists the statuses in: the order work moves through them, the settled last. */
 export const TASK_STATUS_ORDER: readonly TaskStatus[] = [
@@ -823,8 +836,7 @@ export type ListedPullRequest = typeof listedPullRequestSchema.Type;
  * The reader's own pin of one agent on a plan (`agent_pin`), as a plan's
  * is: the agent, the plan it stands on, when they pinned it, and where they
  * dragged it in the sidebar's Pinned section (`pin-order.ts`), absent while
- * it stands by `pinnedAt`. An agent with no plan carries its pin on its own
- * row (`tasklessAgentSchema`).
+ * it stands by `pinnedAt`.
  */
 export const taskAgentPinSchema = EffectSchema.Struct({
   agentId: EffectSchema.String,
@@ -986,12 +998,10 @@ export type Task = typeof taskSchema.Type;
 /**
  * The plan list as the window draws it from the rows it follows live
  * (`task-list-live.ts`): every plan the account reaches, newest started
- * first, each with its agents counted, and beside them every agent with no
- * plan in the account's workspaces, newest started first.
+ * first, each with its agents counted.
  */
 const taskListAnswerSchema = EffectSchema.Struct({
   plans: EffectSchema.Array(taskSummarySchema),
-  planlessAgents: EffectSchema.optionalKey(EffectSchema.Array(tasklessAgentSchema)),
 });
 
 export type TaskListAnswer = typeof taskListAnswerSchema.Type;
@@ -999,14 +1009,11 @@ export type TaskListAnswer = typeof taskListAnswerSchema.Type;
 /**
  * The plan list (GET): every plan the account owns, newest started first,
  * each with its agents in brief and the lines a released client requires
- * (`heldTaskSummarySchema`), and beside them every agent with no plan in the
- * account's workspaces, newest started first, the archived ones of each only
- * where the query asks for them. The agents are absent from a service before
- * them.
+ * (`heldTaskSummarySchema`). Every agent stands on a task, so it carries no
+ * `planlessAgents`, which a released desktop reads as optional.
  */
 export const heldTaskListAnswerSchema = EffectSchema.Struct({
   plans: EffectSchema.Array(heldTaskSummarySchema),
-  planlessAgents: taskListAnswerSchema.fields.planlessAgents,
 });
 
 export type HeldTaskListAnswer = typeof heldTaskListAnswerSchema.Type;

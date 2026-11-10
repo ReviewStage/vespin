@@ -92,7 +92,7 @@ function themeNow(room: PageRoom): PageTheme {
   };
 }
 
-/** Hands the page in `frame`, drawn in `room`, the window's theme when it asks, and again each time the window's appearance flips. */
+/** Hands the page in `frame`, drawn in `room`, the window's theme as the hook comes up, when the page asks, and again each time the window's appearance flips. */
 export function usePageTheme(frame: RefObject<HTMLIFrameElement | null>, room: PageRoom): void {
   useEffect(() => {
     const send = () =>
@@ -104,6 +104,8 @@ export function usePageTheme(frame: RefObject<HTMLIFrameElement | null>, room: P
     };
     window.addEventListener("message", hear);
     const stop = onDrawnThemeChange(send);
+    // Note that the theme is told as the hook comes up, because a frame kept hidden under `Activity` heard no change while it was down.
+    send();
     return () => {
       window.removeEventListener("message", hear);
       stop();

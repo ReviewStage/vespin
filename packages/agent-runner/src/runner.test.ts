@@ -30,6 +30,8 @@ import { RunnerFailed } from "./launch.js";
 import {
   APPROVAL_BY,
   APPROVAL_DECISION,
+  CONNECTION_LOST_DETAIL,
+  connectionLostFailure,
   EFFORT,
   IMAGE_MEDIA_TYPE,
   INPUT_LINE,
@@ -42,6 +44,7 @@ import {
   RUNNER_HEARTBEAT,
   RUNNER_LINES,
   RUNNER_PLACE,
+  RUNNER_RECONNECT,
   RUNNER_UNANSWERED,
   type RunnerConfig,
   type RunnerEvent,
@@ -49,6 +52,7 @@ import {
 import { runAgent } from "./runner.js";
 import { fakeAppServer } from "./testing/fake-app-server.js";
 import { fakeClaudeCode } from "./testing/fake-claude-code.js";
+import { fakeProbe } from "./testing/fake-probe.js";
 import { ANSWER, type Answer, makeFakeService } from "./testing/fake-service.js";
 import {
   ASKED_COMMAND,
@@ -56,6 +60,9 @@ import {
   ASKED_THEN_MESSAGE,
   ASKED_TURN,
   BASH_ASK,
+  CONNECTION_LOST_TURN,
+  CONNECTION_LOST_TWICE,
+  CREDENTIAL_REFUSED_TURN,
   FOLLOW_UP_TURNS,
   SHORT_TURN,
   STOPPED_COMMAND,
@@ -149,6 +156,7 @@ function launch(
   env: Record<string, string> = ENV,
   chain: readonly string[] | null = [],
   answering = true,
+  probe = fakeProbe(),
 ) {
   return Effect.gen(function* () {
     const cli = yield* fakeClaudeCode(steps, chain, answering);
@@ -157,7 +165,9 @@ function launch(
     const write = (line: RunnerConfig | InputLine) => writeText(JSON.stringify(line));
     const run = yield* runAgent({ lines: Stream.fromQueue(stdin), env }).pipe(
       Effect.scoped,
-      Effect.provide(Layer.mergeAll(cli.layer, service.layer, fakeAppServer([]).layer)),
+      Effect.provide(
+        Layer.mergeAll(cli.layer, service.layer, fakeAppServer([]).layer, probe.layer),
+      ),
       Effect.forkScoped,
     );
     return {
@@ -167,6 +177,7 @@ function launch(
       write,
       writeText,
       run,
+      probed: probe.record,
       closeStdin: Queue.end(stdin),
     };
   });
@@ -391,6 +402,241 @@ it.effect(
         detail: "the CLI never took up a message a result left",
       });
     }),
+);
+
+/** The API's host the connection-lost turns probe for, as the CLI reaches it with no base URL set. */
+const ANTHROPIC_HOST = "api.anthropic.com";
+
+/** The carry-on line the service sends once the host answers, as a message line. */
+const CARRY_ON_LINE: InputLine = {
+  type: INPUT_LINE.MESSAGE,
+  uuid: "6b1f5d0c-3a51-4c56-9d0e-2f1c4b7a8e11",
+  content: [{ type: "text", text: "Your previous turn was interrupted; carry on." }],
+};
+
+/** Waits, without moving the clock, until the service has taken an event of the type given. */
+function untilPosted(service: ReturnType<typeof fakeService>, type: string) {
+  return Effect.gen(function* () {
+    const posted = () =>
+      service.applied.some(({ message }) => "type" in message && message.type === type);
+    for (let step = 0; step < 5_000 && !posted(); step += 1) yield* Effect.yieldNow;
+    assert.ok(posted(), `the service took no ${type}`);
+  });
+}
+
+it.effect(
+  "keeps the launch up when the CLI loses the API, probes the host on a doubling wait, and asks for a carry-on once it answers",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const probe = fakeProbe(2);
+      const { cli, write, run, probed } = yield* launch(
+        CONNECTION_LOST_TURN,
+        service,
+        ENV,
+        [],
+        true,
+        probe,
+      );
+      yield* write(CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
+      assert.equal(run.pollUnsafe(), undefined, "the launch stays up");
+      assert.deepEqual(probed.targets[0], { host: ANTHROPIC_HOST, port: 443 });
+
+      // Refused at once and after the first wait; answered after the doubled one.
+      yield* TestClock.adjust(RUNNER_RECONNECT.FIRST_WAIT_MS);
+      assert.equal(probed.targets.length, 2);
+      yield* TestClock.adjust(RUNNER_RECONNECT.FIRST_WAIT_MS * 2 - 1);
+      assert.equal(probed.targets.length, 2);
+      yield* TestClock.adjust(1);
+      yield* untilPosted(service, RUNNER_EVENT.CONNECTION_RESTORED);
+      assert.equal(probed.targets.length, 3);
+
+      // The service's carry-on line runs as the CLI's next turn, which ends the launch as any turn does.
+      yield* write(CARRY_ON_LINE);
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      assert.deepEqual(kinds(service.applied), [
+        "system/init",
+        "assistant",
+        "result/success",
+        RUNNER_EVENT.CONNECTION_LOST,
+        RUNNER_EVENT.CONNECTION_RESTORED,
+        "assistant",
+        "result/success",
+        RUNNER_EVENT.END,
+      ]);
+      const restored = service.applied.find(
+        ({ message }) => "type" in message && message.type === RUNNER_EVENT.CONNECTION_RESTORED,
+      )?.message;
+      assert.deepEqual(restored, {
+        type: RUNNER_EVENT.CONNECTION_RESTORED,
+        host: ANTHROPIC_HOST,
+        carryOn: true,
+      });
+      assert.equal(cli.prompts.length, 2);
+      assert.equal(
+        cli.prompts[1]?.uuid,
+        CARRY_ON_LINE.type === INPUT_LINE.MESSAGE ? CARRY_ON_LINE.uuid : "",
+      );
+    }),
+);
+
+it.effect(
+  "hands a message sent while the host is probed to the CLI once it answers, in place of a carry-on",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const { cli, write, run } = yield* launch(
+        CONNECTION_LOST_TURN,
+        service,
+        ENV,
+        [],
+        true,
+        fakeProbe(1),
+      );
+      yield* write(CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
+      yield* write(CARRY_ON_LINE);
+      yield* Effect.yieldNow;
+      assert.equal(cli.prompts.length, 1, "the message waits for the host");
+
+      yield* TestClock.adjust(RUNNER_RECONNECT.FIRST_WAIT_MS);
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      const restored = service.applied.find(
+        ({ message }) => "type" in message && message.type === RUNNER_EVENT.CONNECTION_RESTORED,
+      )?.message;
+      assert.deepEqual(restored, {
+        type: RUNNER_EVENT.CONNECTION_RESTORED,
+        host: ANTHROPIC_HOST,
+        carryOn: false,
+      });
+      assert.equal(cli.prompts.length, 2);
+    }),
+);
+
+it.effect("ends the launch failed, saying why, once the host stays silent past the wait", () =>
+  Effect.gen(function* () {
+    const service = fakeService();
+    const { cli, write, run } = yield* launch(
+      CONNECTION_LOST_TURN,
+      service,
+      ENV,
+      [],
+      true,
+      fakeProbe(Number.POSITIVE_INFINITY),
+    );
+    yield* write(CONFIG);
+    yield* write(FIRST_MESSAGE);
+    yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
+    const lostAt = yield* Clock.currentTimeMillis;
+
+    const exit = yield* settled(run);
+    assert.deepEqual(exit, Exit.succeed(RUNNER_END.FAILED));
+    const gaveUpAfter = (yield* Clock.currentTimeMillis) - lostAt;
+    assert.ok(gaveUpAfter >= RUNNER_RECONNECT.GIVE_UP_MS, `gave up after ${gaveUpAfter}ms`);
+    assert.ok(
+      gaveUpAfter < RUNNER_RECONNECT.GIVE_UP_MS + RUNNER_RECONNECT.LONGEST_WAIT_MS * 2,
+      `gave up after ${gaveUpAfter}ms`,
+    );
+    assert.equal(cli.closed, true);
+    assert.deepEqual(service.applied.at(-1)?.message, {
+      type: RUNNER_EVENT.END,
+      reason: RUNNER_END.FAILED,
+      detail: connectionLostFailure(ANTHROPIC_HOST, CONNECTION_LOST_DETAIL.GAVE_UP),
+    });
+  }),
+);
+
+it.effect(
+  "ends the launch failed where the connection is lost again before the model answered, rather than probing again",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const { write, run, probed } = yield* launch(
+        CONNECTION_LOST_TWICE,
+        service,
+        ENV,
+        [],
+        true,
+        fakeProbe(),
+      );
+      yield* write(CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* untilPosted(service, RUNNER_EVENT.CONNECTION_RESTORED);
+      yield* write(CARRY_ON_LINE);
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      assert.equal(probed.targets.length, 1);
+      assert.deepEqual(service.applied.at(-1)?.message, {
+        type: RUNNER_EVENT.END,
+        reason: RUNNER_END.FAILED,
+        detail: connectionLostFailure(ANTHROPIC_HOST, CONNECTION_LOST_DETAIL.LOST_AGAIN),
+      });
+    }),
+);
+
+it.effect("ends a stopped launch at once while the host is probed", () =>
+  Effect.gen(function* () {
+    const service = fakeService();
+    const { write, run } = yield* launch(
+      CONNECTION_LOST_TURN,
+      service,
+      ENV,
+      [],
+      true,
+      fakeProbe(Number.POSITIVE_INFINITY),
+    );
+    yield* write(CONFIG);
+    yield* write(FIRST_MESSAGE);
+    yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
+    yield* write({ type: INPUT_LINE.STOP });
+    assert.equal(yield* Fiber.join(run), RUNNER_END.STOPPED);
+  }),
+);
+
+it.effect("ends the turn as before on a model call the API refused, probing nothing", () =>
+  Effect.gen(function* () {
+    const service = fakeService();
+    const { write, run, probed } = yield* launch(CREDENTIAL_REFUSED_TURN, service);
+    yield* write(CONFIG);
+    yield* write(FIRST_MESSAGE);
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    assert.equal(probed.targets.length, 0);
+    assert.deepEqual(kinds(service.applied), ["system/init", "result/success", RUNNER_EVENT.END]);
+  }),
+);
+
+/** The probe's target: the proxy the CLI goes through where one is set, the host where the proxy value names no host, and a gateway's own port where the base URL names one. */
+it.effect.each([
+  {
+    env: { HTTPS_PROXY: "http://proxy.corp.test:3128" },
+    target: { host: "proxy.corp.test", port: 3128 },
+  },
+  { env: { HTTPS_PROXY: "proxy.corp.test:3128" }, target: { host: ANTHROPIC_HOST, port: 443 } },
+  {
+    env: { ANTHROPIC_BASE_URL: "http://gateway.internal:8080/v1" },
+    target: { host: "gateway.internal", port: 8080 },
+  },
+])("probes where the CLI reaches the API, given $env", ({ env, target }) =>
+  Effect.gen(function* () {
+    const service = fakeService();
+    const { write, run, probed } = yield* launch(
+      CONNECTION_LOST_TURN,
+      service,
+      { ...ENV, ...env },
+      [],
+      true,
+      fakeProbe(),
+    );
+    yield* write(CONFIG);
+    yield* write(FIRST_MESSAGE);
+    yield* untilPosted(service, RUNNER_EVENT.CONNECTION_RESTORED);
+    assert.deepEqual(probed.targets, [target]);
+    yield* write(CARRY_ON_LINE);
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+  }),
 );
 
 /** How many IDLE events the service has taken. */
@@ -1488,7 +1734,9 @@ it.effect(
       const stdin = yield* Queue.unbounded<string, Cause.Done>();
       const run = yield* runAgent({ lines: Stream.fromQueue(stdin), env: ENV }).pipe(
         Effect.scoped,
-        Effect.provide(Layer.mergeAll(claudeCodeLive, service.layer, fakeAppServer([]).layer)),
+        Effect.provide(
+          Layer.mergeAll(claudeCodeLive, service.layer, fakeAppServer([]).layer, fakeProbe().layer),
+        ),
         Effect.forkScoped,
       );
       yield* Queue.offer(stdin, JSON.stringify({ ...CONFIG, executable, cwd: directory }));

@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace the invitation is to, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "invitationId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The invitation's id, as list_workspace_invitations answered it."
+    }
+  },
+  "required": [
+    "invitationId"
+  ],
+  "additionalProperties": false
+}

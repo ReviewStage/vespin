@@ -1,7 +1,7 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { NO_ITEMS, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type {
@@ -9,6 +9,7 @@ import type {
   TaskCreateRelationKind,
   TaskStanding,
 } from "@repo/features/task-wire";
+import { DOCUMENT_REGION, RENAME_FAILED_NOTE, TASKS_PAGE } from "@repo/features/tasks-model";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
@@ -45,10 +46,9 @@ import {
   subagentTab,
   TAB_WORDS,
 } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, RENAME_FAILED_NOTE, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import { useMutation } from "@tanstack/react-query";
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Activity, Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { AutomationDirectory } from "../automation-directory.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
@@ -87,7 +87,7 @@ import {
   type TaskMentionsValue,
   useMentionAgentsReader,
 } from "../tasks/task-mentions.js";
-import { taskLinkPlace, useOfferTaskRename } from "../tasks/task-menu-items.js";
+import { taskLinkDestination, useOfferTaskRename } from "../tasks/task-menu-items.js";
 import type { TaskRelationsDoor } from "../tasks/task-relation-menu.js";
 import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
 import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
@@ -123,17 +123,17 @@ import {
 import { DesktopHome } from "./desktop-home.js";
 import {
   AgentPane,
+  agentsRetry,
   DETAILS_WORDS,
   MainTabBars,
   mainTabLabel,
   newAgentStarts,
-  phoneAgentStarts,
   TaskTopbar,
 } from "./main-tabs.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
 import { PlanAgents } from "./plan-agents.js";
+import { PlanHead } from "./plan-head.js";
 import { PlanPages } from "./plan-pages.js";
-import { PlanRelations } from "./plan-relations.js";
 import {
   changesTabOf,
   SIDE_PANEL_HOLDER,
@@ -586,7 +586,7 @@ function DescriptionDocument({
       : tasks.workspaces.find((each) => each.id === opened.workspaceId);
   // The slug the task's links are written under, as its ⋯ menu's Copy link to task writes it.
   const workspace =
-    opened === undefined ? undefined : taskLinkPlace(tasks.workspaces, opened).workspace;
+    opened === undefined ? undefined : taskLinkDestination(tasks.workspaces, opened).workspace;
   // A row that opens a tab of this column, as a coding agent's start in an
   // agent's tab opens the agent's, first has a panel filling the window over it
   // give way, and hands the keys to this column, so ⌘W closes the tab it opened.
@@ -651,8 +651,8 @@ function DescriptionDocument({
           (target.key === undefined ? undefined : keyedItem(inbox.board, target.key, from)?.id);
         return openPlace?.(
           itemId === undefined
-            ? { kind: LINK_PLACE.INBOX, planId: taskId }
-            : { kind: LINK_PLACE.INBOX_ITEM, planId: taskId, itemId },
+            ? { kind: LINK_DESTINATION.INBOX, planId: taskId }
+            : { kind: LINK_DESTINATION.INBOX_ITEM, planId: taskId, itemId },
         );
       }
       case TOOL_TARGET.PAGE:
@@ -969,12 +969,9 @@ function DescriptionDocument({
         shown={tasks.shown}
         onOpenAgent={(agentId) => openAgentTab(agentTab(agentId))}
         onOpenPullRequest={openPullRequestDoor}
-        // Note that New agent stands at every width, a fresh plan's one next step, as the "+" offers it.
-        starts={
-          room === SHELL_ROOM.NARROW
-            ? phoneAgentStarts(mainTabs, agents)
-            : newAgentStarts(mainTabs, agents)
-        }
+        // Note that New agent stands on the group's head at every width, as the strip's "+" offers it.
+        newAgent={newAgentStarts(mainTabs, agents)[0]}
+        starts={room === SHELL_ROOM.NARROW ? agentsRetry(agents) : []}
         phone={
           room === SHELL_ROOM.NARROW
             ? {
@@ -1019,26 +1016,39 @@ function DescriptionDocument({
       ),
     [openedId, pages, openPageTab],
   );
-  // The task's sub-tasks and relations stand over its agents, the head keyed once by the task,
-  // so another task's groups start folded rather than as this one's were left. Note that the
-  // key is the head's alone, because two siblings under one key leave the old task's drawn.
+  // A task that lists no agent offers New agent under its title, since its Agents group draws none;
+  // note that a phone's group stands for archived agents too, its head offering New agent itself.
+  const agentsGrouped = room === SHELL_ROOM.NARROW && (agents.archived?.length ?? 0) > 0;
+  const firstAgentStart = useMemo(
+    () =>
+      agents.agents?.length === 0 && !agentsGrouped
+        ? newAgentStarts(mainTabs, agents)[0]
+        : undefined,
+    [agents, mainTabs, agentsGrouped],
+  );
+  // The task's starts, sub-tasks, and relations stand over its agents, the head keyed once by the
+  // task, so another task's groups start as they open and no draft of this one's stands there.
   const descriptionHead = useCallback(
-    (room: DescriptionRoom) => (
-      <Fragment key={openedId}>
-        {opened === undefined ? null : (
-          <PlanRelations
-            task={opened}
-            tasks={tasks}
-            door={relations}
-            room={room}
-            onOpenTask={openTask}
-          />
-        )}
-        {planAgents}
-        {planPages}
-      </Fragment>
-    ),
-    [openedId, opened, tasks, relations, openTask, planAgents, planPages],
+    (room: DescriptionRoom) =>
+      opened === undefined ? (
+        <Fragment key={openedId}>
+          {planAgents}
+          {planPages}
+        </Fragment>
+      ) : (
+        <PlanHead
+          key={openedId}
+          task={opened}
+          tasks={tasks}
+          door={relations}
+          room={room}
+          newAgent={firstAgentStart}
+          agents={planAgents}
+          pages={planPages}
+          onOpenTask={openTask}
+        />
+      ),
+    [openedId, opened, tasks, relations, openTask, firstAgentStart, planAgents, planPages],
   );
   // A row in a transcript that opens a tab hangs that tab's card, read as
   // the tab reads it, so an agent, a subagent, or a file is previewed alike wherever named.
@@ -1240,7 +1250,7 @@ function DescriptionDocument({
   };
   // ⌘T on a phone starts New agent at once, since no "+" stands in sight to drop its menu.
   const newAgentOnPhone = () => {
-    const [start] = phoneAgentStarts(mainTabs, agents);
+    const [start] = newAgentStarts(mainTabs, agents);
     if (start === undefined || start.disabled === true) return;
     if (sidePanel.open) sidePanel.onToggle();
     start.onSelect();
@@ -1483,30 +1493,36 @@ function DescriptionDocument({
                       </>
                     }
                   >
-                    {/* Note that the panel stands while its toggle asks for its "+" with nothing to show, drawing the menu alone. */}
-                    {!detailsWide && (drawing.panel !== undefined || sidePanel.toggleAsked) ? (
-                      <SidePanel
-                        {...drawing}
-                        panel={drawing.panel ?? sidePanel}
-                        unread={tasks.unreadTabs}
-                        holder={SIDE_PANEL_HOLDER.TASK}
-                        taskId={task.id}
-                        repository={task.repository}
-                        pages={tasks.pages}
-                        agents={agents}
-                        openAgents={mainTabs.openAgents}
-                        shownAgent={followedAgent(mainTabs.tab, {
-                          shown: tasks.shown,
-                          covered: sidePanel.fullScreen,
-                        })}
-                        views={views}
-                        shown={tasks.shown}
-                        focused={sideFocused}
-                        onOpenTarget={openTarget}
-                        banner={stranded.banner}
-                        taskOfTab={tasks}
-                        activity={phone ? { onShown: setShownTab } : undefined}
-                      />
+                    {/* Note that the panel stands while its toggle asks for its "+" with
+          nothing to show, drawing the menu alone; and that it is hidden under
+          `Activity` while the details take the page, rather than left out, so
+          the pages it keeps drawn (`kept-pages.ts`) stand as they were left
+          when the details are left. */}
+                    {drawing.panel !== undefined || sidePanel.toggleAsked ? (
+                      <Activity mode={detailsWide ? "hidden" : "visible"}>
+                        <SidePanel
+                          {...drawing}
+                          panel={drawing.panel ?? sidePanel}
+                          unread={tasks.unreadTabs}
+                          holder={SIDE_PANEL_HOLDER.TASK}
+                          taskId={task.id}
+                          repository={task.repository}
+                          pages={tasks.pages}
+                          agents={agents}
+                          openAgents={mainTabs.openAgents}
+                          shownAgent={followedAgent(mainTabs.tab, {
+                            shown: tasks.shown,
+                            covered: sidePanel.fullScreen,
+                          })}
+                          views={views}
+                          shown={tasks.shown}
+                          focused={sideFocused}
+                          onOpenTarget={openTarget}
+                          banner={stranded.banner}
+                          taskOfTab={tasks}
+                          activity={phone ? { onShown: setShownTab } : undefined}
+                        />
+                      </Activity>
                     ) : null}
                     {stranded.dialog}
                   </TaskPage>

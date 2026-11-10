@@ -4,14 +4,15 @@ import {
   type AgentPullRequest,
   type AgentStatus,
 } from "@repo/features/agent-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
+import { DOCUMENT_REGION } from "@repo/features/tasks-model";
 import { AgentPlaceholderIcon, DocumentIcon, PlusIcon, TaskStatusMark } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { pullRequestLabelOf, TAB_WORDS } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION } from "@repo/ui/tasks-model";
-import { AppWindowIcon, BotIcon, GitPullRequestIcon, GlobeIcon, InboxIcon } from "lucide-react";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { HarnessMark } from "../harness-marks.js";
 import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import { providerOf } from "./agent-model.js";
@@ -132,11 +133,17 @@ export interface KindLook {
 
 /**
  * A task's glyph wherever a task is named: its status's mark
- * (`TaskStatusMark`), or the document where its status is not known, as a
- * task the window does not list.
+ * (`TaskStatusMark`), or its kind's glyph where its status is not known,
+ * as a task the window does not list. Note that it is never the
+ * description's document, which a task named before its list is read
+ * wore everywhere.
  */
 export function PlanGlyph({ status }: { status: TaskStatus | undefined }) {
-  return status === undefined ? <DocumentIcon /> : <TaskStatusMark status={status} />;
+  return status === undefined ? (
+    <EntityGlyph kind={ENTITY_KIND.PLAN} />
+  ) : (
+    <TaskStatusMark status={status} />
+  );
 }
 
 /**
@@ -173,7 +180,11 @@ export function AgentMark({ provider }: { provider: ModelProvider | undefined })
  */
 export function SubagentMark({ model }: { model: string | undefined }) {
   const provider = model === undefined ? undefined : providerOf(model);
-  return provider === undefined ? <BotIcon /> : <HarnessMark provider={provider} />;
+  return provider === undefined ? (
+    <EntityGlyph kind={ENTITY_KIND.WORKER} />
+  ) : (
+    <HarnessMark provider={provider} />
+  );
 }
 
 /**
@@ -215,7 +226,7 @@ export function tabLook(subject: TabSubject): KindLook {
         return { icon: <PlanGlyph status={plan.status} />, label: plan.name };
       }
       if (tab === SIDE_PANEL_TAB.INBOX && subject.thread === true) {
-        return { icon: <GLYPH.THREAD />, label: TAB_WORDS.THREAD };
+        return { icon: <EntityGlyph kind={ENTITY_KIND.INBOX_ITEM} />, label: TAB_WORDS.THREAD };
       }
       const { label, icon: Icon } = SIDE_PANEL_TAB_KIND[tab];
       return { icon: <Icon />, label };
@@ -223,7 +234,7 @@ export function tabLook(subject: TabSubject): KindLook {
     case TAB_KIND.PLAN:
       return { icon: <PlanGlyph status={subject.status} />, label: subject.name };
     case TAB_KIND.INBOX:
-      return { icon: <InboxIcon />, label: TAB_WORDS.INBOX };
+      return { icon: <EntityGlyph kind={ENTITY_KIND.INBOX} />, label: TAB_WORDS.INBOX };
     case TAB_KIND.DRAFT:
       return { icon: <PlusIcon />, label: TAB_WORDS.NEW_AGENT };
     case TAB_KIND.OVERVIEW:
@@ -242,7 +253,7 @@ export function tabLook(subject: TabSubject): KindLook {
       return {
         icon:
           subject.pullRequest === undefined ? (
-            <GitPullRequestIcon />
+            <EntityGlyph kind={ENTITY_KIND.PULL_REQUEST} />
           ) : (
             <PullRequestMark pullRequest={subject.pullRequest} />
           ),
@@ -262,8 +273,8 @@ export function tabLook(subject: TabSubject): KindLook {
       return { icon, label };
     }
     case TAB_KIND.PAGE:
-      return { icon: <AppWindowIcon />, label: subject.title };
+      return { icon: <EntityGlyph kind={ENTITY_KIND.PAGE} />, label: subject.title };
     case TAB_KIND.BROWSER:
-      return { icon: <GlobeIcon />, label: subject.title ?? TAB_WORDS.BROWSER };
+      return { icon: <GLYPH.WEBSITE />, label: subject.title ?? TAB_WORDS.BROWSER };
   }
 }

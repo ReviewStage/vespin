@@ -16,6 +16,7 @@ import {
 import { TASK_COMMENTS_READ } from "@repo/features/description-comment-live";
 import { WRITE_UNTAKEN } from "@repo/features/keyed-write";
 import { issueAddressOf, pullRequestAddressOf } from "@repo/features/link-grammar";
+import { LINK_PREVIEW_UNANSWERED } from "@repo/features/link-preview-view";
 import type { AnyLiveRead, LiveReadAnswer, LiveReadAsked } from "@repo/features/live-read";
 import { type LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import {
@@ -33,6 +34,7 @@ import { AGENT_PAGES_READ, pagesOfLiveRows, TASK_PAGES_READ } from "@repo/featur
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
 import {
   type DescriptionRevisionsAnswer,
+  isTaskSettled,
   startRelationsOf,
   TASK_BLOCK_CHANGE,
   TASK_CREATE_RELATION_KIND,
@@ -362,6 +364,7 @@ export type TasksClient = Pick<
   | "readTree"
   | "readSkills"
   | "readRepositoryFile"
+  | "linkPreview"
   | "readRepositoryTree"
   | "readRepositorySkills"
   | "readRepositoryPullRequest"
@@ -455,9 +458,6 @@ export interface TasksComposer extends Composer {
 function pageSourceLines(html: string): CodeLines {
   return html.split("\n").map((text) => (text === "" ? [] : [{ text }]));
 }
-
-/** The statuses a task stands finished in, which the service stamps `completedAt` as it enters. */
-const FINISHED: ReadonlySet<string> = new Set([TASK_STATUS.DONE, TASK_STATUS.CANCELED]);
 
 /** One side of a relation between two tasks, taken away or added. */
 interface RelationSide {
@@ -1376,7 +1376,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   /** Whether `taskId` holds back a task waiting on it now: unfinished, or not held by the list at all. */
   function blocksNow(taskId: string): boolean {
     const blocker = view.tasks.find((row) => row.id === taskId);
-    return blocker?.status === undefined || !FINISHED.has(blocker.status);
+    return blocker?.status === undefined || !isTaskSettled(blocker.status);
   }
 
   /** A member's name as the list already knows it, from a task they made or are assigned; none where it names them nowhere. */
@@ -1427,7 +1427,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         request.assigneeId === undefined ? null : (listedName(request.assigneeId) ?? ""),
       pinnedAt: null,
       pinPosition: null,
-      completedAt: FINISHED.has(status) ? now : null,
+      completedAt: isTaskSettled(status) ? now : null,
       createdAt: now,
       updatedAt: now,
       status,
@@ -1624,7 +1624,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
               completedAt:
                 standing.status === row.status
                   ? (row.completedAt ?? null)
-                  : FINISHED.has(standing.status)
+                  : isTaskSettled(standing.status)
                     ? kernel.now()
                     : null,
             }),
@@ -2117,6 +2117,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     // The repository's skills are held for every window and read again behind
     // each answer (`heldSkills`), a plan's under the repository the list
     // names it on, so a plan moved to another repository reads that one's.
+    TASKS_LINK_PREVIEW: ({ url }) =>
+      gate() ? served(client.linkPreview(url)) : Effect.succeed(LINK_PREVIEW_UNANSWERED),
     TASKS_SKILLS: (asked) =>
       Effect.gen(function* () {
         if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };

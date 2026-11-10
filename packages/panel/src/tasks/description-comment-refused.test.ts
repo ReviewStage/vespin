@@ -237,7 +237,7 @@ test("a refused reply's files go back before the files added while it was out", 
   await act(async () => answer.resolve(false));
 
   assert.deepEqual(heldFiles(card), ["before.txt", "after.txt"]);
-  assert.equal(composerWords(field), "Like this. [File: before.txt]\n\n[File: after.txt]");
+  assert.equal(composerWords(field), "Like this. [File: before.txt]\n\n[File: after.txt] ");
 });
 
 /** Draws the thread, sends `refused`, types `newer` while it is out, and has the service refuse it; later sends land. */

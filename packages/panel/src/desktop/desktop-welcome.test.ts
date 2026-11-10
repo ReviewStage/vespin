@@ -31,5 +31,5 @@ test.each([
     fresh: false,
   },
 ])("an account $case is new: $fresh", ({ signedIn, listRead, tasks, fresh }) => {
-  assert.equal(welcomed(tasksControl({ signedIn, listRead, tasks }), []), fresh);
+  assert.equal(welcomed(tasksControl({ signedIn, listRead, tasks })), fresh);
 });

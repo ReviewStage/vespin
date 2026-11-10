@@ -1,4 +1,4 @@
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import type { ACTOR_KIND, Actor } from "@repo/ui/actor-model";
@@ -54,7 +54,7 @@ export function useStartingAgent(
       ? undefined
       : () =>
           openPlace({
-            kind: LINK_PLACE.AGENT,
+            kind: LINK_DESTINATION.AGENT,
             ...(taskId === undefined ? undefined : { planId: taskId }),
             agentId: agent.id,
           });

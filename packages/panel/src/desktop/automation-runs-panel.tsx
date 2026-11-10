@@ -7,7 +7,7 @@ import {
 } from "@repo/features/automation-list-model";
 import { AUTOMATION_FIRING, type AutomationRunSummary } from "@repo/features/automation-wire";
 import { GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
-import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { momentText, sinceText } from "@repo/features/time-format";
 import { TRIGGER_CATALOG } from "@repo/features/trigger-catalog";
@@ -150,10 +150,10 @@ export function RunRow({
   const coarse = useCoarsePointer();
   const { agent } = run;
   // Note that every run offers its link, one that started no agent too, because a run's own link opens it.
-  const runPlace: LinkPlace | undefined =
+  const runPlace: LinkDestination | undefined =
     automationId === undefined
       ? undefined
-      : { kind: LINK_PLACE.AUTOMATION_RUN, automationId, runId: run.id };
+      : { kind: LINK_DESTINATION.AUTOMATION_RUN, automationId, runId: run.id };
   const links = runPlace === undefined ? [] : linkItemsOf(runPlace);
   const subject = subjectLink(run);
   const openSubject: MenuAction | undefined =

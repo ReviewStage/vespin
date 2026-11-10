@@ -33,11 +33,13 @@ import { Tooltip } from "../tooltip/hint.js";
  * `busyLabel` it is named by, a Button's own two), the main part refuses its
  * press and stands under its ring as a busy Button does while the chevron still
  * opens the options, and one whose press `succeeded` lands on a check as a
- * busy Button's does. A toolbar short of room folds the main part's words
- * away with `--ui-fold: folded`, as it folds a FoldingButton's, leaving
- * its glyph and its name; shorter still, `--ui-fold: bare` leaves that
- * glyph alone, the chevron not drawn, so the options are reached some
- * other way the app offers.
+ * busy Button's does. It hugs its words, or spans the row it stands in
+ * (`SPLIT_BUTTON_WIDTH.FULL`), its main part taking the room the chevron
+ * leaves, as a phone's row of one control draws it. A toolbar short of room
+ * folds the main part's words away with `--ui-fold: folded`, as it folds a
+ * FoldingButton's, leaving its glyph and its name; shorter still,
+ * `--ui-fold: bare` leaves that glyph alone, the chevron not drawn, so the
+ * options are reached some other way the app offers.
  *
  * The hint over the main part is the window's tooltip (`Tooltip`), or one
  * the caller hangs in its place (`hint`): it is handed
@@ -48,6 +50,14 @@ import { Tooltip } from "../tooltip/hint.js";
  * or unavailable, so a press of the main part closes the options' menu
  * whether or not it acts.
  */
+
+/** How wide a split button stands: its words' own width, or the whole row it stands in. */
+export const SPLIT_BUTTON_WIDTH = {
+  HUG: "hug",
+  FULL: "full",
+} as const;
+
+export type SplitButtonWidth = (typeof SPLIT_BUTTON_WIDTH)[keyof typeof SPLIT_BUTTON_WIDTH];
 
 /** What a hint hands the main part it wraps: when to show and go, and what it says of it. */
 interface SplitButtonHintProps {
@@ -101,6 +111,9 @@ const SPLIT_BOX = cn(
   "fold-bare:[&>.ui-button:last-child]:hidden",
 );
 
+/** The box spanning its row, its main part taking the room the chevron leaves. */
+const SPLIT_FULL = "flex w-full [&>.ui-button:first-child]:flex-1";
+
 /** A filled look's halves, parted by a rule in its own ink. */
 const SPLIT_FILLED_RULE =
   "[&>.ui-button:last-child]:border-s-[color-mix(in_srgb,var(--ui-button-ink)_30%,transparent)]";
@@ -120,6 +133,7 @@ export function SplitButton({
   children,
   onClick,
   disabled,
+  width = SPLIT_BUTTON_WIDTH.HUG,
   busy,
   busyLabel,
   succeeded,
@@ -138,6 +152,8 @@ export function SplitButton({
   onClick?: ((event: MouseEvent<HTMLButtonElement>) => void) | undefined;
   /** Whether both halves are unavailable: they refuse their press, and stay reachable so a hint can say why. */
   disabled?: boolean | undefined;
+  /** How wide it stands: its words' own width, or its whole row. */
+  width?: SplitButtonWidth | undefined;
   /** Whether the main part's press landed, read as its ring leaves: a check stands a moment before its words come back (Button's `succeeded`). */
   succeeded?: boolean | undefined;
   /** The hint over the main part: the window's tooltip, unless the caller hangs one of its own. */
@@ -177,7 +193,11 @@ export function SplitButton({
   );
   return (
     <span
-      className={cn(SPLIT_BOX, FILLED.has(variant) && SPLIT_FILLED_RULE)}
+      className={cn(
+        SPLIT_BOX,
+        width === SPLIT_BUTTON_WIDTH.FULL && SPLIT_FULL,
+        FILLED.has(variant) && SPLIT_FILLED_RULE,
+      )}
       data-variant={variant}
       onClickCapture={
         onMainPress === undefined
