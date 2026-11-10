@@ -1,13 +1,6 @@
 // pull-request-page.tsx -- a pull request's page: its heading with where it stands and its branches, the rows of its checks and reviews, the line a change GitHub refused leaves, and the question an act asks first.
 
-import {
-  ConfirmationDialog,
-  Host,
-  HStack,
-  Button as SwiftUIButton,
-  Text,
-  VStack,
-} from "@expo/ui/swift-ui";
+import { Alert, Host, HStack, Button as SwiftUIButton, Text, VStack } from "@expo/ui/swift-ui";
 import {
   font,
   foregroundStyle,
@@ -239,22 +232,28 @@ type ConfirmAskProps = {
   readonly title: string;
   /** What the act costs, under the question. */
   readonly message?: string | undefined;
-  /** The act's own words, the dialog's one act beside Cancel. */
+  /** The act's own words, the alert's act beside Cancel. */
   readonly act: string;
   /** Whether the act ends or takes away something, which the system draws red. */
   readonly destructive?: boolean | undefined;
   readonly presented: boolean;
   readonly onAct: () => void;
-  /** Called as the dialog goes, by its act, Cancel, or a tap outside it. */
+  /** Called as the alert goes, by its act or Cancel. */
   readonly onDismiss: () => void;
 };
 
+/** What an act that asks first offers beside its act. */
+const CANCEL = "Cancel";
+
 /**
- * The question an act asks first, as the system's confirmation dialog: its
- * question, what it costs, its act, and Cancel, which iOS adds. It stands
- * in a host of its own, the size of nothing, so a screen draws it beside
- * whatever it shows and presents it from a press anywhere, its toolbar's
- * among them.
+ * The question an act asks first, as the system's alert: its question,
+ * what it costs, Cancel, and its act last, as the panel's confirm stands.
+ * Note that it is an alert rather than a confirmation dialog, because iOS
+ * 26 draws a confirmation dialog as a popover on the view that presents it,
+ * and the act is pressed in the bar or on a card, which this cannot stand
+ * on; an alert stands centered whatever presents it. It stands in a host
+ * of its own, the size of nothing, so a screen draws it beside whatever it
+ * shows and presents it from a press anywhere.
  */
 export function ConfirmAsk({
   title,
@@ -267,30 +266,30 @@ export function ConfirmAsk({
 }: ConfirmAskProps) {
   return (
     <Host matchContents style={{ position: "absolute" }}>
-      <ConfirmationDialog
+      <Alert
         title={title}
-        titleVisibility="visible"
         isPresented={presented}
         onIsPresentedChange={(shown) => {
           if (!shown) onDismiss();
         }}
       >
-        <ConfirmationDialog.Trigger>
+        <Alert.Trigger>
           <Text modifiers={[frame({ width: 0, height: 0 })]}>{""}</Text>
-        </ConfirmationDialog.Trigger>
-        <ConfirmationDialog.Actions>
+        </Alert.Trigger>
+        <Alert.Actions>
+          <SwiftUIButton label={CANCEL} role="cancel" onPress={onDismiss} />
           <SwiftUIButton
             label={act}
             role={destructive ? "destructive" : "default"}
             onPress={onAct}
           />
-        </ConfirmationDialog.Actions>
+        </Alert.Actions>
         {message === undefined ? null : (
-          <ConfirmationDialog.Message>
+          <Alert.Message>
             <Text>{message}</Text>
-          </ConfirmationDialog.Message>
+          </Alert.Message>
         )}
-      </ConfirmationDialog>
+      </Alert>
     </Host>
   );
 }
