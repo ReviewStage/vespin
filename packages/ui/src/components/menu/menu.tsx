@@ -74,7 +74,8 @@ import { useTouchHold } from "./touch-hold.js";
  * menu's other items on its way there leaves it standing (`submenu-aim.ts`);
  * pressing, Right, or Enter takes the keyboard in, to its search field
  * first, as the pointer arriving in it does, while resting on the item
- * leaves the keyboard in the menu. Its keys are its own; Escape, or Left where it moves no caret,
+ * leaves the keyboard in the menu. Its keys are its own, a chord it leaves going on to the window's
+ * shortcuts; Escape, or Left where it moves no caret,
  * goes back to the item, and Escape there closes the menu. It is handed
  * its way back and the menu's close, and the menu stands while the window
  * is away from it, as a sign-in it began in the browser takes it.
@@ -1274,11 +1275,18 @@ function PanelItem({
   );
 }
 
+/** Whether a key pressed in a panel is a Command or Control chord nothing in it took, which is the window's to answer. */
+function windowChord(event: React.KeyboardEvent): boolean {
+  return (event.metaKey || event.ctrlKey) && !event.defaultPrevented;
+}
+
 /**
  * A panel standing beside the item that opened it, drawn over the window
  * as the menu is, at the width it asks, placed once it is drawn and again
  * as it or its menu change size. Its keys are its own, never the menu's
- * nor its owner's: Escape, or Left where it moves no caret, goes back to
+ * nor its owner's, but for a Command or Control chord nothing in it took,
+ * which goes on to the window's shortcuts as it would from the menu
+ * itself: Escape, or Left where it moves no caret, goes back to
  * its item, unless the panel took the key itself, as one going back a
  * page of its own does. Focus leaving it for anywhere but its menu, the
  * menu's opener, or a card hung from either closes the menu.
@@ -1376,7 +1384,8 @@ function MenuPanelLayer({
         if (event.pointerType !== "touch" && box.current !== null) focusInto(box.current);
       }}
       onKeyDown={(event) => {
-        event.stopPropagation();
+        // Note that a chord nothing in the panel took is let on to the window, because its keymap is what runs ⌘N and the rest, and a panel holding every key left them dead while it stood.
+        if (!windowChord(event)) event.stopPropagation();
         if (event.defaultPrevented || isComposingKey(event)) return;
         if (event.key !== "Escape" && !(event.key === "ArrowLeft" && leftLeaves(event.target))) {
           return;
