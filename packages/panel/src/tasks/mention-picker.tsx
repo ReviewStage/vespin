@@ -57,15 +57,13 @@ import {
   KeepFocus,
   MENU_SURFACE_INSET,
   MenuGlyph,
-  type MenuKey,
-  MenuKeys,
   type MenuRow,
   MenuSurface,
-  menuKey,
   NO_BACK_KEY,
   POPOVER_WIDTH,
   ProviderMark,
   RectFloat,
+  Shortcut,
   Spinner,
   TEXT_ELEMENT,
   TEXT_TONE,
@@ -404,16 +402,6 @@ const MENU_LABEL = "Mention";
 
 /** What the list says where it has no row. */
 const NO_MATCH = noMatchWords(TERM.RESULT);
-
-/** The keys the list hears, said at its foot as far as it hears them now. */
-const MENU_KEY = {
-  MOVE: menuKey("Move", SHORTCUT_KEY.UP, SHORTCUT_KEY.DOWN),
-  MENTION: menuKey("Mention", SHORTCUT_KEY.ENTER, SHORTCUT_KEY.TAB),
-  OPEN: menuKey("Open", SHORTCUT_KEY.RIGHT),
-  WIDEN: menuKey("All kinds", SHORTCUT_KEY.BACKSPACE),
-  UP: menuKey("Up", SHORTCUT_KEY.BACKSPACE),
-  CLOSE: menuKey("Close", SHORTCUT_KEY.ESCAPE),
-} as const satisfies Record<string, MenuKey>;
 
 /** What a narrowed list's back arrow is read by: back to every kind, or up out of a folder. */
 const BACK_LABEL = {
@@ -1314,12 +1302,17 @@ function showMoreWordsOf(row: MentionRow): {
   };
 }
 
-/** The groups as the list draws them: each row its glyph, its name and detail marked where `query` found them, an agent's end, its card, and a chevron where it opens. */
+/** The key a highlighted folder's row says at its end walks into it, since choosing the row writes the folder. */
+const WALK_INTO_HINT = <Shortcut chord={{ key: SHORTCUT_KEY.RIGHT, plain: true }} />;
+
+/** The groups as the list draws them: each row its glyph, its name and detail marked where `query` found them, an agent's end, its card, a chevron where it opens, and → on the folder at `at`. */
 function comboboxGroups(
   groups: readonly MentionGroup[],
   query: string,
+  at: number,
   rowCard: RowCardOf,
 ): ComboboxGroup[] {
+  const highlighted = groups.flatMap((group) => group.rows)[at];
   return groups.map((group) => ({
     label: group.label,
     options: group.rows.map((row) => ({
@@ -1328,7 +1321,7 @@ function comboboxGroups(
       words: row.name,
       // A group's foot keeps the glyph's room empty, so its words stand in line with the rows above.
       icon: isShowMore(row) ? null : (row.look?.icon ?? <RowGlyph row={row} />),
-      hint: row.look?.end,
+      hint: row === highlighted && opens(row) && !("from" in row) ? WALK_INTO_HINT : row.look?.end,
       card: row.look?.card ?? row.card ?? rowCard(row),
       opens: "from" in row,
     })),
@@ -1390,14 +1383,13 @@ interface MentionReadFailure {
   readonly retry: () => void;
 }
 
-/** The list itself: a narrowed list's crumb, each group's heading and rows, the highlighted one washed, and the keys it hears at its foot. */
+/** The list itself: a narrowed list's crumb, and each group's heading and rows, the highlighted one washed. */
 function MentionMenu({
   id,
   crumb,
   groups,
   query,
   at,
-  keys,
   reading,
   failures,
   rowCard,
@@ -1410,7 +1402,6 @@ function MentionMenu({
   /** The words the groups were found by, which mark each row. */
   query: string;
   at: number;
-  keys: readonly MenuKey[];
   /** Whether a read the list offers rows from is still out, which the list says in place of "no match". */
   reading: boolean;
   /** The reads that failed, which the list says could not be read, with Retry, in place of "no match". */
@@ -1427,7 +1418,7 @@ function MentionMenu({
       <ComboboxList
         id={id}
         label={MENU_LABEL}
-        groups={comboboxGroups(groups, query, rowCard)}
+        groups={comboboxGroups(groups, query, at, rowCard)}
         active={at}
         onActiveChange={onHover}
         onChoose={(index) => {
@@ -1454,7 +1445,6 @@ function MentionMenu({
           ) : undefined
         }
       />
-      <MenuKeys keys={keys} />
     </MenuSurface>
   );
 }
@@ -2083,15 +2073,6 @@ export function useMentionPicker({
     return field.onKeyDown(event);
   };
 
-  // The foot names the keys the list hears now: → where a row opens, ⌫ where the list is narrowed.
-  const keys = [
-    MENU_KEY.MOVE,
-    MENU_KEY.MENTION,
-    ...(rows.some(opens) ? [MENU_KEY.OPEN] : []),
-    ...(scope?.kind === undefined ? [] : [scope.walked.length > 0 ? MENU_KEY.UP : MENU_KEY.WIDEN]),
-    MENU_KEY.CLOSE,
-  ];
-
   // Note that a row's card is the chip's, made as the row is drawn, because the repository's paths are thousands and only the few listed hang one.
   const rowCard: RowCardOf = (row) => {
     if (!("mention" in row)) return undefined;
@@ -2117,7 +2098,6 @@ export function useMentionPicker({
       groups={groups}
       query={term}
       at={at}
-      keys={keys}
       reading={reading}
       failures={failures}
       rowCard={rowCard}
