@@ -96,6 +96,23 @@ it.effect("a restart that never quit can be pressed again once its time has pass
   }).pipe(Effect.scoped),
 );
 
+it.effect("an earlier restart's time passing never frees a later restart's press", () =>
+  Effect.gen(function* () {
+    const { service, events, quits } = yield* serviceFixture();
+    events().onDownloaded("2.0.0");
+    service.install();
+    events().onError("Squirrel could not stage the update");
+    events().onDownloaded("2.0.0");
+
+    yield* TestClock.adjust(Duration.seconds(90));
+    service.install();
+    yield* TestClock.adjust(Duration.seconds(60));
+    service.install();
+
+    assert.deepEqual(quits, ["quit and install", "quit and install"]);
+  }).pipe(Effect.scoped),
+);
+
 it.effect("a service stopped before it started never checks", () =>
   Effect.gen(function* () {
     const { service, told } = yield* serviceFixture();

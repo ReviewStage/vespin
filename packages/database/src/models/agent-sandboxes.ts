@@ -21,22 +21,61 @@
  * `machine/sandbox-machine.ts`): `booting_since` set as it opens the
  * sandbox, LIVE again where it stood released, and cleared once its runner
  * is handed its first lines, which is a use, or once the open failed; a
- * discard, which deletes the sandbox, marks it RELEASED. The task list reads
- * the row of the agent's current session (`sandboxNamedFor`).
+ * discard, which deletes the sandbox, marks it RELEASED. A sweep leaves a
+ * sandbox booting alone, since its boot keeps the last use it began from,
+ * unless the boot began before the sweep's cutoff and never ended. The task
+ * list reads the row of the agent's current session (`sandboxNamedFor`).
+ *
+ * Every write of `state` is guarded on the moves `AGENT_SANDBOX_TRANSITIONS`
+ * declares into the state it writes.
  */
 
-import { and, asc, eq, isNotNull, lt, lte, ne, type SQL, type SQLWrapper, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  lte,
+  or,
+  type SQL,
+  type SQLWrapper,
+  sql,
+} from "drizzle-orm";
 import { Effect, type Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
 import {
   AGENT_SANDBOX_STATE,
+  AGENT_SANDBOX_TRANSITIONS,
   type AgentSandboxState,
   agentSandboxTable,
 } from "../schemas/agent-sandbox.js";
 
 type SandboxUseEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
+
+/** The states a row may move to `to` from, as `AGENT_SANDBOX_TRANSITIONS` declares them. */
+function movesInto(to: AgentSandboxState): AgentSandboxState[] {
+  return Object.values(AGENT_SANDBOX_STATE).filter((from) =>
+    (AGENT_SANDBOX_TRANSITIONS[from] as readonly AgentSandboxState[]).includes(to),
+  );
+}
+
+/** That the row may be written `to`: it stands in a state that moves there, or `to` itself where `stays`. */
+function mayWrite(to: AgentSandboxState, stays: boolean) {
+  return inArray(agentSandboxTable.state, stays ? [to, ...movesInto(to)] : movesInto(to));
+}
+
+/**
+ * That no boot of the sandbox is under way as of `usedBy`: none recorded, or
+ * one begun at or before it, whose launch never said how it ended.
+ */
+function notBootingSince(usedBy: Date) {
+  return or(isNull(agentSandboxTable.bootingSince), lte(agentSandboxTable.bootingSince, usedBy));
+}
 
 /** One use of a sandbox to record: its name, when it was used, and the cutoff a row written since is left at. */
 export interface AgentSandboxUse {
@@ -61,9 +100,9 @@ const upsertOpen = SqlSchema.void({
         .onConflictDoUpdate({
           target: agentSandboxTable.sandboxName,
           set: { agentId, usedAt: at, state: AGENT_SANDBOX_STATE.LIVE },
-          setWhere: sql`${lt(agentSandboxTable.usedAt, writtenBefore)} or ${ne(
-            agentSandboxTable.state,
+          setWhere: sql`${lt(agentSandboxTable.usedAt, writtenBefore)} or ${mayWrite(
             AGENT_SANDBOX_STATE.LIVE,
+            false,
           )}`,
         }),
     ),
@@ -116,6 +155,7 @@ const findReleasable = SqlSchema.findAll({
             : and(
                 eq(agentSandboxTable.state, AGENT_SANDBOX_STATE.LIVE),
                 lte(agentSandboxTable.usedAt, usedBy),
+                notBootingSince(usedBy),
               ),
         )
         .orderBy(asc(agentSandboxTable.usedAt))
@@ -134,8 +174,10 @@ const markReleasing = SqlSchema.findAll({
         .where(
           and(
             eq(agentSandboxTable.sandboxName, sandboxName),
-            eq(agentSandboxTable.state, AGENT_SANDBOX_STATE.LIVE),
+            mayWrite(AGENT_SANDBOX_STATE.RELEASING, false),
             lte(agentSandboxTable.usedAt, usedBy),
+            // Note that a boot keeps the last use it began from, so one under way reads unused.
+            notBootingSince(usedBy),
           ),
         )
         .returning({ sandboxName: agentSandboxTable.sandboxName }),
@@ -194,6 +236,7 @@ const upsertBooting = SqlSchema.void({
         .onConflictDoUpdate({
           target: agentSandboxTable.sandboxName,
           set: { agentId, state: AGENT_SANDBOX_STATE.LIVE, bootingSince: at },
+          setWhere: mayWrite(AGENT_SANDBOX_STATE.LIVE, true),
         }),
     ),
 });
@@ -221,7 +264,12 @@ const markReleased = SqlSchema.void({
       db
         .update(agentSandboxTable)
         .set({ state: AGENT_SANDBOX_STATE.RELEASED, bootingSince: null })
-        .where(eq(agentSandboxTable.sandboxName, sandboxName)),
+        .where(
+          and(
+            eq(agentSandboxTable.sandboxName, sandboxName),
+            mayWrite(AGENT_SANDBOX_STATE.RELEASED, false),
+          ),
+        ),
     ),
 });
 
@@ -234,9 +282,7 @@ const markReleased = SqlSchema.void({
  * apply; null for no session.
  */
 export function sandboxNamedFor(session: SQLWrapper): SQL<string | null> {
-  return sql<
-    string | null
-  >`'agent-sandbox-' || left(encode(sha256(${session}::bytea), 'hex'), 32)`;
+  return sql<string | null>`'agent-sandbox-' || left(encode(sha256(${session}::bytea), 'hex'), 32)`;
 }
 
 /** A boot of the agent's sandbox begun at `at`: its row LIVE, booting since then. */

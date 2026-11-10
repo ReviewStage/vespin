@@ -855,7 +855,14 @@ function CommentEntry({
   );
 }
 
-/** The field a comment's words are edited in, in its place, on the message box: Cancel, then Save. */
+/**
+ * The field a comment's words are edited in, in their place, on the message
+ * box as the field a thread's first comment is written in: the words stay
+ * where they were read, bare on the card with no box around them, and the
+ * box's foot stands under them, its microphone and Cancel beside the round
+ * send, which saves. It takes no files, since an edit changes a comment's
+ * words alone.
+ */
 function CommentEditField({
   value,
   onChange,
@@ -882,15 +889,16 @@ function CommentEditField({
   return (
     <MessageBox
       box={box}
-      look={COMPOSER_LOOK.FIELD}
+      look={COMPOSER_LOOK.BARE}
       className="comment-field comment-editing"
+      data-variant={REPLY_VARIANT.EDIT}
       beforeSend={
         <Button variant={BUTTON_VARIANT.QUIET} size={BUTTON_SIZE.COMPACT} onClick={onCancel}>
           <ReplayUnmask>{COMMENT_WORDS.CANCEL}</ReplayUnmask>
         </Button>
       }
-      // Note that an edit is drawn on the press, which closes the field, so Save is never busy.
-      send={{ label: COMMENT_WORDS.SAVE, inWords: true, empty: false }}
+      // Note that an edit emptied asks to delete the comment, so the send takes a press while empty, and that an edit is drawn on the press, which closes the field, so it is never busy.
+      send={{ label: COMMENT_WORDS.SAVE, empty: false }}
     />
   );
 }
@@ -1193,8 +1201,8 @@ function sameFiles(was: readonly AgentAttachment[], now: readonly AgentAttachmen
   return was.length === now.length && was.every((file, at) => file === now[at]);
 }
 
-/** How a comment's field stands: as a thread's first comment, the card itself, or as a reply under its comments. */
-const REPLY_VARIANT = { FIRST: "first", REPLY: "reply" } as const;
+/** How a comment's field stands: as a thread's first comment, the card itself, as a reply under its comments, or as a comment's words edited in their place (`CommentEditField`). */
+const REPLY_VARIANT = { FIRST: "first", REPLY: "reply", EDIT: "edit" } as const;
 
 type ReplyVariant = (typeof REPLY_VARIANT)[keyof typeof REPLY_VARIANT];
 

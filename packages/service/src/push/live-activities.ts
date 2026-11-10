@@ -431,6 +431,7 @@ function refreshPhone(
       sentAt: new Date(now),
       sentState,
       startedAt: phone.startedAt,
+      activityToken: phone.activityToken,
     });
   });
 }

@@ -20,7 +20,13 @@
  * under the item's key opens one again.
  */
 
-import { INBOX_ASK_STATUS, INBOX_STATUS } from "@repo/features/inbox-wire";
+import {
+  INBOX_ASK_STATUS,
+  INBOX_ASK_STATUS_MOVES,
+  INBOX_STATUS,
+  INBOX_STATUS_MOVES,
+  statusesMovingTo,
+} from "@repo/features/inbox-wire";
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { Effect, Schema } from "effect";
@@ -30,6 +36,9 @@ import { inboxItem } from "../schemas/inbox.js";
 import { inboxMessage } from "../schemas/inbox-message.js";
 
 type SettleEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
+
+/** A message's ask's status, as it was kept. */
+const ASK_STATUS = sql<string>`${inboxMessage.ask} ->> 'status'`;
 
 /** Why an item settled on its own, as its close and its withdrawn ask say it. */
 const INBOX_SETTLED_REASON = {
@@ -77,7 +86,7 @@ const closeOpenItems = SqlSchema.findAll({
             by === SETTLE_BY.TASK
               ? inArray(inboxItem.taskId, ids)
               : inArray(inboxItem.agentId, ids),
-            eq(inboxItem.status, INBOX_STATUS.OPEN),
+            inArray(inboxItem.status, statusesMovingTo(INBOX_STATUS_MOVES, INBOX_STATUS.CLOSED)),
             or(isNotNull(inboxItem.openAskMessageId), eq(inboxItem.needsReply, true)),
           ),
         )
@@ -107,7 +116,12 @@ const withdrawOpenAsks = SqlSchema.void({
         .where(
           and(
             inArray(inboxMessage.itemId, itemIds),
-            sql`${inboxMessage.ask} ->> 'status' = ${INBOX_ASK_STATUS.OPEN}`,
+            inArray(
+              ASK_STATUS,
+              statusesMovingTo(INBOX_ASK_STATUS_MOVES, INBOX_ASK_STATUS.WITHDRAWN, [
+                INBOX_ASK_STATUS.OPEN,
+              ]),
+            ),
           ),
         ),
     ),

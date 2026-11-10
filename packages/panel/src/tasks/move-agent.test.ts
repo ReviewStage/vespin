@@ -23,7 +23,7 @@ import { agentsControl } from "../testing/tasks-control.js";
 import type { AgentsControl } from "./use-agents.js";
 
 /**
- * move-agent.test.ts -- an agent's menu offers Move to › while Bring your own host is on and a Continue of the agent is offered: Cloud and each of the member's devices but the one it runs on, a device not ready dimmed and saying why, and from a device each place saying only pushed work comes along; a pick continues the agent at that place. It is offered nowhere while the agent works, where no Continue is, or with the experiment off.
+ * move-agent.test.ts -- an agent's menu offers Move to › while Bring your own host is on and a Continue of the agent is offered: Cloud and each of the member's devices but the one it runs on, a device not ready dimmed and saying why, and from a device each place saying only pushed work comes along; a pick continues the agent at that place, stopping it first while it writes, and moving nothing where the Stop did not take. It is offered nowhere where no Continue is, or with the experiment off.
  *
  * Synthetic agents and devices throughout.
  */
@@ -59,8 +59,8 @@ const ON_STUDIO: AgentSummary = {
   mac: { name: "Studio", deviceId: STUDIO },
 };
 
-/** Every continue the menu asked, in order. */
-let continued: { agentId: string; runsOn: AgentRunsOnRequest | undefined }[] = [];
+/** Every Stop and continue the menu asked, in order. */
+let continued: { agentId: string; runsOn?: AgentRunsOnRequest | undefined; stop?: true }[] = [];
 
 afterEach(() => {
   continued = [];
@@ -76,6 +76,10 @@ function controlOf(agent: AgentSummary, overrides: Partial<AgentsControl> = {}):
     continueAgent: (agentId, _note, _attachments, runsOn) => {
       continued.push({ agentId, runsOn });
       return Promise.resolve(undefined);
+    },
+    onStop: (agentId) => {
+      continued.push({ agentId, stop: true });
+      return Promise.resolve(true);
     },
     ...overrides,
   });
@@ -159,20 +163,53 @@ test("an agent on a device the service did not name is offered the cloud alone",
   );
 });
 
-test("Move to is offered nowhere while the agent works, where no Continue is offered, or with Bring your own host off", async () => {
+test("an agent still writing is stopped before it moves, each place saying so, and moves nowhere where the Stop did not take", async () => {
   const working = { ...AT_REST, status: AGENT_STATUS.RUNNING };
+  const entry =
+    moveTo(await menuOf(working, controlOf(working))) ?? assert.fail("Move to is offered");
+  assert.equal(entry.items[0]?.detail, "Stops the agent first");
+  entry.items[0]?.onSelect();
+  await act(async () => {
+    for (let tick = 0; tick < 4; tick += 1) await Promise.resolve();
+  });
+  assert.deepEqual(continued, [
+    { agentId: AGENT, stop: true },
+    { agentId: AGENT, runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId: STUDIO } },
+  ]);
+
+  // A second place picked while the Stop is still out moves nothing more.
+  continued = [];
+  const twice =
+    moveTo(await menuOf(working, controlOf(working))) ?? assert.fail("Move to is offered");
+  twice.items[0]?.onSelect();
+  twice.items[0]?.onSelect();
+  await act(async () => {
+    for (let tick = 0; tick < 4; tick += 1) await Promise.resolve();
+  });
+  assert.equal(continued.filter((each) => each.runsOn !== undefined).length, 1);
+
+  continued = [];
+  const refused = controlOf(working, { onStop: () => Promise.resolve(false) });
+  const held = moveTo(await menuOf(working, refused)) ?? assert.fail("Move to is offered");
+  held.items[0]?.onSelect();
+  await act(async () => {
+    for (let tick = 0; tick < 4; tick += 1) await Promise.resolve();
+  });
+  assert.deepEqual(continued, []);
+});
+
+test("Move to is offered nowhere where no Continue is offered, or with Bring your own host off", async () => {
   const otherTasks = controlOf(AT_REST, { agents: [] });
   const noStart = controlOf(AT_REST, { continueAgent: undefined });
   const archived = { ...AT_REST, archivedAt: 2 };
 
   assert.deepEqual(
     [
-      moveTo(await menuOf(working, controlOf(working))),
       moveTo(await menuOf(AT_REST, otherTasks)),
       moveTo(await menuOf(AT_REST, noStart)),
       moveTo(await menuOf(archived, controlOf(archived))),
       moveTo(await menuOf(AT_REST, controlOf(AT_REST), false)),
     ],
-    [undefined, undefined, undefined, undefined, undefined],
+    [undefined, undefined, undefined, undefined],
   );
 });

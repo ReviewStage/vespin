@@ -1837,7 +1837,7 @@ function ownComment(landing?: () => boolean | Promise<boolean>) {
   const press = (label: string) =>
     act(() =>
       [...container.querySelectorAll<HTMLButtonElement>(".comment-editing button")]
-        .find((each) => each.textContent === label)
+        .find((each) => (each.getAttribute("aria-label") ?? each.textContent) === label)
         ?.click(),
     );
   return { ...drawnTab, edit, field, press };

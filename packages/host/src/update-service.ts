@@ -270,6 +270,10 @@ function transition(state: UpdateState, event: UpdateEvent): UpdateState | undef
         : undefined;
     case UPDATE_EVENT.UPDATED:
       return { status: UPDATE_STATUS.UPDATED, ...standing, previousVersion: event.previousVersion };
+    default: {
+      const unhandled: never = event;
+      throw new Error(`Unhandled update event: ${JSON.stringify(unhandled)}`);
+    }
   }
 }
 
@@ -419,6 +423,11 @@ export class UpdateService {
    */
   #repeatingCheck: Fiber.Fiber<unknown> | undefined;
   #firstCheck: Fiber.Fiber<unknown> | undefined;
+  /**
+   * The grace of the install last asked for, replaced by the next one, so an
+   * earlier attempt's grace never frees a later attempt's guard.
+   */
+  #installLapse: Fiber.Fiber<unknown> | undefined;
 
   private constructor(
     options: UpdateServiceOptions,
@@ -491,7 +500,8 @@ export class UpdateService {
       if (!this.#send({ kind: UPDATE_EVENT.INSTALL_LAPSED })) return;
       this.#report("Update install did not restart the app; the restart is offered again");
     });
-    Effect.runSyncWith(this.#services)(
+    this.#installLapse?.interruptUnsafe();
+    this.#installLapse = Effect.runSyncWith(this.#services)(
       Effect.provideService(scheduleOnce(this.#installGraceMs, lapse), Scope.Scope, this.#scope),
     );
   }

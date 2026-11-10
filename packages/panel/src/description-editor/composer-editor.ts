@@ -38,7 +38,7 @@ import {
 import type { EditorProps, EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import { enterKeyHint, enterSends, modEnterSends } from "../enter-sends.js";
-import { pickedRest, spacedAfterChip } from "./chip-spacing.js";
+import { atWordAround, chipOverSelection, spacedChip } from "./chip-spacing.js";
 import {
   COMPOSER_INPUT,
   type ComposerEditorHandle,
@@ -494,23 +494,14 @@ function slashWord(text: string, caret: number): TriggerWord | undefined {
   return { ...mention, end };
 }
 
-/** The `@` word the caret ends: `@` at the start of a word, then up to six words with no bracket, parenthesis, or `@` in them. */
-const AT_WORD = /(^|\s)@((?:[^\s@[\]()]+(?: [^\s@[\]()]+){0,5})?)$/u;
-
-/** A character of an `@` word, which a pick replaces through to the word's end. */
-const AT_WORD_CHARACTER = /[^\s@[\]()]/u;
-
-/** The `@` word the caret ends, as far as it is typed, through to the word's end; nothing in code. */
+/** The `@` word the caret ends, as far as it is typed, through to the word's end (`atWordAround`); nothing in code. */
 function atWord(text: string, caret: number): TriggerWord | undefined {
-  const match = AT_WORD.exec(text.slice(0, caret));
-  if (match === null) return undefined;
-  const query = match[2] ?? "";
-  const start = caret - query.length - 1;
+  const word = atWordAround(text.slice(0, caret), text.slice(caret));
+  if (word === undefined) return undefined;
+  const start = caret - word.query.length - 1;
   // An `@` in code is the code's, as a `/` there is, and as the server reads no mention there.
   if (insideCode(text, start)) return undefined;
-  let end = caret;
-  while (end < text.length && AT_WORD_CHARACTER.test(text[end] ?? "")) end += 1;
-  return { start, query, end: caret + pickedRest(text.slice(caret, end)).length };
+  return { start, query: word.query, end: caret + word.rest };
 }
 
 /**
@@ -1007,27 +998,27 @@ function insertedPicturesAt(
   if (names.length === 0 || !$pos.parent.inlineContent) return false;
   state.pictures = new Set([...state.pictures, ...names]);
   const chips = names.flatMap((name, index) => [
-    ...(index > 0 || needsSpace($pos.nodeBefore, false) ? [schema.text(SPACE)] : []),
+    ...(index > 0 ? [schema.text(SPACE)] : []),
     schema.node(PICTURE_NODE, { name }),
   ]);
   const laid = editor.state.tr.insert(pos, chips);
-  const tr = spacedAfterChip(laid, laid.mapping.map(pos));
+  const tr = spacedChip(laid, pos, laid.mapping.map(pos));
   if (textOf(tr.doc).length > maxLength) return false;
   editor.view.dispatch(tr.setMeta(COMMAND_META, true).setMeta(CHIPPED_META, true).scrollIntoView());
   editor.view.focus();
   return true;
 }
 
-/** The word a trigger found written as the chip given, spaced from what follows (`spacedAfterChip`). */
+/** The word a trigger found written as the chip given, spaced as every chip is (`spacedChip`). */
 function choseChip(editor: Editor, word: ReturnType<typeof triggerAt>, chip: PmNode): void {
   if (word === undefined) return;
   const tr = editor.state.tr.replaceWith(word.from, word.to, chip);
-  editor.view.dispatch(spacedAfterChip(tr, word.from + chip.nodeSize).scrollIntoView());
+  editor.view.dispatch(spacedChip(tr, word.from, word.from + chip.nodeSize).scrollIntoView());
 }
 
 /**
  * A mention made elsewhere laid in where the caret stands, over what is
- * selected, spaced from what follows (`spacedAfterChip`), and the box
+ * selected, spaced as every chip is (`chipOverSelection`), and the box
  * focused; nothing where the box takes no words now, or the words with its
  * link would stand past the bound, as a key typed past it is not written.
  */
@@ -1039,8 +1030,7 @@ function laidInMention(
 ): void {
   if (state.input !== COMPOSER_INPUT.EDITABLE) return;
   const chip = editor.schema.node(MENTION_NODE, { name: mention.name, target: mention.target });
-  const laid = editor.state.tr.replaceSelectionWith(chip, false);
-  const tr = spacedAfterChip(laid, laid.selection.from);
+  const tr = chipOverSelection(editor.state, chip);
   if (textOf(tr.doc).length > maxLength) return;
   editor.view.dispatch(tr.scrollIntoView());
   editor.view.focus();
