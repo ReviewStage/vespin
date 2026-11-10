@@ -28,7 +28,6 @@ import { useSteadyDoor } from "../steady-door.js";
 import { useAddRepository } from "../tasks/add-repository.js";
 import type { AgentFork } from "../tasks/fork-model.js";
 import { useMoveToEntry } from "../tasks/move-agent.js";
-import { markReadItem, type ReadMark } from "../tasks/task-menu-items.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND } from "../tasks/terminal-session.js";
 import {
@@ -51,15 +50,11 @@ import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
  *
  * Every surface that draws an agent offers what `useAgentActions` answers,
  * laid out by `agentMenuGroups` in the one order every menu of the window
- * keeps, Copy, then name and read, then organize, then open elsewhere, then
- * lifecycle, and Delete last and alone: Copy link and Copy transcript ›,
- * Concise or Full, read whole from the service; Rename, which opens its name's field
- * where the surface draws its name, while neither it nor what it stands
- * under is archived, and Mark as unread or Mark as read, for an agent with
- * no task, whose marks are a task's (`agent-read-marks.ts`); Pin or Unpin
- * and Move to section, the reader's own, for an agent with no task, which
- * has a row of its own among the sidebar's tasks (an agent on a task has
- * none, and its tab keeps Pin tab among its tab's keeping); Show terminal,
+ * keeps, Copy, then name, then open elsewhere, then lifecycle, and Delete
+ * last and alone: Copy link and Copy transcript ›, Concise or Full, read
+ * whole from the service; Rename, which opens its name's field where the
+ * surface draws its name, while neither it nor what it stands under is
+ * archived (its tab keeps Pin tab among its tab's keeping); Show terminal,
  * where the platform runs one, and none for an archived agent, whose sandbox
  * takes no shell, which for a local agent opens the Mac's own Terminal in
  * its worktree instead of the relayed tab; Open in Slack, for an agent
@@ -99,12 +94,6 @@ export const AGENT_KEYS: readonly KeyedCommand[] = [
 const COPY_TRANSCRIPT = "Copy transcript";
 const TRANSCRIPT_WAY = { CONCISE: "Concise", FULL: "Full" } as const;
 
-/** A pin as a menu offers it, Pin or Unpin: whether it stands, and the press that sets it or takes it away. */
-interface PinDoor {
-  pinned: boolean;
-  onToggle: () => void;
-}
-
 /**
  * What an agent's menu is built from: each door none where the surface, or
  * the agent, offers no such act, which leaves its item out. A tab's doors
@@ -120,12 +109,6 @@ export interface AgentMenuDoors {
   onCopy?: ((copy: TranscriptCopy) => void) | undefined;
   /** Opens the agent's name's field where the surface draws its name. */
   onRename?: (() => void) | undefined;
-  /** Mark as unread or Mark as read, for an agent with read marks: one with no task. */
-  read?: ReadMark | undefined;
-  /** Pin or Unpin, for an agent with a sidebar row of its own: one with no task, not archived. */
-  agentPin?: PinDoor | undefined;
-  /** Move to section ▸, the reader's own sections, for the same agents (`sidebar-sections.tsx`). */
-  section?: MenuEntry | undefined;
   /** Opens the agent's own Terminal tab in the side panel, adding no shell. */
   onOpenTerminal?: (() => void) | undefined;
   /** Shows the cloud agent's Local tab viewed last in the side panel, opening no new terminal. */
@@ -150,19 +133,18 @@ export interface AgentMenuDoors {
  * The agent's menu, built once for every surface that draws it, in the
  * groups every menu of the window keeps: Copy link, Open in new tab in a
  * browser, and the transcript's two
- * copies; Rename and the read mark; Pin and Move to section; Show terminal,
+ * copies; Rename; Show terminal,
  * Show browser where a phone offers it, Open in task, for an agent drawn
  * apart from its task, and Open in Slack, for one started from Slack;
  * Add repository…, Move to ›, and Archive or Unarchive; and last and alone, Permanently delete. The copies, Show
- * terminal, Open in task, Permanently delete, the read mark, and Pin print
- * ⌥⌘C, ⇧⌥⌘C, ⌘J, ⌘O, ⌘⌫, U, and P only where the chord acts on what the
- * menu acts on (`subject`): the chosen tab, the agent's page, or a sidebar
- * row, whose focus the letters act on. A group with nothing in it is left
+ * terminal, Open in task, and Permanently delete print ⌥⌘C, ⇧⌥⌘C, ⌘J, ⌘O,
+ * and ⌘⌫ only where the chord acts on what the menu acts on (`subject`):
+ * the chosen tab, the agent's page, or a sidebar row. A group with nothing in it is left
  * out, so a surface with few doors draws the few groups it has in the same
  * order.
  */
 export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
-  const { links, onCopy, onRename, read, agentPin, section, onOpenTerminal, onOpenLocal } = doors;
+  const { links, onCopy, onRename, onOpenTerminal, onOpenLocal } = doors;
   const { onOpenInTask } = doors;
   const { onOpenBrowser, onOpenInSlack } = doors;
   const { addRepository, moveTo, archive, deletion, subject } = doors;
@@ -198,19 +180,6 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
   ];
   const named: MenuEntry[] = [
     ...(onRename === undefined ? [] : [commandAction(PANEL_COMMAND.RENAME, onRename, subject)]),
-    ...(read === undefined ? [] : [markReadItem(read, subject)]),
-  ];
-  const organized: MenuEntry[] = [
-    ...(agentPin === undefined
-      ? []
-      : [
-          commandAction(
-            agentPin.pinned ? PANEL_COMMAND.UNPIN_AGENT : PANEL_COMMAND.PIN_AGENT,
-            agentPin.onToggle,
-            subject,
-          ),
-        ]),
-    ...(section === undefined ? [] : [section]),
   ];
   const opened: MenuEntry[] = [
     ...(onOpenTerminal === undefined
@@ -232,7 +201,6 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
   return [
     copies,
     named,
-    organized,
     opened,
     [
       ...(addRepository === undefined ? [] : [addRepository]),
@@ -244,7 +212,7 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
   ].filter((group) => group.length > 0);
 }
 
-/** What an agent offers on itself wherever it is drawn: the doors of its menu that are the agent's own, which a surface adds its own to (`read`, `agentPin`, `section`). */
+/** What an agent offers on itself wherever it is drawn: the doors of its menu that are the agent's own, which a surface adds its own to. */
 export type AgentDoors = Pick<
   AgentMenuDoors,
   | "onCopy"
@@ -263,9 +231,8 @@ export type AgentDoors = Pick<
 /**
  * The doors an agent offers that its sidebar row leaves out, each with why,
  * and the one place that says so. Every other door this hook answers
- * stands in the row's menu (`sidebar-agent.tsx`), which
- * `sidebar-agent.test.ts` holds: a door added to `AgentDoors` either is
- * placed on the row or is named here, or that test fails.
+ * stands in an agent row's menu (`agent-list-row.tsx`): a door added to
+ * `AgentDoors` either is placed on the row or is named here.
  */
 const NOT_ON_A_ROW = {
   onOpenTerminal: "The terminal opens in a side panel, and a row has none.",

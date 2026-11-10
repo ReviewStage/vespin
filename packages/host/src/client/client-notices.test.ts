@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { AGENT_STATUS, type AgentStatus, type TasklessAgent } from "@repo/features/agent-wire";
+import { AGENT_STATUS, type AgentStatus, type ListedAgent } from "@repo/features/agent-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { TaskSummary } from "@repo/features/task-wire";
 import { Deferred, Effect, Exit, Layer, Scope } from "effect";
 import { type AgentNotice, AgentNoticeDoors, NOTICE_KIND } from "../agent-notices.js";
 import { type AppHostRead, type AppTranscript, OWN_TRANSCRIPT } from "../app-state.js";
@@ -166,21 +167,32 @@ it.effect("a workspaces read that dies is reported, to Sentry as well, rather th
   }).pipe(Effect.provide(sentry.layer));
 });
 
-/** An agent with no task, as the task list carries it beside the tasks. */
-const TASKLESS: TasklessAgent = {
+/** The task the agent works on, as the task list carries it. */
+const TASK: TaskSummary = {
+  id: "a1b2c3d4-0000-4000-8000-0000000000bb",
+  workspaceId: "workspace-personal",
+  name: "Ship the chime",
+  createdAt: 1,
+  updatedAt: 1,
+  repository: null,
+};
+
+/** An agent on the task, as the task list carries it beside the tasks. */
+const AGENT: ListedAgent = {
   id: "a1b2c3d4-0000-4000-8000-0000000000aa",
-  planId: null,
+  planId: TASK.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: null,
   createdAt: 1,
   status: AGENT_STATUS.RUNNING,
   turnId: "turn-1",
-  automationId: null,
   workspaceId: "workspace-personal",
   repository: null,
-  activityAt: 1,
 };
+
+/** The task list holding the task and its agent as `agent`. */
+const listing = (agent: ListedAgent) => ({ tasks: [TASK], taskAgents: [agent] });
 
 /** A transcript as the host holds it once `pages` pages were read, the last saying the agent, or the worker, stands at `status`. */
 function transcriptAt(status: AgentStatus, pages = 1): AppHostRead<AppTranscript> {
@@ -196,10 +208,10 @@ it.effect(
       const scope = yield* Scope.make();
       const { state } = yield* linked(scope, () => Effect.void, []);
       const settled = Effect.repeat(Effect.yieldNow, { times: 20 });
-      state.update({ tasks: { ...state.snapshot().tasks, tasklessAgents: [TASKLESS] } });
+      state.update({ tasks: { ...state.snapshot().tasks, ...listing(AGENT) } });
       yield* settled;
       const held = (...[worker, own]: readonly AgentStatus[]) => ({
-        [TASKLESS.id]: {
+        [AGENT.id]: {
           "call-7": transcriptAt(worker ?? AGENT_STATUS.RUNNING),
           ...(own === undefined ? undefined : { [OWN_TRANSCRIPT]: transcriptAt(own) }),
         },
@@ -217,11 +229,11 @@ it.effect(
       yield* settled;
       state.update({
         [LIVE_READ.TRANSCRIPT]: {
-          [TASKLESS.id]: { [OWN_TRANSCRIPT]: transcriptAt(AGENT_STATUS.COMPLETED, 2) },
+          [AGENT.id]: { [OWN_TRANSCRIPT]: transcriptAt(AGENT_STATUS.COMPLETED, 2) },
         },
       });
       yield* settled;
-      assert.deepEqual(state.snapshot().agents.unseen, [TASKLESS.id]);
+      assert.deepEqual(state.snapshot().agents.unseen, [AGENT.id]);
 
       yield* Scope.close(scope, Exit.void);
     }),
@@ -235,7 +247,7 @@ it.effect(
       const { state } = yield* linked(scope, () => Effect.void, []);
       const settled = Effect.repeat(Effect.yieldNow, { times: 20 });
       const own = (read: AppHostRead<AppTranscript>) => ({
-        [LIVE_READ.TRANSCRIPT]: { [TASKLESS.id]: { [OWN_TRANSCRIPT]: read } },
+        [LIVE_READ.TRANSCRIPT]: { [AGENT.id]: { [OWN_TRANSCRIPT]: read } },
       });
 
       // Read as the agent's last turn ended, and let go before its next began.
@@ -243,7 +255,7 @@ it.effect(
       state.update(own(ended));
       yield* settled;
       state.update({
-        tasks: { ...state.snapshot().tasks, tasklessAgents: [{ ...TASKLESS, turnId: "turn-2" }] },
+        tasks: { ...state.snapshot().tasks, ...listing({ ...AGENT, turnId: "turn-2" }) },
       });
       yield* settled;
       // Held again, the host lays what it held anew, not yet caught up, as many pages read as before.
@@ -258,7 +270,7 @@ it.effect(
 
       state.update(own(transcriptAt(AGENT_STATUS.COMPLETED, 3)));
       yield* settled;
-      assert.deepEqual(state.snapshot().agents.unseen, [TASKLESS.id]);
+      assert.deepEqual(state.snapshot().agents.unseen, [AGENT.id]);
 
       yield* Scope.close(scope, Exit.void);
     }),
@@ -274,10 +286,10 @@ it.effect(
       const worker = { "call-7": transcriptAt(AGENT_STATUS.RUNNING) };
       const held = (own?: AppHostRead<AppTranscript>) => ({
         [LIVE_READ.TRANSCRIPT]: {
-          [TASKLESS.id]: own === undefined ? worker : { ...worker, [OWN_TRANSCRIPT]: own },
+          [AGENT.id]: own === undefined ? worker : { ...worker, [OWN_TRANSCRIPT]: own },
         },
       });
-      state.update({ tasks: { ...state.snapshot().tasks, tasklessAgents: [TASKLESS] } });
+      state.update({ tasks: { ...state.snapshot().tasks, ...listing(AGENT) } });
       yield* settled;
 
       state.update(held(transcriptAt(AGENT_STATUS.RUNNING, 1)));
@@ -288,7 +300,7 @@ it.effect(
       // Read anew once the turn ended, its first page counted as the one let go was.
       state.update(held(transcriptAt(AGENT_STATUS.COMPLETED, 1)));
       yield* settled;
-      assert.deepEqual(state.snapshot().agents.unseen, [TASKLESS.id]);
+      assert.deepEqual(state.snapshot().agents.unseen, [AGENT.id]);
 
       yield* Scope.close(scope, Exit.void);
     }),

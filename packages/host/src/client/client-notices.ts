@@ -159,25 +159,6 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
     open: presenter.openPlace,
     report,
   });
-  // A note that throws is reported rather than left to end the fiber, which would never resume.
-  yield* Effect.forkScoped(
-    Stream.runForEach(
-      Stream.changes(Stream.map(state.changes, (document) => document.tasks.tasklessAgents)),
-      (agents) =>
-        Effect.catchDefect(
-          Effect.withErrorReporting(
-            Effect.sync(() => notices.observeAgents(agents ?? [])),
-            { defectsOnly: true },
-          ),
-          (defect) =>
-            Effect.sync(() =>
-              report(
-                `the agents with no task could not be noted: ${defect instanceof Error ? defect.message : String(defect)}`,
-              ),
-            ),
-        ),
-    ),
-  );
   // Every agent on a task, the archived left out, while the list is followed
   // live, is the notices' to hold in place of the watch's own reads, and a
   // task the list no longer holds takes its agents with it.

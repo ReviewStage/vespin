@@ -247,9 +247,7 @@ function tabActionGroups(doors: TabDoors): TabActionGroups {
  * menu (`agentMenuGroups`) over the doors the tab has, which act on what it
  * shows, or the task's document menu on the Plan tab, and none of the tab's
  * own keeping, Close, Close others, and Pin. An agent's own page offers the same
- * on its title's right-click (`desktop-agent-page.tsx`), so a taskless agent is
- * acted on as a task's is. Note that the tab's pin is not the agent's,
- * which a taskless agent's row has, so it is left out of the menu's doors.
+ * on its title's right-click (`desktop-agent-page.tsx`).
  */
 function contentActionGroups(doors: Omit<TabDoors, "handed">): MenuEntry[][] {
   const { onCopy, onRename, onOpenTerminal, onOpenInTask, archive, deletion, links, subject } =

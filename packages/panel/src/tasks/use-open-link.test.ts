@@ -375,10 +375,9 @@ const ARCHIVED = { ...HOLDING, agentIds: [], heldIds: [AGENT] };
 const TASK_PAGE: PagesHere = { kind: HERE.TASK, taskId: TASK, ...HOLDING };
 const AGENT_PAGE: PagesHere = { kind: HERE.AGENT, agentId: AGENT, ...HOLDING };
 
-/** What the window lists: the task, and an agent on no task, which opened the pull request numbered 43. */
+/** What the window lists: the task, whose agent opened the pull request at `URL`. */
 const WINDOW_LISTED: Listed = {
   tasks: [{ taskId: TASK, pullRequests: [{ url: URL, agentId: AGENT }] }],
-  agents: [{ id: OTHER, pullRequest: { url: "https://github.com/acme/relay/pull/43" } }],
 };
 
 function go(link: ReadLink): Route {
@@ -513,12 +512,6 @@ test.each<[string, string, boolean, Route]>([
     `${URL}#issuecomment-1`,
     true,
     go({ workspace: "", place: { kind: LINK_PLACE.CHANGES, planId: TASK, agentId: AGENT } }),
-  ],
-  [
-    "the window: a pull request a listed agent on no task opened, to its Pull request tab",
-    "https://github.com/acme/relay/pull/43",
-    true,
-    go({ workspace: "", place: { kind: LINK_PLACE.CHANGES, agentId: OTHER } }),
   ],
   [
     "the window: a pull request nothing listed names, to the browser",

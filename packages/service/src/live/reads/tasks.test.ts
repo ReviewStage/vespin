@@ -78,7 +78,7 @@ import { Clock, Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { agentSummary, summaryAccounts, summaryDevices } from "../../agents/coder-host/status.js";
 import { continuedByOf, standingsOf } from "../../agents/coder-host/stop.js";
-import { listTasklessAgents, withTaskAgents } from "../../agents/task-agents.js";
+import { withTaskAgents } from "../../agents/task-agents.js";
 import { TURN_FAILURE } from "../../core.js";
 import { tasksRead } from "./tasks.js";
 
@@ -280,10 +280,7 @@ function countedOf(plan: HeldTaskSummary): TaskSummary {
 const heldList = (userId: string) =>
   Effect.gen(function* () {
     const tasks = yield* listTasks(userId);
-    return {
-      plans: (yield* withTaskAgents(userId, tasks)).map(countedOf),
-      planlessAgents: yield* listTasklessAgents(userId, { includeArchived: true }),
-    };
+    return { plans: (yield* withTaskAgents(userId, tasks)).map(countedOf) };
   });
 
 const PUBLISHED = {
