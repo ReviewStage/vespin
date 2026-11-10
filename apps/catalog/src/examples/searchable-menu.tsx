@@ -63,6 +63,10 @@ import { CatalogSection } from "../section";
  * sheet's place and Fast switching where it stands.
  */
 
+const NOW = Date.now();
+const HOUR = 60 * 60_000;
+const DAY = 24 * HOUR;
+
 /** The last line a ChatGPT-paid agent's model menu ends on: who pays, Manage usage set apart at its end, and the plan's usage under it, full width. */
 const PLAN_LINE: MenuLastLine = {
   words: "Your Codex plan",
@@ -75,8 +79,8 @@ const PLAN_LINE: MenuLastLine = {
     <UsageMeters
       width={USAGE_METERS_WIDTH.FILL}
       rows={[
-        { label: "5-hour", usedPercent: 12, resets: "in 4h" },
-        { label: "Weekly", usedPercent: 64, resets: "in 5d" },
+        { label: "5-hour", usedPercent: 12, resetsAt: NOW + 4 * HOUR },
+        { label: "Weekly", usedPercent: 64, resetsAt: NOW + 5 * DAY },
       ]}
     />
   ),

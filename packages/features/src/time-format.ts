@@ -180,6 +180,16 @@ export function dueText(at: number, now: number): string {
   return at > now && at - now < WEEK_MS ? WEEKDAY_AND_TIME.format(at) : dateText(at, now, true);
 }
 
+/**
+ * When a moment to come comes, as a row counts down to it: "in 2h" inside a
+ * day, since a clock alone leaves the reader to work out how near it is,
+ * and past a day as `dueText` says it, "Thu 9:00 AM", then "Nov 20", since
+ * "in 3d" leaves the hour to guess.
+ */
+export function untilText(at: number, now: number): string {
+  return at - now < DAY_MS ? distanceText(at - now) : dueText(at, now);
+}
+
 /** A day and a time in the fewest words, as a version is named: "Oct 11, 2:14 PM". */
 export function dayAndTimeText(at: number): string {
   return DAY_AND_TIME.format(at);
