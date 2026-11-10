@@ -794,15 +794,35 @@ function CommentEntry({
       deleting.ask();
       return;
     }
-    // Note that the edit is drawn by the host on the press, so the field closes at once; words refused come back as its draft (`use-description-comments.ts`), which Edit opens on again.
+    // Note that the edit is drawn by the host on the press, so the field closes at once; words refused come back as its draft (`use-description-comments.ts`), and its files here, which Edit opens on again.
     setEditing(undefined);
     edited.update(() => EMPTY_DRAFT);
-    void doors.control.act(thread.id, {
-      action: DESCRIPTION_COMMENT_ACTION.EDIT,
-      entry: entry.id,
-      words,
-      ...filesChanged(entry.files ?? [], files),
-    });
+    const carried = entry.files ?? [];
+    void doors.control
+      .act(thread.id, {
+        action: DESCRIPTION_COMMENT_ACTION.EDIT,
+        entry: entry.id,
+        words,
+        ...filesChanged(carried, files),
+      })
+      .then((landed) => {
+        if (landed) return;
+        const kept = new Set(files.kept.map((file) => file.attachmentId));
+        edited.update((was) => ({
+          ...was,
+          attachments: files.added,
+          dropped: carried.map((file) => file.attachmentId).filter((id) => !kept.has(id)),
+        }));
+      });
+  };
+  // The files the edit changes, kept in its draft beside its words.
+  const editFiles: EditFilesHolder = {
+    files: { dropped: edited.draft.dropped ?? [], attachments: edited.draft.attachments },
+    update: (next) =>
+      edited.update((was) => {
+        const files = next({ dropped: was.dropped ?? [], attachments: was.attachments });
+        return { ...was, dropped: files.dropped, attachments: files.attachments };
+      }),
   };
   return (
     <div className="comment-entry relative py-tight-gap" data-entry={entry.id}>
@@ -857,6 +877,7 @@ function CommentEntry({
           <CommentEditField
             planId={doors.control.planId}
             files={entry.files ?? NO_FILES}
+            held={editFiles}
             value={editing}
             onChange={write}
             onSave={save}
@@ -881,37 +902,45 @@ function CommentEditField({
   planId,
   files,
   attached = NO_ATTACHMENTS,
+  held: handed,
   value,
   onChange,
   onSave,
   onCancel,
 }: {
   planId: string;
-  /** The files the service keeps for the comment as the edit opens. */
+  /** The files the service keeps for the comment. */
   files: readonly DescriptionCommentFile[];
   /** The files the window holds for it as the edit opens, a held comment's not yet sent; none for a posted one's. */
   attached?: readonly AgentAttachment[];
+  /** Where the files the edit changes are kept, as its words are, so Cancel, Esc, or a save refused finds them as the edit opens again; the field keeps its own where none is handed. */
+  held?: EditFilesHolder | undefined;
   value: string;
   onChange: (words: string) => void;
   /** Saves the words, with the files the field holds. */
   onSave: (files: EditedFiles) => void;
   onCancel: () => void;
 }): React.JSX.Element {
+  const [own, setOwn] = useState<EditFiles>({ dropped: [], attachments: attached });
+  const held = handed ?? { files: own, update: setOwn };
   // The comment's own files the edit keeps, which their × takes off.
-  const [kept, setKept] = useState(files);
+  const kept = files.filter((file) => !held.files.dropped.includes(file.attachmentId));
   // Why the last files handed to the field did not all come; nothing once they did.
   const [refusal, setRefusal] = useState<string | undefined>(undefined);
-  // The files added after them, which a held comment's edit opens holding, so they are held to a message's bounds together.
-  const [held, setHeld] = useState(attached);
+  // Note that the files added are held with those kept, so the two are held to a message's bounds together.
   const added = useAttachedFiles({
     onRefusal: setRefusal,
     most: AGENT_BOUNDS.MAX_ATTACHMENTS - kept.length,
-    holder: { attachments: held, update: setHeld },
+    holder: {
+      attachments: held.files.attachments,
+      update: (next) => held.update((was) => ({ ...was, attachments: next(was.attachments) })),
+    },
   });
   const remove = (index: number) => {
     setRefusal(undefined);
-    if (index < kept.length) setKept((was) => was.filter((_, at) => at !== index));
-    else added.remove(index - kept.length);
+    const file = kept[index];
+    if (file === undefined) added.remove(index - kept.length);
+    else held.update((was) => ({ ...was, dropped: [...was.dropped, file.attachmentId] }));
   };
   const save = () => {
     if (added.reading) return;
@@ -1018,6 +1047,18 @@ function CommentEditField({
 interface EditedFiles {
   readonly kept: readonly DescriptionCommentFile[];
   readonly added: readonly AgentAttachment[];
+}
+
+/** The files an edit changes as it stands open: the comment's own taken off, by their ids, and those added. */
+interface EditFiles {
+  readonly dropped: readonly string[];
+  readonly attachments: readonly AgentAttachment[];
+}
+
+/** Where an edit's files are kept while it stands open, and how they change. */
+interface EditFilesHolder {
+  readonly files: EditFiles;
+  readonly update: (next: (was: EditFiles) => EditFiles) => void;
 }
 
 /** A comment that carries no files. */

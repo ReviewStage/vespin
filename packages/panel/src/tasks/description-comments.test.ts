@@ -1947,7 +1947,8 @@ test("an edit's words outlast Cancel and Esc, come back as Edit opens it again, 
   );
 });
 
-test("an edit takes a comment's file off by its \u00d7 and adds one picked by its +, saving the files kept by their ids and the file added", async () => {
+/** The reader's own comment carrying two files, its Edit opened, with the files the field holds and a press of Save. */
+function editWithFiles(landing?: () => boolean | Promise<boolean>) {
   fakeActs({
     act: (request: AnyAct): Promise<FakeActAnswer> =>
       Promise.resolve(
@@ -1972,34 +1973,57 @@ test("an edit takes a comment's file off by its \u00d7 and adds one picked by it
       ],
     })),
   };
-  const { container, asked } = drawn("list", [withFiles]);
-  act(() =>
-    container.querySelector<HTMLButtonElement>('button[aria-label="Comment actions"]')?.click(),
-  );
-  act(() =>
-    [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
-      .find((each) => each.textContent === "Edit")
-      ?.click(),
-  );
-  const field = container.querySelector(".comment-editing") ?? assert.fail("no edit field");
+  const drawnTab = drawn("list", [withFiles], landing);
+  const { container } = drawnTab;
+  const field = () => container.querySelector(".comment-editing") ?? assert.fail("no edit field");
+  const edit = () => {
+    act(() =>
+      container.querySelector<HTMLButtonElement>('button[aria-label="Comment actions"]')?.click(),
+    );
+    act(() =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+        .find((each) => each.textContent === "Edit")
+        ?.click(),
+    );
+  };
+  const held = () =>
+    [...field().querySelectorAll('[aria-label="Attached files"] > li')].map(attachmentChipName);
+  const change = async () => {
+    act(() =>
+      field().querySelector<HTMLButtonElement>('button[aria-label="Remove old.txt"]')?.click(),
+    );
+    await pickFiles(field(), [new File(["new\n"], "new.txt", { type: "text/plain" })]);
+  };
+  const save = () =>
+    act(async () => field().querySelector<HTMLButtonElement>('button[aria-label="Save"]')?.click());
+  return { ...drawnTab, kept, edit, held, change, save };
+}
 
-  act(() => field.querySelector<HTMLButtonElement>('button[aria-label="Remove old.txt"]')?.click());
-  await pickFiles(field, [new File(["new\n"], "new.txt", { type: "text/plain" })]);
-  assert.deepEqual(
-    [...field.querySelectorAll('[aria-label="Attached files"] > li')].map(attachmentChipName),
-    ["kept.txt", "new.txt"],
-  );
-  await act(async () =>
-    field.querySelector<HTMLButtonElement>('button[aria-label="Save"]')?.click(),
-  );
+test("an edit takes a comment's file off by its \u00d7 and adds one picked by its +, saving the files kept by their ids and the file added", async () => {
+  const { asked, kept, edit, held, change, save } = editWithFiles();
+  edit();
+  await change();
+  assert.deepEqual(held(), ["kept.txt", "new.txt"]);
+  await save();
 
-  const [edit] = asked;
-  assert.ok(edit?.action.action === DESCRIPTION_COMMENT_ACTION.EDIT);
-  assert.deepEqual(edit.action.keep, [kept]);
+  const [sent] = asked;
+  assert.ok(sent?.action.action === DESCRIPTION_COMMENT_ACTION.EDIT);
+  assert.deepEqual(sent.action.keep, [kept]);
   assert.deepEqual(
-    edit.action.attachments?.map((file) => [file.name, file.data]),
+    sent.action.attachments?.map((file) => [file.name, file.data]),
     [["new.txt", Buffer.from("new\n").toString("base64")]],
   );
+});
+
+test("an edit refused opens again on the files it took off and added, as on its words", async () => {
+  const { edit, held, change, save } = editWithFiles(() => false);
+  edit();
+  await change();
+  await save();
+  for (let round = 0; round < 2; round += 1) await act(() => Promise.resolve());
+
+  edit();
+  assert.deepEqual(held(), ["kept.txt", "new.txt"]);
 });
 
 test("an edit's field closes on Save, before the service answers", () => {
