@@ -34,6 +34,7 @@ import { DesignB } from "./design-b";
 import { DesignC } from "./design-c";
 import { DesignD } from "./design-d";
 import { DesignE } from "./design-e";
+import { DesignF } from "./design-f";
 import { FRAME, type Frame } from "./inbox-list";
 import { APPROXIMATIONS } from "./parts";
 
@@ -43,6 +44,7 @@ const DESIGN = {
   C: "c",
   D: "d",
   E: "e",
+  F: "f",
 } as const;
 
 type Design = (typeof DESIGN)[keyof typeof DESIGN];
@@ -86,6 +88,13 @@ const DESIGNS: Record<
       "No separate threads: the Inbox lists agents in Inbox, Running, Hibernating and Archived. A row opens the chat at its newest line; asks sit in a Needs you card over the message box, paged, picks going with your next message; Highlights keeps every ask; a finished turn ends in a Done card.",
     Render: DesignE,
   },
+  [DESIGN.F]: {
+    label: "F · Threads in chat",
+    title: "F · Slack-style threads in the agent's chat",
+    summary:
+      "E's sidebar (Needs you, Done, Running, Scheduled, Archived), each agent's open asks under it. In the chat each ask is a compact anchor; a thread drills into the chat column (or opens inline), the agent's head staying over it and the right panel keeping the PR and pages. A bar over the composer says what needs you; Threads (n) finds any thread.",
+    Render: DesignF,
+  },
 };
 
 const STATES: readonly AgentState[] = [
@@ -104,14 +113,30 @@ interface View {
   readonly state: AgentState;
   readonly frame: Frame;
   readonly dark: boolean;
+  /** Whether design F opens a thread inline in the chat rather than in the column. */
+  readonly inline: boolean;
 }
+
+/** Where design F opens a thread, as its variant switch and the address say it. */
+const THREADS_OPEN = {
+  COLUMN: "column",
+  INLINE: "inline",
+} as const;
+
+type ThreadsOpen = (typeof THREADS_OPEN)[keyof typeof THREADS_OPEN];
 
 function readView(): View {
   const params = new URLSearchParams(window.location.search);
   const design = Object.values(DESIGN).find((each) => each === params.get("design")) ?? DESIGN.A;
   const state = STATES.find((each) => each === params.get("state")) ?? AGENT_STATE.WORKING;
   const frame = params.get("frame") === FRAME.DESKTOP ? FRAME.DESKTOP : FRAME.PHONE;
-  return { design, state, frame, dark: params.get("theme") !== THEME.LIGHT };
+  return {
+    design,
+    state,
+    frame,
+    dark: params.get("theme") !== THEME.LIGHT,
+    inline: params.get("threads") === THREADS_OPEN.INLINE,
+  };
 }
 
 function writeView(view: View): void {
@@ -120,6 +145,7 @@ function writeView(view: View): void {
     state: view.state,
     frame: view.frame,
     theme: view.dark ? THEME.DARK : THEME.LIGHT,
+    threads: view.inline ? THREADS_OPEN.INLINE : THREADS_OPEN.COLUMN,
   });
   window.history.replaceState(null, "", `?${params.toString()}`);
 }
@@ -197,6 +223,19 @@ export function Prototype(): React.JSX.Element {
               value={view.state}
               onChange={(next) => change({ state: next })}
             />
+            {view.design === DESIGN.F ? (
+              <ChoiceBar<ThreadsOpen>
+                label="Thread opens"
+                look={CHOICE_BAR_LOOK.SEGMENTED}
+                size={CHOICE_BAR_SIZE.COMPACT}
+                items={[
+                  { value: THREADS_OPEN.COLUMN, label: "Thread opens in the column" },
+                  { value: THREADS_OPEN.INLINE, label: "Inline" },
+                ]}
+                value={view.inline ? THREADS_OPEN.INLINE : THREADS_OPEN.COLUMN}
+                onChange={(next) => change({ inline: next === THREADS_OPEN.INLINE })}
+              />
+            ) : null}
             <Stack gap={GAP.NONE}>
               <Text variant={TEXT_VARIANT.LABEL}>{design.title}</Text>
               {onPhone ? null : (
@@ -209,7 +248,12 @@ export function Prototype(): React.JSX.Element {
         </header>
         <main className="inbox-proto-stage">
           <div className="inbox-proto-frame" data-frame={frame}>
-            <Render key={`${view.design}-${frame}`} frame={frame} state={view.state} />
+            <Render
+              key={`${view.design}-${frame}-${view.inline}`}
+              frame={frame}
+              state={view.state}
+              threadsInline={view.inline}
+            />
           </div>
         </main>
         {onPhone ? null : (

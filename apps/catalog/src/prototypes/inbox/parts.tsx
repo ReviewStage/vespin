@@ -866,6 +866,7 @@ export function ChatTranscript({
   onFork,
   onOpenThread,
   threadTitle,
+  renderItem,
 }: {
   items: readonly ChatItem[];
   state: AgentState;
@@ -875,6 +876,8 @@ export function ChatTranscript({
   onFork: (id: string) => void;
   onOpenThread?: ((id: ThreadId) => void) | undefined;
   threadTitle: (id: ThreadId) => string;
+  /** A line of the caller's own in an item's place, design F's anchors and quiet lines; the chat's own line where it answers nothing. */
+  renderItem?: ((item: ChatItem) => ReactNode) | undefined;
 }): React.JSX.Element {
   const list = useRef<HTMLUListElement>(null);
   const count = items.length;
@@ -897,13 +900,15 @@ export function ChatTranscript({
           data-side={SENT_KINDS.has(item.kind) ? "end" : undefined}
           data-highlight={highlight !== undefined && item.thread === highlight ? "" : undefined}
         >
-          <ChatLine
-            item={item}
-            forked={forked.has(item.id)}
-            onFork={() => onFork(item.id)}
-            onOpenThread={onOpenThread}
-            threadTitle={threadTitle}
-          />
+          {renderItem?.(item) ?? (
+            <ChatLine
+              item={item}
+              forked={forked.has(item.id)}
+              onFork={() => onFork(item.id)}
+              onOpenThread={onOpenThread}
+              threadTitle={threadTitle}
+            />
+          )}
         </li>
       ))}
       {state === AGENT_STATE.WORKING ? (

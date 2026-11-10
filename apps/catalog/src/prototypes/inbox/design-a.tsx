@@ -53,6 +53,8 @@ export type Place =
 export interface DesignProps {
   readonly frame: Frame;
   readonly state: AgentState;
+  /** Whether design F opens a thread inline in the chat rather than in the column; the others take no notice. */
+  readonly threadsInline?: boolean;
 }
 
 /** A pane's head: Back where the frame has somewhere to go back to, the title, and its ⋯. */

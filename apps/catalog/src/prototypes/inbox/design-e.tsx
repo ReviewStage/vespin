@@ -168,7 +168,7 @@ function RowMeta({ agent }: { agent: ListedAgent }): React.JSX.Element {
 }
 
 /** One agent's row: the blue dot where it needs you or the tick where it finished unread, its name bold while either stands. */
-function AgentRow({
+export function AgentRow({
   agent,
   needsYou,
   current,

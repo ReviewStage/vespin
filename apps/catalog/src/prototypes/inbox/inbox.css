@@ -262,3 +262,22 @@
   border-left: 1px solid var(--ui-color-border);
   background: var(--ui-color-sidebar);
 }
+
+/* Design F's right panel, wide enough for a PR and a page, its screenshot, and a sheet that scrolls. */
+.inbox-proto-side[data-wide] {
+  width: 380px;
+}
+
+.inbox-proto-shot {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  height: auto;
+  border-radius: var(--ui-radius-8);
+  border: 1px solid var(--ui-color-border);
+}
+
+.inbox-proto-sheet-body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
