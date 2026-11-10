@@ -10,6 +10,7 @@ import { latestTurnsOf } from "@repo/database/models/message-reads";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import type { StoreWriter } from "@repo/database/models/writer";
 import { Effect, Option, Result } from "effect";
+import { SqlClient } from "effect/sql";
 import {
   HOSTED_REFUSAL,
   type HostedRefusal,
@@ -64,11 +65,16 @@ export const clearedAgent = /* @__PURE__ */ Effect.fn("web/clearedAgent")(functi
     if (sessionId !== undefined && !(yield* runnerHalted(agent, runtime, sessionId))) {
       return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     }
-    // A wakeup the agent booked belongs to the session let go, so it goes once nothing can refuse the clear.
-    yield* hostedStoreOrUnavailable(cancelAgentWakeup(agent.id));
-    yield* hostedStoreOrUnavailable(recordAgentNativeSession(agent.userId, agent.id, null));
+    // Note that the session is let go, its wakeup with it, and the mark written in one transaction, so a
+    // failed write leaves the session as it stood rather than a fresh one with no mark where it began.
     const store = yield* writer;
-    const marked = yield* hostedStoreOrUnavailable(store.markSessionCleared(target));
+    const letGo = Effect.gen(function* () {
+      yield* cancelAgentWakeup(agent.id);
+      yield* recordAgentNativeSession(agent.userId, agent.id, null);
+      return yield* store.markSessionCleared(target);
+    });
+    const client = yield* SqlClient.SqlClient;
+    const marked = yield* hostedStoreOrUnavailable(client.withTransaction(letGo));
     if (Result.isFailure(marked)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   });
   // Note that messages that kept the claim past a send's own wait read as an agent at work.
