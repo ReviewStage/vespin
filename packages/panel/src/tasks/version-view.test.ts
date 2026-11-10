@@ -9,6 +9,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
 import { KEPT, notKept } from "../act.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import { STANDING_TOAST, standingToastWords } from "../testing/toast.js";
 import { ToastHost, type ToastNotice, useToast } from "../toast.js";
 import { HISTORY_READ } from "./use-description-history.js";
 import { sayRestored, useVersionRestore, VersionView } from "./version-view.js";
@@ -98,16 +99,14 @@ function restoreButton(): HTMLButtonElement {
 
 /** What each toast standing says, leaving out those on their way out. */
 function standing(): string[] {
-  return [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-    (words) => words.textContent ?? "",
-  );
+  return standingToastWords();
 }
 
 /** The Undo on the toasts, or nothing where none stands. */
 function undoButton(): HTMLButtonElement | undefined {
-  return [
-    ...document.querySelectorAll<HTMLButtonElement>(".ui-toast:not([data-leaving]) button"),
-  ].find((button) => button.textContent === "Undo");
+  return [...document.querySelectorAll<HTMLButtonElement>(`${STANDING_TOAST} button`)].find(
+    (button) => button.textContent === "Undo",
+  );
 }
 
 test("a restore with a version before it says so with an Undo, which restores that version and sends the toast away", async () => {

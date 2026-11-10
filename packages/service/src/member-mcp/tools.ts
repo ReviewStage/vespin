@@ -738,12 +738,12 @@ const ListAgentsInputSchema = Schema.Struct({
 const MEMBER_LIST_AGENTS_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.LIST_AGENTS,
   description:
-    "List the coding agents of a workspace the member belongs to, on any task or none and " +
+    "List the coding agents of a workspace the member belongs to, on any task and " +
     "started by any member: each with its id, its title (how the member sees it named), the " +
     "model and effort it runs on with the model's name to say it by, its status " +
     `(${Object.values(AGENT_STATUS).join(", ")}) and why where it failed, its repository and the ` +
     "branch its sandbox is on if a turn has ended, one line of what it last did, its task (id " +
-    "and name; null for an agent on no task), and whether it is archived; the newest started " +
+    "and name; null for one the member cannot open), and whether it is archived; the newest started " +
     "first, at most " +
     `${WORKSPACE_AGENTS_LIST_LIMIT} a page, with nextOffset where more stand, which offset ` +
     "reads the next page by. Pass words to search by words of an agent's title or its task's " +
@@ -856,11 +856,10 @@ const ReadPageInputSchema = Schema.Struct({
 const MEMBER_READ_PAGE_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.READ_PAGE,
   description:
-    "Read a page an agent showed, by the page's id, on a task the member can open or on an " +
-    "agent of theirs with no task, in whichever of the member's workspaces it stands: its " +
+    "Read a page an agent showed, by the page's id, on a task the member can open, in " +
+    "whichever of the member's workspaces it stands: its " +
     "title, the version read (the newest unless you name one) and the newest there is, its " +
-    "task, or, for a page an agent on no task showed on itself, that agent, " +
-    `and its HTML as it stands, cut on a line at ${READ_PAGE_CHARS} characters with ` +
+    `task, and its HTML as it stands, cut on a line at ${READ_PAGE_CHARS} characters with ` +
     "how many were left out.",
   input: ReadPageInputSchema,
   annotations: READ_ONLY,
@@ -2015,8 +2014,7 @@ const UpdateAgentInputSchema = Schema.Struct({
   pinned: Schema.optionalKey(
     describeWire(
       Schema.Boolean,
-      "Whether the member keeps it pinned in their sidebar, the pin theirs alone; an agent on " +
-        "a task or on none alike.",
+      "Whether the member keeps it pinned in their sidebar, the pin theirs alone.",
     ),
   ),
   archived: Schema.optionalKey(
@@ -4432,8 +4430,8 @@ const MEMBER_CREATE_AUTOMATION_TOOL = memberMcpTool({
   description:
     "Make an automation in a workspace the member belongs to, as their own automations page " +
     `would: each time its trigger fires, ${PRODUCT_NAME} starts an agent on its prompt, in its ` +
-    "repositories or in none, on the member's keys and connections, with no task and no one " +
-    "watching, or hands the run to the one agent named. It is on as it is made, runs as the " +
+    "repositories or in none, on the member's keys and connections, on a task of its own with no " +
+    "one watching, or hands the run to the one agent named. It is on as it is made, runs as the " +
     "member, and the desktop shows it as one they made. It works in the repositories named, " +
     `or in none where you name none. One fired by Sentry needs ${PRODUCT_NAME}'s Sentry ` +
     `integration installed on the workspace first. ${WEBHOOK_WORDS} ${WORKSPACE_WORDS} Make ` +

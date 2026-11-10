@@ -35,12 +35,7 @@ and a travel the spring. A script that plays motion reads the same tokens throug
 stop it by pausing rather than by zeroing, so its duration may be a literal,
 and a loop that carries one must answer a play-state token.
 A TypeScript constant that mirrors a CSS timing (`WARM_MS` in `@repo/ui`'s `hint.tsx`)
-names the `MOTION_DURATION_MS` or `MOTION_DELAY_MS` tokens it mirrors. A wait drawn
-over its own length, a toast's countdown bar draining over the hold its
-host hands it (`--ui-toast-hold`), takes that hold rather than a token,
-because it shows time passing rather than moving anything. Reduced motion
-keeps it, since the time left is information, but in whole-second steps rather
-than a glide; only a capture run holds it still, through `--ui-wait-motion`.
+names the `MOTION_DURATION_MS` or `MOTION_DELAY_MS` tokens it mirrors.
 
 ## Layout lands at once; motion is transform and opacity
 

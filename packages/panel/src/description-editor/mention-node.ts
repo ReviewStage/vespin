@@ -3,7 +3,7 @@ import { mentionLinksIn, mentionName } from "@repo/features/mention-link";
 import { type Editor, type JSONContent, Node } from "@tiptap/core";
 import { TextSelection, type Transaction } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
-import { spacedAfterChip } from "./chip-spacing.js";
+import { chipOverSelection } from "./chip-spacing.js";
 import type { MentionDrawer, MentionNode, MentionNodeDoors } from "./contract.js";
 
 /**
@@ -173,7 +173,7 @@ export function mentionTokens(text: string): readonly MentionToken[] {
 /**
  * A paste whose words the panel reads as one mention, a page of an
  * integration's address, laid in as that mention's node where the caret
- * stands, outside code, spaced from what follows (`spacedAfterChip`);
+ * stands, outside code, spaced as every chip is (`chipOverSelection`);
  * answers whether it was, so any other paste goes on as words.
  */
 export function pastedMention(
@@ -187,7 +187,6 @@ export function pastedMention(
   if ($from.marks().some((mark) => mark.type.spec.code === true)) return false;
   const { schema } = view.state;
   const node = schema.node(MENTION_NODE, { name: mention.name, target: mention.target });
-  const laid = view.state.tr.replaceSelectionWith(node, false);
-  view.dispatch(spacedAfterChip(laid, laid.selection.from).scrollIntoView());
+  view.dispatch(chipOverSelection(view.state, node).scrollIntoView());
   return true;
 }

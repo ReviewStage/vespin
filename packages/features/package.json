@@ -208,7 +208,7 @@
     "./task-standing-words": "./src/task-standing-words.js",
     "./task-tree-model": "./src/task-tree-model.js",
     "./attachment-model": "./src/attachment-model.js",
-    "./picture-marker": "./src/picture-marker.js",
+    "./file-marker": "./src/file-marker.js",
     "./turn-rows": "./src/turn-rows.js",
     "./description-diff": "./src/description-diff.js",
     "./dictation-keywords": "./src/dictation-keywords.js",

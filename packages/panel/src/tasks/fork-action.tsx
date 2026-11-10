@@ -247,10 +247,9 @@ export function ForkChip({
   onDrop: () => void;
 }): React.JSX.Element {
   const openPlace = useOpenPlace();
-  const taskId = source?.planId ?? null;
   const { agentId, messageId } = fork;
   // A source the list does not hold is opened on its own page.
-  const task = taskId === null ? undefined : { planId: taskId };
+  const task = source === undefined ? undefined : { planId: source.planId };
   const open =
     openPlace === undefined
       ? undefined

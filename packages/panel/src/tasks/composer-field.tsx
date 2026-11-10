@@ -1,4 +1,4 @@
-import { pictureMarker } from "@repo/features/picture-marker";
+import { fileMarker } from "@repo/features/file-marker";
 import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "@repo/ui";
 import {
   type ReactNode,
@@ -14,7 +14,6 @@ import type {
   ComposerChip,
   ComposerEditorHandle,
   ComposerInput,
-  ComposerQuote,
   ComposerTrigger,
   DescriptionEditorModule,
   MentionNode,
@@ -43,7 +42,7 @@ import { useSelectionToolbar } from "./selection-toolbar.js";
  * words the field draws while the draft is empty, rather than an attribute
  * of the editor's, so the recording masks it as it masks the words. A chip
  * the editor holds is drawn by the box, into the node's own element, as the
- * owner draws it (`chip`), and so are a picture's (`pictures`) and a quote block (`quote`). Words
+ * owner draws it (`chip`), and so is a file's (`files`); a quote is the editor's own block. Words
  * selected raise the format toolbar over them, its marks alone
  * (`./selection-toolbar.tsx`), which stands aside while a list the box
  * opened stands, as its `aria-expanded` says. The field's
@@ -106,14 +105,13 @@ function typingElsewhere(): boolean {
   );
 }
 
-/** A chip the editor asked to be drawn: the element its node stands as, what it is, a skill, a mention, a picture, or a quote, and the key its drawing goes under. */
+/** A chip the editor asked to be drawn: the element its node stands as, what it is, a skill, a mention, or a file, and the key its drawing goes under. */
 interface DrawnChip {
   readonly element: HTMLElement;
   readonly chip:
     | ComposerChip
     | { readonly mention: MentionNode; readonly node: MentionNodeDoors }
-    | { readonly quote: ComposerQuote }
-    | { readonly picture: string };
+    | { readonly file: string };
   readonly key: number;
 }
 
@@ -126,8 +124,8 @@ export interface ComposerFieldMentions {
   readonly pasted: (words: string) => MentionNode | undefined;
 }
 
-/** The pictures a box takes into its words: the names it holds, whose markers are chips, and each chip's look. */
-export interface ComposerFieldPictures {
+/** The files a box takes into its words: the names it holds, whose markers are chips, and each chip's look. */
+export interface ComposerFieldFiles {
   readonly names: ReadonlySet<string>;
   readonly chip: (name: string) => ReactNode;
 }
@@ -152,9 +150,8 @@ export function ComposerField({
   onPasteCut,
   onTrigger,
   chip,
-  quote,
   mentions,
-  pictures,
+  files,
   takesFocus = true,
   focus,
   keystrokeSpan = PANEL_SPAN.KEYSTROKE_COMPOSER,
@@ -185,12 +182,10 @@ export function ComposerField({
   onPasteCut?: (() => void) | undefined;
   onTrigger: (trigger: ComposerTrigger | undefined) => void;
   chip: (chip: ComposerChip) => ReactNode;
-  /** How a quote block the editor holds is drawn; its words alone where none is given. */
-  quote?: ((quote: ComposerQuote) => ReactNode) | undefined;
   /** What the box's mentions are picked and drawn with; none where the box takes no mentions, read as it mounts. */
   mentions?: ComposerFieldMentions | undefined;
-  /** The pictures the box holds and how each one's chip is drawn, by its name; none where the box takes no pictures into its words, read as it mounts. */
-  pictures?: ComposerFieldPictures | undefined;
+  /** The files the box holds and how each one's chip is drawn, by its name; none where the box takes no files into its words, read as it mounts. */
+  files?: ComposerFieldFiles | undefined;
   /** Whether the editor takes the caret as it mounts, unless the developer is typing elsewhere; a box that stands beside a list the keys step through takes none. */
   takesFocus?: boolean;
   /** Whether the editor takes the caret as it mounts, over `takesFocus` and whoever is typing elsewhere; left out, those decide. Read as it mounts. */
@@ -233,7 +228,7 @@ export function ComposerField({
     onPasteCut,
     onTrigger,
     mentions,
-    pictures,
+    files,
     takesFocus,
     focus,
     format: toolbar.doors,
@@ -249,7 +244,7 @@ export function ComposerField({
     onPasteCut,
     onTrigger,
     mentions,
-    pictures,
+    files,
     takesFocus,
     focus,
     format: toolbar.doors,
@@ -285,12 +280,9 @@ export function ComposerField({
       onPasteCut: () => latest.current.onPasteCut?.(),
       onTrigger: (trigger) => latest.current.onTrigger(trigger),
       drawChip: (element, drawnChip) => draw(element, drawnChip),
-      drawQuote: (element, drawnQuote) => draw(element, { quote: drawnQuote }),
-      pictures: now.pictures?.names,
-      drawPicture:
-        now.pictures === undefined
-          ? undefined
-          : (element, name) => draw(element, { picture: name }),
+      files: now.files?.names,
+      drawFile:
+        now.files === undefined ? undefined : (element, name) => draw(element, { file: name }),
       mentions:
         now.mentions === undefined
           ? undefined
@@ -321,10 +313,10 @@ export function ComposerField({
   }, [draft, editor]);
   useLayoutEffect(() => editor.current?.setInput(input), [input, editor, module]);
   useLayoutEffect(() => editor.current?.setSkills(skills), [skills, editor, module]);
-  const pictureNames = pictures?.names;
+  const fileNames = files?.names;
   useLayoutEffect(() => {
-    if (pictureNames !== undefined) editor.current?.setPictures(pictureNames);
-  }, [pictureNames, editor, module]);
+    if (fileNames !== undefined) editor.current?.setFiles(fileNames);
+  }, [fileNames, editor, module]);
   useLayoutEffect(() => editor.current?.setAria(aria));
 
   return (
@@ -335,11 +327,9 @@ export function ComposerField({
         createPortal(
           "mention" in each.chip
             ? (mentions?.chip(each.chip.mention, each.chip.node) ?? `@${each.chip.mention.name}`)
-            : "quote" in each.chip
-              ? (quote?.(each.chip.quote) ?? each.chip.quote.words)
-              : "picture" in each.chip
-                ? (pictures?.chip(each.chip.picture) ?? pictureMarker(each.chip.picture))
-                : chip(each.chip),
+            : "file" in each.chip
+              ? (files?.chip(each.chip.file) ?? fileMarker(each.chip.file))
+              : chip(each.chip),
           each.element,
           each.key,
         ),

@@ -1,7 +1,9 @@
+import type { Noun } from "@repo/features/words";
 import {
   DetailPage,
   GAP,
   GROUP_HEADING,
+  type GroupFold,
   GroupHeader,
   Inline,
   List,
@@ -48,6 +50,13 @@ const SKELETON_ROWS = [
   { name: "38%", context: "120px" },
   { name: "54%", context: "80px" },
 ] as const;
+
+/**
+ * How each of the page's sections folds: open, and folded by a press on its
+ * head, as a task's Overview folds its groups, its placeholders folding
+ * alike so a section's name stands where it will once read.
+ */
+export const PERSON_SECTION_FOLD = { defaultOpen: true } as const satisfies GroupFold;
 
 /** What the page is called where it cannot name the person yet. */
 export const PROFILE = "Profile";
@@ -120,19 +129,32 @@ export function PersonReadingSkeleton(): React.JSX.Element {
   return <SkeletonRegion label="Reading who they are…">{null}</SkeletonRegion>;
 }
 
-/** A section: its name and count over what it holds, a region named `label` where it names one. */
+/**
+ * A section: its name and count over what it holds, a region named `label`
+ * where it names one. A section that folds (`fold`) is pressed on its head,
+ * as a task's Overview folds its groups (`plan-agents.tsx`).
+ */
 export function PersonSectionFrame({
   label,
   title,
   count,
+  noun,
   tone,
+  fold,
+  standing,
   children,
 }: {
   label?: string | undefined;
   title: ReactNode;
   count?: number | undefined;
+  /** What the count counts, said to a reader after the figure: "3 tasks". */
+  noun?: Noun | undefined;
   /** The count's status tone, muted where absent: attention for what waits on the reader. */
   tone?: StatusTone | undefined;
+  /** How the section folds; left out, its rows always stand. */
+  fold?: GroupFold | undefined;
+  /** What a folded section leaves standing under its head: a note its reader must still see. */
+  standing?: ReactNode;
   children: ReactNode;
 }): React.JSX.Element {
   return (
@@ -143,7 +165,17 @@ export function PersonSectionFrame({
       <GroupHeader
         heading={label === undefined ? GROUP_HEADING.NONE : GROUP_HEADING.H2}
         label={title}
-        count={count === undefined ? undefined : { value: count, tone }}
+        count={
+          count === undefined
+            ? undefined
+            : {
+                value: count,
+                tone,
+                noun: noun === undefined ? undefined : count === 1 ? noun.one : noun.many,
+              }
+        }
+        fold={fold}
+        standing={standing}
       >
         {children}
       </GroupHeader>
@@ -151,10 +183,16 @@ export function PersonSectionFrame({
   );
 }
 
-/** A section still being read: a block where its name will stand, over the placeholder rows in `children`. */
-export function SectionSkeleton({ children }: { children: ReactNode }): React.JSX.Element {
+/** A section still being read: a block where its name will stand, over the placeholder rows in `children`, folding as the section it stands for does. */
+export function SectionSkeleton({
+  fold,
+  children,
+}: {
+  fold?: GroupFold | undefined;
+  children: ReactNode;
+}): React.JSX.Element {
   return (
-    <PersonSectionFrame title={<Skeleton width={SKELETON_SECTION_NAME} />}>
+    <PersonSectionFrame title={<Skeleton width={SKELETON_SECTION_NAME} />} fold={fold}>
       {children}
     </PersonSectionFrame>
   );
@@ -163,7 +201,7 @@ export function SectionSkeleton({ children }: { children: ReactNode }): React.JS
 /** A list still being read, which `label` names: rows of a tile, a name, and what is said beside it, as a task's or an automation's row stands. */
 export function RowsSkeleton({ label }: { label: string }): React.JSX.Element {
   return (
-    <SectionSkeleton>
+    <SectionSkeleton fold={PERSON_SECTION_FOLD}>
       <SkeletonRegion label={label}>
         <List label={label}>
           {SKELETON_ROWS.map(({ name, context }) => (

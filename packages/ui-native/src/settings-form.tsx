@@ -17,6 +17,7 @@ import {
   listRowBackground,
   pickerStyle,
   scrollContentBackground,
+  scrollDismissesKeyboard,
   tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -35,7 +36,9 @@ const ACCOUNT_FACE_SIZE = 36;
  * below, under their small muted headers, every row's words in the denser
  * scale's 15 pt. Note that it stands on the sidebar's ground with each row
  * on the surface, as the panel's settings cards stand on its page, rather
- * than on the system's grouped grays.
+ * than on the system's grouped grays. A drag on it lowers the keyboard at
+ * once, as a composing sheet's words otherwise keep it standing over the
+ * rows below them, with no key of the keyboard's own that lowers it.
  */
 export function SettingsForm({ children }: { readonly children: ReactNode }) {
   const colors = useColors();
@@ -43,6 +46,7 @@ export function SettingsForm({ children }: { readonly children: ReactNode }) {
     <Form
       modifiers={[
         scrollContentBackground("hidden"),
+        scrollDismissesKeyboard("immediately"),
         background(colors.SIDEBAR),
         tint(colors.ACCENT),
         font({ textStyle: TYPE_ROLE.ROW_TITLE }),

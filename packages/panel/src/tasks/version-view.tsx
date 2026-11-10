@@ -26,7 +26,7 @@ import type { MenuEntry } from "../desktop/action-menu.js";
 import { PhoneHead, PlaceMore, phoneFindGroups } from "../desktop/phone-head.js";
 import { unreadShown } from "../failure-report.js";
 import { MarkdownMessage } from "../markdown-message.js";
-import { TOAST_HOLD, type ToastNotice, useToast } from "../toast.js";
+import { type ToastNotice, useToast } from "../toast.js";
 import { TOAST_ONLY_UNDO, toastOnlyUndo, type UndoWrite } from "../undo-stack.js";
 import { VERSION_CHANGE, type VersionDiff, versionDiff } from "./description-history-model.js";
 import { DescriptionPictures, useDescriptionPictureDrawer } from "./description-pictures.js";
@@ -304,7 +304,6 @@ export function useVersionRestore(
           replayUnmasked: true,
           words: result.reason,
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: { surface: VERSION_RESTORE.surface, cause: result },
         });
       }
@@ -327,7 +326,6 @@ export function sayRestored(
       replayUnmasked: true,
       words: VERSION_RESTORE.words,
       tone: STATUS_TONE.COMPLETE,
-      hold: TOAST_HOLD.DONE,
     });
     return;
   }
@@ -341,7 +339,6 @@ export function sayRestored(
           words,
           failure: { surface: VERSION_RESTORE.surface, cause: undone.cause },
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
         });
       });
     }),

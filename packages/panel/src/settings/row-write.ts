@@ -19,7 +19,7 @@ import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { type UseMutationResult, useMutation } from "@tanstack/react-query";
 import { actFailureWords } from "../act.js";
 import { type SettingWrite, settingMutation } from "../act-mutations.js";
-import { showToast, TOAST_HOLD } from "../toast.js";
+import { showToast } from "../toast.js";
 
 /** Why a row's write was refused: its sentence, and the answer or the error that refused it. */
 export interface SettingRefusal {
@@ -144,7 +144,6 @@ export function refusalToast<Answer>(
     showToast({
       words: refusal.words,
       tone: STATUS_TONE.DANGER,
-      hold: TOAST_HOLD.FAILED,
       failure: { surface: FAILURE_SURFACE.SETTING_WRITE, cause: refusal.cause },
     });
   };

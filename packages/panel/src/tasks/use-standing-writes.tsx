@@ -1,26 +1,41 @@
 /**
- * use-standing-writes.ts -- where a task stands, its status, priority, or assignee, as each surface setting it sends it itself.
+ * use-standing-writes.tsx -- where a task stands, its status, priority, or assignee, as each surface setting it sends it itself.
  *
  * A change of where a task stands is drawn by main the moment it is asked
  * (`@repo/host`'s `task-list-collections.ts`), so the view already carries
  * it, and put back by main where the service refused. A change the service
  * kept is ⌘Z's to take back (`undo-stack.ts`). A fixture's tasks are read
- * from nowhere, so nothing keeps where they stand.
+ * from nowhere, so nothing keeps where they stand. Setting a task whose
+ * agents are running at Done or Canceled asks first, in red, since it stops
+ * them and the work they are in the middle of; confirmed, it is sent as a
+ * settle that stops them, and the surface draws the question beside it.
  */
 
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
-import type { TaskStanding, TaskStatus, TaskSummary } from "@repo/features/task-wire";
+import { agentStillWriting, agentsOfTask } from "@repo/features/task-agents-model";
 import {
+  isTaskSettled,
+  type TaskStanding,
+  type TaskStatus,
+  type TaskSummary,
+} from "@repo/features/task-wire";
+import {
+  type SettledStatus,
   type StatusChange,
+  type StopAgentsWords,
   settleChanges,
   settledNote,
   settleFailedNote,
+  settleStopWords,
 } from "@repo/features/tasks-model";
 import type { TasksView } from "@repo/features/tasks-view";
-import { STATUS_TONE } from "@repo/ui";
+import { CONFIRM_LOSS, ConfirmDialog, STATUS_TONE, useConfirmDialog } from "@repo/ui";
+import { neverBusyAct } from "@repo/ui/confirm-state";
 import { useQuery } from "@tanstack/react-query";
-import { askKept, firstRefusal, type Kept, notKept } from "../act.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useState } from "react";
+import { askKept, firstRefusal, KEPT, type Kept, notKept } from "../act.js";
+import { confirmFailure } from "../failure-report.js";
+import { useToast } from "../toast.js";
 import { heldTask, pressRows, ROW_WRITE, type TaskRows } from "../undo-stack.js";
 import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useTaskRowDoors } from "./task-row-doors.js";
@@ -43,18 +58,36 @@ function standingNote(standing: TaskStanding): string {
     : ASSIGNEE_CHANGED_NOTES.ASSIGNED;
 }
 
+/** What a question asks before it is asked, which no reader sees. */
+const NO_WORDS: StopAgentsWords = { title: "", body: "", verb: "" };
+
+/** What the act's button says while the stop goes out. */
+const STOPPING = "Stopping agents";
+
+/** A settle held for its question while the tasks' agents run: the changes it sends once confirmed, and what it asks. */
+interface HeldSettle {
+  readonly changes: readonly StatusChange[];
+  readonly status: SettledStatus;
+  readonly words: StopAgentsWords;
+}
+
 /** The tasks as the list holds them, or the open document where the list does not hold one yet. */
-function standingTasksOf(
-  rows: TaskRows,
-  taskIds: readonly string[],
-): readonly Pick<TaskSummary, "id" | "status">[] {
+function standingTasksOf(rows: TaskRows, taskIds: readonly string[]): readonly TaskSummary[] {
   const { activeTaskId } = rows.tasks;
   const held = activeTaskId === undefined ? undefined : heldTask(rows, activeTaskId);
-  return taskIds.flatMap((taskId): readonly Pick<TaskSummary, "id" | "status">[] => {
+  return taskIds.flatMap((taskId): readonly TaskSummary[] => {
     const task = rows.tasks.tasks.find((each) => each.id === taskId);
     if (task !== undefined) return [task];
     return held?.id === taskId ? [held] : [];
   });
+}
+
+/** Whether any of the task's agents is starting or running, read off the agents the list follows, else its count of them. */
+function agentsWorking(rows: TaskRows, task: TaskSummary): boolean {
+  const listed = rows.tasks.taskAgents;
+  return listed === undefined
+    ? (task.agents?.working ?? 0) > 0
+    : agentsOfTask(listed, task.id).some((agent) => agentStillWriting(agent.status));
 }
 
 /** The standing writes a surface sends. */
@@ -73,6 +106,8 @@ export interface StandingWrites {
    * at. A task already there is left as it stands.
    */
   onSettleTasks: (taskIds: readonly string[], status: TaskStatus) => void;
+  /** The question Done or Canceled asks while a task's agents run, which the surface draws beside what it sets. */
+  dialog: React.JSX.Element;
 }
 
 /**
@@ -94,15 +129,20 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
     taskId: string,
     standing: TaskStanding,
     assigneeName?: string,
+    stopAgents?: true,
   ): Promise<Kept> => {
     // Note that the name the reader knows a member by goes with them, so main draws them by it until the list carries them.
     const named = standing.assigneeId && assigneeName !== undefined ? { assigneeName } : undefined;
-    return askKept(sendStandingRow({ taskId, ...standing, ...named }));
+    const stopping = stopAgents === undefined ? undefined : { stopAgents };
+    return askKept(sendStandingRow({ taskId, ...standing, ...named, ...stopping }));
   };
-  // Each status change is sent as one standing. Answers which tasks the
-  // service kept, how many it refused, and what refused the first of them.
-  const sendStatuses = (changes: readonly StatusChange[]) => {
-    const answers = changes.map(({ taskId, status }) => sendStanding(taskId, { status }));
+  // Each status change is sent as one standing, stopping the tasks' agents
+  // where the reader confirmed it. Answers which tasks the service kept, how
+  // many it refused, and what refused the first of them.
+  const sendStatuses = (changes: readonly StatusChange[], stopAgents?: true) => {
+    const answers = changes.map(({ taskId, status }) =>
+      sendStanding(taskId, { status }, undefined, stopAgents),
+    );
     return Promise.all(answers).then((changed) => {
       const landed = changes
         .filter((_, index) => changed[index]?.kept === true)
@@ -116,22 +156,18 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
   // back the status of every task the service kept that still stands where
   // the press left it (`undo-stack.ts`). The open task stays open, since a
   // task done or canceled is still read and worked on.
-  const settleTasks = (taskIds: readonly string[], status: TaskStatus) => {
-    if (fixture) return;
-    const asked = settleChanges(standingTasksOf(standingDoors.rows(), taskIds), status);
-    if (asked.length === 0) return;
+  const settled = (asked: readonly StatusChange[], status: TaskStatus, stopAgents?: true) => {
     const pressed = pressRows(
       ROW_WRITE.TASK_STANDING,
       standingDoors,
       asked.map((change) => ({ id: change.taskId, after: { status: change.status } })),
     );
-    sendStatuses(asked).then(({ landed, refused, cause }) => {
+    sendStatuses(asked, stopAgents).then(({ landed, refused, cause }) => {
       if (landed.length === 0) {
         toast({
           replayUnmasked: true,
           words: settleFailedNote(status, refused),
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: { surface: FAILURE_SURFACE.TASK_SETTLE, cause },
         });
         return;
@@ -142,6 +178,36 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
     });
   };
 
+  // A settle confirmed is sent as one that stops the tasks' agents; the question stands while the surface does.
+  const [held, setHeld] = useState<HeldSettle>();
+  const confirm = useConfirmDialog(
+    { subject: held !== undefined, surfaceOpen: true },
+    neverBusyAct(() => {
+      if (held !== undefined) settled(held.changes, held.status, true);
+    }),
+    confirmFailure(FAILURE_SURFACE.TASK_SETTLE),
+  );
+  // Done or Canceled asks first where an agent of a task it changes is running.
+  // Answers whether it asked, which leaves the change to the answer.
+  const askedFirst = (tasks: readonly TaskSummary[], asked: readonly StatusChange[]) => {
+    const status = asked[0]?.status;
+    if (!isTaskSettled(status)) return false;
+    const rows = standingDoors.rows();
+    const changed = tasks.filter((task) => asked.some((change) => change.taskId === task.id));
+    if (!changed.some((task) => agentsWorking(rows, task))) return false;
+    setHeld({ changes: asked, status, words: settleStopWords(status) });
+    confirm.ask();
+    return true;
+  };
+
+  const settleTasks = (taskIds: readonly string[], status: TaskStatus) => {
+    if (fixture) return;
+    const tasks = standingTasksOf(standingDoors.rows(), taskIds);
+    const asked = settleChanges(tasks, status);
+    if (asked.length === 0 || askedFirst(tasks, asked)) return;
+    settled(asked, status);
+  };
+
   // A fixture's tasks are read from nowhere, so nothing keeps where they
   // stand. A change the service kept is ⌘Z's to take back.
   const setTaskStanding = (
@@ -150,6 +216,11 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
     assigneeName?: string,
   ): Promise<Kept> => {
     if (fixture) return Promise.resolve(notKept(FAILURE_CONDITION.NOT_KEPT));
+    // Note that a change that asks first answers as kept, because nothing went out the service could refuse; once confirmed it toasts as a settle.
+    if (standing.status !== undefined) {
+      const tasks = standingTasksOf(standingDoors.rows(), [taskId]);
+      if (askedFirst(tasks, settleChanges(tasks, standing.status))) return Promise.resolve(KEPT);
+    }
     const { assigneeId, ...rest } = standing;
     const assignee =
       assigneeId === undefined
@@ -166,5 +237,20 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
     });
   };
 
-  return { onSetTaskStanding: setTaskStanding, onSettleTasks: settleTasks };
+  return {
+    onSetTaskStanding: setTaskStanding,
+    onSettleTasks: settleTasks,
+    dialog: (
+      <ConfirmDialog
+        open
+        confirm={confirm}
+        question={{
+          ...(held?.words ?? NO_WORDS),
+          running: STOPPING,
+          loss: CONFIRM_LOSS.IRREVERSIBLE,
+          replayUnmasked: true,
+        }}
+      />
+    ),
+  };
 }

@@ -12,7 +12,6 @@ import {
 import type { FileChip } from "@repo/features/attachment-model";
 import { isVideoType, type KeptPicture } from "@repo/features/conversation-picture-wire";
 import { formatBytes } from "@repo/features/number-format";
-import { isPictureName, pictureMarkers } from "@repo/features/picture-marker";
 import { ACT_KIND } from "@repo/host/acts";
 import { isVideoDataUrl, PICTURE_SET_SHOWN, PictureSet, PictureSetTile } from "@repo/ui";
 import {
@@ -35,12 +34,7 @@ import {
   messageFileChips,
 } from "./attached-file-chips.js";
 import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
-import {
-  PictureChip,
-  usePictureViewer,
-  type WordPictures,
-  WordPicturesContext,
-} from "./picture-chips.js";
+import { useWordFiles, WordFilesContext } from "./file-chips.js";
 
 /**
  * agent-pictures.tsx -- the pictures in an agent's transcript: a set it showed with `show_image`, the pictures an integration's call answered, under the call's row, and an image a line handed it, over the line.
@@ -559,10 +553,7 @@ export function MessageFileChips({
   /** Whether the line is still on its way, its row not yet read back. */
   sending?: boolean;
 }): ReactNode {
-  // Note that a picture the words draw in place is not drawn over them again.
-  const inWords = useContext(WordPicturesContext)?.names;
-  const files = messageFileChips(message).filter((file) => inWords?.has(file.name) !== true);
-  return <KeptFileChips files={files} sending={sending} />;
+  return <KeptFileChips files={messageFileChips(message)} sending={sending} />;
 }
 
 /** A line's files as chips, each one kept as a picture read through the agent's pictures, its bytes once they land. */
@@ -581,14 +572,14 @@ function useKeptChips(files: readonly MessageFileChip[]): FileChip[] {
 }
 
 /**
- * The pictures a sent line names in its words (`@repo/features/picture-marker`),
- * handed to the words under it, which draw each marker as its picture's
- * chip (`SentWords`), and to its files' row, which leaves those out; a
- * press opens a picture over the window, walking the pictures in the order
- * the words name them. A line whose words name none of its pictures, as
- * every line sent before markers, draws as it did.
+ * The files a sent line names in its words (`@repo/features/file-marker`),
+ * handed to the words under it, which draw each marker as its file's chip
+ * (`SentWords`), and to its files' row, which leaves those out; a press opens
+ * a file over the window, walking the files in the order the words name
+ * them. A line whose words name none of its files, as every line sent before
+ * markers, draws as it did.
  */
-export function MessagePictures({
+export function MessageFiles({
   message,
   words,
   children,
@@ -597,31 +588,35 @@ export function MessagePictures({
   words: string;
   children: ReactNode;
 }): ReactNode {
-  const chips = useKeptChips(messageFileChips(message));
-  const named = [...new Set(pictureMarkers(words).map((marker) => marker.name))];
-  const placed = named.flatMap((name) => {
-    const chip = chips.find(
-      (each) => each.name === name && isPictureName(name) && each.mediaType.startsWith("image/"),
-    );
-    return chip === undefined ? [] : [chip];
-  });
-  const viewer = usePictureViewer(placed.filter((chip) => chip.url !== ""));
-  if (placed.length === 0) return children;
-  const pictures: WordPictures = {
-    names: new Set(placed.map((chip) => chip.name)),
-    chip: (name) => (
-      <PictureChip
-        name={name}
-        file={placed.find((chip) => chip.name === name)}
-        onOpen={viewer.open}
-      />
-    ),
-  };
   return (
-    <WordPicturesContext.Provider value={pictures}>
+    <WordFilesOf files={messageFileChips(message)} words={words}>
       {children}
-      {viewer.viewer}
-    </WordPicturesContext.Provider>
+    </WordFilesOf>
+  );
+}
+
+/**
+ * The files a line names in its words, each kept as a picture read through
+ * the agent's pictures, handed to the words and the files' row under it as
+ * `MessageFiles` hands a transcript line's: a queued message's too, whose
+ * files the queue names by the id their bytes are read by.
+ */
+export function WordFilesOf({
+  files,
+  words,
+  children,
+}: {
+  files: readonly MessageFileChip[];
+  words: string;
+  children: ReactNode;
+}): ReactNode {
+  const shown = useWordFiles(useKeptChips(files), words);
+  if (shown.named === undefined) return children;
+  return (
+    <WordFilesContext.Provider value={shown.named}>
+      {children}
+      {shown.viewer}
+    </WordFilesContext.Provider>
   );
 }
 
@@ -639,6 +634,9 @@ export function KeptFileChips({
   /** Whether the line is still on its way, its row not yet read back. */
   sending?: boolean;
 }): ReactNode {
-  const chips = useKeptChips(files);
+  // Note that a file the words draw in place is not drawn over them again, and that a
+  // marker draws the first file of its name alone, so a later file of that name stays here.
+  const drawn = new Set(useContext(WordFilesContext)?.names);
+  const chips = useKeptChips(files.filter((file) => !drawn.delete(file.name)));
   return <AttachedFileChips files={chips} uploading={sending} />;
 }

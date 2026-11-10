@@ -17,6 +17,7 @@ import { afterEach, beforeEach, test, vi } from "vitest";
 import { pictureNow } from "../picture-query.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
+import { STANDING_TOAST } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { useAgentPictureDoor } from "./agent-pictures.js";
 import { type AgentComposerControl, useAgentComposer } from "./use-agent-composer.js";
@@ -182,7 +183,7 @@ test("a refused message that would pass a message's bound beside the box's newer
 
   assert.equal(now().composer.draft, `${long}\nOk`);
   assert.deepEqual(
-    [...document.querySelectorAll(".ui-toast:not([data-leaving]) button")]
+    [...document.querySelectorAll(`${STANDING_TOAST} button`)]
       .map((button) => button.textContent)
       .filter((label) => label === "Put back"),
     [],

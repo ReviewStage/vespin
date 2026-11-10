@@ -25,7 +25,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import type { Glyph } from "./glyph.js";
 import { Avatar, TaskStatusMark, ToneGlyph } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
@@ -109,7 +109,14 @@ function capsuleModifiers(colors: BrandColors, filled: boolean) {
   ];
 }
 
-/** A capsule's words, 13 pt medium in the ink its fill reads in. */
+/**
+ * A capsule's words, 13 pt medium in the ink its fill reads in, its count
+ * after them in its own ink. Note that the words are the text itself where
+ * no count follows, and the joined text is drawn anew whenever its words or
+ * count change, because `@expo/ui`'s native text joins the texts nested in
+ * it as it draws and is never told one of them changed, so it would keep
+ * saying what they first said, such as Open after a merge.
+ */
 function CapsuleWords({
   label,
   count,
@@ -121,19 +128,19 @@ function CapsuleWords({
   readonly ink: string;
   readonly countInk: string;
 }) {
+  const modifiers = [
+    font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
+    foregroundStyle(ink),
+    monospacedDigit(),
+  ];
+  if (count === undefined) return <Text modifiers={modifiers}>{label}</Text>;
   return (
-    <Text
-      modifiers={[
-        font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
-        foregroundStyle(ink),
-        monospacedDigit(),
-      ]}
-    >
-      <Text>{label}</Text>
-      {count === undefined ? null : (
+    <Fragment key={label}>
+      <Text key={count} modifiers={modifiers}>
+        <Text>{label}</Text>
         <Text modifiers={[foregroundStyle(countInk)]}>{` ${count}`}</Text>
-      )}
-    </Text>
+      </Text>
+    </Fragment>
   );
 }
 

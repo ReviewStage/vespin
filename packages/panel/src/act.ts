@@ -36,7 +36,7 @@ import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { actPort } from "./app-bridge.js";
 import type { ShownFailure } from "./failure-report.js";
 import { fixtureClient, loadedTasksFixture } from "./tasks/tasks-fixture-loader.js";
-import { showToast, TOAST_HOLD } from "./toast.js";
+import { showToast } from "./toast.js";
 import { appStateIn } from "./use-app-state.js";
 
 /**
@@ -181,7 +181,6 @@ export function toastActFailure(failure: ShownFailure): void {
   showToast({
     words: actFailureWords(failure.cause),
     tone: STATUS_TONE.DANGER,
-    hold: TOAST_HOLD.FAILED,
     failure,
   });
 }

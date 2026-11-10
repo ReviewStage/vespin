@@ -1,11 +1,13 @@
-# live-activity.yaml -- the Live Activity of the member's running agents: the Dynamic Island's compact and expanded presentations, and the Lock Screen's as Notification Center shows it.
+# live-activity.yaml -- the Live Activity of the member's running agents: the Lock Screen's presentation as Notification Center shows it, and the Dynamic Island's compact and expanded presentations.
 #
 # No push reaches a simulator, so the launch asks the fixture run for an
 # activity of its own (`-liveActivity true`, `src/live-activity/`), three
 # agents working and an ask waiting. The minimal presentation shows only
 # beside another app's activity, so its preview stands for it
 # (`live-activity/AgentsLiveActivity.swift`). An iPad has no Live
-# Activities, so its shots show the Home Screen.
+# Activities, so its shots show the Home Screen. The island's words are the
+# system's, not the app's, so each wait on them is optional: a run where
+# Maestro cannot read them still shoots what the screen draws.
 appId: dev.vespin.ios
 ---
 - launchApp:
@@ -14,24 +16,41 @@ appId: dev.vespin.ios
       fixture: inbox
       liveActivity: "true"
 - assertVisible: "Recorded the invite flow"
-# The island draws the app's activity only once the app is in the background.
 - pressKey: Home
+- waitForAnimationToEnd
+# A swipe down from the top's left opens Notification Center, which draws the
+# Lock Screen's presentation. iOS asks there, under the app's first activity,
+# whether to allow its Live Activities; allowed here, the prompt is gone from
+# the shot and the activity stands for every later run of this flow.
+- swipe:
+    start: "20%,1%"
+    end: "20%,60%"
+- tapOn:
+    text: "Allow"
+    optional: true
+- extendedWaitUntil:
+    visible: "Resend expired invites"
+    timeout: 10000
+    optional: true
+- waitForAnimationToEnd
+- takeScreenshot: live-activity-lock-screen
+- pressKey: Home
+# The island draws the app's activity once the app is in the background,
+# after its own animation in.
+- extendedWaitUntil:
+    visible: "3 working"
+    timeout: 10000
+    optional: true
 - waitForAnimationToEnd
 - takeScreenshot: live-activity-compact
 # A long press on the island expands it.
 - longPressOn:
-    point: "50%,2%"
-- waitForAnimationToEnd
+    point: "50%,4%"
+- extendedWaitUntil:
+    visible: "Fix the token refresh"
+    timeout: 5000
+    optional: true
 - takeScreenshot: live-activity-expanded
-- pressKey: Home
-- waitForAnimationToEnd
-# A swipe down from the top's left opens Notification Center, which draws the
-# Lock Screen's presentation.
-- swipe:
-    start: "20%,1%"
-    end: "20%,60%"
-- waitForAnimationToEnd
-- takeScreenshot: live-activity-lock-screen
 - pressKey: Home
 # Launched again without the argument, the fixture run ends its activity, so
 # no other flow draws it.

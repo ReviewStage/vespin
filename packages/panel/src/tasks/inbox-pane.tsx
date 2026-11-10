@@ -1,4 +1,5 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import type { AgentAttachment } from "@repo/features/agent-wire";
 import { dictationKeywords } from "@repo/features/dictation-keywords";
 import { askHeadWords } from "@repo/features/inbox-ask-words";
 import {
@@ -108,6 +109,7 @@ import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
+import { useWordFiles, WordFilesContext } from "./file-chips.js";
 import { type AnswerNewThread, InboxAnswerBox, type NewThreadStart } from "./inbox-answer-box.js";
 import {
   ANSWERED,
@@ -368,6 +370,31 @@ function DraftReply({
 /** What a reply on its way says at its head's end. */
 const SENDING = "Sending";
 
+/** A reply on its way's files and words: each file its words name drawn in them as its chip, and the rest going up over them. */
+function SendingReplyWords({
+  text,
+  attachments,
+}: {
+  text: string;
+  attachments: readonly AgentAttachment[];
+}): React.JSX.Element {
+  const shown = useWordFiles(attachmentChips(attachments), text);
+  return (
+    <WordFilesContext.Provider value={shown.named}>
+      {shown.beside.length === 0 ? null : <AttachedFileChips files={shown.beside} uploading />}
+      {text === "" ? null : (
+        <div
+          className="inbox-message-words m-0 leading-reading select-text"
+          data-inbox-message-text=""
+        >
+          <SentWords text={text} asDocument />
+        </div>
+      )}
+      {shown.viewer}
+    </WordFilesContext.Provider>
+  );
+}
+
 /**
  * One of the reader's plain replies on their way, which stand as the
  * thread's last messages before the draft reply, in the order sent: drawn
@@ -401,17 +428,7 @@ function PendingReply({
         </Text>
       }
     >
-      {reply.attachments.length === 0 ? null : (
-        <AttachedFileChips files={attachmentChips(reply.attachments)} uploading />
-      )}
-      {reply.text === "" ? null : (
-        <div
-          className="inbox-message-words m-0 leading-reading select-text"
-          data-inbox-message-text=""
-        >
-          <SentWords text={reply.text} asDocument />
-        </div>
-      )}
+      <SendingReplyWords text={reply.text} attachments={reply.attachments} />
     </InboxComment>
   );
 }

@@ -47,23 +47,28 @@ import {
 import { ACCOUNT_INBOX_READ, INBOX_ITEMS_READ, SCOPE_INBOX_PARTS } from "@repo/features/inbox-live";
 import {
   INBOX_ASK_STATUS,
+  INBOX_ASK_STATUS_MOVES,
   INBOX_BOUNDS,
   INBOX_FILE_TYPE,
   INBOX_MESSAGE_AUTHOR,
   INBOX_STATUS,
+  INBOX_STATUS_MOVES,
   INBOX_WIRE_VERSION,
   type InboxAnswers,
   type InboxAsk,
   type InboxAskStanding,
+  type InboxAskStatus,
   type InboxFileType,
   type InboxItem,
   type InboxItemHome,
   type InboxMessage,
+  type InboxStatus,
   inboxAnswersRefusal,
   inboxAnswersSchema,
   inboxReadAskSchema,
   knownAsk,
   standingAsk,
+  statusesMovingTo,
 } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { insideCode } from "@repo/features/mention-link";
@@ -812,8 +817,21 @@ function askStanding({
   return sql`(${inboxMessage.ask} - 'withdrawnAt' - 'withdrawnBy') || ${standing}`;
 }
 
+/** A message's ask's status, as it was kept. */
+const ASK_STATUS = sql<string>`${inboxMessage.ask} ->> 'status'`;
+
 /** Whether a message's ask stands open, as it was kept. */
-const ASK_KEPT_OPEN = sql`${inboxMessage.ask} ->> 'status' = ${INBOX_ASK_STATUS.OPEN}`;
+const ASK_KEPT_OPEN = sql`${ASK_STATUS} = ${INBOX_ASK_STATUS.OPEN}`;
+
+/** Whether a message's ask stands in a status among `from`, every one by default, that may move to `to`. */
+function askMovesTo(to: InboxAskStatus, from?: readonly InboxAskStatus[]): SQL {
+  return inArray(ASK_STATUS, statusesMovingTo(INBOX_ASK_STATUS_MOVES, to, from));
+}
+
+/** Whether the item stands in a status among `from`, every one by default, that may move to `to`. */
+function itemMovesTo(to: InboxStatus, from?: readonly InboxStatus[]): SQL {
+  return inArray(inboxItem.status, statusesMovingTo(INBOX_STATUS_MOVES, to, from));
+}
 
 /** Every ask of the item kept open, but the one message's named, set to stand as given: what a post replaces and a close withdraws. */
 const settleOpenAsks = SqlSchema.void({
@@ -830,28 +848,36 @@ const settleOpenAsks = SqlSchema.void({
         .where(
           and(
             eq(inboxMessage.itemId, itemId),
-            ASK_KEPT_OPEN,
+            askMovesTo(standing.status, [INBOX_ASK_STATUS.OPEN]),
             except === null ? undefined : ne(inboxMessage.id, except),
           ),
         ),
     ),
 });
 
-/** The ask of the one message named set to stand as given: what an answer settles and an answer taken back opens again. */
-const standAsk = SqlSchema.void({
+/** The ask of the one message named set to stand as given, where its moves allow it: what an answer settles and an answer taken back opens again; the message's id where it moved. */
+const standAsk = SqlSchema.findAll({
   Request: Schema.Struct({ ...AskStandingSchema.fields, messageId: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String }),
   execute: ({ messageId, ...standing }) =>
     Database.use((db) =>
       db
         .update(inboxMessage)
         .set({ ask: askStanding(standing) })
-        .where(and(eq(inboxMessage.id, messageId), isNotNull(inboxMessage.ask))),
+        .where(
+          and(
+            eq(inboxMessage.id, messageId),
+            isNotNull(inboxMessage.ask),
+            askMovesTo(standing.status),
+          ),
+        )
+        .returning({ id: inboxMessage.id }),
     ),
 });
 
-/** The item pointed at the message whose ask it now holds open. */
+/** The item pointed at the message whose ask it now holds open, or at none. */
 const holdAsk = SqlSchema.void({
-  Request: Schema.Struct({ itemId: Schema.String, messageId: Schema.String }),
+  Request: Schema.Struct({ itemId: Schema.String, messageId: Schema.NullOr(Schema.String) }),
   execute: ({ itemId, messageId }) =>
     Database.use((db) =>
       db.update(inboxItem).set({ openAskMessageId: messageId }).where(eq(inboxItem.id, itemId)),
@@ -1021,6 +1047,7 @@ const upsertItem = SqlSchema.findOne({
         .onConflictDoUpdate({
           target: [inboxItem.agentId, inboxItem.key],
           set: { ...posted, revision: sql`${inboxItem.revision} + 1` },
+          setWhere: itemMovesTo(write.status),
         })
         .returning({ id: inboxItem.id }),
     );
@@ -1061,6 +1088,7 @@ const closeItem = SqlSchema.findOneOption({
             eq(inboxItem.agentId, agentId),
             eq(inboxItem.key, key),
             ASKING,
+            itemMovesTo(INBOX_STATUS.CLOSED),
           ),
         )
         .returning({ id: inboxItem.id }),
@@ -2060,7 +2088,7 @@ const answerItem = SqlSchema.findOneOption({
             itemVisibleTo(userId),
             eq(inboxItem.revision, revision),
             eq(inboxItem.openAskMessageId, askId),
-            eq(inboxItem.status, INBOX_STATUS.OPEN),
+            itemMovesTo(INBOX_STATUS.ANSWERED),
           ),
         )
         .returning({ id: inboxItem.id, txid: CURRENT_TXID }),
@@ -2105,7 +2133,7 @@ const acknowledgeNotice = SqlSchema.findOneOption({
             eq(inboxItem.id, itemId),
             itemVisibleTo(userId),
             eq(inboxItem.revision, revision),
-            eq(inboxItem.status, INBOX_STATUS.OPEN),
+            itemMovesTo(INBOX_STATUS.ANSWERED),
             NOTICE,
           ),
         )
@@ -2195,7 +2223,7 @@ const memberCloseItem = SqlSchema.findOneOption({
             eq(inboxItem.id, itemId),
             itemVisibleTo(userId),
             eq(inboxItem.revision, revision),
-            eq(inboxItem.status, INBOX_STATUS.OPEN),
+            itemMovesTo(INBOX_STATUS.CLOSED),
           ),
         )
         .returning({ id: inboxItem.id, txid: CURRENT_TXID }),
@@ -2731,6 +2759,23 @@ export function markInboxRead(
 }
 
 /**
+ * The ask of the message named open again on the item that had held it,
+ * where its moves allow it; otherwise the item holds no ask open, so it
+ * never points at an ask that does not stand open.
+ */
+function reopenAskOrNone(itemId: string, messageId: string): InboxStoreEffect<void> {
+  return Effect.gen(function* () {
+    const opened = yield* standAsk({
+      messageId,
+      status: INBOX_ASK_STATUS.OPEN,
+      withdrawnReason: null,
+      withdrawnAt: null,
+    });
+    if (opened.length === 0) yield* holdAsk({ itemId, messageId: null });
+  });
+}
+
+/**
  * The answer taken back off the item it was taken on under the key,
  * opening it again and holding open again the ask the answer settled, where
  * one did; its id, or nothing where that answer no longer stands.
@@ -2761,7 +2806,7 @@ const withdrawAnswer = SqlSchema.findOneOption({
             eq(inboxItem.id, itemId),
             itemVisibleTo(userId),
             eq(inboxItem.answerKey, answerKey),
-            eq(inboxItem.status, INBOX_STATUS.ANSWERED),
+            itemMovesTo(INBOX_STATUS.OPEN, [INBOX_STATUS.ANSWERED]),
           ),
         )
         .returning({ id: inboxItem.id }),
@@ -2788,12 +2833,7 @@ export function withdrawInboxAnswer(
         const withdrawn = yield* withdrawAnswer({ userId, itemId, answerKey, openAsk, now });
         if (Option.isNone(withdrawn)) return Option.none();
         if (openAsk !== null) {
-          yield* standAsk({
-            messageId: openAsk,
-            status: INBOX_ASK_STATUS.OPEN,
-            withdrawnReason: null,
-            withdrawnAt: null,
-          });
+          yield* reopenAskOrNone(itemId, openAsk);
           yield* deleteMessage({ itemId, clientKey: answerKey });
         }
         // The answer taken back is the member's own, so it leaves the item read for them as the answer did.
@@ -2900,7 +2940,7 @@ const withdrawClose = SqlSchema.findOneOption({
             eq(inboxItem.id, itemId),
             itemVisibleTo(userId),
             eq(inboxItem.answerKey, closeKey),
-            eq(inboxItem.status, INBOX_STATUS.CLOSED),
+            itemMovesTo(INBOX_STATUS.OPEN, [INBOX_STATUS.CLOSED]),
             // The agent's own close since, which always says why, is never opened by taking the member's back.
             isNull(inboxItem.closedReason),
           ),
@@ -2954,14 +2994,7 @@ export function withdrawInboxClose(
         const withdrawn = yield* withdrawClose({ userId, itemId, closeKey, openAsk, now });
         if (Option.isNone(withdrawn)) return Option.none();
         yield* deleteMessage({ itemId, clientKey: closeKey });
-        if (openAsk !== null) {
-          yield* standAsk({
-            messageId: openAsk,
-            status: INBOX_ASK_STATUS.OPEN,
-            withdrawnReason: null,
-            withdrawnAt: null,
-          });
-        }
+        if (openAsk !== null) yield* reopenAskOrNone(itemId, openAsk);
         yield* upsertRead({ userId, itemId });
         return Option.map(
           yield* findItem({ userId, itemId }),

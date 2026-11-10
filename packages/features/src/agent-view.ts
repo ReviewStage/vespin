@@ -31,6 +31,7 @@ import { dictationContract } from "./contract/dictation.js";
 import { githubTokenContract } from "./contract/github-token.js";
 import { hostsContract } from "./contract/hosts.js";
 import { inboxContract } from "./contract/inbox.js";
+import { liveActivitiesContract } from "./contract/live-activities.js";
 import { messagesContract } from "./contract/messages.js";
 import { modelsContract } from "./contract/models.js";
 import { pushDevicesContract } from "./contract/push-devices.js";
@@ -51,6 +52,10 @@ import {
   inboxStartRequestSchema,
   inboxTakeBackRequestSchema,
 } from "./inbox-wire.js";
+import {
+  liveActivityEndedRequestSchema,
+  liveActivityTokenRequestSchema,
+} from "./live-activity-wire.js";
 import { memoryIdSchema } from "./memory-wire.js";
 import { modelChoiceSchema, modelProviderSchema } from "./models-wire.js";
 import {
@@ -113,6 +118,7 @@ const AGENT_ACCOUNT_CALLS = {
   models: modelsContract,
   dictation: dictationContract,
   pushDevices: pushDevicesContract,
+  liveActivities: liveActivitiesContract,
   githubToken: githubTokenContract,
   account: {
     writePreferences: accountContract.writePreferences,
@@ -935,6 +941,26 @@ export type PushDeviceStatusAnswerView = typeof pushDeviceStatusAnswerViewSchema
 export const pushDeviceNotifyAnswerViewSchema = answerView(pushDevicesContract.notify);
 
 export type PushDeviceNotifyAnswerView = typeof pushDeviceNotifyAnswerViewSchema.Type;
+
+/** A token of the phone's Live Activity, its push-to-start token or its activity's update token, beside the phone's own token and gateway. */
+export const liveActivityTokenParamsSchema = liveActivityTokenRequestSchema;
+
+export type LiveActivityTokenParams = typeof liveActivityTokenParamsSchema.Type;
+
+/** The phone's Live Activity ended or dismissed on the phone, by the phone's token and gateway. */
+export const liveActivityEndedParamsSchema = liveActivityEndedRequestSchema;
+
+export type LiveActivityEndedParams = typeof liveActivityEndedParamsSchema.Type;
+
+/** A Live Activity token registered as the app hears it: done, or why not, a phone the service does not hold yet among it. */
+export const liveActivityTokenAnswerViewSchema = answerView(liveActivitiesContract.startToken);
+
+export type LiveActivityTokenAnswerView = typeof liveActivityTokenAnswerViewSchema.Type;
+
+/** The phone's Live Activity's end as the app hears it: done, or why not. */
+export const liveActivityEndedAnswerViewSchema = answerView(liveActivitiesContract.ended);
+
+export type LiveActivityEndedAnswerView = typeof liveActivityEndedAnswerViewSchema.Type;
 
 /** Whose inbox is followed: a plan's, or one agent's. */
 export const INBOX_SCOPE_KIND = {

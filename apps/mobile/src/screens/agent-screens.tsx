@@ -1,6 +1,7 @@
 // agent-screens.tsx -- one agent's page, its transcript live under the system's header, and a page it showed, opened whole.
 
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
@@ -52,6 +53,7 @@ import { type AgentComposer, useAgentComposer } from "../agents/use-agent-compos
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
+import { useSurfaceOpen } from "../surface-open.js";
 
 /** What an agent is called where the list holds no title for it yet. */
 const UNTITLED_AGENT = "Agent";
@@ -195,6 +197,7 @@ function AgentComposerBar({ composer }: { readonly composer: AgentComposer }) {
  */
 export function AgentScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
+  useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
   const router = useRouter();
   const openLink = useOpenLink();
   const colors = useColors();
@@ -314,6 +317,7 @@ export function AgentPageScreen() {
     title: string;
   }>();
   const agent = useFollowedAgent(id);
+  useSurfaceOpen(PRODUCT_SURFACE.PAGE, page);
   // Note that a page stands on the agent's task, or on the agent where it works on none.
   const place: PagePlace =
     agent?.planId === null || agent?.planId === undefined

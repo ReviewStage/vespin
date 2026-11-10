@@ -847,13 +847,14 @@ export class HostedTaskClient {
 
   /**
    * Sets where one task stands, how much it matters, who it is assigned
-   * to, or any of them, under the idempotency key given where one is,
-   * answering it as changed with its document, or how it went untaken; a
-   * change that names neither never travels.
+   * to, or any of them, a move to Done or Canceled stopping the task's
+   * running agents where `stopAgents` asks, under the idempotency key given
+   * where one is, answering it as changed with its document, or how it went
+   * untaken; a change that names neither never travels.
    */
   setStanding(
     taskId: string,
-    standing: TaskStanding,
+    standing: TaskStanding & Pick<TaskUpdateRequest, "stopAgents">,
     key?: string,
   ): Effect.Effect<TaskCallResult<TaskWritten, WriteUntaken>, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(readEither(taskUpdateRequestSchema)(standing));

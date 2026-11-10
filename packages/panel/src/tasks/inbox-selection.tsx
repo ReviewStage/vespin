@@ -7,7 +7,7 @@ import { GLYPH } from "@repo/ui/icons";
 import { useRef } from "react";
 import { firstRefusal, type Kept } from "../act.js";
 import { COMMAND_PLACE, commandWords, PANEL_COMMAND } from "../command-items.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import type { InboxResolver } from "./inbox-close.js";
 import { type InboxRemindMany, REMIND_ME, remindManyGroups } from "./inbox-remind.js";
 import { markedNote, useInboxPresses } from "./inbox-writes.js";
@@ -96,7 +96,6 @@ export function useInboxSelection({
           replayUnmasked: true,
           words: note,
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: { surface: FAILURE_SURFACE.INBOX_MARK, cause: firstRefusal(taken) },
         });
       },

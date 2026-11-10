@@ -12,7 +12,7 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { STATUS_TONE } from "@repo/ui";
 import { appPlatform } from "./app-platform.js";
-import { TOAST_HOLD, useToast } from "./toast.js";
+import { useToast } from "./toast.js";
 
 /** What every item that copies an app link is called, wherever it stands, and what its toast says once the clipboard took it. */
 export const LINK_COPY = {
@@ -98,7 +98,6 @@ function useMenuCopy(): (copying: () => Promise<void>, label: string) => void {
         show({
           words: label,
           tone: STATUS_TONE.COMPLETE,
-          hold: TOAST_HOLD.DONE,
           replayUnmasked: true,
         });
       },
@@ -107,7 +106,6 @@ function useMenuCopy(): (copying: () => Promise<void>, label: string) => void {
         show({
           words: COPY_FAILED_NOTE,
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: { surface: FAILURE_SURFACE.COPY, cause },
           replayUnmasked: true,
         });

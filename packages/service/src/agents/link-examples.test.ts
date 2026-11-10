@@ -82,7 +82,7 @@ test("a coding agent is shown to name each kind as a mention Vespin draws as its
   }
 });
 
-test("every address the link rule shows an author how to build is one Vespin draws as its chip, a page under its task or under the agent on no task that showed it", () => {
+test("every address the link rule shows an author how to build is one Vespin draws as its chip, a page under its task", () => {
   // Note that only a shape with a placeholder to fill is an address an author builds; the workspace's own address stands alone.
   const addresses = [
     ...linkRuleWords("https://vespin.dev/acme").matchAll(/`(https:\/\/[^`\s]*<[^`\s]+)`/gu),
@@ -100,7 +100,6 @@ test("every address the link rule shows an author how to build is one Vespin dra
       MENTION_KIND.PERSON,
       LINK_DESTINATION.INBOX_ITEM,
       LINK_DESTINATION.PAGE,
-      MENTION_KIND.PAGE,
     ],
   );
 });

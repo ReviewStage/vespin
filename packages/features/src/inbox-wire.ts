@@ -127,8 +127,15 @@ export const INBOX_BOUNDS = {
   MAX_OPTIONS: 6,
   /** The most characters an option's detail may spell: the trade-off in a sentence or two. */
   MAX_OPTION_DETAIL_CHARS: 600,
-  /** The most fields a form may ask: what a person fills in at a glance. */
-  MAX_FIELDS: 8,
+  /**
+   * The most fields a form may hold as a read or an answer carries it: a
+   * bound on a stored row and a request body, never on how much an agent
+   * may ask, and wider than an agent may post (`MAX_POSTED_FIELDS`), so a
+   * build reads a form a later service lets an agent ask.
+   */
+  MAX_FIELDS: 50,
+  /** The most fields an agent's `answer` ask may name for now, until the builds that read `MAX_FIELDS` are out. */
+  MAX_POSTED_FIELDS: 8,
   /** The most characters a form's text field may take. */
   MAX_FIELD_VALUE_CHARS: 1_000,
   /** The most characters the developer's note may spell. */
@@ -149,8 +156,15 @@ export const INBOX_BOUNDS = {
   MAX_MESSAGES_READ: 50,
   /** The most pictures the agent's message on a thread may carry, each held to the image bound: as many as a post's image blocks once could be. */
   MAX_MESSAGE_PICTURES: 8,
-  /** The most steps a `do` ask may list: a to-do a person works through at a glance. */
-  MAX_STEPS: 8,
+  /**
+   * The most steps a `do` ask may hold as a read or an answer carries it: a
+   * bound on a stored row and a request body, never on how long a to-do
+   * may be, and wider than an agent may post (`MAX_POSTED_STEPS`), so a
+   * build reads a to-do a later service lets an agent post.
+   */
+  MAX_STEPS: 50,
+  /** The most steps an agent's `do` ask may list for now, until the builds that read `MAX_STEPS` are out. */
+  MAX_POSTED_STEPS: 8,
   /** The most characters one step of a `do` ask may spell, in Markdown. */
   MAX_STEP_CHARS: 600,
   /** The most characters a post's addressee may spell: a member's mention link written whole. */
@@ -249,6 +263,19 @@ export const INBOX_STATUS = {
 
 export type InboxStatus = (typeof INBOX_STATUS)[keyof typeof INBOX_STATUS];
 
+/**
+ * The statuses an item may move to from each it stands in: a post opens it
+ * whatever it stands in; a member's answer or nod, a close, and a settle
+ * take only an open one; an answer or a member's close taken back opens
+ * it again, and nothing undoes a settle. Every write of an item's status guards on
+ * the statuses this lists as moving to the one it writes (`statusesMovingTo`).
+ */
+export const INBOX_STATUS_MOVES = {
+  [INBOX_STATUS.OPEN]: [INBOX_STATUS.OPEN, INBOX_STATUS.ANSWERED, INBOX_STATUS.CLOSED],
+  [INBOX_STATUS.ANSWERED]: [INBOX_STATUS.OPEN],
+  [INBOX_STATUS.CLOSED]: [INBOX_STATUS.OPEN],
+} as const satisfies Record<InboxStatus, readonly InboxStatus[]>;
+
 /** How the developer answered an item. */
 export const INBOX_REPLY = {
   /** Picked one or more of a choice's options. */
@@ -302,6 +329,39 @@ export const INBOX_ASK_STATUS = {
   /** The agent took it back, with why. */
   WITHDRAWN: "withdrawn",
 } as const;
+
+export type InboxAskStatus = (typeof INBOX_ASK_STATUS)[keyof typeof INBOX_ASK_STATUS];
+
+/**
+ * The statuses an ask may move to from each it stands in: an open one is
+ * answered, replaced by a later post, or withdrawn; an answer taken back,
+ * and a withdrawal undone, open it again; a replaced one stays so. Every
+ * write of an ask's status guards on the statuses this lists as moving to
+ * the one it writes (`statusesMovingTo`).
+ */
+export const INBOX_ASK_STATUS_MOVES = {
+  [INBOX_ASK_STATUS.OPEN]: [
+    INBOX_ASK_STATUS.ANSWERED,
+    INBOX_ASK_STATUS.REPLACED,
+    INBOX_ASK_STATUS.WITHDRAWN,
+  ],
+  [INBOX_ASK_STATUS.ANSWERED]: [INBOX_ASK_STATUS.OPEN],
+  [INBOX_ASK_STATUS.REPLACED]: [],
+  [INBOX_ASK_STATUS.WITHDRAWN]: [INBOX_ASK_STATUS.OPEN],
+} as const satisfies Record<InboxAskStatus, readonly InboxAskStatus[]>;
+
+/**
+ * The statuses among `from`, every one by default, that the moves table
+ * lets move to `to`: what a write moving a row to `to` holds the row's
+ * status to, so a move the table does not list matches no row.
+ */
+export function statusesMovingTo<Status extends string>(
+  moves: Readonly<Record<Status, readonly Status[]>>,
+  to: Status,
+  from: readonly Status[] = Object.keys(moves) as Status[],
+): Status[] {
+  return from.filter((status) => moves[status].includes(to));
+}
 
 /**
  * The options a version 4 approval stands for as a `decide` ask, and the
@@ -611,27 +671,49 @@ const DECIDE_INPUT_FIELDS = {
   recommended: EffectSchema.optionalKey(recommendedInputSchema),
 };
 
+/** A `do` ask's steps in Markdown, in order, at most `most`. */
+function doSteps(most: number) {
+  return EffectSchema.Array(filledText(INBOX_BOUNDS.MAX_STEP_CHARS)).check(
+    EffectSchema.isMaxLength(most),
+  );
+}
+
+/** An `answer` ask's fields, one to `most`, where it asks typed values. */
+function answerFields(most: number) {
+  return EffectSchema.optionalKey(
+    EffectSchema.Array(inboxFieldSchema).check(
+      EffectSchema.isMinLength(1),
+      EffectSchema.isMaxLength(most),
+    ),
+  );
+}
+
 /**
- * A `do` ask's own keys: its steps in Markdown, in order, few. Note that
- * none is a `do` ask too, because a version 4 to-do named no step and its
- * item's words say what to do; marking it done ticks nothing.
+ * A `do` ask's own keys as it is kept and read: its steps in Markdown, in
+ * order. Note that none is a `do` ask too, because a version 4 to-do named
+ * no step and its item's words say what to do; marking it done ticks nothing.
  */
 const DO_FIELDS = {
   type: EffectSchema.Literal(INBOX_ASK.DO),
-  steps: EffectSchema.Array(filledText(INBOX_BOUNDS.MAX_STEP_CHARS)).check(
-    EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_STEPS),
-  ),
+  steps: doSteps(INBOX_BOUNDS.MAX_STEPS),
 };
 
-/** An `answer` ask's own keys: the fields of a form, where it asks typed values, and none where the reply's words are the answer. */
+/** A `do` ask's own keys as the agent posts it: those it is kept by, its steps held to what an agent may post. */
+const DO_INPUT_FIELDS = {
+  type: DO_FIELDS.type,
+  steps: doSteps(INBOX_BOUNDS.MAX_POSTED_STEPS),
+};
+
+/** An `answer` ask's own keys as it is kept and read: the fields of a form, where it asks typed values, and none where the reply's words are the answer. */
 const ANSWER_FIELDS = {
   type: EffectSchema.Literal(INBOX_ASK.ANSWER),
-  fields: EffectSchema.optionalKey(
-    EffectSchema.Array(inboxFieldSchema).check(
-      EffectSchema.isMinLength(1),
-      EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_FIELDS),
-    ),
-  ),
+  fields: answerFields(INBOX_BOUNDS.MAX_FIELDS),
+};
+
+/** An `answer` ask's own keys as the agent posts it: those it is kept by, its fields held to what an agent may post. */
+const ANSWER_INPUT_FIELDS = {
+  type: ANSWER_FIELDS.type,
+  fields: answerFields(INBOX_BOUNDS.MAX_POSTED_FIELDS),
 };
 
 /** What a message asks of its reader, one of three: decide among options, do steps, or answer. */
@@ -643,11 +725,11 @@ const inboxAskSchema = EffectSchema.Union([
 
 export type InboxAsk = typeof inboxAskSchema.Type;
 
-/** An ask as the agent posts it: one it is kept as, but a `decide`'s recommendation one label or a list of them. */
+/** An ask as the agent posts it: one it is kept as, but a `decide`'s recommendation one label or a list of them, and its steps or fields held to what an agent may post. */
 const inboxAskInputSchema = EffectSchema.Union([
   EffectSchema.Struct(DECIDE_INPUT_FIELDS),
-  EffectSchema.Struct(DO_FIELDS),
-  EffectSchema.Struct(ANSWER_FIELDS),
+  EffectSchema.Struct(DO_INPUT_FIELDS),
+  EffectSchema.Struct(ANSWER_INPUT_FIELDS),
 ]);
 
 export type InboxAskInput = typeof inboxAskInputSchema.Type;

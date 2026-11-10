@@ -253,17 +253,20 @@
 }
 
 /* The caret where no line stands to take one, between two dividers or past
-   one at the text's ends (TipTap's gap cursor), which TipTap's left-out base
-   rules drew: out of the flow, so it moves no block as it stands, and a short
-   accent line blinking where the next block's line would start. */
-.description-document-text .ProseMirror-gapcursor {
+   one at the text's ends, or over a quote that starts a message box
+   (TipTap's gap cursor), which TipTap's left-out base rules drew: out of the
+   flow, so it moves no block as it stands, and a short accent line blinking
+   where the next block's line would start. */
+.description-document-text .ProseMirror-gapcursor,
+.composer-editor .ProseMirror-gapcursor {
   display: none;
   position: absolute;
   margin: 0;
   pointer-events: none;
 }
 
-.description-document-text.ProseMirror-focused .ProseMirror-gapcursor {
+.description-document-text.ProseMirror-focused .ProseMirror-gapcursor,
+.composer-editor.ProseMirror-focused .ProseMirror-gapcursor {
   display: block;
 }
 
@@ -274,7 +277,8 @@
   top: -0.75em;
 }
 
-.description-document-text .ProseMirror-gapcursor::after {
+.description-document-text .ProseMirror-gapcursor::after,
+.composer-editor .ProseMirror-gapcursor::after {
   content: "";
   position: absolute;
   top: -2px;
@@ -287,7 +291,8 @@
 /* Note that reduced motion takes the blink away rather than pausing it,
    because a blink paused in its hidden half would hide the caret. */
 @media (prefers-reduced-motion: reduce) {
-  .description-document-text .ProseMirror-gapcursor::after {
+  .description-document-text .ProseMirror-gapcursor::after,
+  .composer-editor .ProseMirror-gapcursor::after {
     animation: none;
   }
 }
@@ -2144,6 +2149,12 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   margin: 0;
 }
 
+/* A quote stands a tight gap off the lines around it, as the blank line it
+   is sent with sets it apart once drawn. */
+.composer-editor > blockquote {
+  margin-block: var(--ui-tight-gap);
+}
+
 .agent-composer-placeholder {
   position: absolute;
   top: 0;
@@ -2807,9 +2818,9 @@ svg.lucide {
 }
 
 /* The field that answers a thread, starts one, or edits a comment, on the
-   message box (`message-box.tsx`): a reply as every box in the window is, an
-   edit in the card's well, a first comment bare on the card. What stands
-   here lays out what it holds. */
+   message box (`message-box.tsx`): a reply as every box in the window is, a
+   first comment and an edit bare on the card. What stands here lays out
+   what it holds. */
 .comment-field {
   --comment-field-inline: var(--ui-space-8);
   margin-top: var(--ui-control-gap);
@@ -2857,14 +2868,43 @@ svg.lucide {
 /* A thread's first comment is the card itself (`COMPOSER_LOOK.BARE`): its
    words on the card's own surface, no well inside it, its tools along the
    card's foot. */
-.comment-field[data-variant="first"] {
+.comment-field:is([data-variant="first"], [data-variant="edit"]) {
   --comment-field-inline: 0;
   margin-top: 0;
 }
 
-.comment-field[data-variant="first"] :is(.ui-composer-files, .ui-composer-foot) {
+.comment-field:is([data-variant="first"], [data-variant="edit"])
+  :is(.ui-composer-files, .ui-composer-foot) {
   padding-right: 0;
   padding-left: 0;
+}
+
+/* A comment's words edited in their place stand where they were read, in
+   the comment's body with no inset over them, so opening Edit moves no
+   word: only the caret lands in them and the foot opens under them. */
+.comment-field[data-variant="edit"] :is(.agent-composer-placeholder, .agent-composer-input) {
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.comment-field[data-variant="edit"] .ui-composer-foot {
+  padding-bottom: 0;
+}
+
+/* Its files stand where the comment's own stood over its words
+   (`.comment-files`), with room at the row's end for the × each chip
+   carries past its corner. */
+.comment-field[data-variant="edit"] .ui-composer-files {
+  padding: var(--ui-tight-gap) var(--ui-item-gap) var(--ui-item-gap) 0;
+}
+
+/* Its foot holds no more than the +, the microphone, Cancel, and Send,
+   which stand whole in a comment's narrowest card, so its box folds none of
+   them into its ⋯ as a narrower agent's box would: it answers no composer
+   width of its own, while keeping its inline-size containment. */
+.comment-field[data-variant="edit"] {
+  container-name: none;
 }
 
 /* One of an agent's log's rows (`agent-tab.tsx`, drawn only near the view

@@ -192,6 +192,7 @@ test("where a move is offered, the popover lists the places under its facts and 
     devices: [studio],
     moveTo: (to: AgentRunsOnRequest) => moved.push(to),
     pushedOnly: false,
+    detail: undefined,
   };
 
   const rows = await placeMenuOf(withMac, opened);

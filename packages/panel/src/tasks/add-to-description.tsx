@@ -25,7 +25,7 @@ import { type ActResult, type ActVariables, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { encodeImage } from "../feedback-images.js";
 import { keepPictureRead } from "../picture-query.js";
-import { TOAST_HOLD, useWorkingToast } from "../toast.js";
+import { useWorkingToast } from "../toast.js";
 import { pressWrite, type UndoWrite } from "../undo-stack.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
@@ -255,7 +255,6 @@ export function useAddToDescription(): ViewerAction | undefined {
         settle({
           words,
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: {
             surface: FAILURE_SURFACE.DESCRIPTION_ADD,
             cause,

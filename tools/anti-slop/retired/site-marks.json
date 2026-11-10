@@ -4,7 +4,12 @@
     {
       "import": "@repo/brand",
       "names": ["MARK_ART"],
-      "allow": ["packages/brand/", "packages/credentials/", "packages/ui/src/marks/"]
+      "allow": [
+        "packages/brand/",
+        "packages/credentials/",
+        "packages/service/src/previews/",
+        "packages/ui/src/marks/"
+      ]
     }
   ]
 }

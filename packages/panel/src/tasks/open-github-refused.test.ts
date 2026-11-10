@@ -10,6 +10,7 @@ import { appPlatform } from "../app-platform.js";
 import { fakeActPort, refusedOnPort } from "../testing/app-bridge.js";
 import { DESKTOP_LINKS, fakeAppPlatform } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import { standingToastWords } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { type PublishedDoors, PublishedRow } from "./agent-published.js";
 
@@ -74,9 +75,7 @@ async function mountRow(): Promise<HTMLElement> {
 
 /** What each toast standing says, oldest first. */
 function toasts(): string[] {
-  return [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-    (words) => words.textContent ?? "",
-  );
+  return standingToastWords();
 }
 
 test("a refused Open on GitHub raises a toast saying why", async () => {

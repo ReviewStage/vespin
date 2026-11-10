@@ -88,6 +88,12 @@ test.each([
     order: ["Rename `[Picture 1]` here.", "Picture 1"],
   },
   {
+    case: "a PDF and a text file right after their markers, and a text file no marker names after the words as ever",
+    words: "read [File: spec.pdf] then [File: notes.txt]",
+    files: ["notes.txt", "spec.pdf", "log.txt"],
+    order: ["read [File: spec.pdf]", "spec.pdf", " then [File: notes.txt]", "notes.txt", "log.txt"],
+  },
+  {
     case: "words naming none of the pictures handed as they always were",
     words: "Match these.",
     files: ["Picture 1", "spec.pdf"],
@@ -97,7 +103,9 @@ test.each([
   const attachments = files.map((name) =>
     name.endsWith(".pdf")
       ? { name, mediaType: AGENT_ATTACHMENT_TYPE.PDF, data: PNG }
-      : picture(name),
+      : name.endsWith(".txt")
+        ? textFile(name)
+        : picture(name),
   );
   assert.deepEqual(handedOrder(turnContent(words, attachments)), order);
 });

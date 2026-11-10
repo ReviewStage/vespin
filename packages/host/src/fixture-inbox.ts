@@ -1179,6 +1179,10 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
     failureReason: null,
   }),
   [ACT_KIND.PUSH_DEVICE_NOTIFY]: () => ({ done: true }),
+  // The Live Activity's tokens and end are taken, as a phone the service holds would have them.
+  [ACT_KIND.LIVE_ACTIVITY_START_TOKEN]: () => ({ done: true }),
+  [ACT_KIND.LIVE_ACTIVITY_TOKEN]: () => ({ done: true }),
+  [ACT_KIND.LIVE_ACTIVITY_ENDED]: () => ({ done: true }),
 };
 
 /**

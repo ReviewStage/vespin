@@ -28,7 +28,7 @@ import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
 import { useLayoutEffect, useRef } from "react";
 import { useAppCommand } from "./app-commands.js";
-import { showToast, TOAST_HOLD } from "./toast.js";
+import { showToast } from "./toast.js";
 import { appStateQuery, selectCapability } from "./use-app-state.js";
 
 /** The custom property desktop.css divides the traffic lights' width by, since the page zoom does not scale them. */
@@ -63,7 +63,6 @@ export function useWindowZoom(
         showToast({
           words: ZOOM_REFUSED,
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: { surface: FAILURE_SURFACE.WINDOW_ZOOM, cause: result },
         });
         // Note that a refused size is forgotten, because no snapshot will

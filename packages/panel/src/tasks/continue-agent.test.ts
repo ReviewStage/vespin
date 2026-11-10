@@ -1030,7 +1030,7 @@ test("an agent with only forks keeps its box, since a fork is no continuation", 
   assert.ok(tab.sendButton(), "the box still takes a message");
 });
 
-test("the continued box's Archive archives the reader's own agent at once, settled or running, and its Stop stands only while a turn runs", async () => {
+test("the continued box's Archive archives the reader's own settled agent at once and asks first while it runs, and its Stop stands only while a turn runs", async () => {
   const archived: { agentId: string; archived: boolean }[] = [];
   const settled = await drawnTab({
     status: AGENT_STATUS.COMPLETED,
@@ -1057,7 +1057,14 @@ test("the continued box's Archive archives the reader's own agent at once, settl
 
   await act(async () => running.named(note, "Archive")?.click());
   await settle();
-  assert.equal(document.querySelector('[role="alertdialog"]'), null, "nothing was asked");
+  const dialog =
+    document.querySelector<HTMLElement>('[role="alertdialog"]') ?? assert.fail("it asks first");
+  assert.deepEqual(archived, [], "nothing is archived before the answer");
+  const stop = [...dialog.querySelectorAll("button")].find(
+    (each) => each.textContent === "Stop agents",
+  );
+  await act(async () => (stop ?? assert.fail("the stop is offered")).click());
+  await settle();
   assert.deepEqual(archived, [{ agentId: SOURCE, archived: true }]);
 });
 
