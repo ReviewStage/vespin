@@ -167,13 +167,18 @@ export function usePushRegistration(signedIn: boolean): void {
 export function unregisterPushDevice(acts: ActPortClient, fixture: boolean): Promise<void> {
   // The next account to sign in registers the phone afresh.
   registration = undefined;
-  return readDeviceKey(fixture).then((key) => {
-    if (key === undefined) return undefined;
-    return acts[ACT_KIND.PUSH_DEVICE_UNREGISTER](key).then(
-      () => undefined,
-      (error: unknown) => console.error("The phone was not unregistered.", error),
-    );
-  });
+  // Note that the unregister waits on a register still under way, since a register landing after it would put the phone back on the account.
+  const done = lastRegister
+    .then(() => readDeviceKey(fixture))
+    .then((key) => {
+      if (key === undefined) return undefined;
+      return acts[ACT_KIND.PUSH_DEVICE_UNREGISTER](key).then(
+        () => undefined,
+        (error: unknown) => console.error("The phone was not unregistered.", error),
+      );
+    });
+  lastRegister = done;
+  return done;
 }
 
 /** The phone's standing as Settings draws it, none until the service answers, and the "Notify me" choice made from it. */
@@ -185,6 +190,8 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
   const [standing, setStanding] = useState<PushDeviceStatusAnswer | undefined>(undefined);
   // Which choice was made last, so an earlier one's refusal never puts back what a later one drew.
   const picks = useRef(0);
+  // The choice the service last held, read or taken, which a refusal puts back.
+  const confirmed = useRef<PushNotify | undefined>(undefined);
   useEffect(() => {
     if (key === undefined) return undefined;
     let live = true;
@@ -193,7 +200,9 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
       .then(
         (answer) => {
           // A phone the service does not hold yet, or a read it did not answer, draws no standing.
-          if (live) setStanding("failure" in answer ? undefined : answer);
+          if (!live) return;
+          confirmed.current = "failure" in answer ? undefined : answer.notify;
+          setStanding("failure" in answer ? undefined : answer);
         },
         (error: unknown) => console.error("The phone's notifications could not be read.", error),
       );
@@ -204,16 +213,19 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
   const choose = useCallback(
     (notify: PushNotify) => {
       if (key === undefined || standing === undefined) return;
-      const before = standing.notify;
       picks.current += 1;
       const pick = picks.current;
       // Note that the choice is drawn at once and put back where the service did not take it, unless a later choice stands by then.
       setStanding({ ...standing, notify });
       const putBack = () => {
-        if (pick === picks.current) setStanding((held) => held && { ...held, notify: before });
+        const held = confirmed.current;
+        if (pick === picks.current && held !== undefined) {
+          setStanding((drawn) => drawn && { ...drawn, notify: held });
+        }
       };
       acts[ACT_KIND.PUSH_DEVICE_NOTIFY]({ ...key, notify }).then((answer) => {
         if ("failure" in answer) putBack();
+        else confirmed.current = notify;
       }, putBack);
     },
     [acts, key, standing],

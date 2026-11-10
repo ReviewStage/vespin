@@ -26,6 +26,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
 import { Stack, useRouter } from "expo-router";
+import { useRef } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
@@ -75,11 +76,18 @@ export default function SettingsScreen() {
     chosen === undefined
       ? LINK_ORIGIN
       : linkOf({ kind: LINK_DESTINATION.SETTINGS }, chosen.slug ?? chosen.id);
-  // Note that the phone is unregistered first, while the account's credential still stands, so no push of the account reaches a phone signed out of it.
+  // Whether a sign-out is under way, so a press while it runs starts no second one.
+  const signingOut = useRef(false);
+  // Note that the phone is unregistered first, while the account's credential still stands, so no push of the account reaches a phone signed out of it; the unregister's own deadline bounds the wait.
   const signOut = () => {
+    if (signingOut.current) return;
+    signingOut.current = true;
     unregisterPushDevice(acts, fixture)
       .then(() => acts[ACT_KIND.ACCOUNT_SIGN_OUT]())
-      .catch((error: unknown) => console.error("The sign-out did not finish.", error));
+      .catch((error: unknown) => console.error("The sign-out did not finish.", error))
+      .finally(() => {
+        signingOut.current = false;
+      });
   };
   return (
     <>
