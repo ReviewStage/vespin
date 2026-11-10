@@ -175,6 +175,7 @@ export const readOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
  * commits, `setupFinished`, whether the account
  * finished setup, `setupPlace`, where it stands in setup, `soundWhen` and
  * `completionSound`, when and which sound plays as an agent finishes,
+ * `askSound`, which sound plays as something new needs the account,
  * `turnNotifications`, whether a notification is posted then,
  * `onboardingSurvey`, what it answered in setup's survey, `agent`, a choice the catalog
  * accepts, moved only to a model the account pays for, `chaptersModel`, one of the chapters' fixed set, and `experiments`, each experiment's on or off merged over
@@ -198,6 +199,7 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
     body.setupPlace === undefined &&
     body.soundWhen === undefined &&
     body.completionSound === undefined &&
+    body.askSound === undefined &&
     body.turnNotifications === undefined &&
     body.onboardingSurvey === undefined &&
     body.agent === undefined &&
@@ -256,6 +258,11 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
       return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     }
     write.completionSound = completionSound;
+  }
+  if (body.askSound !== undefined) {
+    const askSound = ownPreferenceFromWire("askSound", body.askSound);
+    if (askSound === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    write.askSound = askSound;
   }
   if (body.turnNotifications !== undefined) {
     const turnNotifications = ownPreferenceFromWire("turnNotifications", body.turnNotifications);

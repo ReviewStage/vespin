@@ -81,6 +81,13 @@ export const accountPreference = pgTable("account_preference", {
    */
   completionSound: text("completion_sound").$type<CompletionSound>(),
   /**
+   * Which sound plays as something new needs the account, a question or a
+   * command waiting on a Mac (`@repo/wire/app-settings`'s
+   * `COMPLETION_SOUND`); null until the account chooses, which reads as the
+   * knock. A part of the snapshot of its own, as the link choice is.
+   */
+  askSound: text("ask_sound").$type<CompletionSound>(),
+  /**
    * Whether the OS posts a notification as an agent the account started
    * finishes or asks, while the window is behind; null until the account
    * chooses, which reads as off. A part of the snapshot of its own, as the

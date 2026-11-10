@@ -15,8 +15,9 @@ import { CatalogSection } from "../section";
  * completion-sounds.tsx -- the completion sounds, listed by group, each a press that plays it.
  *
  * This is where a sound is tuned by ear: press one, change its recipe in
- * `@repo/ui`'s `completion-sound.ts`, press it again. A press within a
- * sound's own length plays nothing, as it does wherever the player is called.
+ * `@repo/ui`'s `completion-sound.ts`, press it again. Pressing a sound
+ * again while it sounds plays nothing, and another sound cuts it short, as
+ * wherever the player is called.
  */
 
 const GROUPS: readonly CompletionSoundGroup[] = Object.values(COMPLETION_SOUND_GROUP);
@@ -31,7 +32,7 @@ function CompletionSounds(): React.JSX.Element {
     <>
       <CatalogSection id="completion-sounds-how" title="Press to hear one">
         <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-          Nothing here plays on its own. A press within a sound's own length plays nothing.
+          Nothing here plays on its own. Pressing a sound again while it plays does nothing.
         </Text>
       </CatalogSection>
       {GROUPS.map((group) => (
