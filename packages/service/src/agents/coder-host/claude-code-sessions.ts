@@ -117,6 +117,18 @@ function launchCredential(
   };
 }
 
+/**
+ * The half of Claude Code agents whose launches keep the main conversation's
+ * prompt cache for an hour rather than the CLI's default five minutes, its
+ * workers left on that default: those whose id, a UUID
+ * as Postgres writes it, begins with one of these hex digits. Note that the
+ * weekly agent audit reads this rule to tell the halves apart, recomputing it
+ * from `agent.id` alone (`left(agent.id::text, 1) between '0' and '7'`), so
+ * it changes only with the audit's query. An agent on a Claude subscription
+ * is left out whatever its id, since the CLI already caches for an hour there.
+ */
+const PROMPT_CACHE_HOUR_DIGITS: ReadonlySet<string> = new Set("01234567");
+
 /** The effort the CLI takes for the agent's own, where it names one of the SDK's. */
 function effortOf(effort: string): Effort | undefined {
   return Object.values(EFFORT).find((level) => level === effort);
@@ -237,6 +249,10 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
       const model = providerModelOf(agent.model);
       if (model === undefined) return yield* Effect.fail(new LaunchRefused({ reason: "model" }));
       const effort = effortOf(agent.effort);
+      // Note that the launch chose and recorded who pays before its config is written.
+      const { payer } = yield* recordedPayer(agent);
+      const cacheHour =
+        payer === AGENT_PAYER.API_KEY && PROMPT_CACHE_HOUR_DIGITS.has(agent.id.charAt(0));
       const written: ClaudeCodeConfig = {
         harness: RUNNER_HARNESS.CLAUDE_CODE,
         cwd: layout.checkoutPath,
@@ -244,6 +260,7 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
         model: model.modelId,
         ...(effort === undefined ? undefined : { effort }),
         ...(model.speed === MODEL_SPEED.FAST ? { fast: true } : undefined),
+        ...(cacheHour ? { promptCacheHour: true } : undefined),
         append: yield* options.instructions(agent, layout),
         ...(resume === undefined ? undefined : { resume }),
         ...(rewindBefore === undefined ? undefined : { rewindBefore }),

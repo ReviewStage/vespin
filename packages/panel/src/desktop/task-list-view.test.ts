@@ -30,7 +30,7 @@ import { SIDEBAR_OVERLAY } from "./sidebar-collapse.js";
 
 /**
  * task-list-view.test.ts -- the sidebar's Tasks section lists the work under
- * way, the reader's own until the scope switcher says otherwise, grouped as it
+ * way, the reader's own until View options says otherwise, grouped as it
  * says, each row saying what its group does not, the pins standing apart in
  * a section of their own, and each workspace keeping its own view on this
  * Mac.
@@ -253,17 +253,17 @@ function menuItem(label: string): HTMLElement {
   return found;
 }
 
-/** The scope switcher, which drops the view's menu. */
-function scopeButton(sidebar: HTMLElement): HTMLButtonElement {
+/** The Tasks head's View options, which drops the view's menu. */
+function viewOptions(sidebar: HTMLElement): HTMLButtonElement {
   return (
-    sidebar.querySelector<HTMLButtonElement>('.sidebar-scope button[aria-haspopup="menu"]') ??
-    assert.fail("the scope switcher stands")
+    sidebar.querySelector<HTMLButtonElement>('button[aria-label="View options"]') ??
+    assert.fail("the Tasks head offers View options")
   );
 }
 
-/** Chooses `choice` under Group by in the scope switcher's menu, and lets the menu go. */
+/** Chooses `choice` under Group by in the Tasks head's View options, and lets the menu go. */
 function groupBy(sidebar: HTMLElement, choice: string): void {
-  const button = scopeButton(sidebar);
+  const button = viewOptions(sidebar);
   act(() => button.click());
   act(() => menuItem("Group by").click());
   const grouping = menuItem(choice);
@@ -280,9 +280,9 @@ function listUngrouped(sidebar: HTMLElement): void {
   groupBy(sidebar, "None");
 }
 
-/** Chooses `choice` under `submenu` in the scope switcher's menu. */
+/** Chooses `choice` under `submenu` in the Tasks head's View options. */
 async function choose(sidebar: HTMLElement, submenu: string, choice: string): Promise<void> {
-  const button = scopeButton(sidebar);
+  const button = viewOptions(sidebar);
   act(() => button.click());
   act(() => menuItem(submenu).click());
   // Note that a member is offered once the workspace's members reach their query.
@@ -305,12 +305,16 @@ function groupNames(sidebar: HTMLElement): string[] {
   ].map(heardName);
 }
 
-/** The rows of the Tasks section, each by its name. */
-function taskRows(sidebar: HTMLElement): { name: string }[] {
+/** The rows of the Tasks section: each name, the repository it says, and whether it wears a face. */
+function taskRows(
+  sidebar: HTMLElement,
+): { name: string; repository: string | undefined; face: boolean }[] {
   const tasks = sidebar.querySelector(TASK_LIST);
   assert.ok(tasks, "the Tasks section stands");
   return [...tasks.querySelectorAll(".sidebar-tasks > li > button")].map((row) => ({
     name: row.querySelector(".ui-list-row-title")?.firstChild?.textContent ?? "",
+    repository: row.querySelector(".sidebar-task-repository")?.textContent ?? undefined,
+    face: row.querySelector(".actor-mark") !== null,
   }));
 }
 
@@ -344,11 +348,11 @@ async function mountRead(
   return sidebar;
 }
 
-/** What the scope switcher says, which the list is called by too. */
+/** What the Tasks head says, which the list is called by too. */
 function headWords(sidebar: HTMLElement): string | undefined {
   const list = sidebar.querySelector(TASK_LIST);
   const said =
-    sidebar.querySelector(".sidebar-scope .ui-group-header-lead")?.textContent ?? undefined;
+    sidebar.querySelector(".sidebar-tasks-head .ui-group-header-lead")?.textContent ?? undefined;
   assert.equal(
     list?.getAttribute("aria-label") ?? undefined,
     said,
@@ -361,22 +365,19 @@ test("a shared workspace opens on your own tasks, those you are on and those no 
   const sidebar = await mountRead(ACME, MINE_UNASSIGNED);
 
   assert.deepEqual(groupNames(sidebar), ["relay", "console"]);
-  assert.deepEqual(
-    taskRows(sidebar).map((row) => row.name),
-    ["Fix flaky deploy", "Audit logs"],
-  );
+  assert.deepEqual(taskRows(sidebar), [
+    { name: "Fix flaky deploy", repository: undefined, face: false },
+    { name: "Audit logs", repository: undefined, face: true },
+  ]);
+  const options = sidebar.querySelector('button[aria-label="View options"]');
+  assert.equal(options?.getAttribute("aria-description"), null);
 });
 
-test("the scope switcher offers Assigned to, Group by, and New section, Assigned to holding Me, Anyone, then each teammate by name with their email beside it, hanging their card", async () => {
+test("View options offers Group by, Show completed sub-tasks, and Assigned to, Assigned to holding Me, Anyone, then each teammate by name with their email beside it, hanging their card", async () => {
   const sidebar = await mountRead(ACME, ASSIGNED);
-  const button = scopeButton(sidebar);
+  const button = viewOptions(sidebar);
   act(() => button.click());
-  assert.deepEqual(lastMenuItems(), [
-    "Assigned to",
-    "Group by",
-    "Show completed sub-tasks",
-    "New section",
-  ]);
+  assert.deepEqual(lastMenuItems(), ["Group by", "Show completed sub-tasks", "Assigned to"]);
   assert.equal(menuItem("Show completed sub-tasks").getAttribute("aria-checked"), "false");
   act(() => menuItem("Assigned to").click());
   await vi.waitFor(() =>
@@ -398,7 +399,7 @@ test("the scope switcher offers Assigned to, Group by, and New section, Assigned
   assert.equal(cardName(), "Charles Pan");
 });
 
-test("the Tasks head says My tasks, then Everyone's tasks once Assigned to › Anyone lists everyone's, kept across launches, with no chip", async () => {
+test("the Tasks head says My tasks, then Everyone's tasks once Assigned to › Anyone lists everyone's, kept across launches, with a dot and no chip", async () => {
   const mine = await mountRead(ACME, ASSIGNED);
   assert.equal(headWords(mine), "My tasks");
   await choose(mine, "Assigned to", "Anyone");
@@ -408,17 +409,19 @@ test("the Tasks head says My tasks, then Everyone's tasks once Assigned to › A
   assert.equal(taskRows(sidebar).length, 3);
   assert.equal(headWords(sidebar), "Everyone's tasks");
   assert.equal(sidebar.querySelector('button[aria-label="Show my tasks"]'), null, "no chip");
+  assert.equal(viewOptions(sidebar).getAttribute("aria-description"), "Filtered");
 });
 
-test("grouped by none, the tasks run in one list", () => {
+test("grouped by none, the tasks run in one list, each row naming its repository and wearing who is on it", () => {
   keepAnyone();
   const sidebar = mountSidebar(ACME, ASSIGNED);
   listUngrouped(sidebar);
   assert.deepEqual(groupNames(sidebar), []);
-  assert.deepEqual(
-    taskRows(sidebar).map((row) => row.name),
-    ["Billing empty states", "Retry webhooks", "Fix flaky deploy"],
-  );
+  assert.deepEqual(taskRows(sidebar), [
+    { name: "Billing empty states", repository: "console", face: true },
+    { name: "Retry webhooks", repository: "relay", face: true },
+    { name: "Fix flaky deploy", repository: "relay", face: false },
+  ]);
 });
 
 test("the pins stand in a section of their own above Tasks, whatever the view lists", () => {
@@ -462,9 +465,10 @@ test("a workspace nobody shares lists every task and offers no Assigned to, Grou
   const sidebar = mountSidebar(PERSONAL);
   assert.equal(taskRows(sidebar).length, 3);
   assert.equal(headWords(sidebar), "My tasks");
-  const button = scopeButton(sidebar);
+  const button = viewOptions(sidebar);
+  assert.equal(button.getAttribute("aria-description"), null);
   act(() => button.click());
-  assert.deepEqual(lastMenuItems(), ["Group by", "Show completed sub-tasks", "New section"]);
+  assert.deepEqual(lastMenuItems(), ["Group by", "Show completed sub-tasks"]);
   act(() => menuItem("Group by").click());
   assert.deepEqual(
     ["Repository", "None"].map((choice) => menuItem(choice).getAttribute("aria-checked")),
@@ -530,6 +534,17 @@ test("a workspace whose list names no member count still filters by person once 
   assert.equal(taskRows(sidebar).length, 3);
 });
 
+test("in one run, a task with no repository says so on its row", async () => {
+  const notes = task("t-6", "Hiring loop notes", null, DEAN, { createdAt: 1, updatedAt: 700 });
+  const sidebar = await mountRead(ACME, [...TASKS, notes]);
+  listUngrouped(sidebar);
+  assert.deepEqual(taskRows(sidebar)[0], {
+    name: "Hiring loop notes",
+    repository: "No repository",
+    face: true,
+  });
+});
+
 test("an empty workspace says only that it holds no tasks", async () => {
   const sidebar = await mountRead(ACME, []);
   // Note that the pinned section's own "Drag tasks here to pin them" is a line of the sidebar too.
@@ -590,7 +605,7 @@ test("Show completed sub-tasks stands a parent's finished sub-tasks under it, mu
     of("d", "Delete", TASK_STATUS.IN_PROGRESS, "a"),
     of("s", "Shipped", TASK_STATUS.DONE),
   ]);
-  const button = scopeButton(sidebar);
+  const button = viewOptions(sidebar);
   act(() => button.click());
   act(() => menuItem("Show completed sub-tasks").click());
   const fold = sidebar.querySelector<HTMLButtonElement>(
@@ -625,7 +640,7 @@ test("a workspace nobody shares offers ⌘K no filtering by person", async () =>
 const TRIAGE = oneOff("a-1", "Triage overnight issues", "acme/relay", DEAN, 550);
 const SWEEP = oneOff("a-2", "Sweep flaky tests", "acme/console", CHARLES, 100);
 
-test("a one-off agent stands among its repository's tasks by its last activity, led by its harness mark, and a press opens its page", () => {
+test("a one-off agent stands among its repository's tasks by its last activity, led by its harness mark and ending with its automation's clock, and a press opens its page", () => {
   keepAnyone();
   const sidebar = mountSidebar(ACME, TASKS, [TRIAGE, SWEEP]);
   assert.deepEqual(groupNames(sidebar), ["console", "relay"]);
@@ -646,6 +661,7 @@ test("a one-off agent stands among its repository's tasks by its last activity, 
   ].find((each) => each.textContent?.includes("Triage overnight issues") === true);
   assert.ok(row, "the agent's row stands");
   assert.ok(row.querySelector(".sidebar-agent-glyph svg"), "it leads with its harness mark");
+  assert.ok(row.querySelector(".sidebar-task-time .actor-mark"), "it ends with its starter");
 
   act(() => row.click());
   assert.deepEqual(openedAgents, ["a-1"]);
@@ -873,6 +889,29 @@ test("a task from a service before statuses stands among them", () => {
   assert.ok(taskRows(sidebar).some((row) => row.name === "No status"));
 });
 
+/** What a reader of the screen hears each row of the Tasks section say of whose face it wears, by the row's name. */
+function heardFaces(sidebar: HTMLElement): [string, string | undefined][] {
+  const tasks = sidebar.querySelector(TASK_LIST);
+  assert.ok(tasks, "the Tasks section stands");
+  return [...tasks.querySelectorAll(".sidebar-tasks > li > button")].map((row) => [
+    row.querySelector(".ui-list-row-title")?.firstChild?.textContent ?? "",
+    row.querySelector(".ui-list-row-title .ui-visually-hidden:last-child")?.textContent ??
+      undefined,
+  ]);
+}
+
+test("a row wears its assignee's face where someone else is on it, none where you are, and the unassigned mark, never its creator's, where no one is", async () => {
+  keepAnyone();
+  const sidebar = await mountRead(ACME, ASSIGNED);
+  listUngrouped(sidebar);
+
+  assert.deepEqual(heardFaces(sidebar), [
+    ["Billing empty states", "(unassigned)"],
+    ["Retry webhooks", "(assigned to Charles Pan)"],
+    ["Fix flaky deploy", undefined],
+  ]);
+});
+
 test("Assigned to a teammate, with nothing of theirs, says so, and Show all lists everyone's again", async () => {
   const sidebar = await mountRead(ACME, TASKS);
   await choose(sidebar, "Assigned to", "Charles Pan");
@@ -898,7 +937,7 @@ test("Assigned to says the members could not be read, with Retry, under Me and A
     },
   });
   const sidebar = await mountRead(ACME, ASSIGNED);
-  const button = scopeButton(sidebar);
+  const button = viewOptions(sidebar);
   act(() => button.click());
   act(() => menuItem("Assigned to").click());
   const offered = () =>

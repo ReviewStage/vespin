@@ -14,8 +14,8 @@
  * row's step from the last rather than a message's.
  */
 
+import type { AgentPart, TurnStretch } from "@repo/features/agent-parts";
 import { sameShape, TURN_ROW_DEPTH, type TurnRow } from "@repo/features/turn-rows";
-import type { AgentPart, TurnStretch } from "./agent-model.js";
 
 /** How many of a turn's rows, and lines that reached it, one piece of it holds. */
 export const PIECE_ROWS = 6;

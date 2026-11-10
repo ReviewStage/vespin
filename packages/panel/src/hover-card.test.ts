@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { AGENT_STATUS, CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { GLYPH_STATE } from "@repo/features/glyph-state";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
 import { Effect } from "effect";
@@ -9,7 +10,6 @@ import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { TaskCard } from "./desktop/task-card.js";
-import { GLYPH_STATE } from "./state-glyph.js";
 import { subagentActor } from "./tasks/agent-model.js";
 import { agentSubject, NOTHING_HELD } from "./tasks/agent-ref.js";
 import { AgentTabCard, cardCorner } from "./tasks/agent-tab-card.js";

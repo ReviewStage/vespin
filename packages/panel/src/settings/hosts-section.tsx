@@ -22,8 +22,10 @@ import {
   ConfirmDialog,
   CopyField,
   type DialogConfirm,
+  OutsideSteps,
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
+  SettingsBlock,
   SettingsLine,
   SettingsRow,
   SettingsRowMark,
@@ -33,8 +35,11 @@ import {
   SettingsRowsSkeleton,
   SettingsSection,
   STATUS_TONE,
+  STEP_STATE,
+  Step,
   Switch,
   TEXT_TONE,
+  TEXT_VARIANT,
   Text,
   useAnnounce,
   useConfirmDialog,
@@ -133,9 +138,10 @@ const WORDS = {
   SETTING_UP: "Setting up…",
   UPDATING: "Updating…",
   INSTALL_LABEL: "Run this on a Mac or Linux server",
-  INSTALL_NEXT:
-    "Then open the link it prints, and approve its code. A Mac runs your agents only while its user is logged in.",
+  APPROVE: "Open the link it prints, and approve its code",
+  LOGGED_IN: "A Mac runs your agents only while its user is logged in.",
   INSTALL_FIELD: "Install command",
+  WAITING: "Waiting for a host to join",
   CONNECTED: "is connected.",
 } as const;
 
@@ -402,8 +408,9 @@ function RemoveHostDialog({
 }
 
 /**
- * Add a host: the install command and what comes after it, and the host
- * that just joined, once one has; a reader is told as it does.
+ * Add a host: the install command, then the link it prints, as steps, and
+ * under them the wait for a host to join, until one has: then the host that
+ * joined, which a reader is told of as it does.
  */
 function AddHostSection({
   installScriptUrl,
@@ -416,20 +423,25 @@ function AddHostSection({
   useAnnounce(ANNOUNCE.POLITE, joined === undefined ? "" : `${joined} ${WORDS.CONNECTED}`);
   return (
     <SettingsSection title={SECTION_TITLE.ADD} anchor={SETTINGS_SEARCH_ROW.ADD_HOSTS}>
-      <SettingsRow
-        label={WORDS.INSTALL_LABEL}
-        description={WORDS.INSTALL_NEXT}
-        below={() => (
-          <CopyField
-            label={WORDS.INSTALL_FIELD}
-            value={hostInstallCommand(installScriptUrl)}
-            what="command"
-            copy={copyThroughShell}
-            width={COPY_FIELD_WIDTH.FULL}
-            prompt={COPY_FIELD_PROMPT.SHELL}
-          />
-        )}
-      />
+      <SettingsBlock>
+        <OutsideSteps waiting={joined === undefined ? WORDS.WAITING : undefined}>
+          <Step number={1} title={WORDS.INSTALL_LABEL} state={STEP_STATE.CURRENT}>
+            <CopyField
+              label={WORDS.INSTALL_FIELD}
+              value={hostInstallCommand(installScriptUrl)}
+              what="command"
+              copy={copyThroughShell}
+              width={COPY_FIELD_WIDTH.FULL}
+              prompt={COPY_FIELD_PROMPT.SHELL}
+            />
+          </Step>
+          <Step number={2} title={WORDS.APPROVE} state={STEP_STATE.CURRENT}>
+            <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+              {WORDS.LOGGED_IN}
+            </Text>
+          </Step>
+        </OutsideSteps>
+      </SettingsBlock>
       {joined === undefined ? null : (
         <SettingsLine>
           <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>

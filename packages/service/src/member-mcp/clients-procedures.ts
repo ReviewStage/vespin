@@ -53,8 +53,8 @@ export interface McpClientsProcedureSeams {
   memberMcpServerUrl: string;
 }
 
-/** The member's clients as the wire carries them, with the server's address. */
-function clientsOf(userId: string, serverUrl: string) {
+/** The member's clients as the wire carries them, with the server's address: Settings › MCP's read, and the member MCP server's `list_mcp_clients`. */
+export function memberMcpClients(userId: string, serverUrl: string) {
   return Effect.map(
     hostedStoreOrUnavailable(
       listOAuthGrants(userId, { except: FIRST_PARTY_CLIENTS, tokenOnly: TOKEN_LISTED_CLIENTS }),
@@ -106,7 +106,7 @@ export function mcpClientsProcedures(seams: McpClientsProcedureSeams) {
   const inSession = hosted.mcpClients.use(sessionMiddleware(seams.resolveSessionUserId));
   return {
     list: signedIn.list.effect(function* ({ context }) {
-      return yield* clientsOf(context.userId, seams.memberMcpServerUrl);
+      return yield* memberMcpClients(context.userId, seams.memberMcpServerUrl);
     }),
     revoke: inSession.revoke.effect(function* ({ context, input }) {
       const clientId = input.query.clientId;
@@ -114,7 +114,7 @@ export function mcpClientsProcedures(seams: McpClientsProcedureSeams) {
         yield* hostedStoreOrUnavailable(revokeOAuthClientTokens(context.userId, clientId));
         yield* consentDeletedOrRefusal(seams.deleteClientConsent(context.sessionHeaders, clientId));
       }
-      return yield* clientsOf(context.userId, seams.memberMcpServerUrl);
+      return yield* memberMcpClients(context.userId, seams.memberMcpServerUrl);
     }),
   };
 }

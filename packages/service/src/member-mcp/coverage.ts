@@ -45,7 +45,7 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
   SCREEN_ONLY: "screen-only",
   /** A sign-in or connect flow that finishes in a browser, or a link only a person opens; a disconnect is no such flow. */
   NEEDS_BROWSER: "needs-browser",
-  /** It reads or writes a secret, which no tool ever carries. */
+  /** It reads or writes a secret, which no tool ever carries: a provider key or the GitHub token goes in through the CLI's stdin alone. */
   SECRET: "secret",
   /** It hands a person trust in the account, a decision the member makes in the app alone and never through an agent. */
   SECURITY: "security",
@@ -53,6 +53,8 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
   DESTRUCTIVE: "destructive",
   /** Pairing, devices, the admin dashboard, and the service's own bookkeeping: no member's work. */
   INTERNAL: "internal",
+  /** It refuses every caller, and stands only for an older client that still sends it. */
+  RETIRED: "retired",
   /** A member could use a tool for it, and none exists yet. */
   NOT_YET_BUILT: "not-yet-built",
 } as const;
@@ -60,12 +62,22 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
 export type MemberMcpExclusionReason =
   (typeof MEMBER_MCP_EXCLUSION_REASON)[keyof typeof MEMBER_MCP_EXCLUSION_REASON];
 
-const { SCREEN_ONLY, NEEDS_BROWSER, SECRET, SECURITY, DESTRUCTIVE, INTERNAL, NOT_YET_BUILT } =
-  MEMBER_MCP_EXCLUSION_REASON;
+const {
+  SCREEN_ONLY,
+  NEEDS_BROWSER,
+  SECRET,
+  SECURITY,
+  DESTRUCTIVE,
+  INTERNAL,
+  RETIRED,
+  NOT_YET_BUILT,
+} = MEMBER_MCP_EXCLUSION_REASON;
 
 /** Each tool's procedures: at least one, so no row stands empty. */
 export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.LIST_WORKSPACES]: { workspaces: ["list"] },
+  [MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS]: { workspaces: ["members"] },
+  [MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG]: { workspaces: ["setSlug"] },
   [MEMBER_MCP_TOOL.LIST_TASKS]: { plans: ["list"], taskSections: ["list"] },
   [MEMBER_MCP_TOOL.READ_TASK]: { plans: ["open"] },
   [MEMBER_MCP_TOOL.LIST_AGENTS]: { agents: ["listOfWorkspace", "listOfTask"] },
@@ -75,13 +87,27 @@ export const MEMBER_MCP_COVERAGE = {
     messages: ["agentNewest", "agent"],
   },
   [MEMBER_MCP_TOOL.READ_AGENT_CHANGES]: { agentPullRequests: ["pullRequest"], agents: ["changes"] },
+  [MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT]: {
+    messages: [
+      "agent",
+      "agentNewest",
+      "agentWorker",
+      "agentWorkerNewest",
+      "agentPart",
+      "agentWorkerPart",
+    ],
+  },
   [MEMBER_MCP_TOOL.LIST_MODELS]: { models: ["list"], account: ["preferences"] },
+  [MEMBER_MCP_TOOL.UPDATE_PREFERENCES]: { account: ["writePreferences"] },
   [MEMBER_MCP_TOOL.READ_PAGE]: { taskFiles: ["pages", "page"], agentPages: ["list", "version"] },
   [MEMBER_MCP_TOOL.READ_TASK_FILE]: { taskFiles: ["file"] },
   [MEMBER_MCP_TOOL.LIST_TASK_FOLDER]: { taskFiles: ["tree"] },
   [MEMBER_MCP_TOOL.CREATE_TASK]: { plans: ["create", "editDescription"] },
   [MEMBER_MCP_TOOL.UPDATE_TASK]: { plans: ["update", "parent", "block"], taskSections: ["write"] },
   [MEMBER_MCP_TOOL.EDIT_DESCRIPTION]: { plans: ["open", "editDescription"] },
+  [MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS]: { plans: ["descriptionRevisions"] },
+  [MEMBER_MCP_TOOL.READ_DESCRIPTION_REVISION]: { plans: ["descriptionRevision"] },
+  [MEMBER_MCP_TOOL.RESTORE_DESCRIPTION_REVISION]: { plans: ["restoreDescription"] },
   [MEMBER_MCP_TOOL.CREATE_SECTION]: { taskSections: ["write"] },
   [MEMBER_MCP_TOOL.DELETE_SECTION]: { taskSections: ["write"] },
   [MEMBER_MCP_TOOL.START_AGENT]: { agents: ["start", "startFrom"], plans: ["create"] },
@@ -90,11 +116,37 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.UPDATE_AGENT]: { agents: ["change"] },
   [MEMBER_MCP_TOOL.LIST_AGENT_PORTS]: { agentPorts: ["list", "shared"] },
   [MEMBER_MCP_TOOL.SHARE_AGENT_PORT]: { agentPorts: ["share", "unshare"] },
+  [MEMBER_MCP_TOOL.LIST_AGENT_BROWSER_TABS]: { agentBrowserTabs: ["agentList", "list"] },
+  [MEMBER_MCP_TOOL.OPEN_AGENT_BROWSER_TAB]: { agentBrowserTabs: ["agentOpen", "open"] },
+  [MEMBER_MCP_TOOL.TAKE_OVER_AGENT_BROWSER_TAB]: {
+    agentBrowserTabs: ["agentTakeOver", "takeOver"],
+  },
+  [MEMBER_MCP_TOOL.HAND_BACK_AGENT_BROWSER_TAB]: {
+    agentBrowserTabs: ["agentHandBack", "handBack"],
+  },
   [MEMBER_MCP_TOOL.READ_INBOX]: { inbox: ["account", "task", "agent"] },
   [MEMBER_MCP_TOOL.ANSWER_ASK]: { inbox: ["message"] },
   [MEMBER_MCP_TOOL.REPLY_TO_THREAD]: { inbox: ["message"] },
   [MEMBER_MCP_TOOL.CLOSE_THREAD]: { inbox: ["close"] },
   [MEMBER_MCP_TOOL.AGENT_PULL_REQUEST_ACTION]: { agentPullRequests: ["action"] },
+  [MEMBER_MCP_TOOL.READ_PULL_REQUEST]: {
+    pullRequests: [
+      "pullRequest",
+      "overviewPullRequest",
+      "overviewChecks",
+      "overviewConversation",
+      "changes",
+      "viewed",
+    ],
+  },
+  [MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED]: { pullRequests: ["action"] },
+  [MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS]: {
+    agentPullRequests: ["pullRequest"],
+    pullRequestChapters: ["read", "repositoryRead"],
+  },
+  [MEMBER_MCP_TOOL.GENERATE_PULL_REQUEST_CHAPTERS]: {
+    pullRequestChapters: ["generate", "repositoryGenerate"],
+  },
   [MEMBER_MCP_TOOL.READ_COMMENTS]: { descriptionComments: ["read"] },
   [MEMBER_MCP_TOOL.COMMENT_ON_DESCRIPTION]: { plans: ["open"], descriptionComments: ["start"] },
   [MEMBER_MCP_TOOL.REPLY_TO_COMMENT]: { descriptionComments: ["act"] },
@@ -108,6 +160,15 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.UPDATE_AUTOMATION]: { automations: ["read", "change"] },
   [MEMBER_MCP_TOOL.RUN_AUTOMATION]: { automations: ["run"] },
   [MEMBER_MCP_TOOL.DELETE_AUTOMATION]: { automations: ["remove"] },
+  [MEMBER_MCP_TOOL.READ_SANDBOX_SETUP]: { workspaceSandboxSetup: ["read"] },
+  [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP]: { workspaceSandboxSetup: ["putInstall", "putRepository"] },
+  [MEMBER_MCP_TOOL.LIST_INTEGRATIONS]: { integrations: ["statuses", "settle"] },
+  [MEMBER_MCP_TOOL.CONNECT_INTEGRATION]: { integrations: ["connect"] },
+  [MEMBER_MCP_TOOL.RENAME_INTEGRATION]: { integrations: ["rename"] },
+  [MEMBER_MCP_TOOL.DISCONNECT_INTEGRATION]: { integrations: ["disconnect"] },
+  [MEMBER_MCP_TOOL.LIST_MCP_CLIENTS]: { mcpClients: ["list"] },
+  [MEMBER_MCP_TOOL.LIST_SENTRY_INSTALLATIONS]: { workspaceSentry: ["installations"] },
+  [MEMBER_MCP_TOOL.DISCONNECT_SENTRY]: { workspaceSentry: ["disconnect"] },
 } as const satisfies Record<MemberMcpToolName, HostedProcedureNames>;
 
 type Coverage = typeof MEMBER_MCP_COVERAGE;
@@ -143,7 +204,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   account: {
     access: INTERNAL,
     active: INTERNAL,
-    writePreferences: NOT_YET_BUILT,
     providerKeys: SECRET,
     saveProviderKey: SECRET,
     setProviderKeyForAgents: SECRET,
@@ -165,14 +225,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     users: INTERNAL,
     workspace: INTERNAL,
     workspaces: INTERNAL,
-  },
-  agentBrowserTabs: {
-    list: NOT_YET_BUILT,
-    agentList: NOT_YET_BUILT,
-    agentOpen: NOT_YET_BUILT,
-    open: NOT_YET_BUILT,
-    takeOver: NOT_YET_BUILT,
-    handBack: NOT_YET_BUILT,
   },
   agentPages: { frame: SCREEN_ONLY },
   agentPullRequests: {
@@ -200,6 +252,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     connect: NEEDS_BROWSER,
     claim: NEEDS_BROWSER,
     connection: NOT_YET_BUILT,
+    // Note that a disconnect unlinks the member's GitHub sign-in through Better Auth under a session of theirs, which no OAuth token carries.
     disconnect: NOT_YET_BUILT,
     repositories: NOT_YET_BUILT,
     tokenRepositories: NOT_YET_BUILT,
@@ -237,14 +290,9 @@ export const MEMBER_MCP_EXCLUSIONS = {
     remove: NOT_YET_BUILT,
   },
   integrations: {
-    statuses: NOT_YET_BUILT,
-    settle: NEEDS_BROWSER,
     github: NEEDS_BROWSER,
-    connect: NEEDS_BROWSER,
     tools: NOT_YET_BUILT,
     cancel: NEEDS_BROWSER,
-    disconnect: NOT_YET_BUILT,
-    rename: NOT_YET_BUILT,
   },
   live: {
     inbox: SCREEN_ONLY,
@@ -294,38 +342,17 @@ export const MEMBER_MCP_EXCLUSIONS = {
     answerRequest: INTERNAL,
   },
   macCommands: { waiting: INTERNAL, settle: INTERNAL, claim: INTERNAL, listening: INTERNAL },
-  mcpClients: { list: NOT_YET_BUILT, revoke: NOT_YET_BUILT },
+  // Note that a revoke deletes the member's consent through Better Auth under a session of theirs, which no OAuth token carries.
+  mcpClients: { revoke: NOT_YET_BUILT },
   messages: {
     queue: NOT_YET_BUILT,
-    agentWorker: NOT_YET_BUILT,
-    agentWorkerNewest: NOT_YET_BUILT,
-    agentPart: NOT_YET_BUILT,
-    agentWorkerPart: NOT_YET_BUILT,
   },
   plans: {
     find: NOT_YET_BUILT,
     relation: NOT_YET_BUILT,
     delete: NOT_YET_BUILT,
-    descriptionRevisions: NOT_YET_BUILT,
-    descriptionRevision: NOT_YET_BUILT,
-    restoreDescription: NOT_YET_BUILT,
   },
-  pullRequestChapters: {
-    read: NOT_YET_BUILT,
-    generate: NOT_YET_BUILT,
-    repositoryRead: NOT_YET_BUILT,
-    repositoryGenerate: NOT_YET_BUILT,
-  },
-  pullRequests: {
-    pullRequest: NOT_YET_BUILT,
-    changes: NOT_YET_BUILT,
-    action: NOT_YET_BUILT,
-    viewed: NOT_YET_BUILT,
-    reviewOptions: SCREEN_ONLY,
-    overviewPullRequest: NOT_YET_BUILT,
-    overviewChecks: NOT_YET_BUILT,
-    overviewConversation: NOT_YET_BUILT,
-  },
+  pullRequests: { reviewOptions: SCREEN_ONLY },
   pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },
   repositoryPins: { list: NOT_YET_BUILT, set: NOT_YET_BUILT },
   supportAccess: { grant: SECURITY, revoke: SECURITY },
@@ -335,23 +362,14 @@ export const MEMBER_MCP_EXCLUSIONS = {
     pageFrame: SCREEN_ONLY,
   },
   workspaceEnvironment: { list: NOT_YET_BUILT, put: NOT_YET_BUILT, delete: NOT_YET_BUILT },
-  workspaceSandboxSetup: {
-    read: NOT_YET_BUILT,
-    putInstall: NOT_YET_BUILT,
-    putRepository: NOT_YET_BUILT,
-  },
-  workspaceGithub: { connect: NEEDS_BROWSER, disconnect: NOT_YET_BUILT },
+  workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: {
     list: NOT_YET_BUILT,
     invite: NOT_YET_BUILT,
     cancel: NOT_YET_BUILT,
     offer: NEEDS_BROWSER,
   },
-  workspaceSentry: {
-    install: NEEDS_BROWSER,
-    installations: NOT_YET_BUILT,
-    disconnect: NOT_YET_BUILT,
-  },
+  workspaceSentry: { install: NEEDS_BROWSER },
   workspaceSlackBot: {
     read: NOT_YET_BUILT,
     connect: NEEDS_BROWSER,
@@ -363,10 +381,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   workspaces: {
     create: NOT_YET_BUILT,
     rename: NOT_YET_BUILT,
-    setSlug: NOT_YET_BUILT,
     setPhoto: NOT_YET_BUILT,
     setExperiment: INTERNAL,
-    members: NOT_YET_BUILT,
     removeMember: NOT_YET_BUILT,
     changeRole: NOT_YET_BUILT,
     transfer: DESTRUCTIVE,

@@ -3,11 +3,12 @@
 import assert from "node:assert/strict";
 import { AGENT_STATUS } from "@repo/features/agent-wire";
 import type { TaskSummary } from "@repo/features/task-wire";
+import { TOOL_STATE, type ToolState } from "@repo/features/tool-call-block";
 import { TerminalIcon } from "lucide-react";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { test } from "vitest";
-import { TOOL_STATE, ToolLine, type ToolState } from "./ai-elements/tool.js";
+import { ToolLine } from "./ai-elements/tool.js";
 import { TaskRowStatus } from "./desktop/task-card.js";
 import { AgentGlyph } from "./tasks/tab-look.js";
 import { withQueryClient } from "./testing/copy-feedback.js";

@@ -7,7 +7,6 @@ import {
   type AgentSummary,
   type ListedAgent,
   PULL_REQUEST_STATE,
-  type TasklessAgent,
 } from "./agent-wire.js";
 import type { TaskAgentsSummary, TaskPullRequestLine, TaskPullRequests } from "./task-wire.js";
 
@@ -31,8 +30,7 @@ import type { TaskAgentsSummary, TaskPullRequestLine, TaskPullRequests } from ".
  *
  * Note that a thread waiting on the reader is no status here, because the
  * Tasks page's row and card say how many wait in a count of its own,
- * standing before this status (`@repo/panel`'s `WaitingCount`), and a
- * sidebar row's one mark puts it first (`@repo/ui`'s `RowEndMark`).
+ * standing before this status (`@repo/panel`'s `WaitingCount`).
  */
 
 /** Where a task's agents stand, most pressing first. */
@@ -187,23 +185,6 @@ export function taskAgentsStatus(
   return pullRequest === undefined
     ? NO_STATUS
     : { kind: TASK_AGENTS_STATUS.PULL_REQUEST, pullRequest };
-}
-
-/**
- * The one status an agent with no task wears at its row's end: its failure,
- * else the pull request it opened. Note that it never says the agent works,
- * because its row's leading glyph gives way to the working mark instead.
- */
-export function tasklessAgentStatus(
-  agent: Pick<TasklessAgent, "status" | "pullRequest" | "turn">,
-): TaskAgentsStatus {
-  // An agent its plan's usage limit stopped is no failure to mark, as `standingFailures` counts none.
-  if (agent.status === AGENT_STATUS.FAILED && agent.turn?.failure !== AGENT_FAILURE.PLAN_LIMIT) {
-    return { kind: TASK_AGENTS_STATUS.FAILED };
-  }
-  return agent.pullRequest === undefined
-    ? NO_STATUS
-    : { kind: TASK_AGENTS_STATUS.PULL_REQUEST, pullRequest: agent.pullRequest };
 }
 
 /** The statuses an agent may still write under, which is when it can be stopped. */

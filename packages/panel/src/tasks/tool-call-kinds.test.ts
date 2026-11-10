@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { AGENT_TOOL, RETIRED_TOOL } from "@repo/features/agent-tools";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
+import { toolCallView } from "@repo/features/tool-call-model";
 import { CALL_KIND } from "@repo/features/turn-rows";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { act, createElement } from "react";
@@ -11,7 +12,6 @@ import { afterEach, beforeEach, test } from "vitest";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { AGENT_LEAD, AgentMessage } from "./agent-tab.js";
-import { toolCallView } from "./tool-call-model.js";
 
 /**
  * tool-call-kinds.test.ts -- every tool an agent can call reads on its row as

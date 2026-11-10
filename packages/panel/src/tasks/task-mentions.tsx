@@ -1,7 +1,8 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
+import { descriptionSections } from "@repo/features/description-document";
+import type { MentionHolder } from "@repo/features/mention-holder";
 import { type MentionPlace, sectionAnchors } from "@repo/features/mention-link";
 import type { CatalogModel } from "@repo/features/models-wire";
-import { descriptionSections } from "@repo/features/description-document";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
@@ -24,13 +25,12 @@ import {
 } from "react";
 import { askAct } from "../act.js";
 import { actMutation } from "../act-mutations.js";
+import type { MentionNode } from "../description-editor/contract.js";
 import { descriptionDocumentQuery } from "../live-reads.js";
 import type { LinkDrawer } from "../markdown-message.js";
-import type { MentionNode } from "../description-editor/contract.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { agentActor, agentName } from "./agent-model.js";
 import { type MentionDoors, mentionLinkDrawer } from "./mention-chip.js";
-import type { MentionHolder } from "./mention-holder.js";
 import type {
   MentionAgentsReader,
   MentionableAgent,

@@ -8,6 +8,7 @@ import {
 } from "@repo/features/composer-markdown";
 import { fenceAfter } from "@repo/features/description-document";
 import { pictureMarker, pictureMarkers } from "@repo/features/picture-marker";
+import { skillWord } from "@repo/features/skill-word";
 import { WRITING_MARK } from "@repo/settings/shortcuts";
 import { TEXT_LINK_MARK_ATTRIBUTES } from "@repo/ui/link-face";
 import {
@@ -18,13 +19,7 @@ import {
   QUOTE_GAP,
   quoteOf,
 } from "@repo/ui/reply-quote";
-import {
-  insideCode,
-  mentionAt,
-  skillTokens,
-  skillWord,
-  type TextRange,
-} from "@repo/ui/skill-mention";
+import { insideCode, mentionAt, skillTokens, type TextRange } from "@repo/ui/skill-mention";
 import { type AnyExtension, Editor, Extension, Node } from "@tiptap/core";
 import {
   type Fragment,

@@ -48,6 +48,7 @@ import {
 } from "@repo/features/description-comment-wire";
 import { NOTE_KIND } from "@repo/features/description-notes";
 import { INBOX_ANSWER_LEAD, INBOX_ASK, INBOX_REPLY, INBOX_STATUS } from "@repo/features/inbox-wire";
+import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
 import { DESCRIPTION_ACTOR, TASK_STATUS } from "@repo/features/task-wire";
@@ -56,11 +57,13 @@ import { EXPERIMENT, WORKSPACE_EXPERIMENT_LIST } from "@repo/settings";
 import { settleJsonSchemaGolden } from "@repo/wire/testing";
 import { eq, sql } from "drizzle-orm";
 import { Clock, DateTime, Effect, Option, Result, Schema } from "effect";
+import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { readWorkspaceMemories, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
 import { recordMemberDescriptionNotes } from "../agents/coder-host/description-edit.js";
 import { EXPERIMENT_OFF_REFUSAL } from "../agents/workspace-experiment-on.js";
 import { DESKTOP_OAUTH_CLIENT } from "../auth/oauth-clients.js";
+import { ACTION_RESULT_STATUS } from "../core.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { postInboxThread, readInboxItem } from "../inbox/inbox-store.js";
 import { connectAgentApiKeys } from "../testing/agent-credentials.js";
@@ -74,6 +77,7 @@ import {
   openTask,
   PUBLISHED,
   PULL_REQUEST_NODE_ID,
+  publishedPullRequest,
   publishedPullRequestDrafted,
   RELAY_FULL_NAME,
   startedAgent,
@@ -85,6 +89,11 @@ import {
   signInWithGitHub,
   standingGithubRow,
 } from "../testing/github-app-fake.js";
+import {
+  CONNECTOR_ASKED_NOTHING,
+  GRANTING_SIGN_IN_URL,
+  integrationConnectOf,
+} from "../testing/integration-connect.js";
 import {
   connected,
   MCP_CLIENT,
@@ -275,6 +284,11 @@ const decodeHead = Schema.decodeUnknownSync(
 );
 
 /** A tool's answer as the agent reads it: whether it is the tool's error, and its JSON text read. */
+/** The member's default as list_models answers it. */
+const decodeDefault = Schema.decodeUnknownSync(
+  Schema.Struct({ default: Schema.Struct({ model: Schema.String, effort: Schema.String }) }),
+);
+
 const decodeAnswer = Schema.decodeUnknownSync(
   Schema.Struct({
     isError: Schema.optionalKey(Schema.Boolean),
@@ -482,6 +496,7 @@ it.effect(
           [MEMBER_MCP_TOOL.READ_TASK, { taskId: rows.strangerTask }],
           [MEMBER_MCP_TOOL.READ_AGENT, { agentId: rows.strangerAgent }],
           [MEMBER_MCP_TOOL.READ_AGENT_CHANGES, { agentId: rows.strangerAgent }],
+          [MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT, { agentId: rows.strangerAgent }],
           [MEMBER_MCP_TOOL.READ_INBOX, { workspace: slugOf(rows.elsewhere) }],
           [
             MEMBER_MCP_TOOL.ANSWER_ASK,
@@ -512,6 +527,7 @@ it.effect(
           [MEMBER_MCP_TOOL.READ_TASK, { taskId: rows.ownTask }],
           [MEMBER_MCP_TOOL.READ_AGENT, { agentId: rows.ownAgent }],
           [MEMBER_MCP_TOOL.READ_AGENT_CHANGES, { agentId: rows.ownAgent }],
+          [MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT, { agentId: rows.ownAgent }],
         ] as const,
         ([name, args]) => call(name, args),
       );
@@ -552,7 +568,7 @@ it.effect(
 );
 
 it.effect(
-  "a member makes, starts, messages, stops, changes, shares a port of, plans, comments, remembers, and runs nothing in a workspace they are not in",
+  "a member makes, starts, messages, stops, changes, shares a port of, drives a browser of, plans, comments, remembers, runs, and reads or disconnects the Sentry of nothing in a workspace they are not in",
   () =>
     Effect.gen(function* () {
       const { auth, fetch, services } = yield* standing;
@@ -588,6 +604,12 @@ it.effect(
           { userId: stranger.userId, taskId: task.id },
           { notes: [DESCRIPTION_NOTE] },
         );
+        // A later save, past the window that joins it to the first, so revision 1 holds text the description no longer does.
+        yield* TestClock.adjust("11 minutes");
+        yield* recordMemberDescriptionNotes(
+          { userId: stranger.userId, taskId: task.id },
+          { notes: [{ ...DESCRIPTION_NOTE, text: "Invoices lag." }] },
+        );
         const { text } = Option.getOrThrow(yield* readTask(stranger.userId, task.id));
         const from = text.indexOf(DESCRIPTION_NOTE.text);
         const started = yield* startDescriptionCommentThread(
@@ -622,6 +644,7 @@ it.effect(
           memoryId: kept.memory.id,
           automationId: Option.getOrThrow(automation).id,
           agentId: yield* openTaskAgent(stranger.userId, elsewhere, task.id),
+          revisions: yield* listRevisions(stranger.userId, task.id),
         };
       }).pipe(Effect.provide(services));
       const token = yield* Effect.promise(() =>
@@ -643,6 +666,9 @@ it.effect(
             MEMBER_MCP_TOOL.EDIT_DESCRIPTION,
             { taskId, notes: [{ kind: NOTE_KIND.ADD, section: "Problem", text: "Planted." }] },
           ],
+          [MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS, { taskId }],
+          [MEMBER_MCP_TOOL.READ_DESCRIPTION_REVISION, { taskId, seq: 1 }],
+          [MEMBER_MCP_TOOL.RESTORE_DESCRIPTION_REVISION, { taskId, seq: 1 }],
           [MEMBER_MCP_TOOL.CREATE_SECTION, { workspace, title: "Planted" }],
           [MEMBER_MCP_TOOL.DELETE_SECTION, { sectionId: rows.sectionId }],
           [MEMBER_MCP_TOOL.START_AGENT, { taskId }],
@@ -653,6 +679,10 @@ it.effect(
           [MEMBER_MCP_TOOL.UPDATE_AGENT, { agentId, archived: true }],
           [MEMBER_MCP_TOOL.LIST_AGENT_PORTS, { agentId }],
           [MEMBER_MCP_TOOL.SHARE_AGENT_PORT, { agentId, port: 3000 }],
+          [MEMBER_MCP_TOOL.LIST_AGENT_BROWSER_TABS, { agentId }],
+          [MEMBER_MCP_TOOL.OPEN_AGENT_BROWSER_TAB, { agentId, address: "https://example.com/" }],
+          [MEMBER_MCP_TOOL.TAKE_OVER_AGENT_BROWSER_TAB, { agentId, tabId: randomUUID() }],
+          [MEMBER_MCP_TOOL.HAND_BACK_AGENT_BROWSER_TAB, { agentId, tabId: randomUUID() }],
           [MEMBER_MCP_TOOL.READ_COMMENTS, { taskId }],
           [
             MEMBER_MCP_TOOL.COMMENT_ON_DESCRIPTION,
@@ -678,6 +708,10 @@ it.effect(
           [MEMBER_MCP_TOOL.UPDATE_AUTOMATION, { automationId, name: "Renamed" }],
           [MEMBER_MCP_TOOL.RUN_AUTOMATION, { automationId }],
           [MEMBER_MCP_TOOL.DELETE_AUTOMATION, { automationId }],
+          [MEMBER_MCP_TOOL.READ_SANDBOX_SETUP, { workspace }],
+          [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP, { workspace, script: "Planted." }],
+          [MEMBER_MCP_TOOL.LIST_SENTRY_INSTALLATIONS, { workspace }],
+          [MEMBER_MCP_TOOL.DISCONNECT_SENTRY, { workspace, installationId: randomUUID() }],
         ] as const,
         ([name, args]) =>
           Effect.promise(async () => {
@@ -696,6 +730,7 @@ it.effect(
       const after = yield* Effect.gen(function* () {
         return {
           task: yield* readTask(stranger.userId, taskId),
+          revisions: yield* listRevisions(stranger.userId, taskId),
           sections: yield* listTaskSections(stranger.userId),
           agent: yield* readAgent(stranger.userId, agentId),
           threads: yield* readDescriptionCommentThreads(stranger.userId, taskId),
@@ -713,12 +748,19 @@ it.effect(
         assert.ok(
           !answer.text.includes(taskId) &&
             !answer.text.includes(rows.elsewhere) &&
-            !answer.text.includes("A stranger's"),
+            !answer.text.includes("A stranger's") &&
+            !answer.text.includes("Invoices lag."),
         );
       }
       const task = Option.getOrThrow(after.task);
       assert.equal(task.task.name, "A stranger's task");
+      // Revision 1 is the first save alone, so a restore of it would have changed the description and added a revision.
+      assert.deepEqual(
+        rows.revisions.revisions.map(({ seq }) => seq),
+        [2, 1],
+      );
       assert.equal(task.text, rows.text);
+      assert.deepEqual(after.revisions, rows.revisions);
       assert.deepEqual(
         Option.getOrThrow(after.threads).map((thread) => ({
           status: thread.status,
@@ -959,6 +1001,122 @@ it.effect(
           [
             "mergePullRequest",
             { id, method: "SQUASH", head: PUBLISHED.headSha },
+            `Bearer ${MEMBER_GITHUB_TOKEN}`,
+          ],
+        ],
+      );
+    }),
+);
+
+it.effect(
+  "an outside agent reads any pull request of the member's workspace by its repository and number, its files with the member's viewed marks, and marks one viewed on the member's own GitHub sign-in",
+  () =>
+    Effect.gen(function* () {
+      const calls: GraphqlCall[] = [];
+      const installation = freshInstallation();
+      const files = [
+        {
+          filename: "src/invite.ts",
+          status: "modified",
+          additions: 3,
+          deletions: 1,
+          changes: 4,
+          patch: "@@ -1 +1 @@",
+        },
+        {
+          filename: "src/expire.ts",
+          status: "added",
+          additions: 1,
+          deletions: 0,
+          changes: 1,
+          patch: "@@ -0,0 +1 @@",
+        },
+      ];
+      const github = githubReaching(
+        [installation],
+        undefined,
+        undefined,
+        graphqlAnswering(
+          calls,
+          (call) =>
+            Response.json({
+              data: call.query.includes("mutation")
+                ? {}
+                : call.query.includes("viewerViewedState")
+                  ? {
+                      repository: {
+                        pullRequest: {
+                          files: {
+                            nodes: [{ path: "src/invite.ts", viewerViewedState: "VIEWED" }],
+                            pageInfo: { hasNextPage: false, endCursor: null },
+                          },
+                        },
+                      },
+                    }
+                  : { repository: { pullRequest: { id: PULL_REQUEST_NODE_ID } } },
+            }),
+          (sent) =>
+            new URL(sent.url).pathname ===
+            `/repos/${RELAY_FULL_NAME}/pulls/${PUBLISHED.number}/files`
+              ? Response.json(files)
+              : publishedPullRequest(sent),
+        ),
+      );
+      const { auth, fetch, services } = yield* memberMcpStanding({ github: github.layer });
+      const member = yield* Effect.promise(() => signUp(auth));
+      yield* Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        yield* signInWithGitHub(member.userId, {
+          ...standingGithubRow(now),
+          accessToken: MEMBER_GITHUB_TOKEN,
+        });
+        const workspaceId = yield* openWorkspace(member.userId);
+        yield* connectWorkspaceGitHub(workspaceId, installation);
+      }).pipe(Effect.provide(services));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const named = { repository: RELAY_FULL_NAME, number: PUBLISHED.number };
+      const call = (name: string, args: Record<string, unknown>) =>
+        Effect.promise(async () => decodeAnswer(await client.callTool({ name, arguments: args })));
+
+      const changes = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, { ...named, part: "changes" });
+      const missing = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, { ...named, number: 13 });
+      const marked = yield* call(MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED, {
+        ...named,
+        paths: ["src/expire.ts"],
+        viewed: true,
+      });
+      yield* Effect.promise(() => client.close());
+
+      assert.notEqual(changes.isError, true, changes.content[0].text);
+      assert.deepEqual(
+        JSON.parse(changes.content[0].text).files.map(
+          ({ path, viewed }: { path: string; viewed: string }) => [path, viewed],
+        ),
+        [
+          ["src/invite.ts", "viewed"],
+          ["src/expire.ts", "unviewed"],
+        ],
+      );
+      // A number the repository holds no pull request under is refused as the hosted read refuses it.
+      assert.equal(missing.isError, true);
+      assert.match(missing.content[0].text, /no pull request of that number/u);
+      assert.notEqual(marked.isError, true, marked.content[0].text);
+      assert.deepEqual(
+        calls.flatMap((one) => {
+          const mutation = mutationOf(one);
+          return mutation === undefined ? [] : [[mutation, one.variables, one.authorization]];
+        }),
+        [
+          [
+            "markFileAsViewed",
+            { id: PULL_REQUEST_NODE_ID, path: "src/expire.ts" },
             `Bearer ${MEMBER_GITHUB_TOKEN}`,
           ],
         ],
@@ -1217,6 +1375,147 @@ it.effect(
       assert.equal(forgot.refused, false);
       assert.ok(forgotten.kind === WORKSPACE_MEMORY.READ);
       assert.deepEqual(forgotten.memories, []);
+    }),
+);
+
+it.effect(
+  "a member's default model is changed only to a choice they are offered, as Settings changes it, and list_models reads it back",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch } = yield* standing;
+      const member = yield* Effect.promise(() => signUp(auth));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const call = (name: string, args: Record<string, unknown>) =>
+        Effect.promise(async () => {
+          const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
+          return { refused: answer.isError === true, text: answer.content[0].text };
+        });
+
+      const before = yield* call(MEMBER_MCP_TOOL.LIST_MODELS, {});
+      const unoffered = yield* call(MEMBER_MCP_TOOL.UPDATE_PREFERENCES, {
+        model: "anthropic/claude-opus-5.5",
+        effort: "high",
+      });
+      const after = yield* call(MEMBER_MCP_TOOL.LIST_MODELS, {});
+      yield* Effect.promise(() => client.close());
+
+      // The catalog here offers nothing, so no choice is one the member may move their default to.
+      assert.equal(unoffered.refused, true);
+      assert.match(unoffered.text, /not offered that model/u);
+      assert.deepEqual(
+        decodeDefault(JSON.parse(after.text)),
+        decodeDefault(JSON.parse(before.text)),
+      );
+    }),
+);
+
+it.effect(
+  "an admin acting through the server reads the workspace's members but is refused its slug, which the owner changes",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch, services } = yield* standing;
+      const owner = yield* Effect.promise(() => signUp(auth));
+      const admin = yield* Effect.promise(() => signUp(auth));
+      const workspaceId = yield* Effect.gen(function* () {
+        const workspaceId = yield* openWorkspace(owner.userId);
+        yield* joinWorkspace(workspaceId, admin.userId, WORKSPACE_ROLE.ADMIN);
+        return workspaceId;
+      }).pipe(Effect.provide(services));
+      const callAs = (cookie: string, name: string, args: Record<string, unknown>) =>
+        Effect.gen(function* () {
+          const token = yield* Effect.promise(() =>
+            mintedToken(auth, cookie, {
+              clientId: MCP_CLIENT.id,
+              scope: [MEMBER_MCP_SCOPE.MCP],
+              resource: RESOURCE,
+            }),
+          );
+          const { client } = yield* connected(fetch, token, REVISION.MODERN);
+          const answer = decodeAnswer(
+            yield* Effect.promise(() => client.callTool({ name, arguments: args })),
+          );
+          yield* Effect.promise(() => client.close());
+          return answer;
+        });
+
+      const members = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS, {});
+      const refused = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG, {
+        slug: "seats",
+      });
+      const changed = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG, {
+        slug: "seats",
+      });
+
+      assert.notEqual(members.isError, true, members.content[0].text);
+      assert.deepEqual(
+        JSON.parse(members.content[0].text).members.map(
+          ({ userId, role }: { userId: string; role: string }) => [userId, role],
+        ),
+        [
+          [owner.userId, WORKSPACE_ROLE.OWNER],
+          [admin.userId, WORKSPACE_ROLE.ADMIN],
+        ],
+      );
+      assert.equal(refused.isError, true);
+      assert.notEqual(changed.isError, true, changed.content[0].text);
+      assert.deepEqual(JSON.parse(changed.content[0].text).workspace, {
+        id: workspaceId,
+        slug: "seats",
+        name: "Test Workspace",
+      });
+    }),
+);
+
+it.effect(
+  "a member's connect_integration answers the sign-in link alone, and the sign-in returns to this deployment's own address",
+  () =>
+    Effect.gen(function* () {
+      const returns: string[] = [];
+      const signingIn = integrationConnectOf(() => ({
+        ...CONNECTOR_ASKED_NOTHING,
+        authorize: (_subject, callbackUrl) => {
+          returns.push(callbackUrl);
+          return Effect.succeed({ url: GRANTING_SIGN_IN_URL });
+        },
+      }));
+      const { auth, fetch } = yield* memberMcpStanding({ integrations: signingIn });
+      const member = yield* Effect.promise(() => signUp(auth));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const answer = decodeAnswer(
+        yield* Effect.promise(() =>
+          client.callTool({
+            name: MEMBER_MCP_TOOL.CONNECT_INTEGRATION,
+            arguments: { provider: INTEGRATION_PROVIDER.NOTION },
+          }),
+        ),
+      );
+      yield* Effect.promise(() => client.close());
+
+      assert.equal(answer.isError, undefined);
+      assert.deepEqual(JSON.parse(answer.content[0].text), {
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        url: GRANTING_SIGN_IN_URL,
+        connection: INTEGRATION_PROVIDER.NOTION,
+      });
+      assert.equal(returns.length, 1);
+      assert.ok(
+        returns[0]?.startsWith(`${ORIGIN}/api/account/integrations/connected?state=`),
+        String(returns[0]),
+      );
     }),
 );
 
