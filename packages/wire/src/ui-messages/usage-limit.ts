@@ -3,6 +3,7 @@ import { Schema } from "effect";
 
 export const USAGE_LIMIT_PART = "data-usage-limit";
 export const USAGE_LIMIT_AGENT = { CLAUDE: "Claude", CODEX: "Codex" } as const;
+export type UsageLimitAgent = (typeof USAGE_LIMIT_AGENT)[keyof typeof USAGE_LIMIT_AGENT];
 
 export const UsageLimitNoticeSchema = Schema.Struct({
   agent: Schema.Literals(Object.values(USAGE_LIMIT_AGENT)),
