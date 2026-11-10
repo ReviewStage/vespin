@@ -120,6 +120,19 @@ function leftOut(element: Element): boolean {
   return (style.userSelect || style.webkitUserSelect) === "none";
 }
 
+/** The boxes that stand on lines of their own, as a code card's rows do. */
+const LINE_BOXES: ReadonlySet<string> = new Set(["block", "flex", "grid", "list-item"]);
+
+/**
+ * Code's words inside an element, ending its line where the element stands
+ * on a line of its own, as a code card's row does, whose lines are boxes
+ * with no newline between them; an empty row already holds its newline.
+ */
+function linedCode(element: Element, words: string): string {
+  if (words === "" || words.endsWith(NEWLINE)) return words;
+  return LINE_BOXES.has(getComputedStyle(element).display) ? `${words}${NEWLINE}` : words;
+}
+
 /** The children of `parent` inside `range`, written. */
 function childrenWritten(parent: Node, range: Range, code: boolean): string {
   let words = "";
@@ -165,7 +178,7 @@ function elementWritten(element: Element, range: Range, code: boolean): string {
       ? childrenWritten(element, range, true)
       : codeSpan(childrenWritten(element, range, true));
   const words = childrenWritten(element, range, code);
-  if (code) return words;
+  if (code) return linedCode(element, words);
   const delimiter = MARK_DELIMITER[tag];
   if (delimiter !== undefined) return wrapped(words, delimiter);
   if (tag === "A") return linkWritten(element, words);
@@ -200,13 +213,17 @@ function written(node: Node, range: Range, code: boolean): string {
  * where the selection lies inside one.
  */
 function insideAncestors(words: string, from: Element): string {
-  // Note that a chip's name lies under its press and its label's own boxes, so its whole run of ancestors is asked first.
+  let kept = words;
+  let start: Element | null = from;
+  // Note that a chip's name lies under its press and its label's own boxes, so its whole run of ancestors is asked first, and the marks around the chip go on from it.
   for (let at: Element | null = from; at !== null; at = at.parentElement) {
     const source = WRITTEN.get(at);
-    if (source !== undefined) return source;
+    if (source === undefined) continue;
+    kept = source;
+    start = at.parentElement;
+    break;
   }
-  let kept = words;
-  for (let at: Element | null = from; at !== null; at = at.parentElement) {
+  for (let at: Element | null = start; at !== null; at = at.parentElement) {
     const tag = at.tagName;
     const delimiter = MARK_DELIMITER[tag];
     if (delimiter !== undefined) kept = wrapped(kept, delimiter);
