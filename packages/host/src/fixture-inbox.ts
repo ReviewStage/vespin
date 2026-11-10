@@ -41,6 +41,7 @@ import {
   INBOX_ASK_STATUS,
   INBOX_FIELD,
   INBOX_MESSAGE_AUTHOR,
+  INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_STATUS,
   INBOX_WIRE_VERSION,
@@ -216,6 +217,31 @@ const RECORDED = {
   VIDEO: "a3f4c647-8fb0-4cd9-b4f1-2b3c4d5e6f70",
 } as const;
 
+/** The turn-end thread's option files, by the attachment each is read by: two stills of the card and a recording of it. */
+const TURN_END = {
+  ITEM: fixtureId(6),
+  CARD: "b4a5d758-90c1-4dea-85a2-3c4d5e6f7081",
+  CARD_PHONE: "c5b6e869-a1d2-4efb-96b3-4d5e6f708192",
+  DOCK: "d6c7f97a-b2e3-4f0c-a7c4-5e6f708192a3",
+  RECORDING: "e7d80a8b-c3f4-401d-b8d5-6f708192a3b4",
+} as const;
+
+/** A turn-end option's file as the service answers it: each still the fixture's picture, and the recording its video, as an MP4 to a reader that plays one. */
+function turnEndFile(
+  attachmentId: string,
+  playable: string | undefined,
+): PortActResult<typeof ACT_KIND.AGENTS_INBOX_ATTACHMENT> {
+  if (attachmentId === TURN_END.RECORDING) {
+    return playable === MP4_TYPE
+      ? { contentType: MP4_TYPE, base64: FIXTURE_VIDEO_MP4 }
+      : { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
+  }
+  const stills: readonly string[] = [TURN_END.CARD, TURN_END.CARD_PHONE, TURN_END.DOCK];
+  return stills.includes(attachmentId)
+    ? { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG }
+    : { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+}
+
 /**
  * The thread whose answer the fixture refuses, as a send no answer came back
  * for: the migration's approval, so a flow sees an answer drawn at once and
@@ -274,6 +300,86 @@ const INVITES_ITEMS: readonly InboxItem[] = [
         ...OPEN,
       },
     ),
+  ]),
+  item(6, AGENT.INVITES, "turn-end", "How should a finished turn end?", [
+    {
+      ...agentSaid(
+        109,
+        90 * MINUTE,
+        "Three directions for what a turn shows once the agent is done. Each card holds its shots; press one to look closer.",
+        {
+          type: INBOX_ASK.DECIDE,
+          options: [
+            {
+              label: "A done card",
+              detail: "Archive, plus the follow-ups the agent mentioned.",
+              media: [
+                {
+                  type: INBOX_OPTION_MEDIA.FILE,
+                  attachmentId: TURN_END.CARD,
+                  mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+                  caption: "On a desktop",
+                },
+                {
+                  type: INBOX_OPTION_MEDIA.FILE,
+                  attachmentId: TURN_END.CARD_PHONE,
+                  mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+                  caption: "On a phone",
+                },
+                {
+                  type: INBOX_OPTION_MEDIA.PAGE,
+                  pageId: FIXTURE_PAGE.id,
+                  version: FIXTURE_PAGE.version,
+                  title: FIXTURE_PAGE.title,
+                  place: { taskId: TASK.INVITES },
+                },
+              ],
+            },
+            {
+              label: "Two states of the dock",
+              detail: "Needs you, then Done.",
+              media: [
+                {
+                  type: INBOX_OPTION_MEDIA.FILE,
+                  attachmentId: TURN_END.DOCK,
+                  mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+                  caption: "The dock at rest",
+                },
+                {
+                  type: INBOX_OPTION_MEDIA.FILE,
+                  attachmentId: TURN_END.RECORDING,
+                  mediaType: CONVERSATION_MEDIA_TYPE.WEBM,
+                  caption: "Ticking two follow-ups",
+                },
+                {
+                  type: INBOX_OPTION_MEDIA.LINK,
+                  url: "https://preview.example.com/dock",
+                  label: "The dock on the preview",
+                },
+              ],
+            },
+            { label: "Leave it as it is", detail: "The transcript ends on Worked for." },
+          ],
+          multiple: true,
+          recommended: "A done card",
+          ...OPEN,
+        },
+      ),
+      files: [
+        { attachmentId: TURN_END.CARD, name: "card.png", mediaType: AGENT_ATTACHMENT_TYPE.PNG },
+        {
+          attachmentId: TURN_END.CARD_PHONE,
+          name: "card-phone.png",
+          mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+        },
+        { attachmentId: TURN_END.DOCK, name: "dock.png", mediaType: AGENT_ATTACHMENT_TYPE.PNG },
+        {
+          attachmentId: TURN_END.RECORDING,
+          name: "dock.webm",
+          mediaType: CONVERSATION_MEDIA_TYPE.WEBM,
+        },
+      ],
+    },
   ]),
   item(3, AGENT.INVITES, "invite-limits", "Invite limits", [
     agentSaid(
@@ -1110,6 +1216,7 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   [ACT_KIND.AGENTS_INBOX_READ_STATE]: ({ itemId, unread }) => ({ id: itemId, unread }),
   // Note that the recording is answered as its MP4 copy to a reader that plays MP4, as the service answers one it keeps a copy of.
   [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId, playable }) => {
+    if (itemId === TURN_END.ITEM) return turnEndFile(attachmentId, playable);
     if (itemId !== RECORDED.ITEM) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     if (attachmentId === RECORDED.PICTURE) {
       return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };

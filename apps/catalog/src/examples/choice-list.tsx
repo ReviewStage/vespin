@@ -13,10 +13,17 @@ import {
   type ChoiceLook,
   type ChoiceOption,
   type ChoiceSelect,
+  ExternalIcon,
   GAP,
   GlyphSlot,
   Inline,
   MARK_PROVIDER,
+  OPTION_MEDIA_KIND,
+  OptionMedia,
+  PAGE_THUMB_SIZE,
+  PageThumb,
+  PictureSet,
+  PictureSetTile,
   PROVIDER_MARK_SIZE,
   ProviderMark,
   SETTINGS_ROW_STATE,
@@ -29,6 +36,7 @@ import {
   TextLink,
 } from "@repo/ui";
 import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
+import { PICTURE_STATE } from "@repo/ui/picture-read";
 import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -149,6 +157,81 @@ const CREDENTIAL_ROWS: readonly ChoiceOption<string>[] = [
   },
 ];
 
+/** A screenshot of a design, as an option's thumbnail draws it. */
+const SHOT = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="100%" height="100%" fill="#7aa7f4"/><rect x="24" y="24" width="160" height="18" rx="6" fill="#fff9"/><rect x="24" y="60" width="272" height="110" rx="10" fill="#fff6"/></svg>',
+)}`;
+
+/** An option's shots, as thumbnails. */
+function Shots({ words }: { words: readonly string[] }): React.JSX.Element {
+  return (
+    <PictureSet label="Shots" count={words.length} thumbnails>
+      {words.map((each) => (
+        <PictureSetTile
+          key={each}
+          state={{ kind: PICTURE_STATE.READY, url: SHOT }}
+          width={320}
+          height={200}
+          words={each}
+          onOpen={() => undefined}
+        />
+      ))}
+    </PictureSet>
+  );
+}
+
+/** A choice between designs, each card holding its shots, a page, a recording, or a live address, and None of these after them. */
+const DESIGNS: readonly ChoiceOption<string>[] = [
+  {
+    value: "card",
+    label: "A done card",
+    state: "Archive, plus the follow-ups the agent mentioned.",
+    badge: "Recommended",
+    below: (
+      <OptionMedia
+        label="A done card"
+        pictures={<Shots words={["On a desktop", "On a phone"]} />}
+        lines={[
+          {
+            id: "page",
+            kind: OPTION_MEDIA_KIND.PAGE,
+            title: "Done card directions",
+            thumb: <PageThumb size={PAGE_THUMB_SIZE.ROW} image={SHOT} />,
+            onOpen: () => undefined,
+          },
+        ]}
+      />
+    ),
+  },
+  {
+    value: "dock",
+    label: "Two states of the dock",
+    state: "Needs you, then Done.",
+    below: (
+      <OptionMedia
+        label="Two states of the dock"
+        lines={[
+          {
+            id: "recording",
+            kind: OPTION_MEDIA_KIND.RECORDING,
+            title: "Ticking two follow-ups",
+            thumb: <PageThumb size={PAGE_THUMB_SIZE.ROW} image={SHOT} />,
+            onOpen: () => undefined,
+          },
+          {
+            id: "link",
+            kind: OPTION_MEDIA_KIND.LINK,
+            title: "The dock on the preview",
+            thumb: <PageThumb size={PAGE_THUMB_SIZE.ROW} glyph={<ExternalIcon />} />,
+            onOpen: () => undefined,
+          },
+        ]}
+      />
+    ),
+  },
+  { value: "none", label: "None of these" },
+];
+
 function Held({
   options,
   start,
@@ -243,6 +326,15 @@ function ChoiceLists(): React.JSX.Element {
           legend="Credential"
           options={CREDENTIALS}
           start={["subscription"]}
+          look={CHOICE_LOOK.CARD}
+        />
+      </CatalogSection>
+      <CatalogSection id="choice-list-media" title="Cards carrying media">
+        <Held
+          legend="Designs"
+          options={DESIGNS}
+          start={["card"]}
+          select={CHOICE_SELECT.MANY}
           look={CHOICE_LOOK.CARD}
         />
       </CatalogSection>

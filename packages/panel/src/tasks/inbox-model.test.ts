@@ -11,6 +11,7 @@ import {
   stepParts,
   withChoice,
   withDoPress,
+  withNoneOfThese,
   withStep,
   withValue,
 } from "@repo/features/inbox-draft";
@@ -53,6 +54,7 @@ import {
   INBOX_BOUNDS,
   INBOX_FIELD,
   INBOX_MESSAGE_AUTHOR,
+  INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_RESPONSE,
   INBOX_STATUS,
@@ -304,6 +306,34 @@ test("a thread's form attaches its values to the reply as they are filled, with 
       values: [{ label: "Verify certificate", value: true }],
     },
   });
+});
+
+test("None of these answers a choice whose options carry media as a pick of no option, and lets go once an option is picked; a choice of words alone offers none", () => {
+  const shot = {
+    type: INBOX_OPTION_MEDIA.FILE,
+    attachmentId: "4b6c8d0e-2f3a-4b5c-8d7e-9f0a1b2c3d4e",
+    mediaType: "image/png",
+  } as const;
+  const options = [{ label: "A card", media: [shot] }, { label: "A dock" }];
+  const designs = [asking({ type: INBOX_ASK.DECIDE, options, multiple: true })];
+  const none = withNoneOfThese(EMPTY_INBOX_DRAFT);
+  assert.deepEqual(inboxThreadSend(designs, none)?.answers, {
+    ask: ASKING_ID,
+    reply: INBOX_REPLY.CHOSE,
+    choices: [],
+  });
+  assert.deepEqual(
+    inboxThreadSend(designs, withChoice({ multiple: true }, none, "A dock"))?.answers,
+    {
+      ask: ASKING_ID,
+      reply: INBOX_REPLY.CHOSE,
+      choices: ["A dock"],
+    },
+  );
+  const words = [
+    asking({ type: INBOX_ASK.DECIDE, options: [{ label: "A card" }, { label: "A dock" }] }),
+  ];
+  assert.equal(inboxThreadSend(words, none), undefined);
 });
 
 test("an option picked by its number is the one pick of a choice of one, picked again it stays; of a choice of several it joins the picks, and picked again it leaves them", () => {

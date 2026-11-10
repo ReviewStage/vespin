@@ -4,6 +4,7 @@ import {
   createContext,
   isValidElement,
   type ReactNode,
+  type Ref,
   useContext,
   useLayoutEffect,
 } from "react";
@@ -272,6 +273,7 @@ export function PictureSetTile({
   caption = "",
   why,
   onOpen,
+  ref,
 }: {
   state: PictureState;
   /** The picture's size in pixels; none while it is not known. */
@@ -285,6 +287,8 @@ export function PictureSetTile({
   why?: string | undefined;
   /** Opens the picture; without one, the tile is no press. */
   onOpen?: (() => void) | undefined;
+  /** The tile's place on the page, which a viewer walking pictures in the order they stand reads. */
+  ref?: Ref<HTMLLIElement> | undefined;
 }): React.JSX.Element {
   const { many, more } = useContext(TilePlaceContext);
   const ratio = width === undefined || height === undefined ? WAITING_RATIO : width / height;
@@ -320,6 +324,7 @@ export function PictureSetTile({
     );
   return (
     <li
+      ref={ref}
       className={`${TILE} ${many ? TILE_MANY : TILE_FEW}`}
       style={cssCustomProperties({ "--ui-picture-ratio": ratio })}
     >

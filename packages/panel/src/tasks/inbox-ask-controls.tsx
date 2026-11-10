@@ -4,9 +4,12 @@ import {
   doDecision,
   fieldValueOf,
   type InboxDraft,
+  picksNone,
   shownTicks,
   stepParts,
   withDoPress,
+  withNoneOfThese,
+  withPicks,
   withStep,
   withValue,
 } from "@repo/features/inbox-draft";
@@ -26,6 +29,8 @@ import {
   type InboxChoice,
   type InboxField,
   type InboxForm,
+  NONE_OF_THESE,
+  optionsCarryMedia,
   recommendedLabels,
 } from "@repo/features/inbox-wire";
 import { FIELD_WORDS } from "@repo/features/words";
@@ -62,6 +67,7 @@ import { Fragment } from "react";
 import { copyThroughShell } from "../copy-feedback.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { type FormTextDoors, type FormTextProps, InboxFormText } from "./inbox-form-text.js";
+import { OptionCardMedia } from "./inbox-option-media.js";
 import { ANSWER_STATUS_TONE } from "./inbox-stamp.js";
 import { REPLY_SCOPE } from "./reply-to-selection.js";
 import { SentWords } from "./skill-chip.js";
@@ -100,16 +106,46 @@ const INBOX_ASK_PRESSES = "inbox-ask-presses flex flex-wrap gap-control-gap";
 /** The words a choice's open options are named by, for a reader that does not see the question over them. */
 const CHOICE_LEGEND = "Options";
 
-/** A choice's options as `@repo/ui`'s ChoiceList draws them, each the agent recommends wearing its badge. */
+/**
+ * The value None of these stands under among a choice's cards. Note that
+ * it is no label an option could spell, since a label is words and this
+ * opens with a character no one types.
+ */
+const NONE_VALUE = "\u0000none";
+
+/** A choice's options as `@repo/ui`'s ChoiceList draws them, each the agent recommends wearing its badge, and each card its media. */
 function choiceOptions(
-  options: readonly { label: string; detail?: string | undefined; recommended: boolean }[],
+  options: readonly (InboxChoice["options"][number] & { recommended: boolean })[],
+  cards: boolean,
 ): ChoiceOption<string>[] {
-  return options.map((option) => ({
+  // Note that a card's detail would step it back as unavailable, so a card says its trade-off as its state.
+  const drawn = options.map((option) => ({
     value: option.label,
     label: option.label,
-    detail: option.detail,
+    ...(cards
+      ? { state: option.detail, below: <OptionCardMedia option={option} /> }
+      : { detail: option.detail }),
     badge: option.recommended ? RECOMMENDED : undefined,
   }));
+  return cards ? [...drawn, { value: NONE_VALUE, label: NONE_OF_THESE }] : drawn;
+}
+
+/** What a choice's cards hold picked: the options the draft picks, or None of these alone. */
+function cardValues(draft: InboxDraft): readonly string[] {
+  return picksNone(draft) ? [NONE_VALUE] : draft.choices;
+}
+
+/**
+ * The draft after a choice's cards change to `values`: None of these picked
+ * where it is newly among them, letting every option go, and else the
+ * options among them, letting None of these go.
+ */
+function withCardValues(draft: InboxDraft, values: readonly string[]): InboxDraft {
+  const none = values.includes(NONE_VALUE);
+  if (none && !picksNone(draft)) return withNoneOfThese(draft);
+  const choices = values.filter((value) => value !== NONE_VALUE);
+  if (none && choices.length === 0) return draft;
+  return withPicks(picksNone(draft) ? withNoneOfThese(draft) : draft, choices);
 }
 
 /** Where a choice's open options stand, which a number key and Enter's way to what is missing find them by. */
@@ -147,25 +183,29 @@ function ChoiceOptions({
   readOnly?: boolean;
   onDraft: (draft: InboxDraft) => void;
 }): React.JSX.Element {
+  const cards = optionsCarryMedia(choice);
   const options = choiceOptions(
     choice.options.map((option) => ({
       ...option,
       recommended: recommendedLabels(choice).includes(option.label),
     })),
+    cards,
   );
   return (
     <div {...(readOnly ? {} : { [OPTIONS_ATTRIBUTE]: "" })}>
       <ChoiceList
         legend={CHOICE_LEGEND}
         options={options}
-        value={draft.choices}
+        value={cards ? cardValues(draft) : draft.choices}
         select={choice.multiple === true ? CHOICE_SELECT.MANY : CHOICE_SELECT.ONE}
-        look={CHOICE_LOOK.MARKED}
-        numbered={numbered && !readOnly}
+        look={cards ? CHOICE_LOOK.CARD : CHOICE_LOOK.MARKED}
+        numbered={numbered && !readOnly && !cards}
         clearable
         disabled={disabled}
         readOnly={readOnly}
-        onChange={(choices) => onDraft({ ...draft, choices: [...choices] })}
+        onChange={(choices) =>
+          onDraft(cards ? withCardValues(draft, choices) : { ...draft, choices: [...choices] })
+        }
       />
     </div>
   );
