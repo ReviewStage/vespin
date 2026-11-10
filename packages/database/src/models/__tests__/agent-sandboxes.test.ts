@@ -6,7 +6,7 @@ import { Effect } from "effect";
 import { Database } from "../../core/query.js";
 import { AGENT_SANDBOX_STATE, agentSandboxTable } from "../../schemas/agent-sandbox.js";
 import { user } from "../../schemas/auth.js";
-import { getTestDB, openTaskAgent, openWorkspace } from "../../testing/index.js";
+import { getTestDB, openTaskAgent, startTask } from "../../testing/index.js";
 import { recordAgentSandboxOpen, recordAgentSandboxUse } from "../agent-sandboxes.js";
 
 /**
@@ -34,7 +34,8 @@ const openAgent = Effect.gen(function* () {
   yield* Effect.flatMap(Database, (db) =>
     db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
   );
-  return yield* openTaskAgent(userId, yield* openWorkspace(userId), null);
+  const task = yield* startTask(userId, { name: "Invitations", repository: "acme/relay" });
+  return yield* openTaskAgent(userId, task.workspaceId, task.id);
 });
 
 const rowOf = (sandboxName: string) =>
