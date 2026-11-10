@@ -1,6 +1,6 @@
 ---
 name: vespin
-description: "Drive Vespin from a shell with the `vespin` command: create tasks, read, write, and restore their descriptions, start coding agents and wait on them, check out an agent's branch, share a cloud agent's port by preview link, answer the inbox threads agents post, read and keep the workspace's shared memory, and make and run automations. Load it when asked to work with Vespin tasks, their descriptions, agents, inbox, memory, or automations from a terminal, to script or pipe Vespin, or to wait on an agent and bring its branch local. Prefer Vespin's MCP server only when you have no shell."
+description: "Drive Vespin from a shell with the `vespin` command: create tasks, read, write, and restore their descriptions, comment on them, read the pages agents show, start coding agents and wait on them, check out an agent's branch, share a cloud agent's port by preview link, answer the inbox threads agents post, read and keep the workspace's shared memory, and make and run automations. Load it when asked to work with Vespin tasks, their descriptions, agents, inbox, memory, or automations from a terminal, to script or pipe Vespin, or to wait on an agent and bring its branch local. Prefer Vespin's MCP server only when you have no shell."
 ---
 
 # vespin
@@ -28,7 +28,7 @@ vespin agent checkout <agent-id>              # fetch its branch and check it ou
 - `task create` takes the repository from this folder's `origin` (override with `-R owner/name`). With `-q` it prints the task id, then the agent id. `--start` hands the agent the description (`-F description.md`); `--prompt <file|->` hands it a prompt instead.
 - To see the work live, use `vespin agent logs <id> --follow`. Without `--follow` it prints the transcript so far.
 - `agent checkout` must run inside a clone of the task's repository. `agent view <id>` prints the branch, pull request, and checks.
-- Tasks are named by id, number, or key (`ACME-42`). Agents and threads are named by id.
+- Tasks are named by id, number, or key (`ACME-42`). Agents, threads, comment threads, and pages are named by id.
 
 Other commands:
 
@@ -42,6 +42,9 @@ Other commands:
 | `task cat <task> <path> [--commit sha]` · `task ls <task> [path] [-r]` | Read a file or list a folder of the task's repository as GitHub holds it, at the default branch's head or a commit (`cat`), never an agent's unpushed work in its sandbox |
 | `description show <task>` · `description edit <task> -F <file\|->` | Print the description as Markdown; replace it whole |
 | `description history <task> [--before <r>]` · `description show <task> --revision <r>` · `description restore <task> <r>` | List the description's revisions, newest first, 50 a page (`--before` the revision it printed for older ones); print it as it stood after one; put one back, kept as a new revision, so restoring the one before undoes it |
+| `comment list <task> [--page <id>] [--status open\|resolved\|all]` | Comment threads on the description, or on one of its pages; open ones unless asked |
+| `comment add <task> --on "<words>" -F <msg\|->` · `comment reply <task> <thread> -F <msg\|->` · `comment resolve <task> <thread>` · `comment reopen <task> <thread>` | Start a thread on words copied exactly from the description (as much as stands there once); reply, which is sent to the agents in the thread and to each of the task's agents the words mention as a link, `[@<title>](https://vespin.dev/<workspace>/agent/<agent-id>)` (a bare `@name` asks no one). The comment is posted all the same where an agent cannot take it: the JSON's `unsent` lists those already in the thread (an archived one, say), never a newly mentioned one, so an empty `unsent` does not prove delivery (`-q` prints the thread id alone); resolve or reopen it |
+| `page list --task <task>\|--agent <id>` · `page show <page> --task <task>\|--agent <id> [--version n]` | Pages agents showed on a task, or an agent on no task showed on itself; one version's HTML (the newest by default) |
 | `agent start <task> [-F prompt] [--model m --effort e] [--branch b] [--cloud\|--on <device>] [--follow\|--wait]` | Start an agent; `vespin models` lists `--model` and `--effort` values |
 | `agent continue <id> [-F note] [--at <message-id>] [--model m --effort e] [--cloud\|--on <device>] [--follow\|--wait]` | Continue an agent as the app's Continue does: it is stopped, and a new agent on its task is handed its brief and transcript, then the note. The new agent runs as you, on your own Claude or ChatGPT plan, so a teammate's agent is handed over to you. `--at` forks at one of its assistant messages instead (ids from `agent logs --json`), and it goes on. It runs on the agent's model and where it runs unless you name them |
 | `agent list [<task>] [--offset n]` · `agent view <id>` | Agents, newest first, the workspace's 50 a page (`--offset` the `nextOffset` it printed); one agent's status |
