@@ -111,6 +111,20 @@ export const TASK_STATUS = {
 
 export type TaskStatus = (typeof TASK_STATUS)[keyof typeof TASK_STATUS];
 
+/**
+ * The statuses a task's work is settled in, finished or cut: the two a
+ * finish stamps `completedAt` for and counts, an archive keeps, and a
+ * blocker holds nothing up in. Every reader takes this one set.
+ */
+export const TASK_SETTLED = [TASK_STATUS.DONE, TASK_STATUS.CANCELED] as const;
+
+export type TaskSettledStatus = (typeof TASK_SETTLED)[number];
+
+/** Whether a task standing in `status` is settled (`TASK_SETTLED`); none, from a service before statuses, is not. */
+export function isTaskSettled(status: TaskStatus | undefined): status is TaskSettledStatus {
+  return TASK_SETTLED.some((settled) => settled === status);
+}
+
 /** The order a menu lists the statuses in: the order work moves through them, the settled last. */
 export const TASK_STATUS_ORDER: readonly TaskStatus[] = [
   TASK_STATUS.BACKLOG,
@@ -420,6 +434,7 @@ function updateNamesAChange(update: {
   status?: TaskStatus;
   priority?: TaskPriority;
   assigneeId?: string | null;
+  stopAgents?: boolean;
   runsOn?: TaskRunsOnRequest;
 }): boolean {
   return Object.keys(update).length > 0;
@@ -441,6 +456,9 @@ function positionIsPinned(update: { pinned?: boolean; pinPosition?: string }): b
  * member of the task's workspace before it is kept, and null clears it. A move is the task's
  * owner's alone, into a workspace they are a member of whose GitHub reaches
  * the task's repository, and lets its assignee go where they are no member there.
+ * A move to Done or Canceled archives the task's idle agents; with
+ * `stopAgents`, which the member confirmed, it stops the running ones first
+ * and archives them too, and a build from before it names none.
  * A task holds no place to run, so `runsOn`, which a released desktop still
  * sends, is read so that build's change decodes, and changes nothing.
  */
@@ -456,6 +474,8 @@ export const taskUpdateRequestSchema = EffectSchema.Struct({
   status: EffectSchema.optionalKey(taskStatusSchema),
   priority: EffectSchema.optionalKey(taskPrioritySchema),
   assigneeId: EffectSchema.optionalKey(EffectSchema.NullOr(taskAssigneeIdSchema)),
+  /** With a move to Done or Canceled, whether the task's running agents are stopped and archived with it. */
+  stopAgents: EffectSchema.optionalKey(EffectSchema.Boolean),
   runsOn: EffectSchema.optionalKey(taskRunsOnRequestSchema),
 }).check(EffectSchema.makeFilter(updateNamesAChange), EffectSchema.makeFilter(positionIsPinned));
 

@@ -2,21 +2,21 @@
 
 import assert from "node:assert/strict";
 import { MOTION_DELAY_MS } from "@repo/brand";
-import { act, createElement, type ReactElement } from "react";
+import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
 import { STATUS_TONE } from "../../status-tone.js";
-import { Toast } from "./toast.js";
+import { Toast, type ToastTone } from "./toast.js";
 import { ToastActions } from "./toast-actions.js";
-import { ToastStack } from "./toast-stack.js";
+import { createToastManager, type StandingToast, ToastStack } from "./toast-stack.js";
 
 /**
- * toast.test.ts -- a toast with an action holds under the pointer and focus
- * apart, dismisses on Escape and on its ×, and presses its action after
- * dismissing; one without takes no press; a turn of tone changes its words
- * in place; a drag or a trackpad sweep past the threshold sends it away and
- * one short of it does not; the stack names itself and says the newest words through the
- * window's announcer.
+ * toast.test.ts -- the stack draws each toast its manager is handed, in a
+ * named landmark, each toast named by its words; a toast's action dismisses
+ * it before it presses, and one given an href is a link that does the same
+ * without the browser following it; a turn of tone changes its words in
+ * place; and its × says Dismiss in a hint. What Base UI keeps (holds,
+ * Escape, swipes, what is said aloud) is Base UI's to test.
  */
 
 declare global {
@@ -32,113 +32,94 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-function render(element: ReactElement): HTMLElement {
+/** What a test's toast says, and what stands at its end. */
+interface Shown {
+  readonly tone: ToastTone;
+  readonly words: string;
+  readonly detail?: string;
+  readonly actions?: ReactNode;
+}
+
+/** A stack drawn in the document, and a way to show a toast on it. */
+function stack(): (shown: Shown, id?: string) => void {
+  const manager = createToastManager<Shown>();
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(element));
-  return container;
+  const draw = (toast: StandingToast<Shown>) => {
+    const shown = toast.data;
+    return shown === undefined
+      ? null
+      : createElement(Toast, { key: toast.id, toast, ...shown, actions: shown.actions ?? null });
+  };
+  act(() =>
+    root.render(
+      createElement(ToastStack<Shown>, {
+        manager,
+        label: "Notifications",
+        container,
+        children: draw,
+      }),
+    ),
+  );
+  return (shown, id) => act(() => void manager.add({ id, timeout: 0, data: shown }));
 }
 
-function acting(
-  onHold: (holding: boolean) => void,
-  onEscape: () => void,
-  onPress: () => void,
-  countdown?: number,
-) {
-  return createElement(Toast, {
+/** A toast with an Undo that records its dismissal and its press in `calls`. */
+function undoable(calls: string[]): Shown {
+  return {
     tone: STATUS_TONE.COMPLETE,
     words: "Task archived",
-    countdown,
-    onHold,
-    onEscape,
     actions: createElement(ToastActions, {
       label: "Undo",
-      onPress,
+      onPress: () => calls.push("press"),
       dismissLabel: "Dismiss",
-      onDismiss: onEscape,
+      onDismiss: () => calls.push("dismiss"),
     }),
-  });
+  };
 }
 
-test("a toast is held while the pointer or focus is on it, and let go once neither is", () => {
-  const onHold = vi.fn();
-  const view = render(
-    createElement(
-      "ol",
-      null,
-      acting(
-        onHold,
-        () => undefined,
-        () => undefined,
-      ),
-    ),
-  );
-  const toast = view.querySelector("li");
-  assert.ok(toast !== null);
+test("the stack draws each toast its manager is handed, in a named landmark, each named by its words", () => {
+  const show = stack();
+  show({ tone: STATUS_TONE.DANGER, words: "Couldn't save", detail: "Offline" });
 
-  act(() =>
-    toast.dispatchEvent(
-      new MouseEvent("pointerover", { bubbles: true, relatedTarget: document.body }),
-    ),
-  );
-  act(() => toast.dispatchEvent(new FocusEvent("focusin", { bubbles: true })));
-  act(() =>
-    toast.dispatchEvent(
-      new MouseEvent("pointerout", { bubbles: true, relatedTarget: document.body }),
-    ),
-  );
-  assert.deepEqual(onHold.mock.calls, [[true]], "focus still holds it");
-  act(() => toast.dispatchEvent(new FocusEvent("focusout", { bubbles: true })));
-  assert.deepEqual(onHold.mock.calls, [[true], [false]]);
+  const landmark = document.querySelector('[role="region"][aria-label="Notifications"]');
+  assert.ok(landmark !== null, "a named landmark");
+  const toast = landmark.querySelector(".ui-toast");
+  assert.ok(toast !== null);
+  const named = document.getElementById(toast.getAttribute("aria-labelledby") ?? "");
+  assert.equal(named?.textContent, "Couldn't save");
+  const described = document.getElementById(toast.getAttribute("aria-describedby") ?? "");
+  assert.equal(described?.textContent, "Offline");
 });
 
-test("Escape in a toast with an action dismisses it, and its action dismisses before it presses", () => {
+test("a toast's action dismisses it before it presses", () => {
   const calls: string[] = [];
-  const view = render(
-    createElement(
-      "ol",
-      null,
-      acting(
-        () => undefined,
-        () => calls.push("dismiss"),
-        () => calls.push("press"),
-      ),
-    ),
-  );
-  const toast = view.querySelector("li");
-  assert.ok(toast !== null);
-  act(() => toast.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
-  const undo = [...view.querySelectorAll("button")].find((b) => b.textContent === "Undo");
+  stack()(undoable(calls));
+  const undo = [...document.querySelectorAll("button")].find((b) => b.textContent === "Undo");
   assert.ok(undo !== undefined);
   act(() => undo.click());
-  assert.deepEqual(calls, ["dismiss", "dismiss", "press"]);
+  assert.deepEqual(calls, ["dismiss", "press"]);
 });
 
 test("an action given an href is a link to it in the action's look, and its press dismisses, then presses, without the browser following it", () => {
   const calls: string[] = [];
-  const view = render(
-    createElement(
-      "ol",
-      null,
-      createElement(Toast, {
-        tone: STATUS_TONE.DANGER,
-        words: "Out of credit",
-        actions: createElement(ToastActions, {
-          label: "Add credit",
-          href: "https://example.test/billing",
-          onPress: () => calls.push("press"),
-          dismissLabel: "Dismiss",
-          onDismiss: () => calls.push("dismiss"),
-        }),
-      }),
-    ),
-  );
-  const link = [...view.querySelectorAll("a")].find((a) => a.textContent === "Add credit");
+  stack()({
+    tone: STATUS_TONE.DANGER,
+    words: "Out of credit",
+    actions: createElement(ToastActions, {
+      label: "Add credit",
+      href: "https://example.test/billing",
+      onPress: () => calls.push("press"),
+      dismissLabel: "Dismiss",
+      onDismiss: () => calls.push("dismiss"),
+    }),
+  });
+  const link = [...document.querySelectorAll("a")].find((a) => a.textContent === "Add credit");
   assert.ok(link !== undefined, "the action is a link");
   assert.equal(link.getAttribute("href"), "https://example.test/billing");
   assert.equal(
-    [...view.querySelectorAll("button")].some((b) => b.textContent === "Add credit"),
+    [...document.querySelectorAll("button")].some((b) => b.textContent === "Add credit"),
     false,
     "and no button",
   );
@@ -150,118 +131,15 @@ test("an action given an href is a link to it in the action's look, and its pres
   assert.equal(click.defaultPrevented, true);
 });
 
-test("a toast with no action takes no press and no hold", () => {
-  const view = render(
-    createElement(
-      "ol",
-      null,
-      createElement(Toast, { tone: STATUS_TONE.DANGER, words: "Couldn't save", detail: "Offline" }),
-    ),
-  );
-  const toast = view.querySelector("li");
-  assert.ok(toast !== null);
-  assert.equal(view.querySelectorAll("button").length, 0);
-  assert.equal(toast.querySelector(".ui-toast-detail")?.textContent, "Offline");
-});
-
-test("the stack is a named landmark that says the newest words through the window's announcer", () => {
-  const stack = (polite: string, alert: string) =>
-    createElement(ToastStack, { label: "Notifications", polite, alert, children: null });
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  roots.push(root);
-  act(() => root.render(stack("", "")));
-  assert.equal(container.querySelector("section")?.getAttribute("aria-label"), "Notifications");
-
-  act(() => root.render(stack("Link copied", "")));
-  assert.equal(container.querySelector('[role="status"]')?.textContent, "Link copied");
-
-  act(() => root.render(stack("Link copied", "Couldn't save")));
-  assert.equal(container.querySelector('[role="alert"]')?.textContent, "Couldn't save");
-});
-
-/** A pointer's press, travel, or release on `target`, at `x` across and `y` down. */
-function pointer(target: Element, type: string, x: number, y = 0): void {
-  act(() =>
-    target.dispatchEvent(
-      new MouseEvent(type, { bubbles: true, button: 0, clientX: x, clientY: y }),
-    ),
-  );
-}
-
-/** A toast with an action that records each dismissal in `dismissed`. */
-function swipeable(dismissed: string[]): HTMLLIElement {
-  const view = render(
-    createElement(
-      "ol",
-      null,
-      acting(
-        () => undefined,
-        () => dismissed.push("dismiss"),
-        () => undefined,
-      ),
-    ),
-  );
-  const toast = view.querySelector("li");
-  assert.ok(toast !== null);
-  return toast;
-}
-
 test("a toast whose tone turns changes its words in place", () => {
-  const container = document.body.appendChild(document.createElement("ol"));
-  const root = createRoot(container);
-  roots.push(root);
-  act(() => root.render(createElement(Toast, { tone: STATUS_TONE.WORKING, words: "Saving…" })));
-  const toast = container.querySelector("li");
+  const show = stack();
+  show({ tone: STATUS_TONE.WORKING, words: "Saving…" }, "work");
+  const toast = document.querySelector(".ui-toast");
 
-  act(() => root.render(createElement(Toast, { tone: STATUS_TONE.COMPLETE, words: "Saved" })));
+  show({ tone: STATUS_TONE.COMPLETE, words: "Saved" }, "work");
 
-  assert.equal(container.querySelector("li"), toast, "the same card");
-  assert.equal(container.querySelector(".ui-toast-words")?.textContent, "Saved");
-});
-
-test("a toast dragged sideways past the threshold is sent away, and one let go short of it is not", () => {
-  const dismissed: string[] = [];
-  const toast = swipeable(dismissed);
-
-  pointer(toast, "pointerdown", 0);
-  pointer(toast, "pointermove", 30);
-  pointer(toast, "pointerup", 30);
-  const shortOf = [...dismissed];
-  pointer(toast, "pointerdown", 0);
-  pointer(toast, "pointermove", 120);
-  pointer(toast, "pointerup", 120);
-
-  assert.deepEqual(shortOf, []);
-  assert.deepEqual(dismissed, ["dismiss"]);
-});
-
-test("a press that travels up or down, or not at all, is no swipe", () => {
-  const dismissed: string[] = [];
-  const toast = swipeable(dismissed);
-
-  pointer(toast, "pointerdown", 0, 0);
-  pointer(toast, "pointermove", 10, 120);
-  pointer(toast, "pointermove", 120, 120);
-  pointer(toast, "pointerup", 120, 120);
-
-  assert.deepEqual(dismissed, []);
-});
-
-test("a trackpad's sideways sweep sends the toast away once it passes the threshold, and an up-and-down scroll is no sweep", () => {
-  const dismissed: string[] = [];
-  const toast = swipeable(dismissed);
-  const sweep = (deltaX: number, deltaY = 0) =>
-    act(() => toast.dispatchEvent(new WheelEvent("wheel", { bubbles: true, deltaX, deltaY })));
-
-  sweep(4, 40);
-  sweep(20);
-  sweep(20);
-  const before = [...dismissed];
-  sweep(40);
-
-  assert.deepEqual(before, []);
-  assert.deepEqual(dismissed, ["dismiss"]);
+  assert.equal(document.querySelector(".ui-toast"), toast, "the same card");
+  assert.equal(document.querySelector(".ui-toast-words")?.textContent, "Saved");
 });
 
 /** The words of the hint the pointer resting on `target` raises, past the hint's wait, on a faked clock. */
@@ -281,18 +159,8 @@ function hintOn(target: Element): string | undefined {
 }
 
 test("a toast's × says Dismiss in a hint on hover", () => {
-  const view = render(
-    createElement(
-      "ol",
-      null,
-      acting(
-        () => undefined,
-        () => undefined,
-        () => undefined,
-      ),
-    ),
-  );
-  const dismiss = view.querySelector('button[aria-label="Dismiss"]');
+  stack()(undoable([]));
+  const dismiss = document.querySelector('button[aria-label="Dismiss"]');
   assert.ok(dismiss !== null);
   assert.equal(hintOn(dismiss), "Dismiss");
 });

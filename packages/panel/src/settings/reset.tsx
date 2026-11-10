@@ -21,7 +21,7 @@ import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useIsMutating, useQueryClient } from "@tanstack/react-query";
 import { actFailureWords, KEPT, type Kept, notKept } from "../act.js";
 import { actMutation } from "../act-mutations.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { keepWrite, type RowDoors, type UndoWrite } from "../undo-stack.js";
 import { appStateIn, selectAppSettingsView } from "../use-app-state.js";
 import type { SettingsWrites } from "./writes.js";
@@ -236,7 +236,6 @@ function ResetPageButton({
         toast({
           words: result.reason,
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: { surface: FAILURE_SURFACE.SETTINGS_RESET, cause: result },
         });
         return result;
@@ -257,7 +256,6 @@ function ResetPageButton({
       toast({
         words: actFailureWords(error),
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface: FAILURE_SURFACE.SETTINGS_RESET, cause: error },
       }),
     );

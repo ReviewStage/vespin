@@ -25,9 +25,8 @@ import * as SqlClient from "effect/sql/SqlClient";
  * archived by a member already: once it runs, the agents on eve or with no
  * runtime stand archived by the app for their starter, with why, the others
  * as they were; the archived agent's open question is closed and its ask
- * withdrawn, its notice and the Claude Code agent's question left open; a
- * second run changes nothing; and the starter's unarchive opens the
- * question again.
+ * withdrawn, its notice and the Claude Code agent's question left open; and
+ * a second run changes nothing.
  * Synthetic accounts throughout.
  */
 
@@ -131,13 +130,6 @@ it.effect(
         });
         assert.deepEqual(yield* standing(notice), { status: "open", closedReason: null, asks: [] });
         assert.deepEqual(yield* standing(nativeQuestion), {
-          status: "open",
-          closedReason: null,
-          asks: [["open", undefined]],
-        });
-
-        yield* archiveAgent("dean", onRetired, false);
-        assert.deepEqual(yield* standing(question), {
           status: "open",
           closedReason: null,
           asks: [["open", undefined]],

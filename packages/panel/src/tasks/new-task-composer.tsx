@@ -1,5 +1,6 @@
 import { AGENT_BOUNDS, AGENT_STATUS, hasWordsOrFiles } from "@repo/features/agent-wire";
-import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
+import { FAILURE_REASON, type Failure, rejectedFailure } from "@repo/features/failure-remedy";
+import { wordsWithoutMarkers } from "@repo/features/file-marker";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import type { MacOffer, ModelChoice } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -21,6 +22,7 @@ import {
   Text,
   VisuallyHidden,
 } from "@repo/ui";
+import { useAsyncAction } from "@repo/ui/use-async-action";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAgentDefault } from "../account-choices.js";
@@ -409,8 +411,11 @@ export function NewTaskComposer({
     onSwitch: setDisabledServers,
     onOpenSettings: () => openSettings({ page: SETTINGS_VIEW.INTEGRATIONS }),
   };
-  const [starting, setStarting] = useState(false);
-  const [note, setNote] = useState<Failure | undefined>(refused?.note);
+  const starts = useAsyncAction<Failure>(rejectedFailure);
+  const starting = starts.running;
+  // The refusal a refused card opened on, said until a start or an edit lets it go.
+  const [handed, setHanded] = useState<Failure | undefined>(refused?.note);
+  const note = starts.refusal ?? handed;
   // The relations the press that opened the card chose, or the refused card's, which the + menu and the rows change.
   const [related, setRelated] = useState<readonly NewTaskRelation[]>(
     refused?.card.relations ?? (presetRelation === undefined ? [] : [presetRelation]),
@@ -579,8 +584,9 @@ export function NewTaskComposer({
     setPickedByHand(true);
   };
   const said = words.trim();
-  // Note that an automation's agent starts on words alone, since the brief fences them as the request.
-  const filled = forAutomation ? said !== "" : hasWordsOrFiles(said, attachments);
+  // Note that an automation's agent starts on words alone, since the brief fences them as the request, and a file's marker is no words of the request's.
+  const requested = wordsWithoutMarkers(said).trim() !== "";
+  const filled = forAutomation ? requested : hasWordsOrFiles(said, attachments);
   // An agent needs something to work on, words or files, and works in no repository where none is chosen.
   // Note that an agent nothing of the account's pays for is held here, with the press that connects one, rather than refused once pressed; a bare task needs none.
   const unpaid =
@@ -630,41 +636,39 @@ export function NewTaskComposer({
   };
 
   const begin = (handing: Pick<NewTaskStart, "handed" | "card"> = {}) => {
-    if (starting || devicesUnread) return;
-    setStarting(true);
-    onStarting?.(true);
-    setNote(undefined);
-    // Note that an agent's start lets its words go as it is pressed, because the card closes at
-    // once and a New task opened before the service answers must open empty; a refused card
-    // opened again brings its own words back (`refused.card.words`).
-    const agentStart = handing.handed !== undefined;
-    if (agentStart) draft.update(() => EMPTY_DRAFT);
-    // Note that a tree's start names no repository, because the service gives it the other task's.
-    newTask
-      .start("", tree ? null : repository, workspaceId, {
-        ...(runsOn === undefined ? undefined : { runsOn }),
-        ...(device === undefined ? undefined : { device }),
-        ...(relations.length === 0 ? undefined : { relations: relationsAsked(relations) }),
-        ...handing,
-      })
-      .then((refused) => {
-        if (refused === undefined) {
-          // A task started lets its words go, so the next New task opens empty.
-          pressed.current = undefined;
-          if (!agentStart) draft.update(() => EMPTY_DRAFT);
-        }
-        setNote(refused);
-      })
-      .finally(() => {
-        setStarting(false);
-        onStarting?.(false);
-      });
+    if (devicesUnread) return;
+    void starts.run(() => {
+      onStarting?.(true);
+      setHanded(undefined);
+      // Note that an agent's start lets its words go as it is pressed, because the card closes at
+      // once and a New task opened before the service answers must open empty; a refused card
+      // opened again brings its own words back (`refused.card.words`).
+      const agentStart = handing.handed !== undefined;
+      if (agentStart) draft.update(() => EMPTY_DRAFT);
+      // Note that a tree's start names no repository, because the service gives it the other task's.
+      return newTask
+        .start("", tree ? null : repository, workspaceId, {
+          ...(runsOn === undefined ? undefined : { runsOn }),
+          ...(device === undefined ? undefined : { device }),
+          ...(relations.length === 0 ? undefined : { relations: relationsAsked(relations) }),
+          ...handing,
+        })
+        .then((refused) => {
+          if (refused === undefined) {
+            // A task started lets its words go, so the next New task opens empty.
+            pressed.current = undefined;
+            if (!agentStart) draft.update(() => EMPTY_DRAFT);
+          }
+          return refused;
+        })
+        .finally(() => onStarting?.(false));
+    });
   };
   const start = () => {
     if (!canStart) return;
     const prompt = forAutomation ? automationAgentBrief(said) : said;
     if (forAutomation && prompt.length > AGENT_BOUNDS.MAX_MESSAGE_CHARS) {
-      setNote({ reason: FAILURE_REASON.OTHER, text: TOO_LONG });
+      starts.refuse({ reason: FAILURE_REASON.OTHER, text: TOO_LONG });
       return;
     }
     const ask: AgentAsk = {
@@ -750,7 +754,8 @@ export function NewTaskComposer({
     setDraft: (text) => {
       if (text === words) return;
       draft.update((was) => ({ ...was, text }));
-      setNote(undefined);
+      setHanded(undefined);
+      starts.clear();
     },
     attachments,
     setAttachments: (next) =>
@@ -820,7 +825,7 @@ export function NewTaskComposer({
         wording={startsBare ? BARE_WORDS : PURPOSE_WORDS[purpose]}
         // Note that an automation's agent is held without words, since its brief fences them as the request, files alone saying none.
         sendable={
-          !devicesUnread && (startsBare || unpaid === undefined) && (!forAutomation || said !== "")
+          !devicesUnread && (startsBare || unpaid === undefined) && (!forAutomation || requested)
         }
         model={choice === undefined ? undefined : { choice, note: undefined, choose }}
         models={newTask.models}

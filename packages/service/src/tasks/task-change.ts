@@ -19,7 +19,7 @@ import { isWorkspaceMember } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
 import type { StoredArchive } from "@repo/database/schemas/agent";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
-import { TASK_STATUS, type TaskUpdateRequest } from "@repo/features/task-wire";
+import { isTaskSettled, type TaskUpdateRequest } from "@repo/features/task-wire";
 import type { Sandbox } from "@repo/sandbox";
 import { Data, Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
@@ -59,11 +59,32 @@ const movedRepositoryReached =
           Effect.mapError((refusal) => new MoveRefused({ refusal })),
         );
 
-/** A change confirmed: what the store writes, and the guard a move holds under the task's lock. */
+/** A change confirmed: what the store writes, the guard a move holds under the task's lock, and the agents a confirmed Done or Canceled stopped. */
 export interface TaskChangeConfirmed {
   readonly changes: TaskChanges;
   readonly moveGuard: ReturnType<typeof movedRepositoryReached> | undefined;
+  readonly stopped: ReadonlySet<string>;
 }
+
+/**
+ * Every agent of the task but `caller` stopped for good, its ids answered;
+ * refused as not ready, every agent standing, where one cannot be stopped
+ * yet, since every agent is read before any is stopped and a refusal
+ * cancels no one's work.
+ */
+const everyAgentStopped = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  taskId: string,
+  caller: string | undefined,
+) {
+  const listed = yield* hostedStoreOrUnavailable(listAgents(userId, taskId));
+  const agents = listed.filter((agent) => agent.id !== caller);
+  if (!(yield* everyStopsForGood(agents))) {
+    return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
+  }
+  yield* everyStoppedForGood(STOPPER, userId, agents);
+  return new Set(agents.map((agent) => agent.id));
+});
 
 /**
  * The change `userId` asked of the task, confirmed before the row is
@@ -74,8 +95,10 @@ export interface TaskChangeConfirmed {
  * tree; a new assignee is a member. Both are held again under the row's lock.
  * An archive an older caller asks for stops every agent of the task but
  * `caller`, the calling agent, which never stops itself, then settles the
- * task, or puts it back to work for an unarchive (`archive-settle.ts`); an
- * agent no Stop can name yet refuses it as not ready, every agent standing.
+ * task, or puts it back to work for an unarchive (`archive-settle.ts`), as
+ * a move to Done or Canceled with `stopAgents` does before its write
+ * archives them; an agent no Stop can name yet refuses either as not ready,
+ * every agent standing.
  */
 export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
@@ -126,15 +149,12 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
       ),
     );
   }
-  if (asked.archived === true) {
-    const listed = yield* hostedStoreOrUnavailable(listAgents(userId, taskId));
-    const agents = listed.filter((agent) => agent.id !== caller);
-    // Every agent is read before any is stopped, so an archive refused as not ready cancels no one's work.
-    if (!(yield* everyStopsForGood(agents))) {
-      return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
-    }
-    yield* everyStoppedForGood(STOPPER, userId, agents);
-  }
+  if (asked.archived === true) yield* everyAgentStopped(userId, taskId, caller);
+  // Note that a settle asked again of a task already there stops nothing, because a turn begun since was never confirmed.
+  const stopped: ReadonlySet<string> =
+    isTaskSettled(asked.status) && asked.status !== standing && asked.stopAgents === true
+      ? yield* everyAgentStopped(userId, taskId, caller)
+      : new Set();
   // Note that the archive stamp is never written, because a task is archived no longer.
   const status =
     asked.status !== undefined || asked.archived === undefined
@@ -156,22 +176,30 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
     },
     moveGuard:
       organizationId === undefined ? undefined : movedRepositoryReached(organizationId, userId),
+    stopped,
   };
 });
 
 /**
  * The change confirmed, written (`updateTaskCommitted`), a move to Done or
- * Canceled archiving the task's idle agents by `archivedBy` (`doneTaskArchive`);
+ * Canceled archiving the task's idle agents, and those its confirm stopped,
+ * by `archivedBy` (`doneTaskArchive`);
  * none where the member reaches the task no more. Its refusals under the row's lock are answered
  * by name, as `taskChangeAsked` answers them.
  */
 export const taskChangeWritten = (
   userId: string,
   taskId: string,
-  { changes, moveGuard }: TaskChangeConfirmed,
+  { changes, moveGuard, stopped }: TaskChangeConfirmed,
   archivedBy: StoredArchive,
 ) =>
-  updateTaskCommitted(userId, taskId, changes, moveGuard, doneTaskArchive(archivedBy)).pipe(
+  updateTaskCommitted(
+    userId,
+    taskId,
+    changes,
+    moveGuard,
+    doneTaskArchive(archivedBy, stopped),
+  ).pipe(
     Effect.catch((failure) => {
       switch (failure._tag) {
         case "MoveRefused":
@@ -193,7 +221,7 @@ export const taskChangeSettled = /* @__PURE__ */ Effect.fnUntraced(function* (
   { task, archived, statusMoved }: TaskChanged,
 ) {
   yield* archivedWithTaskLetGo(reach, archived);
-  if (statusMoved && (task.status === TASK_STATUS.DONE || task.status === TASK_STATUS.CANCELED)) {
+  if (statusMoved && isTaskSettled(task.status)) {
     yield* recordServerEvent(
       SERVER_EVENT.TASK_FINISH,
       { userId, workspaceId: task.workspaceId },

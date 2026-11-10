@@ -2,6 +2,8 @@
 
 import { PullRequestScreen } from "../../../../../../screens/pull-request-screens.js";
 
+export { ScreenBoundary as ErrorBoundary } from "../../../../../../screen-boundary.js";
+
 export default function PullRequestRoute() {
   return <PullRequestScreen />;
 }

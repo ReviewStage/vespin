@@ -17,6 +17,7 @@ import { agoText, dateOfText, momentText, sinceText } from "@repo/features/time-
 import { EXPERIMENT } from "@repo/settings";
 import {
   Button,
+  DocumentRule,
   EDITABLE_BLOCK_CLASS,
   IconButton,
   SavedTick,
@@ -63,7 +64,7 @@ import {
 } from "../markdown-message.js";
 import { useCreator } from "../member-directory.js";
 import { useSteadyDoor } from "../steady-door.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { useWorkspaceExperiment, useWorkspaceExperimentOnSince } from "../workspace-experiments.js";
 import {
   CommentsToggle,
@@ -1272,7 +1273,6 @@ export const DescriptionBody = memo(function DescriptionBody({
         replayUnmasked: true,
         words: DESCRIPTION_NOT_SAVED,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: {
           surface: FAILURE_SURFACE.DESCRIPTION_SAVE,
           cause,
@@ -1498,6 +1498,8 @@ export const DescriptionBody = memo(function DescriptionBody({
           />
           {documented ? <ChangedLine looks={looks} marks={marks} /> : null}
           <Fragment key={HEAD_KEY}>{head?.(room)}</Fragment>
+          {/* A hairline parts the head from the description's text, as Notion's parts a page's properties from its body. */}
+          {documented ? <DocumentRule /> : null}
           {!documented ? null : editing.editor === undefined ? (
             editable && views.length === 0 ? (
               <EmptyDocumentBlock entry={entry === EDITOR_PLACE.EMPTY} editing={editing}>

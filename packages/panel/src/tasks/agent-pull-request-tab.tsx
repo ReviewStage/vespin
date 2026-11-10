@@ -188,7 +188,7 @@ import {
   useShortcutTarget,
 } from "../shortcut-target.js";
 import { ShellRoomContext, usePhoneRoom } from "../stage-room.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import {
   AgentChangesTab,
@@ -2990,7 +2990,6 @@ function useThreadJumps(input: {
       replayUnmasked: true,
       words: THREAD_REVEAL_WORDS.GONE,
       tone: STATUS_TONE.DANGER,
-      hold: TOAST_HOLD.FAILED,
       failure: {
         surface: FAILURE_SURFACE.PULL_REQUEST_THREAD,
         cause: FAILURE_CONDITION.GONE,
@@ -3026,7 +3025,6 @@ function useThreadJumps(input: {
               replayUnmasked: true,
               words: THREAD_REVEAL_WORDS.FILE_GONE,
               tone: STATUS_TONE.DANGER,
-              hold: TOAST_HOLD.FAILED,
               failure: {
                 surface: FAILURE_SURFACE.PULL_REQUEST_THREAD,
                 cause: FAILURE_CONDITION.GONE,

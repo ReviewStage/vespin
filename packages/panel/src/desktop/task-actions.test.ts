@@ -845,14 +845,14 @@ function chooseIn(submenu: string, label: string): void {
   act(() => item.click());
 }
 
-test("a row's Status, opened by a right-click or by S on the focused row, sets the task at the status picked, Done as the row's Mark done check does, asking nothing even where agents work on it, and checks the status it stands at", async () => {
-  const working: TaskSummary = {
+test("a row's Status, opened by a right-click or by S on the focused row, sets the task at the status picked, Done as the row's Mark done check does, asking nothing where no agent works on it, and checks the status it stands at", async () => {
+  const resting: TaskSummary = {
     ...OTHER,
     ...STANDING,
     status: TASK_STATUS.IN_PROGRESS,
-    agents: { total: 2, working: 1, pullRequestTotal: 0 },
+    agents: { total: 2, working: 0, pullRequestTotal: 0 },
   };
-  const done: TaskSummary = { ...working, status: TASK_STATUS.DONE };
+  const done: TaskSummary = { ...resting, status: TASK_STATUS.DONE };
   const settled: [string, TaskStatus | undefined][] = [];
   // Each status leaves on the act port, which the service keeps.
   fakeActPort({
@@ -862,7 +862,7 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
       return Promise.resolve(true);
     },
   });
-  const tasks = tasksControl({ tasks: [working] });
+  const tasks = tasksControl({ tasks: [resting] });
   const asked: Asked = {
     opened: [],
     changed: [],
@@ -872,7 +872,7 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
   const doneButton = (container: HTMLElement) =>
     container.querySelector('button[aria-label="Mark done"]');
 
-  const row = mount(withQueryClient(sidebarTask(tasks, working, asked)));
+  const row = mount(withQueryClient(sidebarTask(tasks, resting, asked)));
   const check = doneButton(row);
   assert.ok(check instanceof HTMLButtonElement, "the row offers Mark done as its button");
   act(() => check.click());
@@ -901,9 +901,9 @@ test("a row's Status, opened by a right-click or by S on the focused row, sets t
   assert.equal(asking(), false, "no status asks anything");
   await act(async () => undefined);
   assert.deepEqual(settled, [
-    [working.id, TASK_STATUS.DONE],
-    [working.id, TASK_STATUS.DONE],
-    [working.id, TASK_STATUS.CANCELED],
+    [resting.id, TASK_STATUS.DONE],
+    [resting.id, TASK_STATUS.DONE],
+    [resting.id, TASK_STATUS.CANCELED],
   ]);
 
   unmountAll();

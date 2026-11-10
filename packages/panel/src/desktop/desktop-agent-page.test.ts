@@ -1709,7 +1709,7 @@ test("Archive on the page's ⋯ reads an agent at rest again and archives it una
   assert.equal(home, 1, "the agent archived while its page stood leaves it for Home");
 });
 
-test("Archive on the page's ⋯ archives the reader's own agent at once while it works, asking nothing", async () => {
+test("Archive on the page's ⋯ asks first while the reader's own agent works, and archives it once the stop is confirmed", async () => {
   listed = { ...PAGE, status: AGENT_STATUS.RUNNING };
   const page = mount();
   await settle();
@@ -1717,7 +1717,14 @@ test("Archive on the page's ⋯ archives the reader's own agent at once while it
   await act(async () => archive.click());
   await settle();
 
-  assert.equal(document.querySelector('[role="alertdialog"]'), null, "nothing was asked");
+  const dialog =
+    document.querySelector<HTMLElement>('[role="alertdialog"]') ?? assert.fail("it asks first");
+  assert.deepEqual(archives, [], "nothing is archived before the answer");
+  const stop = [...dialog.querySelectorAll("button")].find(
+    (each) => each.textContent === "Stop agents",
+  );
+  await act(async () => (stop ?? assert.fail("the stop is offered")).click());
+  await settle();
   assert.deepEqual(archives, [{ agentId: AGENT_ID, archived: true }]);
 });
 

@@ -20,7 +20,7 @@ import {
   type SettingsView,
 } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import { cssCustomProperties, RetryOffered, TimeTicks } from "@repo/ui";
+import { Announcer, cssCustomProperties, RetryOffered, TimeTicks } from "@repo/ui";
 import { playCompletionSound } from "@repo/ui/completion-sound";
 import { isComposingKey } from "@repo/ui/composing-key";
 import { useLinkOpener } from "@repo/ui/held-link";
@@ -899,6 +899,8 @@ function AppWindow(): React.JSX.Element {
                             {/* The window's passing notice: the thank-you after a note lands, what
           came of a change made from a menu, and an update arrived. */}
                             <ToastHost />
+                            {/* The window's one pair of live regions, which the panel's live words are read aloud through. */}
+                            <Announcer />
                             {/* A command an agent asks to run on this Mac, while main holds it for an answer. */}
                             <MacCommandAskDialog />
                             {/* The menu a right-click on any link in the window hangs. */}

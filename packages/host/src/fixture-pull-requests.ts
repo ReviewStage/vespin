@@ -318,23 +318,36 @@ function moved(
   }
 }
 
-/** Each read as last laid, by the read the host held and the moves laid over it, so laying the same again hands the store the very object it holds. */
-const LAID = new WeakMap<object, { readonly moves: PullRequestMoves; readonly staged: object }>();
+/** One slice's reads as last laid, by the read the host held, with the moves laid over it. */
+type LaidReads = WeakMap<object, { readonly moves: PullRequestMoves; readonly staged: object }>;
+
+/**
+ * Each slice's reads as last laid, so laying the same again hands the store
+ * the very object it holds. Note that each slice keeps its own, because a
+ * launch holds every part on one shared empty slice (`NO_KEYS_HELD`), which
+ * one cache would answer with the first part laid over it for all three.
+ */
+const LAID = {
+  [LIVE_READ.PULL_REQUEST]: new WeakMap(),
+  [LIVE_READ.PULL_REQUEST_CHECKS]: new WeakMap(),
+  [LIVE_READ.PULL_REQUEST_CONVERSATION]: new WeakMap(),
+} as const satisfies Record<string, LaidReads>;
 
 /** Every part held of one read, its staged pull requests laid over the invitations agent's. */
 function laid<Part>(
+  cache: LaidReads,
   held: AppPullRequestPart<Part>,
   moves: PullRequestMoves,
   parts: () => ReadonlyMap<number, Part>,
 ): AppPullRequestPart<Part> {
-  const kept = LAID.get(held);
+  const kept = cache.get(held);
   // SAFETY: a read's entry is only ever written below, from that same read.
   if (kept?.moves === moves) return kept.staged as AppPullRequestPart<Part>;
   const rows = Object.fromEntries(
     [...parts()].map(([number, each]) => [String(number), { rows: each }]),
   );
   const staged = { ...held, [INVITES_AGENT]: { ...held[INVITES_AGENT], ...rows } };
-  LAID.set(held, { moves, staged });
+  cache.set(held, { moves, staged });
   return staged;
 }
 
@@ -360,9 +373,20 @@ export function pullRequestPartsAppState(
     );
   return {
     ...state,
-    [LIVE_READ.PULL_REQUEST]: laid(state[LIVE_READ.PULL_REQUEST], moves, pullRequests),
-    [LIVE_READ.PULL_REQUEST_CHECKS]: laid(state[LIVE_READ.PULL_REQUEST_CHECKS], moves, checks),
+    [LIVE_READ.PULL_REQUEST]: laid(
+      LAID[LIVE_READ.PULL_REQUEST],
+      state[LIVE_READ.PULL_REQUEST],
+      moves,
+      pullRequests,
+    ),
+    [LIVE_READ.PULL_REQUEST_CHECKS]: laid(
+      LAID[LIVE_READ.PULL_REQUEST_CHECKS],
+      state[LIVE_READ.PULL_REQUEST_CHECKS],
+      moves,
+      checks,
+    ),
     [LIVE_READ.PULL_REQUEST_CONVERSATION]: laid(
+      LAID[LIVE_READ.PULL_REQUEST_CONVERSATION],
       state[LIVE_READ.PULL_REQUEST_CONVERSATION],
       moves,
       () => CONVERSATIONS,

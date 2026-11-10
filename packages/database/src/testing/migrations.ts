@@ -126,7 +126,7 @@ const DROPPED_INDEXES = [
   "agent_org_taskless_created",
 ] as const;
 
-/** The columns a later migration dropped, by every name each held, and the indexes that went with them: an automation's task (`20261028195432_automation_task_drop`), and a private memory's member (`operator_drop`). */
+/** The columns a later migration dropped, by every name each held, and the indexes that went with them: an automation's task (`20261028195432_automation_task_drop`), a private memory's member (`operator_drop`), and an agent's read mark from before every agent stood on a task (`agent_drop_read_through`). */
 const DROPPED_COLUMNS = [
   {
     table: "automation",
@@ -134,6 +134,7 @@ const DROPPED_COLUMNS = [
     indexes: ["automation_trigger_plan", "automation_trigger_task"],
   },
   { table: "memory", columns: ["private_to"], indexes: [] },
+  { table: "agent", columns: ["read_through"], indexes: [] },
 ] as const;
 
 /** Whether the statement names a column since dropped, or an index that went with it. */

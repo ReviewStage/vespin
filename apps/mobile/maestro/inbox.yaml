@@ -38,11 +38,14 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - tapOn: "Open.*"
 # A swipe from the leading edge reveals Mark as read or unread, which a full
-# swipe would press at once, so the flow swipes partway, where a compact
-# window stands a row; a long press offers the same in the row's menu.
+# swipe would press at once, so the flow swipes partway across "Recorded the
+# invite flow", the second row, which a compact window stands at about a
+# quarter of its height whatever the list holds below it; a long press offers
+# the same in the row's menu. Note that the press is optional, because a
+# regular window's sidebar stands its rows elsewhere.
 - swipe:
-    start: "8%, 79%"
-    end: "38%, 79%"
+    start: "8%, 27%"
+    end: "38%, 27%"
     duration: 900
 - takeScreenshot: inbox-swipe
 - tapOn:
@@ -101,15 +104,15 @@ appId: dev.vespin.ios
 - tapOn: "Inbox"
 - waitForAnimationToEnd
 # A compact window's search is the bar's round button, named as the Search
-# tab is, so the first of the two is pressed; a split view's sidebar holds the
-# field itself.
+# tab is, so the one above the tab bar is pressed; a split view's sidebar
+# holds the field itself.
 - runFlow:
     when:
       notVisible: "Search inbox"
     commands:
       - tapOn:
           text: "Search"
-          index: 0
+          above: "Tab Bar"
 - tapOn: "Search inbox"
 - inputText: "digest"
 - assertVisible: "Verify the digest's sender domain"

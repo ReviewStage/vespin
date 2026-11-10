@@ -105,15 +105,17 @@ onFlowComplete:
 # Last, the search, a round glass button in the bar, finds the workspace's
 # tasks whatever their status, a done one among them, by every word typed. It
 # comes last, since its keyboard stands over the rows. A compact window's
-# search is the bar's round button, named as the Search tab is, so the first
-# of the two is pressed; a split view's sidebar holds the field itself.
+# search is the bar's round button, named as the Search tab is, so the one
+# above the tab bar is pressed, which the two's order in the tree does not
+# say once the window has turned; a split view's sidebar holds the field
+# itself.
 - runFlow:
     when:
       notVisible: "Search tasks"
     commands:
       - tapOn:
           text: "Search"
-          index: 0
+          above: "Tab Bar"
 - tapOn: "Search tasks"
 - inputText: "rounding"
 - assertVisible: "Ledger rounding"

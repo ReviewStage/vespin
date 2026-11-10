@@ -724,6 +724,9 @@ function fakeService() {
     unregisterPushDevice: () => Effect.succeed({ done: true as const }),
     pushDeviceStatus: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
     setPushDeviceNotify: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
+    registerLiveActivityStartToken: () => Effect.succeed({ done: true as const }),
+    registerLiveActivityToken: () => Effect.succeed({ done: true as const }),
+    endLiveActivity: () => Effect.succeed({ done: true as const }),
     transcribeDictation: (clip) =>
       Effect.sync(() => {
         asked.push(`transcribe:${clip.audio}:${clip.keywords.join(",")}`);

@@ -1,4 +1,4 @@
-import { pictureMarker, pictureMarkers } from "@repo/features/picture-marker";
+import { fileMarker, fileMarkers } from "@repo/features/file-marker";
 import { skillWord } from "@repo/features/skill-word";
 import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
 import {
@@ -18,7 +18,7 @@ import {
   useState,
 } from "react";
 import { afterPaint } from "../after-paint.js";
-import { WordPicturesContext } from "./picture-chips.js";
+import { WordFilesContext } from "./file-chips.js";
 import type { SkillSource } from "./skill-picker.js";
 import { opensFile, SkillRef, type SkillSubject, type SkillWithFile } from "./skill-ref.js";
 import { type TranscriptElement, TranscriptWords } from "./transcript-blocks.js";
@@ -61,9 +61,9 @@ const SKILL_ELEMENT = {
   NAME: "name",
 } as const;
 
-/** The element a picture's marker is written in as, its name its attribute. */
-const PICTURE_ELEMENT = {
-  TAG: "app-picture-chip",
+/** The element a file's marker is written in as, its name its attribute. */
+const FILE_ELEMENT = {
+  TAG: "app-file-chip",
   NAME: "name",
 } as const;
 
@@ -95,12 +95,22 @@ function skillChip(text: string, token: TextRange): WordChip {
   };
 }
 
-/** A picture's chip, written in as its element, its marker its content. */
-function pictureChip(start: number, end: number, name: string): WordChip {
+/** Words written into HTML as the words they are, in an attribute or between tags. */
+function escapedHtml(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
+}
+
+/** A file's chip, written in as its element, its marker its content. Note that a file's name is the developer's, so it is escaped, as a picture's never needed. */
+function fileChip(start: number, end: number, name: string): WordChip {
+  const written = escapedHtml(name);
   return {
     start,
     end,
-    element: `<${PICTURE_ELEMENT.TAG} ${PICTURE_ELEMENT.NAME}="${name}">${pictureMarker(name)}</${PICTURE_ELEMENT.TAG}>`,
+    element: `<${FILE_ELEMENT.TAG} ${FILE_ELEMENT.NAME}="${written}">${escapedHtml(fileMarker(name))}</${FILE_ELEMENT.TAG}>`,
   };
 }
 
@@ -130,22 +140,22 @@ function SkillElement({ node }: MarkdownNodeProps): ReactNode {
   return <SkillRef name={name} skill={skill} onOpen={onOpen} />;
 }
 
-/** The element a picture's marker was written in as: the picture's chip, where the message holds it, and its marker as words otherwise. */
-function PictureElement({ node }: MarkdownNodeProps): ReactNode {
-  const pictures = useContext(WordPicturesContext);
-  const name = String(node?.properties[PICTURE_ELEMENT.NAME] ?? "");
-  if (pictures === undefined || !pictures.names.has(name)) return pictureMarker(name);
-  return pictures.chip(name);
+/** The element a file's marker was written in as: the file's chip, where the message holds it, and its marker as words otherwise. */
+function FileElement({ node }: MarkdownNodeProps): ReactNode {
+  const files = useContext(WordFilesContext);
+  const name = String(node?.properties[FILE_ELEMENT.NAME] ?? "");
+  if (files === undefined || !files.names.has(name)) return fileMarker(name);
+  return files.chip(name);
 }
 
 /** What the chips a message's words may hold are drawn with, and the tags and attributes each is written in as. */
 const CHIP_COMPONENTS: MarkdownComponents = {
   [SKILL_ELEMENT.TAG]: SkillElement,
-  [PICTURE_ELEMENT.TAG]: PictureElement,
+  [FILE_ELEMENT.TAG]: FileElement,
 };
 const CHIP_TAGS = {
   [SKILL_ELEMENT.TAG]: [SKILL_ELEMENT.NAME],
-  [PICTURE_ELEMENT.TAG]: [PICTURE_ELEMENT.NAME],
+  [FILE_ELEMENT.TAG]: [FILE_ELEMENT.NAME],
 } as const;
 
 /** Hands every transcript under it the task's skills and what opening one's file does. */
@@ -212,7 +222,7 @@ export function useSkillOpener(): ((skill: SkillOption) => void) | undefined {
   return useContext(SkillFileContext)?.onOpen;
 }
 
-/** A message the developer sent, as markdown with every line break typed kept, each skill it names and each picture of its own it names (`WordPicturesContext`) drawn as its chip; `asDocument` draws it as a document and `line` on one line, as `TranscriptWords` does. */
+/** A message the developer sent, as markdown with every line break typed kept, each skill it names and each file of its own it names (`WordFilesContext`) drawn as its chip; `asDocument` draws it as a document and `line` on one line, as `TranscriptWords` does. */
 export function SentWords({
   text,
   asDocument = false,
@@ -223,14 +233,14 @@ export function SentWords({
   line?: boolean | undefined;
 }): ReactNode {
   const skills = useKnownSkills(holdsSlashWord(text));
-  const pictures = useContext(WordPicturesContext);
+  const files = useContext(WordFilesContext);
   const chips = [
     ...(skills === undefined ? [] : skillTokens(text, new Set(skills.keys()))).map((token) =>
       skillChip(text, token),
     ),
-    ...pictureMarkers(text)
-      .filter((marker) => pictures?.names.has(marker.name) === true)
-      .map((marker) => pictureChip(marker.start, marker.end, marker.name)),
+    ...fileMarkers(text)
+      .filter((marker) => files?.names.has(marker.name) === true)
+      .map((marker) => fileChip(marker.start, marker.end, marker.name)),
   ].sort((first, second) => first.start - second.start);
   if (chips.length === 0) {
     return <TranscriptWords text={text} typed asDocument={asDocument} line={line} />;

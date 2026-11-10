@@ -32,6 +32,7 @@ import {
 } from "@repo/ui";
 import { accountActor } from "@repo/ui/actor-model";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { mutationOptions, useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
@@ -40,9 +41,8 @@ import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure, unreadShown } from "../failure-report.js";
 import { githubTokenQuery, githubTokenRetryMutation } from "../live-reads.js";
-import { showToast, TOAST_HOLD } from "../toast.js";
+import { showToast } from "../toast.js";
 import { useHeldThroughExit } from "../use-held-through-exit.js";
-import { useBusyPress } from "./busy-press.js";
 import { GitHubTokenDialog, TokenFacts } from "./github-dialog.js";
 
 /** The row's name. */
@@ -68,7 +68,6 @@ export async function signOutSayingFailure(onSignOut: () => Promise<void>): Prom
       words: SIGN_OUT_FAILED,
       replayUnmasked: true,
       tone: STATUS_TONE.DANGER,
-      hold: TOAST_HOLD.FAILED,
       failure: { surface: FAILURE_SURFACE.ACCOUNT_SIGN_OUT, cause },
     });
   }
@@ -242,7 +241,7 @@ export function AccountSection({
 }): React.JSX.Element {
   const listKnown = workspacesRead && !listFailed;
   const goneWith = deletedWorkspacesWords(workspaces, listKnown);
-  const signOut = useBusyPress(() => signOutSayingFailure(onSignOut));
+  const signOut = useAsyncAction(rejectionWords);
   // Note that the section is only drawn while its page is, so the page
   // leaving takes the question with it.
   const deleting = useMutation(ACCOUNT_DELETE_MUTATION);
@@ -290,10 +289,10 @@ export function AccountSection({
             {() => (
               <Button
                 variant={BUTTON_VARIANT.OUTLINE}
-                busy={signOut.busy}
+                busy={signOut.running}
                 busyLabel="Signing out"
                 disabled={deletion.busy}
-                onClick={signOut.onPress}
+                onClick={() => void signOut.run(() => signOutSayingFailure(onSignOut))}
               >
                 {VERB.SIGN_OUT}
               </Button>
@@ -311,7 +310,7 @@ export function AccountSection({
                 variant={BUTTON_VARIANT.DANGER_OUTLINE}
                 busy={deletion.busy}
                 busyLabel="Deleting the account"
-                disabled={signOut.busy}
+                disabled={signOut.running}
                 onClick={deletion.ask}
               >
                 Delete account

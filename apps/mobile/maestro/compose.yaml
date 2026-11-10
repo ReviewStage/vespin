@@ -3,6 +3,9 @@
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
+# Note that each wait for the screen to settle is capped at five seconds,
+# because the page draws its agent still running, whose mark never stops
+# moving, so an uncapped wait always ran to Maestro's fifteen.
 ---
 # Launched on the host's Inbox fixture, opened on its invitations agent's page
 # as `agent.yaml` is, whose turn still runs and whose queue holds one message
@@ -17,7 +20,8 @@ appId: dev.vespin.ios
 - assertVisible: "Steer"
 - assertVisible: "Stop"
 - assertVisible: "Add"
-- waitForAnimationToEnd
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: compose-idle
 # A follow-up typed lights Send in Stop's place; sent, the field empties and
 # no refusal stands over it.
@@ -25,7 +29,8 @@ appId: dev.vespin.ios
     id: "composer-field"
 - inputText: "Show the invite's expiry in the email too."
 - assertVisible: "Send"
-- waitForAnimationToEnd
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: compose-typed
 - tapOn: "Send"
 - extendedWaitUntil:
@@ -34,7 +39,8 @@ appId: dev.vespin.ios
 - assertNotVisible:
     id: "ask-note"
 - hideKeyboard
-- waitForAnimationToEnd
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: compose-sent
 # The queued message steered into the turn under way.
 - tapOn: "Steer"
@@ -43,5 +49,6 @@ appId: dev.vespin.ios
 # Stop, with nothing typed, stands pressed until the agent stops.
 - tapOn: "Stop"
 - assertVisible: "Stopping"
-- waitForAnimationToEnd
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: compose-stopping

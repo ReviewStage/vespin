@@ -4,12 +4,12 @@
 # this flow, pushes `ask.apns` with `xcrun simctl push`, and runs `open.yaml`.
 # The payload is a decide on the fixture's "Who can withdraw an invite?"
 # thread, as the service writes one (`@repo/features/inbox-push-wire`).
+# Note that the script installs the app afresh and lets it notify first, so
+# the launch clears nothing: Maestro's clear reinstalls the app, which takes
+# the permission back, and its `permissions` cannot grant notifications.
 appId: dev.vespin.ios
 ---
 - launchApp:
-    clearState: true
-    permissions:
-      notifications: allow
     arguments:
       fixture: inbox
 - assertVisible: "Recorded the invite flow"

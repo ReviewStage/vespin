@@ -65,7 +65,6 @@ import {
   Stack,
   TEXT_FIELD_AUTO_COMPLETE,
   TextField,
-  TOAST_HOLD,
   useConfirmDialog,
   useFilePicker,
   useMenu,
@@ -85,9 +84,12 @@ import {
 } from "@repo/ui/icons";
 import { inputProblem } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
+import { useInlineRename } from "@repo/ui/use-inline-rename";
 import { VIRTUAL_ROWS_ANCHOR, VirtualRows } from "@repo/ui/virtual-rows";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
+import type { ActResult, ActVariables } from "../act.js";
 import { actMutation, pressMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark, actorMarkWidth, YouBadge } from "../actor-ref.js";
 import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "../confirm-act.js";
@@ -109,6 +111,7 @@ import {
 } from "../live-reads.js";
 import { memberRows } from "../member-rows.js";
 import { useOpenPerson } from "../person-door.js";
+import { type RenameShape, renameWrite } from "../rename-write.js";
 import { useToast } from "../toast.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { PHOTO_ACCEPT, photoOfFile } from "../workspace-photo.js";
@@ -581,7 +584,6 @@ function MemberLeave({
         toast({
           words: LEAVE_WORDS.LEFT(workspace.name),
           tone: STATUS_TONE.COMPLETE,
-          hold: TOAST_HOLD.DONE,
         });
         onLeft();
       }),
@@ -814,7 +816,6 @@ function WorkspaceDelete({
         toast({
           words: DELETE_WORDS.DELETED(workspace.name),
           tone: STATUS_TONE.COMPLETE,
-          hold: TOAST_HOLD.DONE,
         });
         onDeleted();
       }),
@@ -1146,22 +1147,10 @@ function ManagedGitHub({
     actMutation(ACT_KIND.WORKSPACE_GITHUB_CONNECT),
   );
   const workspaceId = workspace.id;
-  const [refusal, setRefusal] = useState<string>();
   // Note that a second press while the browser is being sent is taken as none, because an install begun again replaces the first one's intent.
-  const [opening, setOpening] = useState(false);
-  const underWay = useRef(false);
-  const open = () => {
-    if (underWay.current) return;
-    underWay.current = true;
-    setOpening(true);
-    setRefusal(undefined);
-    sendWorkspaceGithubConnect({ workspaceId })
-      .catch((refused: Error) => setRefusal(refused.message))
-      .finally(() => {
-        underWay.current = false;
-        setOpening(false);
-      });
-  };
+  const opening = useAsyncAction(rejectionWords);
+  const open = () =>
+    void opening.run(() => sendWorkspaceGithubConnect({ workspaceId }).then(() => undefined));
   const connected = connections.length > 0;
   const actions = connected
     ? [
@@ -1169,7 +1158,7 @@ function ManagedGitHub({
           {
             label: "Manage on GitHub",
             icon: <ExternalLinkIcon />,
-            disabled: opening,
+            disabled: opening.running,
             onSelect: open,
           },
         ],
@@ -1185,7 +1174,7 @@ function ManagedGitHub({
           label: "GitHub",
           description: connectionLine(connected, true),
           error: replayMaskedError(
-            refusedShown(refusal ?? addRefusal, FAILURE_SURFACE.WORKSPACE_GITHUB),
+            refusedShown(opening.refusal ?? addRefusal, FAILURE_SURFACE.WORKSPACE_GITHUB),
           ),
           control: (
             <>
@@ -1193,7 +1182,7 @@ function ManagedGitHub({
               {connected ? null : (
                 <Button
                   variant={BUTTON_VARIANT.OUTLINE}
-                  busy={opening}
+                  busy={opening.running}
                   busyLabel="Connecting"
                   onClick={open}
                 >
@@ -1292,22 +1281,10 @@ function ManagedSentry({
     actMutation(ACT_KIND.WORKSPACE_SENTRY_DISCONNECT),
   );
   const workspaceId = workspace.id;
-  const [refusal, setRefusal] = useState<string>();
-  const [installing, setInstalling] = useState(false);
-  const underWay = useRef(false);
+  const installing = useAsyncAction(rejectionWords);
   const [leaving, setLeaving] = useState<WorkspaceSentryInstallation>();
-  const install = () => {
-    if (underWay.current) return;
-    underWay.current = true;
-    setInstalling(true);
-    setRefusal(undefined);
-    sendWorkspaceSentryInstall({ workspaceId })
-      .catch((refused: Error) => setRefusal(refused.message))
-      .finally(() => {
-        underWay.current = false;
-        setInstalling(false);
-      });
-  };
+  const install = () =>
+    void installing.run(() => sendWorkspaceSentryInstall({ workspaceId }).then(() => undefined));
   // Note that the question stands only while its installation is still listed, so a read that drops it dismisses it.
   const stillListed =
     leaving !== undefined &&
@@ -1351,12 +1328,14 @@ function ManagedSentry({
           leading: SENTRY_MARK,
           label: "Sentry",
           description: connectionLine(sentry.installations.length > 0, true),
-          error: replayMaskedError(refusedShown(refusal, FAILURE_SURFACE.WORKSPACE_SENTRY)),
+          error: replayMaskedError(
+            refusedShown(installing.refusal, FAILURE_SURFACE.WORKSPACE_SENTRY),
+          ),
           control:
             sentry.installations.length > 0 ? null : (
               <Button
                 variant={BUTTON_VARIANT.OUTLINE}
-                busy={installing}
+                busy={installing.running}
                 busyLabel="Opening Sentry"
                 onClick={install}
               >
@@ -1448,22 +1427,10 @@ function ManagedSlackBot({
     actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_DISCONNECT),
   );
   const workspaceId = workspace.id;
-  const [refusal, setRefusal] = useState<string>();
   const [addRefusal, setAddRefusal] = useState<string>();
-  const [connecting, setConnecting] = useState(false);
-  const underWay = useRef(false);
-  const connect = () => {
-    if (underWay.current) return;
-    underWay.current = true;
-    setConnecting(true);
-    setRefusal(undefined);
-    sendWorkspaceSlackBotConnect({ workspaceId })
-      .catch((refused: Error) => setRefusal(refused.message))
-      .finally(() => {
-        underWay.current = false;
-        setConnecting(false);
-      });
-  };
+  const connecting = useAsyncAction(rejectionWords);
+  const connect = () =>
+    void connecting.run(() => sendWorkspaceSlackBotConnect({ workspaceId }).then(() => undefined));
   const disconnectAct = useConfirmAct(slackLeaving, {
     send: () => sendWorkspaceSlackBotDisconnect({ workspaceId }),
     answered: () => ANSWER_ACCEPTED,
@@ -1497,7 +1464,7 @@ function ManagedSlackBot({
           label: "Slack",
           description: connectionLine(slack.team !== undefined, true),
           error: replayMaskedError(
-            refusedShown(refusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT) ??
+            refusedShown(connecting.refusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT) ??
               refusedShown(addRefusal, FAILURE_SURFACE.WORKSPACE_SLACK_BOT_CHANNEL),
           ),
           control:
@@ -1512,7 +1479,7 @@ function ManagedSlackBot({
             ) : (
               <Button
                 variant={BUTTON_VARIANT.OUTLINE}
-                busy={connecting}
+                busy={connecting.running}
                 busyLabel="Connecting"
                 onClick={connect}
               >
@@ -1725,6 +1692,16 @@ function useSlugDialog(workspace: Workspace): SlugAsk {
   };
 }
 
+/** A workspace's rename as its mutation is asked; refused where the service refuses the call. */
+const WORKSPACE_RENAME_SHAPE: RenameShape<
+  ActResult<typeof ACT_KIND.WORKSPACE_RENAME>,
+  ActVariables<typeof ACT_KIND.WORKSPACE_RENAME>
+> = {
+  ask: (workspaceId, name) => ({ workspaceId, name }),
+  asked: ({ workspaceId, name }) => ({ subjectId: workspaceId, name }),
+  refused: () => false,
+};
+
 /**
  * The page's first row, drawn as Account's account row is: the workspace's
  * tile, its name, and who shares it. An account's first workspace is named
@@ -1737,11 +1714,11 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
   const { mutateAsync: sendWorkspacePhotoSet } = useMutation(
     actMutation(ACT_KIND.WORKSPACE_PHOTO_SET),
   );
-  const { mutateAsync: sendWorkspaceRename } = useMutation(actMutation(ACT_KIND.WORKSPACE_RENAME));
   const workspaceId = workspace.id;
   const manages = managesWorkspace(workspace);
   const renamable = manages && workspace.personal !== true;
-  const [editing, setEditing] = useState(false);
+  const renaming = useMutation(actMutation(ACT_KIND.WORKSPACE_RENAME));
+  const rename = useInlineRename(workspaceId, renameWrite(renaming, WORKSPACE_RENAME_SHAPE));
   const [uploading, setUploading] = useState(false);
   const [refusal, setRefusal] = useState<string>();
   const button = useRef<HTMLButtonElement | null>(null);
@@ -1758,18 +1735,11 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
     confirmFailure(FAILURE_SURFACE.WORKSPACE_WRITE),
   );
   // Note that focus goes back to Rename once the edit ends, since the host draws the new name on the press.
-  const endedByKey = useRefocusAfterEdit(editing, button);
-  /** How many renames were asked, so a refusal of one a newer rename followed is not said under the newer name. */
-  const renames = useRef(0);
+  const endedByKey = useRefocusAfterEdit(rename.editing, button);
   const end = ({ value: name, byKey }: InlineEditEnd) => {
     endedByKey(byKey);
-    setEditing(false);
-    if (name === undefined) return;
-    renames.current += 1;
-    const asked = renames.current;
-    sendWorkspaceRename({ workspaceId, name }).catch((refused: Error) => {
-      if (renames.current === asked) setRefusal(refused.message);
-    });
+    // Note that a field reopened over a refused name and typed back to the one drawn changes nothing.
+    rename.end(name === workspace.name ? undefined : name);
   };
   const upload = (file: File) => {
     setRefusal(undefined);
@@ -1798,16 +1768,9 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
       : [];
   // Note that the photo's acts are its tile's own (`PhotoPick`), as setup and New workspace draw it, so the ⋯ holds the slug alone.
   const actions = slugActs.length === 0 ? [] : [slugActs];
-  const rename =
-    renamable && !editing ? (
-      <Button
-        ref={button}
-        variant={BUTTON_VARIANT.OUTLINE}
-        onClick={() => {
-          setRefusal(undefined);
-          setEditing(true);
-        }}
-      >
+  const renamePress =
+    renamable && !rename.editing ? (
+      <Button ref={button} variant={BUTTON_VARIANT.OUTLINE} onClick={rename.begin}>
         Rename
       </Button>
     ) : null;
@@ -1844,9 +1807,9 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
           label: (
             <ReplayMask>
               <InlineEdit
-                value={workspace.name}
+                value={rename.asked ?? workspace.name}
                 label="Workspace name"
-                editing={editing}
+                editing={rename.editing}
                 maxLength={WORKSPACE_BOUNDS.MAX_NAME_CHARS}
                 look={INLINE_EDIT_LOOK.INPUT}
                 onEnd={end}
@@ -1854,8 +1817,14 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
             </ReplayMask>
           ),
           description: sharedWords(workspace.memberCount, workspace.personal === true),
-          error: replayMaskedError(refusedShown(refusal, FAILURE_SURFACE.WORKSPACE_WRITE)),
-          control: rename,
+          // Note that a rename's refusal is the rename's own, so a photo picked meanwhile does not erase it.
+          error: replayMaskedError(
+            refusedShown(
+              rename.refused ? renaming.error?.message : refusal,
+              FAILURE_SURFACE.WORKSPACE_WRITE,
+            ),
+          ),
+          control: renamePress,
         }}
       />
       <ConfirmDialog

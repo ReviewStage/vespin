@@ -77,6 +77,8 @@ import {
   useMenu,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { useAsyncAction } from "@repo/ui/use-async-action";
+import { type InlineRename, type RenameWrite, useInlineRename } from "@repo/ui/use-inline-rename";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -89,6 +91,7 @@ import { confirmFailure, refusedShown } from "../failure-report.js";
 import { HarnessMark } from "../harness-marks.js";
 import { providerKeysQuery, providerKeysRetryMutation } from "../live-reads.js";
 import { type PlanUsageMeters, planUsageMeters } from "../plan-usage.js";
+import { renameWrite } from "../rename-write.js";
 import { linkPressOf, useOpenLink } from "../tasks/use-open-link.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
@@ -596,42 +599,33 @@ function usePastedSecret({
     actMutation(ACT_KIND.PROVIDER_KEYS_SAVE),
   );
   const [pasted, setPasted] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [rejection, setRejection] = useState<string | undefined>(undefined);
+  const saving = useAsyncAction(() => failed);
 
   const save = (value = pasted) => {
     const key = value.trim();
-    if (key === "" || saving) return;
+    if (key === "" || saving.running) return;
     if (!pastedKeyFits(key)) {
-      setRejection(refused(PROVIDER_KEY_REJECTION.INVALID));
+      saving.refuse(refused(PROVIDER_KEY_REJECTION.INVALID));
       return;
     }
-    setSaving(true);
-    setRejection(undefined);
-    void sendProviderKeysSave(payload(key))
-      .catch(() => undefined)
-      .then((answer) => {
-        setSaving(false);
-        if (answer === undefined || "failure" in answer) {
-          setRejection(failed);
-          return;
-        }
-        if (answer.rejected !== undefined) {
-          setRejection(refused(answer.rejected));
-          return;
-        }
+    void saving.run(() =>
+      sendProviderKeysSave(payload(key)).then((answer) => {
+        if ("failure" in answer) return failed;
+        if (answer.rejected !== undefined) return refused(answer.rejected);
         // Kept: the secret leaves the field, and the row draws the service's word for it.
         setPasted("");
         onKept();
-      });
+        return undefined;
+      }),
+    );
   };
   return {
     pasted,
-    saving,
-    rejection,
+    saving: saving.running,
+    rejection: saving.refusal,
     change: (value) => {
       setPasted(value);
-      setRejection(undefined);
+      saving.clear();
     },
     save: () => save(),
     paste: (value) => save(value),
@@ -866,9 +860,9 @@ function credentialsOf(
 
 /**
  * The harness's credentials in the order the account keeps, a reorder drawn
- * at once and sent as the whole order, its key's place among it, and a
- * rename sent as the row's; the list rests on the order sent until the
- * service answers, and says why under the list where either was refused.
+ * at once and sent as the whole order, its key's place among it; the list
+ * rests on the order sent until the service answers, and says why under the
+ * list where it was refused.
  */
 function useCredentialOrder(
   provider: ProviderKeyProvider,
@@ -876,11 +870,9 @@ function useCredentialOrder(
 ): {
   ordered: readonly Credential[];
   move: (from: number, to: number) => void;
-  rename: (credential: Credential, label: string) => void;
   refused: string | undefined;
 } {
   const { mutateAsync: sendReorder } = useMutation(actMutation(ACT_KIND.SUBSCRIPTIONS_REORDER));
-  const { mutateAsync: sendRename } = useMutation(actMutation(ACT_KIND.SUBSCRIPTION_RENAME));
   const [sentOrder, setSentOrder] = useState<readonly string[] | undefined>(undefined);
   const [refused, setRefused] = useState<string | undefined>(undefined);
   const byId = new Map(credentials.map((credential) => [credential.id, credential]));
@@ -907,16 +899,34 @@ function useCredentialOrder(
         if (answer === undefined || "failure" in answer) setRefused(WORDS.REORDER_FAILED);
       });
   };
-  const rename = (credential: Credential, label: string) => {
-    setRefused(undefined);
-    const renamed = "plan" in credential ? kind : PROVIDER_KEY_KIND.API_KEY;
-    void sendRename({ provider, kind: renamed, subscriptionId: credential.id, label })
-      .catch(() => undefined)
-      .then((answer) => {
-        if (answer === undefined || "failure" in answer) setRefused(WORDS.RENAME_FAILED);
-      });
-  };
-  return { ordered, move, rename, refused };
+  return { ordered, move, refused };
+}
+
+/**
+ * The harness's renames, one row's at a time, each sent as the kind its
+ * credential is; a refusal is the rename's own, apart from a reorder's, and
+ * reopens the row's field over the name asked.
+ */
+function useCredentialRename(
+  provider: ProviderKeyProvider,
+  credentials: readonly Credential[],
+): RenameWrite {
+  const renaming = useMutation(actMutation(ACT_KIND.SUBSCRIPTION_RENAME));
+  const plan = HARNESS[provider].plan;
+  const plans = new Set(
+    credentials.flatMap((credential) => ("plan" in credential ? [credential.id] : [])),
+  );
+  return renameWrite(renaming, {
+    ask: (subscriptionId, label) => ({
+      provider,
+      kind: plans.has(subscriptionId) ? plan : PROVIDER_KEY_KIND.API_KEY,
+      subscriptionId,
+      label,
+    }),
+    // Note that a rename here always asks for a label; a cleared one, which only other callers send, reads as none.
+    asked: ({ subscriptionId, label }) => ({ subjectId: subscriptionId, name: label ?? "" }),
+    refused: (answer) => "failure" in answer,
+  });
 }
 
 /** A row's Move up and Move down, where it has somewhere to go. */
@@ -933,11 +943,10 @@ function moveActions(
 
 /* ----- A harness's list ----- */
 
-/** What a harness's steps stand open for: adding a plan or a key, or a row's own replace or rename. */
+/** What a harness's steps stand open for: adding a plan or a key, or a row's own replace. */
 const STEPS = {
   ADD: "add",
   REPLACE: "replace",
-  RENAME: "rename",
   KEY: "key",
 } as const;
 
@@ -949,7 +958,7 @@ type OpenSteps =
     }
   | {
       readonly provider: ProviderKeyProvider;
-      readonly steps: typeof STEPS.REPLACE | typeof STEPS.RENAME;
+      readonly steps: typeof STEPS.REPLACE;
       readonly subscriptionId: string;
     };
 
@@ -1065,6 +1074,12 @@ function PlanSteps({
   );
 }
 
+/** A row's rename opened, the harness's other steps put away first, as opening any of them puts away the rest. */
+function renameIn(rename: InlineRename, onClose: () => void): void {
+  onClose();
+  rename.begin();
+}
+
 /**
  * One plan's row in its harness's order: its logo, its name, renamed in
  * place for a Claude plan, and its line, how much of its window it has used
@@ -1082,7 +1097,7 @@ function PlanRow({
   onOpen,
   onClose,
   onMove,
-  onRename,
+  renames,
   onUnconfirmed,
   alignWith,
 }: {
@@ -1093,11 +1108,12 @@ function PlanRow({
   alignWith: readonly UsageMeterRow[];
   at: number;
   count: number;
-  open: typeof STEPS.REPLACE | typeof STEPS.RENAME | undefined;
-  onOpen: (steps: typeof STEPS.REPLACE | typeof STEPS.RENAME) => void;
+  open: typeof STEPS.REPLACE | undefined;
+  onOpen: (steps: typeof STEPS.REPLACE) => void;
   onClose: () => void;
   onMove: (from: number, to: number) => void;
-  onRename: (label: string) => void;
+  /** The harness's renames, of which this row's is the one asked for its credential. */
+  renames: RenameWrite;
   onUnconfirmed: (unconfirmed: boolean) => void;
 }): React.JSX.Element {
   const harness = HARNESS[provider];
@@ -1105,8 +1121,9 @@ function PlanRow({
   const removal = usePlanRemoval(provider, plan, onUnconfirmed);
   const door = useRef<HTMLButtonElement | null>(null);
   const line = planLine(provider, plan, Date.now());
+  const rename = useInlineRename(plan.id, renames);
   const own = [
-    ...(claude ? [{ label: WORDS.RENAME, onSelect: () => onOpen(STEPS.RENAME) }] : []),
+    ...(claude ? [{ label: WORDS.RENAME, onSelect: () => renameIn(rename, onClose) }] : []),
     ...moveActions(at, count, onMove),
     ...(claude ? [{ label: WORDS.REPLACE_TOKEN, onSelect: () => onOpen(STEPS.REPLACE) }] : []),
   ];
@@ -1116,15 +1133,12 @@ function PlanRow({
         leading={<ProviderMark provider={harness.planMark} size={PROVIDER_MARK_SIZE.ROW} />}
         label={
           <InlineEdit
-            value={name}
+            value={rename.asked ?? name}
             label={WORDS.PLAN_NAME}
-            editing={open === STEPS.RENAME}
+            editing={rename.editing}
             look={INLINE_EDIT_LOOK.INPUT}
             maxLength={SUBSCRIPTION_LABEL_MAX_CHARS}
-            onEnd={({ value }) => {
-              onClose();
-              if (value !== undefined) onRename(value);
-            }}
+            onEnd={({ value }) => rename.end(value === name ? undefined : value)}
           />
         }
         description={
@@ -1194,17 +1208,18 @@ function KeyRow({
   onOpen,
   onClose,
   onMove,
-  onRename,
+  renames,
 }: {
   provider: ProviderKeyProvider;
   apiKey: ProviderKeySummary;
   at: number;
   count: number;
-  open: typeof STEPS.REPLACE | typeof STEPS.RENAME | undefined;
-  onOpen: (steps: typeof STEPS.REPLACE | typeof STEPS.RENAME) => void;
+  open: typeof STEPS.REPLACE | undefined;
+  onOpen: (steps: typeof STEPS.REPLACE) => void;
   onClose: () => void;
   onMove: (from: number, to: number) => void;
-  onRename: (label: string) => void;
+  /** The harness's renames, of which this row's is the one asked for its credential. */
+  renames: RenameWrite;
 }): React.JSX.Element {
   const harness = HARNESS[provider];
   const removal = useKeyRemoval(provider, apiKey);
@@ -1212,6 +1227,7 @@ function KeyRow({
   const name = apiKeyName(apiKey);
   // Note that a key from a service that names no id has nothing to rename it or replace it by.
   const named = apiKey.id !== undefined;
+  const rename = useInlineRename(apiKey.id, renames);
   const wasOpen = useRef(open);
   // The focus goes back to the ⋯ as its replace's steps go, wherever their going left it on nothing.
   useEffect(() => {
@@ -1227,15 +1243,12 @@ function KeyRow({
         leading={<ProviderMark provider={harness.planMark} size={PROVIDER_MARK_SIZE.ROW} />}
         label={
           <InlineEdit
-            value={name}
+            value={rename.asked ?? name}
             label={WORDS.KEY_NAME}
-            editing={open === STEPS.RENAME}
+            editing={rename.editing}
             look={INLINE_EDIT_LOOK.INPUT}
             maxLength={SUBSCRIPTION_LABEL_MAX_CHARS}
-            onEnd={({ value }) => {
-              onClose();
-              if (value !== undefined) onRename(value);
-            }}
+            onEnd={({ value }) => rename.end(value === name ? undefined : value)}
           />
         }
         description={
@@ -1248,7 +1261,9 @@ function KeyRow({
             door={door}
             groups={[
               [
-                ...(named ? [{ label: WORDS.RENAME, onSelect: () => onOpen(STEPS.RENAME) }] : []),
+                ...(named
+                  ? [{ label: WORDS.RENAME, onSelect: () => renameIn(rename, onClose) }]
+                  : []),
                 ...moveActions(at, count, onMove),
                 { label: WORDS.REPLACE_KEY, onSelect: () => onOpen(STEPS.REPLACE) },
               ],
@@ -1311,7 +1326,9 @@ function HarnessCredentials({
   const harness = HARNESS[provider];
   const plans = plansOf(answer, provider);
   const keys = keysOf(answer, provider);
-  const order = useCredentialOrder(provider, credentialsOf(plans, keys));
+  const credentials = credentialsOf(plans, keys);
+  const order = useCredentialOrder(provider, credentials);
+  const renames = useCredentialRename(provider, credentials);
   const drag = useRowDrag(order.move, { handle: SETTINGS_ORDER_HANDLE });
   const [unconfirmed, setUnconfirmed] = useState(false);
   const addPress = useRef<HTMLButtonElement | null>(null);
@@ -1394,7 +1411,7 @@ function HarnessCredentials({
               open.subscriptionId === credential.id
                 ? open.steps
                 : undefined;
-            const onRowOpen = (steps: typeof STEPS.REPLACE | typeof STEPS.RENAME) =>
+            const onRowOpen = (steps: typeof STEPS.REPLACE) =>
               onOpen({ steps, subscriptionId: credential.id });
             return {
               key: credential.id,
@@ -1410,7 +1427,7 @@ function HarnessCredentials({
                     onOpen={onRowOpen}
                     onClose={onClose}
                     onMove={order.move}
-                    onRename={(label) => order.rename(credential, label)}
+                    renames={renames}
                     onUnconfirmed={setUnconfirmed}
                     alignWith={aligned.meters}
                   />
@@ -1424,7 +1441,7 @@ function HarnessCredentials({
                     onOpen={onRowOpen}
                     onClose={onClose}
                     onMove={order.move}
-                    onRename={(label) => order.rename(credential, label)}
+                    renames={renames}
                   />
                 ),
             };
@@ -1436,6 +1453,11 @@ function HarnessCredentials({
           <State ok={false}>{order.refused}</State>
         </SettingsLine>
       )}
+      {renames.refused ? (
+        <SettingsLine>
+          <State ok={false}>{WORDS.RENAME_FAILED}</State>
+        </SettingsLine>
+      ) : null}
     </SettingsSection>
   );
 }

@@ -30,7 +30,7 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { STATUS_TONE } from "@repo/ui";
 import { keepPreviousData, queryOptions, useMutation, useQueryClient } from "@tanstack/react-query";
 import { QUERY_ROOT } from "../query-keys.js";
-import { showToast, TOAST_HOLD } from "../toast.js";
+import { showToast } from "../toast.js";
 import type { AdminReads } from "./admin-doors.js";
 
 /** The admin writes, each a mutation key's second element. */
@@ -173,7 +173,6 @@ export function useFavoriteMutation(reads: AdminReads) {
       showToast({
         words: FAVORITE_FAILED,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface: FAILURE_SURFACE.ADMIN_WRITE, cause },
       });
       // Note that this press is still counted while its onError runs.

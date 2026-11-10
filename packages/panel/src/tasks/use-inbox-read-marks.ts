@@ -16,7 +16,7 @@ import { firstRefusal, KEPT, type Kept, notKept, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { afterPaint } from "../after-paint.js";
 import { useAppCommand } from "../app-commands.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { useInboxAcknowledger } from "./inbox-acknowledge.js";
 import { type InboxReminder, type RemindSaying, remindWords } from "./inbox-remind.js";
 import { markedNote, REMIND_REFUSED, useInboxPresses } from "./inbox-writes.js";
@@ -100,7 +100,6 @@ export function useInboxReadMarks({
         replayUnmasked: true,
         words,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface: FAILURE_SURFACE.INBOX_MARK, cause, about },
       }),
     [toast],

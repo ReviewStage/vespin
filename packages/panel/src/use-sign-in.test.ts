@@ -15,6 +15,7 @@ import { SignInGate } from "./sign-in-gate.js";
 import { FAKE_ANSWER, type FakeActAnswer, fakeActs } from "./testing/app-bridge.js";
 import { fakeAppPlatform } from "./testing/app-platform.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
+import { standingToastWords } from "./testing/toast.js";
 import { ToastHost } from "./toast.js";
 import { useSignIn } from "./use-sign-in.js";
 
@@ -134,7 +135,6 @@ test("a Cancel main refuses says why in a toast, and the gate is offered again a
 
   await act(async () => press("Cancel").click());
 
-  const toasts = [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")];
-  assert.equal(toasts.at(-1)?.textContent, refusal);
+  assert.equal(standingToastWords().at(-1), refusal);
   assert.equal(press("Continue with Google").disabled, false);
 });

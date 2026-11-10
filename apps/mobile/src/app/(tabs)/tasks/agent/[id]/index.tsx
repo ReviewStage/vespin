@@ -2,6 +2,8 @@
 
 import { AgentScreen } from "../../../../../screens/agent-screens.js";
 
+export { ScreenBoundary as ErrorBoundary } from "../../../../../screen-boundary.js";
+
 export default function AgentRoute() {
   return <AgentScreen />;
 }

@@ -1,5 +1,10 @@
 import type { AgentAttachment, AgentSummary } from "@repo/features/agent-wire";
-import { FAILURE_REASON, type Failure, remedyLabel } from "@repo/features/failure-remedy";
+import {
+  FAILURE_REASON,
+  type Failure,
+  rejectedFailure,
+  remedyLabel,
+} from "@repo/features/failure-remedy";
 import type { ModelChoice } from "@repo/features/models-wire";
 import {
   ANNOUNCE,
@@ -19,6 +24,7 @@ import {
   useMenu,
 } from "@repo/ui";
 import { ACTOR_KIND } from "@repo/ui/actor-model";
+import { useAsyncAction } from "@repo/ui/use-async-action";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { ArrowRightIcon, ChevronDownIcon } from "lucide-react";
 import { useId, useRef, useState } from "react";
@@ -119,8 +125,8 @@ function useContinueStart(
   /** Lets the box's words go where it still holds what the press carried. */
   readonly letGo: () => void;
 } {
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<Failure | undefined>(undefined);
+  const starting = useAsyncAction<Failure>(rejectedFailure);
+  const note = starting.refusal;
   const writer = useDraftWriter();
   const { continueAgent } = control;
   useAnnounceShown(ANNOUNCE.ALERT, note?.text ?? "");
@@ -131,24 +137,23 @@ function useContinueStart(
     );
   };
   const start = (choice?: ModelChoice) => {
-    if (continueAgent === undefined || busy) return;
+    if (continueAgent === undefined) return;
     const words = carry?.words.trim() ?? "";
-    setBusy(true);
-    setNote(undefined);
-    void continueAgent(
-      agentId,
-      words === "" ? undefined : words,
-      carry?.attachments ?? [],
-      undefined,
-      choice,
-    ).then((failed) => {
-      setBusy(false);
-      setNote(failed);
-      // The words went on into the new agent, so the box lets them go, where nothing newer stands.
-      if (failed === undefined) letGo();
-    });
+    void starting.run(() =>
+      continueAgent(
+        agentId,
+        words === "" ? undefined : words,
+        carry?.attachments ?? [],
+        undefined,
+        choice,
+      ).then((failed) => {
+        // The words went on into the new agent, so the box lets them go, where nothing newer stands.
+        if (failed === undefined) letGo();
+        return failed;
+      }),
+    );
   };
-  return { busy, note, start, letGo };
+  return { busy: starting.running, note, start, letGo };
 }
 
 /** Why a continue did not start, said beside its press. */

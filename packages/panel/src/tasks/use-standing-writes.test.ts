@@ -41,8 +41,17 @@ afterEach(() => {
   for (const root of roots.splice(0)) act(() => root.unmount());
 });
 
-/** The standing writes over `VIEW`, drawn under the window's toasts, the act port answering `standing` and writing down each payload. */
-function mountWrites(standing: FakeActPort[typeof ACT_KIND.TASKS_SET_STANDING]): {
+/** `VIEW` with an agent of `NOTES` running. */
+const WORKING_VIEW: TasksView = {
+  ...VIEW,
+  tasks: [{ ...NOTES, agents: { total: 1, working: 1, pullRequestTotal: 0 } }],
+};
+
+/** The standing writes over `view`, drawn with their question under the window's toasts, the act port answering `standing` and writing down each payload. */
+function mountWrites(
+  standing: FakeActPort[typeof ACT_KIND.TASKS_SET_STANDING],
+  view: TasksView = VIEW,
+): {
   writes: () => StandingWrites;
   payloads: unknown[];
 } {
@@ -56,8 +65,8 @@ function mountWrites(standing: FakeActPort[typeof ACT_KIND.TASKS_SET_STANDING]):
   });
   let writes: StandingWrites | undefined;
   const Probe = () => {
-    writes = useStandingWrites(() => VIEW);
-    return null;
+    writes = useStandingWrites(() => view);
+    return writes.dialog;
   };
   const root = createRoot(document.body.appendChild(document.createElement("div")));
   roots.push(root);
@@ -120,4 +129,22 @@ test("Mark done's Undo leaves a status chosen since alone, though that choice is
 
   const written = payloads.map((payload) => Option.getOrUndefined(readStanding(payload))?.status);
   assert.deepEqual(written, [TASK_STATUS.DONE, TASK_STATUS.IN_PROGRESS]);
+});
+
+test("Mark done on a task whose agent runs sends nothing until confirmed, then asks the service to stop its agents", async () => {
+  const { writes, payloads } = mountWrites(() => Promise.resolve(true), WORKING_VIEW);
+
+  act(() => writes().onSettleTasks([NOTES.id], SETTLED_STATUS.DONE));
+  await settle();
+  const dialog =
+    document.querySelector<HTMLElement>('[role="alertdialog"]') ?? assert.fail("it asks first");
+  assert.match(dialog.textContent ?? "", /Mark as Done\?/u);
+  assert.deepEqual(payloads, [], "nothing is sent before the answer");
+
+  const stop = [...dialog.querySelectorAll("button")].find(
+    (button) => button.textContent === "Stop agents",
+  );
+  act(() => (stop ?? assert.fail("the act is offered")).click());
+  await settle();
+  assert.deepEqual(payloads, [{ taskId: NOTES.id, status: TASK_STATUS.DONE, stopAgents: true }]);
 });

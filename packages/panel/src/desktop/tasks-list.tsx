@@ -970,7 +970,8 @@ export function TasksList({
       }),
   );
   // Note that every door a row is handed stands across draws, so a row held while what it is handed does (`memo`) holds.
-  const setStanding = useSteadyDoor(useStandingDoor(tasks));
+  const standingDoor = useStandingDoor(tasks);
+  const setStanding = useSteadyDoor(standingDoor.set);
   const rowTab = useTaskRowTab(tasks);
   const { region, agents } = tasks;
   const opened = useMemo(() => openedTaskOf({ region, agents }), [region, agents]);
@@ -1173,6 +1174,7 @@ export function TasksList({
         />
       </div>
       {selection.dialog}
+      {standingDoor.dialog}
     </CollectionPage>
   );
 }

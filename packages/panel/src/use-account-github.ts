@@ -15,7 +15,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { actMutation } from "./act-mutations.js";
 import type { GitHubConnectControl } from "./github-connect.js";
-import { TOAST_HOLD, useToast } from "./toast.js";
+import { useToast } from "./toast.js";
 import { appStateQuery, selectFixtureStaged, selectListedTasks } from "./use-app-state.js";
 
 /** The account's GitHub on the task list the window lists from; absent before the first read lands. */
@@ -47,7 +47,6 @@ export function useAccountGitHub(): GitHubConnectControl {
           toast({
             words: refused.message,
             tone: STATUS_TONE.DANGER,
-            hold: TOAST_HOLD.FAILED,
             failure: { surface: FAILURE_SURFACE.GITHUB_ACCOUNT, act: kind, cause: refused },
           });
           return false;

@@ -34,7 +34,7 @@ import {
   base64Bytes,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
-import { pictureName } from "@repo/features/picture-marker";
+import { pictureName } from "@repo/features/file-marker";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppTranscript } from "@repo/host/app-state";

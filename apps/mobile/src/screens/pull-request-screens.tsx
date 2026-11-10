@@ -5,6 +5,7 @@ import {
   CHECK_STATE,
   type PullRequestCheck,
 } from "@repo/features/agent-wire";
+import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import {
   CHECK_WORDS,
   checksCountOf,
@@ -63,6 +64,7 @@ import {
   usePullRequestRetry,
   usePullRequestWrites,
 } from "../pull-requests/use-pull-request.js";
+import { useSurfaceOpen } from "../surface-open.js";
 
 /** What the bar's ⋯ menu offers beside the merge. */
 const MENU_WORDS = {
@@ -246,6 +248,7 @@ function PullRequestToolbar({
 export function PullRequestScreen() {
   const { id = "", number = "" } = useLocalSearchParams<{ id: string; number: string }>();
   const key: PullRequestKey = { agentId: id, number: Number(number) };
+  useSurfaceOpen(PRODUCT_SURFACE.PULL_REQUEST, number);
   const colors = useColors();
   const agent = useFollowedAgent(id);
   const listed = useAgentPullRequests(id).find((each) => each.number === key.number);
