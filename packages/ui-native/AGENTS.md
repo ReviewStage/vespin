@@ -11,7 +11,9 @@ builds a control of its own.
   (its sidebar's bar holding an act, a `BarMenu` such as the ⋯ menu, and a
   search), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
   `ScopePills`, `FieldChip` and `StatusChip`, `ChoiceList` (the ask card),
-  `PullRequestCard`, `AuthPage` and `ProviderButton`, `SettingsForm` and its
+  `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
+  for its checks and reviewers, `WriteNoteRow`), `ConfirmAsk` (the system's
+  confirmation dialog an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, and the marks (`UnreadDot`, `TaskStatusMark`, `Avatar`, `AgentTile`,
   and `BrandMark`, the Keel mark the app's asset catalog holds). `GlassBar`
   is a bar of Liquid Glass through `expo-glass-effect`, and `Composer` the
@@ -109,7 +111,15 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, radio
   rows, a "Recommended" tag and a detail line) and the pull request
   (`PullRequestCard`: its state's glyph, its title, its lines in green and
-  red, and its acts as pills), each on `SURFACE` inside a hairline.
+  red, and its acts as pills; a press on it opens its own page), each on
+  `SURFACE` inside a hairline.
+- **A pull request's page** reads as the panel's Pull request tab, from the
+  same model (`@repo/features/pull-request-model`): its state as a chip in
+  GitHub's color, the merge queue's in the attention ink with its place
+  ("Queued #2"), its branches, and GitHub's sentence of whether it merges;
+  its checks and reviewers as rows, each glyph the SF Symbol closest to the
+  panel's (`pull-request-look.ts`); and its acts in the bar, an act that
+  asks first asking in `ConfirmAsk`.
 - **The tab bar** is `NativeTabs`: icons alone in a compact window, through
   its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
   New task; a regular window's sidebar keeps its labels.

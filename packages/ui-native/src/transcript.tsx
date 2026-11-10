@@ -22,7 +22,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isLucideSymbol } from "./glyph.js";
 import { Markdown, type MarkdownPlace, Picture } from "./markdown.js";
 import { ToneGlyph } from "./marks.js";
-import { PullRequestCard } from "./pull-request-card.js";
+import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
@@ -61,7 +61,7 @@ const JUMP_TO_LATEST = "Jump to latest";
 /** What a page's card says it opens. */
 const PAGE_WORD = "Page";
 
-/** What a pull request's card offers: its page on GitHub. Note that merging it is the pull request's own screen's. */
+/** What a pull request's card offers first: its page on GitHub. */
 const REVIEW_WORD = "Review";
 
 /** What a row says of a video the system's player cannot play, read as a recording. */
@@ -359,7 +359,14 @@ interface RowDrawing {
   readonly onOpenElsewhere?: (() => void) | undefined;
   /** Opens a web address in Safari, such as a pull request's page on GitHub. */
   readonly onOpenAddress: (address: string) => void;
+  /** Opens a pull request's own screen, as a press on its card asks; none where the app draws no screen for it. */
+  readonly onOpenPullRequest?: ((item: PullRequestItem) => void) | undefined;
+  /** What a pull request's card offers after Review, such as Merge where it may merge now; none where it offers nothing more. */
+  readonly pullRequestActs?: ((item: PullRequestItem) => readonly PullRequestAct[]) | undefined;
 }
+
+/** A pull request an agent opened, as the transcript lists it. */
+type PullRequestItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST }>;
 
 /** One of the transcript's rows, as its kind draws it. */
 function TranscriptRow({
@@ -498,7 +505,15 @@ function TranscriptRow({
               title={item.title}
               additions={item.additions}
               deletions={item.deletions}
-              acts={[{ label: REVIEW_WORD, onPress: () => drawing.onOpenAddress(item.url) }]}
+              acts={[
+                { label: REVIEW_WORD, onPress: () => drawing.onOpenAddress(item.url) },
+                ...(drawing.pullRequestActs?.(item) ?? []),
+              ]}
+              onOpen={
+                drawing.onOpenPullRequest === undefined
+                  ? undefined
+                  : () => drawing.onOpenPullRequest?.(item)
+              }
             />
           </Host>
         </View>

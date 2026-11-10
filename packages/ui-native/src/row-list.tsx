@@ -16,6 +16,8 @@ import {
   scrollContentBackground,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useState } from "react";
+import type { MarkLook } from "./glyph.js";
+import { ToneGlyph } from "./marks.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -92,6 +94,8 @@ type ListSectionProps = {
   readonly title?: string | undefined;
   /** How many rows it holds, drawn after its title in a lighter ink. */
   readonly count?: number | undefined;
+  /** A glyph in its tone before the count, saying how what it counts went, such as checks failing. */
+  readonly mark?: MarkLook | undefined;
   /** Whether a press on its header folds it in place, a chevron leading the header. */
   readonly foldable?: boolean | undefined;
   /** A line under the section, in the system's footnote. */
@@ -103,10 +107,12 @@ type ListSectionProps = {
 function GroupHeader({
   title,
   count,
+  mark,
   folded,
 }: {
   readonly title: string;
   readonly count: number | undefined;
+  readonly mark: MarkLook | undefined;
   readonly folded: boolean | undefined;
 }) {
   const colors = useColors();
@@ -128,6 +134,9 @@ function GroupHeader({
       >
         {title}
       </Text>
+      {mark === undefined ? null : (
+        <ToneGlyph glyph={mark.symbol} tone={mark.tone} textStyle={TYPE_ROLE.GROUP_HEADER} hidden />
+      )}
       {count === undefined ? null : (
         <Text
           modifiers={[
@@ -153,6 +162,7 @@ function GroupHeader({
 export function ListSection({
   title,
   count,
+  mark,
   foldable = false,
   footer,
   children,
@@ -160,7 +170,7 @@ export function ListSection({
   const [folded, setFolded] = useState(false);
   const label =
     title === undefined ? undefined : (
-      <GroupHeader title={title} count={count} folded={foldable ? folded : undefined} />
+      <GroupHeader title={title} count={count} mark={mark} folded={foldable ? folded : undefined} />
     );
   const header =
     label === undefined || !foldable ? (

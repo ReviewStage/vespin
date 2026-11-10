@@ -25,10 +25,11 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactNode } from "react";
-import { Avatar, TaskStatusMark } from "./marks.js";
+import type { Glyph } from "./glyph.js";
+import { Avatar, TaskStatusMark, ToneGlyph } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { STATUS_MARK_LABEL } from "./status-mark-model.js";
-import { type BrandColors, useColors } from "./tokens/colors.js";
+import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -239,6 +240,8 @@ type FieldChipProps = {
   readonly face?: string | undefined;
   /** A glyph leading the chip where neither does, in the muted ink. */
   readonly symbol?: SfSymbol | undefined;
+  /** A mark leading the chip in its tone where none of the above does, such as a pull request's state. */
+  readonly mark?: { readonly glyph: Glyph; readonly tone: StatusTone } | undefined;
 };
 
 /** The mark a field's chip leads with: a status ring, a face, a muted glyph, or none. */
@@ -247,6 +250,11 @@ function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
   if (props.face !== undefined) return <Avatar name={props.face} size={MARK_SIZE.FACE} />;
   if (props.symbol !== undefined) {
     return <Image systemName={props.symbol} size={MARK_SIZE.GLYPH - 2} color={colors.TEXT_MUTED} />;
+  }
+  if (props.mark !== undefined) {
+    return (
+      <ToneGlyph glyph={props.mark.glyph} tone={props.mark.tone} textStyle={TYPE_ROLE.ROW_LINE} />
+    );
   }
   return null;
 }

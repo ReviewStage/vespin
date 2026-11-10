@@ -142,7 +142,7 @@ function RowTime({ at, now }: { readonly at: number; readonly now: number | unde
  * behind a swipe from either edge, and in the menu a long press opens, the
  * trailing ones first, so a person who never swipes still finds them.
  */
-function RowFrame({
+export function RowFrame({
   id,
   row,
   trailingActions = [],
@@ -193,7 +193,7 @@ function RowFrame({
  * column, the title, and what ends the line. The line centers its pieces,
  * so the mark stands on the title at any Dynamic Type size.
  */
-function RowHead({
+export function RowHead({
   unread,
   faded,
   lead,
