@@ -80,6 +80,7 @@ import {
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import { recordingProductAnalytics } from "../events/server-events.js";
 import { LINK_OUTCOME } from "../github/github-installations.js";
+import { pullRequestLinksLayer } from "../github/pull-request-links.js";
 import { PULL_REQUEST_QUEUED_OPERATION } from "../github/pull-request-merging.js";
 import type { AfterResponse } from "../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
@@ -439,6 +440,7 @@ export const standing = (
       integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
       Layer.succeed(SentryApp, sentryAppService(undefined, [])),
       Layer.succeed(PageLinks, { sandbox: undefined }),
+      pullRequestLinksLayer,
       ANALYTICS.layer,
     );
     // Every account behind a bearer is signed in on a browser of its own too, whose cookie names it.

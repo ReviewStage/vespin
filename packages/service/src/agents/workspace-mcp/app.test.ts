@@ -12,6 +12,7 @@ import {
   keepDescriptionAttachment,
 } from "@repo/database/models/description-attachments";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import { createTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, turns } from "@repo/database/schemas/storage";
@@ -278,15 +279,14 @@ const agentWithBearer = Effect.gen(function* () {
   };
 });
 
-/** A Codex agent on no task and in no repository, as an automation's run starts one, with a runner's bearer recorded for its conversation. */
-const agentOnNoTaskWithBearer = Effect.gen(function* () {
+/** A Codex agent on a task in no repository, with a runner's bearer recorded for its conversation. */
+const agentInNoRepositoryWithBearer = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const organizationId = yield* openWorkspace(userId);
   const started = yield* createAgent(userId, {
-    taskId: null,
-    organizationId,
+    taskId: (yield* createTask(userId, { organizationId })).id,
     descriptionSnapshot: null,
     prompt: "Chart the funnel",
     idempotencyKey: randomUUID(),
@@ -695,9 +695,8 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
   it.effect.each([
     {
-      // An agent on no task is listed the description's tools all the same; a Codex agent is listed our wakeup, which its harness has none of.
       why: "in no repository, the checkout's",
-      agent: agentOnNoTaskWithBearer,
+      agent: agentInNoRepositoryWithBearer,
       withheld: ["open_pull_request"],
     },
     {

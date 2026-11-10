@@ -84,9 +84,10 @@ export interface AgentSubject {
  * What an agent's card says, read from what its tab last held as the card
  * is hung (`heldLatest`): where it stands and when it last moved, its pair,
  * and its latest step; an archived agent's says it was archived, and when.
- * It wears the agent's tile, names the automation whose run started it, or
- * a teammate who did, as the reader `agents.me` tells them apart, and leads its corner with the pull
- * request the task holds for it. Its tab's card and every other place naming it say it, `chosen` telling
+ * It wears the agent's tile, names the agent that started it, the automation
+ * whose run did, or a teammate who did, as the reader `agents.me` tells
+ * them apart, says it was started from Slack where it was, and leads its
+ * corner with the pull request the task holds for it. Its tab's card and every other place naming it say it, `chosen` telling
  * whether its tab is the one shown, whose transcript follows the run. Note
  * that an agent with no turn finished in what its tab holds last moved
  * when its newest run began, the latest moment its summary knows.
@@ -120,7 +121,9 @@ export function agentCardReading(
           brief: agent.brief,
         }),
       startedBy: teammateRef(agent.startedBy, agents.me),
+      startedByAgentId: agent.startedByAgentId,
       automationId: agent.automationId,
+      automationName: agent.automationName,
       startedAt: agent.createdAt,
       tile: agentActor(agent, label),
       pullRequest: agents.pullRequests.get(agent.id),
@@ -128,6 +131,7 @@ export function agentCardReading(
         archivedAt === undefined || agent.archivedBy === undefined
           ? undefined
           : archivedByReading(agent.archivedBy, agents.me),
+      fromSlack: agent.source?.kind === AGENT_SOURCE.SLACK,
     };
   };
 }
@@ -151,8 +155,11 @@ export function lineSubject(
     choice: { model: line.model, effort: line.effort },
     transcript: undefined,
     startedBy: teammateRef(line.startedBy, readerId),
+    startedByAgentId: line.startedByAgentId,
     automationId: line.automationId,
+    automationName: line.automationName,
     tile: agentActor(line, name),
+    fromSlack: line.source?.kind === AGENT_SOURCE.SLACK,
   };
   return { name, tile: agentActor(line, name), read: () => reading };
 }
@@ -215,7 +222,6 @@ export function tasklessRowSubject(
       // Note that a read of what it published since, held by the control, is newer than the list's.
       pullRequest: reading.pullRequest ?? pullRequest,
       repository: agent.repository ?? undefined,
-      fromSlack: agent.source?.kind === AGENT_SOURCE.SLACK,
     };
   };
   return { name, tile, agent: summary, read };
@@ -262,6 +268,7 @@ export function tasklessSubject(
     choice: undefined,
     transcript: undefined,
     automationId: line.automationId ?? undefined,
+    automationName: line.automationName ?? undefined,
     tile,
   };
   return { name, tile, read: () => reading };

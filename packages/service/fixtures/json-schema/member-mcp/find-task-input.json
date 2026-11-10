@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "task": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "The task's number in the workspace, such as 42, or its key, such as ACME-42; the key's prefix is not checked, since it follows the workspace's name."
+    }
+  },
+  "required": [
+    "task"
+  ],
+  "additionalProperties": false
+}

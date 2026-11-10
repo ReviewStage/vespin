@@ -117,9 +117,12 @@ another machine you add, with full access to everything that machine's account
 can reach. Their work stays on that machine, though their transcripts are
 stored like any other, and, on a machine running host 0.11.0 or later, so is
 their harness's own session, its thinking text included, as a cloud agent's
-is. To tell your machines apart, each sends us a keyed hash
-of its hardware or machine id, never the id itself, and a Mac sends its model
-name.
+is. A teammate who can see such an agent may continue or fork it, unless it
+works on your own GitHub token: the new agent is handed that session where we
+keep it, or a replay of its transcript where we don't, and the branch the
+agent pushed. Nothing is read from your machine, and a continue only stops the
+agent there. To tell your machines apart, each sends us a keyed hash of its
+hardware or machine id, never the id itself, and a Mac sends its model name.
 
 When such an agent starts, we send that machine a copy of the Anthropic or
 OpenAI credential it runs on, sealed until the machine picks it up, when we

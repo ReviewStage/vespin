@@ -4,14 +4,15 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { createAgent } from "@repo/database/models/agent-store";
 import { writePage } from "@repo/database/models/task-pages";
+import { createTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
 import {
   PAGE_OWNER,
   PAGE_SHOWER,
-  taskPageVersionAnswerSchema,
   taskPagesAnswerSchema,
+  taskPageVersionAnswerSchema,
 } from "@repo/features/page-wire";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
@@ -92,8 +93,7 @@ it.layer(getTestDB())("an agent's own pages over HTTP", (it) => {
         yield* joinWorkspace(workspace, teammate);
         yield* openWorkspace(outsider);
         const started = yield* createAgent(starter, {
-          taskId: null,
-          organizationId: workspace,
+          taskId: (yield* createTask(starter, { organizationId: workspace })).id,
           descriptionSnapshot: null,
           prompt: "Chart the funnel",
           idempotencyKey: randomUUID(),

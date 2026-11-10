@@ -32,9 +32,8 @@ import {
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
-import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { listTasklessAgents, withTaskAgents } from "@repo/service/agents/task-agents";
+import { withTaskAgents } from "@repo/service/agents/task-agents";
 import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { count, eq } from "drizzle-orm";
 import { Effect, Option } from "effect";
@@ -196,44 +195,6 @@ it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
         { agent: listedLine(archived), published: null, pullRequests: [] },
       ]);
     }),
-  );
-
-  it.effect(
-    "an agent with no plan carries the pull request it opened in its row, as a plan's row carries its agents'",
-    () =>
-      Effect.gen(function* () {
-        const { userId, taskId } = yield* openTask;
-        const workspaceId = started(yield* createAgent(userId, start(taskId))).organizationId;
-        const taskless = (repository: string) =>
-          Effect.map(
-            createAgent(userId, {
-              taskId: null,
-              organizationId: workspaceId,
-              descriptionSnapshot: null,
-              prompt: "Sweep the copy.",
-              idempotencyKey: randomUUID(),
-              model: "anthropic/claude-opus-5.5",
-              effort: "high",
-              repository,
-              runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-            }),
-            started,
-          );
-        const published = yield* taskless("acme/web");
-        const quiet = yield* taskless("acme/web");
-        yield* openedPullRequest(userId, published.id, PULL_REQUEST, "acme/web");
-
-        const rows = yield* listTasklessAgents(userId, { includeArchived: false });
-        const { number, title, url, state, checks } = PULL_REQUEST;
-        assert.deepEqual(rows.find((row) => row.id === published.id)?.pullRequest, {
-          number,
-          title,
-          url,
-          state,
-          checks,
-        });
-        assert.equal(rows.find((row) => row.id === quiet.id)?.pullRequest, undefined);
-      }),
   );
 
   it.effect("a plan's listed pull request names the agent that opened it, whose tab it opens", () =>
@@ -445,7 +406,7 @@ it.layer(getTestDB())("the coding agents of an account's plans", (it) => {
 
 it.layer(getTestDB())("the plan list's agent lines", (it) => {
   it.effect(
-    "agents handed a large description or prompt are listed beside their task and with none, naming their brief, automation, and source, and carrying none of the text they were handed",
+    "agents handed a large description or prompt are listed beside their task, carrying none of the text they were handed",
     () =>
       Effect.gen(function* () {
         const { userId, taskId } = yield* openTask;
@@ -471,29 +432,6 @@ it.layer(getTestDB())("the plan list's agent lines", (it) => {
             ),
           ),
         );
-        yield* TestClock.adjust("1 minute");
-        const workspaceId = snapshotted.organizationId;
-        const taskless = started(
-          yield* createAgent(userId, {
-            taskId: null,
-            organizationId: workspaceId,
-            descriptionSnapshot: null,
-            prompt: LARGE_TEXT,
-            automationOrigin: {
-              name: "Nightly triage",
-              firing: { kind: AUTOMATION_FIRING.WEBHOOK, bytes: LARGE_TEXT.length },
-              prompt: LARGE_TEXT,
-              body: LARGE_TEXT,
-            },
-            startedFrom: source,
-            idempotencyKey: randomUUID(),
-            model: "anthropic/claude-opus-5.5",
-            effort: "high",
-            repository: "acme/web",
-            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-          }),
-        );
-
         const [listed] = yield* withTaskAgents(userId, yield* listTasks(userId));
         assert.deepEqual(
           listed?.agents?.agents.map(({ id, title, model }) => ({ id, title, model })),
@@ -502,32 +440,7 @@ it.layer(getTestDB())("the plan list's agent lines", (it) => {
             { id: snapshotted.id, title: "Invite emails", model: snapshotted.model },
           ],
         );
-        const rows = yield* listTasklessAgents(userId, { includeArchived: false });
-        assert.deepEqual(
-          rows.map((row) => ({
-            id: row.id,
-            planId: row.planId,
-            brief: row.brief,
-            automationId: row.automationId,
-            automationName: row.automationName,
-            from: row.from,
-            workspaceId: row.workspaceId,
-            repository: row.repository,
-          })),
-          [
-            {
-              id: taskless.id,
-              planId: null,
-              brief: AGENT_BRIEF.PROMPT,
-              automationId: null,
-              automationName: "Nightly triage",
-              from: source,
-              workspaceId,
-              repository: "acme/web",
-            },
-          ],
-        );
-        const answered = JSON.stringify([listed, rows]);
+        const answered = JSON.stringify(listed);
         assert.ok(!answered.includes(LARGE_TEXT.slice(0, 40)), "the list carries no text");
       }),
   );

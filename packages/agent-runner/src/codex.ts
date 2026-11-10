@@ -94,7 +94,9 @@
  * approval `never` (https://learn.chatgpt.com/docs/sandboxing), set as the
  * thread starts and again as the `sandboxPolicy` of each `turn/start`, as
  * app-server documents, so a thread started under another mode runs under
- * this one from its next turn. The machine is the boundary: a host's box, to
+ * this one from its next turn. Note that a Claude Code agent's permission
+ * mode (`PERMISSION_MODE`) does not reach here: Codex asks the member
+ * nothing, whatever its agent's mode. The machine is the boundary: a host's box, to
  * which an agent there has full access, or the cloud's sandbox, whose
  * firewall holds every credential and leaves only placeholders inside. Its
  * commands still inherit no bearer or key (`shell_environment_policy`),

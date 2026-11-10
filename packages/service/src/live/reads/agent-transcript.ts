@@ -257,7 +257,7 @@ function windowOf(target: ConversationTarget, reached: SQL, past: MessageCursor 
         memberId: outerJoined(user.id),
         memberName: outerJoined(user.name),
         agentId: outerJoined(sendingAgent.id),
-        agentTaskId: sendingAgent.taskId,
+        agentTaskId: outerJoined(sendingAgent.taskId),
         automationId: messages.senderAutomationId,
         journalId: outerJoined(takingJournal.id),
         afterStep: messages.takenAfterStep,

@@ -7,6 +7,7 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test } from "vitest";
 import { fakeActPort } from "../testing/app-bridge.js";
+import { fakeAppPlatform } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { TranscriptWords } from "./transcript-blocks.js";
@@ -14,7 +15,9 @@ import { TranscriptWords } from "./transcript-blocks.js";
 /**
  * transcript-markdown.test.ts -- a fenced block in a reply still being
  * written: drawn plain while its closing fence has not arrived, and sent to
- * main to be colored once it has, rather than once a word. Synthetic reply.
+ * main to be colored once it has, rather than once a word; and a ```slack
+ * block drawn as the message it will send, whose Copy puts it on the
+ * clipboard as rich text. Synthetic replies.
  */
 
 /** The reply's words before its block, so the block is not the first thing written. */
@@ -51,4 +54,37 @@ test("a block after a reply's first words is colored once its closing fence arri
   draw(`${LEAD}const reader = open(path);\nreader.close();\n\`\`\`\n\nThat closes it.`);
   await act(() => Promise.resolve());
   assert.deepEqual(asked, ["const reader = open(path);\nreader.close();"]);
+});
+
+test("a ```slack block draws its marks and copies as rich text", async () => {
+  const copied: { html: string; text: string }[] = [];
+  fakeAppPlatform({
+    copyRich: (rich) => {
+      copied.push({ ...rich });
+      return Promise.resolve();
+    },
+  });
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  act(() =>
+    root.render(
+      withQueryClient(
+        createElement(TranscriptWords, {
+          text: "Send this:\n\n```slack\nShipped *today*\nsee <https://example.com|notes>\n```",
+          streaming: false,
+        }),
+      ),
+    ),
+  );
+  assert.equal(container.querySelector("strong")?.textContent, "today");
+  const copy = container.querySelector<HTMLButtonElement>('button[aria-label="Copy message"]');
+  await act(async () => copy?.click());
+  assert.deepEqual(copied, [
+    {
+      html: 'Shipped <b>today</b><br>see <a href="https://example.com">notes</a>',
+      text: "Shipped today\nsee notes (https://example.com)",
+    },
+  ]);
 });

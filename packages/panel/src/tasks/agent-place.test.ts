@@ -229,12 +229,18 @@ test("a Mac set to let no agent run commands is off in Settings on the reader's 
   );
 });
 
-/** The cloud agent's chip drawn with the move given, opened, and the rows its menu lists, the settings the window was asked to open kept. */
-async function placeMenuOf(move: PlaceMove, opened: SettingsLink[]): Promise<HTMLElement[]> {
+/** The cloud agent's chip drawn with the move given, its `run_on_mac` standing where one is given, opened, and the rows its menu lists, the settings the window was asked to open kept. */
+async function placeMenuOf(
+  move: PlaceMove,
+  opened: SettingsLink[],
+  runOnMac?: RunOnMacStanding,
+): Promise<HTMLElement[]> {
   clear();
   fakeActPort({});
   handState({});
   handBeats({});
+  if (runOnMac !== undefined)
+    handHostReads({ workspaceTools: { [AGENT_ID]: { rows: { runOnMac } } } });
   writeAppState(await appBridge().requestAppState());
   const container = document.createElement("div");
   document.body.append(container);
@@ -260,6 +266,15 @@ async function placeMenuOf(move: PlaceMove, opened: SettingsLink[]): Promise<HTM
   return [...document.querySelectorAll<HTMLElement>('[role="option"]')];
 }
 
+/** What a reader hears describing the move control after its label. */
+function chipDescription(): string | null {
+  const chip = document.querySelector('button[aria-label^="Runs on"]');
+  const id = chip?.getAttribute("aria-describedby");
+  return id === null || id === undefined
+    ? null
+    : (document.getElementById(id)?.textContent ?? null);
+}
+
 test("where a move is offered, the chip lists the places and moves the agent to the one picked, and with no Mac sends the member to add one", async () => {
   const moved: AgentRunsOnRequest[] = [];
   const opened: SettingsLink[] = [];
@@ -270,7 +285,9 @@ test("where a move is offered, the chip lists the places and moves the agent to 
     pushedOnly: false,
   };
 
-  const rows = await placeMenuOf(withMac, opened);
+  const runOnMac = { on: true, owner: { userId: READER, name: "Ada Lovelace" } } as const;
+  const rows = await placeMenuOf(withMac, opened, runOnMac);
+  assert.equal(chipDescription(), ", run_on_mac on your Mac, Online");
   assert.deepEqual(
     rows.map((row) => row.textContent?.includes("Studio") ?? false),
     [false, true],

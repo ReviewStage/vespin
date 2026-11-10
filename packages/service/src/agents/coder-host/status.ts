@@ -9,6 +9,7 @@ import {
 } from "@repo/database/models/agent-store";
 import type { Device } from "@repo/database/models/device-store";
 import type { StoredArchive, StoredAutomationOrigin } from "@repo/database/schemas/agent";
+import { originSubjectsOf } from "@repo/features/agent-origin-live";
 import {
   agentStatusAt,
   type StatusTurn,
@@ -435,6 +436,7 @@ function summaryFields(
       ? undefined
       : { disabledServers: agent.disabledServers }),
     ...(starter === undefined ? undefined : { startedBy: { userId: agent.userId, name: starter } }),
+    ...(agent.startedByAgentId === null ? undefined : { startedByAgentId: agent.startedByAgentId }),
     ...(agent.automationId === null ? undefined : { automationId: agent.automationId }),
     ...(agent.automationName === null ? undefined : { automationName: agent.automationName }),
     ...(agent.source == null ? undefined : { source: agent.source }),
@@ -485,20 +487,12 @@ export function agentSummary(
 
 /**
  * The run that started an agent as its page opens on it: the prompt alone,
- * the issue or pull request a GitHub event named, a webhook's body, and the
+ * what its firing was about (`originSubjectsOf`), a webhook's body, and the
  * member who asked for a run now, named by `names` where their account
  * stands.
  */
 function originOf(origin: StoredAutomationOrigin, names: ReadonlyMap<string, string>): AgentOrigin {
   const { firing } = origin;
-  const subject =
-    firing.kind === AUTOMATION_FIRING.GITHUB && firing.number !== undefined
-      ? {
-          number: firing.number,
-          ...(firing.title === undefined ? undefined : { title: firing.title }),
-          ...(firing.url === undefined ? undefined : { url: firing.url }),
-        }
-      : undefined;
   const runner =
     firing.kind === AUTOMATION_FIRING.MANUAL && firing.userId !== undefined
       ? firing.userId
@@ -506,7 +500,7 @@ function originOf(origin: StoredAutomationOrigin, names: ReadonlyMap<string, str
   const name = runner === undefined ? undefined : names.get(runner);
   return {
     prompt: origin.prompt,
-    ...(subject === undefined ? undefined : { subject }),
+    ...originSubjectsOf(firing),
     ...(origin.body === undefined ? undefined : { body: origin.body }),
     ...(runner === undefined || name === undefined
       ? undefined
