@@ -38,6 +38,8 @@
  */
 
 import type { AccountAccessRow, AccountSeamEffect } from "@repo/database/models/account-store";
+import { stampPresence } from "@repo/database/models/presence-store";
+import type { PresenceDoneAnswer } from "@repo/features/presence-wire";
 import { Clock } from "effect";
 import { isAdminRole } from "../admin/admin-access.js";
 import { standingSupportAccess } from "../auth/auth-policy.js";
@@ -56,6 +58,9 @@ export interface AccountProcedureSeams extends AccountPreferenceSeams {
   /** The role and the grant of support access on the account's own row, as Better Auth stores them. */
   readAccess: (userId: string) => AccountSeamEffect<AccountAccessRow>;
 }
+
+/** What a beat answers once the stamp is kept. */
+const PRESENCE_DONE: PresenceDoneAnswer = { done: true };
 
 /** The account resource: every procedure but the provider keys' own, which are `provider-keys-procedures.ts`'s. */
 export function accountProcedures(seams: AccountProcedureSeams) {
@@ -78,6 +83,12 @@ export function accountProcedures(seams: AccountProcedureSeams) {
         admin: isAdminRole(access.role),
         supportAccessUntil: standingSupportAccess(access.supportAccessUntil, now),
       };
+    }),
+
+    /** The caller stamped active now, as their desktop or web client's beat says, which holds their phone's pushes (`../push/inbox-pushes.ts`). */
+    active: signedIn.active.effect(function* ({ context }) {
+      yield* hostedStoreOrUnavailable(stampPresence(context.userId));
+      return PRESENCE_DONE;
     }),
 
     /** Writes each part the body carries and answers the snapshot as it then stands (`writeOwnPreferences`). */

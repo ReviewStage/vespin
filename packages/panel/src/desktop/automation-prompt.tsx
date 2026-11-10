@@ -2,19 +2,16 @@ import { AUTOMATION_BOUNDS } from "@repo/features/automation-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { EXPERIMENT } from "@repo/settings";
-import { COMPOSER_LOOK, ComposerFrame, cssCustomProperties } from "@repo/ui";
+import { cssCustomProperties } from "@repo/ui";
 import { SERVER_HANDED } from "@repo/ui/agent-servers-model";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { appPlatform } from "../app-platform.js";
-import { useSideBundles } from "../bundle-loader.js";
-import { COMPOSER_INPUT, type ComposerEditorHandle } from "../description-editor/contract.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { repositorySkillsQueryOptions } from "../tasks/agent-reads.js";
-import { ComposerField } from "../tasks/composer-field.js";
-import { useComposerPickers } from "../tasks/composer-pickers.js";
 import { MENTION_MENU_SIDE } from "../tasks/mention-picker.js";
 import { useMentionedPlace } from "../tasks/mentioned-place.js";
+import { MessageField, useMessageBox } from "../tasks/message-box.js";
 import { keptSkills } from "../tasks/repository-skills.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import type { SkillSource } from "../tasks/skill-picker.js";
@@ -44,9 +41,6 @@ import { appStateQuery, selectExperiment, selectListedTasks } from "../use-app-s
 /** The prompt's placeholder, an example of a prompt. */
 const PROMPT_PLACEHOLDER = "Find the flakiest test in CI this week and fix it.";
 
-/** The words a dictation would likely say; the field has no microphone. */
-const NO_KEYWORDS: readonly string[] = [];
-
 /** The tasks of a window that lists none yet. */
 const NO_TASKS: readonly { readonly id: string; readonly name: string }[] = [];
 
@@ -73,35 +67,29 @@ function PromptField({
   onChange: (text: string) => void;
   onSave: () => void;
 }): React.JSX.Element {
-  const editor = useRef<ComposerEditorHandle | undefined>(undefined);
-  const room = useRef<HTMLDivElement>(null);
   const statuses = useIntegrationStatuses();
-  const module = useQuery(useSideBundles().descriptionEditor).data;
-  const pickers = useComposerPickers({
-    editor,
-    room,
+  const box = useMessageBox({
     draft: value,
+    setDraft: onChange,
     placeholder: PROMPT_PLACEHOLDER,
-    self: undefined,
+    label,
+    maxLength: AUTOMATION_BOUNDS.MAX_PROMPT_CHARS,
+    onSubmit: onSave,
+    enterWrites: true,
+    takesFiles: false,
+    takesFocus: false,
     skills,
-    keywords: NO_KEYWORDS,
     // A server's chip says each run opens with it, as the automation's switches leave it.
     servers: { statuses, place: { disabled: disabledServers, handed: SERVER_HANDED.OPENS } },
-    // Note that the field has no microphone, so no dictation of its own has anything to say.
-    onNote: () => undefined,
     // Note that the field stands in a form under the page's toolbar, so a list opens under the caret's line.
     side: MENTION_MENU_SIDE.BELOW,
+    // Escape lets go of the caret and reaches the window marked taken, as every field's here does, so a live call it stops stops and the page stays; a list standing takes it first.
+    escapeClimbs: true,
+    aria: { "aria-invalid": invalid ? "true" : undefined },
   });
-  const listing = pickers.field.aria["aria-expanded"] === "true";
-  // Escape lets go of the caret and reaches the window marked taken, as every field's here does, so a live call it stops stops and the page stays; a list standing takes it first.
-  const onKey = (event: KeyboardEvent): boolean => {
-    if (event.key !== "Escape" || listing) return pickers.field.onKey(event);
-    editor.current?.blur();
-    return true;
-  };
   return (
-    <ComposerFrame
-      look={COMPOSER_LOOK.INPUT}
+    <MessageField
+      box={box}
       className="automation-prompt"
       invalid={invalid}
       style={cssCustomProperties({ "--automation-prompt-rows": String(rows) })}
@@ -109,26 +97,7 @@ function PromptField({
       onKeyDown={(event) => {
         if (event.key === "Escape") event.preventDefault();
       }}
-    >
-      <ComposerField
-        module={module}
-        editor={editor}
-        room={room}
-        draft={value}
-        setDraft={onChange}
-        placeholder={PROMPT_PLACEHOLDER}
-        label={label}
-        input={COMPOSER_INPUT.EDITABLE}
-        maxLength={AUTOMATION_BOUNDS.MAX_PROMPT_CHARS}
-        takesFocus={false}
-        {...pickers.field}
-        onKey={onKey}
-        aria={{ ...pickers.field.aria, "aria-invalid": invalid ? "true" : undefined }}
-        enterWrites
-        onEnter={onSave}
-        onPasteFiles={() => false}
-      />
-    </ComposerFrame>
+    />
   );
 }
 

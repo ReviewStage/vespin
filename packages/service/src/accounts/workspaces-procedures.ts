@@ -70,7 +70,6 @@ import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { type Agent, listAgentsOfDeletedWorkspace } from "@repo/database/models/agent-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import type { MemberSeams, WorkspaceSeams } from "@repo/database/models/workspace-seams";
-import { setWorkspaceSlug } from "@repo/database/models/workspace-slug-store";
 import {
   createWorkspace,
   ensurePersonalWorkspace,
@@ -81,10 +80,7 @@ import { storeWriter } from "@repo/database/models/writer";
 import {
   WORKSPACE_MEMBERS_QUERY,
   WORKSPACE_ROLE,
-  WORKSPACE_SLUG_PROBLEM,
   type WorkspaceRole,
-  type WorkspaceSlugProblem,
-  workspaceSlugProblemOf,
 } from "@repo/features/workspace-wire";
 import { isExperiment, isWorkspaceExperiment } from "@repo/settings";
 import { type Cause, Effect, Option } from "effect";
@@ -106,8 +102,14 @@ import {
 } from "../http/http-effect.js";
 import { accountMiddleware, hosted, sessionMiddleware } from "../orpc/base.js";
 import type { WorkspaceDeleteCall } from "./deletion-hooks.js";
-import { answeredWorkspace, managedWorkspace, pluginCallOrRefused } from "./workspace-access.js";
-import { listFormerMembers, listMembers, memberIdOf } from "./workspace-members.js";
+import {
+  answeredWorkspace,
+  managedWorkspace,
+  ownedWorkspace,
+  pluginCallOrRefused,
+} from "./workspace-access.js";
+import { listMembers, memberIdOf } from "./workspace-members.js";
+import { workspaceMembersRead, workspaceSlugSet } from "./workspace-operations.js";
 
 /** How many of a workspace's agents a delete reads at once, page by page, before it stops any. */
 const DELETE_AGENTS_PAGE = 100;
@@ -120,13 +122,6 @@ const HEIR_ROLES: ReadonlySet<WorkspaceRole> = new Set([
   WORKSPACE_ROLE.ADMIN,
   WORKSPACE_ROLE.OWNER,
 ]);
-
-/** The refusal each reason a slug is refused for is answered with. */
-const SLUG_REFUSAL = {
-  [WORKSPACE_SLUG_PROBLEM.MALFORMED]: HOSTED_REFUSAL.WORKSPACE_SLUG_MALFORMED,
-  [WORKSPACE_SLUG_PROBLEM.RESERVED]: HOSTED_REFUSAL.WORKSPACE_SLUG_RESERVED,
-  [WORKSPACE_SLUG_PROBLEM.TAKEN]: HOSTED_REFUSAL.WORKSPACE_SLUG_TAKEN,
-} as const satisfies Record<WorkspaceSlugProblem, HostedRefusal>;
 
 /** The roles each role removes: the owner an admin or a member, an admin a member alone. */
 const REMOVABLE_BY: ReadonlyMap<WorkspaceRole, ReadonlySet<WorkspaceRole>> = new Map([
@@ -181,18 +176,6 @@ const otherMemberOf = Effect.fn("web/workspaceOtherMember")(function* (
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
   return { role: other.value.role, memberId: memberId.value };
-});
-
-/** A workspace the account owns; one it is not in is not found, and one it is in but does not own not permitted. */
-const ownedWorkspace = Effect.fn("web/ownedWorkspace")(function* (
-  userId: string,
-  workspaceId: string,
-) {
-  const workspace = yield* answeredWorkspace(userId, workspaceId);
-  if (workspace.role !== WORKSPACE_ROLE.OWNER) {
-    return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
-  }
-  return workspace;
 });
 
 /** Every agent of the workspace not archived, any member's, whether or not the owner sees it, read a page at a time. */
@@ -252,14 +235,10 @@ export function workspacesProcedures(seams: WorkspacesProcedureSeams) {
       return { workspace: yield* answeredWorkspace(context.userId, organizationId) };
     }),
     members: account.members.effect(function* ({ context, input }) {
-      const workspace = yield* answeredWorkspace(
+      return yield* workspaceMembersRead(
         context.userId,
         input[WORKSPACE_MEMBERS_QUERY.WORKSPACE_ID],
       );
-      const members = yield* hostedStoreOrUnavailable(listMembers(workspace.id));
-      const former = yield* hostedStoreOrUnavailable(listFormerMembers(workspace.id));
-      // Note that nobody who left says nothing, so an answer is as it was before anyone could leave.
-      return former.length === 0 ? { members } : { members, former };
     }),
     removeMember: session.removeMember.effect(function* ({ context, input }) {
       const { userId, sessionHeaders: headers } = context;
@@ -377,25 +356,8 @@ export function workspacesProcedures(seams: WorkspacesProcedureSeams) {
       yield* memberChanged(userId, workspace.id, SERVER_WORKSPACE_MEMBER_ACTION.RENAME);
       return { workspace: yield* answeredWorkspace(userId, workspace.id) };
     }),
-    /**
-     * Note that the slug is written by the store rather than the plugin,
-     * because the slug it leaves is kept as the workspace's in the same
-     * transaction, and the owner alone may change it, which our rule holds.
-     */
     setSlug: account.setSlug.effect(function* ({ context, input }) {
-      const { userId } = context;
-      const { workspaceId, slug } = input;
-      const workspace = yield* ownedWorkspace(userId, workspaceId);
-      const problem = workspaceSlugProblemOf(slug);
-      if (problem !== undefined) return yield* Effect.fail(SLUG_REFUSAL[problem]);
-      const set = yield* hostedStoreOrUnavailable(
-        setWorkspaceSlug(workspace.id, slug).pipe(
-          Effect.as(true),
-          Effect.catchTag("WorkspaceSlugTaken", () => Effect.succeed(false)),
-        ),
-      );
-      if (!set) return yield* Effect.fail(SLUG_REFUSAL[WORKSPACE_SLUG_PROBLEM.TAKEN]);
-      return { workspace: yield* answeredWorkspace(userId, workspace.id) };
+      return yield* workspaceSlugSet(context.userId, input.workspaceId, input.slug);
     }),
     /**
      * Note that the photo is kept as the very `data:` URL the schema read,

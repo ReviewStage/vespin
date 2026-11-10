@@ -714,6 +714,7 @@ function fakeService() {
           Effect.sync(() => forgetAnswer),
         ),
       ),
+    markActive: () => Effect.sync(() => void asked.push("active")),
     transcribeDictation: (clip) =>
       Effect.sync(() => {
         asked.push(`transcribe:${clip.audio}:${clip.keywords.join(",")}`);

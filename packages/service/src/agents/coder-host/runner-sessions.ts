@@ -340,7 +340,7 @@ export interface RunnerHarness<E extends { readonly _tag: string }> {
     resume: string | undefined,
     firstSequence: number,
     rewindBefore: string | undefined,
-  ) => Effect.Effect<RunnerConfig, LaunchRefused>;
+  ) => Effect.Effect<RunnerConfig, E | LaunchRefused, RunnerServices>;
   /** The checkout's folders the harness finds a repository's skills in, whose names it keeps over an installed skill's. */
   readonly skillRoots: readonly string[];
   /** What goes ahead of a message to a runner already running. */
