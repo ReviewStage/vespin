@@ -1,4 +1,3 @@
-import { NO_AGENT_OWNER_FACTS } from "@repo/database/models/agent-owners";
 import type { AgentLine } from "@repo/database/models/agent-store";
 import {
   AGENT_BRIEF,
@@ -91,7 +90,6 @@ test("a local agent's summary names its Mac and when it last beat; an agent in a
       { turn: undefined },
       now,
       new Map(),
-      NO_AGENT_OWNER_FACTS,
       [],
       new Map([
         [

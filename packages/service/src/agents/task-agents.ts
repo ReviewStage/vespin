@@ -1,29 +1,20 @@
-import { agentOwnerFactsOf } from "@repo/database/models/agent-owners";
 import {
   type AgentLatestTurn,
   type AgentStoreEffect,
-  continuationsOf,
   lastSettledTurnsOfReached,
   latestTurnsOfReached,
   listPublishedAgents,
-  listPublishedAgentsById,
-  listTasklessAgentRows,
-  nativeRuntimesOfReached,
-  openSandboxesOfReached,
   type PublishedAgentLine,
 } from "@repo/database/models/agent-store";
-import { devicesNamed } from "@repo/database/models/device-store";
 import { readAccountNames } from "@repo/database/models/workspace-store";
 import {
   AGENT_STATUS,
   type AgentFailure,
-  type AgentPullRequest,
   type AgentStatus,
   PULL_REQUEST_STATE,
   pullRequestAuthorOf,
-  type TasklessAgent,
 } from "@repo/features/agent-wire";
-import { agentMarkedPullRequest, standingFailures } from "@repo/features/task-agents-model";
+import { standingFailures } from "@repo/features/task-agents-model";
 import {
   type HeldTaskSummary,
   RELEASED_CLIENT_TASK_LINES,
@@ -37,14 +28,11 @@ import {
   agentFailureOf,
   agentRunStartedAt,
   agentStatusOf,
-  agentSummary,
   startedBlank,
-  summaryAccounts,
-  summaryDevices,
 } from "./coder-host/status.js";
 
 /**
- * task-agents.ts -- what each listed task's coding agents are doing and what they published, in brief, for the held list (GET) the command line and released desktops read, and the agents with no plan the list carries beside the plans.
+ * task-agents.ts -- what each listed task's coding agents are doing and what they published, in brief, for the held list (GET) the command line and released desktops read.
  *
  * Four statements answer the whole list however many tasks it holds: the
  * agents of every task named with the pull request each last published,
@@ -183,22 +171,6 @@ function summaryOf(read: readonly ReadAgent[]): NonNullable<HeldTaskSummary["age
   };
 }
 
-/** An agent's pull request as its sidebar row carries it, where it opened one: as a task's row names its own. */
-function pullRequestOf(published: AgentPullRequest | null | undefined) {
-  if (published == null) return undefined;
-  const { number, title, url, state, checks, queued } = published;
-  return {
-    pullRequest: {
-      number,
-      title,
-      url,
-      state,
-      checks,
-      ...(queued === true ? { queued } : undefined),
-    },
-  };
-}
-
 /** The account's listed tasks, each carrying its agents in brief, whichever member started each, where it has any; the tasks' order and every other field as listed. */
 export function withTaskAgents(
   userId: string,
@@ -221,8 +193,6 @@ export function withTaskAgents(
     const byTask = new Map<string, ReadAgent[]>();
     for (const agent of held) {
       const { conversationId, taskId } = agent.agent;
-      // An agent with no task is no task's to summarize.
-      if (taskId === null) continue;
       const line = agentLine(
         agent,
         turns.get(conversationId),
@@ -235,74 +205,6 @@ export function withTaskAgents(
     return tasks.map((task) => {
       const agents = byTask.get(task.id);
       return agents === undefined ? task : { ...task, agents: summaryOf(agents) };
-    });
-  });
-}
-
-/**
- * The agents with no plan in the account's workspaces, whichever member
- * started each, newest started first, each read as its own page reads it
- * but for the run that started it, with its automation's name, when it last moved, and when the account
- * pinned it where it did, the archived ones only where `includeArchived`
- * asks: the sidebar's rows beside the plans.
- */
-export function listTasklessAgents(
-  userId: string,
-  options: { readonly includeArchived: boolean },
-): AgentStoreEffect<readonly TasklessAgent[]> {
-  return Effect.gen(function* () {
-    const agents = yield* listTasklessAgentRows(userId, options);
-    // The one pull request each names of every one it opened, as a task's row picks among its agents' (`agentMarkedPullRequest`).
-    const held = yield* listPublishedAgentsById(
-      userId,
-      agents.map((agent) => agent.id),
-    );
-    const marked = new Map(
-      held.map(({ agent, pullRequests }) => [agent.id, agentMarkedPullRequest(pullRequests)]),
-    );
-    const conversationIds = agents.map((agent) => agent.conversationId);
-    // The agents were read through their workspaces' gate, and each conversation is its starter's.
-    const turns = yield* latestTurnsOfReached(conversationIds);
-    const settled = yield* lastSettledTurnsOfReached(conversationIds);
-    const runtimes = yield* nativeRuntimesOfReached(conversationIds);
-    const sandboxes = yield* openSandboxesOfReached(conversationIds);
-    // The member each was archived by or for is named too, as the agent's own page names them,
-    // and so are the agents continued from each, and the Mac a local one runs on.
-    const names = yield* readAccountNames(agents.flatMap(summaryAccounts));
-    const continued = yield* continuationsOf(
-      userId,
-      agents.map((agent) => agent.id),
-    );
-    const macs = yield* devicesNamed(summaryDevices(agents));
-    const owners = yield* agentOwnerFactsOf(agents);
-    const now = yield* Clock.currentTimeMillis;
-    return agents.map((agent) => {
-      const turn = turns.get(agent.conversationId);
-      const runtime = runtimes.get(agent.conversationId);
-      const sandboxOpen = sandboxes.has(agent.conversationId);
-      return {
-        ...agentSummary(
-          agent,
-          { turn, runtime, sandboxOpen },
-          now,
-          names,
-          owners,
-          continued.get(agent.id),
-          macs,
-        ),
-        // The fields its own page names beside the summary; the run that started it is that page's alone.
-        automationId: agent.automationId,
-        workspaceId: agent.organizationId,
-        repository: agent.repository,
-        activityAt: agentActivityAt(settled.get(agent.conversationId), {
-          createdAt: agent.createdAt,
-        }),
-        ...(agent.pinnedAt === null ? undefined : { pinnedAt: agent.pinnedAt.getTime() }),
-        ...(agent.pinPosition === null ? undefined : { pinPosition: agent.pinPosition }),
-        readThrough: agent.readThrough.getTime(),
-        markedUnread: agent.markedUnread,
-        ...pullRequestOf(marked.get(agent.id)),
-      };
     });
   });
 }

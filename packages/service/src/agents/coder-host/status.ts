@@ -1,4 +1,3 @@
-import type { AgentOwnerFacts } from "@repo/database/models/agent-owners";
 import {
   type Agent,
   type AgentLatestTurn,
@@ -390,25 +389,22 @@ export function summaryDevices(
   );
 }
 
-/** What every read of one agent says of it but its task, its status read at `now`, its owner as `owners` reads it, the agents started from it where any was, and the Mac it runs on where `macs` holds it. */
+/** What every read of one agent says of it but its task, its status read at `now`, its owner, the task it stands on, the agents started from it where any was, and the Mac it runs on where `macs` holds it. */
 function summaryFields(
   agent: AgentLine,
   standing: AgentTurnStanding,
   now: number,
   names: ReadonlyMap<string, string>,
-  owners: AgentOwnerFacts,
   continuedBy: readonly AgentStartedFromIt[],
   macs: ReadonlyMap<string, Device>,
 ): Omit<AgentSummary, "id" | "planId"> {
   const starter = names.get(agent.userId);
   const mac = macOf(agent, macs);
+  // Every agent stands on a task, which owns it, so the run's automation is never asked.
   const owner = agentOwnerOf({
     taskId: agent.taskId,
     runId: agent.automationRunId,
-    runAutomationId:
-      agent.automationRunId === null
-        ? null
-        : (owners.runAutomations.get(agent.automationRunId) ?? null),
+    runAutomationId: null,
   });
   const turn = agentTurnOf(standing.turn);
   const summary: Omit<AgentSummary, "id" | "planId"> = {
@@ -472,17 +468,12 @@ function summaryFields(
   };
 }
 
-/**
- * One agent as the tabs draw it, on a task or with none, read whole or as a
- * list's line. Its owner is read from `owners`, which `agentOwnerFactsOf`
- * answers for the agents of the read.
- */
+/** One agent as the tabs draw it, read whole or as a list's line. */
 export function agentSummary(
   agent: Agent | AgentLine,
   standing: AgentTurnStanding,
   now: number,
   names: ReadonlyMap<string, string>,
-  owners: AgentOwnerFacts,
   continuedBy: readonly AgentStartedFromIt[] = [],
   macs: ReadonlyMap<string, Device> = NO_MACS,
 ): AgentSummary {
@@ -490,7 +481,7 @@ export function agentSummary(
   return {
     id: line.id,
     planId: line.taskId,
-    ...summaryFields(line, standing, now, names, owners, continuedBy, macs),
+    ...summaryFields(line, standing, now, names, continuedBy, macs),
   };
 }
 
@@ -532,20 +523,19 @@ export function pageAccounts(agent: Agent): readonly string[] {
     : summaryAccounts(agent);
 }
 
-/** One agent as its own page reads it, on a task or with none, its status read at `now`, with the agents started from it and the Mac it runs on. */
+/** One agent as its own page reads it, its status read at `now`, with the agents started from it and the Mac it runs on. */
 export function agentPage(
   agent: Agent,
   standing: AgentTurnStanding,
   now: number,
   names: ReadonlyMap<string, string>,
-  owners: AgentOwnerFacts,
   continuedBy: readonly AgentStartedFromIt[] = [],
   macs: ReadonlyMap<string, Device> = NO_MACS,
 ): AgentPage {
   return {
     id: agent.id,
     planId: agent.taskId,
-    ...summaryFields(agentLineOf(agent), standing, now, names, owners, continuedBy, macs),
+    ...summaryFields(agentLineOf(agent), standing, now, names, continuedBy, macs),
     automationId: agent.automationId,
     ...(agent.automationOrigin === null
       ? undefined

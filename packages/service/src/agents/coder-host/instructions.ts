@@ -326,7 +326,7 @@ const TOKEN_OPENED_WORDS = `Once your pull request is open, nothing on it reache
  * Where an agent asked for a plan, a proposal, a design, or research puts
  * the write-up, rather than a document under `docs/` and a pull request to
  * land it: the description, where it was handed one and so can edit it; a page
- * otherwise, on its task or, on none, on itself.
+ * otherwise, on its task.
  */
 function writeUpPlace(brief: AgentBrief, onTask: boolean): string {
   if (brief === AGENT_BRIEF.DESCRIPTION && onTask) {
@@ -336,9 +336,8 @@ function writeUpPlace(brief: AgentBrief, onTask: boolean): string {
 }
 
 /**
- * How a page is shown, said alike to an agent on a task, whose page stands on
- * the task, and to one on none, whose page stands on itself, under the folder
- * its machine reads back from (`MachineLayout`'s `sharedFiles`).
+ * How a page is shown, on the agent's task, under the folder its machine
+ * reads back from (`MachineLayout`'s `sharedFiles`).
  */
 function pagesWords(sharedFiles: string): string {
   return `
@@ -349,13 +348,9 @@ When a result reads better as something to look at or click through than as word
 }
 
 /**
- * What only an agent on a task is told of: a link that names the task, its
- * description's comments, and the task's status, which it keeps; an agent an
- * automation started with no task has none of them, so its instructions
- * leave them out, and shows its pages on itself.
- * An agent on a task keeps the agents it starts on that task; one on none
- * has no task of its own to start them on, so each it starts lands on a
- * task made for it, unless it names one.
+ * What an agent is told of its task: a link that names the task, its
+ * description's comments, and the task's status, which it keeps. It keeps
+ * the agents it starts on that task.
  */
 const TASK_PLACE_WORDS = {
   onTask: {
@@ -381,13 +376,6 @@ Where another agent started you on its task, leave the status to that agent.`,
 
 Members and agents leave comment threads on a description's text, each beside the words it is on, and on a task's pages, each on an element of the page or on the whole page. Each call of the comment tools names the task whose description it acts on by its \`taskId\`, your own task or any other of your workspace, and \`${AGENT_TOOL.READ_COMMENTS}\` reads a page's threads where it names the page as well. \`${AGENT_TOOL.READ_COMMENTS}\` reads them at any time for context; reading asks nothing of you. A member's comment reaches every agent in its thread: one it or an earlier comment mentioned, one that answered in it, and on a page, the agent that showed its newest version. It reaches you as a message naming the thread: read the thread and the description, or the page at the version it names with \`${AGENT_TOOL.READ_PAGE}\`, do what it asks and nothing else it discusses, and answer in that thread with \`${AGENT_TOOL.REPLY_TO_COMMENT}\`, never in a thread no one sent you. Where a page's thread asks for a change to the page, show its next version with \`${AGENT_TOOL.SHOW_PAGE}\` before you answer. \`${AGENT_TOOL.UPDATE_COMMENT}\` resolves a thread once what it asked is done, or reopens one.`,
   },
-  taskless: {
-    link: "",
-    olderLinks: " and `<scheme>://folder/<path>/`",
-    comments: "",
-    status: "",
-    startAgent: ` You work on no task, so leave its taskId out to start it on a new task made for it, in the repository you work in, if any, or name another repository, or null for none; name a task by its id only for work that belongs to that task, and make one first with \`${AGENT_TOOL.CREATE_TASK}\` only for work that should stand as a task of its own`,
-  },
 } as const;
 
 /**
@@ -407,7 +395,7 @@ const PLANLESS_TASK_PLACE_WORDS = {
 Members and agents leave comment threads on a task's pages, each on an element of the page or on the whole page. Each call of the comment tools names the task the page stands on by its \`taskId\`, your own task or any other of your workspace, and \`${AGENT_TOOL.READ_COMMENTS}\` reads a page's threads where it names the page. \`${AGENT_TOOL.READ_COMMENTS}\` reads them at any time for context; reading asks nothing of you. A member's comment reaches every agent in its thread: one it or an earlier comment mentioned, one that answered in it, and the agent that showed the page's newest version. It reaches you as a message naming the thread: read the thread and the page at the version it names with \`${AGENT_TOOL.READ_PAGE}\`, do what it asks and nothing else it discusses, and answer in that thread with \`${AGENT_TOOL.REPLY_TO_COMMENT}\`, never in a thread no one sent you. Where the thread asks for a change to the page, show its next version with \`${AGENT_TOOL.SHOW_PAGE}\` before you answer. \`${AGENT_TOOL.UPDATE_COMMENT}\` resolves a thread once what it asked is done, or reopens one.`,
 } as const;
 
-/** What the agent is told of updating its task's description with `edit_description`, and where a decision it settles goes; nothing for an agent handed a prompt on no task, which has no description. */
+/** What the agent is told of updating its task's description with `edit_description`, and where a decision it settles goes. */
 interface EditDescriptionTold {
   readonly decided: string;
   readonly updating: string;
@@ -425,17 +413,12 @@ const EDIT_DESCRIPTION_WORDS = {
 } as const;
 
 /**
- * What an agent is told of its description: one handed the description always, and one
- * handed a prompt or started blank where it is on a task. Neither of those
- * was handed the description, which the developer may have written since, or may yet, so
- * each is told to read the description before it edits it.
+ * What an agent is told of its description. One handed a prompt or started
+ * blank was not handed the description, which the developer may have
+ * written since, or may yet, so it is told to read the description before
+ * it edits it.
  */
-function editDescriptionTold(
-  brief: AgentBrief,
-  onTask: boolean,
-  notes: string,
-): EditDescriptionTold {
-  if (brief !== AGENT_BRIEF.DESCRIPTION && !onTask) return NOT_TOLD_EDIT_DESCRIPTION;
+function editDescriptionTold(brief: AgentBrief, notes: string): EditDescriptionTold {
   const read =
     brief === AGENT_BRIEF.PROMPT
       ? `Your task has a description beside the prompt you were handed, which the developer may have written or changed since: it may be empty, or say what your prompt does not. Read it with \`${AGENT_TOOL.READ_TASK}\` and your task's id before you edit it. `
@@ -459,8 +442,7 @@ ${read}${notes}`,
  * a message, a thread, and the description alike, and which
  * a correction of the description never drops. One example per kind, its targets
  * the codec's own: a file's or a folder's page on GitHub, any other page by
- * its own address, and the task's own things under the task's link, which
- * an agent on no task has none of. A pull request is named so every time,
+ * its own address, and the task's own things under the task's link. A pull request is named so every time,
  * its address spelled from its number where no tool answered it, since a
  * bare `#42` draws as no chip. A thing of ours, an agent, a task, an
  * automation, a member, a thread, or a page, is named by one rule
@@ -473,7 +455,7 @@ ${read}${notes}`,
  */
 function namingWords(
   repository: string | null,
-  ownTask: OwnTask | null,
+  ownTask: OwnTask,
   describes: boolean,
   workspace: string,
 ): string {
@@ -482,11 +464,10 @@ function namingWords(
       ? ""
       : `
 - A file of your repository: \`[@session-store.ts](https://github.com/${repository}/blob/HEAD/apps/web/session-store.ts)\`; a folder the same way with \`tree\` for \`blob\`; lines at a commit already on GitHub: \`[@session-store.ts:3–5](https://github.com/${repository}/blob/<commit>/apps/web/session-store.ts#L3-L5)\`.`;
-  const taskWords =
-    ownTask !== null && describes
-      ? `
+  const taskWords = describes
+    ? `
 - Your task's description, whose link is \`${ownTask.link}\` and whose id is \`${ownTask.id}\`: \`[@<the task's name>](${ownTask.link})\`, and one of its sections by its heading's anchor, the heading as GitHub spells an anchor (lower case, spaces as hyphens, punctuation dropped): \`[@Rollout](${ownTask.link}#rollout)\`.`
-      : "";
+    : "";
   const where = describes
     ? "in a message, a thread, or the description. Keep a mention in the description exactly as it stands when you edit around it."
     : "in a message or a thread.";
@@ -899,7 +880,7 @@ Your workspace keeps one memory shared by every member and every one of its agen
  * The instructions for one agent, on the repository its row names, null
  * for an agent with none, which works in a sandbox with no checkout, worded
  * for what it was handed, for whether its token reads the repository's CI,
- * for the link of the task it works on, null for an agent on none, and for
+ * for the link of the task it works on, and for
  * whose its commits are: the developer's where the co-author trailer is
  * handed, the App's otherwise, for the branch it was started on, null for the default branch, and for
  * whether its credential is its starter's own token, which reaches GitHub's
@@ -922,7 +903,7 @@ Your workspace keeps one memory shared by every member and every one of its agen
 export function coderInstructions(
   repository: string | null,
   brief: AgentBrief,
-  ownTask: OwnTask | null,
+  ownTask: OwnTask,
   standing: AgentStanding,
   authorship: CommitAuthorship | undefined = undefined,
   startBranch: string | null = null,
@@ -936,13 +917,8 @@ export function coderInstructions(
   const tools = toolsOn(TOOL_WORDS[harness], machine, standing);
   const describes = offers(standing, AGENT_EDIT_DESCRIPTION_TOOL);
   const onTask = TASK_PLACE_WORDS.onTask;
-  const task =
-    ownTask === null
-      ? TASK_PLACE_WORDS.taskless
-      : describes
-        ? onTask
-        : { ...onTask, ...PLANLESS_TASK_PLACE_WORDS };
-  // Note that an agent offered no description edits writes no description, so its write-up goes to a page as one on no task's does.
+  const task = describes ? onTask : { ...onTask, ...PLANLESS_TASK_PLACE_WORDS };
+  // Note that an agent offered no description edits writes no description, so its write-up goes to a page.
   const planTask = describes ? ownTask : null;
   const build =
     repository === null || !offers(standing, AGENT_TOOL.OPEN_PULL_REQUEST)
@@ -956,7 +932,6 @@ export function coderInstructions(
   const editing = describes
     ? editDescriptionTold(
         brief,
-        ownTask !== null,
         build === null ? EDIT_DESCRIPTION_WORDS.repositoryless : EDIT_DESCRIPTION_WORDS.builder,
       )
     : NOT_TOLD_EDIT_DESCRIPTION;
@@ -1035,19 +1010,16 @@ export interface AgentInstructionsContext {
  * alike.
  */
 export function agentCoderInstructions(agent: Agent, context: AgentInstructionsContext): string {
-  const ownTask =
-    agent.taskId === null
-      ? null
-      : {
-          id: agent.taskId,
-          link: linkOf(
-            {
-              kind: LINK_PLACE.TASK,
-              planId: taskLinkStep({ id: agent.taskId, number: context.taskNumber }),
-            },
-            context.workspace,
-          ),
-        };
+  const ownTask = {
+    id: agent.taskId,
+    link: linkOf(
+      {
+        kind: LINK_PLACE.TASK,
+        planId: taskLinkStep({ id: agent.taskId, number: context.taskNumber }),
+      },
+      context.workspace,
+    ),
+  };
   return coderInstructions(
     agent.repository,
     agentBriefOf(agent),
