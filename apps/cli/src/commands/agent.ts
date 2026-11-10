@@ -680,6 +680,12 @@ const logsCommand = Command.make(
   ]),
 );
 
+/** What a queued send came to: waiting behind the turn, or handed on at once to an agent standing idle, as the member MCP's `message_agent` says it. */
+const QUEUED_SEND = {
+  QUEUED: "queued",
+  HANDED_ON: "handed-on",
+} as const;
+
 /** A queued send's refusals, in words that say what to do. */
 const QUEUE_REFUSAL_WORDS = {
   [HOSTED_API_ERROR.NOT_PERMITTED]:
@@ -716,12 +722,18 @@ const sendCommand = Command.make(
         );
         // Note that an agent standing idle is handed the message at once, so it leaves the queue the answer reads.
         const ahead = answered.queue.messages.findIndex((message) => message.id === messageId);
+        const queued = ahead !== -1;
         yield* answer({
-          json: answered.queue,
+          json: {
+            messageId,
+            delivery: queued ? QUEUED_SEND.QUEUED : QUEUED_SEND.HANDED_ON,
+            ahead: queued ? ahead : null,
+            queue: answered.queue,
+          },
           lines: [
-            ahead === -1
-              ? `Sent to agent ${id}; it stood idle.`
-              : `Queued for agent ${id}, ${ahead} ahead of it.`,
+            queued
+              ? `Queued for agent ${id}, ${ahead} ahead of it.`
+              : `Handed to agent ${id} to go now, as it stood idle; a refusal would pause its queue.`,
           ],
           ids: [id],
         });
