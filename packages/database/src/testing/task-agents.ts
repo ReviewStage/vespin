@@ -57,7 +57,7 @@ export const openAgentOnOwnTask = (userId: string, organizationId: string) =>
     return yield* openTaskAgent(userId, organizationId, taskId);
   });
 
-/** An inbox item of the task's agent, open and holding its message's ask open, or open as a notice, its message asking nothing, where `asking` is false; its id. */
+/** An inbox item of the task's agent, open and holding its message's ask open, or open as a notice, its message asking nothing, where `asking` is false; its id. The task is null only for a migration's test on a database from before every item stood on one. */
 export const openInboxItem = (
   userId: string,
   organizationId: string,
