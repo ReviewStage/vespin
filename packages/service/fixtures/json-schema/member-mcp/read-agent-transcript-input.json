@@ -1,0 +1,94 @@
+{
+  "type": "object",
+  "properties": {
+    "agentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "description": "The agent's id, as list_agents answered it."
+    },
+    "worker": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "One of the agent's workers, by the callId of the call that started it, as an entry of the agent's page names it, to read that worker's transcript instead; leave it out for the agent's own."
+    },
+    "call": {
+      "type": "object",
+      "properties": {
+        "messageId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 36,
+          "description": "The messageId of the entry that names the call."
+        },
+        "callId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "description": "The callId of the entry that names the call."
+        }
+      },
+      "required": [
+        "messageId",
+        "callId"
+      ],
+      "additionalProperties": false,
+      "description": "One call of the transcript to read whole, its input and its output, instead of a page; leave it out to read a page."
+    },
+    "from": {
+      "type": "string",
+      "enum": [
+        "end",
+        "start"
+      ],
+      "description": "Where to read its transcript from where neither before nor after is given: end, the default, for its newest page, or start for its first, from the message it was started with."
+    },
+    "before": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entry": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seq",
+        "entry"
+      ],
+      "additionalProperties": false,
+      "description": "The older place a page answered, to read the page of entries before it."
+    },
+    "after": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entry": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seq",
+        "entry"
+      ],
+      "additionalProperties": false,
+      "description": "The newer place a page answered, to read the page of entries after it."
+    },
+    "entries": {
+      "type": "integer",
+      "description": "At most how many entries of its transcript the page holds, such as 1 for what it last said or did; as many as fit in 16000 characters when left out."
+    }
+  },
+  "required": [
+    "agentId"
+  ],
+  "additionalProperties": false
+}

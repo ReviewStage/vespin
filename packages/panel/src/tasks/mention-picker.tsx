@@ -1719,7 +1719,7 @@ export function useMentionPicker({
   /** The repository's skills, where the words go to an agent; none for the description's own words. */
   skills?: MentionSkills | undefined;
   /** The account's connected MCP servers, where the words go to an agent; none for the description's own words. */
-  servers?: readonly NamedServer[];
+  servers?: readonly NamedServer[] | undefined;
   /** The box the editor stands in: a press in it is the editor's, and the date picker hangs in it. */
   room: RefObject<HTMLElement | null>;
   side: MentionMenuSide;

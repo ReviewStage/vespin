@@ -2,7 +2,7 @@
  * workspace-access.ts -- a workspace as an account may act on it, and a write through the organization plugin answered as a refusal.
  *
  * Shared by the workspace procedures: the workspace as the account sees it,
- * one it manages as an owner or an admin, and a plugin call made under the
+ * one it owns, one it manages as an owner or an admin, and a plugin call made under the
  * Mac's session, its failure read as the refusal the Mac draws.
  */
 
@@ -63,6 +63,18 @@ export const answeredWorkspace = Effect.fn("web/answeredWorkspace")(function* (
   const workspace = yield* hostedStoreOrUnavailable(workspaceOf(userId, organizationId));
   if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   return workspace.value;
+});
+
+/** A workspace the account owns; one it is not in is not found, and one it is in but does not own not permitted. */
+export const ownedWorkspace = Effect.fn("web/ownedWorkspace")(function* (
+  userId: string,
+  organizationId: string,
+): Effect.fn.Return<Workspace, HostedRefusal, DatabaseServices> {
+  const workspace = yield* answeredWorkspace(userId, organizationId);
+  if (workspace.role !== WORKSPACE_ROLE.OWNER) {
+    return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+  }
+  return workspace;
 });
 
 /** A workspace the account is an owner or an admin of; the one whose invitations it manages, that it renames, or whose photo it sets. */
