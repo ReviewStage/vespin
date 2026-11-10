@@ -30,7 +30,7 @@ describe("transcriptItems", () => {
           finishedAt: 1,
         },
       ],
-      { writing: false, readerId: undefined, toggles: NO_TOGGLES, now: 2 },
+      { writing: false, readerId: undefined, toggles: NO_TOGGLES, now: 2, pullRequests: [] },
     );
     expect(items.map((item) => item.kind)).toEqual([
       TRANSCRIPT_ITEM.SAID,

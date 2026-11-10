@@ -10,10 +10,11 @@
  */
 
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
+import type { AgentPullRequest } from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppHostRead, AppTranscript } from "@repo/host/app-state";
+import type { AppHostRead, AppStateSnapshot, AppTranscript } from "@repo/host/app-state";
 import {
   type FollowedAgent,
   selectFollowedAgent,
@@ -38,6 +39,21 @@ function refused(what: string): (error: unknown) => void {
 export function useFollowedAgent(agentId: string): FollowedAgent | undefined {
   const select = useMemo(() => selectFollowedAgent(agentId), [agentId]);
   return useQuery({ ...appStateQuery, select }).data;
+}
+
+/** No pull requests, held as one value so a list that holds none reads the same each time. */
+const NO_PULL_REQUESTS: readonly AgentPullRequest[] = [];
+
+/** The pull requests the agent opened, as the task list holds them now; none before it holds them. */
+export function useAgentPullRequests(agentId: string): readonly AgentPullRequest[] {
+  const select = useMemo(
+    () => (state: AppStateSnapshot) =>
+      (state.tasks.agentPullRequests ?? [])
+        .filter((each) => each.agentId === agentId)
+        .map(({ pullRequest }) => pullRequest),
+    [agentId],
+  );
+  return useQuery({ ...appStateQuery, select }).data ?? NO_PULL_REQUESTS;
 }
 
 /**

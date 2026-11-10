@@ -10,8 +10,10 @@
  * opens in place to its body. What the agent thought is left out, as the
  * phone has no room for it. A finished turn ends on how long it worked, and
  * the transcript on Working… while its agent works. The pictures and the
- * recordings it showed stand under the call that showed them, and a page it
- * showed as a card under its line, which opens it whole.
+ * recordings it showed stand under the call that showed them, a page it
+ * showed as a card under its line, which opens it whole, and a pull request
+ * it opened as the pull request's card, as it stands now where the task list
+ * holds it.
  */
 
 import {
@@ -24,7 +26,12 @@ import {
 } from "@repo/features/agent-parts";
 import { recordedVideosOf, shownPicturesOf } from "@repo/features/agent-pictures-model";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
-import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
+import {
+  type AgentPullRequest,
+  type AgentTranscriptMessage,
+  PULL_REQUEST_STATE,
+  type PullRequestState,
+} from "@repo/features/agent-wire";
 import { fileName } from "@repo/features/code-ref-words";
 import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { callHeading, WORKING_LINE, workedForText } from "@repo/features/time-format";
@@ -52,7 +59,7 @@ import {
   TURN_ROW,
   type TurnRow,
 } from "@repo/features/turn-rows";
-import { isRecord, MESSAGE_ROLE } from "@repo/wire";
+import { isRecord, isWireNumber, isWireString, MESSAGE_ROLE } from "@repo/wire";
 
 /** The kinds of item the transcript's list draws. */
 export const TRANSCRIPT_ITEM = {
@@ -68,6 +75,8 @@ export const TRANSCRIPT_ITEM = {
   MEDIA: "media",
   /** A page a call showed, as a card that opens it whole. */
   PAGE: "page",
+  /** A pull request a call opened, as its card. */
+  PULL_REQUEST: "pull-request",
   /** The quiet line a finished turn ends on: how long it worked and when it ended. */
   FOOT: "foot",
   /** The line the transcript ends on while its agent works. */
@@ -78,6 +87,7 @@ export const TRANSCRIPT_ITEM = {
 export const TRANSCRIPT_PIECE = {
   LINE: "line",
   PAGE: "page",
+  PULL_REQUEST: "pull-request",
   MEDIA: "media",
   FOOT: "foot",
   WORKING: "working",
@@ -155,6 +165,17 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly page: string;
       readonly version: number;
     }
+  | {
+      readonly kind: typeof TRANSCRIPT_ITEM.PULL_REQUEST;
+      readonly number: number;
+      readonly title: string;
+      /** Its own page on GitHub. */
+      readonly url: string;
+      readonly state: PullRequestState;
+      /** The lines it adds and removes, where the task list holds it. */
+      readonly additions: number | undefined;
+      readonly deletions: number | undefined;
+    }
 );
 
 /** Which folds the reader turned from how they stand on their own, by their turn and then their row, and which calls they opened, by the call. */
@@ -175,6 +196,8 @@ export interface TranscriptReading {
   readonly toggles: TranscriptToggles;
   /** What the times count from. */
   readonly now: number;
+  /** The pull requests the agent opened as the task list holds them now, which a card opened by a call stands as. */
+  readonly pullRequests: readonly AgentPullRequest[];
 }
 
 /** How many lines of a call's block its card draws, as the panel's card cuts one. */
@@ -307,12 +330,51 @@ function callNaming(
   return { line: { ...callLine(view.kind, moreFiles(view.files), undefined), code: false }, chip };
 }
 
+/**
+ * The pull request a call opened, as its card stands: as the task list holds
+ * it now where it holds it, and otherwise as the call opened it, a draft or
+ * open, with no line counts; none for a call that opened none.
+ */
+function openedPullRequest(
+  part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
+  base: ItemBase,
+  pullRequests: readonly AgentPullRequest[],
+): readonly TranscriptItem[] {
+  const { input, output } = part;
+  if (part.tool !== AGENT_TOOL.OPEN_PULL_REQUEST || !isRecord(output)) return [];
+  const { number, url } = output;
+  if (!isWireNumber(number) || !isWireString(url)) return [];
+  const place = pieceOf(base.place, TRANSCRIPT_PIECE.PULL_REQUEST);
+  const held = pullRequests.find((each) => each.number === number && each.url === url);
+  if (held !== undefined) {
+    const { title, state, additions, deletions } = held;
+    const kind = TRANSCRIPT_ITEM.PULL_REQUEST;
+    return [{ ...base, place, kind, number, title, url, state, additions, deletions }];
+  }
+  const title = isRecord(input) && isWireString(input.title) ? input.title : "";
+  const draft = isRecord(input) && input.draft === true;
+  return [
+    {
+      ...base,
+      place,
+      kind: TRANSCRIPT_ITEM.PULL_REQUEST,
+      number,
+      title,
+      url,
+      state: draft ? PULL_REQUEST_STATE.DRAFT : PULL_REQUEST_STATE.OPEN,
+      additions: undefined,
+      deletions: undefined,
+    },
+  ];
+}
+
 /** One tool call as its items: its line, then what it showed. */
 function callItems(
   part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
   base: ItemBase,
-  toggles: TranscriptToggles,
+  reading: TranscriptReading,
 ): readonly TranscriptItem[] {
+  const { toggles } = reading;
   const shownSet = showedPictures(part);
   const pictures = shownSet ? shownPicturesOf(part.input, part.output) : [];
   const media: readonly ShownMedia[] = [
@@ -372,7 +434,7 @@ function callItems(
             version: shown.version,
           },
         ];
-  return [call, ...page, ...mediaItem];
+  return [call, ...page, ...openedPullRequest(part, base, reading.pullRequests), ...mediaItem];
 }
 
 /** One part as its items; none for what the agent thought, or a part with nothing to draw. */
@@ -387,7 +449,7 @@ function partItems(
         ? []
         : [{ ...base, kind: TRANSCRIPT_ITEM.WORDS, words: part.text }];
     case AGENT_PART.TOOL:
-      return callItems(part, base, reading.toggles);
+      return callItems(part, base, reading);
     case AGENT_PART.ARRIVED:
       return [saidItem(part.line, base, reading)];
     default:

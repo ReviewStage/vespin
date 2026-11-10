@@ -1,8 +1,9 @@
 // transcript.tsx -- an agent's transcript as the iPhone draws it: the app's one React Native list, lazy, anchored at its newest row, its rows the panel's anatomy in the brand's inks.
 
+import { Host } from "@expo/ui/swift-ui";
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
-import type { TaskStatus } from "@repo/features/task-wire";
+import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useCallback, useRef, useState } from "react";
@@ -18,11 +19,13 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { isLucideSymbol } from "./glyph.js";
 import { Markdown, type MarkdownPlace, Picture } from "./markdown.js";
-import { STATUS_MARK_LABEL, STATUS_MARK_LOOK } from "./status-mark-model.js";
-import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, TEXT_SIZE } from "./tokens/type.js";
+import { ToneGlyph } from "./marks.js";
+import { PullRequestCard } from "./pull-request-card.js";
+import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
+import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
+import { MONOSPACE_FONT, TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
   CALL_STANDING,
@@ -58,13 +61,16 @@ const JUMP_TO_LATEST = "Jump to latest";
 /** What a page's card says it opens. */
 const PAGE_WORD = "Page";
 
+/** What a pull request's card offers: its page on GitHub. Note that merging it is the pull request's own screen's. */
+const REVIEW_WORD = "Review";
+
 /** What a row says of a video the system's player cannot play, read as a recording. */
 const RECORDING_LABEL = "Recording";
 
 const styles = StyleSheet.create({
   list: { flex: 1 },
   content: { paddingVertical: SPACE.ROW },
-  row: { paddingHorizontal: SPACE.PAGE, paddingVertical: SPACE.TIGHT },
+  row: { paddingHorizontal: SPACE.EDGE, paddingVertical: SPACE.TIGHT },
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
   said: {
     maxWidth: "82%",
@@ -95,10 +101,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: SPACE.ROW,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 10,
-    padding: SPACE.ROW + 2,
+    borderRadius: RADIUS.CARD,
+    paddingHorizontal: SPACE.EDGE - 4,
+    paddingVertical: SPACE.ROW,
   },
-  head: { paddingHorizontal: SPACE.PAGE, paddingTop: SPACE.ROW, paddingBottom: SPACE.PAGE, gap: 6 },
+  callGlyph: { width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH },
+  head: {
+    paddingHorizontal: SPACE.EDGE,
+    paddingTop: SPACE.TIGHT,
+    paddingBottom: SPACE.EDGE,
+    gap: 6,
+  },
   headLine: { flexDirection: "row", alignItems: "center", gap: 6 },
   jump: { position: "absolute", alignSelf: "center" },
   jumpFace: {
@@ -184,6 +197,32 @@ function BodyBlock({
   );
 }
 
+/**
+ * A call's glyph at a row mark's size: an SF Symbol through the system's
+ * symbol view, or one of Lucide's, such as a pull request's, through
+ * SwiftUI's own image in a host of that square, since React Native's image
+ * draws a symbol set blank.
+ */
+function CallGlyph({ callKind }: { readonly callKind: CallKind }) {
+  const colors = useColors();
+  const glyph = CALL_SYMBOL[callKind];
+  if (!isLucideSymbol(glyph)) {
+    return (
+      <SymbolView
+        name={glyph}
+        size={MARK_SIZE.GLYPH}
+        tintColor={colors.TEXT_MUTED}
+        accessibilityElementsHidden
+      />
+    );
+  }
+  return (
+    <Host style={styles.callGlyph}>
+      <ToneGlyph glyph={glyph} tone={STATUS_TONE.NEUTRAL} textStyle={TYPE_ROLE.ROW_LINE} hidden />
+    </Host>
+  );
+}
+
 /** A call's row: its kind's glyph, its verb in the full ink, what it was done to in the muted one, where it ran, and where it stands; pressed, it opens on its body. */
 function CallRow({
   item,
@@ -204,20 +243,15 @@ function CallRow({
         accessibilityLabel={[line.verb, chip, subject, item.runOn].filter(Boolean).join(" ")}
         style={styles.callLine}
       >
-        <SymbolView
-          name={CALL_SYMBOL[item.callKind]}
-          size={MARK_SIZE.GLYPH}
-          tintColor={colors.TEXT_MUTED}
-          accessibilityElementsHidden
-        />
+        <CallGlyph callKind={item.callKind} />
         <View style={styles.callWords}>
           <Text
             numberOfLines={1}
             style={{
               flexShrink: 0,
               maxWidth: "70%",
-              fontSize: TEXT_SIZE.SUBHEADLINE,
-              color: colors.TEXT,
+              fontSize: TEXT_SIZE.FOOTNOTE,
+              color: colors.TEXT_MUTED,
             }}
           >
             {line.verb}
@@ -228,7 +262,7 @@ function CallRow({
             >
               <Text
                 numberOfLines={1}
-                style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT, fontWeight: "500" }}
+                style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_BODY, fontWeight: "500" }}
               >
                 {chip}
               </Text>
@@ -239,9 +273,9 @@ function CallRow({
               numberOfLines={1}
               style={{
                 flexShrink: 1,
-                fontSize: line.code ? TEXT_SIZE.FOOTNOTE : TEXT_SIZE.SUBHEADLINE,
+                fontSize: line.code ? TEXT_SIZE.CAPTION : TEXT_SIZE.FOOTNOTE,
                 fontFamily: line.code ? MONOSPACE_FONT : undefined,
-                color: colors.TEXT_MUTED,
+                color: line.code ? colors.TEXT_BODY : colors.TEXT_MUTED,
               }}
             >
               {subject}
@@ -299,7 +333,7 @@ function FoldRow({
         />
         <Text
           numberOfLines={1}
-          style={{ flex: 1, fontSize: TEXT_SIZE.SUBHEADLINE, color: colors.TEXT_MUTED }}
+          style={{ flex: 1, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}
         >
           {item.summary}
         </Text>
@@ -323,6 +357,8 @@ interface RowDrawing {
   readonly mediaSource: (id: string) => string | undefined;
   /** Opens a recording the system's player cannot play where it plays. */
   readonly onOpenElsewhere?: (() => void) | undefined;
+  /** Opens a web address in Safari, such as a pull request's page on GitHub. */
+  readonly onOpenAddress: (address: string) => void;
 }
 
 /** One of the transcript's rows, as its kind draws it. */
@@ -352,7 +388,7 @@ function TranscriptRow({
             />
           </View>
           {item.sent === undefined ? null : (
-            <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+            <Text style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}>
               {item.sent}
             </Text>
           )}
@@ -361,7 +397,7 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.FOOT:
       return (
         <View style={[styles.row, { paddingBottom: SPACE.ROW }]}>
-          <Text selectable style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+          <Text selectable style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}>
             {item.words}
           </Text>
         </View>
@@ -370,7 +406,7 @@ function TranscriptRow({
       return (
         <View style={[styles.row, styles.headLine, { paddingVertical: SPACE.ROW }]}>
           <ActivityIndicator size="small" color={colors.TEXT_MUTED} />
-          <Text style={{ fontSize: TEXT_SIZE.SUBHEADLINE, color: colors.TEXT_MUTED }}>
+          <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
             {item.words}
           </Text>
         </View>
@@ -427,14 +463,14 @@ function TranscriptRow({
           >
             <SymbolView
               name="macwindow"
-              size={MARK_SIZE.AVATAR - 6}
-              tintColor={colors.ACCENT}
+              size={MARK_SIZE.WRITER}
+              tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
             />
             <View style={{ flex: 1, gap: 2 }}>
               <Text
                 numberOfLines={2}
-                style={{ fontSize: TEXT_SIZE.SUBHEADLINE, fontWeight: "600", color: colors.TEXT }}
+                style={{ fontSize: TEXT_SIZE.SUBHEADLINE, fontWeight: "500", color: colors.TEXT }}
               >
                 {item.title}
               </Text>
@@ -451,48 +487,52 @@ function TranscriptRow({
           </Pressable>
         </View>
       );
+    case TRANSCRIPT_ITEM.PULL_REQUEST:
+      return (
+        <View style={[styles.row, inset(item.depth), { paddingVertical: SPACE.TIGHT + 2 }]}>
+          {/* Note that the card is SwiftUI's, hosted in the row at the height it draws. */}
+          <Host matchContents={{ vertical: true }}>
+            <PullRequestCard
+              state={item.state}
+              number={item.number}
+              title={item.title}
+              additions={item.additions}
+              deletions={item.deletions}
+              acts={[{ label: REVIEW_WORD, onPress: () => drawing.onOpenAddress(item.url) }]}
+            />
+          </Host>
+        </View>
+      );
   }
 }
 
 type AgentHeadProps = {
-  /** The task the agent works on, its ring and its name; none for an agent on no task. */
-  readonly task?: { readonly name: string; readonly status: TaskStatus | undefined } | undefined;
+  /** The agent's title, the page's heading. */
+  readonly title: string;
   /** The model the agent runs on, as the panel's chip names it. */
   readonly model: string | undefined;
   readonly status: AgentStatus | undefined;
 };
 
 /**
- * The head over the transcript, the agent's own title standing in the
- * system's bar over it: the task it works on, by its ring and name as the
- * panel's crumbs name it, then where the agent stands and the model it runs
- * on, as the panel's tab and its model chip say them.
+ * The head over the transcript, the path to the agent standing small in the
+ * system's bar over it: the agent's title as the page's heading, then where
+ * the agent stands and the model it runs on, as the panel's tab and its
+ * model chip say them.
  */
-export function AgentHead({ task, model, status }: AgentHeadProps) {
+export function AgentHead({ title, model, status }: AgentHeadProps) {
   const colors = useColors();
   const state = status === undefined ? undefined : agentGlyphState(status);
   const words = status === undefined ? undefined : agentStateWords(status);
   const said = [words, model].filter((each) => each !== undefined && each !== "").join(" · ");
   return (
     <View style={styles.head}>
-      {task === undefined ? null : (
-        <View style={styles.headLine}>
-          {task.status === undefined ? null : (
-            <SymbolView
-              name={STATUS_MARK_LOOK[task.status].symbol}
-              size={MARK_SIZE.GLYPH}
-              tintColor={toneColor(colors, STATUS_MARK_LOOK[task.status].tone)}
-              accessibilityLabel={STATUS_MARK_LABEL[task.status]}
-            />
-          )}
-          <Text
-            numberOfLines={1}
-            style={{ flexShrink: 1, fontSize: TEXT_SIZE.SUBHEADLINE, color: colors.TEXT_MUTED }}
-          >
-            {task.name}
-          </Text>
-        </View>
-      )}
+      <Text
+        accessibilityRole="header"
+        style={{ fontSize: TEXT_SIZE.TITLE_3, fontWeight: "600", color: colors.TEXT }}
+      >
+        {title}
+      </Text>
       {said === "" ? null : (
         <View style={styles.headLine}>
           {state === GLYPH_STATE.WORKING ? (
@@ -500,7 +540,7 @@ export function AgentHead({ task, model, status }: AgentHeadProps) {
           ) : state === GLYPH_STATE.FAILED ? (
             <SymbolView name="xmark.circle.fill" size={MARK_SIZE.GLYPH} tintColor={colors.DANGER} />
           ) : null}
-          <Text style={{ fontSize: TEXT_SIZE.SUBHEADLINE, color: colors.TEXT_MUTED }}>{said}</Text>
+          <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>{said}</Text>
         </View>
       )}
     </View>

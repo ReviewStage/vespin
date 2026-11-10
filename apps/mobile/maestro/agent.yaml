@@ -1,4 +1,4 @@
-# agent.yaml -- an agent's page: its transcript opened at its newest turn, still running, a call opened on its body, a run of calls opened, the pictures and the recording it showed, and the page it showed opened whole.
+# agent.yaml -- an agent's page: its transcript opened at its newest turn, still running, a call opened on its body, a run of calls opened, the pictures and the recording it showed, the pull request it opened as its card, and the page it showed opened whole.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -32,8 +32,6 @@ appId: dev.vespin.ios
     direction: UP
 - waitForAnimationToEnd
 - takeScreenshot: agent-page-card
-# Read back, the list offers to jump to the newest row.
-- assertVisible: "Jump to latest"
 - tapOn: "Invite funnel, Page"
 - extendedWaitUntil:
     visible: "Invites sent in the staging workspace.*"
@@ -50,6 +48,12 @@ appId: dev.vespin.ios
     centerElement: true
 - waitForAnimationToEnd
 - takeScreenshot: agent-pictures
+# The pull request it opened after them, as its card with Review.
+- scrollUntilVisible:
+    element: "#128 Invite a teammate by email"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: agent-pull-request
 - scrollUntilVisible:
     element: ".*tool calls.*"
     direction: UP
@@ -58,6 +62,7 @@ appId: dev.vespin.ios
 - assertVisible: "Read.*"
 - waitForAnimationToEnd
 - takeScreenshot: agent-fold
+# Read back, the list offers to jump to the newest row.
 - tapOn: "Jump to latest"
 - assertVisible: "Add a way to resend an invite that expired."
 - waitForAnimationToEnd

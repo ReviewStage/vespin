@@ -25,10 +25,11 @@ builds a control of its own.
   Jump to latest once the reader scrolls back), under `AgentHead`; its rows
   are read by `transcript-model.ts` from the panel's own parts, folds, and
   call lines (`@repo/features/agent-parts`, `turn-rows`, `tool-call-model`),
-  the agent's thinking left out, and each call leads with the SF Symbol
-  closest to the panel's lucide glyph for its kind (`transcript-look.ts`). A
-  page an agent showed is `SealedPage`, the app's one web view, handed the
-  page's HTML sealed by `@repo/features/sealed-page`. `Pressable`,
+  the agent's thinking left out, and each call leads with the glyph for its
+  kind, as the rows' glyphs are chosen (`transcript-look.ts`). A pull
+  request an agent opened stands under its call as `PullRequestCard`, as the
+  task list holds it now. A page an agent showed is `SealedPage`, the app's
+  one web view, handed the page's HTML sealed by `@repo/features/sealed-page`. `Pressable`,
   `TextInput`, and the rest of React Native's controls appear only here.
 - **Markdown** is drawn by `Markdown` in React Native views, and a page of
   it by `MarkdownPage`, which hosts them in SwiftUI's scroller through

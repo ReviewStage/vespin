@@ -5,14 +5,15 @@ import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import { agentStillWriting } from "@repo/features/task-agents-model";
-import type { TaskStatus } from "@repo/features/task-wire";
 import { selectInboxReader, selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   AgentHead,
   AgentTranscript,
+  BAR_TITLE,
   EmptyState,
   type MarkdownPlace,
   NO_TOGGLES,
+  PATH_PART,
   Screen,
   SealedPage,
   shownMediaIds,
@@ -21,6 +22,7 @@ import {
   type TranscriptToggles,
   toggledAt,
   transcriptItems,
+  useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
@@ -29,6 +31,7 @@ import { useMemo, useState } from "react";
 import {
   type PagePlace,
   useAgentMedia,
+  useAgentPullRequests,
   useAgentTranscript,
   useFollowedAgent,
   usePageHtml,
@@ -67,15 +70,13 @@ function useOpenPlace(): (place: MarkdownPlace) => void {
   };
 }
 
-/** The task the agent works on, by its id, its name and status as the list holds them; none for an agent on no task, or before the list holds it. */
-function useTask(
-  taskId: string | null | undefined,
-): { readonly name: string; readonly status: TaskStatus | undefined } | undefined {
+/** The name of the task the agent works on, by its id, as the list holds it; none for an agent on no task, or before the list holds it. */
+function useTaskName(taskId: string | null | undefined): string | undefined {
   const { data } = useQuery({
     ...appStateQuery,
-    select: (state) => selectTasks(state).tasks.find(({ id }) => id === taskId),
+    select: (state) => selectTasks(state).tasks.find(({ id }) => id === taskId)?.name,
   });
-  return data === undefined ? undefined : { name: data.name, status: data.status };
+  return data;
 }
 
 /** The agent's address on vespin.dev, under its workspace, its task's where it has one. */
@@ -94,21 +95,25 @@ function useAgentAddress(
 }
 
 /**
- * One agent's page: the system's header naming the agent, with a menu that
- * opens it on vespin.dev, over its transcript as one lazy list, its head the
- * task it works on, where it stands, and the model it runs on. The
+ * One agent's page: the system's header holding its path, the task it works
+ * on and the agent, small and muted, with a menu that opens it on
+ * vespin.dev, over its transcript as one lazy list, its head the agent's
+ * title, where it stands, and the model it runs on. The
  * transcript is held live while the page is in focus, so a turn under way
  * draws as it moves; each call opens in place, a fold opens on what it
- * holds, and a page the agent showed opens whole.
+ * holds, a page the agent showed opens whole, and a pull request it opened
+ * opens on GitHub.
  */
 export function AgentScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const openPlace = useOpenPlace();
+  const colors = useColors();
   const agent = useFollowedAgent(id);
+  const pullRequests = useAgentPullRequests(id);
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const task = useTask(agent?.planId);
+  const taskName = useTaskName(agent?.planId);
   const address = useAgentAddress(id, agent?.workspaceId, agent?.planId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
   const transcript = held?.rows;
@@ -121,8 +126,9 @@ export function AgentScreen() {
         readerId,
         toggles,
         now: Date.now(),
+        pullRequests,
       }),
-    [messages, status, readerId, toggles],
+    [messages, status, readerId, toggles, pullRequests],
   );
   const mediaIds = useMemo(() => shownMediaIds(items), [items]);
   const media = useAgentMedia(id, mediaIds);
@@ -135,7 +141,12 @@ export function AgentScreen() {
     });
   return (
     <>
-      <Stack.Screen options={{ title }} />
+      <Stack.Screen
+        options={{
+          title: [...(taskName === undefined ? [] : [taskName]), title].join(PATH_PART),
+          headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
+        }}
+      />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel="More">
           <Stack.Toolbar.MenuAction icon="safari" onPress={() => opened(address)}>
@@ -148,7 +159,7 @@ export function AgentScreen() {
         items={items}
         head={
           <AgentHead
-            task={task}
+            title={title}
             model={agent === undefined ? undefined : modelLabel(agent.model)}
             status={status}
           />
@@ -165,6 +176,7 @@ export function AgentScreen() {
         onOpenPage={openPage}
         mediaSource={(pictureId) => media.get(pictureId)}
         onOpenElsewhere={() => opened(address)}
+        onOpenAddress={opened}
       />
     </>
   );
