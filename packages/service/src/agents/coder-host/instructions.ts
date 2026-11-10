@@ -867,7 +867,7 @@ const CREATE_TASK_WORDS = `\`${AGENT_TOOL.CREATE_TASK}\` makes a task of its own
 
 const CODER_SECTION_WORDS: SectionWords = {
   sorting:
-    "Sort the developer's tasks when they ask you to, and otherwise only where you split work into tasks of its own and start an agent on each, which a rollout of several pull requests does not, since its agents start on your own task: there, make one section named for that work before you start them, move each task you made into it as you go, and leave every other task where it stands, so the developer finds the rollout together rather than scattered under Tasks; on your own, delete no section you did not make.",
+    "Sort the developer's tasks when they ask you to, and otherwise only where you split work into tasks of its own and start an agent on each, which child tasks of yours need not, since they stand under your task already: there, make one section named for that work before you start them, move each task you made into it as you go, and leave every other task where it stands, so the developer finds the rollout together rather than scattered under Tasks; on your own, delete no section you did not make.",
   messages: `Your messages are read by the developer in ${PRODUCT_NAME}'s own window as a transcript, beside your tool calls. Lead with the outcome. Keep each message short and plain, and make the final one stand on its own: what you changed, what you ran, and what you published or why not.`,
   createTask: CREATE_TASK_WORDS,
 };

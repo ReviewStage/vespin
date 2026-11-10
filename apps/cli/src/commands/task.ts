@@ -1,5 +1,5 @@
 /**
- * task.ts -- `vespin task list`, `view`, `create`, `update`, `cat`, and `ls`: the workspace's tasks, one task with its agents, pull requests, and open asks, a new task, a task changed, and its repository's files read.
+ * task.ts -- `vespin task list`, `view`, `create`, `update`, `delete`, `cat`, and `ls`: the workspace's tasks, one task with its agents, pull requests, and open asks, a new task, a task changed, a task deleted, and its repository's files read.
  *
  * Each reads the workspace a command acts in (`../workspace.js`) and names a
  * task by its id, its number, or its key (`../tasks.js`). `create` takes its
@@ -35,7 +35,7 @@ import { Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { fileRefused } from "../file-refusal.js";
 import { originRepository } from "../git.js";
-import { answer, CommandFailed, columns, note, readInput } from "../output.js";
+import { answer, CommandFailed, columns, confirmOrYes, note, readInput } from "../output.js";
 import { askService, session } from "../session.js";
 import { resolveTaskId, signedInMemberId } from "../tasks.js";
 import { resolveWorkspace } from "../workspace.js";
@@ -496,6 +496,48 @@ const updateCommand = Command.make(
   ]),
 );
 
+const deleteCommand = Command.make(
+  "delete",
+  {
+    task: Argument.String("task").pipe(
+      Argument.withDescription("The task, by its id, its number, or its key such as ACME-42"),
+    ),
+    yes: Flag.Boolean("yes").pipe(
+      Flag.withAlias("y"),
+      Flag.withDefault(false),
+      Flag.withDescription("Delete without asking; required where stdin is no terminal"),
+    ),
+  },
+  ({ task, yes }) =>
+    Effect.gen(function* () {
+      const id = yield* resolveTaskId(task);
+      const { hosted } = yield* session;
+      const [{ plan }, { workspaces }] = yield* Effect.all(
+        [askService(hosted.plans.open, { id }), askService(hosted.workspaces.list, undefined)],
+        { concurrency: "unbounded" },
+      );
+      const found = taskJson(plan, workspaceNamed(workspaces, plan.workspaceId));
+      yield* confirmOrYes(
+        `Delete ${taskLabel(found)} ${found.name} for good, with its agents and their transcripts?`,
+        yes,
+      );
+      yield* askService(hosted.plans.delete, { id });
+      yield* answer({
+        json: { id: found.id, key: found.key, name: found.name, deleted: true },
+        lines: [`Deleted ${taskLabel(found)} ${found.name}.`],
+        ids: [found.id],
+      });
+    }),
+).pipe(
+  Command.withDescription(
+    "Delete a task for good: its agents are stopped first, then it goes with its description and transcripts",
+  ),
+  Command.withExamples([
+    { command: "vespin task delete ACME-42", description: "Delete a task, after you confirm" },
+    { command: "vespin task delete ACME-42 --yes", description: "The same, from a script" },
+  ]),
+);
+
 /** The account id `--assignee` names among the task's workspace's members: none for nobody, or a usage failure where it names no one, or several. */
 function memberIdOf(taskId: string, named: string) {
   return Effect.gen(function* () {
@@ -529,7 +571,6 @@ function memberIdOf(taskId: string, named: string) {
   });
 }
 
-/** The task group: list, view, create, and update. */
 /** A file or folder named by its task, as `cat` and `ls` take it. */
 const taskArgument = Argument.String("task").pipe(
   Argument.withDescription("The task, by its id, its number, or its key such as ACME-42"),
@@ -627,15 +668,17 @@ const lsCommand = Command.make(
   ]),
 );
 
+/** The task group: list, view, create, update, delete, cat, and ls. */
 export const taskCommand = Command.make("task").pipe(
   Command.withDescription(
-    "List, view, create, and change tasks, and read their repository's files",
+    "List, view, create, change, and delete tasks, and read their repository's files",
   ),
   Command.withSubcommands([
     listCommand,
     viewCommand,
     createCommand,
     updateCommand,
+    deleteCommand,
     catCommand,
     lsCommand,
   ]),
