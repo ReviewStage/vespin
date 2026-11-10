@@ -1971,10 +1971,10 @@ export function agentMessageOf(message: AgentTranscriptMessage): AgentMessageMet
 }
 
 /**
- * Whether a line is one of the agent's own wakeups: the prompt a
- * `ScheduleWakeup` set, which the service once sent back to the agent as a
- * line of the agent's own when it came due, so its head says the agent woke
- * up.
+ * Whether a line is one of the agent's own wakeups: the prompt a wakeup set,
+ * which the service sends back to the agent as a line of the agent's own on
+ * the app's channel when it comes due (`schedule_wakeup`, delivered by the
+ * scheduled sweep), so its head says the agent woke up.
  */
 export function isWakeupLine(message: AgentTranscriptMessage): boolean {
   return userMetadataOf(message)?.channel === MESSAGE_CHANNEL.APP;
@@ -1983,11 +1983,17 @@ export function isWakeupLine(message: AgentTranscriptMessage): boolean {
 /** A second, in the milliseconds a wakeup's wait is told in. */
 const SECOND_MS = 1_000;
 
-/** How long the last wakeup a turn set waited, in milliseconds, read off its `ScheduleWakeup` call; none where the turn set none. */
+/** The calls that book a wakeup, each with its delay under `delaySeconds`: Claude Code's own, and ours, which a Codex agent books with. */
+const WAKEUP_TOOLS: ReadonlySet<string> = new Set([
+  CLAUDE_CODE_TOOL.SCHEDULE_WAKEUP,
+  AGENT_TOOL.SCHEDULE_WAKEUP,
+]);
+
+/** How long the last wakeup a turn set waited, in milliseconds, read off its `ScheduleWakeup` or `schedule_wakeup` call; none where the turn set none, or last canceled one. */
 export function wakeupDelayOf(turn: AgentTranscriptMessage | undefined): number | undefined {
   if (turn === undefined) return undefined;
   const call = agentParts(turn).findLast(
-    (part) => part.kind === AGENT_PART.TOOL && part.tool === CLAUDE_CODE_TOOL.SCHEDULE_WAKEUP,
+    (part) => part.kind === AGENT_PART.TOOL && WAKEUP_TOOLS.has(part.tool),
   );
   const input = call?.kind === AGENT_PART.TOOL ? call.input : undefined;
   return isRecord(input) && isWireNumber(input.delaySeconds)

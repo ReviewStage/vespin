@@ -65,6 +65,7 @@ import {
   transcriptRowKey,
   unreadOpeningLine,
   unreadSentLines,
+  wakeupDelayOf,
   workingLineWords,
 } from "./agent-model.js";
 import { inboxNoteReading } from "./inbox-model.js";
@@ -143,6 +144,33 @@ test("a stored message's parts are read for drawing: text, reasoning, a tool cal
     { kind: AGENT_PART.OTHER },
     { kind: AGENT_PART.OTHER },
   ]);
+});
+
+test("the wakeup a turn set is read off Claude Code's own call or ours alike, by the delay it booked, and none off a cancel", () => {
+  const turnWith = (tool: string, input: Record<string, number | string | boolean>) => ({
+    id: "t",
+    role: "assistant" as const,
+    parts: [
+      { type: "text", text: "Pushed; waiting on the checks." },
+      {
+        type: `tool-${tool}`,
+        toolCallId: "call_1",
+        state: "output-available",
+        input,
+        output: "ok",
+      },
+    ],
+  });
+  assert.equal(
+    wakeupDelayOf(turnWith("ScheduleWakeup", { delaySeconds: 270, prompt: "Check CI" })),
+    270_000,
+  );
+  assert.equal(
+    wakeupDelayOf(turnWith("schedule_wakeup", { delaySeconds: 600, prompt: "Check CI" })),
+    600_000,
+  );
+  assert.equal(wakeupDelayOf(turnWith("schedule_wakeup", { stop: true })), undefined);
+  assert.equal(wakeupDelayOf(undefined), undefined);
 });
 
 /** A row of the developer's, as the service writes one. */

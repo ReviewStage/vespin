@@ -1112,6 +1112,20 @@ const AGENT_TOOL_VIEWS = {
       output: output === undefined ? undefined : sleepOutput(output),
     };
   },
+  // Note that a wakeup's row says the delay booked, as the agent asked it, rather than the one the service held it to, which its answer names.
+  [AGENT_TOOL.SCHEDULE_WAKEUP]: ({ input, output }) => {
+    if (isRecord(input) && input.stop === true) {
+      return namedCall(CALL_KIND.CANCEL_WAKEUP, input, output, undefined);
+    }
+    const seconds =
+      isRecord(input) && isWireNumber(input.delaySeconds) ? input.delaySeconds : undefined;
+    return {
+      kind: CALL_KIND.SCHEDULE_WAKEUP,
+      subject: seconds === undefined ? "" : spanText(seconds),
+      input: input === undefined ? textBlock("") : jsonBlock(input),
+      output: output === undefined ? undefined : jsonBlock(output),
+    };
+  },
 } as const satisfies Record<AgentTool, ToolReader>;
 
 /**
