@@ -21,6 +21,7 @@ import { mcpCommand } from "./mcp.js";
 import { memoryCommand } from "./memory.js";
 import { modelsCommand } from "./models.js";
 import { pageCommand } from "./page.js";
+import { prCommand } from "./pr.js";
 import { sectionCommand } from "./section.js";
 import { taskCommand } from "./task.js";
 import { updateCommand } from "./update.js";
@@ -35,6 +36,7 @@ export const COMMANDS = [
   commentCommand,
   pageCommand,
   agentCommand,
+  prCommand,
   workspaceCommand,
   githubCommand,
   inboxCommand,

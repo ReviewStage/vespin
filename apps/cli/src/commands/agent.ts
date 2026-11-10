@@ -1,5 +1,5 @@
 /**
- * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `stop`, `wait`, `checkout`, `diff` and `pr` (`agent-pull-request.ts`), `ports`, `share`, `forward` (`agent-forward.ts`), and `shell` and `shells` (`agent-shell.ts`): coding agents started, continued, read, followed, messaged, stopped, waited on, their work brought into the working folder, their pull request read and changed, the ports their sandbox listens on shared by link and served on localhost, and its shells attached here.
+ * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `stop`, `wait`, `checkout`, `diff` and `pr` (`agent-pull-request.ts`), `ports`, `share`, `tabs`, `forward` (`agent-forward.ts`), and `shell` and `shells` (`agent-shell.ts`): coding agents started, continued, read, followed, messaged, stopped, waited on, their work brought into the working folder, their pull request read and changed, the ports their sandbox listens on shared by link and served on localhost, the tabs of their cloud browser listed, opened, taken over, and handed back, and its shells attached here.
  *
  * A turn is followed on the held transcript read (`messages.agent`): asked
  * past the cursor the last answer handed back, the service holds it while
@@ -18,6 +18,7 @@
  */
 
 import { isWireUuid } from "@repo/features";
+import type { AgentBrowserTab } from "@repo/features/agent-browser-tab-wire";
 import {
   AGENT_CURSOR_START,
   AGENT_MACHINE,
@@ -968,7 +969,111 @@ const shareCommand = Command.make(
   ]),
 );
 
-/** The agent group: start, continue, and the rest through share, with diff, pr, forward, and the shells from their own files. */
+/** Who drives a tab, in a column's words: its agent, or a member until their takeover lapses. */
+function driverWords(tab: AgentBrowserTab): string {
+  if (tab.driver === null) return "agent";
+  return `member until ${new Date(tab.driver.heldUntil).toLocaleTimeString()}`;
+}
+
+/** A tab's row: its id, who drives it, its title, and its address; never a frame or the page's text. */
+function tabRow(tab: AgentBrowserTab): string[] {
+  return [tab.id, driverWords(tab), tab.title, tab.address];
+}
+
+/** What a write answers: the tab as it then stands, in one row. */
+const tabAnswer = (tab: AgentBrowserTab) =>
+  answer({ json: { tab }, lines: columns([tabRow(tab)]), ids: [tab.id] });
+
+const tabArgument = Argument.String("tab").pipe(
+  Argument.withDescription("The tab's id, as `vespin agent tabs <id>` lists it"),
+);
+
+const tabsOpenCommand = Command.make(
+  "open",
+  {
+    agent: agentArgument,
+    address: Argument.String("address").pipe(
+      Argument.withDescription("The http or https address to open"),
+    ),
+  },
+  ({ agent: id, address }) =>
+    Effect.gen(function* () {
+      const { hosted } = yield* session;
+      const { tab } = yield* askService(hosted.agentBrowserTabs.agentOpen, {
+        params: { id },
+        body: { address },
+      });
+      yield* tabAnswer(tab);
+    }),
+).pipe(
+  Command.withDescription(
+    "Open a tab in an agent's cloud browser, taken over for you until you hand it back",
+  ),
+  Command.withExamples([
+    {
+      command: "vespin agent tabs open <id> https://example.com/login",
+      description: "Open a sign-in page for the agent",
+    },
+  ]),
+);
+
+const tabsTakeCommand = Command.make(
+  "take",
+  { agent: agentArgument, tab: tabArgument },
+  ({ agent: id, tab }) =>
+    Effect.gen(function* () {
+      const { hosted } = yield* session;
+      const taken = yield* askService(hosted.agentBrowserTabs.agentTakeOver, { id, tab });
+      yield* tabAnswer(taken.tab);
+    }),
+).pipe(
+  Command.withDescription(
+    "Take over a tab in an agent's cloud browser so the agent leaves it alone, or renew your takeover; it lapses a minute after",
+  ),
+  Command.withExamples([
+    { command: "vespin agent tabs take <id> <tab>", description: "Take the tab over" },
+  ]),
+);
+
+const tabsHandBackCommand = Command.make(
+  "hand-back",
+  { agent: agentArgument, tab: tabArgument },
+  ({ agent: id, tab }) =>
+    Effect.gen(function* () {
+      const { hosted } = yield* session;
+      const handed = yield* askService(hosted.agentBrowserTabs.agentHandBack, { id, tab });
+      yield* tabAnswer(handed.tab);
+    }),
+).pipe(
+  Command.withDescription("Hand a tab you drive in an agent's cloud browser back to the agent"),
+  Command.withExamples([
+    { command: "vespin agent tabs hand-back <id> <tab>", description: "Give the tab back" },
+  ]),
+);
+
+const tabsCommand = Command.make("tabs", { agent: agentArgument }, ({ agent: id }) =>
+  Effect.gen(function* () {
+    const { hosted } = yield* session;
+    const { tabs } = yield* askService(hosted.agentBrowserTabs.agentList, { id });
+    yield* answer({
+      json: { tabs },
+      lines:
+        tabs.length === 0 ? ["No tab is open in the agent's browser."] : columns(tabs.map(tabRow)),
+      ids: tabs.map((tab) => tab.id),
+    });
+  }),
+).pipe(
+  Command.withDescription(
+    "List the tabs open in an agent's cloud browser, and open, take over, or hand one back",
+  ),
+  Command.withSubcommands([tabsOpenCommand, tabsTakeCommand, tabsHandBackCommand]),
+  Command.withExamples([
+    { command: "vespin agent tabs <id>", description: "Each tab's id, driver, title, and address" },
+    { command: "vespin agent tabs <id> -q", description: "The tab ids alone" },
+  ]),
+);
+
+/** The agent group: start, continue, and the rest through tabs, with diff, pr, forward, and the shells from their own files. */
 export const agentCommand = Command.make("agent").pipe(
   Command.withDescription(
     `Start, continue, follow, message, and stop ${PRODUCT_NAME}'s coding agents`,
@@ -988,6 +1093,7 @@ export const agentCommand = Command.make("agent").pipe(
     prCommand,
     portsCommand,
     shareCommand,
+    tabsCommand,
     shellCommand,
     shellsCommand,
   ]),

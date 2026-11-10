@@ -50,9 +50,11 @@ Other commands:
 | `agent logs <id> [--worker <call-id>] [--call <call-id>]` | The whole transcript; `--worker` reads one of its workers' instead, by the `toolCallId` of the call that started it, and `--call` prints one call whole, its input and output (ids from `agent logs --json`) |
 | `agent diff <id> [--stat] [--number n]` | The diff of an agent's pull request as GitHub holds it, every file's patch; `--stat` one line a file, `-q` the paths; `--number` another pull request of its repository |
 | `agent pr <id> ready\|draft\|merge\|auto-merge [--method merge\|squash\|rebase] [--head sha] [--off] [--number n]` | Change the pull request on GitHub as you: mark it ready, turn it back into a draft, merge it now, or turn auto-merge on (`--off` turns it off). A merge is made against the head as it stands now unless `--head` pins the one you reviewed, by the first method the repository allows unless `--method` names one |
+| `pr chapters <pr\|agent> [--generate] [--number n]` | A pull request's chapters, the story of its diff in reading order, as its Pull request tab shows them. Name it by its GitHub link or `owner/name#n` (in the workspace `-w` names), or by an agent's id for its own pull request (`--number` another of its repository). `--generate` makes them for the head now: one model call on your own API key, which costs money and takes a minute or more, so read first and generate only where none stand or they are stale |
 | `agent ports <id>` | Ports a server listens on in a cloud agent's sandbox, and the one shared by link; none unless the sandbox is running |
 | `agent share <id> <port>` · `agent share <id>` · `agent share <id> --stop` | Share a port by public link (replacing any shared before), print the link shared now, or close it; `-q` prints the link alone |
 | `agent forward <id> [port…] [--local <port>]` | Serve a cloud agent's ports on `localhost` (the ones it listens on now, or those named) until Ctrl-C or its sandbox stops; a local port that will not listen is refused, so pick another with `--local` |
+| `agent tabs <id>` · `agent tabs open <id> <address>` · `agent tabs take <id> <tab>` · `agent tabs hand-back <id> <tab>` | A cloud agent's browser tabs, each by id, who drives it, title, and address (never the page itself); open a page in its browser, such as a sign-in for a person to finish; take a tab over so the agent leaves it alone (it lapses a minute after the last `take`, which renews it); hand it back. `open` takes the new tab over for you |
 | `inbox list [--unread]` · `inbox view <thread>` | Threads agents posted, and one thread with its open ask |
 | `inbox answer <thread> <option>` · `inbox answer <thread> -F <json\|->` · `inbox reply <thread> -F <msg\|->` · `inbox close <thread>` | Answer a decide's option, `done` for a to-do, or a form as JSON by field; write on the thread; close it |
 | `memory list` · `memory search [words…]` · `memory save <text…> [--replaces <id>]` · `memory forget <id>` | The workspace's shared memory: every memory, the few some words find, one kept as your words (or `-F <file\|->`; `--replaces` corrects one in place), one forgotten for good. Search and save are refused while the workspace has Memory off |
@@ -147,4 +149,11 @@ vespin agent wait "$id" --timeout 600; case $? in
   5) vespin agent logs "$id" | tail -50 ;;
   6) vespin agent send "$id" -F - <<< "Status?" ;;
 esac
+```
+
+Read a pull request's chapters, generating them only where none stand yet:
+
+```sh
+state=$(vespin pr chapters acme/app#42 --json | jq -r .pullRequest.chapters.status)
+[ "$state" = none ] && vespin pr chapters acme/app#42 --generate   # slow; spends your API key
 ```
