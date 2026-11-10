@@ -14,6 +14,7 @@ import {
   withTaskId,
 } from "@repo/features/link-grammar";
 import { MENTION_KIND, type Mention, type NumberedTaskIdOf } from "@repo/features/mention-link";
+import { PULL_REQUEST_STATE_LABEL, QUEUED_LABEL } from "@repo/features/pull-request-model";
 import { repositoryParts } from "@repo/features/task-list-model";
 import type { TasksView } from "@repo/features/tasks-view";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
@@ -22,7 +23,6 @@ import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { createContext, useContext, useMemo } from "react";
 import { linkStandingQuery } from "../live-reads.js";
 import { appStateIn, appStateQuery } from "../use-app-state.js";
-import { PULL_REQUEST_STATE_LABEL, QUEUED_LABEL } from "./agent-model.js";
 
 /**
  * use-link-standing.ts -- a GitHub pull request or issue a link in the app's words names, as its chip says it: its key, its title, where it stands, who opened it, and a pull request's lines added and removed, read through the workspace's own GitHub App.
