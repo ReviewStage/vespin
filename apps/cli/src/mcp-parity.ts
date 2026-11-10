@@ -45,7 +45,7 @@ export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.START_AGENT]: { command: ["agent", "start"] },
   [MEMBER_MCP_TOOL.MESSAGE_AGENT]: { command: ["agent", "send"] },
   [MEMBER_MCP_TOOL.STOP_AGENT]: { command: ["agent", "stop"] },
-  [MEMBER_MCP_TOOL.UPDATE_AGENT]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
+  [MEMBER_MCP_TOOL.UPDATE_AGENT]: { command: ["agent", "update"] },
   [MEMBER_MCP_TOOL.LIST_AGENT_PORTS]: { command: ["agent", "ports"] },
   [MEMBER_MCP_TOOL.SHARE_AGENT_PORT]: { command: ["agent", "share"] },
   [MEMBER_MCP_TOOL.READ_INBOX]: { command: ["inbox", "list"] },
