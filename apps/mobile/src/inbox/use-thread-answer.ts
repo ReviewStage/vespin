@@ -225,7 +225,11 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
     hold(itemId, (was) => ({
       ...was,
       note: undefined,
-      sending: new Map(was.sending).set(key, { kind: INBOX_SENDING.CLOSE, at: Date.now() }),
+      sending: new Map(was.sending).set(key, {
+        kind: INBOX_SENDING.CLOSE,
+        revision: item.revision,
+        at: Date.now(),
+      }),
     }));
     acts[ACT_KIND.AGENTS_INBOX_CLOSE]({ itemId, revision: item.revision, clientKey: key })
       .then((answer) => {

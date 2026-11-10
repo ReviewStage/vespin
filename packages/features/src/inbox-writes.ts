@@ -171,7 +171,7 @@ export const INBOX_SENDING = {
   CLOSE: "close",
 } as const;
 
-/** One thing the reader sent on a thread, as it is drawn until a read carries it: a reply under its own key, written at `at`, or a close. */
+/** One thing the reader sent on a thread, as it is drawn until a read carries it: a reply under its own key, written at `at`, or a close of the revision the reader was shown. */
 export type InboxSending =
   | {
       readonly kind: typeof INBOX_SENDING.REPLY;
@@ -180,10 +180,12 @@ export type InboxSending =
       readonly answers?: InboxAnswers | undefined;
       readonly at: number;
     }
-  | { readonly kind: typeof INBOX_SENDING.CLOSE; readonly at: number };
+  | { readonly kind: typeof INBOX_SENDING.CLOSE; readonly revision: number; readonly at: number };
 
 /**
- * The item as one send leaves it: a close settling it while it stands open;
+ * The item as one send leaves it: a close settling it while it stands open
+ * at no newer revision than the close was sent at, since the agent's post
+ * after it reopens the item at a newer one;
  * a reply carrying an answer settling its ask while that stands open
  * (`answeredNow`); and a plain reply at the thread's foot, under its key,
  * the item read. Note that a reply a read already carries, by its key, is
@@ -195,7 +197,9 @@ function sendingDrawn(
   reader: InboxReader | undefined,
 ): InboxItem {
   if (sending.kind === INBOX_SENDING.CLOSE) {
-    return item.status === INBOX_STATUS.OPEN ? closedNow(item, reader, sending.at) : item;
+    return item.status === INBOX_STATUS.OPEN && item.revision <= sending.revision
+      ? closedNow(item, reader, sending.at)
+      : item;
   }
   const thread = item.thread ?? [];
   if (thread.some(({ id, clientKey }) => id === sending.key || clientKey === sending.key)) {

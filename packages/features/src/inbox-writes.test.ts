@@ -79,10 +79,29 @@ describe("inboxSendingDrawn", () => {
     );
     expect(answered.status).toBe(INBOX_STATUS.ANSWERED);
     expect(answered.thread?.[0]?.ask?.status).toBe(INBOX_ASK_STATUS.ANSWERED);
-    const closed = inboxSendingDrawn(ITEM, [{ kind: INBOX_SENDING.CLOSE, at: 2_000 }], READER);
-    expect(closed.status).toBe(INBOX_STATUS.CLOSED);
-    expect(inboxSendingDrawn(answered, [{ kind: INBOX_SENDING.CLOSE, at: 3_000 }], READER)).toBe(
-      answered,
+    const closed = inboxSendingDrawn(
+      ITEM,
+      [{ kind: INBOX_SENDING.CLOSE, revision: ITEM.revision, at: 2_000 }],
+      READER,
     );
+    expect(closed.status).toBe(INBOX_STATUS.CLOSED);
+    expect(
+      inboxSendingDrawn(
+        answered,
+        [{ kind: INBOX_SENDING.CLOSE, revision: ITEM.revision, at: 3_000 }],
+        READER,
+      ),
+    ).toBe(answered);
+  });
+
+  it("leaves open a thread the agent reopened after a close, at a newer revision than the close was sent at", () => {
+    const reopened = { ...ITEM, revision: ITEM.revision + 1 };
+    expect(
+      inboxSendingDrawn(
+        reopened,
+        [{ kind: INBOX_SENDING.CLOSE, revision: ITEM.revision, at: 2_000 }],
+        READER,
+      ),
+    ).toBe(reopened);
   });
 });
