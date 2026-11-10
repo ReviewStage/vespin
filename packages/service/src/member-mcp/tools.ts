@@ -4776,7 +4776,7 @@ const READ_SANDBOX_SETUP_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.READ_SANDBOX_SETUP,
   description:
     "Read the cloud sandbox setup of a workspace the member belongs to, as its Settings › Cloud " +
-    "setup shows it: its install script, which runs once in each build of a repository's base " +
+    "environment shows it: its install script, which runs once in each build of a repository's base " +
     "snapshot, and each repository's setup script, which runs once in each new agent sandbox " +
     "of it after its checkout, each with when it was last saved in epoch milliseconds. " +
     `${WORKSPACE_WORDS} Answers the install script, or install null where none is saved, and ` +
@@ -4796,7 +4796,7 @@ const EDIT_SANDBOX_SETUP_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP,
   description:
     "Save one script of the cloud sandbox setup of a workspace the member is an owner or an " +
-    "admin of, as its Settings › Cloud setup would: the install script, or, naming a " +
+    "admin of, as its Settings › Cloud environment would: the install script, or, naming a " +
     "repository, that repository's setup script, under any casing of its name. The script " +
     "given replaces the one that stood whole, so read it first with " +
     `${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} to change part of it; an empty script removes it. ` +
@@ -5343,7 +5343,7 @@ const PIN_REPOSITORY_TOOL = memberMcpTool({
 
 /*
  * The workspace's environment variables, which its members' cloud agents are
- * handed. Each runs the one operation behind Settings › Environment and its
+ * handed. Each runs the one operation behind Settings › Cloud environment and its
  * procedures (`../workspace-environment/workspace-environment.ts`) as the
  * member, in the workspace a slug names or their only one, so it holds the
  * member to what Settings does: any member reads the names, and only an
@@ -5421,7 +5421,7 @@ const LIST_ENVIRONMENT_VARIABLES_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES,
   description:
     "List the environment variables of a workspace the member belongs to, which every cloud " +
-    "agent its members start is handed, as Settings › Environment lists them: each by its name " +
+    "agent its members start is handed, as Settings › Cloud environment lists them: each by its name " +
     "with when it was last set, in epoch milliseconds, in name order. A value is never shown, " +
     `here or anywhere, once it is set. ${WORKSPACE_WORDS}`,
   input: ListEnvironmentVariablesInputSchema,

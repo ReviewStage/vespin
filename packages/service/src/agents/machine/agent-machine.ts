@@ -250,7 +250,7 @@ export class LaunchRefused extends Data.TaggedError("LaunchRefused")<{
 /** What an open asks: the session the place is opened under, the agent whose repository it checks out, and the reads run beside it. */
 /**
  * The workspace's cloud setup scripts as an open hands them to a sandbox
- * it creates (Settings › Cloud setup): its install script and the agent's
+ * it creates (Settings › Cloud environment): its install script and the agent's
  * repository's setup script, each where one is saved, and the workspace's
  * variables the setup script runs with, every one of them secret.
  */

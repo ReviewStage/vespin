@@ -625,7 +625,7 @@ let acmeSlackBot: WorkspaceSlackBot = {
   ],
 };
 
-/* ----- Settings › Environment ----- */
+/* ----- Settings › Cloud environment's Variables ----- */
 
 /** Acme's environment variables by name, as an add, a replace, and a delete leave them. */
 let acmeVariables: readonly WorkspaceVariable[] = [
@@ -640,7 +640,7 @@ function variablesAnswer(variables: readonly WorkspaceVariable[]) {
   return { variables: acmeVariables };
 }
 
-/* ----- Settings › Cloud setup ----- */
+/* ----- Settings › Cloud environment's scripts ----- */
 
 /** Acme's sandbox setup, as a save leaves it: an install script, setup scripts for two of its repositories, and an archive script for one. */
 let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {

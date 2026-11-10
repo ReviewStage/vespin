@@ -54,6 +54,18 @@ test("a link to Settings with no page, or a page this window does not know, open
   }
 });
 
+test("a link to a page since folded into another opens the page that holds it now", () => {
+  for (const [page, home] of [
+    ["cli", SETTINGS_VIEW.MCP],
+    ["cloud-setup", SETTINGS_VIEW.ENVIRONMENT],
+  ] as const) {
+    assert.deepEqual(
+      linkRoute({ workspace: "acme", place: { kind: LINK_DESTINATION.SETTINGS, page } }, WINDOW),
+      { kind: LINK_ROUTE.SETTINGS, settings: { page: home, workspaceId: ACME.id } },
+    );
+  }
+});
+
 test("an automation, no experiment now, opens on the Plans tab", () => {
   const automation = { kind: LINK_DESTINATION.AUTOMATION, automationId: "a1" } as const;
 

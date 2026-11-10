@@ -105,11 +105,9 @@ function pageDescription(view: SettingsView): ReactNode {
     case SETTINGS_VIEW.MCP:
       return (
         <ReplayUnmask>
-          Use {PRODUCT_NAME} from Claude Code, Cursor, ChatGPT, and other AI apps.
+          Use {PRODUCT_NAME} from Claude Code, Cursor, ChatGPT, other AI apps, and your terminal.
         </ReplayUnmask>
       );
-    case SETTINGS_VIEW.CLI:
-      return <ReplayUnmask>Use {PRODUCT_NAME} from your terminal.</ReplayUnmask>;
     case SETTINGS_VIEW.HOSTS:
       return (
         <ReplayUnmask>

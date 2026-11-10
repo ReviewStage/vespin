@@ -738,11 +738,11 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_TOKEN_REPOSITORIES_FOLLOW: "workspace.tokenRepositoriesFollow",
   WORKSPACE_TOKEN_REPOSITORIES_RETRY: "workspace.tokenRepositoriesRetry",
   WORKSPACE_TOKEN_REPOSITORY_SET: "workspace.tokenRepositorySet",
-  /** A workspace's environment variables by name, read once as Settings › Environment opens and again after each write; no answer carries a value. */
+  /** A workspace's environment variables by name, read once as Settings › Cloud environment opens and again after each write; no answer carries a value. */
   WORKSPACE_ENVIRONMENT_LIST: "workspace.environmentList",
   WORKSPACE_ENVIRONMENT_PUT: "workspace.environmentPut",
   WORKSPACE_ENVIRONMENT_DELETE: "workspace.environmentDelete",
-  /** A workspace's cloud sandbox setup, its install script and each repository's setup script, read once as Settings › Cloud setup opens; a save answers the setup as it then stands. */
+  /** A workspace's cloud sandbox setup, its install script and each repository's setup script, read once as Settings › Cloud environment opens; a save answers the setup as it then stands. */
   WORKSPACE_SANDBOX_SETUP_READ: "workspace.sandboxSetupRead",
   WORKSPACE_INSTALL_SCRIPT_PUT: "workspace.installScriptPut",
   WORKSPACE_REPOSITORY_SETUP_PUT: "workspace.repositorySetupPut",

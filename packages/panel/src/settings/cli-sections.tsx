@@ -51,11 +51,11 @@ import { appStateQuery, selectAccount, selectCapability } from "../use-app-state
 import { ReadFailed } from "./marks.js";
 
 /**
- * cli-page.tsx -- Settings › CLI, the page named for our command: the `vespin` command's install, to copy and, in the desktop app, run here as VS Code installs `code`, and its sign-in, with Sign out everywhere once it holds one.
+ * cli-sections.tsx -- Settings › our MCP & CLI's command sections: the `vespin` command's install, to copy and, in the desktop app, run here as VS Code installs `code`, and its sign-in, with Sign out everywhere once it holds one.
  *
- * Until the command signs in, the page is one setup told as steps
+ * Until the command signs in, its part of the page is one setup told as steps
  * (`OutsideSteps`): install it, then sign in from a terminal, with the wait
- * for its sign-in under them, as the MCP page's Connect an agent is told.
+ * for its sign-in under them, as Connect an app above it is told.
  * Once it has, Install and Sign in stand as sections of their own. Install
  * holds `npm i -g vespin` in `@repo/ui`'s `CopyField`; a browser tab shows
  * that alone.
@@ -68,8 +68,8 @@ import { ReadFailed } from "./marks.js";
  * words.
  *
  * Sign in reads the command's grant from the clients the account allowed
- * (`LIVE_READ.MCP_CLIENTS`, the MCP page's Connected read, which this page
- * narrows to `vespin-cli` and that page leaves it out of). With none, it shows
+ * (`LIVE_READ.MCP_CLIENTS`, Connected's read above them, which these sections
+ * narrow to `vespin-cli` and Connected leaves it out of). With none, it shows
  * `vespin login` to copy. With one, its row names the account and when the
  * command was last active, and Sign out everywhere revokes the grant, asking
  * first in the confirm dialog as Connected's Disconnect does: every token the
@@ -377,8 +377,8 @@ function cliGrant(clients: readonly McpClient[]): McpClient | undefined {
   return clients.find((client) => client.clientId === FIRST_PARTY_OAUTH_CLIENT_ID.CLI);
 }
 
-/** Settings › CLI, for the account signed in: Install, then Sign in as the command's grant stands. */
-export function CliPage(): React.JSX.Element {
+/** The command's sections of Settings › our MCP & CLI, for the account signed in: Install, then Sign in as the command's grant stands. */
+export function CliSections(): React.JSX.Element {
   const installs =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.CLI_INSTALL) }).data ===
     true;

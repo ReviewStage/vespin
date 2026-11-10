@@ -130,7 +130,7 @@ export const RUN_PROFILE = {
   SETTINGS_HOSTS: "settings-hosts",
   /** The same account, Settings on Integrations: some connected, some with their sign-in expired. */
   SETTINGS_INTEGRATIONS: "settings-integrations",
-  /** The same account, Settings on MCP: the agents it let in and how to connect another. */
+  /** The same account, Settings on MCP & CLI: the agents it let in, how to connect another, and the `vespin` command's install and sign-in. */
   SETTINGS_MCP: "settings-mcp",
   /** The same account, Settings on Skills: its team's and its own. */
   SETTINGS_SKILLS: "settings-skills",

@@ -15,10 +15,9 @@ import { AccountSection } from "./account-section.js";
 import { AgentComposerSection } from "./agent-composer-section.js";
 import { AgentsPage } from "./agents-page.js";
 import { AppearanceSection } from "./appearance-page.js";
-import { CliPage } from "./cli-page.js";
-import { CloudSetupPage } from "./cloud-setup-page.js";
+import { CliSections } from "./cli-sections.js";
+import { CloudEnvironmentPage } from "./cloud-environment-page.js";
 import { CommitsSection } from "./commits-section.js";
-import { EnvironmentPage } from "./environment-page.js";
 import { ExperimentalPage } from "./experimental-page.js";
 import { HostsSection } from "./hosts-section.js";
 import { type IntegrationsFilter, IntegrationsSection } from "./integrations-page.js";
@@ -133,15 +132,7 @@ export function SettingsPanel({
       ) : null}
 
       {view !== SETTINGS_VIEW.ENVIRONMENT ? null : signedIn ? (
-        <EnvironmentPage control={workspace} />
-      ) : (
-        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-          {SIGNED_OUT_WORDS}
-        </Text>
-      )}
-
-      {view !== SETTINGS_VIEW.CLOUD_SETUP ? null : signedIn ? (
-        <CloudSetupPage control={workspace} />
+        <CloudEnvironmentPage control={workspace} />
       ) : (
         <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
           {SIGNED_OUT_WORDS}
@@ -167,15 +158,10 @@ export function SettingsPanel({
       ) : null}
 
       {view !== SETTINGS_VIEW.MCP ? null : signedIn ? (
-        <McpClientsSections />
-      ) : (
-        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-          {SIGNED_OUT_WORDS}
-        </Text>
-      )}
-
-      {view !== SETTINGS_VIEW.CLI ? null : signedIn ? (
-        <CliPage />
+        <>
+          <McpClientsSections />
+          <CliSections />
+        </>
       ) : (
         <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
           {SIGNED_OUT_WORDS}

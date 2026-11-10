@@ -269,7 +269,7 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           }
         : undefined,
     ),
-    // The product MCP page's two groups, drawn once an account is signed in: the outside agents it let in, and how to connect one.
+    // The product MCP & CLI page's groups, drawn once an account is signed in: the outside agents it let in, how to connect one, the command's install, and its sign-in.
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.MCP_CLIENTS,
@@ -292,12 +292,11 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           ],
         }
       : undefined,
-    // The CLI page's two groups, drawn once an account is signed in: the command's install, and its sign-in.
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.CLI_INSTALL,
           label: "Install the vespin command",
-          page: SETTINGS_VIEW.CLI,
+          page: SETTINGS_VIEW.MCP,
           haystack: [
             "Install the vespin command",
             "cli command-line tool terminal shell npm path reinstall",
@@ -308,7 +307,7 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
       ? {
           id: SETTINGS_SEARCH_ROW.CLI_SIGN_IN,
           label: "Sign in from your terminal",
-          page: SETTINGS_VIEW.CLI,
+          page: SETTINGS_VIEW.MCP,
           haystack: [
             "Sign in from your terminal",
             "cli command-line tool vespin login sign out everywhere logout",

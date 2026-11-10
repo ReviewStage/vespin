@@ -135,7 +135,7 @@ test("a revoke that did not finish leaves the agent standing with its Disconnect
   act(() => root.render(withQueryClient(createElement(McpClientsSections))));
   await settle();
   assert.ok(pageText().includes("Goes to an app on this computer"), pageText());
-  assert.ok(!pageText().includes("Vespin CLI"), "the command's sign-in is Settings › CLI's");
+  assert.ok(!pageText().includes("Vespin CLI"), "the command's sign-in is its own section's");
 
   await choose("Disconnect");
   await press("Disconnect agent", dialog());

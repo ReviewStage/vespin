@@ -25,13 +25,11 @@ export const SETTINGS_PAGE_LIST = [
   SETTINGS_VIEW.ACCOUNT,
   SETTINGS_VIEW.WORKSPACE,
   SETTINGS_VIEW.ENVIRONMENT,
-  SETTINGS_VIEW.CLOUD_SETUP,
   SETTINGS_VIEW.MEMORY,
   SETTINGS_VIEW.AGENTS,
   SETTINGS_VIEW.HOSTS,
   SETTINGS_VIEW.INTEGRATIONS,
   SETTINGS_VIEW.MCP,
-  SETTINGS_VIEW.CLI,
   SETTINGS_VIEW.SKILLS,
   SETTINGS_VIEW.APPEARANCE,
   SETTINGS_VIEW.THIS_MAC,
@@ -39,6 +37,32 @@ export const SETTINGS_PAGE_LIST = [
   SETTINGS_VIEW.ABOUT,
   SETTINGS_VIEW.SHORTCUTS,
 ] as const satisfies readonly SettingsView[];
+
+/**
+ * The pages folded into another, by the value an address or a link written
+ * before may still name: the CLI's into the MCP page, Cloud setup's into
+ * Environment's.
+ */
+const FOLDED_PAGE = {
+  CLI: "cli",
+  CLOUD_SETUP: "cloud-setup",
+} as const;
+
+/** The page each folded page's value lands on, the one that holds what it held. */
+const FOLDED_INTO: ReadonlyMap<string, SettingsView> = new Map([
+  [FOLDED_PAGE.CLI, SETTINGS_VIEW.MCP],
+  [FOLDED_PAGE.CLOUD_SETUP, SETTINGS_VIEW.ENVIRONMENT],
+]);
+
+/**
+ * The page a page value names: a page that stands, or the page a folded one
+ * was folded into, so a link or an address written before lands where its
+ * page went rather than on the page list; none for a value naming no page.
+ */
+export function settingsViewNamed(page: string | undefined): SettingsView | undefined {
+  if (page === undefined) return undefined;
+  return SETTINGS_PAGE_LIST.find((view) => view === page) ?? FOLDED_INTO.get(page);
+}
 
 /**
  * The headings the Settings sidebar groups its pages under, in the order it
@@ -62,12 +86,10 @@ const GROUP_OF_PAGE = {
   [SETTINGS_VIEW.ACCOUNT]: SETTINGS_PAGE_GROUP.ACCOUNT,
   [SETTINGS_VIEW.WORKSPACE]: SETTINGS_PAGE_GROUP.WORKSPACE,
   [SETTINGS_VIEW.ENVIRONMENT]: SETTINGS_PAGE_GROUP.WORKSPACE,
-  [SETTINGS_VIEW.CLOUD_SETUP]: SETTINGS_PAGE_GROUP.WORKSPACE,
   [SETTINGS_VIEW.AGENTS]: SETTINGS_PAGE_GROUP.ACCOUNT,
   [SETTINGS_VIEW.HOSTS]: SETTINGS_PAGE_GROUP.ACCOUNT,
   [SETTINGS_VIEW.INTEGRATIONS]: SETTINGS_PAGE_GROUP.ACCOUNT,
   [SETTINGS_VIEW.MCP]: SETTINGS_PAGE_GROUP.ACCOUNT,
-  [SETTINGS_VIEW.CLI]: SETTINGS_PAGE_GROUP.ACCOUNT,
   [SETTINGS_VIEW.SKILLS]: SETTINGS_PAGE_GROUP.ACCOUNT,
   [SETTINGS_VIEW.MEMORY]: SETTINGS_PAGE_GROUP.WORKSPACE,
   [SETTINGS_VIEW.APPEARANCE]: SETTINGS_PAGE_GROUP.THIS_MAC,

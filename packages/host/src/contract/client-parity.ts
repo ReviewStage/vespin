@@ -65,7 +65,9 @@ const byDesign = (why: string): ClientGapCell => ({
 
 /** The web's gaps, each the reason a browser tab cannot carry the act or carries it its own way. */
 const WEB = {
-  CLI: byDesign("A tab cannot run the install script; the CLI page shows the command to paste"),
+  CLI: byDesign(
+    "A tab cannot run the install script; the MCP & CLI page shows the command to paste",
+  ),
   LIVE_VIEW: byDesign(
     "The tab opens a Browser tab's live view socket itself (web-browser-live.ts)",
   ),
