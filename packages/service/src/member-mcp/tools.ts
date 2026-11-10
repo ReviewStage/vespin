@@ -3585,7 +3585,7 @@ const UPDATE_SLACK_BOT_TOOL = memberMcpTool({
   run: ({ workspace, notifications, defaultRepository, channel }) =>
     asMemberInWorkspace(workspace, (userId, workspaceId) =>
       Effect.gen(function* () {
-        let slackBot = yield* readSlackBot(userId, workspaceId);
+        let slackBot: WorkspaceSlackBot | undefined;
         if (notifications !== undefined) {
           slackBot = yield* setSlackNotifications(userId, workspaceId, notifications);
         }
@@ -3595,6 +3595,7 @@ const UPDATE_SLACK_BOT_TOOL = memberMcpTool({
         if (channel !== undefined) {
           slackBot = yield* changeSlackChannel(userId, workspaceId, channel);
         }
+        slackBot ??= yield* readSlackBot(userId, workspaceId);
         return { status: ACTION_RESULT_STATUS.ACCEPTED, slackBot: slackBotRecord(slackBot) };
       }).pipe(
         Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
