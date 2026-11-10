@@ -175,7 +175,7 @@ function HomeInbox({
   );
 }
 
-/** Recent: the tasks worked on latest, under a refused read's Retry where the list could not be read, and nothing where neither stands. */
+/** Recent: the tasks worked on latest, under a refused read's Retry where the list could not be read, which stands while Recent is folded too, and nothing where neither stands. */
 function HomeRecent({
   tasks,
   room,
@@ -189,18 +189,20 @@ function HomeRecent({
   const unread = useUnreadTasks({ staged });
   const recent = recentTasks(tasks.listed.tasks, room);
   if (recent.length === 0 && !tasks.listFailed) return null;
+  const refused = tasks.listFailed ? (
+    <div className="home-note my-tight-gap">
+      <ErrorState
+        failure={unreadShown(FAILURE_SURFACE.HOME_TASKS_READ)}
+        onRetry={tasks.onRetryList}
+      >
+        {TASKS_NOT_READ}
+      </ErrorState>
+    </div>
+  ) : null;
+  // Note that a refused read stays under the head while Recent is folded too, so its Retry is never folded away.
   return (
-    <PersonSectionFrame label={RECENT} title={RECENT} fold={PERSON_SECTION_FOLD}>
-      {tasks.listFailed ? (
-        <div className="home-note my-tight-gap">
-          <ErrorState
-            failure={unreadShown(FAILURE_SURFACE.HOME_TASKS_READ)}
-            onRetry={tasks.onRetryList}
-          >
-            {TASKS_NOT_READ}
-          </ErrorState>
-        </div>
-      ) : null}
+    <PersonSectionFrame label={RECENT} title={RECENT} fold={PERSON_SECTION_FOLD} standing={refused}>
+      {refused}
       {recent.length === 0 ? null : (
         <ReplayMask>
           <RecentTasks
