@@ -55,10 +55,8 @@ import {
   fakeSandboxApi,
   noSandboxBrowserLayer,
 } from "../testing/agent-browser-fake.js";
-import {
-  agentBrowserTabsProcedures,
-  BROWSER_TAKEOVER_HOLD_MS,
-} from "./agent-browser-tabs-procedures.js";
+import { BROWSER_TAKEOVER_HOLD_MS } from "./agent-browser-tabs.js";
+import { agentBrowserTabsProcedures } from "./agent-browser-tabs-procedures.js";
 import { AgentBrowser, agentBrowserOver } from "./browser/agent-browser.js";
 
 /**
@@ -550,7 +548,7 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
   );
 
   it.effect(
-    "an agent on no task lists and opens its tabs under its own path, and a teammate who does not see it is refused",
+    "an agent on no task lists, opens, takes over, and hands back its tabs under its own path, and a teammate who does not see it is refused",
     () =>
       Effect.gen(function* () {
         const { starter, teammate, reader, workspace, ask } = yield* openTask;
@@ -608,6 +606,14 @@ it.layer(getTestDB())("a task's Browser tabs route", (it) => {
           tabsOf(yield* ask(request(reader, agentTabsPath(loose.id)))).map((tab) => tab.id),
           [kept.id, opened.id],
         );
+
+        const keptDriver = `${agentTabsPath(loose.id)}/${kept.id}/driver`;
+        assert.deepEqual(yield* ask(request(teammate, keptDriver, "POST")), notFound);
+        assert.equal(
+          tabOf(yield* ask(request(starter, keptDriver, "POST"))).driver?.userId,
+          starter,
+        );
+        assert.equal(tabOf(yield* ask(request(starter, keptDriver, "DELETE"))).driver, null);
       }),
   );
 
