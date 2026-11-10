@@ -264,9 +264,11 @@ const FILL_TIGHT_OPTION = "fold-tight:[[data-fold]_&]:gap-1 fold-tight:[[data-fo
  * the pointer and while chosen, faded while disabled. Note that it draws
  * the keyboard's ring inside itself, because a scrolling row or a trough
  * leaves it no room outside; that its states are selectors of their own
- * rather than Tailwind's `hover:`, which a touch screen never answers; and
- * that the desktop's arrow cursor is keyed on its profile, which outweighs
- * the pointer.
+ * rather than Tailwind's `hover:`, which a touch screen never answers; that
+ * the desktop's arrow cursor is keyed on its profile, which outweighs the
+ * pointer; and that on a coarse pointer it takes a press a finger's height
+ * (`--ui-touch-target`) up and down alone, since a segment drawn inside its
+ * trough's inset is shorter than that and its neighbors stand flush beside it.
  */
 const OPTION = cn(
   "ui-choice-bar-option relative inline-flex items-center justify-center m-0 [border:0] [background:none]",
@@ -274,6 +276,7 @@ const OPTION = cn(
   "[transition:background-color_var(--ui-duration-hover)_var(--ui-motion-exit),color_var(--ui-duration-hover)_var(--ui-motion-exit)]",
   "cursor-press disabled:cursor-default disabled:opacity-disabled",
   "hover:not-disabled:text-foreground aria-selected:text-foreground aria-checked:text-foreground",
+  "pointer-coarse:before:absolute pointer-coarse:before:inset-x-0 pointer-coarse:before:top-1/2 pointer-coarse:before:h-[max(100%,var(--ui-touch-target))] pointer-coarse:before:[transform:translateY(-50%)] pointer-coarse:before:content-['']",
 );
 
 /**
