@@ -196,6 +196,9 @@ const MENTION_STATE = {
 
 type MentionState = (typeof MENTION_STATE)[keyof typeof MENTION_STATE];
 
+/** The lines a file's tab opens on: a mention's, at the commit it pins them to, or lines a path in words names with no commit, read where the tab reads the file. */
+export type OpenFileLines = Omit<MentionLines, "commit"> & { readonly commit?: string | undefined };
+
 /** What a place drawing mentions knows and does: the task or the agent on no task whose words it draws, where its mentions are written, its description's sections' anchors, and what opening a mention does. */
 export interface MentionDoors {
   /** The task, or the agent on no task, whose words the place draws; none where neither holds them, so a section of any description is drawn as found. */
@@ -204,7 +207,7 @@ export interface MentionDoors {
   readonly anchors: ReadonlySet<string>;
   readonly onOpenTask: (mention: DescriptionMention) => void;
   /** Shows a file's tab, at its lines where a mention names them; none where no file can be opened from here. */
-  readonly onOpenFile: ((path: string, lines: MentionLines | undefined) => void) | undefined;
+  readonly onOpenFile: ((path: string, lines: OpenFileLines | undefined) => void) | undefined;
   /** One of the plan's agents as its chip wears it, none for an agent not of the plan; the door is none where the place knows the plan's agents not. */
   readonly agentOf?: ((agentId: string) => MentionedAgentLook | undefined) | undefined;
   /** The card a pull request one of the plan's agents opened hangs on its Pull request tab, by any link to it; none for any other, or where the place knows the plan's agents not. */

@@ -121,6 +121,7 @@ import {
 import { createTaskOnce, readTask } from "@repo/database/models/task-store";
 import { type SettledAgentTurn, storeWriter } from "@repo/database/models/writer";
 import { MESSAGE_SENDER, SLACK_THREAD_ORIGIN } from "@repo/database/storage-vocabulary";
+import { LIMIT_REACHED_WORDS } from "@repo/features/agent-failure-words";
 import { shownPicturesOf } from "@repo/features/agent-pictures-model";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_BOUNDS, type AgentAttachment } from "@repo/features/agent-wire";
@@ -164,6 +165,7 @@ import { fencedWithin } from "../agents/fenced-text.js";
 import { workspaceStepOf } from "../agents/written-mentions.js";
 import { runResultContent } from "../automations/automation-slack-delivery.js";
 import { archiveFinishedAgents } from "../automations/run-archive.js";
+import { TURN_FAILURE } from "../core.js";
 import { HostedEnvironment } from "../environment.js";
 import { workspaceRepository } from "../github/workspace-repository.js";
 import { afterResponse } from "../http/after-response.js";
@@ -473,6 +475,8 @@ function refusalReply(what: string, failure: unknown): SlackMessageContent {
     typeof failure === "object" && failure !== null && "error" in failure
       ? String(failure.error)
       : "model_refused";
+  // A plan's reached limit is said in its own words, not as a refusal's code.
+  if (slug === HOSTED_API_ERROR.AGENT_PLAN_LIMIT_REACHED) return plainReply(LIMIT_REACHED_WORDS);
   return plainReply(`${PRODUCT_NAME} couldn't ${what} (${slug}).`);
 }
 
@@ -967,6 +971,8 @@ export function actOnSlackEvent(
 
 /** What the post says of the turn: its final message where it finished, that it failed and why, or that it was stopped. */
 function turnOutcome(turn: SettledAgentTurn, words: string | undefined): SlackMessageContent {
+  // A turn its plan's usage limit stopped is said so, not that the agent failed.
+  if (turn.failure === TURN_FAILURE.PLAN_LIMIT) return plainReply(LIMIT_REACHED_WORDS);
   if (turn.status === TURN_STATUS.FAILED) {
     return plainReply(
       turn.failure === null ? "The agent failed." : `The agent failed: ${turn.failure}.`,

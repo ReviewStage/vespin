@@ -197,12 +197,15 @@ export interface NativeContextUsage {
 
 /**
  * What a reader may know of the projection as it reads one event: the
- * calls it holds by name, the harness's session as last recorded, and the
- * event's own number, which names what the harness names nothing for.
+ * calls it holds by name, the harness's session as last recorded, the
+ * event's own number, which names what the harness names nothing for, and
+ * whether the plan's limit stands.
  */
 export interface NativeHeld {
   /** The name a held call is stored under, by its id; nothing for a call the projection does not hold. */
   readonly callName: (callId: string) => string | undefined;
   readonly session: string | undefined;
   readonly sequence: number;
+  /** Whether the plan's limit refuses the harness's calls, as it last reported and has not since lifted, so a subagent failing now failed for it. */
+  readonly planLimited: boolean;
 }

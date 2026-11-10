@@ -108,6 +108,7 @@ import { ToastHost, useToastsOwner } from "./toast.js";
 import { forgetUndo, redoLast, undoLast, useUndoWaits } from "./undo-stack.js";
 import { useReadyToast, useUpdatedToast } from "./update-toast.js";
 import { useAccountGitHub } from "./use-account-github.js";
+import { useActiveBeat } from "./use-active-beat.js";
 import {
   appStateQuery,
   selectAccount,
@@ -666,6 +667,8 @@ function AppWindow(): React.JSX.Element {
 
   // Rings and keyboard-only hints follow focus the keyboard actually moved.
   useKeyboardModality();
+  // The member's use of the window holds their phone's pushes while they are here.
+  useActiveBeat(account?.status === ACCOUNT_STATUS.SIGNED_IN);
   // The stage, its dialogs, and its viewers fit what can be seen of the window,
   // above a phone's keyboard.
   useVisualViewport();

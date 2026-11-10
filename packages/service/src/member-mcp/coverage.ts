@@ -66,6 +66,8 @@ const { SCREEN_ONLY, NEEDS_BROWSER, SECRET, SECURITY, DESTRUCTIVE, INTERNAL, NOT
 /** Each tool's procedures: at least one, so no row stands empty. */
 export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.LIST_WORKSPACES]: { workspaces: ["list"] },
+  [MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS]: { workspaces: ["members"] },
+  [MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG]: { workspaces: ["setSlug"] },
   [MEMBER_MCP_TOOL.LIST_TASKS]: { plans: ["list"], taskSections: ["list"] },
   [MEMBER_MCP_TOOL.READ_TASK]: { plans: ["open"] },
   [MEMBER_MCP_TOOL.LIST_AGENTS]: { agents: ["listOfWorkspace", "listOfTask"] },
@@ -77,6 +79,8 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.READ_AGENT_CHANGES]: { agentPullRequests: ["pullRequest"], agents: ["changes"] },
   [MEMBER_MCP_TOOL.LIST_MODELS]: { models: ["list"], account: ["preferences"] },
   [MEMBER_MCP_TOOL.READ_PAGE]: { taskFiles: ["pages", "page"], agentPages: ["list", "version"] },
+  [MEMBER_MCP_TOOL.READ_TASK_FILE]: { taskFiles: ["file"] },
+  [MEMBER_MCP_TOOL.LIST_TASK_FOLDER]: { taskFiles: ["tree"] },
   [MEMBER_MCP_TOOL.CREATE_TASK]: { plans: ["create", "editDescription"] },
   [MEMBER_MCP_TOOL.UPDATE_TASK]: { plans: ["update", "parent", "block"], taskSections: ["write"] },
   [MEMBER_MCP_TOOL.EDIT_DESCRIPTION]: { plans: ["open", "editDescription"] },
@@ -102,6 +106,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.UPDATE_COMMENT]: { descriptionComments: ["act"] },
   [MEMBER_MCP_TOOL.SEARCH_MEMORY]: { account: ["searchMemories"] },
   [MEMBER_MCP_TOOL.SAVE_MEMORY]: { account: ["saveMemory"] },
+  [MEMBER_MCP_TOOL.LIST_MEMORIES]: { account: ["memories"] },
   [MEMBER_MCP_TOOL.FORGET_MEMORY]: { account: ["forgetMemory"] },
   [MEMBER_MCP_TOOL.LIST_AUTOMATIONS]: { automations: ["list", "read", "runs"] },
   [MEMBER_MCP_TOOL.CREATE_AUTOMATION]: { automations: ["create"] },
@@ -142,6 +147,7 @@ type MemberMcpExclusions = {
 export const MEMBER_MCP_EXCLUSIONS = {
   account: {
     access: INTERNAL,
+    active: INTERNAL,
     writePreferences: NOT_YET_BUILT,
     providerKeys: SECRET,
     saveProviderKey: SECRET,
@@ -149,7 +155,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     renameSubscription: SECRET,
     reorderSubscriptions: SECRET,
     removeProviderKey: SECRET,
-    memories: NOT_YET_BUILT,
     startChatGptDeviceLogin: NEEDS_BROWSER,
     pollChatGptDeviceLogin: NEEDS_BROWSER,
     cancelChatGptDeviceLogin: NEEDS_BROWSER,
@@ -322,12 +327,10 @@ export const MEMBER_MCP_EXCLUSIONS = {
     overviewChecks: NOT_YET_BUILT,
     overviewConversation: NOT_YET_BUILT,
   },
-  pushDevices: { register: INTERNAL, unregister: INTERNAL },
+  pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },
   repositoryPins: { list: NOT_YET_BUILT, set: NOT_YET_BUILT },
   supportAccess: { grant: SECURITY, revoke: SECURITY },
   taskFiles: {
-    file: NOT_YET_BUILT,
-    tree: NOT_YET_BUILT,
     skills: SCREEN_ONLY,
     keepPicture: SCREEN_ONLY,
     pageFrame: SCREEN_ONLY,
@@ -361,10 +364,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   workspaces: {
     create: NOT_YET_BUILT,
     rename: NOT_YET_BUILT,
-    setSlug: NOT_YET_BUILT,
     setPhoto: NOT_YET_BUILT,
     setExperiment: INTERNAL,
-    members: NOT_YET_BUILT,
     removeMember: NOT_YET_BUILT,
     changeRole: NOT_YET_BUILT,
     transfer: DESTRUCTIVE,

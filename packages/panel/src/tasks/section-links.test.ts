@@ -1,12 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import {
-  MENTION_KIND,
-  type Mention,
-  type MentionLines,
-  mentionMarkdown,
-} from "@repo/features/mention-link";
+import { MENTION_KIND, type Mention, mentionMarkdown } from "@repo/features/mention-link";
 import type { Task } from "@repo/features/task-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
@@ -21,6 +16,7 @@ import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { onSideBundles, unlandedBundles } from "../testing/side-bundles.js";
 import { DescriptionBody, type SectionLinks } from "./description-body.js";
 import { descriptionEditMutation } from "./description-edit-mutation.js";
+import type { OpenFileLines } from "./mention-chip.js";
 
 // Note that the description, its comments, and its history stand only while the account has Descriptions on.
 beforeAll(() => readExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
@@ -321,7 +317,7 @@ const FILES_TASK: Task = {
 };
 
 function drawnFiles(
-  onOpenFile: ((path: string, lines: MentionLines | undefined) => void) | undefined,
+  onOpenFile: ((path: string, lines: OpenFileLines | undefined) => void) | undefined,
   task: Task = FILES_TASK,
 ): HTMLElement {
   const container = document.createElement("div");
@@ -369,7 +365,7 @@ test("a mention of a file as its page on GitHub opens its tab, at the lines it p
       assumptions: [],
     },
   };
-  const opened: [string, MentionLines | undefined][] = [];
+  const opened: [string, OpenFileLines | undefined][] = [];
   const onGitHub: string[] = [];
   fakeAppPlatform({ ...QUIET_PANEL, openGitHub: (url) => onGitHub.push(url) });
   const container = drawnFiles((path, lines) => opened.push([path, lines]), task);
