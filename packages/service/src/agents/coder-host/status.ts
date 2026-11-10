@@ -10,6 +10,7 @@ import {
 } from "@repo/database/models/agent-store";
 import type { Device } from "@repo/database/models/device-store";
 import type { StoredArchive, StoredAutomationOrigin } from "@repo/database/schemas/agent";
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { originSubjectsOf } from "@repo/features/agent-origin-live";
 import {
   agentStatusAt,
@@ -46,6 +47,7 @@ import { sandboxVcpus } from "@repo/features/sandbox-size";
 import { TURN_FAILURE, TURN_STATUS, type TurnFailure } from "../../core.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import { CODER_REFUSAL } from "./bounds.js";
+import { permissionModeOf } from "./permission-mode.js";
 
 /**
  * status.ts -- where a coding agent stands, read from its newest turn.
@@ -441,6 +443,10 @@ function summaryFields(
     ...(agent.disabledServers.length === 0
       ? undefined
       : { disabledServers: agent.disabledServers }),
+    // Note that full access is said by saying nothing, as a service before modes did; the asks are the task list's to carry.
+    ...(permissionModeOf(agent) === AGENT_PERMISSION_MODE.FULL_ACCESS
+      ? undefined
+      : { permissionMode: permissionModeOf(agent) }),
     ...(starter === undefined ? undefined : { startedBy: { userId: agent.userId, name: starter } }),
     ...(agent.startedByAgentId === null ? undefined : { startedByAgentId: agent.startedByAgentId }),
     ...(agent.automationId === null ? undefined : { automationId: agent.automationId }),

@@ -186,6 +186,10 @@ export function runnerMoments(message: WireValue): Option.Option<readonly Native
       return Option.some([{ kind: NATIVE_MOMENT.ENDED, ending: NATIVE_ENDING.DONE, warm: true }]);
     case RUNNER_EVENT.END:
       return Option.some(endMoments(message));
+    // An ask and its settle are no moment of the run: the events route lands them apart (`runner-approvals.ts`).
+    case RUNNER_EVENT.APPROVAL_REQUESTED:
+    case RUNNER_EVENT.APPROVAL_RESOLVED:
+      return Option.some([]);
     default:
       return Option.none();
   }

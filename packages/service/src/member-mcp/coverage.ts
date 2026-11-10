@@ -282,6 +282,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   agentPages: { frame: SCREEN_ONLY },
   agents: {
+    // Note that an ask is held for a person's own answer, so no agent answers one for them.
+    answerApproval: SECURITY,
     reviewOptions: SCREEN_ONLY,
     workspaceTools: SCREEN_ONLY,
     // Note that a Terminal tab is interactive, so the CLI's `vespin agent shell` reaches it and no tool does.

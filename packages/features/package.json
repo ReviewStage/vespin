@@ -79,6 +79,7 @@
     "./agent-queue-wire": "./src/agent-queue-wire.js",
     "./agent-transcript-live": "./src/agent-transcript-live.js",
     "./agent-wire": "./src/agent-wire.js",
+    "./agent-approval-wire": "./src/agent-approval-wire.js",
     "./conversation-picture-wire": "./src/conversation-picture-wire.js",
     "./date-mention": "./src/date-mention.js",
     "./desktop-session-wire": "./src/desktop-session-wire.js",

@@ -112,6 +112,7 @@ import {
   turnProgressed,
   withTurnServers,
 } from "./native-projection.js";
+import { isApprovalEvent, landApprovalEvent } from "./runner-approvals.js";
 import { redactKeepingPlanCodes, withoutNul } from "./runner-moments.js";
 
 /**
@@ -155,6 +156,10 @@ import { redactKeepingPlanCodes, withoutNul } from "./runner-moments.js";
  * launch, and a turn still running under an older launch, whose runner this
  * one replaced, is failed as its runner lost before anything else is
  * applied, so its end, which is not coming, waits on no deadline.
+ *
+ * An ask a launch whose mode asks holds for a member, and its runner's word
+ * of how one was settled, land beside the transcript in the same
+ * transaction (`runner-approvals.ts`).
  *
  * The route also keeps what
  * the newest model call read on the agent's row for its context ring, the
@@ -552,6 +557,8 @@ function landWrite(
         ),
         (result) => reportRefused("a line's taking", result),
       );
+    case NATIVE_WRITE.APPROVAL:
+      return landApprovalEvent(target.conversationId, write.turnId, write.message, now);
     case NATIVE_WRITE.SESSION:
       return Effect.asVoid(
         recordAgentNativeSession(target.userId, applying.agentId, write.sessionId),
@@ -796,6 +803,10 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       });
       state = projected.state;
       writes.push(...projected.writes);
+      // An ask the runner holds lands under the turn that runs, after the writes that open that turn and before any that end it.
+      if (isApprovalEvent(message)) {
+        writes.push({ kind: NATIVE_WRITE.APPROVAL, turnId: state.turn?.id, message });
+      }
       // A turn starting takes the servers mentioned to the agent since its last turn started
       // (`agent-runtime/servers.ts`), and keeps them for its calls at our own
       // MCP server, which hands them whatever the switches say (`integrations/connection-door.ts`).

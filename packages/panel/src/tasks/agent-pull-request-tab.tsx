@@ -256,7 +256,12 @@ import {
   useAgentPullRequestSource,
 } from "./pull-request-source.js";
 import { PullRequestStack } from "./pull-request-stack.js";
-import { ThreadActions, ThreadWritesProvider } from "./pull-request-thread-actions.js";
+import {
+  ThreadReply,
+  ThreadResolve,
+  ThreadWritesProvider,
+  useThreadControls,
+} from "./pull-request-thread-actions.js";
 import {
   PullRequestStateMenu,
   PullRequestTitle,
@@ -1147,6 +1152,11 @@ function useThreadJump(
     : () => jumps.jump(thread, view);
 }
 
+/** A thread's Resolve and ⋯ at its head's end, standing under the pointer or the keyboard as a description thread's tools do. */
+function ThreadTools({ children }: { children: ReactNode }): React.JSX.Element {
+  return <span className="comment-tools items-center">{children}</span>;
+}
+
 /**
  * A thread's ⋯ at the end of its head: Copy link, the thread's app link in
  * the view it is drawn in (`LINK_PLACE.PULL_REQUEST_THREAD`), then, in Files
@@ -1356,7 +1366,8 @@ function useThreadHead(thread: ReviewThread, now: number, pending: boolean) {
  * was resolved or a later push outdated it, until opened; then the lines it
  * is on, as Files changed draws a diff, its own lines lit
  * (`threadPreview`), and its comments, oldest first, with the replies a
- * read left on GitHub counted after them, and Reply and Resolve at its foot.
+ * read left on GitHub counted after them, Resolve at its head's end, and
+ * its reply's box at its foot.
  */
 function ThreadCard({
   thread,
@@ -1378,6 +1389,7 @@ function ThreadCard({
     landed.onOpenChange(true),
   );
   const toFiles = useThreadJump(thread, PULL_REQUEST_THREAD_VIEW.FILES);
+  const controls = useThreadControls(thread);
   return (
     <li className="pull-request-thread-slot">
       <AnnotationCard
@@ -1388,15 +1400,22 @@ function ThreadCard({
         landing={landed}
         where={<ThreadWhere path={thread.path} lines={lineSpan(thread)} onPress={toFiles} />}
         menu={
-          pending ? (
-            start.menu
-          ) : (
-            <ThreadMenu
-              thread={thread}
-              here={PULL_REQUEST_THREAD_VIEW.CONVERSATION}
-              there={PULL_REQUEST_THREAD_VIEW.FILES}
+          <ThreadTools>
+            <ThreadResolve
+              controls={controls}
+              resolved={thread.resolved}
+              onRefused={() => landed.onOpenChange(true)}
             />
-          )
+            {pending ? (
+              start.menu
+            ) : (
+              <ThreadMenu
+                thread={thread}
+                here={PULL_REQUEST_THREAD_VIEW.CONVERSATION}
+                there={PULL_REQUEST_THREAD_VIEW.FILES}
+              />
+            )}
+          </ThreadTools>
         }
         lead={
           preview === undefined ? undefined : (
@@ -1409,7 +1428,7 @@ function ThreadCard({
             />
           )
         }
-        footer={<ThreadActions thread={thread} />}
+        footer={<ThreadReply controls={controls} />}
       >
         <ThreadComments
           thread={thread}
@@ -1590,6 +1609,7 @@ function InlineThread({
     landed.onOpenChange(true),
   );
   const lines = place === THREAD_PLACE.ABOVE ? lineSpan(thread) : undefined;
+  const controls = useThreadControls(thread);
   return (
     <AnnotationCard
       {...head}
@@ -1603,17 +1623,24 @@ function InlineThread({
         )
       }
       menu={
-        pending ? (
-          start.menu
-        ) : (
-          <ThreadMenu
-            thread={thread}
-            here={PULL_REQUEST_THREAD_VIEW.FILES}
-            there={PULL_REQUEST_THREAD_VIEW.CONVERSATION}
+        <ThreadTools>
+          <ThreadResolve
+            controls={controls}
+            resolved={thread.resolved}
+            onRefused={() => landed.onOpenChange(true)}
           />
-        )
+          {pending ? (
+            start.menu
+          ) : (
+            <ThreadMenu
+              thread={thread}
+              here={PULL_REQUEST_THREAD_VIEW.FILES}
+              there={PULL_REQUEST_THREAD_VIEW.CONVERSATION}
+            />
+          )}
+        </ThreadTools>
       }
-      footer={<ThreadActions thread={thread} />}
+      footer={<ThreadReply controls={controls} />}
     >
       <ThreadComments
         thread={thread}

@@ -224,6 +224,8 @@ export const NATIVE_WRITE = {
   WAIT: "wait",
   /** Send the agent a carry-on line, the connection its runner lost to the model's provider being back (`coder-host/carry-on.ts`). */
   CARRY_ON: "carry_on",
+  /** Land one of the runner's approval events, an ask under the turn that runs or how one was settled (`runner-approvals.ts`), in order with the turn's own writes. */
+  APPROVAL: "approval",
 } as const;
 
 export type NativeWrite =
@@ -255,6 +257,12 @@ export type NativeWrite =
       readonly turnId: string;
       /** The sequence of the event that told the loss, which keys this carry-on apart from the turn's others. */
       readonly lostSequence: number;
+    }
+  | {
+      readonly kind: typeof NATIVE_WRITE.APPROVAL;
+      /** The turn that ran as the event was read; none where none did. */
+      readonly turnId: string | undefined;
+      readonly message: WireValue;
     }
   | {
       readonly kind: typeof NATIVE_WRITE.PLAN_STATUS;

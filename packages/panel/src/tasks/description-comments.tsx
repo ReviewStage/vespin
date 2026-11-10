@@ -938,7 +938,8 @@ function ReplyField({
     clientKey: string,
     attachments: readonly AgentAttachment[],
   ) => Promise<boolean>;
-  onCancel: () => void;
+  /** What Escape does once no list or dictation takes it; none gives up the caret, as a thread that stands open with nothing to close does. */
+  onCancel?: (() => void) | undefined;
   autoFocus: boolean;
   /** Why the last act on the thread did not go, which the foot says under the box; none while nothing failed. */
   failure?: string | undefined;
@@ -1330,7 +1331,7 @@ function ThreadCard({
   doors: ThreadDoors;
   /** Opens the card at rest; none where it always stands open, as in the description's comments list. */
   onOpen?: (() => void) | undefined;
-  /** Closes it, as its field's Escape asks. */
+  /** Closes it, as its field's Escape asks; none where it stands open, whose field's Escape gives up the caret. */
   onClose?: (() => void) | undefined;
   /** Whether the quote stands over it, as in the description's comments list, where its words are not beside it. */
   quote?: boolean;
@@ -1488,7 +1489,7 @@ function ThreadCard({
                     }),
                 }
           }
-          onCancel={() => onClose?.()}
+          onCancel={onClose}
           onSend={(words, clientKey, attachments) =>
             doors.control.act(thread.id, {
               action: DESCRIPTION_COMMENT_ACTION.REPLY,

@@ -86,6 +86,7 @@ import { rewoundAgent } from "./rewind.js";
 import {
   NativeAgentSessions,
   type NativeSessions,
+  RUNNER_ANSWER,
   RUNNER_CHECKOUT,
   RUNNER_CHOICE,
   routedSessions,
@@ -147,6 +148,7 @@ function recording(sessionPrefix: string) {
         calls.push(`retune:${sessionId}:${conversationId}`);
         return RUNNER_CHOICE.WRITTEN;
       }),
+    answer: () => Effect.succeed(RUNNER_ANSWER.NOT_LIVE),
     halt: (sessionId, conversationId) =>
       Effect.sync(() => {
         calls.push(`halt:${sessionId}:${conversationId}`);

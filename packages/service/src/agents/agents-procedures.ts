@@ -52,6 +52,7 @@ import { devicesNamed } from "@repo/database/models/device-store";
 import { readTaskWorkspace } from "@repo/database/models/task-store";
 import { isWorkspaceMember, readAccountNames } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
+import { PERMISSION_MODE_APPLIES } from "@repo/features/agent-approval-wire";
 import { runtimeChoiceRefusal } from "@repo/features/agent-runtime-models";
 import {
   AGENT_ARCHIVER,
@@ -91,7 +92,7 @@ import {
   rewoundAgentById,
   warmedAgent,
 } from "./agent-lifecycle.js";
-import { reachedAgentById } from "./agent-reach.js";
+import { controlsAgent, reachedAgentById } from "./agent-reach.js";
 import {
   askedPullRequest,
   githubReadRefusal,
@@ -100,6 +101,8 @@ import {
 } from "./asked-pull-request.js";
 import { queueAtTouch } from "./coder-host/agent-queue.js";
 import { addAgentRepository } from "./coder-host/agent-repository-add.js";
+import { answeredApproval } from "./coder-host/approval-answer.js";
+import { harnessTakesMode } from "./coder-host/permission-mode.js";
 import {
   agentPullRequestReach,
   instancePublishedCache,
@@ -468,7 +471,9 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
      * account's default is untouched. An agent on a provider's own harness
      * takes only what its runtime runs (`agent-runtime-models.ts`), refused
      * as invalid otherwise, and a runner of it that runs is handed the change
-     * as a `model` line at once (`runnerChoiceApplied`).
+     * as a `model` line at once (`runnerChoiceApplied`). A permission mode,
+     * set only by a member who controls the agent and one that asks only on
+     * Claude Code, reaches it from its next turn, which the answer says.
      */
     change: signedIn.change.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.params.id);
@@ -510,6 +515,22 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
           yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { disabledServers })),
         );
       }
+      if ("permissionMode" in body) {
+        const { permissionMode } = body;
+        // Only who steers the agent sets how its calls are asked, and only Claude Code asks.
+        if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+        const route = Option.getOrUndefined(
+          yield* hostedStoreOrUnavailable(nativeRouteOfReached(agent.conversationId)),
+        );
+        if (!harnessTakesMode(route?.runtime, permissionMode)) {
+          return yield* Effect.fail(HOSTED_REFUSAL.PERMISSION_MODE_REFUSED);
+        }
+        const changed = yield* committedAgent(
+          userId,
+          yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { permissionMode })),
+        );
+        return { ...changed, permissionModeApplies: PERMISSION_MODE_APPLIES.NEXT_TURN };
+      }
       if ("addRepository" in body) {
         // The member adds it as `update_agent` does, and the agent hears it in its conversation.
         const added = yield* addAgentRepository({ userId }, agent, body.addRepository, {
@@ -532,6 +553,11 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /** The agent deleted for good (`agent-lifecycle.ts`), stopped for good first, by any member who reaches it. */
     delete: signedIn.delete.effect(function* ({ input, context }) {
       return yield* deletedAgent(writer, context.userId, input.id);
+    }),
+    /** One ask the agent's runner holds answered by a member who controls it, written to the runner and settled (`approval-answer.ts`). */
+    answerApproval: signedIn.answerApproval.effect(function* ({ input, context }) {
+      const { userId, agent } = yield* reachedAgentById(context.userId, input.params.id);
+      return yield* answeredApproval(userId, agent, input.params.approval, input.body);
     }),
     /** The agent stopped: the harness's cancel of the turn under way, then the row's stamp; an agent with no turn running is answered as it stands. */
     stop: signedIn.stop.effect(function* ({ input, context }) {

@@ -768,6 +768,7 @@ export function chooseFailureNote(failure: AgentCallFailure): string {
     case AGENT_CALL_FAILURE.AGENT_API_KEY_UNREADABLE:
     case AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED:
     case AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED:
+    case AGENT_CALL_FAILURE.PERMISSION_MODE_REFUSED:
       return MODEL_CHANGE_FAILED;
   }
 }
@@ -1289,6 +1290,8 @@ function startFailureWords(failure: AgentCallFailure): string {
     case AGENT_CALL_FAILURE.OPENAI_KEY_MISSING:
     case AGENT_CALL_FAILURE.QUOTA_EXHAUSTED:
     case AGENT_CALL_FAILURE.UPSTREAM_ERROR:
+    // Note that a Start never names a permission mode, so never meets its refusal.
+    case AGENT_CALL_FAILURE.PERMISSION_MODE_REFUSED:
       return "The agent could not be started.";
     case AGENT_CALL_FAILURE.AGENT_RETIRED:
       return START_RETIRED;
@@ -1414,6 +1417,8 @@ export function messageFailureWords(failure: AgentCallFailure): string {
       return localAgentRefusalWords(LOCAL_AGENT_REFUSAL.MAC_AWAY, undefined);
     // No answer is not a refusal: the words may have reached the agent, and Retry carries the same key, so they reach it once.
     case AGENT_CALL_FAILURE.UNANSWERED:
+    // Note that a message never names a permission mode, so never meets its refusal.
+    case AGENT_CALL_FAILURE.PERMISSION_MODE_REFUSED:
       return `${NOT_HEARD_BACK} Try again.`;
     case AGENT_CALL_FAILURE.AGENT_RETIRED:
       return MESSAGE_RETIRED;
