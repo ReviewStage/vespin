@@ -370,7 +370,7 @@ test("a page's tab hangs the page's card: its title and version over its newest 
   assert.ok(frame.closest(".ph-no-capture"), "the preview is left out of the recording");
 });
 
-test("a page's tab keeps its page drawn while another tab is shown, so a return finds the page as it was left rather than loaded afresh", async () => {
+test("a page's tab keeps its page drawn while another tab or the task's details are shown, so a return finds the page as it was left rather than loaded afresh", async () => {
   fakeAppPlatform({ pageFrameUrl });
   const container = await mount({ tab: pageTab(FUNNEL.id) });
   const pageFrame = () =>
@@ -380,6 +380,10 @@ test("a page's tab keeps its page drawn while another tab is shown, so a return 
   await redraw({ tab: changesTab(DONE.id) });
   await redraw({ tab: pageTab(FUNNEL.id) });
   assert.ok(pageFrame() === frame, "the page stands in the frame it was left in");
+  // The task's details take the page, side panel and all, and are left again.
+  await redraw({ tab: pageTab(FUNNEL.id), main: MAIN_TAB.OVERVIEW });
+  await redraw({ tab: pageTab(FUNNEL.id) });
+  assert.ok(pageFrame() === frame, "the page stands in its frame after the details are left");
   // The page's tab offers what its page hands its menu, as it did before it was hidden.
   const tab = [...container.querySelectorAll<HTMLElement>('.side-panel-tabs [role="tab"]')].find(
     (each) => each.querySelector(".ui-tab-label")?.textContent === FUNNEL.title,
