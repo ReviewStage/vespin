@@ -425,6 +425,8 @@ test.each([
     );
     const words = container.textContent ?? "";
     assert.ok(words.includes(`${agent} usage limit reached`), words);
+    // The worker's card says its title alone, since nothing goes on from the worker.
+    assert.ok(!words.includes("Send a message to continue"), words);
     assert.ok(!words.includes("usageLimit"), words);
   },
 );
