@@ -17,7 +17,7 @@
  * refuses one GitHub does not hold yet rather than failing its fetch.
  */
 
-import { isWireUuid } from "@repo/features";
+import { HOSTED_API_ERROR, isWireUuid } from "@repo/features";
 import {
   AGENT_CURSOR_START,
   AGENT_MACHINE,
@@ -28,6 +28,7 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
   agentStartRequestOnWire,
+  QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
 import { CLI_EXIT, cliExitOfAgentStatus } from "@repo/features/cli-exit";
 import { transcriptPartLines, transcriptSpeaker } from "@repo/features/cli-transcript";
@@ -678,6 +679,13 @@ const logsCommand = Command.make(
   ]),
 );
 
+/** A queued send's refusals, in words that say what to do. */
+const QUEUE_REFUSAL_WORDS = {
+  [HOSTED_API_ERROR.NOT_PERMITTED]:
+    "Only the member who started that agent queues to it; send without --queue to steer it instead.",
+  [HOSTED_API_ERROR.INVALID_REQUEST]: "That agent's queue is full.",
+};
+
 const sendCommand = Command.make(
   "send",
   {
@@ -686,11 +694,31 @@ const sendCommand = Command.make(
       Flag.withAlias("F"),
       Flag.withDescription("The message, from a file or - for stdin"),
     ),
+    queue: Flag.Boolean("queue").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription(
+        "Queue it behind the agent's turn, as ⌘↩ does, rather than steer the turn under way; only the agent's starter queues",
+      ),
+    ),
   },
-  ({ agent: id, file }) =>
+  ({ agent: id, file, queue }) =>
     Effect.gen(function* () {
       const text = yield* readInput(file);
       const { hosted } = yield* session;
+      if (queue) {
+        const answered = yield* askService(
+          hosted.messages.queue,
+          { params: { id }, body: { change: QUEUE_CHANGE.ADD, id: crypto.randomUUID(), text } },
+          HOSTED_DEADLINE.USUAL,
+          QUEUE_REFUSAL_WORDS,
+        );
+        yield* answer({
+          json: answered.queue,
+          lines: [`Queued for agent ${id}; ${answered.queue.messages.length} waiting.`],
+          ids: [id],
+        });
+        return;
+      }
       const { agent } = yield* askService(
         hosted.messages.send,
         { params: { id }, body: { text, clientKey: crypto.randomUUID() } },
@@ -704,6 +732,10 @@ const sendCommand = Command.make(
     {
       command: 'echo "Also update the README" | vespin agent send <id> -F -',
       description: "A follow-up from stdin",
+    },
+    {
+      command: "vespin agent send <id> --queue -F next.md",
+      description: "Queued to go once the turn under way ends",
     },
   ]),
 );

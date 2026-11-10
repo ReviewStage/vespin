@@ -649,6 +649,7 @@ it.effect(
           [MEMBER_MCP_TOOL.START_AGENT, { workspace, prompt: "Go." }],
           [MEMBER_MCP_TOOL.START_AGENT, { from: { agentId } }],
           [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello." }],
+          [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello.", queue: true }],
           [MEMBER_MCP_TOOL.STOP_AGENT, { agentId }],
           [MEMBER_MCP_TOOL.UPDATE_AGENT, { agentId, archived: true }],
           [MEMBER_MCP_TOOL.LIST_AGENT_PORTS, { agentId }],

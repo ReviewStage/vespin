@@ -83,7 +83,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.CREATE_SECTION]: { taskSections: ["write"] },
   [MEMBER_MCP_TOOL.DELETE_SECTION]: { taskSections: ["write"] },
   [MEMBER_MCP_TOOL.START_AGENT]: { agents: ["start", "startFrom"], plans: ["create"] },
-  [MEMBER_MCP_TOOL.MESSAGE_AGENT]: { messages: ["send"] },
+  [MEMBER_MCP_TOOL.MESSAGE_AGENT]: { messages: ["send", "queue"] },
   [MEMBER_MCP_TOOL.STOP_AGENT]: { agents: ["stop"] },
   [MEMBER_MCP_TOOL.UPDATE_AGENT]: { agents: ["change"] },
   [MEMBER_MCP_TOOL.LIST_AGENT_PORTS]: { agentPorts: ["list", "shared"] },
@@ -293,7 +293,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   macCommands: { waiting: INTERNAL, settle: INTERNAL, claim: INTERNAL, listening: INTERNAL },
   mcpClients: { list: NOT_YET_BUILT, revoke: NOT_YET_BUILT },
   messages: {
-    queue: NOT_YET_BUILT,
     agentWorker: NOT_YET_BUILT,
     agentWorkerNewest: NOT_YET_BUILT,
     agentPart: NOT_YET_BUILT,
