@@ -8,16 +8,15 @@ import {
   type ApprovalAnswerRequest,
   type ApprovalStatus,
 } from "@repo/features/agent-approval-wire";
+import { AGENT_PART, type AgentPart } from "@repo/features/agent-parts";
 import { AGENT_CALL_FAILURE, type AgentApprovalAnswerView } from "@repo/features/agent-view";
 import { AGENT_RUNTIME, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { TOOL_STATE } from "@repo/features/tool-call-block";
 import {
-  APPROVAL_CARD_ANSWER,
-  APPROVAL_OUTCOME,
-  ApprovalCard,
-  type ApprovalCardAnswer,
-  type ApprovalDetail,
-  type ApprovalSettled,
+  APPROVAL_ACTION,
+  type ApprovalAction,
+  ApprovalActions,
   AskFirstIcon,
   AutoApproveIcon,
   CHIP_LOOK,
@@ -35,7 +34,6 @@ import {
   useMenu,
 } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
-import { isWireString } from "@repo/wire";
 import {
   createContext,
   type ReactNode,
@@ -50,6 +48,7 @@ import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import { failureShown } from "../failure-report.js";
 import { showToast } from "../toast.js";
 import { OVERFLOW_PRESS, type OverflowOffer } from "./message-box.js";
+import type { HeldCall } from "./transcript-blocks.js";
 
 /**
  * agent-approvals.tsx -- how a Claude Code agent's tool calls are answered, as its tab draws it: the mode chip at the composer's foot, a card on each call the agent holds for an answer, and how many wait.
@@ -72,19 +71,22 @@ import { OVERFLOW_PRESS, type OverflowOffer } from "./message-box.js";
  * place, as it does the context ring.
  *
  * A call the agent holds waits on a member's answer (`pendingApprovals`),
- * drawn as `@repo/ui`'s `ApprovalCard` under the call's own row, which it
- * finds by the call's id (`toolUseId`), the command or the file it would
- * touch drawn compactly, and who asks where a subagent does. One whose row
- * is not drawn, a subagent's whose calls the transcript does not keep among
- * them, stands at the transcript's foot over the working line instead
- * (`LooseApprovals`). An answer goes to the service at once, its press busy
- * while it is out, and the card settles into its line as it lands:
- * "Allowed", "Allowed for this agent", "Denied by you". An ask that settled
- * before the answer reached it says how it stood instead ("Already
- * allowed", "Expired"), and one that stops waiting with no answer of this
- * window's says it was denied by the message sent while it waited, expired
- * as its turn ended, or was answered elsewhere. Settled lines stand for as
- * long as the tab does, since the service keeps no ask once it settles.
+ * which the call's own row says, found by the call's id (`toolUseId`): its
+ * line reads "Waiting for approval" in the working mark's place, its body
+ * says who asks where a subagent does and the CLI's own words for why, and
+ * `@repo/ui`'s `ApprovalActions` stand under it, Allow, Always allow, and
+ * Deny, as a row's own presses do (`heldCallOf`). One whose row is not
+ * drawn, a subagent's, whose calls the transcript does not keep among them,
+ * is drawn as a row of its own at the transcript's foot over the working
+ * line, from what the ask says of the call (`heldCallPart`). An answer goes
+ * to the service at once, its press busy while it is out, and as it lands
+ * the presses go and the line says how it came out in a word, "Allowed",
+ * "Always allowed", "Denied", or "Expired", the row otherwise reading as
+ * the call goes on to read, done or failed. One that stops waiting with no
+ * answer of this window's says it was denied where a message the service
+ * took went while it waited, expired as its turn ended, or was answered
+ * elsewhere. Those words stand for as long as the tab does, since the
+ * service keeps no ask once it settles.
  *
  * While a call waits, the working line says so ("Waiting on you · 1
  * approval") rather than counting on, so a paused agent never reads as
@@ -150,16 +152,14 @@ const MODE_CHANGE_FAILED = "The permission mode could not be changed.";
 /** What the composer says over its field while an ask waits. */
 export const DENIES_WAITING = "Sending a message denies the waiting approval.";
 
-/** The settled lines, by how an ask came out and who settled it. */
-const SETTLED_WORDS = {
+/** What a held call's line says: that it waits, then how it came out. */
+const HELD_WORDS = {
+  WAITING: "Waiting for approval",
   ALLOWED: "Allowed",
-  ALLOWED_FOR_AGENT: "Allowed for this agent",
-  DENIED: "Denied by you",
-  DENIED_BY_MESSAGE: "Denied by your message",
+  ALLOWED_FOR_AGENT: "Always allowed",
+  DENIED: "Denied",
   EXPIRED: "Expired",
   ELSEWHERE: "Answered elsewhere",
-  ALREADY_ALLOWED: "Already allowed",
-  ALREADY_DENIED: "Already denied",
 } as const;
 
 /** Why an answer did not go, said under the card's row: refused as not the reader's to answer or gone, or not heard back, which a press again may mend. */
@@ -169,48 +169,24 @@ const ANSWER_FAILED = {
   UNANSWERED: "The answer did not reach the agent. Try again.",
 } as const;
 
-/** Who asks, where a subagent does. */
-const SUBAGENT_ASKS = "Asked by a subagent";
+/** Who asks, where a subagent does, said in the row's body. */
+const SUBAGENT_ASKS = "Asked by a subagent.";
 
 /** The answer each of the card's presses sends. */
 const WIRE_ANSWER = {
-  [APPROVAL_CARD_ANSWER.ALLOW]: APPROVAL_ANSWER.ALLOW,
-  [APPROVAL_CARD_ANSWER.ALLOW_FOR_AGENT]: APPROVAL_ANSWER.ALLOW_FOR_AGENT,
-  [APPROVAL_CARD_ANSWER.DENY]: APPROVAL_ANSWER.DENY,
-} as const satisfies Record<
-  ApprovalCardAnswer,
-  (typeof APPROVAL_ANSWER)[keyof typeof APPROVAL_ANSWER]
->;
+  [APPROVAL_ACTION.ALLOW]: APPROVAL_ANSWER.ALLOW,
+  [APPROVAL_ACTION.ALLOW_FOR_AGENT]: APPROVAL_ANSWER.ALLOW_FOR_AGENT,
+  [APPROVAL_ACTION.DENY]: APPROVAL_ANSWER.DENY,
+} as const satisfies Record<ApprovalAction, (typeof APPROVAL_ANSWER)[keyof typeof APPROVAL_ANSWER]>;
 
-/** The line an ask settles into once this window's answer lands, by the status it then stands at. */
-const ANSWERED_LINE = {
+/** The word an ask's line settles into by the status it stands at, as this window's answer lands or as an answer finds it settled already. */
+const SETTLED_WORD = {
   [APPROVAL_STATUS.PENDING]: undefined,
-  [APPROVAL_STATUS.ALLOWED]: { outcome: APPROVAL_OUTCOME.ALLOWED, words: SETTLED_WORDS.ALLOWED },
-  [APPROVAL_STATUS.ALLOWED_FOR_AGENT]: {
-    outcome: APPROVAL_OUTCOME.ALLOWED,
-    words: SETTLED_WORDS.ALLOWED_FOR_AGENT,
-  },
-  [APPROVAL_STATUS.DENIED]: { outcome: APPROVAL_OUTCOME.DENIED, words: SETTLED_WORDS.DENIED },
-  [APPROVAL_STATUS.EXPIRED]: { outcome: APPROVAL_OUTCOME.EXPIRED, words: SETTLED_WORDS.EXPIRED },
-} as const satisfies Record<ApprovalStatus, ApprovalSettled | undefined>;
-
-/** The line an ask settles into where it no longer waited as this window's answer reached it, by how it stood. */
-const ALREADY_LINE = {
-  [APPROVAL_STATUS.PENDING]: undefined,
-  [APPROVAL_STATUS.ALLOWED]: {
-    outcome: APPROVAL_OUTCOME.ALLOWED,
-    words: SETTLED_WORDS.ALREADY_ALLOWED,
-  },
-  [APPROVAL_STATUS.ALLOWED_FOR_AGENT]: {
-    outcome: APPROVAL_OUTCOME.ALLOWED,
-    words: SETTLED_WORDS.ALREADY_ALLOWED,
-  },
-  [APPROVAL_STATUS.DENIED]: {
-    outcome: APPROVAL_OUTCOME.DENIED,
-    words: SETTLED_WORDS.ALREADY_DENIED,
-  },
-  [APPROVAL_STATUS.EXPIRED]: { outcome: APPROVAL_OUTCOME.EXPIRED, words: SETTLED_WORDS.EXPIRED },
-} as const satisfies Record<ApprovalStatus, ApprovalSettled | undefined>;
+  [APPROVAL_STATUS.ALLOWED]: HELD_WORDS.ALLOWED,
+  [APPROVAL_STATUS.ALLOWED_FOR_AGENT]: HELD_WORDS.ALLOWED_FOR_AGENT,
+  [APPROVAL_STATUS.DENIED]: HELD_WORDS.DENIED,
+  [APPROVAL_STATUS.EXPIRED]: HELD_WORDS.EXPIRED,
+} as const satisfies Record<ApprovalStatus, string | undefined>;
 
 /** The mode an agent runs on: full access where its row names none. */
 function modeOf(agent: Pick<AgentSummary, "permissionMode">): AgentPermissionMode {
@@ -336,8 +312,9 @@ export function AgentModeChip({
 /** One ask as this window holds it: the ask, the answer out, how it settled, and why an answer did not go. */
 interface HeldAsk {
   readonly approval: AgentPendingApproval;
-  readonly answering?: ApprovalCardAnswer | undefined;
-  readonly settled?: ApprovalSettled | undefined;
+  readonly answering?: ApprovalAction | undefined;
+  /** The word its line settled into; none while it waits. */
+  readonly settled?: string | undefined;
   /** Whether it was settled only by leaving the row's waiting asks, which its return to them takes back. */
   readonly vanished?: boolean | undefined;
   /** Whether a message went while it waited, which the service denies it with; a return to the waiting asks clears it. */
@@ -345,13 +322,13 @@ interface HeldAsk {
   readonly error?: ShownError | undefined;
 }
 
-/** One ask as a card draws it. */
+/** One ask as its call's row draws it. */
 export interface ApprovalView {
   readonly approval: AgentPendingApproval;
-  readonly answering: ApprovalCardAnswer | undefined;
-  readonly settled: ApprovalSettled | undefined;
+  readonly answering: ApprovalAction | undefined;
+  readonly settled: string | undefined;
   readonly error: ShownError | undefined;
-  readonly onAnswer: (answer: ApprovalCardAnswer, message?: string) => void;
+  readonly onAnswer: (answer: ApprovalAction, message?: string) => void;
 }
 
 /** The asks of an agent as its tab draws them. */
@@ -365,12 +342,9 @@ export interface AgentApprovalsControl {
 }
 
 /** The line an ask that stopped waiting with no answer of this window's settles into. */
-function vanishedLine(byMessage: boolean, running: boolean): ApprovalSettled {
-  if (byMessage)
-    return { outcome: APPROVAL_OUTCOME.DENIED, words: SETTLED_WORDS.DENIED_BY_MESSAGE };
-  return running
-    ? { outcome: APPROVAL_OUTCOME.ALLOWED, words: SETTLED_WORDS.ELSEWHERE }
-    : { outcome: APPROVAL_OUTCOME.EXPIRED, words: SETTLED_WORDS.EXPIRED };
+function vanishedLine(byMessage: boolean, running: boolean): string {
+  if (byMessage) return HELD_WORDS.DENIED;
+  return running ? HELD_WORDS.ELSEWHERE : HELD_WORDS.EXPIRED;
 }
 
 /**
@@ -442,7 +416,7 @@ export function useAgentApprovals(input: {
   );
 
   const answer = useCallback(
-    (agentId: string, id: string, card: ApprovalCardAnswer, message?: string) => {
+    (agentId: string, id: string, card: ApprovalAction, message?: string) => {
       settle(agentId, id, (ask) => ({ ...ask, answering: card, error: undefined }));
       const request: ApprovalAnswerRequest =
         message === undefined
@@ -511,11 +485,10 @@ function markedAsk(ask: HeldAsk, messaged: boolean, agent: Pick<AgentSummary, "s
 /** An ask once its answer came back: settled as the answer says, or offered again with why it did not go. */
 function answeredAsk(ask: HeldAsk, answered: ApprovalActAnswer, agentId: string): HeldAsk {
   if ("approval" in answered) {
-    const line = ANSWERED_LINE[answered.approval.status];
-    return { ...ask, answering: undefined, settled: line };
+    return { ...ask, answering: undefined, settled: SETTLED_WORD[answered.approval.status] };
   }
   if ("approvalStatus" in answered && answered.approvalStatus !== undefined) {
-    return { ...ask, answering: undefined, settled: ALREADY_LINE[answered.approvalStatus] };
+    return { ...ask, answering: undefined, settled: SETTLED_WORD[answered.approvalStatus] };
   }
   // Note that a refusal names why, and only an answer not heard back asks for another press.
   const refused =
@@ -543,56 +516,39 @@ function answeredAsk(ask: HeldAsk, answered: ApprovalActAnswer, agentId: string)
 
 const NO_ASKS: readonly AgentPendingApproval[] = [];
 
-/** The words of a call's input under `key`, where it holds words there. */
-function inputWords(input: AgentPendingApproval["input"], key: string): string | undefined {
-  const value = input[key];
-  return isWireString(value) && value.length > 0 ? value : undefined;
+/** What the row's body says of who asks and why: the subagent where one does, and the CLI's own words where it gave some. */
+function aboutOf(approval: AgentPendingApproval): string | undefined {
+  const asker = approval.subagentId === undefined ? undefined : SUBAGENT_ASKS;
+  const words = [asker, approval.description].filter((each) => each !== undefined);
+  return words.length === 0 ? undefined : words.join(" ");
 }
 
-/**
- * What a call would touch, drawn compactly: a shell command, a file's path
- * and the words it would write, or its input whole where it names neither.
- */
-export function approvalDetail(approval: AgentPendingApproval): ApprovalDetail | undefined {
-  const { input } = approval;
-  const command = inputWords(input, "command");
-  if (command !== undefined) return { label: "Command", text: command };
-  const path = inputWords(input, "file_path") ?? inputWords(input, "notebook_path");
-  const words =
-    inputWords(input, "content") ??
-    inputWords(input, "new_string") ??
-    inputWords(input, "new_source");
-  if (path !== undefined) return { label: path, text: words ?? path };
-  if (Object.keys(input).length === 0) return undefined;
-  return { label: approval.toolName, text: JSON.stringify(input, null, 2) };
+/** A held call as its row draws it: where it stands in words, who asks and why, and the presses while it waits. */
+export function heldCallOf(ask: ApprovalView): HeldCall {
+  return {
+    status: ask.settled ?? HELD_WORDS.WAITING,
+    waiting: ask.settled === undefined,
+    about: aboutOf(ask.approval),
+    actions:
+      ask.settled === undefined ? (
+        <ApprovalActions
+          answering={ask.answering}
+          error={ask.error}
+          noteMaxLength={APPROVAL_BOUNDS.MAX_MESSAGE_CHARS}
+          onAnswer={ask.onAnswer}
+        />
+      ) : undefined,
+  };
 }
 
-/** One ask drawn as its card. */
-export function AgentApprovalCard({ ask }: { ask: ApprovalView }): React.JSX.Element {
-  const { approval } = ask;
-  return (
-    <ApprovalCard
-      title={approval.title}
-      description={approval.description}
-      asker={approval.subagentId === undefined ? undefined : SUBAGENT_ASKS}
-      detail={approvalDetail(approval)}
-      answering={ask.answering}
-      settled={ask.settled}
-      error={ask.error}
-      noteMaxLength={APPROVAL_BOUNDS.MAX_MESSAGE_CHARS}
-      onAnswer={ask.onAnswer}
-    />
-  );
-}
-
-/** The asks a transcript's rows find theirs among, and the ids of the calls it draws. */
+/** The asks a transcript's rows find theirs among. */
 interface TranscriptAsks {
   readonly asks: readonly ApprovalView[];
 }
 
 const ApprovalsContext = createContext<TranscriptAsks | undefined>(undefined);
 
-/** Hands the transcript's rows the agent's asks, so a paused call draws its card under it. */
+/** Hands the transcript's rows the agent's asks, so a held call's row says it waits and offers the answers. */
 export function ApprovalsProvider({
   asks,
   children,
@@ -604,13 +560,13 @@ export function ApprovalsProvider({
   return <ApprovalsContext.Provider value={value}>{children}</ApprovalsContext.Provider>;
 }
 
-/** The card of the ask held on the call `callId`, under its row; nothing where none is. */
-export function CallApproval({ callId }: { callId: string }): React.JSX.Element | null {
+/** The ask the agent holds on the call `callId`, as its row draws it; none where none is. */
+export function useCallHeld(callId: string): HeldCall | undefined {
   const asks = useContext(ApprovalsContext)?.asks;
   const ask = asks?.find(
     (each) => each.approval.toolUseId === callId && each.approval.subagentId === undefined,
   );
-  return ask === undefined ? null : <AgentApprovalCard ask={ask} />;
+  return ask === undefined ? undefined : heldCallOf(ask);
 }
 
 /** The ids of the tool calls a transcript's messages hold. */
@@ -627,7 +583,7 @@ export function transcriptCallIds(
   return ids;
 }
 
-/** The asks no drawn call holds, a subagent's among them, which stand at the transcript's foot. */
+/** The asks no drawn call holds, a subagent's among them, which stand at the transcript's foot as rows of their own. */
 export function looseApprovals(
   asks: readonly ApprovalView[],
   callIds: ReadonlySet<string>,
@@ -637,20 +593,19 @@ export function looseApprovals(
   );
 }
 
-/** The asks no drawn call holds, at the transcript's foot (`looseApprovals`). */
-export function LooseApprovals({
-  asks,
-}: {
-  asks: readonly ApprovalView[];
-}): React.JSX.Element | null {
-  if (asks.length === 0) return null;
-  return (
-    <div className="agent-loose-approvals flex flex-col gap-control-gap">
-      {asks.map((ask) => (
-        <AgentApprovalCard key={ask.approval.id} ask={ask} />
-      ))}
-    </div>
-  );
+/** The call an ask no drawn row holds stands for, as its row is drawn from it: the tool, its input, under way while the ask waits. */
+export function heldCallPart(
+  approval: AgentPendingApproval,
+): Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }> {
+  return {
+    kind: AGENT_PART.TOOL,
+    tool: approval.toolName,
+    callId: approval.toolUseId,
+    state: TOOL_STATE.INPUT_AVAILABLE,
+    input: approval.input,
+    output: undefined,
+    errorText: undefined,
+  };
 }
 
 /** What the working line says while asks wait: that the agent waits on the reader, and on how many. */

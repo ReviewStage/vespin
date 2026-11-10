@@ -23,10 +23,10 @@ import { ToastHost } from "../toast.js";
 import { AgentTab } from "./agent-tab.js";
 
 /**
- * agent-approvals.test.ts -- a tool call a Claude Code agent holds draws its
- * card under the call, and Allow sends the answer and settles the card into
- * its line; a Codex agent's composer offers no permission mode, where a
- * Claude Code agent's does.
+ * agent-approvals.test.ts -- a tool call a Claude Code agent holds says so on
+ * its own row, and Allow sends the answer and the row says it was allowed;
+ * a Codex agent's composer offers no permission mode, where a Claude Code
+ * agent's does.
  */
 
 const TASK = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
@@ -149,23 +149,18 @@ function modeChip(container: HTMLElement): HTMLButtonElement | null {
   return container.querySelector<HTMLButtonElement>('button[aria-label^="Permission mode"]');
 }
 
-test("Allow on a paused call's card sends the answer, and the card settles into its line", async () => {
+test("Allow on a held call's row sends the answer, and the row says it was allowed", async () => {
   const { container, answered } = await drawnTab(CLAUDE_AGENT);
   const call = container.querySelector(`[data-call-id="${CALL}"]`) ?? assert.fail("the call");
-  const card =
-    container.querySelector<HTMLElement>('[role="group"].ui-approval-card') ??
-    assert.fail("the card");
-  assert.ok(card.textContent?.includes("pnpm test src/members"));
-  assert.ok(call.compareDocumentPosition(card) & Node.DOCUMENT_POSITION_FOLLOWING);
+  assert.ok(call.textContent?.includes("Waiting for approval"));
 
   const allow = buttonReading(container, "Allow") ?? assert.fail("Allow");
   await act(async () => allow.click());
   await settle();
 
   assert.deepEqual(answered, [{ answer: "allow" }]);
-  assert.equal(container.querySelector(".ui-approval-card"), null);
   assert.equal(buttonReading(container, "Allow"), undefined);
-  assert.ok(container.textContent?.includes("Allowed"));
+  assert.ok(call.textContent?.includes("Allowed"));
 });
 
 test("a Codex agent's composer offers no permission mode, where a Claude Code agent's does", async () => {

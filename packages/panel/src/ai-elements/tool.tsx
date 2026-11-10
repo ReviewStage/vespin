@@ -50,6 +50,9 @@ import { Fold, type FoldProps } from "./fold.js";
  * cut moves when the mark goes: the working mark while it runs and the
  * failed mark if it failed, each as an agent's tab draws it
  * (`state-glyph.tsx`); a call that ended well keeps no seat for one. A
+ * call that says where it stands in words (`status`), as one held for an
+ * answer says it waits and then how it was answered, says them muted at
+ * the line's end, the working mark giving way to them while it is held. A
  * subject the body says whole, as a command's input is the command and a
  * read's its path, is the closed row's preview, and the open row says its
  * verb alone (`blockSays`), even while a find draws the body hidden. The
@@ -140,6 +143,10 @@ export interface ToolHeaderProps {
   subjectInBody?: boolean;
   /** Where the call ran, as a quiet tag at the line's end, for a call that ran somewhere other than its tab says ("On your Mac", or whose Mac by their disc and name); none for the rest. */
   place?: ReactNode | undefined;
+  /** Where the call stands in a word or two of the muted ink at the line's end, as a held call's "Waiting for approval" and its answer's "Allowed"; none for the rest. */
+  status?: string | undefined;
+  /** Whether the call is held, not working, so the working mark gives way to its status. */
+  paused?: boolean | undefined;
 }
 
 /**
@@ -159,9 +166,11 @@ export function ToolLine({
   chip,
   subjectIsCode = true,
   place,
+  status,
+  paused = false,
 }: Pick<
   ToolHeaderProps,
-  "state" | "icon" | "label" | "subject" | "chip" | "subjectIsCode" | "place"
+  "state" | "icon" | "label" | "subject" | "chip" | "subjectIsCode" | "place" | "status" | "paused"
 >): ReactNode {
   const trailing = subject !== undefined || chip !== undefined;
   const failed = state === TOOL_STATE.OUTPUT_ERROR;
@@ -204,7 +213,13 @@ export function ToolLine({
           <Badge>{place}</Badge>
         </span>
       )}
-      {failed ? null : <ToolStateMark state={state} />}
+      {status === undefined ? null : (
+        <span className="tool-status flex-none whitespace-nowrap text-muted-foreground">
+          {" "}
+          {status}
+        </span>
+      )}
+      {failed || paused ? null : <ToolStateMark state={state} />}
     </>
   );
 }
@@ -239,6 +254,8 @@ export function ToolHeader({
   subjectIsCode = true,
   subjectInBody = false,
   place,
+  status,
+  paused,
 }: ToolHeaderProps): ReactNode {
   const previewed = useDisclosurePreviewShown(subjectInBody);
   return (
@@ -251,6 +268,8 @@ export function ToolHeader({
         chip={chip}
         subjectIsCode={subjectIsCode}
         place={place}
+        status={status}
+        paused={paused}
       />
     </ToolSummary>
   );

@@ -177,12 +177,12 @@ import {
   type AgentApprovalsControl,
   type AgentModeControl,
   ApprovalsProvider,
-  CallApproval,
-  LooseApprovals,
+  heldCallPart,
   looseApprovals,
   transcriptCallIds,
   useAgentApprovals,
   useAgentPermissionMode,
+  useCallHeld,
   waitingOnYouWords,
 } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
@@ -669,6 +669,8 @@ function ToolCallView({
   cut?: CutBody | undefined;
 }): ReactNode {
   const view = toolCallView({ ...part, jobs });
+  // A call the agent holds for an answer says so on its own row, its answers under it.
+  const held = useCallHeld(part.callId);
   // A worker the plan's limit ended draws the limit's notice in its answer's place.
   const limit = callUsageLimit(part);
   const server = useServerName(view);
@@ -698,6 +700,7 @@ function ToolCallView({
         output={limit === undefined ? view.output : undefined}
         errorText={part.errorText}
         cut={cut}
+        held={held}
       />
       <CallPictures tool={part.tool} input={part.input} output={part.output} />
       {limit === undefined ? null : (
@@ -1188,13 +1191,7 @@ function AgentPartView({
         <CutReasoningView cut={part.cut} />
       );
     case AGENT_PART.TOOL:
-      // A call the agent holds for an answer draws its card under its row, whichever row draws it.
-      return (
-        <>
-          <ToolPartView part={part} delegation={delegation} todos={todos} />
-          <CallApproval callId={part.callId} />
-        </>
-      );
+      return <ToolPartView part={part} delegation={delegation} todos={todos} />;
     // A step boundary is the model's own pacing, and the parts keep one rhythm across it.
     case AGENT_PART.STEP_START:
     case AGENT_PART.OTHER:
@@ -2582,7 +2579,13 @@ function AgentTranscriptView({
       endTrail === undefined &&
       !(failed && connected) ? null : (
         <>
-          <LooseApprovals asks={loose} />
+          {loose.length === 0 ? null : (
+            <div className="agent-loose-approvals flex flex-col">
+              {loose.map((ask) => (
+                <ToolCallView key={ask.approval.id} part={heldCallPart(ask.approval)} />
+              ))}
+            </div>
+          )}
           {working && !waitingNotice ? (
             <WorkingLine
               startedAt={startedAt}
