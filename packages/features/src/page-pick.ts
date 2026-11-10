@@ -306,8 +306,12 @@ export const PAGE_PICK_SCRIPT = `(() => {
       taken.setEnd(last, last.data.length);
       element = taken.commonAncestorContainer instanceof Element ? taken.commonAncestorContainer : taken.commonAncestorContainer.parentElement;
     }
-    // Note that words inside a run of bold or a link stand on the block they are read in, as an element picked with the pointer does.
-    while (element !== null && element !== document.body && element.parentElement !== null && getComputedStyle(element).display.startsWith("inline")) element = element.parentElement;
+    // Note that words inside a run of bold or a link stand on the block they are read in, as an element picked with the pointer does, and never on one drawing no box of its own, which has nowhere to pin.
+    const unboxed = (each) => {
+      const display = getComputedStyle(each).display;
+      return display.startsWith("inline") || display === "contents";
+    };
+    while (element !== null && element !== document.body && element.parentElement !== null && unboxed(element)) element = element.parentElement;
     return element;
   };
 
