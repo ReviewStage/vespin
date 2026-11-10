@@ -14,7 +14,12 @@ import { AgentSandbox, type AgentSandboxService } from "../agents/terminal/agent
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
 import { PageLinks, type PageSandbox } from "../pages/page-links.js";
 import { previewProxyApp } from "./preview-app.js";
-import { mintPreviewSession, PREVIEW_LINK, previewOrigin } from "./preview-links.js";
+import {
+  mintPreviewSession,
+  PREVIEW_LINK,
+  PREVIEW_NAME_KIND,
+  previewOrigin,
+} from "./preview-links.js";
 
 /**
  * A shared port's preview host, over a real dialect: a member's page load of
@@ -62,7 +67,7 @@ const standing = Effect.gen(function* () {
         { userId, agentId },
         yield* Clock.currentTimeMillis,
       );
-      const address = `${previewOrigin(SANDBOX, agentId)}${PREVIEW_LINK.PROXY_PATH}/app`;
+      const address = `${previewOrigin(SANDBOX, { kind: PREVIEW_NAME_KIND.AGENT, agentId })}${PREVIEW_LINK.PROXY_PATH}/app`;
       return yield* Effect.promise(() =>
         route.handler(
           new Request(address, {
