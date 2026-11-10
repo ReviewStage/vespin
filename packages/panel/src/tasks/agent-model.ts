@@ -822,7 +822,7 @@ export function modelConnectWords(model: CatalogModel): string | undefined {
 
 /**
  * Why a choice cannot run, and the press that connects what would run it:
- * the note a model menu and Settings' Default model stand under the choice
+ * the note a model menu and Settings' Model row stand under the choice
  * where no plan or API key of the account's pays for its model, as
  * an account finds the Claude default it stored once its Claude credential
  * is gone; none for a choice something pays for, or one the catalog no

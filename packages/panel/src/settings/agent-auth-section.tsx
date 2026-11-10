@@ -134,7 +134,7 @@ import { ReadFailed } from "./marks.js";
  * The service never answers a key or a token, so nothing here holds one but
  * what is being pasted: it stands in the open field alone, is sent once,
  * and is cleared as soon as the service keeps it. Every answer is the
- * account's credentials whole, which Settings hands to the Default model
+ * account's credentials whole, which Settings hands to New agents' Model
  * row (`onKeys`) so its note follows a save at once, and setup reads for
  * whether either harness can start an agent (`onConnected`). The lists
  * stand under the mask mark, since a saved key's hint, a plan's email, its
@@ -1434,7 +1434,7 @@ function HarnessCredentials({
 
 /**
  * The account's credentials as the host holds them (`LIVE_READ.PROVIDER_KEYS`),
- * each write's own answer laid there, which the Default model row
+ * each write's own answer laid there, which New agents' Model row
  * (`onKeys`) and setup (`onConnected`) hear.
  */
 function useCredentials({
@@ -1452,7 +1452,7 @@ function useCredentials({
   const answer = keys.data;
   const readFailed = keys.isError;
 
-  // The Default model row hears every answer, so nothing there says what a key used to be.
+  // New agents' Model row hears every answer, so nothing there says what a key used to be.
   useEffect(() => {
     if (onKeys !== undefined && (answer !== undefined || readFailed)) onKeys(answer?.keys ?? []);
   }, [answer, readFailed, onKeys]);
@@ -1529,7 +1529,7 @@ function CredentialLists({
   );
 }
 
-/** Settings › Agents' credentials, whose every answer the Default model row hears. */
+/** Settings › Agents' credentials, whose every answer New agents' Model row hears. */
 export function AgentAuthSection({
   signedIn,
   onKeys,

@@ -347,9 +347,9 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.AGENT_MODEL,
-          label: "Default model",
+          label: "Model",
           page: SETTINGS_VIEW.AGENTS,
-          haystack: ["Default model", "model agent claude gpt start"],
+          haystack: ["Model", "default model new agents agent claude gpt start"],
         }
       : undefined,
     input.accountDrawn

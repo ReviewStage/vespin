@@ -308,11 +308,12 @@ test("renaming needs a workspace the reader manages that is not their own first"
   );
 });
 
-test("model finds the default model under a label no other page's row wears", () => {
+test("model and default model both find the Model row, under a label no other page's row wears", () => {
   assert.deepEqual(
     labelsFound("model").filter((label) => label.toLowerCase().includes("model")),
-    ["Default model"],
+    ["Model"],
   );
+  assert.ok(labelsFound("default model").includes("Model"));
 });
 
 test("no two rows on different pages wear the same label", () => {

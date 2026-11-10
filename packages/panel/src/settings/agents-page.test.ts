@@ -34,7 +34,7 @@ import { ToastHost } from "../toast.js";
 import { AgentsPage } from "./agents-page.js";
 
 /**
- * Settings › Coding agents' Default model over a bridge answering as the host
+ * Settings › Agents' New agents section over a bridge answering as the host
  * would: Fast is a settings switch like every other, resting while its write
  * is out and saying a refusal under its own row with the switch left where
  * it stood, and Effort and Context are each a radio group a reader hears the
@@ -355,7 +355,7 @@ test("the model, Effort and Context rows each tick Saved once their write lands,
   models = [OPUS, OPUS_FAST, SONNET];
   const page = await mount();
   const marks = () => [
-    marksIn(rowOf(page, "Default model")),
+    marksIn(rowOf(page, "Model")),
     marksIn(rowOf(page, "Effort")),
     marksIn(rowOf(page, "Context")),
   ];
@@ -379,18 +379,17 @@ test("the model, Effort and Context rows each tick Saved once their write lands,
   act(() => motion.finish());
   act(() =>
     (
-      page.querySelector<HTMLButtonElement>('button[aria-label^="Default model: "]') ??
-      assert.fail("no Default model chip")
+      page.querySelector<HTMLButtonElement>('button[aria-label^="Model: "]') ??
+      assert.fail("no Model chip")
     ).click(),
   );
-  const menu =
-    document.querySelector('[role="dialog"][aria-label="Default model"]') ?? assert.fail();
+  const menu = document.querySelector('[role="dialog"][aria-label="Model"]') ?? assert.fail();
   const option = [...menu.querySelectorAll<HTMLElement>('[role="option"]')].find((each) =>
     (each.textContent ?? "").startsWith("Sonnet 5.5"),
   );
   act(() => option?.click());
   await settle();
-  await vi.waitFor(() => assert.deepEqual(marksIn(rowOf(page, "Default model")), ["Saved"]));
+  await vi.waitFor(() => assert.deepEqual(marksIn(rowOf(page, "Model")), ["Saved"]));
   assert.deepEqual(written().at(-1), { model: SONNET.id, effort: "low" });
 });
 
@@ -500,20 +499,19 @@ test("replacing the account's own Anthropic key moves the models the host holds,
   await vi.waitFor(() => assert.equal(fastSwitch(page).disabled, false));
 });
 
-test("a catalog that could not be read says so in the Default model menu with Retry, and Retry reads it again", async () => {
+test("a catalog that could not be read says so in the Model menu with Retry, and Retry reads it again", async () => {
   refuseModels = true;
   const page = await mount();
-  // Note that the Default model row stands once the failed read reaches its query.
+  // Note that the Model row stands once the failed read reaches its query.
   const control = await vi.waitFor(
     () =>
-      page.querySelector<HTMLButtonElement>('button[aria-label^="Default model: "]') ??
-      assert.fail("no Default model control"),
+      page.querySelector<HTMLButtonElement>('button[aria-label^="Model: "]') ??
+      assert.fail("no Model control"),
   );
   assert.equal(placeholders(page).length, 0, "the page does not read for ever");
 
   act(() => control.click());
-  const menu =
-    document.querySelector('[role="dialog"][aria-label="Default model"]') ?? assert.fail();
+  const menu = document.querySelector('[role="dialog"][aria-label="Model"]') ?? assert.fail();
   assert.equal(
     menu.querySelector('[role="alert"]')?.textContent,
     "The models could not be read.Retry",
@@ -557,7 +555,7 @@ test("a default nothing pays for, as Claude on an OpenAI key alone, says it cann
   };
 
   const picker =
-    page.querySelector<HTMLButtonElement>('button[aria-label^="Default model: "]') ?? assert.fail();
+    page.querySelector<HTMLButtonElement>('button[aria-label^="Model: "]') ?? assert.fail();
   const row = picker.closest(".ui-settings-row") ?? assert.fail("no Model row");
   assert.match(
     row.textContent ?? "",
@@ -571,8 +569,7 @@ test("a default nothing pays for, as Claude on an OpenAI key alone, says it cann
   assert.deepEqual(opened, [claudeRow]);
 
   act(() => picker.click());
-  const menu =
-    document.querySelector('[role="dialog"][aria-label="Default model"]') ?? assert.fail();
+  const menu = document.querySelector('[role="dialog"][aria-label="Model"]') ?? assert.fail();
   const option = [...menu.querySelectorAll<HTMLElement>('[role="option"]')].find((each) =>
     (each.textContent ?? "").startsWith("Sonnet 5.5"),
   );
