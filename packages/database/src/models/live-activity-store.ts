@@ -386,15 +386,24 @@ export function registerLiveActivityToken(
   });
 }
 
-/** The account's phone's activity ended on the phone, its update token forgotten; a phone the account does not hold is passed over. */
+/**
+ * The account's phone's activity ended on the phone, its update token
+ * forgotten: only where the phone still holds `activityToken` when the app
+ * names the activity that ended, or whatever stands where it does not; a
+ * phone the account does not hold is passed over.
+ */
 export function endLiveActivityOnPhone(
   userId: string,
   phone: PushDeviceToken,
+  activityToken?: string,
 ): LiveActivityEffect<void> {
   return Effect.gen(function* () {
     const own = yield* findOwnPhone({ userId, ...phone });
     if (Option.isNone(own)) return;
-    yield* clearOwnActivity({ userId, pushDeviceId: own.value.id });
+    const pushDeviceId = own.value.id;
+    yield* activityToken === undefined
+      ? clearOwnActivity({ userId, pushDeviceId })
+      : clearOwnActivityToken({ userId, pushDeviceId, token: activityToken });
   });
 }
 
