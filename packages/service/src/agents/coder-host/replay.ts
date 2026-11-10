@@ -220,6 +220,10 @@ const NO_BRANCH_WORDS =
 const NO_BRANCH_ON_MAC_WORDS =
   "It left no branch to build on, and what it did stays on the Mac it ran on, so start from the repository's default branch.";
 
+/** What a branchless source on a Mac adds to the work it carried: what it did on top of that work stayed on the Mac. */
+const CARRIED_ON_MAC_WORDS =
+  "What it did on top of that work and did not push stays on the Mac it ran on, so it is not in that branch.";
+
 /** A text cut to the bound on one line, ending in an ellipsis where it was cut. */
 function cutLine(text: string, maximumChars: number): string {
   return cutText(text.replace(/\s+/gu, " ").trim(), maximumChars);
@@ -723,15 +727,16 @@ function whereOf(
       `build on it, and open your pull request from it as usual.${own}`
     );
   }
+  const onMac = copy.miss === SNAPSHOT_MISS.ON_DEVICE;
   if (source.branch === null) {
-    if (carried !== undefined) return carriedWhere(carried);
-    return copy.miss === SNAPSHOT_MISS.ON_DEVICE ? NO_BRANCH_ON_MAC_WORDS : NO_BRANCH_WORDS;
+    if (carried === undefined) return onMac ? NO_BRANCH_ON_MAC_WORDS : NO_BRANCH_WORDS;
+    // Note that a Mac's checkout is never read for a Start, so what the source did on top of that work stays there.
+    return onMac ? `${carriedWhere(carried)} ${CARRIED_ON_MAC_WORDS}` : carriedWhere(carried);
   }
   // Note that a Mac's checkout is never read for a Start, so what the source did not push stays on that Mac.
-  const unpushed =
-    copy.miss === SNAPSHOT_MISS.ON_DEVICE
-      ? "what it had not pushed stays on the Mac it ran on"
-      : "what it had not pushed could not be copied from its sandbox";
+  const unpushed = onMac
+    ? "what it had not pushed stays on the Mac it ran on"
+    : "what it had not pushed could not be copied from its sandbox";
   return (
     `Its branch is \`${source.branch}\`${pull}. ${capitalized(fetchWords(source.branch))} and continue there rather than ` +
     `starting a new one; ${unpushed}, so only what it pushed stands.`
