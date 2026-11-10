@@ -79,7 +79,12 @@ import { ANY_METHOD, type WebRoutes } from "../../route.js";
 import { reopenTaskForWork, settleTaskAfterTurn } from "../../tasks/task-finish.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
 import { roomAfterLimit, soonestResetBeside } from "../coder-host/agent-runtime-choice.js";
-import { RUNNER_ENDED, runnerEnded, runnerIdled } from "../coder-host/runner-sessions.js";
+import {
+  RUNNER_ENDED,
+  runnerEnded,
+  runnerIdled,
+  sandboxTouchRecorded,
+} from "../coder-host/runner-sessions.js";
 import { turnRetried } from "../coder-host/steer.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
 import { TURN_PUBLISH, TurnQueue } from "../coder-host/turn-delivery.js";
@@ -303,12 +308,18 @@ export interface RunnerEventsOptions<R = never> {
 /**
  * A run's sandbox touched as a batch of its runner's events lands
  * (`@repo/sandbox`'s `touchSandbox`), which logs a touch the sandbox did not
- * confirm, since the next due batch, a minute on, touches it again.
+ * confirm, since the next due batch, a minute on, touches it again, and the
+ * touch recorded beside where the sandbox stands (`sandboxTouchRecorded`).
  */
-export function sandboxTouched(alive: RunnerAlive): Effect.Effect<void, never, Sandbox> {
+export function sandboxTouched(
+  alive: RunnerAlive,
+): Effect.Effect<void, never, DatabaseServices | Sandbox> {
   const { sessionId } = alive;
   if (sessionId === undefined) return Effect.void;
-  return touchSandbox(agentSandboxName(sessionId));
+  return Effect.andThen(
+    touchSandbox(agentSandboxName(sessionId)),
+    sandboxTouchRecorded(alive.target.conversationId),
+  );
 }
 
 /**

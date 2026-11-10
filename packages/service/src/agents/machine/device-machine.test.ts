@@ -120,6 +120,7 @@ const launched = (opened: Effect.Success<ReturnType<typeof openLocalAgent>>) =>
       env: ENV,
       userId: opened.userId,
       agentId: opened.agent.id,
+      conversationId: opened.agent.conversationId,
       name: found.name,
       ready: Effect.void,
       firstLines: () => Effect.succeed({ lines: FIRST_LINES, mark: { firstSequence: 4 } }),

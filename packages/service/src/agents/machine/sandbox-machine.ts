@@ -84,20 +84,28 @@ import {
   SHARED_FILES_DIRECTORY,
 } from "@repo/agent-runner/pins";
 import { LAUNCH_PATH, type LaunchPath } from "@repo/agent-runner/protocol";
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   type AgentRunnerRecord,
   forgetAgentRunnerRecord,
   readAgentRunnerRecord,
   writeAgentRunnerRecord,
 } from "@repo/database/models/agent-runner-record";
+import {
+  recordSandboxBooting,
+  recordSandboxOff,
+  recordSandboxRunning,
+  recordSandboxStep,
+} from "@repo/database/models/agent-sandbox-store";
 import { type Agent, hasRepository, type WithRepository } from "@repo/database/models/agent-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
+import { SANDBOX_STEP, type SandboxStep } from "@repo/features/agent-sandbox-wire";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import {
   type ListedSandbox,
   type OpenedSandbox,
+  SANDBOX_IDLE,
   SANDBOX_STATUS,
   Sandbox,
   type SandboxDrive,
@@ -614,6 +622,19 @@ const diedAtStart = (
  * of its own, with none of the caller's context, so without the span every
  * span it opens would start a trace of its own.
  */
+/**
+ * A write of where the sandbox stands (`agent-sandbox-store.ts`), logged
+ * rather than failed where the store refused it, since the record only
+ * tells clients where the sandbox stands and the launch goes on without it.
+ */
+function noted(
+  write: Effect.Effect<void, StoreFailure, DatabaseServices>,
+): Effect.Effect<void, never, DatabaseServices> {
+  return Effect.catch(write, (failure) =>
+    Effect.logWarning(`A sandbox's state was not recorded: ${failure._tag}`),
+  );
+}
+
 function runUnder<A, E>(
   run: SandboxRunner,
   parent: Option.Option<Tracer.AnySpan>,
@@ -731,6 +752,7 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
         const legacy = yield* legacySandboxOf(api, found.session);
         if (legacy !== undefined && legacy.name !== found.name) yield* api.delete(legacy.name);
         yield* api.delete(found.name);
+        yield* noted(recordSandboxOff(found.session));
         yield* forgetAgentRunnerRecord(keptOf(found).userId, found.session, found.name);
       }),
 
@@ -947,15 +969,25 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
   ) =>
     Effect.gen(function* () {
       const userId = checkout.agent.userId;
+      const stepped = (step: SandboxStep) =>
+        Effect.provideContext(
+          noted(recordSandboxStep(checkout.agent.conversationId, step)),
+          servicesOf(context),
+        );
       const github = yield* checkout.credential;
       const sandbox = checkoutOver(context, opened, userId, { github }, github.fullName);
       yield* writeAgentCredential(sandbox, github);
+      yield* stepped(SANDBOX_STEP.CLONING);
       const refill = yield* Effect.tap(
         checkedOutAs(checkout.agent, sandbox, checkout.read, from),
         () => cloneAgentExtras(sandbox, checkout.extras),
       );
       // A source's snapshot ran the setup on its own disk already, which this one is a copy of.
-      if (from !== CREATED_FROM.SOURCE) yield* setUp(sandbox, opened, yield* checkout.setup);
+      if (from !== CREATED_FROM.SOURCE) {
+        const setup = yield* checkout.setup;
+        if (setup !== undefined) yield* stepped(SANDBOX_STEP.SETTING_UP);
+        yield* setUp(sandbox, opened, setup);
+      }
       return refill;
     });
 
@@ -1216,8 +1248,12 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     // launch only once the sandbox stands, and never cuts its opening short; its write token is
     // the one a sandbox created here checks out through (`checkedOutIn`). Note that a use that
     // fails leaves the sandbox standing under the session's name, where the next message finds it.
+    // The sandbox is recorded booting before it opens, and off where the open or its use failed.
     open: (ask, use) =>
       Effect.gen(function* () {
+        yield* noted(
+          recordSandboxBooting(ask.agent.conversationId, ask.session, SANDBOX_STEP.CREATING),
+        );
         const reading = yield* Effect.forkChild(
           Effect.exit(
             hasRepository(ask.agent)
@@ -1267,7 +1303,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           },
           beside,
         );
-      }),
+      }).pipe(Effect.tapError(() => noted(recordSandboxOff(ask.session)))),
 
     // The session's sandbox is run again as it was opened, through `getOrCreate` (`gotOn`): resumed
     // where it stands, or made again from the image where its snapshot is gone, with the drive its
@@ -1282,6 +1318,9 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       Effect.gen(function* () {
         const legacy = found.name !== agentSandboxName(found.session);
         if (legacy && found.running !== undefined) return { place: found.running, created: false };
+        yield* noted(
+          recordSandboxBooting(agent.conversationId, found.session, SANDBOX_STEP.RESUMING),
+        );
         const standing = legacy
           ? ((yield* api.get(found.name)) ?? keptOf(found).sandbox)
           : keptOf(found).sandbox;
@@ -1299,7 +1338,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           place: sandboxPlace(found.session, name, running),
           created: created && from === CREATED_FROM.IMAGE,
         };
-      }),
+      }).pipe(Effect.tapError(() => noted(recordSandboxOff(found.session)))),
 
     // The runner's unit is uploaded beside the caller's steps, and the sandbox is readied as root
     // once the steps its start waits on are done (`started`), since the readying shares the
@@ -1352,6 +1391,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
             concurrency: "unbounded",
             discard: true,
           });
+          yield* noted(recordSandboxStep(launch.conversationId, SANDBOX_STEP.STARTING_AGENT));
           const readied = yield* api
             .run(place, {
               command: "sudo",
@@ -1401,6 +1441,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
             .pipe(
               Effect.tapError(() => diedAtStart(api, place, commandId, Object.values(launch.env))),
             );
+          yield* noted(recordSandboxRunning(launch.conversationId, place.session, SANDBOX_IDLE));
         }).pipe(
           Effect.withSpan("web/handRunnerFirstLines"),
           Effect.tapError(() =>

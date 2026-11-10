@@ -8,6 +8,7 @@ import {
   agentPin,
   agentPullRequest,
   agentRead,
+  agentSandbox,
   conversations,
   device,
   taskPin,
@@ -23,6 +24,7 @@ import {
   agentPinSync,
   agentPullRequestSync,
   agentReadSync,
+  agentSandboxSync,
   agentSync,
   automationRunSync,
   automationSync,
@@ -164,7 +166,8 @@ function issuesStatement() {
  * conversation records the session its sandbox is tagged with, which the
  * claim writes on the conversation's row, so a delta read takes the flip
  * from the log (`movedAgents`) and a pane waiting on the sandbox connects
- * as it lands. Note that the Mac's last beat is not read,
+ * as it lands, and where its sandbox stands, as the service last recorded
+ * it (`agent-sandbox-store.ts`), on the same terms. Note that the Mac's last beat is not read,
  * because a beat wakes nothing (`deviceSync`) and a window judges a Mac by
  * its own presence read.
  */
@@ -212,6 +215,8 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         turnFailure: sql<AgentFailure | null>`case when ${latest.id} is null then null else ${failureWordOf(latest)} end`,
         turnSessionEnded: sessionEndedOf(latest),
         sandboxOpen: sql<boolean>`${conversations.runtimeSessionId} is not null`,
+        sandboxState: outerJoined(agentSandbox.state),
+        sandboxSteps: outerJoined(agentSandbox.steps),
         markedUnread: sql<boolean>`coalesce(${agentRead.markedUnread}, false)`,
       },
       instants: {
@@ -229,6 +234,8 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         // now that the turn the line awaits says it, until the next desktop release is the oldest in use.
         awaitingLineAt: sql<Date | null>`null::timestamptz`,
         lastSettledAt: lastSettledAtIn(agentTable.conversationId),
+        sandboxStateAt: outerJoined(agentSandbox.stateAt),
+        sandboxRunsUntil: agentSandbox.runsUntil,
       },
     },
     (selection) =>
@@ -244,6 +251,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         .leftJoin(automationRun, eq(automationRun.id, agentTable.automationRunId))
         .leftJoin(archiver, eq(archiver.id, sql`${agentTable.archivedBy} ->> 'userId'`))
         .leftJoin(conversations, eq(conversations.id, agentTable.conversationId))
+        .leftJoin(agentSandbox, eq(agentSandbox.conversationId, agentTable.conversationId))
         .leftJoin(device, eq(device.id, agentTable.deviceId))
         .leftJoinLateral(latest, sql`true`)
         .where(
@@ -296,6 +304,7 @@ function movedAgents(moved: SyncMoved): SQL {
       liveKeysIn(agentTable.conversationId, [
         ...moved.topics(messagesSync, TOPIC.CONVERSATION),
         ...moved.topics(conversationsSync, TOPIC.CONVERSATION),
+        ...moved.topics(agentSandboxSync, TOPIC.CONVERSATION),
       ]),
       liveKeysIn(agentTable.taskId, moved.keys(taskSync, task.id)),
       liveKeysIn(agentTable.userId, members),
@@ -342,6 +351,7 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
     turnsSync,
     messagesSync,
     conversationsSync,
+    agentSandboxSync,
     deviceSync,
     memberSync,
     githubPersonalTokenSync,
@@ -355,7 +365,7 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
   }),
   delta: {
     whole: [memberSync, githubPersonalTokenSync, githubRepositoryReadSync],
-    anyTopic: [messagesSync, conversationsSync],
+    anyTopic: [messagesSync, conversationsSync, agentSandboxSync],
     own: { plans: taskSync, agents: agentSync },
     statements: ({ userId }, moved) => ({
       plans: tasksStatement(userId, movedPlans(moved)),

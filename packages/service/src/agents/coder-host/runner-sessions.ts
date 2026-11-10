@@ -123,6 +123,7 @@ import {
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import { readAgentRepositories } from "@repo/database/models/agent-repositories";
+import { recordSandboxTouch } from "@repo/database/models/agent-sandbox-store";
 import {
   type Agent,
   hasRepository,
@@ -171,6 +172,8 @@ import { TURN_FAILURE } from "@repo/features/turn-run";
 import { causeKind, failureKind } from "@repo/runtime/effect";
 import {
   isSandboxError,
+  SANDBOX_IDLE,
+  SANDBOX_TOUCH_EVERY,
   type Sandbox,
   type SandboxError,
   type SandboxFile,
@@ -274,6 +277,22 @@ export type RunnerServices =
   | Sandbox;
 
 /** What every harness's sessions are composed with. */
+/**
+ * A touch of the conversation's running sandbox recorded (`agent-sandbox-store.ts`):
+ * its stop moved to `SANDBOX_IDLE` from now, written only where that moves
+ * it by `SANDBOX_TOUCH_EVERY` or more, so a sandbox in use costs about one
+ * write a minute. A write the store refused is logged and passed over,
+ * since the next touch writes it again.
+ */
+export function sandboxTouchRecorded(
+  conversationId: string,
+): Effect.Effect<void, never, DatabaseServices> {
+  return Effect.catch(
+    recordSandboxTouch(conversationId, SANDBOX_IDLE, SANDBOX_TOUCH_EVERY),
+    (failure) => Effect.logWarning(`A sandbox's touch was not recorded: ${failure._tag}`),
+  );
+}
+
 export interface RunnerSessionsOptions {
   /** The account the sessions act for: the agent's starter, whose conversation and key they read. */
   readonly userId: string;
@@ -1175,6 +1194,7 @@ export const runnerSessions = <
           env: made.env,
           userId,
           agentId: agent.id,
+          conversationId: agent.conversationId,
           extraCheckouts: made.extraCheckouts,
           name: place.name,
           started,
@@ -2199,6 +2219,7 @@ export const runnerSessions = <
         // An agent on screen is its sandbox in use: a running one is touched, a stopped one resumed by the launch below.
         if (found.value.machine === AGENT_MACHINE.VERCEL && found.value.running !== undefined) {
           yield* touchSandbox(found.value.name);
+          yield* sandboxTouchRecorded(conversationId);
         }
         const live = found.value.runner;
         if (live !== undefined) {

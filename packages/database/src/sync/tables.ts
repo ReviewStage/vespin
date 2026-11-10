@@ -29,6 +29,7 @@ import { agentPin } from "../schemas/agent-pin.js";
 import { agentPullRequest } from "../schemas/agent-pull-request.js";
 import { agentQueue } from "../schemas/agent-queue.js";
 import { agentRead } from "../schemas/agent-read.js";
+import { agentSandbox } from "../schemas/agent-sandbox.js";
 import { attachment } from "../schemas/attachment.js";
 import { invitation, member, organization, user } from "../schemas/auth.js";
 import { automation, automationRun } from "../schemas/automation.js";
@@ -707,6 +708,18 @@ export const conversationsSync = defineSyncTable(conversations, {
 });
 
 /**
+ * Where a cloud agent's sandbox stands, on its conversation's topic, as the
+ * conversation's own row is, so the task list takes it from the log as it
+ * takes the conversation (`tasksRead`'s `anyTopic`). A running sandbox's
+ * touches write about once a minute (`recordSandboxTouch`), so every write
+ * is logged.
+ */
+export const agentSandboxSync = defineSyncTable(agentSandbox, {
+  topics: [{ kind: TOPIC.CONVERSATION, column: agentSandbox.conversationId }],
+  log: LOG.EVERY,
+});
+
+/**
  * A turn, on its conversation's topic and, through the coding agent whose
  * conversation it runs in, the agent's own, its task's, and its
  * workspace's, so a turn starting, settling, or stopped reaches every view
@@ -799,6 +812,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   slackChannelRepositorySync,
   messagesSync,
   conversationsSync,
+  agentSandboxSync,
   turnsSync,
   agentDelegationSync,
 ];

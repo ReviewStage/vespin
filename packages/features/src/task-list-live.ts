@@ -1,4 +1,5 @@
 import { Schema as EffectSchema } from "effect";
+import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { agentStatusAt, type StatusTurn, statusClockEdge, turnStoppable } from "./agent-status.js";
 import {
   AGENT_BRIEF,
@@ -202,6 +203,17 @@ const agentLiveRowSchema = EffectSchema.Struct({
   deviceName: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
   /** Whether the agent's conversation records its sandbox's session; absent from a statement before it was carried. */
   sandboxOpen: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /**
+   * Where the agent's sandbox stands as the service last recorded it
+   * (`agent-sandbox-wire.ts`): its state, the steps of its newest boot, when
+   * it moved to its state, and when it stops unless touched; null for an
+   * agent no boot has recorded, a Mac's among them, and absent from a
+   * statement before they were carried.
+   */
+  sandboxState: EffectSchema.optionalKey(EffectSchema.NullOr(agentSandboxSchema.fields.state)),
+  sandboxSteps: EffectSchema.optionalKey(EffectSchema.NullOr(agentSandboxSchema.fields.steps)),
+  sandboxStateAt: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
+  sandboxRunsUntil: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
 });
 
 /**
@@ -480,6 +492,20 @@ function macOf(row: AgentLiveRow): AgentSummary["mac"] {
   return { name: deviceName, deviceId };
 }
 
+/** Where the agent's sandbox stands as its summary says it; none where no boot was recorded, or the statement carries none. */
+function sandboxOf(row: AgentLiveRow): Pick<AgentSummary, "sandbox"> | undefined {
+  const { sandboxState, sandboxStateAt } = row;
+  if (sandboxState == null || sandboxStateAt == null) return undefined;
+  return {
+    sandbox: {
+      state: sandboxState,
+      stateAt: sandboxStateAt,
+      steps: row.sandboxSteps ?? [],
+      runsUntil: row.sandboxRunsUntil ?? null,
+    },
+  };
+}
+
 /** One agent as the tabs draw it, on a plan or with none, its status read at `now`, as the service's summary of it says it, with the agents `continuedBy` from it. */
 function agentSummaryOf(
   row: AgentLiveRow,
@@ -533,6 +559,7 @@ function agentSummaryOf(
     ...(started === undefined ? undefined : { runStartedAt: started }),
     ...(stoppable ? undefined : { stoppable: false }),
     ...(row.sandboxOpen === undefined ? undefined : { sandboxOpen: row.sandboxOpen }),
+    ...sandboxOf(row),
   };
 }
 

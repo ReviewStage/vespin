@@ -5,6 +5,10 @@ import type { LiveStatement } from "@repo/database/core/live-statement";
 import { Database } from "@repo/database/core/query";
 import { agentOwnerFactsOf } from "@repo/database/models/agent-owners";
 import {
+  recordSandboxBooting,
+  recordSandboxRunning,
+} from "@repo/database/models/agent-sandbox-store";
+import {
   archiveAgent,
   createAgent,
   listAgents,
@@ -40,6 +44,7 @@ import {
   openWorkspace,
   startTask,
 } from "@repo/database/testing";
+import { SANDBOX_STATE, SANDBOX_STEP } from "@repo/features/agent-sandbox-wire";
 import { STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
 import {
   AGENT_ARCHIVER,
@@ -83,7 +88,7 @@ import {
   type TurnStatus,
 } from "@repo/wire";
 import { eq } from "drizzle-orm";
-import { Clock, Effect, Option, Schema } from "effect";
+import { Clock, Duration, Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { agentSummary, summaryAccounts, summaryDevices } from "../../agents/coder-host/status.js";
 import { continuedByOf, standingsOf } from "../../agents/coder-host/stop.js";
@@ -783,6 +788,29 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         assert.deepEqual(opened, yield* heldListOf(owner, NOW));
         assert.equal(sandboxOf(opened), true);
       }),
+  );
+
+  it.effect("an agent carries its sandbox's record as the service last wrote it", () =>
+    Effect.gen(function* () {
+      const owner = yield* openUser;
+      const workspace = yield* openWorkspace(owner);
+      const agent = yield* openAgent(owner, { workspaceId: workspace }, 60_000);
+      const sandboxOf = (read: {
+        readonly planlessAgents?: readonly { readonly id: string; readonly sandbox?: unknown }[];
+      }) => read.planlessAgents?.find((each) => each.id === agent.id)?.sandbox;
+      assert.equal(sandboxOf(yield* liveListOf(owner, NOW)), undefined);
+
+      const bootedAt = yield* Clock.currentTimeMillis;
+      yield* recordSandboxBooting(agent.conversationId, "session-1", SANDBOX_STEP.CREATING);
+      yield* recordSandboxRunning(agent.conversationId, "session-1", Duration.minutes(3));
+
+      assert.deepEqual(sandboxOf(yield* liveListOf(owner, NOW)), {
+        state: SANDBOX_STATE.RUNNING,
+        stateAt: bootedAt,
+        steps: [{ step: SANDBOX_STEP.CREATING, at: bootedAt }],
+        runsUntil: bootedAt + 180_000,
+      });
+    }),
   );
 
   it.effect(
