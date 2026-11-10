@@ -687,11 +687,11 @@ let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
 
 /** The setup a run actions save leaves, an empty list removing the repository's, an action keeping its id only where it is already the repository's and only once, as the service keeps them. */
 function runActionsAnswer(repository: string, actions: readonly RunActionPut[]) {
-  const others = acmeSandboxSetup.runActions.filter(
+  const others = (acmeSandboxSetup.runActions ?? []).filter(
     (each) => each.repository.toLowerCase() !== repository.toLowerCase(),
   );
   const keepable = new Set(
-    acmeSandboxSetup.runActions
+    (acmeSandboxSetup.runActions ?? [])
       .filter((each) => each.repository.toLowerCase() === repository.toLowerCase())
       .flatMap((each) => each.actions.map((action) => action.id)),
   );

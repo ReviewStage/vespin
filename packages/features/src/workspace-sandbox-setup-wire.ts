@@ -98,7 +98,8 @@ export const workspaceSandboxSetupAnswerSchema = EffectSchema.Struct({
   install: EffectSchema.NullOr(savedScriptSchema),
   setups: EffectSchema.Array(repositorySetupSchema),
   archives: EffectSchema.Array(repositorySetupSchema),
-  runActions: EffectSchema.Array(repositoryRunActionsSchema),
+  /** Absent from a service older than run actions, which reads as none. */
+  runActions: EffectSchema.optionalKey(EffectSchema.Array(repositoryRunActionsSchema)),
 });
 
 export type WorkspaceSandboxSetupAnswer = typeof workspaceSandboxSetupAnswerSchema.Type;
