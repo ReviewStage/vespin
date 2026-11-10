@@ -36,7 +36,9 @@ import { fileName } from "@repo/features/code-ref-words";
 import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { callHeading, WORKING_LINE, workedForText } from "@repo/features/time-format";
 import {
+  BLOCK_TITLE,
   COMMAND_PROMPT,
+  NO_OUTPUT,
   readableBlock,
   shownOutput,
   TOOL_BLOCK,
@@ -203,16 +205,8 @@ export interface TranscriptReading {
 /** How many lines of a call's block its card draws, as the panel's card cuts one. */
 const BLOCK_LINES = 40;
 
-/** What a call's body says where it answered nothing. */
-const NO_OUTPUT = "No output";
-
-/** What each block of a call's body is headed, as the panel's cards head them. */
-const BLOCK_TITLE = {
-  INPUT: "Input",
-  OUTPUT: "Output",
-  TERMINAL: "Terminal",
-  ERROR: "Error",
-} as const;
+/** What the block a failed call's body ends with is headed. */
+const ERROR_TITLE = "Error";
 
 /** A block's words cut to the lines its card draws. */
 function cutLines(text: string): string {
@@ -236,7 +230,7 @@ function callBody(
   output: ToolBlock | undefined,
   errorText: string | undefined,
 ): readonly CallBodyBlock[] {
-  const error = errorText === undefined ? [] : [{ title: BLOCK_TITLE.ERROR, text: errorText }];
+  const error = errorText === undefined ? [] : [{ title: ERROR_TITLE, text: errorText }];
   if (input.kind === TOOL_BLOCK.COMMAND) {
     const printed = output === undefined ? "" : readableBlock(output).text.trimEnd();
     const prompt = `${COMMAND_PROMPT}${input.text}`;

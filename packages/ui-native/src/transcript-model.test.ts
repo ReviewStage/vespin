@@ -1,3 +1,4 @@
+import { CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { describe, expect, it } from "vitest";
 import { NO_TOGGLES, TRANSCRIPT_ITEM, transcriptItems } from "./transcript-model.js";
@@ -41,4 +42,66 @@ describe("transcriptItems", () => {
       media: [{ id: "picture-1", caption: "The dialog", video: false }],
     });
   });
+
+  const OPENED = {
+    id: "work",
+    role: MESSAGE_ROLE.ASSISTANT,
+    parts: [
+      {
+        type: "tool-open_pull_request",
+        toolCallId: "open",
+        state: "output-available",
+        input: { head: "agent/invites", title: "Invite by email", body: "", draft: true },
+        output: { url: "https://github.com/ada/relay/pull/128", number: 128 },
+      },
+    ],
+    finishedAt: 1,
+  } as const;
+  const HELD = {
+    number: 128,
+    title: "Invite a teammate by email",
+    url: "https://github.com/ada/relay/pull/128",
+    state: PULL_REQUEST_STATE.MERGED,
+    checks: CHECK_SUMMARY.PASSING,
+    additions: 412,
+    deletions: 37,
+    changedFiles: 14,
+  };
+
+  it.each([
+    {
+      held: [HELD],
+      card: {
+        title: "Invite a teammate by email",
+        state: PULL_REQUEST_STATE.MERGED,
+        additions: 412,
+        deletions: 37,
+      },
+    },
+    {
+      held: [],
+      card: {
+        title: "Invite by email",
+        state: PULL_REQUEST_STATE.DRAFT,
+        additions: undefined,
+        deletions: undefined,
+      },
+    },
+  ])(
+    "draws a pull request a call opened as the task list holds it, or as it was opened where the list holds none ($card.state)",
+    ({ held, card }) => {
+      const items = transcriptItems([OPENED], {
+        writing: false,
+        readerId: undefined,
+        toggles: NO_TOGGLES,
+        now: 2,
+        pullRequests: held,
+      });
+      expect(items.find((item) => item.kind === TRANSCRIPT_ITEM.PULL_REQUEST)).toMatchObject({
+        number: 128,
+        url: "https://github.com/ada/relay/pull/128",
+        ...card,
+      });
+    },
+  );
 });

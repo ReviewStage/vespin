@@ -503,6 +503,10 @@ function TranscriptRow({
           </Host>
         </View>
       );
+    default: {
+      const unknown: never = item;
+      throw new Error(`A transcript item of no kind the list draws: ${JSON.stringify(unknown)}`);
+    }
   }
 }
 
@@ -629,7 +633,10 @@ export function AgentTranscript({ items, head, empty, now, ...drawing }: AgentTr
   const anchored = useRef(true);
   const [away, setAway] = useState(false);
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
-  // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in.
+  // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
+  const onScrollBegin = useCallback(() => {
+    anchored.current = false;
+  }, []);
   const onScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     setAway(fromEnd(event.nativeEvent) > LATEST_REACH);
   }, []);
@@ -656,6 +663,7 @@ export function AgentTranscript({ items, head, empty, now, ...drawing }: AgentTr
         contentInsetAdjustmentBehavior="automatic"
         onContentSizeChange={onContentSizeChange}
         onScroll={onScroll}
+        onScrollBeginDrag={onScrollBegin}
         onScrollEndDrag={onScrollSettled}
         onMomentumScrollEnd={onScrollSettled}
         scrollEventThrottle={64}
