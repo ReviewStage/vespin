@@ -8,7 +8,7 @@ import {
   type ProviderKeyProvider,
   type ProviderKeyStatus,
 } from "@repo/features/provider-key-wire";
-import { and, asc, eq, inArray, lte, ne, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, ne, or, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type DatabaseShape } from "../core/query.js";
@@ -73,6 +73,7 @@ const SealedRowSchema = Schema.Struct({
   limitResetsAt: Schema.NullOr(InstantColumnSchema),
   usageWindows: Schema.NullOr(Schema.Array(UsageWindowSchema)),
   usageHeardAt: Schema.NullOr(InstantColumnSchema),
+  usageAskedAt: Schema.NullOr(InstantColumnSchema),
   position: Schema.Int,
   label: Schema.NullOr(Schema.String),
   accountEmail: Schema.NullOr(Schema.String),
@@ -113,6 +114,7 @@ const ROW_COLUMNS = {
   limitResetsAt: accountProviderKey.limitResetsAt,
   usageWindows: accountProviderKey.usageWindows,
   usageHeardAt: accountProviderKey.usageHeardAt,
+  usageAskedAt: accountProviderKey.usageAskedAt,
   position: accountProviderKey.position,
   label: accountProviderKey.label,
   accountEmail: accountProviderKey.accountEmail,
@@ -232,6 +234,7 @@ const savedColumns = (write: typeof SavedSchema.Type) => ({
   limitResetsAt: null,
   usageWindows: null,
   usageHeardAt: null,
+  usageAskedAt: null,
   createdAt: write.now,
 });
 
@@ -458,6 +461,43 @@ const mergePlanUsage = SqlSchema.void({
         })
         .where(and(targetRow(db, write), lte(accountProviderKey.createdAt, write.savedBy)));
     }),
+});
+
+/**
+ * The subscription of this id claimed for one ask of its provider for its
+ * usage: marked asked `at`, where neither a reading nor an ask stands since
+ * `since`; nothing where one does. Note that the claim and the check are
+ * one statement, so two reads at once ask once between them.
+ */
+const claimUsageAsk = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    subscriptionId: Schema.String,
+    at: Schema.Date,
+    since: Schema.Date,
+  }),
+  Result: IdSchema,
+  execute: (claim) =>
+    Database.use((db) =>
+      db
+        .update(accountProviderKey)
+        .set({ usageAskedAt: claim.at })
+        .where(
+          and(
+            eq(accountProviderKey.userId, claim.userId),
+            eq(accountProviderKey.id, claim.subscriptionId),
+            or(
+              isNull(accountProviderKey.usageHeardAt),
+              lte(accountProviderKey.usageHeardAt, claim.since),
+            ),
+            or(
+              isNull(accountProviderKey.usageAskedAt),
+              lte(accountProviderKey.usageAskedAt, claim.since),
+            ),
+          ),
+        )
+        .returning({ id: accountProviderKey.id }),
+    ),
 });
 
 /** Every usage window of the subscription of this id, as a read of its provider answered them, in place of what it held. */
@@ -871,6 +911,22 @@ export function setPlanUsage(
     heardAt,
     savedBy,
   });
+}
+
+/**
+ * Claims the account's subscription of this id for an ask of its provider
+ * for its usage `at`, answering whether it was claimed: not where a reading
+ * was heard or an ask made since `since`, a refused one included, so a
+ * provider that does not answer is asked once a span rather than on every
+ * read.
+ */
+export function claimPlanUsageAsk(
+  userId: string,
+  subscriptionId: string,
+  at: Date,
+  since: Date,
+): TaskStoreEffect<boolean> {
+  return Effect.map(claimUsageAsk({ userId, subscriptionId, at, since }), Option.isSome);
 }
 
 /** Writes every usage window a read of the plan's provider answered for the account's subscription of this id, in place of all it held. */

@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "7cabe2ea-9801-4a28-9ced-5393e9e1ffb8",
+  "id": "d28bff2c-8271-4455-bf14-e7fb2f236e28",
   "prevIds": [
     "20b4afc6-9024-4622-bd80-a537dfe74071",
     "5e620699-3ec1-40ef-958b-057ab782d789",
@@ -948,6 +948,19 @@
       "generated": null,
       "identity": null,
       "name": "usage_heard_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_provider_key"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "usage_asked_at",
       "entityType": "columns",
       "schema": "public",
       "table": "account_provider_key"

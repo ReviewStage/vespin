@@ -3,8 +3,11 @@
  *
  * A turn on a plan hears its windows from Codex as it runs
  * (`account/rateLimits/updated`); between turns nothing does, so a read of
- * the account's keys asks ChatGPT for each plan's whose reading is older
- * than `FRESH_FOR`, with the plan's own access token (renewed under its
+ * the account's keys asks ChatGPT for each plan's whose reading, and whose
+ * last ask, answered or not, are older than `FRESH_FOR`, so a ChatGPT that
+ * refuses is asked once a span rather than on every read of the keys; the
+ * plan is claimed for its ask before it is made (`claimPlanUsageAsk`), so
+ * two reads at once ask once. It is asked with the plan's own access token (renewed under its
  * lock where due, `refreshChatGptAccess`) and its ChatGPT workspace, at the
  * endpoint Codex's own client calls. The endpoint is undocumented, so an
  * answer that is not what Codex reads, a refusal, or no answer within the
@@ -16,6 +19,7 @@
 
 import type { KeyRing } from "@repo/database/models/provider-key-seal";
 import {
+  claimPlanUsageAsk,
   listProviderKeyRows,
   type ProviderKeyRow,
   setPlanUsageWindows,
@@ -80,12 +84,11 @@ function storedWindow(window: typeof WindowAnswerSchema.Type): StoredUsageWindow
   };
 }
 
-/** Whether the plan's reading is old enough, or absent, that ChatGPT is asked. */
-function due(row: ProviderKeyRow, now: Date): boolean {
+/** Whether the plan's reading and its last ask are old enough, or absent, that ChatGPT may be asked. */
+function due(row: ProviderKeyRow, since: Date): boolean {
   if (!ASKED_STATUSES.has(row.status)) return false;
-  return (
-    row.usageHeardAt === null ||
-    now.getTime() - row.usageHeardAt.getTime() >= Duration.toMillis(FRESH_FOR)
+  return [row.usageHeardAt, row.usageAskedAt].every(
+    (at) => at === null || at.getTime() <= since.getTime(),
   );
 }
 
@@ -130,14 +133,18 @@ const askUsage = /* @__PURE__ */ Effect.fnUntraced(function* (
 const askDue = /* @__PURE__ */ Effect.fnUntraced(function* (userId: string, ring: KeyRing) {
   const rows = yield* listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
   const now = yield* DateTime.nowAsDate;
+  const since = new Date(now.getTime() - Duration.toMillis(FRESH_FOR));
   yield* Effect.forEach(
-    rows.filter((row) => due(row, now)),
+    rows.filter((row) => due(row, since)),
     (row) =>
-      Effect.flatMap(askUsage(userId, ring, row), (windows) =>
-        Option.isSome(windows) && windows.value.length > 0
-          ? setPlanUsageWindows(userId, row.id, windows.value, now)
-          : Effect.void,
-      ),
+      Effect.gen(function* () {
+        // Note that the ask is claimed before it is made, so it counts though ChatGPT never answers it.
+        if (!(yield* claimPlanUsageAsk(userId, row.id, now, since))) return;
+        const windows = yield* askUsage(userId, ring, row);
+        if (Option.isSome(windows) && windows.value.length > 0) {
+          yield* setPlanUsageWindows(userId, row.id, windows.value, now);
+        }
+      }),
     { concurrency: "unbounded", discard: true },
   );
 });

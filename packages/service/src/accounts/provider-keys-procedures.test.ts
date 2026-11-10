@@ -1079,6 +1079,26 @@ it.layer(getTestDB())("the provider keys route", (it) => {
   );
 
   it.effect(
+    "a ChatGPT that refuses a plan's usage is asked once in five minutes, not on every read of the keys",
+    () =>
+      Effect.gen(function* () {
+        const device = fakeDeviceAuth();
+        device.state.codePollStatus = HTTP_STATUS.OK;
+        const { owner, ask, checks } = yield* openAccounts({ ring: KEK.ONE, auth: device.auth });
+        yield* connectPlan(ask, owner);
+        const asked = () => checks.filter((check) => check.url === CHATGPT_USAGE_URL).length;
+
+        yield* ask(request(owner));
+        yield* ask(request(owner));
+        const whileRefused = asked();
+        yield* TestClock.adjust("5 minutes");
+        yield* ask(request(owner));
+
+        assert.deepEqual([whileRefused, asked()], [1, 2]);
+      }),
+  );
+
+  it.effect(
     "removing the ChatGPT plan revokes its refresh token at OpenAI first and answers whether OpenAI confirmed it",
     () =>
       Effect.gen(function* () {

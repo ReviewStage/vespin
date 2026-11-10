@@ -100,6 +100,13 @@ export const accountProviderKey = pgTable(
     usageWindows: jsonb("usage_windows").$type<readonly StoredUsageWindow[]>(),
     /** When `usageWindows` was last heard; null with it. */
     usageHeardAt: timestamptz("usage_heard_at"),
+    /**
+     * When the plan's provider was last asked for its usage, whether or not
+     * it answered; null until it has been. Kept apart from `usageHeardAt`,
+     * so a refusal waits its turn before the next ask without the reading
+     * passing for fresh.
+     */
+    usageAskedAt: timestamptz("usage_asked_at"),
     /** Where the credential stands in its provider's one order, its plans and its API key alike, the first paying first. */
     position: integer("position").notNull().default(0),
     /** The name the account gave the subscription or API key; null for the name it is shown by default. */
