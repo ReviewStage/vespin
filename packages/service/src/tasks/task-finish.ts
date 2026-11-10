@@ -1,4 +1,4 @@
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { readAgent } from "@repo/database/models/agent-store";
 import { isRunTask } from "@repo/database/models/automation-store";
 import { isSlackTask } from "@repo/database/models/slack-installation-store";
@@ -175,17 +175,21 @@ export function settleAgentTaskIfFinished(
   );
 }
 
-/** The agent's task moved back to in progress where its finish moved it to done, as a question of the agent's opening again asks; nothing for an agent on no task, or one the account does not reach. */
+/**
+ * The agent's task moved back to in progress where its finish moved it to
+ * done, as a question of the agent's opening again asks, answering whether
+ * it moved; nothing for an agent on no task, or one the account does not
+ * reach. Note that its failure is its caller's, unlike a finish's, because
+ * the take-back that asks it writes it in its own transaction, so a reopen
+ * that failed takes nothing back and may be asked again.
+ */
 export function reopenAgentTaskFinished(
   userId: string,
   agentId: string,
-): Effect.Effect<void, never, DatabaseServices> {
-  return logged(
-    "a finished task's reopening",
-    Effect.flatMap(readAgent(userId, agentId), (agent) =>
-      Option.isSome(agent) && agent.value.taskId !== null
-        ? reopenFinishedTaskWork(userId, agent.value.taskId)
-        : Effect.void,
-    ),
+): Effect.Effect<boolean, StoreFailure, DatabaseServices> {
+  return Effect.flatMap(readAgent(userId, agentId), (agent) =>
+    Option.isSome(agent) && agent.value.taskId !== null
+      ? reopenFinishedTaskWork(userId, agent.value.taskId)
+      : Effect.succeed(false),
   );
 }

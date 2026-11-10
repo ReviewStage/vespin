@@ -46,6 +46,7 @@ import {
 import { MESSAGE_CHANNEL, THREAD_LINE_EVENT, type ThreadLineMetadata } from "@repo/wire";
 import type { LanguageModel } from "ai";
 import { Effect, Option } from "effect";
+import { SqlClient } from "effect/sql";
 import { type AccountResolving, controlsAgent } from "../agents/agent-reach.js";
 import {
   accountInboxPast,
@@ -566,19 +567,26 @@ export const takeBackAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   const told =
     item.needsReply || (item.thread ?? []).some((message) => message.clientKey === clientKey);
   if (told) return { item, outcome: INBOX_TAKE_BACK.TOLD };
-  const reopened = yield* hostedStoreOrUnavailable(
+  const withdrawn =
     item.status === INBOX_STATUS.CLOSED
       ? withdrawInboxClose(userId, itemId, clientKey)
-      : withdrawInboxAnswer(userId, itemId, clientKey),
+      : withdrawInboxAnswer(userId, itemId, clientKey);
+  // A question open again holds the task its settle let finish, as it held it before, in the take-back's own transaction, so one that cannot reopen it takes nothing back.
+  const reopened = yield* hostedStoreOrUnavailable(
+    Effect.flatMap(SqlClient.SqlClient, (client) =>
+      client.withTransaction(
+        Effect.tap(withdrawn, (taken) =>
+          Option.isSome(taken) && openAskOf(taken.value.thread ?? []) !== undefined
+            ? reopenAgentTaskFinished(userId, taken.value.agentId)
+            : Effect.void,
+        ),
+      ),
+    ),
   );
   if (Option.isNone(reopened)) {
     const now = yield* hostedStoreOrUnavailable(readInboxItem(userId, itemId));
     if (Option.isNone(now)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     return { item: now.value.item, outcome: INBOX_TAKE_BACK.MOVED_ON };
-  }
-  // A question open again holds the task its settle let finish, as it held it before.
-  if (openAskOf(reopened.value.thread ?? []) !== undefined) {
-    yield* reopenAgentTaskFinished(userId, reopened.value.agentId);
   }
   return { item: reopened.value, outcome: INBOX_TAKE_BACK.TAKEN };
 });
