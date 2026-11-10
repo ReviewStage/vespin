@@ -2,45 +2,28 @@
  * workspace-environment-procedures.ts -- a workspace's shared environment variables: list their names to a member, and put or delete one as an owner or admin.
  *
  * Every procedure resolves the caller (`accountMiddleware`, on the
- * resource so it runs before an input is read) and the workspace as the
- * caller is a member of it, a workspace it is not in answered as not found;
- * a put or a delete by a member who is no owner or admin is not permitted.
- * A put seals the value under the deployment's ring
- * (`keyRingMiddleware`, so a deployment holding none answers it
- * unavailable) the moment it is read, and nothing logs it. Every answer is
- * the workspace's variable names as they then stand, never a value.
+ * resource so it runs before an input is read) and runs the one operation
+ * behind every door to the variables (`workspace-environment.ts`), which
+ * answers a workspace the caller is not in as not found and a write by a
+ * member who is no owner or admin as not permitted. A put seals the value
+ * under the deployment's ring (`keyRingMiddleware`, so a deployment holding
+ * none answers it unavailable) the moment it is read, and nothing logs it.
+ * Every answer is the workspace's variable names as they then stand, never
+ * a value.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
-import { sealWorkspaceVariable } from "@repo/database/models/provider-key-seal";
-import {
-  listWorkspaceVariables,
-  removeWorkspaceVariable,
-  setWorkspaceVariable,
-} from "@repo/database/models/workspace-environment-store";
-import type { WorkspaceEnvironmentAnswer } from "@repo/features/workspace-environment-wire";
-import { DateTime, Effect, Redacted } from "effect";
-import { answeredWorkspace, managedWorkspace } from "../accounts/workspace-access.js";
-import {
-  type HostedRefusal,
-  hostedStoreOrUnavailable,
-  type UserIdResolver,
-} from "../http/http-effect.js";
+import { Redacted } from "effect";
+import type { UserIdResolver } from "../http/http-effect.js";
 import { accountMiddleware, hosted, keyRingMiddleware } from "../orpc/base.js";
+import {
+  deleteWorkspaceVariable,
+  listWorkspaceEnvironment,
+  putWorkspaceVariable,
+} from "./workspace-environment.js";
 
 export interface WorkspaceEnvironmentProcedureSeams {
   resolveUserId: UserIdResolver;
 }
-
-/** The workspace's variable names as they stand, for the wire. */
-const environmentAnswer = Effect.fn("web/workspaceEnvironmentAnswer")(function* (
-  workspaceId: string,
-): Effect.fn.Return<WorkspaceEnvironmentAnswer, HostedRefusal, DatabaseServices> {
-  const listed = yield* hostedStoreOrUnavailable(listWorkspaceVariables(workspaceId));
-  return {
-    variables: listed.map((row) => ({ name: row.name, updatedAt: row.updatedAt.getTime() })),
-  };
-});
 
 /** The workspace environment resource: every procedure to a signed-in caller, the put on a deployment that holds a ring. */
 export function workspaceEnvironmentProcedures(seams: WorkspaceEnvironmentProcedureSeams) {
@@ -48,23 +31,15 @@ export function workspaceEnvironmentProcedures(seams: WorkspaceEnvironmentProced
   const keyed = signedIn.use(keyRingMiddleware);
   return {
     list: signedIn.list.effect(function* ({ input, context: { userId } }) {
-      const workspace = yield* answeredWorkspace(userId, input.workspaceId);
-      return yield* environmentAnswer(workspace.id);
+      return yield* listWorkspaceEnvironment(userId, input.workspaceId);
     }),
 
-    put: keyed.put.effect(function* ({ input, context: { userId, ring } }) {
-      const workspace = yield* managedWorkspace(userId, input.workspaceId);
-      const owner = { organizationId: workspace.id, name: input.name };
-      const sealed = sealWorkspaceVariable(ring, owner, Redacted.make(input.value));
-      const now = yield* DateTime.nowAsDate;
-      yield* hostedStoreOrUnavailable(setWorkspaceVariable(workspace.id, input.name, sealed, now));
-      return yield* environmentAnswer(workspace.id);
+    put: keyed.put.effect(function* ({ input: { value, ...variable }, context: { userId, ring } }) {
+      return yield* putWorkspaceVariable(ring, userId, variable, Redacted.make(value));
     }),
 
     delete: signedIn.delete.effect(function* ({ input, context: { userId } }) {
-      const workspace = yield* managedWorkspace(userId, input.workspaceId);
-      yield* hostedStoreOrUnavailable(removeWorkspaceVariable(workspace.id, input.name));
-      return yield* environmentAnswer(workspace.id);
+      return yield* deleteWorkspaceVariable(userId, input);
     }),
   };
 }

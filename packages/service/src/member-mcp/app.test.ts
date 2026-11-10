@@ -19,9 +19,11 @@ import {
 } from "@repo/database/models/description-comments";
 import { listRevisions } from "@repo/database/models/description-revisions";
 import { listMemories, rememberMemory } from "@repo/database/models/memory-store";
+import { parseKeyRing } from "@repo/database/models/provider-key-seal";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { listTaskSections, writeTaskSections } from "@repo/database/models/task-section-store";
 import { createTask, readTask } from "@repo/database/models/task-store";
+import { openWorkspaceEnvironment } from "@repo/database/models/workspace-environment-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
@@ -76,7 +78,7 @@ import { DESKTOP_OAUTH_CLIENT } from "../auth/oauth-clients.js";
 import { ACTION_RESULT_STATUS } from "../core.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { postInboxThread, readInboxItem } from "../inbox/inbox-store.js";
-import { connectAgentApiKeys } from "../testing/agent-credentials.js";
+import { AGENT_KEY_RING, connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
   fakeAgentSessions,
   freshInstallation,
@@ -1844,6 +1846,123 @@ it.effect(
 
       assert.equal(answer.isError, true);
       assert.match(answer.content[0].text, /call it first/u);
+    }),
+);
+
+/** The names a workspace environment tool answers, never a value. */
+const decodeVariableNames = Schema.decodeUnknownSync(
+  Schema.Struct({ variables: Schema.Array(Schema.Struct({ name: Schema.String })) }),
+);
+
+/** The server standing with a ring a set variable is sealed under, as a deployment's. */
+const keyedStanding = memberMcpStanding({ keyRing: AGENT_KEY_RING });
+
+it.effect(
+  "an owner sets and deletes a workspace environment variable its agents are handed, no answer carrying its value; a plain member reads its name and is refused a set",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch, services } = yield* keyedStanding;
+      const owner = yield* Effect.promise(() => signUp(auth));
+      const plain = yield* Effect.promise(() => signUp(auth));
+      const workspaceId = yield* Effect.gen(function* () {
+        const id = yield* openWorkspace(owner.userId);
+        yield* joinWorkspace(id, plain.userId);
+        return id;
+      }).pipe(Effect.provide(services));
+      const workspace = `workspace-${workspaceId}`;
+      const value = "postgres://owner:s3cret@db.test/app";
+      const callerAs = (cookie: string) =>
+        Effect.gen(function* () {
+          const token = yield* Effect.promise(() =>
+            mintedToken(auth, cookie, {
+              clientId: MCP_CLIENT.id,
+              scope: [MEMBER_MCP_SCOPE.MCP],
+              resource: RESOURCE,
+            }),
+          );
+          const { client } = yield* connected(fetch, token, REVISION.MODERN);
+          const call = (name: string, args: Record<string, unknown>) =>
+            Effect.promise(async () => {
+              const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
+              const { text } = answer.content[0];
+              return { refused: answer.isError === true, text, read: JSON.parse(text) };
+            });
+          return { client, call };
+        });
+      const ring = Result.getOrThrow(parseKeyRing(AGENT_KEY_RING));
+      const handed = openWorkspaceEnvironment(ring, workspaceId).pipe(Effect.provide(services));
+
+      const asOwner = yield* callerAs(owner.cookie);
+      const asPlain = yield* callerAs(plain.cookie);
+      const set = yield* asOwner.call(MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE, {
+        workspace,
+        name: "DATABASE_URL",
+        value,
+      });
+      const afterSet = yield* handed;
+      const listed = yield* asPlain.call(MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES, {
+        workspace,
+      });
+      const refused = yield* asPlain.call(MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE, {
+        workspace,
+        name: "DATABASE_URL",
+        value: "postgres://plain@db.test/app",
+      });
+      const deleted = yield* asOwner.call(MEMBER_MCP_TOOL.DELETE_ENVIRONMENT_VARIABLE, {
+        workspace,
+        name: "DATABASE_URL",
+      });
+      const afterDelete = yield* handed;
+      yield* Effect.promise(() => Promise.all([asOwner.client.close(), asPlain.client.close()]));
+
+      assert.equal(set.refused, false);
+      assert.deepEqual(afterSet, { DATABASE_URL: value });
+      assert.equal(listed.refused, false);
+      assert.deepEqual(
+        decodeVariableNames(listed.read).variables.map(({ name }) => name),
+        ["DATABASE_URL"],
+      );
+      assert.equal(refused.refused, true);
+      assert.deepEqual(decodeVariableNames(deleted.read).variables, []);
+      assert.deepEqual(afterDelete, {});
+      for (const answered of [set, listed, refused, deleted]) {
+        assert.ok(!answered.text.includes("s3cret"));
+      }
+    }),
+);
+
+it.effect(
+  "an owner's set on a deployment holding no key ring is refused in words that say a retry will not help, and nothing is stored",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch, services } = yield* standing;
+      const owner = yield* Effect.promise(() => signUp(auth));
+      const workspaceId = yield* openWorkspace(owner.userId).pipe(Effect.provide(services));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, owner.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const answer = decodeAnswer(
+        yield* Effect.promise(() =>
+          client.callTool({
+            name: MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE,
+            arguments: { workspace: `workspace-${workspaceId}`, name: "DATABASE_URL", value: "x" },
+          }),
+        ),
+      );
+      yield* Effect.promise(() => client.close());
+      const ring = Result.getOrThrow(parseKeyRing(AGENT_KEY_RING));
+      const stored = yield* openWorkspaceEnvironment(ring, workspaceId).pipe(
+        Effect.provide(services),
+      );
+
+      assert.equal(answer.isError, true);
+      assert.match(answer.content[0].text, /Calling again will not help/u);
+      assert.deepEqual(stored, {});
     }),
 );
 

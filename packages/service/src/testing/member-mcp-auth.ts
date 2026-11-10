@@ -32,7 +32,7 @@ import { memorySandbox } from "@repo/sandbox/testing";
 import { betterAuth } from "better-auth";
 import { jwt } from "better-auth/plugins";
 import { drizzle } from "drizzle-orm/pglite";
-import { Clock, Effect, Layer, Schema } from "effect";
+import { Clock, Effect, Layer, type Redacted, Schema } from "effect";
 import { HttpRouter } from "effect/http";
 import type * as HttpClient from "effect/http/HttpClient";
 import { vi } from "vitest";
@@ -111,7 +111,7 @@ export const MCP_CLIENT: OAuthClient = {
   type: "web",
 };
 
-/** The deployment's environment with no key of its own, which no call here reads. */
+/** The deployment's environment with no key of its own, which no call here reads unless a test hands it a ring (`MemberMcpStandingOptions.keyRing`). */
 const NO_ENVIRONMENT: HostedEnvironmentValues = {
   posthogPersonalApiKey: undefined,
   posthogProjectId: undefined,
@@ -209,11 +209,12 @@ export const MEMBER_MCP_AGENT_SANDBOX = Layer.mergeAll(
   agentBrowserServices,
 ).pipe(Layer.provide(Layer.succeed(AgentImage, FAKE_IMAGE)));
 
-/** What a test stands the server up over: the transport its metadata documents are fetched through, the GitHub its tools reach, and the Vercel Connect the member's integrations are begun and ended through. */
+/** What a test stands the server up over: the transport its metadata documents are fetched through, the GitHub its tools reach, the Vercel Connect the member's integrations are begun and ended through, and the ring a secret is sealed under, none by default. */
 export interface MemberMcpStandingOptions {
   readonly fetchClientMetadataResource?: ClientMetadataResourceFetch;
   readonly github?: Layer.Layer<GitHubApp | HttpClient.HttpClient>;
   readonly integrations?: Layer.Layer<IntegrationConnect>;
+  readonly keyRing?: Redacted.Redacted;
 }
 
 /**
@@ -235,7 +236,10 @@ export function memberMcpStanding(options: MemberMcpStandingOptions = {}) {
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
       options.github ?? NO_GITHUB,
       modelCatalogOf([]),
-      Layer.succeed(HostedEnvironment, NO_ENVIRONMENT),
+      Layer.succeed(HostedEnvironment, {
+        ...NO_ENVIRONMENT,
+        providerKeyEncryptionKeys: options.keyRing,
+      }),
       harness.layer,
       Layer.succeed(SentryApp, sentryAppService(undefined, [])),
       Layer.succeed(PageLinks, { sandbox: undefined }),

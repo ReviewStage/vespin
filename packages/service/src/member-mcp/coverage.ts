@@ -45,7 +45,7 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
   SCREEN_ONLY: "screen-only",
   /** A sign-in or connect flow that finishes in a browser, or a link only a person opens; a disconnect is no such flow. */
   NEEDS_BROWSER: "needs-browser",
-  /** It reads or writes a secret, which no tool ever carries: a provider key or the GitHub token goes in through the CLI's stdin alone. */
+  /** It reads or writes a secret no tool carries: a provider key or the GitHub token goes in through the CLI's stdin alone. A workspace environment variable's value is the one secret a tool takes, `set_environment_variable`'s input, and no tool ever answers one. */
   SECRET: "secret",
   /** It hands a person trust in the account, or takes a way into it away under a fresh session, a decision the member makes in the app alone and never through an agent. */
   SECURITY: "security",
@@ -190,6 +190,9 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.UPDATE_AUTOMATION]: { automations: ["read", "change"] },
   [MEMBER_MCP_TOOL.RUN_AUTOMATION]: { automations: ["run"] },
   [MEMBER_MCP_TOOL.DELETE_AUTOMATION]: { automations: ["remove"] },
+  [MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES]: { workspaceEnvironment: ["list"] },
+  [MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE]: { workspaceEnvironment: ["put"] },
+  [MEMBER_MCP_TOOL.DELETE_ENVIRONMENT_VARIABLE]: { workspaceEnvironment: ["delete"] },
   [MEMBER_MCP_TOOL.LIST_INSTALLED_SKILLS]: { installedSkills: ["list"] },
   [MEMBER_MCP_TOOL.READ_INSTALLED_SKILL]: { installedSkills: ["read"] },
   [MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL]: { installedSkills: ["preview"] },
@@ -356,7 +359,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     keepPicture: SCREEN_ONLY,
     pageFrame: SCREEN_ONLY,
   },
-  workspaceEnvironment: { list: NOT_YET_BUILT, put: NOT_YET_BUILT, delete: NOT_YET_BUILT },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: {
     list: NOT_YET_BUILT,
