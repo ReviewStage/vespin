@@ -144,6 +144,7 @@ import {
   readNativeRewind,
 } from "@repo/database/models/conversation-rewind";
 import { deviceAgentAwaitsUpdate } from "@repo/database/models/device-agent-store";
+import { holdsSessionClearedMark } from "@repo/database/models/message-reads";
 import { parseKeyRing } from "@repo/database/models/provider-key-seal";
 import {
   claimRuntimeSession,
@@ -1584,6 +1585,8 @@ export const runnerSessions = <
         }
         const source = agent.startedFrom?.session;
         if (!layout.transcriptsKept || source === undefined || !(yield* created)) return {};
+        // A session let go (`/clear`) leaves the agent a fresh one of its own, never its source's again.
+        if (yield* holdsSessionClearedMark({ userId, conversationId })) return {};
         const held = yield* holdsSession(userId, conversationId, source);
         if (!held) return {} satisfies ResumedSession;
         const cut = agent.startedFrom?.cutBefore;

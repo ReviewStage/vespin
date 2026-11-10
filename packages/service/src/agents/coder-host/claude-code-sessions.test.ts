@@ -4212,7 +4212,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "an agent continued from another whose transcript was carried forks the source's CLI session at its first open, cut where the Start cut it",
+    "an agent continued from another whose transcript was carried forks the source's CLI session at its first open, cut where the Start cut it, and once cleared opens a fresh one of its own",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -4251,6 +4251,22 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           [config.resume, config.fork, config.rewindBefore],
           [CLI_SESSION, true, "source-line"],
         );
+
+        // A clear marks the transcript and lets the session go; the next place made anew starts afresh.
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        yield* writer.markSessionCleared({ userId, conversationId: continued.conversationId });
+        yield* recordAgentNativeSession(userId, continued.id, null);
+        const fresh = runnerSandboxApi();
+        const reopened = yield* deliveredOpen(
+          yield* sessionsFor(userId, { next: 0 }).pipe(Effect.provide(services(fresh))),
+          yield* writtenLine(continued, "Start over."),
+        );
+        assert.ok(reopened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const [freshConfig] = (yield* launchLines(fresh.commands[0])) as [
+          ClaudeCodeConfig,
+          InputLine,
+        ];
+        assert.deepEqual([freshConfig.resume, freshConfig.fork], [undefined, undefined]);
       }),
   );
 
