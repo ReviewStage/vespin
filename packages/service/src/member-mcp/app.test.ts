@@ -476,13 +476,13 @@ it.effect(
       const { agentId, first, second } = rows;
 
       const read = yield* call(MEMBER_MCP_TOOL.READ_AGENT, { agentId });
+      const reordered = yield* call(MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE, {
+        agentId,
+        change: { change: QUEUE_CHANGE.REORDER, order: [second] },
+      });
       const deleted = yield* call(MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE, {
         agentId,
         change: { change: QUEUE_CHANGE.DELETE, messageId: first },
-      });
-      const reordered = yield* call(MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE, {
-        agentId,
-        change: { change: QUEUE_CHANGE.REORDER, order: [first, second] },
       });
       yield* Effect.promise(() => client.close());
 
