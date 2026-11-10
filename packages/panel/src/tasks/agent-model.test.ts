@@ -176,6 +176,21 @@ test("a finished turn that ended with end_turn replies in its summary, folding t
   assert.deepEqual(words(true), ["Reading the check's log.", "It's all in the summary above."]);
   assert.equal(messageWords(turn), summary);
   assert.equal(finishedReplyLead([turn])?.lead, "Fixed the failing check.");
+  // A later call refused stands for the turn, which then replies in its own words.
+  const refused: AgentTranscriptMessage = {
+    ...turn,
+    parts: [
+      ...turn.parts,
+      {
+        type: "tool-end_turn",
+        toolCallId: "call_again",
+        state: "output-available",
+        input: { summary: "" },
+        output: { status: "rejected", reason: "A summary is required." },
+      },
+    ],
+  };
+  assert.equal(messageWords(refused), "Reading the check's log.\n\nIt's all in the summary above.");
 });
 
 test("the wakeup a turn booked is read off Claude Code's own call or ours alike, by the delay held or asked, past a cancel or a refused call", () => {

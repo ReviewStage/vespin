@@ -447,25 +447,25 @@ function afterStepOf(line: AgentTranscriptMessage): number {
 }
 
 /**
- * The summary of a turn's last `end_turn` that was taken, which is what its
- * developer reads as the turn's reply; none where the turn ended no other
- * way than in its own words, or the call was refused or has not answered.
+ * The summary of a turn's last `end_turn`, where that call was taken, which
+ * is what its developer reads as the turn's reply; none where the turn ended
+ * no other way than in its own words, or the call was refused or has not answered.
  */
 export function endTurnSummary(parts: readonly AgentPart[]): string | undefined {
-  const summaries = parts.flatMap((part) =>
-    part.kind === AGENT_PART.TOOL &&
-    part.tool === AGENT_TOOL.END_TURN &&
-    part.state === TOOL_STATE.OUTPUT_AVAILABLE &&
-    // Note that a call a turn ended before it answered is kept as available too, so only an answer that took it counts.
-    isRecord(part.output) &&
-    part.output.status === ACTION_RESULT_STATUS.ACCEPTED &&
-    isRecord(part.input) &&
-    isWireString(part.input.summary) &&
-    part.input.summary.trim() !== ""
-      ? [part.input.summary.trim()]
-      : [],
+  // Note that the last call stands for the turn, so a later refused one hides an earlier one taken.
+  const ended = parts.findLast(
+    (part) => part.kind === AGENT_PART.TOOL && part.tool === AGENT_TOOL.END_TURN,
   );
-  return summaries.at(-1);
+  return ended?.kind === AGENT_PART.TOOL &&
+    ended.state === TOOL_STATE.OUTPUT_AVAILABLE &&
+    // Note that a call a turn ended before it answered is kept as available too, so only an answer that took it counts.
+    isRecord(ended.output) &&
+    ended.output.status === ACTION_RESULT_STATUS.ACCEPTED &&
+    isRecord(ended.input) &&
+    isWireString(ended.input.summary) &&
+    ended.input.summary.trim() !== ""
+    ? ended.input.summary.trim()
+    : undefined;
 }
 
 /**
