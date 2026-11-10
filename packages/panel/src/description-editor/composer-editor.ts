@@ -38,7 +38,7 @@ import {
 import type { EditorProps, EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import { enterKeyHint, enterSends, modEnterSends } from "../enter-sends.js";
-import { spacedAfterChip } from "./chip-spacing.js";
+import { pickedRest, spacedAfterChip } from "./chip-spacing.js";
 import {
   COMPOSER_INPUT,
   type ComposerEditorHandle,
@@ -510,7 +510,7 @@ function atWord(text: string, caret: number): TriggerWord | undefined {
   if (insideCode(text, start)) return undefined;
   let end = caret;
   while (end < text.length && AT_WORD_CHARACTER.test(text[end] ?? "")) end += 1;
-  return { start, query, end };
+  return { start, query, end: caret + pickedRest(text.slice(caret, end)).length };
 }
 
 /**
