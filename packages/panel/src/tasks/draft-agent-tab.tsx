@@ -1,8 +1,10 @@
 import { AGENT_STATUS, hasWordsOrFiles } from "@repo/features/agent-wire";
+import { rejectedFailure } from "@repo/features/failure-remedy";
 import type { MacOffer } from "@repo/features/models-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { useSecond } from "@repo/ui";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
+import { useAsyncAction } from "@repo/ui/use-async-action";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { useAgentDefault } from "../account-choices.js";
@@ -116,12 +118,12 @@ export function DraftAgentTab({
   /** The cards a fork's source chip hangs, as its tab's own chip does; none where the place draws none. */
   cards?: TranscriptCards | undefined;
 }): React.JSX.Element {
-  const [sending, setSending] = useState(false);
+  const starting = useAsyncAction<ComposerNote>(rejectedFailure);
+  const sending = starting.running;
   // When a fork's or a continue's Start went, which its working line counts from; none while none is out.
   const [sentAt, setSentAt] = useState<number | undefined>(undefined);
-  const [note, setNote] = useState<ComposerNote | undefined>(undefined);
   // Note that a send lets the refusal New task handed over go, so a tab opened again after says only its own.
-  const shownNote = note ?? draft.refused;
+  const shownNote = starting.refusal ?? draft.refused;
   // The account's default as the host holds it, which the chip names until the developer makes a choice of their own.
   const fallback = useAgentDefault().choice;
   // Note that the control is read through a ref, because the panel hands a
@@ -163,23 +165,30 @@ export function DraftAgentTab({
   );
   const send = () => {
     const prompt = draft.prompt.trim();
-    if (sending || unpaid !== undefined) return;
+    if (unpaid !== undefined) return;
     if (fork === undefined && !hasWordsOrFiles(prompt, draft.attachments)) return;
-    setSending(true);
-    setNote(undefined);
-    if (draft.refused !== undefined) latest.current.onDraftChange({ refused: undefined });
-    if (fork !== undefined) setSentAt(Date.now());
-    const { id, choice, attachments, disabledServers } = draft;
-    // Note that a place picked while the experiment was on is not sent once it is off.
-    const runsOn = placesOn ? draft.runsOn : undefined;
-    const started =
-      fork === undefined
-        ? latest.current.startPrompt(id, prompt, choice, attachments, disabledServers, runsOn)
-        : latest.current.startFork(id, fork, prompt, choice, attachments, disabledServers, runsOn);
-    started.then((failed) => {
-      setSending(false);
-      setSentAt(undefined);
-      setNote(failed);
+    void starting.run(() => {
+      if (draft.refused !== undefined) latest.current.onDraftChange({ refused: undefined });
+      if (fork !== undefined) setSentAt(Date.now());
+      const { id, choice, attachments, disabledServers } = draft;
+      // Note that a place picked while the experiment was on is not sent once it is off.
+      const runsOn = placesOn ? draft.runsOn : undefined;
+      const started =
+        fork === undefined
+          ? latest.current.startPrompt(id, prompt, choice, attachments, disabledServers, runsOn)
+          : latest.current.startFork(
+              id,
+              fork,
+              prompt,
+              choice,
+              attachments,
+              disabledServers,
+              runsOn,
+            );
+      return started.then((failed) => {
+        setSentAt(undefined);
+        return failed;
+      });
     });
   };
   const composer: AgentComposerControl = {

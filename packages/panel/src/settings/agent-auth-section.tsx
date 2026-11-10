@@ -73,6 +73,7 @@ import {
   useMenu,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { useAsyncAction } from "@repo/ui/use-async-action";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -600,42 +601,33 @@ function usePastedSecret({
     actMutation(ACT_KIND.PROVIDER_KEYS_SAVE),
   );
   const [pasted, setPasted] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [rejection, setRejection] = useState<string | undefined>(undefined);
+  const saving = useAsyncAction(() => failed);
 
   const save = (value = pasted) => {
     const key = value.trim();
-    if (key === "" || saving) return;
+    if (key === "" || saving.running) return;
     if (!pastedKeyFits(key)) {
-      setRejection(refused(PROVIDER_KEY_REJECTION.INVALID));
+      saving.refuse(refused(PROVIDER_KEY_REJECTION.INVALID));
       return;
     }
-    setSaving(true);
-    setRejection(undefined);
-    void sendProviderKeysSave(payload(key))
-      .catch(() => undefined)
-      .then((answer) => {
-        setSaving(false);
-        if (answer === undefined || "failure" in answer) {
-          setRejection(failed);
-          return;
-        }
-        if (answer.rejected !== undefined) {
-          setRejection(refused(answer.rejected));
-          return;
-        }
+    void saving.run(() =>
+      sendProviderKeysSave(payload(key)).then((answer) => {
+        if ("failure" in answer) return failed;
+        if (answer.rejected !== undefined) return refused(answer.rejected);
         // Kept: the secret leaves the field, and the row draws the service's word for it.
         setPasted("");
         onKept();
-      });
+        return undefined;
+      }),
+    );
   };
   return {
     pasted,
-    saving,
-    rejection,
+    saving: saving.running,
+    rejection: saving.refusal,
     change: (value) => {
       setPasted(value);
-      setRejection(undefined);
+      saving.clear();
     },
     save: () => save(),
     paste: (value) => save(value),
