@@ -1,0 +1,209 @@
+/**
+ * push-device.ts -- the phone registered with the service for pushes while an account is signed in and iOS lets it notify, unregistered before a sign-out, and its "Notify me" and how its pushes fare as Settings reads and sets them.
+ *
+ * The phone is named by the raw APNs token iOS hands the app
+ * (`getDevicePushTokenAsync`, never an Expo push token, so a notification's
+ * words go only to Apple) and the gateway the token belongs to, which the
+ * build decides (`BUILD_ENVIRONMENT`). The token is read once a launch,
+ * since iOS may hand a new one after a restore or a reinstall, and the phone
+ * registered again on every launch while the permission stands, so the
+ * service always holds the token iOS hands now; a register is idempotent.
+ * Nothing is asked while signed out. A fixture run, which reaches no service
+ * and whose simulator holds no APNs token, names the phone by a synthetic
+ * token its host's fixture answers (`@repo/host/fixture-inbox`).
+ *
+ * The rest of what the phone does with a push (its categories and buttons,
+ * a reply typed in place, a tap opening the thread, the badge, and clearing
+ * a settled thread's notification) is the app's notifications work, not
+ * this module's.
+ */
+
+import {
+  PUSH_ENVIRONMENT,
+  PUSH_NOTIFY,
+  type PushDeviceStatusAnswer,
+  type PushEnvironment,
+  type PushNotify,
+} from "@repo/features/push-device-wire";
+import { ACT_KIND } from "@repo/host/acts";
+import type { ActPortClient } from "@repo/host/contract";
+import { useQuery } from "@tanstack/react-query";
+import Constants from "expo-constants";
+import { getDevicePushTokenAsync } from "expo-notifications";
+import { useCallback, useEffect, useState } from "react";
+import { appStateQuery } from "./host/app-state-query.js";
+import { useHostActs } from "./host/host-provider.js";
+import { NOTIFICATION_STANDING, useNotificationPermission } from "./notification-permission.js";
+
+/**
+ * The gateway this build's tokens belong to. Note that the entitlement
+ * names production for every build, and a Debug build Xcode signs for
+ * development is handed a sandbox token all the same, so the build's kind
+ * decides it: a Debug build takes the sandbox, and a Release build
+ * (TestFlight, the App Store) production.
+ */
+const BUILD_ENVIRONMENT: PushEnvironment = __DEV__
+  ? PUSH_ENVIRONMENT.SANDBOX
+  : PUSH_ENVIRONMENT.PRODUCTION;
+
+/** The token a fixture run names the phone by: synthetic hex of a real token's length, which no phone holds. */
+const FIXTURE_PUSH_TOKEN = "f1".repeat(32);
+
+/** The phone as the service names it: its token, and the gateway the token belongs to. */
+export interface PushDeviceKey {
+  readonly token: string;
+  readonly environment: PushEnvironment;
+}
+
+/** This launch's read of the phone's token, made once and shared by every screen that asks. */
+let tokenRead: Promise<PushDeviceKey | undefined> | undefined;
+
+/** The phone's key, read once a launch: a fixture run's synthetic one, or iOS's own; none where iOS hands no token. */
+function readDeviceKey(fixture: boolean): Promise<PushDeviceKey | undefined> {
+  if (fixture)
+    return Promise.resolve({ token: FIXTURE_PUSH_TOKEN, environment: BUILD_ENVIRONMENT });
+  tokenRead ??= getDevicePushTokenAsync().then(
+    (token) =>
+      typeof token.data === "string" && token.data !== ""
+        ? { token: token.data, environment: BUILD_ENVIRONMENT }
+        : undefined,
+    (error: unknown) => {
+      // Note that a refusal is not kept, so the next screen to ask reads again.
+      tokenRead = undefined;
+      console.error("The phone's push token could not be read.", error);
+      return undefined;
+    },
+  );
+  return tokenRead;
+}
+
+/** Whether this launch runs on a fixture's data rather than the service. */
+function useFixtureRun(): boolean {
+  const { data: fixture = false } = useQuery({
+    ...appStateQuery,
+    select: (state) => state.run.fixtureMode,
+  });
+  return fixture;
+}
+
+/** The phone's key once iOS lets it notify, read once a launch; none until then, or where iOS hands no token. */
+export function usePushDeviceKey(): PushDeviceKey | undefined {
+  const { standing } = useNotificationPermission();
+  const fixture = useFixtureRun();
+  const [key, setKey] = useState<PushDeviceKey | undefined>(undefined);
+  const allowed = standing === NOTIFICATION_STANDING.ALLOWED;
+  useEffect(() => {
+    if (!allowed) return undefined;
+    let live = true;
+    readDeviceKey(fixture).then((read) => {
+      if (live) setKey(read);
+    });
+    return () => {
+      live = false;
+    };
+  }, [allowed, fixture]);
+  return allowed ? key : undefined;
+}
+
+/** This launch's register of the phone under the account signed in, and the token it named, which a read of its standing waits for. */
+let registration: { readonly token: string; readonly done: Promise<void> } | undefined;
+
+/**
+ * The phone registered under the account signed in, once for its token
+ * until a sign-out unregisters it: the register under way, or done, where
+ * one was asked already. Note that a read of the phone's standing waits on
+ * it, so a Settings screen opened as the permission is first granted reads
+ * a phone the service holds.
+ */
+function registered(acts: ActPortClient, key: PushDeviceKey): Promise<void> {
+  const bundleId = Constants.expoConfig?.ios?.bundleIdentifier;
+  if (bundleId === undefined) return Promise.resolve();
+  if (registration?.token === key.token) return registration.done;
+  const done = acts[ACT_KIND.PUSH_DEVICE_REGISTER]({ ...key, bundleId }).then(
+    (answer) => {
+      // Note that a register the service did not take is asked again by the next screen that reads.
+      if ("failure" in answer) registration = undefined;
+    },
+    (error: unknown) => {
+      registration = undefined;
+      console.error("The phone was not registered for notifications.", error);
+    },
+  );
+  registration = { token: key.token, done };
+  return done;
+}
+
+/** The phone registered under the account signed in, once a launch while iOS lets it notify; nothing while signed out. */
+export function usePushRegistration(signedIn: boolean): void {
+  const acts = useHostActs();
+  const key = usePushDeviceKey();
+  useEffect(() => {
+    if (!signedIn || key === undefined) return;
+    registered(acts, key).catch(() => undefined);
+  }, [acts, signedIn, key]);
+}
+
+/**
+ * The phone unregistered from the account's pushes, as a sign-out asks
+ * before it signs out, so no push for the account reaches a phone signed
+ * out of it; done at once where the phone holds no token.
+ */
+export function unregisterPushDevice(
+  acts: ActPortClient,
+  key: PushDeviceKey | undefined,
+): Promise<void> {
+  if (key === undefined) return Promise.resolve();
+  // The next account to sign in registers the phone afresh.
+  registration = undefined;
+  return acts[ACT_KIND.PUSH_DEVICE_UNREGISTER](key).then(
+    () => undefined,
+    (error: unknown) => console.error("The phone was not unregistered.", error),
+  );
+}
+
+/** The phone's standing as Settings draws it, none until the service answers, and the "Notify me" choice made from it. */
+export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
+  readonly standing: PushDeviceStatusAnswer | undefined;
+  readonly choose: (notify: PushNotify) => void;
+} {
+  const acts = useHostActs();
+  const [standing, setStanding] = useState<PushDeviceStatusAnswer | undefined>(undefined);
+  useEffect(() => {
+    if (key === undefined) return undefined;
+    let live = true;
+    registered(acts, key)
+      .then(() => acts[ACT_KIND.PUSH_DEVICE_STATUS](key))
+      .then(
+        (answer) => {
+          // A phone the service does not hold yet, or a read it did not answer, draws no standing.
+          if (live) setStanding("failure" in answer ? undefined : answer);
+        },
+        (error: unknown) => console.error("The phone's notifications could not be read.", error),
+      );
+    return () => {
+      live = false;
+    };
+  }, [acts, key]);
+  const choose = useCallback(
+    (notify: PushNotify) => {
+      if (key === undefined || standing === undefined) return;
+      const before = standing.notify;
+      // Note that the choice is drawn at once and put back where the service did not take it.
+      setStanding({ ...standing, notify });
+      acts[ACT_KIND.PUSH_DEVICE_NOTIFY]({ ...key, notify }).then(
+        (answer) => {
+          if ("failure" in answer) setStanding((held) => held && { ...held, notify: before });
+        },
+        () => setStanding((held) => held && { ...held, notify: before }),
+      );
+    },
+    [acts, key, standing],
+  );
+  // A phone iOS no longer lets notify draws no standing, whatever was read before.
+  return { standing: key === undefined ? undefined : standing, choose };
+}
+
+/** Whether the choice named is one of "Notify me"'s, as a picker hands it back by its id. */
+export function isPushNotify(id: string): id is PushNotify {
+  return Object.values(PUSH_NOTIFY).some((notify) => notify === id);
+}
