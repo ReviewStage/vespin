@@ -1,5 +1,5 @@
 /**
- * cached-media.ts -- a video's bytes written once under the app's caches, named by its id and its type's extension, for the system's player, which reads a file and knows its kind by its extension.
+ * cached-media.ts -- a video's bytes written once under the app's caches, named by its id and its type's extension, for the system's player, which reads a file and knows its kind by its extension: an Inbox thread's and an agent's recordings alike.
  */
 
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
@@ -36,6 +36,8 @@ export async function cachedVideo(
   const file = new File(Paths.cache, name);
   if (file.exists) return file.uri;
   const writing = new File(Paths.cache, `${name}${WRITING_SUFFIX}`);
+  // A write an earlier launch left unfinished is cleared rather than written over.
+  if (writing.exists) writing.delete();
   await writing.write(base64, { encoding: "base64" });
   await writing.move(file, { overwrite: true });
   return file.uri;

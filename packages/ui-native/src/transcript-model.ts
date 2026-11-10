@@ -4,14 +4,14 @@
  * What a message's parts are, how a turn folds, and how each call is named
  * are the panel's (`@repo/features/agent-parts`, `turn-rows`,
  * `tool-call-model`), read here as they are read there; this only lays the
- * rows out flat, one item each, so the list draws each lazily. A fold or a
- * group stands as one line, and the rows it holds follow it as items of
+ * rows out flat, one item each, so the list draws each lazily. A group of
+ * calls stands as one line, and the rows it holds follow it as items of
  * their own while it stands open, set in a step. A call is one line that
  * opens in place to its body. What the agent thought is left out, as the
  * phone has no room for it. A finished turn ends on how long it worked, and
- * the transcript on Working… while its agent works. The pictures and the recordings it showed
- * stand under the call that showed them, and a page it showed as a card
- * under its line, which opens it whole.
+ * the transcript on Working… while its agent works. The pictures and the
+ * recordings it showed stand under the call that showed them, and a page it
+ * showed as a card under its line, which opens it whole.
  */
 
 import {
@@ -62,7 +62,7 @@ export const TRANSCRIPT_ITEM = {
   WORDS: "words",
   /** One tool call, its line, and its body where it stands open. */
   CALL: "call",
-  /** A run of calls, or a finished turn's lead, as one line that opens on the rows it holds. */
+  /** A run of calls, as one line that opens on the rows it holds. */
   FOLD: "fold",
   /** The pictures or recordings a call showed, under its line. */
   MEDIA: "media",
@@ -395,7 +395,7 @@ function partItems(
   }
 }
 
-/** A turn's rows as items, a fold's or a group's rows after its line while it stands open. */
+/** A turn's rows as items, a group's rows after its line while it stands open. */
 function rowItems(
   rows: readonly TurnRow<AgentPart>[],
   message: string,
@@ -408,22 +408,18 @@ function rowItems(
       depth,
     };
     if (row.kind === TURN_ROW.BLOCK) return partItems(row.block, base, reading);
-    const standsOpen = row.kind === TURN_ROW.GROUP ? row.open : false;
-    const open = standsOpen !== foldTurned(reading.toggles, base.place);
+    const open = row.open !== foldTurned(reading.toggles, base.place);
     const line: TranscriptItem = {
       ...base,
       kind: TRANSCRIPT_ITEM.FOLD,
       summary: row.summary,
       open,
-      running: row.kind === TURN_ROW.GROUP && row.running,
+      running: row.running,
     };
     if (!open) return [line];
-    const held =
-      row.kind === TURN_ROW.GROUP
-        ? row.blocks.flatMap((block, at) =>
-            partItems(block, { place: { ...base.place, member: at }, depth: depth + 1 }, reading),
-          )
-        : rowItems(row.rows, message, depth + 1, reading);
+    const held = row.blocks.flatMap((block, at) =>
+      partItems(block, { place: { ...base.place, member: at }, depth: depth + 1 }, reading),
+    );
     return [line, ...held];
   });
 }
