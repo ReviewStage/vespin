@@ -329,6 +329,18 @@ export const agentsContract = {
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/stop` }))
     .input(idParams)
     .output(EffectSchema.flip(agentAnswerSchema)),
+  /** One agent's failed first launch booted again (`coder-host/boot.ts`), its queued messages going once its machine is up. */
+  boot: declaredProcedure
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.NOT_PERMITTED,
+        HOSTED_API_ERROR.INVALID_REQUEST,
+      ),
+    )
+    .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/boot` }))
+    .input(idParams)
+    .output(EffectSchema.flip(agentAnswerSchema)),
   /** One agent on screen, kept warm for the next message while it stays there (`agentWarmAnswerSchema`). */
   warm: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))

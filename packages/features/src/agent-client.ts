@@ -1107,6 +1107,14 @@ export class HostedAgentClient {
     );
   }
 
+  /** Boots one agent's failed first launch again (`coder-host/boot.ts`). */
+  boot(agentId: string): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    return Effect.map(
+      hostedCall(this.#hosted.agents.boot, { id: agentId }, { as: AGENT_NOT_FOUND_RENAMES }),
+      unansweredBare,
+    );
+  }
+
   /** Keeps one agent on screen warm for the next message (`agentWarmAnswerSchema`). */
   warm(agentId: string): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.agents.warm, { id: agentId });
