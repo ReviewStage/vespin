@@ -135,8 +135,6 @@ export const INBOX_BOUNDS = {
   MAX_NOTE_CHARS: 4_000,
   /** The most characters the agent's reason for closing an item may spell. */
   MAX_REASON_CHARS: 600,
-  /** The most items one agent keeps open at once: what a person works through, never a log. */
-  MAX_OPEN_PER_AGENT: 20,
   /** The most settled items a read of a task's inbox carries beside every open one, the latest changed first. */
   MAX_ITEMS_READ: 200,
   /** The most settled items an agent's inbox tool answers with beside every open one: enough to hear what was answered lately. */

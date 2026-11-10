@@ -23,10 +23,20 @@
  */
 
 import { type CallToolResult, McpServer } from "@modelcontextprotocol/server";
+import type { DatabaseServices } from "@repo/database/core/query";
+import type { WorkspaceSeams } from "@repo/database/models/workspace-seams";
+import { LINK_ORIGIN } from "@repo/features/link-home";
+import { MEMBER_MCP_TOOL } from "@repo/features/member-mcp-tool";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { failureKind } from "@repo/runtime/effect";
+import type { Sandbox } from "@repo/sandbox";
 import type { WorkspaceExperiment } from "@repo/settings";
-import { Cause, type Context, Effect, Exit, Schema } from "effect";
+import { Cause, type Context, Effect, Exit, type Layer, Schema } from "effect";
+import type { HttpClient } from "effect/http";
+import { WorkspacePlugin } from "../accounts/workspace-create.js";
+import type { AgentBrowser } from "../agents/browser/agent-browser.js";
+import { linkRuleWords } from "../agents/link-rule.js";
+import type { AgentSandbox } from "../agents/terminal/agent-sandbox.js";
 import { ACTION_RESULT_STATUS } from "../core.js";
 import { AdmittedMember, type AdmittedMemberValues } from "./admission.js";
 import {
@@ -39,11 +49,33 @@ import {
 /** The name the server gives itself to a client, and the version it names. */
 const SERVER_INFO = { name: `${PRODUCT_NAME}`, version: "1.0.0" } as const;
 
+/**
+ * How the server tells a client to name what its tools answer: by one link
+ * rule (`../agents/link-rule.ts`), since a tool answers a thing of ours by
+ * its id and name and never writes its mention out, and a member's client
+ * works across their workspaces, each by its slug.
+ */
+const SERVER_INSTRUCTIONS =
+  `Name a thing of ${PRODUCT_NAME}'s as a Markdown link whose words are \`@\` and its name, ` +
+  `which ${PRODUCT_NAME} draws as its chip and which opens it anywhere else: ` +
+  linkRuleWords(`${LINK_ORIGIN}/<workspace>`) +
+  ` The workspace is the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} names it by.`;
+
 /** What a tool answers where it could not run: the words say nothing of why, which the log line does. */
 const TOOL_FAILED = "This tool could not run just now; try it again in a moment.";
 
-/** The services a tool's effect needs beyond the admitted member, which the request's fiber hands over. */
-export type MemberMcpRequestServices = Exclude<MemberMcpServices, AdmittedMember>;
+/** The services a tool's effect needs beyond the admitted member, an agent's sandbox and its browser, and the plugin's workspace writes, which the request's fiber hands over. */
+export type MemberMcpRequestServices = Exclude<
+  MemberMcpServices,
+  AdmittedMember | AgentSandbox | AgentBrowser | WorkspacePlugin
+>;
+
+/** An agent's sandbox as the edge composes it (`../agents/terminal/agent-sandbox.ts`'s `agentSandboxLayer`), which its ports are listed and shared on, and the browser in it (`../agents/browser/agent-browser.ts`'s `agentBrowserServices`), which a tab is opened in. */
+export type MemberMcpAgentSandbox = Layer.Layer<
+  AgentSandbox | AgentBrowser,
+  never,
+  HttpClient.HttpClient | DatabaseServices | Sandbox
+>;
 
 /** A tool's refusal: a result that says it ran nothing, and why. */
 const isRefusal = Schema.is(
@@ -60,9 +92,11 @@ const TOOL_FAILED_RESULT: CallToolResult = {
   isError: true,
 };
 
-/** A tool's effect as the SDK awaits it: run on the handed services as the admitted member, its failure or defect logged and answered as the tool's error. */
+/** A tool's effect as the SDK awaits it: run on the handed services and the agent's sandbox as the admitted member, its failure or defect logged and answered as the tool's error. */
 async function throughDoor(
   services: Context.Context<MemberMcpRequestServices>,
+  agentSandbox: MemberMcpAgentSandbox,
+  workspaces: WorkspaceSeams,
   member: AdmittedMemberValues,
   name: string,
   work: Effect.Effect<MemberMcpToolResult, unknown, MemberMcpServices>,
@@ -75,6 +109,8 @@ async function throughDoor(
         TOOL_FAILED_RESULT,
       ),
     ),
+    Effect.provide(agentSandbox),
+    Effect.provideService(WorkspacePlugin, workspaces),
     Effect.provideService(AdmittedMember, member),
   );
   const exit = await Effect.runPromiseExitWith(services)(answered);
@@ -82,19 +118,22 @@ async function throughDoor(
   return exit.value;
 }
 
-/** The server for one request: every tool of `MEMBER_MCP_TOOLS` but those of a workspace experiment none of the member's workspaces has on, each in the words of the experiments one of them has on (`listedMemberMcpTool`), and run as the admitted member on the handed services. */
+/** The server for one request: every tool of `MEMBER_MCP_TOOLS` but those of a workspace experiment none of the member's workspaces has on, each in the words of the experiments one of them has on (`listedMemberMcpTool`), and run as the admitted member on the handed services and the agent's sandbox. */
 export function memberMcpServer(
   services: Context.Context<MemberMcpRequestServices>,
+  agentSandbox: MemberMcpAgentSandbox,
+  workspaces: WorkspaceSeams,
   member: AdmittedMemberValues,
   experimentsOn: ReadonlySet<WorkspaceExperiment>,
 ): McpServer {
-  const server = new McpServer(SERVER_INFO);
+  const server = new McpServer(SERVER_INFO, { instructions: SERVER_INSTRUCTIONS });
   for (const tool of MEMBER_MCP_TOOLS) {
     if (tool.experiment !== undefined && !experimentsOn.has(tool.experiment)) continue;
     server.registerTool(
       tool.name,
       { ...listedMemberMcpTool(tool, experimentsOn), annotations: tool.annotations },
-      (input) => throughDoor(services, member, tool.name, tool.run(input)),
+      (input) =>
+        throughDoor(services, agentSandbox, workspaces, member, tool.name, tool.run(input)),
     );
   }
   return server;

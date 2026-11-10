@@ -4,7 +4,7 @@ import {
   INTEGRATION_PURPOSE,
   type IntegrationProvider,
 } from "@repo/features/integration-wire";
-import { matchesTokens, searchTokens } from "./search-tokens.js";
+import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 
 /**
  * integration-search.ts -- what a query finds among the integrations, in Settings › Integrations' filter and the MCP popover's search alike.

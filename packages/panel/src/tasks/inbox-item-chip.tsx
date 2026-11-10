@@ -1,5 +1,12 @@
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
-import type { TasklessAgent } from "@repo/features/agent-wire";
+import type { ListedAgent } from "@repo/features/agent-wire";
+import {
+  agentHolder,
+  type InboxListed,
+  NEEDS_YOU,
+  type TasklessInboxAgent,
+  taskHolder,
+} from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import type {
   AppInboxItems,
@@ -14,15 +21,7 @@ import { type ReactNode, useMemo } from "react";
 import { inboxItemsQuery } from "../live-reads.js";
 import { appStateQuery, selectInbox, selectTasks } from "../use-app-state.js";
 import { InboxItemCard, inboxItemGlyph } from "./inbox-item-parts.js";
-import {
-  agentHolder,
-  type InboxListed,
-  inboxAgentOf,
-  NEEDS_YOU,
-  type TasklessInboxAgent,
-  taskHolder,
-  waitsOnReader,
-} from "./inbox-model.js";
+import { inboxAgentOf, waitsOnReader } from "./inbox-model.js";
 import { useMentionedPlace } from "./mentioned-place.js";
 
 /**
@@ -51,7 +50,7 @@ type InboxItemPlace =
 function tasklessAgentOf(
   agentId: string,
   waiting: readonly TasklessInboxAgent[],
-  agents: readonly TasklessAgent[],
+  agents: readonly ListedAgent[],
 ): TasklessInboxAgent | undefined {
   const brief = waiting.find((each) => each.agentId === agentId);
   if (brief !== undefined) return brief;
@@ -130,7 +129,7 @@ function useLinkedItem(place: InboxItemPlace): InboxListed | undefined {
     () =>
       agentId === undefined || linkedTask !== undefined
         ? undefined
-        : tasklessAgentOf(agentId, inbox?.taskless ?? [], tasks?.tasklessAgents ?? []),
+        : tasklessAgentOf(agentId, inbox?.taskless ?? [], tasks?.taskAgents ?? []),
     [agentId, linkedTask, inbox, tasks],
   );
   const taskId = linkedTask;

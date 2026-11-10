@@ -41,13 +41,15 @@ function fresh(agentId: string): Held {
   return { agentId, note: undefined };
 }
 
+/** The model chip of an agent, or none while the agent is not read yet, as an Inbox item's may not be. */
 export function useAgentModel(input: {
-  agent: Pick<AgentSummary, "id" | "model" | "effort" | "contextWindow" | "runtime">;
+  agent: Pick<AgentSummary, "id" | "model" | "effort" | "contextWindow" | "runtime"> | undefined;
   choose: ChoiceWriter;
-}): AgentModelControl {
+}): AgentModelControl | undefined {
   const { agent } = input;
-  const [held, setHeld] = useState<Held>(() => fresh(agent.id));
-  if (held.agentId !== agent.id) setHeld(fresh(agent.id));
+  const agentId = agent?.id ?? "";
+  const [held, setHeld] = useState<Held>(() => fresh(agentId));
+  if (held.agentId !== agentId) setHeld(fresh(agentId));
   // Note that the writer is read through a ref, because the tab hands a new
   // closure on every render and an answer lands on whichever render is current.
   const latest = useRef(input);
@@ -55,12 +57,13 @@ export function useAgentModel(input: {
   /** How many changes have been sent, so an answer to an earlier one is told apart from the latest. */
   const writes = useRef(0);
 
+  if (agent === undefined) return undefined;
   const choose = (next: ModelChoice) => {
     writes.current += 1;
     const write = writes.current;
     setHeld((was) => ({ ...was, note: undefined }));
     latest.current.choose(agent.id, next).then((answer) => {
-      if (write !== writes.current || latest.current.agent.id !== agent.id) return;
+      if (write !== writes.current || latest.current.agent?.id !== agent.id) return;
       setHeld((was) => ({
         ...was,
         note: "failure" in answer ? chooseFailureNote(answer.failure) : undefined,

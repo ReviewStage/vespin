@@ -1,3 +1,4 @@
+import { inboxCommentFiles } from "@repo/features/inbox-list-model";
 import { INBOX_MESSAGE_AUTHOR, type InboxMessage } from "@repo/features/inbox-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -12,7 +13,7 @@ import { pictureQuery } from "../picture-query.js";
 import { AgentActorRef, type AgentSubject } from "./agent-ref.js";
 import { AttachedFileChips } from "./attached-file-chips.js";
 import type { InboxCodeDoors } from "./inbox-code-card.js";
-import { inboxCommentFiles, inboxFileChips } from "./inbox-model.js";
+import { inboxFileChips } from "./inbox-model.js";
 import { InboxPicture, InboxPictures } from "./inbox-pictures.js";
 import { LoneLinkCards } from "./lone-link-card.js";
 import { SentWords } from "./skill-chip.js";

@@ -1,4 +1,3 @@
-import type { TasklessAgent } from "@repo/features/agent-wire";
 import { READ_MARK, type ReadMark, readsUnread } from "@repo/features/read-mark";
 import {
   DESCRIPTION_ACTOR,
@@ -15,12 +14,12 @@ import { actMutation, pressMutation } from "../act-mutations.js";
 import { appStateQuery, memoizedSelect } from "../use-app-state.js";
 
 /**
- * use-task-looks.ts -- what changed since the developer last looked at a task: the open description's sections, and the sidebar's unread tasks and agents.
+ * use-task-looks.ts -- what changed since the developer last looked at a task: the open description's sections, and the sidebar's unread tasks.
  *
  * A look is the plan opened, whichever of its column's tabs it opens on. Its
  * mark is kept on the account by the service (`@repo/features/read-mark`),
  * so a task read on one Mac or browser reads read on every other: the list
- * carries each task's and each agent's mark beside it, and a look, a leave,
+ * carries each task's mark beside it, and a look, a leave,
  * or a menu moves it through the window's act port, drawn on the row at once
  * and kept once the service answers. The instant is the service's own, never
  * this window's clock.
@@ -46,8 +45,7 @@ import { appStateQuery, memoizedSelect } from "../use-app-state.js";
  * (`newestChangeOf`), is after its mark, or while it stands marked unread,
  * and never the task the developer is watching. A pull request merging or
  * closing on GitHub ends no turn and moves no save, so it alone never makes
- * a task unread. An agent with no task keeps the same marks under its own
- * id, its row's `activityAt` standing where a task's newest change does.
+ * a task unread.
  */
 
 /** One stay on a plan: the mark its row carried as it opened, the newest save the plan named then, and the sections saved between the two, as read for the reader it names. Note that a reader's id arriving mid-stay reads the sections again within that same span, because the sections read without it took every developer's save as the reader's, and a save landing during the stay was watched as it landed. A dismissal closes the span, so no read after it lights a section again. */
@@ -76,15 +74,11 @@ const watchedStore = createStore<string | undefined>(undefined);
 /** No marks by hand, before the first document arrives. */
 const NONE_MARKED: ReadonlySet<string> = new Set();
 
-/** The ids of the tasks and the agents with no task the reader marked unread by hand, as the list carries them, made once per move of the lists for every reader. */
+/** The ids of the tasks the reader marked unread by hand, as the list carries them, made once per move of the list for every reader. */
 const selectMarkedUnreadIds = memoizedSelect(
-  (state) => [state.tasks.tasks, state.tasks.tasklessAgents],
-  (tasks, tasklessAgents): ReadonlySet<string> =>
-    new Set(
-      [...tasks, ...(tasklessAgents ?? [])]
-        .filter((row) => row.markedUnread === true)
-        .map((row) => row.id),
-    ),
+  (state) => [state.tasks.tasks],
+  (tasks): ReadonlySet<string> =>
+    new Set(tasks.filter((row) => row.markedUnread === true).map((row) => row.id)),
 );
 
 /** The save that last changed each of the description's sections, each by its heading. */
@@ -230,39 +224,6 @@ export function useTaskLooks(
 }
 
 /**
- * The agent with no task whose page is on screen, looked at: as it opens,
- * which takes back a mark of it as unread, and again as its row's time moves
- * and as it is left, neither of which does, as `useTaskLooks` reads a plan.
- * Held by the window's shell, none while no agent's page is drawn.
- */
-export function useAgentLook(agent: Pick<TasklessAgent, "id" | "activityAt"> | undefined): void {
-  const agentId = agent?.id;
-  const activityAt = agent?.activityAt;
-  // Note that a look is quiet whatever comes back, as `useTaskLooks`' is.
-  const { mutate: markAgentRead } = useMutation(actMutation(ACT_KIND.AGENTS_MARK_READ));
-  const lookAtAgent = useCallback(
-    (agentId: string, readMark: ReadMark) => markAgentRead({ agentId, readMark }),
-    [markAgentRead],
-  );
-  useEffect(() => {
-    if (agentId === undefined) return;
-    lookAtAgent(agentId, READ_MARK.READ);
-    return () => lookAtAgent(agentId, READ_MARK.SEEN);
-  }, [agentId, lookAtAgent]);
-
-  const seenActivity = useRef<{ agentId: string; activityAt: number | undefined } | undefined>(
-    undefined,
-  );
-  useEffect(() => {
-    const seen = seenActivity.current;
-    seenActivity.current = agentId === undefined ? undefined : { agentId, activityAt };
-    if (agentId === undefined || seen?.agentId !== agentId || seen.activityAt === activityAt)
-      return;
-    lookAtAgent(agentId, READ_MARK.SEEN);
-  }, [agentId, activityAt, lookAtAgent]);
-}
-
-/**
  * Whether each of the sidebar's plans is unread: marked so by hand, or
  * changed after its mark, and not the plan the developer is watching, whose
  * changes are seen as they land. A `staged` run draws nothing unread, so its
@@ -275,11 +236,6 @@ export function useUnreadTasks({ staged }: { staged: boolean }): (task: TaskSumm
     if (task.markedUnread === true) return true;
     return task.id !== watched && readsUnread(task, newestChangeOf(task));
   };
-}
-
-/** Whether an agent with no task reads unread: marked so by hand, or active after its mark. */
-export function agentReadsUnread(agent: TasklessAgent): boolean {
-  return readsUnread(agent, agent.activityAt);
 }
 
 /** Whether the developer marked a plan unread, and the mark a menu sets either way. */
@@ -326,13 +282,4 @@ export function useMarkedUnread(taskId: string): boolean {
     [taskId],
   );
   return useQuery({ ...appStateQuery, select }).data === true;
-}
-
-/** An agent with no task marked unread until its page next opens, or read through now, by hand from a menu. */
-export function useMarkAgent(): (agentId: string, unread: boolean) => void {
-  const { mutate: markAgentRead } = useMutation(pressMutation(ACT_KIND.AGENTS_MARK_READ));
-  return useCallback(
-    (agentId, unread) => markAgentRead({ agentId, readMark: readMarkOf(unread) }),
-    [markAgentRead],
-  );
 }

@@ -9,11 +9,16 @@
 
 @layer components {
   /* Note that it clips with `clip`, never `hidden`, so the window sliding
-     past its edges widens no scroller around it and makes none of its own. */
+     past its edges widens no scroller around it and makes none of its own.
+     It stands at the top of its line rather than on its baseline, because
+     WebKit seats a clipped inline-block on its bottom edge, which lifts the
+     words above the ones beside them and makes the line taller; its line is
+     the line it stands in, so its words still share their baseline. */
   .ui-shimmer-frame {
     position: relative;
     display: inline-block;
     overflow: clip;
+    vertical-align: top;
   }
 
   .ui-shimmer {

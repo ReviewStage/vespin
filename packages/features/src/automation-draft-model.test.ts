@@ -180,7 +180,7 @@ test("a new automation is made in its workspace on its schedule, task, repositor
     action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Fix it." },
     scope: AUTOMATION_SCOPE.WORKSPACE,
     target: { kind: AUTOMATION_TARGET.NEW_AGENT },
-    archiveSuccessful: false,
+    archiveSuccessful: true,
     slackDelivery: false,
   });
 });

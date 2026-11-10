@@ -1,5 +1,5 @@
 /**
- * agent.ts -- `vespin agent start`, `list`, `view`, `logs`, `send`, `stop`, `wait`, and `checkout`: coding agents started, read, followed, messaged, stopped, waited on, and their work brought into the working folder.
+ * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `queue`, `stop`, `update`, `rewind`, `delete`, and `wake` (`agent-lifecycle.ts`), `wait`, `checkout`, `diff` and `pr` (`agent-pull-request.ts`), `ports`, `share`, `tabs`, `forward` (`agent-forward.ts`), and `shell` and `shells` (`agent-shell.ts`): coding agents started, continued, read, followed, messaged, stopped, changed, rewound, deleted, woken, waited on, their work brought into the working folder, their pull request read and changed, the ports their sandbox listens on shared by link and served on localhost, the tabs of their cloud browser listed, opened, taken over, and handed back, and its shells attached here.
  *
  * A turn is followed on the held transcript read (`messages.agent`): asked
  * past the cursor the last answer handed back, the service holds it while
@@ -17,21 +17,34 @@
  * refuses one GitHub does not hold yet rather than failing its fetch.
  */
 
-import { isWireUuid } from "@repo/features";
+import { HOSTED_API_ERROR, isWireUuid } from "@repo/features";
+import type { AgentBrowserTab } from "@repo/features/agent-browser-tab-wire";
+import type { AgentQueue, QueuedMessage } from "@repo/features/agent-queue-wire";
 import {
+  ADDED_REPOSITORY_CHECKOUT,
+  type AddedRepositoryCheckout,
   AGENT_CURSOR_START,
   AGENT_MACHINE,
   AGENT_STATUS,
+  type AgentQueueChange,
   type AgentRunsOnRequest,
+  type AgentStartFrom,
   type AgentStatus,
   type AgentSummary,
   type AgentTranscriptMessage,
   agentStartRequestOnWire,
+  QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
 import { CLI_EXIT, cliExitOfAgentStatus } from "@repo/features/cli-exit";
-import { transcriptPartLines, transcriptSpeaker } from "@repo/features/cli-transcript";
+import {
+  transcriptCallPlace,
+  transcriptPartLines,
+  transcriptSpeaker,
+  wholeCallLines,
+} from "@repo/features/cli-transcript";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { FORWARD_PORT } from "@repo/features/sandbox-tunnel-wire";
 import { Duration, Effect, Option, Ref, Result, Schedule } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { checkoutFromOrigin, originHasBranch, originRepository, treeIsClean } from "../git.js";
@@ -39,6 +52,10 @@ import { answer, CommandFailed, columns, note, readInput, streamLines } from "..
 import { askService, session } from "../session.js";
 import { resolveTaskId } from "../tasks.js";
 import { resolveWorkspace } from "../workspace.js";
+import { forwardCommand } from "./agent-forward.js";
+import { deleteCommand, rewindCommand, wakeCommand } from "./agent-lifecycle.js";
+import { diffCommand, prCommand } from "./agent-pull-request.js";
+import { shellCommand, shellsCommand } from "./agent-shell.js";
 
 /** How long after a held read answers the next is asked, so a read that answers at once never spins. */
 const FOLLOW_SPACING = Duration.seconds(1);
@@ -52,6 +69,15 @@ interface AgentStartChoice {
   readonly branch?: string;
 }
 
+/** What a continue asks of its agent beside the agent it starts from: the message a fork is cut at, a note after the replay, model and effort, and where it runs. */
+interface AgentContinueChoice {
+  readonly from: AgentStartFrom;
+  readonly note?: string;
+  readonly model?: string;
+  readonly effort?: string;
+  readonly runsOn?: AgentRunsOnRequest;
+}
+
 /** An agent as a line of a table: its id, where it stands, and its title or model. */
 export function agentLines(agents: readonly AgentSummary[]): string[] {
   return columns(agents.map((agent) => [agent.id, agent.status, agent.title ?? agent.model]));
@@ -62,21 +88,54 @@ export function startedLines(agent: AgentSummary): string[] {
   return [`Started agent ${agent.id} on ${agent.model} (${agent.effort}).`];
 }
 
+/** What a continue says once its agent is started: the agent it continued or forked, and the new one. */
+function continuedLines(sourceId: string, forked: boolean, agent: AgentSummary): string[] {
+  const how = forked ? "Forked" : "Continued";
+  return [`${how} agent ${sourceId} as agent ${agent.id} on ${agent.model} (${agent.effort}).`];
+}
+
+/** A Start request under a key of its own, as it travels, or a usage refusal in `words` where it reads as none. */
+function admittedStart(choice: AgentStartChoice | AgentContinueChoice, words: string) {
+  const admitted = agentStartRequestOnWire({ idempotencyKey: crypto.randomUUID(), ...choice });
+  return Result.isFailure(admitted)
+    ? Effect.fail(new CommandFailed({ exit: CLI_EXIT.USAGE, message: words }))
+    : Effect.succeed(admitted.success);
+}
+
 /** An agent started on a task, under a key of its own, or a refusal saying why it was not. */
 export function startAgent(taskId: string, choice: AgentStartChoice) {
   return Effect.gen(function* () {
-    const admitted = agentStartRequestOnWire({ idempotencyKey: crypto.randomUUID(), ...choice });
-    if (Result.isFailure(admitted)) {
-      return yield* new CommandFailed({
-        exit: CLI_EXIT.USAGE,
-        message:
-          "The prompt is empty or too long, the model and effort do not read, or the branch is no name git takes.",
-      });
-    }
+    const body = yield* admittedStart(
+      choice,
+      "The prompt is empty or too long, the model and effort do not read, or the branch is no name git takes.",
+    );
     const { hosted } = yield* session;
     const started = yield* askService(
       hosted.agents.start,
-      { params: { id: taskId }, body: admitted.success },
+      { params: { id: taskId }, body },
+      HOSTED_DEADLINE.START,
+    );
+    return started.body.agent;
+  });
+}
+
+/**
+ * An agent started from another, in that agent's own place (its task, or its
+ * workspace and repository where it has none), under a key of its own, or a
+ * refusal saying why it was not. With no message named it continues the
+ * agent, which the service hands over and stops; with one it forks the
+ * agent's transcript at that message, and the agent goes on.
+ */
+function continueAgent(choice: AgentContinueChoice) {
+  return Effect.gen(function* () {
+    const body = yield* admittedStart(
+      choice,
+      "The agent or message id is no id, the note is empty or too long, or the model and effort do not read.",
+    );
+    const { hosted } = yield* session;
+    const started = yield* askService(
+      hosted.agents.startFrom,
+      { params: { id: choice.from.agentId }, body },
       HOSTED_DEADLINE.START,
     );
     return started.body.agent;
@@ -114,21 +173,51 @@ function runsOnOf(cloud: boolean, on: Option.Option<string>) {
   });
 }
 
-/** The whole transcript, oldest first: the newest page, and every page below it. */
-function wholeTranscript(agentId: string) {
+/** The whole transcript, oldest first, of the agent or, by the call that started it, one of its workers: the newest page, and every page below it. */
+function wholeTranscript(agentId: string, worker?: string) {
   return Effect.gen(function* () {
     const { hosted } = yield* session;
-    const newest = yield* askService(hosted.messages.agentNewest, { id: agentId });
+    const page = (before: string | undefined) => {
+      const below = before === undefined ? undefined : { before };
+      return worker === undefined
+        ? askService(hosted.messages.agentNewest, { id: agentId, ...below })
+        : askService(hosted.messages.agentWorkerNewest, { id: agentId, call: worker, ...below });
+    };
+    const newest = yield* page(undefined);
     let messages = newest.messages;
     let before = newest.before;
     while (before !== undefined) {
-      const older = yield* askService(hosted.messages.agentNewest, { id: agentId, before });
+      const older = yield* page(before);
       messages = [...older.messages, ...messages];
       before = older.before;
     }
     const cursor = "cursor" in newest ? newest.cursor : AGENT_CURSOR_START;
     const status = "status" in newest ? newest.status : undefined;
     return { messages, cursor, status };
+  });
+}
+
+/** One call of the agent's or its worker's transcript, by its id, printed whole: its input, and its output or its error. */
+function printWholeCall(agentId: string, worker: string | undefined, callId: string) {
+  return Effect.gen(function* () {
+    const { hosted } = yield* session;
+    const { messages } = yield* wholeTranscript(agentId, worker);
+    const place = transcriptCallPlace(messages, callId);
+    if (place === undefined) {
+      return yield* new CommandFailed({
+        exit: CLI_EXIT.USAGE,
+        message: `No call ${callId} in that transcript; agent logs --json names each call's toolCallId.`,
+      });
+    }
+    const at = { id: agentId, message: place.messageId, index: String(place.index) };
+    const { part } = yield* worker === undefined
+      ? askService(hosted.messages.agentPart, at)
+      : askService(hosted.messages.agentWorkerPart, { ...at, call: worker });
+    yield* answer({
+      json: { id: agentId, callId, part },
+      lines: wholeCallLines(part),
+      ids: [agentId],
+    });
   });
 }
 
@@ -277,73 +366,113 @@ const promptFlag = Flag.String("file").pipe(
   Flag.withDescription("The prompt, from a file or - for stdin (default: the task's description)"),
 );
 
+const modelFlag = Flag.String("model").pipe(
+  Flag.optional,
+  Flag.withDescription("The model to run on, by its catalog id, with --effort"),
+);
+
+const effortFlag = Flag.String("effort").pipe(
+  Flag.optional,
+  Flag.withDescription("The reasoning effort, with --model"),
+);
+
+const cloudFlag = Flag.Boolean("cloud").pipe(
+  Flag.withDefault(false),
+  Flag.withDescription("Run in the cloud"),
+);
+
+const onFlag = Flag.String("on").pipe(
+  Flag.optional,
+  Flag.withDescription("Run on one of your devices, by its name or id"),
+);
+
+const followFlag = Flag.Boolean("follow").pipe(
+  Flag.withDefault(false),
+  Flag.withDescription("Stream the agent's turn until it ends"),
+);
+
+const waitFlag = Flag.Boolean("wait").pipe(
+  Flag.withDefault(false),
+  Flag.withDescription("Wait until the turn ends; the exit code says how"),
+);
+
+/** What a start's flags name beside its words: the model and effort, both or neither, where it runs, and how its turn is waited on, one way at most. */
+function startFlagsOf(flags: {
+  readonly model: Option.Option<string>;
+  readonly effort: Option.Option<string>;
+  readonly cloud: boolean;
+  readonly on: Option.Option<string>;
+  readonly follow: boolean;
+  readonly wait: boolean;
+}) {
+  return Effect.gen(function* () {
+    if (flags.follow && flags.wait) {
+      return yield* new CommandFailed({
+        exit: CLI_EXIT.USAGE,
+        message: "Name one of --follow and --wait.",
+      });
+    }
+    if (Option.isSome(flags.model) !== Option.isSome(flags.effort)) {
+      return yield* new CommandFailed({
+        exit: CLI_EXIT.USAGE,
+        message: "Name --model and --effort together (vespin models lists them).",
+      });
+    }
+    const runsOn = yield* runsOnOf(flags.cloud, flags.on);
+    return {
+      ...(Option.isSome(flags.model) ? { model: flags.model.value } : undefined),
+      ...(Option.isSome(flags.effort) ? { effort: flags.effort.value } : undefined),
+      ...(runsOn === undefined ? undefined : { runsOn }),
+    };
+  });
+}
+
+/** A started agent said in `lines`, then, with --follow or --wait, its turn followed or waited on until it ends. */
+function afterStart(
+  agent: AgentSummary,
+  lines: string[],
+  flags: { readonly follow: boolean; readonly wait: boolean },
+) {
+  return Effect.gen(function* () {
+    if (!flags.follow && !flags.wait) {
+      yield* answer({ json: agent, lines, ids: [agent.id] });
+      return;
+    }
+    yield* note(lines.join("\n"));
+    const exit = yield* waitOn(agent.id, { print: flags.follow });
+    if (flags.wait) yield* endedWith(exit);
+  });
+}
+
 const startCommand = Command.make(
   "start",
   {
     task: taskArgument,
     file: promptFlag,
-    model: Flag.String("model").pipe(
-      Flag.optional,
-      Flag.withDescription("The model to run on, by its catalog id, with --effort"),
-    ),
-    effort: Flag.String("effort").pipe(
-      Flag.optional,
-      Flag.withDescription("The reasoning effort, with --model"),
-    ),
-    cloud: Flag.Boolean("cloud").pipe(
-      Flag.withDefault(false),
-      Flag.withDescription("Run in the cloud"),
-    ),
-    on: Flag.String("on").pipe(
-      Flag.optional,
-      Flag.withDescription("Run on one of your devices, by its name or id"),
-    ),
+    model: modelFlag,
+    effort: effortFlag,
+    cloud: cloudFlag,
+    on: onFlag,
     branch: Flag.String("branch").pipe(
       Flag.optional,
       Flag.withDescription(
         "The branch to clone the agent's checkout at, already on GitHub (default: the repository's default branch)",
       ),
     ),
-    follow: Flag.Boolean("follow").pipe(
-      Flag.withDefault(false),
-      Flag.withDescription("Stream the agent's turn until it ends"),
-    ),
-    wait: Flag.Boolean("wait").pipe(
-      Flag.withDefault(false),
-      Flag.withDescription("Wait until the turn ends; the exit code says how"),
-    ),
+    follow: followFlag,
+    wait: waitFlag,
   },
-  ({ task, file, model, effort, cloud, on, branch, follow, wait }) =>
+  ({ task, file, branch, ...flags }) =>
     Effect.gen(function* () {
-      if (follow && wait) {
-        return yield* new CommandFailed({
-          exit: CLI_EXIT.USAGE,
-          message: "Name one of --follow and --wait.",
-        });
-      }
-      if (Option.isSome(model) !== Option.isSome(effort)) {
-        return yield* new CommandFailed({
-          exit: CLI_EXIT.USAGE,
-          message: "Name --model and --effort together (vespin models lists them).",
-        });
-      }
+      const chosen = yield* startFlagsOf(flags);
       const prompt = Option.isSome(file) ? yield* readInput(file.value) : undefined;
-      const runsOn = yield* runsOnOf(cloud, on);
       const taskId = yield* resolveTaskId(task);
       const agent = yield* startAgent(taskId, {
         ...(prompt === undefined ? undefined : { prompt }),
-        ...(Option.isSome(model) ? { model: model.value } : undefined),
-        ...(Option.isSome(effort) ? { effort: effort.value } : undefined),
-        ...(runsOn === undefined ? undefined : { runsOn }),
+        ...chosen,
         ...(Option.isSome(branch) ? { branch: branch.value } : undefined),
       });
-      if (!follow && !wait) {
-        yield* answer({ json: agent, lines: startedLines(agent), ids: [agent.id] });
-        return;
-      }
-      yield* note(startedLines(agent).join("\n"));
-      const exit = yield* waitOn(agent.id, { print: follow });
-      if (wait) yield* endedWith(exit);
+      yield* afterStart(agent, startedLines(agent), flags);
     }),
 ).pipe(
   Command.withDescription("Start an agent on a task, handed its description or a prompt"),
@@ -364,6 +493,70 @@ const startCommand = Command.make(
       command:
         "vespin agent start ACME-42 --model anthropic/claude-opus-5.5 --effort high --follow",
       description: "Choose the model, and stream the turn",
+    },
+  ]),
+);
+
+const continueCommand = Command.make(
+  "continue",
+  {
+    agent: agentArgument,
+    file: Flag.String("file").pipe(
+      Flag.withAlias("F"),
+      Flag.optional,
+      Flag.withDescription(
+        "A note handed to the new agent after the transcript, from a file or - for stdin",
+      ),
+    ),
+    at: Flag.String("at").pipe(
+      Flag.optional,
+      Flag.withDescription(
+        "Fork at this assistant message of the agent's transcript, by its id (agent logs --json), instead of continuing: the agent goes on",
+      ),
+    ),
+    model: modelFlag.pipe(
+      Flag.withDescription("The model to run on, with --effort (default: the agent's)"),
+    ),
+    effort: effortFlag,
+    cloud: cloudFlag,
+    on: onFlag.pipe(
+      Flag.withDescription(
+        "Run on one of your devices, by its name or id (default: where the agent runs)",
+      ),
+    ),
+    follow: followFlag,
+    wait: waitFlag,
+  },
+  ({ agent: sourceId, file, at, ...flags }) =>
+    Effect.gen(function* () {
+      const chosen = yield* startFlagsOf(flags);
+      const note = Option.isSome(file) ? yield* readInput(file.value) : undefined;
+      const agent = yield* continueAgent({
+        from: {
+          agentId: sourceId,
+          ...(Option.isSome(at) ? { messageId: at.value } : undefined),
+        },
+        ...(note === undefined ? undefined : { note }),
+        ...chosen,
+      });
+      yield* afterStart(agent, continuedLines(sourceId, Option.isSome(at), agent), flags);
+    }),
+).pipe(
+  Command.withDescription(
+    "Continue an agent as a new one on its task, handed its brief and transcript, as the app's Continue does; the agent is stopped, and the new one runs as you, on your own plan. --at forks it at a message instead, and it goes on",
+  ),
+  Command.withExamples([
+    {
+      command: "vespin agent continue <id>",
+      description: "A new agent picks up where this one stopped, failed, or ran out of context",
+    },
+    {
+      command: 'echo "Now add the tests" | vespin agent continue <id> -F - --cloud --wait',
+      description: "Continue in the cloud with a note, and wait on it",
+    },
+    {
+      command: "vespin agent continue <id> --at <message-id> --follow",
+      description: "Fork at one of its messages, and stream the new agent's turn",
     },
   ]),
 );
@@ -494,9 +687,33 @@ const logsCommand = Command.make(
       Flag.withDefault(false),
       Flag.withDescription("Stream the turn under way until it ends"),
     ),
+    worker: Flag.String("worker").pipe(
+      Flag.optional,
+      Flag.withDescription(
+        "Read one of its workers' transcript instead, by the toolCallId of the call that started it (agent logs --json)",
+      ),
+    ),
+    call: Flag.String("call").pipe(
+      Flag.optional,
+      Flag.withDescription(
+        "Print one call whole, its input and its output, by its toolCallId (agent logs --json)",
+      ),
+    ),
   },
-  ({ agent: id, follow }) =>
+  ({ agent: id, follow, worker: workerFlag, call: callFlag }) =>
     Effect.gen(function* () {
+      const worker = Option.getOrUndefined(workerFlag);
+      const callId = Option.getOrUndefined(callFlag);
+      if (follow && (worker !== undefined || callId !== undefined)) {
+        return yield* new CommandFailed({
+          exit: CLI_EXIT.USAGE,
+          message: "--follow streams the agent's own turn; leave out --worker and --call.",
+        });
+      }
+      if (callId !== undefined) {
+        yield* printWholeCall(id, worker, callId);
+        return;
+      }
       if (follow) {
         const following = yield* followTurn(id, true);
         yield* answer({
@@ -511,22 +728,45 @@ const logsCommand = Command.make(
         });
         return;
       }
-      const { messages, status } = yield* wholeTranscript(id);
+      const { messages, status } = yield* wholeTranscript(id, worker);
       yield* answer({
-        json: { id, status: status ?? null, messages },
+        json: {
+          id,
+          ...(worker === undefined ? undefined : { worker }),
+          status: status ?? null,
+          messages,
+        },
         lines: pageLines(messages, new Map(), true).lines,
         ids: [id],
       });
     }),
 ).pipe(
   Command.withDescription(
-    "Print an agent's transcript; --follow streams the turn under way (with --json, the whole transcript once it ends)",
+    "Print an agent's transcript, or one of its workers' with --worker, or one call of it whole with --call; --follow streams the turn under way (with --json, the whole transcript once it ends)",
   ),
   Command.withExamples([
     { command: "vespin agent logs <id>", description: "The transcript so far" },
     { command: "vespin agent logs <id> --follow", description: "Stream the turn live" },
+    { command: "vespin agent logs <id> --worker <callId>", description: "A worker's transcript" },
+    {
+      command: "vespin agent logs <id> --call <callId>",
+      description: "One call, its output whole",
+    },
   ]),
 );
+
+/** What a queued send came to: waiting behind the turn, or handed on at once to an agent standing idle, as the member MCP's `message_agent` says it. */
+const QUEUED_SEND = {
+  QUEUED: "queued",
+  HANDED_ON: "handed-on",
+} as const;
+
+/** A queued send's refusals, in words that say what to do. */
+const QUEUE_REFUSAL_WORDS = {
+  [HOSTED_API_ERROR.NOT_PERMITTED]:
+    "Only the member who started that agent queues to it; send without --queue to steer it instead.",
+  [HOSTED_API_ERROR.INVALID_REQUEST]: "That agent's queue is full.",
+};
 
 const sendCommand = Command.make(
   "send",
@@ -536,11 +776,62 @@ const sendCommand = Command.make(
       Flag.withAlias("F"),
       Flag.withDescription("The message, from a file or - for stdin"),
     ),
+    queue: Flag.Boolean("queue").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription(
+        "Queue it behind the agent's turn, as ⌘↩ does, rather than steer the turn under way; only the agent's starter queues, and a paused queue sends nothing until `vespin agent queue resume`",
+      ),
+    ),
+    messageId: Flag.String("message-id").pipe(
+      Flag.optional,
+      Flag.withDescription(
+        "With --queue, the queued message's id, a UUID you mint, so a script addresses it with `vespin agent queue` even where this send's answer was lost; sent again under the same id while that message still waits, it queues nothing more, though once it went or was deleted it queues again",
+      ),
+    ),
   },
-  ({ agent: id, file }) =>
+  ({ agent: id, file, queue, messageId: namedId }) =>
     Effect.gen(function* () {
+      if (Option.isSome(namedId) && !queue) {
+        return yield* usage("--message-id names a queued message, so it goes with --queue.");
+      }
+      if (Option.isSome(namedId) && !isWireUuid(namedId.value)) {
+        return yield* usage("--message-id is a UUID, such as one `uuidgen` prints.");
+      }
       const text = yield* readInput(file);
       const { hosted } = yield* session;
+      if (queue) {
+        const messageId = Option.getOrElse(namedId, () => crypto.randomUUID());
+        const answered = yield* askService(
+          hosted.messages.queue,
+          { params: { id }, body: { change: QUEUE_CHANGE.ADD, id: messageId, text } },
+          HOSTED_DEADLINE.USUAL,
+          QUEUE_REFUSAL_WORDS,
+        );
+        // Note that an agent standing idle is handed the message at once, so it leaves the queue the answer reads.
+        const ahead = answered.queue.messages.findIndex((message) => message.id === messageId);
+        const queued = ahead !== -1;
+        const { paused } = answered.queue;
+        yield* answer({
+          json: {
+            messageId,
+            delivery: queued ? QUEUED_SEND.QUEUED : QUEUED_SEND.HANDED_ON,
+            ahead: queued ? ahead : null,
+            queue: answered.queue,
+          },
+          lines: [
+            queued
+              ? `Queued for agent ${id}, ${ahead} ahead of it.`
+              : `Handed to agent ${id} to go now, as it stood idle; a refusal would pause its queue.`,
+            ...(paused === undefined
+              ? []
+              : [
+                  `Its queue is paused (${paused.because}${paused.refusal === undefined ? "" : `: ${paused.refusal}`}), so nothing goes until \`vespin agent queue resume ${id}\`.`,
+                ]),
+          ],
+          ids: [id],
+        });
+        return;
+      }
       const { agent } = yield* askService(
         hosted.messages.send,
         { params: { id }, body: { text, clientKey: crypto.randomUUID() } },
@@ -555,6 +846,201 @@ const sendCommand = Command.make(
       command: 'echo "Also update the README" | vespin agent send <id> -F -',
       description: "A follow-up from stdin",
     },
+    {
+      command: "vespin agent send <id> --queue -F next.md",
+      description: "Queued to go once the turn under way ends",
+    },
+  ]),
+);
+
+/** A queued message as a line of a table: its id, whether a member holds it to edit, and its words' first line. */
+function queuedRow(message: QueuedMessage): string[] {
+  const [first = ""] = message.text.split("\n");
+  const files = message.files === undefined ? "" : ` (+${message.files.length} files)`;
+  return [message.id, message.editing ? "held" : "queued", `${first}${files}`];
+}
+
+/** The queue as a command answers it: its messages in the order they go, and why it stands paused. */
+const queueAnswer = (id: string, queue: AgentQueue) =>
+  answer({
+    json: { queue },
+    lines: [
+      ...(queue.messages.length === 0
+        ? [`Nothing is queued for agent ${id}.`]
+        : columns(queue.messages.map(queuedRow))),
+      ...(queue.paused === undefined
+        ? []
+        : [
+            `The queue is paused (${queue.paused.because}${queue.paused.refusal === undefined ? "" : `: ${queue.paused.refusal}`}); \`vespin agent queue resume ${id}\` lets it go on.`,
+          ]),
+    ],
+    ids: queue.messages.map((message) => message.id),
+  });
+
+/** A queue change's refusals, in words that say what to do. */
+const QUEUE_CHANGE_REFUSAL_WORDS = {
+  [HOSTED_API_ERROR.NOT_PERMITTED]: "Only the member who started that agent changes its queue.",
+  [HOSTED_API_ERROR.NOT_FOUND]:
+    "No agent of yours has that id, or its queue holds no message of that id, which may have gone already; `vespin agent queue <id>` lists the queue.",
+  [HOSTED_API_ERROR.INVALID_REQUEST]:
+    "Name every message the queue holds, each once, in the order they are to go; `vespin agent queue <id>` lists them.",
+};
+
+/** One change to the agent's queue (`messages.queue`), answered with the queue as it then stands. */
+const changeQueue = (id: string, body: AgentQueueChange) =>
+  Effect.gen(function* () {
+    const { hosted } = yield* session;
+    const answered = yield* askService(
+      hosted.messages.queue,
+      { params: { id }, body },
+      HOSTED_DEADLINE.STEER,
+      QUEUE_CHANGE_REFUSAL_WORDS,
+    );
+    yield* queueAnswer(id, answered.queue);
+  });
+
+/** A queued message's new words, which replace its own. */
+const queuedWordsFlag = Flag.String("file").pipe(
+  Flag.withAlias("F"),
+  Flag.withDescription("The new words, from a file or - for stdin"),
+);
+
+const queuedArgument = Argument.String("message").pipe(
+  Argument.withDescription("The queued message's id, as `vespin agent queue <id>` lists it"),
+);
+
+const queueResumeCommand = Command.make("resume", { agent: agentArgument }, ({ agent: id }) =>
+  changeQueue(id, { change: QUEUE_CHANGE.RESUME }),
+).pipe(
+  Command.withDescription(
+    "Resume an agent's paused queue, which a Stop, a failed turn, or a refused hand-off pauses",
+  ),
+  Command.withExamples([
+    { command: "vespin agent queue resume <id>", description: "Let the queue go on" },
+  ]),
+);
+
+const queueHoldCommand = Command.make(
+  "hold",
+  { agent: agentArgument, message: queuedArgument },
+  ({ agent: id, message }) =>
+    changeQueue(id, { change: QUEUE_CHANGE.HOLD, messageId: message, held: true }),
+).pipe(
+  Command.withDescription(
+    "Hold a queued message, as the app's Edit does: the queue sends what stands ahead of it and stops there",
+  ),
+  Command.withExamples([
+    { command: "vespin agent queue hold <id> <message>", description: "Stop the queue at it" },
+  ]),
+);
+
+const queueReleaseCommand = Command.make(
+  "release",
+  { agent: agentArgument, message: queuedArgument },
+  ({ agent: id, message }) =>
+    changeQueue(id, { change: QUEUE_CHANGE.HOLD, messageId: message, held: false }),
+).pipe(
+  Command.withDescription("Let a held message go again, so the queue sends on past it"),
+  Command.withExamples([
+    { command: "vespin agent queue release <id> <message>", description: "Let it go" },
+  ]),
+);
+
+const queueEditCommand = Command.make(
+  "edit",
+  { agent: agentArgument, message: queuedArgument, file: queuedWordsFlag },
+  ({ agent: id, message, file }) =>
+    Effect.gen(function* () {
+      const text = yield* readInput(file);
+      yield* changeQueue(id, { change: QUEUE_CHANGE.EDIT, messageId: message, text });
+    }),
+).pipe(
+  Command.withDescription(
+    "Write a queued message again in its place; it goes without the files it carried",
+  ),
+  Command.withExamples([
+    {
+      command: "vespin agent queue edit <id> <message> -F next.md",
+      description: "New words for the message",
+    },
+  ]),
+);
+
+const queueDeleteCommand = Command.make(
+  "delete",
+  { agent: agentArgument, message: queuedArgument },
+  ({ agent: id, message }) => changeQueue(id, { change: QUEUE_CHANGE.DELETE, messageId: message }),
+).pipe(
+  Command.withDescription("Delete a queued message before it goes"),
+  Command.withExamples([
+    { command: "vespin agent queue delete <id> <message>", description: "Drop the message" },
+  ]),
+);
+
+const queueReorderCommand = Command.make(
+  "reorder",
+  {
+    agent: agentArgument,
+    messages: Argument.String("message").pipe(
+      Argument.atLeast(1),
+      Argument.withDescription("Every queued message's id, each once, in the order they are to go"),
+    ),
+  },
+  ({ agent: id, messages }) => changeQueue(id, { change: QUEUE_CHANGE.REORDER, order: messages }),
+).pipe(
+  Command.withDescription("Put an agent's queue in a new order"),
+  Command.withExamples([
+    {
+      command: "vespin agent queue reorder <id> <second> <first>",
+      description: "Swap two messages",
+    },
+  ]),
+);
+
+const queueSteerCommand = Command.make(
+  "steer",
+  { agent: agentArgument, message: queuedArgument, file: queuedWordsFlag.pipe(Flag.optional) },
+  ({ agent: id, message, file }) =>
+    Effect.gen(function* () {
+      const text = Option.isSome(file) ? yield* readInput(file.value) : undefined;
+      yield* changeQueue(id, {
+        change: QUEUE_CHANGE.STEER,
+        messageId: message,
+        ...(text === undefined ? undefined : { text }),
+      });
+    }),
+).pipe(
+  Command.withDescription(
+    "Send a queued message now, into the turn under way, and take it out of the queue; -F replaces its words and drops its files",
+  ),
+  Command.withExamples([
+    { command: "vespin agent queue steer <id> <message>", description: "Send it as it stands" },
+  ]),
+);
+
+const queueCommand = Command.make("queue", { agent: agentArgument }, ({ agent: id }) =>
+  Effect.gen(function* () {
+    const { hosted } = yield* session;
+    const newest = yield* askService(hosted.messages.agentNewest, { id });
+    const queue = ("queue" in newest ? newest.queue : undefined) ?? { messages: [], revision: 0 };
+    yield* queueAnswer(id, queue);
+  }),
+).pipe(
+  Command.withDescription(
+    "List the messages queued behind an agent's turn, and resume, hold, release, edit, delete, reorder, or steer them (your own agents only)",
+  ),
+  Command.withSubcommands([
+    queueResumeCommand,
+    queueHoldCommand,
+    queueReleaseCommand,
+    queueEditCommand,
+    queueDeleteCommand,
+    queueReorderCommand,
+    queueSteerCommand,
+  ]),
+  Command.withExamples([
+    { command: "vespin agent queue <id>", description: "Each message's id, state, and words" },
+    { command: "vespin agent queue <id> -q", description: "The message ids alone, in order" },
   ]),
 );
 
@@ -652,18 +1138,457 @@ const checkoutCommand = Command.make("checkout", { agent: agentArgument }, ({ ag
   ]),
 );
 
-/** The agent group: start through checkout. */
+const portsCommand = Command.make("ports", { agent: agentArgument }, ({ agent: id }) =>
+  Effect.gen(function* () {
+    const { hosted } = yield* session;
+    const listed = yield* askService(hosted.agentPorts.list, { id });
+    // Note that a sandbox not running shares nothing, so its share is not read.
+    const { shared } = listed.running
+      ? yield* askService(hosted.agentPorts.shared, { id })
+      : { shared: null };
+    const portLines = columns(
+      listed.ports.map((port) => [String(port), port === shared?.port ? shared.url : ""]),
+    );
+    yield* answer({
+      json: { ...listed, shared },
+      lines: !listed.running
+        ? ["The agent's sandbox is not running."]
+        : listed.ports.length === 0
+          ? ["Nothing listens in the agent's sandbox."]
+          : portLines,
+      ids: listed.ports.map(String),
+    });
+  }),
+).pipe(
+  Command.withDescription(
+    "List the ports a server listens on in an agent's cloud sandbox, and the one shared by link",
+  ),
+  Command.withExamples([
+    { command: "vespin agent ports <id>", description: "The ports, the shared one with its link" },
+    { command: "vespin agent ports <id> -q", description: "The port numbers alone" },
+  ]),
+);
+
+/** What a share says of the port shared now: the port and its link, or that none is. */
+function sharedLines(shared: { readonly port: number; readonly url: string } | null): string[] {
+  return shared === null
+    ? ["No port is shared."]
+    : [`Port ${shared.port} is shared at ${shared.url}`];
+}
+
+const shareCommand = Command.make(
+  "share",
+  {
+    agent: agentArgument,
+    port: Argument.Int("port").pipe(
+      Argument.filter(
+        (port) => port >= FORWARD_PORT.MIN && port <= FORWARD_PORT.MAX,
+        () => `The port is a number from ${FORWARD_PORT.MIN} to ${FORWARD_PORT.MAX}`,
+      ),
+      Argument.withDescription("The port to share, replacing any shared before"),
+      Argument.optional,
+    ),
+    stop: Flag.Boolean("stop").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription("Stop sharing; the link closes"),
+    ),
+  },
+  ({ agent: id, port, stop }) =>
+    Effect.gen(function* () {
+      if (stop && Option.isSome(port)) {
+        return yield* new CommandFailed({
+          exit: CLI_EXIT.USAGE,
+          message: "Name a port to share, or --stop, not both.",
+        });
+      }
+      const { hosted } = yield* session;
+      if (stop) {
+        const stopped = yield* askService(hosted.agentPorts.unshare, { id });
+        yield* answer({ json: stopped, lines: ["Stopped sharing."], ids: [] });
+        return;
+      }
+      if (Option.isSome(port)) {
+        const { url } = yield* askService(hosted.agentPorts.share, {
+          params: { id },
+          body: { port: port.value },
+        });
+        const shared = { port: port.value, url };
+        yield* answer({ json: { shared }, lines: sharedLines(shared), ids: [url] });
+        return;
+      }
+      const { shared } = yield* askService(hosted.agentPorts.shared, { id });
+      yield* answer({
+        json: { shared },
+        lines: sharedLines(shared),
+        ids: shared === null ? [] : [shared.url],
+      });
+    }),
+).pipe(
+  Command.withDescription(
+    "Share a port of an agent's running cloud sandbox by public link, show the link, or stop sharing",
+  ),
+  Command.withExamples([
+    { command: "vespin agent share <id> 3000", description: "Share port 3000, printing its link" },
+    { command: "vespin agent share <id> -q", description: "The link shared now, alone" },
+    { command: "vespin agent share <id> --stop", description: "Close the link" },
+  ]),
+);
+
+/** Who drives a tab, in a column's words: its agent, or a member until their takeover lapses. */
+function driverWords(tab: AgentBrowserTab): string {
+  if (tab.driver === null) return "agent";
+  return `member until ${new Date(tab.driver.heldUntil).toLocaleTimeString()}`;
+}
+
+/** A tab's row: its id, who drives it, its title, and its address; never a frame or the page's text. */
+function tabRow(tab: AgentBrowserTab): string[] {
+  return [tab.id, driverWords(tab), tab.title, tab.address];
+}
+
+/** What a write answers: the tab as it then stands, in one row. */
+const tabAnswer = (tab: AgentBrowserTab) =>
+  answer({ json: { tab }, lines: columns([tabRow(tab)]), ids: [tab.id] });
+
+const tabArgument = Argument.String("tab").pipe(
+  Argument.withDescription("The tab's id, as `vespin agent tabs <id>` lists it"),
+);
+
+const tabsOpenCommand = Command.make(
+  "open",
+  {
+    agent: agentArgument,
+    address: Argument.String("address").pipe(
+      Argument.withDescription("The http or https address to open"),
+    ),
+  },
+  ({ agent: id, address }) =>
+    Effect.gen(function* () {
+      const { hosted } = yield* session;
+      const { tab } = yield* askService(hosted.agentBrowserTabs.agentOpen, {
+        params: { id },
+        body: { address },
+      });
+      yield* tabAnswer(tab);
+    }),
+).pipe(
+  Command.withDescription(
+    "Open a tab in an agent's cloud browser, taken over for you until you hand it back",
+  ),
+  Command.withExamples([
+    {
+      command: "vespin agent tabs open <id> https://example.com/login",
+      description: "Open a sign-in page for the agent",
+    },
+  ]),
+);
+
+const tabsTakeCommand = Command.make(
+  "take",
+  { agent: agentArgument, tab: tabArgument },
+  ({ agent: id, tab }) =>
+    Effect.gen(function* () {
+      const { hosted } = yield* session;
+      const taken = yield* askService(hosted.agentBrowserTabs.agentTakeOver, { id, tab });
+      yield* tabAnswer(taken.tab);
+    }),
+).pipe(
+  Command.withDescription(
+    "Take over a tab in an agent's cloud browser so the agent leaves it alone, or renew your takeover; it lapses a minute after",
+  ),
+  Command.withExamples([
+    { command: "vespin agent tabs take <id> <tab>", description: "Take the tab over" },
+  ]),
+);
+
+const tabsHandBackCommand = Command.make(
+  "hand-back",
+  { agent: agentArgument, tab: tabArgument },
+  ({ agent: id, tab }) =>
+    Effect.gen(function* () {
+      const { hosted } = yield* session;
+      const handed = yield* askService(hosted.agentBrowserTabs.agentHandBack, { id, tab });
+      yield* tabAnswer(handed.tab);
+    }),
+).pipe(
+  Command.withDescription("Hand a tab you drive in an agent's cloud browser back to the agent"),
+  Command.withExamples([
+    { command: "vespin agent tabs hand-back <id> <tab>", description: "Give the tab back" },
+  ]),
+);
+
+const tabsCommand = Command.make("tabs", { agent: agentArgument }, ({ agent: id }) =>
+  Effect.gen(function* () {
+    const { hosted } = yield* session;
+    const { tabs } = yield* askService(hosted.agentBrowserTabs.agentList, { id });
+    yield* answer({
+      json: { tabs },
+      lines:
+        tabs.length === 0 ? ["No tab is open in the agent's browser."] : columns(tabs.map(tabRow)),
+      ids: tabs.map((tab) => tab.id),
+    });
+  }),
+).pipe(
+  Command.withDescription(
+    "List the tabs open in an agent's cloud browser, and open, take over, or hand one back",
+  ),
+  Command.withSubcommands([tabsOpenCommand, tabsTakeCommand, tabsHandBackCommand]),
+  Command.withExamples([
+    { command: "vespin agent tabs <id>", description: "Each tab's id, driver, title, and address" },
+    { command: "vespin agent tabs <id> -q", description: "The tab ids alone" },
+  ]),
+);
+
+/** What `update` changes, each one PATCH of the agent. */
+const AGENT_CHANGE = {
+  TITLE: "title",
+  CHOICE: "choice",
+  PIN: "pin",
+  ARCHIVE: "archive",
+  SERVERS: "servers",
+  REPOSITORY: "repository",
+} as const;
+
+type AgentChange = (typeof AGENT_CHANGE)[keyof typeof AGENT_CHANGE];
+
+/** The change each of `update`'s flags names, as the usage refusal lists them. */
+const AGENT_CHANGE_FLAGS: Record<AgentChange, string> = {
+  [AGENT_CHANGE.TITLE]: "--title",
+  [AGENT_CHANGE.CHOICE]: "--model with --effort",
+  [AGENT_CHANGE.PIN]: "--pin or --unpin",
+  [AGENT_CHANGE.ARCHIVE]: "--archive or --unarchive",
+  [AGENT_CHANGE.SERVERS]: "--disabled-servers",
+  [AGENT_CHANGE.REPOSITORY]: "--add-repository",
+};
+
+/** What `update`'s flags say, before they are read into the one change they name. */
+interface AgentUpdateFlags {
+  readonly title: Option.Option<string>;
+  readonly model: Option.Option<string>;
+  readonly effort: Option.Option<string>;
+  readonly pin: boolean;
+  readonly unpin: boolean;
+  readonly archive: boolean;
+  readonly unarchive: boolean;
+  readonly reason: Option.Option<string>;
+  readonly disabledServers: Option.Option<string>;
+  readonly addRepository: Option.Option<string>;
+  readonly branch: Option.Option<string>;
+}
+
+/** Fails `update` as a usage error, in `message`. */
+const usage = (message: string) => new CommandFailed({ exit: CLI_EXIT.USAGE, message });
+
+/**
+ * The one change `update`'s flags name, as the agent's PATCH takes it, or a
+ * usage refusal where they name none, several, or one half of a pair. The
+ * service writes one change a call, so the command names one rather than
+ * writing several that could stand half done.
+ */
+function agentChangeOf(flags: AgentUpdateFlags) {
+  return Effect.gen(function* () {
+    const named: Record<AgentChange, boolean> = {
+      [AGENT_CHANGE.TITLE]: Option.isSome(flags.title),
+      [AGENT_CHANGE.CHOICE]: Option.isSome(flags.model) || Option.isSome(flags.effort),
+      [AGENT_CHANGE.PIN]: flags.pin || flags.unpin,
+      [AGENT_CHANGE.ARCHIVE]: flags.archive || flags.unarchive,
+      [AGENT_CHANGE.SERVERS]: Option.isSome(flags.disabledServers),
+      [AGENT_CHANGE.REPOSITORY]: Option.isSome(flags.addRepository),
+    };
+    const changes = Object.values(AGENT_CHANGE).filter((change) => named[change]);
+    const [change, ...others] = changes;
+    if (change === undefined || others.length > 0) {
+      const listed = Object.values(AGENT_CHANGE_FLAGS).join(", ");
+      return yield* usage(`Name one change: ${listed}.`);
+    }
+    if (flags.pin && flags.unpin) return yield* usage("Name one of --pin and --unpin.");
+    if (flags.archive && flags.unarchive) {
+      return yield* usage("Name one of --archive and --unarchive.");
+    }
+    if (Option.isSome(flags.reason) && !flags.archive) {
+      return yield* usage("--reason goes with --archive.");
+    }
+    if (Option.isSome(flags.branch) && Option.isNone(flags.addRepository)) {
+      return yield* usage("--branch goes with --add-repository.");
+    }
+    if (Option.isSome(flags.title)) return { change, body: { title: flags.title.value } };
+    if (Option.isSome(flags.model) && Option.isSome(flags.effort)) {
+      return { change, body: { model: flags.model.value, effort: flags.effort.value } };
+    }
+    if (change === AGENT_CHANGE.CHOICE) {
+      return yield* usage("Name --model and --effort together (vespin models lists them).");
+    }
+    if (change === AGENT_CHANGE.PIN) return { change, body: { pinned: flags.pin } };
+    if (change === AGENT_CHANGE.ARCHIVE) {
+      return {
+        change,
+        body: {
+          archived: flags.archive,
+          ...(Option.isSome(flags.reason) ? { reason: flags.reason.value } : undefined),
+        },
+      };
+    }
+    if (Option.isSome(flags.disabledServers)) {
+      // Note that an empty list switches every server back on.
+      const names = flags.disabledServers.value.split(",").map((name) => name.trim());
+      return { change, body: { disabledServers: names.filter((name) => name !== "") } };
+    }
+    return {
+      change,
+      body: {
+        addRepository: {
+          repository: Option.getOrThrow(flags.addRepository),
+          ...(Option.isSome(flags.branch) ? { branch: flags.branch.value } : undefined),
+        },
+      },
+    };
+  });
+}
+
+/** What `update` says of the agent once its change landed. */
+function updatedLines(
+  change: AgentChange,
+  agent: AgentSummary,
+  addedCheckout: AddedRepositoryCheckout | undefined,
+): string[] {
+  const name = agent.title ?? agent.model;
+  if (change === AGENT_CHANGE.TITLE) return [`Renamed agent ${agent.id} to ${name}.`];
+  if (change === AGENT_CHANGE.CHOICE) {
+    return [`Agent ${agent.id} runs on ${agent.model} (${agent.effort}) from its next step.`];
+  }
+  if (change === AGENT_CHANGE.PIN) return [`Changed the pin of agent ${agent.id}.`];
+  if (change === AGENT_CHANGE.ARCHIVE) {
+    const how = agent.archivedAt === undefined ? "Brought back" : "Archived";
+    return [`${how} agent ${agent.id}.`];
+  }
+  if (change === AGENT_CHANGE.SERVERS) {
+    const off = agent.disabledServers ?? [];
+    return [
+      off.length === 0
+        ? `Every MCP server is on for agent ${agent.id}.`
+        : `Switched off for agent ${agent.id}: ${off.join(", ")}.`,
+    ];
+  }
+  const when =
+    addedCheckout === ADDED_REPOSITORY_CHECKOUT.NOW
+      ? "checked out now"
+      : "checked out at its next turn";
+  return [`Added the repository to agent ${agent.id}, ${when}.`];
+}
+
+const updateCommand = Command.make(
+  "update",
+  {
+    agent: agentArgument,
+    title: Flag.String("title").pipe(
+      Flag.optional,
+      Flag.withDescription("Rename it; empty clears the title, so the model's name shows"),
+    ),
+    model: modelFlag.pipe(
+      Flag.withDescription("Move it to this model from its next step, with --effort"),
+    ),
+    effort: effortFlag,
+    pin: Flag.Boolean("pin").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription("Pin it in your sidebar; the pin is yours alone"),
+    ),
+    unpin: Flag.Boolean("unpin").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription("Unpin it from your sidebar"),
+    ),
+    archive: Flag.Boolean("archive").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription(
+        "Archive it, stopping a turn still running; its transcript, branch, and pull request stay",
+      ),
+    ),
+    unarchive: Flag.Boolean("unarchive").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription("Bring an archived agent back"),
+    ),
+    reason: Flag.String("reason").pipe(
+      Flag.optional,
+      Flag.withDescription("Why it is archived, shown on its archived banner, with --archive"),
+    ),
+    disabledServers: Flag.String("disabled-servers").pipe(
+      Flag.optional,
+      Flag.withDescription(
+        'The MCP servers switched off for it, comma-separated, replacing the list; "" switches every one on',
+      ),
+    ),
+    addRepository: Flag.String("add-repository").pipe(
+      Flag.optional,
+      Flag.withDescription(
+        "A repository, owner/name, it works in beside its own from now on; only for a cloud agent you started",
+      ),
+    ),
+    branch: Flag.String("branch").pipe(
+      Flag.optional,
+      Flag.withDescription(
+        "The branch the added repository is checked out at, with --add-repository (default: its default branch)",
+      ),
+    ),
+  },
+  ({ agent: id, ...flags }) =>
+    Effect.gen(function* () {
+      const { change, body } = yield* agentChangeOf(flags);
+      const { hosted } = yield* session;
+      const changed = yield* askService(hosted.agents.change, { params: { id }, body });
+      const { agent } = changed;
+      yield* answer({
+        json: changed,
+        lines: updatedLines(change, agent, changed.addedCheckout),
+        ids: [agent.id],
+      });
+    }),
+).pipe(
+  Command.withDescription(
+    "Change an agent, one change a call: rename it, move it to another model, pin or unpin it, archive it or bring it back, switch its MCP servers off, or add a repository",
+  ),
+  Command.withExamples([
+    { command: 'vespin agent update <id> --title "Fix the login"', description: "Rename it" },
+    {
+      command: "vespin agent update <id> --model anthropic/claude-opus-5.5 --effort high",
+      description: "Move it to another model from its next step",
+    },
+    {
+      command: 'vespin agent update <id> --archive --reason "Its pull request merged"',
+      description: "Archive it, saying why",
+    },
+    {
+      command: "vespin agent update <id> --disabled-servers linear,notion",
+      description: "Switch two MCP servers off for it",
+    },
+  ]),
+);
+
+/** The agent group: start, continue, and the rest through tabs, with diff, pr, forward, and the shells from their own files. */
 export const agentCommand = Command.make("agent").pipe(
-  Command.withDescription(`Start, follow, message, and stop ${PRODUCT_NAME}'s coding agents`),
+  Command.withDescription(
+    `Start, continue, follow, message, change, stop, rewind, delete, and wake ${PRODUCT_NAME}'s coding agents`,
+  ),
   Command.withSubcommands([
     startCommand,
+    continueCommand,
     listCommand,
     viewCommand,
     logsCommand,
     sendCommand,
+    queueCommand,
     stopCommand,
+    updateCommand,
+    rewindCommand,
+    deleteCommand,
+    wakeCommand,
+    forwardCommand,
     waitCommand,
     checkoutCommand,
+    diffCommand,
+    prCommand,
+    portsCommand,
+    shareCommand,
+    tabsCommand,
+    shellCommand,
+    shellsCommand,
   ]),
   Command.withExamples([
     { command: "vespin agent start ACME-42 --wait", description: "Start an agent, and wait on it" },

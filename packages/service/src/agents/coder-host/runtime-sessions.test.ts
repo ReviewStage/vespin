@@ -17,7 +17,6 @@ import { parseKeyRing, sealProviderKey } from "@repo/database/models/provider-ke
 import {
   listProviderKeyRows,
   saveProviderKey,
-  setProviderKeyForAgents,
   setProviderKeyStatus,
 } from "@repo/database/models/provider-key-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
@@ -159,6 +158,12 @@ function recording(sessionPrefix: string) {
         return answers.handover;
       }),
     warm: () => Effect.void,
+    retry: (sessionId, message) =>
+      Effect.sync(() => {
+        calls.push(`retry:${sessionId}`);
+        messages.push(message);
+        return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId, deliveryId: randomUUID() };
+      }),
     checkOut: () => Effect.succeed(RUNNER_CHECKOUT.NOT_LIVE),
     open: (message) =>
       Effect.sync(() => {
@@ -1167,17 +1172,15 @@ const startOn = (taskId: string, model: string, key = randomUUID()) => ({
   choice: { model, effort: "high" },
 });
 
-const startIn = (workspaceId: string, model: string, key = randomUUID()) => ({
-  taskId: null,
-  organizationId: workspaceId,
-  repository: `${RELAY.owner}/${RELAY.name}`,
-  prompt: "Fix the flaky test.",
-  idempotencyKey: key,
-  choice: { model, effort: "high" },
-});
+/** A Start, as `startOn`, on a task the owner makes in the workspace on the repository. */
+const startIn = (owner: string, workspaceId: string, model: string) =>
+  Effect.map(
+    createTask(owner, { organizationId: workspaceId, repository: `${RELAY.owner}/${RELAY.name}` }),
+    (made) => startOn(made.id, model),
+  );
 
 it.layer(Layer.merge(getTestDB(), REACHED))(
-  "a Start decides the runtime and the payer once",
+  "a Start decides the runtime and its first payer",
   (it) => {
     it.effect(
       "an account with a setup-token starts a Claude agent on Claude Code paid by its plan; a GPT model or an account with no setup-token, none with an API key, is refused by name with the provider, since Vespin's key pays for no coding agent, and a function with no harness refuses it as not here rather than run it on the retired runtime; each leaves no agent",
@@ -1222,7 +1225,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               environment(),
               ...(each.native ? [native] : []),
             );
-            const ask = startIn(workspaceId, each.model);
+            const ask = yield* startIn(owner, workspaceId, each.model);
             const started = yield* Effect.result(
               startAgent(routedSessions(owner), owner, ask).pipe(Effect.provide(layers)),
             );
@@ -1439,7 +1442,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
     );
 
     it.effect(
-      "a Start runs where the agent it is started from runs, and a teammate's continue from the owner's agent on the owner's device is refused, never sent to the cloud; a device away is refused by name",
+      "a Start runs where the agent it is started from runs, and a teammate's continue from the owner's agent on the owner's device naming no place takes it up in the cloud; a device away is refused by name",
       () =>
         Effect.gen(function* () {
           const { owner, workspaceId } = yield* openStarter(true);
@@ -1497,7 +1500,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             Option.some([AGENT_MACHINE.DEVICE, deviceId]),
           );
 
-          // A teammate's continue from the owner's agent on the device is refused by name too, as an agent on its starter's own Mac is theirs alone to start from, so it never reaches the cloud.
+          // A teammate's continue from the owner's agent on the device, naming no place, runs in the cloud, since a device runs its owner's agents alone.
           const theirContinue = {
             taskId: task.id,
             prompt: undefined,
@@ -1506,15 +1509,9 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             from: { agentId: owned.success.agent.id },
           };
           const theirContinued = yield* start(teammate, theirContinue);
-          assert.ok(Result.isFailure(theirContinued));
-          assert.deepEqual(theirContinued.failure, HOSTED_REFUSAL.NOT_PERMITTED);
-          assert.ok(Option.isNone(yield* readAgentByKey(teammate, theirContinue.idempotencyKey)));
-
-          // A Start with no task runs in the cloud.
-          const planless = yield* start(owner, startIn(workspaceId, "anthropic/claude-opus-5.5"));
-          assert.ok(Result.isSuccess(planless));
+          assert.ok(Result.isSuccess(theirContinued), JSON.stringify(theirContinued));
           assert.deepEqual(
-            yield* whereRuns(planless.success, owner),
+            yield* whereRuns(theirContinued.success, teammate),
             Option.some([AGENT_MACHINE.VERCEL, null]),
           );
 
@@ -1755,7 +1752,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             const started = yield* startAgent(
               routedSessions(owner),
               owner,
-              startIn(workspaceId, each.model),
+              yield* startIn(owner, workspaceId, each.model),
             ).pipe(Effect.provide(layers(native)));
 
             const [handed] = [...claudeCode.messages, ...codex.messages];
@@ -1770,7 +1767,11 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           const automated = yield* openStarter(true);
           const byAutomation = runtimes();
           const run = yield* startAgent(routedSessions(automated.owner), automated.owner, {
-            ...startIn(automated.workspaceId, "anthropic/claude-opus-5.5"),
+            ...(yield* startIn(
+              automated.owner,
+              automated.workspaceId,
+              "anthropic/claude-opus-5.5",
+            )),
             automationOrigin: {
               name: "Nightly checks",
               firing: { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: 0 },
@@ -1801,10 +1802,10 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           const starting = yield* startAgent(
             routedSessions(byAgent.owner),
             byAgent.owner,
-            startIn(byAgent.workspaceId, "anthropic/claude-opus-5.5"),
+            yield* startIn(byAgent.owner, byAgent.workspaceId, "anthropic/claude-opus-5.5"),
           ).pipe(Effect.provide(layers(agentRuns.native)));
           yield* startAgent(routedSessions(byAgent.owner), byAgent.owner, {
-            ...startIn(byAgent.workspaceId, "anthropic/claude-opus-5.5"),
+            ...(yield* startIn(byAgent.owner, byAgent.workspaceId, "anthropic/claude-opus-5.5")),
             startedBy: starting.agent,
           }).pipe(Effect.provide(layers(agentRuns.native)));
           const opened = [];
@@ -1831,7 +1832,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           yield* startAgent(
             routedSessions(keyed.owner),
             keyed.owner,
-            startIn(keyed.workspaceId, "anthropic/claude-opus-5.5"),
+            yield* startIn(keyed.owner, keyed.workspaceId, "anthropic/claude-opus-5.5"),
           ).pipe(Effect.provide(layers(onRetired.native)));
           assert.equal(onRetired.agentSessions.messages[0]?.lineId, undefined);
         }),
@@ -1843,17 +1844,18 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
         Effect.gen(function* () {
           const layers = (native: ReturnType<typeof runtimes>["native"]) =>
             Layer.mergeAll(githubReaching(INSTALLATIONS).layer, CATALOG, environment(), native);
-          const callIn = (workspaceId: string) => ({
-            ...startIn(workspaceId, "anthropic/claude-opus-5.5"),
-            call: true,
-          });
+          const callIn = (owner: string, workspaceId: string) =>
+            Effect.map(startIn(owner, workspaceId, "anthropic/claude-opus-5.5"), (ask) => ({
+              ...ask,
+              call: true,
+            }));
 
           const planned = yield* openStarter(true);
           const onPlan = runtimes();
           const started = yield* startAgent(
             routedSessions(planned.owner),
             planned.owner,
-            callIn(planned.workspaceId),
+            yield* callIn(planned.owner, planned.workspaceId),
           ).pipe(Effect.provide(layers(onPlan.native)));
           const routing = Option.getOrThrow(
             yield* readAgentRouting(planned.owner, started.agent.id),
@@ -1871,7 +1873,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           const onRetired = yield* startAgent(
             routedSessions(keyed.owner),
             keyed.owner,
-            callIn(keyed.workspaceId),
+            yield* callIn(keyed.owner, keyed.workspaceId),
           ).pipe(Effect.provide(layers(onKey.native)));
           const retiredRouting = Option.getOrThrow(
             yield* readAgentRouting(keyed.owner, onRetired.agent.id),
@@ -1885,9 +1887,11 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           const none = yield* openStarter(false);
           const refusedOn = runtimes();
           const refused = yield* Effect.result(
-            startAgent(routedSessions(none.owner), none.owner, callIn(none.workspaceId)).pipe(
-              Effect.provide(layers(refusedOn.native)),
-            ),
+            startAgent(
+              routedSessions(none.owner),
+              none.owner,
+              yield* callIn(none.owner, none.workspaceId),
+            ).pipe(Effect.provide(layers(refusedOn.native))),
           );
           assertCredentialMissing(refused, MODEL_PROVIDER.ANTHROPIC, "no credential");
         }),
@@ -2000,7 +2004,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               environment(),
               ...(each.native ? [native] : []),
             );
-            const ask = startIn(workspaceId, each.model);
+            const ask = yield* startIn(owner, workspaceId, each.model);
             const started = yield* Effect.result(
               startAgent(routedSessions(owner), owner, ask).pipe(Effect.provide(layers)),
             );
@@ -2045,7 +2049,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           codex.answers.open = SESSION_SEND_OUTCOME.FAILED;
           codex.answers.status = 403;
           codex.answers.planRefusal = PLAN_REFUSAL.SIGNED_OUT;
-          const ask = startIn(workspaceId, "openai/gpt-5.5");
+          const ask = yield* startIn(owner, workspaceId, "openai/gpt-5.5");
 
           const refused = yield* Effect.result(
             startAgent(routedSessions(owner), owner, ask).pipe(
@@ -2063,85 +2067,47 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
     );
 
     it.effect(
-      "where the Claude plan is offered, Settings' choice alone decides: Subscription runs every Claude model on Claude Code, a fast version with its own fast mode, and API key runs on Claude Code on the API key, a fast version included; with no API key saved and the plan not selected, or nothing connected, the Start is refused, never run on Vespin's key",
+      "a Start of a Claude model runs on Claude Code on the plan where the account keeps a subscription of it, a fast version with its own fast mode, and on the API key where it keeps none; with neither, the Start is refused, never run on Vespin's key",
       () =>
         Effect.gen(function* () {
           const cases: readonly {
             readonly name: string;
             readonly plan: boolean;
-            readonly forAgents: boolean;
             readonly apiKey: boolean;
             readonly model: string;
             readonly recorded: readonly [string, AgentPayer | null] | "refused";
           }[] = [
             {
-              name: "Subscription, an API key saved too",
+              name: "a subscription, an API key saved too",
               plan: true,
-              forAgents: true,
               apiKey: true,
               model: "anthropic/claude-opus-5.5",
               recorded: ["claude_code", AGENT_PAYER.CLAUDE_SUBSCRIPTION],
             },
             {
-              name: "Subscription, a fast version",
+              name: "a subscription, a fast version",
               plan: true,
-              forAgents: true,
               apiKey: false,
               model: "anthropic/claude-opus-5.5-fast",
               recorded: ["claude_code", AGENT_PAYER.CLAUDE_SUBSCRIPTION],
             },
             {
-              name: "API key, saved",
-              plan: true,
-              forAgents: false,
-              apiKey: true,
-              model: "anthropic/claude-opus-5.5",
-              recorded: ["claude_code", AGENT_PAYER.API_KEY],
-            },
-            {
-              name: "API key, a fast version",
-              plan: true,
-              forAgents: false,
+              name: "no subscription, an API key saved, a fast version",
+              plan: false,
               apiKey: true,
               model: "anthropic/claude-opus-5.5-fast",
               recorded: ["claude_code", AGENT_PAYER.API_KEY],
             },
             {
-              name: "the plan off, no API key",
-              plan: true,
-              forAgents: false,
+              name: "nothing connected",
+              plan: false,
               apiKey: false,
               model: "anthropic/claude-opus-5.5",
-              recorded: "refused",
-            },
-            {
-              name: "no plan connected, an API key saved",
-              plan: false,
-              forAgents: true,
-              apiKey: true,
-              model: "anthropic/claude-opus-5.5",
-              recorded: ["claude_code", AGENT_PAYER.API_KEY],
-            },
-            {
-              name: "no plan connected, a fast version",
-              plan: false,
-              forAgents: true,
-              apiKey: false,
-              model: "anthropic/claude-opus-5.5-fast",
               recorded: "refused",
             },
           ];
           for (const each of cases) {
             const { owner, workspaceId } = yield* openStarter(each.plan);
-            if (!each.forAgents) {
-              const turned = yield* setProviderKeyForAgents(
-                owner,
-                PROVIDER_KEY_PROVIDER.ANTHROPIC,
-                PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-                false,
-              );
-              assert.equal(turned, true, each.name);
-            }
             if (each.apiKey) yield* saveApiKey(owner, PROVIDER_KEY_PROVIDER.ANTHROPIC);
             const { agentSessions, claudeCode, native } = runtimes();
             const layers = Layer.mergeAll(
@@ -2151,9 +2117,11 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               native,
             );
             const result = yield* Effect.result(
-              startAgent(routedSessions(owner), owner, startIn(workspaceId, each.model)).pipe(
-                Effect.provide(layers),
-              ),
+              startAgent(
+                routedSessions(owner),
+                owner,
+                yield* startIn(owner, workspaceId, each.model),
+              ).pipe(Effect.provide(layers)),
             );
             if (each.recorded === "refused") {
               assertCredentialMissing(result, providerOfCase(each.model), each.name);
@@ -2171,12 +2139,12 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
     );
 
     it.effect(
-      "where the ChatGPT plan is offered, Settings' choice alone decides: Subscription runs GPT models on Codex on the plan, and API key on Codex on the OpenAI API key, and the Start is refused where none was saved",
+      "a Start of a GPT model runs on Codex on the plan where the account keeps a ChatGPT sign-in, and on its OpenAI API key where it keeps none, and is refused where neither was saved",
       () =>
         Effect.gen(function* () {
           const cases: readonly {
             readonly name: string;
-            readonly forAgents: boolean;
+            readonly signedIn: boolean;
             readonly apiKey:
               | typeof PROVIDER_KEY_PROVIDER.OPENAI
               | typeof PROVIDER_KEY_PROVIDER.ANTHROPIC
@@ -2185,38 +2153,32 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             readonly recorded: readonly [string, AgentPayer | null] | "refused";
           }[] = [
             {
-              name: "Subscription, an API key saved too",
-              forAgents: true,
+              name: "a sign-in, an API key saved too",
+              signedIn: true,
               apiKey: PROVIDER_KEY_PROVIDER.OPENAI,
               model: "openai/gpt-5.5",
               recorded: ["codex", AGENT_PAYER.CHATGPT_SUBSCRIPTION],
             },
             {
-              name: "API key, saved",
-              forAgents: false,
+              name: "no sign-in, an API key saved",
+              signedIn: false,
               apiKey: PROVIDER_KEY_PROVIDER.OPENAI,
               model: "openai/gpt-5.5",
               recorded: ["codex", AGENT_PAYER.API_KEY],
             },
             {
-              name: "the plan off, only an Anthropic API key saved",
-              forAgents: false,
+              name: "no sign-in, only an Anthropic API key saved",
+              signedIn: false,
               apiKey: PROVIDER_KEY_PROVIDER.ANTHROPIC,
               model: "openai/gpt-5.5",
               recorded: "refused",
             },
           ];
           for (const each of cases) {
-            const { owner, workspaceId } = yield* openStarter(false, "signed_in");
-            if (!each.forAgents) {
-              const turned = yield* setProviderKeyForAgents(
-                owner,
-                PROVIDER_KEY_PROVIDER.OPENAI,
-                PROVIDER_KEY_KIND.CHATGPT_OAUTH,
-                false,
-              );
-              assert.equal(turned, true, each.name);
-            }
+            const { owner, workspaceId } = yield* openStarter(
+              false,
+              each.signedIn ? "signed_in" : "none",
+            );
             if (each.apiKey !== undefined) yield* saveApiKey(owner, each.apiKey);
             const { agentSessions, codex, native } = runtimes();
             const layers = Layer.mergeAll(
@@ -2226,9 +2188,11 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               native,
             );
             const result = yield* Effect.result(
-              startAgent(routedSessions(owner), owner, startIn(workspaceId, each.model)).pipe(
-                Effect.provide(layers),
-              ),
+              startAgent(
+                routedSessions(owner),
+                owner,
+                yield* startIn(owner, workspaceId, each.model),
+              ).pipe(Effect.provide(layers)),
             );
             if (each.recorded === "refused") {
               assertCredentialMissing(result, providerOfCase(each.model), each.name);
@@ -2250,21 +2214,16 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
     );
 
     it.effect(
-      "with the ChatGPT plan or API key selected a GPT fast version is offered beside its model, and a Start on one runs on Codex, which runs it on its fast tier, while its Ultrafast version is offered on API key alone",
+      "on a ChatGPT sign-in or an OpenAI API key a GPT fast version is offered beside its model, and a Start on one runs on Codex, which runs it on its fast tier, while its Ultrafast version is offered on the API key alone",
       () =>
         Effect.gen(function* () {
-          for (const forAgents of [true, false]) {
-            const { owner, workspaceId } = yield* openStarter(false, "signed_in");
-            if (!forAgents) {
-              yield* setProviderKeyForAgents(
-                owner,
-                PROVIDER_KEY_PROVIDER.OPENAI,
-                PROVIDER_KEY_KIND.CHATGPT_OAUTH,
-                false,
-              );
-              // API key selected is a key saved, which pays now that ours never does.
-              yield* saveApiKey(owner, PROVIDER_KEY_PROVIDER.OPENAI);
-            }
+          for (const signedIn of [true, false]) {
+            const { owner, workspaceId } = yield* openStarter(
+              false,
+              signedIn ? "signed_in" : "none",
+            );
+            // Note that an account with no sign-in pays on its key, which a key saved is, now that ours never does.
+            if (!signedIn) yield* saveApiKey(owner, PROVIDER_KEY_PROVIDER.OPENAI);
             const { agentSessions, codex, native } = runtimes();
             const layers = Layer.mergeAll(
               githubReaching(INSTALLATIONS).layer,
@@ -2278,7 +2237,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               startAgent(
                 routedSessions(owner),
                 owner,
-                startIn(workspaceId, "openai/gpt-5.5-fast"),
+                yield* startIn(owner, workspaceId, "openai/gpt-5.5-fast"),
               ).pipe(Effect.provide(layers)),
             );
 
@@ -2288,10 +2247,10 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
                 "openai/gpt-5.5",
                 "openai/gpt-5.5-fast",
                 "openai/gpt-6.1-sol",
-                ...(forAgents ? [] : ["openai/gpt-6.1-sol-ultrafast"]),
+                ...(signedIn ? [] : ["openai/gpt-6.1-sol-ultrafast"]),
               ],
             );
-            assert.ok(Result.isSuccess(started), String(forAgents));
+            assert.ok(Result.isSuccess(started), String(signedIn));
             assert.equal(started.success.agent.model, "openai/gpt-5.5-fast");
             assert.deepEqual(heard(agentSessions), []);
             assert.ok(heard(codex).length > 0, "Codex runs it");

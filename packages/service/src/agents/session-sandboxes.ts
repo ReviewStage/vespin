@@ -13,8 +13,10 @@
  * the drive a sandbox owns with it, for every agent, one from before drives
  * as well, so an unarchive opens a sandbox afresh, its checkout made from
  * its repository's base drive and its pushed branch, as a sandbox whose
- * snapshot lapsed is; a local agent's archive queues its device a discard
- * line there too (`device-discard.ts`). A deleted workspace's agents'
+ * snapshot lapsed is; where the workspace keeps an archive script for the
+ * agent's repository, the sandbox runs it just before (`archive-script.ts`);
+ * a local agent's archive queues its device a discard line there too
+ * (`device-discard.ts`). A deleted workspace's agents'
  * sandboxes are deleted the same way (`deletedWithWorkspace`), from the
  * sessions its delete read while they stood, and so are its repositories'
  * base drives (`base-drive.ts`'s `deletedBaseDrive`), which no agent owns; a
@@ -31,6 +33,12 @@ import { isSandboxError, Sandbox, type SandboxError, type SandboxService } from 
 import { Context, Duration, Effect, Layer, Option } from "effect";
 import { afterResponse } from "../http/after-response.js";
 import { SESSION_TAG } from "./agent-sandbox-open.js";
+import {
+  ARCHIVE_SCRIPT,
+  type ArchiveScript,
+  archiveScriptOf,
+  archiveScriptRun,
+} from "./archive-script.js";
 import { deletedBaseDrive } from "./base-drive.js";
 import { discardedOrLogged } from "./device-discard.js";
 
@@ -44,6 +52,24 @@ const ARCHIVE_DELETE = {
    * deleted before the drive, is the same few calls and runs under the same.
    */
   TIMEOUT: Duration.seconds(15),
+  /**
+   * The most the archived agents' archive scripts run before their deletes,
+   * all at once, each in its own sandbox: a stopped sandbox's resume and the
+   * script's own bound (`ARCHIVE_SCRIPT`), with room for the calls around
+   * them; past it every script still running is left and the deletes go on.
+   */
+  SCRIPT_TIMEOUT: Duration.sum(
+    Duration.sum(ARCHIVE_SCRIPT.RESUME_TIMEOUT, ARCHIVE_SCRIPT.RUN_TIMEOUT),
+    Duration.seconds(15),
+  ),
+  /**
+   * The most an archive's kept work runs, its scripts and its deletes: inside
+   * Fluid's default of five minutes, which Vercel ends the function at, with
+   * room for the request before it. Note that the scripts get only what the
+   * deletes leave of it (`scriptBudget`), since a delete left undone keeps its
+   * drive, and a script left undone costs nothing the delete does not end.
+   */
+  WORK_BUDGET: Duration.seconds(270),
   /** How many agents of an archived task, or sandboxes and base drives of a deleted workspace, are deleted at once. */
   CONCURRENCY: 5,
 } as const;
@@ -54,6 +80,15 @@ export interface SessionSandboxesService {
    * owns (`Sandbox`'s `delete`); answers how many were deleted.
    */
   readonly deleteFor: (sessionId: string) => Effect.Effect<number, SandboxError>;
+  /**
+   * Runs the archive script in the session's newest sandbox, resumed first
+   * where it stopped, within its bounds (`archive-script.ts`), logging how it
+   * ended; fails only where the sandbox refused a call.
+   */
+  readonly archiveFor: (
+    sessionId: string,
+    archive: ArchiveScript,
+  ) => Effect.Effect<void, SandboxError>;
 }
 
 export class SessionSandboxes extends Context.Service<SessionSandboxes, SessionSandboxesService>()(
@@ -69,6 +104,7 @@ function sessionSandboxesOver(api: SandboxService): SessionSandboxesService {
         for (const sandbox of sandboxes) yield* api.delete(sandbox.name);
         return sandboxes.length;
       }),
+    archiveFor: (sessionId, archive) => archiveScriptRun(api, sessionId, archive),
   };
 }
 
@@ -104,19 +140,56 @@ function describeDeleteFailure(failure: {
   return isSandboxError(failure) ? failure.message : failure._tag;
 }
 
+/** Whether the agent still stands archived, as the store has it now. */
+const stillArchived = (agent: Pick<Agent, "id" | "userId">) =>
+  Effect.map(
+    readAgent(agent.userId, agent.id),
+    (current) => Option.isSome(current) && current.value.archivedAt !== null,
+  );
+
 /**
- * One archived agent's sandboxes deleted, if it is still archived. Note
- * that the archive is read again just before the delete, because an agent
- * unarchived and messaged since has resumed the sandbox this would delete,
- * and its turn must keep it; what is left of the race is the moment between
- * this read and the delete.
+ * How long the archive scripts of so many deletes may run: what the work's
+ * budget leaves once every delete has its own bound, a few at a time, and no
+ * more than the scripts' own bound; nothing where the deletes take it all.
  */
-const deletedWhileArchived = /* @__PURE__ */ Effect.fnUntraced(function* (
+function scriptBudget(deletes: number): Duration.Duration {
+  const rounds = Math.ceil(deletes / ARCHIVE_DELETE.CONCURRENCY);
+  const left =
+    Duration.toMillis(ARCHIVE_DELETE.WORK_BUDGET) -
+    rounds * Duration.toMillis(ARCHIVE_DELETE.TIMEOUT);
+  return Duration.millis(
+    Math.max(0, Math.min(left, Duration.toMillis(ARCHIVE_DELETE.SCRIPT_TIMEOUT))),
+  );
+}
+
+/**
+ * One archived agent's repository's archive script run in its sandbox, where
+ * its workspace keeps one and the agent is still archived; one that failed,
+ * could not run, or ran past its bounds is logged, and its delete goes on.
+ */
+const archiveScriptRanWhileArchived = /* @__PURE__ */ Effect.fnUntraced(function* (
   agent: Pick<Agent, "id" | "userId">,
   sessionId: string,
 ) {
   const current = yield* readAgent(agent.userId, agent.id);
   if (Option.isNone(current) || current.value.archivedAt === null) return;
+  const archive = yield* archiveScriptOf(current.value);
+  if (archive === undefined) return;
+  yield* (yield* SessionSandboxes).archiveFor(sessionId, archive);
+});
+
+/**
+ * One archived agent's sandboxes deleted, if it is still archived. Note
+ * that the archive is read again just before the delete, after any archive
+ * script, because an agent unarchived and messaged since has resumed the
+ * sandbox this would delete, and its turn must keep it; what is left of the
+ * race is the moment between this read and the delete.
+ */
+const deletedWhileArchived = /* @__PURE__ */ Effect.fnUntraced(function* (
+  agent: Pick<Agent, "id" | "userId">,
+  sessionId: string,
+) {
+  if (!(yield* stillArchived(agent))) return;
   yield* (yield* SessionSandboxes).deleteFor(sessionId);
 });
 
@@ -128,7 +201,12 @@ const deletedWhileArchived = /* @__PURE__ */ Effect.fnUntraced(function* (
  * returns without waiting on them and the archive never fails on it. A
  * delete that fails or runs past its bound is logged and left, its sandbox
  * stopping on its own once idle and its drive kept until a later delete of
- * the name. A local agent among them is let go of on its device beside the
+ * the name. Before the deletes, the agents' archive scripts run all at once,
+ * each in its own sandbox, under one deadline that leaves every delete its
+ * bound within the work's budget (`scriptBudget`), so a task moving many
+ * agents to Done still deletes every sandbox before Vercel ends the
+ * function; a script past the deadline is left, and its sandbox's delete
+ * ends it. A local agent among them is let go of on its device beside the
  * deletes, its runner stopped and its folder removed (`device-discard.ts`).
  */
 export const deletedInBackground = /* @__PURE__ */ Effect.fnUntraced(function* (
@@ -152,6 +230,15 @@ export const deletedInBackground = /* @__PURE__ */ Effect.fnUntraced(function* (
     const sessionId = read[at];
     return sessionId === undefined ? [] : [{ agent, sessionId }];
   });
+  const scriptOne = ({ agent, sessionId }: (typeof deletes)[number]) =>
+    archiveScriptRanWhileArchived(agent, sessionId).pipe(
+      Effect.provide(reach.sessionSandboxes),
+      Effect.catch((failure) =>
+        Effect.logWarning(
+          `an archived agent's archive script did not run: ${describeDeleteFailure(failure)}`,
+        ),
+      ),
+    );
   const deleteOne = ({ agent, sessionId }: (typeof deletes)[number]) =>
     deletedWhileArchived(agent, sessionId).pipe(
       Effect.provide(reach.sessionSandboxes),
@@ -162,13 +249,27 @@ export const deletedInBackground = /* @__PURE__ */ Effect.fnUntraced(function* (
         ),
       ),
     );
+  const scripts = Effect.forEach(deletes, scriptOne, {
+    concurrency: "unbounded",
+    discard: true,
+  }).pipe(
+    Effect.timeoutOption(scriptBudget(deletes.length)),
+    Effect.flatMap((finished) =>
+      Option.isSome(finished)
+        ? Effect.void
+        : Effect.logWarning("archived agents' archive scripts were left at the archive's deadline"),
+    ),
+  );
   yield* reach.keepAwake(
     Effect.all(
       [
-        Effect.forEach(deletes, deleteOne, {
-          concurrency: ARCHIVE_DELETE.CONCURRENCY,
-          discard: true,
-        }),
+        Effect.andThen(
+          scripts,
+          Effect.forEach(deletes, deleteOne, {
+            concurrency: ARCHIVE_DELETE.CONCURRENCY,
+            discard: true,
+          }),
+        ),
         Effect.forEach(agents, discardedOrLogged, {
           concurrency: ARCHIVE_DELETE.CONCURRENCY,
           discard: true,

@@ -1,8 +1,22 @@
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import {
+  anyToMarkRead,
+  EVERYONES,
+  INBOX_HOLDER,
+  INBOX_SHOW,
+  INBOX_WHOSE,
+  type InboxGroup,
+  type InboxListed,
+  inboxAtNow,
+  inboxCounts,
+  inboxGroups,
+  listedItems,
+  taskGroups,
+} from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
+import { searchTokens } from "@repo/features/search-tokens";
 import type { AppInboxTaskHolding } from "@repo/host/app-state";
 import { useMinute } from "@repo/ui";
-import { searchTokens } from "@repo/ui/search-tokens";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { afterPaint } from "../after-paint.js";
 import { useInboxViewChoices } from "../desktop/folded-groups.js";
@@ -10,27 +24,10 @@ import { useInboxView } from "../inbox-route.js";
 import { useAutomationsDoor, useInboxDoor } from "../places/routed-doors.js";
 import { AUTOMATIONS_PAGE } from "./automations-place.js";
 import { useInboxResolver } from "./inbox-close.js";
-import {
-  EVERYONES,
-  INBOX_HOLDER,
-  INBOX_SHOW,
-  INBOX_WHOSE,
-  type InboxGroup,
-  type InboxListed,
-  inboxAgentOf,
-  inboxAtNow,
-  inboxCounts,
-  listedItems,
-  taskGroups,
-} from "./inbox-model.js";
+import { inboxAgentOf } from "./inbox-model.js";
 import { useAgents } from "./use-agents.js";
 import { useHeldInboxList } from "./use-held-inbox-list.js";
-import {
-  agentHoldings,
-  inboxGroups,
-  taskHoldings,
-  useHolderInboxItems,
-} from "./use-holder-inbox-items.js";
+import { agentHoldings, taskHoldings, useHolderInboxItems } from "./use-holder-inbox-items.js";
 import { useInboxReadMarks } from "./use-inbox-read-marks.js";
 import {
   useInboxAgents,
@@ -326,7 +323,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     [everyItem, narrowedTask, now],
   );
   // Note that every item marked read is pushed with each followed inbox, its marker among its rows, so nothing is read again.
-  const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id });
+  const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id, readerId: tasks.me });
   // The list's search, which narrows what it lists, never what it counts.
   const [query, setQuery] = useState("");
   const search = useMemo(() => searchTokens(query), [query]);
@@ -334,6 +331,8 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   // Note that a task's items are listed whole, under no view (`TASK_LISTS`).
   const { show, whose } = narrowedTask === undefined ? choices : TASK_LISTS;
   const counts = useMemo(() => inboxCounts(standing, me, whose), [standing, me, whose]);
+  // Note that Mark all as read stands while a notice waits on the reader, read or not, since it acknowledges each (`settledOnRead`).
+  const markable = useMemo(() => anyToMarkRead(standing, me, now), [standing, me, now]);
   const filter = useMemo(() => ({ show, whose, search, readerId: me }), [show, whose, search, me]);
   // The rows hold what the filter lists and the chosen row they drew, while the steps keep the item the pane shows in its place,
   // both held still while the page stands: every row while the pointer is over the list, and the chosen row while it stays chosen.
@@ -432,6 +431,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     named,
     marks,
     standing,
+    markable,
     counts,
     list,
     listedRows,

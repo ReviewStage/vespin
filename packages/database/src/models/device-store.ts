@@ -62,7 +62,13 @@ const DeviceStandingSchema = Schema.Struct({
   capabilities: Schema.Array(Schema.Literals(Object.values(DEVICE_CAPABILITY))),
 });
 
-export type DeviceStanding = typeof DeviceStandingSchema.Type;
+/** A Mac's standing as a launch reads it, with the host version it last called with, which names the runner its release bundled; null for one that never enrolled. */
+const DeviceLaidOutSchema = Schema.Struct({
+  ...DeviceStandingSchema.fields,
+  version: Schema.NullOr(Schema.String),
+});
+
+type DeviceLaidOut = typeof DeviceLaidOutSchema.Type;
 
 type DeviceLayout = typeof DeviceLayoutSchema.Type;
 
@@ -255,7 +261,7 @@ const findNamed = SqlSchema.findAll({
 
 const findLayout = SqlSchema.findOneOption({
   Request: DeviceKeySchema,
-  Result: DeviceStandingSchema,
+  Result: DeviceLaidOutSchema,
   execute: ({ userId, id }) =>
     Database.use((db) =>
       db
@@ -265,6 +271,7 @@ const findLayout = SqlSchema.findOneOption({
           claudeExecutable: device.claudeExecutable,
           codexExecutable: device.codexExecutable,
           capabilities: device.capabilities,
+          version: device.version,
         })
         .from(device)
         .where(
@@ -311,11 +318,11 @@ export function registerDevice(
   );
 }
 
-/** The account's Mac's home folder, the folder its agents stand in where its host named one, bundled CLI, and capabilities, as it last registered them; nothing where the account holds no such Mac, or one that never registered. */
+/** The account's Mac's home folder, the folder its agents stand in where its host named one, bundled CLI, and capabilities, as it last registered them, and the host version it last called with; nothing where the account holds no such Mac, or one that never registered. */
 export function deviceLayout(
   userId: string,
   id: string,
-): DeviceEffect<Option.Option<DeviceStanding>> {
+): DeviceEffect<Option.Option<DeviceLaidOut>> {
   return findLayout({ userId, id });
 }
 

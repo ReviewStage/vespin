@@ -1,0 +1,61 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace whose Slack bot it is, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "notifications": {
+      "type": "boolean",
+      "description": "Whether the bot writes the member, in Slack, the threads that wait on them; the member's own switch, which holds in every workspace."
+    },
+    "defaultRepository": {
+      "anyOf": [
+        {
+          "type": "string",
+          "maxLength": 140
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The repository an agent started from Slack works in where its message names none, as owner/name, one the workspace's GitHub reaches; null clears it."
+    },
+    "channel": {
+      "type": "object",
+      "properties": {
+        "channelId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32,
+          "description": "The channel, by the id read_slack_bot lists it by."
+        },
+        "member": {
+          "type": "boolean",
+          "description": "true to put the bot in the channel, a public one alone; false to take it out, which forgets the channel's repository."
+        },
+        "repository": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 140
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "The repository an agent started from this channel works in where its message names none, as owner/name, one the workspace's GitHub reaches; null clears it."
+        }
+      },
+      "required": [
+        "channelId"
+      ],
+      "additionalProperties": false,
+      "description": "One channel of the team to change."
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}

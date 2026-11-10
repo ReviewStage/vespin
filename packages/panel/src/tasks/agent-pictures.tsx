@@ -12,6 +12,7 @@ import {
 import type { FileChip } from "@repo/features/attachment-model";
 import { isVideoType, type KeptPicture } from "@repo/features/conversation-picture-wire";
 import { formatBytes } from "@repo/features/number-format";
+import { isPictureName, pictureMarkers } from "@repo/features/picture-marker";
 import { ACT_KIND } from "@repo/host/acts";
 import { isVideoDataUrl, PICTURE_SET_SHOWN, PictureSet, PictureSetTile } from "@repo/ui";
 import {
@@ -34,6 +35,12 @@ import {
   messageFileChips,
 } from "./attached-file-chips.js";
 import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
+import {
+  PictureChip,
+  usePictureViewer,
+  type WordPictures,
+  WordPicturesContext,
+} from "./picture-chips.js";
 
 /**
  * agent-pictures.tsx -- the pictures in an agent's transcript: a set it showed with `show_image`, the pictures an integration's call answered, under the call's row, and an image a line handed it, over the line.
@@ -60,8 +67,8 @@ import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
  * the agent, which its row names by the picture it was kept as rather than
  * carrying its bytes, is read the same way and drawn among the line's files
  * (`MessageFileChips`).
- * Everything here is left out of the screen recording, as the tab around
- * it is.
+ * Every picture and video here is left out of the screen recording
+ * (`PictureSet`).
  */
 
 /** Where an agent's or a worker's pictures are read through: the scope the window keeps them under, and the read. */
@@ -552,7 +559,70 @@ export function MessageFileChips({
   /** Whether the line is still on its way, its row not yet read back. */
   sending?: boolean;
 }): ReactNode {
-  return <KeptFileChips files={messageFileChips(message)} sending={sending} />;
+  // Note that a picture the words draw in place is not drawn over them again.
+  const inWords = useContext(WordPicturesContext)?.names;
+  const files = messageFileChips(message).filter((file) => inWords?.has(file.name) !== true);
+  return <KeptFileChips files={files} sending={sending} />;
+}
+
+/** A line's files as chips, each one kept as a picture read through the agent's pictures, its bytes once they land. */
+function useKeptChips(files: readonly MessageFileChip[]): FileChip[] {
+  const door = useContext(AgentPicturesContext);
+  const states = usePictureStates(
+    door,
+    files.map(({ pictureId }) => pictureId),
+  );
+  return files.map(({ pictureId, ...chip }, index): FileChip => {
+    const state = states[index];
+    return pictureId !== undefined && state?.kind === PICTURE_STATE.READY
+      ? { ...chip, url: state.url }
+      : chip;
+  });
+}
+
+/**
+ * The pictures a sent line names in its words (`@repo/features/picture-marker`),
+ * handed to the words under it, which draw each marker as its picture's
+ * chip (`SentWords`), and to its files' row, which leaves those out; a
+ * press opens a picture over the window, walking the pictures in the order
+ * the words name them. A line whose words name none of its pictures, as
+ * every line sent before markers, draws as it did.
+ */
+export function MessagePictures({
+  message,
+  words,
+  children,
+}: {
+  message: AgentTranscriptMessage;
+  words: string;
+  children: ReactNode;
+}): ReactNode {
+  const chips = useKeptChips(messageFileChips(message));
+  const named = [...new Set(pictureMarkers(words).map((marker) => marker.name))];
+  const placed = named.flatMap((name) => {
+    const chip = chips.find(
+      (each) => each.name === name && isPictureName(name) && each.mediaType.startsWith("image/"),
+    );
+    return chip === undefined ? [] : [chip];
+  });
+  const viewer = usePictureViewer(placed.filter((chip) => chip.url !== ""));
+  if (placed.length === 0) return children;
+  const pictures: WordPictures = {
+    names: new Set(placed.map((chip) => chip.name)),
+    chip: (name) => (
+      <PictureChip
+        name={name}
+        file={placed.find((chip) => chip.name === name)}
+        onOpen={viewer.open}
+      />
+    ),
+  };
+  return (
+    <WordPicturesContext.Provider value={pictures}>
+      {children}
+      {viewer.viewer}
+    </WordPicturesContext.Provider>
+  );
 }
 
 /**
@@ -569,16 +639,6 @@ export function KeptFileChips({
   /** Whether the line is still on its way, its row not yet read back. */
   sending?: boolean;
 }): ReactNode {
-  const door = useContext(AgentPicturesContext);
-  const states = usePictureStates(
-    door,
-    files.map(({ pictureId }) => pictureId),
-  );
-  const chips = files.map(({ pictureId, ...chip }, index): FileChip => {
-    const state = states[index];
-    return pictureId !== undefined && state?.kind === PICTURE_STATE.READY
-      ? { ...chip, url: state.url }
-      : chip;
-  });
+  const chips = useKeptChips(files);
   return <AttachedFileChips files={chips} uploading={sending} />;
 }

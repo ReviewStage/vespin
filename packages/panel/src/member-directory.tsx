@@ -1,4 +1,4 @@
-import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
 import type { TaskSummary } from "@repo/features/task-wire";
 import type { FormerMember, Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
 import { type Actor, accountActor, creatorActor, personActor } from "@repo/ui/actor-model";
@@ -54,16 +54,11 @@ const DirectoryContext = createContext<Directory>({
   retry: () => undefined,
 });
 
-/** Reads the workspace's members for everything inside it; none for no workspace. */
-export function MemberDirectory({
-  workspace,
-  readerId,
-  children,
-}: {
-  workspace: Pick<Workspace, "id" | "memberCount"> | undefined;
-  readerId: string | undefined;
-  children: ReactNode;
-}): React.JSX.Element {
+/** The workspace's members as a directory holds them, read on the one read the host holds of them; none for no workspace. */
+function useDirectoryOf(
+  workspace: Pick<Workspace, "id" | "memberCount"> | undefined,
+  readerId: string | undefined,
+): Directory {
   const workspaceId = workspace?.id;
   const read = useQuery(workspaceMembersQuery(workspaceId));
   const { mutate } = useMutation(workspaceMembersRetryMutation());
@@ -79,7 +74,7 @@ export function MemberDirectory({
   // Note that the directory is the same across draws while none of it moves, because every
   // face and name inside it is drawn again for a new one.
   const memberCount = workspace?.memberCount;
-  const directory = useMemo(
+  return useMemo(
     () => ({
       members,
       readerId,
@@ -92,12 +87,45 @@ export function MemberDirectory({
     }),
     [members, readerId, former, workspaceId, memberCount, reading, refused, retry],
   );
+}
+
+/** Reads the workspace's members for everything inside it; none for no workspace. */
+export function MemberDirectory({
+  workspace,
+  readerId,
+  children,
+}: {
+  workspace: Pick<Workspace, "id" | "memberCount"> | undefined;
+  readerId: string | undefined;
+  children: ReactNode;
+}): React.JSX.Element {
+  const directory = useDirectoryOf(workspace, readerId);
   return <DirectoryContext.Provider value={directory}>{children}</DirectoryContext.Provider>;
 }
 
 /** The directory standing around the caller: the members as read, the reader's id, and where the reads stand. */
 export function useMemberDirectory(): Directory {
   return useContext(DirectoryContext);
+}
+
+/**
+ * The members of the workspace given, for a place that picks a person of
+ * it wherever it stands, as the `@` list does: the directory around the
+ * caller where it is that workspace's, else the workspace's own, read here,
+ * the reader named by the directory around or else as signed in. Note that
+ * a place with no workspace given reads the directory around it.
+ */
+export function useWorkspaceDirectory(
+  workspace: Pick<Workspace, "id" | "memberCount"> | undefined,
+): Directory {
+  const around = useMemberDirectory();
+  const account = useQuery({ ...appStateQuery, select: selectAccount }).data;
+  const held = workspace === undefined || around.workspaceId === workspace.id;
+  const own = useDirectoryOf(
+    held ? undefined : workspace,
+    around.readerId ?? signedInAccountId(account),
+  );
+  return held ? around : own;
 }
 
 /** A member the wire names, as the directory around the caller draws them (`personActor`). */

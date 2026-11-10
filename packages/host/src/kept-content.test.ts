@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { INBOX_IMAGE_TYPE } from "@repo/features/inbox-wire";
+import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import { Effect } from "effect";
 import { InboxAttachmentKey, keptContent } from "./kept-content.js";
 
@@ -16,7 +17,11 @@ it.effect(
       const asked: string[] = [];
       const read = (attachmentId: string, base64 = ANSWERED) =>
         kept.answer(
-          new InboxAttachmentKey({ itemId: "item-1", attachmentId }),
+          new InboxAttachmentKey({
+            itemId: "item-1",
+            attachmentId,
+            playable: PLAYABLE_VIDEO_TYPE.WEBM,
+          }),
           () => "user-dana",
           Effect.sync(() => {
             asked.push(attachmentId);

@@ -2,17 +2,15 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
-import { createAgent } from "@repo/database/models/agent-store";
 import { writePage } from "@repo/database/models/task-pages";
 import { user } from "@repo/database/schemas/auth";
-import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, leaveWorkspace, startTask } from "@repo/database/testing";
 import {
   PAGE_FRAME_STATUS,
   PAGE_IN_MAC_APP_PATH,
   PAGE_SANDBOX_ORIGIN,
 } from "@repo/features/page-frame";
-import { PAGE_OWNER, PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
+import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { Clock, type Context, Duration, Effect, Layer, Option, Redacted } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
@@ -166,33 +164,10 @@ it.layer(getTestDB())("a page framed on the web", (it) => {
     () =>
       Effect.gen(function* () {
         const { frame, follow } = yield* standing(SANDBOX);
-        const { starter, teammate, task, page } = yield* pageOnTask;
-        const agent = Option.getOrThrow(
-          yield* createAgent(starter, {
-            taskId: null,
-            organizationId: task.workspaceId,
-            descriptionSnapshot: null,
-            prompt: "Chart the funnel",
-            idempotencyKey: randomUUID(),
-            model: "anthropic/claude-opus-5.5",
-            effort: "high",
-            repository: null,
-            runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-          }),
-        ).agent;
-        const owner = { kind: PAGE_OWNER.AGENT, agentId: agent.id } as const;
-        const shower = { kind: PAGE_SHOWER.AGENT, agentId: agent.id } as const;
-        const own = Option.getOrThrow(
-          yield* writePage(starter, owner, { title: "Mockup", html: "<p>Mockup</p>" }, shower),
-        );
-
+        const { teammate, task, page } = yield* pageOnTask;
         const answer = yield* frame(teammate, framePath(task.id, page.id, 1));
         const served = yield* follow(linkOf(answer));
         const policy = directivesOf(served.headers.get("content-security-policy") ?? "");
-        const agentLink = linkOf(
-          yield* frame(teammate, `/api/agents/${agent.id}/pages/${own.id}/versions/1/frame`),
-        );
-        const agentServed = yield* follow(agentLink);
 
         assert.ok(linkOf(answer).startsWith(`${PAGE_SANDBOX_ORIGIN}/${PAGE_LINK_ROUTE.STEP}/`));
         assert.equal(answer.headers.get("cache-control"), "private, no-store");
@@ -208,7 +183,6 @@ it.layer(getTestDB())("a page framed on the web", (it) => {
         assert.equal(served.headers.get("referrer-policy"), "no-referrer");
         assert.equal(served.headers.get("cache-control"), "private, no-store");
         assert.equal(served.headers.get("set-cookie"), null);
-        assert.ok((yield* Effect.promise(() => agentServed.text())).endsWith("<p>Mockup</p>"));
       }),
   );
 

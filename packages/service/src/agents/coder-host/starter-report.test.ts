@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { archiveAgent, createAgent } from "@repo/database/models/agent-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import { createTask } from "@repo/database/models/task-store";
 import { SettledTurnListener } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
@@ -43,7 +44,8 @@ const openStarted = () =>
     yield* db.insert(user).values({ id: member, name: "Test User", email: `${member}@app.test` });
     yield* connectAgentApiKeys(member);
     const organizationId = yield* openWorkspace(member);
-    const start = { taskId: null, organizationId, descriptionSnapshot: null, repository: null };
+    const task = yield* createTask(member, { organizationId });
+    const start = { taskId: task.id, descriptionSnapshot: null, repository: null };
     const choice = {
       model: "anthropic/claude-opus-5.5",
       effort: "high",
@@ -121,7 +123,7 @@ it.layer(SUITE)("a started agent's final message handed to its starter", (it) =>
   );
 
   it.effect(
-    "a failed turn that said nothing hands its failure, and a stopped one that it was stopped",
+    "a failed turn that said nothing hands its failure, a stopped one that it was stopped, and one the plan's limit stopped that limit",
     () =>
       Effect.gen(function* () {
         const agentSessions = recordingSessions();
@@ -131,8 +133,15 @@ it.layer(SUITE)("a started agent's final message handed to its starter", (it) =>
         yield* endedAt(agent, RUN_STATUS.CANCELED, T0 + 1_000, "Stopping.").pipe(
           Effect.provide(reporting(agentSessions)),
         );
+        yield* endedAt(
+          agent,
+          RUN_STATUS.FAILED,
+          T0 + 2_000,
+          undefined,
+          TURN_FAILURE.PLAN_LIMIT,
+        ).pipe(Effect.provide(reporting(agentSessions)));
 
-        const [failed, stopped] = sentTo(agentSessions, sessionId);
+        const [failed, stopped, limited] = sentTo(agentSessions, sessionId);
         assert.ok(
           failed?.includes(
             `failed its turn (${TURN_FAILURE.MODEL}). Its final message:\n\n(it said nothing)`,
@@ -142,6 +151,13 @@ it.layer(SUITE)("a started agent's final message handed to its starter", (it) =>
         assert.ok(
           stopped?.includes("was stopped before it finished. Its final message:\n\nStopping."),
           stopped ?? "nothing was sent",
+        );
+        // One its plan's usage limit stopped says so, never as a failure word.
+        assert.ok(
+          limited?.includes(
+            "was stopped: the plan hit its usage limit and the turn could not go on. Its final message:",
+          ),
+          limited ?? "nothing was sent",
         );
       }),
   );

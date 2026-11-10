@@ -1,5 +1,6 @@
 import { PRODUCT_SEARCH_SURFACE, PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
 import { INTEGRATION_NAME, INTEGRATION_PROVIDER_LIST } from "@repo/features/integration-wire";
+import { type MatchRange, searchTokens } from "@repo/features/search-tokens";
 import { noMatchWords, TERM } from "@repo/features/words";
 import { managesWorkspace } from "@repo/features/workspace-role";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
@@ -63,7 +64,6 @@ import {
 import { integrationLines } from "@repo/ui/integration-search";
 import { land } from "@repo/ui/landed";
 import { searchHit } from "@repo/ui/search-score";
-import { type MatchRange, searchTokens } from "@repo/ui/search-tokens";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useStateWithRef } from "@repo/ui/use-state-with-ref";
 import { useEffect, useRef } from "react";

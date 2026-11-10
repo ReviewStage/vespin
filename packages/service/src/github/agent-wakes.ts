@@ -747,7 +747,7 @@ function agentWakeText(
       );
     case AGENT_WAKE.CHECK_FAILED: {
       const head = `A check failed on your branch \`${branch ?? ""}\`: ${wake.url}`;
-      const close = `Read why with ${reader}, fix the cause, and push, as you watch your own checks.`;
+      const close = `Read why with ${reader}, fix the cause, and push, then wait on your checks as your instructions say.`;
       const named = failedChecksWords(failed, roomBetween(head, close), reader);
       return [head, named, close].filter((part) => part !== "").join("\n\n");
     }

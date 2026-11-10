@@ -35,6 +35,14 @@
  * service of its own (`ApnsTransport`): Node's HTTP/2 client in production
  * (`apns-http2.ts`), and a fake in a test.
  *
+ * What became of each send is kept on the phone's row, so a push that fails
+ * quietly shows in the phone's Settings rather than in a log alone: one Apple
+ * took stamps the phone delivered and ends any failing run, and any other but
+ * a gone token, a deployment without the key among them, keeps when the run
+ * began and Apple's reason, or ours where Apple gave none
+ * (`PUSH_FAILURE_REASON`). A record that would not land is logged, since
+ * Apple's answer stands either way.
+ *
  * The key travels sealed from the environment (`APNS_ENVIRONMENT`) into
  * the signer and nowhere else, a provider token is held sealed and revealed
  * into the authorization header alone, and a log line names a status and
@@ -45,8 +53,16 @@
 
 import { createPrivateKey, createSign, type KeyObject } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
-import { deletePushDeviceToken } from "@repo/database/models/push-device-store";
-import { PUSH_ENVIRONMENT, type PushEnvironment } from "@repo/features/push-device-wire";
+import {
+  deletePushDeviceToken,
+  recordPushDelivered,
+  recordPushFailed,
+} from "@repo/database/models/push-device-store";
+import {
+  PUSH_ENVIRONMENT,
+  PUSH_FAILURE_REASON,
+  type PushEnvironment,
+} from "@repo/features/push-device-wire";
 import { isRecord, text, unparsedWire } from "@repo/wire";
 import {
   Clock,
@@ -303,9 +319,29 @@ function headersOf(
   };
 }
 
-/** The sender that sends nothing: a deployment without the key. */
+/** A record of what became of a send, run past Apple's answer: one that would not land is logged, and the delivery answered all the same. */
+function recorded(
+  record: Effect.Effect<void, unknown, DatabaseServices>,
+  delivery: ApnsDelivery,
+): Effect.Effect<ApnsDelivery, never, DatabaseServices> {
+  return record.pipe(
+    Effect.catch((failure) => Effect.logWarning("a push's outcome was not recorded", failure)),
+    Effect.as(delivery),
+  );
+}
+
+/** A send that did not reach the phone, kept on its row with the reason. */
+function failed(
+  device: PushDeviceAddress,
+  delivery: ApnsDelivery,
+  reason: string,
+): Effect.Effect<ApnsDelivery, never, DatabaseServices> {
+  return recorded(recordPushFailed(device, reason), delivery);
+}
+
+/** The sender that sends nothing: a deployment without the key, which each phone's row says. */
 const unavailableSender: ApnsSenderValues = {
-  send: () => Effect.succeed(APNS_DELIVERY.UNAVAILABLE),
+  send: ({ device }) => failed(device, APNS_DELIVERY.UNAVAILABLE, PUSH_FAILURE_REASON.UNCONFIGURED),
 };
 
 /** The sender under the credential, over the transport, reusing one provider token inside its lifetime. */
@@ -344,7 +380,7 @@ const apnsSender = Effect.fnUntraced(function* (
     if (device.bundleId !== credentials.bundleId) {
       // Note that a phone of another app is refused here, because Apple would refuse the topic for its token.
       yield* Effect.logWarning("a push to a phone of another app was not sent");
-      return APNS_DELIVERY.REFUSED;
+      return yield* failed(device, APNS_DELIVERY.REFUSED, PUSH_FAILURE_REASON.OTHER_APP);
     }
     const token = yield* providerToken;
     const answered = yield* transport
@@ -359,10 +395,12 @@ const apnsSender = Effect.fnUntraced(function* (
       yield* Effect.logWarning(
         `a push did not reach Apple: ${answered.failure.errorName ?? "no answer"}`,
       );
-      return APNS_DELIVERY.FAILED;
+      return yield* failed(device, APNS_DELIVERY.FAILED, PUSH_FAILURE_REASON.NO_ANSWER);
     }
     const { status, body } = answered.success;
-    if (status === 200) return APNS_DELIVERY.DELIVERED;
+    if (status === 200) {
+      return yield* recorded(recordPushDelivered(device), APNS_DELIVERY.DELIVERED);
+    }
     const reason = reasonOf(body);
     if (status === 410 || (reason !== undefined && TOKEN_GONE_REASONS.has(reason))) {
       return yield* tokenGone(device);
@@ -371,7 +409,11 @@ const apnsSender = Effect.fnUntraced(function* (
     yield* Effect.logWarning(
       `a push was answered ${status}${reason === undefined ? "" : ` ${reason}`}`,
     );
-    return status === 400 || status === 403 ? APNS_DELIVERY.REFUSED : APNS_DELIVERY.FAILED;
+    return yield* failed(
+      device,
+      status === 400 || status === 403 ? APNS_DELIVERY.REFUSED : APNS_DELIVERY.FAILED,
+      reason ?? String(status),
+    );
   });
 
   return { send };

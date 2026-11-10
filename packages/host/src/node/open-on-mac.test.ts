@@ -6,6 +6,7 @@ import path from "node:path";
 import { temporaryDirectory } from "@repo/runtime/testing";
 import { test } from "vitest";
 import {
+  agentSnapshotScript,
   agentWorktreeScript,
   cloneFolder,
   mirrorPrefetchScript,
@@ -22,7 +23,9 @@ import {
  * it lives, and takes the lock over once it is gone; a transfer from a remote that
  * never answers fails rather than hangs; a make that fails or was cut
  * off leaves nothing that blocks the next; and a cloud agent's mirror is
- * made whole at its base from the prefetch beside it, even one cut off.
+ * made whole at its base from the prefetch beside it, even one cut off;
+ * and an archived agent's uncommitted work is saved as a snapshot its next
+ * launch rebuilds the worktree from.
  */
 
 const GIT_ENVIRONMENT = {
@@ -119,6 +122,7 @@ test(
         repository: "acme/app",
         clone,
         worktree: own,
+        agentId: "agent",
         branch: "agent/fix-relay",
         remote,
       });
@@ -166,6 +170,7 @@ test(
           repository: "acme/app",
           clone,
           worktree: own(name),
+          agentId: "agent",
           branch,
           remote: origin,
         }),
@@ -235,6 +240,7 @@ test(
         repository: "acme/app",
         clone,
         worktree: own,
+        agentId: "agent",
         branch: "agent/fix-relay",
         remote: origin,
       }),
@@ -283,6 +289,7 @@ test(
         repository: "acme/app",
         clone,
         worktree: path.join(scratch, "agents", "agent", "repository"),
+        agentId: "agent",
         branch: "agent/fix-relay",
         remote: `http://127.0.0.1:${address.port}/acme/app.git`,
         stallSeconds: 1,
@@ -321,6 +328,7 @@ test(
         repository: "acme/app",
         clone,
         worktree,
+        agentId: "agent",
         branch: "agent/fix-relay",
         remote: origin,
       });
@@ -357,6 +365,7 @@ test(
         repository: "acme/app",
         clone,
         worktree: own,
+        agentId: "agent",
         branch: "agent/fix-relay",
         remote: origin,
       }),
@@ -373,6 +382,47 @@ test(
 );
 
 test(
+  "an archived agent's uncommitted work is saved as a snapshot, and its next launch rebuilds the worktree from it",
+  async (t) => {
+    const { scratch, origin, push, shell, state } = await fixture(t);
+    const head = push("first\n");
+    const clone = cloneFolder(state, "acme/app");
+    const folder = path.join(scratch, "agents", "agent");
+    const own = path.join(folder, "repository");
+    const launch = agentWorktreeScript({
+      repository: "acme/app",
+      clone,
+      worktree: own,
+      agentId: "agent",
+      branch: "agent/fix-relay",
+      remote: origin,
+    });
+    run(scratch, shell, launch);
+    writeFileSync(path.join(own, "README.md"), "changed\n");
+    writeFileSync(path.join(own, "notes.txt"), "new\n");
+    // The branch moves on GitHub meanwhile, which the rebuilt worktree must not take.
+    push("second\n");
+
+    const saved = runEnded(
+      scratch,
+      shell,
+      agentSnapshotScript({ worktree: own, agentId: "agent" }),
+    );
+    assert.equal(saved.code, 0, saved.printed);
+    // The discard removes the folder and prunes its entry.
+    rmSync(folder, { recursive: true, force: true });
+    git(clone, ["worktree", "prune"]);
+    run(scratch, shell, launch);
+
+    assert.equal(git(own, ["rev-parse", "HEAD"]), head);
+    assert.equal(readFileSync(path.join(own, "README.md"), "utf8"), "changed\n");
+    assert.equal(readFileSync(path.join(own, "notes.txt"), "utf8"), "new\n");
+    assert.equal(git(clone, ["for-each-ref", "refs/vespin/archive/"]), "");
+  },
+  GIT_DEADLINE,
+);
+
+test(
   "a make that fails after its worktree is added takes the worktree and its entry away, so the next launch starts clean",
   async (t) => {
     const { scratch, origin, push, shell, state } = await fixture(t);
@@ -383,6 +433,7 @@ test(
       repository: "acme/app",
       clone,
       worktree: own,
+      agentId: "agent",
       branch: "agent/fix-relay",
       remote: origin,
     });
@@ -415,6 +466,7 @@ test(
         repository: "acme/app",
         clone,
         worktree: agent(name),
+        agentId: "agent",
         branch: "agent/fix-relay",
         remote: origin,
       });

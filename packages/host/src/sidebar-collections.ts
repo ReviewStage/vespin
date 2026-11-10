@@ -43,12 +43,12 @@ import {
 } from "@repo/features/tasks-view";
 import {
   type Confirmation,
-  type EntityKind,
   type EntityPool,
   type FieldChange,
   fieldKind,
   type HeldRows,
   ROW_GONE,
+  type RowKind,
   type WriteDeclaration,
 } from "@repo/sync";
 import { Effect, Equal, Schema, type Scope } from "effect";
@@ -69,7 +69,7 @@ type SectionsChange = (sections: TaskSections) => TaskSections;
  * sections as they stand leaves the row alone, so a reader holds the very
  * row.
  */
-const SECTIONS: EntityKind<SectionsRow, SectionsChange> = {
+const SECTIONS: RowKind<SectionsRow, SectionsChange> = {
   key: (row) => row.ownerId,
   drawn: (change, row) => {
     if (row === undefined) return undefined;

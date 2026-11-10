@@ -22,21 +22,15 @@ import {
   FootQuestion,
   Inline,
   JUSTIFY,
-  LAYOUT_ELEMENT,
+  OutsideLink,
+  PasteSteps,
   SETTINGS_ROW_STATE,
-  SecretField,
   SettingsFacts,
   SettingsRowStateLine,
-  STEP_STATE,
-  Stack,
-  Step,
-  Steps,
   TEXT_ELEMENT,
   TEXT_FONT,
-  TEXT_LINK_LOOK,
   TEXT_VARIANT,
   Text,
-  TextLink,
   useConfirmDialog,
 } from "@repo/ui";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
@@ -243,7 +237,6 @@ export function GitHubTokenPaste({
   onSave: (token: string) => Promise<ReactNode>;
 }): React.JSX.Element {
   const openLink = useOpenLink();
-  const [opened, setOpened] = useState(false);
   const [pasted, setPasted] = useState("");
   const [saving, setSaving] = useState(false);
   const [problem, setProblem] = useState<ReactNode>(undefined);
@@ -260,50 +253,28 @@ export function GitHubTokenPaste({
     });
   };
   return (
-    <Stack
-      as={LAYOUT_ELEMENT.FORM}
-      onSubmit={(event) => {
-        event.preventDefault();
-        save(pasted);
-      }}
-    >
-      <Steps>
-        <Step
-          number={1}
-          title={PASTE_WORDS.CREATE}
-          state={opened ? STEP_STATE.DONE : STEP_STATE.CURRENT}
-        >
-          <TextLink
-            look={TEXT_LINK_LOOK.UNDERLINED}
-            href={GITHUB_TOKEN_CREATE_URL}
-            external
-            onClick={(event) => {
-              event.preventDefault();
-              openLink(GITHUB_TOKEN_CREATE_URL);
-              setOpened(true);
-            }}
-          >
+    <PasteSteps
+      first={{
+        title: PASTE_WORDS.CREATE,
+        body: (done) => (
+          <OutsideLink href={GITHUB_TOKEN_CREATE_URL} open={openLink} onOpened={done}>
             {PASTE_WORDS.OPEN}
-          </TextLink>
-        </Step>
-        <Step number={2} state={opened ? STEP_STATE.CURRENT : STEP_STATE.TO_DO}>
-          <SecretField
-            ref={field}
-            label={PASTE_WORDS.LABEL}
-            description={saving ? PASTE_WORDS.RUNNING : undefined}
-            error={refusedShown(problem, FAILURE_SURFACE.GITHUB_TOKEN_SAVE)}
-            placeholder="ghp_…"
-            disabled={saving}
-            value={pasted}
-            onChange={(value) => {
-              setPasted(value);
-              setProblem(undefined);
-            }}
-            onPasted={save}
-          />
-        </Step>
-      </Steps>
-    </Stack>
+          </OutsideLink>
+        ),
+      }}
+      fieldRef={field}
+      label={PASTE_WORDS.LABEL}
+      placeholder="ghp_…"
+      busy={saving}
+      busyWords={PASTE_WORDS.RUNNING}
+      error={refusedShown(problem, FAILURE_SURFACE.GITHUB_TOKEN_SAVE)}
+      value={pasted}
+      onChange={(value) => {
+        setPasted(value);
+        setProblem(undefined);
+      }}
+      onSave={save}
+    />
   );
 }
 

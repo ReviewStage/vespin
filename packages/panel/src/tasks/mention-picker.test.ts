@@ -26,13 +26,14 @@ import {
   handHostReads,
   handState,
   holdAutomations,
+  holdMembers,
   withExperiments,
 } from "../testing/app-state.js";
 import { MentionNodeChip } from "./mention-chip.js";
 import { MENTION_MENU_SIDE, type MentionPicker, useMentionPicker } from "./mention-picker.js";
 
 /**
- * mention-picker.test.ts -- the `@` list as the editor's reports drive it: a list closed with Escape, which fades out before it goes; and on a plan, the workspace's other tasks found by their keys, its Inbox threads by their titles, and its automations by their names.
+ * mention-picker.test.ts -- the `@` list as the editor's reports drive it: a list closed with Escape, which fades out before it goes; on a plan, the workspace's other tasks found by their keys, its Inbox threads by their titles, and its automations by their names; and in New task's box, which no member directory stands around, the workspace's people.
  */
 
 let root: Root | undefined;
@@ -119,17 +120,6 @@ test("an @ list closed with Escape stays drawn, inert, with its rows while it fa
   assert.deepEqual(fadingRows, ["Margins"], "the fading list keeps the rows it closed with");
   assert.equal(expanded, "false", "the field reads the list closed as it starts to fade");
   assert.equal(page.querySelector(".ui-rect-float"), null, "the list goes once it has faded");
-});
-
-test("the @ list's foot names its keys through Shortcut, ⏎ and ⇥ mention and Esc closes", () => {
-  const { picker, page } = mounted();
-  act(() => picker().onTrigger(word("mar")));
-  const foot = page.querySelector(".ui-menu-keys");
-  assert.ok(foot, "the list has a foot");
-  assert.deepEqual(
-    [...foot.children].map((item) => item.textContent),
-    ["↑↓Move", "⏎⇥Mention", "EscClose"],
-  );
 });
 
 /** The list drawn as a description's editor draws it, on `plan-1` of the Stage workspace, each mention picked recorded. */
@@ -407,4 +397,74 @@ test("on a plan, the workspace's automations are found by their name, a pick wri
     workspace: "stage",
     place: { kind: LINK_PLACE.AUTOMATION, automationId: "automation-notes" },
   });
+});
+
+test("in New task's box, which no member directory stands around, the @ list offers the people of the workspace the task starts in, the reader as You", async () => {
+  handState(
+    {},
+    {
+      tasks: {
+        ...IDLE_TASKS_VIEW,
+        workspaces: [workspace("workspace-stage", "Stage", "stage")],
+      },
+    },
+  );
+  const reads = handHostReads({});
+  const held = holdMembers(reads.deliverMembers, (workspaceId) =>
+    workspaceId === "workspace-stage"
+      ? {
+          rows: {
+            members: [
+              {
+                userId: "user-dana",
+                name: "Dana Reyes",
+                email: "dana@example.com",
+                role: WORKSPACE_ROLE.ADMIN,
+              },
+              // The document's signed-in account, as the host holds its reads by it.
+              {
+                userId: "user-held",
+                name: "Dev",
+                email: "dev@example.com",
+                role: WORKSPACE_ROLE.OWNER,
+              },
+            ],
+          },
+        }
+      : undefined,
+  );
+  let latest: MentionPicker | undefined;
+  // The list as New task's box draws it: the workspace given by its id, no task holding the words.
+  function Picker() {
+    const room = useRef<HTMLDivElement>(null);
+    latest = useMentionPicker({
+      source: {
+        holder: undefined,
+        taskName: "",
+        workspace: "stage",
+        workspaceId: "workspace-stage",
+        repository: null,
+        text: () => "",
+      },
+      room,
+      side: MENTION_MENU_SIDE.BELOW,
+      onChoose: () => undefined,
+    });
+    return createElement("div", { ref: room }, latest.menu);
+  }
+  const page = document.body.appendChild(document.createElement("div"));
+  root = createRoot(page);
+  await act(async () => {
+    root?.render(withExperiments({}, createElement(Picker)));
+    for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+  });
+
+  await act(async () => {
+    latest?.onTrigger(word("people:"));
+    for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+  });
+  await vi.waitFor(() =>
+    assert.deepEqual(detailedRows(page), ["Dev · You", "Dana Reyes · dana@example.com"]),
+  );
+  assert.deepEqual(held, ["workspace-stage"], "the workspace's people are read as the list opens");
 });

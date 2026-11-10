@@ -6,8 +6,10 @@
  * rows. The SDK calls the store as promises, from outside any fiber, so
  * each call is a plain `fetch`: a call the service did not answer rejects,
  * and the SDK does what its contract says with that (an append is retried
- * and then dropped, a load fails the query). Nothing of a transcript is
- * logged, since it can hold a tool's output.
+ * and then dropped, a load fails the query). A load reads the transcript a
+ * page at a time and joins the pages before it answers, so no one answer
+ * holds a large session whole and the SDK still gets it whole. Nothing of a
+ * transcript is logged, since it can hold a tool's output.
  */
 
 import type { SessionKey, SessionStore, SessionStoreEntry } from "@anthropic-ai/claude-agent-sdk";
@@ -15,12 +17,12 @@ import { Redacted, Schema } from "effect";
 import {
   RUNNER_TRANSCRIPTS,
   type RunnerTranscriptCall,
-  RunnerTranscriptLoadSchema,
+  RunnerTranscriptPageSchema,
   RunnerTranscriptSessionsSchema,
   RunnerTranscriptSubkeysSchema,
 } from "./protocol.js";
 
-const decodeLoad = Schema.decodeUnknownSync(RunnerTranscriptLoadSchema);
+const decodePage = Schema.decodeUnknownSync(RunnerTranscriptPageSchema);
 const decodeSessions = Schema.decodeUnknownSync(RunnerTranscriptSessionsSchema);
 const decodeSubkeys = Schema.decodeUnknownSync(RunnerTranscriptSubkeysSchema);
 
@@ -54,12 +56,21 @@ export function transcriptStore(
       await post({ call: RUNNER_TRANSCRIPTS.CALL.APPEND, key: keyOf(key), entries });
     },
     load: async (key) => {
-      const answer = decodeLoad(
-        await post({ call: RUNNER_TRANSCRIPTS.CALL.LOAD, key: keyOf(key) }),
-      );
-      return answer.entries === null
-        ? null
-        : answer.entries.map((entry) => entry as SessionStoreEntry);
+      const entries: SessionStoreEntry[] = [];
+      let after: number | null = null;
+      do {
+        const page = decodePage(
+          await post({ call: RUNNER_TRANSCRIPTS.CALL.LOAD_PAGE, key: keyOf(key), after }),
+        );
+        for (const entry of page.entries) entries.push(entry as SessionStoreEntry);
+        // Note that a cursor that does not move on fails the load, which would otherwise never end.
+        if (page.next !== null && after !== null && page.next <= after) {
+          throw new Error("The transcript store answered a page that did not move on");
+        }
+        after = page.next;
+      } while (after !== null);
+      // Note that a key never written is answered null, as the SDK's `load` answers it.
+      return entries.length > 0 ? entries : null;
     },
     listSessions: async (projectKey) => {
       const answer = decodeSessions(

@@ -31,6 +31,11 @@ tag push or a manual dispatch) only builds, signs, notarizes, and verifies the
 app. A green PR says nothing about the Mac app, and the one macOS check to
 wait for is the iOS app's.
 
+A release is dated in Eastern time (America/New_York), never UTC or the
+author's own zone: its `CHANGELOG.md` heading carries the day its tag is
+pushed there (`TZ=America/New_York date +%F`), and `.github/RELEASE.md` is
+the rest of cutting one.
+
 ## Layout
 
 Application logic lives in `packages/`. An app holds what is specific to
@@ -82,6 +87,26 @@ no-suppression check): `Skeleton` and `SkeletonRegion` are drawn only by a
 component named `*Skeleton`, in which an intrinsic element's class must be a
 literal naming itself a skeleton's (`…-skeleton…`); every other box is a
 component, factored out of the surface where it builds the box by hand.
+
+What a row does lives in its row component, never in the page that draws
+it: its menu, its rename, its selection, and its muted and unread states
+are built inside the one component every list of that kind draws
+(`TaskListRow`, `AgentListRow`), so a list that draws the row gets all of
+it, and no page hands a shared row a menu, an editor, or a selection of its
+own. `[check: anti-slop/row-behavior-in-row]`, under the same no-suppression
+check: outside the row components `tools/anti-slop/row-behavior.json` names,
+each with its reason, handing `@repo/ui`'s `TaskRow` its `menu`, `editor`,
+`note`, `choosable`, `settled`, or `unread`, or `TaskListRow` or
+`AgentListRow` a `menu`, `editor`, or `note`, is an error, as is a spread
+onto one. `ListRow` is not held: it is the row of many kinds, each drawn
+where it is listed. A menu shows a shortcut exactly where pressing it would act on the
+menu's subject, so a key it prints always works and one it leaves out does
+not act there. `[check: anti-slop/no-shortcut-flag]`, under the same
+no-suppression check: `commandAction` and its siblings take the menu's
+subject, and the place offering a key says what it acts on
+(`useShortcutTarget`, `packages/panel/src/shortcut-target.ts`); a literal
+`true` or `false`, a negation, a comparison, `&&` or `||`, or a condition
+choosing between the subject and nothing where they take it is an error.
 
 Lint holds the iOS half too (`anti-slop/no-raw-press-outside-ui-native`,
 under the same no-suppression check): outside `packages/ui-native`, an

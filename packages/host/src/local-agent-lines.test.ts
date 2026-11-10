@@ -98,6 +98,7 @@ const directMac = () => ({
   deviceArch: DEVICE_ARCH.ARM64,
   deviceCapabilities: [DEVICE_CAPABILITY.DISCARD],
   worktreeScript: () => WORKTREE_SCRIPT,
+  snapshotScript: () => "exit 0",
   repositoryReachedScript: () => "exit 0",
 });
 
@@ -143,11 +144,12 @@ const following = (lines: readonly DeviceAgentLine[]) =>
           return held();
       }
     };
-    const spawner = scriptedSpawner((program, args) =>
-      program === "/bin/bash" && args[0] === "-l"
-        ? { stdout: "/usr/bin:/bin", exitCode: 0 }
-        : undefined,
-    );
+    // Note that the discard's snapshot script is answered as saved, so the discard goes on to remove the folder.
+    const spawner = scriptedSpawner((program, args) => {
+      if (program !== "/bin/bash") return undefined;
+      if (args[0] === "-l") return { stdout: "/usr/bin:/bin", exitCode: 0 };
+      return args[0] === "-c" ? { exitCode: 0 } : undefined;
+    });
     const services = Layer.mergeAll(
       spawner.layer,
       NodePath.layer,

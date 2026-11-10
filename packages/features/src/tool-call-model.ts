@@ -1,0 +1,1635 @@
+import { isRecord, isWireNumber, isWireString, type WireValue } from "@repo/wire";
+import { Option, Schema } from "effect";
+import {
+  AGENT_TOOL,
+  type AgentTool,
+  CLAUDE_CODE_TOOL,
+  CODEX_TOOL,
+  CONNECTION_TOOL,
+  EVE_TOOL,
+  RETIRED_TOOL,
+} from "./agent-tools.js";
+import { AGENT_TODO_STATUS, type AgentTodos, agentTodosInputSchema } from "./agent-wire.js";
+import { fileRefText, shortCommit } from "./code-ref-words.js";
+import { descriptionAttachmentOf } from "./description-attachment-link.js";
+import type { DescriptionAgentEdit } from "./description-notes.js";
+import { askHeadWords } from "./inbox-ask-words.js";
+import {
+  INBOX_ASK,
+  INBOX_BLOCK,
+  INBOX_FIELD,
+  INBOX_RESPONSE,
+  type InboxPost,
+  type InboxPostBlock,
+  type InboxThreadPostInput,
+  inboxPostInputSchema,
+  inboxThreadPostInputSchema,
+  recommendedLabels,
+} from "./inbox-wire.js";
+import {
+  INTEGRATION_NAME,
+  type IntegrationProvider,
+  type IntegrationRemoteCall,
+  integrationConnectionOf,
+  integrationOfRemoteTool,
+  integrationRemoteCallSchema,
+} from "./integration-wire.js";
+import { LINK_PLACE, type LinkPlace, linkOf } from "./link-grammar.js";
+import { holderTaskId, type MentionHolder } from "./mention-holder.js";
+import type { ModelChoice } from "./models-wire.js";
+import { cardTitle } from "./plain-words.js";
+import { skillWord } from "./skill-word.js";
+import { TOOL_BLOCK, type ToolBlock } from "./tool-call-block.js";
+import {
+  browserCallWords,
+  CALL_KIND,
+  type CallKind,
+  commandDescription,
+  pageName,
+} from "./turn-rows.js";
+
+/**
+ * tool-call-model.ts -- what a coding agent's tool call says on its one row, and what its body shows, decided from the part's own input and output.
+ *
+ * Pure decisions over the tool part the SDK stored: the row's kind and
+ * subject are read from the call's input alone, so a row drawn while the
+ * call runs does not change shape when its answer lands, and the kind's
+ * verb is `turn-rows.ts`'s, but for a command
+ * the model said the purpose of, whose line says that instead; the body's two
+ * blocks are read from the input and the output in the tool's own terms
+ * (a command, a patch, a file's words) where the tool is one the retired runtime gave the
+ * agent or a native harness's read as one (`native-tool-calls.ts`), and as their JSON where it is not. A delegation's row is read the
+ * same way from the part S1's `delegate` tool stores: the task, the pair
+ * the worker runs on, and its answer once it has one. A to-do write's list
+ * is read through the wire's own schema, since its input is the list the
+ * row draws item by item, and an item posted to the developer's inbox
+ * through it too, its row naming the item the Inbox tab draws. A call
+ * about something the window opens elsewhere, a page, an agent,
+ * code shown, names it as its target (`toolTarget`), which its row opens.
+ * A call of an integration's own MCP tool, stored under its provider's
+ * remote name, is drawn as the tool it ran: the provider's mark, the
+ * remote tool's own name, and the input it was sent (`remoteCallOf`), on
+ * the server its card names; a native harness's call of an MCP server's tool
+ * reads the same. Every tool an agent is offered says how it reads in
+ * `AGENT_TOOL_VIEWS`, a `Record` over them, so a tool added without a kind
+ * does not compile. Nothing here draws.
+ */
+
+export interface ToolCallView {
+  readonly kind: CallKind;
+  /** The thing the call was done to, after its kind's verb. */
+  readonly subject: string;
+  /** For a call that read, wrote, or edited files in the task's checkout, their paths as the call named them, in order, which its row names by the first one's chip; none for a patch of a checkout its root names. */
+  readonly files?: readonly string[];
+  /** For a read of a web page, its whole address, which its row names by its website chip. */
+  readonly page?: string;
+  /** For a command, the plain words the model said it is for, which its line says in place of the verb and the command; for a browser call, what it did (`browserCallWords`); absent where there are none. */
+  readonly description?: string;
+  readonly input: ToolBlock;
+  /** Nothing while the call has not answered. */
+  readonly output: ToolBlock | undefined;
+  /** For a call of an integration's own tool, the integration, whose mark its row wears in its kind's icon's place. */
+  readonly provider?: IntegrationProvider;
+  /** For a call of an MCP server's tool, or a search of its tools, the server's name as its card gives it, which the row says it ran on. */
+  readonly server?: string;
+  /** For the same calls, the connection they ran on, which the window names by the account's own name where it holds more than one (`connection-names.tsx`); `server` stands where it does not know it. */
+  readonly connection?: string;
+}
+
+/** The escape every terminal color and cursor sequence starts with. */
+const ESCAPE = String.fromCharCode(27);
+
+/** A control sequence (`ESC [ … m`) or an operating-system command (`ESC ] … BEL`), which a terminal would have eaten. */
+const ANSI_SEQUENCE = new RegExp(
+  `${ESCAPE}(?:\\[[0-9;?]*[ -/]*[@-~]|\\][^${String.fromCharCode(7)}${ESCAPE}]*(?:${String.fromCharCode(7)}|${ESCAPE}\\\\))`,
+  "gu",
+);
+
+/** The words with every terminal escape taken out. */
+function stripAnsi(text: string): string {
+  return text.replace(ANSI_SEQUENCE, "");
+}
+
+/** A patch header naming a file, as `apply_patch` spells one. */
+const PATCH_FILE_HEADER = /^\*\*\* (?:Add|Update|Delete) File: (.+)$/u;
+
+/** The header that moves the file the header before it names, as `apply_patch` spells it. */
+const PATCH_MOVE_HEADER = /^\*\*\* Move to: (.+)$/u;
+
+/**
+ * The files a patch touches, in the order its headers name them. Note that
+ * a file it moves is named where it moved to, in its old path's place,
+ * because the old path names nothing once the patch is applied.
+ */
+function patchPaths(patchText: string): readonly string[] {
+  const paths: string[] = [];
+  for (const line of patchText.split("\n")) {
+    const moved = PATCH_MOVE_HEADER.exec(line.trimEnd())?.[1];
+    if (moved !== undefined && paths.length > 0) paths[paths.length - 1] = moved;
+    const named = PATCH_FILE_HEADER.exec(line.trimEnd())?.[1];
+    if (named !== undefined) paths.push(named);
+  }
+  return paths;
+}
+
+/** Where a value is drawn as JSON, how it reads: pretty-printed, a string as it is. */
+function asJson(value: WireValue): string {
+  return isWireString(value) ? value : JSON.stringify(value, null, 2);
+}
+
+function jsonBlock(value: WireValue): ToolBlock {
+  return { kind: TOOL_BLOCK.JSON, text: asJson(value) };
+}
+
+function textBlock(text: string): ToolBlock {
+  return { kind: TOOL_BLOCK.TEXT, text };
+}
+
+/** A subject with many files: the first, and how many more. */
+function pathsSubject(paths: readonly string[]): string {
+  const [first, ...rest] = paths;
+  if (first === undefined) return "";
+  return rest.length === 0 ? first : `${first} +${rest.length}`;
+}
+
+/** The string under a key of a record, or nothing where the record has none. */
+function stringAt(value: WireValue | undefined, key: string): string | undefined {
+  return isRecord(value) && isWireString(value[key]) ? value[key] : undefined;
+}
+
+/** The one file a call's `filePath` names, as a list; none where it names none. */
+function filesAt(input: WireValue | undefined): readonly string[] {
+  const path = stringAt(input, "filePath");
+  return path === undefined || path === "" ? [] : [path];
+}
+
+/** The files a `show_image` call named, in order, as its row's subject. */
+function shownPaths(input: WireValue | undefined): string {
+  const images = isRecord(input) && Array.isArray(input.images) ? input.images : [];
+  return images
+    .flatMap((image) => (isRecord(image) && isWireString(image.path) ? [image.path] : []))
+    .join(", ");
+}
+
+function isWireArray(value: WireValue): value is readonly WireValue[] {
+  return Array.isArray(value);
+}
+
+/** A command's answer as a terminal would have shown it: its output, then its errors, then a failing exit. */
+function commandOutput(output: WireValue): ToolBlock {
+  const stdout = stringAt(output, "stdout");
+  const stderr = stringAt(output, "stderr");
+  if (stdout === undefined || stderr === undefined || !isRecord(output)) return jsonBlock(output);
+  const exitCode = isWireNumber(output.exitCode) ? output.exitCode : 0;
+  const lines = [stdout.trimEnd(), stderr.trimEnd()].filter((text) => text.length > 0);
+  if (exitCode !== 0) lines.push(`exit ${exitCode}`);
+  if (output.truncated === true) lines.push(TRUNCATED_NOTE);
+  return textBlock(stripAnsi(lines.join("\n")));
+}
+
+/** What an answer cut short by its tool says at its end. */
+const TRUNCATED_NOTE = "(output truncated)";
+
+/** What a command the Mac killed at its timeout says at its end. */
+const TIMED_OUT_NOTE = "(killed at its timeout)";
+
+/** The status `run_on_mac` answers with when the Mac ran nothing. */
+const MAC_COMMAND_NOT_RUN = "not-run";
+
+/** The status `browser` answers with when it ran nothing. */
+const BROWSER_NOT_RUN = "not-run";
+
+/** The actions a browser call named, by name, in the order its input lists them. */
+function browserActions(input: WireValue | undefined): readonly string[] {
+  const actions = isRecord(input) && Array.isArray(input.actions) ? input.actions : [];
+  return actions.flatMap((action: WireValue) => {
+    const name = stringAt(action, "action");
+    return name === undefined ? [] : [name];
+  });
+}
+
+/**
+ * The tab a browser call acted on last, as its row names it: by the title
+ * its answer gives the tab, or its page where it has none; while the call
+ * runs, by the page it opened or went to last; nothing where it named none.
+ */
+function browserTabName(
+  input: WireValue | undefined,
+  output: WireValue | undefined,
+): string | undefined {
+  const tabs = isRecord(output) && Array.isArray(output.tabs) ? output.tabs : [];
+  const last: WireValue | undefined = tabs.at(-1);
+  const title = stringAt(last, "title")?.trim();
+  if (title !== undefined && title !== "") return title;
+  const shown = stringAt(last, "url");
+  if (shown !== undefined && shown !== "") return pageName(shown);
+  if (output !== undefined) return undefined;
+  const actions = isRecord(input) && Array.isArray(input.actions) ? input.actions : [];
+  const opened = actions.flatMap((action: WireValue) => stringAt(action, "url") ?? []).at(-1);
+  return opened === undefined ? undefined : pageName(opened);
+}
+
+/** A browser call's answer: why it ran nothing where it ran nothing, and every step as its JSON otherwise. */
+function browserOutput(output: WireValue): ToolBlock {
+  return stringAt(output, "status") === BROWSER_NOT_RUN
+    ? textBlock(stringAt(output, "reason") ?? "")
+    : jsonBlock(output);
+}
+
+/** A command the Mac ran: as a terminal would have shown it, its timeout said where it was killed; or why it was not run. */
+function macCommandOutput(output: WireValue): ToolBlock {
+  if (stringAt(output, "status") === MAC_COMMAND_NOT_RUN) {
+    return textBlock(stringAt(output, "reason") ?? "");
+  }
+  const shown = commandOutput(output);
+  const timedOut = isRecord(output) && output.timedOut === true;
+  if (!timedOut) return shown;
+  return textBlock(shown.text === "" ? TIMED_OUT_NOTE : `${shown.text}\n${TIMED_OUT_NOTE}`);
+}
+
+/** A patch's answer: the files it changed, one a line, then every problem it reported. */
+function patchOutput(output: WireValue): ToolBlock {
+  const files = isRecord(output) ? output.files : undefined;
+  if (files === undefined || !isWireArray(files)) return jsonBlock(output);
+  const lines = files.flatMap((file) => {
+    const operation = stringAt(file, "operation");
+    const path = stringAt(file, "path");
+    return operation === undefined || path === undefined ? [] : [`${operation} ${path}`];
+  });
+  const diagnostics = isRecord(output) ? output.diagnostics : undefined;
+  if (diagnostics !== undefined && isWireArray(diagnostics)) {
+    for (const diagnostic of diagnostics) lines.push(asJson(diagnostic));
+  }
+  return textBlock(lines.join("\n"));
+}
+
+/** An answer that is words under one key, as they are, with a note where the tool cut them short; anything else as its JSON. */
+function wordsOutput(output: WireValue, key: string): ToolBlock {
+  const words = stringAt(output, key);
+  if (words === undefined) return jsonBlock(output);
+  const truncated = isRecord(output) && output.truncated === true;
+  return textBlock(truncated ? `${words.trimEnd()}\n${TRUNCATED_NOTE}` : words);
+}
+
+/** A loaded skill's answer, which is its instructions as words; anything else as its JSON. */
+function skillOutput(output: WireValue): ToolBlock {
+  return isWireString(output) ? textBlock(output) : jsonBlock(output);
+}
+
+/** The name of the skill a skill load asked for; nothing while its input has not said it. */
+export function loadedSkill(input: WireValue | undefined): string | undefined {
+  const name = stringAt(input, "skill");
+  return name === "" ? undefined : name;
+}
+
+/**
+ * What a description note of each kind did, in the row's words, keyed by the kinds
+ * the agents' journal keeps, a deletion among them as a strike. Note that the
+ * keys are held to the template's type and not read from its module, because
+ * the template reaches Effect's Schema, which the renderer bundle does not
+ * carry for one table of words.
+ */
+const NOTE_VERB = {
+  add: "added",
+  replace: "corrected",
+  remove: "struck",
+} as const satisfies Record<DescriptionAgentEdit["notes"][number]["kind"], string>;
+
+/** What one note of a call's input did, by its kind: a replacement with no words is a strike. */
+function noteKind(note: WireValue): string {
+  const kind = stringAt(note, "kind") ?? "";
+  const text = stringAt(note, "text");
+  return kind === "replace" && text !== undefined && text.trim() === "" ? "remove" : kind;
+}
+
+/** The notes a description edit took, summed by what each did, and the pictures it added: "2 added, 1 corrected, 1 picture added". */
+function descriptionEditSummary(input: WireValue | undefined): string {
+  const notes = isRecord(input) ? input.notes : undefined;
+  if (notes === undefined || !isWireArray(notes)) return "";
+  const pictured = isRecord(input) ? input.pictures : undefined;
+  const pictures = pictured !== undefined && isWireArray(pictured) ? pictured.length : 0;
+  return Object.entries(NOTE_VERB)
+    .flatMap(([kind, verb]) => {
+      const count = notes.filter((note) => noteKind(note) === kind).length;
+      return count === 0 ? [] : [`${count} ${verb}`];
+    })
+    .concat(pictures === 0 ? [] : [`${pictures} ${pictures === 1 ? "picture" : "pictures"} added`])
+    .join(", ");
+}
+
+const readTodos = Schema.decodeUnknownOption(agentTodosInputSchema);
+
+/** The list a to-do write carries, or nothing where its input does not read as one, as while it streams. */
+export function todosView(input: WireValue | undefined): AgentTodos["todos"] | undefined {
+  return Option.getOrUndefined(readTodos(input))?.todos;
+}
+
+/** How many of a list's items are done, and how many it holds. */
+export function todosCount(todos: AgentTodos["todos"]): { done: number; total: number } {
+  const done = todos.filter((todo) => todo.status === AGENT_TODO_STATUS.DONE).length;
+  return { done, total: todos.length };
+}
+
+/** How far a list has got: "2 of 5 done". */
+export function todosSummary(todos: AgentTodos["todos"]): string {
+  const { done, total } = todosCount(todos);
+  return `${done} of ${total} done`;
+}
+
+/** The item a list is at: the one in progress, else the first still pending; nothing once every item is done. */
+export function todoFocus(todos: AgentTodos["todos"]): string | undefined {
+  const current =
+    todos.find((todo) => todo.status === AGENT_TODO_STATUS.IN_PROGRESS) ??
+    todos.find((todo) => todo.status === AGENT_TODO_STATUS.PENDING);
+  return current?.content;
+}
+
+/** One item of a list as words, where the list is copied or drawn as a call's input: a markdown checkbox, the item in progress saying so. */
+function todoLine(todo: AgentTodos["todos"][number]): string {
+  switch (todo.status) {
+    case AGENT_TODO_STATUS.PENDING:
+      return `- [ ] ${todo.content}`;
+    case AGENT_TODO_STATUS.IN_PROGRESS:
+      return `- [ ] ${todo.content} (in progress)`;
+    case AGENT_TODO_STATUS.DONE:
+      return `- [x] ${todo.content}`;
+  }
+}
+
+/** A to-do list's row, a whole list's write or the list as it stood after one of Claude Code's task calls (`agent-todos.ts`): how far the list has got, and the list as checkboxes. The call's answer only says the list was taken, so none is shown. */
+export function todosListView(todos: AgentTodos["todos"]): ToolCallView {
+  return {
+    kind: CALL_KIND.TODOS,
+    subject: todosSummary(todos),
+    input: textBlock(todos.map(todoLine).join("\n")),
+    output: undefined,
+  };
+}
+
+/** A to-do write's row: the list it carries, or its JSON where it does not read. */
+function todosToolView(input: WireValue | undefined): ToolCallView {
+  const todos = todosView(input);
+  if (todos === undefined) {
+    return {
+      kind: CALL_KIND.TODOS,
+      subject: "",
+      input: input === undefined ? textBlock("") : jsonBlock(input),
+      output: undefined,
+    };
+  }
+  return todosListView(todos);
+}
+
+const readPost = Schema.decodeUnknownOption(inboxPostInputSchema);
+
+/** The item a post carries, or nothing where its input does not read as one, as while it streams. */
+function inboxPostView(input: WireValue | undefined): InboxPost | undefined {
+  return Option.getOrUndefined(readPost(input));
+}
+
+/** What a post asks, as the row's body lists it: a choice's options, each recommended one saying so, or a form's fields with their types, a select's recommended option saying so. */
+function askLines(response: InboxPost["response"]): readonly string[] {
+  switch (response.type) {
+    case INBOX_RESPONSE.CHOICE:
+      return response.options.map((option) => {
+        const recommended = recommendedLabels(response).includes(option.label)
+          ? " (recommended)"
+          : "";
+        const detail = option.detail === undefined ? "" : ` -- ${option.detail}`;
+        return `- ${option.label}${recommended}${detail}`;
+      });
+    case INBOX_RESPONSE.FORM:
+      return response.fields.map((field) => {
+        const options =
+          field.type === INBOX_FIELD.SELECT
+            ? `: ${(field.options ?? [])
+                .map((option) =>
+                  option === field.recommended ? `${option} (recommended)` : option,
+                )
+                .join(", ")}`
+            : "";
+        const required = field.required === true ? ", required" : "";
+        return `- ${field.label} (${field.type}${required})${options}`;
+      });
+    default:
+      return [];
+  }
+}
+
+/** One block of a post as the row's body lists it: Markdown as written, a link as its label and address, code as its path, lines, and commit, and an image as its words and the path it was posted from. */
+function blockLine(block: InboxPostBlock): string {
+  switch (block.type) {
+    case INBOX_BLOCK.MARKDOWN:
+      return block.text;
+    case INBOX_BLOCK.LINK:
+      return `${block.label}: ${block.url}`;
+    case INBOX_BLOCK.CODE:
+      return `${fileRefText(block)} at ${shortCommit(block.sha)}`;
+    case INBOX_BLOCK.IMAGE:
+      return `Image: ${block.alt} (${block.path})`;
+  }
+}
+
+/** A post's context and what it asks as the row's body lists them: each block in turn, then the options or the fields. */
+function postLines(post: InboxPost): string {
+  const blocks = (post.blocks ?? []).map(blockLine);
+  return [...blocks, ...askLines(post.response)].filter((line) => line.trim() !== "").join("\n");
+}
+
+const readThreadPost = Schema.decodeUnknownOption(inboxThreadPostInputSchema);
+
+/** The message a post carries from version 5, or nothing where its input does not read as one: a post from before it, or one still streaming. */
+function threadPostView(input: WireValue | undefined): InboxThreadPostInput | undefined {
+  return Option.getOrUndefined(readThreadPost(input));
+}
+
+/**
+ * What a post's ask offers, as the row's body lists it under the ask's
+ * kind: a `decide`'s options, each recommended one saying so, a `do`'s
+ * steps, or an `answer`'s fields with their types; none where the reply's
+ * own words answer it.
+ */
+function threadAskLines(ask: NonNullable<InboxThreadPostInput["ask"]>): readonly string[] {
+  switch (ask.type) {
+    case INBOX_ASK.DECIDE:
+      return ask.options.map((option) => {
+        const recommended = recommendedLabels(ask).includes(option.label) ? " (recommended)" : "";
+        const detail = option.detail === undefined ? "" : ` -- ${option.detail}`;
+        return `- ${option.label}${recommended}${detail}`;
+      });
+    case INBOX_ASK.DO:
+      return ask.steps.map((step) => `- ${step}`);
+    case INBOX_ASK.ANSWER:
+      return (ask.fields ?? []).map((field) => {
+        const options =
+          field.type === INBOX_FIELD.SELECT ? `: ${(field.options ?? []).join(", ")}` : "";
+        const required = field.required === true ? ", required" : "";
+        return `- ${field.label} (${field.type}${required})${options}`;
+      });
+  }
+}
+
+/** A version 5 post as the row's body lists it: its message's first line, then what its ask asks, by its kind, and what it offers. */
+function threadPostLines(post: InboxThreadPostInput): string {
+  const first = post.body.split("\n").find((line) => line.trim() !== "") ?? "";
+  const ask =
+    post.ask === undefined ? [] : [askHeadWords(post.ask, undefined), ...threadAskLines(post.ask)];
+  return [first, ...ask].join("\n");
+}
+
+/** A reply's words, then each picture it showed by the path of its file, as the row's body lists them. */
+function replyLines(input: WireValue | undefined): string {
+  const images = isRecord(input) && Array.isArray(input.images) ? input.images : [];
+  const paths = images.flatMap((image) => {
+    const path = stringAt(image, "path");
+    return path === undefined ? [] : [`Image: ${path}`];
+  });
+  return [stringAt(input, "text") ?? "", ...paths].filter((line) => line.trim() !== "").join("\n");
+}
+
+/**
+ * An inbox call's row: a post names its item's title and lists what it
+ * asks, a close names the item's key and says why, a reply names the
+ * item's key and shows its words and pictures, and a read names
+ * nothing. A post from version 5 names its thread's title, or its key
+ * where it names none, and shows its message's first line and its ask's
+ * kind; a withdrawal names the thread's key and says why. A transcript
+ * from before it still holds the retired `reply_inbox` and
+ * `close_inbox_item` and the post's earlier input, drawn as they were. An answer that did what was asked is the agent's whole inbox,
+ * which the Inbox tab draws as it stands, so none is shown here; one that
+ * did nothing shows why, so a refused post never reads as posted.
+ */
+function inboxToolView(
+  tool: string,
+  input: WireValue | undefined,
+  output: WireValue | undefined,
+): ToolCallView {
+  const refused = inboxRefusal(output);
+  if (tool === AGENT_TOOL.POST_THREAD || tool === RETIRED_TOOL.POST_TO_INBOX) {
+    const message = threadPostView(input);
+    if (message !== undefined) {
+      return {
+        kind: CALL_KIND.INBOX_POST,
+        subject: message.title === undefined ? message.key : cardTitle(message.title),
+        input: textBlock(threadPostLines(message)),
+        output: refused,
+      };
+    }
+    const post = inboxPostView(input);
+    return {
+      kind: CALL_KIND.INBOX_POST,
+      subject: post === undefined ? "" : cardTitle(post.title),
+      input:
+        post === undefined
+          ? input === undefined
+            ? textBlock("")
+            : jsonBlock(input)
+          : textBlock(postLines(post)),
+      output: refused,
+    };
+  }
+  if (tool === AGENT_TOOL.WITHDRAW_ASK) {
+    return {
+      kind: CALL_KIND.INBOX_WITHDRAW,
+      subject: stringAt(input, "key") ?? "",
+      input: textBlock(stringAt(input, "reason") ?? ""),
+      output: refused,
+    };
+  }
+  if (tool === RETIRED_TOOL.REPLY_INBOX) {
+    return {
+      kind: CALL_KIND.INBOX_REPLY,
+      subject: stringAt(input, "key") ?? "",
+      input: textBlock(replyLines(input)),
+      output: refused,
+    };
+  }
+  if (tool === RETIRED_TOOL.CLOSE_INBOX_ITEM) {
+    return {
+      kind: CALL_KIND.INBOX_CLOSE,
+      subject: stringAt(input, "key") ?? "",
+      input: textBlock(stringAt(input, "reason") ?? ""),
+      output: refused,
+    };
+  }
+  return { kind: CALL_KIND.INBOX_READ, subject: "", input: textBlock(""), output: refused };
+}
+
+/** The status an inbox call answers with when it did nothing, by the word its answer spells. */
+const INBOX_CALL_REJECTED = "rejected";
+
+/** Why an inbox call did nothing, as the row's answer shows it; nothing where it did what it was asked, whose answer is the inbox the Inbox tab draws. */
+function inboxRefusal(output: WireValue | undefined): ToolBlock | undefined {
+  if (stringAt(output, "status") !== INBOX_CALL_REJECTED) return undefined;
+  return textBlock(stringAt(output, "reason") ?? "");
+}
+
+/** The units a pause is said in, longest first, each by its seconds and its word. */
+const SPAN_UNITS = [
+  [3_600, "hour"],
+  [60, "minute"],
+  [1, "second"],
+] as const;
+
+/** A count of seconds as a row says it, in its largest whole unit or two: "45 seconds", "5 minutes", "1 hour 30 minutes". */
+function spanText(seconds: number): string {
+  const rounded = Math.max(1, Math.round(seconds));
+  const parts = SPAN_UNITS.flatMap(([span, word], index) => {
+    const count = Math.floor((rounded % (SPAN_UNITS[index - 1]?.[0] ?? Infinity)) / span);
+    return count === 0 ? [] : [`${count} ${word}${count === 1 ? "" : "s"}`];
+  });
+  return parts.slice(0, 2).join(" ");
+}
+
+/** How a pause ended: how long it waited, or that a message ended it early. */
+function sleepOutput(output: WireValue): ToolBlock {
+  if (isRecord(output) && output.interrupted === true) {
+    return textBlock("Stopped early: a message arrived.");
+  }
+  const waited =
+    isRecord(output) && isWireNumber(output.waitedSeconds) ? output.waitedSeconds : undefined;
+  return waited === undefined ? jsonBlock(output) : textBlock(`Waited ${spanText(waited)}.`);
+}
+
+/**
+ * A native harness's subagent, whose inner work its transcript folds under
+ * the one call that started it (`claude-code-moments.ts`, `codex-moments.ts`): drawn as one call,
+ * named by the few words the agent gave it, or its task's first line, its
+ * task the call's input and the subagent's answer its output, as a copy of
+ * the transcript reads a delegation.
+ */
+function subagentCallView(
+  input: WireValue | undefined,
+  output: WireValue | undefined,
+): ToolCallView {
+  const task = stringAt(input, "prompt") ?? "";
+  const named = stringAt(input, "description")?.trim();
+  return {
+    kind: CALL_KIND.WORKER,
+    subject: named === undefined || named === "" ? cardTitle(task) : named,
+    input: textBlock(task),
+    output:
+      output === undefined
+        ? undefined
+        : isWireString(output)
+          ? textBlock(output)
+          : jsonBlock(output),
+  };
+}
+
+/** What a refused pull request's line says in place of its verb, since it opened none. */
+const PULL_REQUEST_REFUSED = "Could not open pull request";
+
+/** A pull request's answer as its body draws it: its JSON where it opened one, the words of its reason where it was refused. */
+function pullRequestAnswer(
+  output: WireValue | undefined,
+  reason: string | undefined,
+): ToolBlock | undefined {
+  if (output === undefined) return undefined;
+  return reason === undefined ? jsonBlock(output) : textBlock(reason);
+}
+
+/**
+ * An opened pull request's row: its number and the title the agent gave it,
+ * the number from the answer once GitHub has given one. Note that a refused
+ * call, which answers a reason and no number, says it opened none, and its
+ * answer is drawn as the text of its reason, which is where the refusal is
+ * read.
+ */
+function openedPullRequestView(
+  input: WireValue | undefined,
+  output: WireValue | undefined,
+): ToolCallView {
+  const title = stringAt(input, "title") ?? "";
+  const reason = stringAt(output, "reason");
+  const number = isRecord(output) && isWireNumber(output.number) ? output.number : undefined;
+  return {
+    kind: CALL_KIND.OPEN_PULL_REQUEST,
+    subject: number === undefined ? title : `#${number} ${title}`,
+    ...(reason === undefined ? undefined : { description: PULL_REQUEST_REFUSED }),
+    input: input === undefined ? textBlock("") : jsonBlock(input),
+    output: pullRequestAnswer(output, reason),
+  };
+}
+
+/** A brain call whose input is one field the row names it by, its answer as its JSON. */
+function namedCall(
+  kind: CallKind,
+  input: WireValue | undefined,
+  output: WireValue | undefined,
+  field: string | undefined,
+): ToolCallView {
+  return {
+    kind,
+    subject: field === undefined ? "" : (stringAt(input, field) ?? ""),
+    input: input === undefined ? textBlock("") : jsonBlock(input),
+    output: output === undefined ? undefined : jsonBlock(output),
+  };
+}
+
+/** A call about one agent named by the agent's title its answer gives, as the agent's tab names it; nothing before the answer, whose input holds only an id. */
+function answeredAgentCall(
+  kind: CallKind,
+  input: WireValue | undefined,
+  output: WireValue | undefined,
+): ToolCallView {
+  const agent = isRecord(output) ? output.agent : undefined;
+  return { ...namedCall(kind, input, output, undefined), subject: stringAt(agent, "title") ?? "" };
+}
+
+/** A call named by a field of what its answer names, as a section by its title; nothing before the answer, whose input holds only ids. */
+function answeredCall(
+  kind: CallKind,
+  input: WireValue | undefined,
+  output: WireValue | undefined,
+  answered: string,
+  field: string,
+): ToolCallView {
+  const named = isRecord(output) ? output[answered] : undefined;
+  return { ...namedCall(kind, input, output, undefined), subject: stringAt(named, field) ?? "" };
+}
+
+/** An issue's call, named by the identifier and title its answer names; before the answer, by the name it was asked by, or the title a filing asked for. */
+function issueCall(
+  kind: CallKind,
+  input: WireValue | undefined,
+  output: WireValue | undefined,
+): ToolCallView {
+  const issue = isRecord(output) ? output.issue : undefined;
+  const identifier = stringAt(issue, "identifier");
+  const title = stringAt(issue, "title");
+  const answered =
+    identifier === undefined || title === undefined ? undefined : `${identifier} ${title}`;
+  const asked = stringAt(input, "issue") ?? stringAt(input, "title") ?? "";
+  return { ...namedCall(kind, input, output, undefined), subject: answered ?? asked };
+}
+
+/** How a comment thread's change is said on its row: resolved, or reopened where `resolved` is false. */
+function commentUpdateKind(input: WireValue | undefined): CallKind {
+  const resolved = isRecord(input) ? input.resolved : undefined;
+  return resolved === false ? CALL_KIND.REOPEN_THREAD : CALL_KIND.RESOLVE_THREAD;
+}
+
+/** How an agent's change is said on its row: archived or unarchived where it named its archive, and changed otherwise. */
+function agentUpdateKind(input: WireValue | undefined): CallKind {
+  const archived = isRecord(input) ? input.archived : undefined;
+  if (archived === true) return CALL_KIND.ARCHIVE_AGENT;
+  return archived === false ? CALL_KIND.UNARCHIVE_AGENT : CALL_KIND.UPDATE_AGENT;
+}
+
+/**
+ * A `share_port` call as its row reads it: a port shared, named by its
+ * number, or a share closed, whose input names none.
+ */
+function sharePortView(input: WireValue | undefined, output: WireValue | undefined): ToolCallView {
+  const port = isRecord(input) && isWireNumber(input.port) ? input.port : undefined;
+  return {
+    ...namedCall(
+      port === undefined ? CALL_KIND.UNSHARE_PORT : CALL_KIND.SHARE_PORT,
+      input,
+      output,
+      undefined,
+    ),
+    subject: port === undefined ? "" : String(port),
+  };
+}
+
+/** What a call to another agent sent it, in the caller's own words: the words, and a start's note beside them. */
+export interface SentWords {
+  readonly words: string | undefined;
+  readonly note: string | undefined;
+}
+
+/** A message's words as the service reads them: under `text`, or under `message` where no `text` stands, as Claude Code's agents name them. */
+function messageWords(input: WireValue | undefined): string | undefined {
+  return stringAt(input, "text") ?? stringAt(input, "message");
+}
+
+/**
+ * What a `start_agent` or a `message_agent` call sent, whole, which its row's
+ * line cuts to its first line: a message's words, or a start's prompt (named
+ * `task` by a start journaled before the prompt had its name) and its note;
+ * nothing for any other call, or for a start on the description with no note, which
+ * sent nothing of its own.
+ */
+export function sentWords(tool: string, input: WireValue | undefined): SentWords | undefined {
+  const words =
+    tool === AGENT_TOOL.MESSAGE_AGENT || tool === RETIRED_TOOL.MESSAGE_CODING_AGENT
+      ? messageWords(input)
+      : tool === AGENT_TOOL.START_AGENT || tool === RETIRED_TOOL.START_CODING_AGENT
+        ? (stringAt(input, "prompt") ?? stringAt(input, "task"))
+        : undefined;
+  const isStart = tool === AGENT_TOOL.START_AGENT || tool === RETIRED_TOOL.START_CODING_AGENT;
+  const note = isStart ? stringAt(input, "note") : undefined;
+  if (words === undefined && note === undefined) return undefined;
+  return { words, note };
+}
+
+/** The job of each worker, by the retired runtime's id for its task, which a stop names in the task's place. */
+export type WorkerJobs = ReadonlyMap<string, string>;
+
+/** What a stop names: the job of the worker it stopped where it is known, and the task's id otherwise. */
+function stoppedTask(input: WireValue | undefined, jobs: WorkerJobs | undefined): string {
+  const task = stringAt(input, "taskId");
+  return (task === undefined ? undefined : jobs?.get(task)) ?? task ?? "";
+}
+
+const readRemoteCall = Schema.decodeUnknownOption(integrationRemoteCallSchema);
+
+/** A call of an integration's own tool, as its stored part names it: the integration, and the envelope the call is kept in; nothing for any other call, or an envelope that does not read. */
+export function remoteCallOf(
+  tool: string,
+  input: WireValue | undefined,
+): { readonly provider: IntegrationProvider; readonly call: IntegrationRemoteCall } | undefined {
+  const provider = integrationOfRemoteTool(tool);
+  if (provider === undefined) return undefined;
+  const call = readRemoteCall(input);
+  return Option.isSome(call) ? { provider, call: call.value } : undefined;
+}
+
+/** The name a connection goes by on a row, as the server's card names it (`unreadRow`): its provider's name, and its place among that provider's accounts past the first; any other name as it is. */
+function connectionName(connection: string): string {
+  const account = integrationConnectionOf(connection);
+  if (account === undefined) return connection;
+  const name = INTEGRATION_NAME[account.provider];
+  return account.place === 1 ? name : `${name} ${account.place}`;
+}
+
+/** A call of an integration's own tool, drawn as the tool it ran: the integration's mark, the tool's own name, and the input the tool was sent, on the server its card names. */
+function remoteToolView(
+  tool: string,
+  input: WireValue | undefined,
+  output: WireValue | undefined,
+): ToolCallView | undefined {
+  const remote = remoteCallOf(tool, input);
+  if (remote === undefined) return undefined;
+  return {
+    kind: CALL_KIND.MCP_TOOL,
+    subject: remote.call.remoteTool,
+    server: connectionName(remote.call.connection ?? remote.provider),
+    connection: remote.call.connection ?? remote.provider,
+    provider: remote.provider,
+    input: jsonBlock(remote.call.input),
+    output: output === undefined ? undefined : jsonBlock(output),
+  };
+}
+
+/** How a native harness names a tool of an MCP server: Claude Code's `mcp__<server>__<tool>`. */
+const CLAUDE_CODE_MCP = /^mcp__(.+?)__(.+)$/u;
+
+/** How Codex's MCP calls are named by `native-tool-calls.ts`: the server, a dot, and the tool. */
+const CODEX_MCP = /^([^.]+)\.(.+)$/u;
+
+/** A call of a tool of an MCP server a native harness made, as it names it: the server by the name its card gives and the tool's own name; nothing for any other tool. */
+function nativeMcpCall(
+  tool: string,
+): { readonly server: string; readonly connection: string; readonly name: string } | undefined {
+  const match = CLAUDE_CODE_MCP.exec(tool) ?? CODEX_MCP.exec(tool);
+  const [, connection, name] = match ?? [];
+  return connection === undefined || name === undefined
+    ? undefined
+    : { server: connectionName(connection), connection, name };
+}
+
+/** Whether a tool's call runs on a server, which its row names: an integration's own, a connection's search or run, or a native harness's MCP call. */
+export function isServerCallTool(tool: string): boolean {
+  return (
+    integrationOfRemoteTool(tool) !== undefined ||
+    tool === CONNECTION_TOOL.SEARCH ||
+    tool === CONNECTION_TOOL.EXECUTE ||
+    nativeMcpCall(tool) !== undefined
+  );
+}
+
+/** A call of an MCP server's tool a native harness made, drawn as the tool it ran on its server, its input and answer as JSON. */
+function nativeMcpView(
+  tool: string,
+  input: WireValue | undefined,
+  output: WireValue | undefined,
+): ToolCallView | undefined {
+  const call = nativeMcpCall(tool);
+  if (call === undefined) return undefined;
+  return {
+    kind: CALL_KIND.MCP_TOOL,
+    subject: call.name,
+    server: call.server,
+    connection: call.connection,
+    input: input === undefined ? textBlock("") : jsonBlock(input),
+    output: output === undefined ? undefined : jsonBlock(output),
+  };
+}
+
+/** A call the retired runtime ran on a connection, named by the connection its input names as its card names it, and by the one field of the input a reader looks for first. */
+function connectionCall(
+  kind: CallKind,
+  field: string,
+  input: WireValue | undefined,
+  output: WireValue | undefined,
+): ToolCallView {
+  const connection = stringAt(input, "connection");
+  return {
+    ...namedCall(kind, input, output, field),
+    ...(connection === undefined ? undefined : { server: connectionName(connection), connection }),
+  };
+}
+
+/** What a reader of one tool's call is handed: the tool's name, its input and answer, and the jobs a stop names a worker by. */
+interface ToolRead {
+  readonly tool: string;
+  readonly input: WireValue | undefined;
+  readonly output: WireValue | undefined;
+  readonly jobs: WorkerJobs | undefined;
+}
+
+type ToolReader = (call: ToolRead) => ToolCallView;
+
+/** A delegation to a worker as a call's row reads it: the job named by its few words or its task's first line, the task its input, and the worker's answer its output. A tab draws it as its own row (`DelegationRow`), so this reads where a copy or a replay does. */
+function delegateView({ input, output }: ToolRead): ToolCallView {
+  const view = delegationView({ input, output }, undefined);
+  return {
+    kind: CALL_KIND.WORKER,
+    subject: view.title ?? cardTitle(view.task),
+    input: textBlock(view.task),
+    output: view.result === undefined ? undefined : textBlock(view.result),
+  };
+}
+
+const READ_SEARCH: ToolReader = ({ input, output }) => ({
+  kind: CALL_KIND.SEARCH,
+  subject: stringAt(input, "pattern") ?? "",
+  input: input === undefined ? textBlock("") : jsonBlock(input),
+  output: output === undefined ? undefined : wordsOutput(output, "content"),
+});
+
+const READ_WEB_SEARCH: ToolReader = ({ input, output }) => ({
+  kind: CALL_KIND.WEB_SEARCH,
+  subject: stringAt(input, "query") ?? "",
+  input: textBlock(stringAt(input, "query") ?? ""),
+  output: output === undefined ? undefined : jsonBlock(output),
+});
+
+const READ_INBOX_CALL: ToolReader = ({ tool, input, output }) => inboxToolView(tool, input, output);
+
+/** A memory kept, named by its words, under `save_memory` or the `remember` it was named before. */
+const SAVE_MEMORY_CALL: ToolReader = ({ input, output }) => ({
+  ...namedCall(CALL_KIND.REMEMBER, input, output, undefined),
+  subject: cardTitle(stringAt(input, "text") ?? ""),
+});
+
+/** The memory searched, named by its query, under `search_memory` or the `recall` it was named before. */
+const SEARCH_MEMORY_CALL: ToolReader = ({ input, output }) =>
+  namedCall(CALL_KIND.RECALL, input, output, "query");
+
+/**
+ * How each tool an agent is offered reads on its row, which is the one place
+ * a tool's kind is chosen: a `Record` over every tool, so a tool added to
+ * `AGENT_TOOL` does not compile until it says how it reads, never the
+ * wrench and "Used" a tool this build does not know wears. A native
+ * harness's own call is read as the call of the same kind before it
+ * reaches here (`native-tool-calls.ts`).
+ */
+const AGENT_TOOL_VIEWS = {
+  [AGENT_TOOL.LOOK_AT_PICTURE]: ({ input, output }) =>
+    namedCall(CALL_KIND.LOOK_AT_PICTURE, input, output, undefined),
+  [AGENT_TOOL.LIST_AGENTS]: ({ input, output }) =>
+    namedCall(CALL_KIND.LIST_AGENTS, input, output, undefined),
+  [AGENT_TOOL.READ_AGENT]: ({ input, output }) =>
+    namedCall(CALL_KIND.READ_AGENT, input, output, "agentId"),
+  [AGENT_TOOL.MESSAGE_AGENT]: ({ input, output }) => ({
+    ...namedCall(CALL_KIND.MESSAGE_AGENT, input, output, undefined),
+    subject: messageWords(input) ?? "",
+  }),
+  [AGENT_TOOL.START_AGENT]: ({ input, output }) =>
+    // Note that a start journaled before the prompt had its name carries it as `task`.
+    namedCall(
+      CALL_KIND.START_AGENT,
+      input,
+      output,
+      stringAt(input, "prompt") === undefined ? "task" : "prompt",
+    ),
+  [AGENT_TOOL.STOP_AGENT]: ({ input, output }) =>
+    answeredAgentCall(CALL_KIND.STOP_AGENT, input, output),
+  [AGENT_TOOL.UPDATE_AGENT]: ({ input, output }) =>
+    answeredAgentCall(agentUpdateKind(input), input, output),
+  [AGENT_TOOL.LIST_TASKS]: ({ input, output }) =>
+    namedCall(CALL_KIND.LIST_TASKS, input, output, undefined),
+  [AGENT_TOOL.READ_TASK]: ({ input, output }) =>
+    answeredCall(CALL_KIND.READ_TASK, input, output, "task", "name"),
+  [AGENT_TOOL.CREATE_TASK]: ({ input, output }) =>
+    namedCall(CALL_KIND.CREATE_TASK, input, output, "name"),
+  [AGENT_TOOL.CREATE_SECTION]: ({ input, output }) =>
+    namedCall(CALL_KIND.CREATE_SECTION, input, output, "title"),
+  [AGENT_TOOL.DELETE_SECTION]: ({ input, output }) =>
+    answeredCall(CALL_KIND.DELETE_SECTION, input, output, "section", "title"),
+  [AGENT_TOOL.UPDATE_TASK]: ({ input, output }) =>
+    answeredCall(CALL_KIND.UPDATE_TASK, input, output, "task", "name"),
+  [AGENT_TOOL.LIST_AUTOMATIONS]: ({ input, output }) =>
+    namedCall(CALL_KIND.LIST_AUTOMATIONS, input, output, undefined),
+  [AGENT_TOOL.CREATE_AUTOMATION]: ({ input, output }) =>
+    namedCall(CALL_KIND.CREATE_AUTOMATION, input, output, "name"),
+  [AGENT_TOOL.UPDATE_AUTOMATION]: ({ input, output }) =>
+    answeredCall(CALL_KIND.UPDATE_AUTOMATION, input, output, "automation", "name"),
+  [AGENT_TOOL.DELETE_AUTOMATION]: ({ input, output }) =>
+    answeredCall(CALL_KIND.DELETE_AUTOMATION, input, output, "automation", "name"),
+  [AGENT_TOOL.RUN_AUTOMATION]: ({ input, output }) =>
+    answeredCall(CALL_KIND.RUN_AUTOMATION, input, output, "automation", "name"),
+  [AGENT_TOOL.LIST_MODELS]: ({ input, output }) =>
+    namedCall(CALL_KIND.LIST_MODELS, input, output, undefined),
+  [AGENT_TOOL.SAVE_MEMORY]: SAVE_MEMORY_CALL,
+  [AGENT_TOOL.SEARCH_MEMORY]: SEARCH_MEMORY_CALL,
+  [AGENT_TOOL.WEB_SEARCH]: READ_WEB_SEARCH,
+  [AGENT_TOOL.READ_WEB_PAGE]: ({ input, output }) => ({
+    kind: CALL_KIND.WEB_PAGE,
+    subject: pageName(stringAt(input, "url") ?? ""),
+    page: stringAt(input, "url") ?? "",
+    input: textBlock(stringAt(input, "url") ?? ""),
+    output: output === undefined ? undefined : wordsOutput(output, "text"),
+  }),
+  [AGENT_TOOL.RUN_ON_MAC]: ({ input, output }) => {
+    const command = stringAt(input, "command") ?? "";
+    const description = commandDescription(stringAt(input, "description"));
+    return {
+      kind: CALL_KIND.MAC_COMMAND,
+      subject: command,
+      ...(description === undefined ? undefined : { description }),
+      input: { kind: TOOL_BLOCK.COMMAND, text: command },
+      output: output === undefined ? undefined : macCommandOutput(output),
+    };
+  },
+  [AGENT_TOOL.BROWSER]: ({ input, output }) => {
+    const tab = browserTabName(input, output);
+    const words = browserCallWords(browserActions(input), tab !== undefined);
+    return {
+      kind: CALL_KIND.BROWSER,
+      subject: words === undefined ? "" : (tab ?? ""),
+      ...(words === undefined ? undefined : { description: words }),
+      input: input === undefined ? textBlock("") : jsonBlock(input),
+      output: output === undefined ? undefined : browserOutput(output),
+    };
+  },
+  [AGENT_TOOL.LIST_PORTS]: ({ input, output }) =>
+    namedCall(CALL_KIND.LIST_PORTS, input, output, undefined),
+  [AGENT_TOOL.SHARE_PORT]: ({ input, output }) => sharePortView(input, output),
+  [AGENT_TOOL.BASH]: ({ input, output }) => {
+    const command = stringAt(input, "command") ?? "";
+    const description = commandDescription(stringAt(input, "description"));
+    return {
+      kind: CALL_KIND.COMMAND,
+      subject: command,
+      ...(description === undefined ? undefined : { description }),
+      input: { kind: TOOL_BLOCK.COMMAND, text: command },
+      output: output === undefined ? undefined : commandOutput(output),
+    };
+  },
+  [AGENT_TOOL.READ_FILE]: ({ input, output }) => ({
+    kind: CALL_KIND.READ_FILE,
+    subject: stringAt(input, "filePath") ?? "",
+    files: filesAt(input),
+    input: textBlock(stringAt(input, "filePath") ?? ""),
+    output: output === undefined ? undefined : wordsOutput(output, "content"),
+  }),
+  [AGENT_TOOL.WRITE_FILE]: ({ input, output }) => ({
+    kind: CALL_KIND.WRITE_FILE,
+    subject: stringAt(input, "filePath") ?? "",
+    files: filesAt(input),
+    input: textBlock(stringAt(input, "content") ?? ""),
+    output: output === undefined ? undefined : wordsOutput(output, "path"),
+  }),
+  [AGENT_TOOL.GLOB]: READ_SEARCH,
+  [AGENT_TOOL.GREP]: READ_SEARCH,
+  [AGENT_TOOL.APPLY_PATCH]: ({ input, output }) => {
+    const patchText = stringAt(input, "patchText") ?? "";
+    const paths = patchPaths(patchText);
+    return {
+      kind: CALL_KIND.EDIT,
+      subject: pathsSubject(paths),
+      // Note that a patch whose root names a checkout may name another than the task's, so its files name none of the task's.
+      files: stringAt(input, "root") === undefined ? paths : [],
+      input: { kind: TOOL_BLOCK.PATCH, text: patchText },
+      output: output === undefined ? undefined : patchOutput(output),
+    };
+  },
+  [AGENT_TOOL.DELEGATE]: delegateView,
+  [AGENT_TOOL.EDIT_DESCRIPTION]: ({ input, output }) => ({
+    kind: CALL_KIND.EDIT_DESCRIPTION,
+    subject: descriptionEditSummary(input),
+    input: input === undefined ? textBlock("") : jsonBlock(input),
+    output: output === undefined ? undefined : jsonBlock(output),
+  }),
+  [AGENT_TOOL.WRITE_TODOS]: ({ input }) => todosToolView(input),
+  [AGENT_TOOL.POST_THREAD]: READ_INBOX_CALL,
+  [AGENT_TOOL.WITHDRAW_ASK]: READ_INBOX_CALL,
+  [AGENT_TOOL.READ_THREADS]: READ_INBOX_CALL,
+  [AGENT_TOOL.OPEN_PULL_REQUEST]: ({ input, output }) => openedPullRequestView(input, output),
+  [AGENT_TOOL.LOAD_SKILL]: ({ input, output }) => {
+    const skillName = loadedSkill(input);
+    return {
+      kind: CALL_KIND.LOAD_SKILL,
+      // A skill is named as the words that load it wherever it is drawn (`skill-ref.tsx`).
+      subject: skillName === undefined ? "" : skillWord(skillName),
+      input: textBlock(skillName ?? ""),
+      output: output === undefined ? undefined : skillOutput(output),
+    };
+  },
+  [AGENT_TOOL.SHOW_PAGE]: ({ input, output }) => ({
+    kind: CALL_KIND.SHOW_PAGE,
+    subject: stringAt(input, "title") ?? "",
+    input: textBlock(stringAt(input, "path") ?? stringAt(input, "html") ?? ""),
+    output: output === undefined ? undefined : jsonBlock(output),
+  }),
+  [AGENT_TOOL.READ_COMMENTS]: ({ input, output }) =>
+    namedCall(CALL_KIND.READ_COMMENTS, input, output, undefined),
+  [AGENT_TOOL.REPLY_TO_COMMENT]: ({ input, output }) => ({
+    ...namedCall(CALL_KIND.REPLY_TO_COMMENT, input, output, undefined),
+    subject: cardTitle(stringAt(input, "text") ?? ""),
+  }),
+  [AGENT_TOOL.UPDATE_COMMENT]: ({ input, output }) =>
+    namedCall(commentUpdateKind(input), input, output, undefined),
+  // A page read is named by the title its answer gives, the id alone being all the call holds.
+  [AGENT_TOOL.READ_PAGE]: ({ input, output }) => ({
+    kind: CALL_KIND.READ_PAGE,
+    subject: stringAt(isRecord(output) ? output.page : undefined, "title") ?? "",
+    input: input === undefined ? textBlock("") : jsonBlock(input),
+    output: output === undefined ? undefined : jsonBlock(output),
+  }),
+  [AGENT_TOOL.SHOW_IMAGE]: ({ input, output }) => ({
+    kind: CALL_KIND.SHOW_IMAGE,
+    subject: shownPaths(input),
+    input: input === undefined ? textBlock("") : jsonBlock(input),
+    output: output === undefined ? undefined : jsonBlock(output),
+  }),
+  [AGENT_TOOL.SLEEP]: ({ input, output }) => {
+    const seconds = isRecord(input) && isWireNumber(input.seconds) ? input.seconds : undefined;
+    return {
+      kind: CALL_KIND.SLEEP,
+      subject: seconds === undefined ? "" : spanText(seconds),
+      input: input === undefined ? textBlock("") : jsonBlock(input),
+      output: output === undefined ? undefined : sleepOutput(output),
+    };
+  },
+  // Note that a wakeup's row says the delay the service held the booking to, as its answer names it, and the one asked for while the call has no answer yet.
+  [AGENT_TOOL.SCHEDULE_WAKEUP]: ({ input, output }) => {
+    if (isRecord(input) && input.stop === true) {
+      return namedCall(CALL_KIND.CANCEL_WAKEUP, input, output, undefined);
+    }
+    const booked = isRecord(output) ? output.wakeup : undefined;
+    const held =
+      isRecord(booked) && isWireNumber(booked.delaySeconds) ? booked.delaySeconds : undefined;
+    const asked =
+      isRecord(input) && isWireNumber(input.delaySeconds) ? input.delaySeconds : undefined;
+    const seconds = held ?? asked;
+    return {
+      kind: CALL_KIND.SCHEDULE_WAKEUP,
+      subject: seconds === undefined ? "" : spanText(seconds),
+      input: input === undefined ? textBlock("") : jsonBlock(input),
+      output: output === undefined ? undefined : jsonBlock(output),
+    };
+  },
+} as const satisfies Record<AgentTool, ToolReader>;
+
+/**
+ * The retired tools a row reads by name: every one but Chat's four, the
+ * three that kept channels, the code and whiteboard tools, and a voice
+ * call's own three, whose calls, with no Chat, channel, Code tab, Board, or
+ * call left to open, draw as any other call does, by the tool's name and
+ * what it was handed and answered.
+ */
+type RetiredTool = Exclude<
+  (typeof RETIRED_TOOL)[keyof typeof RETIRED_TOOL],
+  | typeof RETIRED_TOOL.POST_CHAT
+  | typeof RETIRED_TOOL.READ_CHAT
+  | typeof RETIRED_TOOL.RESOLVE_ASK
+  | typeof RETIRED_TOOL.EDIT_CHANNEL
+  | typeof RETIRED_TOOL.CREATE_CHANNEL
+  | typeof RETIRED_TOOL.UPDATE_CHANNEL
+  | typeof RETIRED_TOOL.MOVE_THREAD
+  | typeof RETIRED_TOOL.SHOW_CODE
+  | typeof RETIRED_TOOL.DRAW_ON_BOARD
+  | typeof RETIRED_TOOL.LOOK_AT_BOARD
+  | typeof RETIRED_TOOL.QUEUE_QUESTION
+  | typeof RETIRED_TOOL.WITHDRAW_QUESTION
+  | typeof RETIRED_TOOL.END_CALL
+>;
+
+/** How each tool no agent is offered now reads, as a transcript written while it was offered still names it, under the name it had then. */
+const RETIRED_TOOL_VIEWS = {
+  [RETIRED_TOOL.WEB_FETCH]: ({ input, output }) => ({
+    kind: CALL_KIND.WEB_PAGE,
+    subject: pageName(stringAt(input, "url") ?? ""),
+    page: stringAt(input, "url") ?? "",
+    input: textBlock(stringAt(input, "url") ?? ""),
+    output: output === undefined ? undefined : wordsOutput(output, "content"),
+  }),
+  [RETIRED_TOOL.SEARCH_WEB]: READ_WEB_SEARCH,
+  [RETIRED_TOOL.LIST_CODING_AGENTS]: ({ input, output }) =>
+    namedCall(CALL_KIND.LIST_AGENTS, input, output, undefined),
+  [RETIRED_TOOL.EDIT_PLAN]: AGENT_TOOL_VIEWS[AGENT_TOOL.EDIT_DESCRIPTION],
+  [RETIRED_TOOL.READ_CODING_AGENT]: ({ input, output }) =>
+    namedCall(CALL_KIND.READ_AGENT, input, output, "agentId"),
+  [RETIRED_TOOL.MESSAGE_CODING_AGENT]: ({ input, output }) =>
+    namedCall(CALL_KIND.MESSAGE_AGENT, input, output, "text"),
+  [RETIRED_TOOL.START_CODING_AGENT]: ({ input, output }) =>
+    namedCall(
+      CALL_KIND.START_AGENT,
+      input,
+      output,
+      stringAt(input, "prompt") === undefined ? "task" : "prompt",
+    ),
+  [RETIRED_TOOL.ARCHIVE_AGENT]: ({ input, output }) =>
+    answeredAgentCall(CALL_KIND.ARCHIVE_AGENT, input, output),
+  [RETIRED_TOOL.UNARCHIVE_AGENT]: ({ input, output }) =>
+    answeredAgentCall(CALL_KIND.UNARCHIVE_AGENT, input, output),
+  [RETIRED_TOOL.MOVE_TASK]: ({ input, output }) =>
+    answeredCall(CALL_KIND.MOVE_TASK, input, output, "task", "name"),
+  [RETIRED_TOOL.CLOSE_INBOX_ITEM]: READ_INBOX_CALL,
+  [RETIRED_TOOL.REPLY_INBOX]: READ_INBOX_CALL,
+  [RETIRED_TOOL.POST_TO_INBOX]: READ_INBOX_CALL,
+  [RETIRED_TOOL.READ_INBOX]: READ_INBOX_CALL,
+  [RETIRED_TOOL.LIST_ISSUES]: ({ input, output }) =>
+    namedCall(CALL_KIND.LIST_ISSUES, input, output, undefined),
+  [RETIRED_TOOL.READ_ISSUE]: ({ input, output }) => issueCall(CALL_KIND.READ_ISSUE, input, output),
+  [RETIRED_TOOL.CREATE_ISSUE]: ({ input, output }) =>
+    issueCall(CALL_KIND.CREATE_ISSUE, input, output),
+  [RETIRED_TOOL.UPDATE_ISSUE]: ({ input, output }) =>
+    issueCall(CALL_KIND.UPDATE_ISSUE, input, output),
+  [RETIRED_TOOL.REMEMBER]: SAVE_MEMORY_CALL,
+  [RETIRED_TOOL.RECALL]: SEARCH_MEMORY_CALL,
+  [RETIRED_TOOL.RESOLVE_THREAD]: ({ input, output }) =>
+    namedCall(CALL_KIND.RESOLVE_THREAD, input, output, undefined),
+  [RETIRED_TOOL.REOPEN_THREAD]: ({ input, output }) =>
+    namedCall(CALL_KIND.REOPEN_THREAD, input, output, undefined),
+} as const satisfies Record<RetiredTool, ToolReader>;
+
+/** The tools the retired runtime gave a session and a native harness's subagent, a message to one and a stop of what runs in Claude Code's background, which a transcript carries beside the agent's own, and the retired runtime's connection tools: a connection's search and its run, each naming the server its input does. */
+const OTHER_TOOL_VIEWS: Readonly<Record<string, ToolReader>> = {
+  [CLAUDE_CODE_TOOL.AGENT]: ({ input, output }) => subagentCallView(input, output),
+  [CODEX_TOOL.SUBAGENT]: ({ input, output }) => subagentCallView(input, output),
+  [CLAUDE_CODE_TOOL.SEND_MESSAGE]: ({ input, output }) =>
+    namedCall(CALL_KIND.WORKER_MESSAGE, input, output, "to"),
+  [CLAUDE_CODE_TOOL.TASK_STOP]: ({ input, output }) =>
+    namedCall(
+      CALL_KIND.STOP_BACKGROUND,
+      input,
+      output,
+      stringAt(input, "task_id") === undefined ? "shell_id" : "task_id",
+    ),
+  [EVE_TOOL.TASK_WAIT]: ({ input, output }) =>
+    namedCall(CALL_KIND.WORKER_WAIT, input, output, undefined),
+  [EVE_TOOL.TASK_CANCEL]: ({ input, output, jobs }) => ({
+    ...namedCall(CALL_KIND.WORKER_CANCEL, input, output, undefined),
+    subject: stoppedTask(input, jobs),
+  }),
+  [CONNECTION_TOOL.SEARCH]: ({ input, output }) =>
+    connectionCall(CALL_KIND.SEARCH_TOOLS, "query", input, output),
+  [CONNECTION_TOOL.EXECUTE]: ({ input, output }) =>
+    connectionCall(CALL_KIND.MCP_TOOL, "tool", input, output),
+};
+
+/** Every tool a row reads by its name alone, which `toolCallView` looks a call up in. */
+const TOOL_VIEWS: ReadonlyMap<string, ToolReader> = new Map(
+  Object.entries({ ...AGENT_TOOL_VIEWS, ...RETIRED_TOOL_VIEWS, ...OTHER_TOOL_VIEWS }),
+);
+
+/** How one tool call is drawn: its row and its body, from the part's input and output, a stop naming the worker it stopped by its job where `jobs` knows it. */
+export function toolCallView(input: {
+  readonly tool: string;
+  readonly input: WireValue | undefined;
+  readonly output: WireValue | undefined;
+  readonly jobs?: WorkerJobs | undefined;
+}): ToolCallView {
+  const call = { ...input, jobs: input.jobs };
+  return (
+    TOOL_VIEWS.get(input.tool)?.(call) ??
+    remoteToolView(input.tool, input.input, input.output) ??
+    nativeMcpView(input.tool, input.input, input.output) ?? {
+      kind: CALL_KIND.OTHER,
+      subject: input.tool,
+      input: input.input === undefined ? textBlock("") : jsonBlock(input.input),
+      output: input.output === undefined ? undefined : jsonBlock(input.output),
+    }
+  );
+}
+
+/** What a call's row may open: something the window already draws in a tab of its own. */
+export const TOOL_TARGET = {
+  /** A coding agent's tab in the task's column. */
+  AGENT: "agent",
+  /** A page's tab in the side panel. */
+  PAGE: "page",
+  /** The task's own tab, its description. */
+  DESCRIPTION: "description",
+  /** The task's Inbox tab, on the item a call names by its key where it names one. */
+  INBOX: "inbox",
+  /** Another task of the workspace, opened on its description as the sidebar opens it, or on one of its agents' tabs where the target names one. */
+  TASK: "task",
+  /** A pull request the agent opened, its Pull request tab where the window has one and GitHub's page otherwise; its row opens it through the link opener (`useOpenLink`), as a link to the pull request does, so no window's `onOpenTarget` is asked for it. */
+  PULL_REQUEST: "pull-request",
+} as const;
+
+export type ToolTarget =
+  | { readonly kind: typeof TOOL_TARGET.AGENT; readonly agent: string }
+  | { readonly kind: typeof TOOL_TARGET.PAGE; readonly page: string }
+  | { readonly kind: typeof TOOL_TARGET.DESCRIPTION }
+  | {
+      readonly kind: typeof TOOL_TARGET.INBOX;
+      /** The key of the calling agent's thread the call posted on or withdrew, whose item the Inbox opens on; none for a read of the whole Inbox. */
+      readonly key?: string;
+      /** The thread's id, as the call's answer names the thread under its key, which its chip is linked by; none where the answer names none. */
+      readonly item?: string;
+    }
+  | {
+      readonly kind: typeof TOOL_TARGET.TASK;
+      readonly task: string;
+      /** One of its agents to open, its tab chosen; none to open the task as the sidebar opens it. */
+      readonly agent?: string;
+    }
+  | { readonly kind: typeof TOOL_TARGET.PULL_REQUEST; readonly url: string };
+
+/** The place in the app a row naming a task names: the task, or one of its agents where the row names one. */
+export function placeOfTaskTarget(
+  target: Extract<ToolTarget, { readonly kind: typeof TOOL_TARGET.TASK }>,
+): LinkPlace {
+  return target.agent === undefined
+    ? { kind: LINK_PLACE.TASK, planId: target.task }
+    : { kind: LINK_PLACE.AGENT, planId: target.task, agentId: target.agent };
+}
+
+/** What the hover over a row says it opens, by its target's kind. */
+export const TARGET_HINT = {
+  [TOOL_TARGET.AGENT]: "Open the agent",
+  [TOOL_TARGET.PAGE]: "Open the page",
+  [TOOL_TARGET.DESCRIPTION]: "Open the description",
+  [TOOL_TARGET.INBOX]: "Open the Inbox",
+  [TOOL_TARGET.TASK]: "Open the task",
+  [TOOL_TARGET.PULL_REQUEST]: "Open the pull request",
+} as const satisfies Record<ToolTarget["kind"], string>;
+
+/** A call as its target is read from it: the tool, the call's id, and its input and answer. */
+interface TargetedCall {
+  readonly tool: string;
+  readonly callId: string;
+  readonly input: WireValue | undefined;
+  readonly output: WireValue | undefined;
+}
+
+const TASK_TARGET: ToolTarget = { kind: TOOL_TARGET.DESCRIPTION };
+const INBOX_TARGET: ToolTarget = { kind: TOOL_TARGET.INBOX };
+
+/** The thread a call names by its key, a post's or a withdrawal's, whose item its row opens, by the id its answer lists the thread under; the whole Inbox where it names none. */
+function namedThread(call: TargetedCall): ToolTarget {
+  const key = stringAt(call.input, "key");
+  if (key === undefined || key === "") return INBOX_TARGET;
+  const threads =
+    isRecord(call.output) && Array.isArray(call.output.inbox) ? call.output.inbox : [];
+  const item = stringAt(
+    threads.find((thread) => stringAt(thread, "key") === key),
+    "id",
+  );
+  return item === undefined
+    ? { kind: TOOL_TARGET.INBOX, key }
+    : { kind: TOOL_TARGET.INBOX, key, item };
+}
+
+/** The agent a call names in its input, as a read of or a message to one does. */
+function namedAgent(call: TargetedCall): ToolTarget | undefined {
+  const agent = stringAt(call.input, "agentId");
+  if (agent === undefined || onAnotherTask(call)) return undefined;
+  return { kind: TOOL_TARGET.AGENT, agent };
+}
+
+/**
+ * Whether a call's answer says its agent is on another task than the one
+ * the call was made on, which opens nothing here: a task's column draws
+ * its own agents' tabs alone, so such an agent's row folds open in place.
+ * An answer from before the service said so is read as this task's.
+ */
+function onAnotherTask(call: TargetedCall): boolean {
+  const answer = isRecord(call.output) ? call.output.agent : undefined;
+  return isRecord(answer) && answer.onYourTask === false;
+}
+
+/** The agent a start began, which its answer names once it has. */
+function startedAgent(call: TargetedCall): ToolTarget | undefined {
+  const answer = isRecord(call.output) ? call.output.agent : undefined;
+  const agent = stringAt(answer, "id");
+  if (agent === undefined || onAnotherTask(call)) return undefined;
+  return { kind: TOOL_TARGET.AGENT, agent };
+}
+
+/** The agent a change names, which its row opens, as a read's does; none for an archive, whose agent left the tabs it would open in. */
+function changedAgent(call: TargetedCall): ToolTarget | undefined {
+  return agentUpdateKind(call.input) === CALL_KIND.ARCHIVE_AGENT ? undefined : namedAgent(call);
+}
+
+/** The description of the task named, which a row opens; the task's own description where it names none. */
+function planOf(task: string | undefined): ToolTarget {
+  return task === undefined ? TASK_TARGET : { kind: TOOL_TARGET.TASK, task };
+}
+
+/** The description a call named by its task, an edit's or a comment tool's, which its row opens; the task's own description for a call made before every such call named one. */
+function namedDescription(call: TargetedCall): ToolTarget {
+  return planOf(stringAt(call.input, "taskId"));
+}
+
+/** The description a look's address names, which its row opens; the task's own description where the address names no picture. */
+function lookedDescription(call: TargetedCall): ToolTarget {
+  const address = stringAt(call.input, "address");
+  return planOf(
+    address === undefined ? undefined : descriptionAttachmentOf(address.trim())?.taskId,
+  );
+}
+
+/** The task a change answered, which its row opens as the sidebar opens it. */
+function answeredTask(call: TargetedCall): ToolTarget | undefined {
+  const answer = isRecord(call.output) ? call.output.task : undefined;
+  const task = stringAt(answer, "id");
+  return task === undefined ? undefined : { kind: TOOL_TARGET.TASK, task };
+}
+
+/** The page a write made or moved on, which its answer names once it has. */
+function shownPage(call: TargetedCall): ToolTarget | undefined {
+  const answer = isRecord(call.output) ? call.output.page : undefined;
+  const page = stringAt(answer, "id");
+  return page === undefined ? undefined : { kind: TOOL_TARGET.PAGE, page };
+}
+
+/** The page and version a `show_page` call showed, which its answer names once it has; nothing for any other call, one refused, or one still running. */
+export function shownPageVersion(
+  call: TargetedCall,
+): { readonly page: string; readonly version: number } | undefined {
+  if (call.tool !== AGENT_TOOL.SHOW_PAGE || call.output === undefined || refused(call.output)) {
+    return undefined;
+  }
+  const answer = isRecord(call.output) ? call.output.page : undefined;
+  const page = stringAt(answer, "id");
+  const version = isRecord(answer) ? answer.version : undefined;
+  return page === undefined || typeof version !== "number" ? undefined : { page, version };
+}
+
+/** The page a read answered, which opens its tab where it is on the call's own task, or the calling agent's own on no task; one of another task or agent opens nothing here. */
+function readPage(call: TargetedCall): ToolTarget | undefined {
+  const answer = isRecord(call.output) ? call.output.page : undefined;
+  const own = isRecord(answer) && (answer.isYourTask === true || answer.isYours === true);
+  return own ? shownPage(call) : undefined;
+}
+
+/** The pull request an open answered, by the address it gave. */
+function openedPullRequest(call: TargetedCall): ToolTarget | undefined {
+  const url = stringAt(call.output, "url");
+  return url === undefined ? undefined : { kind: TOOL_TARGET.PULL_REQUEST, url };
+}
+
+/**
+ * What each tool's call opens, read from the call alone; a tool not listed
+ * opens nothing, and its row folds its input and answer open in place. A
+ * worker's own delegation and a loaded skill open their tabs through their
+ * own rows (`DelegationRow`, `LoadedSkillView`), and a command, a search, or
+ * a file's read, write, or patch, or a web read is read in its row's body,
+ * so none is listed. Note that a coding agent's file calls stay in their
+ * bodies, because a File tab and the Changes tab read the repository and
+ * the pull request on GitHub rather than the agent's checkout, so what the
+ * agent read or wrote and has not pushed would open on nothing.
+ */
+const TOOL_TARGETS: ReadonlyMap<string, (call: TargetedCall) => ToolTarget | undefined> = new Map<
+  AgentTool | (typeof RETIRED_TOOL)[keyof typeof RETIRED_TOOL],
+  (call: TargetedCall) => ToolTarget | undefined
+>([
+  [AGENT_TOOL.SHOW_PAGE, shownPage],
+  [AGENT_TOOL.READ_PAGE, readPage],
+  [AGENT_TOOL.READ_AGENT, namedAgent],
+  [AGENT_TOOL.MESSAGE_AGENT, namedAgent],
+  [AGENT_TOOL.START_AGENT, startedAgent],
+  [RETIRED_TOOL.UNARCHIVE_AGENT, namedAgent],
+  [AGENT_TOOL.STOP_AGENT, namedAgent],
+  [AGENT_TOOL.UPDATE_TASK, answeredTask],
+  [AGENT_TOOL.CREATE_TASK, answeredTask],
+  [AGENT_TOOL.READ_TASK, answeredTask],
+  [AGENT_TOOL.UPDATE_AGENT, changedAgent],
+  [RETIRED_TOOL.READ_CODING_AGENT, namedAgent],
+  [RETIRED_TOOL.MESSAGE_CODING_AGENT, namedAgent],
+  [RETIRED_TOOL.START_CODING_AGENT, startedAgent],
+  [AGENT_TOOL.EDIT_DESCRIPTION, namedDescription],
+  [RETIRED_TOOL.EDIT_PLAN, namedDescription],
+  [AGENT_TOOL.LOOK_AT_PICTURE, lookedDescription],
+  [AGENT_TOOL.READ_COMMENTS, namedDescription],
+  [AGENT_TOOL.REPLY_TO_COMMENT, namedDescription],
+  [AGENT_TOOL.UPDATE_COMMENT, namedDescription],
+  [RETIRED_TOOL.RESOLVE_THREAD, namedDescription],
+  [RETIRED_TOOL.REOPEN_THREAD, namedDescription],
+  [AGENT_TOOL.OPEN_PULL_REQUEST, openedPullRequest],
+  [AGENT_TOOL.POST_THREAD, namedThread],
+  [RETIRED_TOOL.POST_TO_INBOX, namedThread],
+  [AGENT_TOOL.WITHDRAW_ASK, namedThread],
+  [RETIRED_TOOL.CLOSE_INBOX_ITEM, () => INBOX_TARGET],
+  [AGENT_TOOL.READ_THREADS, () => INBOX_TARGET],
+  [RETIRED_TOOL.READ_INBOX, () => INBOX_TARGET],
+  [RETIRED_TOOL.REPLY_INBOX, () => INBOX_TARGET],
+]);
+
+/**
+ * Whether a call's answer says it did nothing. Note that it is told by the
+ * reason it answers beside its status rather than by the status's word,
+ * because every refusal among these tools answers why, each tool in words
+ * of its own the renderer cannot reach, and no answer that did what was
+ * asked carries one.
+ */
+function refused(output: WireValue | undefined): boolean {
+  return stringAt(output, "reason") !== undefined;
+}
+
+/**
+ * What a call's row opens, or nothing where it opens nothing. Note that a
+ * call opens nothing until it has answered, because until then what it is
+ * about has not changed, and its row's body is where its input is read; nor
+ * does one its tool refused, whose body is where the refusal is read.
+ */
+export function toolTarget(call: TargetedCall): ToolTarget | undefined {
+  if (call.output === undefined || refused(call.output)) return undefined;
+  return TOOL_TARGETS.get(call.tool)?.(call);
+}
+
+/** Where a call's row stands, which the link of what the call made is read under: the workspace, the task, and the agent whose transcript it is. */
+export interface TargetPlace {
+  /** The workspace's slug; empty where the place names none. */
+  readonly workspace: string;
+  /** The task whose page draws the transcript, or the agent on no task whose own page does, which the description and the pages stand on; none where the place holds neither. */
+  readonly holder: MentionHolder | undefined;
+  /** The agent whose transcript is drawn, whose threads a post names. */
+  readonly agentId: string | undefined;
+}
+
+/**
+ * The link of what a call made or is about, which its row's chip is drawn
+ * from as the window draws that link anywhere: a pull request by its
+ * address, another task by its description, the task's own description, a page on it or
+ * on the agent of no task, or the agent's thread by the id its answer named. Nothing for an agent,
+ * whose row names it by its own chip (`AgentCallChip`), for the whole
+ * Inbox, and where the place names no workspace or what the thing is on.
+ */
+export function targetLink(target: ToolTarget, place: TargetPlace): string | undefined {
+  if (target.kind === TOOL_TARGET.PULL_REQUEST) return target.url;
+  if (place.workspace === "") return undefined;
+  const linked = (at: LinkPlace) => linkOf(at, place.workspace);
+  switch (target.kind) {
+    case TOOL_TARGET.TASK:
+      return linked({ kind: LINK_PLACE.TASK, planId: target.task });
+    case TOOL_TARGET.DESCRIPTION: {
+      const taskId = holderTaskId(place.holder);
+      return taskId === undefined ? undefined : linked({ kind: LINK_PLACE.TASK, planId: taskId });
+    }
+    case TOOL_TARGET.PAGE: {
+      const holder = place.holder;
+      if (holder === undefined) return undefined;
+      return "taskId" in holder
+        ? linked({ kind: LINK_PLACE.PAGE, planId: holder.taskId, pageId: target.page })
+        : linked({ kind: LINK_PLACE.PAGE, agentId: holder.agentId, pageId: target.page });
+    }
+    case TOOL_TARGET.INBOX:
+      return target.item === undefined || place.agentId === undefined
+        ? undefined
+        : linked({ kind: LINK_PLACE.INBOX_ITEM, agentId: place.agentId, itemId: target.item });
+    case TOOL_TARGET.AGENT:
+      return undefined;
+  }
+}
+
+/** The tools whose call is about one coding agent, under every name one was made under, which a row names by the agent's chip. */
+const AGENT_CALL_TOOLS: ReadonlySet<string> = new Set([
+  AGENT_TOOL.READ_AGENT,
+  AGENT_TOOL.MESSAGE_AGENT,
+  AGENT_TOOL.START_AGENT,
+  RETIRED_TOOL.ARCHIVE_AGENT,
+  RETIRED_TOOL.UNARCHIVE_AGENT,
+  AGENT_TOOL.STOP_AGENT,
+  AGENT_TOOL.UPDATE_AGENT,
+  RETIRED_TOOL.READ_CODING_AGENT,
+  RETIRED_TOOL.MESSAGE_CODING_AGENT,
+  RETIRED_TOOL.START_CODING_AGENT,
+]);
+
+/** The agent a call about one names: its id, the title its answer gives it, either missing where neither the call nor its answer says it, and the model its answer says it runs on, where it says one. */
+export interface CalledAgent {
+  readonly id: string | undefined;
+  readonly title: string | undefined;
+  readonly model?: string | undefined;
+}
+
+/**
+ * The agent a call about one names, which its row draws as the agent's
+ * chip: the id its answer names, else the one its input does, and the
+ * title and the model its answer gives; nothing for any other call, or for one that
+ * names no agent yet, as a start does until it has answered. Note that a
+ * refused call still names the agent its input asked for, because the row
+ * still says what it tried.
+ */
+export function calledAgent(call: Omit<TargetedCall, "callId">): CalledAgent | undefined {
+  if (!AGENT_CALL_TOOLS.has(call.tool)) return undefined;
+  const answer = isRecord(call.output) ? call.output.agent : undefined;
+  const id = stringAt(answer, "id") ?? stringAt(call.input, "agentId");
+  const title = stringAt(answer, "title");
+  const model = stringAt(answer, "model");
+  if (id === undefined && title === undefined) return undefined;
+  return model === undefined ? { id, title } : { id, title, model };
+}
+
+/** The fields a delegation's part carries: the task, model, effort, and result of a `delegate` call by an agent on the retired runtime, and the message the brain's worker is handed in the task's place. */
+const DELEGATION_FIELD = {
+  TASK: "task",
+  MESSAGE: "message",
+  MODEL: "model",
+  EFFORT: "effort",
+  RESULT: "result",
+  /** A native harness's subagent's task (`claude-code-moments.ts`, `codex-moments.ts`). */
+  PROMPT: "prompt",
+  /** The few words a native harness's subagent is named by. */
+  DESCRIPTION: "description",
+} as const;
+
+/** What a delegation's row says and holds: the task, the pair the worker runs on, and its answer once it has one. */
+export interface DelegationView {
+  readonly task: string;
+  /** The few words the agent named the job by, where it gave some (a native harness's subagent's `description`); the task's first line names it otherwise. */
+  readonly title?: string;
+  /** The pair the worker runs on: the one it ran on once settled, else the one the agent chose, each half the agent's own where it chose none; nothing where no pair is known. */
+  readonly choice: ModelChoice | undefined;
+  readonly result: string | undefined;
+}
+
+/**
+ * How one delegation is drawn, from the part's input and output. The settled
+ * output names the pair the worker ran on, which is the one to say; before it
+ * lands, the agent's choice stands, each half it left open filled from the
+ * agent's own pair, since that is what the service fills it from.
+ */
+export function delegationView(
+  part: {
+    readonly input: WireValue | undefined;
+    readonly output: WireValue | undefined;
+  },
+  own: ModelChoice | undefined,
+): DelegationView {
+  // Note that the output is read whole or not at all, because a half pair names no run.
+  const settled =
+    stringAt(part.output, DELEGATION_FIELD.MODEL) !== undefined &&
+    stringAt(part.output, DELEGATION_FIELD.EFFORT) !== undefined;
+  const model = settled
+    ? stringAt(part.output, DELEGATION_FIELD.MODEL)
+    : (stringAt(part.input, DELEGATION_FIELD.MODEL) ?? own?.model);
+  const effort = settled
+    ? stringAt(part.output, DELEGATION_FIELD.EFFORT)
+    : (stringAt(part.input, DELEGATION_FIELD.EFFORT) ?? own?.effort);
+  const title = stringAt(part.input, DELEGATION_FIELD.DESCRIPTION)?.trim();
+  return {
+    task:
+      stringAt(part.input, DELEGATION_FIELD.TASK) ??
+      stringAt(part.input, DELEGATION_FIELD.MESSAGE) ??
+      stringAt(part.input, DELEGATION_FIELD.PROMPT) ??
+      "",
+    ...(title === undefined || title === "" ? undefined : { title }),
+    choice: model !== undefined && effort !== undefined ? { model, effort } : undefined,
+    // A native harness's subagent answers in the words its call settled with.
+    result:
+      stringAt(part.output, DELEGATION_FIELD.RESULT) ??
+      (isWireString(part.output) ? part.output : undefined),
+  };
+}

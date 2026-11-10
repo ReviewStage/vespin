@@ -1,6 +1,12 @@
 import type { TurnRecord } from "@repo/features/agent-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
-import { callHeading, WORKED_SEPARATOR, workingTime } from "@repo/features/time-format";
+import {
+  WORKED_SEPARATOR,
+  WORKED_WORDS,
+  WORKING_LINE,
+  workedForText,
+  workingTime,
+} from "@repo/features/time-format";
 import {
   ANNOUNCE,
   cn,
@@ -32,18 +38,6 @@ import { TurnCard } from "./turn-card.js";
  * the transcript's quiet note line (`NoteLine`), selectable, as the
  * transcript around them is.
  */
-
-/** What a transcript's last line says while its agent works. */
-const WORKING_LINE = "Working…";
-
-/** What a finished turn's last line says before how long it worked. */
-const WORKED_WORDS = "Worked for ";
-
-/** What a finished turn's last line says: how long it worked, and the day and time it ended, as a call's header says it from `now`. */
-function workedForText(startedAt: number, endedAt: number, now: number): string {
-  const ended = callHeading(endedAt, now);
-  return `${WORKED_WORDS}${workingTime(endedAt - startedAt)}${WORKED_SEPARATOR}${ended}`;
-}
 
 /**
  * How long a run has gone since it began, said after its working word and

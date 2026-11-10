@@ -1,3 +1,4 @@
+import { holderTaskId } from "@repo/features/mention-holder";
 import { decodeMention } from "@repo/features/mention-link";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { ANNOUNCE, Checkbox } from "@repo/ui";
@@ -34,7 +35,6 @@ import { useAnnounceShown } from "../use-announce-shown.js";
 import { type OwnBlock, useBlockPicker } from "./block-picker.js";
 import type { EditorPictures } from "./editor-pictures.js";
 import { type MentionDoors, MentionNodeChip, pastedMentionNode } from "./mention-chip.js";
-import { holderTaskId } from "./mention-holder.js";
 import { MENTION_MENU_SIDE, type MentionSource, useMentionPicker } from "./mention-picker.js";
 import { useSelectionToolbar } from "./selection-toolbar.js";
 import { useKnownNames } from "./use-known-names.js";
@@ -63,8 +63,8 @@ import { useNumberedTaskIdOf } from "./use-link-standing.js";
  * rows of its own blocks in the `/` menu, with rows that do not apply to it
  * dropped. The `/` menu stands aside while the `@` list stands, as the
  * toolbar stands aside for either. The editor stands in a room of its own
- * that the toolbar and the menus float in, under `ph-no-capture`, its words
- * document text the recording masks; focus leaving the room for anywhere
+ * that the toolbar and the menus float in, its text left out of the
+ * recording (`ph-no-capture`); focus leaving the room for anywhere
  * but its own toolbar and menus is the document's to hear (`onLeave`). A
  * finish or a leaving waits for a picture still being kept, since only the
  * open editor can lay in its address; it goes once none is.
@@ -299,10 +299,7 @@ export function MarkdownEditor({
   });
   // While the toolbar stands, its Comment's command starts the thread as a press on it does.
   useAppCommand(APP_COMMAND.COMMENT_ON_SELECTION, toolbar.standing ? onComment : undefined);
-  const roomClass =
-    roomClassName === undefined
-      ? `${ROOM_CLASS} ph-no-capture`
-      : `${ROOM_CLASS} ${roomClassName} ph-no-capture`;
+  const roomClass = roomClassName === undefined ? ROOM_CLASS : `${ROOM_CLASS} ${roomClassName}`;
   useAnnounceShown(ANNOUNCE.ALERT, module.isError ? EDITOR_LOAD_FAILED : "");
   if (!module.isSuccess) {
     return (
@@ -319,7 +316,8 @@ export function MarkdownEditor({
     focus,
     label,
     placeholder,
-    className,
+    // Note that the text itself is left out of the recording, because its masked words would still record the rhythm of the typing.
+    className: `${className} ph-no-capture`,
     onDraft,
     onFinish: (section, how) => once(() => onFinish(section, how)),
     sendsOnEnter,

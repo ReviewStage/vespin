@@ -1,12 +1,12 @@
-import { Schema, SchemaTransformation } from "effect";
-import { useCallback, useState } from "react";
 import {
   INBOX_SHOW,
   INBOX_WHOSE,
   type InboxShow,
   type InboxWhose,
   MINE,
-} from "../tasks/inbox-model.js";
+} from "@repo/features/inbox-list-model";
+import { Schema, SchemaTransformation } from "effect";
+import { useCallback, useState } from "react";
 import { keptKey, useKept } from "../use-kept.js";
 
 /**

@@ -4,6 +4,7 @@ import {
   type AgentSummary,
 } from "@repo/features/agent-wire";
 import type { MacOffer } from "@repo/features/models-wire";
+import { agentStillWriting, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import { EXPERIMENT } from "@repo/settings";
 import { GLYPH } from "@repo/ui/icons";
 import { useQuery } from "@tanstack/react-query";
@@ -12,12 +13,11 @@ import type { MenuAction, MenuSubmenu } from "../desktop/action-menu.js";
 import { useDevicePresence } from "../device-presence.js";
 import { machineName, useThisMac } from "../machine-name.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
-import { agentStillWriting } from "./agent-model.js";
-import { deviceMark, RUNS_ON_WORDS } from "./runs-on.js";
+import { deviceMark } from "./runs-on.js";
 import type { AgentsControl } from "./use-agents.js";
 
 /**
- * move-agent.tsx -- an agent moved between the cloud and the member's own devices: its menu's Move to ›, which continues it at the place picked.
+ * move-agent.tsx -- an agent moved between the cloud and the member's own devices: its menu's Move to ›, and its message box's place chip, each of which continues it at the place picked.
  *
  * A move is a continue onto another place (`use-agents.ts`'s
  * `continueAgent` with a `runsOn`), not a mechanism of its own: the service
@@ -40,7 +40,7 @@ import type { AgentsControl } from "./use-agents.js";
  */
 
 /** What Move to says beyond the places' names. */
-const MOVE_WORDS = {
+export const MOVE_WORDS = {
   PUSHED_ONLY: "Only pushed work comes along",
 } as const;
 
@@ -80,6 +80,32 @@ export function useMoveToCloud(agent: MovedAgent, agents: MoveDoors): (() => voi
   if (!offered || continueAgent === undefined || agent.machine !== AGENT_MACHINE.DEVICE)
     return undefined;
   return () => void continueAgent(agent.id, undefined, [], TO_THE_CLOUD);
+}
+
+/** What an agent's place chip moves it by: the member's devices, the move to a place, and whether only its pushed work comes along. */
+export interface PlaceMove {
+  readonly devices: readonly MacOffer[];
+  readonly moveTo: (runsOn: AgentRunsOnRequest) => void;
+  /** Whether the agent runs on a device, so a move takes only what it pushed; the chip's menu says so under each place. */
+  readonly pushedOnly: boolean;
+}
+
+/**
+ * The move an agent's place chip offers, on the terms Move to › offers one
+ * (`useMoveOffered`): the member's devices and the continue that carries
+ * the agent to a place picked, or none where no move is offered. Note that
+ * it stands though the member has no device, since the chip then says where
+ * one is added, rather than taking no press.
+ */
+export function useMovePlace(agent: MovedAgent, agents: MoveDoors): PlaceMove | undefined {
+  const { continueAgent } = agents;
+  const offered = useMoveOffered(agent, agents);
+  if (!offered || continueAgent === undefined) return undefined;
+  return {
+    devices: agents.macs ?? NO_DEVICES,
+    moveTo: (runsOn) => void continueAgent(agent.id, undefined, [], runsOn),
+    pushedOnly: agent.machine === AGENT_MACHINE.DEVICE,
+  };
 }
 
 /** The agent's Move to ›, the places it may move to, or none where it offers no move or has nowhere to go. */

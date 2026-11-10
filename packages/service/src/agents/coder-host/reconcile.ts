@@ -70,6 +70,7 @@ import {
   settleLapsedDeviceAgentLine,
 } from "@repo/database/models/device-agent-store";
 import { devicesNamed } from "@repo/database/models/device-store";
+import { readNativeProjection } from "@repo/database/models/native-projection-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import {
   hasOpenTurn,
@@ -83,13 +84,15 @@ import { storeWriter } from "@repo/database/models/writer";
 import { AGENT_MACHINE, DEVICE_LEASE } from "@repo/features/agent-wire";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { causeKind } from "@repo/runtime/effect";
-import { COMMAND_GONE, type CommandExit, Sandbox, touchSandbox } from "@repo/sandbox";
+import { COMMAND_GONE, type CommandExit, Sandbox } from "@repo/sandbox";
 import { Cause, Clock, Data, Duration, Effect, ErrorReporter, Exit, Option } from "effect";
 import { RUN_STATUS, TURN_FAILURE, TURN_STATUS } from "../../core.js";
 import type { FoundPlace, MachineLifecycle, RecordedRunner } from "../machine/agent-machine.js";
 import { RUNNER_RECORD } from "../machine/agent-machine.js";
 import { deploymentLifecycle } from "../machine/agent-machines.js";
+import { heldProjection } from "../native-events/native-projection.js";
 import { FAILURE_CHARS } from "../native-events/runner-moments.js";
+import { touchAgentSandbox } from "../sandbox-use.js";
 import { agentLogIds } from "./agent-log.js";
 import { CODER } from "./bounds.js";
 import { holdingRunnerIfFree } from "./runner-lease.js";
@@ -130,6 +133,10 @@ const NO_PROGRESS_DETAIL = "the agent's runner made no progress on its turn befo
 
 /** What a turn that ran past its cap says of it. */
 const PAST_CAP_DETAIL = "the turn ran past the longest a turn may run";
+
+/** What a turn the plan's limit cut short says of it where no launch took it up again before its deadline. */
+const PLAN_LIMIT_DETAIL =
+  "the plan's usage limit cut the turn short, and no launch on the next payer took it up before its deadline";
 
 /** What a running turn whose runner a newer launch replaced says of it. */
 const REPLACED_DETAIL = "a newer launch replaced the runner the turn ran on";
@@ -277,13 +284,27 @@ function ownedByLaunch(turn: LapsedTurn, launch: number): boolean {
  * its runner lost only where that runner is known to be gone, or replaced
  * by a newer launch, whose runner's state says nothing of it.
  */
-function endOf(turn: LapsedTurn, runner: RunnerStanding, launch: number, at: Date): LostTurnEnd {
+function endOf(
+  turn: LapsedTurn,
+  runner: RunnerStanding,
+  launch: number,
+  at: Date,
+  retrying: string | undefined,
+): LostTurnEnd {
   if (turn.cancelRequestedAt !== null) return { status: RUN_STATUS.CANCELED };
   if (pastCap(turn, at)) {
     return {
       status: RUN_STATUS.FAILED,
       failure: TURN_FAILURE.DEADLINE,
       failureDetail: PAST_CAP_DETAIL,
+    };
+  }
+  // Note that a turn kept open on its plan's limit that no launch took up again failed for the limit, not for a stuck runner.
+  if (turn.id === retrying) {
+    return {
+      status: RUN_STATUS.FAILED,
+      failure: TURN_FAILURE.PLAN_LIMIT,
+      failureDetail: PLAN_LIMIT_DETAIL,
     };
   }
   if (turn.status === TURN_STATUS.QUEUED) {
@@ -436,6 +457,13 @@ const reapedHolding = (agent: ReconciledAgent, readFirst: ReadonlySet<string>) =
     // Note that the launch is read under the lease, which every launch holds, so the runner read is that launch's.
     const launch = yield* runnerLaunchOf(agent.id);
     const runner = yield* runnerStanding(machine, agent);
+    // The turn the plan's limit cut short that no launch has taken up since, which the projection keeps until one does.
+    const projected = yield* readNativeProjection({
+      userId: agent.userId,
+      conversationId: agent.conversationId,
+    });
+    const held = heldProjection(Option.getOrNull(projected)).turn;
+    const retrying = held?.retrying === true ? held.id : undefined;
     const ends: readonly LapsedTurnEnd[] = lapsed.map((turn) => ({
       turn: {
         id: turn.id,
@@ -443,7 +471,7 @@ const reapedHolding = (agent: ReconciledAgent, readFirst: ReadonlySet<string>) =
         userId: agent.userId,
         conversationId: agent.conversationId,
       },
-      end: endOf(turn, runner, launch, at),
+      end: endOf(turn, runner, launch, at, retrying),
     }));
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     const settled = new Set(yield* settleLapsedTurns(writer, agent.conversationId, ends, now, now));
@@ -543,15 +571,15 @@ export const reconcileAgents = /* @__PURE__ */ Effect.fn("web/reconcileAgents")(
  * The minute sweep's keep-alive: the sandbox of every cloud turn still
  * running inside its progress deadline touched, at most a sweep's worth, a
  * few at a time, each and all within their bounds (`KEEP_UP_SWEEP`); answers
- * how many it drew. A touch that fails is said in the log by `touchSandbox`,
- * and one cut short here, and passed over, since the next minute's sweep
- * touches it again well inside its idle window.
+ * how many it drew, each one's use recorded (`touchAgentSandbox`). A touch
+ * that fails is said in the log, and one cut short here, and passed over,
+ * since the next minute's sweep touches it again well inside its idle window.
  */
 export const keepRunningSandboxesUp = /* @__PURE__ */ Effect.fn("web/keepRunningSandboxesUp")(
   function* (now: number) {
     const names = yield* runningTurnSandboxes(new Date(now), KEEP_UP_SWEEP.SANDBOXES);
     const touched = (name: string) =>
-      touchSandbox(name).pipe(
+      touchAgentSandbox(name).pipe(
         Effect.timeoutOption(KEEP_UP_SWEEP.TOUCH),
         Effect.flatMap((done) =>
           Option.isSome(done)

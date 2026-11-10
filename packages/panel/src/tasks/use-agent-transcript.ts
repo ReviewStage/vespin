@@ -20,6 +20,7 @@ import {
   type AgentUsage,
 } from "@repo/features/agent-wire";
 import type { DeviceLaunchStep, DeviceLaunchUnstarted } from "@repo/features/device-agent-wire";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { type AppTranscript, OWN_TRANSCRIPT } from "@repo/host/app-state";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -28,7 +29,7 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { askAct } from "../act.js";
 import { transcriptQuery, transcriptRetryMutation } from "../live-reads.js";
 import { jsonBytes, PANEL_SPAN, PANEL_SPAN_ATTRIBUTE, recordPanelSpan } from "../panel-spans.js";
-import { type AgentRun, agentStillWriting } from "./agent-model.js";
+import type { AgentRun } from "./agent-model.js";
 
 /**
  * use-agent-transcript.ts -- one agent's transcript, or one of its workers', as its tab draws it, from the read the host holds of it on app state.
@@ -92,6 +93,8 @@ export interface AgentTranscriptControl {
   usage: AgentUsage | undefined;
   /** Who pays for the agent, as the last page said; nothing on a worker's, and for an agent from before payers. */
   payer: AgentPayer | undefined;
+  /** The starter's subscription a plan payer runs the agent on, as the last page said; nothing where it named none. */
+  payerSubscriptionId: string | undefined;
   /** What the agent's model's context holds as its newest step left it, as the last page said; nothing before a step ended, and on a worker's. */
   context: AgentContext | undefined;
   /** When the run under way began, as the last page said; nothing where it did not, which is where a worker's tab counts from. */
@@ -302,6 +305,7 @@ export function useAgentTranscript(input: {
     hostLost: word?.hostLost,
     usage: word?.usage,
     payer: word?.payer,
+    payerSubscriptionId: word?.payerSubscriptionId,
     context: word?.context,
     runStartedAt: word?.runStartedAt,
     pageStatus: word?.status,

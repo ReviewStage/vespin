@@ -1,3 +1,4 @@
+import { repositoryParts, TASK_ORDER, taskTime } from "@repo/features/task-list-model";
 import {
   DESCRIPTION_ACTOR,
   TASK_PRIORITY,
@@ -8,7 +9,6 @@ import {
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { repositoryParts, TASK_ORDER, taskTime } from "./task-list-model.js";
 
 /**
  * tasks-page-model.ts -- how the Tasks page filters, groups, orders, and draws the workspace's tasks, in its List and on its Board.

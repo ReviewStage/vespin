@@ -477,7 +477,7 @@ type StaticChipLook = typeof CHIP_LOOK.TOOLBAR | typeof CHIP_LOOK.PILL;
 /** A static chip's own options: its look, the toolbar's where none is named, its tone, its size, and whether it draws its mark alone, always or in a narrow room. */
 type StaticChipProps = Pick<ChipFace, "tone" | "iconOnly" | "size"> & {
   look?: StaticChipLook | undefined;
-  /** Give its words up, to a reader alone, once the room around it (a `ui-room` container) is narrower than this step, as a `Badge`'s do; its mark still drawn. */
+  /** Give its words up, to a reader alone, once the room around it (a `ui-room` container) is narrower than this step, as a `Badge`'s do, its mark still drawn; under a finger they stay drawn. */
   hideWordsUnder?: VisuallyHiddenUnder | undefined;
   children: ReactNode;
 } & Omit<ComponentPropsWithRef<"span">, "style" | "className" | "children">;
@@ -503,7 +503,8 @@ const STATIC_FACE = {
  * chip at the control's size, toned, is a status standing in a row of
  * controls at their height, as a pull request's merge state stands beside
  * its merge press; in a narrow room it may give its words up to a reader
- * (`hideWordsUnder`), its mark saying the state in their place.
+ * (`hideWordsUnder`), its mark saying the state in their place, though not
+ * under a finger, which has no hover to raise its hint, so a phone keeps them.
  */
 export function StaticChip({
   look = CHIP_LOOK.TOOLBAR,
@@ -551,9 +552,9 @@ type ChipNameProps = {
     }
 );
 
-/** A chip's words, and, drawn as its mark alone, always or under its room's step, read and drawn nowhere; a field's lead and fill it. */
+/** A chip's words, and, drawn as its mark alone, always or under its room's step, read and drawn nowhere; a field's lead and fill it. Note that a room's step gives them up only under a pointer that hovers, because a finger has no rest to raise the hint that would say them. */
 const NAME =
-  "ui-chip-name group-data-[look=field]/chip:flex-1 group-data-[look=field]/chip:text-left group-data-[icon-only=true]/chip:absolute group-data-[icon-only=true]/chip:-m-px group-data-[icon-only=true]/chip:size-px group-data-[icon-only=true]/chip:[clip-path:inset(50%)] @max-[520px]/ui-room:group-data-[words-under=snug]/chip:sr-only @max-[440px]/ui-room:group-data-[words-under=tight]/chip:sr-only";
+  "ui-chip-name group-data-[look=field]/chip:flex-1 group-data-[look=field]/chip:text-left group-data-[icon-only=true]/chip:absolute group-data-[icon-only=true]/chip:-m-px group-data-[icon-only=true]/chip:size-px group-data-[icon-only=true]/chip:[clip-path:inset(50%)] [@media_not_all_and_(pointer:coarse)]:@max-[520px]/ui-room:group-data-[words-under=snug]/chip:sr-only [@media_not_all_and_(pointer:coarse)]:@max-[440px]/ui-room:group-data-[words-under=tight]/chip:sr-only";
 
 /** A name cut in its middle: the start, which gives way first, ending in an ellipsis where it is cut short. */
 function ChipNameStart({ children }: { children: string }): React.JSX.Element {

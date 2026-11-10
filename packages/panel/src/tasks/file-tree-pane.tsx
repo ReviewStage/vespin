@@ -49,8 +49,8 @@ import { entriesOf } from "./folder-listings.js";
  * that read did not land or was cut short, as the empty field then says; ⌘F
  * anywhere in the pane takes the caret to the field. The tree draws rows alone, so where it stands is said here, in its
  * place or under it (`FileTreeStage`), which a crumb's tree says the same
- * way. Every name here is the repository's, so the pane is left out of the
- * screen recording (`ph-no-capture`).
+ * way. Every name here is the repository's, which the screen recording
+ * masks.
  *
  * Beside its tab the pane is a box of its own, which slides as the panel
  * opens and closes it; where its tab has no room for it beside, it is an
@@ -315,7 +315,6 @@ function FileTreeBody({
 
   return (
     <Fill
-      className="ph-no-capture"
       onKeyDown={(event) => {
         if (event.key.toLowerCase() !== "f" || !(event.metaKey || event.ctrlKey)) return;
         // Note that the press goes no further, because the window's ⌘F would

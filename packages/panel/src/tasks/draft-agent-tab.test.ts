@@ -620,6 +620,8 @@ function plannedKeys(forAgents: boolean): ProviderKeysAnswer {
         kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
         status: PROVIDER_KEY_STATUS.UNVERIFIED,
         forAgents,
+        id: "subscription-1",
+        position: 0,
       },
     ],
   };

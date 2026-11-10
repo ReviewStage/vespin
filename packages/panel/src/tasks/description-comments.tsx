@@ -16,7 +16,7 @@ import type { DescriptionSection } from "@repo/features/description-document";
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import type { FrameBox, PagePicked } from "@repo/features/page-pick";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { IRREVERSIBLE_WORDS, pasteCutWords } from "@repo/features/words";
+import { IRREVERSIBLE_WORDS } from "@repo/features/words";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BUTTON_SIZE,
@@ -46,9 +46,6 @@ import {
   CommentPin,
   type CommentPinStands,
   CommentsIcon,
-  ComposerBody,
-  ComposerFoot,
-  ComposerFrame,
   ConfirmDialog,
   cssCustomProperties,
   type DialogQuestion,
@@ -75,14 +72,11 @@ import {
   ScrollArea,
   Skeleton,
   SkeletonRegion,
-  TEXT_AREA_GROW_LIMIT,
-  TEXT_AREA_LOOK,
   TEXT_BUTTON_TONE,
   TEXT_ELEMENT,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
-  TextArea,
   TextButton,
   Time,
   Tooltip,
@@ -113,12 +107,10 @@ import {
   RotateCcwIcon,
 } from "@repo/ui/icons";
 import { MESSAGE_BLOCK, messageBlocks, messageText, replyOf } from "@repo/ui/reply-quote";
-import { UNREPORTED } from "@repo/ui/reported-failure";
 import { ReplayUnmask, writeWithheldSheet } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { VIRTUAL_ROWS_ANCHOR, VirtualRows, type VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import { visibleViewport } from "@repo/ui/visible-viewport";
-import { useQuery } from "@tanstack/react-query";
 import { useSelector } from "@tanstack/react-store";
 import { Equal } from "effect";
 import {
@@ -136,7 +128,6 @@ import {
 } from "react";
 import { ActorMark, ActorRef, commentAuthor } from "../actor-ref.js";
 import { useAppCommand } from "../app-commands.js";
-import { useSideBundles } from "../bundle-loader.js";
 import { coarsePointerNow, FINGER_SELECTION_GAP } from "../coarse-pointer.js";
 import {
   type DescriptionCommentPlace,
@@ -148,42 +139,26 @@ import {
   useDraft,
   useDraftWriter,
 } from "../composer-drafts.js";
-import { useCopyLinkItem } from "../copy-link-item.js";
-import {
-  COMPOSER_INPUT,
-  type ComposerEditorHandle,
-  type DescriptionEditorHandle,
-  type DescriptionEditorModule,
-  type EditorSpan,
-} from "../description-editor/contract.js";
+import { useLinkItems } from "../copy-link-item.js";
+import type { DescriptionEditorHandle, EditorSpan } from "../description-editor/contract.js";
 import type { MenuAction } from "../desktop/action-menu.js";
-import { enterSubmitKey } from "../enter-sends.js";
 import { confirmFailure, failureShown, unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { centerWithin } from "../scroll-within.js";
-import { useAttachedFiles } from "../use-attached-files.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import { AgentActorRef, type AgentSubject, agentSubject, NOTHING_HELD } from "./agent-ref.js";
-import { AttachFilesButton } from "./attach-files-button.js";
 import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
 import { CommentMenu } from "./comment-menu.js";
-import { ComposerField } from "./composer-field.js";
 import { CommentFiles } from "./description-comment-files.js";
 import { EDITOR_ROOM_CLASS } from "./description-document-editor.js";
-import { DictateButton, DictationStrip } from "./dictation-strip.js";
 import type { EditAgents } from "./edit-ref.js";
-import { MentionNodeChip, pastedMentionNode } from "./mention-chip.js";
-import { holderTaskId } from "./mention-holder.js";
-import { MENTION_MENU_SIDE, useMentionPicker } from "./mention-picker.js";
+import { MessageBox, useMessageBox } from "./message-box.js";
 import { type HeldComment, PAGE_REVIEW_WORDS, type PageReviewControl } from "./page-review.js";
 import { PendingWords } from "./pending-comments.js";
-import { ComposerQuoteView, pressPlace, ReplyPress, roomAround } from "./reply-to-selection.js";
-import { type TaskMentionsValue, useMentionLink, useTaskMentions } from "./task-mentions.js";
-import { DICTATION_PHASE, type DictationControl, useDictation } from "./use-dictation.js";
-import { useKnownNames } from "./use-known-names.js";
-import { useNumberedTaskIdOf } from "./use-link-standing.js";
+import { pressPlace, ReplyPress, roomAround } from "./reply-to-selection.js";
+import { useMentionLink } from "./task-mentions.js";
 import { useOpenLink } from "./use-open-link.js";
 import {
   useWordsDatePicker,
@@ -705,7 +680,7 @@ function CommentEntry({
     }),
     confirmFailure(FAILURE_SURFACE.DESCRIPTION_COMMENT_DELETE),
   );
-  const copyLink = useCopyLinkItem()({
+  const copies = useLinkItems()({
     kind: LINK_PLACE.COMMENT,
     planId: doors.control.planId,
     threadId: thread.id,
@@ -714,7 +689,6 @@ function CommentEntry({
   // Note that a page thread's first comment is drawn without the quote its quote line already says.
   const shown = first ? ownWordsOf(thread, entry.words ?? "") : (entry.words ?? "");
   // Note that a reply copies its thread's link, since a link names a comment thread and no comment of one (`LINK_PLACE.COMMENT`).
-  const copies: MenuAction[] = copyLink === undefined ? [] : [copyLink];
   const edits: MenuAction[] = mine
     ? [
         {
@@ -865,11 +839,12 @@ function CommentEntry({
 }
 
 /**
- * The field a comment's words are edited in, in their place, as the field a
- * thread's first comment is written in: the words stay where they were read,
- * bare on the card with no box around them, and the composer's foot stands
- * under them, its microphone and Cancel beside the round send, which saves.
- * It takes no files, since an edit changes a comment's words alone.
+ * The field a comment's words are edited in, in their place, on the message
+ * box as the field a thread's first comment is written in: the words stay
+ * where they were read, bare on the card with no box around them, and the
+ * box's foot stands under them, its microphone and Cancel beside the round
+ * send, which saves. It takes no files, since an edit changes a comment's
+ * words alone.
  */
 function CommentEditField({
   value,
@@ -882,76 +857,32 @@ function CommentEditField({
   onSave: () => void;
   onCancel: () => void;
 }): React.JSX.Element {
-  const editor = useRef<ComposerEditorHandle | undefined>(undefined);
-  const [heard, setHeard] = useState<string | undefined>(undefined);
-  const dictation = useDictation({ editor, keywords: NO_KEYWORDS, onNote: setHeard });
-  const dictating = dictation.phase !== DICTATION_PHASE.IDLE;
-  // Note that only the agent box's editor takes a dictation and counts its words against the bound, as a reply's foot does.
-  const dictates = useCommentEditor() !== undefined;
-  // Whether the last paste was cut to the room the field has left, until the words change again.
-  const [cut, setCut] = useState(false);
-  const write = (words: string) => {
-    setCut(false);
-    onChange(words);
-  };
-  // Note that a dictation's note is said before the cut paste's, as a reply's field says them.
-  const note =
-    heard ?? (cut ? pasteCutWords(DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS) : undefined);
+  // Note that an edit keeps the files its comment was sent with, so it takes none.
+  const box = useMessageBox({
+    draft: value,
+    setDraft: onChange,
+    placeholder: COMMENT_WORDS.EDIT,
+    label: COMMENT_WORDS.EDIT,
+    maxLength: DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS,
+    takesFiles: false,
+    onLeave: onCancel,
+    onSubmit: onSave,
+    focus: true,
+  });
   return (
-    <ComposerFrame
+    <MessageBox
+      box={box}
       look={COMPOSER_LOOK.BARE}
       className="comment-field comment-editing"
       data-variant={REPLY_VARIANT.EDIT}
-      data-held={dictating}
-    >
-      <CommentText
-        value={value}
-        label={COMMENT_WORDS.EDIT}
-        onChange={write}
-        onSubmit={onSave}
-        onCancel={onCancel}
-        autoFocus
-        editor={editor}
-        dictation={dictation}
-        onPasteCut={() => {
-          setHeard(undefined);
-          setCut(true);
-        }}
-      />
-      <ComposerFoot
-        counter={
-          dictates
-            ? { length: value.length, limit: DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS }
-            : undefined
-        }
-        actions={
-          <>
-            <Button size={BUTTON_SIZE.COMPACT} variant={BUTTON_VARIANT.QUIET} onClick={onCancel}>
-              <ReplayUnmask>{COMMENT_WORDS.CANCEL}</ReplayUnmask>
-            </Button>
-            {dictates ? <DictateButton dictation={dictation} disabled={false} /> : null}
-          </>
-        }
-        strip={dictating ? <DictationStrip dictation={dictation} /> : undefined}
-        // Note that an edit emptied asks to delete the comment, so the send takes a press while empty, that a dictation's words land before it saves, and that an edit is drawn on the press, which closes the field, so it is never busy.
-        send={{ label: COMMENT_WORDS.SAVE, empty: false, held: dictating, onSend: onSave }}
-        note={
-          note === undefined
-            ? undefined
-            : {
-                words: note,
-                failure:
-                  note === heard
-                    ? failureShown({
-                        surface: FAILURE_SURFACE.DICTATION,
-                        cause: FAILURE_CONDITION.REFUSED,
-                        refused: true,
-                      })
-                    : UNREPORTED.INPUT,
-              }
-        }
-      />
-    </ComposerFrame>
+      beforeSend={
+        <Button variant={BUTTON_VARIANT.QUIET} size={BUTTON_SIZE.COMPACT} onClick={onCancel}>
+          <ReplayUnmask>{COMMENT_WORDS.CANCEL}</ReplayUnmask>
+        </Button>
+      }
+      // Note that an edit emptied asks to delete the comment, so the send takes a press while empty, and that an edit is drawn on the press, which closes the field, so it is never busy.
+      send={{ label: COMMENT_WORDS.SAVE, empty: false }}
+    />
   );
 }
 
@@ -983,164 +914,6 @@ function CommentWords({ words }: { words: string }): React.JSX.Element {
       className="comment-words block text-body-foreground wrap-anywhere"
       link={link}
       openLink={openLink}
-    />
-  );
-}
-
-/** A comment's field: the agent box's editor, where its bundle has loaded and the page offers mentions, with `@` picking them; a plain field otherwise. Return posts, Shift-Return breaks the line, Escape cancels. */
-function CommentText(props: CommentTextProps): React.JSX.Element {
-  const field = useCommentEditor();
-  // Note that a bundle that never loads leaves the plain field, so a comment can always be written.
-  if (field === undefined) return <PlainCommentText {...props} />;
-  return <MentionCommentText {...props} module={field.module} mentions={field.mentions} />;
-}
-
-/** The agent box's editor a comment is written in, where the page offers mentions and the bundle has not failed; nothing where the plain field stands in. */
-function useCommentEditor():
-  | { readonly module: DescriptionEditorModule | undefined; readonly mentions: TaskMentionsValue }
-  | undefined {
-  const bundle = useQuery(useSideBundles().descriptionEditor);
-  const mentions = useTaskMentions();
-  if (bundle.isError || mentions === undefined) return undefined;
-  return { module: bundle.data, mentions };
-}
-
-interface CommentTextProps {
-  readonly value: string;
-  readonly label: string;
-  readonly onChange: (value: string) => void;
-  readonly onSubmit: () => void;
-  readonly onCancel: () => void;
-  readonly autoFocus?: boolean;
-  /** Where the editor's handle is kept, for a dictation laid into it; the field keeps its own where none is handed. */
-  readonly editor?: RefObject<ComposerEditorHandle | undefined> | undefined;
-  /** The dictation the field's words come from while it records, which takes its keys first and holds the words still. */
-  readonly dictation?: DictationControl | undefined;
-  /** Takes files pasted into the field, answering whether it took any; none where the field takes no files, as an edit's does not. */
-  readonly onPasteFiles?: ((files: readonly File[]) => boolean) | undefined;
-  /** Told once a paste past the comment's bound has been cut to fit; none where the field says nothing of it. */
-  readonly onPasteCut?: (() => void) | undefined;
-}
-
-/** The comment's field on the agent box's editor: mentions as chips, written as their links. */
-function MentionCommentText({
-  value,
-  label,
-  onChange,
-  onSubmit,
-  onCancel,
-  autoFocus = false,
-  module,
-  mentions,
-  editor: handed,
-  dictation,
-  onPasteFiles,
-  onPasteCut,
-}: CommentTextProps & {
-  module: DescriptionEditorModule | undefined;
-  mentions: TaskMentionsValue;
-}): React.JSX.Element {
-  const own = useRef<ComposerEditorHandle | undefined>(undefined);
-  const editor = handed ?? own;
-  const dictating = dictation !== undefined && dictation.phase !== DICTATION_PHASE.IDLE;
-  const room = useRef<HTMLDivElement>(null);
-  const known = useKnownNames();
-  const taskIdOf = useNumberedTaskIdOf();
-  const picker = useMentionPicker({
-    source: mentions,
-    room,
-    // Note that the list rises over the card, since the cards under it in the margin would stand over it.
-    side: MENTION_MENU_SIDE.ABOVE,
-    onChoose: (mention) => editor.current?.chooseMention(mention),
-  });
-  return (
-    <ComposerField
-      module={module}
-      editor={editor}
-      room={room}
-      draft={value}
-      setDraft={onChange}
-      placeholder={label}
-      label={label}
-      input={dictating ? COMPOSER_INPUT.READ_ONLY : COMPOSER_INPUT.EDITABLE}
-      maxLength={DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS}
-      skills={NO_SKILLS}
-      aria={{ ...picker.aria, "aria-placeholder": label }}
-      onKey={(event) => {
-        if (dictation?.onFieldKey(event) === true || picker.onKey(event)) return true;
-        if (event.key !== "Escape") return false;
-        event.preventDefault();
-        onCancel();
-        return true;
-      }}
-      onEnter={onSubmit}
-      onPasteFiles={onPasteFiles ?? (() => false)}
-      onPasteCut={onPasteCut}
-      onTrigger={() => undefined}
-      chip={() => null}
-      quote={(quote) => <ComposerQuoteView quote={quote} held={dictating} />}
-      mentions={{
-        onTrigger: picker.onTrigger,
-        chip: (mention, node) => (
-          <MentionNodeChip
-            mention={mention}
-            doors={mentions.doors}
-            edit={{ node, pickDate: picker.pickDate }}
-          />
-        ),
-        pasted: (words) =>
-          pastedMentionNode(words, mentions.doors.place, {
-            known,
-            taskIdOf,
-            taskId: holderTaskId(mentions.holder),
-            text: mentions.text,
-          }),
-      }}
-      focus={autoFocus}
-    >
-      {picker.menu}
-    </ComposerField>
-  );
-}
-
-/** A comment takes no skills, which are an agent's. */
-const NO_SKILLS: ReadonlySet<string> = new Set();
-
-/**
- * A comment's words as they are typed: Return sends, as `enterSends` reads
- * it, so a finger's keyboard breaks the line with it, Shift-Return breaks
- * the line, and Esc lets the field go. A plain field, so the field's own undo
- * and redo change its words and never the description's.
- */
-function PlainCommentText({
-  value,
-  label,
-  onChange,
-  onSubmit,
-  onCancel,
-  autoFocus = false,
-  onPasteFiles,
-}: CommentTextProps): React.JSX.Element {
-  return (
-    <TextArea
-      look={TEXT_AREA_LOOK.BARE}
-      growLimit={TEXT_AREA_GROW_LIMIT.NONE}
-      grow
-      rows={1}
-      value={value}
-      placeholder={label}
-      label={label}
-      // biome-ignore lint/a11y/noAutofocus: the field is opened by the press that asked for it, as a reply field is.
-      autoFocus={autoFocus}
-      onChange={onChange}
-      onPaste={(event) => {
-        // Note that only files the field takes stop the paste, so text pastes as it always does.
-        const files = Array.from(event.clipboardData.files);
-        if (files.length > 0 && onPasteFiles?.(files) === true) event.preventDefault();
-      }}
-      submitKey={enterSubmitKey()}
-      onSubmit={onSubmit}
-      onEscape={onCancel}
     />
   );
 }
@@ -1182,23 +955,20 @@ function ReplyField({
   /** Where the words may be held in the writer's review rather than posted; none where they may not. */
   review?: CommentReview | undefined;
 }): React.JSX.Element {
-  const editor = useRef<ComposerEditorHandle | undefined>(undefined);
-  const [heard, setHeard] = useState<string | undefined>(undefined);
-  const dictation = useDictation({ editor, keywords: NO_KEYWORDS, onNote: setHeard });
-  const dictating = dictation.phase !== DICTATION_PHASE.IDLE;
-  // Note that only the agent box's editor takes a dictation, so the plain field offers none.
-  const dictates = useCommentEditor() !== undefined;
   const { draft, update } = useDraft(place);
   const words = draft.text;
-  // Whether the last paste was cut to the room the field has left, until the words change again.
-  const [cut, setCut] = useState(false);
-  const setWords = (text: string) => {
-    setCut(false);
-    update((was) => ({ ...was, text }));
-  };
-  // Why the last files handed to the field did not all come; nothing once they did.
-  const [refusal, setRefusal] = useState<string | undefined>(undefined);
-  const files = useAttachedFiles({ onRefusal: setRefusal });
+  const setWords = (text: string) => update((was) => ({ ...was, text }));
+  const box = useMessageBox({
+    draft: words,
+    setDraft: setWords,
+    placeholder: label,
+    label,
+    maxLength: DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS,
+    onLeave: onCancel,
+    onSubmit: () => submit(),
+    focus: autoFocus,
+  });
+  const { files } = box;
   // The last send refused, whose key the same words and files sent again go under, so a send whose answer was lost is taken once.
   const attempt = useRef<CommentSend | undefined>(undefined);
   // Sends refused that the field could not take back beside what was typed or added since, kept apart in the order written, marked as not sent, with Retry under their keys.
@@ -1220,11 +990,6 @@ function ReplyField({
       standing.current = false;
     };
   }, []);
-  // Note that a dictation's note is said before the cut paste's, and only the agent box's editor cuts a paste.
-  const said =
-    heard ?? (cut ? pasteCutWords(DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS) : undefined);
-  // Note that a failed send is said over a refused file, which is said over a dictation's note or a cut paste, and stands on the not-sent line where there is one.
-  const note = (unsent.length === 0 ? failure : undefined) ?? refusal ?? said;
   // Note that a refused send goes back above whatever was typed or added since, so neither is dropped, unless the field is gone or the two together are more than one comment carries; sends refused together stand apart under their own keys, so one the service wrote before its answer was lost is not written again under a new one.
   const takeBack = (sends: readonly CommentSend[]) => {
     const [first] = sends;
@@ -1305,118 +1070,75 @@ function ReplyField({
     confirmFailure(FAILURE_SURFACE.DESCRIPTION_COMMENT_DISCARD),
   );
   return (
-    <ComposerFrame
+    <MessageBox
+      box={box}
       look={variant === REPLY_VARIANT.FIRST ? COMPOSER_LOOK.BARE : COMPOSER_LOOK.CARD}
       className="comment-field"
       data-variant={variant}
-      dropping={files.drop.dropping}
       // Note that held files and files still being read, and a dictation whose words land once heard, hold the field, so a press away keeps a thread being started; typed words are kept as its draft and hold nothing.
-      data-held={files.attachments.length > 0 || files.reading || dictating}
+      data-held={files.attachments.length > 0 || files.reading || box.dictating}
       {...files.drop.target}
-    >
-      {unsent.length === 0 ? null : (
-        <div className="comment-unsent" data-unsent="">
-          {unsent.map((each) => (
-            <Fragment key={each.key}>
-              <AttachedFileChips files={attachmentChips(each.attachments)} />
-              <CommentWords words={each.words} />
-            </Fragment>
-          ))}
-          <FailureNote
-            onRetry={retry}
-            failure={failureShown({
-              surface: FAILURE_SURFACE.DESCRIPTION_COMMENT_SEND,
-              cause: failure === undefined ? FAILURE_CONDITION.NOT_KEPT : FAILURE_CONDITION.REFUSED,
-            })}
-            also={
-              <TextButton tone={TEXT_BUTTON_TONE.QUIET} onClick={discard.ask}>
-                <ReplayUnmask>{COMMENT_WORDS.DISCARD}</ReplayUnmask>
-              </TextButton>
-            }
-          >
-            {/* Note that a refusal's words are the service's, so only the app's own note shows. */}
-            {failure ?? (
-              <ReplayUnmask>
-                {unsent.length === 1 ? COMMENT_WORDS.NOT_SENT : COMMENT_WORDS.NOT_SENT_MANY}
-              </ReplayUnmask>
-            )}
-          </FailureNote>
-          <ConfirmDialog
-            open
-            confirm={discard}
-            question={unsent.length === 1 ? DISCARD_QUESTION : DISCARD_MANY_QUESTION}
-          />
-        </div>
-      )}
-      <ComposerBody
-        files={
-          <AttachedFileChips files={attachmentChips(files.attachments)} onRemove={files.remove} />
-        }
-      >
-        <CommentText
-          value={words}
-          label={label}
-          onChange={setWords}
-          onSubmit={submit}
-          onCancel={onCancel}
-          autoFocus={autoFocus}
-          editor={editor}
-          dictation={dictation}
-          onPasteFiles={files.paste}
-          onPasteCut={() => {
-            // Note that a paste cut says so over a dictation's note, which was said of what came before it.
-            setHeard(undefined);
-            setCut(true);
-          }}
-        />
-      </ComposerBody>
-      <ComposerFoot
-        tools={<AttachFilesButton onFiles={files.attach} />}
-        counter={
-          dictates
-            ? { length: words.length, limit: DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS }
-            : undefined
-        }
-        actions={
-          dictates || other !== undefined ? (
-            <>
-              {other}
-              {dictates ? <DictateButton dictation={dictation} disabled={false} /> : null}
-            </>
-          ) : undefined
-        }
-        strip={dictating ? <DictationStrip dictation={dictation} /> : undefined}
-        send={{
-          label: holds
-            ? PAGE_REVIEW_WORDS.ADD
-            : label === COMMENT_WORDS.ADD
-              ? COMMENT_WORDS.COMMENT
-              : COMMENT_WORDS.REPLY,
-          empty: words.trim() === "",
-          held: files.reading || unsent.length > 0,
-          onSend: submit,
-        }}
-        // Note that a file refused is said over a dictation's note or a cut paste, as the agent box says it.
-        note={
-          note === undefined
-            ? undefined
-            : {
-                words: note,
-                failure:
-                  note === refusal || (note === said && heard === undefined)
-                    ? UNREPORTED.INPUT
-                    : failureShown({
-                        surface:
-                          note === heard
-                            ? FAILURE_SURFACE.DICTATION
-                            : FAILURE_SURFACE.DESCRIPTION_COMMENT_SEND,
-                        cause: FAILURE_CONDITION.REFUSED,
-                        refused: true,
-                      }),
+      head={
+        unsent.length === 0 ? null : (
+          <div className="comment-unsent" data-unsent="">
+            {unsent.map((each) => (
+              <Fragment key={each.key}>
+                <AttachedFileChips files={attachmentChips(each.attachments)} />
+                <CommentWords words={each.words} />
+              </Fragment>
+            ))}
+            <FailureNote
+              onRetry={retry}
+              failure={failureShown({
+                surface: FAILURE_SURFACE.DESCRIPTION_COMMENT_SEND,
+                cause:
+                  failure === undefined ? FAILURE_CONDITION.NOT_KEPT : FAILURE_CONDITION.REFUSED,
+              })}
+              also={
+                <TextButton tone={TEXT_BUTTON_TONE.QUIET} onClick={discard.ask}>
+                  <ReplayUnmask>{COMMENT_WORDS.DISCARD}</ReplayUnmask>
+                </TextButton>
               }
-        }
-      />
-    </ComposerFrame>
+            >
+              {/* Note that a refusal's words are the service's, so only the app's own note shows. */}
+              {failure ?? (
+                <ReplayUnmask>
+                  {unsent.length === 1 ? COMMENT_WORDS.NOT_SENT : COMMENT_WORDS.NOT_SENT_MANY}
+                </ReplayUnmask>
+              )}
+            </FailureNote>
+            <ConfirmDialog
+              open
+              confirm={discard}
+              question={unsent.length === 1 ? DISCARD_QUESTION : DISCARD_MANY_QUESTION}
+            />
+          </div>
+        )
+      }
+      actions={other}
+      send={{
+        label: holds
+          ? PAGE_REVIEW_WORDS.ADD
+          : label === COMMENT_WORDS.ADD
+            ? COMMENT_WORDS.COMMENT
+            : COMMENT_WORDS.REPLY,
+        empty: words.trim() === "",
+        held: files.reading || unsent.length > 0,
+      }}
+      // Note that a failed send is said over the box's own notes, a refused file, a dictation's, a cut paste, or an editor that did not load, unless it stands on the not-sent line.
+      note={
+        unsent.length === 0 && failure !== undefined
+          ? {
+              words: failure,
+              failure: failureShown({
+                surface: FAILURE_SURFACE.DESCRIPTION_COMMENT_SEND,
+                cause: FAILURE_CONDITION.REFUSED,
+                refused: true,
+              }),
+            }
+          : undefined
+      }
+    />
   );
 }
 
@@ -1465,9 +1187,6 @@ function sameFiles(was: readonly AgentAttachment[], now: readonly AgentAttachmen
 const REPLY_VARIANT = { FIRST: "first", REPLY: "reply", EDIT: "edit" } as const;
 
 type ReplyVariant = (typeof REPLY_VARIANT)[keyof typeof REPLY_VARIANT];
-
-/** A comment's dictation hears no names of its own, which an agent's box takes from its repository. */
-const NO_KEYWORDS: readonly string[] = [];
 
 /** Over a thread whose words were deleted: that they were, and what they said. */
 function GoneQuote({

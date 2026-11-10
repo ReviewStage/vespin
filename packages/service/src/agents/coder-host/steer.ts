@@ -8,6 +8,7 @@ import {
   latestTurnsOfReached,
   RUNNING_TURN_STATUSES,
   readAgent,
+  readAgentOfConversation,
   readAgentRouting,
   taskNamesOf,
   unarchiveAgentFrom,
@@ -17,6 +18,7 @@ import { readConversationPicture } from "@repo/database/models/conversation-pict
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { readTaskDescription } from "@repo/database/models/task-store";
+import { releaseWaitedTurns } from "@repo/database/models/turn-state";
 import { readAccountNames } from "@repo/database/models/workspace-store";
 import {
   type AwaitingLineMetadata,
@@ -26,6 +28,8 @@ import {
   STORE_WRITE_EFFECT,
   STORE_WRITE_REFUSAL,
   type StoreWriter,
+  turnOpeningLine,
+  turnWaitingLines,
 } from "@repo/database/models/writer";
 import { type ConversationRuntime, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { AGENT_MACHINE, AGENT_STATUS, type AgentAttachment } from "@repo/features/agent-wire";
@@ -45,6 +49,7 @@ import {
   agentWorkspace,
   workspaceRepository,
 } from "../../github/workspace-repository.js";
+import { afterResponse } from "../../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import {
   credentialMissing,
@@ -69,9 +74,9 @@ import {
 import { experimentOnIn } from "../workspace-experiment-on.js";
 import { workspaceStepOf, writtenMention } from "../written-mentions.js";
 import { messageCredentialMissing } from "./agent-runtime-choice.js";
-import { harnessOf } from "./native-runtime.js";
+import { harnessOf, nativeRuntimeOfSession } from "./native-runtime.js";
 import { reconciledBeforeWrite } from "./reconcile.js";
-import { failedCallRefusal, routedSessions } from "./runtime-sessions.js";
+import { failedCallRefusal, NativeAgentSessions, routedSessions } from "./runtime-sessions.js";
 import { agentStatusOf } from "./status.js";
 
 /**
@@ -116,7 +121,8 @@ import { agentStatusOf } from "./status.js";
  * message (`runtime-sessions.ts`). An archived agent takes
  * no message, and is refused as one that names nothing, since every list
  * leaves it out until it is brought back, which a member's words from Slack
- * or an inbox thread do first (`agentTakingMessage`); it is read again under the
+ * or an inbox thread, and another agent's message, do first
+ * (`agentTakingMessage`); it is read again under the
  * conversation's dispatch claim just before the send, which is taken under
  * the row lock its archive takes, so a send claimed after the archive is
  * refused, and an archive after the claim finds the line awaiting. A
@@ -589,8 +595,8 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
  * conversation; nothing where it is gone. Note that it is read again after
  * and answered as it then stands, because one brought back by someone else
  * meanwhile takes the words too, and one archived again since takes none,
- * which the steer refuses. Only a member's words bring an agent back:
- * another agent's message, GitHub's, and an automation's are refused.
+ * which the steer refuses. Only a member's words and another agent's
+ * message bring an agent back: GitHub's and an automation's are refused.
  */
 export const agentTakingMessage = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
@@ -643,6 +649,95 @@ const lostLineMessage = (target: ConversationTarget, agent: Agent, line: LostLin
     };
     return message;
   });
+
+/**
+ * A turn its plan's limit cut short handed on to a launch on the next
+ * payer, acting for the agent's starter as every native call does: the line
+ * that opened it (`turnOpeningLine`) handed again as it was first
+ * (`lostLineMessage`), to a runner launched afresh in the session the
+ * conversation's record names (`NativeSessions`' `retry`), whose launch
+ * chooses its payer anew. The line keeps its client id, so the turn its
+ * runner opens it in takes no row of it again, and the conversation shows
+ * it once. The lines sent to the turn that no runner took, as a message
+ * another agent sent while the limit held the turn, are handed on after it,
+ * in the order they were written (`turnWaitingLines`), so none is lost with
+ * the runner that ended. Nothing it reads is the ended launch's, so it may
+ * run long after that launch ended. An agent gone or on no harness, a session that never
+ * claimed its record, a function that cannot reach the harness, and a turn
+ * that took no line hand nothing on; answers whether the line went. A turn
+ * whose launch could not resume the harness's session (`replayed`) goes on
+ * the same way in a fresh session, the lost one let go, handed the agent's
+ * steps so far.
+ */
+export const turnRetried = /* @__PURE__ */ Effect.fn("web/turnRetried")(function* (
+  turn: {
+    readonly userId: string;
+    readonly conversationId: string;
+    readonly turnId: string;
+  },
+  replayed = false,
+) {
+  const target = { userId: turn.userId, conversationId: turn.conversationId };
+  const agent = yield* readAgentOfConversation(turn.userId, turn.conversationId);
+  if (Option.isNone(agent)) return false;
+  const routing = yield* readAgentRouting(turn.userId, agent.value.id);
+  const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
+  if (runtime === undefined) return false;
+  const native = yield* Effect.serviceOption(NativeAgentSessions);
+  const reached = Option.flatMap(native, (service) =>
+    service.sessions(runtime, agent.value.userId),
+  );
+  if (Option.isNone(reached)) return false;
+  const sessionId = yield* recordedRuntimeSession(target);
+  if (sessionId === undefined || nativeRuntimeOfSession(sessionId) === undefined) return false;
+  const line = yield* turnOpeningLine(target, turn.turnId);
+  if (Option.isNone(line)) return false;
+  const message = yield* lostLineMessage(target, agent.value, line.value);
+  const sessions = yield* reached.value;
+  const sent = yield* sessions.retry(sessionId, message, replayed);
+  if (sent.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) return false;
+  // Note that a line queued for a runner that reads its lines is the relaunch's already, and sent again under its id is the same row.
+  const waiting = yield* turnWaitingLines(target, turn.turnId);
+  for (const each of waiting) {
+    yield* sessions.send(sessionId, yield* lostLineMessage(target, agent.value, each));
+  }
+  return true;
+});
+
+/** How many turns waiting on a limit's reset one sweep has go on. */
+const WAITED_TURNS = { RESUME_LIMIT: 100 } as const;
+
+/**
+ * The turns held open for a usage limit's reset whose reset has passed at
+ * `now` (`releaseWaitedTurns`), each handed on to a launch as a limited
+ * turn's retry is (`turnRetried`), past the sweep's answer, since a launch
+ * may take most of a minute; a sweep's worth, answering how many. A launch
+ * its plan refuses again leaves the turn open to its progress deadline, which
+ * the sweep's reap then fails it at.
+ */
+export const resumeWaitedTurns = /* @__PURE__ */ Effect.fn("web/resumeWaitedTurns")(function* (
+  now: number,
+) {
+  const released = yield* releaseWaitedTurns(new Date(now), WAITED_TURNS.RESUME_LIMIT);
+  yield* Effect.forEach(
+    released,
+    (turn) =>
+      afterResponse(
+        "a waited turn's retry",
+        turnRetried(turn).pipe(
+          Effect.flatMap((went) =>
+            went ? Effect.void : Effect.logWarning("a turn past its limit's reset was not retried"),
+          ),
+          Effect.catch((failure) =>
+            Effect.logWarning(`a turn past its limit's reset was not retried: ${failure._tag}`),
+          ),
+          Effect.annotateLogs({ conversationId: turn.conversationId, turnId: turn.turnId }),
+        ),
+      ),
+    { discard: true },
+  );
+  return released.length;
+});
 
 /**
  * The lines of the developer's that the agent's failed turn never took,

@@ -1,5 +1,6 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import {
   ArchiveIcon,
   BUTTON_SIZE,
@@ -30,7 +31,8 @@ import { commandAction, commandHead, PANEL_COMMAND } from "../command-items.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { useBusyPress } from "../settings/busy-press.js";
-import { agentName, agentStillWriting, teammateStarter } from "../tasks/agent-model.js";
+import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
+import { agentName, teammateStarter } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { AgentGlyph, agentEndMark } from "../tasks/tab-look.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
@@ -146,7 +148,11 @@ export interface AgentArchive {
 /** An archived agent's Unarchive as a menu offers it, its refusal said in a toast. */
 export function useAgentUnarchive(agentId: string, agents: AgentsControl): MenuAction {
   const press = useArchivePress(agents);
-  return commandAction(PANEL_COMMAND.UNARCHIVE_AGENT, () => press(agentId, false), false);
+  return commandAction(
+    PANEL_COMMAND.UNARCHIVE_AGENT,
+    () => press(agentId, false),
+    shortcutSubject(SHORTCUT_SUBJECT.AGENT, agentId),
+  );
 }
 
 /**
@@ -195,7 +201,7 @@ export function useAgentArchive(
     action: commandAction(
       PANEL_COMMAND.ARCHIVE_AGENT,
       teammate ? (agentStillWriting(agent.status) ? confirm.ask : asked) : archive,
-      false,
+      shortcutSubject(SHORTCUT_SUBJECT.AGENT, agent.id),
     ),
     reading,
     dialog: (

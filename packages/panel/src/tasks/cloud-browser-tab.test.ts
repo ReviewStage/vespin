@@ -185,10 +185,6 @@ test("a cloud Browser tab's pane spins while it waits for the page, draws it onc
   assert.ok(listener, "the pane opened its view");
   // The window's own spinner stands while the page is on its way, its words for a screen reader alone.
   await vi.waitFor(() => assert.equal(status(), "Waiting for the page"));
-  assert.ok(
-    document.querySelector("section.ph-no-capture"),
-    "the pane is left out of the recording",
-  );
 
   await say({
     type: BROWSER_LIVE_SERVER.FRAME,
@@ -197,6 +193,10 @@ test("a cloud Browser tab's pane spins while it waits for the page, draws it onc
     pageHeight: 800,
   });
   assert.equal(status(), undefined);
+  assert.ok(
+    document.querySelector("canvas")?.closest(".ph-no-capture"),
+    "the live view is left out of the recording",
+  );
 
   await press("Take over");
   await say({

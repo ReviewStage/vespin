@@ -300,7 +300,7 @@ function taskWords(agent: MentionedAgent, task: Task | undefined): string {
   return `on the task "${agent.task.name}"`;
 }
 
-/** What a mention of another of the workspace's agents is handed as: its name, its id to message it by, its task, and where its work stands on GitHub; never its conversation. */
+/** What a mention of another of the workspace's agents is handed as: its name, its id to read and message it by, its task, where its work stands on GitHub, and how to read its conversation, which is never handed itself. */
 function agentNoteOf(
   agentId: string,
   name: string,
@@ -320,7 +320,7 @@ function agentNoteOf(
   const message = agent.archived
     ? ""
     : ` To message it, call \`${AGENT_TOOL.MESSAGE_AGENT}\` with its id.`;
-  return `The developer pointed you at another agent of your workspace ${taskWords(agent, task)}, "${agent.name}" (id \`${agent.id}\`)${archived}${working}${branch}${pullRequest}.${readingOf(agent, task?.repository ?? null)}${message} Its conversation is not yours to read.`;
+  return `The developer pointed you at another agent of your workspace ${taskWords(agent, task)}, "${agent.name}" (id \`${agent.id}\`)${archived}${working}${branch}${pullRequest}.${readingOf(agent, task?.repository ?? null)}${message} Read its conversation with \`${AGENT_TOOL.READ_AGENT}\` and its id.`;
 }
 
 /** What a member's role is said as. */

@@ -3,14 +3,13 @@ import {
   AGENT_SOURCE,
   type AgentStatus,
   type AgentSummary,
-  type TasklessAgent,
 } from "@repo/features/agent-wire";
 import { dictationKeywords } from "@repo/features/dictation-keywords";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
-import type { MentionLines } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
@@ -54,12 +53,14 @@ import { agentOriginQuery } from "../live-reads.js";
 import { MemberDirectory } from "../member-directory.js";
 import { HERE } from "../places/pressed-address.js";
 import { useAutomationsDoor } from "../places/routed-doors.js";
+import { useShortcutTarget } from "../shortcut-target.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentSubject } from "../tasks/agent-ref.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { useChangesPeople } from "../tasks/changes-people.js";
+import type { OpenFileLines } from "../tasks/mention-chip.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { TAB_KIND } from "../tasks/tab-look.js";
@@ -72,7 +73,6 @@ import {
 } from "../tasks/task-mentions.js";
 import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
-import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
 import { TRANSCRIPT_COPY } from "../tasks/transcript-copy.js";
 import { type AgentsControl, useAgents } from "../tasks/use-agents.js";
 import { WordsWorkspace } from "../tasks/use-link-standing.js";
@@ -83,20 +83,18 @@ import {
   useOpenPlace,
   useReadLinkOpener,
 } from "../tasks/use-open-link.js";
-import { usePinWrites } from "../tasks/use-pin-writes.js";
 import type { PinHolder, SidePanelTab } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { ActionMenu } from "./action-menu.js";
 import {
-  type AgentMenuDoors,
+  AGENT_KEYS,
   type AgentTerminalDoors,
   agentMenuGroups,
   useAgentActions,
   useAgentDraftDoors,
   useAgentTerminalDoors,
 } from "./agent-actions.js";
-import { useAgentReadMarks } from "./agent-read-marks.js";
 import {
   AutomationRunSteps,
   AutomationRunStrip,
@@ -114,18 +112,18 @@ import {
   useColumnFocus,
   useSidePanelDrawing,
 } from "./side-panel.js";
-import { moveToSectionEntry, useSectionDialogs } from "./sidebar-sections.js";
 import { useTabViews } from "./strip-tabs.js";
 import { tabCard } from "./tab-card.js";
 import { taskCardOf } from "./task-card.js";
 import type { TaskHeadBack } from "./task-pane-switcher.js";
 
 /**
- * desktop-agent-page.tsx -- one agent's page: an agent an automation started with no plan, drawn in the plan's place as the task column draws an agent's tab.
+ * desktop-agent-page.tsx -- one agent's page, the place a link to the agent names, drawn in the task's place as the task column draws an agent's tab.
  *
- * An agent an automation's run starts belongs to the workspace rather than
- * to a task, so there is no task's column for its tab to stand in. Its page
- * stands where the task would, beside the sidebar, as the Inbox does, and
+ * A link to an agent, as an older message may hold, names the agent's own
+ * page, which still answers it, or says the agent is not found where it
+ * cannot be read. Its page stands where the task would, beside the sidebar,
+ * as the Inbox does, and
  * draws the task column's own agent pane (`main-tabs.tsx`'s `AgentPane`):
  * its transcript, its composer, its model and servers, and what it
  * published, at the document's reading width, each through the same
@@ -150,13 +148,8 @@ import type { TaskHeadBack } from "./task-pane-switcher.js";
  * its tab would, and its ⋯ offers the agent's one menu, the very one its
  * tab's ⋯ offers on a task (`agent-actions.tsx`'s `agentMenuGroups`): Copy
  * link and Copy transcript, Rename, which turns the title into
- * its name's field, Show terminal, Archive, and Permanently delete, so an
- * agent with no task is acted on as a task's is; and, since such an agent
- * has a row of its own among the sidebar's tasks, what that row offers too:
- * Mark as unread or Mark as read, through a task's marks
- * (`agent-read-marks.ts`), and Pin or Unpin and Move to section, the
- * reader's own, while the agent is not archived; ⌘J and New terminal open its terminal as on a
- * task (`terminal-commands.tsx`). An archived agent takes no message, so
+ * its name's field, Show terminal, Archive, and Permanently delete; ⌘J and
+ * New terminal open its terminal as on a task (`terminal-commands.tsx`). An archived agent takes no message, so
  * its composer gives way to its own Unarchive, which its ⋯ offers in
  * Archive's place, and it is not renamed. An agent the task list does not carry,
  * deleted or of a workspace the reader is not in, as a link may name, is not
@@ -203,85 +196,23 @@ function slackTrail(agent: Pick<AgentSummary, "source">): readonly ToolbarPlace[
 }
 
 /**
- * The row the sidebar lists the agent by among its tasks, whose pin, read
- * marks, and section are the page's too: for an agent with no task, as the
- * listed workspace's agents hold it; none for an agent on a task, or one the
- * list does not hold, whose page then offers neither.
+ * What a tab of the agent's page is pinned on: the agent's task, whose
+ * panel holds the same tab; none for an archived agent, or one not read
+ * yet, which the sidebar draws no pin of.
  */
-function listedAgent(tasks: TasksControl, agent: AgentSummary): TasklessAgent | undefined {
-  if (agent.planId !== null) return undefined;
-  const { standing, archived } = tasks.listedAgents;
-  return [...standing, ...archived].find((each) => each.id === agent.id);
-}
-
-/** An agent's own doors beside its actions, as its sidebar row offers them, and the dialogs Move to section asks through. */
-export interface AgentOwnDoors {
-  readonly read: AgentMenuDoors["read"];
-  readonly agentPin: AgentMenuDoors["agentPin"];
-  readonly section: AgentMenuDoors["section"];
-  readonly dialog: React.ReactNode;
-}
-
-/**
- * The doors an agent's menu offers beyond its actions, read off its sidebar
- * row (`listedAgent`): its read mark, its Pin, and Move to section, none of
- * them for an agent on a task or one the list does not hold, and neither a
- * pin nor a section for an archived agent, as an archived task. Every
- * surface naming the agent apart from its row, its page's bar and an Inbox
- * item's crumb, offers them alike.
- */
-export function useAgentOwnDoors(
-  tasks: TasksControl,
-  agent: AgentSummary,
-  shown: boolean,
-): AgentOwnDoors {
-  const listed = listedAgent(tasks, agent);
-  const reads = useAgentReadMarks();
-  const sectionDialogs = useSectionDialogs(tasks, shown);
-  const pins = usePinWrites(tasks.drawnTasks);
-  // Note that the agent on screen is unread only by a mark by hand, as its sidebar row reads it while current.
-  const read =
-    listed === undefined
-      ? undefined
-      : {
-          unread: reads.markedUnread(agent.id),
-          onMark: (next: boolean) => reads.mark(listed, next),
-        };
-  const own = listed !== undefined && agent.archivedAt === undefined;
-  const agentPin = own
-    ? {
-        pinned: listed.pinnedAt !== undefined,
-        onToggle: () => pins.onPinAgent(agent.id, listed.pinnedAt === undefined),
-      }
-    : undefined;
-  const section = own
-    ? moveToSectionEntry({ agent: true, id: agent.id }, listed.workspaceId, sectionDialogs)
-    : undefined;
-  return { read, agentPin, section, dialog: sectionDialogs.dialog };
-}
-
-/**
- * What a tab of the agent's page is pinned on: the agent while the sidebar
- * lists it standing, which is where the pin is drawn, or the task of an
- * agent on one, whose panel holds the same tab; none for an archived agent,
- * or one not read yet, which the sidebar draws no pin of.
- */
-function pagePinOn(tasks: TasksControl, agent: AgentSummary | undefined): PinHolder | undefined {
-  if (agent === undefined || agent.archivedAt !== undefined) return undefined;
-  if (agent.planId !== null) return { task: agent.planId };
-  const standing = tasks.listedAgents.standing.some((each) => each.id === agent.id);
-  return standing ? { agent: agent.id } : undefined;
+function pagePinOn(agent: AgentSummary | undefined): PinHolder | undefined {
+  if (agent === undefined || agent.archivedAt !== undefined || agent.planId === null) {
+    return undefined;
+  }
+  return { task: agent.planId };
 }
 
 /**
  * The page's bar: its title and its ⋯, which offer the agent's one menu as
  * its tab in a task's column does (`agent-actions.tsx`'s
- * `agentMenuGroups`): its title turned into its name's field by Rename, and,
- * for an agent with no task, its sidebar row's own read mark, Pin, and
- * Move to section beside the tab's actions.
+ * `agentMenuGroups`): its title turned into its name's field by Rename.
  */
 function AgentPageBar({
-  tasks,
   agent,
   agents,
   shown,
@@ -291,7 +222,6 @@ function AgentPageBar({
   trail,
   steps,
 }: {
-  tasks: TasksControl;
   agent: AgentSummary;
   agents: AgentsControl;
   shown: boolean;
@@ -323,15 +253,13 @@ function AgentPageBar({
     shown && deletion !== undefined && deletion.disabled !== true ? deletion.onSelect : undefined,
   );
   const menu = useMenu(shown);
-  const { read, agentPin, section, dialog: sectionDialog } = useAgentOwnDoors(tasks, agent, shown);
   // Note that the page's own head already leads with the Slack crumb an agent started from Slack opens, so its menu offers no Open in Slack beside it.
+  // The page's agent is what its keys act on while it stands, wherever a menu of it is drawn.
+  useShortcutTarget(shown ? actions.subject : undefined, AGENT_KEYS);
   const groups = agentMenuGroups({
-    chosen: true,
+    subject: actions.subject,
     ...actions.doors,
     onOpenInSlack: undefined,
-    read,
-    agentPin,
-    section,
   });
   const { rename } = actions;
   const renaming = rename?.editing === true;
@@ -376,7 +304,6 @@ function AgentPageBar({
     <>
       {drawnMenu}
       {actions.dialog}
-      {sectionDialog}
     </>
   );
   if (phone !== undefined) {
@@ -690,7 +617,7 @@ function DesktopAgentPage({
     [repositoryPlace],
   );
   // A file a mention names opens in the panel beside the agent, its lines at the commit the mention pins them to.
-  const openMentionedFile = useSteadyDoor((path: string, lines: MentionLines | undefined) =>
+  const openMentionedFile = useSteadyDoor((path: string, lines: OpenFileLines | undefined) =>
     onPressTab(
       lines === undefined
         ? { kind: TAB_PRESS.FILE, ref: { path }, reads: fileReads }
@@ -801,7 +728,6 @@ function DesktopAgentPage({
       )
     ) : (
       <AgentPageBar
-        tasks={tasks}
         agent={agent}
         agents={control}
         shown={tasks.shown}
@@ -921,7 +847,7 @@ function DesktopAgentPage({
                           unread={NO_UNREAD}
                           holder={SIDE_PANEL_HOLDER.AGENT}
                           taskId={agentId}
-                          pinOn={pagePinOn(tasks, agent)}
+                          pinOn={pagePinOn(agent)}
                           repository={agentRepository ?? null}
                           repositoryPlace={repositoryPlace}
                           pages={tasks.agentView.pages}

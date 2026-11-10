@@ -1,0 +1,256 @@
+import { CHECK_SUMMARY } from "@repo/features/agent-wire";
+import { fileName } from "@repo/features/code-ref-words";
+import {
+  ENTITY_KIND,
+  type Entity,
+  type EntityKind,
+  type EntityOf,
+  type KnownNames,
+} from "@repo/features/entity-kind";
+import { workspaceOfSlug } from "@repo/features/workspace-wire";
+import { ProviderMark } from "@repo/ui";
+import { ACTOR_KIND, ACTOR_STATE, type Actor, APP_ACTOR } from "@repo/ui/actor-model";
+import {
+  CalendarIcon,
+  GLYPH,
+  HashIcon,
+  HouseIcon,
+  MessageSquareIcon,
+  ShieldUserIcon,
+} from "@repo/ui/icons";
+import { useQuery } from "@tanstack/react-query";
+import type { ReactNode } from "react";
+import { ACTOR_SIZE, ActorGlyph, ActorMark, automationActor } from "../actor-ref.js";
+import { useAutomation } from "../automation-directory.js";
+import { TILE_SIZE, WorkspaceTile } from "../desktop/workspace-tile.js";
+import { usePerson } from "../member-directory.js";
+import { providerOf } from "../tasks/agent-model.js";
+import { WorkspaceDirectory } from "../tasks/chip-cards.js";
+import { FileTypeIcon } from "../tasks/file-type-icon.js";
+import { InboxItemChipGlyph } from "../tasks/inbox-item-chip.js";
+import { IssueMark } from "../tasks/issue-mark.js";
+import { ReadAgentModel } from "../tasks/mentioned-agent-card.js";
+import { PullRequestMark } from "../tasks/pull-request-mark.js";
+import { SkillMark } from "../tasks/skill-ref.js";
+import { AgentGlyph, AgentMark, PlanGlyph } from "../tasks/tab-look.js";
+import { useAgentStatus, useTaskStatus } from "../tasks/use-known-names.js";
+import type { LinkStanding } from "../tasks/use-link-standing.js";
+import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
+
+/**
+ * entity-mark.tsx -- the mark a chip leads with for each kind of entity it names, one entry per kind (`@repo/features/entity-kind`).
+ *
+ * An entity wears the mark its row wears wherever the window lists it, and
+ * its chip wears that same mark whichever way it was written: a mention's
+ * chip and an app link's chip both lead with `entityMark`, so a person
+ * named by a link wears their face as their mention does, and an agent of
+ * the plan open wears its tab's tile either way. The table is keyed by
+ * every `ENTITY_KIND` and typed over each kind's own `Entity`, so a kind
+ * added there fails to compile until it says what mark it wears.
+ *
+ * A mark that reads where the entity stands, a plan's status, a pull
+ * request's or an issue's state, an agent's harness, an automation's last
+ * run, what an Inbox item asks, falls back while the window holds none of it
+ * to the one glyph `@repo/ui/icons`' `GLYPH` stands for the kind by, never
+ * to the mark of the site its address is on; a person falls back to the
+ * initials the people rows draw where they have no picture.
+ */
+
+/** What a chip hands its entity's mark: what it calls the entity, where it stands, and what it holds of it. */
+export interface EntityMarkAt {
+  /** The name the chip calls it by, which a person not among the members read is found by. */
+  readonly name: string;
+  readonly known: KnownNames;
+  /** The slug of the workspace the link was written under, whose members a person is drawn as. */
+  readonly workspace: string;
+  /** The tiles of one plan's agents, as the place drawing the chip holds them; none where it holds none. */
+  readonly tiles: AgentTiles | undefined;
+  /** What its provider answered for the page it names; none for any other entity, or while unread. */
+  readonly standing: LinkStanding | undefined;
+}
+
+/** The tiles of a plan's agents as their tabs wear them; none for an agent not of the plan. */
+export interface AgentTiles {
+  readonly tileOf: (agentId: string) => Actor | undefined;
+}
+
+/** The mark a kind wears. */
+type EntityMark<T> = (entity: T, at: EntityMarkAt) => ReactNode;
+
+/** The marks, one entry per kind. */
+type EntityMarks = { readonly [K in EntityKind]: EntityMark<EntityOf<K>> };
+
+/** A plan's glyph, wearing its status where the window holds the task, as its row does. */
+function PlanMark({ taskId }: { taskId: string }): React.JSX.Element {
+  return <PlanGlyph status={useTaskStatus(taskId)} />;
+}
+
+/**
+ * The harness an agent runs in, read off its model. Where no model is known
+ * the chip wears the mark of no known harness, while the read is out and
+ * after it answered with none alike, so the harness's mark lands in its place
+ * without moving an entity and the chip's name never shifts when it does not.
+ */
+function harnessMark(model: string | undefined): ReactNode {
+  return <AgentMark provider={model === undefined ? undefined : providerOf(model)} />;
+}
+/**
+ * The mark of an agent the place holds no tile of: the harness the window
+ * last read it running on, giving way to the working mark while the window
+ * lists it working, as its row does; and where the window holds no model of
+ * it, an archived agent's or one past the few its task's row names, the one
+ * the task list carries for it (`ReadAgentModel`).
+ */
+function KnownAgentMark({ agentId, at }: { agentId: string; at: EntityMarkAt }): ReactNode {
+  const model = at.known.agentModels.get(agentId);
+  const status = useAgentStatus(agentId);
+  if (model !== undefined && status !== undefined) return <AgentGlyph agent={{ model, status }} />;
+  if (model !== undefined) return harnessMark(model);
+  return <ReadAgentModel agentId={agentId}>{harnessMark}</ReadAgentModel>;
+}
+
+/** An agent's mark: its tab's tile where the place holds its plan's agents, else its harness's. */
+function AgentEntityMark({
+  agent,
+  at,
+}: {
+  agent: EntityOf<typeof ENTITY_KIND.AGENT>;
+  at: EntityMarkAt;
+}): React.JSX.Element {
+  const { tiles } = at;
+  const tile = tiles?.tileOf(agent.agentId);
+  // Note that a tile the page knows no harness of, its agents not yet read say, gives way to the mark read for it.
+  const harnessless =
+    tile === undefined || (tile.kind === ACTOR_KIND.AGENT && tile.provider === undefined);
+  return harnessless ? (
+    <KnownAgentMark agentId={agent.agentId} at={at} />
+  ) : (
+    <ActorGlyph actor={tile} />
+  );
+}
+
+/** A person as the members around the mark draw them: their picture, their initials where they have none, or grayed where they left. */
+function PersonFace({ userId, name }: { userId: string; name: string }): React.JSX.Element {
+  const person = usePerson({ userId, name });
+  return <ActorMark actor={person} size={ACTOR_SIZE.INLINE} />;
+}
+
+/**
+ * A person's face as the workspace their link names holds them, as their
+ * card reads them (`PersonChipCard`), so the chip and its card agree on
+ * whether they left; the members around the chip where the account holds no
+ * such workspace.
+ */
+function PersonMark({
+  userId,
+  name,
+  workspace,
+}: {
+  userId: string;
+  name: string;
+  workspace: string;
+}): React.JSX.Element {
+  const listed = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+  const named = listed === undefined ? undefined : workspaceOfSlug(listed, workspace);
+  const face = <PersonFace userId={userId} name={name} />;
+  return named === undefined ? (
+    face
+  ) : (
+    <WorkspaceDirectory workspace={named}>{face}</WorkspaceDirectory>
+  );
+}
+
+/** An automation's glyph, what fires it, wearing how its newest run went where the window reads the automation, and at rest where it does not. */
+function AutomationTile({
+  automationId,
+  name,
+}: {
+  automationId: string;
+  name: string;
+}): React.JSX.Element {
+  const known = useAutomation(automationId);
+  return (
+    <ActorGlyph
+      actor={
+        known === undefined
+          ? { kind: ACTOR_KIND.AUTOMATION, name, state: ACTOR_STATE.REST }
+          : automationActor(known.automation)
+      }
+    />
+  );
+}
+
+/** A workspace's tile as its rows draw it; its letter by its slug where the window holds it not. */
+function WorkspaceMark({ slug }: { slug: string }): React.JSX.Element {
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+  const listed = workspaces === undefined ? undefined : workspaceOfSlug(workspaces, slug);
+  return <WorkspaceTile workspace={listed ?? { id: slug, name: slug }} size={TILE_SIZE.INLINE} />;
+}
+
+/** An automation's mark, or one of its runs': the automation's tile. */
+const AUTOMATION_MARK: EntityMark<
+  EntityOf<typeof ENTITY_KIND.AUTOMATION | typeof ENTITY_KIND.AUTOMATION_RUN>
+> = (automation, at) => <AutomationTile automationId={automation.automationId} name={at.name} />;
+
+/** An MCP server's mark, or one of its tools': its provider's. */
+const SERVER_MARK: EntityMark<EntityOf<typeof ENTITY_KIND.SERVER | typeof ENTITY_KIND.TOOL>> = (
+  server,
+) => <ProviderMark provider={server.provider} />;
+
+/** The mark each kind leads with, as its row leads with it wherever the window lists the entity. */
+const ENTITY_MARK: EntityMarks = {
+  [ENTITY_KIND.PLAN]: (plan) => <PlanMark taskId={plan.taskId} />,
+  [ENTITY_KIND.SECTION]: () => <HashIcon aria-hidden="true" />,
+  [ENTITY_KIND.VERSION]: (version) => <PlanMark taskId={version.planId} />,
+  [ENTITY_KIND.COMMENT]: () => <GLYPH.COMMENT />,
+  [ENTITY_KIND.PAGE]: () => <GLYPH.PAGE />,
+  [ENTITY_KIND.AGENT]: (agent, at) => <AgentEntityMark agent={agent} at={at} />,
+  [ENTITY_KIND.WORKER]: () => <GLYPH.AGENT />,
+  [ENTITY_KIND.APP]: () => <ActorMark actor={APP_ACTOR} size={ACTOR_SIZE.INLINE} />,
+  [ENTITY_KIND.CHANGES]: () => <GLYPH.PULL_REQUEST_CHANGES />,
+  // A pull request its provider answered for wears its mark for where it stands, as everywhere the window draws one.
+  [ENTITY_KIND.PULL_REQUEST]: (_pullRequest, { standing }) =>
+    standing?.pullRequest === undefined ? (
+      <GLYPH.PULL_REQUEST />
+    ) : (
+      <PullRequestMark pullRequest={{ ...standing.pullRequest, checks: CHECK_SUMMARY.NONE }} />
+    ),
+  [ENTITY_KIND.PULL_REQUEST_THREAD]: () => <GLYPH.COMMENT />,
+  [ENTITY_KIND.ISSUE]: (_issue, { standing }) =>
+    standing?.issue === undefined ? <GLYPH.ISSUE /> : <IssueMark issue={standing.issue} />,
+  [ENTITY_KIND.LINK]: (link) => (
+    <ProviderMark provider={"site" in link ? link.site : link.provider} />
+  ),
+  [ENTITY_KIND.MESSAGE]: () => <MessageSquareIcon aria-hidden="true" />,
+  [ENTITY_KIND.HOME]: () => <HouseIcon aria-hidden="true" />,
+  [ENTITY_KIND.BOARD]: () => <GLYPH.TASK />,
+  [ENTITY_KIND.INBOX]: () => <GLYPH.INBOX />,
+  [ENTITY_KIND.INBOX_ITEM]: (item) => <InboxItemChipGlyph place={item} />,
+  [ENTITY_KIND.AUTOMATIONS]: () => <GLYPH.AUTOMATION />,
+  [ENTITY_KIND.AUTOMATION]: AUTOMATION_MARK,
+  [ENTITY_KIND.AUTOMATION_RUN]: AUTOMATION_MARK,
+  [ENTITY_KIND.SETTINGS]: () => <GLYPH.SETTINGS />,
+  [ENTITY_KIND.PERSON]: (person, at) => (
+    <PersonMark userId={person.userId} name={at.name} workspace={at.workspace} />
+  ),
+  [ENTITY_KIND.ADMIN]: () => <ShieldUserIcon aria-hidden="true" />,
+  [ENTITY_KIND.FILE]: (file) => <FileTypeIcon name={fileName(file.path)} />,
+  [ENTITY_KIND.FOLDER]: () => <GLYPH.FOLDER />,
+  [ENTITY_KIND.SERVER]: SERVER_MARK,
+  [ENTITY_KIND.TOOL]: SERVER_MARK,
+  [ENTITY_KIND.SKILL]: () => <SkillMark />,
+  // Note that a repository's row leads with its owner's picture only where the place may draw pictures, which no chip is told yet, so it wears its kind's glyph.
+  [ENTITY_KIND.REPOSITORY]: () => <GLYPH.REPOSITORY />,
+  [ENTITY_KIND.WORKSPACE]: (workspace) => <WorkspaceMark slug={workspace.workspace} />,
+  [ENTITY_KIND.DATE]: () => <CalendarIcon aria-hidden="true" />,
+};
+
+/** An entity's mark drawn through its kind's own entry. */
+function markOf<K extends EntityKind>(kind: K, entity: EntityOf<K>, at: EntityMarkAt): ReactNode {
+  return ENTITY_MARK[kind](entity, at);
+}
+
+/** The mark an entity leads with, by its kind's entry. */
+export function entityMark(entity: Entity, at: EntityMarkAt): ReactNode {
+  return markOf(entity.kind, entity, at);
+}

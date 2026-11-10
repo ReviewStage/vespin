@@ -4,7 +4,6 @@ import { ChevronDownIcon, dropBelowStart, GearIcon, NavItem, PlusIcon, useMenu }
 import { ShieldUserIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useQuery } from "@tanstack/react-query";
-import { useNewTaskDrafted } from "../composer-drafts.js";
 import { useOpenSettings } from "../open-settings.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectAdminAccess } from "../use-app-state.js";
@@ -139,7 +138,6 @@ export function WorkspaceSwitcher({
 }): React.JSX.Element | null {
   const menu = useMenu(tasks.shown && inSight);
   const doors = useWorkspaceMenuDoors(admin);
-  const drafted = useNewTaskDrafted(tasks.newTask.workspaceId) && tasks.signedIn && !newTask.shown;
   const listed = tasks.workspace;
   if (listed === undefined) return null;
   const personal = tasks.workspaces[0]?.id === listed.id;
@@ -155,12 +153,7 @@ export function WorkspaceSwitcher({
       >
         <WorkspaceRef workspace={listed} size={WORKSPACE_REF_SIZE.HEAD} />
       </NavItem>
-      <NewTaskButton
-        tasks={tasks}
-        current={newTask.shown}
-        drafted={drafted}
-        onNewTask={newTask.onOpen}
-      />
+      <NewTaskButton tasks={tasks} current={newTask.shown} onNewTask={newTask.onOpen} />
       {menu.drawn === undefined ? null : (
         <ActionMenu
           label="Workspaces"

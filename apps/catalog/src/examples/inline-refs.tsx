@@ -1,4 +1,7 @@
 import {
+  AVATAR_SHAPE,
+  AVATAR_SIZE,
+  Avatar,
   DocumentIcon,
   HoverCard,
   HoverCardHead,
@@ -12,6 +15,7 @@ import {
   Text,
   UserIcon,
 } from "@repo/ui";
+import { CalendarIcon } from "@repo/ui/icons";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -19,9 +23,12 @@ import { CatalogSection } from "../section";
  * inline-refs.tsx -- things named in a line of words: a link's words, a
  * byline's wash, and a mention's pill, each pressable and not; a pill
  * saying where its subject stands, one that leaves the app as a link, one
- * whose subject is gone, all in running words that they wrap across as the
- * words do; long names wrapping in a narrow column, and the same names in a
- * slot one line tall, fading out where they are cut, a path at its start;
+ * whose subject is gone, a person's face and an automation's square standing
+ * level with a line glyph, all in running words that they wrap across as the
+ * words do; long names wrapping in a narrow column, each glyph kept to its
+ * name's first word, and a pull request's key and a date kept whole with
+ * their glyph and standing there; the same long names in a slot one line tall, fading out
+ * where they are cut, a path at its start;
  * and a pill as the subject of a line, as wide as its name until the line
  * runs out. A screen reader hears each pill's kind before its name. Each hangs its card, or
  * its name in a pill, in the window's tooltip, once the pointer rests on
@@ -116,6 +123,41 @@ function InlineRefs(): React.JSX.Element {
           it no longer holds, or the skill{" "}
           <InlineRef look={INLINE_REF_LOOK.PILL} kind="skill" label="/release" onPress={press} />.
         </Text>
+        <Text>
+          Ask{" "}
+          <InlineRef
+            look={INLINE_REF_LOOK.PILL}
+            glyph={<Avatar name="Charles Pan" size={AVATAR_SIZE.INLINE} decorative />}
+            kind="person"
+            label="Charles Pan"
+            onPress={press}
+          />{" "}
+          before{" "}
+          <InlineRef
+            look={INLINE_REF_LOOK.PILL}
+            glyph={
+              <Avatar
+                name="Nightly triage"
+                glyph={<CalendarIcon />}
+                shape={AVATAR_SHAPE.SQUARE}
+                size={AVATAR_SIZE.INLINE}
+                decorative
+              />
+            }
+            kind="automation"
+            label="Nightly triage"
+            onPress={press}
+          />{" "}
+          runs, on{" "}
+          <InlineRef
+            look={INLINE_REF_LOOK.PILL}
+            glyph={<CalendarIcon />}
+            kind="date"
+            label="Oct 20, 2026"
+            name={INLINE_REF_NAME.WHOLE}
+          />
+          .
+        </Text>
       </CatalogSection>
       <CatalogSection id="inline-ref-narrow" title="Long names in a narrow column">
         <div className="catalog-column">
@@ -136,7 +178,25 @@ function InlineRefs(): React.JSX.Element {
               state="4–9"
               onPress={press}
             />
-            , then ship it.
+            , then push it to its pull request{" "}
+            <InlineRef
+              look={INLINE_REF_LOOK.PILL}
+              glyph={<DocumentIcon />}
+              kind="pull request"
+              label="smol-machines/smolvm#7889"
+              name={INLINE_REF_NAME.WHOLE}
+              state="Open"
+              onPress={press}
+            />{" "}
+            and ship it by{" "}
+            <InlineRef
+              look={INLINE_REF_LOOK.PILL}
+              glyph={<CalendarIcon />}
+              kind="date"
+              label="Oct 20, 2026, 3:00 PM PDT"
+              name={INLINE_REF_NAME.WHOLE}
+            />
+            .
           </Text>
         </div>
       </CatalogSection>

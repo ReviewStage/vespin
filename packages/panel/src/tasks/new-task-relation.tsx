@@ -1,4 +1,5 @@
 import { sameRepository } from "@repo/features/github-repositories-wire";
+import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import {
   TASK_BOUNDS,
   TASK_CREATE_RELATION_KIND,
@@ -29,7 +30,7 @@ import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useState } from "react";
 import { RelationKindPill } from "./relation-kind-pill.js";
 import { TASK_RELATION_MENU } from "./task-relation-menu.js";
-import { TASK_STATUS_WORDS, TaskKey } from "./task-standing.js";
+import { TaskKey } from "./task-standing.js";
 
 /**
  * new-task-relation.tsx -- New task's relations: the other tasks the new task starts related to, and how, read from the new task's side, picked from the + menu and drawn as rows over the card.

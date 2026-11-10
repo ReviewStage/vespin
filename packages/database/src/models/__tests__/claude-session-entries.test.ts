@@ -15,6 +15,8 @@ import {
   listSessionEntrySessions,
   listSessionEntrySubkeys,
   loadSessionEntries,
+  loadSessionEntryPage,
+  type SessionEntryPage,
 } from "../claude-session-entries.js";
 import { deleteConversations } from "../conversation-delete.js";
 
@@ -38,6 +40,24 @@ const root = (uuid: string) => ({ ...entry(uuid), parentUuid: null });
 /** A key's whole transcript as the account reads it, none read as no entries. */
 const loaded = (userId: string, conversationId: string, key: typeof MAIN | typeof SUBAGENT) =>
   loadSessionEntries(userId, conversationId, key).pipe(Effect.map(Option.getOrElse(() => [])));
+
+/** A key's transcript read page by page from its first, each page's entries in its own list. */
+const paged = (userId: string, conversationId: string, key: typeof MAIN) =>
+  Effect.gen(function* () {
+    const pages: Array<ReadonlyArray<unknown>> = [];
+    let after: number | null = null;
+    do {
+      const page: SessionEntryPage = yield* loadSessionEntryPage(
+        userId,
+        conversationId,
+        key,
+        after,
+      );
+      pages.push(page.entries);
+      after = page.next;
+    } while (after !== null);
+    return pages;
+  });
 
 /** An account of its own with an agent of its own, by the agent's conversation. */
 const openAgent = Effect.gen(function* () {
@@ -135,6 +155,27 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
           root("a"),
           entry("b"),
         ]);
+      }),
+  );
+
+  it.effect(
+    "a session larger than one page loads whole and in order across its pages, and another account pages none of it",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openAgent;
+        const other = yield* openAgent;
+        // Note that each entry of three megabytes holds more than a page's bytes alone, though far fewer than its count.
+        const large = ["a", "b", "c"].map((uuid) => ({
+          ...entry(uuid),
+          toolOutput: uuid.repeat(3 * 1024 * 1024),
+        }));
+        yield* appendSessionEntries(owner.userId, owner.conversationId, MAIN, large);
+
+        const pages = yield* paged(owner.userId, owner.conversationId, MAIN);
+        assert.ok(pages.length > 1);
+        assert.ok(pages.every((page) => page.length > 0));
+        assert.deepEqual(pages.flat(), large);
+        assert.deepEqual(yield* paged(other.userId, owner.conversationId, MAIN), [[]]);
       }),
   );
 

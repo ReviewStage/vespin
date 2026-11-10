@@ -9,9 +9,13 @@
  * items; the account's feed of every item holds each of those tasks'
  * items whole, which every surface draws from; and the list holds the
  * account's tasks assigned to it, created by it, and worked on by its
- * agents, which its own page lists. The items are an ask of each kind (a decision, an
- * approval, steps to do, an answer in words, and a form), a notice whose
- * message carries code, a long thread, one answered, and one closed. Every
+ * agents, which its own page lists, filled out as the Tasks list stands one:
+ * a task pinned, one in a section of the account's, a sub-task, two
+ * repositories, and the reference journey's task with its agent's pull
+ * request, its pages, its description, and a task it waits on. The items
+ * are an ask of each kind (a decision, an approval, steps to do, an answer
+ * in words, and a form), a notice whose message carries code, a long
+ * thread, one answered, and one closed. Every
  * name, address, and repository here is invented; nothing is read from an
  * account. The panel's fixture loader lays it over the window's document
  * (`@repo/panel`'s `tasks-fixture-loader.ts`), and the Expo app's fixture
@@ -19,8 +23,16 @@
  */
 
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
-import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
-import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
+import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import {
+  AGENT_ATTACHMENT_TYPE,
+  AGENT_STATUS,
+  type AgentSummary,
+  CHECK_SUMMARY,
+  PULL_REQUEST_STATE,
+} from "@repo/features/agent-wire";
+import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
   INBOX_APPROVAL_OPTION,
   INBOX_ASK,
@@ -33,19 +45,26 @@ import {
   type InboxItem,
   type InboxMessage,
 } from "@repo/features/inbox-wire";
+import { LINK_PLACE } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
-import { TASK_PRIORITY, TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
+import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
+import { TASK_PRIORITY, TASK_STATUS, type Task, type TaskSummary } from "@repo/features/task-wire";
 import type { TasksView } from "@repo/features/tasks-view";
+import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
+import { EXPERIMENT } from "@repo/settings";
 import { ACT_KIND } from "./acts.js";
 import {
   type AppHeldById,
   type AppInboxTask,
   type AppInboxTaskHolding,
   type AppStateSnapshot,
+  OWN_TRANSCRIPT,
   RUN_PROFILE,
 } from "./app-state.js";
 import type { PortActKind, PortActPayload, PortActResult } from "./contract/index.js";
-import { FIXTURE_IDS } from "./fixture-stage.js";
+import { fixtureAgentPicture, fixtureAgentTranscript } from "./fixture-agent-transcript.js";
+import { FIXTURE_PICTURE_PNG, FIXTURE_VIDEO_WEBM } from "./fixture-inbox-media.js";
+import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
 
 /**
  * When the fixture landed, from which every instant here is counted back.
@@ -81,6 +100,14 @@ const TASK = {
   ROUNDING: "4dae6081-2f5b-4c73-9e9b-5a6b7c8d9ea4",
 } as const;
 
+/** The account's tasks that hold no item, which fill out its Tasks list: a sub-task of the reference journey's, one in a second repository, and one in a section of its own. */
+const LISTED = {
+  COPY: "81e2a425-6d9f-4ab7-92df-9eafb0c1d2e8",
+  ALERTS: "92f3b536-7eaf-4bc8-a3ea-afb0c1d2e3f9",
+  LAUNCH: "a304c647-8fb0-4cd9-b4fb-b0c1d2e3f40a",
+  SECTION: "b415d758-90c1-4dea-85ac-c1d2e3f4051b",
+} as const;
+
 /** The agents that posted the items, one at work on each task. */
 const AGENT = {
   INVITES: "5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5",
@@ -89,6 +116,9 @@ const AGENT = {
 } as const;
 
 const MODEL = "anthropic/claude-opus-5.5";
+
+/** The fixture's workspace by the name its addresses spell it with, as the panel's tasks fixture names it. */
+const FIXTURE_WORKSPACE_SLUG = "personal";
 
 /* ----- The items ----- */
 
@@ -158,7 +188,21 @@ function item(
 
 const OPEN = { status: INBOX_ASK_STATUS.OPEN } as const;
 
-/** The reference journey's task's items: a decision, an approval, a form, a notice with code, and a long thread. */
+/** The recorded thread's files: a still its words draw, and the recording sent after them, by the attachment each is read by. */
+const RECORDED = {
+  ITEM: fixtureId(10),
+  PICTURE: "92f3b536-7eaf-4bc8-a3e0-1a2b3c4d5e6f",
+  VIDEO: "a3f4c647-8fb0-4cd9-b4f1-2b3c4d5e6f70",
+} as const;
+
+/** Where the recorded thread's words draw its still from: the still's address on the thread, as an agent's post names a picture it attached. */
+const RECORDED_PICTURE_ADDRESS = inboxAttachmentAddress(
+  { kind: LINK_PLACE.INBOX_ITEM, planId: TASK.INVITES, itemId: RECORDED.ITEM },
+  RECORDED.PICTURE,
+  FIXTURE_WORKSPACE_SLUG,
+);
+
+/** The reference journey's task's items: a decision, an approval, a form, a notice with code, a long thread, and a notice with a picture and a recording. */
 const INVITES_ITEMS: readonly InboxItem[] = [
   item(
     1,
@@ -293,6 +337,45 @@ const INVITES_ITEMS: readonly InboxItem[] = [
       { type: INBOX_ASK.ANSWER, ...OPEN },
     ),
   ]),
+  item(
+    10,
+    AGENT.INVITES,
+    "invite-recording",
+    "Recorded the invite flow",
+    [
+      {
+        ...agentSaid(
+          114,
+          25 * MINUTE,
+          [
+            "I walked the invite flow in the preview, from [@Teammate invitations](https://vespin.dev/personal/task/0f6a2c4e-8b1d-4e3f-9a57-1c2b3d4e5f60) to the accepted page:",
+            "",
+            `![The invite page](${RECORDED_PICTURE_ADDRESS})`,
+            "",
+            "The recording is under this. The expired page is still the placeholder.",
+          ].join("\n"),
+        ),
+        files: [
+          {
+            attachmentId: RECORDED.PICTURE,
+            name: "invite-page.png",
+            mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+          },
+        ],
+      },
+      {
+        ...agentSaid(115, 24 * MINUTE, "And the whole flow, sent to accepted:"),
+        files: [
+          {
+            attachmentId: RECORDED.VIDEO,
+            name: "invite-flow.webm",
+            mediaType: CONVERSATION_MEDIA_TYPE.WEBM,
+          },
+        ],
+      },
+    ],
+    { unread: true },
+  ),
 ];
 
 /** The digest task's items: steps to do, an answer in words, and one answered. */
@@ -475,7 +558,7 @@ function agentsLine(taskId: string): Pick<TaskSummary, "agents"> {
       total: 1,
       working,
       activityAt: newest(INBOXES.get(taskId) ?? []),
-      pullRequestTotal: 0,
+      pullRequestTotal: taskId === TASK.INVITES ? 1 : 0,
     },
   };
 }
@@ -495,6 +578,7 @@ const OWN_TASKS: readonly TaskSummary[] = [
     ownerId: ADA.userId,
     createdBy: ADA,
     assignee: ADA,
+    pinnedAt: LANDED - 9 * DAY,
     ...agentsLine(TASK.DIGEST),
   },
   {
@@ -514,21 +598,145 @@ const OWN_TASKS: readonly TaskSummary[] = [
   },
 ];
 
+/** One of the account's tasks no item stands in, assigned to it, as its Tasks list lists it. */
+function listedTask(
+  id: string,
+  name: string,
+  more: Pick<TaskSummary, "repository" | "status" | "number" | "updatedAt"> & Partial<TaskSummary>,
+): TaskSummary {
+  return {
+    id,
+    workspaceId: FIXTURE_IDS.WORKSPACE,
+    name,
+    createdAt: LANDED - 3 * DAY,
+    priority: TASK_PRIORITY.MEDIUM,
+    ownerId: ADA.userId,
+    createdBy: ADA,
+    assignee: ADA,
+    ...more,
+  };
+}
+
+/**
+ * The account's tasks that hold no item, which fill out its Tasks list as
+ * the sidebar stands it: a sub-task under the reference journey's, a task
+ * in a second repository, so the list draws its repositories' headings, and
+ * one the account keeps in a section of its own.
+ */
+const LISTED_TASKS: readonly TaskSummary[] = [
+  listedTask(LISTED.COPY, "Invite email copy", {
+    repository: "ada/relay",
+    status: TASK_STATUS.TODO,
+    number: 44,
+    updatedAt: LANDED - 3 * HOUR,
+    parentTaskId: TASK.INVITES,
+  }),
+  listedTask(LISTED.ALERTS, "Usage alerts", {
+    repository: "ada/ledger",
+    status: TASK_STATUS.TODO,
+    number: 45,
+    updatedAt: LANDED - 5 * HOUR,
+    priority: TASK_PRIORITY.LOW,
+  }),
+  listedTask(LISTED.LAUNCH, "Launch checklist", {
+    repository: "ada/relay",
+    status: TASK_STATUS.IN_PROGRESS,
+    number: 46,
+    updatedAt: LANDED - 7 * HOUR,
+  }),
+];
+
+/** The tasks the fixture lays after the list's own, by id. */
+const STAGED_TASK_IDS: ReadonlySet<string> = new Set(
+  [...OWN_TASKS, ...LISTED_TASKS].map((task) => task.id),
+);
+
+/** The account's one section, holding the launch's checklist. */
+const LISTED_SECTIONS: NonNullable<TasksView["taskSections"]> = {
+  sections: [
+    {
+      id: LISTED.SECTION,
+      workspaceId: FIXTURE_IDS.WORKSPACE,
+      title: "Launch",
+      createdAt: LANDED - 8 * DAY,
+    },
+  ],
+  entries: [{ taskId: LISTED.LAUNCH, sectionId: LISTED.SECTION, addedAt: LANDED - 8 * DAY }],
+  agentEntries: [],
+};
+
+/** The pull request the reference journey's agent opened, open with its checks passing. */
+const INVITES_PULL_REQUEST = {
+  number: 128,
+  title: "Invite a teammate by email",
+  url: "https://github.com/ada/relay/pull/128",
+  state: PULL_REQUEST_STATE.OPEN,
+  checks: CHECK_SUMMARY.PASSING,
+  additions: 412,
+  deletions: 37,
+} as const;
+
+/** The fixture's workspace where a list names none, as the panel's tasks fixture names it, with Task descriptions on. */
+const FIXTURE_WORKSPACE: Workspace = {
+  id: FIXTURE_IDS.WORKSPACE,
+  name: ADA.name,
+  slug: FIXTURE_WORKSPACE_SLUG,
+  role: WORKSPACE_ROLE.OWNER,
+  github: { login: "ada", active: true },
+  personal: true,
+  experiments: [
+    {
+      experiment: EXPERIMENT.DESCRIPTIONS,
+      on: true,
+      changedBy: { id: ADA.userId, name: ADA.name },
+      changedAt: LANDED - 30 * DAY,
+    },
+  ],
+};
+
+/**
+ * The reference journey's task as a list with no tasks fixture lists it, the
+ * iOS app's: the panel's tasks fixture lists it whole, and this stands for
+ * it only where that one does not.
+ */
+const INVITES_TASK: TaskSummary = {
+  id: TASK.INVITES,
+  workspaceId: FIXTURE_IDS.WORKSPACE,
+  name: FIXTURE_TASK_NAME,
+  createdAt: LANDED - 2 * DAY,
+  updatedAt: LANDED - 4 * MINUTE,
+  repository: "ada/relay",
+  status: TASK_STATUS.IN_PROGRESS,
+  priority: TASK_PRIORITY.HIGH,
+  number: 42,
+  ownerId: ADA.userId,
+  createdBy: ADA,
+};
+
+/** The reference journey's task as the account's own: created by it, assigned to it, and its agent at work. */
+function ownInvites(task: TaskSummary): TaskSummary {
+  return { ...task, ownerId: ADA.userId, createdBy: ADA, assignee: ADA, ...agentsLine(task.id) };
+}
+
 /**
  * The list as these profiles draw it, from the list the tasks fixture draws:
  * the reference journey's task assigned to the account and its agent at
- * work, and the account's own two tasks after it, so every task holding an
- * item is listed. The same list under any other profile.
+ * work, standing in where the list holds none, and the account's own two
+ * tasks after it, so every task holding an item is listed. The same list
+ * under any other profile.
  */
 export function inboxTasksView(profile: string, list: TasksView): TasksView {
   if (!STAGED_PROFILES.has(profile)) return list;
+  const listed = list.tasks.some((task) => task.id === TASK.INVITES)
+    ? list.tasks
+    : [INVITES_TASK, ...list.tasks];
+  // Note that a list staged already, which the host wrote again, holds the staged tasks once, so they are laid over it rather than added twice.
   const tasks = [
-    ...list.tasks.map((task) =>
-      task.id === TASK.INVITES
-        ? { ...task, ownerId: ADA.userId, createdBy: ADA, assignee: ADA, ...agentsLine(task.id) }
-        : task,
-    ),
+    ...listed
+      .filter((task) => !STAGED_TASK_IDS.has(task.id))
+      .map((task) => (task.id === TASK.INVITES ? ownInvites(task) : task)),
     ...OWN_TASKS,
+    ...LISTED_TASKS,
   ];
   // Note that the list follows each task's agent live too, which its row, its Inbox items, and a person's page read.
   const followed = tasks.flatMap((task) => {
@@ -544,7 +752,162 @@ export function inboxTasksView(profile: string, list: TasksView): TasksView {
           },
         ];
   });
-  return { ...list, tasks, taskAgents: [...(list.taskAgents ?? []), ...followed] };
+  const invitesAgent = AGENTS.get(TASK.INVITES);
+  return {
+    ...list,
+    tasks,
+    taskAgents: [
+      ...(list.taskAgents ?? []).filter((agent) => !followed.some(({ id }) => id === agent.id)),
+      ...followed,
+    ],
+    taskSections: LISTED_SECTIONS,
+    workspaces: list.workspaces.some((workspace) => workspace.id === FIXTURE_IDS.WORKSPACE)
+      ? list.workspaces
+      : [FIXTURE_WORKSPACE, ...list.workspaces],
+    taskPullRequests: [
+      ...(list.taskPullRequests ?? []).filter((each) => each.taskId !== TASK.INVITES),
+      { taskId: TASK.INVITES, pullRequests: [{ ...INVITES_PULL_REQUEST, agentId: AGENT.INVITES }] },
+    ],
+    agentPullRequests: [
+      ...(list.agentPullRequests ?? []).filter((each) => each.taskId !== TASK.INVITES),
+      ...(invitesAgent === undefined
+        ? []
+        : [
+            {
+              agentId: invitesAgent.id,
+              taskId: TASK.INVITES,
+              pullRequest: { ...INVITES_PULL_REQUEST, changedFiles: 14 },
+            },
+          ]),
+    ],
+  };
+}
+
+/* ----- The reference journey's description and pages ----- */
+
+/**
+ * The reference journey's description, as its page draws it under Task
+ * descriptions: headings, words marked up, lists and a task list, a quote, a
+ * table wider than a phone, code, a mention chip of each kind, and a
+ * picture, so a capture of it shows every piece the description draws.
+ */
+const INVITES_DESCRIPTION = [
+  "## Context",
+  "",
+  "Only an admin can add someone to a workspace, so members wait on an admin to bring a " +
+    "teammate in. **Invites** let any member do it, and *expire* after a week.",
+  "",
+  "## Goal",
+  "",
+  "- A member invites a teammate by email.",
+  "- The teammate joins the workspace by opening the link.",
+  "",
+  "> A withdrawn or accepted link grants nothing when it is opened again.",
+  "",
+  "## Approach",
+  "",
+  "Model an invite as a `memberships` row with `state = pending`, so removal covers invites " +
+    "and members alike.",
+  "",
+  "```ts",
+  "export function inviteMember(workspaceId: string, email: string): Promise<Membership>;",
+  "```",
+  "",
+  "| Step | Owner | Where | Done |",
+  "| :-- | :-- | :-- | :-: |",
+  "| Send the invite | Agent | src/members/invite.ts | yes |",
+  "| Accept the link | Agent | src/members/accept.ts | no |",
+  "",
+  "## Links",
+  "",
+  "- Task: [@Usage alerts](https://vespin.dev/personal/task/45)",
+  "- Pull request: [@#128 Invite a teammate by email](https://github.com/ada/relay/pull/128)",
+  "- File: [@invite.ts](https://github.com/ada/relay/blob/HEAD/src/members/invite.ts)",
+  "- Date: [@Nov 16, 2026](mention://date/2026-11-16)",
+  "",
+  "## Checks",
+  "",
+  "- [x] An invite is sent once per address",
+  "- [ ] A withdrawn link grants nothing",
+  "",
+  `![The invite page](data:image/png;base64,${FIXTURE_PICTURE_PNG})`,
+  "",
+].join("\n");
+
+/** The reference journey's task as its page reads it: its row's fields, its description, and the task it waits on. */
+function invitesDocument(listed: TaskSummary): Task {
+  const { agents: _agents, ...task } = listed;
+  return {
+    ...task,
+    document: { body: INVITES_DESCRIPTION, assumptions: [] },
+    blockedBy: [LISTED.ALERTS],
+    blocks: [],
+  };
+}
+
+/** The pages the reference journey's agent showed, as its task's page lists them. */
+const INVITES_PAGES: readonly PageLine[] = [
+  {
+    id: FIXTURE_PAGE.id,
+    title: FIXTURE_PAGE.title,
+    version: FIXTURE_PAGE.version,
+    at: LANDED - 2 * HOUR,
+    shownBy: { kind: PAGE_SHOWER.AGENT, agentId: AGENT.INVITES },
+  },
+];
+
+/** A descriptions slice with the reference journey's laid over it, and the listed task it was laid from. */
+interface StagedDocuments {
+  readonly from: TaskSummary;
+  readonly laid: AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT];
+}
+
+/**
+ * Each held descriptions slice with the reference journey's laid over it, by
+ * the slice, so a slice staged is never staged anew while the task it was
+ * laid from stands as it was.
+ */
+const STAGED_DOCUMENTS = new WeakMap<
+  AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT],
+  StagedDocuments
+>();
+
+/**
+ * The descriptions slice with the reference journey's laid over it, its
+ * fields the task's as the list stands it (`ownInvites`), so its page and its
+ * row say the same; the stand-in where the document lists none of it, as the
+ * panel's fixture run, which lists its own on the window's side, does.
+ */
+function stagedDocuments(
+  state: AppStateSnapshot,
+): AppStateSnapshot[typeof LIVE_READ.DESCRIPTION_DOCUMENT] {
+  const held = state[LIVE_READ.DESCRIPTION_DOCUMENT];
+  const from = state.tasks.tasks.find((task) => task.id === TASK.INVITES) ?? INVITES_TASK;
+  const staged = STAGED_DOCUMENTS.get(held);
+  if (staged !== undefined && staged.from === from) return staged.laid;
+  const laid = { ...held, [TASK.INVITES]: { rows: { task: invitesDocument(ownInvites(from)) } } };
+  STAGED_DOCUMENTS.set(held, { from, laid });
+  STAGED_DOCUMENTS.set(laid, { from, laid });
+  return laid;
+}
+
+/** Each held pages slice with the reference journey's laid over it, one object for each. */
+const STAGED_PAGES = new WeakMap<
+  AppStateSnapshot[typeof LIVE_READ.PAGES],
+  AppStateSnapshot[typeof LIVE_READ.PAGES]
+>();
+
+function stagedPages(state: AppStateSnapshot): AppStateSnapshot[typeof LIVE_READ.PAGES] {
+  const held = state[LIVE_READ.PAGES];
+  const staged = STAGED_PAGES.get(held);
+  if (staged !== undefined) return staged;
+  const laid = {
+    ...held,
+    [PAGE_OWNER.TASK]: { ...held[PAGE_OWNER.TASK], [TASK.INVITES]: { rows: INVITES_PAGES } },
+  };
+  STAGED_PAGES.set(held, laid);
+  STAGED_PAGES.set(laid, laid);
+  return laid;
 }
 
 /* ----- The window's document ----- */
@@ -574,6 +937,32 @@ function noneHeldIn(workspaceIds: readonly string[]): AppHeldById<readonly never
   return Object.fromEntries(workspaceIds.map((id) => [id, { rows: [] }]));
 }
 
+/** The invitations agent's transcript as the host holds one read, its run begun as its agent was started. */
+const INVITES_TRANSCRIPT = fixtureAgentTranscript(
+  LANDED - 3 * DAY,
+  ADA,
+  "Build teammate invitations",
+);
+
+/** The transcripts main holds with the invitations agent's laid over them, one object for each of main's. */
+const STAGED_TRANSCRIPTS = new WeakMap<
+  AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT],
+  AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT]
+>();
+
+function stagedTranscripts(
+  held: AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT],
+): AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT] {
+  const kept = STAGED_TRANSCRIPTS.get(held);
+  if (kept !== undefined) return kept;
+  const staged = {
+    ...held,
+    [AGENT.INVITES]: { ...held[AGENT.INVITES], [OWN_TRANSCRIPT]: { rows: INVITES_TRANSCRIPT } },
+  };
+  STAGED_TRANSCRIPTS.set(held, staged);
+  return staged;
+}
+
 /**
  * Main's document as these profiles draw it: the account signed in, its
  * read of what waits naming the tasks holding items, and each of
@@ -595,8 +984,11 @@ export function inboxAppState(
     [LIVE_READ.INBOX_ITEMS]: {
       rows: { [INBOX_SCOPE_KIND.PLAN]: fed, [INBOX_SCOPE_KIND.AGENT]: {} },
     },
+    [LIVE_READ.DESCRIPTION_DOCUMENT]: stagedDocuments(state),
+    [LIVE_READ.PAGES]: stagedPages(state),
     [LIVE_READ.AUTOMATIONS]: noneHeldIn(workspaceIds),
     [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: noneHeldIn(workspaceIds),
+    [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
   };
 }
 
@@ -620,6 +1012,21 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   },
   // Note that a mark is taken as the service takes one, the item's state echoed, though nothing here moves, so its dot stays as staged: the host draws a mark, and none stands behind a fixture run's act door.
   [ACT_KIND.AGENTS_INBOX_READ_STATE]: ({ itemId, unread }) => ({ id: itemId, unread }),
+  [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId }) => {
+    if (itemId !== RECORDED.ITEM) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    if (attachmentId === RECORDED.PICTURE) {
+      return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
+    }
+    if (attachmentId === RECORDED.VIDEO) {
+      return { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
+    }
+    return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+  },
+  // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
+  [ACT_KIND.TASKS_SET_STANDING]: () => true,
+  // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
+  [ACT_KIND.AGENTS_PICTURE]: ({ pictureId }) => fixtureAgentPicture(pictureId),
+  [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,
   }),

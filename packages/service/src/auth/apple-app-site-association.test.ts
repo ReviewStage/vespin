@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { IOS_OAUTH_CALLBACK_PATH } from "@repo/features/ios-sign-in-wire";
+import { IOS_APP_LINK_COMPONENTS } from "@repo/features/ios-app-links";
 import { ConfigProvider, Effect, Schema } from "effect";
 import { HttpRouter } from "effect/http";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
@@ -27,7 +27,13 @@ const decodeDocument = Schema.decodeUnknownSync(
       details: Schema.Array(
         Schema.Struct({
           appIDs: Schema.Array(Schema.String),
-          components: Schema.Array(Schema.Struct({ "/": Schema.String })),
+          components: Schema.Array(
+            Schema.Struct({
+              "/": Schema.String,
+              exclude: Schema.optionalKey(Schema.Literal(true)),
+              comment: Schema.String,
+            }),
+          ),
         }),
       ),
     }),
@@ -50,7 +56,7 @@ const answered = Effect.fn(function* (variables: Record<string, string>) {
 });
 
 it.effect(
-  "the document names the configured app, under the app's own bundle id unless the deployment names another, as JSON for the sign-in's one path",
+  "the document names the configured app, under the app's own bundle id unless the deployment names another, as JSON for the paths the app opens",
   () =>
     Effect.gen(function* () {
       const own = yield* answered({ [APPLE_APP_ENVIRONMENT.TEAM_ID]: TEAM_ID });
@@ -60,7 +66,12 @@ it.effect(
       const appId = `${TEAM_ID}.${IOS_BUNDLE_ID_DEFAULT}`;
       assert.deepEqual(document, {
         applinks: {
-          details: [{ appIDs: [appId], components: [{ "/": IOS_OAUTH_CALLBACK_PATH }] }],
+          details: [
+            {
+              appIDs: [appId],
+              components: IOS_APP_LINK_COMPONENTS,
+            },
+          ],
         },
         webcredentials: { apps: [appId] },
       });

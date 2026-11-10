@@ -204,12 +204,20 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
     "`delegate`",
     "task_wait",
   ];
-  const CLAUDE_CODES = ["TaskCreate", "WebSearch", "WebFetch", "Skill tool", "Agent tool", "Bash"];
+  const CLAUDE_CODES = [
+    "TaskCreate",
+    "WebSearch",
+    "WebFetch",
+    "Skill tool",
+    "Agent tool",
+    "Bash",
+    "ScheduleWakeup",
+  ];
   const CODEXES = [
     "`apply_patch`",
     "`update_plan`",
     "Codex's own web search",
-    "Codex's own subagents",
+    "Codex's own subagent tools",
   ];
   for (const brief of Object.values(AGENT_BRIEF)) {
     for (const repository of ["Acme/Relay", null]) {
@@ -247,17 +255,27 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
         }
       }
     }
-    const watching = coderInstructions(
-      "Acme/Relay",
-      brief,
-      TASK_ADDRESS,
-      standingFor("Acme/Relay"),
-      undefined,
-      null,
-      false,
-      CODER_HARNESS.CODEX,
-    );
-    assert.ok(watching.includes("gh pr checks <number> --watch --fail-fast"), brief);
+    // A Codex agent waits on its checks with our wakeup, since Codex has none of its own, and never on a watch.
+    for (const memberToken of [false, true]) {
+      const waiting = coderInstructions(
+        "Acme/Relay",
+        brief,
+        TASK_ADDRESS,
+        standingFor("Acme/Relay", { wakeup: true }),
+        undefined,
+        null,
+        memberToken,
+        CODER_HARNESS.CODEX,
+      );
+      assert.ok(waiting.includes(`wait with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\``), brief);
+      // GitHub's message that the checks finished reaches an agent on the App alone, so only it is told to cancel the wakeup then.
+      assert.equal(
+        waiting.includes(`call \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` with \`stop: true\``),
+        !memberToken,
+        brief,
+      );
+      assert.ok(!waiting.includes("--watch --fail-fast"), brief);
+    }
   }
 });
 
@@ -324,26 +342,25 @@ test("an agent on a task with no repository names what it decided in its message
   assert.deepEqual([decided("Acme/Relay"), decided(null)], [true, false]);
 });
 
-test("every agent on a task is told to keep its task's status with update_task, moving it back to in progress and on to done, a helper on its starter's task leaving it to the starter and one on a task of its own keeping that one's, and one on no task told of no status", () => {
+test("every agent on a task is told to keep its task's status with update_task, on to done once its work and subtasks are, a helper on its starter's task leaving it to the starter, and one on no task told of no status", () => {
   const STATUS = "## Your task's status";
   const told = (brief: AgentBrief, task: OwnTask | null) => {
     const words = coderInstructions("Acme/Relay", brief, task, standingFor("Acme/Relay"));
     const at = words.indexOf(STATUS);
-    if (at === -1) return [false, false, false, false, false];
+    if (at === -1) return [false, false, false, false];
     const section = words.slice(at, words.indexOf("\n\n## ", at + STATUS.length));
     return [
       true,
       section.includes(AGENT_TOOL.UPDATE_TASK),
-      section.includes("Mark it done"),
+      section.includes("every subtask is Done or Canceled"),
       section.includes(
         "Where another agent started you on its task, leave the status to that agent",
       ),
-      section.includes("one started on a task of its own keeps that status itself"),
     ];
   };
   for (const brief of Object.values(AGENT_BRIEF)) {
-    assert.deepEqual(told(brief, TASK_ADDRESS), [true, true, true, true, true], brief);
-    assert.deepEqual(told(brief, null), [false, false, false, false, false], brief);
+    assert.deepEqual(told(brief, TASK_ADDRESS), [true, true, true, true], brief);
+    assert.deepEqual(told(brief, null), [false, false, false, false], brief);
   }
 });
 

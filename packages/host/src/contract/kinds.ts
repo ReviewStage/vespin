@@ -41,6 +41,10 @@ export const ACCOUNT_ASK_ACT_KIND = {
   PROVIDER_KEYS_REMOVE: "providerKeys.remove",
   /** A connected plan's default for the account's coding agents turned on or off, from beside its row in Settings. */
   PROVIDER_KEYS_FOR_AGENTS: "providerKeys.forAgents",
+  /** One of the account's subscriptions named, or its name cleared, from its row in Settings. */
+  SUBSCRIPTION_RENAME: "providerKeys.rename",
+  /** The account's subscriptions of a kind put in a new order, as their list in Settings was dragged. */
+  SUBSCRIPTIONS_REORDER: "providerKeys.reorder",
   /**
    * Settings › Agents › Codex › Connect: Codex's device-code login, run by
    * the service, begun, waited on while the host asks after it on its
@@ -84,6 +88,13 @@ export const ACCOUNT_ASK_ACT_KIND = {
    * way keeps it.
    */
   DICTATION_TRANSCRIBE: "dictation.transcribe",
+  /**
+   * The member used this window just now: a key, a press, or a move of the
+   * pointer, told at most once every `PRESENCE.BEAT_EVERY_MS`, which the
+   * service stamps so their phone holds its pushes (`presence-wire.ts`).
+   * Carries nothing.
+   */
+  ACCOUNT_ACTIVE: "account.active",
 } as const;
 
 /** The Automations pages' asks: the account's automations made, changed, deleted, and run now, and a workspace's automations, its runs, or one's runs held and read again. */
@@ -191,10 +202,14 @@ export const AGENT_ACT_KIND = {
   AGENTS_REWIND: "agents.rewind",
   /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
+  /** The ports listened on in an agent's cloud sandbox, asked of the service as the plug's menu stands open, on a host that forwards none. */
+  AGENTS_PORTS: "agents.ports",
+  /** The agent's port shared by public link now, asked of the service beside its ports. */
+  AGENTS_PORT_SHARED: "agents.portShared",
+  AGENTS_PORT_SHARE: "agents.portShare",
+  AGENTS_PORT_UNSHARE: "agents.portUnshare",
   AGENTS_ARCHIVE: "agents.archive",
   AGENTS_PIN: "agents.pin",
-  /** The reader's own read mark of an agent with no task moved, kept on the account (`read-mark.ts`). */
-  AGENTS_MARK_READ: "agents.markRead",
   AGENTS_DELETE: "agents.delete",
   /**
    * Which agent's tab the panel shows, or none: what an agent's end leaves no
@@ -267,8 +282,8 @@ export const AGENT_INBOX_ACT_KIND = {
   AGENTS_INBOX_ANSWER: "agents.inboxAnswer",
   /** One open item closed without an answer against the revision the panel drew, under the panel's own key. */
   AGENTS_INBOX_CLOSE: "agents.inboxClose",
-  /** A held close let go once its Undo can no longer be pressed, sent to the service, or taken back by its Undo. */
-  AGENTS_INBOX_CLOSE_RELEASE: "agents.inboxCloseRelease",
+  /** A held close or nod let go once its Undo can no longer be pressed, sent to the service, or taken back by its Undo. */
+  AGENTS_INBOX_RELEASE: "agents.inboxRelease",
   /** A message on one item's thread, open or settled, under the panel's own key; it never answers the item. */
   AGENTS_INBOX_MESSAGE: "agents.inboxMessage",
   /** A new thread with one agent, its subject and first message, under the panel's own key. */
@@ -371,7 +386,7 @@ export const INTEGRATION_ACT_KIND = {
   MCP_CLIENTS_FOLLOW: "mcpClients.follow",
   /** The held outside MCP clients read again at once, as Try again asks. */
   MCP_CLIENTS_RETRY: "mcpClients.retry",
-  /** One outside MCP client revoked under the Mac's session, answering the clients as they then stand, or that the revoke did not finish. */
+  /** One outside MCP client revoked, answering the clients as they then stand, or that the revoke did not finish. */
   MCP_CLIENTS_REVOKE: "mcpClients.revoke",
 } as const;
 
@@ -486,6 +501,8 @@ export const TASKS_ACT_KIND = {
   TASKS_RESTORE: "tasks.restore",
   /** A page tab's source of one version of one of the plan's pages, read from the service as its frame's is and colored by main as HTML; answered to the tab, never on the document. */
   TASKS_PAGE_SOURCE: "tasks.pageSource",
+  /** One version of one of the plan's pages, or an agent's on no task, its HTML whole, read from the service as its frame's is, for a client that draws the page itself, the iPhone's sealed page; answered to the client, never on the document. */
+  TASKS_PAGE_HTML: "tasks.pageHtml",
   /**
    * One plan's pages, or one agent's on no task, held followed while the
    * window holds the stream open for a surface that draws them, the open
@@ -742,6 +759,8 @@ export const WINDOW_SURFACE_ACT_KIND = {
   WINDOW_COPY_TEXT: "window.copyText",
   /** A picture put on the clipboard as a PNG, as a copy from Preview puts one. */
   WINDOW_COPY_IMAGE: "window.copyImage",
+  /** Words put on the clipboard as rich text, their HTML and their plain text together, as a copy from Mail puts them. */
+  WINDOW_COPY_RICH: "window.copyRich",
   WINDOW_SAVE_FILE: "window.saveFile",
   /**
    * A downscaled still of part of the asking panel, as ⌃Tab's card previews a
@@ -835,6 +854,8 @@ export const PORT_ACT_USE = {
   PROVIDER_KEYS_SAVE: ACT_USE.WRITE,
   PROVIDER_KEYS_REMOVE: ACT_USE.WRITE,
   PROVIDER_KEYS_FOR_AGENTS: ACT_USE.WRITE,
+  SUBSCRIPTION_RENAME: ACT_USE.WRITE,
+  SUBSCRIPTIONS_REORDER: ACT_USE.WRITE,
   CHATGPT_DEVICE_START: ACT_USE.WRITE,
   CHATGPT_DEVICE_WAIT: ACT_USE.WRITE,
   CHATGPT_DEVICE_CANCEL: ACT_USE.WRITE,
@@ -846,6 +867,7 @@ export const PORT_ACT_USE = {
   MEMORIES_RETRY: ACT_USE.READ,
   MEMORIES_FORGET: ACT_USE.WRITE,
   DICTATION_TRANSCRIBE: ACT_USE.FETCH,
+  ACCOUNT_ACTIVE: ACT_USE.WRITE,
 
   AGENTS_MODELS_FOLLOW: ACT_USE.READ,
   AGENTS_MODELS_RETRY: ACT_USE.READ,
@@ -878,9 +900,12 @@ export const PORT_ACT_USE = {
   AGENTS_STOP: ACT_USE.WRITE,
   AGENTS_REWIND: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
+  AGENTS_PORTS: ACT_USE.FETCH,
+  AGENTS_PORT_SHARED: ACT_USE.FETCH,
+  AGENTS_PORT_SHARE: ACT_USE.WRITE,
+  AGENTS_PORT_UNSHARE: ACT_USE.WRITE,
   AGENTS_ARCHIVE: ACT_USE.WRITE,
   AGENTS_PIN: ACT_USE.WRITE,
-  AGENTS_MARK_READ: ACT_USE.WRITE,
   AGENTS_DELETE: ACT_USE.WRITE,
   AGENTS_SHOWN: ACT_USE.WRITE,
   AGENTS_SEEN: ACT_USE.WRITE,
@@ -900,7 +925,7 @@ export const PORT_ACT_USE = {
   AGENTS_INBOX_ITEMS_RETRY: ACT_USE.READ,
   AGENTS_INBOX_ANSWER: ACT_USE.WRITE,
   AGENTS_INBOX_CLOSE: ACT_USE.WRITE,
-  AGENTS_INBOX_CLOSE_RELEASE: ACT_USE.WRITE,
+  AGENTS_INBOX_RELEASE: ACT_USE.WRITE,
   AGENTS_INBOX_MESSAGE: ACT_USE.WRITE,
   AGENTS_INBOX_START: ACT_USE.WRITE,
   AGENTS_INBOX_READ_STATE: ACT_USE.WRITE,
@@ -1001,6 +1026,7 @@ export const PORT_ACT_USE = {
   TASKS_REVISION: ACT_USE.FETCH,
   TASKS_RESTORE: ACT_USE.WRITE,
   TASKS_PAGE_SOURCE: ACT_USE.FETCH,
+  TASKS_PAGE_HTML: ACT_USE.FETCH,
   TASKS_PAGES_FOLLOW: ACT_USE.READ,
   TASKS_DOCUMENT_FOLLOW: ACT_USE.READ,
   TASKS_DOCUMENT_RETRY: ACT_USE.READ,
@@ -1034,6 +1060,7 @@ export const PORT_ACT_USE = {
   WINDOW_FOCUS_PANEL: ACT_USE.WRITE,
   WINDOW_COPY_TEXT: ACT_USE.WRITE,
   WINDOW_COPY_IMAGE: ACT_USE.WRITE,
+  WINDOW_COPY_RICH: ACT_USE.WRITE,
   WINDOW_SAVE_FILE: ACT_USE.WRITE,
   WINDOW_CAPTURE: ACT_USE.FETCH,
   WINDOW_UNSAVED_WORK: ACT_USE.WRITE,

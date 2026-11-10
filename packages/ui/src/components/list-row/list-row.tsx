@@ -17,6 +17,7 @@ import {
 } from "react";
 import { cssCustomProperties } from "../../css.js";
 import { ChevronRightIcon, FoldChevronIcon } from "../../icons/lucide-glyphs.js";
+import { middleOpensTab } from "../../middle-press.js";
 import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import { said } from "../../said.js";
 import { ReplayWords } from "../../session-replay-marks.js";
@@ -60,7 +61,9 @@ export type { ListSelection } from "../selection/list-selection.js";
  *
  * A row that opens something is a button, `onPress`, named by its words in
  * the order they are drawn, title first, so a voice saying what it reads
- * presses it. Its acts are that button's siblings in the row's item, never
+ * presses it. A row whose press goes to a place with an address of its
+ * own opens it in a tab of its own on a middle-click (`onOpenInTab`), as a
+ * link does, where its window can open one; a ⌘-click still chooses it. Its acts are that button's siblings in the row's item, never
  * inside it, because a button holds no button: each is a control of its own,
  * reached by Tab after the row and pressed without pressing the row. A row
  * that opens nothing is no control at all. The leading mark is decoration,
@@ -620,6 +623,7 @@ export function ListRow({
   actions,
   actionsAt = LIST_ROW_ACTIONS.ALWAYS,
   onPress,
+  onOpenInTab,
   linkHref,
   current,
   unread,
@@ -679,6 +683,8 @@ export function ListRow({
   actionsAt?: ListRowActions;
   /** What pressing the row does, handed the press, whose modifiers it may read; a row without one is not a control. */
   onPress?: ((event: MouseEvent<HTMLButtonElement>) => void) | undefined;
+  /** Opens what the row opens in a tab of its own, which a middle-click on its press does, as on a link, choosing nothing; none where the window opens no tab. */
+  onOpenInTab?: (() => void) | undefined;
   /** The address its press opens, where it opens one, which a right-click offers as a link's (`useLinkAddress`). */
   linkHref?: string | undefined;
   /** How the row is the one open now, drawn and announced as current; nothing where it is not. */
@@ -927,7 +933,10 @@ export function ListRow({
       {...(tabbable === undefined ? rovingItem() : {})}
       {...(choosable ? selectableRow(selectKey) : {})}
       // Note that the focus moves as a mousedown's default, so refusing it there is what keeps it.
-      onMouseDown={keepFocus ? preventFocusMove : choosable ? holdRun : undefined}
+      {...middleOpensTab(
+        onOpenInTab,
+        keepFocus ? preventFocusMove : choosable ? holdRun : undefined,
+      )}
       onClick={(event) => {
         // Note that the row around the press is what is pressed, its fill and its actions with it.
         const row = event.currentTarget.closest<HTMLElement>(".ui-list-row");

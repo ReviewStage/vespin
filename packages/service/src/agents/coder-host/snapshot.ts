@@ -60,11 +60,12 @@ export const SNAPSHOT = {
   STDERR_TAIL: 600,
 } as const;
 
-/** Why the source's work was not copied: the Start already made its agent, the task moved repository since the source started, the source never opened a sandbox, the copy failed, or it ran past its bound. */
+/** Why the source's work was not copied: the Start already made its agent, the task moved repository since the source started, the source never opened a sandbox, it runs on a Mac, whose checkout a Start never reads, the copy failed, or it ran past its bound. */
 export const SNAPSHOT_MISS = {
   STARTED: "started",
   MOVED: "moved",
   NO_SANDBOX: "no-sandbox",
+  ON_DEVICE: "on-device",
   FAILED: "failed",
   TIMED_OUT: "timed-out",
 } as const;

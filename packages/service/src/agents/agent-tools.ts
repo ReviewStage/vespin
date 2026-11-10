@@ -3,7 +3,9 @@ import {
   type Agent,
   type AgentLatestTurn,
   continuationsOf,
+  type LineSent,
   latestTurnsOfReached,
+  lineSendersOf,
   type NativeRoute,
   nativeRouteOfReached,
   RUNNING_TURN_STATUSES,
@@ -14,7 +16,8 @@ import {
 import { currentAutomationRun } from "@repo/database/models/automation-store";
 import { type Device, devicesSeenSince } from "@repo/database/models/device-store";
 import {
-  listJournals,
+  listMessagesBefore,
+  listMessagesFrom,
   messageSeqOf,
   newestJournalsOfReached,
   type StoredMessageRecord,
@@ -33,8 +36,9 @@ import {
   type TaskChanges,
 } from "@repo/database/models/task-store";
 import { isWorkspaceMember } from "@repo/database/models/workspace-store";
-import type { StoreWriter } from "@repo/database/models/writer";
+import type { ConversationTarget, StoreWriter } from "@repo/database/models/writer";
 import type { StoredArchive } from "@repo/database/schemas/agent";
+import type { AgentQueue } from "@repo/features/agent-queue-wire";
 import { START_NOTE_HEADING } from "@repo/features/agent-replay";
 import {
   harnessNameOf,
@@ -68,7 +72,6 @@ import {
 } from "@repo/features/agent-wire";
 import { deviceAgentRegisterRequestSchema } from "@repo/features/device-agent-wire";
 import { githubRepositoryFullNameSchema } from "@repo/features/github-repositories-wire";
-import { MENTION_KIND } from "@repo/features/mention-link";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import { type ModelChoice, modelChoiceSchema } from "@repo/features/models-wire";
 import { PAGE_OWNER, type PageOwner } from "@repo/features/page-wire";
@@ -115,8 +118,9 @@ import {
 import { taskChangeAsked, taskChangeSettled, taskChangeWritten } from "../tasks/task-change.js";
 import { createTaskAsked } from "../tasks/task-create-relation.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
-import { agentStarterName, controlsAgent } from "./agent-reach.js";
+import { agentStarterName, startsFromAgent } from "./agent-reach.js";
 import { calledId } from "./called-id.js";
+import { queueOnPage } from "./coder-host/agent-queue.js";
 import { addAgentRepository, addedRepositoryLine } from "./coder-host/agent-repository-add.js";
 import {
   forwardedImageRefusalWords,
@@ -124,7 +128,7 @@ import {
   type ImageForwarder,
 } from "./coder-host/forwarded-images.js";
 import { agentPublished } from "./coder-host/published.js";
-import { callEntry } from "./coder-host/replay.js";
+import { callEntry, cutText, lineWords, senderName } from "./coder-host/replay.js";
 import type { SummaryModelOf } from "./coder-host/replay-summary.js";
 import {
   accountModelChoices,
@@ -168,13 +172,7 @@ import {
   type ExperimentsOn,
   experimentOnIn,
 } from "./workspace-experiment-on.js";
-import {
-  workspaceNamingOf,
-  workspaceStepOf,
-  writtenMention,
-  writtenPageMention,
-  writtenTaskMention,
-} from "./written-mentions.js";
+import { workspaceNamingOf } from "./written-mentions.js";
 
 /**
  * agent-tools.ts -- the tools every agent reaches the workspace's coding agents by: list them, read one's progress, start one.
@@ -196,14 +194,16 @@ import {
  * agents; a coding agent's own list leaves itself out. Each tool reads the
  * same rows the agent tabs read: the agents and the newest turn each stands
  * on (`coder-host/status.ts`), the branch each row holds, and the
- * transcript's turn journals, rendered as a short tail of what the agent
- * said and did; a read of one agent also asks GitHub what that branch
- * published, as the agent's tab does (`coder-host/published.ts`), and says
- * nothing of it where GitHub could not be asked. The app's voice summarizes a read
- * aloud, so its tail's entries are cut close and its words for the tool say
- * so; a coding agent reads its tail as text, to learn why an agent went
- * quiet, so each of its entries keeps more, and it may ask for a longer
- * tail, to a bound. One agent messages another with `message_agent`
+ * transcript's messages: a list says what each agent last did, and a read
+ * of one agent answers a page of its whole transcript, the lines sent to it
+ * under who sent them and what it said and which tools it called on what,
+ * a call's output left out, read back from its end or on from its start or
+ * from any place a page answered, each entry cut to a bound and the page to
+ * a budget of characters, so one read cannot flood the model and a reader
+ * pages on to find what was said. A read of one agent also asks GitHub what
+ * that branch published, as the agent's tab does
+ * (`coder-host/published.ts`), and says nothing of it where GitHub could
+ * not be asked. One agent messages another with `message_agent`
  * (`coder-host/agent-message.ts`). A start takes the one path every other start does
  * (`coder-host/start.ts`), on the caller's own task or another of its workspace, under the
  * same key, so a call run again starts no second agent: the description as the
@@ -231,7 +231,7 @@ import {
  * it forks it there, which leaves it going on; either is handed the
  * source's brief, its replay with our summary of what does not fit, a
  * copy of its work, and the note, and takes no prompt and no branch. A read
- * names the message each entry of the tail stands in, which a fork names.
+ * names the message each entry of a page stands in, which a fork names.
  * An archive and every other change of an agent take the one operation the
  * Archive agent menu and the agent's menu run (`agent-change.ts`) for the
  * member the caller acts for: any agent of the workspace that member could
@@ -272,21 +272,29 @@ import {
 export const TASKS_LIST_LIMIT = 50;
 
 export const AGENT_TOOL_BOUNDS = {
-  /** The newest turns a progress read walks first, the one under way included. */
-  TAIL_TURNS: 3,
-  /** The entries a progress read answers where it asks for no number, the newest last. */
-  TAIL_ENTRIES: 20,
-  /** The most entries a progress read may ask for: with a coding agent's entries, about ten thousand tokens. */
-  MAX_TAIL_ENTRIES: 50,
-  /** The most characters one entry of a coding agent's tail carries, which it reads as text. */
-  AGENT_ENTRY_CHARS: 800,
+  /** The most entries a page of a transcript may ask for. */
+  MAX_PAGE_ENTRIES: 200,
+  /** The most characters a page of a transcript carries, its entries' words together: about four thousand tokens. */
+  PAGE_CHARS: 16_000,
+  /** The most characters one entry of a page carries, so one long message leaves room for others. */
+  AGENT_ENTRY_CHARS: 4_000,
+  /** The messages a page reads from the store at a time, until the page is full or the transcript ends. */
+  PAGE_ROWS: 20,
   /** The most characters an agent's latest activity carries in the list. */
   ACTIVITY_CHARS: 160,
+  /** The most characters a queued message's words carry in `read_agent`'s queue. */
+  QUEUED_CHARS: 160,
 } as const;
 
 /** Why a call ran nothing, or sent nothing, in words the model can act on. */
 export const AGENT_TOOL_REFUSAL = {
   UNREADABLE: `Not run: name the agent by the id ${AGENT_TOOL.LIST_AGENTS} answered.`,
+  UNREADABLE_PAGE:
+    `Not run: name the agent by the id ${AGENT_TOOL.LIST_AGENTS} answered, and at most one ` +
+    "place, before or after, as a page answered it.",
+  UNREADABLE_TRANSCRIPT:
+    "Not run: a message of that agent's transcript on this page could not be read, so the " +
+    "page would leave it out.",
   UNREADABLE_TASKS:
     "Not run: narrow the tasks by words of their name, by a status " +
     `(${Object.values(TASK_STATUS).join(", ")}), and by an assignee as a member's mention link ` +
@@ -648,17 +656,50 @@ const LIST_MODELS_INPUT = Schema.Struct({
 
 const readListModelsAsked = Schema.decodeUnknownResult(LIST_MODELS_INPUT);
 
-/** A coding agent's read names the agent and, at most, how long a tail it wants. */
+/** Where a page of a transcript is read from where it names no place: its newest page, or its first. */
+const TRANSCRIPT_FROM = {
+  END: "end",
+  START: "start",
+} as const;
+
+/** A place in a transcript, between two entries: the sequence of the message an entry stands in, and the entry's index among that message's. */
+const TRANSCRIPT_PLACE = Schema.Struct({
+  seq: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+  entry: Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+});
+
+type TranscriptPlace = typeof TRANSCRIPT_PLACE.Type;
+
+/** A coding agent's read names the agent and, at most, which page of its transcript it wants and how many entries. */
 const CODER_READ_AGENT_INPUT = Schema.Struct({
   agentId: AGENT_ID,
+  from: Schema.optionalKey(
+    describeWire(
+      Schema.Literals(Object.values(TRANSCRIPT_FROM)),
+      `Where to read its transcript from where neither before nor after is given: ` +
+        `${TRANSCRIPT_FROM.END}, the default, for its newest page, or ${TRANSCRIPT_FROM.START} ` +
+        "for its first, from the message it was started with.",
+    ),
+  ),
+  before: Schema.optionalKey(
+    describeWire(
+      TRANSCRIPT_PLACE,
+      "The older place a page answered, to read the page of entries before it.",
+    ),
+  ),
+  after: Schema.optionalKey(
+    describeWire(
+      TRANSCRIPT_PLACE,
+      "The newer place a page answered, to read the page of entries after it.",
+    ),
+  ),
   entries: Schema.optionalKey(
     describeWire(
       Schema.Int.check(
-        Schema.isBetween({ minimum: 1, maximum: AGENT_TOOL_BOUNDS.MAX_TAIL_ENTRIES }),
+        Schema.isBetween({ minimum: 1, maximum: AGENT_TOOL_BOUNDS.MAX_PAGE_ENTRIES }),
       ),
-      "How many entries of its transcript to read, the newest last; " +
-        `${AGENT_TOOL_BOUNDS.TAIL_ENTRIES} when left out, at most ` +
-        `${AGENT_TOOL_BOUNDS.MAX_TAIL_ENTRIES}.`,
+      "At most how many entries of its transcript the page holds, such as 1 for what it last " +
+        `said or did; as many as fit in ${AGENT_TOOL_BOUNDS.PAGE_CHARS} characters when left out.`,
     ),
   ),
 });
@@ -849,7 +890,7 @@ function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
             describeWire(
               wireUuidSchema,
               `One of that agent's messages, by the messageId ${AGENT_TOOL.READ_AGENT} names on ` +
-                "an entry of its tail, to fork it there; leave it out to continue the agent from " +
+                "an entry of its transcript, to fork it there; leave it out to continue the agent from " +
                 "where it stands.",
             ),
           ),
@@ -971,7 +1012,7 @@ export const LIST_AGENTS_TOOL = {
     "sandbox is on if a turn " +
     "has ended, one line of what it last did, its task (id and name; null for " +
     "an agent on no task) and whether that is the task you work on, and whether the agent is " +
-    "archived, and its mention, the `[@title](link)` to name it by in your words. The agents " +
+    "archived. The agents " +
     "that matter to you come first: the agent that started you and the agents you started, " +
     "then those on your task; then the rest of the workspace, the newest started first, at most " +
     `${WORKSPACE_AGENTS_LIST_LIMIT} a page, with nextOffset where more stand, which offset ` +
@@ -987,20 +1028,31 @@ export const LIST_AGENTS_TOOL = {
   inputSchema: AGENT_LIST_INPUT,
 } as const;
 
-/** `read_agent` as a coding agent is offered it, which reads the tail as text and may ask for more of it. */
+/** How a read of an agent says a page of its transcript, which the coding agent's and the member MCP's descriptions share. */
+export const TRANSCRIPT_PAGE_WORDS =
+  "a page of its whole transcript, oldest first: each line sent to it under who sent it (a " +
+  "member by name, the developer, an agent, an automation, or GitHub), what it said, and which " +
+  "tools it called on what, a call's output left out, each entry cut to " +
+  `${AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS} characters and the page to ` +
+  `${AGENT_TOOL_BOUNDS.PAGE_CHARS}, and each of its own with the messageId of the message it ` +
+  "stands in. The " +
+  "newest page comes first; pass the page's older as before to read back the page before it, " +
+  `and its newer as after to read on; from ${TRANSCRIPT_FROM.START} reads its first page. Older ` +
+  "is left out where the page opens the transcript, and newer where it reaches the newest " +
+  "entry. To find what someone said, or why the agent did something, page back from the " +
+  "newest, or on from the start, until you reach it.";
+
+/** `read_agent` as a coding agent is offered it, which reads a page of the whole transcript as text and pages through the rest. */
 export const CODER_READ_AGENT_TOOL = {
   name: AGENT_TOOL.READ_AGENT,
   description:
     "Read one agent of your workspace by its id, on any task and started by any member: " +
     `what ${AGENT_TOOL.LIST_AGENTS} says of it, the branch it pushed and the pull request from it ` +
-    "as GitHub holds them, and the tail of its transcript, what it last said and which tools it " +
-    "called on what, newest last, each entry cut to " +
-    `${AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS} characters and with the messageId of the ` +
-    `message it stands in, which ${AGENT_TOOL.START_AGENT}'s from names to fork the agent ` +
-    "there. Read one to learn why an agent " +
-    "went quiet, what it is stuck on, or what it did, before you message it or decide what " +
-    "comes next. It only reads: the agent is not told. Answers `accepted` with the reading, or " +
-    "`rejected` and why.",
+    `as GitHub holds them, and ${TRANSCRIPT_PAGE_WORDS} ${AGENT_TOOL.START_AGENT}'s from names ` +
+    "a messageId to fork the agent there. Read one to learn why an agent went quiet, what it is " +
+    "stuck on, what it did, or what was said to it and why, before you message it or decide " +
+    "what comes next. It only reads: the agent is not told. Answers `accepted` with the " +
+    "reading, or `rejected` and why.",
   inputSchema: CODER_READ_AGENT_INPUT,
 } as const;
 
@@ -1042,14 +1094,14 @@ function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
     `stand as a task of its own, make it with ${AGENT_TOOL.CREATE_TASK} first. Where you work ` +
     "on no task, taskId left out starts it on a new task made for it, named as its agent is, " +
     "assigned to the member you work for, in the repository you work in or the one repository " +
-    `names, and done by itself once its agents finish well${NEW_TASK_PROMPT_WORDS[words]}. ` +
+    `names${NEW_TASK_PROMPT_WORDS[words]}. ` +
     "This one call carries everything the agent is told as " +
     "it starts, and the agent sets to work on it at once, so never follow it with a message to " +
     "the agent it started; message it only when there is something new to say. Its checkout is " +
     "the repository's default branch, or the branch named, which must already be on GitHub. " +
     "It runs on the " +
     "model and effort named, or on the member's default with neither. Answers `accepted` with " +
-    "the agent's id, model, the model's name to say it by, effort, status, and mention once its session " +
+    "the agent's id, title, model, the model's name to say it by, effort, and status once its session " +
     "is open, or `rejected` and why " +
     "nothing was started; a rejected model or effort lists the choices. " +
     `${AGENT_TOOL.LIST_MODELS} lists them before you name one. With from, it starts from ` +
@@ -1057,7 +1109,7 @@ function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
     "that failed, ended, or ran out of context, which is handed over and stopped, or fork one " +
     "at a messageId to try another direction while it goes on. An agent already continued may " +
     "be continued again, and the answer then names the earlier continuations by their id and " +
-    "mention (earlierContinuations). A start from another agent " +
+    "title (earlierContinuations). A start from another agent " +
     "copies its work and summarizes its transcript, so it may take a minute to answer."
   );
 }
@@ -1097,7 +1149,10 @@ export const UPDATE_TASK_TOOL = {
     "and several go in one call. Mark a task whose work is " +
     "done Done, with status done, as the menu's Mark done does, such as one whose pull requests " +
     "merged, or one the developer asked you to clean up; that withdraws every ask still open on its " +
-    "threads, so mark it done only once you no longer need them; never a teammate's " +
+    "threads, so mark it done only once you no longer need them, and archives every other " +
+    "agent on the task, an idle one at once and one still at work once its turn ends; a " +
+    "change of its status off Done brings them back, while a turn that reopens the task " +
+    "does not; never a teammate's " +
     "task still in use unless the developer asked for it. A task is never archived: a settled " +
     `one stands Done or Canceled, which ${AGENT_TOOL.LIST_TASKS} lists by status. A block is ` +
     "Linear's: the blocker's work comes first and the task it blocks waits on it, as one child " +
@@ -1148,7 +1203,7 @@ export const READ_PAGE_TOOL = {
     "Read a page an agent showed in your workspace, by its id: its title, the version read " +
     "(the newest unless you name one) and the newest there is, its task and whether that is " +
     "the task you work on, or, for a page an agent on no task showed on itself, that agent " +
-    "and whether it is you, its mention ready to write, and its HTML as it " +
+    "and whether it is you, and its HTML as it " +
     "stands, cut on a line at " +
     `${READ_PAGE_CHARS} characters with how many were left out. Read a page the developer ` +
     "pointed you at, or one another agent showed, before you build on it or revise it; to " +
@@ -1377,15 +1432,13 @@ export const LIST_TASKS_TOOL = {
     "assignee's mention link, null for no one), " +
     "the repository its agents work in (null for none yet), who started it, whether it is " +
     "the task you work on, the sectionId of the sidebar section the " +
-    "developer you work for keeps it in (null for none, under Tasks), and its mention, the " +
-    "`[@name](link)` to name it by in your words, the newest first and at most " +
+    "developer you work for keeps it in (null for none, under Tasks), the newest first and at most " +
     `${TASKS_LIST_LIMIT} a page, with ` +
     "nextOffset where more stand; and beside them every section that developer keeps in this " +
     "workspace's sidebar, each with its id and title. Narrow it by words of a task's name with " +
     `nameContains, by where it stands with status, and by who it is assigned to with assignee. Call it to find the task to start an agent on with ${AGENT_TOOL.START_AGENT}'s ` +
     `taskId, to narrow ${AGENT_TOOL.LIST_AGENTS} to one, or to find the task and the section ` +
-    `${AGENT_TOOL.UPDATE_TASK}'s sectionId names, and ${AGENT_TOOL.DELETE_SECTION} where you ` +
-    "are offered it.",
+    `${AGENT_TOOL.UPDATE_TASK}'s sectionId names, and ${AGENT_TOOL.DELETE_SECTION}.`,
   inputSchema: LIST_TASKS_INPUT,
 } as const;
 
@@ -1401,15 +1454,35 @@ function cut(text: string, maximumChars: number): string {
   return line.length > maximumChars ? `${line.slice(0, maximumChars - 1)}…` : line;
 }
 
-/** A journal's entries in order: each of the agent's own texts, and each call with its subject. */
-function entriesOf(journal: StoredUIMessage, maximumChars: number): string[] {
-  return journal.parts.flatMap((part) => {
+/** One entry's words, whole, and the id of the call it says, where it is one. */
+interface EntryWords {
+  readonly text: string;
+  readonly callId?: string;
+}
+
+/** A journal's entries in order, whole: each of the agent's own texts, and each call with its subject and its id. */
+function journalEntriesOf(journal: StoredUIMessage): EntryWords[] {
+  return journal.parts.flatMap((part): EntryWords[] => {
     if (isTextUIPart(part) && part.text.trim().length > 0) {
-      return [cut(`${ENTRY_WORDS.SAID}: ${part.text}`, maximumChars)];
+      return [{ text: `${ENTRY_WORDS.SAID}: ${part.text.trim()}` }];
     }
-    if (isStoredToolPart(part)) return [cut(callEntry(part), maximumChars)];
+    if (isStoredToolPart(part)) return [{ text: callEntry(part), callId: part.toolCallId }];
     return [];
   });
+}
+
+/** A journal's entries in order, whole, as words alone. */
+function entriesOf(journal: StoredUIMessage): string[] {
+  return journalEntriesOf(journal).map((entry) => entry.text);
+}
+
+/** A message's entries in order, whole: a line under who sent it, its files named, and a journal's own; none for any other row. */
+function rowEntriesOf(record: StoredMessageRecord, sent: LineSent | undefined): EntryWords[] {
+  const { role, parts } = record.message;
+  if (role === MESSAGE_ROLE.ASSISTANT) return journalEntriesOf(record.message);
+  if (role !== MESSAGE_ROLE.USER) return [];
+  const words = lineWords(parts).trim();
+  return words === "" ? [] : [{ text: `${senderName(sent)}: ${words}` }];
 }
 
 /** One agent as the model reads it: its title, what it runs on, where it stands, the branch its row holds, and what it last did. */
@@ -1431,16 +1504,7 @@ interface AgentReading {
   readonly repository: string | null;
   readonly branch: string | null;
   readonly activity: string | null;
-  /** The agent's mention, `[@title](link)`, as the caller writes it to name the agent in its words. */
-  readonly mention: string;
 }
-
-/** The newest journals of an agent's conversation, each with its message's id, read under the member who started it, oldest first; none where the page does not read. */
-const journalsOf = (agent: Agent, limit: number) =>
-  Effect.map(
-    listJournals(agent.userId, agent.conversationId, CODER_TOOL_SET, limit),
-    (read): readonly StoredMessageRecord[] => (read.ok ? read.value : []),
-  );
 
 /** The agents' standings, read once for the lot: each one's newest turn. The agents were read through their workspace's gate, so their conversations are read by id. */
 const standingsOf = (agents: readonly Agent[]) =>
@@ -1488,12 +1552,13 @@ const readAgentReading = (
   },
   newest: StoredMessageRecord | undefined,
   offered: readonly OfferedModel[],
-  workspace: string,
 ): AgentReading => {
   const activity =
     newest === undefined
       ? undefined
-      : entriesOf(newest.message, AGENT_TOOL_BOUNDS.ACTIVITY_CHARS).at(-1);
+      : entriesOf(newest.message)
+          .map((entry) => cut(entry, AGENT_TOOL_BOUNDS.ACTIVITY_CHARS))
+          .at(-1);
   return {
     id: agent.id,
     ...task,
@@ -1509,7 +1574,6 @@ const readAgentReading = (
     repository: agent.repository,
     branch: agent.branch,
     activity: activity ?? null,
-    mention: agentMention(agent, workspace),
   };
 };
 
@@ -1638,15 +1702,6 @@ export function choiceRefusal(
   return `${lead}: ${refused}. The choices are: ${choices}.`;
 }
 
-/** The agent's mention under the workspace's step, by the agent whichever task it works on, named as its tab is. */
-function agentMention(agent: Agent, workspace: string): string {
-  return writtenMention(
-    { kind: MENTION_KIND.AGENT, agentId: agent.id },
-    agentName(agent),
-    workspace,
-  );
-}
-
 /** How a coding agent names itself to another: its title, its id to answer it by, and its repository where it has one. */
 function agentIntroduction(agent: Agent): string {
   const working = agent.repository === null ? "" : `, working in ${agent.repository}`;
@@ -1688,15 +1743,14 @@ function startedByNote(starter: Agent, note: string | undefined): string {
 const startedReading = (agent: Agent, offered: readonly OfferedModel[], ownTask: string | null) =>
   Effect.gen(function* () {
     const standing = yield* standingsOf([agent]);
-    const workspace = yield* workspaceStepOf(agent.userId, agent.organizationId);
     return {
       id: agent.id,
+      title: agentName(agent),
       model: agent.model,
       modelName: modelLabel(agent.model, offered),
       effort: agent.effort,
       status: standing(agent).status,
       onYourTask: agent.taskId !== null && agent.taskId === ownTask,
-      mention: agentMention(agent, workspace),
     };
   });
 
@@ -1775,7 +1829,6 @@ export function runListAgents(
       const standing = yield* standingsOf(agents);
       const newest = yield* newestJournalsOf(agents);
       const offered = yield* offeredModels;
-      const step = yield* workspaceStepOf(callerUserId(caller), workspace.value);
       const readings = agents.map((agent) =>
         readAgentReading(
           agent,
@@ -1783,7 +1836,6 @@ export function runListAgents(
           standing(agent),
           newest.get(agent.conversationId),
           offered,
-          step,
         ),
       );
       return {
@@ -1795,48 +1847,214 @@ export function runListAgents(
   );
 }
 
+/** How a page reads a transcript: back from a place, or from its end, or on from a place, or from its start. */
+const PAGE_WAY = {
+  BACK: "back",
+  ON: "on",
+} as const;
+
+type PageWay = (typeof PAGE_WAY)[keyof typeof PAGE_WAY];
+
+/** Which page a read asks for: the way it reads, the place it reads from, none for the transcript's end or start, and at most how many entries. */
+export interface PageAsked {
+  readonly way: PageWay;
+  readonly place: TranscriptPlace | undefined;
+  readonly entries: number;
+}
+
+/** One entry of a page: its place, the journal it stands in, which a fork names, none for a line sent to the agent, the line sent to the agent, which a rewind names, none for the agent's own, its words, cut to the bound, and the id of the call it says, where it is one. */
+export interface PageEntry {
+  readonly place: TranscriptPlace;
+  readonly messageId: string | undefined;
+  readonly lineId: string | undefined;
+  readonly text: string;
+  readonly callId: string | undefined;
+}
+
+/** A page of a transcript in the order it was read, and whether an entry stands past it that did not fit. */
+export interface PageRead {
+  readonly entries: readonly PageEntry[];
+  readonly more: boolean;
+}
+
+/** Whether one place comes before another in a transcript. */
+function isBefore(one: TranscriptPlace, other: TranscriptPlace): boolean {
+  return one.seq < other.seq || (one.seq === other.seq && one.entry < other.entry);
+}
+
+/** Whether an entry lies past the place a page reads from, the way it reads; every entry where it names none. */
+function liesPast(place: TranscriptPlace, asked: PageAsked): boolean {
+  if (asked.place === undefined) return true;
+  return asked.way === PAGE_WAY.BACK ? isBefore(place, asked.place) : isBefore(asked.place, place);
+}
+
+/** A message's entries in the order a page reads them, each with its place and cut to the bound. */
+function pageEntriesOf(
+  record: StoredMessageRecord,
+  sent: LineSent | undefined,
+  way: PageWay,
+): PageEntry[] {
+  const entries = rowEntriesOf(record, sent).map(({ text, callId }, entry) => ({
+    place: { seq: record.seq, entry },
+    // Note that only the agent's own journal is named, because a fork is cut at one and refuses a line.
+    messageId: record.message.role === MESSAGE_ROLE.ASSISTANT ? record.id : undefined,
+    // Note that a line sent to the agent is named apart, because a rewind is cut before one and a fork refuses it.
+    lineId: record.message.role === MESSAGE_ROLE.USER ? record.id : undefined,
+    text: cutText(text, AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS),
+    callId,
+  }));
+  return way === PAGE_WAY.BACK ? entries.reverse() : entries;
+}
+
+/** The messages a page reads next, in the order it reads them, and the sequence to read on from, none where the transcript ends with them. */
+interface PageRows {
+  readonly rows: readonly StoredMessageRecord[];
+  readonly next: number | undefined;
+}
+
+/** The messages a page reads next from a sequence, the way it reads; nothing where one of them does not read. */
+const pageRowsAt = (target: ConversationTarget, way: PageWay, at: number) => {
+  const { PAGE_ROWS } = AGENT_TOOL_BOUNDS;
+  const { userId, conversationId } = target;
+  return Effect.map(
+    way === PAGE_WAY.BACK
+      ? listMessagesBefore(userId, conversationId, CODER_TOOL_SET, at, PAGE_ROWS)
+      : listMessagesFrom(userId, conversationId, CODER_TOOL_SET, at, PAGE_ROWS),
+    (read): PageRows | undefined => {
+      if (!read.ok) return undefined;
+      const rows = read.value;
+      const ordered = way === PAGE_WAY.BACK ? rows.toReversed() : rows;
+      const last = ordered.at(-1);
+      const next = way === PAGE_WAY.BACK ? last?.seq : (last?.seq ?? 0) + 1;
+      return { rows: ordered, next: rows.length < PAGE_ROWS ? undefined : next };
+    },
+  );
+};
+
 /**
- * The newest entries of an agent's transcript, as many as asked where it
- * has them, each with the id of the message it stands in, which a fork
- * names (`start_agent`'s `from`). Note that the newest turns are read first and older ones only
- * where those fall short, because a coding agent's one turn is often its
- * whole run, long enough on its own; and that the second read takes as many
- * turns as entries asked, since a turn that ended carries at least one.
+ * A page of a transcript, an agent's or its worker's, read under the
+ * member who started the agent:
+ * the entries past the place asked, the way asked, until the page holds as
+ * many as asked or the next would take it past its budget of characters,
+ * which leaves at least one on a page however long. Note that a page reads
+ * the store a few messages at a time, because one journal can hold a whole
+ * run's calls and a page rarely needs many; and that a page reaching a
+ * message that does not read is nothing, as a fork's replay is, because a
+ * page that stopped there would pass for the transcript's own end.
  */
-const tailOf = (agent: Agent, entries: number, entryChars: number) =>
+export const transcriptPage = (target: ConversationTarget, asked: PageAsked) =>
   Effect.gen(function* () {
-    const entriesIn = (journals: readonly StoredMessageRecord[]) =>
-      journals.flatMap((journal) =>
-        entriesOf(journal.message, entryChars).map((text) => ({ messageId: journal.id, text })),
+    const entries: PageEntry[] = [];
+    let chars = 0;
+    let at: number | undefined =
+      asked.way === PAGE_WAY.BACK
+        ? asked.place === undefined
+          ? Number.MAX_SAFE_INTEGER
+          : asked.place.seq + 1
+        : (asked.place?.seq ?? 0);
+    while (at !== undefined) {
+      const rowsRead: PageRows | undefined = yield* pageRowsAt(target, asked.way, at);
+      if (rowsRead === undefined) return undefined;
+      const { rows, next }: PageRows = rowsRead;
+      const senders = yield* lineSendersOf(
+        { userId: target.userId, conversationId: target.conversationId },
+        rows.filter((row) => row.message.role === MESSAGE_ROLE.USER).map((row) => row.id),
       );
-    const newest = yield* journalsOf(agent, AGENT_TOOL_BOUNDS.TAIL_TURNS);
-    const read = entriesIn(newest);
-    const more =
-      read.length < entries &&
-      newest.length === AGENT_TOOL_BOUNDS.TAIL_TURNS &&
-      entries > AGENT_TOOL_BOUNDS.TAIL_TURNS;
-    const all = more ? entriesIn(yield* journalsOf(agent, entries)) : read;
-    return all.slice(-entries);
+      const read = rows.flatMap((row) => pageEntriesOf(row, senders.get(row.id), asked.way));
+      for (const entry of read.filter((each) => liesPast(each.place, asked))) {
+        const full =
+          entries.length === asked.entries ||
+          (entries.length > 0 && chars + entry.text.length > AGENT_TOOL_BOUNDS.PAGE_CHARS);
+        if (full) return { entries, more: true } satisfies PageRead;
+        entries.push(entry);
+        chars += entry.text.length;
+      }
+      at = next;
+    }
+    return { entries, more: false } satisfies PageRead;
   });
 
-/** One call of `read_agent`: the agent as the list reads it, and the tail of its newest turns, as long as asked and each entry cut for the caller. */
+/** Which page a read asks for, from its input: a place before or after, else the end or the start; none where it names both places. */
+export function pageAskedOf(
+  asked: Pick<typeof CODER_READ_AGENT_INPUT.Type, "from" | "before" | "after" | "entries">,
+): PageAsked | undefined {
+  const entries = asked.entries ?? AGENT_TOOL_BOUNDS.MAX_PAGE_ENTRIES;
+  if (asked.before !== undefined && asked.after !== undefined) return undefined;
+  if (asked.before !== undefined) return { way: PAGE_WAY.BACK, place: asked.before, entries };
+  if (asked.after !== undefined) return { way: PAGE_WAY.ON, place: asked.after, entries };
+  const way = asked.from === TRANSCRIPT_FROM.START ? PAGE_WAY.ON : PAGE_WAY.BACK;
+  return { way, place: undefined, entries };
+}
+
+/**
+ * A page as the read answers it: its entries oldest first, the place to
+ * read back from where an entry stands before it, and the place to read on
+ * from where one stands after it. Note that an entry stands on the side a
+ * page was read from wherever that read named a place, since the place is
+ * an entry's own, and on the far side wherever the page was full.
+ */
+export function pageAnswer(
+  asked: PageAsked,
+  page: PageRead,
+  said: (entry: PageEntry) => WireRecord,
+): WireRecord {
+  const back = asked.way === PAGE_WAY.BACK;
+  const entries = back ? page.entries.toReversed() : page.entries;
+  const first = entries[0];
+  const last = entries.at(-1);
+  const older = (back ? page.more : asked.place !== undefined) ? first?.place : undefined;
+  const newer = (back ? asked.place !== undefined : page.more) ? last?.place : undefined;
+  return {
+    transcript: entries.map(said),
+    ...(older === undefined ? undefined : { older: { ...older } }),
+    ...(newer === undefined ? undefined : { newer: { ...newer } }),
+  };
+}
+
+/** An entry as `read_agent` says it: its words, and the journal it stands in where it is the agent's own. */
+function readAgentEntry({ messageId, lineId, text }: PageEntry): WireRecord {
+  return {
+    ...(messageId === undefined ? undefined : { messageId }),
+    ...(lineId === undefined ? undefined : { lineId }),
+    text,
+  };
+}
+
+/**
+ * An agent's queue as `read_agent` and the member MCP's `change_agent_queue`
+ * say it: each message waiting behind its turn, in the order they go, by its
+ * id, its words cut short, how many files go with it, and whether a member
+ * holds it to edit, which stops the hand-off at it; and why the queue
+ * stands paused, which sends nothing until it is resumed.
+ */
+export function queueRecord(queue: AgentQueue): WireRecord {
+  return {
+    messages: queue.messages.map((message) => ({
+      id: message.id,
+      text: cutText(message.text, AGENT_TOOL_BOUNDS.QUEUED_CHARS),
+      ...(message.files === undefined ? undefined : { files: message.files.length }),
+      ...(message.editing ? { held: true } : undefined),
+    })),
+    ...(queue.paused === undefined ? undefined : { paused: { ...queue.paused } }),
+  };
+}
+
+/** One call of `read_agent`: the agent as the list reads it, its queue where messages wait in it, and the page of its transcript asked, its newest where none is named. */
 export function runReadAgent(
   call: AgentReadCall,
   input: UnparsedWireValue,
 ): Effect.Effect<WireRecord, never, AgentToolServices> {
   const asked = readAgentAsked(input);
-  if (Result.isFailure(asked)) {
-    return Effect.succeed(agentToolRejected(AGENT_TOOL_REFUSAL.UNREADABLE));
+  const page = Result.isSuccess(asked) ? pageAskedOf(asked.success) : undefined;
+  if (Result.isFailure(asked) || page === undefined) {
+    return Effect.succeed(agentToolRejected(AGENT_TOOL_REFUSAL.UNREADABLE_PAGE));
   }
-  const entries = asked.success.entries ?? AGENT_TOOL_BOUNDS.TAIL_ENTRIES;
-  const entryChars = AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS;
   return orStoreRefusal(
     Effect.gen(function* () {
       const found = yield* workspaceAgentOf(call.caller, asked.success.agentId);
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
-      const { agent, task, workspaceId } = found.value;
+      const { agent, task } = found.value;
       const standing = yield* standingsOf([agent]);
-      const step = yield* workspaceStepOf(callerUserId(call.caller), workspaceId);
       const newest = yield* newestJournalsOf([agent]);
       const reading = readAgentReading(
         agent,
@@ -1844,26 +2062,28 @@ export function runReadAgent(
         standing(agent),
         newest.get(agent.conversationId),
         yield* offeredModels,
-        step,
       );
       const published = yield* publishedOf(callerUserId(call.caller), agent);
-      const tail = yield* tailOf(agent, entries, entryChars);
+      const read = yield* transcriptPage(agent, page);
+      if (read === undefined) return agentToolRejected(AGENT_TOOL_REFUSAL.UNREADABLE_TRANSCRIPT);
+      const queue = yield* queueOnPage(agent.id);
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         agent: readingRecord(reading),
         ...(published === undefined
           ? undefined
           : { published: { branch: published.branch, pullRequest: published.pullRequest } }),
-        tail,
+        ...(queue.messages.length === 0 ? undefined : { queue: queueRecord(queue) }),
+        ...pageAnswer(page, read, readAgentEntry),
       };
     }),
   );
 }
 
-/** An agent that already continued the one a start continues, as the start's answer names it: its id and its mention. */
+/** An agent that already continued the one a start continues, as the start's answer names it: its id and its title. */
 interface EarlierContinuation {
   readonly id: string;
-  readonly mention: string;
+  readonly title: string;
 }
 
 /** Where a start from another agent lands: the source's own place, its task or, with none, its workspace and repository, and, for a continue, the agents that already continued the source, oldest first. */
@@ -1874,7 +2094,7 @@ interface SourceLanding {
 
 /**
  * The agents that continued a source, oldest first, each by its id and its
- * mention, up to the one named `upTo`, which is left out with every agent
+ * title, up to the one named `upTo`, which is left out with every agent
  * after it; all of them where none is named. A fork is no continuation.
  */
 const earlierContinuationsOf = (
@@ -1887,16 +2107,10 @@ const earlierContinuationsOf = (
     const whole = continuations.filter((each) => each.messageId === undefined);
     const cut = whole.findIndex((each) => each.agentId === upTo);
     const earlier = cut < 0 ? whole : whole.slice(0, cut);
-    if (earlier.length === 0) return [];
-    const step = yield* workspaceStepOf(at.userId, at.workspaceId);
     return earlier.map(
       (each): EarlierContinuation => ({
         id: each.agentId,
-        mention: writtenMention(
-          { kind: MENTION_KIND.AGENT, agentId: each.agentId },
-          each.title ?? CONTINUATION_NAME,
-          step,
-        ),
+        title: each.title ?? CONTINUATION_NAME,
       }),
     );
   });
@@ -1929,7 +2143,7 @@ const sourceLanding = (
     const found = yield* workspaceAgentOf(caller, from.agentId);
     if (Option.isNone(found)) return Result.fail(START_AGENT_REFUSAL.NO_SOURCE);
     const { agent: source, workspaceId } = found.value;
-    if (!controlsAgent(callerUserId(caller), source)) {
+    if (!startsFromAgent(callerUserId(caller), source)) {
       return Result.fail(`Not started: only ${yield* agentStarterName(source)} can do this.`);
     }
     if (named !== undefined && named !== source.taskId) {
@@ -2297,15 +2511,15 @@ interface TaskUpdateAnswered {
   readonly blocksNamed: boolean;
 }
 
-/** A task's change as the model reads it: the task as it now stands, with its mention, its parent and its blocks where the call named them, and whether every change named already stood before the call. */
-const taskUpdateAnswer = (
+/** A task's change as the model reads it: the task as it now stands, its parent and its blocks where the call named them, and whether every change named already stood before the call. */
+export const taskUpdateAnswer = (
   userId: string,
   task: StoredTask["task"],
   { already, section, parentNamed, blocksNamed }: TaskUpdateAnswered,
 ) =>
   Effect.gen(function* () {
     const { step, name } = yield* workspaceNamingOf(userId, task.workspaceId);
-    const blocks = blocksNamed ? yield* taskBlockReadingsNow(userId, task.id, step) : undefined;
+    const blocks = blocksNamed ? yield* taskBlockReadingsNow(userId, task.id) : undefined;
     const answer: WireRecord = {
       status: ACTION_RESULT_STATUS.ACCEPTED,
       task: {
@@ -2314,7 +2528,6 @@ const taskUpdateAnswer = (
         name: task.name,
         repository: task.repository,
         pinned: task.pinnedAt !== undefined,
-        mention: writtenTaskMention(task, task.name, step),
         ...(section === undefined
           ? undefined
           : { section: section === null ? null : { ...section } }),
@@ -2701,7 +2914,7 @@ export function runUpdateAgent(
     Effect.gen(function* () {
       const found = yield* workspaceAgentOf(caller, agentId);
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
-      const { task, workspaceId } = found.value;
+      const { task } = found.value;
       const choices = yield* Effect.result(accountModelChoices(userId));
       if (Result.isFailure(choices)) return agentToolRejected(UPDATE_AGENT_REFUSAL.UNAVAILABLE);
       const { offered } = choices.success;
@@ -2751,7 +2964,6 @@ export function runUpdateAgent(
       });
       if (Option.isNone(written)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
       agent = written.value.agent;
-      const step = yield* workspaceStepOf(userId, workspaceId);
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         agent: {
@@ -2764,7 +2976,6 @@ export function runUpdateAgent(
           disabledServers: [...agent.disabledServers],
           task: task.task === null ? null : { ...task.task },
           onYourTask: task.onYourTask,
-          mention: agentMention(agent, step),
           archived: agent.archivedAt !== null,
           ...(pinned === undefined ? undefined : { pinned }),
         },
@@ -2807,7 +3018,7 @@ function addedRepository(
     Effect.gen(function* () {
       const found = yield* workspaceAgentOf(caller, agentId);
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
-      const { agent, task, workspaceId } = found.value;
+      const { agent, task } = found.value;
       const calling = callerAgent(caller);
       const added = yield* Effect.result(
         addAgentRepository({ userId, agent: calling }, agent, asked, {
@@ -2821,7 +3032,6 @@ function addedRepository(
       }
       const { repository, path, checkout } = added.success;
       const now = checkout === ADDED_REPOSITORY_CHECKOUT.NOW;
-      const step = yield* workspaceStepOf(userId, workspaceId);
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         agent: {
@@ -2829,7 +3039,6 @@ function addedRepository(
           title: agent.title ?? agent.model,
           task: task.task === null ? null : { ...task.task },
           onYourTask: task.onYourTask,
-          mention: agentMention(agent, step),
         },
         added: { repository, path, checkout },
         ...(now && calling?.id === agent.id
@@ -2893,7 +3102,6 @@ export function runListTasks(
         startedBy: task.createdBy?.name ?? null,
         isYourTask: task.id === ownTask,
         sectionId: sectionOf.get(task.id) ?? null,
-        mention: writtenTaskMention(task, task.name, step),
       }));
       const next = offset + TASKS_LIST_LIMIT;
       return {
@@ -3049,7 +3257,6 @@ export function runReadPage(
       // A page of another workspace, even one the member is also in, is none of the caller's.
       const standing = yield* pageStandingOf(caller, owner);
       if (Option.isNone(standing)) return agentToolRejected(READ_PAGE_REFUSAL.NO_PAGE);
-      const mention = yield* writtenPageMention(userId, owner, page.id, page.title);
       const cut = pageCut(page.html);
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
@@ -3059,8 +3266,6 @@ export function runReadPage(
           version: page.version,
           newestVersion,
           ...standing.value,
-          // The page's mention, ready to write, wherever its owner's workspace reads for the member.
-          ...(Option.isNone(mention) ? undefined : { mention: mention.value }),
           html: cut.html,
           leftOutChars: cut.leftOutChars,
         },

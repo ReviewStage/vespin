@@ -11,6 +11,22 @@
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
+import { GLYPH_STATE } from "@repo/features/glyph-state";
+import {
+  holderAutomationId,
+  holderName,
+  INBOX_HOLDER,
+  INBOX_LINE,
+  type InboxHolder,
+  type InboxLineKind,
+  type InboxListed,
+  inboxLineKind,
+  inboxSettledStanding,
+  itemWorkspaceId,
+  NEEDS_YOU,
+  needsYou as needsYouOf,
+  readersItem,
+} from "@repo/features/inbox-list-model";
 import {
   INBOX_STATUS,
   type InboxItem,
@@ -19,6 +35,9 @@ import {
 } from "@repo/features/inbox-wire";
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
+import { cardTitle } from "@repo/features/plain-words";
+import { agentStillWriting } from "@repo/features/task-agents-model";
+import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import {
   cn,
   DraftMark,
@@ -46,31 +65,15 @@ import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor } from "../actor
 import { useAutomation } from "../automation-directory.js";
 import { useInboxItemDrafted } from "../composer-drafts.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
-import { GLYPH_STATE, StateGlyph } from "../state-glyph.js";
+import { StateGlyph } from "../state-glyph.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
-import { agentStillWriting, providerOf } from "./agent-model.js";
+import { providerOf } from "./agent-model.js";
 import { AgentMarkRef, type AgentSubject, lineSubject, tasklessSubject } from "./agent-ref.js";
 import { AutomationChipCard, TaskChipCard } from "./chip-cards.js";
 import { HOME_ROW_META } from "./home-row.js";
-import {
-  holderAutomationId,
-  holderName,
-  INBOX_HOLDER,
-  INBOX_LINE,
-  type InboxHolder,
-  type InboxLineKind,
-  type InboxListed,
-  inboxLineKind,
-  inboxSettledStanding,
-  itemWorkspaceId,
-  NEEDS_YOU,
-  needsYou as needsYouOf,
-  readersItem,
-} from "./inbox-model.js";
 import { ReadAgentModel } from "./mentioned-agent-card.js";
 import { PlanGlyph } from "./tab-look.js";
-import { TASK_CARD_STANDING, TASK_STATUS_WORDS, TaskKey } from "./task-standing.js";
-import { cardTitle } from "./tool-call-model.js";
+import { TASK_CARD_STANDING, TaskKey } from "./task-standing.js";
 import { useOpenPlace } from "./use-open-link.js";
 import { useTaskAgent } from "./use-task-work.js";
 

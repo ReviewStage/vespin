@@ -4,6 +4,14 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { createAgent, renameAgent } from "@repo/database/models/agent-store";
 import { createAutomation } from "@repo/database/models/automation-store";
+import {
+  cancelWorkspaceInvitation,
+  createWorkspaceInvitation,
+} from "@repo/database/models/invitation-store";
+import {
+  removeWorkspaceMember,
+  setWorkspaceMemberRole,
+} from "@repo/database/models/organization-store";
 import { createTask, updateTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
@@ -18,7 +26,6 @@ import {
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { eq } from "drizzle-orm";
 import { Effect, Option, Result } from "effect";
-import { memberIdOf } from "../accounts/workspace-members.js";
 import { postInboxThread } from "../inbox/inbox-store.js";
 import { workspaceInvitationsRead } from "../live/reads/workspace-invitations.js";
 import { workspaceMembersRead } from "../live/reads/workspace-members.js";
@@ -29,9 +36,9 @@ import { openWorkspacePlugin } from "../testing/workspace-plugin.js";
  * `workspaceInvitationsRead`) on the migrated capture: each write that moves
  * either read, through its real writer, notifies the workspace's topic, which
  * both reads are woken on, so a window holding them hears it within a
- * coalesce window rather than at the hold's end. Memberships and invitations
- * are written by the organization plugin through the seams our routes
- * call; an account's name and its sign-in by the account's own row, as the
+ * coalesce window rather than at the hold's end. A membership is made by the
+ * organization plugin's server-only add, and changed, and invitations made
+ * and canceled, by the stores the operations write through; an account's name and its sign-in by the account's own row, as the
  * plugin's adapter writes them; and the work that names a former member by
  * the stores. A sign-in moves no read, so it notifies nothing.
  *
@@ -50,13 +57,6 @@ const openAccount = (name: string) =>
     yield* db.insert(user).values({ id, name, email: `${id}@app.test` });
     return id;
   });
-
-/** A session of the account's, as the headers the plugin's calls are made under. */
-const sessionOf = (plugin: WorkspacePlugin, userId: string) =>
-  Effect.map(
-    plugin.sessionBearerOf(userId),
-    (bearer) => new Headers({ authorization: `Bearer ${bearer}` }),
-  );
 
 /** A shared workspace the owner makes through the plugin's server-only create. */
 const openTeam = (plugin: WorkspacePlugin, ownerId: string) =>
@@ -99,7 +99,6 @@ it.effect(
         const owner = yield* openAccount("Ada Lovelace");
         const teammate = yield* openAccount("Grace Hopper");
         const workspaceId = yield* openTeam(plugin, owner);
-        const headers = yield* sessionOf(plugin, owner);
         const reader = { userId: owner, workspaceId };
         const moved: readonly SyncTopic[] = [
           [TOPIC.WORKSPACE, workspaceId],
@@ -128,48 +127,39 @@ it.effect(
           ),
           [],
         );
-        const memberId = Option.getOrThrow(yield* memberIdOf(teammate, workspaceId));
         yield* wakesTheWorkspace(
-          plugin.members.updateMemberRole({
-            headers,
-            organizationId: workspaceId,
-            memberId,
-            role: WORKSPACE_ROLE.ADMIN,
-          }),
+          setWorkspaceMemberRole(workspaceId, teammate, WORKSPACE_ROLE.ADMIN),
           moved,
           reader,
         );
-        yield* wakesTheWorkspace(
-          plugin.members.removeMember({ headers, organizationId: workspaceId, memberId }),
-          moved,
-          reader,
-        );
+        yield* wakesTheWorkspace(removeWorkspaceMember(workspaceId, teammate), moved, reader);
       }).pipe(Effect.provide(plugin.database));
     }),
 );
 
-it.effect("an invitation made and canceled through the plugin notifies the workspace", () =>
+it.effect("an invitation made and canceled notifies the workspace", () =>
   Effect.gen(function* () {
     const plugin = yield* openWorkspacePlugin;
     yield* Effect.gen(function* () {
       const owner = yield* openAccount("Ada Lovelace");
       const workspaceId = yield* openTeam(plugin, owner);
-      const headers = yield* sessionOf(plugin, owner);
       const reader = { userId: owner, workspaceId };
       const workspace: readonly SyncTopic[] = [[TOPIC.WORKSPACE, workspaceId]];
 
       const invited = yield* wakesTheWorkspace(
-        plugin.members.inviteMember({
-          headers,
+        createWorkspaceInvitation({
           organizationId: workspaceId,
           email: "grace@example.com",
           role: WORKSPACE_ROLE.MEMBER,
+          inviterId: owner,
+          createdAt: new Date("2026-11-10T12:00:00Z"),
+          expiresAt: new Date("2026-11-12T12:00:00Z"),
         }),
         workspace,
         reader,
       );
       yield* wakesTheWorkspace(
-        plugin.members.cancelInvitation({ headers, invitationId: invited.value.id }),
+        cancelWorkspaceInvitation(workspaceId, invited.value.id),
         workspace,
         reader,
       );

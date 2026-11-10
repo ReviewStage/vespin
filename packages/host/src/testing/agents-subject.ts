@@ -592,11 +592,6 @@ function fakeService() {
         asked.push(`pin:${agentId}:${String(request.pinned)}`);
         return { agent: AGENT };
       }),
-    markRead: (agentId, request) =>
-      Effect.sync(() => {
-        asked.push(`mark-read:${agentId}:${request.readMark}`);
-        return { agent: AGENT };
-      }),
     agent: (agentId) =>
       Effect.sync(() => {
         asked.push(`page:${agentId}`);
@@ -675,6 +670,16 @@ function fakeService() {
         asked.push(`forAgents:${change.kind}:${String(change.forAgents)}`);
         return { keys: [] };
       }),
+    renameSubscription: (rename) =>
+      Effect.sync(() => {
+        asked.push(`rename:${rename.subscriptionId}`);
+        return { keys: [] };
+      }),
+    reorderSubscriptions: (order) =>
+      Effect.sync(() => {
+        asked.push(`reorder:${order.subscriptionIds.join(",")}`);
+        return { keys: [] };
+      }),
     startChatGptDeviceLogin: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     pollChatGptDeviceLogin: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     cancelChatGptDeviceLogin: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
@@ -704,6 +709,7 @@ function fakeService() {
           Effect.sync(() => forgetAnswer),
         ),
       ),
+    markActive: () => Effect.sync(() => void asked.push("active")),
     transcribeDictation: (clip) =>
       Effect.sync(() => {
         asked.push(`transcribe:${clip.audio}:${clip.keywords.join(",")}`);
@@ -1124,6 +1130,13 @@ export function subject(
       kept: yield* keptContent(KEPT_CONTENT_CHARACTERS),
       focus,
       client: service.client,
+      // Note that no test here asks an agent's ports, so their service is a sandbox that is not running.
+      ports: {
+        list: () => Effect.succeed({ running: false, ports: [] }),
+        shared: () => Effect.succeed({ shared: null }),
+        share: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+        unshare: () => Effect.succeed({ shared: null }),
+      },
       ...(options.listed === undefined ? undefined : { listed: options.listed }),
       pool,
     }).pipe(Effect.provide(noNetwork));
@@ -1178,8 +1191,8 @@ export function subject(
       acts: { ...composer.acts, ...accountAsks.acts },
       /** The composer's row writes that may wait, as a relaunch lays its queue back by. */
       queueable: composer.queueable,
-      flushHeldCloses: composer.flushHeldCloses,
-      letGoHeldCloses: composer.letGoHeldCloses,
+      flushHeldSettles: composer.flushHeldSettles,
+      letGoHeldSettles: composer.letGoHeldSettles,
       answerClosesAfter: service.answerClosesAfter,
       transcripts,
       /** Each of `transcript`'s rows the host laid, in order. */

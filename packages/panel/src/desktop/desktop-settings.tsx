@@ -41,7 +41,7 @@ import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
 import { useListEdge, useScreenRef, useScreenSplit } from "../column-split.js";
-import { LinkWorkspaceProvider, useCopyLinkItem } from "../copy-link-item.js";
+import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { SettingsPageLink } from "../open-settings.js";
 import type { NavigationHistory } from "../places/window-history.js";
 import { revealWithin, scrollerOf } from "../scroll-within.js";
@@ -98,10 +98,14 @@ export interface SettingsStep {
  * account's own agents use, the product's MCP lets outside agents use the
  * account, CLI is the `vespin` command an agent with a shell runs, so a
  * reader who landed on one looking for another is sent across, and Hosts
- * says what a host is and where it is picked. No other page has one.
+ * says what a host is and where it is picked. Agents says once, for both
+ * harnesses' lists, the order their credentials are tried in. No other page
+ * has one.
  */
 function pageDescription(view: SettingsView): ReactNode {
   switch (view) {
+    case SETTINGS_VIEW.AGENTS:
+      return <ReplayUnmask>Plans and API keys are used in the order listed.</ReplayUnmask>;
     case SETTINGS_VIEW.INTEGRATIONS:
       return (
         <ReplayUnmask>
@@ -155,7 +159,8 @@ function SettingsPageRow({
 }): React.JSX.Element {
   const page = settingsPageOf(view);
   const menu = useMenu(true);
-  const copyLink = useCopyLinkItem()({ kind: LINK_PLACE.SETTINGS, page: view });
+  const links = useLinkItems()({ kind: LINK_PLACE.SETTINGS, page: view });
+  const openInTab = useOpenInTab()({ kind: LINK_PLACE.SETTINGS, page: view });
   return (
     <li>
       <NavItem
@@ -163,15 +168,16 @@ function SettingsPageRow({
         current={current ? NAV_CURRENT.PAGE : undefined}
         roving
         onClick={onOpen}
-        contextMenu={copyLink === undefined ? undefined : menu.contextMenu()}
+        onOpenInTab={openInTab}
+        contextMenu={links.length === 0 ? undefined : menu.contextMenu()}
       >
         {page.title}
       </NavItem>
-      {menu.drawn === undefined || copyLink === undefined ? null : (
+      {menu.drawn === undefined || links.length === 0 ? null : (
         <ActionMenu
           label={PAGE_ACTIONS}
           menu={menu.drawn}
-          groups={[[copyLink]]}
+          groups={[links]}
           replayUnmasked
           onClose={menu.close}
         />

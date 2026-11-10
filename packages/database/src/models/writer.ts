@@ -19,6 +19,7 @@ import {
   type AgentMessageMetadata,
   type AppLineMetadata,
   type AutomationLineMetadata,
+  type CarryOnLineMetadata,
   type CommentLineMetadata,
   type GitHubLineMetadata,
   isWireString,
@@ -48,6 +49,7 @@ import {
   type StoredToolPart,
   type StoredUIMessage,
   TOOL_PART_STATE,
+  USAGE_LIMIT_PART,
 } from "@repo/wire/ui-messages";
 import {
   asSchema,
@@ -92,8 +94,10 @@ import {
   type AwaitedTurn,
   awaitedTurn,
   awaitTurn,
+  carryTurn,
   dropAwaitingNothing,
   endTurn,
+  holdTurn,
   queueTurn,
   requeueUntaken,
   startTurn,
@@ -400,6 +404,7 @@ export type AwaitingLineMetadata =
   | StartLineMetadata
   | GitHubLineMetadata
   | AppLineMetadata
+  | CarryOnLineMetadata
   | AutomationLineMetadata
   | SlackLineMetadata;
 
@@ -557,6 +562,24 @@ export interface StoreWriter {
   requeueLine(
     target: ConversationTarget,
     lineId: string,
+  ): Write<Result.Result<boolean, typeof NO_CONVERSATION>>;
+  /**
+   * Carries the running turn named onto the newer launch given, as one
+   * that goes on with a turn its plan's limit cut short takes it up
+   * (`turn-state.ts`'s `carryTurn`); answers whether it moved.
+   */
+  carryTurn(
+    target: ConversationTarget,
+    carry: { readonly turnId: string; readonly attempt: number },
+  ): Write<Result.Result<boolean, typeof NO_CONVERSATION>>;
+  /**
+   * Holds the running turn named open until the usage limit that cut it
+   * short resets, as one no other payer can go on with now waits for it
+   * (`turn-state.ts`'s `holdTurn`); answers whether it was held.
+   */
+  holdTurn(
+    target: ConversationTarget,
+    hold: { readonly turnId: string; readonly until: Date },
   ): Write<Result.Result<boolean, typeof NO_CONVERSATION>>;
 }
 
@@ -1650,6 +1673,25 @@ function moveJournalBehindWhatFollowed(context: WriterContext, id: string): Writ
   });
 }
 
+/** A pause stays among the journal's parts when the turn resumes below it. */
+const usageLimitReached = /* @__PURE__ */ Effect.fnUntraced(function* (
+  context: WriterContext,
+  event: Extract<RunEvent, { kind: typeof RUN_EVENT.USAGE_LIMIT_REACHED }>,
+): Effect.fn.Return<StoreWriteResult, StoreFailure, DatabaseServices> {
+  const opened = yield* journal(context, event.turnId);
+  if (Result.isFailure(opened)) return Result.fail(opened.failure);
+  const row = opened.success;
+  const id = String(event.sequence);
+  if (row.parts.some((part) => part.type === USAGE_LIMIT_PART && part.id === id)) {
+    return Result.succeed(STORE_WRITE_EFFECT.REPEATED);
+  }
+  if (row.finishedAt !== null) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FINISHED });
+  return yield* amendJournal(context, event.turnId, row, [
+    ...row.parts,
+    { type: USAGE_LIMIT_PART, id, data: event.notice },
+  ]);
+});
+
 function consume(context: WriterContext, event: RunEvent): Write<StoreWriteResult> {
   switch (event.kind) {
     case RUN_EVENT.TURN_STARTED:
@@ -1668,6 +1710,8 @@ function consume(context: WriterContext, event: RunEvent): Write<StoreWriteResul
       return messageCompleted(context, event);
     case RUN_EVENT.TEXT_DRAFTED:
       return textDrafted(context, event);
+    case RUN_EVENT.USAGE_LIMIT_REACHED:
+      return usageLimitReached(context, event);
     // The rest of the stream is the relay's, about a run's moments rather
     // than the record.
     case RUN_EVENT.SLOW_STEP:
@@ -2109,7 +2153,94 @@ const LostLineSchema = Schema.Struct({
   parts: StoredPartsColumnSchema,
   sender: Schema.NullOr(messageSenderSchema),
   senderUserId: Schema.NullOr(Schema.String),
+  /** What the line says carried it, as the row keeps it (`AwaitingLineMetadata`); null on a row kept with none. */
+  metadata: Schema.NullOr(MessageMetadataColumnSchema),
 });
+
+/** The first of the developer's lines the turn named took, as a resend of a lost line reads one; none where it took none. */
+const findOpeningLine = SqlSchema.findOneOption({
+  Request: Schema.Struct({ ...ConversationTargetSchema.fields, turnId: Schema.String }),
+  Result: LostLineSchema,
+  execute: (key) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: messages.id,
+          clientId: messages.clientId,
+          parts: messages.parts,
+          sender: messages.sender,
+          senderUserId: messages.senderUserId,
+          metadata: messages.metadata,
+        })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.userId, key.userId),
+            eq(messages.conversationId, key.conversationId),
+            eq(messages.turnId, key.turnId),
+            eq(messages.role, MESSAGE_ROLE.USER),
+          ),
+        )
+        .orderBy(asc(messages.seq))
+        .limit(1),
+    ),
+});
+
+/**
+ * The line that opened the coding agent's turn named, as a resend hands it
+ * on (`LostLine`): the first of the developer's lines the turn took, which
+ * a launch on the next payer goes on with once the plan's limit cut the
+ * turn short; none where the turn took none.
+ */
+export function turnOpeningLine(
+  target: ConversationTarget,
+  turnId: string,
+): Effect.Effect<Option.Option<LostLine>, StoreFailure, DatabaseServices> {
+  return findOpeningLine({ ...target, turnId });
+}
+
+/** The developer's lines that await the turn named and no turn took, in the order they were written, as a resend of a lost line reads them. */
+const findTurnWaitingLines = SqlSchema.findAll({
+  Request: Schema.Struct({ ...ConversationTargetSchema.fields, turnId: Schema.String }),
+  Result: LostLineSchema,
+  execute: (key) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: messages.id,
+          clientId: messages.clientId,
+          parts: messages.parts,
+          sender: messages.sender,
+          senderUserId: messages.senderUserId,
+          metadata: messages.metadata,
+        })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.userId, key.userId),
+            eq(messages.conversationId, key.conversationId),
+            eq(messages.awaitsTurnId, key.turnId),
+            isNull(messages.turnId),
+            eq(messages.role, MESSAGE_ROLE.USER),
+          ),
+        )
+        .orderBy(asc(messages.seq)),
+    ),
+});
+
+/**
+ * The developer's lines sent to the coding agent's turn named that no
+ * runner took, in the order they were written, as a resend hands each on
+ * (`LostLine`): what a launch on the next payer is handed after the turn's
+ * opening line, so a message sent while the plan's limit held the turn is
+ * not lost with the runner that ended.
+ */
+export function turnWaitingLines(
+  target: ConversationTarget,
+  turnId: string,
+): Effect.Effect<readonly LostLine[], StoreFailure, DatabaseServices> {
+  return findTurnWaitingLines({ ...target, turnId });
+}
 
 const findLostLines = SqlSchema.findAll({
   Request: ConversationTargetSchema,
@@ -2123,6 +2254,7 @@ const findLostLines = SqlSchema.findAll({
           parts: messages.parts,
           sender: messages.sender,
           senderUserId: messages.senderUserId,
+          metadata: messages.metadata,
         })
         .from(messages)
         .innerJoin(conversations, eq(conversations.id, messages.conversationId))
@@ -2646,6 +2778,14 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
     resendLostLines: (target, dispatch) => Effect.uninterruptible(resentLines(target, dispatch)),
     requeueLine: (target, lineId) =>
       underConversation(target, (context) => requeueLine(context, lineId)),
+    carryTurn: (target, carry) =>
+      underConversation(target, (context) =>
+        Effect.map(carryTurn(context.target, { ...carry, at: context.now }), Result.succeed),
+      ),
+    holdTurn: (target, hold) =>
+      underConversation(target, (context) =>
+        Effect.map(holdTurn(context.target, hold), Result.succeed),
+      ),
   };
 
   return Effect.flatMap(toolsRefusingUnknownOutcome(tools), (refusing) =>

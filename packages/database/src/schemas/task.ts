@@ -146,7 +146,7 @@ export const task = pgTable(
      */
     completedAt: timestamptz("completed_at"),
     /**
-     * Who moved the task to Done by hand, which archived its idle agents with
+     * Who moved the task to Done or Canceled by hand, which archived its idle agents with
      * it (`StoredArchive`): a member, or a coding agent for its member; null
      * while it stands in any other status, and for a Done made by our own finish,
      * which archives nothing. An agent still at work as it moved is

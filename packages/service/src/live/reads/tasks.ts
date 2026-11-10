@@ -176,7 +176,8 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
       ordered: false,
       columns: {
         id: agentTable.id,
-        planId: agentTable.taskId,
+        // Note that the row still declares a plan that may be none, because a released desktop decodes it so.
+        planId: sql<string | null>`${agentTable.taskId}`,
         workspaceId: agentTable.organizationId,
         model: agentTable.model,
         effort: agentTable.effort,
@@ -188,6 +189,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         repository: agentTable.repository,
         starterId: agentTable.userId,
         starterName: outerJoined(starter.name),
+        startedByAgentId: agentTable.startedByAgentId,
         automationId: agentTable.automationId,
         automationName: sql<string | null>`${agentTable.automationOrigin} ->> 'name'`,
         runId: agentTable.automationRunId,
@@ -224,6 +226,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         startedAt: latest.startedAt,
         settledAt: latest.settledAt,
         leaseUntil: latest.leaseUntil,
+        waitsUntil: latest.waitsUntil,
         // Note that a desktop released before the turn record reads a line awaiting its turn by this; null
         // now that the turn the line awaits says it, until the next desktop release is the oldest in use.
         awaitingLineAt: sql<Date | null>`null::timestamptz`,

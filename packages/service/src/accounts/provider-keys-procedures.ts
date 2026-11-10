@@ -15,10 +15,9 @@
  * A subscription credential, a Claude setup-token, is braked and sealed as
  * a key is but never sent to its provider: it is kept unverified, and a
  * credential spelled as no credential of its kind is refused as invalid.
- * Until a provider's API key and subscription may stand side by side, a
- * save of one kind where the provider holds the other is refused and
- * replaces nothing. The answer's `keys` are API keys alone, and the
- * subscriptions stand apart beside them.
+ * An account may keep several API keys of a provider: a save adds one at
+ * the bottom of its order, or replaces the one its id names. The answer's
+ * `keys` are API keys alone, and the subscriptions stand apart beside them.
  *
  * A ChatGPT plan (`chatgpt_oauth`) is the one credential that is not a
  * pasted key: the service connects it through Codex's device-code login
@@ -53,15 +52,19 @@ import {
 } from "@repo/database/models/provider-key-seal";
 import {
   listProviderKeyRows,
+  type ProviderKeyRow,
   removeProviderKey,
+  reorderSubscriptions,
   saveProviderKey,
   setProviderKeyForAgents,
+  setSubscriptionLabel,
 } from "@repo/database/models/provider-key-store";
 import {
   CHATGPT_DEVICE_FAILURE_MESSAGE,
   CHATGPT_DEVICE_LOGIN,
   type ChatGptDeviceLoginOutcome,
   type ChatGptDevicePollAnswer,
+  type PlanUsage,
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_REJECTION,
@@ -127,6 +130,18 @@ const SUBSCRIPTION_KINDS = Object.values(PROVIDER_KEY_KIND).filter(
 /** Every Claude setup-token's own prefix, an OAuth token's, which no API key carries. */
 const CLAUDE_SETUP_TOKEN_PREFIX = "sk-ant-oat";
 
+/** A plan's usage as last heard, none where none was or where its window has reset since. */
+function usageOf(row: ProviderKeyRow, now: number): PlanUsage | undefined {
+  if (row.usagePercent === null) return undefined;
+  if (row.usageResetsAt !== null && row.usageResetsAt.getTime() <= now) return undefined;
+  return {
+    // Note that a harness may report past the whole window, which reads as all of it.
+    usedPercent: Math.min(Math.max(row.usagePercent, 0), 100),
+    ...(row.usageWindowMins === null ? undefined : { windowMins: row.usageWindowMins }),
+    ...(row.usageResetsAt === null ? undefined : { resetsAt: row.usageResetsAt.getTime() }),
+  };
+}
+
 /**
  * The account's credentials of one kind as it is shown them, each one the
  * ring cannot open answered unreadable, and a ChatGPT plan the retired
@@ -156,11 +171,14 @@ const summariesOf = /* @__PURE__ */ Effect.fnUntraced(function* (
       addedAt: row.createdAt.getTime(),
       status,
       statusAt: row.statusAt.getTime(),
+      id: row.id,
+      position: row.position,
+      ...(row.label === null ? undefined : { label: row.label }),
       ...(status === PROVIDER_KEY_STATUS.LIMIT_REACHED && row.limitResetsAt !== null
         ? { limitResetsAt: row.limitResetsAt.getTime() }
         : undefined),
     };
-    return { summary, forAgents: row.forAgents };
+    return { summary, row, usage: usageOf(row, now) };
   });
 });
 
@@ -175,8 +193,16 @@ const keysAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   );
   const subscriptions: SubscriptionKeySummary[] = [];
   for (const kind of SUBSCRIPTION_KINDS) {
-    for (const { summary, forAgents } of yield* summariesOf(userId, kind, ring)) {
-      subscriptions.push({ ...summary, kind, forAgents });
+    for (const { summary, row, usage } of yield* summariesOf(userId, kind, ring)) {
+      subscriptions.push({
+        ...summary,
+        kind,
+        id: row.id,
+        position: row.position,
+        forAgents: row.forAgents,
+        ...(row.accountEmail === null ? undefined : { email: row.accountEmail }),
+        ...(usage === undefined ? undefined : { usage }),
+      });
     }
   }
   return {
@@ -242,8 +268,24 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
         if (refused !== undefined) return yield* keysAnswer(userId, ring, refused);
         const now = yield* DateTime.nowAsDate;
         const sealed = sealProviderKey(ring, { userId, provider, kind }, key);
+        const placement = {
+          ...(input.subscriptionId === undefined
+            ? undefined
+            : { subscriptionId: input.subscriptionId }),
+          ...(input.add === undefined ? undefined : { add: input.add }),
+        };
         yield* hostedStoreOrUnavailable(
-          saveProviderKey(userId, provider, kind, sealed, providerKeyHint(key), null, now),
+          saveProviderKey(
+            userId,
+            provider,
+            kind,
+            sealed,
+            providerKeyHint(key),
+            null,
+            now,
+            null,
+            placement,
+          ),
         );
         yield* recordServerEvent(SERVER_EVENT.PROVIDER_KEY_CREATE, { userId }, { provider });
         return yield* keysAnswer(userId, ring);
@@ -261,6 +303,7 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
       if (checked !== PROVIDER_KEY_CHECK.ACCEPTED) return yield* keysAnswer(userId, ring, checked);
       const sealed = sealProviderKey(ring, { userId, provider, kind }, key);
       const now = yield* DateTime.nowAsDate;
+      // Note that a key is added at the bottom of the order unless the save names the one it replaces.
       yield* hostedStoreOrUnavailable(
         saveProviderKey(
           userId,
@@ -270,24 +313,31 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
           providerKeyHint(key),
           fastAccess ?? null,
           now,
+          null,
+          input.subscriptionId === undefined ? {} : { subscriptionId: input.subscriptionId },
         ),
       );
       yield* recordServerEvent(SERVER_EVENT.PROVIDER_KEY_CREATE, { userId }, { provider });
       return yield* keysAnswer(userId, ring);
     }),
 
-    /** One provider's credential removed, by the provider and the kind the query names; an API key where it names none. A ChatGPT plan is revoked at OpenAI first. */
+    /** One provider's credential removed, by the provider, the kind, and the subscription the query names; an API key where it names no kind, the first of its kind where it names no subscription. A ChatGPT plan is revoked at OpenAI first. */
     removeProviderKey: keyed.removeProviderKey.effect(function* ({ context, input }) {
       const { userId, ring } = context;
       const kind = input.query.kind ?? PROVIDER_KEY_KIND.API_KEY;
+      const { subscriptionId } = input.query;
       if (
         kind === PROVIDER_KEY_KIND.CHATGPT_OAUTH &&
         input.query.provider === SUBSCRIPTION_KIND_PROVIDER[kind]
       ) {
-        const confirmed = yield* hostedStoreOrUnavailable(removeChatGptCredentials(userId, ring));
+        const confirmed = yield* hostedStoreOrUnavailable(
+          removeChatGptCredentials(userId, ring, subscriptionId),
+        );
         return yield* keysAnswer(userId, ring, undefined, !confirmed);
       }
-      yield* hostedStoreOrUnavailable(removeProviderKey(userId, input.query.provider, kind));
+      yield* hostedStoreOrUnavailable(
+        removeProviderKey(userId, input.query.provider, kind, subscriptionId),
+      );
       return yield* keysAnswer(userId, ring);
     }),
 
@@ -295,16 +345,50 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
     setProviderKeyForAgents: keyed.setProviderKeyForAgents.effect(function* ({ context, input }) {
       const { userId, ring } = context;
       yield* hostedStoreOrUnavailable(
-        setProviderKeyForAgents(userId, input.provider, input.kind, input.forAgents),
+        setProviderKeyForAgents(
+          userId,
+          input.provider,
+          input.kind,
+          input.forAgents,
+          input.subscriptionId,
+        ),
       );
       return yield* keysAnswer(userId, ring);
     }),
 
-    /** A ChatGPT plan's connection through Codex's device-code login begun, braked with saves: the code to enter and the login to poll; what claims the sign-in stays sealed on the service. */
-    startChatGptDeviceLogin: keyed.startChatGptDeviceLogin.effect(function* ({ context }) {
+    /** One of the account's subscriptions or API keys named, or its name cleared; one it does not hold changes nothing. */
+    renameSubscription: keyed.renameSubscription.effect(function* ({ context, input }) {
+      const { userId, ring } = context;
+      // Note that a name is kept as typed but for its ends, and one left empty is the default's.
+      const label = input.label?.trim() ?? "";
+      yield* hostedStoreOrUnavailable(
+        setSubscriptionLabel(
+          userId,
+          input.provider,
+          input.kind,
+          input.subscriptionId,
+          label === "" ? null : label,
+        ),
+      );
+      return yield* keysAnswer(userId, ring);
+    }),
+
+    /** The account's credentials of the provider, its plans and its API key, put in the order named, the first paying first. */
+    reorderSubscriptions: keyed.reorderSubscriptions.effect(function* ({ context, input }) {
+      const { userId, ring } = context;
+      yield* hostedStoreOrUnavailable(
+        reorderSubscriptions(userId, input.provider, input.subscriptionIds),
+      );
+      return yield* keysAnswer(userId, ring);
+    }),
+
+    /** A ChatGPT plan's connection through Codex's device-code login begun, braked with saves: the code to enter and the login to poll; what claims the sign-in stays sealed on the service. A start that adds keeps the plan it connects at the bottom of the account's order. */
+    startChatGptDeviceLogin: keyed.startChatGptDeviceLogin.effect(function* ({ context, input }) {
       const { userId, ring } = context;
       if (!(yield* brake.check(userId))) return yield* Effect.fail(HOSTED_REFUSAL.QUOTA_EXHAUSTED);
-      const started = yield* hostedStoreOrUnavailable(startChatGptDeviceLogin(userId, ring));
+      const started = yield* hostedStoreOrUnavailable(
+        startChatGptDeviceLogin(userId, ring, input?.add === true),
+      );
       if (Option.isNone(started)) return yield* Effect.fail(HOSTED_REFUSAL.UPSTREAM_ERROR);
       return started.value;
     }),

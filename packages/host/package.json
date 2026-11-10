@@ -31,7 +31,8 @@
     "./update-service": "./src/update-service.js",
     "./task-code": "./src/task-code.js",
     "./task-code-remote": "./src/task-code-remote.js",
-    "./task-code-worker": "./src/task-code-worker.js"
+    "./task-code-worker": "./src/task-code-worker.js",
+    "./follow-stream": "./src/follow-stream.js"
   },
   "types": "./src/index.ts",
   "scripts": {
@@ -56,14 +57,12 @@
     "@shikijs/themes": "4.5.0",
     "@tanstack/db": "0.15.2",
     "effect": "catalog:",
-    "shiki": "4.5.0",
-    "ws": "catalog:"
+    "shiki": "4.5.0"
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@orpc/client": "catalog:",
     "@types/node": "catalog:",
-    "@types/ws": "8.18.1",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

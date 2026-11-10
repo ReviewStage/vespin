@@ -138,7 +138,7 @@ import {
   recordAgentRunnerToken,
   runnerLaunchOf,
 } from "@repo/database/models/agent-store";
-import { holdsSession } from "@repo/database/models/claude-session-entries";
+import { holdsSession, markSessionBroken } from "@repo/database/models/claude-session-entries";
 import {
   clearNativeRewindHanded,
   readNativeRewind,
@@ -153,6 +153,7 @@ import {
   ANY_LAUNCH,
   clearRunnerLines,
   queueRunnerLine,
+  requeueRunnerLine,
   runnerLineWaitingSince,
   waitingRunnerFiles,
   withdrawRunnerLine,
@@ -167,6 +168,7 @@ import { type ConversationTarget, storeWriter } from "@repo/database/models/writ
 import type { RunnerLineFile } from "@repo/database/schemas/runner-line";
 import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
+import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
 import { causeKind, failureKind } from "@repo/runtime/effect";
 import {
   isSandboxError,
@@ -174,7 +176,6 @@ import {
   type SandboxError,
   type SandboxFile,
   SandboxUnavailable,
-  touchSandbox,
 } from "@repo/sandbox";
 import { TURN_STATUS, type WireValue } from "@repo/wire";
 import type { UserContent } from "ai";
@@ -224,6 +225,7 @@ import { deploymentLifecycle } from "../machine/agent-machines.js";
 import { extraCheckoutPaths } from "../repository-sandbox-contract.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import { LAUNCH_SWAP } from "../sandbox-firewall.js";
+import { touchAgentSandbox } from "../sandbox-use.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
   PLAN_REFUSAL,
@@ -339,7 +341,7 @@ export interface RunnerHarness<E extends { readonly _tag: string }> {
     resume: string | undefined,
     firstSequence: number,
     rewindBefore: string | undefined,
-  ) => Effect.Effect<RunnerConfig, LaunchRefused>;
+  ) => Effect.Effect<RunnerConfig, E | LaunchRefused, RunnerServices>;
   /** The checkout's folders the harness finds a repository's skills in, whose names it keeps over an installed skill's. */
   readonly skillRoots: readonly string[];
   /** What goes ahead of a message to a runner already running. */
@@ -436,7 +438,11 @@ function besideBytes(turnText: string | undefined, content: readonly ContentBloc
  */
 interface ResumedSession {
   readonly resume?: string;
+  /** Whether the session resumes from the CLI's own files with the store left out of the launch, as one the store does not hold whole on a machine whose disk keeps it (`MachineLayout`'s `diskSessions`). */
+  readonly fromDisk?: boolean;
   readonly fork?: boolean;
+  /** The client id of the source's line a forked session is cut just before (`StoredStartedFrom`'s `cutBefore`); none where it is forked whole. */
+  readonly cut?: string;
   readonly replay?: boolean;
 }
 
@@ -662,7 +668,7 @@ function sandboxSetupOf(agent: Agent, machine: AgentMachineKind) {
     const [install, repository] = yield* Effect.all(
       [
         readInstallScript(agent.organizationId),
-        readRepositorySetup(agent.organizationId, agent.repository),
+        readRepositorySetup(agent.organizationId, agent.repository, REPOSITORY_SCRIPT_KIND.SETUP),
       ],
       { concurrency: "unbounded" },
     );
@@ -991,12 +997,13 @@ export const runnerSessions = <
             return yield* new LaunchRefused({ reason: "no agent" });
           const named = (url: string) => launchUrl(url, recordedLaunch.value);
           // A rewind's cut is handed to the launch that resumes the harness's session, and let go
-          // once the runner has it; a fresh session never heard the line it names.
+          // once the runner has it; a fresh session never heard the line it names. A forked session
+          // is cut where the Start cut it, through the same cut, since the line it names is the source's.
           const read = Effect.gen(function* () {
             const rewind = Option.getOrUndefined(
               yield* readNativeRewind({ userId, conversationId: agent.conversationId }),
             );
-            const rewindBefore = resumed.resume === undefined ? undefined : rewind;
+            const rewindBefore = resumed.resume === undefined ? undefined : (resumed.cut ?? rewind);
             const config = yield* harness
               .config(agent, layout, resumed.resume, firstSequence, rewindBefore)
               .pipe(Effect.withSpan("web/runnerConfig"));
@@ -1012,7 +1019,7 @@ export const runnerSessions = <
                 eventsUrl: named(config.eventsUrl),
                 ...("tokenUrl" in config ? { tokenUrl: named(config.tokenUrl) } : undefined),
                 ...(layout.linesRead ? { linesUrl: named(options.linesUrl) } : undefined),
-                ...(layout.transcriptsKept
+                ...(layout.transcriptsKept && resumed.fromDisk !== true
                   ? { transcriptsUrl: named(options.transcriptsUrl) }
                   : undefined),
                 ...(resumed.fork === true ? { fork: true } : undefined),
@@ -1339,7 +1346,7 @@ export const runnerSessions = <
         const { content } = sent.line;
         // Note that the replay is fitted beside what else the line carries, so the whole line fits the window.
         const replay = replayed
-          ? yield* restartReplay(agent, besideBytes(opened.text, content))
+          ? yield* restartReplay(agent, besideBytes(opened.text, content), sent.line.uuid)
           : undefined;
         const words = [replay, opened.text].filter((part) => part !== undefined);
         const ahead: readonly ContentBlock[] =
@@ -1360,15 +1367,20 @@ export const runnerSessions = <
      * The agent's own steps so far, as a session opened afresh on its
      * conversation is handed them (`restartReplayOf`), fitted to its model's
      * window less the instructions told where none was measured and the
-     * bytes the rest of its line comes to; nothing where its rows cannot be
-     * read, logged, so the session still opens on the turn's words.
+     * bytes the rest of its line comes to, and without the line being sent
+     * (`sending`); nothing where its rows cannot be read, logged, so the
+     * session still opens on the turn's words.
      */
-    const restartReplay = (agent: Agent, beside: number) =>
-      restartReplayOf(agent, {
-        windowTokens: contextWindowOf([], agent.model, agent.contextWindow),
-        instructionsTokens: REPLAY_FIT.INSTRUCTIONS_FALLBACK_TOKENS,
-        besideBytes: beside,
-      }).pipe(
+    const restartReplay = (agent: Agent, beside: number, sending: string) =>
+      restartReplayOf(
+        agent,
+        {
+          windowTokens: contextWindowOf([], agent.model, agent.contextWindow),
+          instructionsTokens: REPLAY_FIT.INSTRUCTIONS_FALLBACK_TOKENS,
+          besideBytes: beside,
+        },
+        sending,
+      ).pipe(
         Effect.tapError(logStoreFailure),
         Effect.orElseSucceed(() => undefined),
       );
@@ -1406,6 +1418,16 @@ export const runnerSessions = <
         return (
           opened.descriptionsOn !== standing.descriptionsOn || opened.memoryOn !== standing.memoryOn
         );
+      });
+
+    /** The agent's native session marked broken (`markSessionBroken`), so no launch resumes it from the store again (`holdsSession`). */
+    const lostSessionMarked = (agent: Agent) =>
+      Effect.gen(function* () {
+        const routing = yield* readAgentRouting(userId, agent.id);
+        const own = Option.getOrUndefined(
+          Option.flatMapNullishOr(routing, (read) => read.nativeSession),
+        );
+        if (own !== undefined) yield* markSessionBroken(userId, agent.conversationId, own);
       });
 
     /** The files a message names written into the running place, before its line names them. */
@@ -1469,15 +1491,19 @@ export const runnerSessions = <
      * a send queues for one, and a warm call ask. On a machine that keeps the
      * CLI's transcript (`MachineLayout`'s `transcriptsKept`), the harness
      * resumes from the store whenever it holds any entry of the session, and
-     * from those alone, whatever the disk holds, so a session resumes only
-     * where the store holds it from its first entry (`holdsSession`); one it
-     * holds a tail of, or none of, as a session begun before it kept
-     * transcripts, is let go, and the fresh session that opens in its place
-     * is handed the agent's steps so far (`replay`). On a machine that keeps
-     * none, the session resumes from the disk alone, so not in a place made
-     * anew (`created`), whose disk is gone. A continued or forked agent with
+     * from those alone, whatever the disk holds, so a session resumes from
+     * the store only where it holds it from its first entry
+     * (`holdsSession`). One it holds a tail of, or none of, as a session
+     * begun before it kept transcripts, is let go in a sandbox, and the fresh
+     * session that opens in its place is handed the agent's steps so far
+     * (`replay`); on a Mac, whose disk keeps it (`diskSessions`), it resumes
+     * from the disk with the store left out of the launch (`fromDisk`), so
+     * the store never comes to hold a tail it would load alone. On a machine
+     * that keeps none, the session resumes from the disk alone, so not in a
+     * place made anew (`created`), whose disk is gone. A continued or forked agent with
      * no session of its own yet forks its source's in a new place, where the
-     * Start copied a transcript the store holds from its first entry.
+     * Start copied a transcript the store holds from its first entry, cut
+     * where the Start cut it.
      * Whether the place was made anew is read only where it decides the
      * session, so a launch prepared beside its place's resume waits on that
      * resume only there.
@@ -1494,15 +1520,20 @@ export const runnerSessions = <
         );
         const { conversationId } = agent;
         if (own !== undefined) {
-          const resumes = layout.transcriptsKept
-            ? yield* holdsSession(userId, conversationId, own)
-            : !(yield* created);
-          return (resumes ? { resume: own } : { replay: true }) satisfies ResumedSession;
+          if (layout.transcriptsKept && (yield* holdsSession(userId, conversationId, own))) {
+            return { resume: own } satisfies ResumedSession;
+          }
+          const fromDisk = (!layout.transcriptsKept || layout.diskSessions) && !(yield* created);
+          return (fromDisk ? { resume: own, fromDisk } : { replay: true }) satisfies ResumedSession;
         }
         const source = agent.startedFrom?.session;
         if (!layout.transcriptsKept || source === undefined || !(yield* created)) return {};
         const held = yield* holdsSession(userId, conversationId, source);
-        return (held ? { resume: source, fork: true } : {}) satisfies ResumedSession;
+        if (!held) return {} satisfies ResumedSession;
+        const cut = agent.startedFrom?.cutBefore;
+        return (
+          cut === undefined ? { resume: source, fork: true } : { resume: source, fork: true, cut }
+        ) satisfies ResumedSession;
       });
 
     /** The session a launch resumes in a place known made anew or not (`resumedSessionWhen`). */
@@ -1604,7 +1635,9 @@ export const runnerSessions = <
      * preparation that failed fails the launch once the place runs, as an
      * open's does. In a place made anew in place of one whose disk was lost
      * (`created`), the member's installed skills went with that disk, so
-     * they are uploaded again, as a new place's are. Answers the place.
+     * they are uploaded again, as a new place's are. A launch whose
+     * harness's session was lost (`replayed`) resumes it by no path, the disk's
+     * included, and opens a fresh one handed the agent's steps. Answers the place.
      */
     const relaunched = <PE, PR>(
       agent: Agent,
@@ -1615,6 +1648,7 @@ export const runnerSessions = <
       layout: MachineLayout,
       sent: RunnerMessage | undefined,
       queuedFirst?: OpenedLine,
+      replayed = false,
     ) =>
       Effect.gen(function* () {
         const target = { userId, conversationId: agent.conversationId };
@@ -1636,7 +1670,9 @@ export const runnerSessions = <
                   layout,
                   sent,
                   credential,
-                  resumedSessionWhen(agent, layout, Deferred.await(created)),
+                  replayed
+                    ? Effect.succeed({ replay: true } satisfies ResumedSession)
+                    : resumedSessionWhen(agent, layout, Deferred.await(created)),
                   queuedFirst,
                 ),
               ),
@@ -1719,6 +1755,10 @@ export const runnerSessions = <
       layout: MachineLayout,
       sent: RunnerMessage,
       handsOn: boolean,
+      /** Whether a runner up is ended and launched again whatever it holds, as a retry on the next payer asks (`retry`). */
+      relaunch = false,
+      /** Whether the harness's session is let go and the conversation replayed, as a retry of a turn whose launch could not resume it asks (`retry`). */
+      replayed = false,
     ) =>
       Effect.gen(function* () {
         // The agent is read beside the place, and its read answers only for a place found or opening.
@@ -1755,12 +1795,17 @@ export const runnerSessions = <
         const { conversationId } = agent;
         const turn = (yield* latestTurnsOfReached([conversationId])).get(conversationId);
         const turnRunning = turn?.status === TURN_STATUS.RUNNING;
-        // A session opened on experiments since changed is opened afresh, on the same place, its
-        // conversation replayed into it: its harness's session is let go before anything is
-        // handed, so every launch past here, the turn's delivery's among them, resumes none, and
-        // the first line, its replay ahead of it, is composed once.
-        const restart = yield* experimentsChanged(agent, turnRunning);
-        if (restart) yield* recordAgentNativeSession(userId, agent.id, null);
+        // A session the harness could not resume, or opened on experiments since changed, is opened
+        // afresh, on the same place, its conversation replayed into it: its harness's session is let
+        // go before anything is handed, so every launch past here, the turn's delivery's among them,
+        // resumes none, and the first line, its replay ahead of it, is composed once.
+        const restart = replayed || (yield* experimentsChanged(agent, turnRunning));
+        // Note that a session the harness could not resume is marked broken rather than forgotten,
+        // so the store never resumes it again, the launch below resumes it by no path
+        // (`relaunched`), and a Mac whose disk a later launch resumes it from again loses it once
+        // more and replays then.
+        if (replayed) yield* lostSessionMarked(agent);
+        else if (restart) yield* recordAgentNativeSession(userId, agent.id, null);
         const restartLine = restart
           ? yield* openedLine(agent, sessionId, sent, true, true)
           : undefined;
@@ -1802,6 +1847,7 @@ export const runnerSessions = <
           // has gone, so a line written to a runner on its way down is lost.
           if (
             restart ||
+            relaunch ||
             (standing.machine === AGENT_MACHINE.DEVICE &&
               pastWarmWindow(
                 turnRunning,
@@ -1825,6 +1871,7 @@ export const runnerSessions = <
               layout,
               sent,
               restartLine,
+              replayed,
             );
             yield* handed(SERVER_HANDOFF_PATH.RELAUNCHED);
             return accepted;
@@ -1909,6 +1956,7 @@ export const runnerSessions = <
           layout,
           sent,
           restartLine,
+          replayed,
         );
         yield* handed(wasUp ? SERVER_HANDOFF_PATH.RELAUNCHED : SERVER_HANDOFF_PATH.RESUMED);
         return accepted;
@@ -2180,7 +2228,7 @@ export const runnerSessions = <
         if (Option.isNone(found) || found.value.agentId !== agent.id) return;
         // An agent on screen is its sandbox in use: a running one is touched, a stopped one resumed by the launch below.
         if (found.value.machine === AGENT_MACHINE.VERCEL && found.value.running !== undefined) {
-          yield* touchSandbox(found.value.name);
+          yield* touchAgentSandbox(found.value.name);
         }
         const live = found.value.runner;
         if (live !== undefined) {
@@ -2397,6 +2445,45 @@ export const runnerSessions = <
             );
           }).pipe(
             Effect.catch(failed("send")),
+            Effect.annotateLogs(agentLogIds({ conversationId: message.conversationId }, sessionId)),
+            Effect.provideContext(
+              Option.isSome(after) ? Context.add(context, AfterResponse, after.value) : context,
+            ),
+          );
+        }),
+
+      // A turn its plan's limit cut short goes on with its own line in a launch on the next payer:
+      // the runner, wherever it runs and whatever it holds, ended and launched again here under the
+      // lease, as a message to a Mac's is, its payer chosen afresh as every launch's is
+      // (`turnPayerOf`) and the harness's session resumed (`resumedSessionWhen`); or, for a turn
+      // whose launch could not resume it (`replayed`), let go and the conversation replayed. Note
+      // that on a machine whose runner reads its lines, the line the ended launch took is put back
+      // untaken first, because the launch queues it again under the same id, and a line taken is
+      // never handed again (`requeueRunnerLine`). The line is resent, since the session it resumes
+      // already holds it under its id.
+      retry: (sessionId, message, replayed = false) =>
+        Effect.gen(function* () {
+          const after = yield* Effect.serviceOption(AfterResponse);
+          return yield* Effect.gen(function* () {
+            const agent = yield* agentOf(message.conversationId);
+            const layout = yield* machine.layout(agent);
+            const first = messageLine(message, layout);
+            const sent = { ...first, line: { ...first.line, resent: true } };
+            return yield* holdingRunner(
+              agent.id,
+              Effect.andThen(
+                layout.linesRead
+                  ? requeueRunnerLine(userId, agent.id, sent.line.uuid)
+                  : Effect.void,
+                sendHolding(sessionId, message, layout, sent, false, true, replayed),
+              ),
+              CODER.RUNNER_LEASE.SEND_WAIT,
+            ).pipe(
+              Effect.catch(failed("retry")),
+              Effect.annotateLogs(agentLogIds(agent, sessionId)),
+            );
+          }).pipe(
+            Effect.catch(failed("retry")),
             Effect.annotateLogs(agentLogIds({ conversationId: message.conversationId }, sessionId)),
             Effect.provideContext(
               Option.isSome(after) ? Context.add(context, AfterResponse, after.value) : context,

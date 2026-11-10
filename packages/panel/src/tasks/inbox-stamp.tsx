@@ -1,6 +1,6 @@
+import { ANSWER_TONE, type AnswerStamp, type AnswerTone } from "@repo/features/inbox-list-model";
 import { Badge, CHIP_LOOK, CHIP_SIZE, Chip, STATUS_TONE, type StatusTone } from "@repo/ui";
 import { CheckIcon, Undo2Icon } from "@repo/ui/icons";
-import { ANSWER_TONE, type AnswerStamp, type AnswerTone } from "./inbox-model.js";
 
 /**
  * inbox-stamp.tsx -- an answer to an Inbox ask as a stamp: its glyph and its words, at the head of the reply that sent it or over the box it is attached to.

@@ -1,5 +1,5 @@
 import { CHATGPT_DEVICE_LOGIN, type ChatGptDeviceSettled } from "@repo/features/provider-key-wire";
-import { and, eq } from "drizzle-orm";
+import { and, eq, lte } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices } from "../core/query.js";
@@ -11,11 +11,12 @@ import type { TaskStoreEffect, TaskStoreFailure } from "./task-store.js";
 /**
  * chatgpt-device-login-store.ts -- an account's pending connection of a ChatGPT plan through Codex's device-code login: begun, checked under its row's lock, settled, and dropped.
  *
- * An account holds at most one pending login, and a start replaces it
- * whole under a new login id, so a panel still polling the old one finds
- * it gone. Every read and write names the account and the login together,
- * so no account reaches another's login, and none reaches a login its own
- * newer start replaced. A check runs under the row's lock
+ * An account may hold several pending logins, each under its own login id,
+ * so a second sign-in started beside the first connects a subscription of
+ * its own; a start clears the account's logins whose code lapsed, so none
+ * outlives the next start by more than its code. Every read and write names
+ * the account and the login together, so no account reaches another's
+ * login. A check runs under the row's lock
  * (`withChatGptDeviceLoginLocked`), so two polls at once run one after the
  * other and the second reads how the first settled it. A settled login
  * keeps its outcome and leaves its sealed codes, so a poll after the one
@@ -33,6 +34,7 @@ const SettledSchema = Schema.Literals([
 const OwnerSchema = Schema.Struct({ userId: Schema.String, loginId: Schema.String });
 
 const LoginRowSchema = Schema.Struct({
+  adds: Schema.Boolean,
   sealedCodes: Schema.NullOr(Schema.String),
   outcome: Schema.NullOr(SettledSchema),
   expiresAt: InstantColumnSchema,
@@ -48,28 +50,41 @@ const ownLogin = (owner: DeviceLoginOwner) =>
     eq(accountChatGptDeviceLogin.loginId, owner.loginId),
   );
 
-const upsertLogin = SqlSchema.void({
+const insertLogin = SqlSchema.void({
   Request: Schema.Struct({
     ...OwnerSchema.fields,
+    adds: Schema.Boolean,
     sealedCodes: Schema.String,
     expiresAt: Schema.Date,
     now: Schema.Date,
   }),
-  execute: (write) => {
-    const row = {
-      loginId: write.loginId,
-      sealedCodes: write.sealedCodes,
-      outcome: null,
-      expiresAt: write.expiresAt,
-      createdAt: write.now,
-    };
-    return Database.use((db) =>
+  execute: (write) =>
+    Database.use((db) =>
+      db.insert(accountChatGptDeviceLogin).values({
+        loginId: write.loginId,
+        userId: write.userId,
+        adds: write.adds,
+        sealedCodes: write.sealedCodes,
+        outcome: null,
+        expiresAt: write.expiresAt,
+        createdAt: write.now,
+      }),
+    ),
+});
+
+const deleteLapsed = SqlSchema.void({
+  Request: Schema.Struct({ userId: Schema.String, now: Schema.Date }),
+  execute: (read) =>
+    Database.use((db) =>
       db
-        .insert(accountChatGptDeviceLogin)
-        .values({ userId: write.userId, ...row })
-        .onConflictDoUpdate({ target: accountChatGptDeviceLogin.userId, set: row }),
-    );
-  },
+        .delete(accountChatGptDeviceLogin)
+        .where(
+          and(
+            eq(accountChatGptDeviceLogin.userId, read.userId),
+            lte(accountChatGptDeviceLogin.expiresAt, read.now),
+          ),
+        ),
+    ),
 });
 
 const lockLogin = SqlSchema.findAll({
@@ -79,6 +94,7 @@ const lockLogin = SqlSchema.findAll({
     Database.use((db) =>
       db
         .select({
+          adds: accountChatGptDeviceLogin.adds,
           sealedCodes: accountChatGptDeviceLogin.sealedCodes,
           outcome: accountChatGptDeviceLogin.outcome,
           expiresAt: accountChatGptDeviceLogin.expiresAt,
@@ -106,14 +122,23 @@ const deleteLogin = SqlSchema.void({
     Database.use((db) => db.delete(accountChatGptDeviceLogin).where(ownLogin(owner))),
 });
 
-/** Keeps the account's new pending login, its codes sealed, replacing whichever it held. */
+/**
+ * Keeps the account's new pending login, its codes sealed, beside whichever
+ * it holds, clearing those whose code lapsed. `adds` says whether the plan
+ * it connects is added at the bottom of the account's order rather than
+ * replacing its first.
+ */
 export function beginChatGptDeviceLogin(
   owner: DeviceLoginOwner,
   sealedCodes: string,
   expiresAt: Date,
   now: Date,
+  adds = false,
 ): TaskStoreEffect<void> {
-  return upsertLogin({ ...owner, sealedCodes, expiresAt, now });
+  return Effect.andThen(
+    deleteLapsed({ userId: owner.userId, now }),
+    insertLogin({ ...owner, adds, sealedCodes, expiresAt, now }),
+  );
 }
 
 /**

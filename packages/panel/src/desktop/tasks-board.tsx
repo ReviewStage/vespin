@@ -1,5 +1,17 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
+  type ChildTaskCount,
+  childTaskCounts,
+  repositoryLabel,
+  TASK_ORDER,
+  taskTime,
+} from "@repo/features/task-list-model";
+import {
+  NO_ASSIGNEE_WORDS,
+  TASK_PRIORITY_WORDS,
+  TASK_STATUS_WORDS,
+} from "@repo/features/task-standing-words";
+import {
   TASK_BOUNDS,
   TASK_STATUS,
   type TaskStanding,
@@ -85,13 +97,6 @@ import {
 import { actorName } from "@repo/ui/actor-model";
 import { FIND_SKIP_ATTRIBUTE } from "@repo/ui/find-skip";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import {
-  type ChildTaskCount,
-  childTaskCounts,
-  repositoryLabel,
-  TASK_ORDER,
-  taskTime,
-} from "@repo/ui/task-list-model";
 import { RENAME_FAILED_NOTE, repositoryPageUrl } from "@repo/ui/tasks-model";
 import {
   COMPLETED_WINDOW,
@@ -130,14 +135,10 @@ import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { newTaskAction } from "../tasks/inbox-list.js";
+import { openTaskInTab } from "../tasks/task-menu-items.js";
 import { TASK_RENAME_SHAPE, useTaskRename } from "../tasks/task-rename.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
-import {
-  NO_ASSIGNEE_WORDS,
-  TASK_PRIORITY_WORDS,
-  TASK_STATUS_WORDS,
-  TaskKey,
-} from "../tasks/task-standing.js";
+import { TaskKey } from "../tasks/task-standing.js";
 import { linkPressOf } from "../tasks/use-open-link.js";
 import { useMarkedUnread } from "../tasks/use-task-looks.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
@@ -178,7 +179,7 @@ import {
   OlderCompleted,
   type TasksViewFrame,
 } from "./tasks-page-options.js";
-import { type ChosenTasks, chosenRowMenu, useTasksSelection } from "./tasks-selection.js";
+import { type ChosenRows, chosenRowMenu, useTasksSelection } from "./tasks-selection.js";
 import { useHeldTasks } from "./use-held-tasks.js";
 import { useTaskDrag } from "./use-row-drag.js";
 
@@ -221,7 +222,7 @@ import { useTaskDrag } from "./use-row-drag.js";
  * while any is chosen, by X on the card in hand, and by ⌘-click, across
  * columns; a ⇧-click or ⇧↑↓ chooses a run within the card's own column
  * (`selectionRun`), as Linear's board does. While any is chosen, a bar at the
- * page's foot marks them done, sets their status, or moves them to a section,
+ * page's foot sets their status, moves them to a section, or deletes them,
  * as the List's does (`tasks-selection.tsx`), and a card chosen among
  * several offers those acts from its ⋯ and a right-click.
  *
@@ -407,7 +408,7 @@ const TaskBoardCard = memo(function TaskBoardCard({
   subTasksFinished: number;
   subTasksTotal: number;
   /** The selection it stands in, where it is one of several chosen: how many, and what the bar does to them all. */
-  chosen: ChosenTasks | undefined;
+  chosen: ChosenRows | undefined;
   /** Opens a task by its id. */
   onSelect: (taskId: string) => void;
   onStanding: (task: TaskSummary, standing: TaskStanding) => void;
@@ -531,6 +532,7 @@ const TaskBoardCard = memo(function TaskBoardCard({
               menu.close(false);
               onOpen();
             }}
+            onOpenInTab={openTaskInTab(tasks.workspaces, task)}
           >
             <span id={nameId} className={BOARD_NAME}>
               <ReplayMask>{task.name}</ReplayMask>
@@ -740,7 +742,7 @@ function TaskBoardColumnView({
   /** How many of a task's sub-tasks are finished, of all of them, by its id; none for a task with none. */
   subTasksOf: ReadonlyMap<string, ChildTaskCount>;
   /** The selection a card of the task stands in, where it is one of several chosen (`useTasksSelection`). */
-  chosenOf: (taskId: string) => ChosenTasks | undefined;
+  chosenOf: (taskId: string) => ChosenRows | undefined;
   /** Whether a find bar stands open over the page, which draws every card so the find covers them. */
   finding: boolean;
   /** Holds the column's run of cards while it stands, so a card out of view can be brought in (`useVirtualRuns`). */
