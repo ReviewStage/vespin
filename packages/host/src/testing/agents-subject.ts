@@ -1014,6 +1014,7 @@ const TRANSCRIPT_PARTS = [
   "windowParts",
   "queueRevision",
   "launch",
+  "boot",
 ] as const;
 const SCOPE_PARTS = ["items", "messages", "files"] as const;
 export const ACCOUNT_PARTS = ["items", "planless", "plans", "automations", "failedRuns"] as const;

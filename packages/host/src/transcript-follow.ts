@@ -184,8 +184,8 @@ export type TranscriptFollows<Key = TranscriptKey> = RcMap.RcMap<Key, Standing, 
 /**
  * The rows a page beside the messages is read by as one text, in no order of
  * Postgres's, so only a change to one moves it: the turns, the titles, the
- * workers, the queue's revision, a device agent's newest launch line, and
- * the developer's lines still awaiting a turn. Note that the messages and the journal's revision are left out,
+ * workers, the queue's revision, a device agent's newest launch line, a
+ * first launch's boot, and the developer's lines still awaiting a turn. Note that the messages and the journal's revision are left out,
  * because the window's own rows carry the messages; and that a line awaiting
  * its turn is in, because whoever wrote it, a queue's hand-off or another
  * member, the agent's status moves with it, which only a page says. Held
@@ -200,6 +200,7 @@ function digestOf(rows: AgentTranscriptLiveRows): string {
     workers: rows.workers,
     queue: rows.queueRevision ?? [],
     launch: rows.launch ?? [],
+    boot: rows.boot ?? [],
     awaiting: rows.window
       .filter((row) => row.role === MESSAGE_ROLE.USER && row.turnStatus === null)
       .map(({ id }) => ({ id })),

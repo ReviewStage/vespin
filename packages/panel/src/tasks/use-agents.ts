@@ -88,11 +88,9 @@ import {
   choiceRequest,
   continueFailureNote,
   DELETE_WORDS,
-  openingLineOf,
   RENAME_FAILED,
   RETRY_FAILED,
   SERVERS_FAILED,
-  type SentLine,
   START_FAILED_AWAY,
   START_NEEDS_TASK,
   startFailureNote,
@@ -273,8 +271,8 @@ const MODELS_READ_BOUND_MS = 15_000;
  * New task's Agent mode starts its agent with its task, in the task's one
  * start (`use-tasks-tab.ts`): an agent that landed joins the list of the
  * task it started on where that task stands open (`onTaskStarted`), drawn
- * at once with the words it was started on as its first line (`opening`),
- * before the task's list or the agent's transcript is read, and one
+ * at once, before the task's list or the agent's transcript is read, its
+ * words waiting in its queue while its first launch boots, and one
  * the service refused leaves the task a draft holding the words, the files,
  * and the model picked on New task's chip, where one was, with why
  * (`onHandDraft`), under the key that start carried, so its tab's Retry is
@@ -295,21 +293,6 @@ const MODELS_READ_BOUND_MS = 15_000;
  * press are another request under a key of its own. Its tab opens as a
  * Start's does.
  */
-
-/** The words New task started an agent on: the key its start carried, the prompt, and the files. */
-interface StartedWords {
-  readonly key: string;
-  readonly prompt: string;
-  readonly attachments: readonly AgentAttachment[];
-  /** When Start was pressed, which the agent's first line is stamped with. */
-  readonly sentAt: number;
-}
-
-/** The line an agent was started on, by the agent. */
-interface OpeningLine {
-  readonly agentId: string;
-  readonly line: SentLine;
-}
 
 /** How an archive was pressed: whether a question was asked first, which keeps it off ⌘Z. */
 interface ArchivePress {
@@ -417,14 +400,13 @@ export interface AgentsControl {
    */
   onHandDraft: (taskId: string, handed: HandedDraft) => void;
   /**
-   * Takes an agent New task started with its task, and the words it was
-   * started on: it joins the list where that task stands open, or stands
-   * as that task's whole list until the list is read, which is read again,
-   * and its words are its first line until its transcript reads one back.
+   * Takes an agent New task started with its task: it joins the list where
+   * that task stands open, or stands as that task's whole list until the
+   * list is read, which is read again. Note that its words are no line of
+   * its transcript yet, because they wait in its queue until its first
+   * launch hands them off.
    */
-  onTaskStarted: (taskId: string, agent: AgentSummary, words: StartedWords) => void;
-  /** The first line of the agent New task last started, drawn as the developer's until its transcript reads a line of theirs back (`unreadOpeningLine`). */
-  opening: OpeningLine | undefined;
+  onTaskStarted: (taskId: string, agent: AgentSummary) => void;
   /** Changes the open task's draft's files from those it holds as the change lands. */
   onDraftAttachments: (
     next: (held: readonly AgentAttachment[]) => readonly AgentAttachment[],
@@ -891,10 +873,10 @@ export function useAgents(input: {
   const keptDraft = useNewAgentDraft(taskId, heldDraft?.id);
   const writer = useDraftWriter();
   const draft = taskId === undefined ? undefined : taskDraft(heldDraft, keptDraft);
-  // The agent New task last started, its task, and the line it was started on.
-  const [started, setStarted] = useState<
-    { taskId: string; agent: AgentSummary; line: SentLine } | undefined
-  >(undefined);
+  // The agent New task last started, and its task.
+  const [started, setStarted] = useState<{ taskId: string; agent: AgentSummary } | undefined>(
+    undefined,
+  );
   const pending = useRef<PendingStart | undefined>(undefined);
   // The Start out now on a task, whose tab stands under its key until it answers.
   const [pressed, setPressed] = useState<{ taskId: string; starting: StartingAgent } | undefined>(
@@ -933,10 +915,6 @@ export function useAgents(input: {
   // The agent New task just started on the open task, which stands until the list carries it, so its tab draws at once.
   const seed = useMemo(() => (started === undefined ? undefined : [started.agent]), [started]);
   const held = taskId !== undefined && started?.taskId === taskId ? seed : undefined;
-  const opening = useMemo(
-    () => (started === undefined ? undefined : { agentId: started.agent.id, line: started.line }),
-    [started],
-  );
   // The task's agents as the followed task list carries them; none where it does not carry the task.
   const { listedAgents } = input;
   const listedHere = useMemo(
@@ -1297,8 +1275,8 @@ export function useAgents(input: {
   // Note that the task New task started may not stand open yet as its start
   // answers. Until the task list carries its agent, the agent stands as its
   // task's, so its tab draws at once rather than after the list.
-  const onTaskStarted = (on: string, agent: AgentSummary, words: StartedWords) => {
-    setStarted({ taskId: on, agent, line: openingLineOf(words) });
+  const onTaskStarted = (on: string, agent: AgentSummary) => {
+    setStarted({ taskId: on, agent });
   };
 
   // Note that the files are changed from the draft as it stands when the
@@ -1734,7 +1712,6 @@ export function useAgents(input: {
     onDraftChange,
     onHandDraft,
     onTaskStarted,
-    opening,
     onDraftAttachments,
     onDiscardDraft,
     startPrompt: steadyStartPrompt,

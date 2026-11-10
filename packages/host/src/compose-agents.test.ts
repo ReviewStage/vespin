@@ -414,6 +414,7 @@ function transcriptRows(live: { readonly transcript: TranscriptLive }, seq: numb
     windowParts: [],
     queueRevision: [],
     launch: [],
+    boot: [],
   });
 }
 
@@ -655,7 +656,7 @@ it.effect(
 );
 
 it.effect(
-  "a held transcript reads its page again when only the agent's queue moves, the page laid with the queue's revision it was read at, or when a line of the developer's lands awaiting its turn, whoever wrote it",
+  "a held transcript reads its page again when only the agent's queue moves, the page laid with the queue's revision it was read at, when only its first launch's boot moves, or when a line of the developer's lands awaiting its turn, whoever wrote it",
   () =>
     Effect.gen(function* () {
       const {
@@ -682,6 +683,14 @@ it.effect(
       yield* nextPoll;
       assert.equal(reads(), beforeQueue + 1, "the queue moving reads the page");
       assert.equal(held().at(-1)?.word?.queueRevision, 1, "its queue is at least that new");
+
+      // A first launch's boot moving on, from Starting to its setup scripts, moves nothing else.
+      const beforeBoot = reads();
+      live.transcript.set({
+        boot: [{ attempt: 1, phase: "running-scripts", setupExit: null, failure: null }],
+      });
+      yield* nextPoll;
+      assert.equal(reads(), beforeBoot + 1, "the boot moving reads the page");
 
       // A queue's hand-off writes the member's line before its turn is opened; the page says the agent runs.
       const beforeLine = reads();

@@ -2115,20 +2115,6 @@ export function openingLineOf(words: {
   };
 }
 
-/**
- * The line an agent was started on, while its transcript reads back no line
- * of the developer's. Note that the service writes that first row under a
- * key of its own, or the retired runtime under none, so the line is let go by any row of
- * theirs rather than by its id, and the first is always that one.
- */
-export function unreadOpeningLine(
-  opening: SentLine | undefined,
-  messages: readonly AgentTranscriptMessage[],
-): SentLine | undefined {
-  if (opening === undefined) return undefined;
-  return messages.some((message) => message.role === MESSAGE_ROLE.USER) ? undefined : opening;
-}
-
 /** The transcript's rows, with the lines sent and not yet read back at its end, in the order they went. */
 export function agentLines(
   messages: readonly AgentTranscriptMessage[],

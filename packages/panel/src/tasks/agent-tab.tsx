@@ -242,7 +242,6 @@ import {
   threadLineOf,
   transcriptRowKey,
   turnUnderWay,
-  unreadOpeningLine,
   usageLimitAgentOf,
   WORKING_PHASE,
   type WorkingPhase,
@@ -3384,11 +3383,10 @@ const NO_TICKS: readonly number[] = [];
 /**
  * The tab of an agent New task or a Start is still starting, before the
  * service has made it: the developer's words as its first line, where it was
- * started on some, as the agent's own transcript will draw them, and its
- * working line saying it is starting, over the composer's card, which the
- * agent's own tab takes the place of once the start answers, its first line
- * drawn in the same place, and its model's chip where the start named the
- * model. One started on no words is briefed on the description.
+ * started on some, and its working line saying it is starting, over the
+ * composer's card, which the agent's own tab takes the place of once the
+ * start answers, its words then waiting in its queue until its first launch
+ * hands them off, and its model's chip where the start named the model. One started on no words is briefed on the description.
  */
 export function StartingAgentTab({
   line,
@@ -3567,20 +3565,8 @@ function AgentTabBody({
   // Note that the log never waits on the pull request's dock over the box, because its read asks GitHub and would hold every tab's first draw for a second or more.
   // Note that nothing counts as landed before the first page.
   const surroundsLanded = messages.length > 0;
-  // An agent New task just started draws the words it was started on as its
-  // first line until its transcript reads one back (`unreadOpeningLine`).
-  const opening = unreadOpeningLine(
-    control.opening?.agentId === agent.id ? control.opening.line : undefined,
-    messages,
-  );
-  const sent = useMemo(
-    () => (opening === undefined ? composer.sent : [opening, ...composer.sent]),
-    [opening, composer.sent],
-  );
   const opened = useRef(false);
-  // Note that a log already drawn on its opening line is never held back again, because
-  // an agent just started has published nothing and been called by no one, so nothing would move it.
-  if (surroundsLanded || opening !== undefined) opened.current = true;
+  if (surroundsLanded) opened.current = true;
   const holding = messages.length > 0 && !opened.current;
   const copyWithToast = useCopyToast();
   const openGitHub = (url: string) => appPlatform().openGitHub(url);
@@ -3707,7 +3693,7 @@ function AgentTabBody({
         modelsFailed={control.modelsFailed}
         readModels={control.readModels}
         transcript={transcript}
-        composer={sent === composer.sent ? composer : { ...composer, sent }}
+        composer={composer}
         model={model}
         servers={servers}
         mode={mode}
