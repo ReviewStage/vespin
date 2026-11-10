@@ -67,7 +67,7 @@ function numberQuery(number: Option.Option<number>) {
 }
 
 /** One file's diff, as git prints it: its header, then its patch or why GitHub carried none. */
-function fileDiffLines(file: AgentChangedFile): string[] {
+export function fileDiffLines(file: AgentChangedFile): string[] {
   const before = file.previousPath ?? file.path;
   const from = file.status === CHANGED_FILE_STATUS.ADDED ? NO_FILE : `a/${before}`;
   const to = file.status === CHANGED_FILE_STATUS.DELETED ? NO_FILE : `b/${file.path}`;
@@ -80,7 +80,7 @@ function fileDiffLines(file: AgentChangedFile): string[] {
 }
 
 /** One file as a line of the stat: what became of it, the lines it adds and removes, and its path. */
-function fileStatRow(file: AgentChangedFile): string[] {
+export function fileStatRow(file: AgentChangedFile): string[] {
   const path = file.previousPath === null ? file.path : `${file.previousPath} -> ${file.path}`;
   return [file.status, `+${file.additions}`, `-${file.deletions}`, path];
 }

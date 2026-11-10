@@ -78,6 +78,8 @@ import {
   wholeRendering,
 } from "@repo/ui/github-html";
 import {
+  AlarmClockCheckIcon,
+  AlarmClockOffIcon,
   AppWindowIcon,
   ArchiveIcon,
   ArchiveRestoreIcon,
@@ -1154,6 +1156,8 @@ const CALL_ICON = {
   [CALL_KIND.SHOW_IMAGE]: ImageIcon,
   [CALL_KIND.OPEN_PULL_REQUEST]: () => <GLYPH.PULL_REQUEST />,
   [CALL_KIND.SLEEP]: TimerIcon,
+  [CALL_KIND.SCHEDULE_WAKEUP]: AlarmClockCheckIcon,
+  [CALL_KIND.CANCEL_WAKEUP]: AlarmClockOffIcon,
   [CALL_KIND.LIST_TASKS]: () => <GLYPH.TASK />,
   [CALL_KIND.REMEMBER]: () => <GLYPH.MEMORY />,
   [CALL_KIND.RECALL]: () => <GLYPH.MEMORY />,

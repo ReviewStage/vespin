@@ -60,6 +60,15 @@ export function SettingsLine({ children }: { children: ReactNode }): React.JSX.E
   );
 }
 
+/** A card's block where its rows would stand, padded as a row is: a setup's steps, which are no setting of their own. */
+export function SettingsBlock({ children }: { children: ReactNode }): React.JSX.Element {
+  return (
+    <div className="ui-settings-block m-0 box-border min-w-0 px-settings-row-inline py-settings-row-block">
+      {children}
+    </div>
+  );
+}
+
 /* ----- Skeletons ----- */
 
 /** The control a placeholder row ends in, in the shape of the one that lands. */
