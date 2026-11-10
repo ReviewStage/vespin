@@ -80,9 +80,9 @@ import { ReadFailed } from "./marks.js";
  */
 
 const SECTION_TITLE = {
-  SET_UP: `Set up the ${PRODUCT_NAME.toLowerCase()} command`,
-  INSTALL: "Install",
-  SIGN_IN: "Sign in",
+  SET_UP: "Set up the CLI",
+  INSTALL: "Install the CLI",
+  SIGN_IN: "CLI sign-in",
 } as const;
 
 const PAGE_LINE = {

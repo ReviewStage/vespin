@@ -273,10 +273,10 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.MCP_CLIENTS,
-          label: "Connected apps",
+          label: "Apps connected over MCP",
           page: SETTINGS_VIEW.MCP,
           haystack: [
-            "Connected apps",
+            "Apps connected over MCP",
             "mcp server clients oauth allowed agents with access revoke disconnect external outside",
           ],
         }
@@ -284,10 +284,10 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.MCP_CONNECT,
-          label: "Connect an app",
+          label: "Connect an app over MCP",
           page: SETTINGS_VIEW.MCP,
           haystack: [
-            "Connect an app",
+            "Connect an app over MCP",
             "agent mcp server url address claude code codex cursor vs code chatgpt connector external outside",
           ],
         }

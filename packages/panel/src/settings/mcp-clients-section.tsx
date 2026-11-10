@@ -102,8 +102,8 @@ import { MenuRow } from "./menu-row.js";
  */
 
 const SECTION_TITLE = {
-  CLIENTS: "Connected",
-  CONNECT: "Connect an app",
+  CLIENTS: "Apps connected over MCP",
+  CONNECT: "Connect an app over MCP",
 } as const;
 
 /** The name each agent knows the server by in a command that adds it. */

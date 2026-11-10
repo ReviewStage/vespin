@@ -288,8 +288,8 @@ test("mcp finds the Vespin MCP & CLI page's groups and none of the integrations"
     [SETTINGS_VIEW.MCP],
   );
   assert.deepEqual(labelsFound("mcp"), [
-    "Connected apps",
-    "Connect an app",
+    "Apps connected over MCP",
+    "Connect an app over MCP",
     "Install the vespin command",
     "Sign in from your terminal",
   ]);
