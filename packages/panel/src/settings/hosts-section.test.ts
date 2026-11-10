@@ -148,7 +148,7 @@ test("Add a host shows the public install command, with no secret in it, and nam
   assert.ok(!pageText().includes("is connected."), "a host the account had already is not named");
 });
 
-test("a host that joins while the page stands is said to be connected, and reads Setting up… until its first beat", async () => {
+test("a host that joins while the page stands is said to be connected in the wait's place, and reads Setting up… until its first beat", async () => {
   const hosts: HostLine[] = [];
   handBeats({});
   const lay = holdHosts(() => [...hosts]);
@@ -156,12 +156,14 @@ test("a host that joins while the page stands is said to be connected, and reads
   await settle();
   // Note that the page stands on the account's first list, read once it reaches the hosts' query, before a host joins.
   await vi.waitFor(() => assert.ok(pageText().includes(`curl -fsSL ${SCRIPT} | sh`)));
+  assert.ok(pageText().includes("Waiting for a host to join"), pageText());
 
   hosts.push({ id: "9b2d4f6a-1c3e-4a5b-8d7f-0e2a4c6b8d31", name: "hel-02" });
   act(lay);
   await settle();
 
   await vi.waitFor(() => assert.ok(pageText().includes("hel-02 is connected."), pageText()));
+  assert.ok(!pageText().includes("Waiting for a host to join"), "the wait gives way to the host");
   assert.ok(pageText().includes("hel-02Setting up… · Linux server"), pageText());
 });
 

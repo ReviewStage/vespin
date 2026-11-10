@@ -20,8 +20,10 @@ import { mcpCommand } from "./mcp.js";
 import { memoryCommand } from "./memory.js";
 import { modelsCommand } from "./models.js";
 import { prCommand } from "./pr.js";
+import { preferencesCommand } from "./preferences.js";
 import { repoCommand } from "./repo.js";
 import { sectionCommand } from "./section.js";
+import { setupCommand } from "./setup.js";
 import { slackCommand } from "./slack.js";
 import { taskCommand } from "./task.js";
 import { updateCommand } from "./update.js";
@@ -37,12 +39,14 @@ export const COMMANDS = [
   prCommand,
   workspaceCommand,
   githubCommand,
+  setupCommand,
   repoCommand,
   slackCommand,
   inboxCommand,
   memoryCommand,
   automationCommand,
   modelsCommand,
+  preferencesCommand,
   keysCommand,
   mcpCommand,
   apiCommand,
