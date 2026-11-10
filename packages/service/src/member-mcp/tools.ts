@@ -149,6 +149,10 @@ import {
   workspaceAgentOf,
 } from "../agents/agent-tools.js";
 import {
+  READ_AGENT_TRANSCRIPT_INPUT,
+  runReadAgentTranscript,
+} from "../agents/agent-transcript-tool.js";
+import {
   AUTOMATION_TOOL_REFUSAL,
   CREATE_AUTOMATION_TOOL,
   DELETE_AUTOMATION_TOOL,
@@ -564,6 +568,28 @@ const READ_AGENT_CHANGES_TOOL = memberMcpTool({
       (userId) => agentWorkspace(userId, { id: asked.agentId }),
       AGENT_TOOL_REFUSAL.NO_AGENT,
       (call) => runReadAgentChanges(call, asked),
+    ),
+});
+
+const READ_AGENT_TRANSCRIPT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT,
+  description:
+    "Read the whole transcript of a coding agent the member can see, by its id, or of one of " +
+    `its workers, page by page, as ${MEMBER_MCP_TOOL.READ_AGENT} pages it and in the same ` +
+    "places: each line sent to it under who sent it, what it said, and which tools it called on " +
+    "what, each of its own entries with the messageId of the message it stands in and each " +
+    "call's with its callId. Name a worker by the callId of the call that started it to page " +
+    "through that worker's transcript instead; name a call by its messageId and callId to read " +
+    "that one call whole, its input and its output or its error, which a page leaves out, each " +
+    `cut on a line at ${READ_PAGE_CHARS} characters with how many were left out. It only reads: ` +
+    "the agent is not told. Answers `accepted` with the page or the call, or `rejected` and why.",
+  input: READ_AGENT_TRANSCRIPT_INPUT,
+  annotations: READ_ONLY,
+  run: (asked) =>
+    readAsMember(
+      (userId) => agentWorkspace(userId, { id: asked.agentId }),
+      AGENT_TOOL_REFUSAL.NO_AGENT,
+      (call) => runReadAgentTranscript(call, asked),
     ),
 });
 
@@ -2170,6 +2196,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_LIST_AGENTS_TOOL,
   MEMBER_READ_AGENT_TOOL,
   READ_AGENT_CHANGES_TOOL,
+  READ_AGENT_TRANSCRIPT_TOOL,
   MEMBER_READ_PAGE_TOOL,
   MEMBER_LIST_MODELS_TOOL,
   MEMBER_CREATE_TASK_TOOL,

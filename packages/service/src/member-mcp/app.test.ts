@@ -482,6 +482,7 @@ it.effect(
           [MEMBER_MCP_TOOL.READ_TASK, { taskId: rows.strangerTask }],
           [MEMBER_MCP_TOOL.READ_AGENT, { agentId: rows.strangerAgent }],
           [MEMBER_MCP_TOOL.READ_AGENT_CHANGES, { agentId: rows.strangerAgent }],
+          [MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT, { agentId: rows.strangerAgent }],
           [MEMBER_MCP_TOOL.READ_INBOX, { workspace: slugOf(rows.elsewhere) }],
           [
             MEMBER_MCP_TOOL.ANSWER_ASK,
@@ -512,6 +513,7 @@ it.effect(
           [MEMBER_MCP_TOOL.READ_TASK, { taskId: rows.ownTask }],
           [MEMBER_MCP_TOOL.READ_AGENT, { agentId: rows.ownAgent }],
           [MEMBER_MCP_TOOL.READ_AGENT_CHANGES, { agentId: rows.ownAgent }],
+          [MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT, { agentId: rows.ownAgent }],
         ] as const,
         ([name, args]) => call(name, args),
       );

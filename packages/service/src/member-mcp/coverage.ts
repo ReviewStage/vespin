@@ -75,6 +75,16 @@ export const MEMBER_MCP_COVERAGE = {
     messages: ["agentNewest", "agent"],
   },
   [MEMBER_MCP_TOOL.READ_AGENT_CHANGES]: { agentPullRequests: ["pullRequest"], agents: ["changes"] },
+  [MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT]: {
+    messages: [
+      "agent",
+      "agentNewest",
+      "agentWorker",
+      "agentWorkerNewest",
+      "agentPart",
+      "agentWorkerPart",
+    ],
+  },
   [MEMBER_MCP_TOOL.LIST_MODELS]: { models: ["list"], account: ["preferences"] },
   [MEMBER_MCP_TOOL.READ_PAGE]: { taskFiles: ["pages", "page"], agentPages: ["list", "version"] },
   [MEMBER_MCP_TOOL.CREATE_TASK]: { plans: ["create", "editDescription"] },
@@ -294,10 +304,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   mcpClients: { list: NOT_YET_BUILT, revoke: NOT_YET_BUILT },
   messages: {
     queue: NOT_YET_BUILT,
-    agentWorker: NOT_YET_BUILT,
-    agentWorkerNewest: NOT_YET_BUILT,
-    agentPart: NOT_YET_BUILT,
-    agentWorkerPart: NOT_YET_BUILT,
   },
   plans: {
     find: NOT_YET_BUILT,
