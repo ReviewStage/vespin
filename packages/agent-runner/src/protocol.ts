@@ -537,6 +537,8 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   /** Absent in a config written before Codex mode, which is Claude Code's. */
   harness: Schema.optionalKey(Schema.Literal(RUNNER_HARNESS.CLAUDE_CODE)),
   cwd: Schema.String,
+  /** The agent the launch runs, whose id names the refs its checkout's snapshots stand under (`checkout-snapshot.ts`). */
+  agentId: Schema.String,
   executable: Schema.String,
   model: Schema.String,
   effort: Schema.optionalKey(EffortSchema),
@@ -606,6 +608,8 @@ export type ClaudeCodeConfig = typeof ClaudeCodeConfigSchema.Type;
 export const CodexConfigSchema = Schema.Struct({
   harness: Schema.Literal(RUNNER_HARNESS.CODEX),
   cwd: Schema.String,
+  /** The agent the launch runs, whose id names the refs its checkout's snapshots stand under (`checkout-snapshot.ts`). */
+  agentId: Schema.String,
   executable: Schema.String,
   model: Schema.String,
   effort: Schema.optionalKey(CodexEffortSchema),
@@ -863,9 +867,9 @@ export interface RunnerIdle {
   readonly type: typeof RUNNER_EVENT.IDLE;
 }
 
-/** Where a checkout keeps the snapshot taken before each turn (`checkout-snapshot.ts`): under a stamp of when it was taken and the line's id, among the worktree's own refs. */
+/** Where a checkout keeps the snapshots taken before each turn (`checkout-snapshot.ts`): under the agent's id, each under a stamp of when it was taken and the line's id, in the clone's own refs beside an archived agent's (`refs/vespin/archive/`). */
 export const CHECKOUT_SNAPSHOT = {
-  REF_PREFIX: "refs/worktree/vespin/turns/",
+  REF_PREFIX: "refs/vespin/turns/",
   /** How many snapshots a checkout keeps: the oldest beyond go as a new one is taken. */
   KEEP: 20,
 } as const;

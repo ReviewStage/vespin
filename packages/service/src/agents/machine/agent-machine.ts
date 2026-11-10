@@ -462,12 +462,13 @@ export interface AgentMachineService {
    * (`@repo/features/checkout-restore`), once the runner is ended: in a
    * sandbox, woken where it stopped; on a Mac, by a restore line its host
    * follows and settles with the script's exit. Refused (`LaunchRefused`)
-   * where the Mac is away or removed, as a line to it is.
+   * where the Mac is away or removed, as a line to it is. A sandbox's
+   * restore is a use of it, recorded in the store (`../sandbox-use.ts`).
    */
   readonly restoreCheckout: (
     session: string,
     snapshot: TurnCheckoutSnapshot,
-  ) => Effect.Effect<RestoreOutcome, SandboxError | LaunchRefused>;
+  ) => Effect.Effect<RestoreOutcome, SandboxError | LaunchRefused, DatabaseServices>;
   /** The runner's exit code, null while it runs, or gone where the machine no longer knows it; waiting at most `within` for the exit. */
   readonly runnerExit: (
     handle: RunnerHandle,

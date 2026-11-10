@@ -1062,7 +1062,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         Effect.provideService(Sandbox, api),
         Effect.mapError((failure) => refused ?? failure),
       );
-      yield* recordedSandboxOpen(agent.id, agentSandboxName(sessionId));
+      yield* recordedSandboxOpen(agent.id, agentSandboxName(sessionId), created);
       return { ...runningOf(sandbox), created, lockfileMoved: moved, from: attempt.from };
     });
 

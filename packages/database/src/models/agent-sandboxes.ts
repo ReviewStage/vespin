@@ -35,6 +35,7 @@ import {
   type AgentSandboxState,
   agentSandboxTable,
 } from "../schemas/agent-sandbox.js";
+import { forgetTurnSnapshotsOfAgent, forgetTurnSnapshotsOfSandbox } from "./turn-state.js";
 
 type SandboxUseEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
@@ -234,9 +235,7 @@ const markReleased = SqlSchema.void({
  * apply; null for no session.
  */
 export function sandboxNamedFor(session: SQLWrapper): SQL<string | null> {
-  return sql<
-    string | null
-  >`'agent-sandbox-' || left(encode(sha256(${session}::bytea), 'hex'), 32)`;
+  return sql<string | null>`'agent-sandbox-' || left(encode(sha256(${session}::bytea), 'hex'), 32)`;
 }
 
 /** A boot of the agent's sandbox begun at `at`: its row LIVE, booting since then. */
@@ -260,15 +259,26 @@ export function recordAgentSandboxBootFailed(sandboxName: string): SandboxUseEff
 
 /** The sandbox deleted by its session's discard, its row RELEASED. */
 export function recordAgentSandboxDiscarded(sandboxName: string): SandboxUseEffect<void> {
-  return markReleased({ sandboxName });
+  // The snapshots its agent's turns hold went with its disk.
+  return Effect.andThen(forgetTurnSnapshotsOfSandbox(sandboxName), markReleased({ sandboxName }));
 }
 
-/** The agent's sandbox recorded LIVE and used at `at`, where its row was written before the cutoff or stood RELEASED. */
+/**
+ * The agent's sandbox recorded LIVE and used at `at`, where its row was
+ * written before the cutoff or stood RELEASED. Where the open `created`
+ * the sandbox, under a name whose earlier sandbox was released, discarded,
+ * or lapsed, the snapshots the agent's turns hold are forgotten first, since
+ * they stood on the disk that is gone.
+ */
 export function recordAgentSandboxOpen(
   agentId: string,
   use: AgentSandboxUse,
+  created = false,
 ): SandboxUseEffect<void> {
-  return upsertOpen({ ...use, agentId });
+  return Effect.andThen(
+    created ? forgetTurnSnapshotsOfAgent(agentId) : Effect.void,
+    upsertOpen({ ...use, agentId }),
+  );
 }
 
 /** The sandbox's row used at `at`, where an open recorded one and it was written before the cutoff. */
@@ -318,5 +328,11 @@ export function settleAgentSandboxRelease(
   sandboxName: string,
   state: typeof AGENT_SANDBOX_STATE.LIVE | typeof AGENT_SANDBOX_STATE.RELEASED,
 ): SandboxUseEffect<void> {
-  return settleReleasing({ sandboxName, state });
+  // A sandbox deleted took the snapshots its agent's turns hold with it.
+  return Effect.andThen(
+    state === AGENT_SANDBOX_STATE.RELEASED
+      ? forgetTurnSnapshotsOfSandbox(sandboxName)
+      : Effect.void,
+    settleReleasing({ sandboxName, state }),
+  );
 }

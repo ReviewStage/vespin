@@ -140,3 +140,17 @@ test("makes a branch the agent deleted again at its old commit, and restores not
   );
   assert.deepEqual(status(cwd), before, "nothing was touched");
 });
+
+test("puts the branch back on a worktree an archive's rebuild left detached at the snapshot's parent, its files restored", () => {
+  const { cwd, later, snapshot } = repositoryAfterATurn();
+  // The rebuild: the worktree made again at the commit the archive's snapshot was taken on, HEAD detached there, and the files as the archive kept them.
+  git(cwd, "checkout", "--quiet", "--detach", later);
+  writeFileSync(join(cwd, "kept.txt"), "as the archive kept it\n");
+
+  assert.equal(restore(cwd, snapshot), 0);
+
+  assert.equal(git(cwd, "symbolic-ref", "--short", "HEAD"), "main");
+  assert.equal(git(cwd, "rev-parse", "main"), later, "the turn's commit stays on main");
+  assert.equal(words(cwd, "kept.txt"), "as edited before the turn\n");
+  assert.equal(words(cwd, "later.txt"), undefined);
+});

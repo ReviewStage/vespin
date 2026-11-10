@@ -152,6 +152,7 @@ const SANDBOX_ENV = {
 const CONFIG: CodexConfig = {
   harness: RUNNER_HARNESS.CODEX,
   cwd: "/srv/agent-probe-repo",
+  agentId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
   executable: "/opt/agent-codex/bin/codex",
   model: "gpt-5.5",
   effort: CODEX_EFFORT.HIGH,

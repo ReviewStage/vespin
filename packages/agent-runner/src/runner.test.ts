@@ -99,6 +99,7 @@ const ENV = {
 
 const CONFIG: RunnerConfig = {
   cwd: "/workspace/repository",
+  agentId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
   executable: "/opt/claude/bin/claude",
   model: "claude-sonnet",
   effort: EFFORT.HIGH,
