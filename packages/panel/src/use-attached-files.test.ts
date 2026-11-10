@@ -225,12 +225,30 @@ test("a picture pasted into the agent's box is held as its chip in the words, th
   }
 });
 
+test("a word typed after a file laid in as its chip stands a space apart from it", async () => {
+  const container = await mounted("agent");
+  await drop(container, [png("one.png")]);
+  typeInComposer(container, "here");
+  const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
+  assert.equal(editor.getText(), "[Picture 1] here");
+});
+
+/** The chip a file was just laid in with taken out as two Backspaces would: the first the space laid in after it, which the browser deletes itself, the second the chip whole. */
+function takeOutLastChip(container: HTMLElement): void {
+  const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
+  act(() => {
+    const { from } = editor.state.selection;
+    editor.view.dispatch(editor.state.tr.delete(from - 1, from));
+  });
+  act(() => pressInComposer(container, "Backspace"));
+}
+
 test("one Backspace taking a picture's chip out of the words takes the picture off the message", async () => {
   const container = await mounted("agent");
   await drop(container, [png("one.png"), png("two.png")]);
   assert.deepEqual(held(container).pictures, ["Open Picture 1", "Open Picture 2"]);
 
-  act(() => pressInComposer(container, "Backspace"));
+  takeOutLastChip(container);
   await settle();
 
   assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
@@ -244,7 +262,7 @@ test("undo bringing a deleted picture's chip back brings its picture back, thoug
   // Note that each step closes its own entry in the history, as a pause between them would.
   const pause = () => act(() => editor.view.dispatch(closeHistory(editor.state.tr)));
   pause();
-  act(() => pressInComposer(container, "Backspace"));
+  takeOutLastChip(container);
   pause();
   typeInComposer(container, "a");
   act(() => {
@@ -273,7 +291,7 @@ test("a save that leaves the box's words standing still lets one Backspace take 
 
   act(() => pressInComposer(container, "Enter"));
   await settle();
-  act(() => pressInComposer(container, "Backspace"));
+  takeOutLastChip(container);
   await settle();
 
   assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });

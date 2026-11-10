@@ -1009,10 +1009,12 @@ function insertedPicturesAt(
     ...(index > 0 || needsSpace($pos.nodeBefore, false) ? [schema.text(SPACE)] : []),
     schema.node(PICTURE_NODE, { name }),
   ]);
-  const trail = needsSpace($pos.nodeAfter, true) ? [schema.text(SPACE)] : [];
+  // Note that a space follows the last chip, and the caret stands past it, as a mention picked from its list leaves them, so the next word typed stands apart.
+  const spaced = doc.textBetween(pos, Math.min(pos + 1, doc.content.size)) === SPACE;
+  const trail = spaced ? [] : [schema.text(SPACE)];
   const tr = editor.state.tr.insert(pos, [...chips, ...trail]);
   if (textOf(tr.doc).length > maxLength) return false;
-  const after = tr.mapping.map(pos) - trail.length;
+  const after = tr.mapping.map(pos) + (spaced ? SPACE.length : 0);
   editor.view.dispatch(
     tr
       .setSelection(TextSelection.create(tr.doc, after))
