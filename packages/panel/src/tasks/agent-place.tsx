@@ -58,9 +58,11 @@ import { CLOUD_ROW, DeviceGlyph, rowRequest, runsOnRows } from "./runs-on.js";
  * It is a start's Runs on chip as the agent keeps it (`runs-on.tsx`): the
  * same toolbar chip, the same glyph by the device's platform, and the same
  * name every list of machines gives it (`machine-name.ts`), This Mac among
- * them, so an agent reads alike before and after it starts. Since where an
- * agent runs is set as it starts, the chip ends in no chevron and
- * takes no press (`StaticChip`); a rest on it, or a tap under a finger,
+ * them, so an agent reads alike before and after it starts. Where a move is
+ * offered (`move-agent.tsx`'s `useMovePlace`), it is the move control,
+ * ending in its chevron and dropping the places to move the agent to
+ * (`PlaceMenuChip`); otherwise it ends in no chevron and takes no press
+ * (`StaticChip`). Either way a rest on it, or a tap under a finger,
  * hangs a card saying where the agent runs and whether the
  * device is online, and a reader hears "Runs on:" before its words. An
  * agent in a sandbox says "Cloud" beside the cloud glyph, and its card names
