@@ -2627,7 +2627,8 @@ const LIST_AGENT_PORTS_TOOL = memberMcpTool({
     `shares by link now, if any, with that link, to choose one to share with ` +
     `${MEMBER_MCP_TOOL.SHARE_AGENT_PORT}. A sandbox that is not running is never woken: it ` +
     "answers running false with no ports, as does an agent on a Mac. Answers `accepted` with " +
-    "whether the sandbox is running, its ports, and the port shared with its link, or shared " +
+    "whether the sandbox is running, its ports, labels saying what serves each port where it " +
+    "could be read (such as `storybook dev`), and the port shared with its link, or shared " +
     "null, or `rejected` and why.",
   input: AgentIdInputSchema,
   annotations: READ_ONLY,

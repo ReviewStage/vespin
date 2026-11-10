@@ -8,6 +8,8 @@ import type { SoundWhen } from "./sound-when.js";
 export const SETTINGS_PAGE = {
   /** Who is signed in and the ways out, the page Settings opens on. */
   ACCOUNT: "account",
+  /** How the app works for the account wherever it signs in: where links and new tasks open, how agents send and commit, and how a finished agent tells the account. */
+  PREFERENCES: "preferences",
   APPEARANCE: "appearance",
   /** The window's own shortcuts, listed to be found rather than changed. */
   SHORTCUTS: "shortcuts",
@@ -55,22 +57,18 @@ export const SETTING_SECTION = {
   LINES: "lines",
   /** How code looks, the third: the syntax themes, the type, its size and line height, and ligatures. */
   TEXT: "text",
-  /** Where the account's app links open, a group of its own on Account, under who is signed in. */
-  LINKS: "links",
-  /** What New task does once a task starts, a group of its own on Account, under Links. */
-  TASKS: "tasks",
-  /** Whether this copy of the app counts how its features are used, a group of its own on Account, under Tasks. */
+  /** Where the account's app links open, and whether a task New task starts opens, the first group on Preferences. */
+  GENERAL: "general",
+  /** Whether this copy of the app counts how its features are used, a group of its own on Account, under who is signed in. */
   PRIVACY: "privacy",
   /** Whether the app opens as this Mac starts, a group of its own on This Mac, under its own rows. */
   STARTUP: "startup",
   /** The microphone dictation listens on, a group of its own on This Mac, under the permission that lets the app listen. */
   MICROPHONE: "microphone",
-  /** How an agent's message box sends while its turn runs, a group of its own on Agents, under the default model. */
-  COMPOSER: "composer",
-  /** Who authors an agent's commits, a group of its own on Account, under the message box. */
-  COMMITS: "commits",
-  /** Whether and which sound plays, and whether a notification is posted, as an agent finishes, a group of its own on Account, under Commits. */
-  SOUNDS: "sounds",
+  /** How an agent's message box sends while its turn runs, and who authors its commits, a group of its own on Preferences, under General. */
+  AGENTS: "agents",
+  /** Whether and which sound plays, and whether a notification is posted, as an agent finishes, a group of its own on Preferences, under Agents. */
+  NOTIFICATIONS: "notifications",
 } as const;
 
 export type SettingSection = (typeof SETTING_SECTION)[keyof typeof SETTING_SECTION];

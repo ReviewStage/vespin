@@ -64,7 +64,8 @@ import { appStateQuery, selectCapability, selectPortForwarding } from "../use-ap
  * be shared whether or not it is forwarded, and on the desktop the Forward
  * to localhost switch under them, beside the plug the menu rises from.
  * One row per port, "localhost:3000" where it reached this Mac
- * and ":3000" where it did not, has a submenu beside it holding Open, which
+ * and ":3000" where it did not, with what serves it beside, such as
+ * "storybook dev", has a submenu beside it holding Open, which
  * opens a forwarded port in the default browser (saying where it came from,
  * "from :3000", where the Mac's port differs), and Share, which shares it by
  * a public link. The one shared port wears a link glyph, and its submenu
@@ -74,7 +75,8 @@ import { appStateQuery, selectCapability, selectPortForwarding } from "../use-ap
  * with the link or with Share again; the menu closes only on a click
  * outside it or Escape. Every word drawn is the app's own, port numbers
  * among them, and the link is never drawn, so a screen recording shows them
- * as they read.
+ * as they read, but what serves a port, which is made from a command line
+ * and kept masked. The plug's hint names it too, after the port it says.
  */
 
 /** What an agent forwarding is off for reads. */
@@ -113,10 +115,11 @@ interface SharedPort {
   readonly url: string;
 }
 
-/** One port the plug lists: the sandbox's, and the local port this Mac reaches it at where it was forwarded to one. */
+/** One port the plug lists: the sandbox's, the local port this Mac reaches it at where it was forwarded to one, and what serves it where that was read. */
 interface PlugPort {
   readonly port: number;
   readonly localPort: number | undefined;
+  readonly label: string | undefined;
   /** Whether forwarding found no local port free for it. */
   readonly busy: boolean;
 }
@@ -136,6 +139,11 @@ interface PlugPorts {
 /** The local address a port is forwarded to. */
 function localAddress(localPort: number): string {
   return `localhost:${localPort}`;
+}
+
+/** A port's address in the plug's hint, with what serves it where that was read. */
+function served(address: string, label: string | undefined): string {
+  return label === undefined ? address : `${address} (${label})`;
 }
 
 /** The local ports that reached this Mac, the lowest sandbox port first. */
@@ -200,9 +208,9 @@ export function useForwardToast(agent: Pick<AgentSummary, "id" | "machine">): vo
 /** The ports as this Mac's host forwards them, kept in app state, and a share asked of it. */
 function forwardedPorts(agentId: string, answer: PortForwardingAnswer): PlugPorts {
   return {
-    ports: answer.ports.map(({ port, localPort, state }) => {
+    ports: answer.ports.map(({ port, localPort, state, label }) => {
       const busy = localPort === undefined || state === PORT_FORWARD_STATE.UNAVAILABLE;
-      return { port, localPort: busy ? undefined : localPort, busy };
+      return { port, localPort: busy ? undefined : localPort, label, busy };
     }),
     shared: answer.shared,
     none: WORDS.WAITING,
@@ -271,8 +279,14 @@ function useHostedPorts(agentId: string, asked: boolean, open: boolean): PlugPor
   const listed = useQuery(agentPortsQuery(agentId, asked && open)).data;
   const linked = useQuery(agentSharedPortQuery(agentId, asked, asked && open)).data;
   const read = listed === undefined || "failure" in listed ? undefined : listed;
+  const labels = new Map((read?.labels ?? []).map(({ port, label }) => [port, label]));
   return {
-    ports: (read?.ports ?? []).map((port) => ({ port, localPort: undefined, busy: false })),
+    ports: (read?.ports ?? []).map((port) => ({
+      port,
+      localPort: undefined,
+      label: labels.get(port),
+      busy: false,
+    })),
     shared: linked === undefined || "failure" in linked ? undefined : (linked.shared ?? undefined),
     none:
       listed === undefined
@@ -314,13 +328,16 @@ function sharedItems(
   ];
 }
 
-/** A port's row that offers nothing: dimmed, saying why where there is a reason. */
-function dimmedRow(port: number, detail: string | undefined): MenuEntry {
+/** A port's row that offers nothing: dimmed, saying why where it is busy on this Mac, and what serves it otherwise. */
+function dimmedRow(port: number, busy: boolean, label: string | undefined): MenuEntry {
+  const detail = busy ? WORDS.BUSY : label;
   return {
     key: port,
     label: `:${port}`,
     icon: <GlobeIcon aria-hidden="true" />,
-    ...(detail === undefined ? {} : { detail, detailPlace: MENU_DETAIL.BESIDE }),
+    ...(detail === undefined
+      ? {}
+      : { detail, detailPlace: MENU_DETAIL.BESIDE, detailMasked: !busy }),
     disabled: true,
     onSelect: () => {},
   };
@@ -335,7 +352,7 @@ function dimmedRow(port: number, detail: string | undefined): MenuEntry {
  */
 function portRows(view: PlugPorts, copy: (words: string, label: string) => void): MenuEntry[] {
   const { shared } = view;
-  const rows = view.ports.map(({ port, localPort, busy }): MenuEntry => {
+  const rows = view.ports.map(({ port, localPort, label, busy }): MenuEntry => {
     const isShared = shared?.port === port;
     const open: MenuAction[] =
       localPort === undefined
@@ -367,10 +384,11 @@ function portRows(view: PlugPorts, copy: (words: string, label: string) => void)
                 onSelect: () => view.share(port),
               },
             ];
-    if (items.length === 0 || (busy && !isShared))
-      return dimmedRow(port, busy ? WORDS.BUSY : undefined);
+    if (items.length === 0 || (busy && !isShared)) return dimmedRow(port, busy, label);
     return {
       label: localPort === undefined ? `:${port}` : localAddress(localPort),
+      detail: label,
+      detailMasked: true,
       icon: isShared ? <LinkIcon aria-hidden="true" /> : <GlobeIcon aria-hidden="true" />,
       items,
     };
@@ -406,13 +424,15 @@ export function ForwardChip({
   if (!cloud) return null;
   const view = forwarded ? forwardedPorts(agent.id, answer) : hosted;
   const first = reached(answer)[0];
+  const labelOf = (port: number) => view.ports.find((each) => each.port === port)?.label;
+  const firstLabel = view.ports.find((each) => each.localPort === first)?.label;
   const lit = forwarded || view.shared !== undefined;
   const words = forwarded
     ? first === undefined
       ? WORDS.FORWARDING
-      : `${WORDS.FORWARDING_TO} ${localAddress(first)}`
+      : `${WORDS.FORWARDING_TO} ${served(localAddress(first), firstLabel)}`
     : view.shared !== undefined
-      ? `${WORDS.SHARING} :${view.shared.port}`
+      ? `${WORDS.SHARING} ${served(`:${view.shared.port}`, labelOf(view.shared.port))}`
       : offered
         ? WORDS.OFF
         : WORDS.PORTS;

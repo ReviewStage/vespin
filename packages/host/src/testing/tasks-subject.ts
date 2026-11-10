@@ -1584,7 +1584,7 @@ export const answered = (set: () => void) =>
   );
 
 /** One plan as the plans statement delivers its row. */
-export function taskRow(id: string, name: string) {
+export function planRow(id: string, name: string) {
   return {
     id,
     workspaceId: "workspace-personal",
@@ -1609,7 +1609,7 @@ export function taskRow(id: string, name: string) {
 /** One plan as the plans statement delivers the service's task. */
 export function rowOfTask(each: Task) {
   return {
-    ...taskRow(each.id, each.name),
+    ...planRow(each.id, each.name),
     workspaceId: each.workspaceId,
     repository: each.repository,
     createdAt: each.createdAt,

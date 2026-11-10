@@ -29,6 +29,7 @@ import { agentBrowserTab } from "../schemas/agent-browser-tab.js";
 import { agentPin } from "../schemas/agent-pin.js";
 import { agentPullRequest } from "../schemas/agent-pull-request.js";
 import { agentQueue } from "../schemas/agent-queue.js";
+import { agentSandboxTable } from "../schemas/agent-sandbox.js";
 import { attachment } from "../schemas/attachment.js";
 import { invitation, member, organization, user } from "../schemas/auth.js";
 import { automation, automationRun } from "../schemas/automation.js";
@@ -161,6 +162,29 @@ export const agentApprovalSync = defineSyncTable(agentApproval, {
       through: agentTable,
       key: agentTable.id,
       by: agentApproval.agentId,
+      topics: [
+        { kind: TOPIC.TASK, column: agentTable.taskId },
+        { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
+      ],
+    },
+  ],
+  log: LOG.EVERY,
+});
+
+/**
+ * A cloud agent's sandbox, on its agent's topic and, through its agent, that
+ * agent's task's and workspace's, so the task list hears it boot, come up,
+ * and go as it hears the agent move. A sandbox in use moves its last use at
+ * most once a minute (`../models/agent-sandboxes.ts`), so every write is
+ * logged.
+ */
+export const agentSandboxSync = defineSyncTable(agentSandboxTable, {
+  topics: [
+    { kind: TOPIC.AGENT, column: agentSandboxTable.agentId },
+    {
+      through: agentTable,
+      key: agentTable.id,
+      by: agentSandboxTable.agentId,
       topics: [
         { kind: TOPIC.TASK, column: agentTable.taskId },
         { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
@@ -789,6 +813,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   integrationConnectionSync,
   runnerLineSync,
   agentQueueSync,
+  agentSandboxSync,
   deviceAgentLineSync,
   deviceAgentRequestSync,
   descriptionCommentThreadSync,

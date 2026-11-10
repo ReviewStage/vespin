@@ -125,7 +125,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
         }).pipe(Effect.provide(api.layer));
 
         assert.deepEqual(listed, { sandbox: SANDBOX_STATE.STOPPED, terminals: [] });
-        assert.deepEqual(ports, { running: false, ports: [] });
+        assert.deepEqual(ports, { running: false, ports: [], labels: [] });
         assert.deepEqual(
           started,
           Result.fail({ kind: SHELL_REFUSAL.NOT_RUNNING, sandbox: SANDBOX_STATE.STOPPED }),
@@ -167,7 +167,7 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
   );
 
   it.effect(
-    "a running sandbox's ports are the ones its servers listen on, each once, never root's or the browser's, and tables it could not read are an outage",
+    "a running sandbox's ports are the ones its servers listen on, each once, never root's or the browser's, each with what serves it, and tables it could not read are an outage",
     () =>
       Effect.gen(function* () {
         // The kernel's tables as `cat` prints them, by hand: the sandbox's init on 23456 as root,
@@ -183,7 +183,23 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           "   0: 00000000000000000000000000000000:0BB8 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1002        0 4500 1",
           "   1: 00000000000000000000000000000000:1435 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1001        0 4600 1",
         ];
-        const api = standing(SANDBOX_STATUS.RUNNING, tables);
+        // Then the listeners the script printed as root: both servers started by one `pnpm dev`, as a
+        // monorepo's are, so each is named by what listens on it, and a line it could not have printed.
+        const listeners = [
+          "vespin-listeners",
+          JSON.stringify({
+            inode: "4200",
+            command: ["pnpm", "dev"],
+            listener: ["node", "/w/node_modules/next/dist/bin/next", "dev"],
+          }),
+          JSON.stringify({
+            inode: "4600",
+            command: ["pnpm", "dev"],
+            listener: ["/w/node_modules/.bin/vite", "--port", "5173"],
+          }),
+          "not a listener",
+        ];
+        const api = standing(SANDBOX_STATUS.RUNNING, [...tables, ...listeners]);
         const unread = standing(SANDBOX_STATUS.RUNNING, [], 1);
 
         const ports = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
@@ -195,7 +211,14 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           ),
         );
 
-        assert.deepEqual(ports, { running: true, ports: [3000, 5173] });
+        assert.deepEqual(ports, {
+          running: true,
+          ports: [3000, 5173],
+          labels: [
+            { port: 3000, label: "next dev" },
+            { port: 5173, label: "vite" },
+          ],
+        });
         assert.equal(api.state.commands[0]?.running, RUNNING_SESSION);
         assert.ok(outage instanceof SandboxUnavailable);
       }),

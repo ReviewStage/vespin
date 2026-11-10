@@ -56,6 +56,8 @@ const scriptedConnection = Effect.gen(function* () {
 function subject(options: { taken?: number[] } = {}) {
   return Effect.gen(function* () {
     const ports = new Map<string, number[]>([[AGENT_ID, []]]);
+    /** What the service reads as serving each port, by agent. */
+    const labels = new Map<string, { port: number; label: string }[]>();
     const stopped = new Set<string>();
     /** The port the service reads as shared, by agent, with its link. */
     const shares = new Map<string, { port: number; url: string }>();
@@ -91,6 +93,7 @@ function subject(options: { taken?: number[] } = {}) {
           Effect.sync(() => ({
             running: !stopped.has(agentId),
             ports: stopped.has(agentId) ? [] : (ports.get(agentId) ?? []),
+            labels: stopped.has(agentId) ? [] : (labels.get(agentId) ?? []),
           })),
         share: (agentId, port) =>
           Effect.sync(() => {
@@ -143,7 +146,13 @@ function subject(options: { taken?: number[] } = {}) {
       listeners,
       tunnels,
       /** The ports the service reads in an agent's sandbox from now on. */
-      serve: (agentId: string, listening: number[]) => void ports.set(agentId, listening),
+      serve: (agentId: string, listening: number[], served: Record<number, string> = {}) => {
+        ports.set(agentId, listening);
+        labels.set(
+          agentId,
+          Object.entries(served).map(([port, label]) => ({ port: Number(port), label })),
+        );
+      },
       /** The agent's sandbox stopped, as the service reads it from now on. */
       stop: (agentId: string) => void stopped.add(agentId),
       /** A connection made to a local port, as a browser on the Mac would. */
@@ -214,11 +223,11 @@ it.effect("a shared port's link is told beside the ports until the service close
   }),
 );
 
-it.effect("the forwarded ports follow each read, for one agent at a time", () =>
+it.effect("the forwarded ports follow each read, each with what serves it, for one agent at a time", () =>
   Effect.gen(function* () {
     const { set, serve, listeners, told } = yield* subject();
     serve(AGENT_ID, [3000, 5173]);
-    serve(OTHER_AGENT_ID, [8080]);
+    serve(OTHER_AGENT_ID, [8080], { 8080: "storybook dev" });
 
     yield* set({ agentId: AGENT_ID, on: true });
     yield* settle;
@@ -241,7 +250,14 @@ it.effect("the forwarded ports follow each read, for one agent at a time", () =>
       agentId: OTHER_AGENT_ID,
       on: true,
       running: true,
-      ports: [{ port: 8080, localPort: 8080, state: PORT_FORWARD_STATE.LISTENING }],
+      ports: [
+        {
+          port: 8080,
+          localPort: 8080,
+          state: PORT_FORWARD_STATE.LISTENING,
+          label: "storybook dev",
+        },
+      ],
     });
     assert.deepEqual(other, { on: true, running: false, ports: [] });
 

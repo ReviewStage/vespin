@@ -82,6 +82,7 @@ const DECLARED_TABLES = [
   "integration_installation",
   "invitation",
   "jwks",
+  "live_activity",
   "mac_command",
   "mac_command_listener",
   "memory",

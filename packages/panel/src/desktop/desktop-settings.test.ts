@@ -49,7 +49,7 @@ const PAGE_GROUPS = [
   { heading: "Workspace", rows: ["Workspace", "Cloud environment"] },
   {
     heading: "Account",
-    rows: ["Account", "Agents", "Integrations", "Vespin MCP & CLI", "Experimental"],
+    rows: ["Account", "Preferences", "Agents", "Integrations", "Vespin MCP & CLI", "Experimental"],
   },
   {
     heading: "This Mac",
@@ -90,6 +90,9 @@ function listing(listed: Workspace): WorkspaceSettingsControl {
 const HOMES = [
   { words: "Sign out", page: "Account" },
   { words: "Delete account", page: "Account" },
+  { words: "Open Vespin links in", page: "Preferences" },
+  { words: "Commit author", page: "Preferences" },
+  { words: "Show a notification", page: "Preferences" },
   { words: "Let agents run commands on this Mac", page: "This Mac" },
   { words: "Prefer the Mac's microphone", page: "This Mac" },
   { words: "Open Vespin at login", page: "This Mac" },
@@ -356,6 +359,7 @@ test("the sidebar lists Machines under Account after Agents, and its search find
 
   assert.deepEqual(pageGroups(on)[1]?.rows, [
     "Account",
+    "Preferences",
     "Agents",
     "Machines",
     "Integrations",

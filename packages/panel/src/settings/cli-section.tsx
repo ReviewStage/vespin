@@ -24,6 +24,7 @@ import {
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
   SettingsBlock,
+  SettingsLine,
   SettingsRow,
   SettingsRowStateLine,
   SettingsSection,
@@ -51,14 +52,15 @@ import { appStateQuery, selectAccount, selectCapability } from "../use-app-state
 import { ReadFailed } from "./marks.js";
 
 /**
- * cli-sections.tsx -- Settings › our MCP & CLI's command sections: the `vespin` command's install, to copy and, in the desktop app, run here as VS Code installs `code`, and its sign-in, with Sign out everywhere once it holds one.
+ * cli-section.tsx -- Settings › our MCP & CLI's CLI section: the `vespin` command's sign-in, with Sign out everywhere once it holds one, and its install, to copy and, in the desktop app, run here as VS Code installs `code`.
  *
- * Until the command signs in, its part of the page is one setup told as steps
- * (`OutsideSteps`): install it, then sign in from a terminal, with the wait
- * for its sign-in under them, as Connect an app above it is told.
- * Once it has, Install and Sign in stand as sections of their own. Install
- * holds `npm i -g vespin` in `@repo/ui`'s `CopyField`; a browser tab shows
- * that alone.
+ * The section stands as the MCP section over it does: what is connected
+ * first, then how to connect. Until the command signs in, a line says so
+ * over one setup told as steps (`OutsideSteps`): install it, then sign in
+ * from a terminal, with the wait for its sign-in under them, as Connect an
+ * app is told. Once it has, its sign-in's row stands first and the install's
+ * row under it. The install holds `npm i -g vespin` in `@repo/ui`'s
+ * `CopyField`; a browser tab shows that alone.
  * Where the client runs the install itself (`HOST_CAPABILITY.CLI_INSTALL`,
  * the desktop app once its build names a release), the row ends in Install,
  * which runs the service's install script in this Mac's account. Once it
@@ -67,22 +69,21 @@ import { ReadFailed } from "./marks.js";
  * that did not land says why in the row's failure line, in the script's own
  * words.
  *
- * Sign in reads the command's grant from the clients the account allowed
- * (`LIVE_READ.MCP_CLIENTS`, Connected's read above them, which these sections
- * narrow to `vespin-cli` and Connected leaves it out of). With none, it shows
+ * The sign-in reads the command's grant from the clients the account allowed
+ * (`LIVE_READ.MCP_CLIENTS`, the MCP section's read, which this section
+ * narrows to `vespin-cli` and that one leaves out of its list). With none, it shows
  * `vespin login` to copy. With one, its row names the account and when the
  * command was last active, and Sign out everywhere revokes the grant, asking
- * first in the confirm dialog as Connected's Disconnect does: every token the
+ * first in the confirm dialog as an agent's Disconnect does: every token the
  * command holds for the account goes, so every computer it is signed in on
  * is signed out, though an access token it already holds keeps working until
  * it expires. A grant revoked while the page shows stays signed out here
  * until the read no longer lists it, unless the command signs in again.
  */
 
-const SECTION_TITLE = {
-  SET_UP: "Set up the CLI",
-  INSTALL: "Install the CLI",
-  SIGN_IN: "CLI sign-in",
+const SECTION = {
+  TITLE: "CLI",
+  CAPTION: `Use ${PRODUCT_NAME} from your terminal.`,
 } as const;
 
 const PAGE_LINE = {
@@ -102,16 +103,19 @@ const PAGE_LINE = {
   SIGNING_OUT: "Signing out",
   SIGN_OUT_REFUSED: "Signing out didn't finish. Try again.",
   READ_FAILED: "The command's sign-in could not be read.",
+  NOT_SIGNED_IN: "Not signed in yet.",
 } as const;
 
-/** The page as it stands while the sign-in is read: Install's row, ending in Install where the client runs it, and Sign in's one row. */
-function pageSkeleton(installs: boolean): readonly SettingsSectionSkeletonShape[] {
+/** The section as it stands while the sign-in is read: the sign-in's row, then the install's, ending in Install where the client runs it. */
+function sectionSkeleton(installs: boolean): readonly SettingsSectionSkeletonShape[] {
   return [
     {
       headed: true,
-      rows: [{ described: true, controls: installs ? [SETTINGS_SKELETON_CONTROL.BUTTON] : [] }],
+      rows: [
+        { described: true, controls: [] },
+        { described: true, controls: installs ? [SETTINGS_SKELETON_CONTROL.BUTTON] : [] },
+      ],
     },
-    { headed: true, rows: [{ described: true, controls: [] }] },
   ];
 }
 
@@ -201,12 +205,12 @@ function LoginCommand(): React.JSX.Element {
   );
 }
 
-/** Install, once the command is signed in: the npm install to copy, and, where the client runs it, Install and how it went. */
-function InstallSection({ installs }: { installs: boolean }): React.JSX.Element {
+/** The install's row, once the command is signed in or its sign-in could not be read: the npm install to copy, and, where the client runs it, Install and how it went. */
+function InstallRow({ installs }: { installs: boolean }): React.JSX.Element {
   const install = useCliInstall();
   const { installed, failed } = install;
   return (
-    <SettingsSection title={SECTION_TITLE.INSTALL} anchor={SETTINGS_SEARCH_ROW.CLI_INSTALL}>
+    <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.CLI_INSTALL)}>
       <SettingsRow
         label={PAGE_LINE.INSTALL_LABEL}
         description={
@@ -224,7 +228,7 @@ function InstallSection({ installs }: { installs: boolean }): React.JSX.Element 
         {...(installs ? { children: () => <InstallPress install={install} /> } : undefined)}
         below={() => <NpmInstallCommand />}
       />
-    </SettingsSection>
+    </div>
   );
 }
 
@@ -233,11 +237,11 @@ function InstallSection({ installs }: { installs: boolean }): React.JSX.Element 
  * steps, and the wait for its sign-in under them. Install's step says how
  * the client's own install went, and checks off once it lands.
  */
-function SetUpSection({ installs }: { installs: boolean }): React.JSX.Element {
+function SetUpSteps({ installs }: { installs: boolean }): React.JSX.Element {
   const install = useCliInstall();
   const { installed, failed } = install;
   return (
-    <SettingsSection title={SECTION_TITLE.SET_UP} anchor={SETTINGS_SEARCH_ROW.CLI_INSTALL}>
+    <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.CLI_INSTALL)}>
       <SettingsBlock>
         <OutsideSteps waiting={PAGE_LINE.WAITING}>
           <Step
@@ -264,16 +268,14 @@ function SetUpSection({ installs }: { installs: boolean }): React.JSX.Element {
             />
           </Step>
           <Step number={2} title={PAGE_LINE.SIGN_IN_LABEL} state={STEP_STATE.CURRENT}>
-            <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.CLI_SIGN_IN)}>
-              <LoginCommand />
-            </div>
+            <LoginCommand />
             <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
               {PAGE_LINE.SIGN_IN_WORDS}
             </Text>
           </Step>
         </OutsideSteps>
       </SettingsBlock>
-    </SettingsSection>
+    </div>
   );
 }
 
@@ -377,8 +379,12 @@ function cliGrant(clients: readonly McpClient[]): McpClient | undefined {
   return clients.find((client) => client.clientId === FIRST_PARTY_OAUTH_CLIENT_ID.CLI);
 }
 
-/** The command's sections of Settings › our MCP & CLI, for the account signed in: Install, then Sign in as the command's grant stands. */
-export function CliSections(): React.JSX.Element {
+/**
+ * The CLI section for the account signed in: the command's sign-in, or that
+ * it has none yet, then how to install it, as the MCP section over it stands
+ * its agents over Connect an app.
+ */
+export function CliSection(): React.JSX.Element {
   const installs =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.CLI_INSTALL) }).data ===
     true;
@@ -389,42 +395,50 @@ export function CliSections(): React.JSX.Element {
   const rows = read.data;
   // The grant signed out while the page shows, by when it was allowed, which stands signed out until the read drops it or a new sign-in replaces it.
   const [signedOutAt, setSignedOutAt] = useState<number | null | undefined>(undefined);
-  if (rows === undefined) {
-    return read.isError ? (
-      <>
-        <InstallSection installs={installs} />
-        <SettingsSection title={SECTION_TITLE.SIGN_IN} anchor={SETTINGS_SEARCH_ROW.CLI_SIGN_IN}>
-          <ReadFailed
-            line={PAGE_LINE.READ_FAILED}
-            surface={FAILURE_SURFACE.MCP_CLIENTS_READ}
-            onRetry={() => retry.mutate()}
-          />
-        </SettingsSection>
-      </>
-    ) : (
+  if (rows === undefined && !read.isError) {
+    return (
       <SettingsSectionsSkeleton
         label={readingWords("the command's sign-in")}
-        sections={pageSkeleton(installs)}
+        sections={sectionSkeleton(installs)}
       />
     );
   }
-  const listed = cliGrant(rows.clients);
+  const listed = rows === undefined ? undefined : cliGrant(rows.clients);
   const grant =
     listed === undefined || (signedOutAt !== undefined && listed.allowedAt === signedOutAt)
       ? undefined
       : listed;
   const email = account?.status === ACCOUNT_STATUS.SIGNED_IN ? account.email : undefined;
-  if (grant === undefined || email === undefined) return <SetUpSection installs={installs} />;
   return (
-    <>
-      <InstallSection installs={installs} />
-      <SettingsSection title={SECTION_TITLE.SIGN_IN} anchor={SETTINGS_SEARCH_ROW.CLI_SIGN_IN}>
-        <SignedInRow
-          email={email}
-          grant={grant}
-          onSignedOut={() => setSignedOutAt(grant.allowedAt)}
-        />
-      </SettingsSection>
-    </>
+    <SettingsSection
+      title={SECTION.TITLE}
+      caption={SECTION.CAPTION}
+      anchor={SETTINGS_SEARCH_ROW.CLI_SIGN_IN}
+    >
+      {rows === undefined ? (
+        <>
+          <ReadFailed
+            line={PAGE_LINE.READ_FAILED}
+            surface={FAILURE_SURFACE.MCP_CLIENTS_READ}
+            onRetry={() => retry.mutate()}
+          />
+          <InstallRow installs={installs} />
+        </>
+      ) : grant === undefined || email === undefined ? (
+        <>
+          <SettingsLine>{PAGE_LINE.NOT_SIGNED_IN}</SettingsLine>
+          <SetUpSteps installs={installs} />
+        </>
+      ) : (
+        <>
+          <SignedInRow
+            email={email}
+            grant={grant}
+            onSignedOut={() => setSignedOutAt(grant.allowedAt)}
+          />
+          <InstallRow installs={installs} />
+        </>
+      )}
+    </SettingsSection>
   );
 }

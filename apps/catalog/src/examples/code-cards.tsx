@@ -19,7 +19,8 @@ import { CatalogSection } from "../section";
  * a header with an action of its own, and a file's lines with the file's
  * opening beside the Copy, as an Inbox item's code stands; and a code
  * editor over the same colored lines, its edited lines drawn plain until
- * colored again, and an empty one with its placeholder. The catalog's
+ * colored again, one numbering its lines in a gutter as a script's editor
+ * does, and an empty one with its placeholder. The catalog's
  * copy act is the browser's own clipboard; an app hands in its shell's.
  */
 
@@ -65,6 +66,12 @@ const LONG = Array.from(
 function EditedCode(): React.JSX.Element {
   const [code, setCode] = useState(COLORED);
   return <CodeEditor label="Colored code" value={code} onChange={setCode} lines={COLORED_LINES} />;
+}
+
+/** A code editor numbering its lines, as a script's stands, a few lines tall while it holds fewer. */
+function NumberedCode(): React.JSX.Element {
+  const [code, setCode] = useState(SHORT);
+  return <CodeEditor label="Numbered code" value={code} onChange={setCode} rows={3} lineNumbers />;
 }
 
 /** An empty code editor, its placeholder standing. */
@@ -135,6 +142,9 @@ function CodeCards(): React.JSX.Element {
         title="A code editor, colored where its colors still spell a line"
       >
         <EditedCode />
+      </CatalogSection>
+      <CatalogSection id="code-editor-numbered" title="A code editor numbering its lines">
+        <NumberedCode />
       </CatalogSection>
       <CatalogSection id="code-editor-empty" title="An empty code editor, with its placeholder">
         <EmptyCode />

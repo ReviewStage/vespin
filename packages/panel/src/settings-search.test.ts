@@ -119,7 +119,7 @@ test("Integrations finds the Workspace page's group as Workspace connections, un
   );
 });
 
-test("searching GitHub while signed in finds Integrations' GitHub row and Profile's token, pull request, and commit author rows, and a personal access token finds Profile's alone", () => {
+test("searching GitHub while signed in finds Integrations' GitHub row, Account's token row, and Preferences' pull request and commit author rows, and a personal access token finds Account's alone", () => {
   const entries = settingsSearchCorpus({
     settings: settingsView(),
     accountDrawn: true,
@@ -135,11 +135,13 @@ test("searching GitHub while signed in finds Integrations' GitHub row and Profil
   );
   assert.deepEqual(
     groups.find((group) => group.page === SETTINGS_VIEW.ACCOUNT)?.items.map((entry) => entry.id),
-    [
-      SETTINGS_SEARCH_ROW.GITHUB_ACCESS,
-      APP_SETTING_ID.PULL_REQUEST_OPEN,
-      APP_SETTING_ID.COMMIT_AUTHOR,
-    ],
+    [SETTINGS_SEARCH_ROW.GITHUB_ACCESS],
+  );
+  assert.deepEqual(
+    groups
+      .find((group) => group.page === SETTINGS_VIEW.PREFERENCES)
+      ?.items.map((entry) => entry.id),
+    [APP_SETTING_ID.PULL_REQUEST_OPEN, APP_SETTING_ID.COMMIT_AUTHOR],
   );
   assert.deepEqual(
     (searchSettings(entries, "personal access token")?.groups ?? []).map((group) =>
@@ -281,29 +283,34 @@ function labelsFound(query: string, input: SettingsSearchInput = FULL_INPUT): re
 }
 
 test("skills and rename each find the row the page draws", () => {
-  assert.ok(labelsFound("skills").includes("Add a skill"));
+  assert.ok(labelsFound("skills").includes("Add skill"));
   assert.deepEqual(labelsFound("rename"), ["Rename workspace"]);
 });
 
-test("mcp finds the Vespin MCP & CLI page's groups and none of the integrations", () => {
+test("mcp finds the Vespin MCP & CLI page's rows and none of the integrations", () => {
   const groups = searchSettings(settingsSearchCorpus(FULL_INPUT), "mcp")?.groups ?? [];
   assert.deepEqual(
     groups.map((group) => group.page),
     [SETTINGS_VIEW.MCP],
   );
   assert.deepEqual(labelsFound("mcp"), [
-    "Apps connected over MCP",
-    "Connect an app over MCP",
+    "Connected apps",
+    "Connect an app",
     "Install the vespin command",
-    "Sign in from your terminal",
+    "CLI sign-in",
   ]);
+});
+
+test("cli sign-in and set up the cli each find the CLI section's row", () => {
+  assert.deepEqual(labelsFound("cli sign-in"), ["CLI sign-in"]);
+  assert.deepEqual(labelsFound("set up the cli"), ["Install the vespin command"]);
 });
 
 test("renaming needs a workspace the reader manages that is not their own first", () => {
   assert.equal(
-    labelsFound("add a skill", { ...FULL_INPUT, workspace: undefined }).includes("Add a skill"),
+    labelsFound("add skill", { ...FULL_INPUT, workspace: undefined }).includes("Add skill"),
     false,
-    "the Skills page draws no Add a skill row while its workspace is unread or failed",
+    "the Skills page draws no Add skill while its workspace is unread or failed",
   );
   assert.deepEqual(labelsFound("rename", { ...FULL_INPUT, workspace: TEAM }), []);
   assert.deepEqual(
@@ -312,11 +319,12 @@ test("renaming needs a workspace the reader manages that is not their own first"
   );
 });
 
-test("model finds the default model under a label no other page's row wears", () => {
+test("model and default model both find the Model row, under a label no other page's row wears", () => {
   assert.deepEqual(
     labelsFound("model").filter((label) => label.toLowerCase().includes("model")),
-    ["Default model"],
+    ["Model"],
   );
+  assert.ok(labelsFound("default model").includes("Model"));
 });
 
 test("no two rows on different pages wear the same label", () => {

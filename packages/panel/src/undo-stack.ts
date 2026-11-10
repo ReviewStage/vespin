@@ -859,11 +859,11 @@ export function heldTask({ held }: TaskRows, taskId: string): Task | undefined {
 }
 
 /**
- * A task's row as the tasks drawn show it: the list's, else its plan's as
+ * A task as the tasks drawn show it: the list's, else its plan's as
  * the host holds it for the window, as a task just started is held before
  * the list carries it.
  */
-export function taskRow(rows: TaskRows, taskId: string): TaskSummary | undefined {
+export function drawnTask(rows: TaskRows, taskId: string): TaskSummary | undefined {
   return rows.tasks.tasks.find((task) => task.id === taskId) ?? heldTask(rows, taskId);
 }
 
@@ -908,7 +908,7 @@ function pinSent({ pinned, position }: PinFields): { pinned: boolean; position?:
 export const ROW_WRITE = {
   TASK_RENAME: {
     read: (tasks, taskId) => {
-      const task = taskRow(tasks, taskId);
+      const task = drawnTask(tasks, taskId);
       return task === undefined ? undefined : { name: task.name };
     },
     holds: holdsEach,
@@ -919,7 +919,7 @@ export const ROW_WRITE = {
   } satisfies RowWrite<TaskRows, { readonly name: string }, typeof ACT_KIND.TASKS_RENAME>,
   TASK_STANDING: {
     read: (tasks, taskId) => {
-      const task = taskRow(tasks, taskId);
+      const task = drawnTask(tasks, taskId);
       if (task === undefined) return undefined;
       return {
         status: statusOf(task),
@@ -949,7 +949,7 @@ export const ROW_WRITE = {
   } satisfies RowWrite<TaskRows, StandingFields, typeof ACT_KIND.TASKS_SET_STANDING>,
   TASK_PIN: {
     read: (tasks, taskId) => {
-      const task = taskRow(tasks, taskId);
+      const task = drawnTask(tasks, taskId);
       if (task === undefined) return undefined;
       return { pinned: task.pinnedAt !== undefined, position: task.pinPosition ?? null };
     },

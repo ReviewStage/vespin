@@ -36,7 +36,7 @@ export const SETTINGS_SEARCH_ROW = {
   AGENT_FAST: "agent-fast",
   API_KEY_ANTHROPIC: "api-key-anthropic",
   API_KEY_OPENAI: "api-key-openai",
-  /** Skills' Add a skill row. */
+  /** Skills' first group, whose heading holds its Add skill. */
   ADD_SKILL: "add-skill",
   /** Our MCP & CLI page's Connected, the outside agents the account let in. */
   MCP_CLIENTS: "mcp-clients",

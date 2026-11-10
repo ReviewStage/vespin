@@ -16,6 +16,7 @@ import {
   permissionModeAppliesSchema,
 } from "./agent-approval-wire.js";
 import { AGENT_QUEUE_BOUNDS, agentQueueSchema } from "./agent-queue-wire.js";
+import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
 import { integrationConnectionNameSchema, integrationConnectionOf } from "./integration-wire.js";
 import { commitShaSchema, githubRepositoryFullNameSchema } from "./link-grammar.js";
@@ -1291,6 +1292,15 @@ export const agentSummarySchema = EffectSchema.Struct({
    */
   sandboxOpen: EffectSchema.optionalKey(EffectSchema.Boolean),
   /**
+   * Where the agent's sandbox stands as the service last recorded it
+   * (`agent-sandbox-wire.ts`), which a reader reads against its own clock
+   * (`@repo/panel`'s `sandboxStandingAt`), since a sandbox stops by itself
+   * once untouched. The task list carries it live. Absent for an agent on
+   * a Mac, for a cloud agent whose sandbox no open has recorded, from a
+   * read that does not name it, and from a service older than it.
+   */
+  sandbox: EffectSchema.optionalKey(agentSandboxSchema),
+  /**
    * What the agent was handed as its first message, so its tab draws a
    * description as the description's card, a task as the developer's own message, and,
    * for an agent started blank, its first line as any other line. Absent
@@ -1416,7 +1426,7 @@ export const agentMessageAnswerSchema = EffectSchema.Struct({
  * is on screen, at once and then every minute while it stays there. The
  * service answers at once and keeps a cloud agent's sandbox and runner
  * warm past it, launching the runner with no message where none runs, so
- * a message goes straight into the running session; it lets them go three
+ * a message goes straight into the running session; it lets them go five
  * minutes after the later of the agent's last turn's end and the last such
  * call. A Mac's agent, an archived one, and one the caller may not message
  * are answered the same and kept warm by nothing.

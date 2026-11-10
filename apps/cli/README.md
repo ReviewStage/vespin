@@ -33,7 +33,7 @@ vespin login
 This opens your browser to sign in. On a machine with no browser, such as one
 you reach over SSH, run `vespin login --no-browser` and paste back the address
 your browser lands on. `vespin logout` signs you out, and you can revoke the
-CLI at any time under Settings › Vespin MCP & CLI › CLI sign-in.
+CLI at any time under Settings › Vespin MCP & CLI › CLI.
 
 ## Examples
 

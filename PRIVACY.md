@@ -235,6 +235,16 @@ with your account. Beside the token we keep each phone's "Notify me" choice,
 when a push to it last reached Apple, and, while its pushes fail, since when
 and Apple's reason, which the phone's Settings shows.
 
+If your iPhone allows the app's Live Activities, the app also registers the
+two tokens Apple hands it for the one Live Activity that shows your running
+agents: one that lets the Service start the activity, and one for the
+activity while it stands on the phone. We keep them with your phone's row,
+beside when the Service last pushed the activity and what that push showed,
+and the Service sends Apple a token with each push to the activity: **your
+agents' titles and their current steps**, how many of them run, and how many
+threads wait on you. We forget the activity's token once it ends, or Apple
+says it is gone, and both tokens leave with the phone's row or your account.
+
 So your phone stays quiet while you're at your desk, the Service notes when
 a desktop or web client of yours was last active: while you use one, it
 tells the Service so at most every 30 seconds, with nothing of what you typed

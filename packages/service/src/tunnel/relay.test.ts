@@ -2,17 +2,7 @@ import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { TUNNEL_CLOSE, TUNNEL_KIND } from "@repo/features/sandbox-tunnel-wire";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/terminal-wire";
-import {
-  type Cause,
-  Clock,
-  Duration,
-  Effect,
-  Fiber,
-  Option,
-  Queue,
-  Redacted,
-  Stream,
-} from "effect";
+import { type Cause, Duration, Effect, Fiber, Option, Queue, Redacted, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import type { RelayFrame, RelaySocket } from "../terminal/relay.js";
 import { relayTunnel, type TunnelDependencies } from "./relay.js";
@@ -21,9 +11,8 @@ import { relayTunnel, type TunnelDependencies } from "./relay.js";
  * One tunnel as the relay pipes it, over sockets and a sandbox that answer
  * from a script, on the test clock: a stopped sandbox is never woken, for
  * any kind, and the tunnel closes as not running; a running one starts the port bridge,
- * and once it is ready frames cross both ways, the sandbox touched while
- * it stands, until ten minutes without a byte close the tunnel as idle and
- * end its touches.
+ * and once it is ready frames cross both ways, until five minutes without a
+ * byte close the tunnel as idle.
  */
 
 const ASK = {
@@ -55,29 +44,19 @@ const scriptedSocket = Effect.gen(function* () {
 
 type Scripted = Effect.Success<typeof scriptedSocket>;
 
-/** The relay's world: the agent reached, its sandbox standing as given, and every touch asked. */
+/** The relay's world: the agent reached, and its sandbox standing as given. */
 function world(pty: Scripted, standing: SandboxState = SANDBOX_STATE.RUNNING) {
-  const asked = { opened: 0, connected: 0, touched: [] as number[] };
   const deps: TunnelDependencies = {
     reach: () => Effect.succeed(Option.some({ sessionId: "wrun_1" })),
     open: () =>
-      Effect.sync(() => {
-        asked.opened += 1;
-        return standing === SANDBOX_STATE.RUNNING
+      Effect.succeed(
+        standing === SANDBOX_STATE.RUNNING
           ? { state: standing, shell: { url: "wss://pty.test", token: Redacted.make("pty-token") } }
-          : { state: standing };
-      }),
-    connect: () =>
-      Effect.sync(() => {
-        asked.connected += 1;
-        return pty.socket;
-      }),
-    touch: () =>
-      Effect.flatMap(Clock.currentTimeMillis, (at) =>
-        Effect.sync(() => void asked.touched.push(at)),
+          : { state: standing },
       ),
+    connect: () => Effect.succeed(pty.socket),
   };
-  return { deps, asked };
+  return deps;
 }
 
 /** Lets every fiber the last step woke run to its next wait. */
@@ -99,23 +78,22 @@ it.effect.each([
     Effect.gen(function* () {
       const device = yield* scriptedSocket;
       const pty = yield* scriptedSocket;
-      const { deps, asked } = world(pty, SANDBOX_STATE.STOPPED);
+      const deps = world(pty, SANDBOX_STATE.STOPPED);
 
       yield* Effect.scoped(relayTunnel(device.socket, ask, deps));
 
       assert.deepEqual(device.closed, [TUNNEL_CLOSE.NOT_RUNNING]);
       assert.deepEqual(pty.sent, []);
-      assert.deepEqual(asked.touched, []);
     }),
 );
 
 it.effect(
-  "frames cross once the bridge is ready, touching the sandbox, until ten idle minutes close it",
+  "frames cross once the bridge is ready, until five minutes without a byte close it as idle",
   () =>
     Effect.gen(function* () {
       const device = yield* scriptedSocket;
       const pty = yield* scriptedSocket;
-      const { deps, asked } = world(pty);
+      const deps = world(pty);
 
       const relay = yield* Effect.forkChild(Effect.scoped(relayTunnel(device.socket, ASK, deps)));
       yield* settle;
@@ -134,20 +112,16 @@ it.effect(
       assert.deepEqual(lines(pty.sent), [`${OPEN}\n`]);
       assert.deepEqual(device.sent, [{ text: DATA }]);
 
-      // Traffic five minutes on moves the idle bound on.
-      yield* TestClock.adjust(Duration.minutes(5));
+      // Traffic three minutes on moves the idle bound on.
+      yield* TestClock.adjust(Duration.minutes(3));
       yield* device.push({ text: DATA });
       yield* settle;
-      yield* TestClock.adjust(Duration.minutes(9));
+      yield* TestClock.adjust(Duration.minutes(4));
       assert.deepEqual(device.closed, []);
 
       yield* TestClock.adjust(Duration.minutes(2));
       yield* Fiber.join(relay);
-      const touched = asked.touched.length;
-      yield* TestClock.adjust(Duration.minutes(30));
 
       assert.deepEqual(device.closed, [TUNNEL_CLOSE.IDLE]);
-      assert.equal(asked.touched.length, touched);
-      assert.ok(touched >= 3);
     }),
 );

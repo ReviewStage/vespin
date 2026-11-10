@@ -122,6 +122,8 @@ export const RUN_PROFILE = {
   AGENT_PAGE: "agent-page",
   /** A synthetic account signed in, Settings opened at launch on its Account page. */
   SETTINGS_ACCOUNT: "settings-account",
+  /** The same account, Settings on Preferences: its team's Slack bot connected, so Slack notifications stand under Notifications. */
+  SETTINGS_PREFERENCES: "settings-preferences",
   /** The same account, Settings on its team's workspace: its members and an invitation waiting. */
   SETTINGS_WORKSPACE: "settings-workspace",
   /** The same account, Settings on Agents: its Claude plan connected and its ChatGPT sign-in expired. */

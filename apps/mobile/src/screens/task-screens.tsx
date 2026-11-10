@@ -62,6 +62,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { SettingsBarButton, useSettingsAccount } from "../settings-button.js";
+import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import {
   type TaskOverview,
   type TasksListing,
@@ -303,6 +304,21 @@ function pickedGroups(tree: TaskTree, picked: string): readonly TaskTreeGroup[] 
   return [...(tree.pinned === undefined ? [] : [tree.pinned]), ...tree.sections].filter(
     (group) => group.key === picked,
   );
+}
+
+/**
+ * The groups column's pick that shows task `id` in the middle column: the
+ * pick it stands on where that group lists the task, else Pinned or the
+ * section that lists it, else My tasks.
+ */
+function pickHolding(tree: TaskTree, id: string, current: string): string {
+  const lists = (groups: readonly TaskTreeGroup[]) =>
+    groups.some((group) => group.rows.some(({ task }) => task.id === id));
+  if (lists(pickedGroups(tree, current))) return current;
+  const named = [...(tree.pinned === undefined ? [] : [tree.pinned]), ...tree.sections].find(
+    (group) => lists([group]),
+  );
+  return named?.key ?? MY_TASKS_GROUP;
 }
 
 /** How many tasks a group's rows hold. */
@@ -621,12 +637,26 @@ function TasksStackList() {
 // window stands three columns, the groups, the picked group's tasks, and the
 // task. The Stack's header steps aside, since the split view draws each
 // column's navigation bar itself.
-function TasksSplitScreen() {
+function TasksSplitScreen({
+  selected,
+  select,
+}: {
+  readonly selected: string | undefined;
+  readonly select: (id: string) => void;
+}) {
   const three = useThreeColumns();
-  const [selected, setSelected] = useState<string | undefined>(undefined);
-  const [picked, setPicked] = useState<string>(MY_TASKS_GROUP);
   const { search, setSearch, listing } = useTasksScreen();
+  const [picked, setPicked] = useState<string>(() =>
+    selected === undefined ? MY_TASKS_GROUP : pickHolding(listing.tree, selected, MY_TASKS_GROUP),
+  );
+  // Note that a selection a link or a related task made moves the groups column to a group that lists it, so its row stands beside its page.
+  const [shown, setShown] = useState(selected);
+  if (selected !== shown) {
+    setShown(selected);
+    if (selected !== undefined) setPicked(pickHolding(listing.tree, selected, picked));
+  }
   const overview = useTaskOverview(selected);
+  const read = useTasksRead();
   const account = useSettingsAccount();
   const tree = (
     <TasksTree
@@ -635,7 +665,7 @@ function TasksSplitScreen() {
       search={search}
       groups={three ? pickedGroups(listing.tree, picked) : undefined}
       selected={selected}
-      onSelect={setSelected}
+      onSelect={select}
     />
   );
   return (
@@ -648,10 +678,12 @@ function TasksSplitScreen() {
           }
           content={three ? tree : undefined}
           detail={
-            overview === undefined ? (
-              <EmptyState title={SELECT_A_TASK} symbol="checklist" />
-            ) : (
+            overview !== undefined ? (
               <OverviewPage key={overview.task.id} overview={overview} />
+            ) : selected !== undefined && read ? (
+              <EmptyState title={TASK_NOT_FOUND} symbol="questionmark.folder" />
+            ) : (
+              <EmptyState title={SELECT_A_TASK} symbol="checklist" />
             )
           }
           detailMenu={overview === undefined ? undefined : taskMenu(overview)}
@@ -671,7 +703,12 @@ function TasksSplitScreen() {
 /** The Tasks tab's root screen: its tree, laid out by the window's size class. */
 export function TasksListScreen() {
   const sizeClass = useWindowSizeClass();
-  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? <TasksSplitScreen /> : <TasksStackList />;
+  const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
+  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
+    <TasksSplitScreen selected={selected} select={select} />
+  ) : (
+    <TasksStackList />
+  );
 }
 
 /** The Tasks tab's pushed screen: one task's Overview, named by the route's `id`, its path small in the bar and its ⋯ beside it; Task not found where the read list holds no such task, and nothing while it is still read. */
@@ -681,6 +718,7 @@ export function TaskScreen() {
   const overview = useTaskOverview(id);
   const read = useTasksRead();
   const menu = overview === undefined ? undefined : taskMenu(overview);
+  if (useHandToSplit(SPLIT_TAB.TASKS, id)) return null;
   return (
     <>
       <Stack.Screen

@@ -520,6 +520,28 @@ test("Add skill opens with its box focused, not the card", async () => {
   assert.ok(document.activeElement === document.querySelector("textarea"), "the box has focus");
 });
 
+test("Add skill on a group's heading installs for that group's people", async () => {
+  await mountPage();
+  const addIn = (title: string) =>
+    button(
+      "Add skill",
+      [...document.querySelectorAll("section")].find(
+        (each) => each.querySelector("h2")?.textContent === title,
+      ) ?? assert.fail(`no ${title} group`),
+    );
+
+  for (const title of ["Stage", "Only you"]) {
+    act(() => addIn(title).click());
+    await paste(COMMAND);
+    act(() => primary().click());
+    await settle();
+  }
+  assert.deepEqual(
+    sentOf(ACT_KIND.INSTALLED_SKILLS_INSTALL).map((each) => (each as { scope: string }).scope),
+    [INSTALLED_SKILL_SCOPE.WORKSPACE, INSTALLED_SKILL_SCOPE.PERSONAL],
+  );
+});
+
 test("a personal workspace lists the account's own skills alone", async () => {
   stored = [PR_STYLE];
   await mountPage(workspace({ personal: true }));

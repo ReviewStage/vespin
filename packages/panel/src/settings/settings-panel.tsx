@@ -12,26 +12,22 @@ import type { AppSettingsView } from "@repo/settings/wire";
 import { TEXT_TONE, TEXT_VARIANT, Text } from "@repo/ui";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { AccountSection } from "./account-section.js";
-import { AgentComposerSection } from "./agent-composer-section.js";
 import { AgentsPage } from "./agents-page.js";
 import { AppearanceSection } from "./appearance-page.js";
-import { CliSections } from "./cli-sections.js";
+import { CliSection } from "./cli-section.js";
 import { CloudEnvironmentPage } from "./cloud-environment-page.js";
-import { CommitsSection } from "./commits-section.js";
 import { ExperimentalPage } from "./experimental-page.js";
 import { HostsSection } from "./hosts-section.js";
 import { type IntegrationsFilter, IntegrationsSection } from "./integrations-page.js";
-import { LinksSection } from "./links-section.js";
 import { MacCommandsSection } from "./mac-commands-section.js";
-import { McpClientsSections } from "./mcp-clients-section.js";
+import { McpSection } from "./mcp-clients-section.js";
 import { MemorySection } from "./memory-page.js";
 import { MicrophoneSection } from "./microphone-section.js";
+import { PreferencesPage } from "./preferences-page.js";
 import { PrivacySection } from "./privacy-section.js";
 import { settingsRowsInput, shownWorkspace } from "./settings-rows.js";
 import { WindowShortcutSections } from "./shortcuts-page.js";
 import { SkillsPage } from "./skills-page.js";
-import { SoundsSection } from "./sounds-section.js";
-import { TasksSection } from "./tasks-section.js";
 import { UpdatesSection } from "./updates.js";
 import { WorkspacePage, type WorkspaceSettingsControl } from "./workspace-page.js";
 import { useSettingsWrites } from "./writes.js";
@@ -96,32 +92,37 @@ export function SettingsPanel({
     <ReplayUnmask>
       {view === SETTINGS_VIEW.ACCOUNT ? (
         signedIn ? (
-          <>
-            <AccountSection
-              account={account}
-              workspaces={workspace?.workspaces}
-              // Note that the workspaces are read once some are listed, as every account holds its own.
-              workspacesRead={(workspace?.workspaces.length ?? 0) > 0}
-              listFailed={workspace?.listFailed ?? false}
-              onSignOut={onSignOut}
-            />
-            {panelView ? <LinksSection view={panelView} writes={writes} /> : null}
-            {panelView ? <AgentComposerSection view={panelView} writes={writes} /> : null}
-            {panelView ? (
-              <CommitsSection view={panelView} writes={writes} account={account} />
-            ) : null}
-            {panelView ? (
-              <SoundsSection view={panelView} writes={writes} notifications={notifications} />
-            ) : null}
-            {panelView ? <TasksSection view={panelView} writes={writes} /> : null}
+          <AccountSection
+            account={account}
+            workspaces={workspace?.workspaces}
+            // Note that the workspaces are read once some are listed, as every account holds its own.
+            workspacesRead={(workspace?.workspaces.length ?? 0) > 0}
+            listFailed={workspace?.listFailed ?? false}
+            onSignOut={onSignOut}
+          >
             {panelView ? <PrivacySection view={panelView} writes={writes} /> : null}
-          </>
+          </AccountSection>
         ) : (
           <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
             {SIGNED_OUT_WORDS}
           </Text>
         )
       ) : null}
+
+      {view !== SETTINGS_VIEW.PREFERENCES ? null : signedIn ? (
+        panelView ? (
+          <PreferencesPage
+            view={panelView}
+            account={account}
+            notifications={notifications}
+            workspaces={workspace?.workspaces ?? []}
+          />
+        ) : null
+      ) : (
+        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+          {SIGNED_OUT_WORDS}
+        </Text>
+      )}
 
       {view !== SETTINGS_VIEW.WORKSPACE ? null : !signedIn ? (
         <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
@@ -159,8 +160,8 @@ export function SettingsPanel({
 
       {view !== SETTINGS_VIEW.MCP ? null : signedIn ? (
         <>
-          <McpClientsSections />
-          <CliSections />
+          <McpSection />
+          <CliSection />
         </>
       ) : (
         <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>

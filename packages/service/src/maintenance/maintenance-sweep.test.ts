@@ -31,6 +31,7 @@ interface Recorded {
   keptUp: number[];
   resumed: number[];
   heldPushes: number[];
+  liveActivities: number[];
   sandboxReleases: number[];
   wakeups: number[];
 }
@@ -43,6 +44,7 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
     keptUp: [],
     resumed: [],
     heldPushes: [],
+    liveActivities: [],
     sandboxReleases: [],
     wakeups: [],
   };
@@ -78,6 +80,11 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
     releaseHeldPushes: (now) =>
       Effect.sync(() => {
         recorded.heldPushes.push(now);
+        return 0;
+      }),
+    refreshLiveActivities: (now) =>
+      Effect.sync(() => {
+        recorded.liveActivities.push(now);
         return 0;
       }),
     releaseSandboxes: (now) =>
@@ -118,6 +125,7 @@ it.effect("a deployment without CRON_SECRET answers unavailable and sweeps nothi
       keptUp: [],
       resumed: [],
       heldPushes: [],
+      liveActivities: [],
       sandboxReleases: [],
       wakeups: [],
     });
@@ -141,6 +149,7 @@ it.effect("a wrong or missing bearer is refused and sweeps nothing", () =>
       keptUp: [],
       resumed: [],
       heldPushes: [],
+      liveActivities: [],
       sandboxReleases: [],
       wakeups: [],
     });
@@ -151,6 +160,7 @@ it.effect("a wrong or missing bearer is refused and sweeps nothing", () =>
       keptUp: [],
       resumed: [],
       heldPushes: [],
+      liveActivities: [],
       sandboxReleases: [],
       wakeups: [],
     });
@@ -175,6 +185,7 @@ it.effect(
         keptUp: [instant],
         resumed: [instant],
         heldPushes: [instant],
+        liveActivities: [instant],
         sandboxReleases: [instant],
         wakeups: [instant],
       });

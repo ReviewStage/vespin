@@ -17,12 +17,13 @@ export { SETTINGS_VIEW };
 /**
  * The pages in the order the command palette and the settings search list
  * them, and the Settings sidebar within each of its groups, Account first
- * since Settings opens on it. Every option has one home among them;
+ * since Settings opens on it, and Preferences under it. Every option has one home among them;
  * Experimental follows This Mac, so About and Keyboard shortcuts, which only
  * lists the window's own chords, stay last.
  */
 export const SETTINGS_PAGE_LIST = [
   SETTINGS_VIEW.ACCOUNT,
+  SETTINGS_VIEW.PREFERENCES,
   SETTINGS_VIEW.WORKSPACE,
   SETTINGS_VIEW.ENVIRONMENT,
   SETTINGS_VIEW.MEMORY,
@@ -84,6 +85,7 @@ export type SettingsPageGroup = (typeof SETTINGS_PAGE_GROUP)[keyof typeof SETTIN
  */
 const GROUP_OF_PAGE = {
   [SETTINGS_VIEW.ACCOUNT]: SETTINGS_PAGE_GROUP.ACCOUNT,
+  [SETTINGS_VIEW.PREFERENCES]: SETTINGS_PAGE_GROUP.ACCOUNT,
   [SETTINGS_VIEW.WORKSPACE]: SETTINGS_PAGE_GROUP.WORKSPACE,
   [SETTINGS_VIEW.ENVIRONMENT]: SETTINGS_PAGE_GROUP.WORKSPACE,
   [SETTINGS_VIEW.AGENTS]: SETTINGS_PAGE_GROUP.ACCOUNT,

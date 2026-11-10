@@ -1,5 +1,5 @@
 /**
- * relay.ts -- one attached shell: a panel's socket, the desktop's or the web app's, piped to the shell's PTY in the agent's sandbox, touching the sandbox for as long as the socket stands.
+ * relay.ts -- one attached shell: a panel's socket, the desktop's or the web app's, piped to the shell's PTY in the agent's sandbox, touching the sandbox while the terminal is used.
  *
  * A connection reaches its agent through the one rule every agent route
  * keeps, then attaches only to a sandbox that is running: a stopped one is
@@ -11,12 +11,13 @@
  * the shell printed comes back as it came; neither is read, kept, logged, or
  * counted, here or anywhere the relay writes.
  *
- * The connection touches the sandbox (`@repo/sandbox`'s `touch`) from its
- * attach and every `SANDBOX_TOUCH_EVERY` for as long as it stands, typed in
- * or not, as an open terminal holds its machine, so a developer typing after
- * the agent's turn ended is never cut off by its idle stop. Nothing here
+ * The connection touches the sandbox (`@repo/sandbox`'s `touchedWhileUsed`)
+ * from its attach and then while it is used, a byte typed in or printed by
+ * the shell, so a developer typing after the agent's turn ended is never cut
+ * off by its idle stop, and a terminal left open and quiet lets the sandbox
+ * stop `SANDBOX_IDLE` after its last use, as every sandbox does. Nothing here
  * closes a connection for want of typing; the host ends it when the tab
- * goes, or once the terminal has gone ten minutes unused (`@repo/host`'s
+ * goes, or once the terminal has gone `TERMINAL_IDLE` unused (`@repo/host`'s
  * `compose-terminals.ts`). While a terminal is connected, the GitHub token at the sandbox's firewall
  * is kept fresh on the rule the agent's own steps keep it by, claimed
  * in the store (`sandbox-terminal-lease.ts`) so two windows mint one token between them: the
@@ -45,12 +46,13 @@ import {
 import {
   type InteractiveShell,
   ptyExitSchema,
-  SANDBOX_TOUCH_EVERY,
   type SandboxError,
+  touchedWhileUsed,
 } from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
   type Cause,
+  Clock,
   DateTime,
   Deferred,
   Duration,
@@ -123,8 +125,8 @@ export interface RelayDependencies {
   readonly connect: (
     shell: InteractiveShell,
   ) => Effect.Effect<RelaySocket, SandboxError, Scope.Scope>;
-  /** Touches the session's sandbox where it runs; a touch that fails is logged, for the next to touch it again. */
-  readonly touch: (sessionId: string) => Effect.Effect<void>;
+  /** Touches the session's sandbox where it runs; one the sandbox did not confirm fails, and is tried again (`touchedWhileUsed`). */
+  readonly touch: (sessionId: string) => Effect.Effect<void, SandboxError>;
   /** Claims the token's renewal on the running sandbox session, once per conversation per session within the refresh rule. */
   readonly claimRenewal: (
     conversationId: string,
@@ -282,14 +284,15 @@ function readDevice(
   return Effect.ensuring(read, Queue.end(fromDevice));
 }
 
-/** The desktop's frames to the PTY: typing as it came, and a resize as the PTY's own frame. */
+/** The desktop's frames to the PTY: typing as it came, which is a use, and a resize as the PTY's own frame, which is not. */
 function deviceToPty(
   fromDevice: Stream.Stream<RelayFrame>,
   pty: RelaySocket,
+  used: Effect.Effect<void>,
 ): Effect.Effect<PipeEnd> {
   return Effect.gen(function* () {
     yield* Stream.runForEach(fromDevice, (frame) => {
-      if ("bytes" in frame) return pty.send(frame);
+      if ("bytes" in frame) return Effect.andThen(used, pty.send(frame));
       const resize = readResize(jsonOf(frame.text));
       if (Result.isFailure(resize)) return Effect.void;
       const { cols, rows } = resize.success;
@@ -299,16 +302,21 @@ function deviceToPty(
   });
 }
 
-/** The PTY's frames to the desktop: output as it came, and its exit as the relay's own frame, which ends the pipe. */
-function ptyToDevice(device: RelaySocket, pty: RelaySocket): Effect.Effect<PipeEnd> {
+/** The PTY's frames to the desktop: output as it came, which is a use, and its exit as the relay's own frame, which ends the pipe. */
+function ptyToDevice(
+  device: RelaySocket,
+  pty: RelaySocket,
+  used: Effect.Effect<void>,
+): Effect.Effect<PipeEnd> {
   return Effect.gen(function* () {
     const exited = yield* Ref.make(false);
     yield* Stream.runForEachWhile(pty.frames, (frame) => {
-      if ("bytes" in frame) return Effect.as(device.send(frame), true);
+      if ("bytes" in frame) return Effect.as(Effect.andThen(used, device.send(frame)), true);
       const exit = readPtyExit(jsonOf(frame.text));
       // A text frame that is not the exit is output the PTY server sent as text.
       if (Result.isFailure(exit)) {
-        return Effect.as(device.send({ bytes: new TextEncoder().encode(frame.text) }), true);
+        const output = device.send({ bytes: new TextEncoder().encode(frame.text) });
+        return Effect.as(Effect.andThen(used, output), true);
       }
       const { code } = exit.success;
       return Effect.as(
@@ -352,13 +360,10 @@ export function relayTerminal(
           : TERMINAL_RELAY_CLOSE.STARTING,
       );
     }
-    // An attached terminal is the developer using the sandbox: it is touched from the attach for as long as the connection stands.
-    const { sessionId } = agent;
-    yield* Effect.forkScoped(
-      Effect.repeat(deps.touch(sessionId), {
-        schedule: Schedule.spaced(SANDBOX_TOUCH_EVERY),
-      }),
-    );
+    // An attach is a use, and so is every byte typed or printed after it: the sandbox is touched while the terminal is used, never for standing open alone.
+    const lastUsed = yield* Ref.make(yield* Clock.currentTimeMillis);
+    yield* touchedWhileUsed(deps.touch(agent.sessionId), Ref.get(lastUsed));
+    const used = Effect.flatMap(Clock.currentTimeMillis, (at) => Ref.set(lastUsed, at));
     // Note that the desktop's frames are read from here on into a queue of the relay's own, because the first renewal waits on the desktop leaving while what it typed waits for the shell.
     const fromDevice = yield* Queue.make<RelayFrame, Cause.Done>();
     const held = yield* Ref.make<number | undefined>(0);
@@ -396,8 +401,8 @@ export function relayTerminal(
     if (leftFirst) return yield* pty.success.close(NORMAL_CLOSE);
     yield* device.send({ text: JSON.stringify({ type: TERMINAL_RELAY_FRAME.ATTACHED }) });
     const end = yield* Effect.raceAll([
-      deviceToPty(Stream.fromQueue(fromDevice), pty.success),
-      ptyToDevice(device, pty.success),
+      deviceToPty(Stream.fromQueue(fromDevice), pty.success, used),
+      ptyToDevice(device, pty.success, used),
     ]);
     yield* pty.success.close(NORMAL_CLOSE);
     if (end !== PIPE_END.DEVICE_LEFT) yield* device.close(CLOSE_OF_END[end]);
