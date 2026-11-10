@@ -353,6 +353,7 @@ function press(listed: string): void {
 /** The Settings pages by their names, in the order the palette lists them with no experiment on: Account's own page is Account, and the Workspace page, whose head names the listed workspace, is Workspace here. */
 const SETTINGS_PAGES = [
   "Account",
+  "Preferences",
   "Workspace",
   "Cloud environment",
   "Agents",
@@ -378,7 +379,13 @@ test("the Settings filter lists Memory after Cloud environment only while the li
   await paletteUnderState(tasksControl({ workspaces: [acme], workspace: acme }));
   chooseFilter("Settings");
 
-  assert.deepEqual(rows().slice(0, 4), ["Account", "Workspace", "Cloud environment", "Memory"]);
+  assert.deepEqual(rows().slice(0, 5), [
+    "Account",
+    "Preferences",
+    "Workspace",
+    "Cloud environment",
+    "Memory",
+  ]);
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 

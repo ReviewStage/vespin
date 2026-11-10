@@ -8,7 +8,13 @@ import {
   type SettingsView,
 } from "@repo/settings/settings-views";
 import { DisplayIcon, KeyboardIcon, LaptopIcon, PlugIcon, ProductMark } from "@repo/ui";
-import { CloudCogIcon, FlaskConicalIcon, GLYPH, InfoIcon } from "@repo/ui/icons";
+import {
+  CloudCogIcon,
+  FlaskConicalIcon,
+  GLYPH,
+  InfoIcon,
+  SlidersHorizontalIcon,
+} from "@repo/ui/icons";
 import { settingsPageShown } from "./settings-rows.js";
 
 /** A page's name and glyph. */
@@ -23,11 +29,13 @@ interface SettingsPage {
  * disagree about its name. The name and the glyph are the whole row: what a
  * page holds is one press away. Account's own page is Account, because it is
  * where the account itself is kept, and "Your profile" in the account menu
- * opens the person page; the Workspace page's row is Workspace under the
+ * opens the person page; Preferences beside it holds how the app works for
+ * the account; the Workspace page's row is Workspace under the
  * listed workspace's name, and its head names that workspace.
  */
 const SETTINGS_PAGE = {
   [SETTINGS_VIEW.ACCOUNT]: { title: "Account", icon: <GLYPH.PERSON /> },
+  [SETTINGS_VIEW.PREFERENCES]: { title: "Preferences", icon: <SlidersHorizontalIcon /> },
   [SETTINGS_VIEW.WORKSPACE]: { title: "Workspace", icon: <GLYPH.PEOPLE /> },
   // Note that the cloud agents' variables and scripts stand on one page, since both exist only for those agents.
   [SETTINGS_VIEW.ENVIRONMENT]: { title: "Cloud environment", icon: <CloudCogIcon /> },
