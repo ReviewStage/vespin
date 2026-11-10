@@ -90,6 +90,7 @@ import {
   RUNNER_CHOICE,
   routedSessions,
   runnerChoiceApplied,
+  SANDBOX_HAND_STOP,
   sessionsRouter,
   TURN_HANDOVER,
   type TurnHandover,
@@ -158,6 +159,7 @@ function recording(sessionPrefix: string) {
         return answers.handover;
       }),
     warm: () => Effect.void,
+    stopSandbox: () => Effect.succeed(SANDBOX_HAND_STOP.STOPPED),
     retry: (sessionId, message) =>
       Effect.sync(() => {
         calls.push(`retry:${sessionId}`);

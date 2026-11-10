@@ -37,6 +37,7 @@
 import { randomUUID } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { agentOwnerFactsOf } from "@repo/database/models/agent-owners";
+import { releaseSandboxHold } from "@repo/database/models/agent-sandbox-store";
 import {
   type Agent,
   type AgentCommitted,
@@ -58,6 +59,7 @@ import {
   AGENT_ARCHIVER,
   AGENT_BOUNDS,
   AGENT_LIST_ARCHIVED,
+  AGENT_MACHINE,
   type AgentPullRequest,
   type AgentSummary,
 } from "@repo/features/agent-wire";
@@ -102,7 +104,11 @@ import {
 } from "./coder-host/published.js";
 import { productionSummaryModel, type SummaryModelOf } from "./coder-host/replay-summary.js";
 import { rewoundAgent } from "./coder-host/rewind.js";
-import { routedSessions, runnerWarmed } from "./coder-host/runtime-sessions.js";
+import {
+  routedSessions,
+  runnerSandboxStopped,
+  runnerWarmed,
+} from "./coder-host/runtime-sessions.js";
 import {
   acceptedAgentChoice,
   placeOfAgent,
@@ -557,12 +563,38 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /**
      * The agent on screen kept warm (`runnerWarmed`): answered at once, its runner launched past
      * the answer where none runs. Kept for a member who may message it alone, whose message the
-     * warm runner would take; anyone else is answered the same, and nothing is kept.
+     * warm runner would take; anyone else is answered the same, and nothing is kept. A Wake now
+     * (`wake`) lets go a member's hold on its stopped sandbox first, which a warm call otherwise
+     * leaves stopped.
      */
     warm: signedIn.warm.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
-      if (controlsAgent(userId, agent)) yield* runnerWarmed(agent);
+      if (!controlsAgent(userId, agent)) return { warm: true as const };
+      if (input.wake === true) {
+        yield* releaseSandboxHold(agent.conversationId).pipe(
+          Effect.catch((failure) =>
+            Effect.logWarning(`a sandbox's hold was not let go: ${failure._tag}`),
+          ),
+        );
+      }
+      yield* runnerWarmed(agent);
       return { warm: true as const };
+    }),
+    /**
+     * The agent's idle cloud sandbox stopped by a member who may drive it
+     * (`runnerSandboxStopped`), its disk kept and held off until its next
+     * message or a Wake now. A Mac's agent has no sandbox, and an archived
+     * one's is retired already.
+     */
+    sandboxStop: signedIn.sandboxStop.effect(function* ({ input, context }) {
+      const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
+      if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+      if (agent.machine === AGENT_MACHINE.DEVICE) {
+        return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+      }
+      if (agent.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_RETIRED);
+      yield* runnerSandboxStopped(agent);
+      return { stopped: true as const };
     }),
     /** The agent taken back to just before one of the developer's lines (`rewind.ts`), answered as it then stands. */
     rewind: signedIn.rewind.effect(function* ({ input, context }) {

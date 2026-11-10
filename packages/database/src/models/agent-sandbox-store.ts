@@ -9,6 +9,8 @@
  * then; each touch moves that on, though only where it moves by the
  * caller's least step, so a sandbox in use costs about one write a minute;
  * and a discard, or an open that failed, marks the session's sandbox off.
+ * A member's stop marks it off held, which the warm call reads to leave it
+ * stopped, until a boot begins anew or a Wake now lets the hold go.
  * Each write reads the clock itself, so every instant is the service's.
  */
 
@@ -42,6 +44,7 @@ const AgentSandboxRowSchema = Schema.Struct({
   steps: Schema.Array(Schema.Struct({ step: Schema.Literals(STEPS), at: Schema.Number })),
   stateAt: InstantColumnSchema,
   runsUntil: Schema.NullOr(InstantColumnSchema),
+  heldOff: Schema.Boolean,
 });
 
 export type AgentSandboxRow = typeof AgentSandboxRowSchema.Type;
@@ -53,6 +56,7 @@ const rowColumns = {
   steps: agentSandbox.steps,
   stateAt: agentSandbox.stateAt,
   runsUntil: agentSandbox.runsUntil,
+  heldOff: agentSandbox.heldOff,
 };
 
 /** A step as the row's `steps` holds it, begun at the instant given. */
@@ -87,6 +91,7 @@ const upsertBooting = SqlSchema.void({
         steps: stepAt(step, now),
         stateAt: now,
         runsUntil: null,
+        heldOff: false,
       };
       return db
         .insert(agentSandbox)
@@ -136,7 +141,7 @@ const upsertRunning = SqlSchema.void({
         // Note that a boot's steps stay, so a reader can say how long the boot took.
         .onConflictDoUpdate({
           target: agentSandbox.conversationId,
-          set: { session, state: SANDBOX_STATE.RUNNING, stateAt: now, runsUntil },
+          set: { session, state: SANDBOX_STATE.RUNNING, stateAt: now, runsUntil, heldOff: false },
         }),
     ),
 });
@@ -170,6 +175,41 @@ const markOff = SqlSchema.void({
         .update(agentSandbox)
         .set({ state: SANDBOX_STATE.OFF, stateAt: now, runsUntil: null })
         .where(and(eq(agentSandbox.session, session), ne(agentSandbox.state, SANDBOX_STATE.OFF))),
+    ),
+});
+
+const upsertHeldOff = SqlSchema.void({
+  Request: Schema.Struct({
+    conversationId: Schema.String,
+    session: Schema.String,
+    now: Schema.Date,
+  }),
+  execute: ({ conversationId, session, now }) =>
+    Database.use((db) => {
+      const held = {
+        session,
+        state: SANDBOX_STATE.OFF,
+        stateAt: now,
+        runsUntil: null,
+        heldOff: true,
+      };
+      return db
+        .insert(agentSandbox)
+        .values({ conversationId, ...held })
+        .onConflictDoUpdate({ target: agentSandbox.conversationId, set: held });
+    }),
+});
+
+const releaseHold = SqlSchema.void({
+  Request: Schema.Struct({ conversationId: Schema.String }),
+  execute: ({ conversationId }) =>
+    Database.use((db) =>
+      db
+        .update(agentSandbox)
+        .set({ heldOff: false })
+        .where(
+          and(eq(agentSandbox.conversationId, conversationId), eq(agentSandbox.heldOff, true)),
+        ),
     ),
 });
 
@@ -235,4 +275,21 @@ export function recordSandboxTouch(
 /** The sandbox of the session named off from now: discarded, or its open failed; nothing where a newer session's record stands, or it is off already. */
 export function recordSandboxOff(session: string): SandboxEffect<void> {
   return Effect.flatMap(DateTime.nowAsDate, (now) => markOff({ session, now }));
+}
+
+/** The conversation's sandbox, under the session named, stopped by a member now and held off, so a warm call leaves it stopped. */
+export function recordSandboxHeldOff(conversationId: string, session: string): SandboxEffect<void> {
+  return Effect.flatMap(DateTime.nowAsDate, (now) =>
+    upsertHeldOff({ conversationId, session, now }),
+  );
+}
+
+/** Whether a member's stop holds the conversation's sandbox off. */
+export function sandboxHeldOff(conversationId: string): SandboxEffect<boolean> {
+  return Effect.map(readAgentSandbox(conversationId), (row) => row?.heldOff === true);
+}
+
+/** The hold a member's stop put on the conversation's sandbox let go, by a Wake now; nothing where none holds it. */
+export function releaseSandboxHold(conversationId: string): SandboxEffect<void> {
+  return releaseHold({ conversationId });
 }

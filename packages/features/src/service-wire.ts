@@ -145,6 +145,8 @@ export const HOSTED_API_ERROR = {
   SANDBOX_STOPPED: "sandbox-stopped",
   /** The coding agent's sandbox can never resume: its snapshot expired or was deleted, its saved files with it, and the agent's next turn starts a fresh one. Nothing was resumed. */
   SANDBOX_SNAPSHOT_GONE: "sandbox-snapshot-gone",
+  /** A turn of the coding agent's runs, or waits to, in its sandbox, so it was not stopped; nothing was stopped. */
+  SANDBOX_IN_USE: "sandbox-in-use",
   /** A skill of that name is already installed in the scope asked: the account's own, or the workspace's. Nothing was installed. */
   SKILL_NAME_TAKEN: "skill-name-taken",
   /** A skill's files were refused: a file past its bound, a `SKILL.md` that breaks the convention, or a credential-shaped literal. Nothing was installed. */

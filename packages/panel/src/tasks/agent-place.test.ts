@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { SANDBOX_STATE } from "@repo/features/agent-sandbox-wire";
-import { AGENT_MACHINE, type AgentSummary } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { RUN_ON_MAC_OFF, type RunOnMacStanding } from "@repo/features/workspace-tools-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY, MAC_COMMAND_MODE } from "@repo/settings";
@@ -65,7 +65,7 @@ async function settle(): Promise<void> {
 
 /** An agent's box drawn with `agent` while the beats stand as `ages` says, each device's age, or failed where none is given, and what the box then says; on a Mac whose Settings let no agent run commands where `never`. */
 async function placeOf(
-  agent: Pick<AgentSummary, "mac" | "machine" | "sandbox">,
+  agent: Pick<AgentSummary, "mac" | "machine" | "sandbox"> & Partial<Pick<AgentSummary, "status">>,
   ages: Readonly<Record<string, number>> | undefined,
   runOnMac?: RunOnMacStanding,
   never = false,
@@ -93,7 +93,10 @@ async function placeOf(
   act(() =>
     root.render(
       withQueryClient(
-        createElement(AgentPlace, { agent: { id: AGENT_ID, ...agent }, readerId: READER }),
+        createElement(AgentPlace, {
+          agent: { id: AGENT_ID, status: AGENT_STATUS.COMPLETED, ...agent },
+          readerId: READER,
+        }),
       ),
     ),
   );
@@ -144,6 +147,37 @@ test("an agent in the cloud says Cloud and where its sandbox stands, off where n
     runsUntil: Date.now() + 60 * 60_000,
   };
   assert.equal(await placeOf({ sandbox }, undefined), "Runs on: Cloud · Running");
+});
+
+test("a running sandbox's card offers Stop now while no turn runs, which asks the stop of the agent, and none while one does", async () => {
+  const sandbox = {
+    state: SANDBOX_STATE.RUNNING,
+    stateAt: 0,
+    steps: [],
+    runsUntil: Date.now() + 60 * 60_000,
+  };
+  const stopNow = () =>
+    [...document.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Stop now",
+    );
+  await placeOf({ sandbox }, undefined);
+  const asked: unknown[] = [];
+  fakeActPort({
+    [ACT_KIND.AGENTS_SANDBOX_STOP]: (payload) => {
+      asked.push(payload);
+      return Promise.resolve({ stopped: true });
+    },
+  });
+  restOn(document.querySelector(".ui-chip") ?? assert.fail("the chip stands"));
+  await settle();
+  act(() => (stopNow() ?? assert.fail("the card offers Stop now")).click());
+  await settle();
+  assert.deepEqual(asked, [{ agentId: AGENT_ID }]);
+
+  await placeOf({ sandbox, status: AGENT_STATUS.RUNNING }, undefined);
+  restOn(document.querySelector(".ui-chip") ?? assert.fail("the chip stands"));
+  await settle();
+  assert.equal(stopNow(), undefined, "a turn under way is never stopped from the card");
 });
 
 /** The `run_on_mac` row the cloud chip's card ends with, once rested on: whose its person chip names and what its dot says. */

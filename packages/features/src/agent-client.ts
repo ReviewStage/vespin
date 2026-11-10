@@ -20,6 +20,7 @@ import {
   AGENT_INBOX_WRITE_RENAMES,
   AGENT_NOT_FOUND_RENAMES,
   AGENT_RENAMES,
+  AGENT_SANDBOX_STOP_RENAMES,
   AGENT_START_RENAMES,
   type AgentAgentAnswer,
   type AgentCallFailure,
@@ -47,6 +48,7 @@ import {
   type AgentPullRequestWriteAnswerView,
   type AgentQueueAnswerView,
   type AgentReviewOptionsAnswerView,
+  type AgentSandboxStopAnswerView,
   type AgentWarmAnswerView,
   type AgentWorkspaceListParams,
   type AgentWorkspaceToolsAnswerView,
@@ -997,9 +999,23 @@ export class HostedAgentClient {
     );
   }
 
-  /** Keeps one agent on screen warm for the next message (`agentWarmAnswerSchema`). */
-  warm(agentId: string): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
-    return hostedCall(this.#hosted.agents.warm, { id: agentId });
+  /** Keeps one agent on screen warm for the next message (`agentWarmAnswerSchema`), a Wake now (`wake`) letting go a member's hold on its stopped sandbox first. */
+  warm(
+    agentId: string,
+    wake = false,
+  ): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agents.warm, wake ? { id: agentId, wake } : { id: agentId });
+  }
+
+  /** Stops one agent's idle cloud sandbox, held off until its next message or a Wake now. */
+  stopSandbox(
+    agentId: string,
+  ): Effect.Effect<AgentSandboxStopAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(
+      this.#hosted.agents.sandboxStop,
+      { id: agentId },
+      { as: AGENT_SANDBOX_STOP_RENAMES },
+    );
   }
 
   /** Takes one agent back to just before one of the developer's lines, stopping it first where it still works, answering it as it then stands. */

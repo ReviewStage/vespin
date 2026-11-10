@@ -241,6 +241,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     reviewOptions: SCREEN_ONLY,
     workspaceTools: SCREEN_ONLY,
     sandboxResume: NOT_YET_BUILT,
+    sandboxStop: NOT_YET_BUILT,
     // Note that a Terminal tab is interactive, so the CLI's `vespin agent shell` reaches it and no tool does.
     terminals: SCREEN_ONLY,
     openTerminal: SCREEN_ONLY,

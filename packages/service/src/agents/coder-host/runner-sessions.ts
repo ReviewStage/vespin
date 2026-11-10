@@ -123,7 +123,11 @@ import {
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import { readAgentRepositories } from "@repo/database/models/agent-repositories";
-import { recordSandboxTouch } from "@repo/database/models/agent-sandbox-store";
+import {
+  recordSandboxHeldOff,
+  recordSandboxTouch,
+  sandboxHeldOff,
+} from "@repo/database/models/agent-sandbox-store";
 import {
   type Agent,
   hasRepository,
@@ -253,6 +257,7 @@ import {
   type NativeSessions,
   RUNNER_CHECKOUT,
   RUNNER_CHOICE,
+  SANDBOX_HAND_STOP,
   TURN_HANDOVER,
   type TurnHandover,
 } from "./runtime-sessions.js";
@@ -2207,13 +2212,16 @@ export const runnerSessions = <
      * warm window again from now, and where none runs, the runner is launched
      * with no message (`launchedWithoutMessage`), warm from its start, for the
      * next message to go into its running session as a line. A turn that runs
-     * has a runner of its own, whose IDLE arms a window of its own.
+     * has a runner of its own, whose IDLE arms a window of its own. A
+     * sandbox a member stopped by hand is held off, and left as it stands
+     * (`stopHolding`).
      */
     const warmHolding = (sessionId: string, agent: Agent) =>
       Effect.gen(function* () {
         const { conversationId } = agent;
         const turn = (yield* latestTurnsOfReached([conversationId])).get(conversationId);
         if (turn?.status === TURN_STATUS.RUNNING) return;
+        if (yield* sandboxHeldOff(conversationId)) return;
         const found = yield* machine.findPlace(userId, sessionId);
         if (Option.isNone(found) || found.value.agentId !== agent.id) return;
         // An agent on screen is its sandbox in use: a running one is touched, a stopped one resumed by the launch below.
@@ -2229,6 +2237,33 @@ export const runnerSessions = <
         // the agent's steps replayed, so none is launched warm with no line to hand them.
         if ((yield* resumedSessionOf(agent, yield* machine.layout(agent), false)).replay) return;
         yield* launchedWithoutMessage(sessionId, agent);
+      });
+
+    /**
+     * The session's sandbox stopped by a member, under the agent's runner
+     * lease, where none of its turns runs or waits: its runner ended as a
+     * halt ends it (`haltHolding`), the sandbox stopped where it still runs,
+     * its disk kept, and its record held off, so the warm call the agent on
+     * screen sends each minute resumes nothing. Note that the hold is written
+     * last, under the lease a warm call takes too, so a warm call never reads
+     * it before the stop it stands for; the next message's boot lets it go.
+     */
+    const stopHolding = (sessionId: string, agent: Agent) =>
+      Effect.gen(function* () {
+        const { conversationId } = agent;
+        const turn = (yield* latestTurnsOfReached([conversationId])).get(conversationId);
+        if (turn !== undefined && RUNNING_TURN_STATUSES.has(turn.status)) {
+          return SANDBOX_HAND_STOP.IN_USE;
+        }
+        yield* haltHolding(sessionId, conversationId);
+        const found = yield* machine.findPlace(userId, sessionId);
+        const running =
+          Option.isSome(found) && found.value.agentId === agent.id
+            ? found.value.running
+            : undefined;
+        if (running !== undefined) yield* machine.stop(running);
+        yield* recordSandboxHeldOff(conversationId, sessionId);
+        return SANDBOX_HAND_STOP.STOPPED;
       });
 
     /**
@@ -2613,6 +2648,15 @@ export const runnerSessions = <
               `A ${harness.name} warm call failed: ${keptFailureWords(failureWords(failure))}`,
             ),
           ),
+          Effect.annotateLogs(agentLogIds({ conversationId }, sessionId)),
+          Effect.provideContext(context),
+        ),
+
+      stopSandbox: (sessionId, conversationId) =>
+        Effect.gen(function* () {
+          const agent = yield* agentOf(conversationId);
+          return yield* holdingRunner(agent.id, stopHolding(sessionId, agent));
+        }).pipe(
           Effect.annotateLogs(agentLogIds({ conversationId }, sessionId)),
           Effect.provideContext(context),
         ),

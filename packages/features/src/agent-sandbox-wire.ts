@@ -64,3 +64,12 @@ export const agentSandboxSchema = EffectSchema.Struct({
 });
 
 export type AgentSandbox = typeof agentSandboxSchema.Type;
+
+/**
+ * A cloud agent's sandbox stopped by a member, answered once it is: its
+ * disk kept, and held off, so the warm call an agent on screen sends leaves
+ * it stopped until the agent's next message or a Wake now.
+ */
+export const agentSandboxStopAnswerSchema = EffectSchema.Struct({
+  stopped: EffectSchema.Literal(true),
+});

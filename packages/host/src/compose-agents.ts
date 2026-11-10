@@ -251,6 +251,7 @@ export type AgentClient = Pick<
   | "stop"
   | "rewind"
   | "warm"
+  | "stopSandbox"
   | "delete"
   | "agent"
   | "pullRequest"
@@ -1224,7 +1225,8 @@ function composed(
       asked(client.addRepository(agentId, { addRepository })),
     AGENTS_STOP: ({ agentId }) => asked(client.stop(agentId)),
     AGENTS_REWIND: ({ agentId, messageId }) => asked(client.rewind(agentId, messageId)),
-    AGENTS_WARM: ({ agentId }) => asked(client.warm(agentId)),
+    AGENTS_WARM: ({ agentId, wake }) => asked(client.warm(agentId, wake === true)),
+    AGENTS_SANDBOX_STOP: ({ agentId }) => asked(client.stopSandbox(agentId)),
     // Note that an agent's ports and its link are asked of the service on each act and held nowhere here, because the plug reads them again while its menu stands open.
     AGENTS_PORTS: ({ agentId }) => asked(dependencies.ports.list(agentId)),
     AGENTS_PORT_SHARED: ({ agentId }) => asked(dependencies.ports.shared(agentId)),

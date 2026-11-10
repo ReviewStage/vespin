@@ -100,6 +100,16 @@ export const TURN_HANDOVER = {
 
 export type TurnHandover = (typeof TURN_HANDOVER)[keyof typeof TURN_HANDOVER];
 
+/** What a member's stop of a native agent's sandbox came to (`runner-sessions.ts`'s `stopSandbox`). */
+export const SANDBOX_HAND_STOP = {
+  /** The runner ended, the sandbox stopped where it ran, and its record held off. */
+  STOPPED: "stopped",
+  /** A turn of the agent's runs or waits, so nothing was stopped. */
+  IN_USE: "in_use",
+} as const;
+
+export type SandboxHandStop = (typeof SANDBOX_HAND_STOP)[keyof typeof SANDBOX_HAND_STOP];
+
 /** A native harness's sessions: the `AgentSessions` interface, the agent's model and effort as they stand handed to a running runner, and its repositories as they stand checked out in the place it runs in. */
 export interface NativeSessions<Turn extends SessionTurn = SessionTurn>
   extends AgentSessions<Turn> {
@@ -120,6 +130,17 @@ export interface NativeSessions<Turn extends SessionTurn = SessionTurn>
   ) => Effect.Effect<TurnHandover, { readonly _tag: string }>;
   /** The session's runner launched with no message past the answer, where none runs, for an agent on screen (`runner-sessions.ts`'s `warm`); it answers at once and fails nothing. */
   readonly warm: (sessionId: string, conversationId: string) => Effect.Effect<void>;
+  /**
+   * The session's sandbox stopped by a member, under the agent's runner
+   * lease, where none of its turns runs or waits: its runner ended, the
+   * sandbox stopped with its disk kept, and its record held off, so a warm
+   * call resumes nothing (`runner-sessions.ts`'s `stopSandbox`). Fails where
+   * the store or the machine could not be asked.
+   */
+  readonly stopSandbox: (
+    sessionId: string,
+    conversationId: string,
+  ) => Effect.Effect<SandboxHandStop, { readonly _tag: string }>;
   /**
    * The message handed to a runner launched afresh, any runner up ended
    * first, so a turn its plan's limit cut short goes on with its own line on
@@ -429,6 +450,48 @@ export const runnerWarmed = (agent: {
     Effect.catch((failure) =>
       Effect.logWarning(`a native agent was not kept warm: ${failureKind(failure)}`),
     ),
+    Effect.annotateLogs(agentLogIds(agent)),
+  );
+
+/**
+ * A cloud agent's idle sandbox stopped by a member, acting for the agent's
+ * starter as every native call does (`runner-sessions.ts`'s `stopSandbox`):
+ * refused as in use where a turn runs or waits, and as not reached where
+ * this function holds no harness for it or its session never claimed its
+ * record; a failure of the store or the machine is logged and answered as
+ * the sandbox's upstream failing. The caller has refused a Mac's agent and
+ * an archived one already.
+ */
+export const runnerSandboxStopped = (agent: {
+  readonly id: string;
+  readonly userId: string;
+  readonly conversationId: string;
+}): Effect.Effect<void, HostedRefusal, DatabaseServices> =>
+  Effect.gen(function* () {
+    const routing = yield* readAgentRouting(agent.userId, agent.id);
+    const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
+    if (runtime === undefined) return HOSTED_REFUSAL.NATIVE_AGENT_NOT_HERE;
+    const native = yield* Effect.serviceOption(NativeAgentSessions);
+    const reached = Option.flatMap(native, (service) => service.sessions(runtime, agent.userId));
+    if (Option.isNone(reached)) return HOSTED_REFUSAL.NATIVE_AGENT_NOT_HERE;
+    const sessionId = yield* recordedRuntimeSession({
+      userId: agent.userId,
+      conversationId: agent.conversationId,
+    });
+    // A session that never claimed its record never opened a sandbox to stop.
+    if (sessionId === undefined || nativeRuntimeOfSession(sessionId) === undefined) {
+      return HOSTED_REFUSAL.NOT_FOUND;
+    }
+    const stopped = yield* (yield* reached.value).stopSandbox(sessionId, agent.conversationId);
+    return stopped === SANDBOX_HAND_STOP.IN_USE ? HOSTED_REFUSAL.SANDBOX_IN_USE : undefined;
+  }).pipe(
+    Effect.catch((failure) =>
+      Effect.as(
+        Effect.logWarning(`a native agent's sandbox was not stopped: ${failureKind(failure)}`),
+        HOSTED_REFUSAL.UPSTREAM_ERROR,
+      ),
+    ),
+    Effect.flatMap((refusal) => (refusal === undefined ? Effect.void : Effect.fail(refusal))),
     Effect.annotateLogs(agentLogIds(agent)),
   );
 

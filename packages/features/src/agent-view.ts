@@ -602,6 +602,34 @@ export type AgentDeleteAnswerView = typeof agentDeleteAnswerViewSchema.Type;
 /** An agent on screen kept warm, as the window hears it: that the service took the call, or why not. */
 export const agentWarmAnswerViewSchema = answerView(agentsContract.warm);
 
+/** An agent kept warm, as the window names it: the agent, and whether a Wake now lets go a member's hold on its stopped sandbox first. */
+export const agentWarmParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  wake: EffectSchema.optionalKey(EffectSchema.Boolean),
+});
+
+/** How a member's stop of an agent's sandbox reads its refusals: a harness not reached from here and an agent ended for good are no answer; the agent gone, one only its starter drives, one a turn uses, and the sandbox not answering each its own. */
+export const AGENT_SANDBOX_STOP_RENAMES = {
+  [HOSTED_API_ERROR.NATIVE_AGENT_NOT_HERE]: READ_AS_UNANSWERED,
+  [HOSTED_API_ERROR.AGENT_RETIRED]: READ_AS_UNANSWERED,
+} as const;
+
+/** Why a member's stop of an agent's sandbox did not stop it, as the window reads it. */
+export const AGENT_SANDBOX_STOP_FAILURE = failureSetOf(
+  { sandboxStop: agentsContract.sandboxStop },
+  { as: AGENT_SANDBOX_STOP_RENAMES },
+);
+
+export type AgentSandboxStopFailure =
+  (typeof AGENT_SANDBOX_STOP_FAILURE)[keyof typeof AGENT_SANDBOX_STOP_FAILURE];
+
+/** An agent's sandbox stopped by a member, as the window hears it: that it stopped, or why not. */
+export const agentSandboxStopAnswerViewSchema = answerView(agentsContract.sandboxStop, {
+  as: AGENT_SANDBOX_STOP_RENAMES,
+});
+
+export type AgentSandboxStopAnswerView = typeof agentSandboxStopAnswerViewSchema.Type;
+
 export type AgentWarmAnswerView = typeof agentWarmAnswerViewSchema.Type;
 
 /** One agent's transcript past a cursor, as the window asks it: the agent, and where the window stands; or, naming the delegation call that started one, a worker's transcript under the agent. */

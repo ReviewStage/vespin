@@ -265,6 +265,7 @@ const standing = (
 const agentOf = (agentId: string) => `/api/agents/${agentId}`;
 const terminalsOf = (agentId: string) => `/api/agents/${agentId}/terminals`;
 const resumeOf = (agentId: string) => `/api/agents/${agentId}/sandbox/resume`;
+const stopOf = (agentId: string) => `/api/agents/${agentId}/sandbox/stop`;
 const portsOf = (agentId: string) => `/api/agents/${agentId}/ports`;
 const terminalOf = (agentId: string, terminalId: string) => `${terminalsOf(agentId)}/${terminalId}`;
 
@@ -331,7 +332,7 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
   );
 
   it.effect(
-    "an agent on its starter's own GitHub token gives its shells to its starter alone: a teammate who sees it is refused, and one who does not reads it as none",
+    "an agent on its starter's own GitHub token gives its shells and its sandbox's stop to its starter alone: a teammate who sees it is refused, and one who does not reads it as none",
     () =>
       Effect.gen(function* () {
         const { userId, reader, tokenless, agent } = yield* openTokenAgent;
@@ -362,7 +363,15 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
           refused,
         );
         assert.deepEqual(yield* call(portsOf(agent.id), "Bearer reader"), refused);
+        assert.deepEqual(
+          yield* call(stopOf(agent.id), "Bearer reader", { method: "POST" }),
+          refused,
+        );
         assert.equal((yield* call(terminalsOf(agent.id), "Bearer tokenless")).status, 404);
+        assert.equal(
+          (yield* call(stopOf(agent.id), "Bearer tokenless", { method: "POST" })).status,
+          404,
+        );
         assert.equal((yield* call(portsOf(agent.id), "Bearer tokenless")).status, 404);
         assert.equal(sandbox.asked.length, asked, "no refused call reaches the sandbox");
       }),

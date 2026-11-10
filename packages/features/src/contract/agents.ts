@@ -22,6 +22,7 @@
 import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
+import { agentSandboxStopAnswerSchema } from "../agent-sandbox-wire.js";
 import {
   AGENT_LIST_QUERY,
   AGENT_WORKSPACE_QUERY,
@@ -77,6 +78,21 @@ const SANDBOX_REFUSALS = [
 
 /** A route in an agent's sandbox, refusing as every one does. */
 const sandboxProcedure = declaredProcedure.errors(refuses(...SANDBOX_REFUSALS));
+
+/**
+ * What a sandbox stopped by hand refuses: an agent not found, not the
+ * caller's to drive (`agent-reach.ts`'s `controlsAgent`), archived, or on a
+ * harness this function cannot reach; one a turn runs or waits in; and a
+ * sandbox Vercel did not answer for.
+ */
+const SANDBOX_STOP_REFUSALS = [
+  HOSTED_API_ERROR.NOT_FOUND,
+  HOSTED_API_ERROR.NOT_PERMITTED,
+  HOSTED_API_ERROR.AGENT_RETIRED,
+  HOSTED_API_ERROR.NATIVE_AGENT_NOT_HERE,
+  HOSTED_API_ERROR.SANDBOX_IN_USE,
+  HOSTED_API_ERROR.UPSTREAM_ERROR,
+] as const;
 
 /** A route that acts on a shell, refusing too as a sandbox not yet opened or stopped. */
 const shellProcedure = sandboxProcedure.errors(
@@ -286,11 +302,16 @@ export const agentsContract = {
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/stop` }))
     .input(idParams)
     .output(EffectSchema.flip(agentAnswerSchema)),
-  /** One agent on screen, kept warm for the next message while it stays there (`agentWarmAnswerSchema`). */
+  /** One agent on screen, kept warm for the next message while it stays there (`agentWarmAnswerSchema`); `wake` lets go a member's hold on its stopped sandbox first, as Wake now does. */
   warm: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/warm` }))
-    .input(idParams)
+    .input(
+      EffectSchema.Struct({
+        id: EffectSchema.String,
+        wake: EffectSchema.optionalKey(EffectSchema.Boolean),
+      }),
+    )
     .output(EffectSchema.flip(agentWarmAnswerSchema)),
   /** One agent taken back to just before one of the developer's lines, stopped first where it still works. */
   rewind: declaredProcedure
@@ -333,6 +354,12 @@ export const agentsContract = {
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/sandbox/resume` }))
     .input(idParams)
     .output(EffectSchema.flip(sandboxResumedAnswerSchema)),
+  /** One agent's idle sandbox stopped by a member and held off until its next message or a Wake now. */
+  sandboxStop: declaredProcedure
+    .errors(refuses(...SANDBOX_STOP_REFUSALS))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/sandbox/stop` }))
+    .input(idParams)
+    .output(EffectSchema.flip(agentSandboxStopAnswerSchema)),
   /** One agent's shells and where its sandbox stands. */
   terminals: sandboxProcedure
     .meta(openapi({ method: HTTP_METHOD.GET, path: TERMINALS_PATH }))

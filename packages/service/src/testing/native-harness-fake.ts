@@ -21,6 +21,7 @@ import {
   RUNNER_CHECKOUT,
   RUNNER_CHOICE,
   type RunnerCheckout,
+  SANDBOX_HAND_STOP,
   TURN_HANDOVER,
 } from "../agents/coder-host/runtime-sessions.js";
 import {
@@ -51,6 +52,7 @@ export function scriptedHarness(
           halt: () => Effect.succeed(true),
           deliverTurn: () => Effect.succeed(TURN_HANDOVER.HANDED),
           warm: () => Effect.void,
+          stopSandbox: () => Effect.succeed(SANDBOX_HAND_STOP.STOPPED),
         }),
       ),
   };

@@ -577,6 +577,7 @@ function fakeService() {
         return { agent: AGENT };
       }),
     warm: () => Effect.succeed({ warm: true as const }),
+    stopSandbox: () => Effect.succeed({ stopped: true as const }),
     delete: (agentId) =>
       Effect.map(changeGate, () => {
         asked.push(`delete:${agentId}`);

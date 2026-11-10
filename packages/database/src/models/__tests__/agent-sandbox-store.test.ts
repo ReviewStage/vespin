@@ -11,10 +11,13 @@ import { getTestDB, startTask } from "../../testing/index.js";
 import {
   readAgentSandbox,
   recordSandboxBooting,
+  recordSandboxHeldOff,
   recordSandboxOff,
   recordSandboxRunning,
   recordSandboxStep,
   recordSandboxTouch,
+  releaseSandboxHold,
+  sandboxHeldOff,
 } from "../agent-sandbox-store.js";
 import { createAgent } from "../agent-store.js";
 
@@ -23,7 +26,8 @@ import { createAgent } from "../agent-store.js";
  * the order they began, kept once it runs and reset by the next boot; a
  * touch that moves the stop by less than the least step writes nothing;
  * and a discard of a session the conversation moved off leaves the newer
- * session's record. Synthetic accounts throughout; each case reads every
+ * session's record; a member's stop holds it off until a boot or a Wake now
+ * lets go. Synthetic accounts throughout; each case reads every
  * instant as milliseconds from its own start, since the cases share a clock.
  */
 
@@ -123,5 +127,24 @@ it.layer(getTestDB())("a cloud agent's sandbox record", (it) => {
         assert.equal(off?.stateAt.getTime(), start + 5_000);
         assert.equal(off?.runsUntil, null);
       }),
+  );
+
+  it.effect("a member's stop holds the sandbox off until the next boot or a Wake now", () =>
+    Effect.gen(function* () {
+      const conversationId = yield* openConversation;
+      yield* recordSandboxRunning(conversationId, "session-1", IDLE);
+      yield* recordSandboxHeldOff(conversationId, "session-1");
+      const held = yield* readAgentSandbox(conversationId);
+      assert.equal(held?.state, SANDBOX_STATE.OFF);
+      assert.equal(held?.runsUntil, null);
+      assert.equal(yield* sandboxHeldOff(conversationId), true);
+
+      yield* recordSandboxBooting(conversationId, "session-1", SANDBOX_STEP.RESUMING);
+      assert.equal(yield* sandboxHeldOff(conversationId), false);
+
+      yield* recordSandboxHeldOff(conversationId, "session-1");
+      yield* releaseSandboxHold(conversationId);
+      assert.equal(yield* sandboxHeldOff(conversationId), false);
+    }),
   );
 });

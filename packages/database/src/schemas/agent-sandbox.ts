@@ -1,5 +1,5 @@
 import type { SandboxBootStep, SandboxState } from "@repo/features/agent-sandbox-wire";
-import { index, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { timestamptz } from "./_helpers.js";
 import { conversations } from "./storage.js";
 
@@ -15,7 +15,9 @@ import { conversations } from "./storage.js";
  * row goes with its conversation. Vercel stops an untouched sandbox by
  * itself, which no service code sees, so `runs_until` is when the sandbox
  * stops unless touched again, and a reader reads the row against its own
- * clock rather than taking `state` as it stands.
+ * clock rather than taking `state` as it stands. A sandbox a member stopped
+ * by hand is held off (`held_off`), so the warm call an agent on screen
+ * sends leaves it stopped until the agent's next boot or a Wake now.
  */
 export const agentSandbox = pgTable(
   "agent_sandbox",
@@ -34,6 +36,8 @@ export const agentSandbox = pgTable(
     stateAt: timestamptz("state_at").notNull(),
     /** While running, when the sandbox stops unless touched again; null otherwise. */
     runsUntil: timestamptz("runs_until"),
+    /** Whether a member stopped the sandbox by hand, so a warm call resumes nothing; cleared as the next boot begins and on a Wake now. */
+    heldOff: boolean("held_off").notNull().default(false),
   },
   // A discard names the sandbox by its session.
   (table) => [index("agent_sandbox_session").on(table.session)],

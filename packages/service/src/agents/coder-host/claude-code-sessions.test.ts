@@ -24,6 +24,7 @@ import {
   readAgentRunnerRecord,
   writeAgentRunnerRecord,
 } from "@repo/database/models/agent-runner-record";
+import { releaseSandboxHold, sandboxHeldOff } from "@repo/database/models/agent-sandbox-store";
 import {
   type Agent,
   createAgent,
@@ -155,7 +156,7 @@ import { CODER } from "./bounds.js";
 import { claudeCodeSessions } from "./claude-code-sessions.js";
 import { reconcileAgent } from "./reconcile.js";
 import { RUNNER_ENDED, type RunnerSessionsOptions, runnerEnded } from "./runner-sessions.js";
-import { RUNNER_CHOICE, TURN_HANDOVER } from "./runtime-sessions.js";
+import { RUNNER_CHOICE, SANDBOX_HAND_STOP, TURN_HANDOVER } from "./runtime-sessions.js";
 import { agentFailureOf } from "./status.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 import { TURN_DELIVERY } from "./turn-delivery-bounds.js";
@@ -2422,6 +2423,52 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           read.map((line) => developerContent(JSON.parse(line.text) as InputLine)),
           [[{ type: "text", text: "Now the emails." }]],
         );
+      }),
+  );
+
+  it.effect(
+    "a member's stop of an idle agent's sandbox stops it and holds it off, a warm call leaves it stopped, and a Wake now's release lets the next warm call resume it",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sequence = { next: 0 };
+        const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        yield* recordHeldSession(userId, agent);
+        yield* runnerTook(agent.id);
+        const first = api.commands[0];
+        assert.ok(first !== undefined);
+        first.exitCode = 0;
+        sequence.next = 9;
+
+        yield* TestClock.adjust(Duration.millis(1));
+        yield* (yield* Database).insert(turns).values({
+          userId,
+          conversationId: agent.conversationId,
+          origin: TURN_ORIGIN.TYPED,
+          status: TURN_STATUS.SETTLED,
+          queuedAt: new Date(yield* Clock.currentTimeMillis),
+          settledAt: new Date(yield* Clock.currentTimeMillis),
+        });
+        const stopped = yield* sessions.stopSandbox(opened.sessionId, agent.conversationId);
+
+        assert.equal(stopped, SANDBOX_HAND_STOP.STOPPED);
+        assert.equal(api.sandboxes[0]?.status, "stopped");
+        assert.equal(yield* sandboxHeldOff(agent.conversationId), true);
+        yield* sessions.warm(opened.sessionId, agent.conversationId);
+        assert.equal(api.sandboxes[0]?.status, "stopped", "the warm call resumed nothing");
+        assert.equal(api.commands.length, 1, "the warm call launched nothing");
+
+        yield* releaseSandboxHold(agent.conversationId);
+        yield* sessions.warm(opened.sessionId, agent.conversationId);
+        assert.equal(api.sandboxes[0]?.status, "running");
+        assert.equal(api.commands.length, 2);
       }),
   );
 

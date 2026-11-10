@@ -1,6 +1,7 @@
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
   AGENT_MACHINE,
+  AGENT_STATUS,
   type AgentSummary,
   DEVICE_STANDING,
   type DeviceStanding,
@@ -129,11 +130,14 @@ function runOnMacStands(read: RunOnMacRead): string {
 function CloudChip({
   agentId,
   sandbox,
+  atWork,
   readerId,
   narrow,
 }: {
   agentId: string;
   sandbox: AgentSummary["sandbox"];
+  /** Whether a turn of the agent's runs or is starting, which hides the card's Stop now. */
+  atWork: boolean;
   readerId: string | undefined;
   narrow: boolean;
 }): React.JSX.Element {
@@ -160,7 +164,7 @@ function CloudChip({
       }
       more={
         <>
-          <SandboxStatus agentId={agentId} sandbox={sandbox} />
+          <SandboxStatus agentId={agentId} sandbox={sandbox} atWork={atWork} />
           {owner === undefined ? null : (
             <>
               <HoverCardRule />
@@ -205,7 +209,7 @@ export function AgentPlace({
   readerId,
   narrow = false,
 }: {
-  agent: Pick<AgentSummary, "id" | "mac" | "machine" | "sandbox">;
+  agent: Pick<AgentSummary, "id" | "mac" | "machine" | "sandbox" | "status">;
   /** The reader's account, whose own Mac the card calls "Your Mac". */
   readerId: string | undefined;
   /** Whether the box is too narrow for the chip's words, so it draws its glyph alone. */
@@ -213,7 +217,13 @@ export function AgentPlace({
 }): React.JSX.Element | null {
   if (agent.machine !== AGENT_MACHINE.DEVICE) {
     return (
-      <CloudChip agentId={agent.id} sandbox={agent.sandbox} readerId={readerId} narrow={narrow} />
+      <CloudChip
+        agentId={agent.id}
+        sandbox={agent.sandbox}
+        atWork={agent.status === AGENT_STATUS.STARTING || agent.status === AGENT_STATUS.RUNNING}
+        readerId={readerId}
+        narrow={narrow}
+      />
     );
   }
   if (agent.mac === undefined) return null;
