@@ -45,8 +45,10 @@ import {
  * rollout needs no reading of its own: each pull request's child task
  * finishes once its worker's pull request merged and the worker is idle,
  * and the parent, whose orchestrator opens none, is marked done by that
- * orchestrator once the last child task is. The agents' standing is read as the sidebar
- * reads it (`stop.ts`'s `standsStopped`): a line awaiting its turn reads as
+ * orchestrator once the last child task is; a parent made for itself (below)
+ * reads done while its orchestrator stands idle between reports, and in
+ * progress again as the next report wakes it. The agents' standing is read
+ * as the sidebar reads it (`stop.ts`'s `standsStopped`): a line awaiting its turn reads as
  * running, an agent started blank with no turn as idle.
  *
  * A task an automation's run or a Slack message made for itself, or

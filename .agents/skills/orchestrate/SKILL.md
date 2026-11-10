@@ -212,7 +212,7 @@ and each message arrives as a new turn; a worker's
 - **Worker ended**: a line from Vespin, not the worker, naming a
   worker of yours whose turn failed, or that someone else stopped or
   archived. No report will come from it on its own, so act now unless its PR
-  already merged: read it with `read_agent`, then continue a failed worker
+  already merged or was cut: read it with `read_agent`, then continue a failed worker
   as the table's "Continue a dead or stalled worker" row says. For one the
   user stopped or archived, ask the user whether to go on before you
   continue it. Each ending is told once, so do not wait for a second line.
@@ -312,5 +312,5 @@ unless another coding agent started you on it.
 - Do not archive a worker while its PR is unmerged, unless a continuation
   has taken the PR over or the PR was closed because it was cut.
 - Stop a worker only when it goes the wrong way, is stuck, will not hold
-  for a restack, or its PR is cut. Continue a dead or stopped worker; never start a fresh one
-  to replace it.
+  for a restack, or its PR is cut. Continue a dead or stopped worker unless
+  its PR was cut; never start a fresh one to replace it.
