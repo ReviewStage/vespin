@@ -36,8 +36,11 @@ import { SlackNotificationsRow } from "./slack-notifications-row.js";
  * has our Slack bot connected (`slack-notifications-row.tsx`).
  */
 
-/** What Play is called, for a reader and its hover. */
-const PLAY = "Play the sound";
+/** What each sound's Play is called, for a reader and its hover, so the two are told apart. */
+const PLAY = {
+  [APP_SETTING_SCHEMA.completionSound.field]: "Play the sound for a finish",
+  [APP_SETTING_SCHEMA.askSound.field]: "Play the sound for something that needs you",
+} as const;
 
 /** What the line says where the system will not show the app's notifications: macOS, by whether this is the packaged app, or the browser. */
 const NOTIFICATIONS_OFF_WORDS = {
@@ -65,10 +68,10 @@ export function SoundsSection({
   const actions = (field: AppSettingField) =>
     field === APP_SETTING_SCHEMA.completionSound.field ||
     field === APP_SETTING_SCHEMA.askSound.field ? (
-      <Tooltip label={PLAY}>
+      <Tooltip label={PLAY[field]}>
         <IconButton
           icon={<PlayIcon />}
-          label={PLAY}
+          label={PLAY[field]}
           onClick={() => playCompletionSound(chosen[field])}
         />
       </Tooltip>
