@@ -277,8 +277,7 @@ export const DesktopInbox = memo(function DesktopInbox({
         const taskId =
           (chosen?.item.id === item.id ? chosen.holder.task.id : undefined) ??
           standing.find(({ items }) => items.some((each) => each.id === item.id))?.holder.task.id ??
-          tasks.liveAgents?.find((agent) => agent.id === item.agentId)?.planId ??
-          undefined;
+          tasks.liveAgents?.find((agent) => agent.id === item.agentId)?.planId;
         inbox.choose(
           taskId === undefined
             ? { itemId, opened: true }

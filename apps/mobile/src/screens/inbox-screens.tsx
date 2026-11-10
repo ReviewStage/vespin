@@ -1,5 +1,6 @@
 // inbox-screens.tsx -- the Inbox's list and its thread: the Stack's two screens in a compact window, one split view in a regular one.
 
+import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
   ANSWER_TONE,
@@ -73,6 +74,7 @@ import { useThreadAnswer } from "../inbox/use-thread-answer.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { SettingsBarButton, useSettingsAccount } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
+import { useSurfaceOpen } from "../surface-open.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { OpenAskCard, ThreadComposer, threadMenu } from "./inbox-ask.js";
@@ -519,6 +521,7 @@ function InboxSplitScreen({
 }) {
   const { show, search, setSearch, listing, acts, scopes, menu } = useInboxScreen(selected);
   const account = useSettingsAccount();
+  useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -566,6 +569,7 @@ function InboxSplitScreen({
 export function InboxListScreen() {
   const sizeClass = useWindowSizeClass();
   const { selected, select } = useSplitSelection(SPLIT_TAB.INBOX);
+  useSurfaceOpen(PRODUCT_SURFACE.INBOX);
   return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
     <InboxSplitScreen selected={selected} select={select} />
   ) : (
@@ -577,7 +581,9 @@ export function InboxListScreen() {
 export function InboxThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { listed, readerId, feed } = useInboxThread(id);
-  if (useHandToSplit(SPLIT_TAB.INBOX, id)) return null;
+  const handed = useHandToSplit(SPLIT_TAB.INBOX, id);
+  useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.THREAD, id);
+  if (handed) return null;
   return (
     <>
       <Stack.Screen

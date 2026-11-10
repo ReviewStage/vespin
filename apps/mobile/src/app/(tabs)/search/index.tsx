@@ -4,6 +4,8 @@ import { EmptyState, Screen } from "@repo/ui-native";
 import { Stack } from "expo-router";
 import { SettingsBarButton } from "../../../settings-button.js";
 
+export { ScreenBoundary as ErrorBoundary } from "../../../screen-boundary.js";
+
 export default function SearchScreen() {
   return (
     <>

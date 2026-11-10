@@ -6,10 +6,10 @@
  * stands at is the same one the sandbox's process crosses. Closing the scope
  * the process was spawned in ends it, its process group with it. A request
  * Codex makes of the client is answered by the listener where it serves it
- * (a sandbox's refresh of the plan's token, `codex.ts`), in a fiber of its
- * own so the reader goes on meanwhile, and refused at once otherwise (an
- * approval, never expected under `approval_policy = "never"`), so a turn
- * cannot hang on it.
+ * (a sandbox's refresh of the plan's token, or an approval the member
+ * answers, `codex.ts`), in a fiber of its own so the reader goes on
+ * meanwhile, however long its answer takes, and refused at once otherwise,
+ * so a turn cannot hang on it.
  */
 
 import {
@@ -108,12 +108,19 @@ export class AppServerRequestFailed extends Data.TaggedError("AppServerRequestFa
   readonly detail: string;
 }> {}
 
+/** A request app-server made of the client: its JSON-RPC id, which its `serverRequest/resolved` names, its method, and its params as it wrote them. */
+export interface AppServerRequest {
+  readonly id: number | string;
+  readonly method: string;
+  readonly params: Schema.Json | undefined;
+}
+
 /** What the launch hears from app-server: each notification, as Codex wrote it, each request it made, and its end. */
 export interface AppServerListener {
   readonly onNotification: (notification: CodexNotification) => Effect.Effect<void>;
   /** The answer to a request app-server made, where the launch serves its method; none where it does not. */
   readonly onRequest?: (
-    method: string,
+    request: AppServerRequest,
   ) => Effect.Effect<Schema.Json, AppServerRequestFailed> | undefined;
   /** The process's stdout ended: it exited, with the tail of what it wrote to stderr. */
   readonly onExit: (stderrTail: string) => Effect.Effect<void>;
@@ -137,6 +144,7 @@ type Outgoing =
 const IncomingSchema = Schema.Struct({
   id: Schema.optionalKey(Schema.Union([Schema.Number, Schema.String])),
   method: Schema.optionalKey(Schema.String),
+  params: Schema.optionalKey(Schema.Json),
   result: Schema.optionalKey(Schema.Json),
   error: Schema.optionalKey(
     Schema.Struct({
@@ -199,9 +207,9 @@ export const spawnAppServer = Effect.fn("agent-runner/spawnAppServer")(function*
         "agent-runner: skipped a line app-server wrote that is not JSON-RPC",
       );
     }
-    const { id, method, result, error } = incoming.value;
+    const { id, method, params, result, error } = incoming.value;
     if (method !== undefined && id !== undefined) {
-      const served = listener.onRequest?.(method);
+      const served = listener.onRequest?.({ id, method, params });
       if (served === undefined) {
         return write({
           id,

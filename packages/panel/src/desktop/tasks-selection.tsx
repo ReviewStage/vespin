@@ -347,6 +347,7 @@ export function useTasksSelection(
           restoreTo={nextRowOrHead}
         />
         {sections.dialog}
+        {standing.dialog}
       </>
     ),
   };

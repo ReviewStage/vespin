@@ -305,7 +305,7 @@ export const CREATE_AUTOMATION_TOOL = {
   description:
     "Make an automation in your workspace for the developer you work for, as the automations " +
     `page would: each time its trigger fires, ${PRODUCT_NAME} starts an agent on its prompt, in its ` +
-    "repositories or in none, on its creator's keys and connections, with no task and no one watching, or " +
+    "repositories or in none, on its creator's keys and connections, on a task of its own with no one watching, or " +
     "hands the run to the one agent named. It is on as it is made, and runs as the developer. " +
     `One fired by Sentry needs ${PRODUCT_NAME}'s Sentry integration installed on the workspace first. ` +
     "Make one when the developer asks for it, never otherwise on your own, and read " +

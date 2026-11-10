@@ -1,6 +1,6 @@
 import { LEGACY_APP_WORD, literalsReadingLegacy } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
-import { agentMessageRequestSchema } from "./agent-wire.js";
+import { AGENT_BOUNDS, agentMessageRequestSchema } from "./agent-wire.js";
 import { pageVersionNumberSchema } from "./page-wire.js";
 import { chosenIdSchema, countedNumber, memberRefSchema, wireUuidSchema } from "./service-wire.js";
 import { TASK_BOUNDS } from "./task-wire.js";
@@ -24,7 +24,10 @@ import { filledText } from "./text-schema.js";
  * shape: pictures, PDFs, and text files. The service keeps them in the
  * shared attachment table, owned by the comment, and an entry names each by
  * its id, its name, and its type; their bytes are read apart, as a description's
- * picture's are, at `descriptionAttachmentPath`.
+ * picture's are, at `descriptionAttachmentPath`. An edit may change them too:
+ * it names the files the comment goes on carrying, by their ids, and the
+ * files it adds after them, and the comment's files together are held to the
+ * bounds of one message's.
  *
  * A thread may instead be on one of the task's pages (`page-wire.ts`): on
  * an element of the version a member was reading, which they picked in the
@@ -348,6 +351,14 @@ export const descriptionCommentActionRequestSchema = EffectSchema.Union([
     action: EffectSchema.Literal(DESCRIPTION_COMMENT_ACTION.EDIT),
     entry: wireUuidSchema,
     words: descriptionCommentWordsSchema,
+    /** The files the comment goes on carrying, by their ids, in the order it carries them; absent where it keeps every file it carries. */
+    keep: EffectSchema.optionalKey(
+      EffectSchema.Array(wireUuidSchema).check(
+        EffectSchema.isMaxLength(AGENT_BOUNDS.MAX_ATTACHMENTS),
+      ),
+    ),
+    /** The files added after those kept. */
+    attachments: descriptionCommentFilesSchema,
   }),
   EffectSchema.Struct({
     action: EffectSchema.Literal(DESCRIPTION_COMMENT_ACTION.DELETE),
@@ -383,6 +394,8 @@ export const DESCRIPTION_COMMENT_REFUSAL = {
   NO_ENTRY: "no-entry",
   /** The key the reply was sent under already wrote to another thread of the description. */
   KEY_TAKEN: "key-taken",
+  /** An edit would leave the comment carrying more files, or more bytes of them, than one message carries (`AGENT_BOUNDS`). */
+  TOO_MANY_FILES: "too-many-files",
 } as const;
 
 export type DescriptionCommentRefusal =

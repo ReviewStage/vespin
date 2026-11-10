@@ -110,6 +110,12 @@ const FLIP_WORDS = {
     off: (workspace: string) =>
       `Stops agents in ${workspace} from keeping or recalling memories, and hides Settings › Memory for everyone.`,
   },
+  [EXPERIMENT.TURN_END]: {
+    on: (workspace: string) =>
+      `Has agents in ${workspace} end each turn with a short summary, and shows over each agent's box what it needs from you, or that it's done, with follow-ups to send.`,
+    off: (workspace: string) =>
+      `Stops agents in ${workspace} from ending turns with a summary and follow-ups, and puts the Inbox row back over each agent's box.`,
+  },
 } as const satisfies Record<
   WorkspaceExperiment,
   { readonly on: (workspace: string) => string; readonly off: (workspace: string) => string }

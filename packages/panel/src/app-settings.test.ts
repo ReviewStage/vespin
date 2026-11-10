@@ -13,6 +13,7 @@ import { fakeActPort, refusedOnPort } from "./testing/app-bridge.js";
 import { fakeAppPlatform } from "./testing/app-platform.js";
 import { handState } from "./testing/app-state.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
+import { standingToastWords } from "./testing/toast.js";
 import { ToastHost } from "./toast.js";
 
 /**
@@ -79,9 +80,7 @@ async function mountRefusingInstall(sentence: string): Promise<() => SettingsPan
 
 /** What each toast standing says, oldest first. */
 function toasts(): string[] {
-  return [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-    (words) => words.textContent ?? "",
-  );
+  return standingToastWords();
 }
 
 test("a Restart main refuses raises a toast in main's own words", async () => {

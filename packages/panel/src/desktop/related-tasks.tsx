@@ -135,7 +135,8 @@ export function RelatedTasks({
   /** Opens a row's task, as the surface the list stands on opens a task. */
   onOpenTask: (taskId: string) => void;
 }): React.JSX.Element {
-  const setStanding = useStandingDoor(tasks);
+  const standing = useStandingDoor(tasks);
+  const setStanding = standing.set;
   const selection = useTasksSelection(tasks, new Set(rows.map((row) => row.task.id)));
   const workspaceName = tasks.workspace?.name ?? "";
   const rowTab = taskRowTab(tasks);
@@ -222,6 +223,7 @@ export function RelatedTasks({
         }}
       </VirtualTaskRows>
       {selection.dialog}
+      {standing.dialog}
     </div>
   );
 }

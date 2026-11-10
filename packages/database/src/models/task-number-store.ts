@@ -2,13 +2,15 @@ import { and, eq } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
+import { agentTable } from "../schemas/agent.js";
+import { organization } from "../schemas/auth.js";
 import { task, taskNumberForward } from "../schemas/task.js";
+import { workspaceIdOfSlug } from "./workspace-slug-store.js";
 import {
   isWorkspaceMember,
   taskReachableBy,
   type WorkspaceStoreEffect,
 } from "./workspace-store.js";
-import { workspaceIdOfSlug } from "./workspace-slug-store.js";
 
 /**
  * task-number-store.ts -- a task found by its number in a workspace, as a link `/<slug>/task/<number>` names it, and the numbers a task left behind as it moved.
@@ -21,7 +23,8 @@ import { workspaceIdOfSlug } from "./workspace-slug-store.js";
  * stands now, and the workspace is found by its slug, current or former
  * (`workspace-slug-store.ts`), or its id, only for a member of it, so a number another account's workspace holds, one
  * naming no task, and a slug naming no workspace of the reader's all
- * answer as nothing.
+ * answer as nothing. An agent is found the same way, by its task's number and
+ * the head of its own id, as a shared preview's host names it.
  */
 
 const TaskNumberSchema = Schema.Struct({
@@ -89,6 +92,32 @@ const findForwardedTask = SqlSchema.findOneOption({
     ),
 });
 
+/** The workspace's slug and the task's number of the agent under this id, where the account reaches its task. */
+const findAgentTaskKey = SqlSchema.findOneOption({
+  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
+  Result: Schema.Struct({ slug: Schema.String, number: Schema.Number }),
+  execute: ({ userId, agentId }) =>
+    Database.use((db) =>
+      db
+        .select({ slug: organization.slug, number: task.number })
+        .from(agentTable)
+        .innerJoin(task, eq(task.id, agentTable.taskId))
+        .innerJoin(organization, eq(organization.id, task.organizationId))
+        .where(and(eq(agentTable.id, agentId), taskReachableBy(userId)))
+        .limit(1),
+    ),
+});
+
+/** The ids of the agents on the task. */
+const findTaskAgentIds = SqlSchema.findAll({
+  Request: Schema.String,
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: (taskId) =>
+    Database.use((db) =>
+      db.select({ id: agentTable.id }).from(agentTable).where(eq(agentTable.taskId, taskId)),
+    ),
+});
+
 const insertForward = SqlSchema.void({
   Request: Schema.Struct({
     organizationId: Schema.String,
@@ -131,5 +160,40 @@ export function taskIdOfNumber(
     const held = yield* findNumberedTask(asked);
     const found = Option.isSome(held) ? held : yield* findForwardedTask(asked);
     return Option.map(found, (row) => row.id);
+  });
+}
+
+/**
+ * The workspace slug and task number that name the agent's task in a link,
+ * where the account reaches the task; nothing otherwise.
+ */
+export function taskKeyOfAgent(
+  userId: string,
+  agentId: string,
+): WorkspaceStoreEffect<Option.Option<{ readonly slug: string; readonly number: number }>> {
+  return findAgentTaskKey({ userId, agentId });
+}
+
+/**
+ * The agent on the task a workspace, by slug or id, and number name whose id
+ * starts with `idHead`, as `taskIdOfNumber` finds the task; nothing where the
+ * account does not reach the task, or where no agent on it, or more than one,
+ * has an id with that head.
+ */
+export function agentIdOfTaskNumber(
+  userId: string,
+  workspaceStep: string,
+  number: number,
+  idHead: string,
+): WorkspaceStoreEffect<Option.Option<string>> {
+  return Effect.gen(function* () {
+    const taskId = yield* taskIdOfNumber(userId, workspaceStep, number);
+    if (Option.isNone(taskId)) return Option.none();
+    const head = idHead.toLowerCase();
+    const matched = (yield* findTaskAgentIds(taskId.value)).filter((row) =>
+      row.id.toLowerCase().startsWith(head),
+    );
+    const [only] = matched;
+    return matched.length === 1 && only !== undefined ? Option.some(only.id) : Option.none();
   });
 }

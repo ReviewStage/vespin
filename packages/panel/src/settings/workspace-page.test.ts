@@ -77,11 +77,12 @@ import {
   holdRepositoryLists,
   type RepositoriesRead,
 } from "../testing/app-state.js";
-import { startQueriesAfresh, withQueryClient } from "../testing/copy-feedback.js";
+import { settleQueries, startQueriesAfresh, withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { stubCanvas, webpBytes } from "../testing/photo-canvas.js";
 import { relayout } from "../testing/resize-observer.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
+import { standingToastWords } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { WorkspacePage, type WorkspaceSettingsControl } from "./workspace-page.js";
 
@@ -811,6 +812,8 @@ async function renameTo(page: HTMLElement, typed: string, key: string): Promise<
     field.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true }));
   });
   await settle();
+  // Note that a rename's answer reaches the row on the rename's mutation, a notify tick after it lands.
+  await settleQueries();
 }
 
 test("an owner renames the workspace in place with its ends trimmed, and Escape or the same name sends nothing", async () => {
@@ -828,13 +831,17 @@ test("an owner renames the workspace in place with its ends trimmed, and Escape 
   assert.equal(document.activeElement === button(identity(page), "Rename"), true);
 });
 
-test("an admin's rename the service refuses says so under the row, and a member is offered no rename", async () => {
+test("an admin's rename the service refuses says so under the row and reopens the field over the name asked, and a member is offered no rename", async () => {
   refuseRename = true;
   const admin = await mount({ ...ACME, role: WORKSPACE_ROLE.ADMIN });
   await renameTo(admin.page, "Acme Labs", "Enter");
 
   assert.deepEqual(renames(), [{ workspaceId: ACME.id, name: "Acme Labs" }]);
   assert.equal(refusalOf(identity(admin.page)), WORKSPACE_NOT_PERMITTED_REFUSAL);
+  assert.equal(
+    admin.page.querySelector<HTMLInputElement>('input[aria-label="Workspace name"]')?.value,
+    "Acme Labs",
+  );
 
   const member = await mount(ACME);
   assert.equal(buttons(member.page, "Rename").length, 0);
@@ -1501,12 +1508,7 @@ test("a removal the account's role does not allow says so in a toast", async () 
   await chooseAction(memberNamed(page, "Sam"), "Remove from workspace");
   await confirm("Remove member");
 
-  assert.deepEqual(
-    [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-      (words) => words.textContent,
-    ),
-    [WORKSPACE_NOT_PERMITTED_REFUSAL],
-  );
+  assert.deepEqual(standingToastWords(), [WORKSPACE_NOT_PERMITTED_REFUSAL]);
 });
 
 test("a member leaves after confirming, which names what stays and what stops, and lands the window; an owner is offered no Leave", async () => {
@@ -1563,12 +1565,7 @@ test("the owner deletes a team workspace once its name is typed, told what goes 
     [{ workspaceId: ACME.id }],
   );
   assert.equal(owner.pressed.left, 1);
-  assert.deepEqual(
-    [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-      (words) => words.textContent,
-    ),
-    [`${ACME.name} was deleted`],
-  );
+  assert.deepEqual(standingToastWords(), [`${ACME.name} was deleted`]);
 
   const member = await mount(ACME);
   assert.deepEqual(buttons(leaveGroup(member.page) ?? assert.fail("no leave"), "Delete"), []);

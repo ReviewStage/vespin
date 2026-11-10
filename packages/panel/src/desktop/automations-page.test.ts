@@ -152,10 +152,13 @@ const CATALOG = [
 /** The account's default model, which a new agent runs on until another is chosen. */
 const DEFAULT_CHOICE = { model: "anthropic/claude-opus-5.5", effort: "high" };
 
+/** The task the workspace's same-agent automation agents stand on, which the window does not list. */
+const DIGEST_TASK = "2b4d6f8a-0c1e-4a3b-9d5f-7a9c1e3b5d7f";
+
 /** One agent of the workspace's on the repository, which a same-agent automation's runs may go to. */
 const CI_DIGEST = {
   id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
-  planId: null,
+  planId: DIGEST_TASK,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "CI digest",
@@ -223,7 +226,7 @@ let creates: AutomationCreateParams[] = [];
 let deletes: string[] = [];
 /** Every search of a workspace's agents, as the act carried it. */
 let agentsAsked: unknown[] = [];
-/** Every agent on no task the task list carries, as the host lays it. */
+/** Every agent of the workspace the task list carries, as the host lays it. */
 let workspaceAgents: readonly ListedAgent[] = [];
 /** The agents a search for `words` finds, as the service answers it. */
 let agentsFound: (words: string) => readonly AgentSummary[] = () => [];
@@ -2767,6 +2770,38 @@ test("a Run now the service refuses says why under the name, and a new automatio
   await settle();
   assert.ok(![...fresh.querySelectorAll("button")].some((each) => each.textContent === "Run now"));
   assert.match(fresh.textContent ?? "", /No runs yet\./u);
+});
+
+test("a Run now refused while a save is out leaves the save's check to land, and its own refusal standing", async () => {
+  heldChanges = [];
+  runRefusal = AUTOMATION_CALL_FAILURE.NOT_PERMITTED;
+  // The check's motion never finishes, so a check that landed stands to be read.
+  Object.defineProperty(HTMLElement.prototype, "getAnimations", {
+    configurable: true,
+    value(this: HTMLElement) {
+      return this.classList.contains("ui-button-done") ? [new EventTarget()] : [];
+    },
+  });
+  onTestFinished(() => {
+    Reflect.deleteProperty(HTMLElement.prototype, "getAnimations");
+  });
+  const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
+  await settle();
+  type(page.querySelector("input[aria-label='Automation name']"), "Sweep");
+  const save = button("Save");
+
+  act(() => save.click());
+  await settle();
+  act(() => button("Run now").click());
+  await settle();
+  heldChanges[0]?.();
+  await settle();
+
+  assert.ok(save.querySelector(".ui-button-done"), "Save shows its check");
+  assert.equal(
+    page.querySelector("[role='alert']")?.textContent,
+    "Only its creator, or the workspace's owners and admins, can run it.",
+  );
 });
 
 /** A run of the sweep that started the CI digest agent, which a press on its row opens. */

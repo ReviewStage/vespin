@@ -31,6 +31,7 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
+import { taskKeyOfAgent } from "@repo/database/models/task-number-store";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import type {
   ListeningPortsAnswer,
@@ -38,10 +39,14 @@ import type {
   SharedPortAnswer,
 } from "@repo/features/listening-ports-wire";
 import type { SandboxError } from "@repo/sandbox";
-import { Effect } from "effect";
-import { HOSTED_REFUSAL, type HostedRefusal } from "../http/http-effect.js";
+import { Effect, Option } from "effect";
+import {
+  HOSTED_REFUSAL,
+  type HostedRefusal,
+  hostedStoreOrUnavailable,
+} from "../http/http-effect.js";
 import { PageLinks } from "../pages/page-links.js";
-import { previewOrigin } from "../previews/preview-links.js";
+import { previewNameOf, previewOrigin } from "../previews/preview-links.js";
 import { AgentSandbox, type AgentSandboxService } from "./terminal/agent-sandbox.js";
 import { reachedAgentSession, sandboxOrUpstream } from "./terminal/sandbox-reach.js";
 
@@ -60,11 +65,14 @@ const onSandbox = <A>(call: (sandbox: AgentSandboxService) => Effect.Effect<A, S
     return yield* sandboxOrUpstream(call(yield* AgentSandbox));
   });
 
-/** The link a member is handed for the agent's shared port: its preview host where the deployment has one, the route otherwise. */
-const linkOf = (id: string, route: string) =>
+/** The link a member is handed for the agent's shared port: its preview host, named by its task, where the deployment has one, the route otherwise. */
+const linkOf = (userId: string, id: string, route: string) =>
   Effect.gen(function* () {
     const { sandbox } = yield* PageLinks;
-    return sandbox === undefined ? route : `${previewOrigin(sandbox, id)}/`;
+    if (sandbox === undefined) return route;
+    const key = yield* hostedStoreOrUnavailable(taskKeyOfAgent(userId, id));
+    if (Option.isNone(key)) return yield* Effect.fail<HostedRefusal>(HOSTED_REFUSAL.NOT_FOUND);
+    return `${previewOrigin(sandbox, previewNameOf(key.value.slug, key.value.number, id))}/`;
   });
 
 /** The ports listened on in the agent's sandbox, and whether it is running. */
@@ -87,7 +95,7 @@ export function shareAgentPort(
     if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.SANDBOX_STOPPED);
     const url = yield* onSandbox((sandbox) => sandbox.share(sessionId, port));
     if (url === undefined) return yield* Effect.fail(HOSTED_REFUSAL.SANDBOX_STOPPED);
-    return { url: yield* linkOf(id, url) };
+    return { url: yield* linkOf(userId, id, url) };
   });
 }
 
@@ -107,6 +115,6 @@ export function sharedAgentPort(userId: string, id: string): PortsEffect<SharedP
     if (sessionId === undefined) return { shared: null };
     const shared = yield* onSandbox((sandbox) => sandbox.shared(sessionId));
     if (shared === null) return { shared: null };
-    return { shared: { port: shared.port, url: yield* linkOf(id, shared.url) } };
+    return { shared: { port: shared.port, url: yield* linkOf(userId, id, shared.url) } };
   });
 }

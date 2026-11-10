@@ -41,7 +41,7 @@ import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure, unreadShown } from "../failure-report.js";
 import { githubTokenQuery, githubTokenRetryMutation } from "../live-reads.js";
-import { showToast, TOAST_HOLD } from "../toast.js";
+import { showToast } from "../toast.js";
 import { useHeldThroughExit } from "../use-held-through-exit.js";
 import { GitHubTokenDialog, TokenFacts } from "./github-dialog.js";
 
@@ -68,7 +68,6 @@ export async function signOutSayingFailure(onSignOut: () => Promise<void>): Prom
       words: SIGN_OUT_FAILED,
       replayUnmasked: true,
       tone: STATUS_TONE.DANGER,
-      hold: TOAST_HOLD.FAILED,
       failure: { surface: FAILURE_SURFACE.ACCOUNT_SIGN_OUT, cause },
     });
   }

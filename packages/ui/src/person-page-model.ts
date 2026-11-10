@@ -62,7 +62,7 @@ function agentsOf(
 ): PersonAgent[] {
   const byId = new Map(tasks.map((task) => [task.id, task]));
   return agents.flatMap((agent) => {
-    const task = agent.planId === null ? undefined : byId.get(agent.planId);
+    const task = byId.get(agent.planId);
     if (task === undefined || agent.archivedAt !== undefined) return [];
     if (agent.startedBy?.userId !== userId) return [];
     return [{ task, agent, at: agentLastMovedAt(agent) }];
@@ -111,10 +111,8 @@ export function personRef(
     if (task.assignee?.userId === userId) return task.assignee;
   }
   const listed = new Set(tasks.map((task) => task.id));
-  return agents?.find(
-    (agent) =>
-      agent.planId !== null && listed.has(agent.planId) && agent.startedBy?.userId === userId,
-  )?.startedBy;
+  return agents?.find((agent) => listed.has(agent.planId) && agent.startedBy?.userId === userId)
+    ?.startedBy;
 }
 
 /** Who started an agent on a task, by account id, among the agents the list followed live holds, the archived among them; none where it holds no such agent or no starter. */

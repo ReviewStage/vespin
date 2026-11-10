@@ -20,7 +20,7 @@ import { Option, Schema } from "effect";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sendMutation } from "../act-mutations.js";
 import { keepPictureRead, pictureNow, pictureQuery } from "../picture-query.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import type { AgentPictureDoor } from "./agent-pictures.js";
 import { putBackRefused } from "./refused-send.js";
 import type { HeldComposer } from "./use-agent-composer.js";
@@ -150,7 +150,6 @@ export function useAgentQueue(agentId: string, queue: AgentQueue | undefined): A
             ? { detail: QUEUE_LEFT_WORDS }
             : undefined),
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: {
             surface:
               next.change === QUEUE_CHANGE.DELETE

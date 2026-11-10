@@ -29,6 +29,19 @@ export const AGENT_SANDBOX_STATE = {
 
 export type AgentSandboxState = (typeof AGENT_SANDBOX_STATE)[keyof typeof AGENT_SANDBOX_STATE];
 
+/**
+ * The states a row may move to from each: a LIVE sandbox is released by a
+ * sweep or deleted by its session's discard, a RELEASING one is opened again
+ * or deleted, and a RELEASED one is opened again. Every write of `state`
+ * (`../models/agent-sandboxes.ts`) is guarded on the moves into the state it
+ * writes.
+ */
+export const AGENT_SANDBOX_TRANSITIONS = {
+  [AGENT_SANDBOX_STATE.LIVE]: [AGENT_SANDBOX_STATE.RELEASING, AGENT_SANDBOX_STATE.RELEASED],
+  [AGENT_SANDBOX_STATE.RELEASING]: [AGENT_SANDBOX_STATE.LIVE, AGENT_SANDBOX_STATE.RELEASED],
+  [AGENT_SANDBOX_STATE.RELEASED]: [AGENT_SANDBOX_STATE.LIVE],
+} as const satisfies Record<AgentSandboxState, readonly AgentSandboxState[]>;
+
 export const agentSandboxTable = pgTable(
   "agent_sandbox",
   {

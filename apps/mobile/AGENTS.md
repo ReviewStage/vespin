@@ -22,6 +22,7 @@ the macOS run below. Every command here runs from `apps/mobile`.
 | `xcrun simctl launch booted dev.vespin.ios -fixture inbox` | Launch the installed app on the host's Inbox fixture, as the Maestro flows do, so it reads no server |
 | `xcrun simctl launch booted dev.vespin.ios -authServer stub` | Launch it signed out against the stubbed account service, as `maestro/sign-in.yaml` does |
 | `xcrun simctl launch booted dev.vespin.ios -fixture inbox -agent 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5` | Launch it on the Inbox fixture, opened on its invitations agent's page, as `maestro/agent.yaml` does |
+| `xcrun simctl launch booted dev.vespin.ios -sentryTest js` | Send Sentry a test report from a live launch (`native` crashes the app instead, sent on the next launch), to check a build's reports arrive symbolicated (`src/crash-reports.ts`); `xcrun devicectl device process launch --device <iPhone> dev.vespin.ios -sentryTest js` does it on a connected iPhone |
 | `scripts/simulator-build.sh` | Generate `ios/` and build a Release app for the simulator, its bundle embedded, naming the `.app` on its last line |
 | `scripts/simulator-screenshots.sh <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
 | `xcrun simctl io booted screenshot shot.png` | One screenshot of the booted simulator by hand |
@@ -69,8 +70,9 @@ A pull request merges on the Linux checks alone, with no device check first;
 device problems show in the TestFlight builds. For screenshots, ask for a run
 on your branch: Vespin's GitHub App cannot dispatch a workflow, so it is
 started from the developer's Mac (`gh workflow run ios-simulators.yml --ref
-<branch>`). A run on all three simulators takes over two hours, so name fewer
-for a quicker look (`-f simulators="iPhone 18 Pro,iPad Pro 11-inch (M5)"`).
+<branch>`). Each simulator takes about an hour, every flow in the light
+appearance and the dark, after a 20-minute build, so name fewer for a quicker
+look (`-f simulators="iPhone 18 Pro"`).
 Then read its screenshots:
 
 ```
@@ -81,10 +83,13 @@ gh run download <run id> --name mobile-screenshots --dir /tmp/mobile-screenshots
 Each simulator's pictures, in each appearance, are under
 `/tmp/mobile-screenshots/<slug>/<light|dark>/debug/<flow>/takeScreenshot/`,
 named as the flow's `takeScreenshot` steps name them; a failed step's own
-screenshot is under `debug/<flow>/screenshots/` beside them. The notification
-flow, whose push Maestro cannot send, runs apart: the script runs
-`maestro/notification/background.yaml`, pushes `ask.apns` with
-`xcrun simctl push`, and runs `open.yaml`, its output under
+screenshot is under `debug/<flow>/screenshots/` beside them. A flow that
+failed runs once more, alone, its second run under `<light|dark>/retry/`
+laid out the same way. The notification flow, whose push Maestro cannot
+send, runs apart: the script installs the app afresh, lets it notify through
+the applesimutils Maestro installs (Maestro's own `permissions` cannot grant
+notifications), runs `maestro/notification/background.yaml`, pushes
+`ask.apns` with `xcrun simctl push`, and runs `open.yaml`, its output under
 `<light|dark>/notification/`.
 
 ## The host

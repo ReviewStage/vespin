@@ -2,6 +2,8 @@
 
 import { NewTaskScreen } from "../screens/start-screens.js";
 
+export { ScreenBoundary as ErrorBoundary } from "../screen-boundary.js";
+
 export default function StartTaskRoute() {
   return <NewTaskScreen />;
 }

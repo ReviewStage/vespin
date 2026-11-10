@@ -8,15 +8,11 @@
    the play state of a loop with no end of its own (a busy button's ring).
    `--ui-scroll-glide` is how a scroller a component moves itself gets
    there, a tab strip bringing a tab into view: a glide, or at once where
-   motion is held still. `--ui-wait-motion` is the play state of a wait
-   drawn over its own length, a toast's countdown: it says how much time is
-   left, so reduced motion keeps it running, in steps rather than a glide,
-   and only a capture run holds it. The desktop holds the same tokens still
-   on its capture stage. */
+   motion is held still. The desktop holds the same tokens still on its
+   capture stage. */
 
 :root {
   --ui-loop-motion: running;
-  --ui-wait-motion: running;
   --ui-scroll-glide: smooth;
 }
 

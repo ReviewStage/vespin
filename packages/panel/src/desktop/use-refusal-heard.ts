@@ -2,7 +2,7 @@ import type { FailureAbout, FailureSurface } from "@repo/features/shown-failure"
 import { STATUS_TONE } from "@repo/ui";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useCallback, useEffect, useRef } from "react";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 
 /**
  * use-refusal-heard.ts -- a confirmed act's refusal said in a toast where the dialog that asked no longer stands to say it.
@@ -40,7 +40,6 @@ export function useRefusalHeard(
       toast({
         words: result.reason,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface, cause: result, about },
       });
       return result;

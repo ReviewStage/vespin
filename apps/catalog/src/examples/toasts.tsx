@@ -1,11 +1,12 @@
 /**
  * toasts.tsx -- the passing notices in each tone, stacked as the window stacks
- * them: a plain one that lets clicks through, one with a second line, and
- * ones carrying an action, one of them led by a provider's mark, whose × shows under the pointer or focus, the
- * Undo one draining its countdown, paused under the pointer; then one whose
- * work is under way, turned in place into done or failed by a press, and
- * one to drag or sweep sideways away, shown again by a press; and failures
- * that offer their details to copy, alone and beside a Retry.
+ * them, each stack on a Base UI manager of its own, every toast's × showing
+ * under the pointer or focus: a plain one, one with a second line, and one
+ * carrying Undo; then ones carrying an action, one of them led by a
+ * provider's mark and one opening a page; failures that offer
+ * their details to copy, alone and beside a Retry; one whose work is under
+ * way, turned in place into done or failed by a press; and one to swipe
+ * sideways away, shown again by a press.
  */
 
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
@@ -13,111 +14,183 @@ import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   BUTTON_VARIANT,
   Button,
+  createToastManager,
   GAP,
   Inline,
+  type MarkProvider,
   STATUS_TONE,
+  type StandingToast,
+  TOAST_TYPE,
   Toast,
   ToastActions,
+  type ToastCopy,
   ToastStack,
+  type ToastStackManager,
   type ToastTone,
 } from "@repo/ui";
-import { useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 function noop(): void {}
 
-/** How long the Undo toast's countdown runs, as the window's hold for a toast with an action. */
-const ACTION_HOLD_MS = 5000;
+/** A toast as a catalog stack shows it: what the card draws, and its action, where it has one. */
+interface CatalogNotice {
+  readonly id: string;
+  readonly tone: ToastTone;
+  readonly words: string;
+  readonly detail?: string;
+  readonly mark?: MarkProvider;
+  /** Its action's label, and the page it opens, where it opens one. */
+  readonly action?: { readonly label: string; readonly href?: string };
+  readonly copy?: ToastCopy;
+}
 
-/** How long a failure toast's countdown runs, as the window's hold for a refusal. */
-const FAILED_HOLD_MS = 6000;
-
-/** A toast with an action, as an undoable change carries one. */
-function Acting({
-  tone,
-  words,
-  detail,
-  label,
-  href,
-  countdown,
+/** The toast a catalog stack draws for `toast`, its action and × closing it on `manager`. */
+function CatalogToast({
+  toast,
+  manager,
 }: {
-  tone: ToastTone;
-  words: string;
-  detail?: string;
-  label: string;
-  /** The page the action opens, drawn as a link in the action's look. */
-  href?: string;
-  countdown?: number;
-}): React.JSX.Element {
+  toast: StandingToast<CatalogNotice>;
+  manager: ToastStackManager<CatalogNotice>;
+}): ReactNode {
+  const notice = toast.data;
+  if (notice === undefined) return null;
+  const { action, copy } = notice;
+  const href = action?.href;
   return (
     <Toast
-      tone={tone}
-      words={words}
-      detail={detail}
-      countdown={countdown}
+      toast={toast}
+      tone={notice.tone}
+      mark={notice.mark}
+      words={notice.words}
+      detail={notice.detail}
       actions={
         <ToastActions
-          label={label}
-          href={href}
-          onPress={href === undefined ? noop : () => window.open(href, "_blank", "noreferrer")}
+          {...(action === undefined
+            ? {}
+            : {
+                label: action.label,
+                href,
+                onPress:
+                  href === undefined ? noop : () => window.open(href, "_blank", "noreferrer"),
+              })}
+          copy={copy}
           dismissLabel="Dismiss"
-          onDismiss={noop}
+          onDismiss={() => manager.close(toast.id)}
         />
       }
     />
   );
 }
 
+/**
+ * A stack in its own frame, standing `shown` until each is dismissed, and
+ * the manager it keeps them on. Note that the frame's transform makes it
+ * the containing block of the stack's fixed corner, and that each toast is
+ * shown by its id, so showing it again in place changes nothing.
+ */
+function CatalogStack({
+  label,
+  shown,
+  manager,
+}: {
+  label: string;
+  shown: readonly CatalogNotice[];
+  manager: ToastStackManager<CatalogNotice>;
+}): React.JSX.Element {
+  const [frame, setFrame] = useState<HTMLDivElement | null>(null);
+  useEffect(() => {
+    // Note that a manager only reaches a stack once the stack stands, so nothing is shown before its frame is.
+    if (frame === null) return;
+    for (const notice of shown) manager.add({ id: notice.id, ...standing(notice) });
+  }, [frame, manager, shown]);
+  return (
+    <div className="catalog-toast-stage" ref={setFrame}>
+      {frame === null ? null : (
+        <ToastStack manager={manager} label={label} container={frame}>
+          {(toast) => <CatalogToast key={toast.id} toast={toast} manager={manager} />}
+        </ToastStack>
+      )}
+    </div>
+  );
+}
+
+/** How a catalog toast stands: until it is dismissed, its words said aloud, a refusal urgently, and one saying work is under way with no hold until it settles. */
+function standing(notice: CatalogNotice) {
+  return {
+    title: notice.words,
+    description: notice.detail,
+    priority: notice.tone === STATUS_TONE.DANGER ? ("high" as const) : ("low" as const),
+    timeout: 0,
+    type: notice.tone === STATUS_TONE.WORKING ? TOAST_TYPE.WORKING : undefined,
+    data: notice,
+  };
+}
+
+/** A manager of the section's own, made once. */
+function useCatalogManager(): ToastStackManager<CatalogNotice> {
+  return useState(() => createToastManager<CatalogNotice>())[0];
+}
+
+/** The window's stack at its fullest: a plain toast, a refusal with a second line, and an Undo. */
+const STACKED: readonly CatalogNotice[] = [
+  { id: "copied", tone: STATUS_TONE.COMPLETE, words: "Link copied" },
+  {
+    id: "unsaved",
+    tone: STATUS_TONE.DANGER,
+    words: "Couldn't save the description",
+    detail: "Your change is kept here until you are back online.",
+  },
+  {
+    id: "archived",
+    tone: STATUS_TONE.COMPLETE,
+    words: "Task archived",
+    action: { label: "Undo" },
+  },
+];
+
+/** Toasts carrying an action: an ask, a connection led by its provider's mark, and one opening a page. */
+const ACTING: readonly CatalogNotice[] = [
+  {
+    id: "ask",
+    tone: STATUS_TONE.ATTENTION,
+    words: "Should withdrawn invitations count?",
+    detail: "Relay · Retry the webhook",
+    action: { label: "View" },
+  },
+  {
+    id: "expired",
+    tone: STATUS_TONE.ATTENTION,
+    mark: INTEGRATION_PROVIDER.LINEAR,
+    words: "Linear's sign-in expired",
+    action: { label: "Reconnect" },
+  },
+  {
+    id: "credit",
+    tone: STATUS_TONE.DANGER,
+    words: "Your OpenAI account is out of credit.",
+    action: {
+      label: "Add credit",
+      href: "https://platform.openai.com/settings/organization/billing/overview",
+    },
+  },
+];
+
 function Toasts(): React.JSX.Element {
+  const manager = useCatalogManager();
   return (
     <CatalogSection id="toast-stack" title="Stacked in the corner">
-      {/* A transform makes this box the containing block of the stack's fixed corner. */}
-      <div className="catalog-toast-stage">
-        <ToastStack
-          label="Notifications"
-          polite="Link copied. Task archived. Should withdrawn invitations count? Linear's sign-in expired"
-          alert="Couldn't save the description"
-        >
-          <Toast tone={STATUS_TONE.COMPLETE} words="Link copied" />
-          <Toast
-            tone={STATUS_TONE.DANGER}
-            words="Couldn't save the description"
-            detail="Your change is kept here until you are back online."
-          />
-          <Acting
-            tone={STATUS_TONE.COMPLETE}
-            words="Task archived"
-            label="Undo"
-            countdown={ACTION_HOLD_MS}
-          />
-          <Acting
-            tone={STATUS_TONE.ATTENTION}
-            words="Should withdrawn invitations count?"
-            detail="Relay · Retry the webhook"
-            label="View"
-          />
-          <Toast
-            tone={STATUS_TONE.ATTENTION}
-            mark={INTEGRATION_PROVIDER.LINEAR}
-            words="Linear's sign-in expired"
-            actions={
-              <ToastActions
-                label="Reconnect"
-                onPress={noop}
-                dismissLabel="Dismiss"
-                onDismiss={noop}
-              />
-            }
-          />
-          <Acting
-            tone={STATUS_TONE.DANGER}
-            words="Your OpenAI account is out of credit."
-            label="Add credit"
-            href="https://platform.openai.com/settings/organization/billing/overview"
-          />
-        </ToastStack>
-      </div>
+      <CatalogStack label="Notifications" shown={STACKED} manager={manager} />
+    </CatalogSection>
+  );
+}
+
+function Acting(): React.JSX.Element {
+  const manager = useCatalogManager();
+  return (
+    <CatalogSection id="toast-actions" title="Carrying an action">
+      <CatalogStack label="Action notifications" shown={ACTING} manager={manager} />
     </CatalogSection>
   );
 }
@@ -136,38 +209,31 @@ function copyToClipboard(text: string): Promise<void> {
   return navigator.clipboard.writeText(text);
 }
 
+/** The details a failure toast copies, through the browser's clipboard. */
+const FAILURE_COPY: ToastCopy = { text: FAILURE_DETAILS, what: "details", copy: copyToClipboard };
+
 /** Failure toasts, each offering its details to copy: one with nothing else to press, and one beside its Retry. */
+const FAILED: readonly CatalogNotice[] = [
+  {
+    id: "unstopped",
+    tone: STATUS_TONE.DANGER,
+    words: "The agent could not be stopped.",
+    copy: FAILURE_COPY,
+  },
+  {
+    id: "unsaved",
+    tone: STATUS_TONE.DANGER,
+    words: "Your description edits could not be saved.",
+    action: { label: "Retry" },
+    copy: FAILURE_COPY,
+  },
+];
+
 function Failures(): React.JSX.Element {
-  const copy = { text: FAILURE_DETAILS, what: "details", copy: copyToClipboard };
+  const manager = useCatalogManager();
   return (
     <CatalogSection id="toast-failure-copy" title="Failures copy their details">
-      <div className="catalog-toast-stage">
-        <ToastStack
-          label="Failure notifications"
-          polite=""
-          alert="Your description edits could not be saved."
-        >
-          <Toast
-            tone={STATUS_TONE.DANGER}
-            words="The agent could not be stopped."
-            countdown={FAILED_HOLD_MS}
-            actions={<ToastActions copy={copy} dismissLabel="Dismiss" onDismiss={noop} />}
-          />
-          <Toast
-            tone={STATUS_TONE.DANGER}
-            words="Your description edits could not be saved."
-            actions={
-              <ToastActions
-                label="Retry"
-                onPress={noop}
-                copy={copy}
-                dismissLabel="Dismiss"
-                onDismiss={noop}
-              />
-            }
-          />
-        </ToastStack>
-      </div>
+      <CatalogStack label="Failure notifications" shown={FAILED} manager={manager} />
     </CatalogSection>
   );
 }
@@ -181,71 +247,69 @@ const SAYING = {
 
 type Outcome = keyof typeof SAYING;
 
+/** The working toast's id on its stack. */
+const WORK_ID = "work";
+
+/** The working toast as the section first shows it. */
+const WORK: readonly CatalogNotice[] = [
+  { id: WORK_ID, tone: STATUS_TONE.WORKING, words: SAYING[STATUS_TONE.WORKING] },
+];
+
 /** A working toast, turned in place by a press into what came of its work. */
 function Working(): React.JSX.Element {
-  const [tone, setTone] = useState<Outcome>(STATUS_TONE.WORKING);
+  const manager = useCatalogManager();
+  const say = (tone: Outcome) => {
+    const notice = { id: WORK_ID, tone, words: SAYING[tone] };
+    manager.add({ id: WORK_ID, ...standing(notice) });
+  };
   return (
     <CatalogSection id="toast-working" title="Working, then done in place">
       <Inline gap={GAP.CONTROL}>
-        <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => setTone(STATUS_TONE.WORKING)}>
+        <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => say(STATUS_TONE.WORKING)}>
           Start
         </Button>
-        <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => setTone(STATUS_TONE.COMPLETE)}>
+        <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => say(STATUS_TONE.COMPLETE)}>
           Succeed
         </Button>
-        <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => setTone(STATUS_TONE.DANGER)}>
+        <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => say(STATUS_TONE.DANGER)}>
           Fail
         </Button>
       </Inline>
-      <div className="catalog-toast-stage">
-        <ToastStack label="Working notifications" polite={SAYING[tone]} alert="">
-          <Toast tone={tone} words={SAYING[tone]} />
-        </ToastStack>
-      </div>
+      <CatalogStack label="Working notifications" shown={WORK} manager={manager} />
     </CatalogSection>
   );
 }
 
-/** A toast to drag or sweep sideways away, drawn anew by a press once it has gone. */
+/** A toast to swipe sideways away, shown anew by a press once it has gone. */
 function Swiped(): React.JSX.Element {
-  const [shown, setShown] = useState({ count: 0, leaving: false });
-  const dismiss = () => setShown({ ...shown, leaving: true });
+  const manager = useCatalogManager();
+  const [shown] = useState<readonly CatalogNotice[]>(() => [swipeable()]);
   return (
     <CatalogSection id="toast-swipe" title="Swiped away">
-      <Button
-        variant={BUTTON_VARIANT.OUTLINE}
-        onClick={() => setShown({ count: shown.count + 1, leaving: false })}
-      >
+      <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => manager.add(standing(swipeable()))}>
         Show again
       </Button>
-      <div className="catalog-toast-stage">
-        <ToastStack label="Swipeable notifications" polite="Task archived" alert="">
-          <Toast
-            key={shown.count}
-            tone={STATUS_TONE.COMPLETE}
-            words="Task archived"
-            detail="Drag or sweep it sideways"
-            leaving={shown.leaving}
-            onEscape={dismiss}
-            actions={
-              <ToastActions
-                label="Undo"
-                onPress={noop}
-                dismissLabel="Dismiss"
-                onDismiss={dismiss}
-              />
-            }
-          />
-        </ToastStack>
-      </div>
+      <CatalogStack label="Swipeable notifications" shown={shown} manager={manager} />
     </CatalogSection>
   );
+}
+
+/** The toast the swipe section shows. */
+function swipeable(): CatalogNotice {
+  return {
+    id: crypto.randomUUID(),
+    tone: STATUS_TONE.COMPLETE,
+    words: "Task archived",
+    detail: "Swipe it sideways",
+    action: { label: "Undo" },
+  };
 }
 
 function AllToasts(): React.JSX.Element {
   return (
     <>
       <Toasts />
+      <Acting />
       <Failures />
       <Working />
       <Swiped />

@@ -125,6 +125,19 @@ const LIVE_ACTIVITY: AppExtension = {
 // run in it, and a local build, which never uploads, is build 1.
 const BUILD_NUMBER = process.env.VESPIN_IOS_BUILD_NUMBER ?? "1";
 
+// The Sentry project the app reports to and uploads its symbols under: the
+// desktop's, under the one DSN the release secrets hold for both
+// (`SENTRY_DSN`), written into the build's `extra` for `src/crash-reports.ts`
+// to read, empty where the build names none. Sentry's config plugin adds the
+// build phases that upload the Hermes source maps and the dSYMs, which
+// sentry-cli does under `SENTRY_AUTH_TOKEN`; a build without the token, a
+// local or simulator build among them, uploads nothing rather than failing.
+const SENTRY = {
+  ORGANIZATION: "stage-review",
+  PROJECT: "vespin-desktop",
+  URL: "https://sentry.io/",
+} as const;
+
 // The splash's ground and mark are the brand's, in both appearances: the
 // mark is generated beside the icon, in each mode's copper on transparency.
 const SPLASH = {
@@ -499,7 +512,23 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
           dark: { backgroundColor: BRAND_PALETTE.DARK.GROUND, image: SPLASH.DARK_IMAGE },
         },
       ],
+      [
+        "@sentry/react-native/expo",
+        {
+          organization: SENTRY.ORGANIZATION,
+          project: SENTRY.PROJECT,
+          url: SENTRY.URL,
+          disableAutoUpload: !process.env.SENTRY_AUTH_TOKEN,
+        },
+      ],
     ],
+    // A TestFlight build is the one whose number release-ios.yml names, and its reports are filed as production's.
+    extra: {
+      sentry: {
+        dsn: process.env.SENTRY_DSN ?? "",
+        released: process.env.VESPIN_IOS_BUILD_NUMBER !== undefined,
+      },
+    },
     // Builds come from GitHub's macOS runners and TestFlight, never an
     // over-the-air update, so Expo's update client is left out of the app.
     updates: { enabled: false },

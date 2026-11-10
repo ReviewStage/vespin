@@ -144,6 +144,22 @@ function holdsReply(
   );
 }
 
+/**
+ * An entry carrying only the files an edit keeps, in the order it keeps
+ * them, or every file it carries where the edit names none. Note that the
+ * files an edit adds are drawn once the service answers, since only it
+ * names them.
+ */
+function keptFiles(
+  entry: DescriptionCommentEntry,
+  keep: readonly string[] | undefined,
+): DescriptionCommentEntry {
+  if (keep === undefined || entry.files === undefined) return entry;
+  const { files, ...rest } = entry;
+  const kept = keep.flatMap((id) => files.filter((file) => file.attachmentId === id));
+  return kept.length === 0 ? rest : { ...rest, files: kept };
+}
+
 /** What one thing done to a thread draws over its row, from the row as it is drawn now. */
 function actChange(
   action: DescriptionCommentActionRequest,
@@ -161,9 +177,12 @@ function actChange(
     case DESCRIPTION_COMMENT_ACTION.EDIT:
       return (row) => ({
         entries: row.entries.map((entry) =>
-          entry.id !== action.entry || entry.words === action.words
+          entry.id !== action.entry ||
+          (entry.words === action.words &&
+            action.keep === undefined &&
+            action.attachments === undefined)
             ? entry
-            : { ...entry, words: action.words, editedAt: at },
+            : { ...keptFiles(entry, action.keep), words: action.words, editedAt: at },
         ),
       });
     case DESCRIPTION_COMMENT_ACTION.DELETE:

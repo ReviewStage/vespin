@@ -72,11 +72,18 @@ const RunningAgentTurnSchema = Schema.Struct({
 
 export type RunningAgentTurn = typeof RunningAgentTurnSchema.Type;
 
-/** What a push records of the phone's activity: when it went, the state it carried, and the start of the activity it went to, which must still stand. */
+/**
+ * What a push records of the phone's activity: when it went, the state it
+ * carried, and the activity it went to, which must still stand: its start,
+ * and for an update the update token it was sent to. A push-to-start names
+ * no update token, since the activity it made may register one before the
+ * start is recorded.
+ */
 export interface LiveActivityPush {
   readonly sentAt: Date;
   readonly sentState: string;
   readonly startedAt: Date;
+  readonly activityToken?: string;
 }
 
 /** The activity a refresh read on the phone: its start and its update token, which a claim or a clear is held to. */
@@ -166,10 +173,11 @@ const upsertActivityToken = SqlSchema.void({
         .values({ pushDeviceId, activityToken: token, startedAt: now })
         .onConflictDoUpdate({
           target: liveActivity.pushDeviceId,
-          // An activity stands on the phone now, showing what the start that made it carried.
+          // An activity stands on the phone now, showing what the start that made it carried; one that replaces another shows nothing the service knows of.
           set: {
             activityToken: token,
             startedAt: sql`coalesce(${liveActivity.startedAt}, ${now})`,
+            sentState: sql`case when ${liveActivity.activityToken} is distinct from ${token} and ${liveActivity.activityToken} is not null then null else ${liveActivity.sentState} end`,
           },
         }),
     ),
@@ -268,13 +276,20 @@ const updateOwnPushed = SqlSchema.void({
     sentAt: Schema.Date,
     sentState: Schema.String,
     startedAt: Schema.Date,
+    activityToken: Schema.optionalKey(Schema.String),
   }),
-  execute: ({ userId, pushDeviceId, sentAt, sentState, startedAt }) =>
+  execute: ({ userId, pushDeviceId, sentAt, sentState, startedAt, activityToken }) =>
     Database.use((db) =>
       db
         .update(liveActivity)
         .set({ sentAt, sentState })
-        .where(and(ownRow(userId, pushDeviceId), eq(liveActivity.startedAt, startedAt))),
+        .where(
+          and(
+            ownRow(userId, pushDeviceId),
+            eq(liveActivity.startedAt, startedAt),
+            activityToken === undefined ? undefined : eq(liveActivity.activityToken, activityToken),
+          ),
+        ),
     ),
 });
 

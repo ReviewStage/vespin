@@ -72,13 +72,7 @@ import { priorityOf, statusOf } from "@repo/ui/tasks-page-model";
 import { Store, useSelector } from "@tanstack/react-store";
 import { type ActResult, type ActVariables, askKept, KEPT, type Kept, notKept } from "./act.js";
 import type { ShownFailure } from "./failure-report.js";
-import {
-  showToast,
-  TOAST_HOLD,
-  type ToastNotice,
-  withdrawToast,
-  withdrawToastActing,
-} from "./toast.js";
+import { showToast, type ToastNotice, withdrawToast } from "./toast.js";
 
 /** The most entries each list keeps; an older one leaves as a newer one comes. */
 const MAX_ENTRIES = 50;
@@ -179,7 +173,7 @@ let turn: Promise<unknown> = Promise.resolve();
 let generation = 0;
 
 /** Each entry's toast's Undo, by which its toast is withdrawn once the entry is pushed off the lists. */
-const undoPresses = new WeakMap<UndoEntry, () => void>();
+const undoToastSubjects = new WeakMap<UndoEntry, string>();
 
 /** The lists as they stand. */
 function lineNow(): UndoLine {
@@ -194,8 +188,8 @@ function lineNow(): UndoLine {
 function stacked(entries: readonly UndoEntry[], entry: UndoEntry): readonly UndoEntry[] {
   const next = [...entries, entry];
   for (const off of next.slice(0, -MAX_ENTRIES)) {
-    const press = undoPresses.get(off);
-    if (press !== undefined) withdrawToastActing(press);
+    const subject = undoToastSubjects.get(off);
+    if (subject !== undefined) withdrawToast(subject);
   }
   return next.slice(-MAX_ENTRIES);
 }
@@ -212,13 +206,12 @@ function undoToast(words: string, undo: () => void): ToastNotice {
     words,
     tone: STATUS_TONE.COMPLETE,
     action: { label: UNDO_LABEL, onPress: undo, replayUnmasked: true },
-    hold: TOAST_HOLD.UNDO,
   };
 }
 
 /** The toast a write that happened at once says it with where nothing is left to take back: its words alone. */
 function doneToast(words: string): ToastNotice {
-  return { words, tone: STATUS_TONE.COMPLETE, hold: TOAST_HOLD.DONE };
+  return { words, tone: STATUS_TONE.COMPLETE };
 }
 
 /** Says what a run came to: a refusal and a row changed since, always; a key's run that applied names its entry, and one from its own toast says nothing more. */
@@ -227,7 +220,6 @@ function said(entry: UndoEntry, way: UndoWay, run: UndoRun, keyed: boolean): voi
     const saying = {
       words: run.words ?? REFUSED_WORDS[way],
       tone: STATUS_TONE.DANGER,
-      hold: TOAST_HOLD.FAILED,
       failure: run.failure,
       replayUnmasked: run.words !== undefined,
     } as const;
@@ -235,14 +227,13 @@ function said(entry: UndoEntry, way: UndoWay, run: UndoRun, keyed: boolean): voi
     return;
   }
   if (run.ran === UNDO_RAN.CHANGED) {
-    showToast({ words: CHANGED_WORDS[way], tone: STATUS_TONE.ATTENTION, hold: TOAST_HOLD.DONE });
+    showToast({ words: CHANGED_WORDS[way], tone: STATUS_TONE.ATTENTION });
     return;
   }
   if (!keyed) return;
   showToast({
     words: `${DONE_WORDS[way]}: ${entry.words}`,
     tone: STATUS_TONE.COMPLETE,
-    hold: TOAST_HOLD.DONE,
   });
 }
 
@@ -284,13 +275,19 @@ function ranNewest(way: UndoWay): Promise<UndoRan | undefined> {
   return newest === undefined ? Promise.resolve(undefined) : ran(newest, way, true);
 }
 
-/** Keeps `entry` as the newest for ⌘Z, leaving nothing for ⇧⌘Z, and answers its toast, whose Undo runs it through the lists. */
+/**
+ * Keeps `entry` as the newest for ⌘Z, leaving nothing for ⇧⌘Z, and answers
+ * its toast, whose Undo runs it through the lists. Note that the toast is
+ * about the entry's subject, or one of its own, by which it is withdrawn
+ * once the entry is pushed off the list.
+ */
 function undoable(entry: UndoEntry): ToastNotice {
   const press = () => void ran(entry, UNDO_WAY.UNDO, false);
-  undoPresses.set(entry, press);
+  const subject = entry.subject ?? crypto.randomUUID();
+  undoToastSubjects.set(entry, subject);
   const { undo } = lineNow();
   undoLine.setState(() => ({ undo: stacked(undo, entry), redo: [] }));
-  return undoToast(entry.words, press);
+  return { ...undoToast(entry.words, press), subject };
 }
 
 /** ⌘Z: takes back the newest entry, answering what it came to, or nothing where none waits. */
@@ -624,7 +621,6 @@ export function pressWrite<Rows, Asked, Change, Kind extends PortActKind, Answer
         replayUnmasked: true,
         words: refusal,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: writeFailure(write, change, answer),
       });
       return false;
@@ -779,7 +775,6 @@ export function pressTakeBack<Doors, Change, Answer, TakenBack>(
       replayUnmasked: true,
       words: refusal.words,
       tone: STATUS_TONE.DANGER,
-      hold: TOAST_HOLD.FAILED,
       failure: refusal.failure,
     });
   });

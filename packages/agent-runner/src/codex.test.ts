@@ -26,6 +26,8 @@ import { CODEX_BUNDLED_MODELS_JSON } from "./codex-protocol/bundled-models.js";
 import { codexToken } from "./codex-token.js";
 import type { RunnerSelf } from "./launch.js";
 import {
+  APPROVAL_BY,
+  APPROVAL_DECISION,
   CODEX_EFFORT,
   CODEX_PLAN_BACKEND,
   CODEX_TOKEN_COMMAND,
@@ -36,6 +38,7 @@ import {
   INPUT_LINE,
   INSTALLED_SKILLS,
   type InputLine,
+  PERMISSION_MODE,
   RUNNER_END,
   RUNNER_ENV,
   RUNNER_EVENT,
@@ -1507,5 +1510,234 @@ it.effect(
         reason: RUNNER_END.FAILED,
         detail: "stream disconnected before completion: connection reset",
       });
+    }),
+);
+
+/** A checkout with its git folder, and a home with none of the package caches yet, each a folder of the test's own. */
+function permissionFolders() {
+  const cwd = mkdtempSync(join(tmpdir(), "vespin-codex-checkout-"));
+  mkdirSync(join(cwd, ".git"));
+  const home = mkdtempSync(join(tmpdir(), "vespin-codex-home-"));
+  const caches = [join(home, ".npm"), join(home, ".cache"), join(home, ".local", "share", "pnpm")];
+  return {
+    cwd,
+    home,
+    writableRoots: [join(cwd, ".git"), ...caches],
+    caches,
+    [Symbol.dispose]: () => {
+      rmSync(cwd, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true });
+    },
+  };
+}
+
+/** The sleep turn's command, as app-server asks to run it outside the sandbox. */
+const COMMAND_ASK: RecordedMessage = {
+  id: 41,
+  method: "item/commandExecution/requestApproval",
+  params: {
+    kind: "command",
+    threadId: THREAD,
+    turnId: "00000000-0000-4000-8000-000000000006",
+    itemId: "call_9_0",
+    startedAtMs: 1792520831000,
+    environmentId: null,
+    reason: "Install the dependencies over the network",
+    command: "/bin/bash -lc 'sleep 600'",
+    cwd: "/srv/agent-probe-repo",
+  },
+};
+
+/** An MCP server's form, which app-server hands the client under approval `on-request`. */
+const ELICITATION: RecordedMessage = {
+  id: 42,
+  method: "mcpServer/elicitation/request",
+  params: {
+    threadId: THREAD,
+    turnId: null,
+    serverName: "linear",
+    mode: "form",
+    message: "Pick a team",
+  },
+};
+
+/** The sleep turn with what app-server asks the client after the command starts. */
+function sleepTurnAsking(...asked: readonly RecordedMessage[]): Script {
+  const turn = exchange(FIRST, 5);
+  return {
+    exchanges: [...OPEN, { ...turn, reply: [...turn.reply, ...asked] }, exchange(FIRST, 6)],
+  };
+}
+
+/** The runner's events of one type, as posted. */
+function posted(service: ReturnType<typeof fakeService>, type: string) {
+  return service.applied.flatMap(({ message: each }) =>
+    "type" in each && each.type === type ? [each] : [],
+  );
+}
+
+it.effect(
+  "in Ask for approval, runs Codex's workspace sandbox with git and the package caches writable, holds an ask for the member, answers Always allow as acceptForSession, and declines an MCP form",
+  () =>
+    Effect.gen(function* () {
+      using folders = permissionFolders();
+      const service = fakeService(RUNNER_EVENT.APPROVAL_REQUESTED);
+      const { spawned, write, run } = yield* launch(
+        [sleepTurnAsking(COMMAND_ASK, ELICITATION)],
+        service,
+        {
+          ...ENV,
+          HOME: folders.home,
+        },
+      );
+      yield* write({ ...CONFIG, cwd: folders.cwd, permissionMode: PERMISSION_MODE.ASK });
+      yield* write(message("Run sleep 600.", LINE.FIRST));
+      yield* service.seen;
+      const [process] = spawned;
+      assert.ok(process !== undefined);
+      // The form is declined at once; the command waits on the member.
+      assert.deepEqual(yield* Queue.take(process.answers), {
+        id: 42,
+        result: { action: "decline", content: null, _meta: null },
+      });
+      const [asked] = posted(service, RUNNER_EVENT.APPROVAL_REQUESTED);
+      assert.ok(asked !== undefined && asked.type === RUNNER_EVENT.APPROVAL_REQUESTED);
+      assert.equal(asked.toolUseId, "call_9_0");
+      assert.equal(asked.toolName, "commandExecution");
+      assert.equal(asked.description, "Install the dependencies over the network");
+      assert.equal(asked.input.command, "/bin/bash -lc 'sleep 600'");
+      yield* write({
+        type: INPUT_LINE.APPROVAL,
+        requestId: asked.requestId,
+        decision: APPROVAL_DECISION.ALLOW_FOR_AGENT,
+      });
+      assert.deepEqual(yield* Queue.take(process.answers), {
+        id: 41,
+        result: { decision: "acceptForSession" },
+      });
+      yield* write({ type: INPUT_LINE.STOP });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.STOPPED);
+      assert.deepEqual(
+        posted(service, RUNNER_EVENT.APPROVAL_RESOLVED).map((each) => ({ ...each })),
+        [
+          {
+            type: RUNNER_EVENT.APPROVAL_RESOLVED,
+            requestId: asked.requestId,
+            decision: APPROVAL_DECISION.ALLOW_FOR_AGENT,
+            by: APPROVAL_BY.MEMBER,
+          },
+        ],
+      );
+      assert.equal(override(process, "approval_policy"), '"on-request"');
+      assert.equal(override(process, "approvals_reviewer"), '"user"');
+      assert.equal(override(process, "sandbox_mode"), '"workspace-write"');
+      assert.equal(
+        override(process, "sandbox_workspace_write.writable_roots"),
+        `[${folders.writableRoots.map((root) => JSON.stringify(root)).join(", ")}]`,
+      );
+      assert.equal(override(process, "sandbox_workspace_write.network_access"), "true");
+      const [thread] = received(process, "thread/start");
+      assert.equal(thread?.approvalPolicy, "on-request");
+      assert.equal(thread?.approvalsReviewer, "user");
+      assert.equal(thread?.sandbox, "workspace-write");
+      assert.deepEqual(received(process, "turn/start")[0]?.sandboxPolicy, {
+        type: "workspaceWrite",
+        writableRoots: folders.writableRoots,
+        networkAccess: true,
+        excludeTmpdirEnvVar: false,
+        excludeSlashTmp: false,
+      });
+      // A cache the home did not hold is made, since a sandboxed command cannot make it.
+      assert.ok(folders.caches.every((cache) => existsSync(cache)));
+    }),
+);
+
+/** A command Codex's automatic review denied, its completion, and an ask the review handed to the member. */
+const REVIEWED: readonly RecordedMessage[] = [
+  {
+    method: "item/autoApprovalReview/completed",
+    params: {
+      threadId: THREAD,
+      turnId: "00000000-0000-4000-8000-000000000006",
+      startedAtMs: 1792520831000,
+      completedAtMs: 1792520832000,
+      reviewId: "review-1",
+      targetItemId: "call_reviewed",
+      decisionSource: "agent",
+      review: {
+        status: "denied",
+        riskLevel: null,
+        userAuthorization: null,
+        rationale: "Automatic approval review failed: the reviewer's model was refused.",
+      },
+      action: {
+        type: "command",
+        source: "shell",
+        command: "curl https://example.test",
+        cwd: "/srv/agent-probe-repo",
+      },
+    },
+  },
+  {
+    method: "item/completed",
+    params: {
+      threadId: THREAD,
+      turnId: "00000000-0000-4000-8000-000000000006",
+      item: {
+        type: "commandExecution",
+        id: "call_reviewed",
+        command: "curl https://example.test",
+        cwd: "/srv/agent-probe-repo",
+        status: "declined",
+        aggregatedOutput: null,
+        exitCode: null,
+      },
+    },
+  },
+  COMMAND_ASK,
+];
+
+it.effect(
+  "in Approve for me, Codex's automatic review answers, a command it denied says why on its row, and an ask still waiting as the launch ends is resolved before its end",
+  () =>
+    Effect.gen(function* () {
+      using folders = permissionFolders();
+      const service = fakeService(RUNNER_EVENT.APPROVAL_REQUESTED);
+      const { spawned, write, run } = yield* launch([sleepTurnAsking(...REVIEWED)], service, {
+        ...ENV,
+        HOME: folders.home,
+      });
+      yield* write({ ...CONFIG, cwd: folders.cwd, permissionMode: PERMISSION_MODE.AUTO });
+      yield* write(message("Run sleep 600.", LINE.FIRST));
+      yield* service.seen;
+      yield* write({ type: INPUT_LINE.STOP });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.STOPPED);
+      const [process] = spawned;
+      assert.equal(override(process, "approvals_reviewer"), '"auto_review"');
+      assert.equal(received(process, "turn/start")[0]?.approvalsReviewer, "auto_review");
+      const declined = service.applied.flatMap(({ message: each }) =>
+        "method" in each &&
+        each.method === "item/completed" &&
+        each.params.item.id === "call_reviewed"
+          ? [each.params.item]
+          : [],
+      );
+      assert.deepEqual(
+        declined.map((item) =>
+          item.type === "commandExecution" ? item.aggregatedOutput : undefined,
+        ),
+        [
+          "Codex's automatic review denied this command. Automatic approval review failed: the reviewer's model was refused.",
+        ],
+      );
+      assert.deepEqual(
+        posted(service, RUNNER_EVENT.APPROVAL_RESOLVED).map((each) =>
+          each.type === RUNNER_EVENT.APPROVAL_RESOLVED ? each.by : undefined,
+        ),
+        [APPROVAL_BY.ENDED],
+      );
+      assert.equal(kinds(service.applied).at(-1), RUNNER_EVENT.END);
     }),
 );

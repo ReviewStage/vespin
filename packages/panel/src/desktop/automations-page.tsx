@@ -84,7 +84,7 @@ import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { stateEndMark } from "../state-glyph.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { useWorkspacesRead } from "../workspaces-read.js";
 import { rowMenu } from "./action-menu.js";
 import { openRunAgent } from "./automation-agent-run.js";
@@ -278,7 +278,6 @@ function useRunNow(automationId: string): { readonly running: boolean; readonly 
             words: RUN_REFUSAL_WORDS[answer.failure],
             replayUnmasked: true,
             tone: STATUS_TONE.DANGER,
-            hold: TOAST_HOLD.FAILED,
             failure: {
               surface: FAILURE_SURFACE.AUTOMATION_RUN,
               cause: answer,

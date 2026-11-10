@@ -20,6 +20,8 @@ export const EXPERIMENT = {
   DESCRIPTIONS: "descriptions",
   /** Rewind restores files: a rewind or an edit of a message may put the agent's files back as they stood before it, from the checkout its runner records before each turn. */
   REWIND_FILES: "rewind-files",
+  /** Done and follow-ups: an agent ends a turn with a short summary, and the bar over its box says what it needs from you, or that it is done, with what is still open and the follow-ups it offers. */
+  TURN_END: "turn-end",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -42,6 +44,7 @@ export const WORKSPACE_EXPERIMENT_LIST = [
   EXPERIMENT.REWIND_FILES,
   EXPERIMENT.DESCRIPTIONS,
   EXPERIMENT.MEMORY,
+  EXPERIMENT.TURN_END,
 ] as const;
 
 export type WorkspaceExperiment = (typeof WORKSPACE_EXPERIMENT_LIST)[number];
@@ -83,6 +86,14 @@ export const EXPERIMENTS = [
     name: "Rewind restores files",
     detail:
       "Rewinding or editing a message can also put the agent's files back to how they stood before it.",
+    owner: "Dean",
+    since: "2026-11-10",
+  },
+  {
+    key: EXPERIMENT.TURN_END,
+    name: "Done and follow-ups",
+    detail:
+      "When an agent finishes, the bar over its box says what it needs from you, or that it's done, with follow-ups to send.",
     owner: "Dean",
     since: "2026-11-10",
   },

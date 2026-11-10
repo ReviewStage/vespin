@@ -131,7 +131,7 @@ async function box(rewound: AgentAgentAnswer, sent: AgentAgentAnswer = REWOUND) 
 const REWOUND: AgentAgentAnswer = {
   agent: {
     id: "8f0c1d2e-3a4b-4c5d-8e6f-7a8b9c0d1e2f",
-    planId: null,
+    planId: "6e7f8a9b-0c1d-4e2f-8a3b-4c5d6e7f8a9b",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: null,

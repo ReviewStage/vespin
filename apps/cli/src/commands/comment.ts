@@ -48,6 +48,8 @@ const REFUSAL_WORDS: Record<DescriptionCommentRefusal, string> = {
   [DESCRIPTION_COMMENT_REFUSAL.NOT_YOURS]: "Only its writer may change that comment.",
   [DESCRIPTION_COMMENT_REFUSAL.NO_ENTRY]: "The thread holds no such comment.",
   [DESCRIPTION_COMMENT_REFUSAL.KEY_TAKEN]: "The write was already taken on another thread.",
+  [DESCRIPTION_COMMENT_REFUSAL.TOO_MANY_FILES]:
+    "The comment would carry more files, or more bytes of them, than one message may.",
 };
 
 const taskArgument = Argument.String("task").pipe(

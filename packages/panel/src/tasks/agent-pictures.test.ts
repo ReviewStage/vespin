@@ -903,6 +903,30 @@ test.each([
   },
 );
 
+test("a line carrying two pictures of one name, as queued messages joined do, draws the first where its words name it and the second among its files", async () => {
+  const shot = (url: string) => ({
+    type: "file" as const,
+    mediaType: INBOX_IMAGE_TYPE.PNG,
+    filename: "Picture 1",
+    url,
+  });
+  const { container } = await drawn({
+    id: "line",
+    role: MESSAGE_ROLE.USER,
+    parts: [
+      text("Make this [Picture 1] bigger."),
+      shot("data:image/png;base64,AAAA"),
+      shot("data:image/png;base64,BBBB"),
+    ],
+  });
+
+  const row = [...container.querySelectorAll('ul[aria-label="Attached files"] > li')];
+  assert.deepEqual(
+    row.map((chip) => chip.querySelector("img")?.getAttribute("src")),
+    ["data:image/png;base64,BBBB"],
+  );
+});
+
 test("a line still on its way draws its files going up with no share, each taking its check as the line lands", () => {
   const message: AgentTranscriptMessage = {
     id: "line-1",
