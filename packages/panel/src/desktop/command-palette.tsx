@@ -193,7 +193,7 @@ import { unreadShown } from "../failure-report.js";
 import { type InboxView, useInboxView } from "../inbox-route.js";
 import { type CopyLink, inSidePanel, type LinkAtHand } from "../links-at-hand.js";
 import { workspaceMembersQuery, workspaceMembersRetryMutation } from "../live-reads.js";
-import { useMemberDirectory } from "../member-directory.js";
+import { useWorkspaceDirectory } from "../member-directory.js";
 import { memberRows } from "../member-rows.js";
 import { PANEL_SPAN, useKeystrokeSpans } from "../panel-spans.js";
 import { PANEL_TAB, type PanelTab } from "../panel-tabs.js";
@@ -1851,7 +1851,8 @@ export function CommandPalette({
   // The experiments on in the workspace the window lists, the account's own beside them.
   const experiments = useExperimentsIn(tasks.workspace?.id);
   const inboxWaiting = useInboxWaitingTasks();
-  const directory = useMemberDirectory();
+  // Note that the palette stands outside a task page, so it reads the open task's workspace's members itself, the reader among them, which a starter's face is told from.
+  const directory = useWorkspaceDirectory(tasks.workspace);
   if (open && !available) setOpen(false);
   const [filter, setFilter] = useState<PaletteFilter>(PALETTE_FILTER.ALL);
   // How many times ⌘K has opened the palette, each of which chooses its first row.
