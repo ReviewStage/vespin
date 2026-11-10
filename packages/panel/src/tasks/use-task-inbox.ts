@@ -1,3 +1,4 @@
+import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import {
   AGENT_CALL_FAILURE,
   type AgentCallFailure,
@@ -35,7 +36,7 @@ import {
 import { holderInboxQuery, holderInboxRetryMutation, inboxItemsQuery } from "../live-reads.js";
 import type { PictureReader } from "../picture-query.js";
 import { useSendQueue } from "../send-queue.js";
-import { messageFailureWords } from "./agent-model.js";
+
 import type { InboxAcknowledger } from "./inbox-acknowledge.js";
 import { useInboxArrivals } from "./inbox-arrivals.js";
 import { type InboxBoardView, type InboxNote, inboxBoard } from "./inbox-model.js";

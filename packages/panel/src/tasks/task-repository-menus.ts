@@ -7,9 +7,9 @@
  */
 
 import type { TaskRelationKind } from "@repo/features/task-wire";
+import { recentRepositories, workspaceReaches } from "@repo/features/tasks-model";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { managesWorkspace } from "@repo/features/workspace-role";
-import { recentRepositories, workspaceReaches } from "@repo/ui/tasks-model";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { appPlatform } from "../app-platform.js";

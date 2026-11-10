@@ -1,10 +1,10 @@
 import { AGENT_BOUNDS, type AgentSummary } from "@repo/features/agent-wire";
 import { TASK_BOUNDS, type TaskSummary } from "@repo/features/task-wire";
+import { RENAME_FAILED_NOTE } from "@repo/features/tasks-model";
 import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import { ANNOUNCE, type CrumbMenu, InlineEdit, moreLabel, useMenu } from "@repo/ui";
 import { confirmAsked } from "@repo/ui/confirm-state";
-import { RENAME_FAILED_NOTE } from "@repo/ui/tasks-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import { useMutation } from "@tanstack/react-query";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";

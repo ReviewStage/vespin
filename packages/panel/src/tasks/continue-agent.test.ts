@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
@@ -50,7 +51,6 @@ import {
   endLineOffersTryAgain,
   endLineParts,
   endLineReason,
-  messageFailureWords,
   startFailureNote,
 } from "./agent-model.js";
 import { AgentTab } from "./agent-tab.js";

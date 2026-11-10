@@ -21,9 +21,9 @@
 
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_DESTINATION, type LinkDestination, taskLinkStep } from "@repo/features/link-grammar";
+import { DOCUMENT_REGION } from "@repo/features/tasks-model";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { StripTab } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION } from "@repo/ui/tasks-model";
 import { type HistoryLocation, useRouter } from "@tanstack/react-router";
 import { useMemo, useSyncExternalStore } from "react";
 import { adminLinkFields } from "../admin/routing.js";

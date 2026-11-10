@@ -1,3 +1,4 @@
+import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import {
   AGENT_CALL_FAILURE,
   type AgentCallFailure,
@@ -24,7 +25,6 @@ import { actMutation } from "../act-mutations.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 import type { ShortcutSubject } from "../shortcut-target.js";
 import { pressTakeBack, type TakeBackUndoRefusal, type TakeBackWrite } from "../undo-stack.js";
-import { messageFailureWords } from "./agent-model.js";
 
 /**
  * inbox-close.tsx -- open Inbox items resolved without an answer, at once and with Undo, from every place that offers it: an item's menus, its question card, the list's head, a chosen row's menu, and E.

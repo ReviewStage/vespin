@@ -9,6 +9,7 @@
  */
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { localAgentRefusalWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
 import type { AgentAttachment } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
@@ -23,6 +24,7 @@ import type {
   TaskStanding,
   TaskSummary,
 } from "@repo/features/task-wire";
+import { startFailureNote } from "@repo/features/tasks-model";
 import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -30,7 +32,6 @@ import type { AppStateSnapshot } from "@repo/host/app-state";
 import { APP_SETTING_DEFAULTS } from "@repo/settings";
 import { STATUS_TONE } from "@repo/ui";
 import { agentTab, draftTab } from "@repo/ui/tab-strip-model";
-import { startFailureNote } from "@repo/ui/tasks-model";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 import { sendMutation } from "../act-mutations.js";
@@ -45,7 +46,6 @@ import {
 import {
   startFailureNote as agentStartFailureNote,
   choiceRequest,
-  localAgentRefusalWords,
   openingLineOf,
   type SentLine,
 } from "./agent-model.js";

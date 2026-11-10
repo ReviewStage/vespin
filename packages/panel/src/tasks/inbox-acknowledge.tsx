@@ -19,6 +19,7 @@
  * already stands.
  */
 
+import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import {
   AGENT_CALL_FAILURE,
   type AgentCallFailure,
@@ -35,7 +36,7 @@ import { useCallback, useRef } from "react";
 import { unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { pressTakeBack, type TakeBackWrite } from "../undo-stack.js";
-import { messageFailureWords } from "./agent-model.js";
+
 import {
   type Send,
   type Settles,

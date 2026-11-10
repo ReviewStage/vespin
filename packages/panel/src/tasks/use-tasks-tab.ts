@@ -22,6 +22,20 @@ import type {
   TaskRelationKind,
   TaskSummary,
 } from "@repo/features/task-wire";
+import {
+  DOCUMENT_REGION,
+  type DocumentRegion,
+  documentRegion,
+  renamedRegion,
+  renamedView,
+  sidebarTasks,
+  TASK_MARK,
+  TASKS_PAGE,
+  type TaskMark,
+  type TaskNames,
+  type TasksPage,
+  tasksPage,
+} from "@repo/features/tasks-model";
 import { TASK_CALL_FAILURE, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -41,20 +55,6 @@ import {
   sameTab,
   subagentTab,
 } from "@repo/ui/tab-strip-model";
-import {
-  DOCUMENT_REGION,
-  type DocumentRegion,
-  documentRegion,
-  renamedRegion,
-  renamedView,
-  sidebarTasks,
-  TASK_MARK,
-  TASKS_PAGE,
-  type TaskMark,
-  type TaskNames,
-  type TasksPage,
-  tasksPage,
-} from "@repo/ui/tasks-model";
 import { useStateWithRef } from "@repo/ui/use-state-with-ref";
 import {
   mutationOptions,

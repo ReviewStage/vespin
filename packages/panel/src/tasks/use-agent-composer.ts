@@ -1,3 +1,4 @@
+import type { RefusedCall } from "@repo/features/agent-refusal-words";
 import { newerTurn } from "@repo/features/agent-status";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
@@ -21,7 +22,6 @@ import {
   closesComposer,
   heldSentLines,
   messageFailureNote,
-  type RefusedCall,
   SENT_LINE_STATE,
   type SentLine,
   unreadSentLines,

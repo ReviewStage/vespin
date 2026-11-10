@@ -1,3 +1,4 @@
+import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentInboxMessagedView } from "@repo/features/agent-view";
 import { type InboxHolder, type InboxListed, NOTHING_HERE } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
@@ -35,7 +36,7 @@ import { HERE, placeAddress, ROUTE, THING } from "../places/pressed-address.js";
 import { useInboxDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
-import { agentName, messageFailureWords } from "../tasks/agent-model.js";
+import { agentName } from "../tasks/agent-model.js";
 import {
   INBOX_COLUMNS,
   INBOX_VIEW,

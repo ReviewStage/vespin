@@ -17,6 +17,7 @@ import {
   type TaskStanding,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { RENAME_FAILED_NOTE, repositoryPageUrl } from "@repo/features/tasks-model";
 import {
   noneYetWords,
   REFRESH_FAILED_WORDS,
@@ -97,7 +98,6 @@ import {
 import { actorName } from "@repo/ui/actor-model";
 import { FIND_SKIP_ATTRIBUTE } from "@repo/ui/find-skip";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { RENAME_FAILED_NOTE, repositoryPageUrl } from "@repo/ui/tasks-model";
 import {
   COMPLETED_WINDOW,
   TASK_PROPERTY,

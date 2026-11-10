@@ -5,6 +5,7 @@ import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { sectionAnchors } from "@repo/features/mention-link";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { DescriptionRevisionLine } from "@repo/features/task-wire";
+import { DOCUMENT_REGION } from "@repo/features/tasks-model";
 import { readFailedWords, readingWords } from "@repo/features/words";
 import type { FormerMember, Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -45,7 +46,6 @@ import {
 } from "@repo/ui";
 import { type Actor, actorName } from "@repo/ui/actor-model";
 import { ArrowUpRightIcon, GLYPH, RotateCcwIcon } from "@repo/ui/icons";
-import { DOCUMENT_REGION } from "@repo/ui/tasks-model";
 import {
   VIRTUAL_ROW_KEY_ATTRIBUTE,
   VIRTUAL_ROWS_ANCHOR,

@@ -1,4 +1,5 @@
 import type { AgentQueue, QueuedMessage } from "@repo/features/agent-queue-wire";
+import { QUEUE_LEFT_WORDS, QUEUE_REFUSED_WORDS } from "@repo/features/agent-queue-words";
 import { AGENT_CALL_FAILURE, type AgentQueueAnswerView } from "@repo/features/agent-view";
 import {
   AGENT_BOUNDS,
@@ -43,19 +44,6 @@ import type { HeldComposer } from "./use-agent-composer.js";
 
 /** What a change answered where the act itself failed. */
 const UNANSWERED: AgentQueueAnswerView = { failure: AGENT_CALL_FAILURE.UNANSWERED };
-
-/** What the toast says of a change the host drew and took back, by what it asked; a hold's refusal closes its edit, which says it. */
-const REFUSED_WORDS: { readonly [Change in AgentQueueChange["change"]]?: string } = {
-  [QUEUE_CHANGE.ADD]: "Could not queue the message.",
-  [QUEUE_CHANGE.EDIT]: "Could not save the queued message.",
-  [QUEUE_CHANGE.DELETE]: "Could not delete the queued message.",
-  [QUEUE_CHANGE.STEER]: "Could not send the queued message.",
-  [QUEUE_CHANGE.REORDER]: "Could not reorder the queue.",
-  [QUEUE_CHANGE.RESUME]: "Could not resume the queue.",
-};
-
-/** What the toast says beneath them where the service said the message is no longer in the queue. */
-const LEFT_WORDS = "It already left the queue.";
 
 /** The messages of a queue its page carries none of, as an agent's page before its first change. */
 const NO_MESSAGES: readonly QueuedMessage[] = [];
@@ -153,13 +141,13 @@ export function useAgentQueue(agentId: string, queue: AgentQueue | undefined): A
         if ("queue" in answer && messageId !== undefined && files.length > 0) {
           keepLandedFiles(queryClient, agentId, answer.queue, messageId, files);
         }
-        const words = REFUSED_WORDS[next.change];
+        const words = QUEUE_REFUSED_WORDS[next.change];
         if (!("failure" in answer) || words === undefined) return answer;
         toast({
           replayUnmasked: true,
           words,
           ...(answer.failure === AGENT_CALL_FAILURE.NOT_FOUND && messageId !== undefined
-            ? { detail: LEFT_WORDS }
+            ? { detail: QUEUE_LEFT_WORDS }
             : undefined),
           tone: STATUS_TONE.DANGER,
           hold: TOAST_HOLD.FAILED,
