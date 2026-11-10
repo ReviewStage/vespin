@@ -7,22 +7,18 @@
  * agent is handed is what Copy details copies (`shownFailureDetails`), which
  * names no word a person wrote, and beside it the cause's stack as an issue
  * sends it (`shownFailureStack`), the app's version, build, platform, and
- * the route's pattern and path, which name ids and no content. Every part
- * read from text passes the credential redaction (`credential-redaction.ts`):
- * the details and the stack as they are read, and the route's path and the
- * build's branch here. Note that the prompt is not redacted whole, because
+ * the route's pattern, which names no value. Every part read from text
+ * passes the credential redaction (`credential-redaction.ts`): the details
+ * and the stack as they are read, and the build's branch here. Note that the
+ * route's path is left out, because on the web it is whatever address was
+ * typed, and that the prompt is not redacted whole, because
  * the redaction takes any run of 32 characters for a credential, which would
  * take the ids, the Sentry event and trace, and the commit the agent needs.
  */
 
 import { redactCredentials } from "./credential-redaction.js";
 import { PRODUCT_NAME } from "./product-name.js";
-import {
-  redactedPathText,
-  type ShownFailureReport,
-  shownFailureCode,
-  shownFailureStack,
-} from "./shown-failure.js";
+import { type ShownFailureReport, shownFailureCode, shownFailureStack } from "./shown-failure.js";
 
 /** The product's own repository, whose workspace's members are offered Investigate and whose task it starts. */
 export const INVESTIGATION_REPOSITORY = "ReviewStage/vespin";
@@ -40,17 +36,16 @@ export interface InvestigatedBuild {
   readonly branch?: string | undefined;
 }
 
-/** Where in the window a failure was shown: the route's pattern and the path it stood on. */
+/** Where in the window a failure was shown: the pattern of the route that stood, as `/$workspace/task/$taskId`. */
 export interface InvestigatedRoute {
   readonly pattern: string;
-  readonly path: string;
 }
 
 /** What an investigation is handed beside the failure's report: its copied details, and the run and window it was shown in. */
 export interface FailureInvestigationContext {
   /** What Copy details copies of the failure (`shownFailureDetails`). */
   readonly details: string;
-  /** The app's platform as the run names it: a Mac's `darwin`, or `web`. */
+  /** The app's platform as the run names it (`RUN_PLATFORM`), or another desktop's. */
   readonly platform: string;
   readonly version?: string | undefined;
   readonly build?: InvestigatedBuild | undefined;
@@ -65,11 +60,19 @@ export interface FailureInvestigation {
   readonly prompt: string;
 }
 
-/** What each platform a run names is called in the prompt: the desktop app on a Mac, or the web app. */
+/** The platforms a run names that the prompt calls by name: the desktop app on a Mac, and the web app. */
+export const RUN_PLATFORM = {
+  MAC: "darwin",
+  WEB: "web",
+} as const;
+
+export type RunPlatform = (typeof RUN_PLATFORM)[keyof typeof RUN_PLATFORM];
+
+/** What each platform a run names is called in the prompt. */
 const PLATFORM_WORDS: Readonly<Record<string, string>> = {
-  darwin: "macOS desktop app",
-  web: "web app",
-};
+  [RUN_PLATFORM.MAC]: "macOS desktop app",
+  [RUN_PLATFORM.WEB]: "web app",
+} satisfies Record<RunPlatform, string>;
 
 /** What the run's platform is called in the prompt, or the desktop app on the platform it names. */
 function platformWords(platform: string): string {
@@ -99,10 +102,7 @@ export function failureInvestigation(
   const code = shownFailureCode(report);
   const stack = shownFailureStack(report);
   const act = report.act === undefined ? "" : `, answering the act \`${report.act}\``;
-  const route =
-    context.route === undefined
-      ? "unknown"
-      : `\`${context.route.pattern}\` (path \`${redactedPathText(context.route.path)}\`)`;
+  const route = context.route === undefined ? "unknown" : `\`${context.route.pattern}\``;
   const prompt = [
     `A member of our team pressed Investigate on an error ${PRODUCT_NAME} showed them. Find its cause, fix it, and open a pull request.`,
     "",

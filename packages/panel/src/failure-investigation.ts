@@ -62,11 +62,10 @@ export function holdWindowRouter(router: PanelRouter): () => void {
   };
 }
 
-/** The route open now: its pattern and the path it stands on; nothing where no router is held or none matched. */
+/** The route open now, by its pattern; nothing where no router is held or none matched. */
 function openRoute(): InvestigatedRoute | undefined {
   const matched = windowRouter?.state.matches.at(-1);
-  if (matched === undefined) return undefined;
-  return { pattern: matched.fullPath, path: matched.pathname };
+  return matched === undefined ? undefined : { pattern: matched.fullPath };
 }
 
 /** Whether `workspace`'s GitHub reaches the product's own repository: an active installation on its owner. */

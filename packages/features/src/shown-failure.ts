@@ -37,7 +37,7 @@
 
 import { Predicate } from "effect";
 import { CALL_FAULT, DEADLINE_ERROR_NAME } from "./account-call.js";
-import { redactCredentials } from "./credential-redaction.js";
+import { redactCredentials, redactNamedCredentials } from "./credential-redaction.js";
 import { PRODUCT_NAME } from "./product-name.js";
 
 /** Where a failure was shown: the surface whose words said so. */
@@ -423,6 +423,13 @@ const TEXT_BOUND = 500;
 /** How long a cause's stack may be once redacted; past it, the rest is cut. */
 const STACK_BOUND = 4000;
 
+/**
+ * Where a stack's frame stands: a scheme's address or an absolute path, up
+ * to its line and column, and never past a query, a fragment, or a
+ * parenthesis, so a value in a query is redacted with the rest.
+ */
+const FRAME_LOCATION = /(?:[a-z][\w+.-]*:\/\/\/?|\/)[^\s()?#]*:\d+(?::\d+)?/gi;
+
 /** How deep a cause's chain is read: past it, the rest is left out. */
 const CHAIN_BOUND = 5;
 
@@ -705,20 +712,30 @@ export function shownFailureCode(report: ShownFailureReport): string {
 }
 
 /**
- * Text naming paths, as a stack's frames or a route do, with every
- * credential-shaped run replaced in each step between its `/`s on its own,
- * since the redaction reads a `/` as part of a credential's run and would
- * otherwise take a long path for one.
+ * A stack as it may be sent: every value a credential's name is assigned
+ * replaced across the whole stack first, then each frame's location
+ * (`FRAME_LOCATION`) redacted a step between its `/`s at a time, so a long
+ * file path is not taken for a credential and stays to be read, and the
+ * rest redacted whole, so a credential holding a `/` outside a location is
+ * still taken.
  */
-export function redactedPathText(text: string): string {
-  return text.split("/").map(redactCredentials).join("/");
+function redactedStack(stack: string): string {
+  const named = redactNamedCredentials(stack);
+  let redacted = "";
+  let read = 0;
+  for (const location of named.matchAll(FRAME_LOCATION)) {
+    redacted += redactCredentials(named.slice(read, location.index));
+    redacted += location[0].split("/").map(redactCredentials).join("/");
+    read = location.index + location[0].length;
+  }
+  return redacted + redactCredentials(named.slice(read));
 }
 
 /**
  * The stack of a shown failure's cause, as its issue sends it: the cause's
  * own frames under the header its sendable error says, with every
- * credential-shaped run replaced, each step of a frame's path on its own
- * (`redactedPathText`), and cut at `STACK_BOUND`; nothing where no cause
+ * credential-shaped run replaced but a frame's path kept to be read
+ * (`redactedStack`), and cut at `STACK_BOUND`; nothing where no cause
  * down its chain is an error with a stack, as a bare condition is not.
  */
 export function shownFailureStack(report: ShownFailureReport): string | undefined {
@@ -730,7 +747,7 @@ export function shownFailureStack(report: ShownFailureReport): string | undefine
     const header = { name: own?.tag ?? own?.name ?? cause.name, message: own?.message ?? "" };
     const stack = sendableStack(cause, header);
     if (stack === undefined) continue;
-    const redacted = redactedPathText(stack);
+    const redacted = redactedStack(stack);
     return redacted.length > STACK_BOUND ? `${redacted.slice(0, STACK_BOUND)}…` : redacted;
   }
   return undefined;

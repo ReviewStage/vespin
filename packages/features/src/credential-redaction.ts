@@ -33,5 +33,15 @@ const REDACTED = "[redacted]";
  * would otherwise take a value's head up to its first `.` and leave the tail.
  */
 export function redactCredentials(message: string): string {
-  return message.replace(NAMED_CREDENTIAL_PATTERN, REDACTED).replace(CREDENTIAL_PATTERN, REDACTED);
+  return redactNamedCredentials(message).replace(CREDENTIAL_PATTERN, REDACTED);
+}
+
+/**
+ * Text with only the values a `key`, `token`, or `secret` name is assigned
+ * replaced, each whole up to its end, a `/` within it included: the first
+ * pass of `redactCredentials`, for text read in parts after it, as a stack's
+ * frame locations are, so a value no part holds whole is still taken.
+ */
+export function redactNamedCredentials(message: string): string {
+  return message.replace(NAMED_CREDENTIAL_PATTERN, REDACTED);
 }
