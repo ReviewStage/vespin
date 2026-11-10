@@ -25,6 +25,7 @@
 
 import { agentDelegationTable, agentTable } from "../schemas/agent.js";
 import { agentApproval } from "../schemas/agent-approval.js";
+import { agentBootTable } from "../schemas/agent-boot.js";
 import { agentBrowserTab } from "../schemas/agent-browser-tab.js";
 import { agentPin } from "../schemas/agent-pin.js";
 import { agentPullRequest } from "../schemas/agent-pull-request.js";
@@ -185,6 +186,23 @@ export const agentSandboxSync = defineSyncTable(agentSandboxTable, {
       through: agentTable,
       key: agentTable.id,
       by: agentSandboxTable.agentId,
+      topics: [
+        { kind: TOPIC.TASK, column: agentTable.taskId },
+        { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
+      ],
+    },
+  ],
+  log: LOG.EVERY,
+});
+
+/** An agent's first launch, on the agent's topic, its task's, and its workspace's, as its sandbox's row is. */
+export const agentBootSync = defineSyncTable(agentBootTable, {
+  topics: [
+    { kind: TOPIC.AGENT, column: agentBootTable.agentId },
+    {
+      through: agentTable,
+      key: agentTable.id,
+      by: agentBootTable.agentId,
       topics: [
         { kind: TOPIC.TASK, column: agentTable.taskId },
         { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
@@ -814,6 +832,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   runnerLineSync,
   agentQueueSync,
   agentSandboxSync,
+  agentBootSync,
   deviceAgentLineSync,
   deviceAgentRequestSync,
   descriptionCommentThreadSync,

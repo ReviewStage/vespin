@@ -15,6 +15,7 @@ import {
   agentPermissionModeSchema,
   permissionModeAppliesSchema,
 } from "./agent-approval-wire.js";
+import { agentBootSchema } from "./agent-boot.js";
 import { AGENT_QUEUE_BOUNDS, agentQueueSchema } from "./agent-queue-wire.js";
 import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
@@ -1419,6 +1420,13 @@ export const agentAnswerSchema = EffectSchema.Struct({
 export const agentMessageAnswerSchema = EffectSchema.Struct({
   agent: agentSummarySchema,
   txid: EffectSchema.optionalKey(EffectSchema.String),
+  /**
+   * The agent's queue with the message in it, where the agent's machine was
+   * still booting its first launch and the message waits there to go once it
+   * is up (`agent-boot.ts`), in place of a line written; absent where the
+   * message was sent, and from a service older than it.
+   */
+  queued: EffectSchema.optionalKey(agentQueueSchema),
 });
 
 /**
@@ -2713,6 +2721,14 @@ export const agentMessagesAnswerSchema = EffectSchema.Struct({
   cursor: agentCursorSchema,
   /** The messages queued behind the agent's turn, and whether the queue stands paused, on its own transcript; absent while none is queued, on a worker's page, and from a service older than it. */
   queue: EffectSchema.optionalKey(agentQueueSchema),
+  /**
+   * The agent's first launch while it stands (`agent-boot.ts`): its machine
+   * booting, its setup scripts running, its first message going, or the boot
+   * failed, on its own transcript until its first turn settles; absent on a
+   * worker's page, for an agent whose first launch is over or never booted
+   * this way, and from a service older than it.
+   */
+  boot: EffectSchema.optionalKey(agentBootSchema),
   /**
    * The turn the page before the oldest message here is read before, on a
    * task conversation's page read from its newest turns or before one;

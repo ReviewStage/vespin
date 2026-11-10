@@ -3,6 +3,7 @@
 export * from "./account-provider-key.js";
 export * from "./agent.js";
 export * from "./agent-approval.js";
+export * from "./agent-boot.js";
 export * from "./agent-browser-tab.js";
 export * from "./agent-pin.js";
 export * from "./agent-pull-request.js";

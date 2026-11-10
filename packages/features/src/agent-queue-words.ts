@@ -14,6 +14,7 @@ export const QUEUE_WORDS = {
   STOPPED: "Queue paused because you interrupted",
   TURN_FAILED: "Queue paused because the turn failed",
   REFUSED: "Queue paused: the next message could not be sent",
+  BOOT_FAILED: "Queue paused until the machine starts",
   PAUSED: "Queue paused",
 } as const;
 
@@ -43,6 +44,7 @@ const REFUSAL_WORDS: Readonly<Record<string, string>> = {
 export function pausedWords(paused: QueuePaused): string {
   if (paused.because === QUEUE_PAUSE.STOPPED) return QUEUE_WORDS.STOPPED;
   if (paused.because === QUEUE_PAUSE.TURN_FAILED) return QUEUE_WORDS.TURN_FAILED;
+  if (paused.because === QUEUE_PAUSE.BOOT_FAILED) return QUEUE_WORDS.BOOT_FAILED;
   const why = paused.refusal === undefined ? undefined : REFUSAL_WORDS[paused.refusal];
   return why === undefined ? QUEUE_WORDS.REFUSED : `${QUEUE_WORDS.PAUSED}: ${why}`;
 }

@@ -71,6 +71,7 @@
     "./models/quota": "./src/models/quota.js",
     "./models/recorded-session": "./src/models/recorded-session.js",
     "./models/repository-pin-store": "./src/models/repository-pin-store.js",
+    "./models/agent-boot-store": "./src/models/agent-boot-store.js",
     "./models/agent-queue-store": "./src/models/agent-queue-store.js",
     "./models/runner-line-store": "./src/models/runner-line-store.js",
     "./models/run-agents": "./src/models/run-agents.js",

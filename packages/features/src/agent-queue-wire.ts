@@ -14,11 +14,12 @@ import { Schema as EffectSchema } from "effect";
  * member asks of the queue is `agent-wire.ts`'s, beside a message.
  */
 
-/** Why a queue stands paused: the developer's Stop, a turn that failed, or a hand-off the service refused. */
+/** Why a queue stands paused: the developer's Stop, a turn that failed, a hand-off the service refused, or the agent's first launch failing to boot its machine (`agent-boot.ts`), which Retry lifts. */
 export const QUEUE_PAUSE = {
   STOPPED: "stopped",
   TURN_FAILED: "turn-failed",
   REFUSED: "refused",
+  BOOT_FAILED: "boot-failed",
 } as const;
 
 export type QueuePause = (typeof QUEUE_PAUSE)[keyof typeof QUEUE_PAUSE];
@@ -52,6 +53,13 @@ const queuedMessageSchema = EffectSchema.Struct({
   ),
   /** The member who queued it, whose message it goes as. */
   queuedBy: EffectSchema.String,
+  /**
+   * Who a line sent while the agent's machine booted goes as, by the name the
+   * transcript would draw it under, where that is not `queuedBy` typing it:
+   * an automation, GitHub, another agent, or Vespin itself. Absent for a
+   * member's own message, and from a service older than it.
+   */
+  from: EffectSchema.optionalKey(EffectSchema.Struct({ name: EffectSchema.String })),
   /** Whether a member is editing it in their composer, which stops the hand-off at it; absent while nobody is. */
   editing: EffectSchema.optionalKey(EffectSchema.Literal(true)),
 });
