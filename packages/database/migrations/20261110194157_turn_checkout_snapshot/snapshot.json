@@ -1,11 +1,11 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "a3bc7f91-ccfd-4d1e-a26f-f010c61927e8",
+  "id": "41b7bc3c-9090-45dd-b575-c12a2d137fec",
   "prevIds": [
-    "20b4afc6-9024-4622-bd80-a537dfe74071",
-    "5e620699-3ec1-40ef-958b-057ab782d789",
-    "71363fb1-20e2-469a-b396-1abffa6e11c4"
+    "0ec5568e-ab45-4c4a-8942-b9539fbacde5",
+    "5fd3fc3b-f67a-48ad-b867-b2b5f2fae091",
+    "ea68a8ee-ba2f-4d1e-99a4-009d24cfa08d"
   ],
   "ddl": [
     {
@@ -927,6 +927,45 @@
       "table": "account_provider_key"
     },
     {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "usage_windows",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_provider_key"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "usage_heard_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_provider_key"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "usage_asked_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_provider_key"
+    },
+    {
       "type": "integer",
       "typeSchema": null,
       "notNull": true,
@@ -1689,6 +1728,19 @@
       "generated": null,
       "identity": null,
       "name": "settled_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_approval"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "confirmed_at",
       "entityType": "columns",
       "schema": "public",
       "table": "agent_approval"
@@ -5519,6 +5571,19 @@
       "table": "automation_run"
     },
     {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "claimed_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "automation_run"
+    },
+    {
       "type": "uuid",
       "typeSchema": null,
       "notNull": false,
@@ -8786,6 +8851,19 @@
       "generated": null,
       "identity": null,
       "name": "sent_state",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "live_activity"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "swept_at",
       "entityType": "columns",
       "schema": "public",
       "table": "live_activity"
@@ -14181,6 +14259,34 @@
       "method": "btree",
       "concurrently": false,
       "name": "automation_run_unrecorded_settled",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "automation_run"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "automation_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "settled_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": "\"claimed_at\" is not null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "automation_run_claimed",
       "entityType": "indexes",
       "schema": "public",
       "table": "automation_run"
