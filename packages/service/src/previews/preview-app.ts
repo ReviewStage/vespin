@@ -133,6 +133,53 @@ const WAKING_PAGE = previewPage({
   end: `<script>(function poll(){fetch("${PREVIEW_LINK.STATUS_PATH}",{cache:"no-store",credentials:"same-origin"}).then(function(r){return r.ok?r.json():{ready:false}}).catch(function(){return {ready:false}}).then(function(s){if(s.ready)location.reload();else setTimeout(poll,${WAKING_POLL_SECONDS * 1000})})})()</script>`,
 });
 
+/** The site's share card, as `apps/web/app.html` carries it for every pasted link: the image on the app's host, its size, and its words. */
+const SHARE_CARD = {
+  TITLE: `Preview on ${PRODUCT_NAME}`,
+  DESCRIPTION: "An agent's running app, open to the members of its workspace who sign in.",
+  IMAGE_PATH: "/og-card.png",
+  IMAGE_WIDTH: 1200,
+  IMAGE_HEIGHT: 630,
+  IMAGE_ALT: `The ${PRODUCT_NAME} logo — a disc cut by a V, beside the name — on a near-black ground.`,
+} as const;
+
+/**
+ * The page an unfurler reads for a pasted preview link: Slack, iMessage, X,
+ * and the rest fetch it signed out and outside a browser, so the card is
+ * the site's own, the same for every preview. It names nothing of the
+ * agent, the task, or the workspace, since whoever holds the link reads it,
+ * and no og:url, so each unfurler keeps the link it was handed. X reads its
+ * own `twitter:` copies of the tags.
+ */
+function shareCardPage(app: string | undefined): string {
+  const image = new URL(SHARE_CARD.IMAGE_PATH, app).href;
+  const tags = [
+    ["name", "robots", "noindex"],
+    ["name", "description", SHARE_CARD.DESCRIPTION],
+    ["property", "og:type", "website"],
+    ["property", "og:site_name", PRODUCT_NAME],
+    ["property", "og:title", SHARE_CARD.TITLE],
+    ["property", "og:description", SHARE_CARD.DESCRIPTION],
+    ["property", "og:image", image],
+    ["property", "og:image:width", String(SHARE_CARD.IMAGE_WIDTH)],
+    ["property", "og:image:height", String(SHARE_CARD.IMAGE_HEIGHT)],
+    ["property", "og:image:type", "image/png"],
+    ["property", "og:image:alt", SHARE_CARD.IMAGE_ALT],
+    ["name", "twitter:card", "summary_large_image"],
+    ["name", "twitter:title", SHARE_CARD.TITLE],
+    ["name", "twitter:description", SHARE_CARD.DESCRIPTION],
+    ["name", "twitter:image", image],
+    ["name", "twitter:image:alt", SHARE_CARD.IMAGE_ALT],
+  ] as const;
+  return previewPage({
+    title: SHARE_CARD.TITLE,
+    line: NOT_SIGNED_IN,
+    head: tags
+      .map(([kind, key, content]) => `<meta ${kind}="${key}" content="${content}">`)
+      .join(""),
+  });
+}
+
 /** The page sandbox, or not found on a deployment that has none. */
 const pageSandbox = Effect.gen(function* () {
   const { sandbox } = yield* PageLinks;
@@ -256,15 +303,28 @@ function isPageLoad(request: Request): boolean {
   return request.headers.get("sec-fetch-mode") === "navigate";
 }
 
-/** A request without a member's cookie: a page load sent to sign in on the app, anything else refused. */
+/** Whether the request is an unfurler's read of a pasted link: a GET no browser made, since every browser names its fetch's mode on an `https:` request. */
+function isUnfurl(request: Request): boolean {
+  return request.method === HTTP_METHOD.GET && !request.headers.has("sec-fetch-mode");
+}
+
+/** A request without a member's cookie: an unfurler's read answered the share card, a page load sent to sign in on the app, anything else refused. */
 function signInFirst(sandbox: PageSandbox, name: PreviewName, request: Request, asked: string) {
+  const [app] = sandbox.appOrigins;
+  // Note that the card answers 200, because an unfurler draws no card for a page that refuses it.
+  if (isUnfurl(request)) {
+    return HttpServerResponse.text(shareCardPage(app), {
+      status: HOSTED_HTTP_STATUS.OK,
+      contentType: "text/html; charset=utf-8",
+      headers: NEVER_KEPT,
+    });
+  }
   if (request.method !== HTTP_METHOD.GET || !isPageLoad(request)) {
     return HttpServerResponse.text(NOT_SIGNED_IN, {
       status: HOSTED_HTTP_STATUS.UNAUTHORIZED,
       headers: NEVER_KEPT,
     });
   }
-  const [app] = sandbox.appOrigins;
   const signIn = new URL(PREVIEW_LINK.SIGN_IN_PATH, app);
   signIn.searchParams.set(PREVIEW_LINK.QUERY.PREVIEW, previewLabel(name));
   signIn.searchParams.set(PREVIEW_LINK.QUERY.RETURN, asked);
