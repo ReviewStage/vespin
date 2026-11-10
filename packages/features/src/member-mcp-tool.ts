@@ -38,6 +38,8 @@ export const MEMBER_MCP_TOOL = {
   REPLY_TO_THREAD: "reply_to_thread",
   CLOSE_THREAD: "close_thread",
   AGENT_PULL_REQUEST_ACTION: "agent_pull_request_action",
+  READ_PULL_REQUEST: "read_pull_request",
+  MARK_PULL_REQUEST_FILES_VIEWED: "mark_pull_request_files_viewed",
   READ_COMMENTS: AGENT_TOOL.READ_COMMENTS,
   COMMENT_ON_DESCRIPTION: "comment_on_description",
   REPLY_TO_COMMENT: AGENT_TOOL.REPLY_TO_COMMENT,

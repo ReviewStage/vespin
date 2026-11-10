@@ -74,6 +74,7 @@ import {
   openTask,
   PUBLISHED,
   PULL_REQUEST_NODE_ID,
+  publishedPullRequest,
   publishedPullRequestDrafted,
   RELAY_FULL_NAME,
   startedAgent,
@@ -958,6 +959,122 @@ it.effect(
           [
             "mergePullRequest",
             { id, method: "SQUASH", head: PUBLISHED.headSha },
+            `Bearer ${MEMBER_GITHUB_TOKEN}`,
+          ],
+        ],
+      );
+    }),
+);
+
+it.effect(
+  "an outside agent reads any pull request of the member's workspace by its repository and number, its files with the member's viewed marks, and marks one viewed on the member's own GitHub sign-in",
+  () =>
+    Effect.gen(function* () {
+      const calls: GraphqlCall[] = [];
+      const installation = freshInstallation();
+      const files = [
+        {
+          filename: "src/invite.ts",
+          status: "modified",
+          additions: 3,
+          deletions: 1,
+          changes: 4,
+          patch: "@@ -1 +1 @@",
+        },
+        {
+          filename: "src/expire.ts",
+          status: "added",
+          additions: 1,
+          deletions: 0,
+          changes: 1,
+          patch: "@@ -0,0 +1 @@",
+        },
+      ];
+      const github = githubReaching(
+        [installation],
+        undefined,
+        undefined,
+        graphqlAnswering(
+          calls,
+          (call) =>
+            Response.json({
+              data: call.query.includes("mutation")
+                ? {}
+                : call.query.includes("viewerViewedState")
+                  ? {
+                      repository: {
+                        pullRequest: {
+                          files: {
+                            nodes: [{ path: "src/invite.ts", viewerViewedState: "VIEWED" }],
+                            pageInfo: { hasNextPage: false, endCursor: null },
+                          },
+                        },
+                      },
+                    }
+                  : { repository: { pullRequest: { id: PULL_REQUEST_NODE_ID } } },
+            }),
+          (sent) =>
+            new URL(sent.url).pathname ===
+            `/repos/${RELAY_FULL_NAME}/pulls/${PUBLISHED.number}/files`
+              ? Response.json(files)
+              : publishedPullRequest(sent),
+        ),
+      );
+      const { auth, fetch, services } = yield* memberMcpStanding({ github: github.layer });
+      const member = yield* Effect.promise(() => signUp(auth));
+      yield* Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        yield* signInWithGitHub(member.userId, {
+          ...standingGithubRow(now),
+          accessToken: MEMBER_GITHUB_TOKEN,
+        });
+        const workspaceId = yield* openWorkspace(member.userId);
+        yield* connectWorkspaceGitHub(workspaceId, installation);
+      }).pipe(Effect.provide(services));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const named = { repository: RELAY_FULL_NAME, number: PUBLISHED.number };
+      const call = (name: string, args: Record<string, unknown>) =>
+        Effect.promise(async () => decodeAnswer(await client.callTool({ name, arguments: args })));
+
+      const changes = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, { ...named, part: "changes" });
+      const missing = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, { ...named, number: 13 });
+      const marked = yield* call(MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED, {
+        ...named,
+        paths: ["src/expire.ts"],
+        viewed: true,
+      });
+      yield* Effect.promise(() => client.close());
+
+      assert.notEqual(changes.isError, true, changes.content[0].text);
+      assert.deepEqual(
+        JSON.parse(changes.content[0].text).files.map(
+          ({ path, viewed }: { path: string; viewed: string }) => [path, viewed],
+        ),
+        [
+          ["src/invite.ts", "viewed"],
+          ["src/expire.ts", "unviewed"],
+        ],
+      );
+      // A number the repository holds no pull request under is refused as the hosted read refuses it.
+      assert.equal(missing.isError, true);
+      assert.match(missing.content[0].text, /no pull request of that number/u);
+      assert.notEqual(marked.isError, true, marked.content[0].text);
+      assert.deepEqual(
+        calls.flatMap((one) => {
+          const mutation = mutationOf(one);
+          return mutation === undefined ? [] : [[mutation, one.variables, one.authorization]];
+        }),
+        [
+          [
+            "markFileAsViewed",
+            { id: PULL_REQUEST_NODE_ID, path: "src/expire.ts" },
             `Bearer ${MEMBER_GITHUB_TOKEN}`,
           ],
         ],

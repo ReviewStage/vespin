@@ -231,6 +231,12 @@ import {
 import type { SentryApp } from "../triggers/sentry/sentry-app-config.js";
 import { AdmittedMember, type AdmittedMemberValues } from "./admission.js";
 import { answerAskAsMember, closeThreadAsMember, readMemberInbox, replyAsMember } from "./inbox.js";
+import {
+  MARK_FILES_VIEWED_FIELDS,
+  READ_PULL_REQUEST_FIELDS,
+  runMarkFilesViewed,
+  runReadPullRequest,
+} from "./pull-request-tools.js";
 
 /** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against, an agent's sandbox its ports are read and shared in, the deployment's page links its shares answer, and the member the call acts for. */
 export type MemberMcpServices =
@@ -1495,6 +1501,62 @@ const AGENT_PULL_REQUEST_ACTION_TOOL = memberMcpTool({
     ),
 });
 
+// Any pull request of a repository the member's workspace reaches, by its repository and number (`pull-request-tools.ts`).
+
+/** A read names its workspace, as a list does, and the pull request and its part. */
+const ReadPullRequestInputSchema = Schema.Struct({
+  workspace: WORKSPACE_INPUT,
+  ...READ_PULL_REQUEST_FIELDS,
+});
+
+/** A mark names its workspace, as a list does, and the pull request's files. */
+const MarkPullRequestFilesViewedInputSchema = Schema.Struct({
+  workspace: WORKSPACE_INPUT,
+  ...MARK_FILES_VIEWED_FIELDS,
+});
+
+const READ_PULL_REQUEST_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.READ_PULL_REQUEST,
+  description:
+    "Read any pull request of a repository the member's workspace reaches on GitHub, by its " +
+    "repository (owner/name) and number, one part a call, as its Pull request tab draws it. " +
+    "overview (the default) answers the pull request as GitHub holds it now: its state, its " +
+    "checks in one word, the head commit it stands on (headSha), the lines it adds and removes, " +
+    "the branch it is from, and its overview: its body as written in Markdown, cut to a bound, its " +
+    "base and head, whether it would merge, who opened it, who it asks for a review, its labels, " +
+    "and the stack it stands in. checks answers each check on its head and its deployments. " +
+    "conversation answers where each reviewer stands and its comments and reviews, newest " +
+    "first, each with its review threads, a page at a time held to a bound, with nextOffset " +
+    "where more stand. changes answers the files it changes, a page at a time with nextOffset, " +
+    "each with what became of it, the lines it adds and removes, and whether the member marked " +
+    "it viewed; name a path to read that file's patch as well. " +
+    `${WORKSPACE_WORDS} Answers \`rejected\` and why where the member is in no such workspace ` +
+    "or the repository holds no pull request of that number. It only reads.",
+  input: ReadPullRequestInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace, ...asked }) =>
+    listAsMember(workspace, (call) =>
+      runReadPullRequest(callerUserId(call.caller), callerWorkspaceId(call.caller), asked),
+    ),
+});
+
+const MARK_PULL_REQUEST_FILES_VIEWED_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED,
+  description:
+    "Mark files of any pull request of a repository the member's workspace reaches as viewed, " +
+    "or unmark them, by the pull request's repository (owner/name) and number and the files' " +
+    `paths as ${MEMBER_MCP_TOOL.READ_PULL_REQUEST}'s changes name them, as GitHub's own Viewed ` +
+    "box does: on GitHub as the member, on their own GitHub sign-in. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the paths marked, or \`rejected\` and why ` +
+    "at the first GitHub did not take, naming those marked before it.",
+  input: MarkPullRequestFilesViewedInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ workspace, ...asked }) =>
+    listAsMember(workspace, (call) =>
+      runMarkFilesViewed(callerUserId(call.caller), callerWorkspaceId(call.caller), asked),
+    ),
+});
+
 /*
  * The comments and the memory. A description's comment threads, and its task's
  * pages', are read, answered, resolved, and reopened as the member, on a task
@@ -2188,6 +2250,8 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   REPLY_TO_THREAD_TOOL,
   CLOSE_THREAD_TOOL,
   AGENT_PULL_REQUEST_ACTION_TOOL,
+  READ_PULL_REQUEST_TOOL,
+  MARK_PULL_REQUEST_FILES_VIEWED_TOOL,
   MEMBER_READ_COMMENTS_TOOL,
   MEMBER_COMMENT_ON_DESCRIPTION_TOOL,
   MEMBER_REPLY_TO_COMMENT_TOOL,

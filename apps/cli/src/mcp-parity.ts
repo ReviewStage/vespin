@@ -53,6 +53,8 @@ export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.REPLY_TO_THREAD]: { command: ["inbox", "reply"] },
   [MEMBER_MCP_TOOL.CLOSE_THREAD]: { command: ["inbox", "close"] },
   [MEMBER_MCP_TOOL.AGENT_PULL_REQUEST_ACTION]: { command: ["agent", "pr"] },
+  [MEMBER_MCP_TOOL.READ_PULL_REQUEST]: { command: ["pr", "view"] },
+  [MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED]: { command: ["pr", "viewed"] },
   [MEMBER_MCP_TOOL.READ_COMMENTS]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
   [MEMBER_MCP_TOOL.COMMENT_ON_DESCRIPTION]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
   [MEMBER_MCP_TOOL.REPLY_TO_COMMENT]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
