@@ -622,7 +622,7 @@ function runOnMacWords(standing: AgentStanding): string {
  * which a sandbox runs as it is created (`../machine/sandbox-machine.ts`'s
  * `SETUP_RUN_SCRIPT`).
  */
-const SANDBOX_SETUP_WORDS = `You have passwordless \`sudo\`, so install what the repository's setup needs that the sandbox lacks, such as a system package with \`sudo apt-get install\`. Docker is installed too: \`docker\` and \`docker compose\` start its daemon on first use, and a port a container publishes is on \`localhost\`. Where your workspace keeps cloud setup scripts, in ${PRODUCT_NAME}'s Settings › Cloud environment, they ran as your sandbox was created, before you started: what they printed and how they exited is in \`${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}\`, and where it ends on anything but \`--- exit 0\`, tell the developer what failed.`;
+const SANDBOX_SETUP_WORDS = `You have passwordless \`sudo\`, so install what the repository's setup needs that the sandbox lacks, such as a system package with \`sudo apt-get install\`. Docker is installed too: \`docker\` and \`docker compose\` start its daemon on first use, and a port a container publishes is on \`localhost\`. Where your workspace keeps cloud setup scripts, in ${PRODUCT_NAME}'s Settings › Cloud environment, they ran as your sandbox was created, before you started: what they printed and how they exited is in \`${REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG}\`.`;
 
 /** The checkout section's words after where it stands and the tools' own: how GitHub is reached, and the Mac beside the sandbox. */
 function checkoutReachWords(machine: CoderMachine, standing: AgentStanding): string {

@@ -1,3 +1,4 @@
+import type { AgentBoot } from "@repo/features/agent-boot";
 import type { AgentQueue } from "@repo/features/agent-queue-wire";
 import {
   type AgentMessagesAnswerView,
@@ -123,6 +124,8 @@ export interface AgentTranscriptControl {
   subagents: ReadonlyMap<string, AgentSubagentStanding>;
   /** The messages queued behind the agent's turn and the queue's pause, as the last page said; none while none is queued, and on a worker's. */
   queue: AgentQueue | undefined;
+  /** The agent's first launch while it stands, as the last page said: its machine booting, its setup scripts running, its first message going, or the boot failed; none once its first turn settled, and on a worker's. */
+  boot: AgentBoot | undefined;
   /** Where the launch of a failed local agent its host settled unstarted stopped, as the last page said; nothing for any other failure. */
   launchStopped: DeviceLaunchStep | undefined;
   /** Why that launch never started, where its host said a reason beyond the step, as the last page said; nothing for any other launch. */
@@ -321,6 +324,7 @@ export function useAgentTranscript(input: {
     delegations,
     subagents,
     queue: word?.queue,
+    boot: word?.boot,
     // Note that the page's one launch word is read only once the agent failed, as where its start stopped, so a launch's steps never reach the working line.
     launchStopped:
       word?.status === AGENT_STATUS.FAILED && word.launch !== AGENT_LAUNCH.WAITING

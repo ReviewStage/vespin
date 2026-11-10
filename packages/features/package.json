@@ -90,6 +90,7 @@
     "./agent-view": "./src/agent-view.js",
     "./agent-queue-wire": "./src/agent-queue-wire.js",
     "./agent-boot": "./src/agent-boot.js",
+    "./agent-boot-words": "./src/agent-boot-words.js",
     "./agent-transcript-live": "./src/agent-transcript-live.js",
     "./agent-wire": "./src/agent-wire.js",
     "./agent-approval-model": "./src/agent-approval-model.js",
