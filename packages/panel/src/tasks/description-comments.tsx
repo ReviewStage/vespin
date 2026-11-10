@@ -3442,17 +3442,16 @@ function pinOf(
  */
 function usePointedPin(
   over: string | undefined,
-  pins: readonly ReadonlyMap<string, HTMLElement>[],
+  held: ReadonlyMap<string, HTMLElement>,
+  posted: ReadonlyMap<string, HTMLElement>,
 ): void {
-  const pinsRef = useRef(pins);
-  pinsRef.current = pins;
   useEffect(() => {
     if (over === undefined) return undefined;
-    const pin = pinOf(pinsRef.current, over);
+    const pin = pinOf([held, posted], over);
     if (pin === undefined) return undefined;
     pointCard(pin, true);
     return () => pointCard(pin, false);
-  }, [over]);
+  }, [over, held, posted]);
 }
 
 /** Where a thread on the whole page is started: the frame's top edge. */
@@ -3956,7 +3955,7 @@ export function PageCommentLayer({
   // The pins drawn, by their element's path, which a card opened from one stands under.
   const postedPins = useRef(new Map<string, HTMLElement>());
   const heldPins = useRef(new Map<string, HTMLElement>());
-  usePointedPin(over, [heldPins.current, postedPins.current]);
+  usePointedPin(over, heldPins.current, postedPins.current);
   // The element whose held comments stand open by it, by its path; none open.
   const [heldOpen, setHeldOpen] = useState<string | undefined>(undefined);
   const heldThere =
