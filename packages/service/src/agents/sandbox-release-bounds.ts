@@ -18,7 +18,7 @@ export const SANDBOX_RELEASE = {
   MAX_DURATION_SECONDS: 60,
   /** How long a sandbox stands unused before its release is due. */
   UNUSED_FOR: Duration.days(7),
-  /** How many sandboxes one sweep queues at most, oldest used first, so a fault cannot release every sandbox at once. */
+  /** How many sandboxes newly due one sweep marks and queues at most, oldest used first, so a fault cannot release every sandbox at once; as many again still releasing are published again beside them. */
   SWEEP_LIMIT: 50,
   /**
    * How long a release's message is kept, and how long Queues drops a

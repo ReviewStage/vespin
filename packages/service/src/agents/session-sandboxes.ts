@@ -15,10 +15,13 @@
  * alone, never the provider, marks each due row RELEASING, and publishes its
  * release on `SANDBOX_RELEASE.TOPIC`, at most `SANDBOX_RELEASE.SWEEP_LIMIT`
  * a sweep, and publishes again every row still RELEASING, whose message may
- * have been lost; its consumer (`consumeSandboxRelease`) reads the row again
- * just before the delete, writes it LIVE where it was opened, touched, or
- * given a turn since, and else deletes the sandbox, one already gone
- * counting as deleted, and writes it RELEASED. A delivery that failed comes
+ * have been lost; RELEASING rows are read apart from those newly due, so
+ * releases that keep failing never hold the new ones back. Its consumer
+ * (`consumeSandboxRelease`) reads the row again under the agent's runner
+ * lease, which a launch holds while it opens the sandbox, just before the
+ * delete, writes it LIVE where it was opened, touched, or given a turn
+ * since, and else deletes the sandbox and any other of its session, one
+ * already gone counting as deleted, and writes it RELEASED. A delivery that failed comes
  * again. An agent brought back after its release opens a sandbox afresh,
  * its checkout made from its repository's base drive and its pushed branch,
  * as a sandbox whose snapshot lapsed is.
@@ -80,6 +83,7 @@ import {
   archiveScriptRun,
 } from "./archive-script.js";
 import { deletedBaseDrive } from "./base-drive.js";
+import { holdingRunnerIfFree } from "./coder-host/runner-lease.js";
 import { discardedOrLogged } from "./device-discard.js";
 import { SANDBOX_RELEASE } from "./sandbox-release-bounds.js";
 
@@ -311,7 +315,7 @@ export const deletedWithWorkspace = /* @__PURE__ */ Effect.fnUntraced(function* 
 export const SANDBOX_RELEASE_OUTCOME = {
   /** Deleted, with the drive it owns, and written RELEASED. */
   RELEASED: "released",
-  /** Opened, touched, or given a turn since it was found due, and written LIVE again. */
+  /** Opened, touched, or given a turn since it was found due, or a launch under way holds its agent's runner, and written LIVE again. */
   USED_SINCE: "used-since",
   /** Deleting is off, and the row written LIVE again. */
   DELETES_OFF: "deletes-off",
@@ -349,11 +353,54 @@ function sandboxReleaseDue(usedAt: Date, now: number, turnOpen: boolean): boolea
 }
 
 /**
- * One release consumed: the row read again just before the delete, and the
- * sandbox deleted, with the drive it owns, only where the row still stands
- * RELEASING, deleting is on, and the release is still due; else the row is
- * written LIVE again and nothing deleted. A delete that fails fails the
- * delivery, which comes again; one already gone counts as deleted.
+ * The sandbox deleted with the drive it owns, and with it any other sandbox
+ * of the agent's session, such as one opened under a UUID before sandboxes
+ * were named after their session (`agent-sandbox-open.ts`'s
+ * `legacySandboxOf`), which an archive's delete by the session's tag used to
+ * take; one already gone counts as deleted.
+ */
+const deletedWithSession = (
+  sandboxName: string,
+  sessionId: string | null,
+): Effect.Effect<void, SandboxError, Sandbox> =>
+  Effect.flatMap(Sandbox, (api) =>
+    Effect.andThen(
+      api.delete(sandboxName),
+      sessionId === null ? Effect.void : sessionSandboxesOver(api).deleteFor(sessionId),
+    ),
+  );
+
+/**
+ * The release decided again under the agent's runner lease: the row read
+ * again, and the sandbox deleted only where it still stands RELEASING and
+ * its release is still due; else written LIVE again.
+ */
+const releasedHolding = (sandboxName: string) =>
+  Effect.gen(function* () {
+    const row = yield* agentSandboxRelease(sandboxName);
+    if (Option.isNone(row) || row.value.state !== AGENT_SANDBOX_STATE.RELEASING) {
+      return SANDBOX_RELEASE_OUTCOME.NOT_RELEASING;
+    }
+    const turnOpen = yield* hasOpenTurn(row.value.conversationId);
+    if (!sandboxReleaseDue(row.value.usedAt, yield* Clock.currentTimeMillis, turnOpen)) {
+      yield* settleAgentSandboxRelease(sandboxName, AGENT_SANDBOX_STATE.LIVE);
+      return SANDBOX_RELEASE_OUTCOME.USED_SINCE;
+    }
+    yield* deletedWithSession(sandboxName, row.value.sessionId).pipe(
+      Effect.timeout(SANDBOX_RELEASE.DELETE_TIMEOUT),
+    );
+    yield* settleAgentSandboxRelease(sandboxName, AGENT_SANDBOX_STATE.RELEASED);
+    return SANDBOX_RELEASE_OUTCOME.RELEASED;
+  });
+
+/**
+ * One release consumed. With deleting off, the row is written LIVE again
+ * and nothing deleted. Else the release is decided again holding the agent's
+ * runner lease (`releasedHolding`), which a launch holds while it opens the
+ * sandbox, so no launch opens it between the last read and the delete; a
+ * lease another call holds means a launch is under way, and the row is
+ * written LIVE again. A delete that fails fails the delivery, which comes
+ * again.
  */
 export const consumeSandboxRelease = /* @__PURE__ */ Effect.fn("web/consumeSandboxRelease")(
   function* (
@@ -369,16 +416,10 @@ export const consumeSandboxRelease = /* @__PURE__ */ Effect.fn("web/consumeSandb
         yield* settleAgentSandboxRelease(sandboxName, AGENT_SANDBOX_STATE.LIVE);
         return SANDBOX_RELEASE_OUTCOME.DELETES_OFF;
       }
-      const turnOpen = yield* hasOpenTurn(row.value.conversationId);
-      if (!sandboxReleaseDue(row.value.usedAt, yield* Clock.currentTimeMillis, turnOpen)) {
-        yield* settleAgentSandboxRelease(sandboxName, AGENT_SANDBOX_STATE.LIVE);
-        return SANDBOX_RELEASE_OUTCOME.USED_SINCE;
-      }
-      yield* (yield* Sandbox)
-        .delete(sandboxName)
-        .pipe(Effect.timeout(SANDBOX_RELEASE.DELETE_TIMEOUT));
-      yield* settleAgentSandboxRelease(sandboxName, AGENT_SANDBOX_STATE.RELEASED);
-      return SANDBOX_RELEASE_OUTCOME.RELEASED;
+      const held = yield* holdingRunnerIfFree(row.value.agentId, releasedHolding(sandboxName));
+      if (Option.isSome(held)) return held.value;
+      yield* settleAgentSandboxRelease(sandboxName, AGENT_SANDBOX_STATE.LIVE);
+      return SANDBOX_RELEASE_OUTCOME.USED_SINCE;
     });
     yield* Effect.logInfo(`an unused sandbox's release ended: ${outcome}`);
     return outcome;
@@ -395,8 +436,9 @@ export const consumeSandboxRelease = /* @__PURE__ */ Effect.fn("web/consumeSandb
 );
 
 /**
- * The sweep: the sandboxes due or still RELEASING read from the ledger
- * alone, the oldest used first and at most `SANDBOX_RELEASE.SWEEP_LIMIT`;
+ * The sweep: the sandboxes due and those still RELEASING read from the
+ * ledger alone, the oldest used first and at most `SANDBOX_RELEASE.SWEEP_LIMIT`
+ * of each;
  * with deleting on, each due one marked RELEASING and each published,
  * `SANDBOX_RELEASE.PUBLISH_CONCURRENCY` at a time so a slow queue holds the
  * minute's other sweeps back by a few publishes' bounds at most, and

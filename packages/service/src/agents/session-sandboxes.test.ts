@@ -3,6 +3,8 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { AGENT_USER } from "@repo/agent-runner/pins";
 import { Database } from "@repo/database/core/query";
+import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import { agentTable } from "@repo/database/schemas/agent";
 import { AGENT_SANDBOX_STATE, agentSandboxTable } from "@repo/database/schemas/agent-sandbox";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openAgentOnOwnTask, openWorkspace } from "@repo/database/testing";
@@ -30,7 +32,8 @@ import {
  * sandbox refused fails as it answered. An archive script runs in the
  * session's sandbox, as the agent's user, and is ended past its bound. An
  * agent's sandbox unused for `SANDBOX_RELEASE.UNUSED_FOR` is released by the
- * sweep, deleted and recorded released, one touched after the sweep found
+ * sweep, deleted with any older sandbox of its session and recorded
+ * released, one touched after the sweep found
  * it due is left standing, and none is touched while deleting is off.
  * Synthetic accounts, agents, and sandbox names throughout.
  */
@@ -149,18 +152,38 @@ it.effect("an archive script that runs past its bound is ended", () =>
   }),
 );
 
-/** An agent's sandbox standing in the memory and opened in the ledger now, with the memory it stands in. */
+/**
+ * An agent's sandbox standing in the memory and opened in the ledger now,
+ * beside an older one of its session under a UUID, as a sandbox opened
+ * before sandboxes were named after their session stands, with the memory
+ * they stand in.
+ */
 const openedSandbox = Effect.gen(function* () {
   const userId = `user-${randomUUID()}`;
   yield* Effect.flatMap(Database, (db) =>
     db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
   );
   const agentId = yield* openAgentOnOwnTask(userId, yield* openWorkspace(userId));
+  const [agent] = yield* Effect.flatMap(Database, (db) =>
+    db
+      .select({ conversationId: agentTable.conversationId })
+      .from(agentTable)
+      .where(eq(agentTable.id, agentId)),
+  );
+  assert.ok(agent !== undefined);
+  const sessionId = `wrun_${randomUUID()}`;
+  yield* claimRuntimeSession(
+    { userId, conversationId: agent.conversationId },
+    sessionId,
+    new Date(yield* Clock.currentTimeMillis),
+  );
   const name = `agent-sandbox-${randomUUID()}`;
+  const legacy = randomUUID();
   const sandbox = memorySandbox();
-  sandbox.stand({ name, tags: { sessionId: SESSION }, status: SANDBOX_STATUS.STOPPED });
+  sandbox.stand({ name, tags: { sessionId }, status: SANDBOX_STATUS.STOPPED });
+  sandbox.stand({ name: legacy, tags: { sessionId }, status: SANDBOX_STATUS.STOPPED });
   yield* recordedSandboxOpen(agentId, name);
-  return { name, sandbox };
+  return { name, legacy, sandbox };
 });
 
 const stateOf = (name: string) =>
@@ -195,19 +218,21 @@ const consumed = (name: string) =>
   );
 
 it.layer(getTestDB())("an unused sandbox's release", (it) => {
-  it.effect("a sandbox unused for its keep is deleted by its release and recorded released", () =>
-    Effect.gen(function* () {
-      const { name, sandbox } = yield* openedSandbox;
-      yield* TestClock.adjust(SANDBOX_RELEASE.UNUSED_FOR);
+  it.effect(
+    "a sandbox unused for its keep is deleted by its release, with an older one of its session, and recorded released",
+    () =>
+      Effect.gen(function* () {
+        const { name, legacy, sandbox } = yield* openedSandbox;
+        yield* TestClock.adjust(SANDBOX_RELEASE.UNUSED_FOR);
 
-      const published = yield* swept(true).pipe(Effect.provide(sandbox.layer));
-      const outcome = yield* consumed(name).pipe(Effect.provide(sandbox.layer));
+        const published = yield* swept(true).pipe(Effect.provide(sandbox.layer));
+        const outcome = yield* consumed(name).pipe(Effect.provide(sandbox.layer));
 
-      assert.ok(published.includes(name));
-      assert.equal(outcome, SANDBOX_RELEASE_OUTCOME.RELEASED);
-      assert.deepEqual(sandbox.state.deleted, [name]);
-      assert.deepEqual(yield* stateOf(name), [AGENT_SANDBOX_STATE.RELEASED]);
-    }),
+        assert.ok(published.includes(name));
+        assert.equal(outcome, SANDBOX_RELEASE_OUTCOME.RELEASED);
+        assert.deepEqual(sandbox.state.deleted, [name, legacy]);
+        assert.deepEqual(yield* stateOf(name), [AGENT_SANDBOX_STATE.RELEASED]);
+      }),
   );
 
   it.effect("a sandbox touched after the sweep found it due is left standing and live", () =>
