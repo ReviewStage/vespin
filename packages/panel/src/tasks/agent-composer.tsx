@@ -12,19 +12,9 @@ import { FAILURE_REASON, remedyLabel, retriesBesideRemedy } from "@repo/features
 import type { CatalogModel } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { ShortcutChord } from "@repo/settings/shortcuts";
-import {
-  type ComposerNote,
-  type ComposerRefusal,
-  MicrophoneIcon,
-  MoreButton,
-  moreLabel,
-  PlusIcon,
-  riseAboveEnd,
-  useMenu,
-} from "@repo/ui";
+import type { ComposerNote, ComposerRefusal } from "@repo/ui";
 import { SERVER_HANDED } from "@repo/ui/agent-servers-model";
 import { GLYPH } from "@repo/ui/icons";
-import { OPENAI_KEY_MISSING_NOTE } from "@repo/ui/microphone-access";
 import {
   type ComponentProps,
   type ReactNode,
@@ -34,7 +24,7 @@ import {
   useState,
 } from "react";
 import { useConnected } from "../connection.js";
-import { ActionMenu, type MenuEntry } from "../desktop/action-menu.js";
+import type { MenuEntry } from "../desktop/action-menu.js";
 import { modEnterSends } from "../enter-sends.js";
 import { failureShown } from "../failure-report.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";
@@ -44,9 +34,8 @@ import { contextHint } from "./agent-context-model.js";
 import { noteWhileOffline } from "./agent-model.js";
 import { AgentModelChip } from "./agent-model-chip.js";
 import { type AgentServersControl, serversMenuPanel } from "./agent-servers.js";
-import { AttachFilesButton, type AttachPicker, attachmentRow } from "./attach-files-button.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide } from "./mention-picker.js";
-import { MessageBox, useMessageBox } from "./message-box.js";
+import { FOLD_WIDTH, MessageBox, OVERFLOW_PRESS, useMessageBox } from "./message-box.js";
 import { useRepositoryRemedy } from "./repository-remedy.js";
 import type { SkillSource } from "./skill-picker.js";
 import { useMentionBox } from "./task-mentions.js";
@@ -155,19 +144,10 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * words as its chip, read as `/name`, which the agent loads before it acts
  * and a press opens the `SKILL.md` of (`skill-picker.tsx`).
  *
- * The foot answers the card's own width, not the window's, so the box
- * holds in the main column and the side panel alike, the way Cursor's and
- * ChatGPT's narrow panes do (planning.css's `composer` container). As the
- * card narrows, New task's Runs on chip draws its mark alone; then a ⋯ takes in, in this order, the
- * context ring and the microphone, where the ring stands, since a ⋯ holding
- * the microphone alone would be one press behind two; then the model chip draws
- * its harness's mark alone; and last the + goes into the ⋯ too, the ⋯
- * offering the + menu's rows in its place. The field
- * and the round Send or Stop always stand whole. The chips drawing their
- * marks alone are `FOLD_WIDTH`'s, read off the card's width here; what the
- * ⋯ takes in is the stylesheet's, which it offers as it opens, read off the
- * card itself; a popover it opens hangs where the ⋯ stands, at the right
- * of the owner's presses, where its own hidden press stood.
+ * The foot folds as the card narrows as every message box's does
+ * (`message-box.tsx`): the ⋯ takes in the context ring and the microphone,
+ * then the model chip draws its harness's mark alone, then the + folds in
+ * too. The field and the round Send or Stop always stand whole.
  *
  * New task's composer is this same box over a start rather than a message
  * (`new-task-composer.tsx`): its owner names what the box asks for and
@@ -210,95 +190,11 @@ export const BUTTON = {
   STOP: "Stop",
   STOPPING: "Stopping",
   SENDING: "Sending",
-  ATTACH: "Attach files",
-  ADD: "Add files and more",
-  MORE_THING: "Composer",
   QUEUE: "Queue",
   STEER: "Steer",
   SAVE: "Save",
 } as const;
 
-/**
- * The card widths below which a press draws its mark alone: the owner's
- * tools after the "+" first (New task's Runs on chip), then the owner's presses that carry words (New task's Plan
- * toggle, at the step the ⋯ stands), then the model
- * chip. Note that they are steps of the same order as the stylesheet's
- * `composer` queries (tasks.css's, and New task's in desktop.css, at 400
- * and 240), because the room each leaves is counted on the steps before it.
- */
-const FOLD_WIDTH = {
-  TOOLS: 520,
-  ACTIONS: 400,
-  MODEL: 300,
-} as const;
-
-type FoldWidth = (typeof FOLD_WIDTH)[keyof typeof FOLD_WIDTH];
-
-/** The fold widths, narrowest first. */
-const FOLD_LINES = Object.values(FOLD_WIDTH).toSorted((a, b) => a - b);
-
-/** The presses a narrow card's ⋯ takes in, by the class each wears on the foot. */
-const OVERFLOW_PRESS = {
-  ATTACH: "agent-composer-attach",
-  CONTEXT: "agent-context-button",
-  DICTATE: "dictate-button",
-} as const;
-
-type OverflowPress = (typeof OVERFLOW_PRESS)[keyof typeof OVERFLOW_PRESS];
-
-/** A press the ⋯ may take in, and the rows the menu offers in its place. */
-interface OverflowOffer {
-  press: OverflowPress;
-  entries: readonly MenuEntry[];
-}
-
-/** The presses standing on the card's foot that the stylesheet hid for want of room. */
-function hiddenPresses(card: HTMLElement | null): readonly OverflowPress[] {
-  if (card === null) return [];
-  return Object.values(OVERFLOW_PRESS).filter((press) => {
-    const element = card.querySelector(`.${press}`);
-    return element !== null && getComputedStyle(element).display === "none";
-  });
-}
-
-/**
- * The narrowest fold width the card's form lays its foot out under, in the
- * box the stylesheet's `composer` queries read, followed as it resizes;
- * nothing before it was laid out, or where it is wider than every fold, which
- * draws every chip whole. Note that it holds the fold rather than the width,
- * because the form resizes as every pane beside it lands, and a width held
- * would draw the whole box again mid-glide for the chips it already draws.
- */
-function useFootFold(card: RefObject<HTMLDivElement | null>): FoldWidth | undefined {
-  const [under, setUnder] = useState<FoldWidth | undefined>(undefined);
-  useEffect(() => {
-    const form = card.current?.querySelector("form");
-    if (form === null || form === undefined) return undefined;
-    const measure = () => {
-      const style = getComputedStyle(form);
-      const inner =
-        form.clientWidth -
-        Number.parseFloat(style.paddingLeft) -
-        Number.parseFloat(style.paddingRight);
-      setUnder(inner > 0 ? FOLD_LINES.find((line) => inner < line) : undefined);
-    };
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(form);
-    return () => observer.disconnect();
-  }, [card]);
-  return under;
-}
-
-/**
- * The composer's room around its card, on the transcript's own inset, and
- * the boxes its foot lays its presses in: the attach press's, at the
- * foot's left, which the narrowest card folds into the ⋯, and the right's
- * row, the model chip through Send. The box and its placeholder
- * (`agent-tab-skeleton.tsx`) both stand in these, so the placeholder lands
- * where the box does. The card is a drop target alone; the keys it hears
- * come from its own field and buttons.
- */
 /**
  * The room the composer's card stands in, a note under it, on the
  * transcript's own inset so the card and the column line up, with none above
@@ -332,78 +228,6 @@ export function ComposerCard({
     <div className={COMPOSER_ROOM_CLASS} {...props}>
       {children}
     </div>
-  );
-}
-
-/** The attach press's own box at the foot's left, which the narrowest card hides as the ⋯ takes the press in. */
-export function ComposerAttach({ children }: { children: ReactNode }): React.JSX.Element {
-  return <span className="agent-composer-attach flex">{children}</span>;
-}
-
-/** The owner's presses at the foot's right, before Send: the model chip, the context ring, the microphone, and the ⋯. */
-export function ComposerActions({ children }: { children: ReactNode }): React.JSX.Element {
-  // It may narrow, so a long model name is cut short before the presses are.
-  return (
-    <div className="agent-composer-actions relative flex min-w-0 flex-initial items-center gap-tight-gap">
-      {children}
-    </div>
-  );
-}
-
-/**
- * The foot's ⋯, which the stylesheet shows only once the card is too narrow
- * for every press: opened, it offers each press the stylesheet hid, read as
- * it opens, so it never offers one still standing beside it. The card
- * changing width closes it, since what it offers was read at the old
- * width; the panel beside it may be dragged with no window resize.
- */
-function ComposerMore({
-  card,
-  offers,
-}: {
-  card: RefObject<HTMLDivElement | null>;
-  offers: readonly OverflowOffer[];
-}): React.JSX.Element {
-  const menu = useMenu(true);
-  const [taken, setTaken] = useState<readonly OverflowPress[]>([]);
-  const trigger = menu.trigger(riseAboveEnd);
-  const standing = menu.open !== undefined;
-  const { close } = menu;
-  useEffect(() => {
-    const box = card.current;
-    if (!standing || box === null) return undefined;
-    const width = box.getBoundingClientRect().width;
-    const observer = new ResizeObserver(() => {
-      if (box.getBoundingClientRect().width !== width) close(false);
-    });
-    observer.observe(box);
-    return () => observer.disconnect();
-  }, [standing, close, card]);
-  const actions = offers
-    .filter((offer) => taken.includes(offer.press))
-    .flatMap((each) => each.entries);
-  return (
-    <>
-      <span className="agent-composer-more hidden">
-        <MoreButton
-          thing={BUTTON.MORE_THING}
-          {...trigger}
-          onClick={(event) => {
-            setTaken(hiddenPresses(card.current));
-            trigger.onClick(event);
-          }}
-        />
-      </span>
-      {menu.drawn === undefined ? null : (
-        <ActionMenu
-          replayUnmasked
-          label={moreLabel(BUTTON.MORE_THING)}
-          menu={menu.drawn}
-          groups={[actions]}
-          onClose={menu.close}
-        />
-      )}
-    </>
   );
 }
 
@@ -553,10 +377,6 @@ export function AgentComposer({
   answer?: ComposerAnswer | undefined;
 }): React.JSX.Element {
   const connected = useConnected();
-  const card = useRef<HTMLDivElement>(null);
-  const picker = useRef<AttachPicker>(null);
-  const footFold = useFootFold(card);
-  const folds = (below: FoldWidth) => footFold !== undefined && footFold <= below;
   // The popover the ⋯ may open in place of its hidden press.
   const [contextOpen, setContextOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -597,11 +417,16 @@ export function AgentComposer({
     // Escape with no list open gives up an edit of a queued message, the box keeping the caret.
     onLeave: editingQueued ? queueing.onCancel : onLeave,
     side: listSide,
+    onSubmit: () => submit(),
+    onKey: (event) =>
+      queueKey(event) ||
+      // A file still being read holds the owner's keys too, as it holds Send.
+      (!files.reading && onKey?.(event) === true),
+    takesFocus,
+    focusedByOwner,
+    keystrokeSpan: answer === undefined ? undefined : PANEL_SPAN.KEYSTROKE_INBOX_ANSWER,
   });
-  const { editor, room, files, module } = box;
-  const { dictation } = box.pickers;
-  // Whether the editor stood as the box first drew, which an owner that focuses the field focuses.
-  const [mountedFirst] = useState(module !== undefined);
+  const { editor, room, frame, files } = box;
   // Note that Send waits while files are read, so no message goes without a file the developer already handed the box.
   const sendHeld = held || !sendable || files.reading;
   // Note that an edit's Save stands with the box emptied, since saving nothing gives the edit up.
@@ -687,11 +512,11 @@ export function AgentComposer({
       room.current?.contains(active) === true ||
       (active instanceof HTMLButtonElement &&
         active.type === "submit" &&
-        card.current?.contains(active) === true);
+        frame.current?.contains(active) === true);
     if (dropped) {
       editor.current?.focus();
     }
-  }, [held, sends, room, editor]);
+  }, [held, sends, room, editor, frame]);
 
   // The transcript's Reply lays its quote in where the caret stands, for as long as the box stands.
   useEffect(() => {
@@ -725,7 +550,7 @@ export function AgentComposer({
    */
   const sentBy = (go: () => void) => {
     box.quiet();
-    refocus.current = card.current?.contains(document.activeElement) === true;
+    refocus.current = frame.current?.contains(document.activeElement) === true;
     go();
     setSends((count) => count + 1);
   };
@@ -766,99 +591,24 @@ export function AgentComposer({
           ? { label: BUTTON.STEER, icon: <GLYPH.STEER /> }
           : undefined;
 
-  // Note that a popover closed by key while the ⋯ stands hands focus to the
-  // ⋯, after its own close has handed it to its hidden press, because a
-  // hidden press can hold no keyboard; with the press drawn, the ⋯ is not.
-  const handBack = (set: (open: boolean) => void) => (open: boolean) => {
-    const more = card.current?.querySelector<HTMLElement>(".agent-composer-more") ?? null;
-    const press = more?.querySelector<HTMLElement>("button") ?? null;
-    const returning =
-      !open && (document.activeElement?.closest(".ui-anchored-popover") ?? null) !== null;
-    set(open);
-    if (returning && more !== null && press !== null && getComputedStyle(more).display !== "none") {
-      queueMicrotask(() => press.focus());
-    }
-  };
-
   // What the + offers beside files, its menu's rows after Attachment: the servers' popover, where the box hands servers, then its owner's.
   const plusRows: readonly MenuEntry[] = [
     ...(servers === undefined ? [] : [serversMenuPanel(servers, statuses)]),
     ...plus,
   ];
-  const openPicker = () => picker.current?.open();
-  const offers: OverflowOffer[] = [
-    {
-      press: OVERFLOW_PRESS.ATTACH,
-      // Note that a + folded away hands the ⋯ its menu's rows, or its own press where it opens the picker itself.
-      entries:
-        plusRows.length === 0
-          ? [{ label: BUTTON.ATTACH, icon: <PlusIcon />, disabled: held, onSelect: openPicker }]
-          : [attachmentRow(openPicker, held), ...plusRows],
-    },
-    ...(context === undefined
-      ? []
-      : [
-          {
-            press: OVERFLOW_PRESS.CONTEXT,
-            entries: [
-              {
-                label: contextHint(context),
-                icon: <ContextRingIcon context={context} />,
-                onSelect: () => setContextOpen(true),
-              },
-            ],
-          },
-        ]),
-    {
-      press: OVERFLOW_PRESS.DICTATE,
-      entries: [
-        {
-          label: dictation.keyMissing ? OPENAI_KEY_MISSING_NOTE : "Dictate",
-          icon: <MicrophoneIcon />,
-          disabled: held || module === undefined,
-          onSelect: dictation.start,
-        },
-      ],
-    },
-  ];
 
   return (
-    <ComposerCard
-      ref={card}
-      data-status={status}
-      data-closed={closed ? "" : undefined}
-      {...files.drop.target}
-    >
+    <ComposerCard data-status={status} data-closed={closed ? "" : undefined} {...files.drop.target}>
       {/* A box closed for good wears the held look a box sending does, faded, so the note and Continue under it read as the way on. */}
       <MessageBox
         box={box}
         className={closed ? "opacity-60" : answer === undefined ? undefined : "inbox-answer"}
-        onSubmit={submit}
         head={answer?.question}
-        keystrokeSpan={answer === undefined ? undefined : PANEL_SPAN.KEYSTROKE_INBOX_ANSWER}
-        takesFocus={takesFocus && !(focusedByOwner && mountedFirst)}
-        onKey={(event) =>
-          queueKey(event) ||
-          // A file still being read holds the owner's keys too, as it holds Send.
-          (!files.reading && onKey?.(event) === true)
-        }
-        tools={
+        plus={plusRows}
+        tools={tools?.(box.folds(FOLD_WIDTH.TOOLS))}
+        actions={
           <>
-            <ComposerAttach>
-              <AttachFilesButton
-                label={plusRows.length === 0 ? BUTTON.ATTACH : BUTTON.ADD}
-                disabled={held}
-                picker={picker}
-                onFiles={files.attach}
-                more={plusRows}
-              />
-            </ComposerAttach>
-            {tools?.(folds(FOLD_WIDTH.TOOLS))}
-          </>
-        }
-        actions={(dictate) => (
-          <ComposerActions>
-            {actions?.(folds(FOLD_WIDTH.ACTIONS))}
+            {actions?.(box.folds(FOLD_WIDTH.ACTIONS))}
             {model === undefined ? null : (
               <AgentModelChip
                 model={model}
@@ -868,20 +618,34 @@ export function AgentComposer({
                 usage={usage}
                 payer={payer}
                 payerSubscriptionId={payerSubscriptionId}
-                narrow={folds(FOLD_WIDTH.MODEL)}
+                narrow={box.folds(FOLD_WIDTH.MODEL)}
               />
             )}
             <AgentContextRing
               context={context}
               brief={brief}
               open={contextOpen}
-              onOpenChange={handBack(setContextOpen)}
+              onOpenChange={box.handBack(setContextOpen)}
             />
-            {dictate}
-            <ComposerMore card={card} offers={offers} />
-            {beforeSend?.(folds(FOLD_WIDTH.ACTIONS))}
-          </ComposerActions>
-        )}
+          </>
+        }
+        more={
+          context === undefined
+            ? undefined
+            : [
+                {
+                  press: OVERFLOW_PRESS.CONTEXT,
+                  entries: [
+                    {
+                      label: contextHint(context),
+                      icon: <ContextRingIcon context={context} />,
+                      onSelect: () => setContextOpen(true),
+                    },
+                  ],
+                },
+              ]
+        }
+        beforeSend={beforeSend?.(box.folds(FOLD_WIDTH.ACTIONS))}
         send={{
           label: sendWay?.label ?? sendLabel,
           ...(sendWay === undefined ? undefined : { icon: sendWay.icon }),

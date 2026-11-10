@@ -2196,24 +2196,29 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   opacity: 0.6;
 }
 
-/* The composer answers its card's width, not the window's, so it holds in
-   the main column and the side panel alike (`agent-composer.tsx`). The
-   presses never give way, the model chip's words do first, and the ⋯
-   stands only once it has something to take in. The card is a `ui-room`
-   too, so the badge saying where the agent runs gives up its words under
-   it (`agent-place.tsx`) rather than under a room around the box. */
-.agent-composer > form {
-  container: composer ui-room / inline-size;
+/* A message box answers its card's width, not the window's, so it holds in
+   the main column, the side panel, and a comment's margin alike
+   (`message-box.tsx`). The presses never give way, a chip's words do
+   first, and the ⋯ stands only once it has something to take in. An
+   agent's card is a `ui-room` too, so the badge saying where the agent runs
+   gives up its words under it (`agent-place.tsx`) rather than under a room
+   around the box. */
+.message-box {
+  container: composer / inline-size;
 }
 
-.agent-composer-actions > .agent-context {
+.agent-composer > .message-box {
+  container-name: composer ui-room;
+}
+
+.message-box-actions > .agent-context {
   flex: none;
 }
 
 /* The foot's end, which stands whole in every other box, gives way where it
    holds these presses, so the model chip's words are cut short before the
    row runs past the card. */
-.ui-composer-foot-end:has(> .agent-composer-actions) {
+.ui-composer-foot-end:has(> .message-box-actions) {
   flex-shrink: 1;
   min-width: 0;
 }
@@ -2225,19 +2230,19 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
    the ⋯ stands. */
 /* off-scale: 400px, a card under which the box folds its own presses into its ⋯ (composer-foot.css) */
 @container composer (width < 400px) {
-  .agent-composer .agent-context-button,
-  .agent-composer > form .agent-composer-actions:has(.agent-context-button) .dictate-button {
+  .message-box .agent-context-button,
+  .message-box-actions:has(.agent-context-button) .dictate-button {
     display: none;
   }
 
-  .agent-composer-actions > .agent-context {
+  .message-box-actions > .agent-context {
     position: absolute;
     top: 0;
     right: 0;
     height: 100%;
   }
 
-  .agent-composer-actions:has(.agent-context-button) .agent-composer-more {
+  .message-box-actions:has(.agent-context-button) .message-box-more {
     display: inline-flex;
   }
 }
@@ -2246,12 +2251,12 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
    the microphone with them, leaving what the agent published, the model,
    the ⋯, and Send. */
 @container composer (width < 240px) {
-  .agent-composer .agent-composer-attach,
-  .agent-composer > form .dictate-button {
+  .message-box .message-box-attach,
+  .message-box .dictate-button {
     display: none;
   }
 
-  .agent-composer-actions .agent-composer-more {
+  .message-box-actions .message-box-more {
     display: inline-flex;
   }
 }

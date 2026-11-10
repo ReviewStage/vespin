@@ -66,6 +66,7 @@ export function useComposerPickers({
   servers,
   onNote,
   onLeave,
+  escapeClimbs = false,
   side = MENTION_MENU_SIDE.ABOVE,
 }: {
   /** The box's editor; nothing until it has mounted. */
@@ -88,6 +89,8 @@ export function useComposerPickers({
   onNote: (note: string | undefined) => void;
   /** What Escape does where no list or dictation takes it: New task's box closes its card; the box gives up the caret where none is given. */
   onLeave?: (() => void) | undefined;
+  /** Whether Escape, once it lets go of the caret, climbs on to the window, as on a page whose every field hands it there. */
+  escapeClimbs?: boolean | undefined;
   /** Which side of the caret's line the `@` and `/` lists stand: over it, as at a tab's foot, or under it, where the box stands at the top of its page. */
   side?: MentionMenuSide;
 }): ComposerPickers {
@@ -138,7 +141,7 @@ export function useComposerPickers({
       return true;
     }
     if (event.key !== "Escape") return false;
-    event.stopPropagation();
+    if (!escapeClimbs) event.stopPropagation();
     if (onLeave === undefined) editor.current?.blur();
     else onLeave();
     return true;

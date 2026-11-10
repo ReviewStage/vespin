@@ -859,25 +859,21 @@ function CommentEditField({
     maxLength: DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS,
     takesFiles: false,
     onLeave: onCancel,
+    onSubmit: onSave,
+    focus: true,
   });
   return (
     <MessageBox
       box={box}
       look={COMPOSER_LOOK.FIELD}
       className="comment-field comment-editing"
-      focus
-      onSubmit={onSave}
-      actions={(dictate) => (
-        <>
-          {dictate}
-          <Button variant={BUTTON_VARIANT.QUIET} size={BUTTON_SIZE.COMPACT} onClick={onCancel}>
-            <ReplayUnmask>{COMMENT_WORDS.CANCEL}</ReplayUnmask>
-          </Button>
-        </>
-      )}
+      beforeSend={
+        <Button variant={BUTTON_VARIANT.QUIET} size={BUTTON_SIZE.COMPACT} onClick={onCancel}>
+          <ReplayUnmask>{COMMENT_WORDS.CANCEL}</ReplayUnmask>
+        </Button>
+      }
       // Note that an edit is drawn on the press, which closes the field, so Save is never busy.
       send={{ label: COMMENT_WORDS.SAVE, inWords: true, empty: false }}
-      note={box.note?.note}
     />
   );
 }
@@ -961,6 +957,8 @@ function ReplyField({
     label,
     maxLength: DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS,
     onLeave: onCancel,
+    onSubmit: () => submit(),
+    focus: autoFocus,
   });
   const { files } = box;
   // The last send refused, whose key the same words and files sent again go under, so a send whose answer was lost is taken once.
@@ -1070,10 +1068,8 @@ function ReplyField({
       className="comment-field"
       data-variant={variant}
       // Note that held files and files still being read, and a dictation whose words land once heard, hold the field, so a press away keeps a thread being started; typed words are kept as its draft and hold nothing.
-      data-held={files.attachments.length > 0 || files.reading || box.pickers.dictating}
+      data-held={files.attachments.length > 0 || files.reading || box.dictating}
       {...files.drop.target}
-      focus={autoFocus}
-      onSubmit={submit}
       head={
         unsent.length === 0 ? null : (
           <div className="comment-unsent" data-unsent="">
@@ -1111,12 +1107,7 @@ function ReplyField({
           </div>
         )
       }
-      actions={(dictate) => (
-        <>
-          {other}
-          {dictate}
-        </>
-      )}
+      actions={other}
       send={{
         label: holds
           ? PAGE_REVIEW_WORDS.ADD
@@ -1137,7 +1128,7 @@ function ReplyField({
                 refused: true,
               }),
             }
-          : box.note?.note
+          : undefined
       }
     />
   );
