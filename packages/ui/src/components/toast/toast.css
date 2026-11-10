@@ -59,7 +59,7 @@
     bottom: 0;
     box-sizing: border-box;
     width: 100%;
-    pointer-events: none;
+    pointer-events: auto;
     transform: translateX(var(--toast-swipe-movement-x, 0px)) translateY(var(--ui-toast-rise));
     transition:
       transform var(--ui-duration-fast) var(--ui-spring-fast),
@@ -93,20 +93,14 @@
       translateY(var(--ui-toast-rise));
   }
 
-  /* One past the stack's room waits aside, hidden and out of the pointer's
-     way, until a newer one leaves and it stands again. */
+  /* One past the stack's room waits aside, hidden and so out of the
+     pointer's way, until a newer one leaves and it stands again. */
   .ui-toast[data-limited] {
     opacity: 0;
     visibility: hidden;
   }
 
-  /* A toast with an action is pointed at, so it takes the pointer that one
-     with none lets pass through to whatever is under it. */
-  .ui-toast[data-action="true"]:not([data-limited]) {
-    pointer-events: auto;
-  }
-
-  /* A toast with an action shows its × as a disc over its top-left corner
+  /* A toast shows its × as a disc over its top-left corner
      under the pointer or focus, as a Mac's own notifications do, so it takes
      no room in the row. At rest it lets the pointer through, so the part of
      it past the card's edge never stands in the way of what is under it. */

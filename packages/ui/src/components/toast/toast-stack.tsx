@@ -16,8 +16,8 @@ import { TOAST_HOLD } from "./toast.js";
  * is room, each toast's place, and its words said aloud through the
  * viewport's live regions, one the host adds with `priority: "high"` said
  * urgently from its `title` and `description`. The viewport is a landmark
- * over whatever docks at the window's foot, taking no pointer itself, so only
- * a toast with something to press stands in the way of what is under it.
+ * over whatever docks at the window's foot, taking no pointer itself, so
+ * only its toasts stand in the way of what is under them.
  *
  * It is portaled to the body, or to `container` where the host stands it
  * somewhere of its own, as a catalog frames it. Note that the viewport

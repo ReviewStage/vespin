@@ -1,9 +1,9 @@
 /**
  * toasts.tsx -- the passing notices in each tone, stacked as the window stacks
- * them, each stack on a Base UI manager of its own: a plain one that lets
- * clicks through, one with a second line, and one carrying Undo; then ones
- * carrying an action, one of them led by a provider's mark and one opening
- * a page, whose × shows under the pointer or focus; failures that offer
+ * them, each stack on a Base UI manager of its own, every toast's × showing
+ * under the pointer or focus: a plain one, one with a second line, and one
+ * carrying Undo; then ones carrying an action, one of them led by a
+ * provider's mark and one opening a page; failures that offer
  * their details to copy, alone and beside a Retry; one whose work is under
  * way, turned in place into done or failed by a press; and one to swipe
  * sideways away, shown again by a press.
@@ -66,21 +66,19 @@ function CatalogToast({
       words={notice.words}
       detail={notice.detail}
       actions={
-        action === undefined && copy === undefined ? undefined : (
-          <ToastActions
-            {...(action === undefined
-              ? {}
-              : {
-                  label: action.label,
-                  href,
-                  onPress:
-                    href === undefined ? noop : () => window.open(href, "_blank", "noreferrer"),
-                })}
-            copy={copy}
-            dismissLabel="Dismiss"
-            onDismiss={() => manager.close(toast.id)}
-          />
-        )
+        <ToastActions
+          {...(action === undefined
+            ? {}
+            : {
+                label: action.label,
+                href,
+                onPress:
+                  href === undefined ? noop : () => window.open(href, "_blank", "noreferrer"),
+              })}
+          copy={copy}
+          dismissLabel="Dismiss"
+          onDismiss={() => manager.close(toast.id)}
+        />
       }
     />
   );

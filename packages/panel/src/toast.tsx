@@ -26,16 +26,15 @@
  * while what it says still stands, until whoever showed it withdraws it.
  * One saying work is under way (`useWorkingToast`) stands until the work
  * settles, then turns in place into what came of it, done or failed, and
- * stands for that one's hold, rather than leaving and another arriving. One
- * with an action may always be dismissed before then, since that is how the
- * developer reaches what it stands over: by its action, by the × it shows
- * over its top-left corner under the pointer or focus, as a Mac's own
- * notifications do, by Escape while focus is in it, by a sideways swipe, or
- * by whoever showed it withdrawing what it is about. One with no action is
- * never pointed at, so clicks pass through it. The stack always stands in
- * the window's bottom-right corner, over whatever docks at its foot, a
- * plan's call bar or an agent's composer; one with an action there can be
- * dismissed to reach End call or Send under it.
+ * stands for that one's hold, rather than leaving and another arriving.
+ * Every toast takes the pointer and may always be dismissed before then,
+ * since that is how the developer reaches what it stands over: by its
+ * action, by the × it shows over its top-left corner under the pointer or
+ * focus, as a Mac's own notifications do, by Escape while focus is in it, by
+ * a sideways swipe, or by whoever showed it withdrawing what it is about.
+ * The stack always stands in the window's bottom-right corner, over whatever
+ * docks at its foot, a plan's call bar or an agent's composer; a toast there
+ * can be dismissed to reach End call or Send under it.
  *
  * A toast saying a failure carries the failure, which is reported as it is
  * shown (`failure-report.ts`), so no failure the panel says in a toast goes
@@ -43,9 +42,7 @@
  * report to copy, by the window's copy button after its action, named "Copy
  * details", which answers on itself and leaves the toast and any action on
  * it standing, so a person can send them with a report of the problem. Its
- * glyph alone stands there, so the failure's words keep their room, and a
- * failure toast with nothing else to press takes the pointer for it, and so
- * may be dismissed. A refusal, whose words already say what happened, and a
+ * glyph alone stands there, so the failure's words keep their room. A refusal, whose words already say what happened, and a
  * window with nothing to report through offer no copy
  * (`reportShownFailure`). A failure that is not a refusal, shown while the
  * app does not reach the service, is reported and not shown at all, unless
@@ -349,7 +346,6 @@ function ToastCard({ toast }: { toast: StandingToast<ToastData> }): React.JSX.El
     details === undefined
       ? undefined
       : { text: details, what: DETAILS_WHAT, copy: (text) => appPlatform().copyText(text) };
-  const acts = action !== undefined || copy !== undefined;
   return (
     <Toast
       toast={toast}
@@ -360,17 +356,15 @@ function ToastCard({ toast }: { toast: StandingToast<ToastData> }): React.JSX.El
       detail={notice.detail}
       replayUnmasked={notice.replayUnmasked}
       actions={
-        !acts ? undefined : (
-          <ToastActions
-            {...(action === undefined
-              ? {}
-              : { label: action.label, href: action.href, onPress: action.onPress })}
-            copy={copy}
-            dismissLabel={DISMISS_LABEL}
-            onDismiss={() => toastManager.close(toast.id)}
-            replayUnmasked={action?.replayUnmasked}
-          />
-        )
+        <ToastActions
+          {...(action === undefined
+            ? {}
+            : { label: action.label, href: action.href, onPress: action.onPress })}
+          copy={copy}
+          dismissLabel={DISMISS_LABEL}
+          onDismiss={() => toastManager.close(toast.id)}
+          replayUnmasked={action?.replayUnmasked}
+        />
       }
     />
   );

@@ -65,10 +65,10 @@ const GLYPH_INK = {
 /**
  * The card: its glyph, its words' first line, and its action share a first
  * row as tall as a control, each centered on it; its words wrap at the card's
- * own line. One with an action ends a step closer to it.
+ * own line. One with an action button ends a step closer to it.
  */
 const TOAST_CARD =
-  "ui-toast flex items-start gap-icon-gap rounded-toast border border-border-strong bg-background px-list-inset py-row-inset shadow-toast data-[action=true]:pr-toast-gap";
+  "ui-toast flex items-start gap-icon-gap rounded-toast border border-border-strong bg-background px-list-inset py-row-inset shadow-toast has-[.ui-button:not(.ui-toast-dismiss_.ui-button)]:pr-toast-gap";
 
 /** The cell its glyph stands in, centered on its first row. */
 const TOAST_GLYPH =
@@ -118,8 +118,8 @@ export function Toast({
   detail?: string | undefined;
   /** Whether its words and detail are the app's own, which a screen recording shows as they read; a toast that quotes a person's words, a name, or a refusal's words leaves them masked. */
   replayUnmasked?: boolean | undefined;
-  /** Its action and dismiss, as `ToastActions` draws them; a toast with none is never pointed at. */
-  actions?: ReactNode;
+  /** Its ×, beside its action and copy where it has them, as `ToastActions` draws them. */
+  actions: ReactNode;
 }): React.JSX.Element {
   const Lead = glyph;
   return (
@@ -128,7 +128,6 @@ export function Toast({
       swipeDirection={SWIPE_AWAY}
       className={TOAST_CARD}
       data-tone={tone}
-      data-action={actions === undefined ? undefined : "true"}
     >
       <span
         className={`${TOAST_GLYPH} ${mark === undefined ? GLYPH_INK[tone] : MARK_INK}`}
