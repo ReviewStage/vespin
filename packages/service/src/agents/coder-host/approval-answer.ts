@@ -1,3 +1,25 @@
+/**
+ * approval-answer.ts -- a member's answer to an ask an agent's runner holds: written to the runner the way a message steers it, then the ask settled.
+ *
+ * Only a member who controls the agent answers (`controlsAgent`), as only
+ * they steer it, and for an agent its starter's plan pays for, one the plan
+ * policy admits as a writer (`admitsPlanWriter`). An ask that no longer
+ * waits is refused with how it stands (`approval-settled`), and nothing
+ * reaches the runner. One still pending is written to the runner first, as
+ * an `approval` line naming the CLI's id for it, the way the agent's
+ * messages go: the store's line in the cloud, the device's MESSAGE line on
+ * a host (`runtime-sessions.ts`'s `runnerApprovalAnswered`). Then the ask is
+ * settled, a compare-and-set on its standing pending, so of two answers
+ * racing one settles it and the other is refused; the runner takes the
+ * first line to reach it and skips the other, and its own word of what it
+ * took (`APPROVAL_RESOLVED`) stands over the row (`runner-approvals.ts`).
+ * Note that the line goes first, because an ask settled with no line
+ * written would leave the runner holding a call no one can answer again.
+ * Where no runner of the agent runs, none holds the ask, which is expired
+ * and refused; where the runner could not be reached just now, the ask
+ * still waits, and the answer is refused as unavailable, to be sent again.
+ */
+
 import { INPUT_LINE } from "@repo/agent-runner/protocol";
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
@@ -23,28 +45,6 @@ import {
 import { admitsPlanWriter, controlsAgent } from "../agent-reach.js";
 import { DECISION_OF_ANSWER } from "../native-events/runner-approvals.js";
 import { type ApprovalLine, RUNNER_ANSWER, runnerApprovalAnswered } from "./runtime-sessions.js";
-
-/**
- * approval-answer.ts -- a member's answer to an ask an agent's runner holds: written to the runner the way a message steers it, then the ask settled.
- *
- * Only a member who controls the agent answers (`controlsAgent`), as only
- * they steer it, and for an agent its starter's plan pays for, one the plan
- * policy admits as a writer (`admitsPlanWriter`). An ask that no longer
- * waits is refused with how it stands (`approval-settled`), and nothing
- * reaches the runner. One still pending is written to the runner first, as
- * an `approval` line naming the CLI's id for it, the way the agent's
- * messages go: the store's line in the cloud, the device's MESSAGE line on
- * a host (`runtime-sessions.ts`'s `runnerApprovalAnswered`). Then the ask is
- * settled, a compare-and-set on its standing pending, so of two answers
- * racing one settles it and the other is refused; the runner takes the
- * first line to reach it and skips the other, and its own word of what it
- * took (`APPROVAL_RESOLVED`) stands over the row (`runner-approvals.ts`).
- * Note that the line goes first, because an ask settled with no line
- * written would leave the runner holding a call no one can answer again.
- * Where no runner of the agent runs, none holds the ask, which is expired
- * and refused; where the runner could not be reached just now, the ask
- * still waits, and the answer is refused as unavailable, to be sent again.
- */
 
 /** How an ask the member could not settle stands now, as the refusal names it; not found where it went with its agent. */
 const refusedAsItStands = /* @__PURE__ */ Effect.fnUntraced(function* (

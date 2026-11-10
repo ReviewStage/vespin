@@ -215,6 +215,8 @@ export const NATIVE_WRITE = {
   RETRY: "retry",
   /** Hold the turn its plan's limit cut short open until the soonest limit resets, for the minute sweep to go on with it then, where no payer has room now. */
   WAIT: "wait",
+  /** Land one of the runner's approval events, an ask under the turn that runs or how one was settled (`runner-approvals.ts`), in order with the turn's own writes. */
+  APPROVAL: "approval",
 } as const;
 
 export type NativeWrite =
@@ -241,6 +243,12 @@ export type NativeWrite =
     }
   | { readonly kind: typeof NATIVE_WRITE.RETRY; readonly turnId: string; readonly replay?: true }
   | { readonly kind: typeof NATIVE_WRITE.WAIT; readonly turnId: string; readonly until: number }
+  | {
+      readonly kind: typeof NATIVE_WRITE.APPROVAL;
+      /** The turn that ran as the event was read; none where none did. */
+      readonly turnId: string | undefined;
+      readonly message: WireValue;
+    }
   | {
       readonly kind: typeof NATIVE_WRITE.PLAN_STATUS;
       readonly status: PlanStatus;

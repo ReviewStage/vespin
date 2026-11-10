@@ -1009,7 +1009,7 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
-    "an ask its runner holds lands under the running turn, its runner's word settles it, and one left pending expires as the turn ends",
+    "an ask its runner holds lands under the running turn, half a character in its input made whole, its runner's word settles it, and one left pending expires as the turn ends",
     () =>
       Effect.gen(function* () {
         const post = yield* standing;
@@ -1021,7 +1021,8 @@ it.layer(SUITE)("the runner events route", (it) => {
           toolUseId: `toolu_${requestId}`,
           toolName: "Bash",
           title: "Run git push --force?",
-          input: { command: "git push --force" },
+          // A runner's cut inside a surrogate pair leaves half a character, which Postgres refuses in a JSON value.
+          input: { command: "git push --force", note: "cut at \uD83D" },
         });
         const asking = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
@@ -1055,7 +1056,7 @@ it.layer(SUITE)("the runner events route", (it) => {
 
         assert.deepEqual(
           waiting.map((each) => [each.requestId, each.toolUseId, each.ask.input]),
-          [["b", "toolu_b", { command: "git push --force" }]],
+          [["b", "toolu_b", { command: "git push --force", note: "cut at \uFFFD" }]],
         );
         const [b] = waiting;
         assert.ok(b !== undefined);

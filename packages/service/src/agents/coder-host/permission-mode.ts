@@ -1,11 +1,3 @@
-import { PERMISSION_MODE, type PermissionMode } from "@repo/agent-runner/protocol";
-import type { Agent } from "@repo/database/models/agent-store";
-import { CONVERSATION_RUNTIME, type ConversationRuntime } from "@repo/database/storage-vocabulary";
-import {
-  AGENT_PERMISSION_MODE,
-  type AgentPermissionMode,
-} from "@repo/features/agent-approval-wire";
-
 /**
  * permission-mode.ts -- an agent's permission mode as its launches read it: what a Claude Code runner is handed, and which harness takes a mode that asks.
  *
@@ -16,6 +8,14 @@ import {
  * `launchFingerprint`). Only Claude Code asks; a Codex runner reads no mode
  * and runs every call unasked, so a mode that asks is refused for it.
  */
+
+import { PERMISSION_MODE, type PermissionMode } from "@repo/agent-runner/protocol";
+import type { Agent } from "@repo/database/models/agent-store";
+import { CONVERSATION_RUNTIME, type ConversationRuntime } from "@repo/database/storage-vocabulary";
+import {
+  AGENT_PERMISSION_MODE,
+  type AgentPermissionMode,
+} from "@repo/features/agent-approval-wire";
 
 /** The agent's modes as a Claude Code runner's config names them, one for one. */
 const RUNNER_MODE_OF = {

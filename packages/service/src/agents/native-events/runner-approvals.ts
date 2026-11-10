@@ -1,9 +1,34 @@
+/**
+ * runner-approvals.ts -- a runner's asks and its word of how each was settled, as the events route lands them beside the agent's transcript.
+ *
+ * A launch whose mode asks (`PERMISSION_MODE`) posts APPROVAL_REQUESTED as
+ * it holds a tool call for a member's answer, and APPROVAL_RESOLVED once the
+ * ask is settled, whatever settled it, before its END. Each lands in the
+ * batch's own transaction, under the conversation's lock, in order with
+ * the turn's own writes (`NATIVE_WRITE.APPROVAL`), so an ask lands after the
+ * write that opens its turn and before any that ends it, and an event
+ * posted again lands nothing twice: an ask under the turn that runs as it
+ * is applied, and a settle on the ask its CLI id names
+ * (`@repo/database/models/agent-approvals`). An ask posted with no turn
+ * running has no turn to expire with, so it is not kept, and its runner,
+ * which still holds the call, settles it at the launch's end.
+ *
+ * The call's input is the agent's transcript content, a command or a
+ * file's contents among it: it is cut again to the service's bound and
+ * kept beside the transcript, and nothing of it, its title, or its
+ * description is said in a log. Every string kept is made well formed,
+ * since a cut a runner made inside a surrogate pair leaves half a
+ * character, which Postgres refuses in a JSON value and would fail the
+ * whole batch on.
+ */
+
 import {
   APPROVAL_BY,
   APPROVAL_DECISION,
   APPROVAL_INPUT,
   type ApprovalBy,
   type ApprovalDecision,
+  RUNNER_EVENT,
   RunnerApprovalRequestedSchema,
   RunnerApprovalResolvedSchema,
 } from "@repo/agent-runner/protocol";
@@ -23,25 +48,6 @@ import {
 } from "@repo/features/agent-approval-wire";
 import type { WireValue } from "@repo/wire";
 import { Effect, Option, Schema } from "effect";
-
-/**
- * runner-approvals.ts -- a runner's asks and its word of how each was settled, as the events route lands them beside the agent's transcript.
- *
- * A launch whose mode asks (`PERMISSION_MODE`) posts APPROVAL_REQUESTED as
- * it holds a tool call for a member's answer, and APPROVAL_RESOLVED once the
- * ask is settled, whatever settled it, before its END. Each lands in the
- * batch's own transaction, under the conversation's lock, so an event
- * posted again lands nothing twice: an ask under the turn that runs as it
- * is applied, and a settle on the ask its CLI id names
- * (`@repo/database/models/agent-approvals`). An ask posted with no turn
- * running has no turn to expire with, so it is not kept, and its runner,
- * which still holds the call, settles it at the launch's end.
- *
- * The call's input is the agent's transcript content, a command or a
- * file's contents among it: it is cut again to the service's bound and
- * kept beside the transcript, and nothing of it, its title, or its
- * description is said in a log.
- */
 
 /** The runner's decisions as a member's answers name them, one for one. */
 const ANSWER_OF_DECISION = {
@@ -77,9 +83,19 @@ const readResolved = Schema.decodeUnknownOption(RunnerApprovalResolvedSchema);
 
 const readInput = Schema.decodeUnknownOption(agentPendingApprovalSchema.fields.input);
 
-/** Words cut to the bound, an ellipsis ending one cut, as the runner cuts them. */
+/** A surrogate standing alone, half of a character, which no store keeps; read by code point, a whole pair is no match. */
+const LONE_SURROGATE = /[\uD800-\uDFFF]/gu;
+
+/** The approval events of the runner's own, which the events route lands apart from the run's moments. */
+const APPROVAL_EVENTS: ReadonlySet<unknown> = new Set([
+  RUNNER_EVENT.APPROVAL_REQUESTED,
+  RUNNER_EVENT.APPROVAL_RESOLVED,
+]);
+
+/** Words cut to the bound, an ellipsis ending one cut, as the runner cuts them, and well formed: half a character, the runner's cut's or ours, is replaced. */
 function cutText(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  const cut = text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  return cut.replace(LONE_SURROGATE, "\uFFFD");
 }
 
 /** A value of a call's input cut as the runner cuts it, and no deeper than the bound. */
@@ -91,7 +107,10 @@ function cutValue(value: unknown, depth: number): unknown {
     return value.slice(0, APPROVAL_INPUT.ITEMS_MAX).map((each) => cutValue(each, depth + 1));
   }
   return Object.fromEntries(
-    Object.entries(value).map(([key, each]) => [key, cutValue(each, depth + 1)]),
+    Object.entries(value).map(([key, each]) => [
+      key.replace(LONE_SURROGATE, "\uFFFD"),
+      cutValue(each, depth + 1),
+    ]),
   );
 }
 
@@ -116,6 +135,17 @@ function statusOfResolved(by: ApprovalBy, decision: ApprovalDecision): ApprovalS
   return UNDECIDED.has(by)
     ? APPROVAL_STATUS.EXPIRED
     : APPROVAL_STATUS_OF_ANSWER[ANSWER_OF_DECISION[decision]];
+}
+
+/** Whether the message is one of the runner's approval events, an ask or its settle. */
+export function isApprovalEvent(message: WireValue): boolean {
+  return (
+    typeof message === "object" &&
+    message !== null &&
+    !Array.isArray(message) &&
+    "type" in message &&
+    APPROVAL_EVENTS.has(message.type)
+  );
 }
 
 /**

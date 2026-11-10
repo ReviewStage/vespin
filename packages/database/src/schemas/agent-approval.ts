@@ -1,23 +1,3 @@
-import type {
-  AgentPendingApproval,
-  ApprovalSettledBy,
-  ApprovalStatus,
-} from "@repo/features/agent-approval-wire";
-import { sql } from "drizzle-orm";
-import {
-  type AnyPgColumn,
-  index,
-  jsonb,
-  pgTable,
-  text,
-  uniqueIndex,
-  uuid,
-} from "drizzle-orm/pg-core";
-import { createdAt, timestamptz } from "./_helpers.js";
-import { agentTable } from "./agent.js";
-import { user } from "./auth.js";
-import { conversations, turns } from "./storage.js";
-
 /**
  * agent-approval.ts -- each tool call a coding agent's runner held for a member's answer, from its ask to how it was settled.
  *
@@ -40,6 +20,27 @@ import { conversations, turns } from "./storage.js";
  * content, a command or a file's contents among it, read under the rule its
  * transcript is, and never written to a trace, a counted event, or a log.
  */
+
+import type {
+  AgentPendingApproval,
+  ApprovalSettledBy,
+  ApprovalStatus,
+} from "@repo/features/agent-approval-wire";
+import { sql } from "drizzle-orm";
+import {
+  type AnyPgColumn,
+  index,
+  jsonb,
+  pgTable,
+  text,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
+import { createdAt, timestamptz } from "./_helpers.js";
+import { agentTable } from "./agent.js";
+import { user } from "./auth.js";
+import { conversations, turns } from "./storage.js";
+
 export const agentApproval = pgTable(
   "agent_approval",
   {
