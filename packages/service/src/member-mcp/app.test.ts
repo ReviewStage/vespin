@@ -56,6 +56,7 @@ import { EXPERIMENT, WORKSPACE_EXPERIMENT_LIST } from "@repo/settings";
 import { settleJsonSchemaGolden } from "@repo/wire/testing";
 import { eq, sql } from "drizzle-orm";
 import { Clock, DateTime, Effect, Option, Result, Schema } from "effect";
+import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { readWorkspaceMemories, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
 import { recordMemberDescriptionNotes } from "../agents/coder-host/description-edit.js";
@@ -1043,7 +1044,7 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
   );
 
   it.effect(
-    "an outside agent starts a thread with the member's agent, which takes it up as the member's message, and marks it unread and sets its reminder for the member",
+    "an outside agent starts a thread with the member's agent, which takes it up as the member's message, and marks it unread and sets its reminder for the member, refusing a time already past",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
@@ -1078,6 +1079,15 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
           threadId: started.thread.id,
           at: "2030-01-07T09:00-08:00",
         });
+        yield* TestClock.setTime(Date.parse("2026-11-10T00:00Z"));
+        const past = yield* Effect.promise(async () =>
+          decodeAnswer(
+            await client.callTool({
+              name: MEMBER_MCP_TOOL.REMIND_THREAD,
+              arguments: { threadId: started.thread.id, at: "2020-01-07T09:00-08:00" },
+            }),
+          ),
+        );
         yield* Effect.promise(() => client.close());
 
         assert.equal(started.thread.title, "Flaky checkout test");
@@ -1089,6 +1099,8 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         assert.ok(handed.includes("flaky checkout test"), handed);
         assert.equal(unread.unread, true);
         assert.deepEqual([reminded.remindAt, reminded.unread], ["2030-01-07T17:00:00.000Z", true]);
+        // A time already past is refused, so the reminder set before it stands.
+        assert.equal(past.isError, true, past.content[0].text);
       }),
   );
 });

@@ -42,7 +42,7 @@ import {
 } from "@repo/features/inbox-wire";
 import { LINK_PLACE, linkOf, mentionMarkdownLink } from "@repo/features/link-grammar";
 import { MEMBER_MCP_TOOL } from "@repo/features/member-mcp-tool";
-import { Effect } from "effect";
+import { Clock, Effect } from "effect";
 import { agentToolRejected, orStoreRefusal } from "../agents/agent-tools.js";
 import { settledMessages, threadLineOf } from "../agents/coder-host/inbox.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
@@ -83,6 +83,7 @@ const MEMBER_INBOX_REFUSAL = {
     "Not done: it could not be handed to the thread's agent just now, so nothing was kept; try again in a moment.",
   NO_AGENT: `Not started: the member reaches no such agent, or it no longer stands to hear them; ${MEMBER_MCP_TOOL.LIST_AGENTS} names their agents.`,
   UNMARKED: "Not done: it could not be written just now; try again in a moment.",
+  PAST: "Not set: that time is not after now; name a time to come, or null to end the reminder.",
 } as const;
 
 /** The writer a hand-off writes the member's line into the agent's conversation with, as the window's doors write it. */
@@ -305,7 +306,7 @@ export function remindThreadAsMember(
   userId: string,
   asked: { readonly threadId: string; readonly at: number | null },
 ) {
-  return remindAsMember(userId, asked.threadId, asked.at).pipe(
+  const set = remindAsMember(userId, asked.threadId, asked.at).pipe(
     Effect.map(
       ({ id, unread }): WireRecord => ({
         status: ACTION_RESULT_STATUS.ACCEPTED,
@@ -315,5 +316,11 @@ export function remindThreadAsMember(
       }),
     ),
     Effect.catch((refusal) => Effect.succeed(unmarkedAs(refusal))),
+  );
+  // Note that a time already past is refused, as the window's picker does, since it would end a reminder still pending.
+  return Effect.flatMap(Clock.currentTimeMillis, (now) =>
+    asked.at !== null && asked.at <= now
+      ? Effect.succeed(agentToolRejected(MEMBER_INBOX_REFUSAL.PAST))
+      : set,
   );
 }
