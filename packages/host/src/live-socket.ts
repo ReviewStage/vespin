@@ -92,6 +92,22 @@ interface StandingSocket {
   ended: boolean;
 }
 
+/** Where the client stands on a socket: none yet, one opening, one taking asks, or every ask over HTTP until a failed open's wait is over. */
+const CONNECTION = {
+  NONE: "none",
+  OPENING: "opening",
+  OPEN: "open",
+  HTTP: "http",
+} as const;
+
+type Connection =
+  | { readonly kind: typeof CONNECTION.NONE }
+  | { readonly kind: typeof CONNECTION.OPENING }
+  | { readonly kind: typeof CONNECTION.OPEN; readonly standing: StandingSocket }
+  | { readonly kind: typeof CONNECTION.HTTP; readonly until: number };
+
+const NO_CONNECTION: Connection = { kind: CONNECTION.NONE };
+
 /** Why an ask was never answered: its socket ended first. */
 class SocketEnded {
   readonly _tag = "SocketEnded";
@@ -157,9 +173,7 @@ export function liveSocketClient(
     const serviceOrigin = new URL(options.serviceBaseUrl).origin;
     const address = `${socketOrigin}${LIVE_SOCKET.PATH}`;
     const scope = yield* Effect.scope;
-    let current: StandingSocket | undefined;
-    let opening = false;
-    let httpUntil = 0;
+    let connection: Connection = NO_CONNECTION;
     let nextId = 0;
 
     /** The socket ended: every ask it holds failed, and it closed. */
@@ -167,7 +181,9 @@ export function liveSocketClient(
       Effect.gen(function* () {
         if (standing.ended) return;
         standing.ended = true;
-        if (current === standing) current = undefined;
+        if (connection.kind === CONNECTION.OPEN && connection.standing === standing) {
+          connection = NO_CONNECTION;
+        }
         for (const waiting of standing.waiting.values()) {
           yield* Deferred.fail(waiting, new SocketEnded());
         }
@@ -216,42 +232,51 @@ export function liveSocketClient(
     /** The next socket, taking asks once it stands; where its open failed, asks go over HTTP for a while. */
     const openNext = Effect.gen(function* () {
       const opened = yield* open;
-      if (opened === undefined) {
-        const now = yield* Clock.currentTimeMillis;
-        httpUntil = now + Duration.toMillis(LIVE_SOCKET_BOUNDS.HTTP_AFTER_FAILED_OPEN);
+      if (opened !== undefined) {
+        connection = { kind: CONNECTION.OPEN, standing: opened };
+        return;
       }
-      current = opened;
+      const now = yield* Clock.currentTimeMillis;
+      connection = {
+        kind: CONNECTION.HTTP,
+        until: now + Duration.toMillis(LIVE_SOCKET_BOUNDS.HTTP_AFTER_FAILED_OPEN),
+      };
     }).pipe(
+      // Note that an open cut short leaves nothing opening, so the next ask opens again.
       Effect.ensuring(
         Effect.sync(() => {
-          opening = false;
+          if (connection.kind === CONNECTION.OPENING) connection = NO_CONNECTION;
         }),
       ),
     );
 
     /**
-     * The socket an ask goes over: the current one while it takes asks.
+     * The socket an ask goes over: the open one while it takes asks.
      * Otherwise none, so the ask goes over HTTP, while the old one, past its
-     * time, drains, and the next one opens in the background.
+     * time, drains, and the next one opens in the background unless one is
+     * already opening or a failed open's wait is not yet over.
      */
     const socketFor = Effect.gen(function* () {
       const now = yield* Clock.currentTimeMillis;
-      const standing = current;
-      if (
-        standing !== undefined &&
-        !standing.ended &&
-        now - standing.openedAt < Duration.toMillis(LIVE_SOCKET_BOUNDS.ROTATE_AFTER)
-      ) {
-        return standing;
+      switch (connection.kind) {
+        case CONNECTION.OPENING:
+          return undefined;
+        case CONNECTION.HTTP:
+          if (now < connection.until) return undefined;
+          break;
+        case CONNECTION.OPEN: {
+          const { standing } = connection;
+          const fresh =
+            now - standing.openedAt < Duration.toMillis(LIVE_SOCKET_BOUNDS.ROTATE_AFTER);
+          if (!standing.ended && fresh) return standing;
+          yield* Effect.forkIn(Effect.delay(end(standing), LIVE_SOCKET_BOUNDS.DRAIN), scope);
+          break;
+        }
+        case CONNECTION.NONE:
+          break;
       }
-      if (standing !== undefined) {
-        current = undefined;
-        yield* Effect.forkIn(Effect.delay(end(standing), LIVE_SOCKET_BOUNDS.DRAIN), scope);
-      }
-      if (!opening && now >= httpUntil) {
-        opening = true;
-        yield* Effect.forkIn(openNext, scope);
-      }
+      connection = { kind: CONNECTION.OPENING };
+      yield* Effect.forkIn(openNext, scope);
       return undefined;
     });
 
