@@ -1,3 +1,4 @@
+import { shortCommit } from "@repo/features/code-ref-words";
 import type { MentionLines } from "@repo/features/mention-link";
 import { THING_KIND, type Thing, type ThingKind, type ThingOf } from "@repo/features/thing-kind";
 import { HoverCardSkeleton } from "@repo/ui";
@@ -13,7 +14,6 @@ import {
   VersionChipCard,
 } from "./chip-cards.js";
 import { FileCard } from "./file-ref.js";
-import { shortCommit } from "./file-tab-model.js";
 import { InboxItemChipCard } from "./inbox-item-chip.js";
 import {
   AgentPullRequestChipCard,

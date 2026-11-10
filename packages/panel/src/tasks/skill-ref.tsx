@@ -1,3 +1,4 @@
+import { skillWord } from "@repo/features/skill-word";
 import { TASK_SKILL_SOURCE, type TaskSkillSource } from "@repo/features/task-wire";
 import { THING_KIND, THING_WORD } from "@repo/features/thing-kind";
 import {
@@ -12,7 +13,7 @@ import {
   INLINE_REF_NAME,
   InlineRef,
 } from "@repo/ui";
-import { type SkillOption, skillWord } from "@repo/ui/skill-mention";
+import type { SkillOption } from "@repo/ui/skill-mention";
 import { BookOpenIcon } from "lucide-react";
 import { FileTypeIcon } from "./file-type-icon.js";
 import { SkillSourceBadge } from "./skill-source-badge.js";

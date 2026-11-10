@@ -4,6 +4,7 @@ import {
   CHECK_SUMMARY,
 } from "@repo/features/agent-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { holderTaskId } from "@repo/features/mention-holder";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import {
   CountParts,
@@ -31,7 +32,6 @@ import {
   pullRequestStateWord,
 } from "./agent-model.js";
 import { MentionChipCard } from "./mention-chip.js";
-import { holderTaskId } from "./mention-holder.js";
 import { PullRequestMark } from "./pull-request-mark.js";
 import { usePullRequestsOnGitHub } from "./pull-request-opens.js";
 import { useMentionDoors } from "./task-mentions.js";

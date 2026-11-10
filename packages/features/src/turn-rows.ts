@@ -391,6 +391,35 @@ export function commandDescription(description: string | undefined): string | un
   return words === undefined || words === "" ? undefined : words;
 }
 
+/** The kinds of call that name files, which a row names by the first one's chip. */
+const FILE_CALLS: ReadonlySet<CallKind> = new Set([
+  CALL_KIND.READ_FILE,
+  CALL_KIND.WRITE_FILE,
+  CALL_KIND.EDIT,
+]);
+
+/** The file a call's row names by its chip: the first it named, for a call that reads or writes files; none for any other. */
+export function calledFile(
+  kind: CallKind,
+  files: readonly string[] | undefined,
+): string | undefined {
+  return FILE_CALLS.has(kind) ? files?.[0] : undefined;
+}
+
+/** How many files a call named past the first, which its row says after the first one's chip; none for one file. */
+export function moreFiles(files: readonly string[] | undefined): string | undefined {
+  return files === undefined || files.length < 2 ? undefined : `+${files.length - 1}`;
+}
+
+/** A web address, as a website chip reads one. */
+const WEB_SCHEME = /^https?:\/\//iu;
+
+/** The site a web address is of, as a website chip names it: its host without its `www.`; nothing for an address that is not the web's. */
+export function siteName(href: string): string | undefined {
+  if (!WEB_SCHEME.test(href) || !URL.canParse(href)) return undefined;
+  return new URL(href).hostname.replace(/^www\./u, "");
+}
+
 /** A page's address as a reader names it: its host and path, without the scheme. */
 export function pageName(url: string): string {
   return url.replace(/^https?:\/\//, "").replace(/\/$/, "");
