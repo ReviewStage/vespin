@@ -148,7 +148,7 @@ it.layer(getTestDB())("a shared port's preview host", (it) => {
   );
 
   it.effect(
-    "an unfurler's signed-out read of a preview link is answered the site's card, naming nothing of the task",
+    "an unfurler's signed-out read of a preview link is answered the site's card, naming nothing of the task, with a link to sign in",
     () =>
       Effect.gen(function* () {
         const route = yield* previewRoute;
@@ -171,7 +171,16 @@ it.layer(getTestDB())("a shared port's preview host", (it) => {
           html.includes('<meta property="og:image" content="https://tryluke.dev/og-card.png">'),
         );
         assert.ok(html.includes('<meta name="twitter:card" content="summary_large_image">'));
-        assert.ok(!html.includes("acme"));
+        // The card's tags name nothing of the task; only its sign-in link names the host the reader holds.
+        assert.ok(!(html.match(/<meta[^>]*>/gu) ?? []).some((tag) => tag.includes("acme")));
+        const signIn = new URL(
+          /<a href="([^"]*)"/u.exec(html)?.[1]?.replaceAll("&amp;", "&") ?? "",
+        );
+        assert.equal(
+          `${signIn.origin}${signIn.pathname}`,
+          `https://tryluke.dev${PREVIEW_LINK.SIGN_IN_PATH}`,
+        );
+        assert.equal(signIn.searchParams.get(PREVIEW_LINK.QUERY.PREVIEW), "acme-42-abcdef");
         // A script's fetch without the cookie is still refused, never handed a page.
         assert.equal(fetched.status, HOSTED_HTTP_STATUS.UNAUTHORIZED);
       }),

@@ -146,12 +146,14 @@ const SHARE_CARD = {
 /**
  * The page an unfurler reads for a pasted preview link: Slack, iMessage, X,
  * and the rest fetch it signed out and outside a browser, so the card is
- * the site's own, the same for every preview. It names nothing of the
- * agent, the task, or the workspace, since whoever holds the link reads it,
- * and no og:url, so each unfurler keeps the link it was handed. X reads its
- * own `twitter:` copies of the tags.
+ * the site's own, the same for every preview. Its tags name nothing of the
+ * agent, the task, or the workspace, and no og:url, so each unfurler keeps
+ * the link it was handed. X reads its own `twitter:` copies of the tags.
+ * Its body links to the sign-in a page load is sent to, for a browser too
+ * old to name its fetch's mode; that link names only the host the reader
+ * already holds.
  */
-function shareCardPage(app: string | undefined): string {
+function shareCardPage(app: string | undefined, signIn: URL): string {
   const image = new URL(SHARE_CARD.IMAGE_PATH, app).href;
   const tags = [
     ["name", "robots", "noindex"],
@@ -173,7 +175,7 @@ function shareCardPage(app: string | undefined): string {
   ] as const;
   return previewPage({
     title: SHARE_CARD.TITLE,
-    line: NOT_SIGNED_IN,
+    line: `<a href="${signIn.href.replaceAll("&", "&amp;")}">Sign in</a> to view this preview.`,
     head: tags
       .map(([kind, key, content]) => `<meta ${kind}="${key}" content="${content}">`)
       .join(""),
@@ -311,9 +313,12 @@ function isUnfurl(request: Request): boolean {
 /** A request without a member's cookie: an unfurler's read answered the share card, a page load sent to sign in on the app, anything else refused. */
 function signInFirst(sandbox: PageSandbox, name: PreviewName, request: Request, asked: string) {
   const [app] = sandbox.appOrigins;
+  const signIn = new URL(PREVIEW_LINK.SIGN_IN_PATH, app);
+  signIn.searchParams.set(PREVIEW_LINK.QUERY.PREVIEW, previewLabel(name));
+  signIn.searchParams.set(PREVIEW_LINK.QUERY.RETURN, asked);
   // Note that the card answers 200, because an unfurler draws no card for a page that refuses it.
   if (isUnfurl(request)) {
-    return HttpServerResponse.text(shareCardPage(app), {
+    return HttpServerResponse.text(shareCardPage(app, signIn), {
       status: HOSTED_HTTP_STATUS.OK,
       contentType: "text/html; charset=utf-8",
       headers: NEVER_KEPT,
@@ -325,9 +330,6 @@ function signInFirst(sandbox: PageSandbox, name: PreviewName, request: Request, 
       headers: NEVER_KEPT,
     });
   }
-  const signIn = new URL(PREVIEW_LINK.SIGN_IN_PATH, app);
-  signIn.searchParams.set(PREVIEW_LINK.QUERY.PREVIEW, previewLabel(name));
-  signIn.searchParams.set(PREVIEW_LINK.QUERY.RETURN, asked);
   return HttpServerResponse.redirect(signIn, {
     status: HOSTED_HTTP_STATUS.FOUND,
     headers: { "Cache-Control": "no-store" },
