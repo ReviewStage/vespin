@@ -180,7 +180,13 @@ import {
   type RepositoryCredential,
   sandboxFirewall,
 } from "../sandbox-firewall.js";
-import { recordedSandboxOpen } from "../sandbox-use.js";
+import {
+  recordedSandboxBooted,
+  recordedSandboxBootFailed,
+  recordedSandboxBooting,
+  recordedSandboxDiscarded,
+  recordedSandboxOpen,
+} from "../sandbox-use.js";
 import {
   AgentMachine,
   type AgentMachineService,
@@ -733,6 +739,7 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
         const legacy = yield* legacySandboxOf(api, found.session);
         if (legacy !== undefined && legacy.name !== found.name) yield* api.delete(legacy.name);
         yield* api.delete(found.name);
+        yield* recordedSandboxDiscarded(found.name);
         yield* forgetAgentRunnerRecord(keptOf(found).userId, found.session, found.name);
       }),
 
@@ -1220,8 +1227,10 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
     // launch only once the sandbox stands, and never cuts its opening short; its write token is
     // the one a sandbox created here checks out through (`checkedOutIn`). Note that a use that
     // fails leaves the sandbox standing under the session's name, where the next message finds it.
+    // The sandbox is recorded booting before it opens, and its boot ended where the open or its use failed.
     open: (ask, use) =>
       Effect.gen(function* () {
+        yield* recordedSandboxBooting(ask.agent.id, agentSandboxName(ask.session));
         const reading = yield* Effect.forkChild(
           Effect.exit(
             hasRepository(ask.agent)
@@ -1271,7 +1280,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           },
           beside,
         );
-      }),
+      }).pipe(Effect.tapError(() => recordedSandboxBootFailed(agentSandboxName(ask.session)))),
 
     // The session's sandbox is run again as it was opened, through `getOrCreate` (`gotOn`): resumed
     // where it stands, or made again from the image where its snapshot is gone, with the drive its
@@ -1286,6 +1295,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       Effect.gen(function* () {
         const legacy = found.name !== agentSandboxName(found.session);
         if (legacy && found.running !== undefined) return { place: found.running, created: false };
+        yield* recordedSandboxBooting(agent.id, found.name);
         const standing = legacy
           ? ((yield* api.get(found.name)) ?? keptOf(found).sandbox)
           : keptOf(found).sandbox;
@@ -1303,7 +1313,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           place: sandboxPlace(found.session, name, running),
           created: created && from === CREATED_FROM.IMAGE,
         };
-      }),
+      }).pipe(Effect.tapError(() => recordedSandboxBootFailed(found.name))),
 
     // The runner's unit is uploaded beside the caller's steps, and the sandbox is readied as root
     // once the steps its start waits on are done (`started`), since the readying shares the
@@ -1405,6 +1415,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
             .pipe(
               Effect.tapError(() => diedAtStart(api, place, commandId, Object.values(launch.env))),
             );
+          yield* recordedSandboxBooted(launch.name);
         }).pipe(
           Effect.withSpan("web/handRunnerFirstLines"),
           Effect.tapError(() =>
@@ -1412,7 +1423,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           ),
         );
         return { handle, ready };
-      }),
+      }).pipe(Effect.tapError(() => recordedSandboxBootFailed(launch.name))),
   };
 }
 

@@ -1,5 +1,6 @@
 import { Schema as EffectSchema } from "effect";
 import { AGENT_PERMISSION_MODE, agentPendingApprovalSchema } from "./agent-approval-wire.js";
+import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { agentStatusAt, type StatusTurn, statusClockEdge, turnStoppable } from "./agent-status.js";
 import {
   AGENT_BRIEF,
@@ -209,6 +210,15 @@ const agentLiveRowSchema = EffectSchema.Struct({
   permissionMode: EffectSchema.optionalKey(EffectSchema.String),
   /** The tool calls the agent's runner holds for a member's answer, the oldest first; absent from a statement before they were carried. */
   pendingApprovals: EffectSchema.optionalKey(EffectSchema.Array(agentPendingApprovalSchema)),
+  /**
+   * Where the agent's sandbox stands as the service last recorded it
+   * (`agent-sandbox-wire.ts`): its state, when that last moved, and when it
+   * stops unless touched; null for an agent whose sandbox no open recorded,
+   * a Mac's among them, and absent from a statement before they were carried.
+   */
+  sandboxState: EffectSchema.optionalKey(EffectSchema.NullOr(agentSandboxSchema.fields.state)),
+  sandboxStateAt: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
+  sandboxRunsUntil: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
 });
 
 /**
@@ -487,6 +497,19 @@ function macOf(row: AgentLiveRow): AgentSummary["mac"] {
   return { name: deviceName, deviceId };
 }
 
+/** Where the agent's sandbox stands as its summary says it; none where no open was recorded, or the statement carries none. */
+function sandboxOf(row: AgentLiveRow): Pick<AgentSummary, "sandbox"> | undefined {
+  const { sandboxState, sandboxStateAt } = row;
+  if (sandboxState == null || sandboxStateAt == null) return undefined;
+  return {
+    sandbox: {
+      state: sandboxState,
+      stateAt: sandboxStateAt,
+      runsUntil: row.sandboxRunsUntil ?? null,
+    },
+  };
+}
+
 /** One agent as the tabs draw it, on a plan or with none, its status read at `now`, as the service's summary of it says it, with the agents `continuedBy` from it. */
 function agentSummaryOf(
   row: AgentLiveRow,
@@ -546,6 +569,7 @@ function agentSummaryOf(
     ...(started === undefined ? undefined : { runStartedAt: started }),
     ...(stoppable ? undefined : { stoppable: false }),
     ...(row.sandboxOpen === undefined ? undefined : { sandboxOpen: row.sandboxOpen }),
+    ...sandboxOf(row),
     ...(permissionMode === undefined || permissionMode === AGENT_PERMISSION_MODE.FULL_ACCESS
       ? undefined
       : { permissionMode }),

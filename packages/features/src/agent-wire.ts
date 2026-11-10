@@ -16,6 +16,7 @@ import {
   permissionModeAppliesSchema,
 } from "./agent-approval-wire.js";
 import { AGENT_QUEUE_BOUNDS, agentQueueSchema } from "./agent-queue-wire.js";
+import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
 import { integrationConnectionNameSchema, integrationConnectionOf } from "./integration-wire.js";
 import { commitShaSchema, githubRepositoryFullNameSchema } from "./link-grammar.js";
@@ -1290,6 +1291,15 @@ export const agentSummarySchema = EffectSchema.Struct({
    * which a pane reads as not known.
    */
   sandboxOpen: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /**
+   * Where the agent's sandbox stands as the service last recorded it
+   * (`agent-sandbox-wire.ts`), which a reader reads against its own clock
+   * (`@repo/panel`'s `sandboxStandingAt`), since a sandbox stops by itself
+   * once untouched. The task list carries it live. Absent for an agent on
+   * a Mac, for a cloud agent whose sandbox no open has recorded, from a
+   * read that does not name it, and from a service older than it.
+   */
+  sandbox: EffectSchema.optionalKey(agentSandboxSchema),
   /**
    * What the agent was handed as its first message, so its tab draws a
    * description as the description's card, a task as the developer's own message, and,
