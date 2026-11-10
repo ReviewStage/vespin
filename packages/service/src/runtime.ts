@@ -13,6 +13,7 @@ import { FetchHttpClient } from "effect/http";
 import { invitationMailFromEnvironment } from "./accounts/invitation-mail.js";
 import { onboardingEventsFromEnvironment } from "./accounts/onboarding-events.js";
 import { welcomeMailFromEnvironment } from "./accounts/welcome-mail.js";
+import { agentWakeupsFromEnvironment } from "./agents/coder-host/agent-wakeups.js";
 import { settledTurnListener } from "./agents/coder-host/settled-turns.js";
 import { startedTurnListener } from "./agents/coder-host/started-turns.js";
 import { queuedTurnListener, turnQueueFromEnvironment } from "./agents/coder-host/turn-delivery.js";
@@ -182,6 +183,7 @@ export const webServices = Layer.mergeAll(
   startedTurnListener.pipe(Layer.provide(apnsSender)),
   turnQueueFromEnvironment,
   sandboxReleasesFromEnvironment,
+  agentWakeupsFromEnvironment,
   modelCatalogLayer.pipe(Layer.provide(Layer.merge(FetchHttpClient.layer, hostedEnvironment))),
   pullRequestLinksLayer,
   productAnalyticsFromEnvironment.pipe(
