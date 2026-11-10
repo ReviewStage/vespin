@@ -271,12 +271,17 @@ export const DesktopInbox = memo(function DesktopInbox({
   const { startInboxThread } = agents;
   const newThread: InboxNewThread | undefined = tasks.signedIn
     ? startedThreads(startInboxThread, (item, itemId) => {
-        // Note that the thread stands on the task of the item it was started from, which may no longer be the one chosen.
-        const group = standing.find(({ items }) => items.some((each) => each.id === item.id));
+        // Note that the thread stands on the task of the item it was started from, which may no longer be the one
+        // chosen nor listed, so its task is read from the chosen item, then the listed groups, then its agent.
+        const taskId =
+          (chosen?.item.id === item.id ? chosen.holder.task.id : undefined) ??
+          standing.find(({ items }) => items.some((each) => each.id === item.id))?.holder.task.id ??
+          tasks.liveAgents?.find((agent) => agent.id === item.agentId)?.planId ??
+          undefined;
         inbox.choose(
-          group === undefined
+          taskId === undefined
             ? { itemId, opened: true }
-            : { taskId: group.holder.task.id, itemAgentId: item.agentId, itemId, opened: true },
+            : { taskId, itemAgentId: item.agentId, itemId, opened: true },
         );
       })
     : undefined;
