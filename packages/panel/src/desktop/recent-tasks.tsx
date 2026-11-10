@@ -141,37 +141,40 @@ export function RecentTasks({
 }): React.JSX.Element {
   const now = useMinute();
   const directory = useMemberDirectory();
-  const setStanding = useStandingDoor(tasks);
+  const standing = useStandingDoor(tasks);
   const rowTab = taskRowTab(tasks);
   const opened = openedTaskOf(tasks);
   const workspaceName = tasks.workspace?.name ?? "";
   return (
-    <GlanceRows label={label} cells={cellsOf(face)} joinsWalk={joinsWalk} moves={moves}>
-      {(cells, more) =>
-        listed.map((task) => (
-          <TaskListRow
-            key={task.id}
-            tasks={rowTab}
-            task={task}
-            opened={opened}
-            workspaceName={workspaceName}
-            cells={cells}
-            repositoryName={
-              task.repository === null ? undefined : repositoryLabel(task.repository, listed)
-            }
-            // Note that a task the reader is on wears no face, since the rows are theirs to glance at.
-            assigneeHeld={face && assigneeFace(task, directory) === undefined}
-            chosen={undefined}
-            more={more}
-            edges={TASK_ROW_EDGES.UNCHOSEN}
-            unread={unread(task)}
-            card={taskCardOf(tasks, task, now)}
-            onOpen={() => onOpen(task.id)}
-            onStanding={(standing) => setStanding(task, standing)}
-          />
-        ))
-      }
-    </GlanceRows>
+    <>
+      <GlanceRows label={label} cells={cellsOf(face)} joinsWalk={joinsWalk} moves={moves}>
+        {(cells, more) =>
+          listed.map((task) => (
+            <TaskListRow
+              key={task.id}
+              tasks={rowTab}
+              task={task}
+              opened={opened}
+              workspaceName={workspaceName}
+              cells={cells}
+              repositoryName={
+                task.repository === null ? undefined : repositoryLabel(task.repository, listed)
+              }
+              // Note that a task the reader is on wears no face, since the rows are theirs to glance at.
+              assigneeHeld={face && assigneeFace(task, directory) === undefined}
+              chosen={undefined}
+              more={more}
+              edges={TASK_ROW_EDGES.UNCHOSEN}
+              unread={unread(task)}
+              card={taskCardOf(tasks, task, now)}
+              onOpen={() => onOpen(task.id)}
+              onStanding={(asked) => standing.set(task, asked)}
+            />
+          ))
+        }
+      </GlanceRows>
+      {standing.dialog}
+    </>
   );
 }
 

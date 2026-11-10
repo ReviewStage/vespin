@@ -327,6 +327,8 @@ export const tasksSetStandingParamsSchema = EffectSchema.Struct({
   assigneeId: EffectSchema.optionalKey(EffectSchema.NullOr(taskAssigneeIdSchema)),
   /** The name the window knows the member assigned by, which the host draws them by until the list carries them; never sent to the service. */
   assigneeName: EffectSchema.optionalKey(EffectSchema.String),
+  /** With a move to Done or Canceled the member confirmed, whether the task's running agents are stopped and archived with it. */
+  stopAgents: EffectSchema.optionalKey(EffectSchema.Boolean),
 }).check(EffectSchema.makeFilter(namesAStanding));
 
 export type TasksSetStandingParams = typeof tasksSetStandingParamsSchema.Type;

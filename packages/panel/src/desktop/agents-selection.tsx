@@ -1,6 +1,7 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { agentStillWriting } from "@repo/features/task-agents-model";
+import { archiveStopWords } from "@repo/features/tasks-model";
 import { countWords, IRREVERSIBLE_WORDS, TERM } from "@repo/features/words";
 import {
   CONFIRM_LOSS,
@@ -32,10 +33,10 @@ import { useRefusalHeard } from "./use-refusal-heard.js";
  * offers the acts from its ⋯, a right-click, a long press, and the menu
  * key, under how many it acts on (`chosenRowMenu`), as a task's related
  * tasks do. Archive, or Unarchive where every agent chosen is archived,
- * keeps one agent's rules (`agent-archive.tsx`): the reader's own are
- * archived at once; a teammate's drawn at rest is read again first; and a
- * teammate's still working, or one whose read did not land, asks one
- * question for them all first, in the accent, naming how many. However many
+ * keeps one agent's rules (`agent-archive.tsx`): those at rest are
+ * archived at once, a teammate's drawn at rest read again first; and one
+ * still working, or one whose read did not land, asks one question for them
+ * all first, in red. However many
  * it takes, one toast says them all and its one Undo brings them all back,
  * on the toast alone where a question was asked (`use-agents.ts`).
  * Permanently delete always asks first, naming how many. A question holds
@@ -52,21 +53,15 @@ function firstRefusal(answers: readonly ActionResult[]): ActionResult {
 }
 
 /**
- * The question archiving the agents chosen asks where a teammate's still
- * works, or could not be read again, naming how many. Unarchive brings them
- * back, so the act is never red: it asks in the accent, as an act that
- * reaches someone else, whose turn it stops.
+ * The question archiving the agents chosen asks where one still works, or
+ * could not be read again. Unarchive brings them back but not the work their
+ * stop cut off, so the act is red.
  */
-function archiveChosenQuestion(count: number): DialogQuestion {
-  const one = count === 1;
+function archiveChosenQuestion(several: boolean): DialogQuestion {
   return {
-    title: `Stop and archive ${countWords(count, TERM.AGENT)}?`,
-    body: one
-      ? "Its transcript and pull request are kept."
-      : "Their transcripts and pull requests are kept.",
-    verb: `Stop and archive ${one ? TERM.AGENT.one : TERM.AGENT.many}`,
+    ...archiveStopWords(several),
     running: "Stopping and archiving",
-    loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+    loss: CONFIRM_LOSS.IRREVERSIBLE,
     replayUnmasked: true,
   };
 }
@@ -188,7 +183,7 @@ export function useAgentsSelection(
     const teammates = chosen.filter(
       (agent) => teammateStarter(agent.startedBy, agents.me) !== undefined,
     );
-    if (teammates.some((agent) => agentStillWriting(agent.status))) {
+    if (chosen.some((agent) => agentStillWriting(agent.status))) {
       askArchive(agentIds);
       return;
     }
@@ -278,7 +273,7 @@ export function useAgentsSelection(
         <ConfirmDialog
           open
           confirm={archiveConfirm}
-          question={archiveChosenQuestion(stopping.length)}
+          question={archiveChosenQuestion(stopping.length > 1)}
           restoreTo={nextRowOrHead}
         />
         <ConfirmDialog

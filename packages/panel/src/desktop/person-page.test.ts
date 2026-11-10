@@ -1112,7 +1112,7 @@ test("a teammate's agent at rest is archived from its row at once, read again by
   );
 });
 
-test("archiving chosen agents where a teammate's still works asks once, naming how many, before any is archived", async () => {
+test("archiving chosen agents where a teammate's still works asks once before any is archived", async () => {
   const archived: [string, boolean][] = [];
   // Note that Charles has a second agent at work, so Working now on his page holds two.
   const GUARD = agent(4, "Retry storm guard", CHARLES, AGENT_STATUS.RUNNING, 4 * MINUTE);
@@ -1143,10 +1143,10 @@ test("archiving chosen agents where a teammate's still works asks once, naming h
   await settle();
   const dialog =
     document.querySelector<HTMLElement>('[role="alertdialog"]') ?? assert.fail("it asks first");
-  assert.match(dialog.textContent ?? "", /Stop and archive 2 agents\?/u);
+  assert.match(dialog.textContent ?? "", /Archive agents\?/u);
   assert.deepEqual(archived, [], "nothing is archived before the answer");
 
-  act(() => button(dialog, "Stop and archive agents").click());
+  act(() => button(dialog, "Stop agents").click());
   await settle();
   assert.deepEqual(
     archived.toSorted(),

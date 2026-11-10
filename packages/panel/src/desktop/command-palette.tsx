@@ -2262,20 +2262,23 @@ export function CommandPalette({
   const band = useMemo(() => <PaletteFilters filter={filter} onFilter={setFilter} />, [filter]);
 
   return (
-    <PaletteDialog
-      open={open}
-      opening={openings}
-      onOpenChange={setOpen}
-      placeholder={filterPlaceholder(filter)}
-      groups={stood.current}
-      filter={filter}
-      query={query}
-      onQueryChange={setQuery}
-      // Note that a listing cut short is said where nothing matches too, since what was sought may lie past the cut.
-      empty={cut ? `${NOTHING_MATCHES}. ${TRUNCATED_LINE}` : NOTHING_MATCHES}
-      band={band}
-      onKeyDown={keyDown}
-      inputRef={keystrokes}
-    />
+    <>
+      <PaletteDialog
+        open={open}
+        opening={openings}
+        onOpenChange={setOpen}
+        placeholder={filterPlaceholder(filter)}
+        groups={stood.current}
+        filter={filter}
+        query={query}
+        onQueryChange={setQuery}
+        // Note that a listing cut short is said where nothing matches too, since what was sought may lie past the cut.
+        empty={cut ? `${NOTHING_MATCHES}. ${TRUNCATED_LINE}` : NOTHING_MATCHES}
+        band={band}
+        onKeyDown={keyDown}
+        inputRef={keystrokes}
+      />
+      {standing.dialog}
+    </>
   );
 }

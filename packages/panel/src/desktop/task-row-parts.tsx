@@ -85,20 +85,30 @@ export function standsAt(task: TaskSummary, standing: TaskStanding): boolean {
   return priorityOf(task) === standing.priority;
 }
 
+/** A change of where a task stands as the rows send it, and the question it may ask first. */
+export interface StandingDoor {
+  readonly set: (
+    task: TaskSummary,
+    standing: TaskStanding,
+    onRefused?: () => void,
+  ) => Promise<void>;
+  readonly dialog: React.JSX.Element;
+}
+
 /**
  * Sends a task a change of where it stands, unless it stands there already,
  * which the tab draws at once, a member assigned by the directory's name for
  * them, and puts back where the service did not keep it, and says so then.
  * What the caller moved with it to put back too, `onRefused`, runs only on
  * that refusal. It settles once the service has answered, so a press may wait on it.
+ * Done or Canceled on a task whose agents run asks first, through the
+ * dialog the caller draws beside its rows.
  */
-export function useStandingDoor(
-  tasks: Pick<TasksControl, "drawnTasks">,
-): (task: TaskSummary, standing: TaskStanding, onRefused?: () => void) => Promise<void> {
+export function useStandingDoor(tasks: Pick<TasksControl, "drawnTasks">): StandingDoor {
   const toast = useToast();
   const { members } = useMemberDirectory();
-  const { onSetTaskStanding } = useStandingWrites(tasks.drawnTasks);
-  return (task, standing, onRefused) => {
+  const { onSetTaskStanding, dialog } = useStandingWrites(tasks.drawnTasks);
+  const set: StandingDoor["set"] = (task, standing, onRefused) => {
     if (standsAt(task, standing)) return Promise.resolve();
     const named = members?.find((member) => member.userId === standing.assigneeId)?.name;
     return onSetTaskStanding(task.id, standing, named).then((kept) => {
@@ -116,6 +126,7 @@ export function useStandingDoor(
       });
     });
   };
+  return { set, dialog };
 }
 
 /** A chip that names one of a task's standings by its mark and drops the menu that changes it, each value with its mark, the one standing checked. */

@@ -14,8 +14,8 @@
  * clears whichever archive stands.
  *
  * Every other archive writes through here too, each deciding which agents
- * it puts away and why: a task moved to Done or Canceled archives its idle agents in
- * the task's own transaction (`doneTaskArchive`), and they are let go of
+ * it puts away and why: a task moved to Done or Canceled archives its idle agents, and
+ * the running ones a member confirmed stopping, in the task's own transaction (`doneTaskArchive`), and they are let go of
  * once it commits (`archivedWithTaskLetGo`); a turn ending on a task a
  * member or an agent moved to Done or Canceled archives its agent with it
  * (`archivedWithDoneTask`); and "Archive finished runs", which a Slack agent
@@ -188,9 +188,21 @@ export const archivedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   return written;
 });
 
-/** How a task's move to Done or Canceled archives its agents with it, as `archivedBy`: those a Stop reads idle, in the task's own transaction (`updateTaskCommitted`). */
-export const doneTaskArchive = (archivedBy: StoredArchive) =>
-  ({ archivedBy, idle: idleStandingAgents }) satisfies TaskDoneArchive<DatabaseServices>;
+/**
+ * How a task's move to Done or Canceled archives its agents with it, as
+ * `archivedBy`, in the task's own transaction (`updateTaskCommitted`): those
+ * a Stop reads idle, and those the member's confirm already stopped
+ * (`stopped`), archived at once as an archive by hand archives an agent it
+ * stopped, rather than once their turns end.
+ */
+export const doneTaskArchive = (archivedBy: StoredArchive, stopped: ReadonlySet<string>) =>
+  ({
+    archivedBy,
+    idle: (agents) =>
+      Effect.map(idleStandingAgents(agents), (idle) =>
+        stopped.size === 0 ? idle : new Set([...idle, ...stopped]),
+      ),
+  }) satisfies TaskDoneArchive<DatabaseServices>;
 
 /** The agents a task's Done or Canceled archived with it let go of once it commits, as an archive by hand lets one go: their archive scripts run and a local one discarded on its device. */
 export const archivedWithTaskLetGo = (

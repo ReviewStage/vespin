@@ -151,7 +151,7 @@ import {
   TaskRowStatus,
   taskCardOf,
 } from "./task-card.js";
-import { taskSubject, useStandingDoor } from "./task-row-parts.js";
+import { type StandingDoor, taskSubject, useStandingDoor } from "./task-row-parts.js";
 import { ChosenTasksContext, chosenRowMenu } from "./tasks-selection.js";
 import { useRefusalHeard } from "./use-refusal-heard.js";
 
@@ -504,7 +504,12 @@ function SidebarTaskMarks({
       command: actingCommand({ command: item.command, subject }),
     }),
   );
-  return <RowMarks marks={marks} disabled={disabled} />;
+  return (
+    <>
+      <RowMarks marks={marks} disabled={disabled} />
+      {standing.dialog}
+    </>
+  );
 }
 
 /** Which standing chips a row draws beside its name: a Tasks list row's and a Board card's, as their properties show them. */
@@ -526,7 +531,7 @@ function standingSubmenus(
   standing: Pick<StandingWrites, "onSettleTasks">,
   task: TaskSummary,
   assignees: readonly MenuRow[],
-  setStanding: ReturnType<typeof useStandingDoor>,
+  setStanding: StandingDoor["set"],
   subject: ShortcutSubject,
   chips: StandingChips | undefined,
 ): MenuSubmenu[] {
@@ -940,7 +945,7 @@ export function useTaskMenuItems(
   const sections = useSectionDialogs(tasks, tasks.shown && doors.drawn);
   const section =
     task !== undefined ? moveToSectionEntry(task.id, task.workspaceId, sections, name) : undefined;
-  const setStanding = useStandingDoor(tasks);
+  const standingDoor = useStandingDoor(tasks);
   const pins = usePinWrites(tasks.drawnTasks);
   const relationId = useId();
   const writes = useTaskRelationWrites();
@@ -948,7 +953,7 @@ export function useTaskMenuItems(
   const assignees = useAssigneeRows(task?.assignee);
   const standing =
     task !== undefined
-      ? standingSubmenus(standingWrites, task, assignees, setStanding, subject, doors.chips)
+      ? standingSubmenus(standingWrites, task, assignees, standingDoor.set, subject, doors.chips)
       : [];
   const groups = (): readonly (readonly MenuEntry[])[] => [
     ...withRowMoves(
@@ -994,6 +999,8 @@ export function useTaskMenuItems(
       />
       {moving.dialog}
       {sections.dialog}
+      {standingWrites.dialog}
+      {standingDoor.dialog}
     </>
   );
   return { deletion, markDone, groups, footer, subject: menuSubject, keysOn: subject, dialog };
