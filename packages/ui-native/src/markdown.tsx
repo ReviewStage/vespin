@@ -1,5 +1,7 @@
 // markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, links, mention chips, and pictures that open full screen and zoom.
 
+import { Host, Image as SwiftUIImage } from "@expo/ui/swift-ui";
+import { accessibilityHidden } from "@expo/ui/swift-ui/modifiers";
 import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
 import type { LinkPlace } from "@repo/features/link-grammar";
@@ -159,9 +161,10 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
 }
 
 /**
- * A chip's glyph at `size` points in `color`: an SF Symbol through the
- * system's symbol view, or one of Lucide's from the asset catalog, which
- * React Native's image reads by its name and tints as a template.
+ * A chip's glyph in a `size`-point square in `color`: an SF Symbol through
+ * the system's symbol view, or one of Lucide's custom symbols through
+ * SwiftUI's own image in a host of that square. Note that React Native's
+ * image draws a symbol set blank, since it reads only image sets by name.
  */
 function ChipGlyph({
   glyph,
@@ -176,12 +179,14 @@ function ChipGlyph({
     return <SymbolView name={glyph} size={size} tintColor={color} accessibilityElementsHidden />;
   }
   return (
-    <Image
-      source={{ uri: glyph }}
-      resizeMode="contain"
-      style={{ width: size, height: size, tintColor: color }}
-      accessibilityElementsHidden
-    />
+    <Host style={{ width: size, height: size }}>
+      <SwiftUIImage
+        assetName={glyph}
+        size={size}
+        color={color}
+        modifiers={[accessibilityHidden()]}
+      />
+    </Host>
   );
 }
 
