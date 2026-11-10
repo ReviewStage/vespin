@@ -537,8 +537,8 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   /** Absent in a config written before Codex mode, which is Claude Code's. */
   harness: Schema.optionalKey(Schema.Literal(RUNNER_HARNESS.CLAUDE_CODE)),
   cwd: Schema.String,
-  /** The agent the launch runs, whose id names the refs its checkout's snapshots stand under (`checkout-snapshot.ts`). */
-  agentId: Schema.String,
+  /** The agent the launch runs, whose id names the refs its checkout's snapshots stand under (`checkout-snapshot.ts`); none in a config written before it, whose turns take no snapshot. */
+  agentId: Schema.optionalKey(Schema.String),
   executable: Schema.String,
   model: Schema.String,
   effort: Schema.optionalKey(EffortSchema),
@@ -608,8 +608,8 @@ export type ClaudeCodeConfig = typeof ClaudeCodeConfigSchema.Type;
 export const CodexConfigSchema = Schema.Struct({
   harness: Schema.Literal(RUNNER_HARNESS.CODEX),
   cwd: Schema.String,
-  /** The agent the launch runs, whose id names the refs its checkout's snapshots stand under (`checkout-snapshot.ts`). */
-  agentId: Schema.String,
+  /** The agent the launch runs, whose id names the refs its checkout's snapshots stand under (`checkout-snapshot.ts`); none in a config written before it, whose turns take no snapshot. */
+  agentId: Schema.optionalKey(Schema.String),
   executable: Schema.String,
   model: Schema.String,
   effort: Schema.optionalKey(CodexEffortSchema),
