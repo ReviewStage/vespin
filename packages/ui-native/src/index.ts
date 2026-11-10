@@ -71,7 +71,13 @@ export {
   pullRequestLook,
   REVIEW_LOOK,
 } from "./pull-request-look.js";
-export { ConfirmAsk, MarkRow, PullRequestHead, WriteNoteRow } from "./pull-request-page.js";
+export {
+  ConfirmAsk,
+  MarkRow,
+  NoticeAsk,
+  PullRequestHead,
+  WriteNoteRow,
+} from "./pull-request-page.js";
 export { LIST_LOOK, type ListLook, ListSection, RowList } from "./row-list.js";
 export { Screen, Spacer } from "./screen.js";
 export { SealedPage } from "./sealed-page.js";

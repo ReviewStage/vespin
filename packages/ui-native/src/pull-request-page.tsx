@@ -293,3 +293,45 @@ export function ConfirmAsk({
     </Host>
   );
 }
+
+type NoticeAskProps = {
+  /** What happened, in a line: "Task made" */
+  readonly title: string;
+  /** Why, under it. */
+  readonly message: string;
+  readonly presented: boolean;
+  /** Called as the alert goes, by its one act. */
+  readonly onDismiss: () => void;
+};
+
+/** The one act a notice offers, which only lets it go. */
+const DISMISS = { LABEL: "OK", ROLE: "cancel" } as const;
+
+/**
+ * What an act that went only in part says before the screen moves on, as
+ * the system's alert with one act: what happened, why, and OK. It stands in
+ * a host the size of nothing, as `ConfirmAsk` does.
+ */
+export function NoticeAsk({ title, message, presented, onDismiss }: NoticeAskProps) {
+  return (
+    <Host matchContents style={{ position: "absolute" }}>
+      <Alert
+        title={title}
+        isPresented={presented}
+        onIsPresentedChange={(shown) => {
+          if (!shown) onDismiss();
+        }}
+      >
+        <Alert.Trigger>
+          <Text modifiers={[frame({ width: 0, height: 0 })]}>{""}</Text>
+        </Alert.Trigger>
+        <Alert.Actions>
+          <SwiftUIButton label={DISMISS.LABEL} role={DISMISS.ROLE} onPress={onDismiss} />
+        </Alert.Actions>
+        <Alert.Message>
+          <Text>{message}</Text>
+        </Alert.Message>
+      </Alert>
+    </Host>
+  );
+}

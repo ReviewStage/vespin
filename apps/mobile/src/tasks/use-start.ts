@@ -59,11 +59,27 @@ const NO_DEVICES: readonly MacOffer[] = [];
 /** The row Runs on picks for the cloud, beside each device's id. */
 export const CLOUD = "cloud";
 
+/** How a start went: its agent started, its task made with no agent, or refused. */
+export const START_ANSWER = {
+  STARTED: "started",
+  /** The task made, its agent not started: refused, with why, or never asked for. */
+  MADE: "made",
+  REFUSED: "refused",
+} as const;
+
 /** What a start that did not go says, or the agent or task it started. */
 export type StartAnswer =
-  | { readonly agentId: string; readonly taskId: string }
-  | { readonly taskId: string; readonly agentId?: undefined; readonly note?: string | undefined }
-  | { readonly refused: string };
+  | {
+      readonly kind: typeof START_ANSWER.STARTED;
+      readonly agentId: string;
+      readonly taskId: string;
+    }
+  | {
+      readonly kind: typeof START_ANSWER.MADE;
+      readonly taskId: string;
+      readonly note: string | undefined;
+    }
+  | { readonly kind: typeof START_ANSWER.REFUSED; readonly refused: string };
 
 /** What a refused agent Start says, by why, naming the device that would not take it where the service said, as the panel's note says it. */
 function startRefusalWords(refused: RefusedCall): string {
@@ -225,8 +241,10 @@ export function useStartAgent(taskId: string): (ask: StartAsk) => Promise<StartA
       console.error("The agent's start did not go.", error);
       return { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
     });
-    if ("failure" in answer) return { refused: startRefusalWords(answer) };
-    return { agentId: answer.agent.id, taskId };
+    if ("failure" in answer) {
+      return { kind: START_ANSWER.REFUSED, refused: startRefusalWords(answer) };
+    }
+    return { kind: START_ANSWER.STARTED, agentId: answer.agent.id, taskId };
   };
 }
 
@@ -256,12 +274,16 @@ export function useStartTask(
       console.error("The task's start did not go.", error);
       return { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
     });
-    if ("failure" in answer) return { refused: startFailureNote(answer.failure) };
-    const started = answer.agentStart;
-    if (started === undefined) return { taskId: answer.planId };
-    if ("failure" in started) {
-      return { taskId: answer.planId, note: startRefusalWords(started) };
+    if ("failure" in answer) {
+      return { kind: START_ANSWER.REFUSED, refused: startFailureNote(answer.failure) };
     }
-    return { agentId: started.agent.id, taskId: answer.planId };
+    const started = answer.agentStart;
+    if (started === undefined) {
+      return { kind: START_ANSWER.MADE, taskId: answer.planId, note: undefined };
+    }
+    if ("failure" in started) {
+      return { kind: START_ANSWER.MADE, taskId: answer.planId, note: startRefusalWords(started) };
+    }
+    return { kind: START_ANSWER.STARTED, agentId: started.agent.id, taskId: answer.planId };
   };
 }

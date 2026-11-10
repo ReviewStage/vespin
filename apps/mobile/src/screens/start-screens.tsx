@@ -5,21 +5,26 @@ import {
   BAR_TITLE,
   ListSection,
   MenuPickRow,
+  NoticeAsk,
+  rejectionWords,
   Screen,
   SettingsForm,
+  useAsyncAction,
   useColors,
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { absurd } from "effect";
 import { NotificationFeedbackType, notificationAsync } from "expo-haptics";
 import { Stack, useRouter } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   CLOUD,
   type ModelPick,
   runsOnOptions,
+  START_ANSWER,
   type StartAnswer,
   useModelPick,
   useRepositoryPick,
@@ -41,6 +46,7 @@ const WORDS = {
   START: "Start",
   CANCEL: "Cancel",
   NO_REPOSITORIES: "The workspace's GitHub reaches no repository yet.",
+  TASK_MADE: "Task made, its agent not started",
 } as const;
 
 /** Buzzes the phone as the system does for a start taken, or refused. */
@@ -127,41 +133,88 @@ function AgentSection({
   );
 }
 
+/** A task made whose agent was refused: why, said before the sheet gives way to the task's page. */
+type Noted = { readonly taskId: string; readonly note: string };
+
 /**
  * Sends a start once, while none is out: on an agent started, the sheet
- * gives way to its page; on a task made whose agent was refused, to the
- * task's page; on a refusal, the sheet stays with its words, the refusal
- * said under them.
+ * gives way to its page; on a task made whose agent was refused, the
+ * refusal is said in an alert, and once it is read the sheet gives way to
+ * the task's page; on a task made with no agent asked for, to the task's
+ * page; on a refusal, the sheet stays with its words, the refusal said
+ * under them.
  */
 function useSheetStart(start: () => Promise<StartAnswer>): {
   readonly starting: boolean;
   readonly note: string | undefined;
+  readonly noted: Noted | undefined;
   readonly go: () => void;
+  readonly leaveNoted: () => void;
 } {
   const router = useRouter();
-  const [starting, setStarting] = useState(false);
-  const [note, setNote] = useState<string | undefined>(undefined);
-  const go = () => {
-    if (starting) return;
-    setStarting(true);
-    setNote(undefined);
-    start()
-      .then((answer) => {
-        if ("refused" in answer) {
-          setNote(answer.refused);
-          buzz(NotificationFeedbackType.Error);
-          return;
-        }
-        buzz(NotificationFeedbackType.Success);
-        router.dismiss();
-        router.navigate(`/tasks/${encodeURIComponent(answer.taskId)}`);
-        if (answer.agentId !== undefined) {
-          router.push(`/tasks/agent/${encodeURIComponent(answer.agentId)}`);
-        }
-      })
-      .finally(() => setStarting(false));
+  const action = useAsyncAction(rejectionWords);
+  const [noted, setNoted] = useState<Noted | undefined>(undefined);
+  // Note that the alert lets its note go by its OK and by its dismissal both, so the leave is taken once.
+  const left = useRef(false);
+  const leave = (taskId: string, agentId?: string) => {
+    if (left.current) return;
+    left.current = true;
+    router.dismiss();
+    router.navigate(`/tasks/${encodeURIComponent(taskId)}`);
+    if (agentId !== undefined) router.push(`/tasks/agent/${encodeURIComponent(agentId)}`);
   };
-  return { starting, note, go };
+  const answered = (answer: StartAnswer): string | undefined => {
+    switch (answer.kind) {
+      case START_ANSWER.REFUSED:
+        buzz(NotificationFeedbackType.Error);
+        return answer.refused;
+      case START_ANSWER.MADE:
+        if (answer.note === undefined) {
+          buzz(NotificationFeedbackType.Success);
+          leave(answer.taskId);
+          return undefined;
+        }
+        buzz(NotificationFeedbackType.Warning);
+        setNoted({ taskId: answer.taskId, note: answer.note });
+        return undefined;
+      case START_ANSWER.STARTED:
+        buzz(NotificationFeedbackType.Success);
+        leave(answer.taskId, answer.agentId);
+        return undefined;
+      default:
+        return absurd(answer);
+    }
+  };
+  const go = () => {
+    if (noted !== undefined) return;
+    action
+      .run(() => start().then(answered))
+      .catch((error: unknown) => {
+        console.error("The start did not settle.", error);
+      });
+  };
+  const leaveNoted = () => {
+    if (noted !== undefined) leave(noted.taskId);
+  };
+  return { starting: action.running, note: action.refusal, noted, go, leaveNoted };
+}
+
+/** What the sheet says, as the system's alert, of a task made whose agent was refused. */
+function NotedAsk({
+  noted,
+  onDismiss,
+}: {
+  readonly noted: Noted | undefined;
+  readonly onDismiss: () => void;
+}) {
+  return (
+    <NoticeAsk
+      title={WORDS.TASK_MADE}
+      message={noted?.note ?? ""}
+      presented={noted !== undefined}
+      onDismiss={onDismiss}
+    />
+  );
 }
 
 /**
@@ -174,12 +227,17 @@ export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
   const [runsOn, setRunsOn] = useState(CLOUD);
   const pick = useModelPick();
   const startAgent = useStartAgent(taskId);
-  const { starting, note, go } = useSheetStart(() =>
+  const { starting, note, noted, go, leaveNoted } = useSheetStart(() =>
     startAgent({ prompt: prompt.trim(), picked: pick.picked, runsOn }),
   );
   return (
     <>
-      <SheetBar title={WORDS.NEW_AGENT} ready={prompt.trim() !== "" && !starting} onStart={go} />
+      <SheetBar
+        title={WORDS.NEW_AGENT}
+        ready={prompt.trim() !== "" && !starting && noted === undefined}
+        onStart={go}
+      />
+      <NotedAsk noted={noted} onDismiss={leaveNoted} />
       <Screen>
         <SettingsForm>
           <ListSection footer={note}>
@@ -212,7 +270,7 @@ export function NewTaskScreen() {
   const repository = useRepositoryPick(workspace);
   const pick = useModelPick();
   const startTask = useStartTask(workspace?.id);
-  const { starting, note, go } = useSheetStart(() =>
+  const { starting, note, noted, go, leaveNoted } = useSheetStart(() =>
     startTask({
       prompt: prompt.trim(),
       picked: pick.picked,
@@ -222,7 +280,12 @@ export function NewTaskScreen() {
   );
   return (
     <>
-      <SheetBar title={WORDS.NEW_TASK} ready={prompt.trim() !== "" && !starting} onStart={go} />
+      <SheetBar
+        title={WORDS.NEW_TASK}
+        ready={prompt.trim() !== "" && !starting && noted === undefined}
+        onStart={go}
+      />
+      <NotedAsk noted={noted} onDismiss={leaveNoted} />
       <Screen>
         <SettingsForm>
           <ListSection footer={note}>

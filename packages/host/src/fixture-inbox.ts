@@ -222,6 +222,8 @@ const RECORDED = {
  * taken back.
  */
 const REFUSED_ITEM = fixtureId(2);
+/** The words a New task's agent is refused on, its task still made, so a flow sees the note a refused agent leaves. */
+const FIXTURE_REFUSED_START_PROMPT = "Start this agent on a retired model.";
 
 /** Where the recorded thread's words draw its still from: the still's address on the thread, as an agent's post names a picture it attached. */
 const RECORDED_PICTURE_ADDRESS = inboxAttachmentAddress(
@@ -1156,15 +1158,24 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
     if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     return { agent: { ...held, status: AGENT_STATUS.CANCELED } };
   },
-  // A Start, and a task's start with its agent, answered with a new agent starting on the words, as the service answers one.
+  // A Start, and a task's start with its agent, answered with a new agent starting on the words, as the service answers one; a task's start on the refused words is made with its agent refused.
   [ACT_KIND.AGENTS_START]: ({ taskId, prompt }) => ({
     agent: agentOn(fixtureId(91), taskId ?? TASK.INVITES, prompt ?? "", AGENT_STATUS.STARTING, 0),
   }),
   [ACT_KIND.TASKS_START]: ({ agent }) => ({
     planId: fixtureId(92),
-    agentStart: {
-      agent: agentOn(fixtureId(93), fixtureId(92), agent?.prompt ?? "", AGENT_STATUS.STARTING, 0),
-    },
+    agentStart:
+      agent?.prompt === FIXTURE_REFUSED_START_PROMPT
+        ? { failure: AGENT_CALL_FAILURE.INVALID_CHOICE }
+        : {
+            agent: agentOn(
+              fixtureId(93),
+              fixtureId(92),
+              agent?.prompt ?? "",
+              AGENT_STATUS.STARTING,
+              0,
+            ),
+          },
   }),
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,
