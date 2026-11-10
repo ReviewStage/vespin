@@ -83,8 +83,15 @@ test("a connection lost to the provider holds the turn open with a notice, count
   );
   assert.equal(turnProgressed(0, lost.state), true, "a heartbeat alone is progress while it waits");
 
-  const restored = projectMoments(
+  // A loss told again while the wait stands adds no notice, so the restore settles the first.
+  const lostTwice = projectMoments(
     lost.state,
+    [{ kind: NATIVE_MOMENT.CONNECTION_LOST, host: "api.anthropic.com" }],
+    { ...context, sequence: 2, now: 31_000 },
+  );
+  assert.deepEqual(lostTwice.writes, []);
+  const restored = projectMoments(
+    lostTwice.state,
     [{ kind: NATIVE_MOMENT.CONNECTION_RESTORED, host: "api.anthropic.com", carryOn: true }],
     { ...context, sequence: 2, now: 61_000 },
   );

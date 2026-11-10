@@ -596,14 +596,20 @@ const connectionLost = Effect.fn("agent-runner/connectionLost")(function* (launc
     );
   }
   yield* Effect.logWarning(`agent-runner: lost the connection to ${launch.providerHost}`);
-  yield* launch.sink.emit({ type: RUNNER_EVENT.CONNECTION_LOST, host: launch.providerHost });
-  const held: Reconnecting["held"] = [];
-  const probe = yield* Effect.forkScoped(
-    Effect.flatMap(awaitProvider(launch.probeTarget), (answered) =>
-      connectionProbed(launch, answered),
-    ),
+  // Under the admission, so no message is handed to the CLI between the loss and the hold,
+  // and the probe, which decides under it too, finds the wait standing.
+  yield* launch.admission.withPermit(
+    Effect.gen(function* () {
+      yield* launch.sink.emit({ type: RUNNER_EVENT.CONNECTION_LOST, host: launch.providerHost });
+      const held: Reconnecting["held"] = [];
+      const probe = yield* Effect.forkScoped(
+        Effect.flatMap(awaitProvider(launch.probeTarget), (answered) =>
+          connectionProbed(launch, answered),
+        ),
+      );
+      yield* Ref.set(launch.reconnecting, { probe, held });
+    }),
   );
-  yield* Ref.set(launch.reconnecting, { probe, held });
 });
 
 /**

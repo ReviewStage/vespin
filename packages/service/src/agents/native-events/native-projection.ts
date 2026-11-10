@@ -915,8 +915,9 @@ class Fold {
       case NATIVE_MOMENT.CONNECTION_LOST: {
         // The turn waits for the provider's host, still under way, and the transcript says so where it happened;
         // what the model turn failed with is let go, since the loss is no failure of the turn's unless the wait is.
+        // A loss told again while the wait stands keeps the first notice, which the restore settles.
         const turn = this.state.turn;
-        if (turn === undefined) return;
+        if (turn === undefined || turn.reconnecting !== undefined) return;
         const { failure: _failure, ...kept } = this.#closed(turn);
         const told = this.#tell(kept, {
           kind: RUN_EVENT.CONNECTION_LOST,
