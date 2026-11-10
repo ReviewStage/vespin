@@ -52,7 +52,7 @@ import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { NotificationFeedbackType, notificationAsync } from "expo-haptics";
 import { launchImageLibraryAsync } from "expo-image-picker";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 
@@ -185,6 +185,8 @@ export function useAgentComposer(
   const stopAction = useAsyncAction(() => STOP_FAILED);
   // Note that a Stop the service took stands pressed past its answer, until the document shows the agent resting.
   const [stopTaken, setStopTaken] = useState(false);
+  // Note that each turn's end is counted, so a Stop answered after its turn ended changes nothing in the next.
+  const turnsEnded = useRef(0);
   const writing = status !== undefined && agentStillWriting(status);
   // Note that an agent on the retired runtime keeps no queue, and only its starter changes one.
   const starter = agent?.startedBy;
@@ -194,6 +196,7 @@ export function useAgentComposer(
   // A Stop stands pressed until the agent stops writing, and what it said goes with the turn. Note that it runs again as the Stop settles, because the document may show the agent resting before the answer lands.
   useEffect(() => {
     if (writing) return;
+    turnsEnded.current += 1;
     setStopTaken(false);
     clearStop();
   }, [writing, stopTaken, stopState, clearStop]);
@@ -283,12 +286,14 @@ export function useAgentComposer(
     setPictures((held) => held.filter((picture) => picture.id !== id));
     setPictureNote(undefined);
   };
-  // A press while a Stop is out runs nothing (`useAsyncAction`), nor one after the service took it.
+  // A press while a Stop is out runs nothing (`useAsyncAction`), nor one after the service took it, and an answer from an ended turn says nothing.
   const stop = () => {
     if (stopTaken) return;
+    const pressedIn = turnsEnded.current;
     void stopAction.run(() =>
       acts[ACT_KIND.AGENTS_STOP]({ agentId })
         .then((answer) => {
+          if (turnsEnded.current !== pressedIn) return undefined;
           if ("failure" in answer) throw new Error(`The stop was refused: ${answer.failure}.`);
           if (agentStillWriting(answer.agent.status)) return STOP_NOTHING_YET;
           setStopTaken(true);
@@ -296,6 +301,7 @@ export function useAgentComposer(
         })
         .catch((error: unknown) => {
           console.error("The stop did not go.", error);
+          if (turnsEnded.current !== pressedIn) return undefined;
           buzz(NotificationFeedbackType.Error);
           return STOP_FAILED;
         }),
