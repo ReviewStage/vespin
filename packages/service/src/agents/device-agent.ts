@@ -15,6 +15,7 @@
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
+import { failAgentBoot } from "@repo/database/models/agent-boot-store";
 import { latestTurnsOf, readAgent } from "@repo/database/models/agent-store";
 import {
   claimDeviceAgentLine,
@@ -29,13 +30,14 @@ import { beatDevice, deviceLayout } from "@repo/database/models/device-store";
 import { openMacLaunchSecrets, parseKeyRing } from "@repo/database/models/provider-key-seal";
 import { storeWriter } from "@repo/database/models/writer";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
+import { BOOT_FAILURE } from "@repo/features/agent-boot";
 import {
   DEVICE_AGENT_LINE_KIND,
   type DeviceAgentLaunchSecrets,
   type DeviceLaunchUnstarted,
   deviceAgentLaunchSecretsSchema,
 } from "@repo/features/device-agent-wire";
-import { Clock, Duration, Effect, Option, Redacted, Result, Schema } from "effect";
+import { Clock, DateTime, Duration, Effect, Option, Redacted, Result, Schema } from "effect";
 import { TURN_FAILURE, TURN_STATUS } from "../core.js";
 import { HostedEnvironment } from "../environment.js";
 import { heldUntil } from "../http/held-read.js";
@@ -206,6 +208,8 @@ export function settledDeviceAgentLine(
     if (Option.isNone(newest) || newest.value.id !== id) return true;
     const agent = yield* readAgent(userId, agentId);
     if (Option.isNone(agent)) return true;
+    // A launch that settled before its runner was up fails the agent's first launch, where that is what it booted.
+    yield* failAgentBoot(agentId, BOOT_FAILURE.MAC_UNSTARTED, yield* DateTime.nowAsDate);
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     const { conversationId } = agent.value;
     const turn = (yield* latestTurnsOf(userId, [conversationId])).get(conversationId);

@@ -189,18 +189,31 @@ export interface SessionMessage<Turn extends SessionTurn = SessionTurn> {
 }
 
 /**
+ * How a booted machine came up: its runner up and ready for its queue's
+ * head, or its launch only handed to a host fed on its stdin (a Mac), which
+ * says itself when its runner starts (`device-agents-procedures.ts`'s
+ * `lineStep`).
+ */
+export const MACHINE_UP = {
+  READY: "ready",
+  AWAITS_HOST: "awaits-host",
+} as const;
+
+export type MachineUp = (typeof MACHINE_UP)[keyof typeof MACHINE_UP];
+
+/**
  * An agent's machine booted for its first launch: refused at once where the
  * launch could not begin (its plan, its key, its Mac), as an open is;
  * otherwise its session claimed, and `up`, the machine opening and its
  * runner launched with no message, which answers why it failed where it did
- * and nothing once the runner is up.
+ * and how it came up where it did (`MACHINE_UP`).
  */
 export type MachineBoot =
   | SessionFailed
   | {
       readonly outcome: typeof SESSION_SEND_OUTCOME.ACCEPTED;
       readonly sessionId: string;
-      readonly up: Effect.Effect<BootFailure | undefined>;
+      readonly up: Effect.Effect<BootFailure | MachineUp>;
     };
 
 /**

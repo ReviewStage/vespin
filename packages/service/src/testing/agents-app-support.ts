@@ -61,6 +61,7 @@ import { messagesProcedures } from "../agents/messages-procedures.js";
 import { type SandboxDeleteReach, sessionSandboxesLayer } from "../agents/session-sandboxes.js";
 import {
   type AgentSessions,
+  MACHINE_UP,
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
@@ -320,7 +321,7 @@ export function fakeAgentSessions(
         return Effect.succeed({
           outcome: SESSION_SEND_OUTCOME.ACCEPTED,
           sessionId,
-          up: Effect.succeed(undefined),
+          up: Effect.succeed(MACHINE_UP.READY),
         } as const);
       }),
     answer: (sessionId, _conversationId, line) =>

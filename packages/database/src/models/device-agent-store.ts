@@ -1088,17 +1088,19 @@ export function claimDeviceAgentLine(
  * Keeps the step the account's Mac reported its launch of a launch line it
  * claimed and has not settled has reached, where it moves the line's step
  * forward, and leaves it as it stands where it does not, or where the line
- * holds a step a newer build wrote that this build cannot place; whether the Mac
- * holds such a line, which is false for another Mac's or account's line, a
- * line of any other kind, one waiting, and one settled.
+ * holds a step a newer build wrote that this build cannot place; answers the
+ * line's agent where the Mac holds such a line, none for another Mac's or
+ * account's line, a line of any other kind, one waiting, and one settled.
  */
 export function stepDeviceAgentLaunch(
   userId: string,
   deviceId: string,
   id: string,
   step: DeviceLaunchStep,
-): DeviceAgentEffect<boolean> {
-  return Effect.map(writeLaunchStep({ userId, deviceId, id, step }), (rows) => rows.length > 0);
+): DeviceAgentEffect<Option.Option<string>> {
+  return Effect.map(writeLaunchStep({ userId, deviceId, id, step }), ([row]) =>
+    Option.fromNullishOr(row?.agentId),
+  );
 }
 
 /**

@@ -29,7 +29,9 @@ import { hostedStoreOrUnavailable } from "../../http/http-effect.js";
 import {
   type AgentSessions,
   describeUnreachable,
+  MACHINE_UP,
   type MachineBoot,
+  type MachineUp,
   SESSION_SEND_OUTCOME,
 } from "../sessions/agent-sessions.js";
 import { agentFailureSaid, agentLogIds } from "./agent-log.js";
@@ -103,18 +105,24 @@ const bootFailed = (agent: Agent, failure: BootFailure, attempt: number) =>
     yield* Effect.logWarning(`an agent's first launch failed to boot: ${failure}`);
   });
 
-/** The machine's open past the answer: the boot failed where it could not come up, its queue handed on where it did. */
+/**
+ * The machine's open past the answer: the boot failed where it could not
+ * come up, its queue handed on where its runner is up, and left as it
+ * stands where its host says itself when its runner starts (a Mac's
+ * `lineStep`).
+ */
 const machineCameUp = (
   agent: Agent,
-  up: Effect.Effect<BootFailure | undefined>,
+  up: Effect.Effect<BootFailure | MachineUp>,
   attempt: number,
   sessionsFor: QueueSessions,
 ) =>
   afterResponse(
     "an agent's first launch's machine",
     Effect.gen(function* () {
-      const failure = yield* up;
-      if (failure !== undefined) return yield* bootFailed(agent, failure, attempt);
+      const came = yield* up;
+      if (came === MACHINE_UP.AWAITS_HOST) return;
+      if (came !== MACHINE_UP.READY) return yield* bootFailed(agent, came, attempt);
       yield* bootBecameReady(agent, attempt, sessionsFor);
     }).pipe(Effect.annotateLogs(agentLogIds(agent))),
   );

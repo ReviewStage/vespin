@@ -28,6 +28,7 @@ import {
 } from "../agents/coder-host/runtime-sessions.js";
 import {
   type AgentSessions,
+  MACHINE_UP,
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
@@ -46,7 +47,7 @@ export const bootedAtOnce: AgentSessions["boot"] = () =>
   Effect.succeed({
     outcome: SESSION_SEND_OUTCOME.ACCEPTED,
     sessionId: `${NATIVE_SESSION_PREFIX.claude_code}${randomUUID()}`,
-    up: Effect.succeed(undefined),
+    up: Effect.succeed(MACHINE_UP.READY),
   } as const);
 
 /**
@@ -69,7 +70,7 @@ export function openedOnBoot<Turn extends SessionTurn>(
         return {
           outcome: SESSION_SEND_OUTCOME.ACCEPTED,
           sessionId,
-          up: Effect.succeed(undefined),
+          up: Effect.succeed(MACHINE_UP.READY),
         } as const;
       }),
     send: (sessionId, message) =>
@@ -108,7 +109,7 @@ export function scriptedHarness(
           return {
             outcome: SESSION_SEND_OUTCOME.ACCEPTED,
             sessionId,
-            up: Effect.succeed(undefined),
+            up: Effect.succeed(MACHINE_UP.READY),
           } as const;
         }),
       send: (sessionId, message) =>
