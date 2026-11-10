@@ -13,7 +13,7 @@ import {
 import { DraftIcon, MailIcon } from "../../icons/lucide-glyphs.js";
 import { MARK_PROVIDER, ProviderMark } from "../../marks/provider-mark.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
-import { BlockCardHeader, CODE_CARD_TITLE } from "../code-card/code-card.js";
+import { BlockCardHeader, CODE_CARD_TITLE } from "../code-card/block-card-header.js";
 import { CopyButton } from "../copy-button/copy-button.js";
 import { PROSE_CLASS } from "../prose/prose.js";
 
