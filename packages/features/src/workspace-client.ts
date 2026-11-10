@@ -48,6 +48,7 @@ import {
   workspaceInviteRequestSchema,
 } from "./workspace-invitation-wire.js";
 import {
+  type RepositoryScriptKind,
   type WorkspaceSandboxSetupAnswer,
   workspaceInstallScriptPutRequestSchema,
   workspaceRepositorySetupPutRequestSchema,
@@ -514,14 +515,20 @@ export class HostedWorkspaceClient {
     );
   }
 
-  /** A repository's setup script saved by an owner or admin, an empty one removing it, answering the setup as it then stands; a script the service would refuse by shape never travels. */
+  /** A repository's setup script, or its archive script where `kind` names it, saved by an owner or admin, an empty one removing it, answering the setup as it then stands; a script the service would refuse by shape never travels. */
   putRepositorySetup(
     workspaceId: string,
     repository: string,
     script: string,
+    kind?: RepositoryScriptKind,
   ): Effect.Effect<WorkspaceCallResult<WorkspaceSandboxSetupAnswer>, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(
-      readEither(workspaceRepositorySetupPutRequestSchema)({ workspaceId, repository, script }),
+      readEither(workspaceRepositorySetupPutRequestSchema)({
+        workspaceId,
+        repository,
+        script,
+        ...(kind === undefined ? undefined : { kind }),
+      }),
     );
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return resultOf(

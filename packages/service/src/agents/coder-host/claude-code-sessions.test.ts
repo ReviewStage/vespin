@@ -77,6 +77,7 @@ import {
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
+import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { SANDBOX_IDLE, type Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
@@ -3754,7 +3755,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.ok(Result.isSuccess(ring));
         const workspace = agent.organizationId;
         yield* setInstallScript(workspace, "apt-get install -y redis-tools", new Date(0));
-        yield* setRepositorySetup(workspace, RELAY_FULL_NAME, "pnpm install", new Date(0));
+        yield* setRepositorySetup(
+          workspace,
+          RELAY_FULL_NAME,
+          REPOSITORY_SCRIPT_KIND.SETUP,
+          "pnpm install",
+          new Date(0),
+        );
         yield* setWorkspaceVariable(
           workspace,
           "DATABASE_URL",

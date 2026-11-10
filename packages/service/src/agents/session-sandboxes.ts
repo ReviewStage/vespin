@@ -13,8 +13,10 @@
  * the drive a sandbox owns with it, for every agent, one from before drives
  * as well, so an unarchive opens a sandbox afresh, its checkout made from
  * its repository's base drive and its pushed branch, as a sandbox whose
- * snapshot lapsed is; a local agent's archive queues its device a discard
- * line there too (`device-discard.ts`). A deleted workspace's agents'
+ * snapshot lapsed is; where the workspace keeps an archive script for the
+ * agent's repository, the sandbox runs it just before (`archive-script.ts`);
+ * a local agent's archive queues its device a discard line there too
+ * (`device-discard.ts`). A deleted workspace's agents'
  * sandboxes are deleted the same way (`deletedWithWorkspace`), from the
  * sessions its delete read while they stood, and so are its repositories'
  * base drives (`base-drive.ts`'s `deletedBaseDrive`), which no agent owns; a
@@ -31,6 +33,12 @@ import { isSandboxError, Sandbox, type SandboxError, type SandboxService } from 
 import { Context, Duration, Effect, Layer, Option } from "effect";
 import { afterResponse } from "../http/after-response.js";
 import { SESSION_TAG } from "./agent-sandbox-open.js";
+import {
+  ARCHIVE_SCRIPT,
+  type ArchiveScript,
+  archiveScriptOf,
+  archiveScriptRun,
+} from "./archive-script.js";
 import { deletedBaseDrive } from "./base-drive.js";
 import { discardedOrLogged } from "./device-discard.js";
 
@@ -44,6 +52,16 @@ const ARCHIVE_DELETE = {
    * deleted before the drive, is the same few calls and runs under the same.
    */
   TIMEOUT: Duration.seconds(15),
+  /**
+   * The most an archived agent's archive script runs before its delete, a
+   * stopped sandbox's resume and the script's own bound
+   * (`ARCHIVE_SCRIPT`) with room for the calls around them; past it the
+   * script is left and the delete goes on.
+   */
+  SCRIPT_TIMEOUT: Duration.sum(
+    Duration.sum(ARCHIVE_SCRIPT.RESUME_TIMEOUT, ARCHIVE_SCRIPT.RUN_TIMEOUT),
+    Duration.seconds(15),
+  ),
   /** How many agents of an archived task, or sandboxes and base drives of a deleted workspace, are deleted at once. */
   CONCURRENCY: 5,
 } as const;
@@ -54,6 +72,15 @@ export interface SessionSandboxesService {
    * owns (`Sandbox`'s `delete`); answers how many were deleted.
    */
   readonly deleteFor: (sessionId: string) => Effect.Effect<number, SandboxError>;
+  /**
+   * Runs the archive script in the session's newest sandbox, resumed first
+   * where it stopped, within its bounds (`archive-script.ts`), logging how it
+   * ended; fails only where the sandbox refused a call.
+   */
+  readonly archiveFor: (
+    sessionId: string,
+    archive: ArchiveScript,
+  ) => Effect.Effect<void, SandboxError>;
 }
 
 export class SessionSandboxes extends Context.Service<SessionSandboxes, SessionSandboxesService>()(
@@ -69,6 +96,7 @@ function sessionSandboxesOver(api: SandboxService): SessionSandboxesService {
         for (const sandbox of sandboxes) yield* api.delete(sandbox.name);
         return sandboxes.length;
       }),
+    archiveFor: (sessionId, archive) => archiveScriptRun(api, sessionId, archive),
   };
 }
 
@@ -104,12 +132,22 @@ function describeDeleteFailure(failure: {
   return isSandboxError(failure) ? failure.message : failure._tag;
 }
 
+/** Whether the agent still stands archived, as the store has it now. */
+const stillArchived = (agent: Pick<Agent, "id" | "userId">) =>
+  Effect.map(
+    readAgent(agent.userId, agent.id),
+    (current) => Option.isSome(current) && current.value.archivedAt !== null,
+  );
+
 /**
- * One archived agent's sandboxes deleted, if it is still archived. Note
- * that the archive is read again just before the delete, because an agent
- * unarchived and messaged since has resumed the sandbox this would delete,
- * and its turn must keep it; what is left of the race is the moment between
- * this read and the delete.
+ * One archived agent's sandboxes deleted, if it is still archived, its
+ * repository's archive script run in it first where its workspace keeps one.
+ * A script that failed, could not run, or ran past its bounds is logged and
+ * the delete goes on. Note that the archive is read again just before the
+ * delete, and again after the script, because an agent unarchived and
+ * messaged since has resumed the sandbox this would delete, and its turn must
+ * keep it; what is left of the race is the moment between the last read and
+ * the delete.
  */
 const deletedWhileArchived = /* @__PURE__ */ Effect.fnUntraced(function* (
   agent: Pick<Agent, "id" | "userId">,
@@ -117,7 +155,20 @@ const deletedWhileArchived = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   const current = yield* readAgent(agent.userId, agent.id);
   if (Option.isNone(current) || current.value.archivedAt === null) return;
-  yield* (yield* SessionSandboxes).deleteFor(sessionId);
+  const sandboxes = yield* SessionSandboxes;
+  const archive = yield* archiveScriptOf(current.value);
+  if (archive !== undefined) {
+    yield* sandboxes.archiveFor(sessionId, archive).pipe(
+      Effect.timeout(ARCHIVE_DELETE.SCRIPT_TIMEOUT),
+      Effect.catch((failure) =>
+        Effect.logWarning(
+          `an archived agent's archive script did not run: ${describeDeleteFailure(failure)}`,
+        ),
+      ),
+    );
+    if (!(yield* stillArchived(agent))) return;
+  }
+  yield* sandboxes.deleteFor(sessionId).pipe(Effect.timeout(ARCHIVE_DELETE.TIMEOUT));
 });
 
 /**
@@ -155,7 +206,6 @@ export const deletedInBackground = /* @__PURE__ */ Effect.fnUntraced(function* (
   const deleteOne = ({ agent, sessionId }: (typeof deletes)[number]) =>
     deletedWhileArchived(agent, sessionId).pipe(
       Effect.provide(reach.sessionSandboxes),
-      Effect.timeout(ARCHIVE_DELETE.TIMEOUT),
       Effect.catch((failure) =>
         Effect.logWarning(
           `an archived agent's sandbox was not deleted: ${describeDeleteFailure(failure)}`,

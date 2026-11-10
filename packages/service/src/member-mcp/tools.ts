@@ -122,6 +122,7 @@ import {
   type TaskTreeAnswer,
 } from "@repo/features/task-wire";
 import {
+  REPOSITORY_SCRIPT_KIND,
   type WorkspaceSandboxSetupAnswer,
   workspaceInstallScriptPutRequestSchema,
 } from "@repo/features/workspace-sandbox-setup-wire";
@@ -3235,6 +3236,7 @@ const EDIT_SANDBOX_SETUP_TOOL = memberMcpTool({
               callerWorkspaceId(caller),
               repository,
               script,
+              REPOSITORY_SCRIPT_KIND.SETUP,
             ),
         (setup) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...setup }),
       ),
