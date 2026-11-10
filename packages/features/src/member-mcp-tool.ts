@@ -50,6 +50,13 @@ export const MEMBER_MCP_TOOL = {
   UPDATE_AUTOMATION: AGENT_TOOL.UPDATE_AUTOMATION,
   RUN_AUTOMATION: AGENT_TOOL.RUN_AUTOMATION,
   DELETE_AUTOMATION: AGENT_TOOL.DELETE_AUTOMATION,
+  LIST_INTEGRATIONS: "list_integrations",
+  CONNECT_INTEGRATION: "connect_integration",
+  RENAME_INTEGRATION: "rename_integration",
+  DISCONNECT_INTEGRATION: "disconnect_integration",
+  LIST_MCP_CLIENTS: "list_mcp_clients",
+  LIST_SENTRY_INSTALLATIONS: "list_sentry_installations",
+  DISCONNECT_SENTRY: "disconnect_sentry",
 } as const;
 
 export type MemberMcpToolName = (typeof MEMBER_MCP_TOOL)[keyof typeof MEMBER_MCP_TOOL];

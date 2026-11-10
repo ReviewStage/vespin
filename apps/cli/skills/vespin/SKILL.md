@@ -49,6 +49,10 @@ Other commands:
 | `agent forward <id> [port…] [--local <port>]` | Serve a cloud agent's ports on `localhost` (the ones it listens on now, or those named) until Ctrl-C or its sandbox stops; a local port that will not listen is refused, so pick another with `--local` |
 | `inbox list [--unread]` · `inbox view <thread>` | Threads agents posted, and one thread with its open ask |
 | `inbox answer <thread> <option>` · `inbox answer <thread> -F <json\|->` · `inbox reply <thread> -F <msg\|->` · `inbox close <thread>` | Answer a decide's option, `done` for a to-do, or a form as JSON by field; write on the thread; close it |
+| `integrations list` · `integrations connect <provider> [--account <connection>] [--add] [--no-browser]` | Your integrations' accounts, each by its connection name (`notion`, `notion-2`) and where it stands; begin connecting one, which prints the sign-in link (and opens it at a terminal): nothing is connected until the person signs in there, so hand a coding agent's link to them |
+| `integrations rename <connection> <label>` · `integrations disconnect <connection> [--yes]` | Name an account; disconnect it, which takes its tools from your agents and revokes its grant. It asks at a terminal; piped or from a coding agent it needs `--yes`, so disconnect only when the person asked |
+| `sentry list` · `sentry disconnect <installation> [--yes]` | The Sentry organizations linked to the workspace; disconnect one (owners and admins), so its issues and alerts start no automation. Linking one takes the app |
+| `mcp clients` | The coding agents you allowed on Vespin's MCP server; revoke one in Settings › MCP |
 | `agent shells <id>` · `agent shell <id> [<shell>] [--title t]` | An agent's Terminal tab shells; open a new one, or attach to one, in this terminal (Ctrl-] detaches). `shell` is interactive and refuses to run piped, so a coding agent hands it to the person |
 
 `description edit` replaces the whole description, so run `description show` first and edit that; piped, `show` prints JSON, so take its `body` (`jq -r .body`). Run `vespin <group> --help` for any flag not listed here.

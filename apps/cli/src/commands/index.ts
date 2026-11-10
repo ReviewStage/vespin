@@ -13,9 +13,11 @@ import { agentCommand } from "./agent.js";
 import { apiCommand } from "./api.js";
 import { descriptionCommand } from "./description.js";
 import { inboxCommand } from "./inbox.js";
+import { integrationsCommand } from "./integrations.js";
 import { mcpCommand } from "./mcp.js";
 import { modelsCommand } from "./models.js";
 import { sectionCommand } from "./section.js";
+import { sentryCommand } from "./sentry.js";
 import { taskCommand } from "./task.js";
 import { updateCommand } from "./update.js";
 import { versionCommand } from "./version.js";
@@ -30,6 +32,8 @@ export const COMMANDS = [
   workspaceCommand,
   inboxCommand,
   modelsCommand,
+  integrationsCommand,
+  sentryCommand,
   mcpCommand,
   apiCommand,
   updateCommand,

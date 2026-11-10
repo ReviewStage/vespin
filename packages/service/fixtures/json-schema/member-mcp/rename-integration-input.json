@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "connection": {
+      "type": "string",
+      "description": "The account, by the connection name list_integrations answered, such as notion, or notion-2 for a second Notion account."
+    },
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "What the member calls the account, such as the workspace it is at the provider."
+    }
+  },
+  "required": [
+    "connection",
+    "label"
+  ],
+  "additionalProperties": false
+}
