@@ -11,10 +11,7 @@
  * (`packages/service/src/accounts/workspaces-procedures.ts`): a workspace
  * the caller is not in (`not-found`), a role that does not allow the write
  * (`not-permitted`), and a slug the service will not give
- * (`workspace-slug-*`). Every member write through Better Auth's plugin
- * also declares the plugin's already-invited refusal, which its error codes
- * may answer on any of them (`workspace-access.ts`'s `pluginCallOrRefused`);
- * the delete, which no such code answers, does not.
+ * (`workspace-slug-*`).
  */
 
 import { openapi } from "@orpc/openapi";
@@ -80,13 +77,7 @@ export const workspacesContract = {
     .input(exactInput(workspaceCreateRequestSchema))
     .output(EffectSchema.flip(workspaceAnswerSchema)),
   rename: declaredProcedure
-    .errors(
-      refuses(
-        HOSTED_API_ERROR.NOT_FOUND,
-        HOSTED_API_ERROR.NOT_PERMITTED,
-        HOSTED_API_ERROR.ALREADY_INVITED,
-      ),
-    )
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
     .meta(bodyCap(BODY_BYTES))
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.WORKSPACES_RENAME }))
     .input(exactInput(workspaceRenameRequestSchema))
@@ -106,13 +97,7 @@ export const workspacesContract = {
     .input(exactInput(workspaceSlugSetRequestSchema))
     .output(EffectSchema.flip(workspaceAnswerSchema)),
   setPhoto: declaredProcedure
-    .errors(
-      refuses(
-        HOSTED_API_ERROR.NOT_FOUND,
-        HOSTED_API_ERROR.NOT_PERMITTED,
-        HOSTED_API_ERROR.ALREADY_INVITED,
-      ),
-    )
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
     .meta(bodyCap(PHOTO_BODY_BYTES))
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.WORKSPACES_PHOTO_SET }))
     .input(exactInput(workspacePhotoSetRequestSchema))
@@ -131,13 +116,7 @@ export const workspacesContract = {
     .input(workspaceMembersQuerySchema)
     .output(EffectSchema.flip(workspaceMembersAnswerSchema)),
   removeMember: declaredProcedure
-    .errors(
-      refuses(
-        HOSTED_API_ERROR.NOT_FOUND,
-        HOSTED_API_ERROR.NOT_PERMITTED,
-        HOSTED_API_ERROR.ALREADY_INVITED,
-      ),
-    )
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
     .meta(bodyCap(BODY_BYTES))
     .meta(
       openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.WORKSPACES_MEMBERS_REMOVE }),
@@ -145,37 +124,19 @@ export const workspacesContract = {
     .input(exactInput(workspaceMemberRemovalSchema))
     .output(EffectSchema.flip(workspaceMembersAnswerSchema)),
   changeRole: declaredProcedure
-    .errors(
-      refuses(
-        HOSTED_API_ERROR.NOT_FOUND,
-        HOSTED_API_ERROR.NOT_PERMITTED,
-        HOSTED_API_ERROR.ALREADY_INVITED,
-      ),
-    )
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
     .meta(bodyCap(BODY_BYTES))
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.WORKSPACES_MEMBERS_ROLE }))
     .input(exactInput(workspaceMemberRoleSchema))
     .output(EffectSchema.flip(workspaceMembersAnswerSchema)),
   transfer: declaredProcedure
-    .errors(
-      refuses(
-        HOSTED_API_ERROR.NOT_FOUND,
-        HOSTED_API_ERROR.NOT_PERMITTED,
-        HOSTED_API_ERROR.ALREADY_INVITED,
-      ),
-    )
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
     .meta(bodyCap(BODY_BYTES))
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.WORKSPACES_TRANSFER }))
     .input(exactInput(workspaceTransferSchema))
     .output(EffectSchema.flip(workspaceMembersAnswerSchema)),
   leave: declaredProcedure
-    .errors(
-      refuses(
-        HOSTED_API_ERROR.NOT_FOUND,
-        HOSTED_API_ERROR.NOT_PERMITTED,
-        HOSTED_API_ERROR.ALREADY_INVITED,
-      ),
-    )
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
     .meta(bodyCap(BODY_BYTES))
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.WORKSPACES_LEAVE }))
     .input(exactInput(workspaceLeaveRequestSchema))

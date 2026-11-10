@@ -109,8 +109,13 @@ const CONFIRM_WORDS: ReadonlySet<string> = new Set(["y", "yes"]);
  * person where stdin is a terminal, who must answer y or yes. Note that
  * without a terminal nothing is read from stdin, because a script that
  * pipes a stray line must not delete by accident, so `--yes` is required.
+ * A command that deletes nothing names what a refusal leaves undone.
  */
-export const confirmOrYes = Effect.fnUntraced(function* (question: string, yes: boolean) {
+export const confirmOrYes = Effect.fnUntraced(function* (
+  question: string,
+  yes: boolean,
+  declined = "Nothing was deleted.",
+) {
   if (yes) return;
   if (!(yield* canPrompt)) {
     return yield* new CommandFailed({
@@ -120,7 +125,7 @@ export const confirmOrYes = Effect.fnUntraced(function* (question: string, yes: 
   }
   const answered = yield* readLine(`${question} [y/N]`);
   if (answered !== undefined && CONFIRM_WORDS.has(answered.trim().toLowerCase())) return;
-  return yield* new CommandFailed({ exit: CLI_EXIT.REFUSED, message: "Nothing was deleted." });
+  return yield* new CommandFailed({ exit: CLI_EXIT.REFUSED, message: declined });
 });
 
 /** One line ending, as `echo` or a Windows editor leaves it at the end of piped stdin. */

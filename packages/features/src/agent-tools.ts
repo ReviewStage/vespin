@@ -235,6 +235,15 @@ export const CLAUDE_CODE_UNRECORDED_TOOL = {
   TOOL_SEARCH: "ToolSearch",
 } as const;
 
+/**
+ * The name a native harness's call is stored under where it names a tool no
+ * transcript registers, such as a retired one a session still calls, the
+ * name it called kept in its input (`{ name, input }`), so the call stands in
+ * the record, as the error the harness answered it with, rather than being
+ * left out.
+ */
+export const UNKNOWN_TOOL = "unknown_tool";
+
 /** The name our MCP server is registered under, in Claude Code (`mcpServers.workspace`) and Codex (`mcp_servers.workspace`) alike. */
 export const WORKSPACE_MCP_SERVER = "workspace";
 

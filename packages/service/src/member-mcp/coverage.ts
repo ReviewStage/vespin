@@ -47,7 +47,7 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
   NEEDS_BROWSER: "needs-browser",
   /** It reads or writes a secret no tool carries: a provider key or the GitHub token goes in through the CLI's stdin alone. A workspace environment variable's value is the one secret a tool takes, `set_environment_variable`'s input, and no tool ever answers one. */
   SECRET: "secret",
-  /** It hands a person trust in the account, a decision the member makes in the app alone and never through an agent. */
+  /** It hands a person trust in the account, or takes a way into it away under a fresh session, a decision the member makes in the app alone and never through an agent. */
   SECURITY: "security",
   /** It cannot be undone and stays in the app and the CLI alone, by design. */
   DESTRUCTIVE: "destructive",
@@ -129,8 +129,21 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.ANSWER_ASK]: { inbox: ["message"] },
   [MEMBER_MCP_TOOL.REPLY_TO_THREAD]: { inbox: ["message"] },
   [MEMBER_MCP_TOOL.CLOSE_THREAD]: { inbox: ["close"] },
+  [MEMBER_MCP_TOOL.MARK_THREAD_READ]: { inbox: ["markItemRead", "markItemUnread"] },
+  [MEMBER_MCP_TOOL.MARK_INBOX_READ]: { inbox: ["markAllRead"] },
+  // `snoozeItem` is `remindItem` under the path an older desktop still calls.
+  [MEMBER_MCP_TOOL.REMIND_THREAD]: { inbox: ["remindItem", "snoozeItem"] },
+  [MEMBER_MCP_TOOL.START_THREAD]: { inbox: ["start"] },
   [MEMBER_MCP_TOOL.AGENT_PULL_REQUEST_ACTION]: { agentPullRequests: ["action"] },
   [MEMBER_MCP_TOOL.READ_PULL_REQUEST]: {
+    agentPullRequests: [
+      "pullRequest",
+      "overviewPullRequest",
+      "overviewChecks",
+      "overviewConversation",
+      "viewed",
+    ],
+    agents: ["changes"],
     pullRequests: [
       "pullRequest",
       "overviewPullRequest",
@@ -140,7 +153,10 @@ export const MEMBER_MCP_COVERAGE = {
       "viewed",
     ],
   },
-  [MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED]: { pullRequests: ["action"] },
+  [MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED]: {
+    agentPullRequests: ["pullRequest", "action"],
+    pullRequests: ["action"],
+  },
   [MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS]: {
     agentPullRequests: ["pullRequest"],
     pullRequestChapters: ["read", "repositoryRead"],
@@ -164,6 +180,11 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES]: { workspaceEnvironment: ["list"] },
   [MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE]: { workspaceEnvironment: ["put"] },
   [MEMBER_MCP_TOOL.DELETE_ENVIRONMENT_VARIABLE]: { workspaceEnvironment: ["delete"] },
+  [MEMBER_MCP_TOOL.LIST_INSTALLED_SKILLS]: { installedSkills: ["list"] },
+  [MEMBER_MCP_TOOL.READ_INSTALLED_SKILL]: { installedSkills: ["read"] },
+  [MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL]: { installedSkills: ["preview"] },
+  [MEMBER_MCP_TOOL.INSTALL_SKILL]: { installedSkills: ["install"] },
+  [MEMBER_MCP_TOOL.REMOVE_INSTALLED_SKILL]: { installedSkills: ["remove"] },
   [MEMBER_MCP_TOOL.READ_SANDBOX_SETUP]: { workspaceSandboxSetup: ["read"] },
   [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP]: { workspaceSandboxSetup: ["putInstall", "putRepository"] },
   [MEMBER_MCP_TOOL.LIST_INTEGRATIONS]: { integrations: ["statuses", "settle"] },
@@ -231,12 +252,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     workspaces: INTERNAL,
   },
   agentPages: { frame: SCREEN_ONLY },
-  agentPullRequests: {
-    viewed: NOT_YET_BUILT,
-    overviewPullRequest: NOT_YET_BUILT,
-    overviewChecks: NOT_YET_BUILT,
-    overviewConversation: NOT_YET_BUILT,
-  },
   agents: {
     delete: NOT_YET_BUILT,
     warm: NOT_YET_BUILT,
@@ -256,8 +271,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     connect: NEEDS_BROWSER,
     claim: NEEDS_BROWSER,
     connection: NOT_YET_BUILT,
-    // Note that a disconnect unlinks the member's GitHub sign-in through Better Auth under a session of theirs, which no OAuth token carries.
-    disconnect: NOT_YET_BUILT,
+    // Note that Better Auth's unlink asks a fresh session, which no OAuth token is, so it stays the app's.
+    disconnect: SECURITY,
     repositories: NOT_YET_BUILT,
     tokenRepositories: NOT_YET_BUILT,
     setTokenRepository: NOT_YET_BUILT,
@@ -279,19 +294,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   inbox: {
     home: SCREEN_ONLY,
     answer: NOT_YET_BUILT,
-    start: NOT_YET_BUILT,
-    markItemRead: NOT_YET_BUILT,
-    markItemUnread: NOT_YET_BUILT,
-    remindItem: NOT_YET_BUILT,
-    snoozeItem: NOT_YET_BUILT,
-    markAllRead: NOT_YET_BUILT,
-  },
-  installedSkills: {
-    list: NOT_YET_BUILT,
-    read: NOT_YET_BUILT,
-    preview: NOT_YET_BUILT,
-    install: NOT_YET_BUILT,
-    remove: NOT_YET_BUILT,
   },
   integrations: {
     github: NEEDS_BROWSER,

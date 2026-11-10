@@ -5,6 +5,7 @@ import { baselineProblems } from "../shared/baseline.ts";
 import { repositoryPathOf, TYPESCRIPT_SOURCE } from "../shared/effect-edges.ts";
 import { attributeName } from "../shared/jsx.ts";
 import {
+  bindsGlyphs,
   GLYPH_REGISTRY,
   isAllowed,
   isIconDoor,
@@ -19,7 +20,8 @@ import { isClassList } from "../shared/style-guard.ts";
 
 /**
  * What phase 2 retired stays retired: a class name in a class list, a glyph
- * imported from `@repo/ui/icons`, a JSX prop, or an import, each refused
+ * imported from `@repo/ui/icons` or `lucide-react`, a JSX prop, or an import
+ * of a package or of a module of the repository by its path, each refused
  * outside the paths its retired file allows, past the baseline that file
  * gives it. The list is data, one JSON file per kind under
  * `tools/anti-slop/retired/` (`shared/retired.ts` reads it and says how a
@@ -127,13 +129,13 @@ export function retiredRuleFor(retirements: readonly Retirement[]) {
         whole = false,
       ) {
         for (const retirement of standing) {
-          if (!matchesModule(retirement, specifier)) continue;
+          if (!matchesModule(retirement, specifier, file)) continue;
           if (retirement.names.length === 0 || whole) place(retirement, node);
           for (const name of imported) {
             if (retirement.names.includes(specifierName(name))) place(retirement, name);
           }
         }
-        if (!isIconDoor(specifier, file)) return;
+        if (!bindsGlyphs(specifier, file)) return;
         for (const name of imported) noteGlyph(specifierName(name), name);
       }
 
@@ -142,9 +144,9 @@ export function retiredRuleFor(retirements: readonly Retirement[]) {
         if (registries.has(object)) noteGlyph(`${GLYPH_REGISTRY}.${key}`, node);
         const specifier = namespaces.get(object);
         if (specifier === undefined) return;
-        if (isIconDoor(specifier, file)) noteGlyph(key, node);
+        if (bindsGlyphs(specifier, file)) noteGlyph(key, node);
         for (const retirement of standing) {
-          if (matchesModule(retirement, specifier) && retirement.names.includes(key))
+          if (matchesModule(retirement, specifier, file) && retirement.names.includes(key))
             place(retirement, node);
         }
       }

@@ -1,8 +1,10 @@
 /**
  * pr-viewed.ts -- `vespin pr viewed`: files of any pull request marked viewed, or unmarked, on GitHub as you, as GitHub's own Viewed box does.
  *
- * Each path is one change through `pullRequests.action`, made in turn on
- * your own GitHub sign-in, and the command stops at the first GitHub did
+ * The pull request is named as `vespin pr view` names it, a repository's or
+ * an agent's. Each path is one change through `pullRequests.action`, or
+ * `agentPullRequests.action` for an agent's, made in turn on your own
+ * GitHub sign-in, and the command stops at the first GitHub did
  * not take, saying which were marked before it. `vespin pr view --stat`
  * reads the marks back.
  */
@@ -17,12 +19,13 @@ import { Effect } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { answer, CommandFailed } from "../output.js";
 import { askService, session } from "../session.js";
-import { pullRequestArgument, pullRequestQuery } from "./pr-view.js";
+import { agentNumberFlag, NAMED_BY, pullRequestArgument, pullRequestNamed } from "./pr-view.js";
 
 export const viewedCommand = Command.make(
   "viewed",
   {
     pr: pullRequestArgument,
+    number: agentNumberFlag,
     paths: Argument.String("path").pipe(
       Argument.atLeast(1),
       Argument.withDescription("The files, by their paths from the repository's root"),
@@ -32,19 +35,24 @@ export const viewedCommand = Command.make(
       Flag.withDescription("Unmark them instead"),
     ),
   },
-  ({ pr, paths, unmark }) =>
+  ({ pr, number, paths, unmark }) =>
     Effect.gen(function* () {
       const { hosted } = yield* session;
-      const query = yield* pullRequestQuery(pr);
+      const named = yield* pullRequestNamed(pr, number);
       const action = unmark
         ? PULL_REQUEST_ACTION.UNMARK_FILE_VIEWED
         : PULL_REQUEST_ACTION.MARK_FILE_VIEWED;
       const done: string[] = [];
       for (const path of paths) {
-        const written = yield* askService(hosted.pullRequests.action, {
-          query,
-          body: { action, path },
-        });
+        const body = { action, path };
+        const written =
+          named.by === NAMED_BY.REPOSITORY
+            ? yield* askService(hosted.pullRequests.action, { query: named.query, body })
+            : yield* askService(hosted.agentPullRequests.action, {
+                params: { id: named.id },
+                query: named.number === undefined ? {} : { number: named.number },
+                body,
+              });
         if (written.outcome !== PULL_REQUEST_WRITE_OUTCOME.DONE) {
           const why =
             written.outcome === PULL_REQUEST_WRITE_OUTCOME.REFUSED
@@ -71,6 +79,10 @@ export const viewedCommand = Command.make(
     {
       command: "vespin pr viewed acme/relay#42 src/a.ts --unmark",
       description: "Unmark one",
+    },
+    {
+      command: "vespin pr viewed <agent-id> src/a.ts",
+      description: "Mark a file of the agent's own pull request viewed",
     },
   ]),
 );
