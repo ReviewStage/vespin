@@ -1431,12 +1431,6 @@
   margin-top: 0;
 }
 
-/* A foot inside the frame (`reply-form.tsx`) reaches the frame's own edge
-   rather than the words' inset, as it does in every other frame. */
-.comment-editor-frame > .ui-composer-foot {
-  margin-inline: calc(-1 * var(--ui-control-inset));
-}
-
 /* A review's summary is the composer's own field (`review-panel.tsx`) in a
    text field's frame: it stands three lines at a text area's insets, as a
    comment's box opens, and grows a line at a time to the composer's cap. */
@@ -1453,8 +1447,19 @@
   padding: var(--ui-space-6) var(--ui-control-inset) 0;
 }
 
-.comment-editor-frame:has(> .comment-editor-head) {
-  padding-inline-end: calc(var(--ui-control-height) + var(--ui-space-4));
+/* The Markdown editor as a comment's field (`comment-editor.tsx`): its
+   words at the message box's own insets in that field (`.comment-field
+   .agent-composer-input`), so a comment written to GitHub stands as one
+   written to an agent does, and an edit's words where they were read. */
+.comment-field .comment-editor-text {
+  min-height: 36px; /* off-scale: one line and its padding, as the message box's */
+  padding: var(--ui-row-inset) var(--comment-field-inline) var(--ui-space-2);
+}
+
+.comment-field[data-variant="edit"] .comment-editor-text {
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 /* A suggested change is GitHub's ```suggestion block, drawn under its name
@@ -2794,6 +2799,7 @@ svg.lucide {
 
 @media (hover: hover) {
   .comment-entry:hover .comment-tools,
+  .ui-comment:hover .comment-tools,
   .annotation-card:hover .ui-disclosure-actions .comment-tools {
     opacity: 1;
   }

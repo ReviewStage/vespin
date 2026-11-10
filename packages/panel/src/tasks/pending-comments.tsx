@@ -17,7 +17,7 @@ import { createContext, type ReactNode, useContext, useState } from "react";
 import { ActorRef, commentAuthor } from "../actor-ref.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 import { confirmFailure } from "../failure-report.js";
-import { CommentMenu } from "./comment-menu.js";
+import { CommentMenu, CommentTools } from "./comment-menu.js";
 import { useNamer } from "./pull-request-people.js";
 import { noop, useThreadWriting } from "./pull-request-thread-actions.js";
 import { PullRequestWriteNote, usePullRequestWrites } from "./pull-request-writes.js";
@@ -286,7 +286,7 @@ export function PendingComment({
       at={head.at}
       now={head.now}
       status={<PendingWords />}
-      trailing={acts.menu}
+      trailing={<CommentTools>{acts.menu}</CommentTools>}
     >
       {acts.body(words)}
     </Comment>

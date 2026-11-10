@@ -42,7 +42,6 @@ import {
   ChoiceBar,
   COMMENT_PIN_LOOK,
   COMMENT_PIN_STANDS,
-  COMPOSER_LOOK,
   CONFIRM_LOSS,
   Comment,
   type CommentAuthor,
@@ -152,7 +151,8 @@ import { centerWithin } from "../scroll-within.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import { AgentActorRef, type AgentSubject, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import { attachmentChips } from "./attached-file-chips.js";
-import { CommentMenu } from "./comment-menu.js";
+import { CommentMenu, CommentTools } from "./comment-menu.js";
+import { REPLY_LOOK, REPLY_VARIANT, type ReplyVariant } from "./comment-variant.js";
 import {
   CommentFiles,
   useCommentFileChips,
@@ -836,7 +836,7 @@ function CommentEntry({
                 <ReplayUnmask>{COMMENT_WORDS.EDITED}</ReplayUnmask>
               </Text>
             )}
-            <div className="comment-tools">
+            <CommentTools>
               {first ? (
                 <Tooltip label={settle ? COMMENT_WORDS.RESOLVE : COMMENT_WORDS.REOPEN}>
                   <IconButton
@@ -850,7 +850,7 @@ function CommentEntry({
                 </Tooltip>
               ) : null}
               <CommentMenu groups={groups} />
-            </div>
+            </CommentTools>
             <ConfirmDialog
               open
               confirm={deleting}
@@ -970,7 +970,7 @@ function CommentEditField({
   return (
     <MessageBox
       box={box}
-      look={COMPOSER_LOOK.BARE}
+      look={REPLY_LOOK[REPLY_VARIANT.EDIT]}
       className="comment-field comment-editing"
       data-variant={REPLY_VARIANT.EDIT}
       beforeSend={
@@ -1290,7 +1290,7 @@ function ReplyField({
   return (
     <MessageBox
       box={box}
-      look={variant === REPLY_VARIANT.FIRST ? COMPOSER_LOOK.BARE : COMPOSER_LOOK.CARD}
+      look={REPLY_LOOK[variant]}
       className="comment-field"
       data-variant={variant}
       // Note that held files and files still being read, and a dictation whose words land once heard, hold the field, so a press away keeps a thread being started; typed words are kept as its draft and hold nothing.
@@ -1401,11 +1401,6 @@ function carried(send: Pick<CommentSend, "words" | "attachments">): boolean {
 function sameFiles(was: readonly AgentAttachment[], now: readonly AgentAttachment[]): boolean {
   return was.length === now.length && was.every((file, at) => file === now[at]);
 }
-
-/** How a comment's field stands: as a thread's first comment, the card itself, as a reply under its comments, or as a comment's words edited in their place (`CommentEditField`). */
-const REPLY_VARIANT = { FIRST: "first", REPLY: "reply", EDIT: "edit" } as const;
-
-type ReplyVariant = (typeof REPLY_VARIANT)[keyof typeof REPLY_VARIANT];
 
 /** Over a thread whose words were deleted: that they were, and what they said. */
 function GoneQuote({
@@ -3606,9 +3601,9 @@ export function PendingPageComment({
         status={<PendingWords />}
         trailing={
           editing === undefined ? (
-            <div className="comment-tools">
+            <CommentTools>
               <CommentMenu groups={groups} />
-            </div>
+            </CommentTools>
           ) : undefined
         }
       >
