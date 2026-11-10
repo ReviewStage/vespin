@@ -274,6 +274,10 @@ export function liveSocketClient(
         }
         case CONNECTION.NONE:
           break;
+        default: {
+          const unknown: never = connection;
+          throw new Error(`Unknown live socket connection: ${JSON.stringify(unknown)}`);
+        }
       }
       connection = { kind: CONNECTION.OPENING };
       yield* Effect.forkIn(openNext, scope);
