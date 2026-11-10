@@ -27,7 +27,7 @@ import { AttachedFileChips } from "./attached-file-chips.js";
  * its × to take it off (`KeptCommentFiles`), before the files added, which
  * its box draws. A picture its words name (`[Picture 1]`) is drawn in
  * the words, where its marker stands, rather than in the row
- * (`useWordPictures`), written and posted alike.
+ * (`useWordFiles`), written and posted alike.
  */
 
 /** How a plan's comment's file is read: as the plan's attachment, which its pictures read too. */

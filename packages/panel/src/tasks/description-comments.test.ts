@@ -1651,18 +1651,23 @@ test("a reply carries the files picked into its field, and a comment's files are
   );
 
   const field = card.querySelector(".comment-field") ?? assert.fail("no reply field");
+  const editor = field.querySelector<HTMLElement>(".composer-editor") ?? assert.fail("no field");
+  writeInComposer(editor, "Repro:");
   await pickFiles(field, [new File(["Steps to reproduce\n"], "steps.txt", { type: "text/plain" })]);
-  assert.deepEqual(
-    [...field.querySelectorAll('[aria-label="Attached files"] > li')].map(attachmentChipName),
-    ["steps.txt"],
+  assert.ok(
+    editor.querySelector('[data-chip="fileChip"] [aria-label="Open steps.txt"]'),
+    "the file picked stands in the words as its chip",
   );
-  await post(
-    field.querySelector<HTMLElement>(".composer-editor") ?? assert.fail("no field"),
-    "Repro attached.",
-  );
+  assert.equal(field.querySelectorAll('[aria-label="Attached files"] > li').length, 0);
+  pressInComposer(editor, "Enter");
+  await act(async () => undefined);
 
   const [reply] = asked;
   assert.equal(reply?.action.action, DESCRIPTION_COMMENT_ACTION.REPLY);
+  assert.equal(
+    reply !== undefined && "words" in reply.action ? reply.action.words : undefined,
+    "Repro: [File: steps.txt]",
+  );
   assert.deepEqual(
     reply !== undefined && "attachments" in reply.action
       ? reply.action.attachments?.map((file) => [file.name, file.mediaType, file.data])
@@ -1894,8 +1899,13 @@ function editWithFiles(landing?: () => boolean | Promise<boolean>) {
         ?.click(),
     );
   };
-  const held = () =>
-    [...field().querySelectorAll('[aria-label="Attached files"] > li')].map(attachmentChipName);
+  // Note that the files the edit holds stand in its row, the comment's own its words do not name, and in its words, the files added.
+  const held = () => [
+    ...[...field().querySelectorAll('[aria-label="Attached files"] > li')].map(attachmentChipName),
+    ...[...field().querySelectorAll('[data-chip="fileChip"] [aria-label^="Open "]')].map(
+      (chip) => chip.getAttribute("aria-label")?.slice("Open ".length) ?? null,
+    ),
+  ];
   const change = async () => {
     act(() =>
       field().querySelector<HTMLButtonElement>('button[aria-label="Remove old.txt"]')?.click(),

@@ -136,6 +136,11 @@ function png(name: string, size = 8): File {
   return new File([bytes], name, { type: "image/png" });
 }
 
+/** A PDF of the name, its bytes a PDF's header. */
+function pdf(name: string): File {
+  return new File(["%PDF-1.7\n"], name, { type: "application/pdf" });
+}
+
 const roots: Root[] = [];
 
 beforeAll(() => Effect.runPromise(editorBundleLanded));
@@ -196,25 +201,40 @@ async function paste(container: HTMLElement, files: readonly File[]): Promise<bo
   return !event.defaultPrevented;
 }
 
-/** What the box shows of its files: its chips beside the words by name, the pictures its words hold by what their chips open, and its note. */
+/** What the box shows of its files: its chips beside the words by name, the files its words hold by what their chips open, and its note. */
 function held(container: HTMLElement) {
   return {
     chips: [...container.querySelectorAll('[aria-label="Attached files"] > li')].map(
       attachmentChipName,
     ),
     pictures: [
-      ...composerEditor(container).querySelectorAll('[data-chip="pictureChip"] [aria-label]'),
+      ...composerEditor(container).querySelectorAll('[data-chip="fileChip"] [aria-label]'),
     ].map((chip) => chip.getAttribute("aria-label")),
     note: container.querySelector('.ui-composer-foot-note [role="alert"]')?.textContent ?? null,
   };
 }
 
-test("a picture dropped on the agent's box is held as its chip in the words, and says nothing", async () => {
+test("a picture and a PDF dropped on the agent's box are held as their chips in the words, and say nothing", async () => {
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
-    await drop(container, [png("dropped.png")]);
-    assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null }, box);
+    await drop(container, [png("dropped.png"), pdf("spec.pdf")]);
+    assert.deepEqual(
+      held(container),
+      { chips: [], pictures: ["Open Picture 1", "Open spec.pdf"], note: null },
+      box,
+    );
   }
+});
+
+test("two files of one name, and one whose name holds brackets, each stand in the words as a chip of its own", async () => {
+  const container = await mounted("agent");
+  const text = (name: string) => new File(["words\n"], name, { type: "text/plain" });
+  await drop(container, [text("notes.txt"), text("notes.txt"), text("log[1].txt")]);
+  assert.deepEqual(held(container), {
+    chips: [],
+    pictures: ["Open notes.txt", "Open notes 2.txt", "Open log(1).txt"],
+    note: null,
+  });
 });
 
 test("a picture pasted into the agent's box is held as its chip in the words, the paste writing no words of its own", async () => {

@@ -67,6 +67,7 @@ export * from "./components/event-notes/event-notes.js";
 export * from "./components/facts/facts.js";
 export * from "./components/failure-note/failure-note.js";
 export * from "./components/file-picker/file-picker.js";
+export * from "./components/file-ref/file-ref.js";
 export * from "./components/file-text/file-text.js";
 export * from "./components/folding-button/folding-button.js";
 export * from "./components/form-field/form-field.js";

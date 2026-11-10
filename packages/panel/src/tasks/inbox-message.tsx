@@ -12,6 +12,13 @@ import { usePerson } from "../member-directory.js";
 import { pictureQuery } from "../picture-query.js";
 import { AgentActorRef, type AgentSubject } from "./agent-ref.js";
 import { AttachedFileChips } from "./attached-file-chips.js";
+import {
+  filesInWords,
+  useWordFileViewer,
+  WordFileChip,
+  type WordFiles,
+  WordFilesContext,
+} from "./file-chips.js";
 import type { InboxCodeDoors } from "./inbox-code-card.js";
 import { inboxFileChips } from "./inbox-model.js";
 import { InboxPicture, InboxPictures } from "./inbox-pictures.js";
@@ -167,9 +174,59 @@ function CommentFiles({
 }
 
 /**
+ * The files a member's words name (`@repo/features/file-marker`), each read
+ * as the files over the words are and drawn where its marker stands as its
+ * chip, opening over the window, as a sent message's to an agent are
+ * (`file-chips.tsx`); nothing where the words name none, or for an agent's
+ * words, which write no markers.
+ */
+function useInboxWordFiles(
+  itemId: string,
+  files: NonNullable<InboxMessage["files"]>,
+  words: string | undefined,
+  images: InboxImageReads,
+): { readonly named: WordFiles | undefined; readonly viewer: ReactNode } {
+  const placed = useMemo(() => {
+    const names = new Set(
+      filesInWords(
+        files.map((file) => ({ name: file.name, mediaType: file.mediaType, url: "" })),
+        words ?? "",
+      ).map((chip) => chip.name),
+    );
+    return files.filter((file) => names.has(file.name));
+  }, [files, words]);
+  const reads = useQueries({
+    queries: placed.map((file) => pictureQuery(itemId, file.attachmentId, images.read)),
+  });
+  const urls = new Map(
+    placed.flatMap((file, index) => {
+      const read = reads[index]?.data;
+      return read?.kind === PICTURE_STATE.READY ? [[file.attachmentId, read.url] as const] : [];
+    }),
+  );
+  const chips = inboxFileChips(placed, urls);
+  const viewer = useWordFileViewer(chips.filter((chip) => chip.url !== ""));
+  if (chips.length === 0) return { named: undefined, viewer: viewer.viewer };
+  return {
+    named: {
+      names: new Set(chips.map((chip) => chip.name)),
+      chip: (name) => (
+        <WordFileChip
+          name={name}
+          file={chips.find((chip) => chip.name === name)}
+          onOpen={viewer.open}
+        />
+      ),
+    },
+    viewer: viewer.viewer,
+  };
+}
+
+/**
  * A message's files and words, as its thread draws them: the files it
  * carried over its words, the agent's words drawn as its question's are and
- * a member's as a sent message's, a Markdown document either way.
+ * a member's as a sent message's, a Markdown document either way, each file
+ * a member's words name drawn in them rather than over them.
  */
 export function MessageWords({
   itemId,
@@ -181,11 +238,18 @@ export function MessageWords({
   images: InboxImageReads;
 }): React.JSX.Element {
   const fromAgent = message.author === INBOX_MESSAGE_AUTHOR.AGENT;
+  const files = message.files ?? NO_FILES;
+  const { named, viewer } = useInboxWordFiles(
+    itemId,
+    files,
+    fromAgent ? undefined : message.text,
+    images,
+  );
   return (
-    <>
+    <WordFilesContext.Provider value={named}>
       <CommentFiles
         itemId={itemId}
-        files={message.files ?? NO_FILES}
+        files={named === undefined ? files : files.filter((file) => !named.names.has(file.name))}
         words={message.text}
         images={images}
       />
@@ -201,6 +265,7 @@ export function MessageWords({
           )}
         </div>
       )}
-    </>
+      {viewer}
+    </WordFilesContext.Provider>
   );
 }

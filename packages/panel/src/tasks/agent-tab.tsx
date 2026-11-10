@@ -228,7 +228,7 @@ import {
   AgentPicturesProvider,
   CallPictures,
   MessageFileChips,
-  MessagePictures,
+  MessageFiles,
   ShownPictures,
   useAgentPictureDoor,
 } from "./agent-pictures.js";
@@ -1734,7 +1734,7 @@ export function AgentMessage({
       </MessageContent>
     );
     return (
-      <MessagePictures message={message} words={shown}>
+      <MessageFiles message={message} words={shown}>
         <Message
           from={received ? MESSAGE_ROLE.ASSISTANT : message.role}
           className={received ? RECEIVED_MESSAGE_CLASS : undefined}
@@ -1774,7 +1774,7 @@ export function AgentMessage({
             }
           />
         </Message>
-      </MessagePictures>
+      </MessageFiles>
     );
   }
   const { startedAt, finishedAt } = message;

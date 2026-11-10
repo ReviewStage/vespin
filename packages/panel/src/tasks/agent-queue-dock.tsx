@@ -29,7 +29,7 @@ import { useState } from "react";
 import { useRowDrag } from "../desktop/use-row-drag.js";
 import { confirmFailure } from "../failure-report.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
-import { KeptFileChips } from "./agent-pictures.js";
+import { KeptFileChips, WordFilesOf } from "./agent-pictures.js";
 import { SentWords } from "./skill-chip.js";
 
 /**
@@ -192,13 +192,18 @@ export function AgentQueueDock({
                   </span>
                 }
                 title={
-                  <OneLine words={message.text}>
-                    <SentWords text={message.text} line />
-                  </OneLine>
+                  <WordFilesOf files={queuedFileChips(message)} words={message.text}>
+                    <OneLine words={message.text}>
+                      <SentWords text={message.text} line />
+                    </OneLine>
+                  </WordFilesOf>
                 }
                 attachments={
                   message.files === undefined ? undefined : (
-                    <KeptFileChips files={queuedFileChips(message)} />
+                    // Note that the row holds the files the words do not name: one sent before markers, or named in code.
+                    <WordFilesOf files={queuedFileChips(message)} words={message.text}>
+                      <KeptFileChips files={queuedFileChips(message)} />
+                    </WordFilesOf>
                   )
                 }
                 attachmentsOpen

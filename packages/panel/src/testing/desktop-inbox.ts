@@ -1320,9 +1320,22 @@ export function itemPane(page: HTMLElement): HTMLElement {
   return page.querySelector<HTMLElement>(".inbox-view-items") ?? assert.fail("the pane is drawn");
 }
 
-/** The names of the files attached in `within`, as each chip names its file. */
+/** What a file's and a picture's chip in the words is heard as before its name (`FileRef`, `PictureRef`). */
+const FILE_KINDS: ReadonlySet<string> = new Set(["file ", "picture "]);
+
+/** The names of the files attached in `within`, as each chip names its file: those in the row over the words, then those the words name. */
 export function attachedNames(within: Element): (string | null)[] {
-  return [...within.querySelectorAll('[aria-label="Attached files"] > li')].map(attachmentChipName);
+  return [
+    ...[...within.querySelectorAll('[aria-label="Attached files"] > li')].map(attachmentChipName),
+    ...namedInWords(within),
+  ];
+}
+
+/** The files the words name, by the name each one's chip there says, in the order the words name them. */
+function namedInWords(within: Element): (string | null)[] {
+  return [...within.querySelectorAll(".ui-inline-ref")]
+    .filter((chip) => FILE_KINDS.has(chip.querySelector(".ui-visually-hidden")?.textContent ?? ""))
+    .map((chip) => chip.querySelector(".ui-inline-ref-label")?.textContent ?? null);
 }
 
 /** Whether an item's row wears the Draft pencil. */

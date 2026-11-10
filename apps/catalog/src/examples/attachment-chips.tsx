@@ -3,6 +3,7 @@ import {
   AttachmentChip,
   BUTTON_VARIANT,
   Button,
+  FileRef,
   ImageIcon,
   LIST_MOTION_WAY,
   ListMotion,
@@ -23,8 +24,9 @@ import { CatalogSection } from "../section";
  * each file taken off scaling out under the row's `ListMotion`;
  * then the same chips in a narrow column, a call's pictures still read,
  * gone, and not kept, and files going up, at a share and with none, which
- * land on a press, each taking its check; and pictures named in a message's
- * words as their pills, one whose bytes are not here wearing a picture's glyph.
+ * land on a press, each taking its check; and pictures and files named in a
+ * message's words as their pills, one whose bytes are not here wearing its
+ * kind's glyph and opening nothing.
  */
 
 /** A synthetic picture drawn in place, so the catalog renders offline. */
@@ -142,7 +144,7 @@ function UploadingRow(): React.JSX.Element {
   );
 }
 
-/** Pictures named in a message's words, each pill hanging its picture and saying which it opened. */
+/** Pictures and files named in a message's words, each pill hanging its picture or wearing its file's type, and saying which it opened. */
 function PicturesInWords(): React.JSX.Element {
   const [opened, setOpened] = useState<string>();
   return (
@@ -152,7 +154,9 @@ function PicturesInWords(): React.JSX.Element {
         <PictureRef name="Picture 1" image={PICTURE} onOpen={() => setOpened("Picture 1")} /> look
         like this{" "}
         <PictureRef name="Picture 2" image={WIDE_PICTURE} onOpen={() => setOpened("Picture 2")} />,
-        not like <PictureRef name="Picture 3" />.
+        not like <PictureRef name="Picture 3" />, as{" "}
+        <FileRef name="spec.pdf" onOpen={() => setOpened("spec.pdf")} /> says, not{" "}
+        <FileRef name="notes.txt" />.
       </p>
       <p>{opened === undefined ? "Nothing opened" : `Opened ${opened}`}</p>
     </>
@@ -188,7 +192,7 @@ function AttachmentChips(): React.JSX.Element {
       <CatalogSection id="attachment-chip-uploading" title="Going up">
         <UploadingRow />
       </CatalogSection>
-      <CatalogSection id="picture-ref-words" title="Pictures in a message's words">
+      <CatalogSection id="picture-ref-words" title="Files in a message's words">
         <PicturesInWords />
       </CatalogSection>
       <CatalogSection id="attachment-chip-narrow" title="Narrow column, long names">

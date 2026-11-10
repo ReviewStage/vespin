@@ -187,14 +187,14 @@ test("a paste past the box's cap and too large for a file is cut to the room lef
   assert.equal(note(), undefined, "the note goes once the words change again");
 });
 
-test("a long paste lands as a text file and the box keeps none of its words", async () => {
+test("a long paste lands as a text file's chip where it was pasted, and the box keeps none of its words", async () => {
   const box = await mounted();
   const log = Array.from({ length: 40 }, (_, line) => `error ${String(line)}`).join("\n");
   pasteInComposer(box.container, log);
   await settle();
-  assert.equal(box.shown(), "", "the words stay out of the box");
+  assert.equal(box.shown().includes("error"), false, "the words stay out of the box");
   const chip = box.button("Open Pasted text 1.txt") ?? assert.fail("the paste stands as a chip");
-  assert.equal(chip.textContent?.includes("40 lines"), true);
+  assert.ok(composerEditor(box.container).contains(chip), "the chip stands in the words");
 });
 
 test("a paste that fits the cap says nothing of a cut", async () => {
