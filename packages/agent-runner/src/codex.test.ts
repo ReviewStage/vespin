@@ -836,7 +836,12 @@ it.effect("compacts the thread in a compaction line's place, its words dropped",
     };
     const { spawned, write, run } = yield* launch([script], service);
     yield* write({ ...CONFIG, threadId: THREAD });
-    yield* write({ ...message("/compact keep the plan", LINE.FIRST), compact: true });
+    yield* write({
+      type: INPUT_LINE.MESSAGE,
+      uuid: LINE.FIRST,
+      content: [{ type: "text", text: "/compact keep the plan" }],
+      compact: true,
+    });
 
     assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
     const [process] = spawned;
