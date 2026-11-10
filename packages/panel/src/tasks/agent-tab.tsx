@@ -51,6 +51,7 @@ import {
 import { skillWord } from "@repo/features/skill-word";
 import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
+import type { TerminalSummary } from "@repo/features/terminal-wire";
 import { workingTime } from "@repo/features/time-format";
 import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
 import {
@@ -292,6 +293,7 @@ import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
 import { briefAgent, replayOpening } from "./replay-card-model.js";
 import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
 import { REWIND_ACTION, RewindProvider, rewindPoints, useMessageEdit } from "./rewind-action.js";
+import { RunActionsButton } from "./run-actions-button.js";
 import { MentionedServers, SentToAgent } from "./server-card.js";
 import { ShownPage } from "./shown-page.js";
 import { SentWords, useSkill } from "./skill-chip.js";
@@ -2836,8 +2838,11 @@ function AgentTabView({
   placeMove,
   bringIn,
   holding = false,
+  composerActions,
 }: {
   agent: AgentSummary;
+  /** What stands first among the composer's right-hand presses, before the model chip: the Run button where the workspace has Run actions on (`run-actions-button.tsx`). */
+  composerActions?: ((narrow: boolean) => React.ReactNode) | undefined;
   /** Whether the log waits to draw for what stands around it, while it says it is loading. */
   holding?: boolean;
   /** Where the transcript hands the door that brings a message whose row is not drawn into view. */
@@ -3239,6 +3244,7 @@ function AgentTabView({
                 <ForwardChip agent={agent} />
               </>
             )}
+            actions={composerActions}
             onStop={onStop}
             // Note that a started agent's conversation always opens on its description or
             // task, so the box takes a follow up even before the transcript is read.
@@ -3285,6 +3291,8 @@ interface AgentTabDoors {
   cards?: TranscriptCards | undefined;
   /** Opens the agent's pull request, its checks, description, and conversation, in a tab of the side panel's own. */
   onOpenPullRequest?: ((number?: number) => void) | undefined;
+  /** Shows a shell the service started for the agent, as a run action's, in the side panel's Terminal tab; none where no side panel runs terminals. */
+  onShowShell?: ((terminal: TerminalSummary) => void) | undefined;
   /** Hears the transcript the tab holds each time it moves, which the tab's hover card previews once the tab is not shown. */
   onHeld: (agentId: string, held: HeldTranscript) => void;
 }
@@ -3415,6 +3423,7 @@ function AgentTabBody({
   transcript,
   onOpenSubagent,
   onOpenPullRequest,
+  onShowShell,
   onOpenTarget,
   cards,
   run,
@@ -3605,6 +3614,9 @@ function AgentTabBody({
           openPullRequestNumber: onOpenPullRequest,
         }}
         startedAt={agent.runStartedAt}
+        composerActions={(narrow) => (
+          <RunActionsButton agent={agent} shown={shown} narrow={narrow} onShowShell={onShowShell} />
+        )}
         counts={shown}
         delegationStarts={shown ? transcript.delegations : undefined}
         onStop={() => control.onStop(agent.id)}

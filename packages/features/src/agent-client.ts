@@ -55,6 +55,8 @@ import {
   type AgentPullRequestWriteAnswerView,
   type AgentQueueAnswerView,
   type AgentReviewOptionsAnswerView,
+  type AgentRunActionAnswerView,
+  type AgentRunActionStopAnswerView,
   type AgentWarmAnswerView,
   type AgentWorkspaceListParams,
   type AgentWorkspaceToolsAnswerView,
@@ -1105,6 +1107,22 @@ export class HostedAgentClient {
       hostedCall(this.#hosted.agents.stop, { id: agentId }, { as: AGENT_NOT_FOUND_RENAMES }),
       unansweredBare,
     );
+  }
+
+  /** Runs one of the agent's repository's run actions in its running sandbox, answering the shell that runs it. */
+  runAction(
+    agentId: string,
+    actionId: string,
+  ): Effect.Effect<AgentRunActionAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agents.runAction, { id: agentId, action: actionId });
+  }
+
+  /** Interrupts what a run action's shell runs, answering the agent's shells as they then stand. */
+  stopRunAction(
+    agentId: string,
+    actionId: string,
+  ): Effect.Effect<AgentRunActionStopAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agents.stopRunAction, { id: agentId, action: actionId });
   }
 
   /** Keeps one agent on screen warm for the next message (`agentWarmAnswerSchema`). */

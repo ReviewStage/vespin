@@ -241,6 +241,8 @@ export type AgentClient = Pick<
   | "stop"
   | "rewind"
   | "warm"
+  | "runAction"
+  | "stopRunAction"
   | "delete"
   | "agent"
   | "pullRequest"
@@ -1057,6 +1059,9 @@ function composed(
     AGENTS_PORT_SHARED: ({ agentId }) => asked(dependencies.ports.shared(agentId)),
     AGENTS_PORT_SHARE: ({ agentId, port }) => asked(dependencies.ports.share(agentId, port)),
     AGENTS_PORT_UNSHARE: ({ agentId }) => asked(dependencies.ports.unshare(agentId)),
+    AGENTS_RUN_ACTION: ({ agentId, actionId }) => asked(client.runAction(agentId, actionId)),
+    AGENTS_RUN_ACTION_STOP: ({ agentId, actionId }) =>
+      asked(client.stopRunAction(agentId, actionId)),
     AGENTS_DELETE: declaredWrite(dependencies.pool, deleted),
     AGENTS_PAGE: ({ agentId }) => asked(client.agent(agentId)),
     AGENTS_CHANGES: ({ agentId, number }) => asked(client.changes(agentId, number)),

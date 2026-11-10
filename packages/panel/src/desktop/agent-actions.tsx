@@ -38,7 +38,7 @@ import {
 } from "../tasks/transcript-copy.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { SidePanelControl } from "../tasks/use-side-panel.js";
-import { useOpenTerminalTab } from "../tasks/use-terminal-session.js";
+import { useOpenTerminalTab, useShowShellTab } from "../tasks/use-terminal-session.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import type { MenuAction, MenuEntry } from "./action-menu.js";
 import { useAgentArchive, useAgentUnarchive } from "./agent-archive.js";
@@ -258,6 +258,14 @@ export interface AgentTerminalDoors {
   readonly onOpenLocal?: ((agentId: string) => void) | undefined;
   /** Whether the platform runs terminals, which ⌘J and New terminal stand on. */
   readonly terminals: boolean;
+  /** Shows a shell the service started for the agent, as a run action's, in a Terminal tab of its own; none where the platform runs no terminals. */
+  readonly onShowShell?: ((agentId: string, terminal: ShownShell) => void) | undefined;
+}
+
+/** A shell the service started, as a Terminal tab names and attaches to it. */
+export interface ShownShell {
+  readonly id: string;
+  readonly title: string;
 }
 
 /** An agent's actions as a surface draws them: its doors, its rename where it is renamed, and the questions its Archive and its delete ask through, drawn beside them. */
@@ -302,8 +310,10 @@ export function useAgentTerminalDoors(
       .data === true;
   const openTerminal = useOpenTerminal(sidePanel, onShown);
   const openLocal = useOpenTerminalTab(TERMINAL_KIND.LOCAL, sidePanel, onShown);
+  const showShell = useShowShellTab(sidePanel, onShown);
   return {
     terminals,
+    onShowShell: terminals ? showShell : undefined,
     onOpenTerminal: terminals ? (agentId) => openTerminal(agentId, TERMINAL_ASK.SHOW) : undefined,
     onOpenLocal: locals ? (agentId) => openLocal(agentId, false) : undefined,
   };

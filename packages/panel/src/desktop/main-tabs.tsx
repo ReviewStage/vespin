@@ -62,7 +62,7 @@ import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTab, MainTabsControl } from "../tasks/use-main-tabs.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { ActionMenu, type MenuAction } from "./action-menu.js";
-import { type AgentTerminalDoors, useAgentActions } from "./agent-actions.js";
+import { type AgentTerminalDoors, type ShownShell, useAgentActions } from "./agent-actions.js";
 import { AgentHistory } from "./agent-history.js";
 import type { TaskCards } from "./side-panel.js";
 import {
@@ -776,6 +776,7 @@ export function MainTabContent({
   views,
   onOpenDelegation,
   onOpenPullRequest,
+  onShowShell,
   onOpenTarget,
   cards,
   onFork,
@@ -790,6 +791,8 @@ export function MainTabContent({
   onOpenDelegation: (agentId: string, callId: string, task: string, status: AgentStatus) => void;
   /** Opens the agent's pull request in the side panel, by the agent, or another it opened by its number; none where no side panel stands to show it. */
   onOpenPullRequest?: ((agentId: string, number?: number) => void) | undefined;
+  /** Shows a shell the service started for the agent, as a run action's, in the side panel's Terminal tab; none where no side panel runs terminals. */
+  onShowShell?: ((agentId: string, terminal: ShownShell) => void) | undefined;
   /** Opens what a call in the agent's transcript is about in the tab that draws it. */
   onOpenTarget: (target: ToolTarget) => void;
   /** The cards the transcript's rows that open a tab hang, as those tabs hang them. */
@@ -853,6 +856,11 @@ export function MainTabContent({
               onOpenPullRequest === undefined
                 ? undefined
                 : (number?: number) => onOpenPullRequest(agentId, number)
+            }
+            onShowShell={
+              onShowShell === undefined
+                ? undefined
+                : (terminal: ShownShell) => onShowShell(agentId, terminal)
             }
             onOpenTarget={onOpenTarget}
             cards={cards.agent(agentId)}

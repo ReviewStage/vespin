@@ -1481,6 +1481,7 @@ function DescriptionDocument({
                                 views={views}
                                 onOpenDelegation={openDelegationDoor}
                                 onOpenPullRequest={openPullRequestDoor}
+                                onShowShell={terminalDoors.onShowShell}
                                 onOpenTarget={openTargetDoor}
                                 cards={cards}
                                 onFork={forkDoor}

@@ -843,6 +843,7 @@ function DesktopAgentPage({
                             views={views}
                             onOpenDelegation={openDelegation}
                             onOpenPullRequest={openPullRequest}
+                            onShowShell={terminalDoors.onShowShell}
                             onOpenTarget={openTarget}
                             cards={cards}
                             onFork={draftDoors.onFork}
