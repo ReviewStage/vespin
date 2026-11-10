@@ -15,7 +15,7 @@
  */
 
 import { CLI_EXIT, type CliExit } from "@repo/features/cli-exit";
-import { Console, Data, Effect, FileSystem, Option, Stdio, Stream, Terminal } from "effect";
+import { Console, Data, Effect, FileSystem, Option, Queue, Stdio, Stream, Terminal } from "effect";
 import { JSON_FLAG, QUIET_FLAG } from "./flags.js";
 
 /** The `-F` value that names stdin rather than a file. */
@@ -126,19 +126,43 @@ export const confirmOrYes = Effect.fnUntraced(function* (question: string, yes: 
 /** One line ending, as `echo` or a Windows editor leaves it at the end of piped stdin. */
 const TRAILING_NEWLINE = /\r?\n$/u;
 
+/** The keys that end a line typed at the terminal: Enter, as a raw terminal sends it, and Ctrl-J. */
+const LINE_END_KEYS: ReadonlySet<string> = new Set(["return", "enter"]);
+
+/**
+ * One line typed at the terminal key by key, none of it echoed: Backspace
+ * takes back the last character and Enter ends the line. Note that we read
+ * keys rather than `Terminal.readLine`, because the terminal reads stdin raw
+ * with no line editing, so a line would carry each Backspace as a character.
+ * Esc, Ctrl-C, or Ctrl-D ends the keys, which reads nothing.
+ */
+const hiddenLine = Effect.scoped(
+  Effect.gen(function* () {
+    const terminal = yield* Terminal.Terminal;
+    const keys = yield* terminal.readInput;
+    const typed: string[] = [];
+    for (;;) {
+      const pressed = yield* Effect.option(Queue.take(keys));
+      if (Option.isNone(pressed)) return undefined;
+      const { input, key } = pressed.value;
+      if (LINE_END_KEYS.has(key.name)) return typed.join("");
+      if (key.name === "backspace") typed.pop();
+      else if (Option.isSome(input) && !key.ctrl && !key.meta) typed.push(input.value);
+    }
+  }),
+);
+
 /**
  * A secret the person hands the command, never an argument, which a shell
  * keeps in its history: one line typed at a terminal, asked with `prompt` on
- * stderr and never echoed, since the terminal reads stdin raw with no output
- * of its own; or all of piped stdin, one trailing line ending dropped, so a
- * value of several lines arrives whole. Nothing read, or nothing but an
- * empty value, is a usage failure, whose words never carry what was read.
+ * stderr and never echoed (`hiddenLine`); or all of piped stdin, one
+ * trailing line ending dropped, so a value of several lines arrives whole.
+ * Nothing read, or nothing but an empty value, is a usage failure, whose
+ * words never carry what was read.
  */
 export const readSecret = Effect.fnUntraced(function* (prompt: string) {
   const read = (yield* canPrompt)
-    ? yield* Effect.flatMap(note(prompt), () =>
-        Effect.option(Effect.flatMap(Terminal.Terminal, (terminal) => terminal.readLine)),
-      ).pipe(Effect.map(Option.getOrUndefined))
+    ? yield* Effect.flatMap(note(prompt), () => hiddenLine)
     : yield* Effect.orElseSucceed(stdinText, () => undefined).pipe(
         Effect.map((piped) => piped?.replace(TRAILING_NEWLINE, "")),
       );
