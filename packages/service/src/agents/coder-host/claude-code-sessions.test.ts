@@ -3422,8 +3422,8 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         yield* updateAgentPermissionModeCommitted(userId, agent.id, AGENT_PERMISSION_MODE.ASK);
         const now = new Date(yield* Clock.currentTimeMillis);
         const elsewhere = randomUUID();
-        const until = new Date(now.getTime() + Duration.toMillis(CODER.RUNNER_LEASE.HOLD));
-        assert.equal(yield* claimAgentRunnerLease(agent.id, elsewhere, now, until), true);
+        const heldUntil = new Date(now.getTime() + Duration.toMillis(CODER.RUNNER_LEASE.HOLD));
+        assert.equal(yield* claimAgentRunnerLease(agent.id, elsewhere, now, heldUntil), true);
 
         const sending = yield* Effect.forkChild(
           sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails."),
