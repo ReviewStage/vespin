@@ -263,7 +263,7 @@ import {
   MessagePlaceProvider,
   useMessageReveal,
 } from "./message-links.js";
-import { useMoveToCloud } from "./move-agent.js";
+import { type PlaceMove, useMovePlace, useMoveToCloud } from "./move-agent.js";
 import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
 import { briefAgent, replayOpening } from "./replay-card-model.js";
 import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
@@ -2734,6 +2734,7 @@ function AgentTabView({
   continuedNote,
   continuable = false,
   onMoveToCloud,
+  placeMove,
   bringIn,
   holding = false,
 }: {
@@ -2798,6 +2799,8 @@ function AgentTabView({
   continuable?: boolean;
   /** Moves the agent to the cloud, as Move to's Cloud does, which a launch its Mac's GitHub sign-in could not start offers; none where Move to would not. */
   onMoveToCloud?: (() => void) | undefined;
+  /** The move the box's place chip offers (`useMovePlace`); none where the chip takes no press. */
+  placeMove?: PlaceMove | undefined;
 }): React.JSX.Element {
   // Note that the messages a rewind drops are hidden at once, until the transcript reads back without them.
   const { cut } = composer;
@@ -3121,7 +3124,7 @@ function AgentTabView({
             brief={agent.brief}
             tools={(narrow) => (
               <>
-                <AgentPlace agent={agent} readerId={readerId} narrow={narrow} />
+                <AgentPlace agent={agent} readerId={readerId} move={placeMove} narrow={narrow} />
                 <ForwardChip agent={agent} />
               </>
             )}
@@ -3336,6 +3339,7 @@ function AgentTabBody({
     known: control.pullRequests.get(agent.id),
   });
   const moveToCloud = useMoveToCloud(agent, control);
+  const placeMove = useMovePlace(agent, control);
   useForwardToast(agent);
   // Note that the log never waits on the pull request's dock over the box, because its read asks GitHub and would hold every tab's first draw for a second or more.
   // Note that nothing counts as landed before the first page.
@@ -3515,6 +3519,7 @@ function AgentTabBody({
         }
         continuable={continued.length > 0 || control.continueAgent !== undefined}
         onMoveToCloud={moveToCloud}
+        placeMove={placeMove}
         endTrail={
           // Note that the box's note names them while it stands, so the transcript names them only where an archive took the box.
           continued.length === 0 || unarchive === undefined ? undefined : (
