@@ -20,6 +20,7 @@ import {
   readForkCut,
   readNativeRewind,
   readRewindable,
+  readRewindSnapshot,
   rewindConversation,
 } from "../conversation-rewind.js";
 
@@ -147,6 +148,31 @@ const standing = (target: Target) =>
   });
 
 it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
+  it.effect(
+    "reads the checkout the runner recorded before the turn a line opened, and none for a line whose turn recorded none or that awaits its turn",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openConversation;
+        const { first, firstLine, secondLine } = yield* threeLines(target);
+        const snapshot = {
+          commit: "0123456789abcdef0123456789abcdef01234567",
+          head: "89abcdef0123456789abcdef0123456789abcdef",
+          branch: null,
+        };
+        yield* (yield* Database)
+          .update(turns)
+          .set({ snapshotCommit: snapshot.commit, snapshotHead: snapshot.head })
+          .where(eq(turns.id, first));
+
+        assert.deepEqual(
+          Option.getOrUndefined(yield* readRewindSnapshot(target, firstLine)),
+          snapshot,
+        );
+        assert.ok(Option.isNone(yield* readRewindSnapshot(target, secondLine)));
+        assert.ok(Option.isNone(yield* readRewindSnapshot(target, yield* rowOf(target, 5))));
+      }),
+  );
+
   it.effect("drops the line named and everything after it, and keeps what came before", () =>
     Effect.gen(function* () {
       const target = yield* openConversation;

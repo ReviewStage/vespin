@@ -633,6 +633,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         assert.deepEqual(config, {
           harness: RUNNER_HARNESS.CODEX,
           cwd: "/workspace/repository",
+          agentId: agent.id,
           executable: "/usr/local/bin/codex",
           model: "gpt-6.1-sol",
           effort: "xhigh",

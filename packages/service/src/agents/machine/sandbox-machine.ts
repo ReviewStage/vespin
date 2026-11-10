@@ -230,6 +230,7 @@ const SANDBOX_LAYOUT: MachineLayout = {
   linesRead: true,
   transcriptsKept: true,
   diskSessions: false,
+  permissionModes: true,
 };
 
 /** The runner's bundle as the image carries it (`apps/web/agent-image/Dockerfile`), which each launch overwrites with the deploy's unit. */
@@ -1059,7 +1060,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         Effect.provideService(Sandbox, api),
         Effect.mapError((failure) => refused ?? failure),
       );
-      yield* recordedSandboxOpen(agent.id, agentSandboxName(sessionId));
+      yield* recordedSandboxOpen(agent.id, agentSandboxName(sessionId), created);
       return { ...runningOf(sandbox), created, lockfileMoved: moved, from: attempt.from };
     });
 

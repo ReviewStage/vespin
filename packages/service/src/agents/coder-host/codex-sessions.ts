@@ -317,6 +317,7 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
       const written: CodexConfig = {
         harness: RUNNER_HARNESS.CODEX,
         cwd: layout.checkoutPath,
+        agentId: agent.id,
         executable: layout.codexExecutable,
         model,
         ...(effort === undefined ? undefined : { effort }),

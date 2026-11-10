@@ -869,6 +869,7 @@
   --spacing-menu-label: calc(var(--ui-row-inset) + var(--ui-menu-glyph) + var(--ui-icon-gap));
   --spacing-submenu-reach: calc(100% + 9px - var(--ui-submenu-shift, 0px));
   --spacing-submenu: 200px; /* off-scale: a submenu's width */
+  --spacing-submenu-hinted: 280px; /* off-scale: a submenu whose rows wear a hint under their names */
   --spacing-ui-32: var(--ui-space-32);
   --spacing-disclosure-row: 36px; /* off-scale: a file row's height */
   /* A place in a column standing tall enough for a face. */

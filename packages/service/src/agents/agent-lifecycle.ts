@@ -90,9 +90,10 @@ export const rewoundAgentById = /* @__PURE__ */ Effect.fnUntraced(function* (
   account: string,
   id: string,
   messageId: string,
-): Effect.fn.Return<AgentSummary, HostedRefusal, DatabaseServices> {
+  restoreFiles = false,
+): Effect.fn.Return<AgentSummary, HostedRefusal, DatabaseServices | Sandbox> {
   const { userId, agent } = yield* reachedAgentById(account, id);
-  yield* rewoundAgent(userId, agent, messageId);
+  yield* rewoundAgent(userId, agent, messageId, restoreFiles);
   return yield* summaryOf(userId, agent);
 });
 

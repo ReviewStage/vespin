@@ -402,6 +402,7 @@ const AGENT_TOOLS = [
   "save_memory",
   "search_memory",
   "schedule_wakeup",
+  "end_turn",
 ] as const;
 
 /** The tools a native agent is served: every tool of our catalog that its harness has no equal of. */
@@ -650,6 +651,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const fetch = yield* standing;
         const agent = yield* agentWithBearer;
         yield* experimentInTestWorkspace(agent.userId, EXPERIMENT.MEMORY);
+        yield* experimentInTestWorkspace(agent.userId, EXPERIMENT.TURN_END);
         yield* descriptionsOn(agent.userId);
         const client = yield* connected(fetch, agent.bearer);
 
@@ -666,7 +668,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         const standingOn = {
           agent: Option.none(),
           open: new Set<ToolGate>(),
-          experiments: { descriptionsOn: true, memoryOn: true },
+          experiments: { descriptionsOn: true, memoryOn: true, turnEndOn: true },
         };
         for (const tool of listed.tools) {
           const served = isServedTool(tool.name) ? TOOL_CATALOG.get(tool.name) : undefined;
@@ -714,7 +716,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
       withheld: ["browser", "run_on_mac", "list_ports", "share_port", "schedule_wakeup"],
     },
   ])(
-    "tools/list leaves out what the catalog's gates offer no agent $why, and the memory and the description's tools where its starter has Memory and Task descriptions off",
+    "tools/list leaves out what the catalog's gates offer no agent $why, and the memory, the description's, and the turn's end tools where its starter has Memory, Task descriptions, and Done and follow-ups off",
     ({ agent: made, withheld }) =>
       Effect.gen(function* () {
         const fetch = yield* standing;
@@ -730,6 +732,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
           "search_memory",
           "edit_description",
           "look_at_picture",
+          "end_turn",
         ];
         assert.deepEqual(
           listed.tools.map((tool) => tool.name).sort(),

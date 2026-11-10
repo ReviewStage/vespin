@@ -141,6 +141,7 @@ function Hung({
   const drawn = useDisclosure(open);
   const [chosen, setChosen] = useState<string | undefined>("acme/app");
   const [effort, setEffort] = useState("high");
+  const [approval, setApproval] = useState("ask");
   const menuId = useId();
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -190,6 +191,20 @@ function Hung({
                       ],
                       value: effort,
                       onPick: setEffort,
+                    },
+                  },
+                  // A submenu under a heading, each row's hint on a line of its own under its name, as the model menu's Permissions are.
+                  {
+                    id: "permissions",
+                    label: "Permissions",
+                    detail: APPROVALS.find((each) => each.id === approval)?.label,
+                    submenu: {
+                      label: "Permissions",
+                      heading: "How should actions be approved?",
+                      rows: APPROVALS,
+                      value: approval,
+                      note: "Takes effect from the next turn.",
+                      onPick: setApproval,
                     },
                   },
                   // A row with a quiet mark after its label, as Start's Run on wears its Experimental tag.
@@ -370,6 +385,28 @@ const MODELS: readonly MenuRow[] = [
   { id: "opus-5", label: "Opus 5", icon: CLAUDE, end: CONNECT_CLAUDE, searchOnly: true },
   { id: "opus-4.8", label: "Opus 4.8", icon: CLAUDE, end: CONNECT_CLAUDE, searchOnly: true },
   { id: "opus-4.7", label: "Opus 4.7", icon: CLAUDE, end: CONNECT_CLAUDE, searchOnly: true },
+];
+
+/** How an agent's actions are approved, as the Permissions submenu lists them: each with its hint under its name. */
+const APPROVALS: readonly MenuRow[] = [
+  {
+    id: "ask",
+    label: "Ask for approval",
+    detail: "Always ask to edit external files and use the internet",
+    detailUnder: true,
+  },
+  {
+    id: "auto",
+    label: "Approve for me",
+    detail: "Only ask for actions detected as potentially unsafe",
+    detailUnder: true,
+  },
+  {
+    id: "full",
+    label: "Full access",
+    detail: "Unrestricted access to the internet and any file on your computer",
+    detailUnder: true,
+  },
 ];
 
 /** The efforts a model runs at, as the Effort submenu lists them. */

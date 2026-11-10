@@ -198,6 +198,7 @@ test("an experiment is found by its name, what it brings, and what other apps ca
     "the page it holds",
   );
   const experiments = [
+    "Rewind restores files",
     "Done and follow-ups",
     "Run actions",
     "Task descriptions",

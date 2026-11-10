@@ -92,11 +92,17 @@ const WORDS = {
 
 /** What turning each workspace experiment on or off changes for everyone in `workspace`, as its question says it. */
 const FLIP_WORDS = {
+  [EXPERIMENT.REWIND_FILES]: {
+    on: (workspace: string) =>
+      `Offers everyone in ${workspace} a choice, on Rewind and Edit, to put the agent's files back to how they stood before that message.`,
+    off: (workspace: string) =>
+      `Takes that choice off Rewind and Edit for everyone in ${workspace}; a rewind then takes back the conversation alone.`,
+  },
   [EXPERIMENT.RUN_ACTIONS]: {
     on: (workspace: string) =>
-      `Lets owners and admins of ${workspace} keep each repository's run actions in Cloud environment, and shows a Run menu in every cloud agent's message box that runs one in the agent's sandbox when pressed.`,
+      `Lets owners and admins of ${workspace} keep each repository's run actions in Cloud environment, and shows a Run button over every cloud agent's tabs, and Run rows in ⌘K, that run one in the agent's sandbox when pressed.`,
     off: (workspace: string) =>
-      `Hides the Run menu and the run actions in Cloud environment for everyone in ${workspace}, and stops any from being run.`,
+      `Hides the Run button, its ⌘K rows, and the run actions in Cloud environment for everyone in ${workspace}, and stops any from being run.`,
   },
   [EXPERIMENT.DESCRIPTIONS]: {
     on: (workspace: string) =>

@@ -250,6 +250,11 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
     Effect.gen(function* () {
       const model = providerModelOf(agent.model);
       if (model === undefined) return yield* Effect.fail(new LaunchRefused({ reason: "model" }));
+      // Note that a device whose runner reads no mode would run one that asks with full access, so it is refused rather than run unasked.
+      const mode = launchPermissionMode(agent);
+      if (mode !== undefined && !layout.permissionModes) {
+        return yield* new LaunchRefused({ reason: "permission mode", modesUnsupported: true });
+      }
       const effort = effortOf(agent.effort);
       // Note that the launch chose and recorded who pays before its config is written.
       const { payer } = yield* recordedPayer(agent);
@@ -258,6 +263,7 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
       const written: ClaudeCodeConfig = {
         harness: RUNNER_HARNESS.CLAUDE_CODE,
         cwd: layout.checkoutPath,
+        agentId: agent.id,
         executable: layout.claudeExecutable ?? CLAUDE_EXECUTABLE,
         model: model.modelId,
         ...(effort === undefined ? undefined : { effort }),
@@ -275,7 +281,7 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
         allowedDomains: [],
         installedSkills: layout.installedSkills,
         // Note that the agent's mode is read at each launch, so a change reaches it from its next turn.
-        ...launchPermissionMode(agent),
+        ...mode,
       };
       return written;
     });

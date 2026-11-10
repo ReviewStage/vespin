@@ -79,6 +79,7 @@ import {
   makeApprovals,
   settleAsk,
 } from "./approvals.js";
+import { CheckoutSnapshots } from "./checkout-snapshot.js";
 import { ClaudeCode, type ClaudeCodeSession, type ClaudeCodeShape } from "./claude-code.js";
 import { runCodex } from "./codex.js";
 import { type EventSink, makeEventSink } from "./events.js";
@@ -96,6 +97,7 @@ import { type ClaudeCodeMemoryWatch, claudeCodeMemoryWatch } from "./out-of-memo
 import { SANDBOX_TOOL_ENV } from "./pins.js";
 import {
   APPROVAL_BY,
+  type CheckoutSnapshot,
   CLAUDE_CODE_TOOLS,
   CLAUDE_CODE_UNASKED_TOOLS,
   CLAUDE_CODE_WORKER,
@@ -420,6 +422,8 @@ interface Launch {
   readonly failure: Ref.Ref<string>;
   /** The launch's first event number, which a turn-scoped stop names. */
   readonly firstSequence: number;
+  /** The checkout recorded before a turn the line named opens (`checkout-snapshot.ts`); none where it could not be. */
+  readonly snapshot: (lineId: string) => Effect.Effect<CheckoutSnapshot | undefined>;
   /** The API's host, as the CLI reaches it, which a lost connection is probed for. */
   readonly providerHost: string;
   /** Where that host is probed: the proxy the CLI goes through, or the host itself. */
@@ -465,9 +469,15 @@ const handToCli = Effect.fn("agent-runner/handToCli")(function* (
 ) {
   const running = yield* Ref.getAndSet(launch.turnRunning, true);
   yield* Ref.set(launch.warm, false);
+  // The checkout is recorded before the CLI can touch it; a line a running turn takes in opens no turn to rewind to.
+  const snapshot = running ? undefined : yield* launch.snapshot(uuid);
   yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(prompt));
   // Posted ahead of the hand-off, so it is numbered before anything the CLI says of the message.
-  yield* launch.sink.emit({ type: RUNNER_EVENT.ACCEPTED, uuid });
+  yield* launch.sink.emit({
+    type: RUNNER_EVENT.ACCEPTED,
+    uuid,
+    ...(snapshot === undefined ? undefined : { snapshot }),
+  });
   yield* Queue.offer(launch.prompts, userMessage(prompt, content, running));
 });
 
@@ -847,6 +857,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   context: LaunchContext<ClaudeCodeConfig>,
 ) {
   const claudeCode = yield* ClaudeCode;
+  const snapshots = yield* CheckoutSnapshots;
   const { config, lines, sink, bearer, trace } = context;
   const inFlight = MutableRef.make<InFlight | undefined>(undefined);
   const onStop: HookCallback = async (hook) => {
@@ -932,6 +943,10 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     ended: yield* Deferred.make<RunnerEnd>(),
     failure: yield* Ref.make(""),
     firstSequence: config.firstSequence,
+    snapshot: (lineId) =>
+      config.agentId === undefined
+        ? Effect.succeed(undefined)
+        : snapshots.take(config.cwd, config.agentId, lineId),
     providerHost: provider.host,
     probeTarget: probeTargetOf(context.env, provider),
     reconnecting: yield* Ref.make<Reconnecting | undefined>(undefined),

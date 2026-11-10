@@ -772,6 +772,8 @@ export function chooseFailureNote(failure: AgentCallFailure): string {
     case AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED:
     case AGENT_CALL_FAILURE.EXTRA_REPOSITORY_REFUSED:
     case AGENT_CALL_FAILURE.PERMISSION_MODE_REFUSED:
+    // Note that a model change asks no files back, so never meets a rewind's refusal.
+    case AGENT_CALL_FAILURE.CHECKOUT_SNAPSHOT_MISSING:
       return MODEL_CHANGE_FAILED;
   }
 }
@@ -2086,6 +2088,8 @@ export interface SentLine {
   readonly rewinds?: string | undefined;
   /** Whether the agent was already taken back to just before that line, which is gone, so the line's Retry only sends. */
   readonly rewound?: boolean | undefined;
+  /** Whether the agent's files go back too as it is taken back before that line, to the snapshot its runner took before the line's turn. */
+  readonly restoresFiles?: boolean | undefined;
   /** Whether the service answered that the agent took it; until it does, a row read back may still be withdrawn. */
   readonly taken?: boolean | undefined;
 }

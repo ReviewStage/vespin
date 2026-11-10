@@ -84,6 +84,8 @@ export const AGENT_TOOL = {
   SHOW_IMAGE: "show_image",
   // A wakeup a coding agent books for later, on a harness with no wakeup of its own: its turn ends, and the prompt opens its next turn when due.
   SCHEDULE_WAKEUP: "schedule_wakeup",
+  // A coding agent's turn ended in a short summary, the reply its developer reads, and the follow-ups it offers them.
+  END_TURN: "end_turn",
   // The retired runtime's own durable pause, which a coding agent took before it checked on its checks or a deploy again.
   SLEEP: "sleep",
 } as const;
