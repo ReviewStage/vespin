@@ -5,6 +5,7 @@ import {
   COMPOSER_LOOK,
   ComposerBody,
   ComposerFoot,
+  ComposerFootNote,
   ComposerFrame,
   type ComposerLook,
   type ComposerNote,
@@ -693,7 +694,7 @@ export function MessageBox({
   );
 }
 
-/** A box's field alone, in a frame sized as a text field, for a box that sends with its page: an Inbox form's field, an automation's prompt. */
+/** A box's field alone, in a frame sized as a text field, for a box that sends with its page: an Inbox form's field, an automation's prompt, a review's summary; its note, a paste cut or an editor that did not load, under it. */
 export function MessageField({
   box,
   look = COMPOSER_LOOK.INPUT,
@@ -709,9 +710,13 @@ export function MessageField({
   invalid?: boolean | undefined;
 }): React.JSX.Element {
   const { options } = box[DRAWN];
+  // Note that a field has no foot to say its note in, a paste cut to its room or an editor that did not load with its Retry, so the note stands under the field.
   return (
-    <ComposerFrame {...frame} look={look} className={className} invalid={invalid}>
-      <BoxField box={box} onEnter={options.onSubmit} />
-    </ComposerFrame>
+    <>
+      <ComposerFrame {...frame} look={look} className={className} invalid={invalid}>
+        <BoxField box={box} onEnter={options.onSubmit} />
+      </ComposerFrame>
+      {box.note === undefined ? null : <ComposerFootNote note={box.note.note} />}
+    </>
   );
 }

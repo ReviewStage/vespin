@@ -265,6 +265,18 @@ function StopButton({ stop }: { stop: ComposerStop }): React.JSX.Element {
   );
 }
 
+/** A box's one note, as its foot draws it under the bar, and as a field-only box draws it under its field, which has no foot: its line, said as it lands, and what mends it under the line. */
+export function ComposerFootNote({ note }: { note: ComposerNote }): React.JSX.Element {
+  return (
+    <div className="ui-composer-foot-note flex flex-col items-start gap-tight-gap">
+      <ErrorState onRetry={note.onRetry} remedy={note.remedy} failure={note.failure}>
+        {note.words}
+      </ErrorState>
+      {note.mends}
+    </div>
+  );
+}
+
 /** A message box's foot: a bar of `tools`, the counter, `actions` and the send or `stop`, or `strip` in the bar's place, and `note` under it. */
 export function ComposerFoot({
   send,
@@ -316,14 +328,7 @@ export function ComposerFoot({
       {send.refuses === undefined ? null : (
         <ErrorLine id={refusalId} error={inputProblem(send.refuses.words)} />
       )}
-      {note === undefined ? null : (
-        <div className="ui-composer-foot-note flex flex-col items-start gap-tight-gap">
-          <ErrorState onRetry={note.onRetry} remedy={note.remedy} failure={note.failure}>
-            {note.words}
-          </ErrorState>
-          {note.mends}
-        </div>
-      )}
+      {note === undefined ? null : <ComposerFootNote note={note} />}
     </FootBox>
   );
 }
