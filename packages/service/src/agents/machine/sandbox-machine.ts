@@ -230,6 +230,7 @@ const SANDBOX_LAYOUT: MachineLayout = {
   linesRead: true,
   transcriptsKept: true,
   diskSessions: false,
+  permissionModes: true,
 };
 
 /** The runner's bundle as the image carries it (`apps/web/agent-image/Dockerfile`), which each launch overwrites with the deploy's unit. */

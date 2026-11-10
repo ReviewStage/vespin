@@ -132,6 +132,9 @@ export function localAgentRefusalWords(
       return `This task runs on ${device?.name ?? "another member's device"}. Only ${device?.owner ?? "its owner"} can start agents on it.`;
     case LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN:
       return `${name} runs an older vespin-host, which can't work in a repository reached on your own GitHub token. Update its host, ${RUN_IN_CLOUD}.`;
+    // Note that the way out is the machine's own update or Full access, since the cloud is not where this agent's mode was the question.
+    case LOCAL_AGENT_REFUSAL.PERMISSION_MODES:
+      return `${name} runs an older version of ${PRODUCT_NAME}, which would run this agent without asking. Update ${PRODUCT_NAME} on this machine to use Ask for approval, or switch this agent to Full access.`;
     case undefined:
       return `${name} couldn't take this agent. Try again, ${RUN_IN_CLOUD}.`;
   }

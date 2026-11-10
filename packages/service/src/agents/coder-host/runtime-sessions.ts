@@ -557,5 +557,8 @@ export function failedCallRefusal(failed: {
   if (failed.runtimeRefusal === RUNTIME_REFUSAL.DEVICE_AWAY) {
     return localAgentRefused(LOCAL_AGENT_REFUSAL.MAC_AWAY);
   }
+  if (failed.runtimeRefusal === RUNTIME_REFUSAL.MODES_UNSUPPORTED) {
+    return localAgentRefused(LOCAL_AGENT_REFUSAL.PERMISSION_MODES);
+  }
   return HOSTED_REFUSAL.UNAVAILABLE;
 }
