@@ -3272,6 +3272,9 @@ const ENVIRONMENT_REFUSAL = {
   UNANSWERED:
     "Not run: the workspace's environment variables could not be reached just now. The call " +
     "may be made again.",
+  NO_KEY_RING:
+    "Not set: this deployment holds no key to seal a value under, so no environment variable " +
+    "can be set here until its operator configures one. Calling again will not help.",
 } as const;
 
 /** An environment call's refusal in the member's words, the operation's verb naming what was not done. */
@@ -3363,10 +3366,13 @@ const SET_ENVIRONMENT_VARIABLE_TOOL = memberMcpTool({
   input: SetEnvironmentVariableInputSchema,
   annotations: IDEMPOTENT_CHANGE,
   run: ({ workspace, name, value }) =>
-    environmentAsMember(workspace, "set", (userId, workspaceId) =>
-      Effect.flatMap(hostedKeyRing, (ring) =>
-        putWorkspaceVariable(ring, userId, { workspaceId, name }, Redacted.make(value)),
-      ),
+    // Note that a deployment holding no ring never comes to hold one on a retry, so it is refused in words of its own.
+    Effect.flatMap(Effect.result(hostedKeyRing), (ring) =>
+      Result.isFailure(ring)
+        ? Effect.succeed(agentToolRejected(ENVIRONMENT_REFUSAL.NO_KEY_RING))
+        : environmentAsMember(workspace, "set", (userId, workspaceId) =>
+            putWorkspaceVariable(ring.success, userId, { workspaceId, name }, Redacted.make(value)),
+          ),
     ),
 });
 
