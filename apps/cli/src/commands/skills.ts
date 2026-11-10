@@ -29,12 +29,19 @@ import { resolveWorkspace } from "../workspace.js";
 /** The source argument that reads a skill's text from stdin. */
 const STDIN_SOURCE = "-";
 
-/** Refusals said in words that name what to do about them. */
+/** Refusals said in words that name what to do about them; a refused permission in each command's own. */
 const SKILL_REFUSAL_WORDS = {
   [HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE]: `The workspace's GitHub installation does not reach that repository; add it to the installation in ${PRODUCT_NAME}'s GitHub settings.`,
   [HOSTED_API_ERROR.SKILL_NAME_TAKEN]: "A skill of that name is already installed there.",
   [HOSTED_API_ERROR.SKILL_FILES_REFUSED]:
     "The skill's files were refused: a SKILL.md with a valid name and description, no file too large, and nothing shaped like a credential.",
+  [HOSTED_API_ERROR.NOT_PERMITTED]:
+    "You may no longer install skills in this workspace; nothing was installed.",
+} as const;
+
+/** A removal's refusals, a refused permission said as a removal's. */
+const REMOVE_REFUSAL_WORDS = {
+  ...SKILL_REFUSAL_WORDS,
   [HOSTED_API_ERROR.NOT_PERMITTED]:
     "You may not remove that skill: a workspace's skill is removed by its installer and the workspace's owners and admins.",
 } as const;
@@ -127,14 +134,25 @@ function installAsked(
   },
 ) {
   if (preview.kind === SKILL_PASTE_KIND.SOURCE) {
+    // Note that a name is matched in any case, as a skill named for view or remove is, and taken as the source spells it.
+    const named = asked.skill.map((wanted) => ({
+      wanted,
+      found: preview.skills.find((skill) => skill.name.toLowerCase() === wanted.toLowerCase()),
+    }));
+    const unknown = named.flatMap(({ wanted, found }) => (found === undefined ? [wanted] : []));
     const chosen =
-      asked.skill.length > 0
-        ? asked.skill
-        : preview.skills.filter((skill) => skill.selected).map((skill) => skill.name);
+      unknown.length > 0
+        ? []
+        : asked.skill.length > 0
+          ? named.flatMap(({ found }) => (found === undefined ? [] : [found.name]))
+          : preview.skills.filter((skill) => skill.selected).map((skill) => skill.name);
     return {
       chosen,
       request: { skills: chosen, sha: preview.sha },
-      missing: "Name the skills to install with --skill.",
+      missing:
+        unknown.length > 0
+          ? `The source holds no skill named ${unknown.join(", ")}; the ones above are what it holds.`
+          : "Name the skills to install with --skill.",
     };
   }
   const name =
@@ -288,7 +306,7 @@ const installCommand = Command.make(
       description: "Install one of them for you alone",
     },
     {
-      command: "vespin skills install - --scope workspace < SKILL.md",
+      command: "vespin skills install - --scope workspace --yes < SKILL.md",
       description: "Install a skill's text for the workspace",
     },
   ]),
@@ -318,7 +336,7 @@ const removeCommand = Command.make(
         hosted.installedSkills.remove,
         { id: named.id },
         undefined,
-        SKILL_REFUSAL_WORDS,
+        REMOVE_REFUSAL_WORDS,
       );
       yield* answer({
         json: skillJson(named),

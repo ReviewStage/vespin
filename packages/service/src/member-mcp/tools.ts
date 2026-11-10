@@ -2454,6 +2454,8 @@ const MEMBER_DELETE_AUTOMATION_TOOL = memberMcpTool({
 const SKILL_TOOL_REFUSAL = {
   NO_SKILL: "Not run: the member sees no installed skill of that id.",
   NO_WORKSPACE: "Not run: the member belongs to no such workspace.",
+  NOT_INSTALLABLE:
+    "Not run: the member may no longer install skills in that workspace; nothing was installed.",
   NOT_PERMITTED:
     "Not run: the member may not remove that skill; a workspace's skill is removed by its " +
     "installer and the workspace's owners and admins.",
@@ -2483,13 +2485,31 @@ const SKILL_FILES_WORDS: Readonly<Record<InstalledSkillRefusal, string>> = {
   [INSTALLED_SKILL_REFUSAL.CREDENTIAL]: "a file holds what looks like a credential",
 };
 
-/** A refusal from the skills' operation, in the agent's words; not found names the skill or the workspace, as the call asked by. */
-function skillRefusalWords(refusal: HostedRefusal, notFound: string): string {
+/** What a skill call says where what it asked by is out of reach: the workspace or the skill. */
+interface SkillCallWords {
+  readonly notFound: string;
+  readonly notPermitted: string;
+}
+
+/** A call about a workspace: its list, a preview, or an install. */
+const ABOUT_WORKSPACE: SkillCallWords = {
+  notFound: SKILL_TOOL_REFUSAL.NO_WORKSPACE,
+  notPermitted: SKILL_TOOL_REFUSAL.NOT_INSTALLABLE,
+};
+
+/** A call about one skill: a read or a removal. */
+const ABOUT_SKILL: SkillCallWords = {
+  notFound: SKILL_TOOL_REFUSAL.NO_SKILL,
+  notPermitted: SKILL_TOOL_REFUSAL.NOT_PERMITTED,
+};
+
+/** A refusal from the skills' operation, in the agent's words, those naming what the call asked by its own. */
+function skillRefusalWords(refusal: HostedRefusal, words: SkillCallWords): string {
   switch (refusal.error) {
     case HOSTED_API_ERROR.NOT_FOUND:
-      return notFound;
+      return words.notFound;
     case HOSTED_API_ERROR.NOT_PERMITTED:
-      return SKILL_TOOL_REFUSAL.NOT_PERMITTED;
+      return words.notPermitted;
     case HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE:
       return SKILL_TOOL_REFUSAL.NOT_REACHABLE;
     case HOSTED_API_ERROR.INVALID_REQUEST:
@@ -2509,10 +2529,10 @@ function skillRefusalWords(refusal: HostedRefusal, notFound: string): string {
 /** A skill call's answer: `accepted` with what the operation answered, or `rejected` in the refusal's words. */
 const skillAnswer = <A extends object, R>(
   operation: Effect.Effect<A, HostedRefusal, R>,
-  notFound: string,
+  words: SkillCallWords,
 ): Effect.Effect<WireRecord, never, R> =>
   Effect.match(operation, {
-    onFailure: (refusal) => agentToolRejected(skillRefusalWords(refusal, notFound)),
+    onFailure: (refusal) => agentToolRejected(skillRefusalWords(refusal, words)),
     onSuccess: (answer) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answer }),
   });
 
@@ -2616,7 +2636,7 @@ const LIST_INSTALLED_SKILLS_TOOL = memberMcpTool({
   annotations: READ_ONLY,
   run: ({ workspace }) =>
     skillsInWorkspace(workspace, (userId, workspaceId) =>
-      skillAnswer(listSkills(userId, workspaceId), SKILL_TOOL_REFUSAL.NO_WORKSPACE),
+      skillAnswer(listSkills(userId, workspaceId), ABOUT_WORKSPACE),
     ),
 });
 
@@ -2629,7 +2649,7 @@ const READ_INSTALLED_SKILL_TOOL = memberMcpTool({
   input: SkillIdInputSchema,
   annotations: READ_ONLY,
   run: ({ skillId }) =>
-    skillAsMember((userId) => skillAnswer(readSkill(userId, skillId), SKILL_TOOL_REFUSAL.NO_SKILL)),
+    skillAsMember((userId) => skillAnswer(readSkill(userId, skillId), ABOUT_SKILL)),
 });
 
 const PREVIEW_SKILL_INSTALL_TOOL = memberMcpTool({
@@ -2649,10 +2669,7 @@ const PREVIEW_SKILL_INSTALL_TOOL = memberMcpTool({
   run: ({ workspace, source }) =>
     skillsInWorkspace(workspace, (userId, workspaceId) =>
       Effect.map(
-        skillAnswer(
-          previewSkillPaste(userId, { text: source, workspaceId }),
-          SKILL_TOOL_REFUSAL.NO_WORKSPACE,
-        ),
+        skillAnswer(previewSkillPaste(userId, { text: source, workspaceId }), ABOUT_WORKSPACE),
         // Note that a paste the preview reads as neither source nor text is answered as no preview at all.
         (answer) =>
           answer.kind === SKILL_PASTE_KIND.UNSUPPORTED
@@ -2681,7 +2698,7 @@ const INSTALL_SKILL_TOOL = memberMcpTool({
         Effect.map(installSkills(userId, { ...asked, text: source, workspaceId }), (installed) => ({
           skills: installed.skills,
         })),
-        SKILL_TOOL_REFUSAL.NO_WORKSPACE,
+        ABOUT_WORKSPACE,
       ),
     ),
 });
@@ -2701,7 +2718,7 @@ const REMOVE_INSTALLED_SKILL_TOOL = memberMcpTool({
     skillAsMember((userId) =>
       skillAnswer(
         Effect.map(removeSkill(userId, skillId), (removed) => ({ removed: removed.id })),
-        SKILL_TOOL_REFUSAL.NO_SKILL,
+        ABOUT_SKILL,
       ),
     ),
 });
