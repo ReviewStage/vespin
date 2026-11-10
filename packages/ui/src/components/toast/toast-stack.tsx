@@ -1,6 +1,7 @@
 import { Toast as BaseToast, type ToastManager, type ToastObject } from "@base-ui/react/toast";
 import { Duration } from "effect";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { TOAST_HOLD } from "./toast.js";
 
 /**
@@ -19,7 +20,11 @@ import { TOAST_HOLD } from "./toast.js";
  * a toast with something to press stands in the way of what is under it.
  *
  * It is portaled to the body, or to `container` where the host stands it
- * somewhere of its own, as a catalog frames it.
+ * somewhere of its own, as a catalog frames it. Note that the viewport
+ * stands from the window's first draw, empty, because a live region drawn
+ * already holding its words is one a screen reader may never read, and that
+ * it is portaled by React's own `createPortal` rather than Base UI's
+ * `Toast.Portal`, which costs a mount the viewport has no use for.
  */
 
 /** How many toasts stand at once; the ones past it wait aside, drawn but hidden, until there is room. */
@@ -41,12 +46,7 @@ export function createToastManager<Data extends object>(): ToastStackManager<Dat
   return BaseToast.createToastManager<Data>();
 }
 
-/**
- * The viewport and the toasts the manager keeps in it, newest first, each
- * drawn by `draw`; nothing while it keeps none. Note that the viewport and
- * its portal stand only while a toast does, because the window draws none
- * nearly always, and both cost a mount and an unmount for nothing.
- */
+/** The viewport and the toasts the manager keeps in it, newest first, each drawn by `draw`. */
 function Standing<Data extends object>({
   label,
   container,
@@ -57,20 +57,18 @@ function Standing<Data extends object>({
   draw: (toast: StandingToast<Data>) => ReactNode;
 }): ReactNode {
   const { toasts } = BaseToast.useToastManager<Data>();
-  if (toasts.length === 0) return null;
-  return (
-    <BaseToast.Portal container={container}>
-      <BaseToast.Viewport
-        className="ui-toast-stack pointer-events-none fixed z-toast"
-        aria-label={label}
-      >
-        {toasts.map(draw)}
-      </BaseToast.Viewport>
-    </BaseToast.Portal>
+  return createPortal(
+    <BaseToast.Viewport
+      className="ui-toast-stack pointer-events-none fixed z-toast"
+      aria-label={label}
+    >
+      {toasts.map(draw)}
+    </BaseToast.Viewport>,
+    container ?? document.body,
   );
 }
 
-/** The stack, named as a landmark while it holds a toast, its manager's toasts each drawn by `children`. */
+/** The stack, named as a landmark, its manager's toasts each drawn by `children`. */
 export function ToastStack<Data extends object>({
   manager,
   label,
