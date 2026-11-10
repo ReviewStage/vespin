@@ -217,6 +217,8 @@ export interface AttachedFilesOptions {
   readonly held?: boolean | undefined;
   /** Where the box puts the pictures it takes into its words; none where it takes them beside the words alone. */
   readonly pictures?: AttachedPictures | undefined;
+  /** The box's words as it opens, whose markers name the pictures its chips hold already, as a draft kept or a message opened for editing does. */
+  readonly words?: string | undefined;
 }
 
 /** The files a box holds and the ways it takes more and lets them go. */
@@ -262,7 +264,11 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
   const heldNow = () => latest.current.holder?.attachments ?? ownNow.current;
   const [reading, setReading] = useState(0);
   // The pictures whose markers the words have held, the pictures taken off with their markers, by name, and every picture's name handed out, all until the box empties.
-  const placed = useRef(new Set<string>());
+  // Note that the words the box opens on name pictures too, since its editor hands back no words it opened on.
+  const [opened] = useState(
+    () => new Set(writtenMarkers(options.words ?? "").map((marker) => marker.name)),
+  );
+  const placed = useRef(opened);
   const stashed = useRef(new Map<string, AgentAttachment>());
   const minted = useRef(new Set<string>());
   // Whether the box's message went, so the next time its words and files stand empty its pictures are let go.

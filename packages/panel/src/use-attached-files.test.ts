@@ -2,11 +2,11 @@
 
 import assert from "node:assert/strict";
 import type { AgentAgentAnswer } from "@repo/features/agent-view";
-import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { AGENT_ATTACHMENT_TYPE, AGENT_BOUNDS } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE, type ShownFailureReport } from "@repo/features/shown-failure";
 import { closeHistory } from "@tiptap/pm/history";
 import { Effect } from "effect";
-import { act, createElement, type ReactNode } from "react";
+import { act, createElement, type ReactNode, useEffect, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test } from "vitest";
 import { installShownFailureReporter } from "./failure-report.js";
@@ -97,6 +97,31 @@ function RefusedEditBox(): ReactNode {
       onCancel: ignore,
     },
   });
+}
+
+/** The agent's box opening on a draft kept with a picture its words name, as a draft kept from before, or a message opened for editing. */
+function KeptDraftBox(): ReactNode {
+  const composer = useAgentComposer({
+    agentId: "agent-1",
+    taskId: "plan-1",
+    messages: [],
+    send: () => new Promise<AgentAgentAnswer>(ignore),
+  });
+  const [kept, setKept] = useState(false);
+  // Note that the draft is kept once, before the box first draws, since the control's doors are new on every render.
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (seeded.current) return;
+    seeded.current = true;
+    composer.setDraft("Like [Picture 1]");
+    composer.setAttachments(() => [
+      { name: "Picture 1", mediaType: AGENT_ATTACHMENT_TYPE.PNG, data: "iVBORw0KGgo=" },
+    ]);
+    setKept(true);
+  });
+  return kept
+    ? createElement(AgentComposer, { ...QUIET_COMPOSER, composer, skills: undefined })
+    : null;
 }
 
 /** The boxes that take files, each drawn alone. */
@@ -252,6 +277,21 @@ test("a save that leaves the box's words standing still lets one Backspace take 
   await settle();
 
   assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
+});
+
+test("one Backspace taking a chip the box opened on out of the words takes its picture off", async () => {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  await act(async () => root.render(withQueryClient(createElement(KeptDraftBox))));
+  await settle();
+  assert.deepEqual(held(container).pictures, ["Open Picture 1"]);
+
+  act(() => pressInComposer(container, "Backspace"));
+  await settle();
+
+  assert.deepEqual(held(container), { chips: [], pictures: [], note: null });
 });
 
 test("a file this machine cannot read says so in the agent's box and is reported with why", async () => {

@@ -510,6 +510,7 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
     holder: options.holder,
     held: options.held === true || options.takesFiles === false,
     onRefusal: (words) => say(SAID.FILE, words),
+    words: options.draft,
     pictures:
       options.takesPictures === true
         ? {
