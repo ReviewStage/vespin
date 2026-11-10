@@ -261,6 +261,7 @@ function PlaceMenuChip({
   here,
   glyph,
   words,
+  said,
   card,
   move,
   narrow,
@@ -269,6 +270,8 @@ function PlaceMenuChip({
   here: string | undefined;
   glyph: ReactNode;
   words: string;
+  /** What a reader hears after the words, as the static chip says it; none where it says nothing more. */
+  said: string | undefined;
   card: ReactNode;
   move: PlaceMove;
   narrow: boolean;
@@ -301,7 +304,7 @@ function PlaceMenuChip({
       iconOnly={narrow}
       rows={[...places, ...setUp]}
       noMatch={RUNS_ON_WORDS.NO_MATCH}
-      hint={`${RUNS_ON}${words}`}
+      hint={`${RUNS_ON}${words}${said ?? ""}`}
       card={card}
       align={POPOVER_ALIGN.START}
       width={CHIP_WIDTH.AUTO}
@@ -355,6 +358,7 @@ function PlaceChip({
         here={here}
         glyph={glyph}
         words={words}
+        said={said}
         card={card}
         move={move}
         narrow={narrow}
