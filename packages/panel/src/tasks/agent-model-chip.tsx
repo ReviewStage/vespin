@@ -15,7 +15,7 @@ import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useRef, useState } from "react";
 import { HarnessMark } from "../harness-marks.js";
 import { choiceLabel, paidByOf, providerOf } from "./agent-model.js";
-import { payerLastLine, usePayerPlanName } from "./agent-payer.js";
+import { payerLastLine, usePayerPlan } from "./agent-payer.js";
 import { ModelLabel } from "./model-label.js";
 import { ModelMenu, settledChoice } from "./model-menu.js";
 import type { AgentModelControl } from "./use-agent-model.js";
@@ -112,7 +112,7 @@ export function AgentModelChip({
   const paidBy = payer ?? usage?.payer;
   const paying = paidByOf(payer, usage, model.runtime);
   const offered = models === undefined ? undefined : runtimeModels(models, model.runtime, paidBy);
-  const planName = usePayerPlanName(paying, payerSubscriptionId, paidBy === undefined, owner);
+  const plan = usePayerPlan(paying, payerSubscriptionId, paidBy === undefined, owner);
 
   return (
     <div className="agent-model-chip relative flex min-w-0" ref={root}>
@@ -148,7 +148,7 @@ export function AgentModelChip({
           startsNew={startsNew}
           offersFast={runtimeModelRule(model.runtime, paidBy).fast}
           onChoose={model.choose}
-          lastLine={payerLastLine(paying, provider, usage, owner, planName)}
+          lastLine={payerLastLine(paying, provider, usage, owner, plan)}
           onClose={close}
           onLeave={(left) => {
             if (!(left instanceof Node && root.current?.contains(left))) setOpen(false);

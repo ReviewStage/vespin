@@ -614,6 +614,10 @@
   --spacing-progress-height: 3px; /* off-scale: a hairline bar */
   --spacing-progress-thin-height: var(--ui-space-2);
   --container-progress: 160px; /* off-scale: a meter's length beside a line of words */
+  /* A plan's usage rows: each window's name, its bar a meter's length, the share used, and when it resets. */
+  --grid-template-columns-usage-meters: auto minmax(0, var(--container-progress)) auto auto;
+  /* The same rows where they run the whole width they are given, their bars taking what the words leave. */
+  --grid-template-columns-usage-meters-fill: auto minmax(0, 1fr) auto auto;
   --spacing-toast-gap: var(--ui-space-8);
   --spacing-toast-inset: var(--ui-space-12);
   --spacing-toast-line-gap: var(--ui-space-2);

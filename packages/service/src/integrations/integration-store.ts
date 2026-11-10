@@ -28,7 +28,7 @@ import {
   type IntegrationProvider,
   integrationProviderSchema,
 } from "@repo/features/integration-wire";
-import { and, eq, gte, isNull, or, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 
@@ -59,6 +59,32 @@ export interface IntegrationAccountKey {
   readonly provider: IntegrationProvider;
   readonly connectionName: string;
   readonly connectSubject: string;
+}
+
+const { PENDING, CONNECTED, EXPIRED } = INTEGRATION_ROW_STATUS;
+
+/**
+ * The statuses a row may move to from each status it stands in, and the
+ * only moves this file writes: a first sign-in inserts a row pending, a
+ * sign-in completing sets any row connected (one connected or expired
+ * signing in again among them), and Connect answering it holds no usable
+ * grant expires a connected row. A sign-in begun on a row that stands moves
+ * nothing.
+ */
+const INTEGRATION_ROW_MOVES: Readonly<
+  Record<IntegrationRowStatus, readonly IntegrationRowStatus[]>
+> = {
+  [PENDING]: [CONNECTED],
+  [CONNECTED]: [CONNECTED, EXPIRED],
+  [EXPIRED]: [CONNECTED],
+};
+
+/** That a row stands in a status `INTEGRATION_ROW_MOVES` lets move to `to`, the guard every status update writes under. */
+function movesTo(to: IntegrationRowStatus) {
+  const from = Object.values(INTEGRATION_ROW_STATUS).filter((status) =>
+    INTEGRATION_ROW_MOVES[status].includes(to),
+  );
+  return inArray(integrationConnection.status, from);
 }
 
 const IntegrationRowSchema = Schema.Struct({
@@ -224,7 +250,7 @@ const upsertSignIn = SqlSchema.findAll({
           provider,
           connectSubject,
           connectionName,
-          status: INTEGRATION_ROW_STATUS.PENDING,
+          status: PENDING,
           state,
           stateIssuedAt: at,
           updatedAt: at,
@@ -293,7 +319,7 @@ const updateConnected = SqlSchema.findAll({
       db
         .update(integrationConnection)
         .set({
-          status: INTEGRATION_ROW_STATUS.CONNECTED,
+          status: CONNECTED,
           state: null,
           stateIssuedAt: null,
           // A label the account already carries, the developer's own among them, is kept over the grant's; an empty one, which a grant that named nothing left, is not.
@@ -304,7 +330,7 @@ const updateConnected = SqlSchema.findAll({
           toolsListedAt: null,
           updatedAt: at,
         })
-        .where(and(ofAccount(account), eq(integrationConnection.state, state)))
+        .where(and(ofAccount(account), eq(integrationConnection.state, state), movesTo(CONNECTED)))
         .returning({ userId: integrationConnection.userId }),
     ),
 });
@@ -411,13 +437,8 @@ const updateExpired = SqlSchema.void({
     Database.use((db) =>
       db
         .update(integrationConnection)
-        .set({ status: INTEGRATION_ROW_STATUS.EXPIRED, updatedAt: at })
-        .where(
-          and(
-            ofAccount(account),
-            eq(integrationConnection.status, INTEGRATION_ROW_STATUS.CONNECTED),
-          ),
-        ),
+        .set({ status: EXPIRED, updatedAt: at })
+        .where(and(ofAccount(account), movesTo(EXPIRED))),
     ),
 });
 

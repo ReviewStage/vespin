@@ -1,4 +1,4 @@
-import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
+import { isTaskSettled, TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
 
 /**
  * task-list-model.ts -- how the sidebar's task list is grouped and filtered: the view a workspace keeps, the groups it draws, and the time each row shows.
@@ -452,7 +452,7 @@ export interface ChildTaskCount {
 
 /** Whether a task has settled: done, or canceled, which is as settled as done. */
 export function taskFinished(task: TaskSummary): boolean {
-  return task.status === TASK_STATUS.DONE || task.status === TASK_STATUS.CANCELED;
+  return isTaskSettled(task.status);
 }
 
 /** A task's direct sub-tasks, oldest first, so they read in the order they were made; never itself, which no one writes. */

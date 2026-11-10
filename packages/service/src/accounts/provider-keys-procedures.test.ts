@@ -45,6 +45,7 @@ import { recordingProductAnalytics, SERVER_EVENT } from "../events/server-events
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
 import { hostedAnswer } from "../testing/hosted-route.js";
 import { CODEX_DEVICE_OAUTH } from "./chatgpt-credentials.js";
+import { CHATGPT_USAGE_URL } from "./chatgpt-usage.js";
 import { providerKeysProcedures } from "./provider-keys-procedures.js";
 
 /**
@@ -176,6 +177,8 @@ const openAccounts = (
     fast?: FastAnswers;
     /** OpenAI's authorization server, where a test reaches it. */
     auth?: (request: RecordedRequest) => Response;
+    /** ChatGPT's usage endpoint, which refuses where a test does not answer it. */
+    usage?: (request: RecordedRequest) => Response;
   } = {},
 ) =>
   Effect.gen(function* () {
@@ -192,9 +195,11 @@ const openAccounts = (
     const provider = recordingHttpClient((request) =>
       new URL(request.url).origin === AUTH_ORIGIN
         ? (options.auth ?? openAiAuth())(request)
-        : request.url === FAST_CHECK_URL
-          ? (options.fast?.get(keyOf(request.headers))?.clone() ?? jsonResponse({}))
-          : jsonResponse({}, answers.get(keyOf(request.headers)) ?? HTTP_STATUS.UNAUTHORIZED),
+        : request.url === CHATGPT_USAGE_URL
+          ? (options.usage?.(request) ?? jsonResponse({}, HTTP_STATUS.UNAUTHORIZED))
+          : request.url === FAST_CHECK_URL
+            ? (options.fast?.get(keyOf(request.headers))?.clone() ?? jsonResponse({}))
+            : jsonResponse({}, answers.get(keyOf(request.headers)) ?? HTTP_STATUS.UNAUTHORIZED),
     );
     const logged: string[] = [];
     const procedures = providerKeysProcedures({
@@ -987,7 +992,7 @@ it.layer(getTestDB())("the provider keys route", (it) => {
   );
 
   it.effect(
-    "a plan's usage is answered as last heard until its window resets, then not at all",
+    "a plan's usage windows are answered as last heard, the shortest first, each until its own window resets",
     () =>
       Effect.gen(function* () {
         const device = fakeDeviceAuth();
@@ -996,24 +1001,100 @@ it.layer(getTestDB())("the provider keys route", (it) => {
         yield* TestClock.adjust("1 hour");
         yield* connectPlan(ask, owner);
         const now = new Date(yield* Clock.currentTimeMillis);
-        const resetsAt = new Date(now.getTime() + 30 * 60_000);
-        yield* setPlanUsage(
-          owner,
-          PROVIDER_KEY_PROVIDER.OPENAI,
-          PROVIDER_KEY_KIND.CHATGPT_OAUTH,
-          { usedPercent: 42, windowMins: 300, resetsAt },
-          now,
-        );
-        const usage = (read: Answer) => keysOf(read).subscriptions?.map((plan) => plan.usage);
+        const session = { usedPercent: 42, windowMins: 300, resetsAt: now.getTime() + 30 * 60_000 };
+        const week = {
+          usedPercent: 18,
+          windowMins: 10_080,
+          resetsAt: now.getTime() + 3 * 86_400_000,
+        };
+        for (const window of [week, session]) {
+          yield* setPlanUsage(
+            owner,
+            PROVIDER_KEY_PROVIDER.OPENAI,
+            PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+            window,
+            now,
+            now,
+          );
+        }
+        const usage = (read: Answer) =>
+          keysOf(read).subscriptions?.map((plan) => [plan.usage, plan.usageWindows]);
 
         const heard = usage(yield* ask(request(owner)));
         yield* TestClock.adjust("31 minutes");
         const reset = usage(yield* ask(request(owner)));
 
-        assert.deepEqual(heard, [
-          { usedPercent: 42, windowMins: 300, resetsAt: resetsAt.getTime() },
+        assert.deepEqual(heard, [[session, [session, week]]]);
+        assert.deepEqual(reset, [[week, [week]]]);
+      }),
+  );
+
+  it.effect(
+    "a read of the keys asks ChatGPT for a plan's usage with its token and workspace where its reading is due, and keeps both windows it answers",
+    () =>
+      Effect.gen(function* () {
+        const device = fakeDeviceAuth();
+        device.state.codePollStatus = HTTP_STATUS.OK;
+        const resetsAt = { session: 1_800_000_000, week: 1_800_400_000 };
+        const { owner, ask, checks } = yield* openAccounts({
+          ring: KEK.ONE,
+          auth: device.auth,
+          usage: () =>
+            jsonResponse({
+              plan_type: "team",
+              rate_limit: {
+                allowed: true,
+                limit_reached: false,
+                primary_window: {
+                  used_percent: 12,
+                  limit_window_seconds: 18_000,
+                  reset_after_seconds: 0,
+                  reset_at: resetsAt.session,
+                },
+                secondary_window: {
+                  used_percent: 64,
+                  limit_window_seconds: 604_800,
+                  reset_after_seconds: 0,
+                  reset_at: resetsAt.week,
+                },
+              },
+            }),
+        });
+        yield* connectPlan(ask, owner);
+        const asked = () => checks.filter((check) => check.url === CHATGPT_USAGE_URL);
+
+        const first = keysOf(yield* ask(request(owner))).subscriptions?.[0]?.usageWindows;
+        // A reading heard inside five minutes is not asked for again.
+        yield* ask(request(owner));
+
+        assert.deepEqual(first, [
+          { usedPercent: 12, windowMins: 300, resetsAt: resetsAt.session * 1000 },
+          { usedPercent: 64, windowMins: 10_080, resetsAt: resetsAt.week * 1000 },
         ]);
-        assert.deepEqual(reset, [undefined]);
+        assert.deepEqual(
+          asked().map((check) => [check.authorization, check.headers.get("chatgpt-account-id")]),
+          [[`Bearer ${DEVICE_TOKENS.access_token}`, DEVICE.WORKSPACE]],
+        );
+      }),
+  );
+
+  it.effect(
+    "a ChatGPT that refuses a plan's usage is asked once in five minutes, not on every read of the keys",
+    () =>
+      Effect.gen(function* () {
+        const device = fakeDeviceAuth();
+        device.state.codePollStatus = HTTP_STATUS.OK;
+        const { owner, ask, checks } = yield* openAccounts({ ring: KEK.ONE, auth: device.auth });
+        yield* connectPlan(ask, owner);
+        const asked = () => checks.filter((check) => check.url === CHATGPT_USAGE_URL).length;
+
+        yield* ask(request(owner));
+        yield* ask(request(owner));
+        const whileRefused = asked();
+        yield* TestClock.adjust("5 minutes");
+        yield* ask(request(owner));
+
+        assert.deepEqual([whileRefused, asked()], [1, 2]);
       }),
   );
 
