@@ -64,9 +64,6 @@ const PAGE_WORD = "Page";
 /** What a pull request's card offers: its page on GitHub. Note that merging it is the pull request's own screen's. */
 const REVIEW_WORD = "Review";
 
-/** What a row says of a video the system's player cannot play, read as a recording. */
-const RECORDING_LABEL = "Recording";
-
 const styles = StyleSheet.create({
   list: { flex: 1 },
   content: { paddingVertical: SPACE.ROW },
@@ -433,11 +430,11 @@ function TranscriptRow({
               {shown.video ? (
                 <Video
                   source={drawing.mediaSource(shown.id)}
-                  label={shown.caption === "" ? RECORDING_LABEL : shown.caption}
+                  label={shown.label}
                   onOpenElsewhere={drawing.onOpenElsewhere}
                 />
               ) : (
-                <Picture source={drawing.mediaSource(shown.id)} alt={shown.caption} />
+                <Picture source={drawing.mediaSource(shown.id)} alt={shown.label} />
               )}
               {shown.caption === "" ? null : (
                 <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>

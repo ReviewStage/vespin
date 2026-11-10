@@ -129,7 +129,10 @@ export interface CallBodyBlock {
 /** One picture or recording a call showed, by the id the service kept it under. */
 export interface ShownMedia {
   readonly id: string;
+  /** The words drawn under it; empty for none. */
   readonly caption: string;
+  /** What it is heard as: its caption, or where it has none its name among the call's (`screenshot-1`), as the panel's viewer names it. */
+  readonly label: string;
   readonly video: boolean;
 }
 
@@ -378,20 +381,35 @@ function callItems(
   const shownSet = showedPictures(part);
   const pictures = shownSet ? shownPicturesOf(part.input, part.output) : [];
   const media: readonly ShownMedia[] = [
-    ...pictures.flatMap(({ picture, caption }) =>
+    ...pictures.flatMap(({ picture, caption, name }) =>
       picture === undefined
         ? []
-        : [{ id: picture.id, caption, video: isVideoType(picture.mediaType) }],
+        : [
+            {
+              id: picture.id,
+              caption,
+              label: caption === "" ? name : caption,
+              video: isVideoType(picture.mediaType),
+            },
+          ],
     ),
-    ...recordedVideosOf(part.tool, part.output).map(({ picture, caption }) => ({
+    ...recordedVideosOf(part.tool, part.output).map(({ picture, caption, name }) => ({
       id: picture.id,
       caption,
+      label: caption === "" ? name : caption,
       video: true,
     })),
     // Note that a picture a call answered that was not kept has no bytes to draw, so it is left out.
     ...calledPicturesOf(part.tool, part.input, part.output).flatMap((called) =>
       called.kept
-        ? [{ id: called.picture.id, caption: "", video: isVideoType(called.picture.mediaType) }]
+        ? [
+            {
+              id: called.picture.id,
+              caption: "",
+              label: called.name,
+              video: isVideoType(called.picture.mediaType),
+            },
+          ]
         : [],
     ),
   ];

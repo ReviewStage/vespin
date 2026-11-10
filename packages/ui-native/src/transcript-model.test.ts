@@ -39,7 +39,7 @@ describe("transcriptItems", () => {
       TRANSCRIPT_ITEM.WORDS,
     ]);
     expect(items[1]).toMatchObject({
-      media: [{ id: "picture-1", caption: "The dialog", video: false }],
+      media: [{ id: "picture-1", caption: "The dialog", label: "The dialog", video: false }],
     });
   });
 
