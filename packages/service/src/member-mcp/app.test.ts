@@ -662,6 +662,7 @@ it.effect(
         [
           [MEMBER_MCP_TOOL.CREATE_TASK, { workspace, name: "Planted" }],
           [MEMBER_MCP_TOOL.UPDATE_TASK, { taskId, name: "Renamed" }],
+          [MEMBER_MCP_TOOL.DELETE_TASK, { taskId }],
           [
             MEMBER_MCP_TOOL.EDIT_DESCRIPTION,
             { taskId, notes: [{ kind: NOTE_KIND.ADD, section: "Problem", text: "Planted." }] },

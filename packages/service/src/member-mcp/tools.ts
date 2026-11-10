@@ -307,6 +307,7 @@ import {
   DESCRIPTION_SAVE_STATUS,
   restoreRevision,
 } from "../tasks/description-notes.js";
+import { deleteTaskStoppingAgents } from "../tasks/task-delete.js";
 import { readTaskFile } from "../tasks/task-file.js";
 import { readTaskTree } from "../tasks/task-tree.js";
 import type { SentryApp } from "../triggers/sentry/sentry-app-config.js";
@@ -1119,6 +1120,80 @@ const MEMBER_UPDATE_TASK_TOOL = memberMcpTool({
       (userId) => readTaskWorkspace(userId, asked.taskId),
       UPDATE_TASK_REFUSAL.NO_TASK,
       (call) => runUpdateTask(call, asked),
+    ),
+});
+
+/** Why a task was not deleted, in words the agent can act on; the task stands in each. */
+const DELETE_TASK_REFUSAL = {
+  NO_TASK: `Not deleted: the member can open no task with that id; ${MEMBER_MCP_TOOL.LIST_TASKS} names them.`,
+  NOT_READY:
+    "Not deleted: an agent of that task has a turn still coming up, or was started while the " +
+    "others were stopped, so there is no turn to stop yet; call again in a moment.",
+  NOT_PERMITTED:
+    "Not deleted: an agent of that task runs on another member's own subscription, so only " +
+    "they and their agents can stop it.",
+  NATIVE_NOT_HERE:
+    "Not deleted: an agent of that task runs on Claude Code or Codex, which cannot be reached " +
+    "from here to stop its turn yet; the member deletes the task from the app.",
+  UNAVAILABLE:
+    "Not deleted: the service could not stop every agent of that task just now. The call may " +
+    "be made again.",
+} as const;
+
+/** A delete's refusal in the agent's words (`deleteTaskStoppingAgents`). */
+function deleteTaskRefusalWords(refusal: HostedRefusal): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return DELETE_TASK_REFUSAL.NO_TASK;
+    case HOSTED_API_ERROR.AGENT_NOT_READY:
+      return DELETE_TASK_REFUSAL.NOT_READY;
+    case HOSTED_API_ERROR.NOT_PERMITTED:
+      return DELETE_TASK_REFUSAL.NOT_PERMITTED;
+    case HOSTED_API_ERROR.NATIVE_AGENT_NOT_HERE:
+      return DELETE_TASK_REFUSAL.NATIVE_NOT_HERE;
+    default:
+      return DELETE_TASK_REFUSAL.UNAVAILABLE;
+  }
+}
+
+/** A delete names the task alone. */
+const DeleteTaskInputSchema = Schema.Struct({
+  taskId: describeWire(
+    wireUuidSchema,
+    `The task to delete, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
+  ),
+});
+
+/**
+ * `delete_task`: a task deleted as the app's Permanently delete deletes one,
+ * through the operation its procedure runs (`deleteTaskStoppingAgents`), on
+ * the member's own standing, so the tool deletes what the app lets them
+ * delete and nothing more.
+ */
+const MEMBER_DELETE_TASK_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.DELETE_TASK,
+  description:
+    "Delete a task the member can open for good, by its id, a teammate's included, in " +
+    "whichever of the member's workspaces it stands, as the app's Permanently delete would: " +
+    "every agent on it is stopped first, then the task goes with everything on it, its " +
+    "agents and their transcripts among it, and none of it can be brought back. A delete refused " +
+    "leaves the task standing, though agents it stopped before the refusal stay stopped. " +
+    "Delete one only when the member asks for it, and mark one done or canceled with " +
+    `${MEMBER_MCP_TOOL.UPDATE_TASK}'s status where they only want it out of the way. ` +
+    "Answers `accepted` with the task's id, or `rejected` and why.",
+  input: DeleteTaskInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ taskId }) =>
+    writeAsMember(
+      (userId) => readTaskWorkspace(userId, taskId),
+      DELETE_TASK_REFUSAL.NO_TASK,
+      (call) =>
+        deleteTaskStoppingAgents(call.writer, callerUserId(call.caller), taskId).pipe(
+          Effect.map(() => ({ status: ACTION_RESULT_STATUS.ACCEPTED, taskId })),
+          Effect.catch((refusal) =>
+            Effect.succeed(agentToolRejected(deleteTaskRefusalWords(refusal))),
+          ),
+        ),
     ),
 });
 
@@ -3723,6 +3798,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   UPDATE_PREFERENCES_TOOL,
   MEMBER_CREATE_TASK_TOOL,
   MEMBER_UPDATE_TASK_TOOL,
+  MEMBER_DELETE_TASK_TOOL,
   MEMBER_EDIT_DESCRIPTION_TOOL,
   LIST_DESCRIPTION_REVISIONS_TOOL,
   READ_DESCRIPTION_REVISION_TOOL,

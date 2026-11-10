@@ -104,6 +104,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.LIST_TASK_FOLDER]: { taskFiles: ["tree"] },
   [MEMBER_MCP_TOOL.CREATE_TASK]: { plans: ["create", "editDescription"] },
   [MEMBER_MCP_TOOL.UPDATE_TASK]: { plans: ["update", "parent", "block"], taskSections: ["write"] },
+  [MEMBER_MCP_TOOL.DELETE_TASK]: { plans: ["delete"] },
   [MEMBER_MCP_TOOL.EDIT_DESCRIPTION]: { plans: ["open", "editDescription"] },
   [MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS]: { plans: ["descriptionRevisions"] },
   [MEMBER_MCP_TOOL.READ_DESCRIPTION_REVISION]: { plans: ["descriptionRevision"] },
@@ -357,7 +358,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   plans: {
     find: NOT_YET_BUILT,
     relation: NOT_YET_BUILT,
-    delete: NOT_YET_BUILT,
   },
   pullRequests: { reviewOptions: SCREEN_ONLY },
   pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },

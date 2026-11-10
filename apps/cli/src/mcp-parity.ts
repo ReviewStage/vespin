@@ -45,6 +45,7 @@ export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.LIST_TASK_FOLDER]: { command: ["task", "ls"] },
   [MEMBER_MCP_TOOL.CREATE_TASK]: { command: ["task", "create"] },
   [MEMBER_MCP_TOOL.UPDATE_TASK]: { command: ["task", "update"] },
+  [MEMBER_MCP_TOOL.DELETE_TASK]: { command: ["task", "delete"] },
   [MEMBER_MCP_TOOL.EDIT_DESCRIPTION]: { command: ["description", "edit"] },
   [MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS]: { command: ["description", "history"] },
   [MEMBER_MCP_TOOL.READ_DESCRIPTION_REVISION]: { command: ["description", "show"] },
