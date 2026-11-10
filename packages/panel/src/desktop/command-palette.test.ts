@@ -2856,7 +2856,7 @@ type FedInbox = { readonly items: readonly InboxItem[] } | { readonly failure: s
 function fedOf(inbox: FedInbox): AppHostRead<AppInboxItems> {
   if ("failure" in inbox) return { failed: true };
   return {
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [ROTATION.id]: inbox.items }, [INBOX_SCOPE_KIND.AGENT]: {} },
+    rows: { [INBOX_SCOPE_KIND.PLAN]: { [ROTATION.id]: inbox.items } },
   };
 }
 

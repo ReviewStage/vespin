@@ -13,9 +13,7 @@ import type { InboxItem } from "@repo/features/inbox-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import type {
   AppHostRead,
-  AppInboxAgentHolding,
   AppInboxSlice,
-  AppInboxTasklessItem,
   AppInboxWaitingItem,
   AppTranscript,
 } from "@repo/host/app-state";
@@ -350,34 +348,6 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
     readInboxImage: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     ...overrides,
   };
-}
-
-/**
- * Each agent the open items of agents with no task name, once, as main lists
- * the agents holding items: how many of them it holds, how many of those
- * are to do, asks and notices alike, and when the latest changed, named as its latest item names it.
- */
-export function agentHoldingsOf(
-  taskless: readonly AppInboxTasklessItem[],
-): readonly AppInboxAgentHolding[] {
-  const held = new Map<string, AppInboxAgentHolding>();
-  for (const entry of taskless) {
-    const was = held.get(entry.agentId);
-    const latest = was !== undefined && was.updatedAt > entry.updatedAt ? was : entry;
-    held.set(entry.agentId, {
-      agentId: entry.agentId,
-      agentTitle: latest.agentTitle,
-      agentModel: latest.agentModel,
-      automationId: latest.automationId,
-      automationName: latest.automationName,
-      repository: latest.repository,
-      ...(latest.workspaceId === undefined ? undefined : { workspaceId: latest.workspaceId }),
-      items: (was?.items ?? 0) + 1,
-      toDo: (was?.toDo ?? 0) + 1,
-      updatedAt: latest.updatedAt,
-    });
-  }
-  return [...held.values()];
 }
 
 /**

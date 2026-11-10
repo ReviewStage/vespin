@@ -1,6 +1,5 @@
 import {
   EVERYONES,
-  holderName,
   INBOX_NOT_READ,
   INBOX_SCOPES,
   INBOX_SHOW,
@@ -156,7 +155,6 @@ import {
 import { INBOX_ITEM_KEYS, inboxItemSubject, useInboxItemActions } from "./inbox-item-actions.js";
 import {
   addressedWords,
-  HolderGlyph,
   InboxItemCard,
   InboxItemMarks,
   inboxLineGlyph,
@@ -174,8 +172,8 @@ import { PlanGlyph } from "./tab-look.js";
  * The list is drawn from the sidebar's own pieces, on the Inbox's own ground, so it reads as the
  * sidebar does. An item is a row, as a
  * mail app lists a thread: the tile of the agent that posted it
- * (`actor-ref.tsx`), as the task's summary or main's read of an agent with
- * no task names the agent, its title, and how long ago it last changed,
+ * (`actor-ref.tsx`), as the task's summary names the agent, its title,
+ * and how long ago it last changed,
  * and before its time the face of the teammate whose agent asks it, as the
  * sidebar marks a teammate's task, the reader's own wearing none; under
  * them, muted, the last word in its thread, who said it first
@@ -529,12 +527,12 @@ export const InboxItemRow = memo(function InboxItemRow({
         }
         describedAs={heard}
         lead={{
-          icon: <HolderGlyph holder={holder} />,
+          icon: <PlanGlyph status={holder.task.status} />,
           // Note that a thread its agent addressed by name says so after its task, since its task's assignee may be someone else.
           label:
             addressedTo === undefined
-              ? holderName(holder)
-              : `${holderName(holder)} · ${addressedWords(addressee)}`,
+              ? holder.task.name
+              : `${holder.task.name} · ${addressedWords(addressee)}`,
         }}
         leadAt={LIST_ROW_LEAD.ABOVE}
         meta={
