@@ -62,6 +62,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { SettingsBarButton, useSettingsAccount } from "../settings-button.js";
+import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import {
   type TaskOverview,
   type TasksListing,
@@ -623,9 +624,14 @@ function TasksStackList() {
 // window stands three columns, the groups, the picked group's tasks, and the
 // task. The Stack's header steps aside, since the split view draws each
 // column's navigation bar itself.
-function TasksSplitScreen() {
+function TasksSplitScreen({
+  selected,
+  select,
+}: {
+  readonly selected: string | undefined;
+  readonly select: (id: string) => void;
+}) {
   const three = useThreeColumns();
-  const [selected, setSelected] = useState<string | undefined>(undefined);
   const [picked, setPicked] = useState<string>(MY_TASKS_GROUP);
   const { search, setSearch, listing } = useTasksScreen();
   const overview = useTaskOverview(selected);
@@ -637,7 +643,7 @@ function TasksSplitScreen() {
       search={search}
       groups={three ? pickedGroups(listing.tree, picked) : undefined}
       selected={selected}
-      onSelect={setSelected}
+      onSelect={select}
     />
   );
   return (
@@ -673,7 +679,12 @@ function TasksSplitScreen() {
 /** The Tasks tab's root screen: its tree, laid out by the window's size class. */
 export function TasksListScreen() {
   const sizeClass = useWindowSizeClass();
-  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? <TasksSplitScreen /> : <TasksStackList />;
+  const { selected, select } = useSplitSelection(SPLIT_TAB.TASKS);
+  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
+    <TasksSplitScreen selected={selected} select={select} />
+  ) : (
+    <TasksStackList />
+  );
 }
 
 /** The Tasks tab's pushed screen: one task's Overview, named by the route's `id`, its path small in the bar and its ⋯ beside it; Task not found where the read list holds no such task, and nothing while it is still read. */
@@ -683,6 +694,7 @@ export function TaskScreen() {
   const overview = useTaskOverview(id);
   const read = useTasksRead();
   const menu = overview === undefined ? undefined : taskMenu(overview);
+  if (useHandToSplit(SPLIT_TAB.TASKS, id)) return null;
   return (
     <>
       <Stack.Screen

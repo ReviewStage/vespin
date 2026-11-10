@@ -74,6 +74,7 @@ import {
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
 import { SettingsBarButton, useSettingsAccount } from "../settings-button.js";
+import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { OpenAskCard, ThreadComposer, threadMenu } from "./inbox-ask.js";
@@ -493,8 +494,13 @@ function InboxStackList() {
 // search and ⋯ menu in the sidebar's bar, and the selected thread beside it.
 // The Stack's header steps aside, since the split view draws each column's
 // navigation bar itself.
-function InboxSplitScreen() {
-  const [selected, setSelected] = useState<string | undefined>(undefined);
+function InboxSplitScreen({
+  selected,
+  select,
+}: {
+  readonly selected: string | undefined;
+  readonly select: (id: string) => void;
+}) {
   const { show, search, setSearch, listing, acts, scopes, menu } = useInboxScreen(selected);
   const account = useSettingsAccount();
   const chosen = listing.listed.find(({ item }) => item.id === selected);
@@ -518,7 +524,7 @@ function InboxSplitScreen() {
                   listed={listing.listed}
                   readerId={listing.readerId}
                   selected={selected}
-                  onSelect={setSelected}
+                  onSelect={select}
                   onRefresh={acts.refresh}
                   onMark={acts.mark}
                 />
@@ -544,7 +550,12 @@ function InboxSplitScreen() {
 /** The Inbox tab's root screen: its list, laid out by the window's size class. */
 export function InboxListScreen() {
   const sizeClass = useWindowSizeClass();
-  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? <InboxSplitScreen /> : <InboxStackList />;
+  const { selected, select } = useSplitSelection(SPLIT_TAB.INBOX);
+  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
+    <InboxSplitScreen selected={selected} select={select} />
+  ) : (
+    <InboxStackList />
+  );
 }
 
 /** The Inbox's pushed screen: one thread, named by the route's `id`, its path small in the bar over its heading. */
@@ -552,6 +563,7 @@ export function InboxThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { listed, readerId, feed } = useInboxThread(id);
   const { refresh, refreshTasks } = useInboxActs();
+  if (useHandToSplit(SPLIT_TAB.INBOX, id)) return null;
   return (
     <>
       <Stack.Screen
