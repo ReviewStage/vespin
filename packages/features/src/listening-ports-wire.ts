@@ -20,7 +20,7 @@
 import { Schema as EffectSchema } from "effect";
 import { FORWARD_PORT } from "./sandbox-tunnel-wire.js";
 
-/** What serves a port, in a few words made from the command that started it, such as `storybook dev` or `pnpm dev · web`. */
+/** What serves a port, in a few words made from the command that started it, such as `storybook dev` or `pnpm dev`. */
 const portLabelSchema = EffectSchema.Struct({ port: EffectSchema.Int, label: EffectSchema.String });
 
 export type PortLabel = typeof portLabelSchema.Type;

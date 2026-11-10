@@ -17,9 +17,9 @@
  * prints the command line of the one the shell ran: the listener's ancestor
  * whose parent is a shell, or the listener itself where no shell stands
  * above it, the rule the shared preview's relay records a server by
- * (`preview-relay.ts`). It prints the listener's own command line and
- * folder beside it, which label two ports one command started, such as a
- * monorepo's `turbo dev`. A port whose process could not be read is listed
+ * (`preview-relay.ts`). It prints the listener's own command line beside
+ * it, which labels two ports one command started, such as a monorepo's
+ * `turbo dev`. A port whose process could not be read is listed
  * without a label, as is every port where the script did not run. A command
  * line can carry a secret, so it never leaves this module: only the label
  * made from it does, and nothing here is logged or traced.
@@ -29,7 +29,7 @@ import type { ListeningPortsAnswer, PortLabel } from "@repo/features/listening-p
 import type { CommandAsk, CommandRun } from "@repo/sandbox";
 import { Result, Schema } from "effect";
 import { SANDBOX_BROWSER } from "../browser/sandbox-browser.js";
-import { labelIn, labelOf } from "./port-label.js";
+import { labelOf } from "./port-label.js";
 
 /** The kernel's TCP socket tables, IPv4's and IPv6's; a kernel without IPv6 has no second one, and `cat` prints the first alone. */
 const SOCKET_TABLES = ["/proc/net/tcp", "/proc/net/tcp6"] as const;
@@ -55,7 +55,7 @@ const LISTENERS_MARK = "vespin-listeners";
 /**
  * The script that prints, one JSON line each, the process holding each
  * socket a non-root user listens on: the socket's inode, the command line
- * the shell ran, and the listener's own command line and folder. It is
+ * the shell ran, and the listener's own command line. It is
  * written without a single quote, since the shell's own quotes hold it.
  */
 const LISTENERS_SOURCE = String.raw`"use strict";
@@ -65,7 +65,6 @@ const read = (file) => { try { return fs.readFileSync(file, "utf8"); } catch { r
 const parentOf = (pid) => Number(read("/proc/" + pid + "/stat").replace(/^.*\) /s, "").split(" ")[1]);
 const nameOf = (pid) => read("/proc/" + pid + "/comm").trim();
 const argvOf = (pid) => read("/proc/" + pid + "/cmdline").split("\0").filter(Boolean);
-const cwdOf = (pid) => { try { return fs.readlinkSync("/proc/" + pid + "/cwd"); } catch { return ""; } };
 const wanted = new Set();
 for (const table of ["/proc/net/tcp", "/proc/net/tcp6"]) {
   for (const line of read(table).split("\n").slice(1)) {
@@ -89,7 +88,7 @@ for (const [inode, listener] of found) {
   let pid = listener;
   for (let parent = parentOf(pid); parent > 1 && !SHELLS.has(nameOf(parent)); parent = parentOf(pid)) pid = parent;
   if (!SHELLS.has(nameOf(parentOf(pid)))) pid = listener;
-  console.log(JSON.stringify({ inode, command: argvOf(pid), listener: argvOf(listener), cwd: cwdOf(listener) }));
+  console.log(JSON.stringify({ inode, command: argvOf(pid), listener: argvOf(listener) }));
 }
 `;
 
@@ -99,7 +98,6 @@ const ListenerLine = Schema.fromJsonString(
     inode: Schema.String,
     command: Schema.Array(Schema.String),
     listener: Schema.Array(Schema.String),
-    cwd: Schema.String,
   }),
 );
 
@@ -148,9 +146,8 @@ function listenersOf(lines: readonly string[]): Map<string, Listener> {
 
 /**
  * Each port's label: what the shell ran, or, where several ports would read
- * the same, what listens on each and the folder it runs in, so two servers
- * one command started are told apart; a port none could be made for has
- * none.
+ * the same, what listens on each, so two servers one command started are
+ * told apart; a port none could be made for has none.
  */
 function labelsOf(
   sockets: readonly KeptSocket[],
@@ -162,8 +159,7 @@ function labelsOf(
     if (listener === undefined || made.has(port)) continue;
     const own = labelOf(listener.listener);
     const ran = labelOf(listener.command) ?? own;
-    if (ran !== undefined)
-      made.set(port, { ran, own: own === undefined ? undefined : labelIn(own, listener.cwd) });
+    if (ran !== undefined) made.set(port, { ran, own });
   }
   const readings = [...made.values()].map(({ ran }) => ran);
   return [...made]

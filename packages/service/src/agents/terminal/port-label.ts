@@ -1,9 +1,8 @@
 /**
- * port-label.ts -- the few words that say what serves a port in an agent's sandbox, such as `storybook dev` or `pnpm dev · web`, made from the command line of the process that listens on it.
+ * port-label.ts -- the few words that say what serves a port in an agent's sandbox, such as `storybook dev` or `pnpm dev`, made from the command line of the process that listens on it.
  *
  * A label is built from names alone: the program, the script or package it
- * runs, its first subcommand, and the package or folder a package manager
- * was pointed at. A flag's value, an address, or any word past the first is
+ * runs, and its first subcommand. A flag's value, an address, or any word past the first is
  * never kept, since a command line can carry a secret, and a word is kept
  * only where it reads as a name (`NAME`). An interpreter (`node`, `python`)
  * is named by what it runs, a script under `node_modules` by its package,
@@ -22,7 +21,7 @@ const INTERPRETERS: ReadonlySet<string> = new Set(["node", "nodejs", "deno", "ts
 /** Python, of whichever version, named by the module or script it runs. */
 const PYTHON = /^python[0-9.]*$/;
 
-/** Package managers, named with the script they run and where. */
+/** Package managers, named with the script they run. */
 const PACKAGE_MANAGERS: ReadonlySet<string> = new Set(["npm", "pnpm", "yarn", "bun"]);
 
 /** Runners named by the command they run. */
@@ -34,8 +33,8 @@ const PASSES_ON: ReadonlySet<string> = new Set(["exec", "dlx", "x"]);
 /** A package manager's words before the script it runs. */
 const RUNS_SCRIPT: ReadonlySet<string> = new Set(["run", "run-script"]);
 
-/** A package manager's flags whose value names the package or folder it runs in. */
-const PLACE_FLAGS: ReadonlySet<string> = new Set([
+/** A package manager's flags whose value, the package or folder it runs in, is the next word, which is passed over with them. */
+const VALUED_FLAGS: ReadonlySet<string> = new Set([
   "--filter",
   "-F",
   "-C",
@@ -44,13 +43,8 @@ const PLACE_FLAGS: ReadonlySet<string> = new Set([
   "--prefix",
   "--workspace",
   "-w",
+  "workspace",
 ]);
-
-/** The same flags written with their value after `=`. */
-const PLACE_FLAG_VALUE = /^--(?:filter|dir|cwd|prefix|workspace)=(.+)$/;
-
-/** Between what runs and where. */
-const PLACE_JOIN = " · ";
 
 /** A path's last segment. */
 function baseName(path: string): string {
@@ -60,11 +54,6 @@ function baseName(path: string): string {
 /** A word, where it reads as a name. */
 function named(word: string | undefined): string | undefined {
   return word !== undefined && NAME.test(word) ? word : undefined;
-}
-
-/** The name a package or folder a package manager was pointed at goes by: `@repo/web`, `./apps/web`, and `web...` are all `web`. */
-function placeOf(value: string): string | undefined {
-  return named(baseName(value.replace(/^!/, "").replace(/\.{3}$/, "")));
 }
 
 /** What a script an interpreter runs is called: its package where it lies under `node_modules`, its own name, less its extension, otherwise. */
@@ -96,25 +85,16 @@ function interpreted(program: string, rest: readonly string[]): string | undefin
   return withSubcommand(scriptName(rest[at] ?? ""), rest.slice(at + 1));
 }
 
-/** A package manager's run: the script it runs and the package or folder it was pointed at, or the command it passes on to. */
+/** A package manager's run: the script it runs, or the command it passes on to. */
 function managed(manager: string, rest: readonly string[]): string | undefined {
-  let place: string | undefined;
   for (let at = 0; at < rest.length; at++) {
     const word = rest[at] ?? "";
-    const valued = PLACE_FLAG_VALUE.exec(word)?.[1];
-    if (valued !== undefined) place = placeOf(valued);
-    else if (PLACE_FLAGS.has(word) || (manager === "yarn" && word === "workspace")) {
-      place = placeOf(rest[at + 1] ?? "");
-      at++;
-    } else if (PASSES_ON.has(word)) return labelOf(rest.slice(at + 1));
+    if (VALUED_FLAGS.has(word)) at++;
+    else if (PASSES_ON.has(word)) return labelOf(rest.slice(at + 1));
     else if (!word.startsWith("-") && !RUNS_SCRIPT.has(word)) {
       // Note that bun runs a file as an interpreter does.
       if (manager === "bun" && word.includes(".")) return interpreted(manager, rest.slice(at));
-      if (!VERB.test(word)) return manager;
-      const script = word;
-      return place === undefined
-        ? `${manager} ${script}`
-        : `${manager} ${script}${PLACE_JOIN}${place}`;
+      return VERB.test(word) ? `${manager} ${word}` : manager;
     }
   }
   return manager;
@@ -140,10 +120,4 @@ export function labelOf(argv: readonly string[]): string | undefined {
   if (PACKAGE_MANAGERS.has(program)) return managed(program, rest);
   if (INTERPRETERS.has(program) || PYTHON.test(program)) return interpreted(program, rest);
   return withSubcommand(named(program), rest);
-}
-
-/** A label and the folder it runs in, which tells apart two servers that would read the same. */
-export function labelIn(label: string, cwd: string): string {
-  const place = named(baseName(cwd));
-  return place === undefined ? label : `${label}${PLACE_JOIN}${place}`;
 }

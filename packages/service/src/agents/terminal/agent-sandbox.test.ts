@@ -184,20 +184,18 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           "   1: 00000000000000000000000000000000:1435 00000000000000000000000000000000:0000 0A 00000000:00000000 00:00000000 00000000  1001        0 4600 1",
         ];
         // Then the listeners the script printed as root: both servers started by one `pnpm dev`, as a
-        // monorepo's are, so each is named by what listens and where, and a line it could not have printed.
+        // monorepo's are, so each is named by what listens on it, and a line it could not have printed.
         const listeners = [
           "vespin-listeners",
           JSON.stringify({
             inode: "4200",
             command: ["pnpm", "dev"],
             listener: ["node", "/w/node_modules/next/dist/bin/next", "dev"],
-            cwd: "/w/apps/web",
           }),
           JSON.stringify({
             inode: "4600",
             command: ["pnpm", "dev"],
             listener: ["/w/node_modules/.bin/vite", "--port", "5173"],
-            cwd: "/w/apps/docs",
           }),
           "not a listener",
         ];
@@ -217,8 +215,8 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
           running: true,
           ports: [3000, 5173],
           labels: [
-            { port: 3000, label: "next dev · web" },
-            { port: 5173, label: "vite · docs" },
+            { port: 3000, label: "next dev" },
+            { port: 5173, label: "vite" },
           ],
         });
         assert.equal(api.state.commands[0]?.running, RUNNING_SESSION);
