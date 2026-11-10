@@ -2,10 +2,10 @@
 
 import assert from "node:assert/strict";
 import { AGENT_TODO_STATUS, type AgentTodos } from "@repo/features/agent-wire";
+import { TOOL_STATE } from "@repo/features/tool-call-block";
 import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { test } from "vitest";
-import { TOOL_STATE } from "../ai-elements/tool.js";
 import { TranscriptTodos } from "./transcript-blocks.js";
 
 /**

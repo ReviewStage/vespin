@@ -1,5 +1,6 @@
 import type { AgentChangedFile } from "@repo/features/agent-wire";
 import { chaptersProviderOf } from "@repo/features/chapters-model-choice";
+import { fileName } from "@repo/features/code-ref-words";
 import { formatCount } from "@repo/features/number-format";
 import {
   type Chapter,
@@ -123,7 +124,6 @@ import {
 import type { ChaptersRead } from "./chapters-read.js";
 import { drawnIn, useFloatsOver } from "./drawn-in.js";
 import { FileCard } from "./file-ref.js";
-import { fileName } from "./file-ref-model.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 import type { TreeShown } from "./file-view.js";
 import type { PullRequestSource } from "./pull-request-source.js";

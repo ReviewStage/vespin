@@ -1,11 +1,12 @@
 /**
- * mcp-client-operations.ts -- the outside MCP clients a member allowed read, and one revoked, as the hosted procedures make them and the member MCP tools will.
+ * mcp-client-operations.ts -- the outside MCP clients a member allowed read, and one revoked, as the hosted procedures and the member MCP tools make them.
  *
  * Each is the one operation its doors run: `mcpClients.list` and
  * `mcpClients.revoke` (`clients-procedures.ts`) for Settings › MCP on the
- * desktop and the web app and for the command-line tool, under the
- * account's OAuth token. A client a member allowed holds their consent and
- * the tokens minted on it, in the OAuth provider's own tables. The read
+ * desktop and the web app and for the command-line tool, under the account's
+ * OAuth token, and `list_mcp_clients` (`integrations.ts`) for an outside
+ * agent acting for a member. A client a member allowed holds their consent
+ * and the tokens minted on it, in the OAuth provider's own tables. The read
  * lists the member's consents for every client but the desktop's, and the
  * command-line tool, which skips consent, by the live token it holds,
  * through Drizzle (`oauth-grants.ts`), since every endpoint of the

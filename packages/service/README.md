@@ -2708,6 +2708,9 @@ the rest still run, and any failure fails the cron's check-in. In order:
 - `syncLog`: the sync log's transactions older than its keep pruned.
 - `turns`: the coding agents' turns past their deadline failed with why
   (`src/agents/coder-host/reconcile.ts`), a sweep's worth of agents at a time.
+- `wakeups`: the wakeups coding agents booked with `schedule_wakeup` that are
+  due, each handed back to its agent as a line of its own
+  (`src/maintenance/wakeup-sweep.ts`), a sweep's worth at a time.
 
 A turn's row holds the deadline of the state it stands in
 (`packages/features/src/turn-deadline.ts`), written by its one writer

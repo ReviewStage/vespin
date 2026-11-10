@@ -110,6 +110,10 @@ export const CALL_KIND = {
   OPEN_PULL_REQUEST: "open-pull-request",
   /** A pause a coding agent took (`sleep`) before it checked again on what takes time, its row naming how long. */
   SLEEP: "sleep",
+  /** A wakeup a coding agent booked for later (`schedule_wakeup`), its row naming how long until it fires. */
+  SCHEDULE_WAKEUP: "schedule-wakeup",
+  /** The wakeup a coding agent booked canceled (`schedule_wakeup` with `stop`). */
+  CANCEL_WAKEUP: "cancel-wakeup",
   /** The workspace's tasks listed (`list_tasks`). */
   LIST_TASKS: "list-tasks",
   /** A fact kept in the workspace's shared memory (`save_memory`, or `remember` in an older transcript), its row saying it. */
@@ -190,6 +194,8 @@ export const CALL_WORDS = {
   [CALL_KIND.SHOW_IMAGE]: { verb: "Showed", code: true },
   [CALL_KIND.OPEN_PULL_REQUEST]: { verb: "Opened pull request", code: false },
   [CALL_KIND.SLEEP]: { verb: "Waited", code: false },
+  [CALL_KIND.SCHEDULE_WAKEUP]: { verb: "Set a wakeup in", code: false },
+  [CALL_KIND.CANCEL_WAKEUP]: { verb: "Canceled the wakeup", code: false },
   [CALL_KIND.LIST_TASKS]: { verb: "Listed the tasks", code: false },
   [CALL_KIND.REMEMBER]: { verb: "Saved to memory:", code: false },
   [CALL_KIND.RECALL]: { verb: "Searched memory", code: false },
@@ -383,6 +389,35 @@ function firstLine(text: string): string {
 export function commandDescription(description: string | undefined): string | undefined {
   const words = description?.replace(/\s+/gu, " ").trim();
   return words === undefined || words === "" ? undefined : words;
+}
+
+/** The kinds of call that name files, which a row names by the first one's chip. */
+const FILE_CALLS: ReadonlySet<CallKind> = new Set([
+  CALL_KIND.READ_FILE,
+  CALL_KIND.WRITE_FILE,
+  CALL_KIND.EDIT,
+]);
+
+/** The file a call's row names by its chip: the first it named, for a call that reads or writes files; none for any other. */
+export function calledFile(
+  kind: CallKind,
+  files: readonly string[] | undefined,
+): string | undefined {
+  return FILE_CALLS.has(kind) ? files?.[0] : undefined;
+}
+
+/** How many files a call named past the first, which its row says after the first one's chip; none for one file. */
+export function moreFiles(files: readonly string[] | undefined): string | undefined {
+  return files === undefined || files.length < 2 ? undefined : `+${files.length - 1}`;
+}
+
+/** A web address, as a website chip reads one. */
+const WEB_SCHEME = /^https?:\/\//iu;
+
+/** The site a web address is of, as a website chip names it: its host without its `www.`; nothing for an address that is not the web's. */
+export function siteName(href: string): string | undefined {
+  if (!WEB_SCHEME.test(href) || !URL.canParse(href)) return undefined;
+  return new URL(href).hostname.replace(/^www\./u, "");
 }
 
 /** A page's address as a reader names it: its host and path, without the scheme. */

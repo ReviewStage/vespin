@@ -1,0 +1,30 @@
+{
+  "type": "object",
+  "properties": {
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "The default model, by its catalog id as list_models answers it."
+    },
+    "effort": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "The default reasoning effort, as the model lists it."
+    },
+    "contextWindow": {
+      "type": "string",
+      "enum": [
+        "standard",
+        "long"
+      ],
+      "description": "The default context window, standard or long; leave it out for the model's standard one."
+    }
+  },
+  "required": [
+    "model",
+    "effort"
+  ],
+  "additionalProperties": false
+}
