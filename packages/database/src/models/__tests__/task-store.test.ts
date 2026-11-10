@@ -1195,6 +1195,34 @@ it.layer(getTestDB())("a task's move to Done or Canceled", (it) => {
         assert.equal(yield* archiveOf(dean, running), undefined);
       }),
   );
+
+  it.effect(
+    "a move from Done to Canceled archives its idle agents again as the new mover, and a move off it brings them back",
+    () =>
+      Effect.gen(function* () {
+        const { dean, charles, taskId, workspace } = yield* openSharedTask;
+        const idle = yield* openTaskAgent(dean, workspace, taskId);
+        const byHand = yield* openTaskAgent(dean, workspace, taskId);
+        yield* archiveAgent(dean, byHand, true);
+        const asDean = { by: AGENT_ARCHIVER.MEMBER, userId: dean } as const;
+        const asCharles = { by: AGENT_ARCHIVER.MEMBER, userId: charles } as const;
+
+        yield* updateTask(dean, taskId, { status: TASK_STATUS.DONE }, undefined, {
+          archivedBy: asDean,
+          idle: idleBut(""),
+        });
+        yield* TestClock.adjust("1 minute");
+        yield* updateTask(charles, taskId, { status: TASK_STATUS.CANCELED }, undefined, {
+          archivedBy: asCharles,
+          idle: idleBut(""),
+        });
+        assert.deepEqual(yield* archiveOf(dean, idle), { ...asCharles, withTask: true });
+
+        yield* updateTask(dean, taskId, { status: TASK_STATUS.IN_PROGRESS });
+        assert.equal(yield* archiveOf(dean, idle), undefined);
+        assert.notEqual(yield* archiveOf(dean, byHand), undefined);
+      }),
+  );
 });
 
 /** When the task was finished, as the account reads it in the list and opened alike, which must agree. */
