@@ -354,7 +354,7 @@ test("Vespin's read_agent, called over its MCP server and stored under its own n
   assert.deepEqual(opened, [{ kind: TOOL_TARGET.AGENT, agent: "agent-7" }]);
 });
 
-test("an agent's payer says whose it is: the reader's own, or the teammate who started it, by name", () => {
+test("an agent's payer says whose it is: the reader's own, by its name masked from a screen recording where it names one, or the teammate who started it, by name", () => {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -391,12 +391,27 @@ test("an agent's payer says whose it is: the reader's own, or the teammate who s
               owner: theo,
             }),
           ),
+          createElement(
+            "p",
+            null,
+            createElement(PayerValue, {
+              payer: AGENT_PAYER.CHATGPT_SUBSCRIPTION,
+              provider: MODEL_PROVIDER.OPENAI,
+              usage: undefined,
+              owner: undefined,
+              planName: "ana@work.com",
+            }),
+          ),
         ),
       ),
     ),
   );
-  const [own, theirs] = [...container.querySelectorAll("p")].map((line) => line.textContent);
+  const lines = [...container.querySelectorAll("p")];
+  const [own, theirs, named] = lines.map((line) => line.textContent);
   assert.equal(own, "Your Claude plan");
+  // Note that a plan's name may be the account's email, so its words are masked in a screen recording.
+  assert.equal(named, "Your Codex plan · ana@work.com");
+  assert.equal(lines[2]?.querySelector("[data-replay-mask]")?.textContent, named);
   // Note that the chip's face draws the teammate's initial before their name.
   assert.match(theirs ?? "", /Theo Lindqvist’s Anthropic API key · \$0\.42 so far$/);
   assert.doesNotMatch(theirs ?? "", /Your/);
