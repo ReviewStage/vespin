@@ -5,25 +5,29 @@
 appId: dev.vespin.ios
 ---
 # Launched on the host's Inbox fixture, as `skeleton.yaml` is, so no server is
-# reached; the description stands on the Tasks tab's placeholder rows.
+# reached; the description is the fixture's task's, which holds every piece
+# (`@repo/host/fixture-inbox`).
 - launchApp:
     clearState: true
     arguments:
       fixture: inbox
 - assertVisible: "Inbox"
 - tapOn: "Tasks"
-- tapOn: "Draw markdown in @repo/ui-native"
-- assertVisible: "What changed"
+- tapOn: "Teammate invitations"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Goal"
+    direction: DOWN
 - takeScreenshot: markdown-top
 - scrollUntilVisible:
-    element: "Simulator"
+    element: "Owner"
     direction: DOWN
 - takeScreenshot: markdown-table
 - scrollUntilVisible:
-    element: "A striped sample picture"
+    element: "The invite page"
     direction: DOWN
 - takeScreenshot: markdown-end
-- tapOn: "A striped sample picture"
+- tapOn: "The invite page"
 - assertVisible:
     id: "markdown-picture-done"
 - takeScreenshot: markdown-picture

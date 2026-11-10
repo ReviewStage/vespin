@@ -38,19 +38,19 @@ export const SETTINGS_SEARCH_ROW = {
   API_KEY_OPENAI: "api-key-openai",
   /** Skills' Add a skill row. */
   ADD_SKILL: "add-skill",
-  /** Our MCP page's Connected, the outside agents the account let in. */
+  /** Our MCP & CLI page's Connected, the outside agents the account let in. */
   MCP_CLIENTS: "mcp-clients",
-  /** Our MCP page's Connect an agent, the agent asked for and its step. */
+  /** Our MCP & CLI page's Connect an app, the agent asked for and its step. */
   MCP_CONNECT: "mcp-connect",
-  /** The CLI page's Install, the `vespin` command's install. */
+  /** Our MCP & CLI page's Install, the `vespin` command's install. */
   CLI_INSTALL: "cli-install",
-  /** The CLI page's Sign in, the command's sign-in and Sign out everywhere. */
+  /** Our MCP & CLI page's Sign in, the command's sign-in and Sign out everywhere. */
   CLI_SIGN_IN: "cli-sign-in",
   /** Hosts' Add hosts button, under its list. */
   ADD_HOSTS: "add-hosts",
   /** The Workspace page's identity row, where an owner or an admin renames the workspace. */
   WORKSPACE_RENAME: "workspace-rename",
-  /** The Workspace page's identity row, whose ⋯ holds the owner's Change slug. */
+  /** The Workspace page's identity row, whose ⋯ holds the owner's Change URL. */
   WORKSPACE_SLUG: "workspace-slug",
   /** Settings › Experimental's group of the experiments the workspace Settings shows chooses for everyone in it. */
   EXPERIMENTS_WORKSPACE: "experiments-workspace",

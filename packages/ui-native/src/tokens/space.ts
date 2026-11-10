@@ -26,6 +26,8 @@ export const MARK_SIZE = {
   AVATAR: 28,
   /** A teammate's face among a row's end marks, and on a chip. */
   FACE: 16,
+  /** The account's photo in a bar, inside the round glass the bar's other buttons stand in. */
+  BAR_FACE: 32,
 } as const;
 
 /** How round the bordered pieces stand: a card, such as an ask's or a pull request's, and a tag. */

@@ -62,7 +62,7 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * narrow as a card's row does, but at a list's tighter block inset and least
  * height and with its label at body weight.
  *
- * What rides the label's line without being its name, a Modified word or a
+ * What rides the label's line without being its name, a Saved tick or a
  * mark that something needs a hand, is the row's `adornment`: it stands after
  * the label, a short step off it, and the label alone still names the
  * control. What the row itself grows under its line, a control that needs
@@ -242,7 +242,7 @@ export function SettingsRow({
   description?: ReactNode;
   /** The face or mark the row leads with, before its words, where it stands for something of its own. */
   leading?: ReactNode;
-  /** What rides the label's line after it without naming the control: a Modified word, a mark. */
+  /** What rides the label's line after it without naming the control: a Saved tick, a mark. */
   adornment?: ReactNode;
   /** What went wrong with the last write, and the failure beneath it, or nothing while none did. */
   error?: ShownError | undefined;
@@ -477,15 +477,6 @@ export function SettingsSavedMark(): React.JSX.Element {
   return (
     <span className="ui-settings-saved-mark inline-flex text-complete in-[.ui-button]:ml-ui-4">
       <CheckIcon />
-    </span>
-  );
-}
-
-/** The word beside a row's name while its value differs from the default: a fact about a preference, never an urgency. */
-export function SettingsChangedMark(): React.JSX.Element {
-  return (
-    <span className="ui-settings-changed-mark text-caption leading-tag font-tag text-muted-foreground">
-      Modified
     </span>
   );
 }

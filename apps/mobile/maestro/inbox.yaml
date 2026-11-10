@@ -1,4 +1,4 @@
-# inbox.yaml -- the Inbox's list under its scope pills, its ⋯ menu, its search, a row's swipe and long press, and a thread with a picture opened full screen and a video in the system's player.
+# inbox.yaml -- the Inbox's list under its scope pills, the account's photo in its bar, its ⋯ menu, its search, a row's swipe and long press, and a thread with a picture opened full screen and a video in the system's player.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -12,13 +12,14 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
 - assertVisible: "Recorded the invite flow"
+# The account's photo leads the bar, heard as Settings: the fixture's account
+# has no picture, so its letters stand in it.
+- assertVisible: "Settings"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-list
-# The ⋯ menu: Mark all as read, and Settings under it. A tap off the menu
-# closes it.
+# The ⋯ menu: Mark all as read. A tap off the menu closes it.
 - tapOn: "More"
 - assertVisible: "Mark all as read"
-- assertVisible: "Settings"
 - takeScreenshot: inbox-more
 - tapOn:
     point: "50%, 90%"
@@ -55,13 +56,18 @@ appId: dev.vespin.ios
 - assertVisible: "Mark as read"
 - takeScreenshot: inbox-menu
 - tapOn: "Mark as read"
-# Note that the row is scrolled to the middle rather than to the first point
-# it shows, because the folded Duo then stands it against the top edge, where a
-# tap a point or two higher no longer opens it.
-- scrollUntilVisible:
-    element: "Recorded the invite flow"
-    direction: UP
-    centerElement: true
+# Note that the list is scrolled back to its first row, rather than to the
+# first point this row shows, because the folded Duo then stands it against the
+# top edge, where a tap a point or two higher no longer opens it. Neither row
+# can be scrolled to the middle, since a list at its top scrolls no further,
+# and a window that shows the row already scrolls not at all.
+- runFlow:
+    when:
+      notVisible: "Recorded the invite flow"
+    commands:
+      - scrollUntilVisible:
+          element: "Who can withdraw an invite\\?"
+          direction: UP
 # A thread opens on its path small in the bar and its title as the page's
 # heading, then each message: the agent's tile, name and time over its words,
 # its picture drawn where the words name it, and its recording after the

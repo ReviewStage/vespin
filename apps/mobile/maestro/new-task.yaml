@@ -1,0 +1,35 @@
+# new-task.yaml -- New task from the tab bar's round +: Home's composer as a sheet, the task described, its repository and model picked, and the task started with its agent, the agent's page opened.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, whose models and repositories are
+# staged and whose task start is answered with the task made and its agent
+# starting (`@repo/host/fixture-inbox`), so nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Inbox"
+- tapOn: "New task"
+- assertVisible: "Describe the task"
+- assertVisible: "Repository"
+- waitForAnimationToEnd
+- takeScreenshot: new-task-sheet
+- inputText: "Let a workspace owner revoke a pending invite."
+- hideKeyboard
+# The repository's menu offers what the workspace's GitHub reaches.
+- tapOn: "Repository.*"
+- assertVisible: "ada/ledger"
+- waitForAnimationToEnd
+- takeScreenshot: new-task-repositories
+- tapOn: "ada/ledger"
+- waitForAnimationToEnd
+- takeScreenshot: new-task-filled
+- tapOn: "Start"
+- extendedWaitUntil:
+    notVisible: "Describe the task"
+    timeout: 5000
+- waitForAnimationToEnd
+- takeScreenshot: new-task-started

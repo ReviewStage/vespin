@@ -8,7 +8,8 @@
  */
 
 import type { RunProfile } from "@repo/host/app-state";
-import { Effect, type Layer, ManagedRuntime } from "effect";
+import { followStream, type OpenedStream } from "@repo/host/follow-stream";
+import { Effect, Fiber, type Layer, ManagedRuntime } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
@@ -31,8 +32,15 @@ export interface MobileHostStartOptions {
   readonly httpClient?: Layer.Layer<HttpClient.HttpClient>;
 }
 
-/** The host as started: what the screens read and act through, and its close, which drains it. */
+/** A stream the screens hold open on the act port, such as a transcript's follow, until the stop handed back is called. */
+export type HostFollow = <View>(
+  open: () => Promise<OpenedStream<View>>,
+  take: (view: View) => void,
+) => () => void;
+
+/** The host as started: what the screens read and act through, the follows they hold open, and its close, which drains it. */
 export interface StandingMobileHost extends MobileHost {
+  readonly follow: HostFollow;
   readonly close: () => Promise<void>;
 }
 
@@ -63,7 +71,14 @@ export async function startMobileHost(
   );
   try {
     const host = await runtime.runPromise(MobileHostTag);
-    return { bridge: host.bridge, acts: host.acts, close: () => runtime.dispose() };
+    // A follow runs on the host's runtime, opened again as it breaks, until its stop interrupts it.
+    const follow: HostFollow = (open, take) => {
+      const fiber = runtime.runFork(followStream(open, take));
+      return () => {
+        runtime.runFork(Fiber.interrupt(fiber));
+      };
+    };
+    return { bridge: host.bridge, acts: host.acts, follow, close: () => runtime.dispose() };
   } catch (error) {
     await runtime.dispose();
     throw error;

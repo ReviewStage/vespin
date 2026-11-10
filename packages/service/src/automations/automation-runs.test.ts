@@ -748,8 +748,9 @@ it.layer(SUITE)("an automation's runs", (it) => {
         yield* ranTurn(departing.owner, orphaned, TURN_STATUS.SETTLED);
         // Its starter gone from the workspace, the agent is no one's to archive.
         yield* leaveWorkspace(departing.workspaceId, departing.owner);
+        const askingTask = Option.getOrThrow(yield* readAgent(archiving.owner, asking)).taskId;
         const question = yield* postInboxThread(
-          { userId: archiving.owner, taskId: null, agentId: asking },
+          { userId: archiving.owner, taskId: askingTask, agentId: asking },
           {
             key: "which-queue",
             title: "Which queue?",

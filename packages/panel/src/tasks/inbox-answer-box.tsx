@@ -14,6 +14,7 @@ import { AgentComposer } from "./agent-composer.js";
 import { useInboxAcknowledger } from "./inbox-acknowledge.js";
 import { focusMissing } from "./inbox-ask-controls.js";
 import { inboxNoteReading } from "./inbox-model.js";
+import { putBackRefused } from "./refused-send.js";
 import { ReplyToSelection } from "./reply-to-selection.js";
 import type { SkillSource } from "./skill-picker.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
@@ -215,9 +216,6 @@ function AnswerCard({
   const attempt = useRef<{ readonly key: string; readonly words: string } | undefined>(undefined);
   const starts = newThread !== undefined && asNew;
   const asks = controls !== undefined && !starts;
-  // The draft as it stands now, which a start landing later reads rather than the one it was sent from.
-  const standing = useRef(draft);
-  standing.current = draft;
   // Note that only a nod and a thread start hold the box; a reply leaves it at once and the next may follow.
   const sending = control.sending.has(item.id) || starting;
   const acknowledgeHeld = useInboxAcknowledger();
@@ -292,7 +290,7 @@ function AnswerCard({
   };
   // Note that the same words and files sent again go under the key they went under, so a retry starts one thread.
   // The box lets go of what it sent at once, as a reply does, so words written while the start is out stay
-  // there; a start refused puts what it sent back only into a box that holds nothing, so neither is lost.
+  // there; a start refused puts what it sent back ahead of them (`refused-send.ts`), so neither is lost.
   const start = (offer: AnswerNewThread) => {
     const sent = { note: draft.note, attachments: draft.attachments };
     const text = sent.note.trim();
@@ -310,7 +308,11 @@ function AnswerCard({
         return;
       }
       setRefusal(refused);
-      if (emptyBox(standing.current)) control.onDraft(item, { ...standing.current, ...sent });
+      putBackRefused({
+        went: { text: sent.note, attachments: sent.attachments },
+        most: INBOX_BOUNDS.MAX_MESSAGE_CHARS,
+        update: (next) => control.onHeld(item, next),
+      });
     });
   };
   const composer: AgentComposerControl = {

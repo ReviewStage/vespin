@@ -5,7 +5,7 @@ import {
   automationTriggerText,
 } from "@repo/features/automation-list-model";
 import { AUTOMATION_SCOPE, type AutomationSummary } from "@repo/features/automation-wire";
-import { INBOX_HOLDER, NEEDS_YOU, waitsOnReaderNow } from "@repo/features/inbox-list-model";
+import { NEEDS_YOU, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { inboxWaitsOn } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -728,11 +728,8 @@ function PersonColumn({
   // An item is theirs where it waits on them (`inboxWaitsOn`), on a task its assignee or else its agent's starter, by the list followed live from a service that names neither.
   // On the reader's own page it must also wait on them now as the sidebar's Inbox row counts it (`waitsOnReaderNow`), so one with a reminder still ahead is left out until it comes due.
   const waiting = read.items.filter(
-    ({ holder, item }) =>
-      (inboxWaitsOn(item)?.userId ??
-        (holder.kind === INBOX_HOLDER.TASK
-          ? agentStarter(liveAgents, item.agentId)
-          : undefined)) === userId &&
+    ({ item }) =>
+      (inboxWaitsOn(item)?.userId ?? agentStarter(liveAgents, item.agentId)) === userId &&
       (!you || waitsOnReaderNow(item, tasks.me, now)),
   );
   // Nobody the workspace's members or those who left name, as a link to someone outside it opens, is not found here; until both are read, nobody is.

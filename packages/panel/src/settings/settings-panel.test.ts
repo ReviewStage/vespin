@@ -150,7 +150,7 @@ test("This Mac says under Ask every time where macOS refused Vespin's last notif
   assert.equal(opened, 1);
 });
 
-test("the web's Account page asks a browser never asked to show the notifications the account turned on elsewhere", () => {
+test("the web's Preferences page asks a browser never asked to show the notifications the account turned on elsewhere", () => {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -163,6 +163,7 @@ test("the web's Account page asks a browser never asked to show the notification
       withQueryClient(
         createElement(SettingsPanel, {
           ...SETTINGS,
+          view: SETTINGS_VIEW.PREFERENCES,
           settings: settingsView({ turnNotifications: true }),
           capabilities: DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.DESKTOP_APP),
         }),

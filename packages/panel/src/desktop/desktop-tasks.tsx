@@ -9,6 +9,7 @@ import type {
   TaskCreateRelationKind,
   TaskStanding,
 } from "@repo/features/task-wire";
+import { DOCUMENT_REGION, RENAME_FAILED_NOTE, TASKS_PAGE } from "@repo/features/tasks-model";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
@@ -45,10 +46,9 @@ import {
   subagentTab,
   TAB_WORDS,
 } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, RENAME_FAILED_NOTE, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import { useMutation } from "@tanstack/react-query";
-import { Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Activity, Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { AutomationDirectory } from "../automation-directory.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
@@ -1483,30 +1483,36 @@ function DescriptionDocument({
                       </>
                     }
                   >
-                    {/* Note that the panel stands while its toggle asks for its "+" with nothing to show, drawing the menu alone. */}
-                    {!detailsWide && (drawing.panel !== undefined || sidePanel.toggleAsked) ? (
-                      <SidePanel
-                        {...drawing}
-                        panel={drawing.panel ?? sidePanel}
-                        unread={tasks.unreadTabs}
-                        holder={SIDE_PANEL_HOLDER.TASK}
-                        taskId={task.id}
-                        repository={task.repository}
-                        pages={tasks.pages}
-                        agents={agents}
-                        openAgents={mainTabs.openAgents}
-                        shownAgent={followedAgent(mainTabs.tab, {
-                          shown: tasks.shown,
-                          covered: sidePanel.fullScreen,
-                        })}
-                        views={views}
-                        shown={tasks.shown}
-                        focused={sideFocused}
-                        onOpenTarget={openTarget}
-                        banner={stranded.banner}
-                        taskOfTab={tasks}
-                        activity={phone ? { onShown: setShownTab } : undefined}
-                      />
+                    {/* Note that the panel stands while its toggle asks for its "+" with
+          nothing to show, drawing the menu alone; and that it is hidden under
+          `Activity` while the details take the page, rather than left out, so
+          the pages it keeps drawn (`kept-pages.ts`) stand as they were left
+          when the details are left. */}
+                    {drawing.panel !== undefined || sidePanel.toggleAsked ? (
+                      <Activity mode={detailsWide ? "hidden" : "visible"}>
+                        <SidePanel
+                          {...drawing}
+                          panel={drawing.panel ?? sidePanel}
+                          unread={tasks.unreadTabs}
+                          holder={SIDE_PANEL_HOLDER.TASK}
+                          taskId={task.id}
+                          repository={task.repository}
+                          pages={tasks.pages}
+                          agents={agents}
+                          openAgents={mainTabs.openAgents}
+                          shownAgent={followedAgent(mainTabs.tab, {
+                            shown: tasks.shown,
+                            covered: sidePanel.fullScreen,
+                          })}
+                          views={views}
+                          shown={tasks.shown}
+                          focused={sideFocused}
+                          onOpenTarget={openTarget}
+                          banner={stranded.banner}
+                          taskOfTab={tasks}
+                          activity={phone ? { onShown: setShownTab } : undefined}
+                        />
+                      </Activity>
                     ) : null}
                     {stranded.dialog}
                   </TaskPage>

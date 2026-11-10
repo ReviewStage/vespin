@@ -1,6 +1,10 @@
 import { Schema as EffectSchema } from "effect";
 import { accountInboxAnswerSchema } from "./account-inbox-wire.js";
 import {
+  agentPermissionModeRequestSchema,
+  approvalAnswerRequestSchema,
+} from "./agent-approval-wire.js";
+import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
   agentAddRepositoryRequestSchema,
@@ -29,6 +33,7 @@ import { hostsContract } from "./contract/hosts.js";
 import { inboxContract } from "./contract/inbox.js";
 import { messagesContract } from "./contract/messages.js";
 import { modelsContract } from "./contract/models.js";
+import { pushDevicesContract } from "./contract/push-devices.js";
 import { CONVERSATION_MEDIA_TYPE } from "./conversation-picture-wire.js";
 import { dictationRequestSchema } from "./dictation-wire.js";
 import { failureFactsSchema } from "./failure-facts.js";
@@ -44,6 +49,7 @@ import {
   inboxMessageRequestSchema,
   inboxReadAllRequestSchema,
   inboxStartRequestSchema,
+  inboxTakeBackRequestSchema,
 } from "./inbox-wire.js";
 import { memoryIdSchema } from "./memory-wire.js";
 import { modelChoiceSchema, modelProviderSchema } from "./models-wire.js";
@@ -59,6 +65,11 @@ import {
   subscriptionOrderRequestSchema,
 } from "./provider-key-wire.js";
 import { pullRequestActionRequestSchema } from "./pull-request-write-wire.js";
+import {
+  pushDeviceNotifyRequestSchema,
+  pushDeviceRegisterRequestSchema,
+  pushDeviceUnregisterRequestSchema,
+} from "./push-device-wire.js";
 import { repositoryUnreachedSchema } from "./repository-reach-wire.js";
 import { countedNumber, HOSTED_API_ERROR, wireUuidSchema } from "./service-wire.js";
 import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
@@ -101,6 +112,7 @@ export const AGENT_RENAMES = {
 const AGENT_ACCOUNT_CALLS = {
   models: modelsContract,
   dictation: dictationContract,
+  pushDevices: pushDevicesContract,
   githubToken: githubTokenContract,
   account: {
     writePreferences: accountContract.writePreferences,
@@ -263,6 +275,7 @@ const AGENT_MESSAGE_CALLS = {
   inbox: {
     answer: inboxContract.answer,
     close: inboxContract.close,
+    takeBack: inboxContract.takeBack,
     message: inboxContract.message,
     start: inboxContract.start,
     home: inboxContract.home,
@@ -598,6 +611,11 @@ export const agentDeleteAnswerViewSchema = answerView(agentsContract.delete, {
 
 export type AgentDeleteAnswerView = typeof agentDeleteAnswerViewSchema.Type;
 
+/** An ask answered, as the window hears it: how the ask then stands, or why it was not answered, an ask settled already naming how it stands. */
+export const agentApprovalAnswerViewSchema = answerView(agentsContract.answerApproval);
+
+export type AgentApprovalAnswerView = typeof agentApprovalAnswerViewSchema.Type;
+
 /** An agent on screen kept warm, as the window hears it: that the service took the call, or why not. */
 export const agentWarmAnswerViewSchema = answerView(agentsContract.warm);
 
@@ -704,6 +722,23 @@ export const agentServersParamsSchema = EffectSchema.Struct({
 });
 
 export type AgentServersParams = typeof agentServersParamsSchema.Type;
+
+/** One agent's permission mode changed for its next turn, as the window asks it: the agent and the mode. */
+export const agentPermissionModeParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  ...agentPermissionModeRequestSchema.fields,
+});
+
+export type AgentPermissionModeParams = typeof agentPermissionModeParamsSchema.Type;
+
+/** One ask of an agent answered, as the window asks it: the agent, the ask, and the answer with a denial's words. */
+export const agentApprovalAnswerParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  approvalId: EffectSchema.NonEmptyString,
+  ...approvalAnswerRequestSchema.fields,
+});
+
+export type AgentApprovalAnswerParams = typeof agentApprovalAnswerParamsSchema.Type;
 
 /** A repository added to one agent beside the ones it works in, as the window asks it of the host. */
 export const agentAddRepositoryParamsSchema = EffectSchema.Struct({
@@ -873,6 +908,36 @@ export const dictationTranscribeAnswerViewSchema = answerView(dictationContract.
 
 export type DictationTranscribeAnswerView = typeof dictationTranscribeAnswerViewSchema.Type;
 
+/** The phone the app runs on, as it registers itself for pushes: its APNs token, its build's gateway, and its app. */
+export const pushDeviceRegisterParamsSchema = pushDeviceRegisterRequestSchema;
+
+export type PushDeviceRegisterParams = typeof pushDeviceRegisterParamsSchema.Type;
+
+/** The phone named by its token and gateway, as its unregister and its standing's read name it. */
+export const pushDeviceKeyParamsSchema = pushDeviceUnregisterRequestSchema;
+
+export type PushDeviceKeyParams = typeof pushDeviceKeyParamsSchema.Type;
+
+/** The phone's "Notify me" set, by its token and gateway. */
+export const pushDeviceNotifyParamsSchema = pushDeviceNotifyRequestSchema;
+
+export type PushDeviceNotifyParams = typeof pushDeviceNotifyParamsSchema.Type;
+
+/** A register or an unregister as the app hears it: done, or why not. */
+export const pushDeviceDoneAnswerViewSchema = answerView(pushDevicesContract.register);
+
+export type PushDeviceDoneAnswerView = typeof pushDeviceDoneAnswerViewSchema.Type;
+
+/** The phone's standing as its Settings reads it: its "Notify me" and how its pushes fared, or why not, a phone the service does not hold among it. */
+export const pushDeviceStatusAnswerViewSchema = answerView(pushDevicesContract.status);
+
+export type PushDeviceStatusAnswerView = typeof pushDeviceStatusAnswerViewSchema.Type;
+
+/** A "Notify me" set as the app hears it: done, or why not, a phone the service does not hold among it. */
+export const pushDeviceNotifyAnswerViewSchema = answerView(pushDevicesContract.notify);
+
+export type PushDeviceNotifyAnswerView = typeof pushDeviceNotifyAnswerViewSchema.Type;
+
 /** Whose inbox is followed: a plan's, or one agent's. */
 export const INBOX_SCOPE_KIND = {
   PLAN: "plan",
@@ -895,16 +960,10 @@ const agentInboxAnswerViewSchema = EffectSchema.Union([inboxAnswerSchema, failed
 
 export type AgentInboxAnswerView = typeof agentInboxAnswerViewSchema.Type;
 
-/**
- * A nod on one notice of the inbox, Got it, as the window asks it: the
- * item, and the acknowledgment the service takes, its key the window's own;
- * and, where it is `held`, that the window offers Undo for it, held and let
- * go as a close is (`agentInboxCloseParamsSchema`).
- */
+/** A nod on one notice of the inbox, Got it, as the window asks it: the item, and the acknowledgment the service takes, its key the window's own. */
 export const agentInboxAnswerParamsSchema = EffectSchema.Struct({
   itemId: EffectSchema.NonEmptyString,
   ...inboxAcknowledgeRequestSchema.fields,
-  held: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 export type AgentInboxAnswerParams = typeof agentInboxAnswerParamsSchema.Type;
@@ -918,11 +977,10 @@ export type AgentInboxAnsweredView = typeof agentInboxAnsweredViewSchema.Type;
 
 /**
  * A close of one item without an answer, as the window asks it: the item,
- * and the close request the service takes, its key the window's own; and,
- * where it is `held`, that the window offers Undo for it, so the host draws
- * it at once and sends it only once the window lets it go
- * (`agentInboxReleaseParamsSchema`). It is heard as an answer is
- * (`agentInboxAnsweredViewSchema`).
+ * and the close request the service takes, its key the window's own. It is
+ * heard as an answer is (`agentInboxAnsweredViewSchema`). Note that a close
+ * an older build queued on disk may name `held`, which the host held it
+ * under then and now reads as nothing.
  */
 export const agentInboxCloseParamsSchema = EffectSchema.Struct({
   itemId: EffectSchema.NonEmptyString,
@@ -932,16 +990,20 @@ export const agentInboxCloseParamsSchema = EffectSchema.Struct({
 
 export type AgentInboxCloseParams = typeof agentInboxCloseParamsSchema.Type;
 
-/** A held close or nod let go by the window that asked it, by its key: sent to the service, or, where `send` is false, taken back as its Undo asks. */
-export const agentInboxReleaseParamsSchema = EffectSchema.Struct({
-  clientKey: EffectSchema.NonEmptyString,
-  send: EffectSchema.Boolean,
+/** The member's own nod or close taken back, as the window asks it: the item, and the key that nod or close went under (`inboxTakeBackRequestSchema`). */
+export const agentInboxTakeBackParamsSchema = EffectSchema.Struct({
+  itemId: EffectSchema.NonEmptyString,
+  ...inboxTakeBackRequestSchema.fields,
 });
 
-/** What letting a held close or nod go found: whether it was still held, which an Undo that came too late hears as false. */
-export const agentInboxReleasedViewSchema = EffectSchema.Struct({
-  held: EffectSchema.Boolean,
-});
+export type AgentInboxTakeBackParams = typeof agentInboxTakeBackParamsSchema.Type;
+
+/** A take-back, as the window hears it: the item as it then stands and what came of the take-back, or why there is no answer. */
+export const agentInboxTakenBackViewSchema = factsUnheard(
+  answerView(inboxContract.takeBack, { as: AGENT_INBOX_WRITE_RENAMES }),
+);
+
+export type AgentInboxTakenBackView = typeof agentInboxTakenBackViewSchema.Type;
 
 /** A message on one item's thread, as the window asks it: the item, and the message request the service takes, its key the window's own. */
 export const agentInboxMessageParamsSchema = EffectSchema.Struct({

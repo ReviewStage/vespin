@@ -1101,7 +1101,6 @@ const composedTab = (
     yield* account.link({
       startCapabilities: Effect.void,
       stopCapabilities: Effect.void,
-      settleHeld: Effect.void,
     });
     yield* account.lifetime;
     yield* settings.lifetime;

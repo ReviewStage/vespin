@@ -7,6 +7,7 @@ import {
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
 import type { TaskPullRequestLine, TaskSummary } from "@repo/features/task-wire";
+import { repositoryPageUrl } from "@repo/features/tasks-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import {
   AttentionMark,
@@ -34,7 +35,6 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, actorName, SOMEONE_REASON } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
-import { repositoryPageUrl } from "@repo/ui/tasks-model";
 import { priorityOf, statusOf } from "@repo/ui/tasks-page-model";
 import { ACTOR_SIZE, ActorMark, actorCard, UnassignedMark } from "../actor-ref.js";
 import { useCreator, useMemberDirectory, usePerson } from "../member-directory.js";

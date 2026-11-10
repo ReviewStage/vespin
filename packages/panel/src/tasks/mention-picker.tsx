@@ -463,11 +463,11 @@ interface RepositoryPath {
   readonly folder: boolean;
 }
 
-/** The highlight as it was moved, held against the word it was moved in. */
+/** The highlight, held against the word it stands in by the key of the row it stands on (`rowKey`), so a row read late never takes its place. */
 interface Highlight {
   readonly start: number;
   readonly query: string;
-  readonly at: number;
+  readonly key: string;
 }
 
 /** A folder the list walked into: its path, and the words as they stood then, past which the words typed search it. */
@@ -1955,19 +1955,44 @@ export function useMentionPicker({
     : [];
   // Words typed past a space that match nothing are prose, not a mention: the list stands aside, and comes back only if they match again.
   const shown = open && (rows.length > 0 || !/\s/u.test(term.trim()));
-  const held =
+  const heldKey =
     highlight !== undefined &&
     trigger !== undefined &&
     highlight.start === trigger.start &&
     highlight.query === trigger.query
-      ? highlight.at
-      : 0;
-  const at = Math.min(held, Math.max(rows.length - 1, 0));
+      ? highlight.key
+      : undefined;
+  // A row no longer listed gives the highlight back to the first row, as new words do.
+  const at = Math.max(
+    heldKey === undefined ? 0 : rows.findIndex((row) => rowKey(row) === heldKey),
+    0,
+  );
+  // Note that the row drawn highlighted is held by its key, the first row's
+  // too, because a read that lands late (the workspace's agents, its
+  // people) lays rows above it, and Enter must write the row the developer
+  // saw highlighted rather than whichever row slid into its place.
+  const shownKey = rows[at] === undefined ? undefined : rowKey(rows[at]);
+  const wordStart = trigger?.start;
+  const wordQuery = trigger?.query;
+  useEffect(() => {
+    if (shownKey === undefined || wordStart === undefined || wordQuery === undefined) return;
+    setHighlight((held) =>
+      held?.start === wordStart && held.query === wordQuery && held.key === shownKey
+        ? held
+        : { start: wordStart, query: wordQuery, key: shownKey },
+    );
+  }, [shownKey, wordStart, wordQuery]);
+  // A key or the pointer moves the highlight onto the row at `index`.
+  const highlightRow = (index: number) => {
+    const row = rows[index];
+    if (trigger !== undefined && row !== undefined)
+      setHighlight({ start: trigger.start, query: trigger.query, key: rowKey(row) });
+  };
   // The list narrowed or widened by a key starts again at its first row.
   const narrowTo = (next: Held | undefined) => {
     if (trigger === undefined) return;
     setNarrowing(next);
-    setHighlight({ start: trigger.start, query: trigger.query, at: 0 });
+    setHighlight(undefined);
   };
   // A kind's row narrows the list to it; a folder's walks into it, narrowing a wide list to files and folders.
   const openRow = (row: MentionRow) => {
@@ -2045,10 +2070,7 @@ export function useMentionPicker({
     count: rows.length,
     controls: listId,
     activeId,
-    onActiveChange: (index) => {
-      if (trigger !== undefined)
-        setHighlight({ start: trigger.start, query: trigger.query, at: index });
-    },
+    onActiveChange: highlightRow,
     onChoose: (index) => {
       const row = rows[index];
       if (row !== undefined) choose(row);
@@ -2122,7 +2144,7 @@ export function useMentionPicker({
       failures={failures}
       rowCard={rowCard}
       rowGlyph={rowGlyph}
-      onHover={(index) => setHighlight({ start: trigger.start, query: trigger.query, at: index })}
+      onHover={highlightRow}
       onChoose={choose}
     />
   );

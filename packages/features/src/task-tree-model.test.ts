@@ -1,5 +1,4 @@
 import { expect, test } from "vitest";
-import { TASK_ROW } from "./task-list-model.js";
 import { searchedTasks, type TaskTree, taskTree } from "./task-tree-model.js";
 import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
 
@@ -50,10 +49,7 @@ function drawn(tree: TaskTree): readonly (readonly string[])[] {
   return [...(tree.pinned === undefined ? [] : [tree.pinned]), ...tree.sections, ...tree.tasks].map(
     (group) => [
       group.title ?? "",
-      ...group.rows.map(
-        ({ row, depth }) =>
-          `${"  ".repeat(depth)}${row.kind === TASK_ROW.TASK ? row.task.name : ""}`,
-      ),
+      ...group.rows.map(({ task: each, depth }) => `${"  ".repeat(depth)}${each.name}`),
     ],
   );
 }

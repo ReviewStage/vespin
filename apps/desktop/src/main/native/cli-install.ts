@@ -11,7 +11,7 @@ import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import { printed } from "./this-mac-host";
 
 /**
- * cli-install.ts -- the `vespin` command installed into this Mac's account, as Settings' MCP page's Install command-line tool asks: the service's install script run in its `cli` mode, the way This Mac's host runs it for the host.
+ * cli-install.ts -- the `vespin` command installed into this Mac's account, as Settings' MCP & CLI page's Install asks: the service's install script run in its `cli` mode, the way This Mac's host runs it for the host.
  *
  * The script is the service's own, at the origin the app signs in to, never
  * one a window names, and runs with `/bin/sh` through This Mac's host's own

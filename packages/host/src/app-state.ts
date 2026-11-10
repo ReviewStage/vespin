@@ -122,6 +122,8 @@ export const RUN_PROFILE = {
   AGENT_PAGE: "agent-page",
   /** A synthetic account signed in, Settings opened at launch on its Account page. */
   SETTINGS_ACCOUNT: "settings-account",
+  /** The same account, Settings on Preferences: its team's Slack bot connected, so Slack notifications stand under Notifications. */
+  SETTINGS_PREFERENCES: "settings-preferences",
   /** The same account, Settings on its team's workspace: its members and an invitation waiting. */
   SETTINGS_WORKSPACE: "settings-workspace",
   /** The same account, Settings on Agents: its Claude plan connected and its ChatGPT sign-in expired. */
@@ -130,7 +132,7 @@ export const RUN_PROFILE = {
   SETTINGS_HOSTS: "settings-hosts",
   /** The same account, Settings on Integrations: some connected, some with their sign-in expired. */
   SETTINGS_INTEGRATIONS: "settings-integrations",
-  /** The same account, Settings on MCP: the agents it let in and how to connect another. */
+  /** The same account, Settings on MCP & CLI: the agents it let in, how to connect another, and the `vespin` command's install and sign-in. */
   SETTINGS_MCP: "settings-mcp",
   /** The same account, Settings on Skills: its team's and its own. */
   SETTINGS_SKILLS: "settings-skills",
@@ -234,57 +236,6 @@ export interface AppInboxTaskHolding {
 }
 
 /**
- * One inbox item of an agent an automation started with no task, waiting on
- * the developer: the item as a task's are, the agent as its row names it
- * now, and the automation and repository standing where a task would; the
- * automation, and its name, null where the reader may not read it or none
- * stands, and the repository null for an agent that works in none.
- */
-export interface AppInboxTasklessItem extends AppInboxWaitingItem {
-  /** When the item last changed, by the service's clock, which a follow of its agent's inbox is current once it holds. */
-  updatedAt: number;
-  agentTitle: string | null;
-  agentModel: string;
-  automationId: string | null;
-  automationName: string | null;
-  repository: string | null;
-  /** The workspace the agent belongs to, whose Inbox lists the item; absent from a service before it. */
-  workspaceId?: string;
-  /** The account that started the agent, whom the item waits on; absent where the service does not say, when it is the reader's own. */
-  startedBy?: string;
-  /** The account the item waits on: the member its agent addressed it to, else its starter; absent from a service before it, which reads as waiting on `startedBy`. */
-  waitsOn?: string;
-}
-
-/** One automation holding items of its runs' agents with no task, waiting or settled, as a task holding items is listed: how many, and when the latest changed; null for the agents no automation the reader may read names. */
-interface AppInboxAutomationHolding {
-  automationId: string | null;
-  items: number;
-  updatedAt: number;
-}
-
-/**
- * One agent with no task holding inbox items, waiting or settled, as a task
- * holding items is listed: how many, how many are the reader's to do, and
- * when the latest changed, by the service's clock; and the agent as an item
- * of it names it, since one whose items are all settled has none waiting.
- */
-export type AppInboxAgentHolding = Pick<
-  AppInboxTasklessItem,
-  | "agentId"
-  | "agentTitle"
-  | "agentModel"
-  | "automationId"
-  | "automationName"
-  | "repository"
-  | "workspaceId"
-  | "updatedAt"
-> & {
-  items: number;
-  toDo: number;
-};
-
-/**
  * What waits on the developer across the account's tasks, as main's own
  * read of it last answered (`@repo/host/agent-notices`): each task with an
  * open inbox item, the task whose item changed latest first. What the
@@ -295,12 +246,6 @@ export interface AppInboxSlice {
   waiting: readonly AppInboxTask[];
   /** Every task holding an inbox item, waiting or settled, the task whose item changed latest first: what the window's Inbox lists. */
   tasks: readonly AppInboxTaskHolding[];
-  /** The open items of agents with no task in the account's workspaces, every member's, the latest changed first, as the window's Inbox lists them; those of the reader's own agents (`startedBy`) alone wait on it and count with the tasks'. */
-  taskless: readonly AppInboxTasklessItem[];
-  /** Every automation holding items of its agents with no task, as `tasks` lists the tasks. */
-  automations: readonly AppInboxAutomationHolding[];
-  /** Every agent with no task holding an inbox item, waiting or settled, as `tasks` lists the tasks; none from a service before it. */
-  agents: readonly AppInboxAgentHolding[];
   /** The newest run of each of the account's own automations that failed to start lately, the latest first, which marks the window's Automations until that automation is opened. */
   failedRuns: readonly AccountFailedRun[];
 }
@@ -398,11 +343,12 @@ type ByInboxHolder<Value> = {
 
 /**
  * Every inbox item the account reaches, settled ones of the read's window
- * among them, by the plan each is on, or its agent where that has no task,
- * each holder's in the order its own read answers them. A holder it holds
- * nothing of holds nothing now.
+ * among them, by the plan each is on, each plan's in the order its own read
+ * answers them. A plan it holds nothing of holds nothing now.
  */
-export type AppInboxItems = ByInboxHolder<readonly InboxItem[]>;
+export type AppInboxItems = {
+  readonly [INBOX_SCOPE_KIND.PLAN]: Readonly<Record<string, readonly InboxItem[]>>;
+};
 
 /** One plan's or agent's own inbox, as the host's read of it stands: its items whole, every open one and the latest settled, once it answered. */
 export type AppHolderInbox = AppHostRead<readonly InboxItem[]>;

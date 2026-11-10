@@ -1,10 +1,5 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import {
-  type DrawnTaskRow,
-  type TaskRow,
-  type TasksById,
-  taskRowKey,
-} from "@repo/features/task-list-model";
+import type { DrawnTaskRow, TasksById } from "@repo/features/task-list-model";
 import {
   TASK_SECTION_BOUNDS,
   TASK_SECTION_ICON_KIND,
@@ -632,19 +627,14 @@ export function moveToSectionEntry(
   };
 }
 
-/** The tasks among a section's rows, in its order. */
-function drawnSectionTasks(drawn: DrawnSection): TaskSummary[] {
-  return drawn.rows.map((row) => row.task);
-}
-
 /** What every section is drawn with. */
 interface SectionContext {
   readonly tasks: TasksControl;
   readonly dialogs: SectionDialogs;
   /** What the sidebar names in place. */
   readonly edits: SectionEdits;
-  /** Whether a row is the open one, the open task's, which a fold leaves standing. */
-  readonly current: (row: TaskRow) => boolean;
+  /** Whether a task is the open one, which a fold leaves standing. */
+  readonly current: (task: TaskSummary) => boolean;
   /** Whether a task is unread, as its row's weight says. */
   readonly unread: (task: TaskSummary) => boolean;
   /** Whether the sidebar is in sight, which the menus close without. */
@@ -664,7 +654,7 @@ interface SectionContext {
   /** Where the column's runs of rows stand (`SidebarRun`). */
   readonly runs: SidebarRunsPlace;
   /** Hears a row let go over another zone: a section by its id, Tasks, or Pinned. */
-  readonly onDropRow: (row: TaskRow, zone: string, at: number) => void;
+  readonly onDropRow: (task: TaskSummary, zone: string, at: number) => void;
   /** Hears a row lifted into a drag and that drag ended, while which an empty Pinned stands to take it. */
   readonly onCarried: (carried: boolean) => void;
 }
@@ -708,7 +698,7 @@ function sectionActionGroups(
       onSelect: () => dialogs.askDelete(section, doors.opener.current),
     },
   ];
-  const read: MenuEntry[] = drawnSectionTasks(drawn).some(context.unread)
+  const read: MenuEntry[] = drawn.tasks.some(context.unread)
     ? [{ label: "Mark all as read", icon: <MailOpenIcon />, onSelect: doors.onMarkRead }]
     : [];
   return [[...edit, ...read], remove];
@@ -725,19 +715,19 @@ function sectionActionGroups(
 function SectionRows({
   drawn,
   context,
-  rows,
+  tasks,
   folded,
 }: {
   drawn: DrawnSection;
   context: SectionContext;
-  rows: readonly TaskRow[];
+  tasks: readonly TaskSummary[];
   folded: boolean;
 }): React.JSX.Element {
-  const nested = useNestedRows(rows, context.opened, context.current, context.every);
+  const nested = useNestedRows(tasks, context.opened, context.current, context.every);
   // Note that a row on its way out has no place among the rows a drag or a menu moves.
-  const shown = useLeaving(nested, ({ row }) => taskRowKey(row));
+  const shown = useLeaving(nested, ({ task }) => task.id);
   const keys = useMemo(() => shown.map(({ key }) => key), [shown]);
-  const listedAt = new Map(nested.map(({ row }, at) => [taskRowKey(row), at]));
+  const listedAt = new Map(nested.map(({ task }, at) => [task.id, at]));
   // Note that a row is heard by its place among the rows drawn, rows on their way out among them, and found among those listed by its key, as the slot it is carried to is (`listedSlot`).
   const fromListed = (from: number) => {
     const key = shown[from]?.key;
@@ -745,7 +735,7 @@ function SectionRows({
   };
   const storedAt = (at: number) => {
     const held = nested[at];
-    return held === undefined ? -1 : drawn.rows.indexOf(held.row);
+    return held === undefined ? -1 : drawn.tasks.indexOf(held.task);
   };
   // Note that a move lands the row's entry beside its sibling's, which alone orders the two as they are drawn.
   const besideSibling = (from: number, beside: number | undefined) => {
@@ -762,7 +752,7 @@ function SectionRows({
   const drag = useRunRowDrag(move, {
     onDropOut: (from, zone, at) => {
       const held = shown[from]?.value;
-      if (held !== undefined) context.onDropRow(held.row, zone, at);
+      if (held !== undefined) context.onDropRow(held.task, zone, at);
     },
     onCarried: context.onCarried,
   });
@@ -803,7 +793,7 @@ function SectionRows({
 
 /** What a section draws in place of its rows while the view leaves none standing: a word that tasks are dragged in; nothing while it draws rows. */
 function SectionFoot({ drawn }: { drawn: DrawnSection }): React.JSX.Element | null {
-  if (drawn.rows.length > 0) return null;
+  if (drawn.tasks.length > 0) return null;
   return (
     <div className={SIDEBAR_SECTION_SLOT}>
       <NoteLine look={NOTE_LINE_LOOK.INSET}>Drag tasks here</NoteLine>
@@ -825,11 +815,11 @@ function SidebarSection({
   const { section } = drawn;
   const { tasks } = context;
   const folded = context.folded(section.id);
-  const standing = drawn.rows.filter(context.current);
+  const standing = drawn.tasks.filter(context.current);
   const menu = useMenu(tasks.shown && context.inSight);
   const ellipsis = useRef<HTMLButtonElement | null>(null);
   const reads = useReadMarks();
-  const held = drawnSectionTasks(drawn);
+  const held = drawn.tasks;
   const groups = sectionActionGroups(drawn, context, {
     opener: ellipsis,
     onMarkRead: () => {
@@ -875,7 +865,7 @@ function SidebarSection({
         {...sidebarHead({
           folded,
           onToggle: () => context.onToggle(section.id),
-          count: drawn.rows.length,
+          count: drawn.tasks.length,
           noun: TASK_NOUN,
         })}
         glyph={glyph}
@@ -884,7 +874,7 @@ function SidebarSection({
         contextMenu={menu.contextMenu(ellipsis)}
         standing={
           standing.length === 0 ? undefined : (
-            <SectionRows drawn={drawn} context={context} rows={standing} folded />
+            <SectionRows drawn={drawn} context={context} tasks={standing} folded />
           )
         }
         actions={
@@ -896,8 +886,8 @@ function SidebarSection({
           />
         }
       >
-        {drawn.rows.length === 0 ? null : (
-          <SectionRows drawn={drawn} context={context} rows={drawn.rows} folded={false} />
+        {drawn.tasks.length === 0 ? null : (
+          <SectionRows drawn={drawn} context={context} tasks={drawn.tasks} folded={false} />
         )}
         <SectionFoot drawn={drawn} />
       </GroupHeader>

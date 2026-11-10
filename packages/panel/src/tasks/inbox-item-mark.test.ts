@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
 import { AGENT_STATUS } from "@repo/features/agent-wire";
-import { taskHolder } from "@repo/features/inbox-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { act, createElement } from "react";
@@ -76,7 +75,6 @@ test("an item an archived agent posted wears the harness that agent ran on, as t
     root?.render(
       withQueryClient(
         createElement(ItemMark, {
-          holder: taskHolder(TASK),
           agentId: ARCHIVED,
           models: undefined,
           readerId: undefined,

@@ -66,30 +66,19 @@ function drawnAs(words: string): (string | undefined)[] {
   );
 }
 
-test("a coding agent is shown to name each kind as a mention Vespin draws as its chip, its task's own under its task's link and only where it has a task, and a thing of ours by the one link rule", () => {
+test("a coding agent is shown to name each kind as a mention Vespin draws as its chip, its task's own under its task's link, and a thing of ours by the one link rule", () => {
   const shared = [MENTION_KIND.FILE, MENTION_KIND.FILE, MENTION_KIND.LINK, MENTION_KIND.LINK];
   // A task's own things are named by its number, a place the window draws as the task's chip once it finds the task.
   const own = [LINK_DESTINATION.TASK, LINK_DESTINATION.SECTION];
   for (const brief of Object.values(AGENT_BRIEF)) {
-    for (const onTask of [true, false]) {
-      const words = coderInstructions(
-        REPOSITORY,
-        brief,
-        onTask ? TASK_ADDRESS : null,
-        standingFor(REPOSITORY),
-      );
-      const told = words.slice(words.indexOf("## What your messages are"));
-      assert.deepEqual(
-        drawnAs(told),
-        [...shared, ...(onTask ? own : []), LINK_DESTINATION.AUTOMATION],
-        `${brief} ${onTask}`,
-      );
-      assert.deepEqual(
-        linksIn(told).filter(({ label }) => !isMentionLabel(label)),
-        [],
-        "every example is written as a mention",
-      );
-    }
+    const words = coderInstructions(REPOSITORY, brief, TASK_ADDRESS, standingFor(REPOSITORY));
+    const told = words.slice(words.indexOf("## What your messages are"));
+    assert.deepEqual(drawnAs(told), [...shared, ...own, LINK_DESTINATION.AUTOMATION], brief);
+    assert.deepEqual(
+      linksIn(told).filter(({ label }) => !isMentionLabel(label)),
+      [],
+      "every example is written as a mention",
+    );
   }
 });
 
@@ -137,18 +126,16 @@ function appMentionsIn(words: string): { kind: string | undefined; mention: bool
 }
 
 test("a coding agent is shown to name an MCP server as a mention Vespin draws as its chip, a second account's among them", () => {
-  for (const onTask of [true, false]) {
-    const words = coderInstructions(
-      REPOSITORY,
-      AGENT_BRIEF.PROMPT,
-      onTask ? TASK_ADDRESS : null,
-      standingFor(REPOSITORY),
-    );
-    assert.deepEqual(appMentionsIn(words), [
-      { kind: MENTION_KIND.SERVER, mention: true },
-      { kind: MENTION_KIND.SERVER, mention: true },
-    ]);
-  }
+  const words = coderInstructions(
+    REPOSITORY,
+    AGENT_BRIEF.PROMPT,
+    TASK_ADDRESS,
+    standingFor(REPOSITORY),
+  );
+  assert.deepEqual(appMentionsIn(words), [
+    { kind: MENTION_KIND.SERVER, mention: true },
+    { kind: MENTION_KIND.SERVER, mention: true },
+  ]);
 });
 
 /** Every date mention the words show, as the mention its target names. */

@@ -90,8 +90,8 @@ import type { DictationControl } from "./use-dictation.js";
  * The foot answers the card's own width, not the window's (the `composer`
  * container, tasks.css). As the card narrows, the owner's tools draw their
  * marks alone (`folds(FOLD_WIDTH.TOOLS)`); then the ⋯ takes in, in this
- * order, the owner's press it offers in its stead (an agent's context ring)
- * and the microphone, where that press stands, since a ⋯ holding the
+ * order, the owner's presses it offers in their stead (an agent's context
+ * ring and permission mode chip) and the microphone, where the ring stands, since a ⋯ holding the
  * microphone alone would be one press behind two; then the owner's
  * chip draws its mark alone (`FOLD_WIDTH.MODEL`); and last the + goes into
  * the ⋯ too, which offers the + menu's rows in its place. The field and
@@ -150,6 +150,7 @@ export const OVERFLOW_PRESS = {
   ATTACH: "message-box-attach",
   CONTEXT: "agent-context-button",
   DICTATE: "dictate-button",
+  MODE: "agent-mode-button",
 } as const;
 
 type OverflowPress = (typeof OVERFLOW_PRESS)[keyof typeof OVERFLOW_PRESS];

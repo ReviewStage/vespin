@@ -14,7 +14,6 @@ import type { TaskSummary } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppInboxTasklessItem } from "@repo/host/app-state";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { Effect } from "effect";
 import { act, createElement, Fragment } from "react";
@@ -32,7 +31,7 @@ import {
 import { signedInAs } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
-import { agentHoldingsOf, tasksControl, waitingOf } from "../testing/tasks-control.js";
+import { tasksControl, waitingOf } from "../testing/tasks-control.js";
 import { holdingInboxChoice, windowRouter } from "../testing/window-router.js";
 import { DesktopInbox } from "./desktop-inbox.js";
 
@@ -77,7 +76,6 @@ const TASK: TaskSummary = {
   repository: "acme/relay",
 };
 const TASK_AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
-const SWEEP_AGENT = "5d7e8f90-1a2b-4c3d-8e4f-5a6b7c8d9e0f";
 
 /** A notice an agent posted, asking nothing, its thread one message of the words given. */
 function item(id: string, agentId: string, words: string): InboxItem {
@@ -100,20 +98,6 @@ function item(id: string, agentId: string, words: string): InboxItem {
     ],
     postedAt: 1_000,
     updatedAt: 2_000,
-  };
-}
-
-/** One waiting item of the agent no plan holds, as main's read names it: in the workspace given, or in none where the service did not name one. */
-function waitingSweep(waiting: InboxItem, workspaceId: string | undefined): AppInboxTasklessItem {
-  return {
-    ...waitingOf(waiting),
-    updatedAt: waiting.updatedAt,
-    agentTitle: "Sweep the flaky tests",
-    agentModel: "anthropic/claude-opus-5.5",
-    automationId: null,
-    automationName: null,
-    repository: "globex/ledger",
-    ...(workspaceId === undefined ? undefined : { workspaceId }),
   };
 }
 
@@ -149,22 +133,20 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** The window's Inbox listing `listed`, holding the plan's items and the agent's given, the first of them chosen, and every act it asked. */
+/** The window's Inbox listing `listed`, holding the plan's items given, the first of them chosen, and every act it asked. */
 async function inbox(options: {
   listed: Workspace | undefined;
   taskItems: readonly InboxItem[];
-  sweep: { readonly item: InboxItem; readonly workspaceId: string | undefined } | undefined;
+  /** The plan holding the items; Teammate invitations, in Acme, unless said. */
+  task?: TaskSummary;
   /** The account's workspaces as main's document holds them; Acme and Globex unless said. */
   workspaces?: readonly Workspace[];
 }) {
   const asked: AnyAct[] = [];
   const workspaces = options.workspaces ?? [ACME, GLOBEX];
-  // The account's feed holds the task's items, and the sweep agent's, which the Inbox draws from; the host holds each link's standing through every workspace.
+  const task = options.task ?? TASK;
+  // The account's feed holds the task's items, which the Inbox draws from; the host holds each link's standing through every workspace.
   const signedIn = signedInAs({ id: "user-sam", email: "sam@example.com", name: "Sam Okafor" });
-  const taskless =
-    options.sweep === undefined
-      ? []
-      : [waitingSweep(options.sweep.item, options.sweep.workspaceId)];
   const state = {
     ...signedIn,
     inbox: {
@@ -172,27 +154,21 @@ async function inbox(options: {
       waiting:
         options.taskItems.length === 0
           ? []
-          : [{ taskId: TASK.id, items: options.taskItems.map(waitingOf) }],
+          : [{ taskId: task.id, items: options.taskItems.map(waitingOf) }],
       tasks:
         options.taskItems.length === 0
           ? []
-          : [{ taskId: TASK.id, items: options.taskItems.length, updatedAt: 2_000 }],
-      taskless,
-      agents: agentHoldingsOf(taskless),
+          : [{ taskId: task.id, items: options.taskItems.length, updatedAt: 2_000 }],
     },
     tasks: {
       ...IDLE_TASKS_VIEW,
-      tasks: [TASK],
+      tasks: [task],
       taskAgents: [],
       workspaces,
     },
     [LIVE_READ.LINK_STANDINGS]: Object.fromEntries(workspaces.map(({ id }) => [id, STANDINGS])),
     [LIVE_READ.INBOX_ITEMS]: {
-      rows: {
-        [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: options.taskItems },
-        [INBOX_SCOPE_KIND.AGENT]:
-          options.sweep === undefined ? {} : { [options.sweep.item.agentId]: [options.sweep.item] },
-      },
+      rows: { [INBOX_SCOPE_KIND.PLAN]: { [task.id]: options.taskItems } },
     },
   };
   fakeActs({
@@ -213,18 +189,13 @@ async function inbox(options: {
     },
   });
   fakeActPort({ ...fakeActPortCalls() });
-  const sweep = options.sweep;
   // Note that the first item stands chosen at its address, held as a press on its row holds it, so the item is drawn.
   const [first] = options.taskItems;
   const chosen: InboxChoice | undefined =
-    first !== undefined
-      ? { taskId: TASK.id, itemId: first.id }
-      : sweep === undefined
-        ? undefined
-        : { agentId: sweep.item.agentId, itemId: sweep.item.id };
+    first === undefined ? undefined : { taskId: task.id, itemId: first.id };
   function Page() {
     return createElement(DesktopInbox, {
-      tasks: tasksControl({ workspace: options.listed, tasks: [TASK] }),
+      tasks: tasksControl({ workspace: options.listed, tasks: [task] }),
     });
   }
   const container = document.body.appendChild(document.createElement("div"));
@@ -268,7 +239,6 @@ test("a plan's item in the window's Inbox reads its links through the plan's wor
   const { container, asked } = await inbox({
     listed: ACME,
     taskItems: [item("a1b2c3d4-0000-4000-8000-000000000001", TASK_AGENT, `Opened ${PULL}.`)],
-    sweep: undefined,
   });
 
   // Note that the item's words stand once the account's inbox read reaches its query.
@@ -280,42 +250,11 @@ test("an item of a workspace an older service answered with no slug still reads 
   const { slug: _slug, ...unslugged } = GLOBEX;
   const { container, asked } = await inbox({
     listed: undefined,
-    taskItems: [],
-    sweep: {
-      item: item("a1b2c3d4-0000-4000-8000-000000000004", SWEEP_AGENT, `Opened ${LEDGER_PULL}.`),
-      workspaceId: GLOBEX.id,
-    },
+    taskItems: [item("a1b2c3d4-0000-4000-8000-000000000004", TASK_AGENT, `Opened ${LEDGER_PULL}.`)],
+    task: { ...TASK, workspaceId: GLOBEX.id, repository: "globex/ledger" },
     workspaces: [ACME, unslugged],
   });
 
-  assert.deepEqual(chips(container), [["#5", "Merged"]]);
+  await vi.waitFor(() => assert.deepEqual(chips(container), [["#5", "Merged"]]));
   assert.deepEqual(readThrough(asked), [`workspace-globex ${LEDGER_PULL}`]);
-});
-
-test("an item of an agent with no plan reads its links through the agent's own workspace, not the one the Inbox lists", async () => {
-  const { container, asked } = await inbox({
-    listed: undefined,
-    taskItems: [],
-    sweep: {
-      item: item("a1b2c3d4-0000-4000-8000-000000000002", SWEEP_AGENT, `Opened ${LEDGER_PULL}.`),
-      workspaceId: GLOBEX.id,
-    },
-  });
-
-  assert.deepEqual(chips(container), [["#5", "Merged"]]);
-  assert.deepEqual(readThrough(asked), [`workspace-globex ${LEDGER_PULL}`]);
-});
-
-test("an item whose workspace the service did not name reads nothing, and its link says what its address says, though the Inbox lists a workspace", async () => {
-  const { container, asked } = await inbox({
-    listed: ACME,
-    taskItems: [],
-    sweep: {
-      item: item("a1b2c3d4-0000-4000-8000-000000000003", SWEEP_AGENT, `Opened ${PULL}.`),
-      workspaceId: undefined,
-    },
-  });
-
-  assert.deepEqual(chips(container), [["relay#42", null]]);
-  assert.deepEqual(readThrough(asked), []);
 });

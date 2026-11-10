@@ -174,6 +174,23 @@ test("it opens named by its title on its field, keeps Tab and Shift-Tab among it
   expect(holds(opener)).toBe(true);
 });
 
+test("⌘W puts the card away as Escape does, claimed so the menu bar's Close tab never closes the window behind it", () => {
+  const { opener, field } = opened();
+  const press = new KeyboardEvent("keydown", {
+    key: "w",
+    code: "KeyW",
+    metaKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  act(() => {
+    field.dispatchEvent(press);
+  });
+  expect(press.defaultPrevented).toBe(true);
+  expect(card()).toBeNull();
+  expect(holds(opener)).toBe(true);
+});
+
 test("a link or a select at either end of the card is one of its controls, and what is out of the Tab order is not", () => {
   draw(
     createElement(Dialog, {

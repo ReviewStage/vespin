@@ -8,15 +8,22 @@ import { agentTable } from "./agent.js";
  * One row per sandbox, keyed by its name (`agent-sandbox-<digest>`, from
  * `@repo/service`'s `agents/agent-sandbox-open.ts`), naming the agent it was
  * opened for, `used_at`, the last open or touch recorded, and `state`, LIVE
- * while the sandbox stands and RELEASED once it was deleted. An open writes
- * the row LIVE and a touch moves `used_at` on, at most once a minute each
- * (`../models/agent-sandboxes.ts`, `@repo/service`'s `agents/sandbox-use.ts`).
- * The row goes with its agent. It holds ids, a name, and an instant alone.
+ * while the sandbox stands, RELEASING once a sweep found it unused long
+ * enough to delete and queued its release, and RELEASED once it was deleted.
+ * An open writes the row LIVE and a touch moves `used_at` on, at most once a
+ * minute each (`../models/agent-sandboxes.ts`, `@repo/service`'s
+ * `agents/sandbox-use.ts`); the release is `@repo/service`'s
+ * `agents/session-sandboxes.ts`. `booting_since` is when a boot of the
+ * sandbox began, set as the launch opens it and cleared once its runner is
+ * handed its first lines or the open failed, so the task list reads the
+ * sandbox booting, running, or off (`@repo/service`'s `live/reads/tasks.ts`).
+ * The row goes with its agent. It holds ids, a name, and instants alone.
  */
 
 /** Whether a sandbox the row names stands. */
 export const AGENT_SANDBOX_STATE = {
   LIVE: "live",
+  RELEASING: "releasing",
   RELEASED: "released",
 } as const;
 
@@ -33,6 +40,8 @@ export const agentSandboxTable = pgTable(
     /** When the sandbox was last opened or touched, to the minute. */
     usedAt: timestamptz("used_at").notNull(),
     state: text("state").$type<AgentSandboxState>().notNull().default(AGENT_SANDBOX_STATE.LIVE),
+    /** When the boot under way began; null where none is. */
+    bootingSince: timestamptz("booting_since"),
   },
   (table) => [
     // An agent's delete cascades to its rows, found by the agent alone.

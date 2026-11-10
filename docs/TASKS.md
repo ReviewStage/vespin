@@ -139,9 +139,7 @@ on any Settings page leaves Settings.
   the dimmed window, puts the dialog away, its words and files kept as New
   task's draft, which Home's composer shares.
 - A pinned task stands under **Pinned**, a section above Tasks drawn only
-  while any task is pinned, which no view filters. A
-  pinned agent with no task stands there among the pinned tasks, ordered the
-  same way, and leaves its place among the tasks. Its rows, tabs pinned to
+  while any task is pinned, which no view filters. Its rows, tabs pinned to
   the sidebar among them, are dragged up and down it to the order the
   developer wants, each drop drawn at once and put back with a toast when
   the service refuses it; a pin not yet dragged stands on top, newest pinned
@@ -721,7 +719,7 @@ it, draws the Runs on chip for the agent it starts like any other start. A
 device that is not the starter's, was removed, or is away refuses the start
 by name, and nothing moves it to the cloud on its own.
 
-While Bring your own host is on, an agent's ⋯ menu offers Move to ›: Cloud
+While Bring your own machine is on, an agent's ⋯ menu offers Move to ›: Cloud
 and each of the member's own devices, but not the place the agent runs now,
 a device that takes no agent now dimmed and saying why. It stands only
 where Continue in new agent could run: on an agent at rest, not archived,

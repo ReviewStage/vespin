@@ -1,11 +1,10 @@
 /**
- * archive-script.ts -- a repository's archive script, run in an archived agent's sandbox just before the sandbox is deleted for good.
+ * archive-script.ts -- a repository's archive script, run in an archived agent's sandbox once the archive stands.
  *
- * As Conductor runs `scripts.archive` before a workspace is archived: an
- * agent's archive deletes its sandbox (`session-sandboxes.ts`'s
- * `deletedInBackground`), and where its workspace keeps an archive script
- * for the agent's repository (Settings › Cloud setup), the sandbox runs it
- * first, as the agent's own user from its checkout, with the workspace's
+ * An agent's archive lets it go (`session-sandboxes.ts`'s
+ * `archivedInBackground`), and where its workspace keeps an archive script
+ * for the agent's repository (Settings › Cloud environment), the sandbox runs it,
+ * as the agent's own user from its checkout, with the workspace's
  * variables, typically to stop services, upload logs, or let go of what the
  * agent made outside it, such as a preview database. A sandbox only stopped,
  * as one idle for `SANDBOX_IDLE` is, runs nothing, since it is kept.
@@ -14,10 +13,10 @@
  * sandbox already gone, or one that cannot be resumed (its snapshot gone, or
  * a resume past `ARCHIVE_SCRIPT.RESUME_TIMEOUT`), skips it, and one that runs
  * past `ARCHIVE_SCRIPT.RUN_TIMEOUT` is ended; each is said in a log line, and
- * the delete goes on. What the script prints goes to the sandbox's setup log
+ * the archive stands. What the script prints goes to the sandbox's setup log
  * (`REPOSITORY_SANDBOX_CONTRACT.PATH.SETUP_LOG`), which the agent's Terminal
- * reads until the delete, and its stderr's tail, every workspace variable's
- * value and every token-shaped run redacted (`commandStderrTail`), to the
+ * reads until the sandbox is released, and its stderr's tail, every
+ * workspace variable's value and every token-shaped run redacted (`commandStderrTail`), to the
  * service's log with how it exited.
  */
 
@@ -45,13 +44,13 @@ import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
 /**
  * The archive script's bounds. Note that all of it runs inside the archive's
  * kept work (`SandboxDeleteReach`'s `keepAwake`), whose function Vercel ends
- * at Fluid's default of five minutes, so the resume, the script, and the
- * delete after them stay well inside that.
+ * at Fluid's default of five minutes, so the resume and the script stay
+ * well inside that.
  */
 export const ARCHIVE_SCRIPT = {
   /** How long a stopped sandbox's resume is waited on before the script is skipped: a resume from its snapshot takes about eleven seconds (`SANDBOX_IDLE`). */
   RESUME_TIMEOUT: Duration.minutes(1),
-  /** How long the script runs before it is ended, as Settings › Cloud setup says: long enough to stop services and upload logs, short enough that the delete still lands. */
+  /** How long the script runs before it is ended, as Settings › Cloud environment says: long enough to stop services and upload logs, short enough that the delete still lands. */
   RUN_TIMEOUT: Duration.seconds(90),
   /** How often a script still running is asked again for its exit, where the provider ended a wait before it did. */
   EXIT_POLL: Duration.seconds(1),
