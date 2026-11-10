@@ -329,6 +329,9 @@
   /* How far in from a compact chip's start a box stands centered on the
      chip's mark, as a board card's box stands over its status chip. */
   --spacing-select-box-inset: calc((var(--spacing-chip-compact) - var(--spacing-select-box)) / 2);
+  /* A draft under rows that keep that gutter starts at it, its hairline taken
+     out as from the inset (`--spacing-task-row-draft`). */
+  --spacing-task-row-draft-gutter: calc(var(--spacing-select-gutter) - 1px);
   --grid-template-columns-tasks-list: var(--tasks-list-columns);
   --spacing-dialog-action-gap: var(--ui-dialog-action-gap);
   --spacing-dialog-action: var(--ui-dialog-action-width);

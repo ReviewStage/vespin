@@ -117,10 +117,11 @@ function agentRequest(handed: NewTaskAgent) {
   };
 }
 
-/** Where a group's quick add puts the task it adds: the group's status, priority, or assignee, or its repository. */
+/** Where a group's quick add puts the task it adds: the group's status, priority, or assignee, its repository, or the task it adds a sub-task of. */
 export interface QuickAddInto {
   readonly standing?: TaskStanding;
   readonly repository?: string;
+  readonly parentTaskId?: string;
 }
 
 /** What a quick add asks of where its task stands: a status, a priority, or an assignee, as given; no one assigned is where a task starts, so it is asked nothing. */
@@ -337,6 +338,7 @@ export function useQuickAddStart(workspaceId: string | undefined): QuickAddStart
       sendTaskStart({
         name,
         ...(into.repository === undefined ? undefined : { repository: into.repository }),
+        ...(into.parentTaskId === undefined ? undefined : { parentTaskId: into.parentTaskId }),
         ...(workspaceId === undefined ? undefined : { workspaceId }),
         ...startingStanding(into.standing),
         planning: false,

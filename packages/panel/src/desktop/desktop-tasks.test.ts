@@ -336,7 +336,7 @@ test("a run's task leads its bar with the path to the automation whose run made 
   );
 });
 
-test("a wide task's details with no agent offer New agent at their head, which opens a draft as the way back to the agents does", async () => {
+test("a wide task's details with no agent offer New agent under its title, which opens a draft as the way back to the agents does", async () => {
   fakeAppPlatform(QUIET_PANEL);
   fakeAppBridge({});
   fakeActPort({});
@@ -366,12 +366,12 @@ test("a wide task's details with no agent offer New agent at their head, which o
       ),
     ),
   );
-  const newAgent = (within: Element | null) =>
-    [...(within?.querySelectorAll<HTMLElement>("button, [role='option']") ?? [])].find(
-      (each) => each.textContent === "New agent",
+  const newAgent =
+    [...container.querySelectorAll<HTMLButtonElement>(".plan-starts button")].find((each) =>
+      each.textContent?.startsWith("New agent"),
     ) ?? assert.fail("New agent is offered");
 
-  act(() => newAgent(container.querySelector(".plan-agents [aria-label='Agents']")).click());
+  act(() => newAgent.click());
   const back =
     [...container.querySelectorAll<HTMLButtonElement>(".desktop-document button")].find(
       (each) => each.textContent === "Agents",

@@ -24,12 +24,12 @@ import { PlanAgents } from "./plan-agents.js";
  * developer first, each counting what needs them, then those at work,
  * then the newest started, each saying where it runs itself; a row opens its agent, its ⋯ offers the
  * agent's menu, its pull request's chip opens
- * the pull request and not the agent, and a task with no agent and no start
- * draws no list; the group ends with New agent, even on a task with no
- * agent, and on a phone the task's Inbox follows it only while something
- * waits there that no listed agent's row marks, on a task that starts no
- * agent too; and the agents are chosen together, New agent never among
- * them, a row chosen among several offering the acts on every one chosen.
+ * the pull request and not the agent, and a task with no agent draws no
+ * group; New agent stands on the group's head, and on a phone the task's
+ * Inbox follows the group only while something waits there that no listed
+ * agent's row marks, on a task that starts no agent too; and the agents
+ * are chosen together, a row chosen among several offering the acts on
+ * every one chosen.
  * Synthetic agents throughout.
  */
 
@@ -83,18 +83,18 @@ function waitingOn(agentId: string, count: number): ReadonlyMap<string, readonly
   return new Map([[agentId, items]]);
 }
 
-/** The group over `agents`, `NEWEST` holding a merged pull request, unfolded unless `folded` says, offering New agent where `starts` says, a phone's where `phone` says; every agent, pull request, and start it opens recorded. */
+/** The group over `agents`, `NEWEST` holding a merged pull request, unfolded unless `folded` says, offering New agent on its head where `newAgent` says, a phone's where `phone` says; every agent, pull request, and start it opens recorded. */
 function mount(
   agents: readonly AgentSummary[],
   {
     folded = false,
-    starts = false,
+    newAgent = false,
     phone = false,
     waiting = new Map(),
     acts = {},
   }: {
     folded?: boolean;
-    starts?: boolean;
+    newAgent?: boolean;
     phone?: boolean;
     waiting?: ReadonlyMap<string, readonly InboxItem[]>;
     /** The agents control's acts the test answers itself. */
@@ -142,9 +142,10 @@ function mount(
           shown: true,
           onOpenAgent: (agentId) => opened.agents.push(agentId),
           onOpenPullRequest: (agentId) => opened.pullRequests.push(agentId),
-          starts: starts
-            ? [{ label: "New agent", onSelect: () => opened.phone.push("new agent") }]
-            : [],
+          newAgent: newAgent
+            ? { label: "New agent", onSelect: () => opened.phone.push("new agent") }
+            : undefined,
+          starts: [],
           phone: !phone
             ? undefined
             : {
@@ -225,12 +226,7 @@ test("the group starts folded unless the page says otherwise, its head counting 
   assert.equal(host.querySelector('[aria-label="Agents"]'), null);
 });
 
-test("a task with no agent and no start draws no list", () => {
-  const { host } = mount([]);
-  assert.equal(host.querySelector('[aria-label="Agents"]'), null);
-});
-
-test("the group ends with New agent even on a task with no agent, and on a phone the task's Inbox follows only while something waits there", () => {
+test("New agent stands on the group's head, a task with no agent draws no group, and on a phone the task's Inbox follows only while something waits there", () => {
   const press = (host: HTMLElement, words: string) => {
     const found = [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
       button.textContent?.includes(words),
@@ -238,16 +234,23 @@ test("the group ends with New agent even on a task with no agent, and on a phone
     assert.ok(found !== undefined, `the group offers ${words}`);
     act(() => found.click());
   };
-  const none = mount([], { starts: true, phone: true });
-  assert.match(none.host.querySelector('[aria-label="Agents"]')?.textContent ?? "", /New agent/u);
-  assert.doesNotMatch(none.host.textContent ?? "", /need/u, "no Inbox row while nothing waits");
-  press(none.host, "New agent");
-  assert.deepEqual(none.opened.phone, ["new agent"]);
+  const none = mount([], { newAgent: true, phone: true });
+  assert.equal(none.host.textContent, "", "no group and no Inbox row while nothing waits");
+  act(() => root?.unmount());
+  document.body.innerHTML = "";
+
+  const one = mount([OLDEST], { newAgent: true, folded: true });
+  act(() => one.host.querySelector<HTMLButtonElement>("button[aria-label='New agent']")?.click());
+  assert.deepEqual(one.opened.phone, ["new agent"], "the head's + starts one, the group folded");
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
   // Note that the threads are an agent's the group does not list, an archived one's, so no row marks them.
-  const waiting = mount([OLDEST], { starts: true, phone: true, waiting: waitingOn(NEWEST.id, 2) });
+  const waiting = mount([OLDEST], {
+    newAgent: true,
+    phone: true,
+    waiting: waitingOn(NEWEST.id, 2),
+  });
   press(waiting.host, "2 threads need you");
   assert.deepEqual(waiting.opened.phone, ["inbox"]);
   act(() => root?.unmount());
@@ -259,10 +262,9 @@ test("the group ends with New agent even on a task with no agent, and on a phone
   assert.deepEqual(archived.opened.phone, ["inbox"]);
 });
 
-test("the agents are chosen together by their boxes, never New agent, and a row chosen among several archives every one chosen at once", async () => {
+test("the agents are chosen together by their boxes, and a row chosen among several archives every one chosen at once", async () => {
   const archived: (readonly string[])[] = [];
   const { host, opened } = mount([OLDEST, NEWEST], {
-    starts: true,
     acts: {
       archiveAgents: agentsArchiveMutation(({ agentIds }) => {
         archived.push(agentIds);
@@ -271,8 +273,6 @@ test("the agents are chosen together by their boxes, never New agent, and a row 
     },
   });
   const rows = [...host.querySelectorAll('[aria-label="Agents"] li')];
-  const start = rows.find((row) => row.textContent?.includes("New agent"));
-  assert.equal(start?.querySelector('[role="checkbox"]'), null, "New agent draws no box");
   for (const title of [OLDEST.title, NEWEST.title]) {
     const box = rows
       .find((row) => row.textContent?.includes(title))
