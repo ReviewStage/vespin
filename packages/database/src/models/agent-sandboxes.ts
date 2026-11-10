@@ -12,8 +12,8 @@
  * A release reads and writes here too (`@repo/service`'s
  * `agents/session-sandboxes.ts`): the sweep reads the LIVE sandboxes last
  * used by a cutoff and those RELEASING, the oldest first, and marks each due
- * one RELEASING; its consumer reads the row again with its agent, the
- * agent's conversation, and its session, and settles it LIVE, where it was
+ * one RELEASING; its consumer reads the row again with its agent and the
+ * agent's conversation, and settles it LIVE, where it was
  * used since, or RELEASED, once deleted, each only where the row still
  * stands RELEASING, so an open between them wins.
  */
@@ -28,7 +28,6 @@ import {
   type AgentSandboxState,
   agentSandboxTable,
 } from "../schemas/agent-sandbox.js";
-import { conversations } from "../schemas/storage.js";
 
 type SandboxUseEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
@@ -85,12 +84,11 @@ const StateSchema = Schema.Literals([
   AGENT_SANDBOX_STATE.RELEASED,
 ]);
 
-/** A sandbox a release names: its name, its agent, the agent's conversation and its session where one was recorded, when it was last used, and its state. */
+/** A sandbox a release names: its name, its agent, the agent's conversation, when it was last used, and its state. */
 const ReleaseRowSchema = Schema.Struct({
   sandboxName: Schema.String,
   agentId: Schema.String,
   conversationId: Schema.String,
-  sessionId: Schema.NullOr(Schema.String),
   usedAt: Schema.Date,
   state: StateSchema,
 });
@@ -147,13 +145,11 @@ const findRelease = SqlSchema.findOneOption({
           sandboxName: agentSandboxTable.sandboxName,
           agentId: agentSandboxTable.agentId,
           conversationId: agentTable.conversationId,
-          sessionId: conversations.runtimeSessionId,
           usedAt: agentSandboxTable.usedAt,
           state: agentSandboxTable.state,
         })
         .from(agentSandboxTable)
         .innerJoin(agentTable, eq(agentTable.id, agentSandboxTable.agentId))
-        .innerJoin(conversations, eq(conversations.id, agentTable.conversationId))
         .where(eq(agentSandboxTable.sandboxName, sandboxName)),
     ),
 });
@@ -217,7 +213,7 @@ export function markAgentSandboxReleasing(
   return Effect.map(markReleasing({ sandboxName, usedBy }), (rows) => rows.length > 0);
 }
 
-/** The sandbox's row as a release reads it again, with its agent, the agent's conversation, and its session; none where the row or its agent is gone. */
+/** The sandbox's row as a release reads it again, with its agent and the agent's conversation; none where the row or its agent is gone. */
 export function agentSandboxRelease(
   sandboxName: string,
 ): SandboxUseEffect<Option.Option<AgentSandboxRelease>> {
