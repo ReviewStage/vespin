@@ -178,7 +178,7 @@ it.layer(SUITE)("a started agent's final message handed to its starter", (it) =>
   );
 });
 
-test("a turn ended with end_turn hands its summary as its final words, and one whose end_turn was refused its last text", () => {
+test("a turn ended with end_turn hands its summary as its final words, and one whose end_turn was refused or never answered its last text", () => {
   const said = "Pushed the fix; the checks run again.";
   const summary = "- Fixed the failing check\n- Pushed to #214";
   const ended = (state: "output-available" | "output-error"): StoredUIMessage =>
@@ -201,4 +201,14 @@ test("a turn ended with end_turn hands its summary as its final words, and one w
 
   assert.equal(lastSaid(ended("output-available")), summary);
   assert.equal(lastSaid(ended("output-error")), said);
+  // A turn that ended before the call answered keeps it as available, with no answer that took it.
+  const unanswered = ended("output-available");
+  const [text, call] = unanswered.parts;
+  assert.equal(
+    lastSaid({
+      ...unanswered,
+      parts: [text, { ...call, output: undefined }],
+    } as unknown as StoredUIMessage),
+    said,
+  );
 });
