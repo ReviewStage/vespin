@@ -169,7 +169,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const workspaceClient = new HostedWorkspaceClient({
       serviceBaseUrl: kernel.hostedServiceBaseUrl,
       credential: account.credential,
-      sessionCredential: account.sessionCredential,
     });
     const agentClient = new HostedAgentClient({
       serviceBaseUrl: kernel.hostedServiceBaseUrl,
@@ -237,7 +236,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         mcpClients: new HostedMcpClientsClient({
           serviceBaseUrl: kernel.hostedServiceBaseUrl,
           credential: account.credential,
-          sessionCredential: account.sessionCredential,
         }),
         // Note that a refusal's reason is not reported, because it may carry the address.
         openExternal: (url) =>

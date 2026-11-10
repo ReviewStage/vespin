@@ -103,9 +103,10 @@ its export's name. A Vespin workspace is an
 `organization` and its team the `member` rows, under the plugin's default
 roles `owner`, `admin`, and `member`. A desktop caller holds an OAuth token and
 no Better Auth session, which every member and organization endpoint requires,
-so a hosted route reads membership through Drizzle over these tables and
-writes only through the plugin's server-only `auth.api.createOrganization`
-(with a `userId` and no headers) and `auth.api.addMember`. Never call either
+so a hosted route reads membership through Drizzle over these tables, creates
+a workspace only through the plugin's server-only `auth.api.createOrganization`
+(with a `userId` and no headers), and writes every other change to them
+through the stores (`organization-store.ts`, `invitation-store.ts`). Never call either
 inside `client.withTransaction`: Better Auth writes over its own pool, outside
 the fiber's `SqlClient`. `auth-database.test.ts` creates a workspace and adds a
 member through the plugin over PGlite.
@@ -214,9 +215,7 @@ admin or an admin a member, and `POST /api/workspaces/transfer { workspaceId,
 userId }` lets the owner alone hand the workspace to an admin, becoming an
 admin, but for an account's first workspace; each answers `{ members }`, and
 none acts on the caller, whose way out is leaving, or on an owner.
-A handover is two of the plugin's role writes, the heir made owner first, so
-one cut short leaves two owners rather than none, and trying again finishes
-it. `POST /api/workspaces/leave` lets anyone but
+A handover moves both roles in one transaction. `POST /api/workspaces/leave` lets anyone but
 an owner leave, and `POST /api/workspaces/rename { workspaceId, name }` lets
 an owner or an admin rename a workspace, answering `{ workspace }` under its
 new name and the slug it already had, but for an account's first workspace,
@@ -234,22 +233,22 @@ under it still names it, and
 admin set its photo, a `data:` URL of a PNG, JPEG, or WebP of at most
 `WORKSPACE_PHOTO_BOUNDS.MAX_BYTES` decoded, or remove it with `null`,
 answering `{ workspace }` with its new `photoVersion` or none; any other
-photo is `invalid-request`. They are the plugin's own
-`removeMember`, `updateMemberRole`, `leaveOrganization`, and `updateOrganization` (`memberSeams`
-in `workspace-seams.ts`, the last handed the name alone or the logo alone), called with the
-request's one credential (`packages/service/src/auth/session-credential.ts`):
-its `Authorization` alone wherever it carries one, which carries the Mac's own
-Better Auth session as a signed bearer token that the bearer plugin reads as
-the session cookie, and the browser's cookie only where it carries none, so a
-bearer the plugin did not sign is never read past to a cookie beside it. So these six
-paths take the session, not the OAuth token, and the plugin checks the
-caller's role and membership again behind Vespin's own rules. A workspace the
-account is not in is `not-found`; a role that does not allow it,
-`not-permitted`; a session the service does not take,
-`invalid-token`, which is the Mac's cue to ask for a new one through the
-hand-off page (`desktop-session.html`). `packages/service/src/accounts/workspaces-app.test.ts` holds
-each over the plugin on PGlite, and `packages/service/src/accounts/member-seams.test.ts` the
-plugin's own refusals.
+photo is `invalid-request`. Every one of them takes the account's OAuth
+token, as the desktop, the web app, the iPhone, the command-line tool, and the
+member MCP server all carry, and runs one operation that holds who may make
+it (`workspace-member-operations.ts`, `workspace-operations.ts`, and
+`workspace-delete.ts` in `packages/service/src/accounts/`). Since the
+plugin's own `removeMember`, `updateMemberRole`, `leaveOrganization`,
+`updateOrganization`, and `deleteOrganization` take only a session, the rows
+they would write are written by the store (`organization-store.ts`), and an
+owner's delete runs the workspace's deletion steps itself, as the plugin's
+delete hooks run them (`workspace-deletion.ts`). A workspace's invitations
+are listed, made, and canceled the same way (`workspace-invitation-operations.ts`
+over `invitation-store.ts`), the make checking what the plugin's
+`createInvitation` checked. A workspace the account is not in is
+`not-found`; a role that does not allow it, `not-permitted`.
+`packages/service/src/accounts/workspaces-app.test.ts` holds each over the
+plugin's tables on PGlite.
 
 Dynamic client registration stays disabled. One public client is compiled in:
 **`desktop`** (`packages/service/src/auth/oauth-clients.ts`), the macOS companion app. It

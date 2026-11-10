@@ -388,7 +388,7 @@ export const INTEGRATION_ACT_KIND = {
   MCP_CLIENTS_FOLLOW: "mcpClients.follow",
   /** The held outside MCP clients read again at once, as Try again asks. */
   MCP_CLIENTS_RETRY: "mcpClients.retry",
-  /** One outside MCP client revoked under the Mac's session, answering the clients as they then stand, or that the revoke did not finish. */
+  /** One outside MCP client revoked, answering the clients as they then stand, or that the revoke did not finish. */
   MCP_CLIENTS_REVOKE: "mcpClients.revoke",
 } as const;
 

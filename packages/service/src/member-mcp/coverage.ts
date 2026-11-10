@@ -47,7 +47,7 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
   NEEDS_BROWSER: "needs-browser",
   /** It reads or writes a secret, which no tool ever carries: a provider key or the GitHub token goes in through the CLI's stdin alone. */
   SECRET: "secret",
-  /** It hands a person trust in the account, a decision the member makes in the app alone and never through an agent. */
+  /** It hands a person trust in the account, or takes a way into it away under a fresh session, a decision the member makes in the app alone and never through an agent. */
   SECURITY: "security",
   /** It cannot be undone and stays in the app and the CLI alone, by design. */
   DESTRUCTIVE: "destructive",
@@ -219,7 +219,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     connect: NEEDS_BROWSER,
     claim: NEEDS_BROWSER,
     connection: NOT_YET_BUILT,
-    disconnect: NOT_YET_BUILT,
+    // Note that Better Auth's unlink asks a fresh session, which no OAuth token is, so it stays the app's.
+    disconnect: SECURITY,
     repositories: NOT_YET_BUILT,
     tokenRepositories: NOT_YET_BUILT,
     setTokenRepository: NOT_YET_BUILT,

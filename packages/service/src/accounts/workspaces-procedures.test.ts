@@ -14,7 +14,7 @@
 
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import type { MemberSeams, WorkspaceSeams } from "@repo/database/models/workspace-seams";
+import type { WorkspaceSeams } from "@repo/database/models/workspace-seams";
 import { HOSTED_SERVICE_PATH } from "@repo/features";
 import { WORKSPACE_PHOTO_BOUNDS } from "@repo/features/workspace-wire";
 import { HTTP_METHOD } from "@repo/wire";
@@ -26,9 +26,6 @@ import { workspacesProcedures } from "./workspaces-procedures.js";
 
 const ORIGIN = "https://app.test";
 const USER_ID = "user-1";
-/** A browser's session cookie, which the fake session read below names the account by. */
-const SESSION_COOKIE = "better-auth.session_token=session";
-
 /** The bound on every workspace write's body but the photo's: a name's, or an id's. */
 const BODY_BYTES = 1_024;
 
@@ -40,20 +37,12 @@ const UNREACHED = (): never => assert.fail("the request reached the workspace st
 
 // SAFETY: every seam fails the test as soon as it is called, and no refusal here calls one.
 const workspaces = new Proxy({}, { get: () => UNREACHED }) as WorkspaceSeams;
-// SAFETY: as above, for the plugin's member writes.
-const members = new Proxy({}, { get: () => UNREACHED }) as MemberSeams;
 
 const handle = hostedFetch({
   workspaces: workspacesProcedures({
     resolveUserId: (request) =>
       Effect.succeed(Option.fromNullishOr(request.headers.has("authorization") ? USER_ID : null)),
-    resolveSessionUserId: (request) =>
-      Effect.succeed(
-        Option.fromNullishOr(request.headers.get("cookie") === SESSION_COOKIE ? USER_ID : null),
-      ),
     workspaces,
-    members,
-    deleteWorkspace: UNREACHED,
   }),
 });
 
@@ -61,7 +50,7 @@ interface Asked {
   readonly path: string;
   readonly method?: string;
   readonly body?: string;
-  readonly caller?: "account" | "session";
+  readonly caller?: "account";
 }
 
 /** One request's status and body, as the route answers it; a body's length is stated, as every client states it. */
@@ -69,7 +58,6 @@ const answer = ({ path, method = HTTP_METHOD.POST, body, caller }: Asked) =>
   Effect.gen(function* () {
     const headers = new Headers();
     if (caller === "account") headers.set("authorization", "Bearer token");
-    if (caller === "session") headers.set("cookie", SESSION_COOKIE);
     if (body !== undefined) {
       headers.set("content-type", "application/json");
       headers.set("content-length", String(new TextEncoder().encode(body).byteLength));
@@ -131,7 +119,7 @@ it.effect(
         yield* answer({
           path: HOSTED_SERVICE_PATH.WORKSPACES_RENAME,
           body: bodyOf(rename, BODY_BYTES + 1),
-          caller: "session",
+          caller: "account",
         }),
         tooLarge,
       );
@@ -139,7 +127,7 @@ it.effect(
         yield* answer({
           path: HOSTED_SERVICE_PATH.WORKSPACES_RENAME,
           body: bodyOf(rename, BODY_BYTES),
-          caller: "session",
+          caller: "account",
         }),
         invalid,
         "a body at the bound is read, and its stray key refused",
@@ -149,7 +137,7 @@ it.effect(
         yield* answer({
           path: HOSTED_SERVICE_PATH.WORKSPACES_PHOTO_SET,
           body: bodyOf(photo, PHOTO_BODY_BYTES),
-          caller: "session",
+          caller: "account",
         }),
         invalid,
         "a photo's body at its bound is read",
@@ -158,7 +146,7 @@ it.effect(
         yield* answer({
           path: HOSTED_SERVICE_PATH.WORKSPACES_PHOTO_SET,
           body: bodyOf(photo, PHOTO_BODY_BYTES + 1),
-          caller: "session",
+          caller: "account",
         }),
         tooLarge,
       );
@@ -173,7 +161,7 @@ it.effect(
         yield* answer({
           path: HOSTED_SERVICE_PATH.WORKSPACES_TRANSFER,
           body: '{"workspaceId":"w-1","userId":"user-2","role":"owner"}',
-          caller: "session",
+          caller: "account",
         }),
         refused(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST),
       );
@@ -181,7 +169,7 @@ it.effect(
         yield* answer({
           path: HOSTED_SERVICE_PATH.WORKSPACES_MEMBERS_ROLE,
           method: HTTP_METHOD.GET,
-          caller: "session",
+          caller: "account",
         }),
         refused(HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED, HOSTED_API_ERROR.METHOD_NOT_ALLOWED),
       );
