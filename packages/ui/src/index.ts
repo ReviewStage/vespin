@@ -30,6 +30,7 @@ export * from "./components/card/card.js";
 export * from "./components/card-press/card-press.js";
 export * from "./components/checkbox/checkbox.js";
 export * from "./components/chip/chip.js";
+export * from "./components/chip-popover/chip-popover.js";
 export * from "./components/choice/count-part.js";
 export * from "./components/choice-bar/choice-bar.js";
 export * from "./components/choice-list/choice-list.js";

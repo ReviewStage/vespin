@@ -29,4 +29,13 @@
     border-radius: var(--ui-radius-full);
     background: var(--ui-tone-ink);
   }
+
+  /* A dot before words, as large as a glyph's and in the same tone's ink. */
+  .ui-status-words-dot {
+    flex: none;
+    width: var(--ui-space-6);
+    height: var(--ui-space-6);
+    border-radius: var(--ui-radius-full);
+    background: var(--ui-tone-ink);
+  }
 }
