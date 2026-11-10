@@ -387,4 +387,6 @@ test("a page is found by its own name and leads its rows, the best page first, e
     stops.some((stop) => stop.page === SETTINGS_VIEW.EXPERIMENTAL && stop.entry === undefined),
     "a page found only through a row it holds still leads that row",
   );
+  // Note that the page's old name still finds its row, for readers who learned it as Hosts.
+  assert.ok(labelsFound("hosts").includes("Add a machine"));
 });

@@ -250,7 +250,7 @@ const THIS_MAC_WORDS = {
 /** What turning This Mac off asks first: it takes the host off this Mac, and its agents' folders where the member leaves that checked. */
 const THIS_MAC_OFF = {
   title: "Turn off agents on this Mac?",
-  body: `${PRODUCT_NAME} removes itself from this Mac, and any agent running here stops. Their tasks and transcripts stay in ${PRODUCT_NAME}.`,
+  body: `This Mac stops running your agents, and any agent running here stops. Their tasks and transcripts stay in ${PRODUCT_NAME}.`,
   verb: "Turn off",
   running: "Turning off",
 } as const;
