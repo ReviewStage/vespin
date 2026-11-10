@@ -594,6 +594,15 @@ export const MAC_TERMINAL_ACT_KIND = {
 } as const;
 
 /**
+ * What this Mac spends on the app (`mac-resources.ts`): each of its
+ * processes' CPU and memory now, read from the process table by the
+ * desktop's main, which a panel asks every few seconds while it shows them.
+ */
+export const MAC_RESOURCES_ACT_KIND = {
+  MAC_RESOURCES_READ: "macResources.read",
+} as const;
+
+/**
  * A shell on this Mac (`mac-shells.ts`): the developer's login shell opened
  * in a folder for the asking panel, attached, and closed, answered by the
  * desktop's main, which holds it. What it prints travels on the port an
@@ -820,6 +829,7 @@ export const PORT_ACT_KIND = {
   ...INSTALLED_SKILL_ACT_KIND,
   ...INTEGRATION_ACT_KIND,
   ...MAC_COMMAND_ACT_KIND,
+  ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,
   ...PORT_FORWARD_ACT_KIND,
@@ -1007,6 +1017,8 @@ export const PORT_ACT_USE = {
 
   MAC_COMMAND_ANSWER: ACT_USE.WRITE,
 
+  MAC_RESOURCES_READ: ACT_USE.FETCH,
+
   MAC_SHELL_MIRROR: ACT_USE.WRITE,
   MAC_SHELL_OPEN: ACT_USE.WRITE,
   MAC_SHELL_ATTACH: ACT_USE.WRITE,
@@ -1150,6 +1162,7 @@ export const PORT_ACT_USE = {
 export const PLATFORM_PORT_ACT_KIND = {
   ...BROWSER_LIVE_ACT_KIND,
   ...CLI_ACT_KIND,
+  ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
   ...MAC_TERMINAL_ACT_KIND,
   ...TERMINAL_ACT_KIND,

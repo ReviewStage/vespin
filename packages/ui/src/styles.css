@@ -83,6 +83,7 @@
 @import "./components/corner-count/corner-count.css";
 @import "./components/status-dot/status-dot.css";
 @import "./components/resize-edge/resize-edge.css";
+@import "./components/resources-popover/resources-popover.css";
 @import "./components/zoom-image/zoom-image.css";
 @import "./components/remote-surface/remote-surface.css";
 @import "./components/editable-block/editable-block.css";
