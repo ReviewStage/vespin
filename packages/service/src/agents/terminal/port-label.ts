@@ -42,8 +42,19 @@ const VALUED_FLAGS: ReadonlySet<string> = new Set([
   "--cwd",
   "--prefix",
   "--workspace",
-  "-w",
   "workspace",
+]);
+
+/** npm's `-w` names the workspace it runs in, as `--workspace` does; pnpm's takes no value. */
+const NPM_WORKSPACE_FLAG = "-w";
+
+/** An interpreter's flags whose value, a module it loads first, is the next word, which is passed over with them. */
+const PRELOAD_FLAGS: ReadonlySet<string> = new Set([
+  "-r",
+  "--require",
+  "--import",
+  "--loader",
+  "--experimental-loader",
 ]);
 
 /** A path's last segment. */
@@ -80,7 +91,11 @@ function interpreted(program: string, rest: readonly string[]): string | undefin
   if (PYTHON.test(program) && module !== -1) {
     return withSubcommand(named(rest[module + 1]), rest.slice(module + 2));
   }
-  const at = rest.findIndex((word) => !word.startsWith("-") && word !== "run");
+  // Note that a module loaded first, as `-r dotenv/config` names one, is not what runs.
+  const at = rest.findIndex(
+    (word, index) =>
+      !word.startsWith("-") && word !== "run" && !PRELOAD_FLAGS.has(rest[index - 1] ?? ""),
+  );
   if (at === -1) return program;
   return withSubcommand(scriptName(rest[at] ?? ""), rest.slice(at + 1));
 }
@@ -89,7 +104,7 @@ function interpreted(program: string, rest: readonly string[]): string | undefin
 function managed(manager: string, rest: readonly string[]): string | undefined {
   for (let at = 0; at < rest.length; at++) {
     const word = rest[at] ?? "";
-    if (VALUED_FLAGS.has(word)) at++;
+    if (VALUED_FLAGS.has(word) || (manager === "npm" && word === NPM_WORKSPACE_FLAG)) at++;
     else if (PASSES_ON.has(word)) return labelOf(rest.slice(at + 1));
     else if (!word.startsWith("-") && !RUNS_SCRIPT.has(word)) {
       // Note that bun runs a file as an interpreter does.
