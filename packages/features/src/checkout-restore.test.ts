@@ -154,3 +154,17 @@ test("puts the branch back on a worktree an archive's rebuild left detached at t
   assert.equal(words(cwd, "kept.txt"), "as edited before the turn\n");
   assert.equal(words(cwd, "later.txt"), undefined);
 });
+
+test("sweeps what a .gitignore the turn wrote was hiding, and leaves what the snapshot's own rules ignore", () => {
+  const { cwd, snapshot } = repositoryAfterATurn();
+  // The turn adds an ignore rule and fills the folder it hides; the build the snapshot's rules ignore stands from before.
+  writeFileSync(join(cwd, ".gitignore"), "out/\ndist/\n");
+  mkdirSync(join(cwd, "dist"));
+  writeFileSync(join(cwd, "dist", "bundle.js"), "built by the turn\n");
+
+  assert.equal(restore(cwd, snapshot), 0);
+
+  assert.equal(words(cwd, "dist/bundle.js"), undefined, "what the turn's rule hid is gone");
+  assert.equal(words(cwd, "out/built.txt"), "ignored\n", "what the snapshot's rule ignores stays");
+  assert.equal(words(cwd, ".gitignore"), "out/\n");
+});

@@ -53,6 +53,10 @@ export const CHECKOUT_RESTORE_SCRIPT = [
   "fi",
   "git add -A -- .",
   `git read-tree --reset -u "$${COMMIT}"`,
+  // Note that the add and the read run twice, because the first add reads the turn's own ignore rules: a `.gitignore` the turn
+  // wrote hides what it made, which the first read then leaves behind; the second add runs under the snapshot's rules, put back by the first read.
+  "git add -A -- .",
+  `git read-tree --reset -u "$${COMMIT}"`,
   "if git rev-parse --verify --quiet HEAD >/dev/null 2>&1; then git reset -q; else git rm -r -q --cached -- . >/dev/null 2>&1 || true; fi",
 ].join("\n");
 
