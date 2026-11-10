@@ -174,7 +174,8 @@ test("a Claude Code agent's model chip names its mode off Full access, where a C
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 
-  const { permissionMode: _mode, pendingApprovals: _asks, ...plain } = CLAUDE_AGENT;
+  // Note that the Codex agent's row names a mode that asks too, so only the harness gate keeps the chip from naming it.
+  const { pendingApprovals: _asks, ...plain } = CLAUDE_AGENT;
   const codex = await drawnTab({
     ...plain,
     model: "openai/gpt-5.5",

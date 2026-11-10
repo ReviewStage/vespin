@@ -31,7 +31,8 @@ import { AgentModelChip } from "./agent-model-chip.js";
  * manage its usage; no other agent's says what pays. An automation's chip
  * says a choice nothing of the reader's pays for cannot run; a running
  * agent's never does. A chip handed the agent's permission mode names it
- * off Full access and offers the modes from its menu's Permissions row.
+ * off Full access and offers the modes from its menu's Permissions row,
+ * which stands while the catalog could not be read too.
  */
 
 const MODELS: readonly CatalogModel[] = [
@@ -396,4 +397,39 @@ test("a chip handed the agent's permission mode names it off Full access, and it
   act(() => approve.click());
 
   assert.deepEqual(chosen, ["auto"]);
+});
+
+test("the menu offers Permissions while the catalog could not be read, the one place the mode is changed", () => {
+  const view = document.createElement("div");
+  document.body.append(view);
+  const root = createRoot(view);
+  roots.push(root);
+  act(() =>
+    root.render(
+      withQueryClient(
+        createElement(AgentModelChip, {
+          model: {
+            choice: { model: "anthropic/claude-opus-5.5", effort: "high" },
+            note: undefined,
+            choose: () => undefined,
+            runtime: AGENT_RUNTIME.CLAUDE_CODE,
+          },
+          models: undefined,
+          modelsFailed: true,
+          readModels: () => undefined,
+          usage: undefined,
+          permissions: { mode: "full_access", note: undefined, choose: () => undefined },
+        }),
+      ),
+    ),
+  );
+
+  const chip = view.querySelector<HTMLButtonElement>(".agent-model-chip button");
+  assert.ok(chip);
+  act(() => chip.click());
+  assert.ok(
+    [...document.querySelectorAll<HTMLElement>('[aria-haspopup="listbox"]')].some((row) =>
+      row.textContent?.startsWith("Permissions"),
+    ),
+  );
 });

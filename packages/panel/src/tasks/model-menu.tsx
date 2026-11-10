@@ -356,9 +356,12 @@ export function ModelMenu(props: {
     ];
   };
 
+  // Note that Permissions stands while the catalog is unread, failed, or no longer offers the choice, since the menu is the one place a mode is changed.
   const foot: FootRow[] | undefined =
     chosen === undefined || read === undefined || models === undefined
-      ? undefined
+      ? props.permissions === undefined
+        ? undefined
+        : permissionsRow()
       : [
           ...connectRow(),
           {
