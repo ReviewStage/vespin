@@ -459,14 +459,14 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           haystack: ["Workspace URL", "Change URL slug link address workspace"],
         }
       : undefined,
-    // The Skills page's one standing row, drawn once the page has the workspace it lists the skills of: the skills themselves are read from the service and listed under it.
+    // The Skills page's Add skill, on its first group's heading, drawn once the page has the workspace it lists the skills of.
     input.workspace
       ? {
           id: SETTINGS_SEARCH_ROW.ADD_SKILL,
-          label: "Add a skill",
+          label: "Add skill",
           page: SETTINGS_VIEW.SKILLS,
           haystack: [
-            "Add a skill",
+            "Add skill",
             "skills skill install import github repository SKILL.md instructions agents",
           ],
         }

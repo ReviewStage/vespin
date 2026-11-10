@@ -277,7 +277,7 @@ function labelsFound(query: string, input: SettingsSearchInput = FULL_INPUT): re
 }
 
 test("skills and rename each find the row the page draws", () => {
-  assert.ok(labelsFound("skills").includes("Add a skill"));
+  assert.ok(labelsFound("skills").includes("Add skill"));
   assert.deepEqual(labelsFound("rename"), ["Rename workspace"]);
 });
 
@@ -297,9 +297,9 @@ test("mcp finds the Vespin MCP & CLI page's groups and none of the integrations"
 
 test("renaming needs a workspace the reader manages that is not their own first", () => {
   assert.equal(
-    labelsFound("add a skill", { ...FULL_INPUT, workspace: undefined }).includes("Add a skill"),
+    labelsFound("add skill", { ...FULL_INPUT, workspace: undefined }).includes("Add skill"),
     false,
-    "the Skills page draws no Add a skill row while its workspace is unread or failed",
+    "the Skills page draws no Add skill while its workspace is unread or failed",
   );
   assert.deepEqual(labelsFound("rename", { ...FULL_INPUT, workspace: TEAM }), []);
   assert.deepEqual(
