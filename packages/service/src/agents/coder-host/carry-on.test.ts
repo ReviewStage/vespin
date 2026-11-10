@@ -5,7 +5,13 @@
  */
 
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import {
+  agentQueueNow,
+  pauseAgentQueue,
+  queueAgentMessage,
+} from "@repo/database/models/agent-queue-store";
 import { latestTurnsOf, readAgent } from "@repo/database/models/agent-store";
 import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
 import { beatDevice } from "@repo/database/models/device-store";
@@ -14,6 +20,7 @@ import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { storeWriter } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB } from "@repo/database/testing";
+import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { DEVICE_AGENT_LINE_KIND } from "@repo/features/device-agent-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
@@ -31,7 +38,7 @@ import {
   warmLocalAgent,
 } from "../../testing/local-agent.js";
 import { claimedDeviceAgentLine, settledDeviceAgentLine } from "../device-agent.js";
-import { queueAtTurnEnd } from "./agent-queue.js";
+import { queueAtTouch, queueAtTurnEnd } from "./agent-queue.js";
 import {
   CARRY_ON_OUTCOME,
   type CarryOnInput,
@@ -75,7 +82,7 @@ it.layer(getTestDB())("the carry-on decision", (it) => {
         ...mac,
         agent: { archivedAt: null, machine: AGENT_MACHINE.VERCEL },
       };
-      // A Mac quiet past its lease, as the sweep words it.
+      // A Mac quiet past its lease, as the sweep words it, back now.
       const away: CarryOnInput = {
         ...mac,
         turn: {
@@ -83,6 +90,7 @@ it.layer(getTestDB())("the carry-on decision", (it) => {
           failure: TURN_FAILURE.MODEL,
           failureDetail: hostAwayDetail("Studio"),
         },
+        hostBack: true,
       };
 
       assert.deepEqual(carryOnDecision(mac), {
@@ -108,6 +116,30 @@ it.layer(getTestDB())("the carry-on decision", (it) => {
         outcome: CARRY_ON_OUTCOME.QUEUE_NEXT,
       });
     }),
+  );
+
+  it.effect(
+    "a turn its Mac lost waits for the Mac's first beat back, queued message or not, since the Mac refuses every line until then",
+    () =>
+      Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        const away: CarryOnInput = {
+          ...resumable(now),
+          turn: {
+            ...cutOff(now),
+            failure: TURN_FAILURE.MODEL,
+            failureDetail: hostAwayDetail("Studio"),
+          },
+        };
+
+        assert.deepEqual(carryOnDecision(away), { outcome: CARRY_ON_OUTCOME.AWAIT_HOST });
+        assert.deepEqual(carryOnDecision({ ...away, queued: true }), {
+          outcome: CARRY_ON_OUTCOME.AWAIT_HOST,
+        });
+        assert.deepEqual(carryOnDecision({ ...away, queued: true, hostBack: true }), {
+          outcome: CARRY_ON_OUTCOME.QUEUE_NEXT,
+        });
+      }),
   );
 
   it.effect("a turn settled more than an hour ago is left failed", () =>
@@ -284,9 +316,10 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
             agent.conversationId,
           );
           assert.equal(failed?.failureDetail, hostAwayDetail("Studio"));
-          // Nothing went while the Mac was away, which refuses the carry-on's launch.
+          // Nothing goes while the Mac is away, which would refuse it, and the queue waits unpaused.
           yield* turnEnded(warm);
           assert.equal(yield* carriedOnStands(warm, lost), false);
+          assert.equal((yield* agentQueueNow(agent.id)).paused, undefined);
 
           yield* beatDevice(userId, deviceId);
           const went = yield* carryOnHostReturned(sessionsFor, userId, deviceId, () => Effect.void);
@@ -298,6 +331,66 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           );
           assert.equal(resumed?.status, TURN_STATUS.QUEUED);
           assert.notEqual(yield* launchClaimed(warm), undefined);
+        }),
+    );
+
+    it.effect(
+      "a message queued behind the turn a Mac lost goes at the Mac's first beat back, in the carry-on's place, and a queue paused for a reason of its own is left as it stands",
+      () =>
+        Effect.gen(function* () {
+          const warm = yield* warmLocalAgent;
+          const { userId, agent } = warm;
+          const paused = yield* warmLocalAgent;
+          yield* turnRunning(warm, "Now the emails.");
+          yield* turnRunning(paused, "Now the emails.");
+          for (const each of [warm, paused]) {
+            yield* queueAgentMessage(each.userId, each.agent.id, {
+              id: randomUUID(),
+              text: "Then open the pull request.",
+            });
+          }
+          yield* pauseAgentQueue(paused.agent.id, QUEUE_PAUSE.STOPPED);
+          yield* TestClock.adjust("6 minutes");
+          yield* reconcileAgent(agent);
+          yield* reconcileAgent(paused.agent);
+          yield* turnEnded(warm);
+          yield* turnEnded(paused);
+          assert.equal(
+            (yield* agentQueueNow(agent.id)).messages.length,
+            1,
+            "nothing goes while away",
+          );
+
+          for (const each of [warm, paused]) {
+            yield* beatDevice(each.userId, each.deviceId);
+            yield* carryOnHostReturned(sessionsFor, each.userId, each.deviceId, (back) =>
+              queueAtTouch(sessionsFor, back),
+            );
+          }
+
+          assert.deepEqual(
+            (yield* agentQueueNow(agent.id)).messages,
+            [],
+            "the queued message went",
+          );
+          const resumed = (yield* latestTurnsOf(userId, [agent.conversationId])).get(
+            agent.conversationId,
+          );
+          assert.equal(resumed?.status, TURN_STATUS.QUEUED);
+          assert.notEqual(yield* launchClaimed(warm), undefined);
+          assert.equal(
+            yield* sentLineStands(
+              userId,
+              agent.conversationId,
+              sentLineId(carryOnKey(resumed?.id ?? "")),
+            ),
+            false,
+            "no carry-on goes beside it",
+          );
+          const stillPaused = yield* agentQueueNow(paused.agent.id);
+          assert.equal(stillPaused.paused?.because, QUEUE_PAUSE.STOPPED);
+          assert.equal(stillPaused.messages.length, 1);
+          assert.equal(yield* launchClaimed(paused), undefined);
         }),
     );
   },

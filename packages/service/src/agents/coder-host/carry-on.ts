@@ -8,9 +8,11 @@
  * lease, or a cloud turn whose sandbox stopped under it (`reconcile.ts`).
  * Every such settle reaches the store writer's one settled-turn listener
  * (`settled-turns.ts`), whose queue step asks here what comes next
- * (`agent-queue.ts`'s `queueAtTurnEnd`), and a Mac back from past its
- * lease asks for its agents at its first beat (`carryOnHostReturned`),
- * since a line sent while it was away was refused. The carry-on is a line
+ * (`agent-queue.ts`'s `queueAtTurnEnd`). A turn the sweep failed for its
+ * Mac quiet past its lease is one whose Mac is away, which refuses every
+ * line, so nothing goes at its settle (`AWAIT_HOST`): the Mac asks for its
+ * agents at its first beat back (`carryOnHostReturned`), and the carry-on,
+ * or the queued message, goes then. The carry-on is a line
  * the service sends the agent (`steerAgentWritten`, under the app's name
  * and the `carry_on` channel), which opens a fresh turn through the one
  * path a message takes, so the sweep's reap of the cut-off turn always
@@ -67,16 +69,18 @@ const CARRY_ON = {
   WINDOW: Duration.hours(1),
 } as const;
 
-/** What comes after a cut-off turn: a carry-on sent, the queued message handed on in its place, or nothing. */
+/** What comes after a cut-off turn: a carry-on sent, the queued message handed on in its place, either once its Mac is back, or nothing. */
 export const CARRY_ON_OUTCOME = {
   RESUME: "resume",
   QUEUE_NEXT: "queue_next",
+  AWAIT_HOST: "await_host",
   NONE: "none",
 } as const;
 
 export type CarryOnDecision =
   | { readonly outcome: typeof CARRY_ON_OUTCOME.RESUME; readonly reason: CarryOnReason }
   | { readonly outcome: typeof CARRY_ON_OUTCOME.QUEUE_NEXT }
+  | { readonly outcome: typeof CARRY_ON_OUTCOME.AWAIT_HOST }
   | { readonly outcome: typeof CARRY_ON_OUTCOME.NONE };
 
 /** The turn the decision reads: how it ended and when, as its row says. */
@@ -94,6 +98,8 @@ export interface CarryOnInput {
   readonly openerChannel: string | undefined;
   /** Whether a message stands queued behind the turn. */
   readonly queued: boolean;
+  /** Whether the agent's Mac is back, as its first beat past its lease says; unsaid reads as not, which a turn its Mac lost awaits. */
+  readonly hostBack?: boolean | undefined;
   /** Epoch milliseconds now. */
   readonly now: number;
 }
@@ -168,6 +174,10 @@ export function carryOnDecision(input: CarryOnInput): CarryOnDecision {
   if (input.now - settledAt > Duration.toMillis(CARRY_ON.WINDOW)) {
     return { outcome: CARRY_ON_OUTCOME.NONE };
   }
+  // A Mac quiet past its lease refuses every line until it beats again, so its turn waits for that beat.
+  if (hostLostOf(turn) !== undefined && input.hostBack !== true) {
+    return { outcome: CARRY_ON_OUTCOME.AWAIT_HOST };
+  }
   if (input.queued) return { outcome: CARRY_ON_OUTCOME.QUEUE_NEXT };
   return { outcome: CARRY_ON_OUTCOME.RESUME, reason };
 }
@@ -178,10 +188,11 @@ function channelOf(line: LostLine | undefined): string | undefined {
   return metadata != null && "channel" in metadata ? metadata.channel : undefined;
 }
 
-/** The decision over the agent and its newest turn as they stand, the turn's opening line and the queue read for it. */
+/** The decision over the agent and its newest turn as they stand, the turn's opening line and the queue read for it; `hostBack` where the agent's Mac just beat again. */
 export const decidedCarryOn = /* @__PURE__ */ Effect.fn("web/decidedCarryOn")(function* (
   agent: Agent,
   turn: AgentLatestTurn | undefined,
+  hostBack = false,
 ) {
   const now = yield* Clock.currentTimeMillis;
   if (cutOffReasonOf(agent, turn) === undefined || turn === undefined) {
@@ -195,6 +206,7 @@ export const decidedCarryOn = /* @__PURE__ */ Effect.fn("web/decidedCarryOn")(fu
     turn,
     openerChannel: channelOf(Option.getOrUndefined(opener)),
     queued: queue.messages.length > 0,
+    hostBack,
     now,
   });
 });
@@ -256,8 +268,9 @@ const HOST_RETURN = { AGENTS: 50 } as const;
 /**
  * The agents of a Mac back from past its lease carried on, for the turns the
  * sweep failed naming the Mac while it was away, as the header says: each
- * decided as at its settle, and the queued message handed on in place of a
- * carry-on through `handOn`. Answers how many lines went.
+ * decided as at its settle, the Mac now back, and the queued message handed
+ * on in place of a carry-on through `handOn`, which leaves a queue paused
+ * for a reason of its own as it stands. Answers how many carry-ons went.
  */
 export const carryOnHostReturned = /* @__PURE__ */ Effect.fn("web/carryOnHostReturned")(function* (
   sessionsFor: QueueSessions,
@@ -273,7 +286,7 @@ export const carryOnHostReturned = /* @__PURE__ */ Effect.fn("web/carryOnHostRet
     const { conversationId } = agent.value;
     const turn = (yield* latestTurnsOf(userId, [conversationId])).get(conversationId);
     if (hostLostOf(turn) === undefined) continue;
-    const decided = yield* decidedCarryOn(agent.value, turn);
+    const decided = yield* decidedCarryOn(agent.value, turn, true);
     if (decided.outcome === CARRY_ON_OUTCOME.QUEUE_NEXT) {
       yield* handOn(agent.value);
       continue;

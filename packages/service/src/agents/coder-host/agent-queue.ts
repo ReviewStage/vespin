@@ -280,12 +280,15 @@ export const queueAtTurnEnd = Effect.fn("web/queueAtTurnEnd")(function* (
         Effect.as(Effect.logWarning("agent-queue: a carry-on was not decided", cause), undefined),
       ),
     );
+    // A carry-on that did not go leaves the turn failed as it was, so the queue pauses as for any failed turn.
     if (decided?.outcome === CARRY_ON_OUTCOME.RESUME && turn !== undefined) {
-      return yield* Effect.asVoid(carriedOn(sessionsFor, agent, turn.id, decided.reason));
+      if (yield* carriedOn(sessionsFor, agent, turn.id, decided.reason)) return;
     }
     if (decided?.outcome === CARRY_ON_OUTCOME.QUEUE_NEXT) {
       return yield* handOnQueue(sessionsFor, agent);
     }
+    // A Mac away refuses every line, so its turn waits unpaused for the Mac's first beat back (`carryOnHostReturned`).
+    if (decided?.outcome === CARRY_ON_OUTCOME.AWAIT_HOST) return;
     return yield* Effect.asVoid(pauseAgentQueue(agent.id, because)).pipe(
       Effect.catchCause((cause) => Effect.logWarning("agent-queue: a pause failed", cause)),
     );
