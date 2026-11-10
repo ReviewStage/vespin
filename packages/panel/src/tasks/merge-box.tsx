@@ -23,8 +23,10 @@ import {
   ConfirmDialog,
   type DialogQuestion,
   SPINNER_SIZE,
+  SPLIT_BUTTON_WIDTH,
   SpinnerRing,
   SplitButton,
+  type SplitButtonWidth,
   STATUS_TONE,
   StaticChip,
   type StatusTone,
@@ -75,11 +77,12 @@ import { type PullRequestWrites, QUEUE_WARNING } from "./pull-request-writes.js"
  * - with auto-merge on, Disable auto-merge;
  * - in the merge queue, Remove from queue, asked first, since leaving the
  *   queue may hold up the pull requests behind it;
- * - blocked by a rule or behind its base, with nothing else to offer, Bypass
- *   rules and merge by the method chosen, its chevron choosing it too, for a
+ * - blocked by a rule or behind its base, with nothing else to offer, for a
  *   member GitHub lets merge past the base's rules as it lets an admin
- *   (`canBypassRules`, read on their own sign-in), asked first, naming what
- *   it bypasses, as `gh pr merge --admin` merges.
+ *   (`canBypassRules`, read on their own sign-in), the method chosen as its
+ *   words, held, its hint saying why, and its chevron offering, after the
+ *   methods and in red, Bypass rules and merge…, which asks first, naming
+ *   what it bypasses, and merges as `gh pr merge --admin` does.
  *
  * The method is kept per repository across launches, in this window's own
  * storage as the sidebar's folds are (`folded-groups.ts`); the first the
@@ -401,6 +404,9 @@ function MethodPress({
   busyLabel,
   onChoose,
   onPress,
+  held,
+  more,
+  width,
 }: {
   variant: ButtonVariant;
   words: string;
@@ -411,11 +417,19 @@ function MethodPress({
   /** What the press says while its own change is out. */
   busyLabel: string | undefined;
   onChoose: (method: MergeMethod) => void;
-  onPress: () => void;
+  /** What the press does; none where it is held. */
+  onPress?: (() => void) | undefined;
+  /** Why the press itself may not be made now, said in its hint, its chevron still open; none where it may. */
+  held?: string | undefined;
+  /** Items the chevron's menu offers after the methods, set apart by a rule. */
+  more?: readonly MenuAction[] | undefined;
+  /** How wide the split button stands. */
+  width: SplitButtonWidth;
 }): React.JSX.Element {
-  const menu = useMenu(methods.length > 1);
+  const split = methods.length > 1 || more !== undefined;
+  const menu = useMenu(split);
   const icon = variant === BUTTON_VARIANT.PRIMARY ? <GitMergeIcon aria-hidden="true" /> : undefined;
-  if (methods.length < 2) {
+  if (!split) {
     return (
       <Button
         variant={variant}
@@ -434,6 +448,9 @@ function MethodPress({
         variant={variant}
         icon={icon}
         disabled={busy && busyLabel === undefined}
+        mainDisabled={held !== undefined}
+        width={width}
+        hintLabel={held}
         onClick={onPress}
         {...busyProps(busyLabel)}
         menu={{ label: BOX_WORDS.CHOOSE_METHOD, ...menu.trigger() }}
@@ -445,7 +462,10 @@ function MethodPress({
           replayUnmasked
           label={BOX_WORDS.CHOOSE_METHOD}
           menu={menu.drawn}
-          groups={[methodItems(methods, method, busy, onChoose)]}
+          groups={[
+            methodItems(methods, method, busy, onChoose),
+            ...(more === undefined ? [] : [more]),
+          ]}
           onClose={menu.close}
         />
       )}
@@ -478,12 +498,14 @@ interface BypassAsked {
 }
 
 /**
- * Bypass rules and merge: a press by the method chosen, as a merge's is,
- * which asks first and then merges at the head it asked about, so GitHub
- * refuses a head pushed since. The question goes once a read finds another
- * head or another base, so it never merges a head, or into a base, the
- * member was not asked about, and goes with its panel; one already answered
- * finishes.
+ * The press a member who may bypass the base's rules is offered where they
+ * hold the merge up, tucked away as Graphite's merge box tucks it: the
+ * method chosen as its words, held, its hint saying why, and its chevron's
+ * menu offering Bypass rules and merge… after the methods, in red. That asks
+ * first, then merges at the head it asked about, so GitHub refuses a head
+ * pushed since. The question goes once a read finds another head or another
+ * base, so it never merges a head, or into a base, the member was not asked
+ * about, and goes with its panel; one already answered finishes.
  */
 function BypassPress({
   pullRequest,
@@ -493,6 +515,7 @@ function BypassPress({
   busyLabel,
   shown,
   writes,
+  width,
   onChoose,
 }: {
   pullRequest: AgentOverviewPullRequest;
@@ -502,6 +525,7 @@ function BypassPress({
   busyLabel: string | undefined;
   shown: boolean;
   writes: PullRequestWrites;
+  width: SplitButtonWidth;
   onChoose: (method: MergeMethod) => void;
 }): React.JSX.Element {
   const headSha = pullRequest.merging?.headSha ?? "";
@@ -522,17 +546,26 @@ function BypassPress({
   return (
     <>
       <MethodPress
-        variant={BUTTON_VARIANT.DANGER_OUTLINE}
-        words={BOX_WORDS.BYPASS}
+        variant={BUTTON_VARIANT.PRIMARY}
+        words={PRESS_WORDS[method]}
         methods={methods}
         method={method}
         busy={busy}
         busyLabel={busyLabel}
         onChoose={onChoose}
-        onPress={() => {
-          setAsked({ head: headSha, base });
-          confirm.ask();
-        }}
+        width={width}
+        held={busyLabel === undefined ? sentenceOf(pullRequest, MERGE_ACTION.BYPASS) : undefined}
+        more={[
+          {
+            label: `${BOX_WORDS.BYPASS}…`,
+            danger: true,
+            disabled: busy,
+            onSelect: () => {
+              setAsked({ head: headSha, base });
+              confirm.ask();
+            },
+          },
+        ]}
       />
       <ConfirmDialog open confirm={confirm} question={bypassQuestion(pullRequest, method)} />
     </>
@@ -578,6 +611,7 @@ export function MergeControl({
   repository,
   shown,
   writes,
+  width = SPLIT_BUTTON_WIDTH.HUG,
 }: {
   pullRequest: AgentOverviewPullRequest;
   /** The agent's repository, which the method chosen is kept by. */
@@ -585,6 +619,8 @@ export function MergeControl({
   /** Whether the panel the control stands in is on screen; a question asked goes with it. */
   shown: boolean;
   writes: PullRequestWrites;
+  /** How wide a press by the method chosen stands: its words' own width, or the row's, a phone's row of the control alone. */
+  width?: SplitButtonWidth | undefined;
 }): React.JSX.Element | null {
   const { merging } = pullRequest;
   const methods = merging?.methods ?? [];
@@ -633,6 +669,7 @@ export function MergeControl({
             busy={busy}
             busyLabel={busyAs(PULL_REQUEST_ACTION.MERGE)}
             onChoose={choose}
+            width={width}
             onPress={() =>
               void writes.write({ action: PULL_REQUEST_ACTION.MERGE, method, headSha })
             }
@@ -649,6 +686,7 @@ export function MergeControl({
             busy={busy}
             busyLabel={busyAs(PULL_REQUEST_ACTION.ENABLE_AUTO_MERGE)}
             onChoose={choose}
+            width={width}
             onPress={() =>
               void writes.write({ action: PULL_REQUEST_ACTION.ENABLE_AUTO_MERGE, method, headSha })
             }
@@ -683,6 +721,7 @@ export function MergeControl({
             busyLabel={busyAs(PULL_REQUEST_ACTION.MERGE)}
             shown={shown}
             writes={writes}
+            width={width}
             onChoose={choose}
           />
         );
@@ -693,7 +732,13 @@ export function MergeControl({
   const drawn = press();
   if (drawn === null && !asked) return null;
   return (
-    <span className="merge-control flex min-h-control min-w-0 items-center gap-control-gap">
+    <span
+      className={
+        width === SPLIT_BUTTON_WIDTH.FULL
+          ? "merge-control flex min-h-control w-full min-w-0 items-center justify-end gap-control-gap"
+          : "merge-control flex min-h-control min-w-0 items-center gap-control-gap"
+      }
+    >
       {drawn}
       <ConfirmDialog open confirm={confirm} question={DEQUEUE_QUESTION} />
     </span>

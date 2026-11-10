@@ -1209,6 +1209,19 @@
   margin-inline-start: auto;
 }
 
+/* A phone's merge control stands on a row of its own under the title's,
+   spanning it, so the pill and what stands beside it keep one line, and its
+   press is the screen's width across rather than wrapped to a ragged line at
+   the row's end. The row stands nowhere where the control offers nothing. */
+.pull-request-merge-row {
+  display: flex;
+  margin-block-start: var(--ui-control-gap);
+}
+
+.pull-request-merge-row:empty {
+  display: none;
+}
+
 /* A narrow header, a phone's or the side panel's at its least, gives the
    title a line of its own over the pill and the controls, which stand
    under it at the row's two ends; beside them it would wrap a word to a

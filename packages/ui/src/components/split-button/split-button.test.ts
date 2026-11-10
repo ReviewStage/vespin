@@ -11,7 +11,8 @@ import { SplitButton } from "./split-button.js";
  * chevron opens the options' menu, focus on its first item; the keys walk
  * the menu, a choice acts and closes it, and Escape closes it with focus back
  * on the chevron. Unavailable, both halves refuse their press yet stay Tab
- * stops; busy, the main part is named by what it is doing and refuses its
+ * stops; held, the main part alone refuses its press while the chevron still
+ * opens the menu; busy, the main part is named by what it is doing and refuses its
  * press while the chevron still opens the menu. A main part whose press
  * succeeded lands on a check as its ring leaves; one that failed does not.
  */
@@ -38,10 +39,12 @@ type Done = string[];
 function Harness({
   done,
   disabled,
+  mainDisabled,
   busy,
 }: {
   done: Done;
   disabled?: boolean;
+  mainDisabled?: boolean;
   busy?: string;
 }): React.JSX.Element {
   const menu = useMenu(true);
@@ -51,6 +54,7 @@ function Harness({
     createElement(SplitButton, {
       label: "Save the description",
       disabled,
+      mainDisabled,
       busy: busy !== undefined,
       busyLabel: busy ?? "",
       onClick: () => done.push("Save"),
@@ -178,6 +182,22 @@ test("unavailable, both halves refuse their press and stay Tab stops", () => {
     ["true", 0],
     ["true", 0],
   ]);
+});
+
+test("held, the main part alone refuses its press, while the chevron still opens the menu, whose choice acts", () => {
+  const done: Done = [];
+  mount(createElement(Harness, { done, mainDisabled: true }));
+  const save = button("Save the description");
+
+  press(save);
+  press(button("More ways to save"));
+  expect(openMenu()).not.toBeNull();
+  const item = document.activeElement;
+  if (!(item instanceof HTMLElement)) throw new Error("nothing has focus");
+  press(item);
+
+  expect(save.getAttribute("aria-disabled")).toBe("true");
+  expect(done).toEqual(["Save as draft"]);
 });
 
 test("busy, the main part is named by what it is doing and refuses its press, while the chevron still opens the menu", () => {
