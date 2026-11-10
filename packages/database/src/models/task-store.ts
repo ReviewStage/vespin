@@ -57,12 +57,7 @@ import { ArchivedByColumnSchema, InstantColumnSchema } from "./columns.js";
 import { deleteConversations } from "./conversation-delete.js";
 import { readLastEdit, readSectionWriters } from "./description-revisions.js";
 import { type Device, devicesNamed } from "./device-store.js";
-import {
-  reopenAgentInboxItems,
-  reopenTaskInboxItems,
-  settleAgentInboxItems,
-  settleTaskInboxItems,
-} from "./inbox-settle.js";
+import { settleAgentInboxItems, settleTaskInboxItems } from "./inbox-settle.js";
 import { taskMadeByRun } from "./run-tasks.js";
 import {
   leaveTaskBlocks,
@@ -1797,17 +1792,14 @@ const archivedIdleWithTask = Effect.fnUntraced(function* <R>(
 
 /**
  * The agents the task's Done or Canceled stamped at `completedAt` archived with it, and
- * those archived with it as their turns ended since, brought back, each
- * opening again the items its archive settled (`inbox-settle.ts`); one
- * archived on its own stays archived.
+ * those archived with it as their turns ended since, brought back, the
+ * items its archive settled left settled (`inbox-settle.ts`); one archived
+ * on its own stays archived.
  */
 const broughtBackWithTask = Effect.fnUntraced(function* (taskId: string, completedAt: Date) {
   const archived = yield* lockArchivedWithTask({ taskId, since: completedAt });
   if (archived.length === 0) return;
   yield* clearArchives(archived.map(({ id }) => id));
-  yield* Effect.forEach(archived, ({ id, archivedAt }) => reopenAgentInboxItems(id, archivedAt), {
-    discard: true,
-  });
 });
 
 /** Who moves a task's status: a member or a coding agent by hand (`updateTask`), or work taking the task up (`beginTaskWork`). */
@@ -1821,9 +1813,10 @@ const TASK_STANDING = { OPEN: "open", SETTLED: "settled" } as const;
 type TaskStanding = (typeof TASK_STANDING)[keyof typeof TASK_STANDING];
 
 /**
- * What a status move does beyond its row. Bringing back and reopening undo
- * the standing Done or Canceled by its stamp, and run only where the row
- * holds one; archiving runs only where the mover hands an archiver.
+ * What a status move does beyond its row. Bringing back undoes the standing
+ * Done or Canceled's archive by its stamp, and runs only where the row
+ * holds one; archiving runs only where the mover hands an archiver. No move
+ * opens again an item a settle closed (`inbox-settle.ts`).
  */
 const TASK_MOVE_EFFECT = {
   /** The agents the standing Done or Canceled archived with the task brought back (`broughtBackWithTask`). */
@@ -1832,16 +1825,14 @@ const TASK_MOVE_EFFECT = {
   ARCHIVE_IDLE_AGENTS: "archive-idle-agents",
   /** The task's open asks settled (`settleTaskInboxItems`). */
   SETTLE_INBOX: "settle-inbox",
-  /** The items the standing Done or Canceled settled opened again (`reopenTaskInboxItems`). */
-  REOPEN_INBOX: "reopen-inbox",
 } as const;
 
 type TaskMoveEffect = (typeof TASK_MOVE_EFFECT)[keyof typeof TASK_MOVE_EFFECT];
 
 /**
  * Every status move's effects, by its mover and the sides it moves from and
- * to; a move within a side by hand, such as Done to Canceled, undoes the
- * standing settle and makes its own. Work opens nothing and brings no agent
+ * to; a move within a side by hand, such as Done to Canceled, brings back
+ * the standing archive's agents and makes its own settle. Work opens nothing and brings no agent
  * back, and only ever moves a task to In progress, so its moves to settled
  * do nothing.
  */
@@ -1855,7 +1846,7 @@ const TASK_MOVE_EFFECTS = {
       ],
     },
     [TASK_STANDING.SETTLED]: {
-      [TASK_STANDING.OPEN]: [TASK_MOVE_EFFECT.BRING_BACK_AGENTS, TASK_MOVE_EFFECT.REOPEN_INBOX],
+      [TASK_STANDING.OPEN]: [TASK_MOVE_EFFECT.BRING_BACK_AGENTS],
       [TASK_STANDING.SETTLED]: [
         TASK_MOVE_EFFECT.BRING_BACK_AGENTS,
         TASK_MOVE_EFFECT.ARCHIVE_IDLE_AGENTS,
@@ -1915,9 +1906,6 @@ const taskStatusMoved = Effect.fnUntraced(function* <R, E2, R2>(
   if (effects.includes(TASK_MOVE_EFFECT.SETTLE_INBOX)) {
     yield* settleTaskInboxItems(taskId, move.to, now);
   }
-  if (effects.includes(TASK_MOVE_EFFECT.REOPEN_INBOX) && finishedAt !== null) {
-    yield* reopenTaskInboxItems(taskId, move.from, finishedAt);
-  }
   // An archived agent's asks the task's settle left open settle with its archive.
   yield* settleAgentInboxItems(
     archived.map(({ id }) => id),
@@ -1938,7 +1926,7 @@ const taskStatusMoved = Effect.fnUntraced(function* <R, E2, R2>(
  * that the change moves into progress is assigned to the account, unless the
  * change names an assignee of its own. A change that moves the task to Done
  * or Canceled settles its open inbox items, and one that moves it off them
- * to work again opens again the items that move settled (`inbox-settle.ts`).
+ * to work again leaves those items settled (`inbox-settle.ts`).
  *
  * Where the caller hands `doneArchive`, a change that moves the task to Done
  * or Canceled records the archiver given as who moved it there, and archives
