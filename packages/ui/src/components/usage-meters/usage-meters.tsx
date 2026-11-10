@@ -22,6 +22,13 @@ import {
  * reader. A reading that is not fresh says when it was heard under the rows
  * (`heard`), since a plan's usage is only known from the turns that ran on
  * it.
+ *
+ * Meters that stand one under another, each plan's in a list of plans, line
+ * up as one table, as Capy's connections do (`alignWith`): each column is as
+ * wide as its widest words among all of them, so every name, bar, share,
+ * and reset starts where the one above it does. Note that each cell holds
+ * every other block's words for its column, hidden and unread, since a
+ * column can only be as wide as words it holds.
  */
 
 /** One window's row: its name, the share used, when it resets, and the ink its bar fills in. */
@@ -61,32 +68,78 @@ function percentWords(usedPercent: number): string {
   return `${String(Math.round(usedPercent))}%`;
 }
 
+/** One cell's words, as wide as the widest of `sizes`, which it holds hidden in the same place. */
+function Cell({
+  words,
+  sizes,
+  className,
+}: {
+  words: string;
+  sizes: readonly string[];
+  className: string;
+}): React.JSX.Element {
+  return (
+    <span className={cn("grid", className)}>
+      <span className="col-start-1 row-start-1">{words}</span>
+      {sizes
+        .filter((size) => size !== words)
+        .map((size) => (
+          <span key={size} className="invisible col-start-1 row-start-1" aria-hidden>
+            {size}
+          </span>
+        ))}
+    </span>
+  );
+}
+
+/** Each column's words among the rows, each once. */
+function columnWords(rows: readonly UsageMeterRow[]) {
+  const unique = (words: readonly string[]) => [...new Set(words)];
+  return {
+    labels: unique(rows.map((row) => row.label)),
+    percents: unique(rows.map((row) => percentWords(row.usedPercent))),
+    resets: unique(rows.flatMap((row) => (row.resets === undefined ? [] : [row.resets]))),
+  };
+}
+
 export function UsageMeters({
   rows,
   heard,
   width = USAGE_METERS_WIDTH.METER,
+  alignWith = rows,
 }: {
   rows: readonly UsageMeterRow[];
   /** When the reading was heard, where it is not fresh: "Updated 1h ago". */
   heard?: string | undefined;
   /** How wide the meters run; their bars a meter's length where none is named. */
   width?: UsageMetersWidth | undefined;
+  /** Every row of the meters these line up with, theirs among them; their own rows where none is named. */
+  alignWith?: readonly UsageMeterRow[] | undefined;
 }): React.JSX.Element {
   const { grid, bar } = WIDTHS[width];
+  const sizes = columnWords(alignWith);
   return (
     <div className="ui-usage-meters flex flex-col gap-ui-4 text-caption">
       <div className={cn("grid items-center gap-x-ui-8 gap-y-ui-4", grid)}>
         {rows.map((row) => (
           <div key={row.label} className="contents" data-window={row.label}>
-            <span className="text-muted-foreground">{row.label}</span>
+            <Cell words={row.label} sizes={sizes.labels} className="text-muted-foreground" />
             <Progress
               value={row.usedPercent}
               tone={row.tone ?? PROGRESS_TONE.WORKING}
               width={bar}
               size={PROGRESS_SIZE.THIN}
             />
-            <span className="text-right tabular-nums">{percentWords(row.usedPercent)}</span>
-            <span className="text-muted-foreground tabular-nums">{row.resets ?? ""}</span>
+            <Cell
+              words={percentWords(row.usedPercent)}
+              sizes={sizes.percents}
+              className="justify-items-end tabular-nums"
+            />
+            <Cell
+              words={row.resets ?? ""}
+              sizes={sizes.resets}
+              className="text-muted-foreground tabular-nums"
+            />
           </div>
         ))}
       </div>

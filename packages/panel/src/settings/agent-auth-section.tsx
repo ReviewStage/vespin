@@ -72,6 +72,7 @@ import {
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  type UsageMeterRow,
   useConfirmDialog,
   useMenu,
 } from "@repo/ui";
@@ -1083,10 +1084,13 @@ function PlanRow({
   onMove,
   onRename,
   onUnconfirmed,
+  alignWith,
 }: {
   provider: ProviderKeyProvider;
   plan: SubscriptionKeySummary;
   name: string;
+  /** Every plan's meter rows on the page, which its meters line up with. */
+  alignWith: readonly UsageMeterRow[];
   at: number;
   count: number;
   open: typeof STEPS.REPLACE | typeof STEPS.RENAME | undefined;
@@ -1127,7 +1131,11 @@ function PlanRow({
           <>
             {line.words === undefined ? null : <State ok={line.ok}>{line.words}</State>}
             {line.usage !== undefined ? (
-              <SettingsRowUsage rows={line.usage.rows} heard={line.usage.heard} />
+              <SettingsRowUsage
+                rows={line.usage.rows}
+                heard={line.usage.heard}
+                alignWith={alignWith}
+              />
             ) : line.meter === undefined ? null : (
               <SettingsRowMeter value={line.meter.value} tone={line.meter.tone} />
             )}
@@ -1289,9 +1297,12 @@ function HarnessCredentials({
   open,
   onOpen,
   onClose,
+  aligned,
 }: {
   provider: ProviderKeyProvider;
   answer: ProviderKeysAnswer;
+  /** What every harness's card lines up with: whether one draws grips, and every plan's meters on the page. */
+  aligned: PageAlignment;
   /** Which of this harness's steps stand open, if any. */
   open: HarnessSteps | undefined;
   onOpen: (steps: HarnessSteps) => void;
@@ -1375,6 +1386,7 @@ function HarnessCredentials({
         <SettingsOrderedRows
           label={harness.name}
           onPointerDown={drag}
+          gutter={aligned.gutter}
           rows={order.ordered.map((credential, at) => {
             const rowOpen =
               open !== undefined &&
@@ -1400,6 +1412,7 @@ function HarnessCredentials({
                     onMove={order.move}
                     onRename={(label) => order.rename(credential, label)}
                     onUnconfirmed={setUnconfirmed}
+                    alignWith={aligned.meters}
                   />
                 ) : (
                   <KeyRow
@@ -1468,6 +1481,24 @@ function useCredentials({
  * changed in place, one credential's steps open at a time: signed out, a
  * read that failed, or the sections' skeleton while it is out.
  */
+/** What every harness's card on the page lines up with. */
+interface PageAlignment {
+  /** Whether any card draws grips, so every card keeps their gutter and its marks stand in one column with theirs. */
+  readonly gutter: boolean;
+  /** Every plan's meter rows on the page, so each plan's meters line up with every other's as one table. */
+  readonly meters: readonly UsageMeterRow[];
+}
+
+/** What the page's cards line up with, as the account's keys stand `now`. */
+function pageAlignment(answer: ProviderKeysAnswer, now: number): PageAlignment {
+  return {
+    gutter: HARNESSES.some(
+      (provider) => plansOf(answer, provider).length + keysOf(answer, provider).length > 1,
+    ),
+    meters: (answer.subscriptions ?? []).flatMap((plan) => planUsageMeters(plan, now)?.rows ?? []),
+  };
+}
+
 function CredentialLists({
   signedIn,
   gap,
@@ -1508,6 +1539,7 @@ function CredentialLists({
       />
     );
   }
+  const aligned = pageAlignment(answer, Date.now());
   return (
     <ReplayMask>
       <Stack gap={gap}>
@@ -1519,6 +1551,7 @@ function CredentialLists({
             open={open?.provider === provider ? open : undefined}
             onOpen={(steps) => setOpen({ ...steps, provider })}
             onClose={() => setOpen(undefined)}
+            aligned={aligned}
           />
         ))}
       </Stack>

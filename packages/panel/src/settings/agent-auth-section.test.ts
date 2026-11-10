@@ -315,9 +315,14 @@ const lineOf = (within: Element) => {
 const meterOf = (within: Element) =>
   within.querySelector('[data-slot="progress"]')?.getAttribute("data-tone") ?? undefined;
 
-/** A plan's usage meters, each window's row as its words read. */
+/** A plan's usage meters, each window's row as a reader hears its words, the copies that size its columns left out. */
 const metersOf = (within: Element) =>
-  [...within.querySelectorAll("[data-window]")].map((row) => row.textContent);
+  [...within.querySelectorAll("[data-window]")].map((row) =>
+    [...row.querySelectorAll("span")]
+      .filter((span) => span.children.length === 0 && span.closest("[aria-hidden]") === null)
+      .map((span) => span.textContent)
+      .join(""),
+  );
 
 const plain = (words: string) => ({ words, state: SETTINGS_ROW_STATE.PLAIN });
 const readyLine = plain("Ready");
