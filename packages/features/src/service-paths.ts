@@ -62,6 +62,17 @@ export const HOSTED_SERVICE_PATH = {
   /** The phone's "Notify me" set (POST), by its token and gateway in the body; one the account does not hold is answered not found. */
   ACCOUNT_PUSH_DEVICES_NOTIFY: "/api/account/push-devices/notify",
   /**
+   * The push-to-start token ActivityKit handed the phone for its Live
+   * Activity (POST), beside the phone's device token and gateway in the body;
+   * a phone the account does not hold is answered not found.
+   * `live-activity-wire.ts` declares the body.
+   */
+  ACCOUNT_LIVE_ACTIVITIES_START_TOKEN: "/api/account/live-activities/start-token",
+  /** The update token of the Live Activity standing on the phone (POST), as the start token is registered. */
+  ACCOUNT_LIVE_ACTIVITIES_ACTIVITY_TOKEN: "/api/account/live-activities/activity-token",
+  /** The phone's Live Activity ended or was dismissed on the phone (POST), by the phone's device token and gateway; one the account does not hold is passed over. */
+  ACCOUNT_LIVE_ACTIVITIES_ENDED: "/api/account/live-activities/ended",
+  /**
    * The member used a desktop or web client just now (POST), with an empty
    * body: the service stamps when the account was last active, which holds
    * its phone's pushes while it stands inside `PRESENCE.WINDOW_MS`.

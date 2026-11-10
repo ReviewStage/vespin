@@ -67,6 +67,7 @@
     "./models/push-device-store": "./src/models/push-device-store.js",
     "./models/presence-store": "./src/models/presence-store.js",
     "./models/held-push-store": "./src/models/held-push-store.js",
+    "./models/live-activity-store": "./src/models/live-activity-store.js",
     "./models/quota": "./src/models/quota.js",
     "./models/recorded-session": "./src/models/recorded-session.js",
     "./models/repository-pin-store": "./src/models/repository-pin-store.js",
