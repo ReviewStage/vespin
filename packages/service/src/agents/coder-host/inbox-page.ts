@@ -7,10 +7,7 @@ import type { InboxAnswer } from "@repo/features/inbox-wire";
 import { Clock, Duration, Effect } from "effect";
 import { cursorOf, heldUntilMoved as heldOpen } from "../../http/held-read.js";
 import {
-  accountInboxAgents,
-  accountInboxAutomations,
   accountInboxTasks,
-  accountTasklessItems,
   accountWaitingItems,
   accountWaitingStamps,
   type InboxStamp,
@@ -55,11 +52,7 @@ import { CODER } from "./bounds.js";
  * it for as long as it is signed in rather than while a tab is on screen.
  * A reader that asks is listed the archived tasks holding items beside the
  * rest, though none of their items waits on it.
- * The open items of agents with no task, and the automations holding them,
- * ride beside the tasks' under keys of their own, and move the same cursor;
- * each agent with no task holding an item, settled ones included, is
- * listed as a task is, and its own settled items still unread are held as
- * a task's are.
+ * Every agent stands on a task, so its items are its task's.
  * So does the newest run of each of the account's own automations that
  * failed to start in the last `FAILED_RUN_WINDOW`, which is no item, but
  * is what its owner is told of whichever plan is open; a run aging out of
@@ -150,7 +143,7 @@ export function taskInboxPast(
   );
 }
 
-/** Where everything that waits on the account stands: its open items, its planless agents' among them, and its automations' failed runs. */
+/** Where everything that waits on the account stands: its open items, and its automations' failed runs. */
 function accountStamps(userId: string): InboxStoreEffect<readonly InboxCursorStamp[]> {
   return Effect.gen(function* () {
     const items = yield* accountWaitingStamps(userId);
@@ -161,14 +154,15 @@ function accountStamps(userId: string): InboxStoreEffect<readonly InboxCursorSta
 
 /**
  * What waits on the developer across the account, held while its cursor is
- * still the reader's, and when it was read. Note that the instant is taken
- * before the items are, because an item written between the two would
- * otherwise read as changed before an answer that does not hold it.
+ * still the reader's, and when it was read. Every agent stands on a task, so
+ * its `planless`, `automations`, and `agents` are empty, as the live read's
+ * parts are, which a released desktop still follows. Note that the instant
+ * is taken before the items are, because an item written between the two
+ * would otherwise read as changed before an answer that does not hold it.
  */
 export function accountInboxPast(
   userId: string,
   after: string,
-  repositoryless = false,
 ): InboxStoreEffect<AccountInboxAnswer> {
   const read = Effect.gen(function* () {
     const readAt = yield* Clock.currentTimeMillis;
@@ -176,18 +170,14 @@ export function accountInboxPast(
     const cursor = cursorOf(yield* accountStamps(userId));
     const rows = yield* accountWaitingItems(userId);
     const tasks = yield* accountInboxTasks(userId);
-    const tasklessRows = yield* accountTasklessItems(userId, repositoryless);
-    const automations = yield* accountInboxAutomations(userId);
-    const agents = yield* accountInboxAgents(userId, repositoryless);
     const failedRuns = yield* failedRunsOf(userId);
     const items = rows.map(({ status: _status, ...entry }) => entry);
-    const taskless = tasklessRows.map(({ status: _status, ...entry }) => entry);
     return {
       items,
       plans: tasks,
-      planless: taskless,
-      automations,
-      agents,
+      planless: [],
+      automations: [],
+      agents: [],
       failedRuns,
       cursor,
       readAt,

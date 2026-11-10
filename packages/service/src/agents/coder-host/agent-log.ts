@@ -48,7 +48,7 @@ const REPORTED_KEYS = [
 
 /**
  * The ids of a coding agent a line is annotated with, those the caller
- * holds: its own, its conversation's, its task's where it has one, and
+ * holds: its own, its conversation's, its task's, and
  * our session its machine is tagged with.
  */
 export function agentLogIds(
@@ -58,7 +58,7 @@ export function agentLogIds(
   return {
     ...(agent.id === undefined ? undefined : { agentId: agent.id }),
     ...(agent.conversationId === undefined ? undefined : { conversationId: agent.conversationId }),
-    ...(agent.taskId === undefined || agent.taskId === null ? undefined : { taskId: agent.taskId }),
+    ...(agent.taskId === undefined ? undefined : { taskId: agent.taskId }),
     ...(sessionId === undefined ? undefined : { sessionId }),
   };
 }

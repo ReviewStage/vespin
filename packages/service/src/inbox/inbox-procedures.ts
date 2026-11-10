@@ -22,7 +22,6 @@ import {
 import { readTaskWorkspace } from "@repo/database/models/task-store";
 import { type StoreWriter, storeWriter } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { ACCOUNT_INBOX_REPOSITORYLESS } from "@repo/features/account-inbox-wire";
 import type { AgentAttachment } from "@repo/features/agent-wire";
 import {
   INBOX_ASK_STATUS,
@@ -803,14 +802,10 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
   const writer = storeWriter({ tools: CODER_TOOL_SET });
   const signedIn = hosted.inbox.use(accountMiddleware(seams.resolveUserId));
   return {
-    // Note that the query's `archived=include`, which an older build still sends, is taken and changes nothing: no task is archived any more, so there is none to list.
+    // Note that the query's `archived=include` and `repositoryless`, which an older build still sends, are taken and change nothing: no task is archived any more, and no agent stands on no task, the one whose repository the second asked about.
     account: signedIn.account.effect(function* ({ input, context }) {
       const after = input.after ?? INBOX_CURSOR_START;
-      const repositoryless =
-        input[ACCOUNT_INBOX_REPOSITORYLESS.QUERY] === ACCOUNT_INBOX_REPOSITORYLESS.INCLUDE;
-      return yield* hostedStoreOrUnavailable(
-        accountInboxPast(context.userId, after, repositoryless),
-      );
+      return yield* hostedStoreOrUnavailable(accountInboxPast(context.userId, after));
     }),
     task: signedIn.task.effect(function* ({ input, context }) {
       const taskId = yield* pathUuid(input.id);

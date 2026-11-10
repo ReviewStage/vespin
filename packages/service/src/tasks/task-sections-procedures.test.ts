@@ -105,52 +105,62 @@ function sectionsOf(answered: Answer): TaskSections {
 const refusal = (status: number, error: string): Answer => ({ status, body: { error } });
 
 it.layer(getTestDB())("the task sections route", (it) => {
-  it.effect("a section made answers every section, for the bearer's account alone", () =>
-    Effect.gen(function* () {
-      const { owner, other, ask } = yield* openAccounts;
-      const workspaceId = yield* openWorkspace(owner);
-      const id = randomUUID();
-      const madeAt = yield* Clock.currentTimeMillis;
-      yield* TestClock.adjust("1 minute");
-      const createIt = () =>
-        ask(
-          request(owner, {
-            method: "PUT",
-            body: {
-              kind: TASK_SECTION_WRITE.CREATE,
+  it.effect(
+    "a section made answers every section, for the bearer's account alone, and a released desktop's placing of an agent changes none of it",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, ask } = yield* openAccounts;
+        const workspaceId = yield* openWorkspace(owner);
+        const id = randomUUID();
+        const madeAt = yield* Clock.currentTimeMillis;
+        yield* TestClock.adjust("1 minute");
+        const createIt = () =>
+          ask(
+            request(owner, {
+              method: "PUT",
+              body: {
+                kind: TASK_SECTION_WRITE.CREATE,
+                id,
+                workspaceId,
+                title: "  Launch ",
+                icon: { kind: "emoji", emoji: "🚀" },
+              },
+            }),
+          );
+        const answered = yield* createIt();
+        const made = sectionsOf(answered);
+        // The write names the transaction it wrote in, for the sidebar's follower to wait on; made again, it wrote nothing and names none.
+        assert.match(readAnswer(answered).txid ?? "", /^\d+$/u);
+        assert.equal(readAnswer(yield* createIt()).txid, undefined);
+
+        assert.deepEqual(made, {
+          sections: [
+            {
               id,
               workspaceId,
-              title: "  Launch ",
+              title: "Launch",
               icon: { kind: "emoji", emoji: "🚀" },
+              createdAt: madeAt + 60_000,
             },
+          ],
+          entries: [],
+          agentEntries: [],
+        });
+        assert.deepEqual(sectionsOf(yield* ask(request(owner))), made);
+        // A released desktop still places an agent in a section; every agent stands on a task, so it writes nothing and is no refusal.
+        const placed = yield* ask(
+          request(owner, {
+            method: "PUT",
+            body: { kind: TASK_SECTION_WRITE.PLACE_AGENT, agentId: randomUUID(), sectionId: id },
           }),
         );
-      const answered = yield* createIt();
-      const made = sectionsOf(answered);
-      // The write names the transaction it wrote in, for the sidebar's follower to wait on; made again, it wrote nothing and names none.
-      assert.match(readAnswer(answered).txid ?? "", /^\d+$/u);
-      assert.equal(readAnswer(yield* createIt()).txid, undefined);
-
-      assert.deepEqual(made, {
-        sections: [
-          {
-            id,
-            workspaceId,
-            title: "Launch",
-            icon: { kind: "emoji", emoji: "🚀" },
-            createdAt: madeAt + 60_000,
-          },
-        ],
-        entries: [],
-        agentEntries: [],
-      });
-      assert.deepEqual(sectionsOf(yield* ask(request(owner))), made);
-      assert.deepEqual(sectionsOf(yield* ask(request(other))), {
-        sections: [],
-        entries: [],
-        agentEntries: [],
-      });
-    }),
+        assert.deepEqual(readAnswer(placed), made);
+        assert.deepEqual(sectionsOf(yield* ask(request(other))), {
+          sections: [],
+          entries: [],
+          agentEntries: [],
+        });
+      }),
   );
 
   it.effect(
