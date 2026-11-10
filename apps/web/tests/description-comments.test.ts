@@ -37,7 +37,6 @@ import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { CODER } from "@repo/service/agents/coder-host/bounds";
 import { sessionSandboxesLayer } from "@repo/service/agents/session-sandboxes";
 import {
-  type AgentSessions,
   SESSION_SEND_OUTCOME,
   type SessionMessage,
 } from "@repo/service/agents/sessions/agent-sessions";
@@ -56,7 +55,10 @@ import {
   CONNECTOR_ASKED_NOTHING,
   integrationConnectOf,
 } from "@repo/service/testing/integration-connect";
-import { scriptedHarnessLayer } from "@repo/service/testing/native-harness-fake";
+import {
+  type ScriptedSessions,
+  scriptedHarnessLayer,
+} from "@repo/service/testing/native-harness-fake";
 import { keepAwakeDetached } from "@repo/service/testing/session-sandboxes-fake";
 import { EXPERIMENT } from "@repo/settings";
 import { unparsedWire } from "@repo/wire";
@@ -118,7 +120,7 @@ const resolveUserId = (incoming: Request) =>
 const opened: SessionMessage[] = [];
 
 /** The agent sessions as the routes reach them under the member's bearer: every open accepted and written down, no other call made. */
-const fakeAgentSessions = (): AgentSessions => ({
+const fakeAgentSessions = (): ScriptedSessions => ({
   open: (message) =>
     Effect.sync(() => {
       opened.push(message);
