@@ -1,5 +1,6 @@
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import {
+  anyToMarkRead,
   EVERYONES,
   INBOX_HOLDER,
   INBOX_SHOW,
@@ -322,7 +323,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     [everyItem, narrowedTask, now],
   );
   // Note that every item marked read is pushed with each followed inbox, its marker among its rows, so nothing is read again.
-  const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id });
+  const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id, readerId: tasks.me });
   // The list's search, which narrows what it lists, never what it counts.
   const [query, setQuery] = useState("");
   const search = useMemo(() => searchTokens(query), [query]);
@@ -330,6 +331,8 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
   // Note that a task's items are listed whole, under no view (`TASK_LISTS`).
   const { show, whose } = narrowedTask === undefined ? choices : TASK_LISTS;
   const counts = useMemo(() => inboxCounts(standing, me, whose), [standing, me, whose]);
+  // Note that Mark all as read stands while a notice waits on the reader, read or not, since it acknowledges each (`settledOnRead`).
+  const markable = useMemo(() => anyToMarkRead(standing, me, now), [standing, me, now]);
   const filter = useMemo(() => ({ show, whose, search, readerId: me }), [show, whose, search, me]);
   // The rows hold what the filter lists and the chosen row they drew, while the steps keep the item the pane shows in its place,
   // both held still while the page stands: every row while the pointer is over the list, and the chosen row while it stays chosen.
@@ -428,6 +431,7 @@ export function useInboxListing(tasks: TasksControl, narrowedTask?: string) {
     named,
     marks,
     standing,
+    markable,
     counts,
     list,
     listedRows,

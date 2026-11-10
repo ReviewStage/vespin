@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace, by the slug list_workspaces answered, whose skills to list or whose GitHub installation reads a source; leave it out where the member belongs to one workspace alone."
+    },
+    "source": {
+      "type": "string",
+      "maxLength": 131072,
+      "description": "What to install from, as the member would paste it into Add skill: a GitHub repository (owner/name or its address), a link to one of its folders, an `npx skills add` line naming one, or a skill's own SKILL.md text."
+    }
+  },
+  "required": [
+    "source"
+  ],
+  "additionalProperties": false
+}

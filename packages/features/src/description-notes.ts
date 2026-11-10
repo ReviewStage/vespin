@@ -1,9 +1,9 @@
 import { EXCESS_KEYS, isRecord, type UnparsedWireValue } from "@repo/wire";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { Schema as EffectSchema, Result } from "effect";
-import { mentionLinksIn } from "./mention-link.js";
 import { taskPicturesIn } from "./description-attachment-link.js";
-import { openFenceAt, descriptionSections } from "./description-document.js";
+import { descriptionSections, openFenceAt } from "./description-document.js";
+import { mentionLinksIn } from "./mention-link.js";
 import { DESCRIPTION_SECTION_BOUNDS, TASK_BOUNDS } from "./task-wire.js";
 import { trimmedText } from "./text-schema.js";
 
@@ -115,6 +115,33 @@ export const NOTE_KIND = {
 
 /** The most notes one answer may take. */
 const MAX_NOTES = 40;
+
+/** Why a note could not be taken into the text as it stands. */
+export const NOTE_MISS = {
+  /** A replacement's find stands nowhere in the text. */
+  NOWHERE: "nowhere",
+  /** A replacement's find stands more than once. */
+  REPEATED: "repeated",
+  /** An addition's heading stands over more than one section. */
+  HEADING_REPEATED: "heading-repeated",
+  /** A replacement would drop or break a mention the text held. */
+  DROPS_MENTION: "drops-mention",
+  /** A replacement would drop or break a picture the text held. */
+  DROPS_PICTURE: "drops-picture",
+} as const;
+
+/** What a note met, with how many places it stood in where it stood in more than one. */
+export type NoteMiss =
+  | {
+      readonly kind:
+        | typeof NOTE_MISS.NOWHERE
+        | typeof NOTE_MISS.DROPS_MENTION
+        | typeof NOTE_MISS.DROPS_PICTURE;
+    }
+  | {
+      readonly kind: typeof NOTE_MISS.REPEATED | typeof NOTE_MISS.HEADING_REPEATED;
+      readonly times: number;
+    };
 
 /** The heading a point goes under, as a note names one: the notetaker's and a coding agent's alike. */
 export const descriptionNoteSectionSchema = describeWire(
@@ -261,8 +288,17 @@ function spansOf(text: string, find: string): readonly Span[] {
  * correction landing on the wrong line is the edit a note must never make.
  */
 export function locatedPhrase(text: string, find: string): Span | undefined {
+  const located = placeOf(text, find);
+  return Result.isSuccess(located) ? located.success : undefined;
+}
+
+/** The one place a phrase stands in a text, or how it missed: standing nowhere, or how many times it stands. */
+function placeOf(text: string, find: string): Result.Result<Span, NoteMiss> {
   const spans = spansOf(text, find);
-  return spans.length === 1 ? spans[0] : undefined;
+  const [first] = spans;
+  if (first === undefined) return Result.fail({ kind: NOTE_MISS.NOWHERE });
+  if (spans.length > 1) return Result.fail({ kind: NOTE_MISS.REPEATED, times: spans.length });
+  return Result.succeed(first);
 }
 
 /** Text added after a field's answer: on the next line within a list, and as a new paragraph otherwise. */
@@ -293,20 +329,22 @@ function fenceClosed(words: string): string {
 function addedToText(
   text: string,
   note: Extract<DescriptionNote, { kind: typeof NOTE_KIND.ADD }>,
-): string | undefined {
+): Result.Result<string, NoteMiss> {
   const heading = note.section;
   const added = contained(note.text);
   const under = descriptionSections(text).filter((each) => each.heading === heading);
-  if (under.length > 1) return undefined;
+  if (under.length > 1) {
+    return Result.fail({ kind: NOTE_MISS.HEADING_REPEATED, times: under.length });
+  }
   const section = under[0];
   if (section === undefined) {
     const head = fenceClosed(text.trimEnd());
-    return `${head.length === 0 ? "" : `${head}\n\n`}## ${heading}\n\n${added}\n`;
+    return Result.succeed(`${head.length === 0 ? "" : `${head}\n\n`}## ${heading}\n\n${added}\n`);
   }
   const words = fenceClosed(section.text);
   const lines = words.split("\n");
   const grown = lines.length > 1 ? appended(words, added) : `${words}\n\n${added}`;
-  return text.slice(0, section.from) + grown + text.slice(section.to);
+  return Result.succeed(text.slice(0, section.from) + grown + text.slice(section.to));
 }
 
 /** Where the lines a span touches start and end: the first one's start, and just past the last one's line break. */
@@ -328,7 +366,7 @@ function struckFromText(text: string, lines: Span): string {
 }
 
 /**
- * The text with the span deleted, or nothing where a deletion within lines
+ * The text with the span deleted, or the miss where a deletion within lines
  * would drop a mention or a picture. Note that where the lines it touches hold nothing
  * else, they are struck whole, with the blank line they leave doubled taken
  * back, because a model deleting a point copies its words and not the line
@@ -337,16 +375,15 @@ function struckFromText(text: string, lines: Span): string {
  * a deletion that leaves any of a line standing is a correction, and keeps
  * every mention whole, so it cannot cut one's target short.
  */
-function deletedFromText(text: string, at: Span): string | undefined {
+function deletedFromText(text: string, at: Span): Result.Result<string, NoteMiss> {
   const lines = linesOf(text, at);
   const rest = text.slice(lines.from, at.from) + text.slice(at.to, lines.to);
-  if (rest.trim().length === 0) return struckFromText(text, lines);
-  const deleted = text.slice(0, at.from) + text.slice(at.to);
-  return keepsMentions(text, deleted) && keepsPictures(text, deleted) ? deleted : undefined;
+  if (rest.trim().length === 0) return Result.succeed(struckFromText(text, lines));
+  return keptWhole(text, text.slice(0, at.from) + text.slice(at.to));
 }
 
 /**
- * The text with the one place `find` stands replaced, or nothing where it
+ * The text with the one place `find` stands replaced, or the miss where it
  * stands nowhere or more than once, or the replacement would drop a mention
  * or a picture.
  * An empty replacement deletes (`deletedFromText`).
@@ -354,25 +391,32 @@ function deletedFromText(text: string, at: Span): string | undefined {
 function replacedInText(
   text: string,
   note: Extract<DescriptionNote, { kind: typeof NOTE_KIND.REPLACE }>,
-): string | undefined {
-  const at = locatedPhrase(text, note.find);
-  if (at === undefined) return undefined;
+): Result.Result<string, NoteMiss> {
+  const located = placeOf(text, note.find);
+  if (Result.isFailure(located)) return Result.fail(located.failure);
+  const at = located.success;
   if (note.text === "") return deletedFromText(text, at);
   // A replacement inside a fence is code, written as given rather than contained as prose.
   const words = openFenceAt(text, at.from) === undefined ? contained(note.text) : note.text;
-  const replaced = text.slice(0, at.from) + words + text.slice(at.to);
-  return keepsMentions(text, replaced) && keepsPictures(text, replaced) ? replaced : undefined;
+  return keptWhole(text, text.slice(0, at.from) + words + text.slice(at.to));
+}
+
+/** A correction's text, or the miss where it would drop a mention or a picture the text held before it. */
+function keptWhole(before: string, after: string): Result.Result<string, NoteMiss> {
+  if (!keepsMentions(before, after)) return Result.fail({ kind: NOTE_MISS.DROPS_MENTION });
+  if (!keepsPictures(before, after)) return Result.fail({ kind: NOTE_MISS.DROPS_PICTURE });
+  return Result.succeed(after);
 }
 
 /**
- * A document's text with one note taken, or nothing where the note cannot
+ * A document's text with one note taken, or the miss where the note cannot
  * be: an addition at the end of the one section under its heading, or as a
  * new section at the end of the text where it has none; a replacement names text
  * that must stand exactly once in the whole text, headings among it, so a
  * heading is renamed, a section moved or struck, and a point moved between
  * sections by replacements alone.
  */
-function applyNoteToText(text: string, note: DescriptionNote): string | undefined {
+function applyNoteToText(text: string, note: DescriptionNote): Result.Result<string, NoteMiss> {
   return note.kind === NOTE_KIND.ADD ? addedToText(text, note) : replacedInText(text, note);
 }
 
@@ -421,21 +465,20 @@ function keepsPictures(before: string, after: string): boolean {
 
 /**
  * Notes taken over a document's text: the text with every note taken, or,
- * where one could not be, the text as it stood and the first note that
- * could not, which refuses the whole batch.
+ * where one could not be, the text as it stood, the first note that could
+ * not, which refuses the whole batch, and why it could not.
  */
-export interface TextNotesTaken {
-  readonly text: string;
-  readonly missed?: DescriptionNote;
-}
+export type TextNotesTaken =
+  | { readonly text: string; readonly missed?: undefined }
+  | { readonly text: string; readonly missed: DescriptionNote; readonly why: NoteMiss };
 
 /** Notes taken in order until one cannot be: the text so far, and the note that stopped them. */
 function takenInOrder(text: string, notes: readonly DescriptionNote[]): TextNotesTaken {
   let taken = text;
   for (const note of notes) {
     const next = applyNoteToText(taken, note);
-    if (next === undefined) return { text: taken, missed: note };
-    taken = next;
+    if (Result.isFailure(next)) return { text: taken, missed: note, why: next.failure };
+    taken = next.success;
   }
   return { text: taken };
 }
@@ -448,7 +491,7 @@ function takenInOrder(text: string, notes: readonly DescriptionNote[]): TextNote
  */
 export function applyNotesToText(text: string, notes: readonly DescriptionNote[]): TextNotesTaken {
   const taken = takenInOrder(text, notes);
-  return taken.missed === undefined ? taken : { text, missed: taken.missed };
+  return taken.missed === undefined ? taken : { ...taken, text };
 }
 
 const readNote = readEither(descriptionNoteSchema, { excess: EXCESS_KEYS.DROP });

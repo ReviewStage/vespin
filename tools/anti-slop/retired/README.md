@@ -22,11 +22,14 @@ so guard PRs that land together never touch the same file.
   `className` or kept in a constant (the oxlint rule), and in a stylesheet's
   selectors (the style guard, `style-guard.ts`). A trailing `*` matches every
   class it starts.
-- A **glyph** is a name imported from `@repo/ui/icons`, Lucide's aliases alike
-  (`ArrowLeft`, `ArrowLeftIcon`, `LucideArrowLeft`), or a concept read off the
-  registry (`GLYPH.BACK`).
+- A **glyph** is a name imported from `@repo/ui/icons` or straight from
+  `lucide-react`, Lucide's aliases alike (`ArrowLeft`, `ArrowLeftIcon`,
+  `LucideArrowLeft`), or a concept read off the registry (`GLYPH.BACK`).
 - A **pattern** is a JSX prop by name, or an import of a module or its
-  subpaths; `names` narrows an import to the imported names listed.
+  subpaths; `names` narrows an import to the imported names listed. The
+  module is a package (`cmdk`) or a module of the repository by its path from
+  the root with no extension (`packages/panel/src/tasks/tab-look`), which a
+  relative import reaches whatever it spells (`./tab-look.js`).
 - `allow` lists path prefixes from the repository's root where the entry still
   stands: the one component that owns it.
 - `baseline` (optional, per entry) maps a file to how many places it may still

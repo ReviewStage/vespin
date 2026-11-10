@@ -35,6 +35,18 @@ export function markedNote(unread: boolean, landed: number, refused: number): st
   return refused === 0 ? kept : `${kept}, ${refused} could not be`;
 }
 
+/** What one toast says of notices a read mark could not acknowledge because their agent changed them since they were listed, which still wait on the reader. */
+export function changedNote(changed: number): string {
+  const verb = changed === 1 ? "was" : "were";
+  return `${countWords(changed, TERM.INBOX_ITEM)} changed before ${changed === 1 ? "it" : "they"} ${verb} acknowledged`;
+}
+
+/** What one toast says of notices a read mark acknowledged: how many the service took, and how many not. */
+export function acknowledgedNote(landed: number, refused: number): string {
+  if (landed === 0) return `Could not acknowledge ${countWords(refused, TERM.INBOX_ITEM)}`;
+  return `${countWords(landed, TERM.INBOX_ITEM)} acknowledged, ${refused} could not be`;
+}
+
 /** What a toast says of a reminder set, or canceled, that the service did not take. */
 export const REMIND_REFUSED = {
   SET: "Could not set the reminder",

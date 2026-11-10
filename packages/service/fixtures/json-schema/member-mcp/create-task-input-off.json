@@ -69,34 +69,37 @@
       "type": "string",
       "minLength": 1,
       "maxLength": 36,
-      "description": "The task to make it a child of, by the id list_tasks answered: a part of that task's work, which works in its repository. Left out, it stands at the top."
+      "description": "The task to make it a child of, by the id list_tasks answered: a task of your workspace, whose repository it works in. Left out, it stands at the top."
     },
-    "relation": {
-      "type": "object",
-      "properties": {
-        "kind": {
-          "type": "string",
-          "enum": [
-            "blocked-by",
-            "blocks",
-            "sub-task-of",
-            "parent-of"
-          ],
-          "description": "How the new task stands to the other, from the new task's side: blocked-by, it waits on the other's work; blocks, the other waits on its work; sub-task-of, a child of the other, as parentTaskId makes one; parent-of, the other's parent, refused where the other has a parent already."
-        },
-        "taskId": {
-          "type": "string",
-          "minLength": 1,
-          "maxLength": 36,
-          "description": "The other task, of your workspace, by the id list_tasks answered."
-        }
+    "subTaskIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 36
       },
-      "required": [
-        "kind",
-        "taskId"
-      ],
-      "additionalProperties": false,
-      "description": "Another task of your workspace the new task starts related to, written with it so both land together. A sub-task-of or parent-of takes the other task's repository, so leave repository out, and another is refused; a block takes nothing of it. Not beside parentTaskId; left out, it starts related to none."
+      "maxItems": 50,
+      "description": "Its sub-tasks (the tasks it is the parent of), by the id list_tasks answered, each a task of your workspace with no parent yet, working in one repository with it, which it takes, so leave repository out. Left out, it has none."
+    },
+    "blockedBy": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 36
+      },
+      "maxItems": 50,
+      "description": "Its blocked-by (the tasks it waits on), by the id list_tasks answered, each a task of your workspace, such as a sibling whose work comes first. Left out, it waits on none."
+    },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 36
+      },
+      "maxItems": 50,
+      "description": "Its blocks (the tasks that wait on it), by the id list_tasks answered, each a task of your workspace. Left out, none waits on it."
     }
   },
   "required": [

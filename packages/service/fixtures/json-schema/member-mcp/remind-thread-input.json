@@ -1,0 +1,27 @@
+{
+  "type": "object",
+  "properties": {
+    "threadId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "description": "The thread's id, as read_inbox answered it."
+    },
+    "at": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "When the thread comes back, as a time with its offset, such as 2026-10-20T09:00-07:00, in the member's own zone where you know it; null to end a reminder set before."
+    }
+  },
+  "required": [
+    "threadId",
+    "at"
+  ],
+  "additionalProperties": false
+}
