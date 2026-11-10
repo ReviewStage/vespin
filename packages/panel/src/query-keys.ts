@@ -39,6 +39,8 @@ export const QUERY_ROOT = {
   APP_STATE: "appState",
   /** A web page's preview for the card a plain link hangs, by the link's address (`tasks/link-preview-card.tsx`). */
   LINK_PREVIEW: "link-preview",
+  /** A button an agent put in its reply, by the agent and the button (`tasks/reply-button-link.tsx`). */
+  REPLY_BUTTON: "reply-button",
   TASK_FILE: "task-file",
   TASK_TREE: "task-tree",
   PAGE_SOURCE: "page-source",
