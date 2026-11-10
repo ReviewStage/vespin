@@ -5446,7 +5446,7 @@ const SET_ENVIRONMENT_VARIABLE_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE,
   description:
     "Set one environment variable of a workspace the member owns or administers, as Settings › " +
-    "Environment's Add or Replace value would: every cloud agent its members start from then " +
+    "Cloud environment's Add or Replace value would: every cloud agent its members start from then " +
     "on is handed it, and one of the same name has its value replaced. The value is sealed " +
     "the moment it arrives and is never shown again, to you, the member, or anyone, so set " +
     "only a value the member gave you for this. Answers with the workspace's variable names as " +
@@ -5474,7 +5474,7 @@ const DELETE_ENVIRONMENT_VARIABLE_TOOL = memberMcpTool({
   description:
     "Delete one environment variable of a workspace the member owns or administers, by its " +
     `name as ${MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES} answered it, as Settings › ` +
-    "Environment's Delete would: its value is gone for good, and no cloud agent started from " +
+    "Cloud environment's Delete would: its value is gone for good, and no cloud agent started from " +
     "then on is handed it. Delete one only when the member asks for it. Answers with the " +
     "workspace's variable names as they then stand, a variable already gone among them, or " +
     `\`rejected\` and why. ${WORKSPACE_WORDS}`,
