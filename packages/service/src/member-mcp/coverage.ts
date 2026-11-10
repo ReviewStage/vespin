@@ -79,6 +79,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.READ_PAGE]: { taskFiles: ["pages", "page"], agentPages: ["list", "version"] },
   [MEMBER_MCP_TOOL.CREATE_TASK]: { plans: ["create", "editDescription"] },
   [MEMBER_MCP_TOOL.UPDATE_TASK]: { plans: ["update", "parent", "block"], taskSections: ["write"] },
+  [MEMBER_MCP_TOOL.DELETE_TASK]: { plans: ["delete"] },
   [MEMBER_MCP_TOOL.EDIT_DESCRIPTION]: { plans: ["open", "editDescription"] },
   [MEMBER_MCP_TOOL.CREATE_SECTION]: { taskSections: ["write"] },
   [MEMBER_MCP_TOOL.DELETE_SECTION]: { taskSections: ["write"] },
@@ -302,7 +303,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   plans: {
     find: NOT_YET_BUILT,
     relation: NOT_YET_BUILT,
-    delete: NOT_YET_BUILT,
     descriptionRevisions: NOT_YET_BUILT,
     descriptionRevision: NOT_YET_BUILT,
     restoreDescription: NOT_YET_BUILT,

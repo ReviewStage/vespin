@@ -10,7 +10,8 @@
  * stdout stays the answer alone.
  *
  * A command asks a person nothing unless stdin is a terminal (`canPrompt`):
- * where it is not, what it would ask is read from stdin as input.
+ * where it is not, what it would ask is read from stdin as input, bar a
+ * destructive command's go-ahead, which then takes `--yes` alone.
  */
 
 import { CLI_EXIT, type CliExit } from "@repo/features/cli-exit";
@@ -98,6 +99,28 @@ export const readLine = Effect.fnUntraced(function* (prompt: string) {
   }
   const piped = yield* Effect.orElseSucceed(stdinText, () => "");
   return piped.split("\n")[0];
+});
+
+/** What a person types at a confirmation to go on; anything else, or nothing, goes no further. */
+const CONFIRM_WORDS: ReadonlySet<string> = new Set(["y", "yes"]);
+
+/**
+ * A destructive command's go-ahead: given with `--yes`, or asked of the
+ * person where stdin is a terminal, who must answer y or yes. Note that
+ * without a terminal nothing is read from stdin, because a script that
+ * pipes a stray line must not delete by accident, so `--yes` is required.
+ */
+export const confirmOrYes = Effect.fnUntraced(function* (question: string, yes: boolean) {
+  if (yes) return;
+  if (!(yield* canPrompt)) {
+    return yield* new CommandFailed({
+      exit: CLI_EXIT.USAGE,
+      message: `${question} Pass --yes to go ahead without a terminal to confirm at.`,
+    });
+  }
+  const answered = yield* readLine(`${question} [y/N]`);
+  if (answered !== undefined && CONFIRM_WORDS.has(answered.trim().toLowerCase())) return;
+  return yield* new CommandFailed({ exit: CLI_EXIT.REFUSED, message: "Nothing was deleted." });
 });
 
 /** The text a `-F <file|->` names: the file's, or stdin's for `-`, or why it could not be read. */

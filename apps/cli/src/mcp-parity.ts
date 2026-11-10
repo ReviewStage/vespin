@@ -39,6 +39,7 @@ export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.READ_PAGE]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
   [MEMBER_MCP_TOOL.CREATE_TASK]: { command: ["task", "create"] },
   [MEMBER_MCP_TOOL.UPDATE_TASK]: { command: ["task", "update"] },
+  [MEMBER_MCP_TOOL.DELETE_TASK]: { command: ["task", "delete"] },
   [MEMBER_MCP_TOOL.EDIT_DESCRIPTION]: { command: ["description", "edit"] },
   [MEMBER_MCP_TOOL.CREATE_SECTION]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
   [MEMBER_MCP_TOOL.DELETE_SECTION]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
