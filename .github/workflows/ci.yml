@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 # CI is Linux only: the packaged macOS app is proven by the release workflow
-# before anything ships, and the iOS app's simulators run by hand
+# before anything ships, and the iOS app's simulators run nightly and by hand
 # (`ios-simulators.yml`). Every job below bar `CI`, which only reads the
 # others' results, is independent and runs at once, so a run takes as long as
 # its longest job: the tests, which are the bulk of `check.sh`, are spread

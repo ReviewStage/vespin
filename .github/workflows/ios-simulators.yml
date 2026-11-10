@@ -1,14 +1,15 @@
 name: iOS simulators
 
 # The iOS app built and driven on the simulators, which only a Mac can do,
-# run by hand on any branch (`gh workflow run ios-simulators.yml --ref
-# <branch>`) rather than on every pull request: a run takes about 100 minutes
-# on a runner billed at ten times a Linux one, and each push restarted it, so
-# it held every iOS pull request for hours. The app's agents on the
-# developer's Mac drive the flows there before they push; a cloud agent, which
-# has no Xcode, asks for a run on its branch to see its screens. The Linux
-# checks still bundle the app with Metro (`export:ios`) on every pull request,
-# and the TestFlight build (`release-ios.yml`) is the native build's gate.
+# run nightly on main and by hand on any branch (`gh workflow run
+# ios-simulators.yml --ref <branch>`) rather than on every pull request: a run
+# takes about 100 minutes on a runner billed at ten times a Linux one, and each
+# push restarted it, so it held every iOS pull request for hours. The app's
+# agents on the developer's Mac drive the flows there before they push; a
+# cloud agent, which has no Xcode, asks for a run on its branch to see its
+# screens. The Linux checks still bundle the app with Metro (`export:ios`) on
+# every pull request, and the TestFlight build (`release-ios.yml`) is the
+# native build's gate.
 #
 # Expo generates the native project from `apps/mobile/app.config.ts`, Xcode
 # builds it for the simulator, and Maestro runs the flows under
@@ -21,6 +22,11 @@ name: iOS simulators
 # simulator needs; the Xcode point release is pinned below.
 
 on:
+  # Nightly on main, at midnight Pacific, so a break the pull requests' Linux
+  # checks cannot see shows up the next morning rather than at the next
+  # TestFlight build.
+  schedule:
+    - cron: "0 7 * * *"
   workflow_dispatch:
 
 permissions:
