@@ -1,4 +1,4 @@
-import { AGENT_MACHINE, type AgentAttachment, type AgentSummary } from "@repo/features/agent-wire";
+import type { AgentAttachment, AgentSummary } from "@repo/features/agent-wire";
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import {
   CARD_CORNER,
@@ -151,8 +151,7 @@ export function agentForkDoors(input: {
   // Note that an agent with no task is forked and continued as a task's is, its draft on its own page,
   // and that an archived one, on its page or in its task's tab, opens no draft.
   const drafts = control.onUnarchive === undefined && agent.archivedAt === undefined;
-  // Note that a local agent has no sandbox snapshot to fork from, so it offers no fork.
-  const forkable = onFork !== undefined && drafts && agent.machine !== AGENT_MACHINE.DEVICE;
+  const forkable = onFork !== undefined && drafts;
   const open =
     onOpenTarget === undefined
       ? undefined

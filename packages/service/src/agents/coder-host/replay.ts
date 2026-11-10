@@ -71,7 +71,7 @@ import {
   replayTokens,
   withinWindow,
 } from "./replay-summary.js";
-import type { SnapshotOutcome } from "./snapshot.js";
+import { SNAPSHOT_MISS, type SnapshotOutcome } from "./snapshot.js";
 import { CODER_TOOL_SET, RETIRED_CODER_TOOL } from "./tool-set.js";
 import { CURSOR_START } from "./transcript.js";
 
@@ -722,9 +722,14 @@ function whereOf(
   if (source.branch === null) {
     return carried === undefined ? NO_BRANCH_WORDS : carriedWhere(carried);
   }
+  // Note that a Mac's checkout is never read for a Start, so what the source did not push stays on that Mac.
+  const unpushed =
+    copy.miss === SNAPSHOT_MISS.ON_DEVICE
+      ? "what it had not pushed stays on the Mac it ran on"
+      : "what it had not pushed could not be copied from its sandbox";
   return (
     `Its branch is \`${source.branch}\`${pull}. ${capitalized(fetchWords(source.branch))} and continue there rather than ` +
-    "starting a new one; what it had not pushed could not be copied from its sandbox, so only what it pushed stands."
+    `starting a new one; ${unpushed}, so only what it pushed stands.`
   );
 }
 

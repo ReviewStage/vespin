@@ -1,15 +1,19 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { Database } from "@repo/database/core/query";
 import { createAgent, readAgent } from "@repo/database/models/agent-store";
 import { recordRepositoryReads } from "@repo/database/models/github-repository-reads";
 import { readGitHubTokenRow } from "@repo/database/models/github-token-store";
 import { createTask } from "@repo/database/models/task-store";
 import { storeWriter } from "@repo/database/models/writer";
+import { agentTable } from "@repo/database/schemas/agent";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
+import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
+import { eq } from "drizzle-orm";
 import { DateTime, Effect, Layer, Option } from "effect";
 import { HOSTED_REFUSAL } from "../http/http-effect.js";
 import {
@@ -21,7 +25,9 @@ import {
   openTokenMember,
 } from "../testing/github-app-fake.js";
 import { agentPullRequestReach } from "./coder-host/published.js";
+import { TAKEN_ON } from "./coder-host/replay.js";
 import { routedSessions } from "./coder-host/runtime-sessions.js";
+import { SNAPSHOT_MISS } from "./coder-host/snapshot.js";
 import { steerAgent } from "./coder-host/steer.js";
 import { startFromOf } from "./coder-host/takeover.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
@@ -148,6 +154,65 @@ it.layer(SUITE)("an agent on its starter's own GitHub token", (it) => {
           ),
         );
         assert.equal(unreached._tag, "RepositoryNotReachable");
+      }).pipe(Effect.provide(NO_GITHUB)),
+  );
+});
+
+it.layer(SUITE)("an agent on its starter's own Mac", (it) => {
+  it.effect(
+    "a teammate who sees it is refused its messages, but continues or forks it from the branch it pushed, reading nothing of the Mac",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        const teammate = yield* openGithubUser();
+        const workspace = yield* openWorkspace(owner);
+        yield* joinWorkspace(workspace, teammate);
+        const task = yield* createTask(owner, {
+          organizationId: workspace,
+          repository: "octo-member/app",
+          githubAccess: GITHUB_ACCESS.APP,
+        });
+        const started = yield* createAgent(owner, {
+          taskId: task.id,
+          idempotencyKey: randomUUID(),
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          descriptionSnapshot: "# App\n",
+          prompt: null,
+          repository: "octo-member/app",
+          githubAccess: GITHUB_ACCESS.APP,
+          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+        });
+        const agent = Option.getOrThrow(started).agent;
+        yield* Database.use((db) =>
+          db
+            .update(agentTable)
+            .set({ machine: AGENT_MACHINE.DEVICE })
+            .where(eq(agentTable.id, agent.id)),
+        );
+        const onMac = Option.getOrThrow(yield* readAgent(owner, agent.id));
+        const agentSessions = yield* routedSessions<TypedTurn>(teammate);
+
+        const refused = yield* Effect.flip(
+          steerAgent(agentSessions, storeWriter({ tools: CODER_TOOL_SET }), teammate, onMac, {
+            text: "Carry on.",
+            clientKey: randomUUID(),
+            sender: { kind: MESSAGE_SENDER.MEMBER, userId: teammate },
+          }),
+        );
+        const from = yield* startFromOf(
+          teammate,
+          { taskId: task.id },
+          { agentId: agent.id },
+          [],
+          randomUUID(),
+        );
+
+        assert.deepEqual(refused, HOSTED_REFUSAL.NOT_PERMITTED);
+        assert.deepEqual(from.told.work, {
+          on: TAKEN_ON.COPY,
+          copy: { copied: false, miss: SNAPSHOT_MISS.ON_DEVICE },
+        });
       }).pipe(Effect.provide(NO_GITHUB)),
   );
 });

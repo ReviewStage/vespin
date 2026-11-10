@@ -117,8 +117,10 @@ another machine you add, with full access to everything that machine's account
 can reach. Their work stays on that machine, though their transcripts are
 stored like any other, and, on a machine running host 0.11.0 or later, so is
 their harness's own session, its thinking text included, as a cloud agent's
-is. To tell your machines apart, each sends us a keyed hash
-of its hardware or machine id, never the id itself, and a Mac sends its model
+is. A teammate who can see such an agent may continue or fork it: the new
+agent is handed that session and the branch the agent pushed, and nothing is
+read from your machine; a continue only stops the agent there. To tell your
+machines apart, each sends us a keyed hash of its hardware or machine id, never the id itself, and a Mac sends its model
 name.
 
 When such an agent starts, we send that machine a copy of the Anthropic or
