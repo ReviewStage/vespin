@@ -51,9 +51,13 @@ appId: dev.vespin.ios
 - assertVisible: "Mark as read"
 - takeScreenshot: inbox-menu
 - tapOn: "Mark as read"
+# Note that the row is scrolled to the middle rather than to the first point
+# it shows, because the folded Duo then stands it against the top edge, where a
+# tap a point or two higher no longer opens it.
 - scrollUntilVisible:
     element: "Recorded the invite flow"
     direction: UP
+    centerElement: true
 # A thread opens on its path and subject, then each message as a comment: the
 # agent's tile, name and time over its words, its picture drawn where the
 # words name it, and its recording after the message that sent it.
