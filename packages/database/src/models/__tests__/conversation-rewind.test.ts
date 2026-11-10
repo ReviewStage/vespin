@@ -1,15 +1,18 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { APPROVAL_STATUS } from "@repo/features/agent-approval-wire";
 import { MESSAGE_ROLE, TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { and, asc, eq } from "drizzle-orm";
 import { Duration, Effect, Fiber, Option, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
+import { agentApproval } from "../../schemas/agent-approval.js";
 import { user } from "../../schemas/auth.js";
 import { conversations, messages, turns } from "../../schemas/storage.js";
 import { CONVERSATION_KIND, CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
 import { getTestDB, startTask } from "../../testing/index.js";
+import { recordApprovalAsked } from "../agent-approvals.js";
 import { createAgent, readNativeHanded, recordNativeHanded } from "../agent-store.js";
 import {
   clearNativeRewindHanded,
@@ -160,20 +163,38 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
   );
 
   it.effect(
-    "cuts at the first line, leaving the conversation empty for the words sent in its place",
+    "cuts at the first line, leaving the conversation empty for the words sent in its place, with no ask of its first turn left pending",
     () =>
       Effect.gen(function* () {
         const target = yield* openConversation;
         const { first, firstLine } = yield* threeLines(target);
+        yield* recordApprovalAsked({
+          conversationId: target.conversationId,
+          turnId: first,
+          requestId: "request-1",
+          toolUseId: "toolu_request-1",
+          subagentId: null,
+          toolName: "Bash",
+          title: "Run pnpm test?",
+          description: null,
+          input: { command: "pnpm test" },
+          at: new Date(1_000),
+        });
 
         const rewound = yield* rewindConversation(target, firstLine);
         const after = yield* standing(target);
+        const asks = yield* (yield* Database)
+          .select({ status: agentApproval.status })
+          .from(agentApproval)
+          .where(eq(agentApproval.conversationId, target.conversationId));
 
         assert.equal(Result.getOrThrow(rewound).clientId, "client-1");
         assert.deepEqual(after.seqs, []);
         // The first turn's row stands, settled and empty, so the agent reads as one that ran rather than one that never started.
         assert.deepEqual(after.turns, [first]);
         assert.deepEqual(after.statuses, [TURN_STATUS.SETTLED]);
+        // Its ask expired with it, since no runner holds it to hear an answer.
+        assert.deepEqual(asks, [{ status: APPROVAL_STATUS.EXPIRED }]);
         assert.deepEqual(yield* readNativeRewind(target), Option.some("client-1"));
       }),
   );
