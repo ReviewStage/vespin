@@ -82,7 +82,7 @@ it.layer(SUITE)("a button in an agent's reply", (it) => {
         assert.equal(off, HOSTED_REFUSAL.NOT_FOUND);
 
         yield* experimentInTestWorkspace(owner, EXPERIMENT.REPLY_BUTTONS);
-        assert.equal(yield* claimReplyButtonPress(buttonId, owner, NOW), true);
+        assert.ok((yield* claimReplyButtonPress(buttonId, owner, NOW)) !== undefined);
         yield* settleReplyButtonPress(buttonId, owner, reached, NOW);
         const again = yield* pressReplyButton(writer, teammate, agentId, buttonId, noSummary);
         assert.deepEqual(

@@ -9,7 +9,8 @@
  * answered as it stands, so it runs once whoever presses it. The claim's
  * own presser runs it again under the same key, the button's id, which the
  * start keys the agent by and the send keys its line by, so a retry after a
- * press cut off starts or sends once. Every check runs again here as the
+ * press cut off starts or sends once, and an attempt refused releases only
+ * its own claim, never a retry's. Every check runs again here as the
  * presser: a start lands on the button agent's task, on their model or the
  * one the button names; a send reaches an agent they reach. A press refused
  * is released, so the button may be pressed again.
@@ -162,10 +163,10 @@ export const pressReplyButton = /* @__PURE__ */ Effect.fnUntraced(function* (
   const { button, agent } = yield* reachedButton(userId, agentId, buttonId);
   const now = yield* DateTime.nowAsDate;
   const claimed = yield* hostedStoreOrUnavailable(claimReplyButtonPress(button.id, userId, now));
-  if (claimed) {
+  if (claimed !== undefined) {
     const reached = yield* runPressed(writer, userId, button, summaryModel).pipe(
       Effect.tapError(() =>
-        hostedStoreOrUnavailable(releaseReplyButtonPress(button.id, userId)).pipe(Effect.ignore),
+        hostedStoreOrUnavailable(releaseReplyButtonPress(button.id, claimed)).pipe(Effect.ignore),
       ),
     );
     yield* hostedStoreOrUnavailable(settleReplyButtonPress(button.id, userId, reached, now));
