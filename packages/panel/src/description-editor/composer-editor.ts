@@ -226,6 +226,13 @@ function fragmentText(fragment: Fragment): string {
   return blocks.length === 0 ? writtenLine(inline).text : messageText(blocks);
 }
 
+/** The words a copied slice stands for: words picked inside one quote copied as its words, not as a quote, as a copy taken out of a quoted line elsewhere is; anything else as the box writes it. */
+function copiedText(slice: Slice): string {
+  const only = slice.content.childCount === 1 ? slice.content.firstChild : null;
+  const insideQuote = only !== null && isQuote(only) && slice.openStart > 0 && slice.openEnd > 0;
+  return fragmentText(insideQuote ? only.content : slice.content);
+}
+
 /** The words the document stands for, as the message sends them. */
 function textOf(doc: PmNode): string {
   return fragmentText(doc.content);
@@ -889,7 +896,7 @@ function composerProps(state: ComposerState, props: ComposerEditorProps): Editor
     // Note that a drop of files is left to the card around the box, which takes them as a "+" does.
     handleDrop: (_view, event) => event.dataTransfer?.types.includes("Files") === true,
     clipboardTextParser: (text, _context, _plain, view) => sliceOf(view.state.schema, text, state),
-    clipboardTextSerializer: (slice) => fragmentText(slice.content),
+    clipboardTextSerializer: copiedText,
   };
 }
 

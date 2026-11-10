@@ -193,7 +193,8 @@ function elementWritten(element: Element, range: Range, inside: Inside): string 
     const code = childrenWritten(element, range, coded);
     return inside.code ? code : codeSpan(code);
   }
-  const marked = inside.marked || element.matches(MARK_SELECTOR);
+  // Note that a heading is written bold, so its words escape as a bold run's do.
+  const marked = inside.marked || element.matches(MARK_SELECTOR) || HEADING_TAGS.has(tag);
   const words = childrenWritten(element, range, { ...inside, marked });
   if (inside.code) return linedCode(element, words);
   const delimiter = MARK_DELIMITER[tag];

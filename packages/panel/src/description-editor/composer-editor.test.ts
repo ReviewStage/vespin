@@ -648,6 +648,20 @@ test("a quote is typed with `> `, edited like any words, Backspace at its start 
   assert.equal(box.drafts.at(-1), "Option A ships today, surely.\nWhy?");
 });
 
+test("words copied from inside a quote are copied as words, and a quote copied whole as a quote", () => {
+  const box = mounted("> Option A ships today.\n\nWhy?");
+  const view = composerEditor(box.host).editor?.view ?? assert.fail("the editor is running");
+  const copied = () =>
+    view.someProp("clipboardTextSerializer", (serialize) =>
+      serialize(view.state.selection.content(), view),
+    );
+  // The quote's line starts past the quote's and the line's openings.
+  box.select(2 + "Option ".length, 2 + "Option A ships".length);
+  assert.equal(copied(), "A ships");
+  box.selectAll();
+  assert.equal(copied(), "> Option A ships today.\n\nWhy?");
+});
+
 test("a quote is cut from its end to the room the bound leaves, and none is laid in where there is none", () => {
   const box = mounted("Hi", { maxLength: 30 });
   assert.equal(box.handle.insertQuote("Option A or option B or option C"), true);

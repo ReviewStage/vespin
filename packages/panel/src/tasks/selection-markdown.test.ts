@@ -60,6 +60,12 @@ test("words are quoted as the message box writes them: plain words as they read,
   document.body.append(words);
 
   assert.equal(selectedMarkdown(whole(words)), "a<b in snake_case, **2\\*3**");
+
+  // A heading is written bold, so its words escape as a bold run's do.
+  const heading = document.createElement("h2");
+  heading.textContent = "a*b";
+  document.body.append(heading);
+  assert.equal(selectedMarkdown(whole(heading)), "**a\\*b**");
 });
 
 test("words picked inside a chip's name under a bold run quote the chip's link in bold", () => {
