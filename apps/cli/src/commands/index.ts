@@ -11,9 +11,11 @@
 import { ACCOUNT_COMMANDS } from "./account.js";
 import { agentCommand } from "./agent.js";
 import { apiCommand } from "./api.js";
+import { automationCommand } from "./automation.js";
 import { descriptionCommand } from "./description.js";
 import { inboxCommand } from "./inbox.js";
 import { mcpCommand } from "./mcp.js";
+import { memoryCommand } from "./memory.js";
 import { modelsCommand } from "./models.js";
 import { taskCommand } from "./task.js";
 import { updateCommand } from "./update.js";
@@ -27,6 +29,8 @@ export const COMMANDS = [
   agentCommand,
   workspaceCommand,
   inboxCommand,
+  memoryCommand,
+  automationCommand,
   modelsCommand,
   mcpCommand,
   apiCommand,

@@ -1,6 +1,6 @@
 ---
 name: vespin
-description: Drive Vespin from a shell with the `vespin` command: create tasks, read and write their descriptions, start coding agents and wait on them, check out an agent's branch, share a cloud agent's port by preview link, and answer the inbox threads agents post. Load it when asked to work with Vespin tasks, their descriptions, agents, or inbox from a terminal, to script or pipe Vespin, or to wait on an agent and bring its branch local. Prefer Vespin's MCP server only when you have no shell.
+description: Drive Vespin from a shell with the `vespin` command: create tasks, read and write their descriptions, start coding agents and wait on them, check out an agent's branch, share a cloud agent's port by preview link, answer the inbox threads agents post, read and keep the workspace's shared memory, and make and run automations. Load it when asked to work with Vespin tasks, their descriptions, agents, inbox, memory, or automations from a terminal, to script or pipe Vespin, or to wait on an agent and bring its branch local. Prefer Vespin's MCP server only when you have no shell.
 ---
 
 # vespin
@@ -45,6 +45,10 @@ Other commands:
 | `agent forward <id> [port…] [--local <port>]` | Serve a cloud agent's ports on `localhost` (the ones it listens on now, or those named) until Ctrl-C or its sandbox stops; a local port that will not listen is refused, so pick another with `--local` |
 | `inbox list [--unread]` · `inbox view <thread>` | Threads agents posted, and one thread with its open ask |
 | `inbox answer <thread> <option>` · `inbox answer <thread> -F <json\|->` · `inbox reply <thread> -F <msg\|->` · `inbox close <thread>` | Answer a decide's option, `done` for a to-do, or a form as JSON by field; write on the thread; close it |
+| `memory list` · `memory search [words…]` · `memory save <text…> [--replaces <id>]` · `memory forget <id>` | The workspace's shared memory: every memory, the few some words find, one kept as your words (or `-F <file\|->`; `--replaces` corrects one in place), one forgotten for good. Search and save are refused while the workspace has Memory off |
+| `automation list [--task <task>]` · `automation view <id>` | Automations you may read, and one with its prompt and newest runs |
+| `automation create <name> --prompt <file\|-> (--cron <expr> [--timezone tz] \| --github <event> [--label l] [--branch b] \| --sentry <event> \| --trigger <json>) [-R owner/name…] [--task <task>] [--model m --effort e] [--scope personal\|workspace]` | Make an automation that starts an agent on its prompt each time it fires; `--cron` is read in this machine's time zone unless `--timezone` names one. A webhook trigger is made only in the app, which shows its secret once |
+| `automation update <id> [--name] [--prompt] [--enable\|--disable] [trigger flags] [-R…] [--model m --effort e] [--scope]` · `automation run <id>` · `automation delete <id>` | Change one (what you leave out stands), run one now (`-q` prints the agent it started), delete one |
 | `agent shells <id>` · `agent shell <id> [<shell>] [--title t]` | An agent's Terminal tab shells; open a new one, or attach to one, in this terminal (Ctrl-] detaches). `shell` is interactive and refuses to run piped, so a coding agent hands it to the person |
 
 `description edit` replaces the whole description, so run `description show` first and edit that; piped, `show` prints JSON, so take its `body` (`jq -r .body`). Run `vespin <group> --help` for any flag not listed here.
