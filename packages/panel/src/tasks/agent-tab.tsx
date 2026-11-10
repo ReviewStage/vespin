@@ -280,6 +280,7 @@ import type { HeldTranscript } from "./agent-tab-card.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { AgentTabSkeleton, TranscriptSkeleton } from "./agent-tab-skeleton.js";
 import { ArchivedComposerNote } from "./archived-note.js";
+import { ComputerDock } from "./computer-dock.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
 import {
   ContinueAgent,
@@ -3571,6 +3572,11 @@ function AgentTabView({
           readerId={readerId}
         />
         <AgentPicturesProvider value={pictures}>
+          <ComputerDock
+            messages={lines}
+            working={standing.working}
+            onStop={offersStop(agent) ? onStop : undefined}
+          />
           <AgentQueueDock
             messages={queue.messages}
             controls={controlsQueue}

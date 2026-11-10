@@ -13,7 +13,18 @@ import type { FileChip } from "@repo/features/attachment-model";
 import { isVideoType, type KeptPicture } from "@repo/features/conversation-picture-wire";
 import { formatBytes } from "@repo/features/number-format";
 import { ACT_KIND } from "@repo/host/acts";
-import { AppIcon, isVideoDataUrl, PICTURE_SET_SHOWN, PictureSet, PictureSetTile } from "@repo/ui";
+import {
+  APP_ICON_SIZE,
+  AppIcon,
+  type AppIconSize,
+  isVideoDataUrl,
+  PAGE_THUMB_SIZE,
+  PageThumb,
+  PICTURE_SET_SHOWN,
+  PictureSet,
+  PictureSetTile,
+  PictureTile,
+} from "@repo/ui";
 import {
   PICTURE_STATE,
   type PictureState,
@@ -452,11 +463,42 @@ function notKeptWords(byteCount: number): string {
  * under them as a `show_image` call's would.
  */
 /** An app's icon a call kept beside the transcript, read through the transcript's door, in a call row's glyph seat; a screen's glyph stands there until it lands. */
-export function KeptAppIcon({ id }: { id: string }): ReactNode {
+export function KeptAppIcon({
+  id,
+  size = APP_ICON_SIZE.LINE,
+}: {
+  id: string;
+  size?: AppIconSize | undefined;
+}): ReactNode {
   const door = useContext(AgentPicturesContext);
   const state = usePicture(pictureQuery(door?.owner ?? "", id, door?.read), pictureUnread);
+  return <AppIcon src={state.kind === PICTURE_STATE.READY ? state.url : undefined} size={size} />;
+}
 
-  return <AppIcon src={state.kind === PICTURE_STATE.READY ? state.url : undefined} />;
+/** A window a call kept, as a row's small thumb read through the transcript's door, which opens it full size in the viewer. */
+export function KeptWindowThumb({
+  picture,
+  words,
+}: {
+  picture: KeptPicture;
+  /** What the window is named, its app's name. */
+  words: string;
+}): ReactNode {
+  const door = useContext(AgentPicturesContext);
+  const { open, viewer } = useViewer(door);
+  const state = usePicture(pictureQuery(door?.owner ?? "", picture.id, door?.read), pictureUnread);
+  if (door === undefined) return null;
+  return (
+    <>
+      <PictureTile name={words} onOpen={() => open([{ picture, words }], picture.id)}>
+        <PageThumb
+          size={PAGE_THUMB_SIZE.ROW}
+          image={state.kind === PICTURE_STATE.READY ? state.url : undefined}
+        />
+      </PictureTile>
+      {viewer}
+    </>
+  );
 }
 
 export function CallPictures({

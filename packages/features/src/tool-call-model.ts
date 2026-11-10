@@ -192,7 +192,7 @@ function stringAt(value: WireValue | undefined, key: string): string | undefined
 }
 
 /** The app a computer call's answer names, as the Mac named it; while it runs, or where it answered none, as the call named it. */
-function computerAppName(
+export function computerAppName(
   input: WireValue | undefined,
   output: WireValue | undefined,
 ): string | undefined {
@@ -202,7 +202,7 @@ function computerAppName(
 }
 
 /** The picture a computer call's answer kept its app's icon as, by id; none where it kept none. */
-function computerAppIcon(output: WireValue | undefined): string | undefined {
+export function computerAppIcon(output: WireValue | undefined): string | undefined {
   if (!isRecord(output) || !isRecord(output.app) || !isRecord(output.app.icon)) return undefined;
 
   return stringAt(output.app.icon.picture, "id");
