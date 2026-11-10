@@ -327,7 +327,7 @@ test("every agent on a task is told to keep its task's status with update_task, 
     return [
       true,
       section.includes(AGENT_TOOL.UPDATE_TASK),
-      section.includes("every subtask is Done or Canceled"),
+      section.includes("its subtasks are Done or Canceled"),
       section.includes(
         "Where another agent started you on its task, leave the status to that agent",
       ),

@@ -363,8 +363,8 @@ const TASK_PLACE_WORDS = {
 ## Your task's status
 
 You're in charge of this task's status. Keep it current with \`${AGENT_TOOL.UPDATE_TASK}\`:
-- **In progress** while you, or an agent you started, is working on it or on one of its subtasks, including while that work waits on review or merge.
-- **Done** once its own work is finished (merged, or the answer or write-up delivered), every subtask is Done or Canceled, and nothing waits on the developer.
+- **In progress** while the task is still open: you or an agent you started is working on it, or it's waiting on a review, a merge, or the developer.
+- **Done** once the developer has everything they started this task for and has no reason to come back: its changes have merged and its subtasks are Done or Canceled. Done archives you, so if you're not sure, leave it In progress; closing it is one click for the developer.
 - **To do** when the work is planned and ready but nobody is on it yet, such as when it waits on another task.
 - **Backlog** when the developer sets it aside for later.
 - **Canceled** only when the developer says to drop it.
