@@ -83,7 +83,6 @@ import {
   type AgentOlderAnswer,
   type AgentPinRequest,
   type AgentQueueChange,
-  type AgentReadRequest,
   type AgentRenameRequest,
   type AgentServersRequest,
   type AgentStartRequest,
@@ -959,22 +958,6 @@ export class HostedAgentClient {
       hostedCall(
         this.#hosted.agents.change,
         { params: { id: agentId }, body },
-        { as: AGENT_NOT_FOUND_RENAMES, ...keyed(key) },
-      ),
-      rowWritten,
-    );
-  }
-
-  /** Moves the account's own read mark of one agent (`read-mark.ts`), under the idempotency key given where one is, answering it as it then stands. */
-  markRead(
-    agentId: string,
-    request: AgentReadRequest,
-    key?: string,
-  ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
-    return Effect.map(
-      hostedCall(
-        this.#hosted.agents.change,
-        { params: { id: agentId }, body: { readMark: request.readMark } },
         { as: AGENT_NOT_FOUND_RENAMES, ...keyed(key) },
       ),
       rowWritten,

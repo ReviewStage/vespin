@@ -1043,8 +1043,6 @@ export type AgentPinRequest = typeof agentPinRequestSchema.Type;
  */
 export const agentReadRequestSchema = EffectSchema.Struct({ readMark: readMarkSchema });
 
-export type AgentReadRequest = typeof agentReadRequestSchema.Type;
-
 /**
  * Switching the agent's MCP servers (PATCH): the whole list of those off,
  * which replaces the list standing, so two quick changes land as the later

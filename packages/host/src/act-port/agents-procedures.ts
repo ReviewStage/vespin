@@ -45,8 +45,7 @@ type NotedAgentAct =
   | "AGENTS_STOP"
   | "AGENTS_REWIND"
   | "AGENTS_ARCHIVE"
-  | "AGENTS_PIN"
-  | "AGENTS_MARK_READ";
+  | "AGENTS_PIN";
 
 /** The answer as it stands, noted on its way to the panel. */
 function noted<Answer, E>(
@@ -143,13 +142,6 @@ export function agentProcedures(dependencies: AgentProceduresDependencies) {
     }),
     [AGENT_ACT_KIND.AGENTS_PIN]: actPort[AGENT_ACT_KIND.AGENTS_PIN].effect(function* ({ input }) {
       return yield* notedAgent(declaredAnswer(AGENT_ACTS.AGENTS_PIN, acts.AGENTS_PIN, input));
-    }),
-    [AGENT_ACT_KIND.AGENTS_MARK_READ]: actPort[AGENT_ACT_KIND.AGENTS_MARK_READ].effect(function* ({
-      input,
-    }) {
-      return yield* notedAgent(
-        declaredAnswer(AGENT_ACTS.AGENTS_MARK_READ, acts.AGENTS_MARK_READ, input),
-      );
     }),
     [AGENT_ACT_KIND.AGENTS_SHOWN]: actPort[AGENT_ACT_KIND.AGENTS_SHOWN].effect(function* ({
       input,

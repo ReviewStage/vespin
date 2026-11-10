@@ -20,7 +20,6 @@ import {
   NATIVE_AGENT_RUNTIMES,
   PULL_REQUEST_STATE,
   pullRequestAuthorOf,
-  type TasklessAgent,
   turnStatusOfWord,
 } from "./agent-wire.js";
 import { integrationConnectionOf } from "./integration-wire.js";
@@ -536,44 +535,6 @@ function agentSummaryOf(
   };
 }
 
-/** An agent with no plan as the list carries it, as its own page reads it, its status read at `now`. */
-function tasklessAgentOf(
-  row: AgentLiveRow,
-  now: number,
-  continuedBy: ContinuedBy | undefined,
-): TasklessAgent {
-  return {
-    ...agentSummaryOf(row, now, continuedBy),
-    planId: null,
-    automationId: row.automationId,
-    workspaceId: row.workspaceId,
-    repository: row.repository,
-    activityAt: activityAt(row),
-    ...(row.pinnedAt === null ? undefined : { pinnedAt: row.pinnedAt }),
-    ...(row.pinnedAt === null || row.pinPosition === null
-      ? undefined
-      : { pinPosition: row.pinPosition }),
-    ...readMarkOf(row),
-    ...pullRequestOf(markedOfRow(row)),
-  };
-}
-
-/** An agent's pull request as its sidebar row carries it, where it opened one, as the held list projects it. */
-function pullRequestOf(published: AgentLiveRow["published"]) {
-  if (published === null) return undefined;
-  const { number, title, url, state, checks, queued } = published;
-  return {
-    pullRequest: {
-      number,
-      title,
-      url,
-      state,
-      checks,
-      ...(queued === true ? { queued } : undefined),
-    },
-  };
-}
-
 /** One agent on a plan as the list carries it, its status read at `now`, with its own workspace and repository, and when its newest turn ended where one has. */
 function listedAgentOf(
   row: AgentLiveRow,
@@ -704,7 +665,6 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
   let continued = new Map<string, Continued>();
   let groups = new Map<string, DrawnGroup>();
   let listed = new Map<string, Built<AgentLiveRow, ListedAgent>>();
-  let taskless = new Map<string, Built<AgentLiveRow, TasklessAgent>>();
   let summaries = new Map<string, Built<TaskLiveRow, TaskSummary>>();
   let drawn: TaskListDrawing | undefined;
   /** What an agent's row alone builds, its pin and its pull request, built once for as long as the row stands. */
@@ -768,19 +728,11 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
 
     // Each agent as the tabs draw it, built again where its row or those started from it moved, or the clock moved its status.
     const nextListed = new Map<string, Built<AgentLiveRow, ListedAgent>>();
-    const nextTaskless = new Map<string, Built<AgentLiveRow, TasklessAgent>>();
     let edge: number | undefined;
     for (const row of rows.agents) {
       const continuedBy = nextContinued.get(row.id)?.by;
-      if (row.planId === null) {
-        const built = rebuilt(taskless.get(row.id), row, continuedBy, now, () => ({
-          value: tasklessAgentOf(row, now, continuedBy),
-          until: clockEdgeOf(row, now),
-        }));
-        nextTaskless.set(row.id, built);
-        edge = earlierEdge(edge, built.until);
-        continue;
-      }
+      // Note that every agent stands on a task now; a row from before that was so is drawn nowhere.
+      if (row.planId === null) continue;
       const built = rebuilt(listed.get(row.id), row, continuedBy, now, () => ({
         value: listedAgentOf(row, now, continuedBy),
         until: clockEdgeOf(row, now),
@@ -806,24 +758,12 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
 
     const held = drawn;
     const keptPlans = keptItems(held?.list.plans, plans);
-    const planlessAgents = keptItems(
-      held?.list.planlessAgents,
-      [...nextTaskless.values()]
-        .toSorted((a, b) => newestFirst(a.row, b.row))
-        .map((built) => built.value),
-    );
     continued = nextContinued;
     groups = nextGroups;
     listed = nextListed;
-    taskless = nextTaskless;
     summaries = nextSummaries;
     drawn = {
-      list:
-        held !== undefined &&
-        held.list.plans === keptPlans &&
-        held.list.planlessAgents === planlessAgents
-          ? held.list
-          : { plans: keptPlans, planlessAgents },
+      list: held !== undefined && held.list.plans === keptPlans ? held.list : { plans: keptPlans },
       taskAgents: keptItems(
         held?.taskAgents,
         [...nextListed.values()]
@@ -912,8 +852,7 @@ export function agentPullRequestsOfLiveRows(rows: TaskListLiveRows): readonly Li
 /**
  * The plan list as the held read answers it with every archived agent
  * included, as the live rows stand at `now`: the plans newest started
- * first, each with its agents in brief, and the agents with no plan newest
- * started first.
+ * first, each with its agents in brief.
  */
 export function taskListOfLiveRows(rows: TaskListLiveRows, now: number): TaskListAnswer {
   return taskListDrawer()(rows, now).list;

@@ -12,7 +12,6 @@ import {
   agentMessagesAnswerSchema,
   agentPinRequestSchema,
   agentQueueChangeSchema,
-  agentReadRequestSchema,
   agentRenameRequestSchema,
   agentServersRequestSchema,
   agentStartRequestFields,
@@ -727,14 +726,6 @@ export const agentPinParamsSchema = EffectSchema.Struct({
 });
 
 export type AgentPinParams = typeof agentPinParamsSchema.Type;
-
-/** The reader's own read mark of one agent moved (`read-mark.ts`), as the window asks it: the agent and how. */
-export const agentMarkReadParamsSchema = EffectSchema.Struct({
-  agentId: EffectSchema.NonEmptyString,
-  ...agentReadRequestSchema.fields,
-});
-
-export type AgentMarkReadParams = typeof agentMarkReadParamsSchema.Type;
 
 /** One agent, as the window names it to stop or to delete. */
 export const agentStopParamsSchema = EffectSchema.Struct({

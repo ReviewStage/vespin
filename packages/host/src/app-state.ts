@@ -1112,7 +1112,6 @@ export const HOST_READ_SLICE = {
     rowIds: {
       tasks: "id" satisfies keyof TasksRows<"tasks">[number],
       taskAgents: "id" satisfies keyof TasksRows<"taskAgents">[number],
-      tasklessAgents: "id" satisfies keyof TasksRows<"tasklessAgents">[number],
       taskPullRequests: "taskId" satisfies keyof TasksRows<"taskPullRequests">[number],
       agentPullRequests: "agentId" satisfies keyof TasksRows<"agentPullRequests">[number],
     } satisfies { readonly [Part in keyof TasksView]?: string },

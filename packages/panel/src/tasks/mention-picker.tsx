@@ -1,5 +1,5 @@
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
-import type { AgentPullRequest, AgentSummary, TasklessAgent } from "@repo/features/agent-wire";
+import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
 import { automationTriggerText } from "@repo/features/automation-list-model";
 import type { AutomationSummary } from "@repo/features/automation-wire";
 import { fileName } from "@repo/features/code-ref-words";
@@ -25,7 +25,6 @@ import {
   type MentionPlace,
   sectionAnchors,
 } from "@repo/features/mention-link";
-import { agentName } from "@repo/features/model-label";
 import type { PageLine } from "@repo/features/page-wire";
 import { searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -376,27 +375,18 @@ const PER_KIND = 50;
 /** How long the typing rests before the service is searched for the agents the words name. */
 const SEARCH_PAUSE = Duration.millis(250);
 
-/** The agents on no task of a window that lists none. */
-const NO_TASKLESS_AGENTS: readonly TasklessAgent[] = [];
-
-/** The window's tasks, workspaces, and agents on no task, which tell their readers only when one is a new list, so a patch to the open plan draws no list again. */
+/** The window's tasks and workspaces, which tell their readers only when one is a new list, so a patch to the open plan draws no list again. */
 interface ListedTasks {
   readonly tasks: readonly TaskSummary[];
   readonly workspaces: readonly Workspace[];
-  readonly tasklessAgents: readonly TasklessAgent[];
 }
 
 /** The lists before the first document arrives. */
-const NO_LISTED_TASKS: ListedTasks = {
-  tasks: [],
-  workspaces: [],
-  tasklessAgents: NO_TASKLESS_AGENTS,
-};
+const NO_LISTED_TASKS: ListedTasks = { tasks: [], workspaces: [] };
 
 const selectListedTasks = (state: AppStateSnapshot): ListedTasks => ({
   tasks: state.tasks.tasks,
   workspaces: state.tasks.workspaces,
-  tasklessAgents: state.tasks.tasklessAgents ?? NO_TASKLESS_AGENTS,
 });
 
 /** The list's own name, which its listbox is read by. */
@@ -734,16 +724,14 @@ function threadRow(place: InboxItemPlace, item: InboxItem, holder: string): Ment
 /**
  * Each of the workspace's Inbox threads' rows as the account's feed holds
  * them, the plan's own first, then the newest changed first: a task's under
- * its task, said by its name, and an agent's on no task under the agent, said
- * by its name; none of another workspace's, or of a holder the window lists
- * not.
+ * its task, said by its name; none of another workspace's, or of a task the
+ * window lists not.
  */
 function threadRows(
   feed: AppInboxItems | undefined,
   taskId: string | undefined,
   workspace: Workspace | undefined,
   tasks: readonly TaskSummary[],
-  agents: readonly TasklessAgent[],
 ): MentionRow[] {
   if (feed === undefined || workspace === undefined) return [];
   const held: { readonly row: MentionRow; readonly own: boolean; readonly at: number }[] = [];
@@ -757,14 +745,6 @@ function threadRows(
         own: planId === taskId,
         at: item.updatedAt,
       });
-    }
-  }
-  for (const [agentId, items] of Object.entries(feed[INBOX_SCOPE_KIND.AGENT])) {
-    const agent = agents.find((each) => each.id === agentId && each.workspaceId === workspace.id);
-    if (agent === undefined) continue;
-    for (const item of items) {
-      const place: InboxItemPlace = { kind: LINK_PLACE.INBOX_ITEM, agentId, itemId: item.id };
-      held.push({ row: threadRow(place, item, agentName(agent)), own: false, at: item.updatedAt });
     }
   }
   return held
@@ -1488,7 +1468,7 @@ export interface MentionableAgent {
   readonly id: string;
   readonly name: string;
   readonly actor: Actor;
-  /** The task it works on, by its id and, where the place knows it, its name; absent for an agent on none. */
+  /** The task it works on, by its id and, where the place knows it, its name; absent where the place does not know it. */
   readonly task?: { readonly id: string; readonly name?: string | undefined } | undefined;
   readonly archived?: boolean | undefined;
   /** The agent as the workspace's list read it, where a place drew it from that list: what a picker draws its tab's look and title from. */
@@ -1789,7 +1769,7 @@ export function useMentionPicker({
   const retryFeed = useMutation(inboxItemsRetryMutation());
   const threadsAsked = open && tasksWorkspace !== undefined;
   const threadRowsOffered = threadsAsked
-    ? threadRows(feed.data, taskId, tasksWorkspace, listed.tasks, listed.tasklessAgents)
+    ? threadRows(feed.data, taskId, tasksWorkspace, listed.tasks)
     : [];
   // The automations offered are the workspace's, followed only while the list stands open.
   const automationsAsked = open && tasksWorkspace !== undefined;

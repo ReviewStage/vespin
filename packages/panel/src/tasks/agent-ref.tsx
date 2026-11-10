@@ -1,10 +1,4 @@
-import {
-  AGENT_SOURCE,
-  type AgentStatus,
-  type AgentSummary,
-  type ListedAgent,
-  type TasklessAgent,
-} from "@repo/features/agent-wire";
+import type { AgentStatus, AgentSummary, ListedAgent } from "@repo/features/agent-wire";
 import { agentStateWords } from "@repo/features/glyph-state";
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
@@ -181,44 +175,6 @@ export function listedRowSubject(
     }),
   });
   return { name, tile: agentActor(agent, name), agent, read };
-}
-
-/**
- * An agent with no task as the sidebar's list carries it, as its row's card
- * says it: its tab's card (`agentCardReading`), but that it last moved when
- * the list says it did, the end of its newest run included, and that it
- * shows the pull request the list carries for it, as a task's row's card
- * shows its own, since no tab of it holds either; a read of what it
- * published that the control holds since stands before the list's.
- */
-export function tasklessRowSubject(
-  agent: TasklessAgent,
-  agents: Pick<AgentsControl, "models" | "me" | "pullRequests">,
-): AgentSubject {
-  const { automationId, pullRequest, ...rest } = agent;
-  const summary: AgentSummary = automationId === null ? rest : { ...rest, automationId };
-  const name = agentName(summary, agents.models);
-  const tile = agentActor(summary, name);
-  const base = agentCardReading(summary, name, NOTHING_HELD, false, agents);
-  const { archivedAt } = agent;
-  const writing = archivedAt === undefined && agentStillWriting(agent.status);
-  const read = (): CardReading => {
-    const reading = base();
-    return {
-      ...reading,
-      corner: cardCorner({
-        writing,
-        startedAt: agent.runStartedAt,
-        movedAt: archivedAt ?? agent.activityAt,
-        state: archivedAt === undefined ? agentStateWords(agent.status) : ARCHIVED_WORDS,
-      }),
-      // Note that a read of what it published since, held by the control, is newer than the list's.
-      pullRequest: reading.pullRequest ?? pullRequest,
-      repository: agent.repository ?? undefined,
-      fromSlack: agent.source?.kind === AGENT_SOURCE.SLACK,
-    };
-  };
-  return { name, tile, agent: summary, read };
 }
 
 /**

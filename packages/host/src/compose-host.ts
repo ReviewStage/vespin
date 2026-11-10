@@ -291,17 +291,9 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         },
       }),
     );
-    /** An agent as the task list holds it now, on a plan or with none; none where it lists no such agent. */
-    const agentListed = (agentId: string) => {
-      const { taskAgents = [], tasklessAgents = [] } = tasks.snapshot();
-      const onTask = taskAgents.find((agent) => agent.id === agentId);
-      if (onTask !== undefined) return onTask;
-      const taskless = tasklessAgents.find((agent) => agent.id === agentId);
-      if (taskless === undefined) return undefined;
-      // Note that an agent no automation started names none, which a summary leaves out rather than nulls.
-      const { automationId, ...agent } = taskless;
-      return automationId === null ? agent : { ...agent, automationId };
-    };
+    /** An agent as the task list holds it now; none where it lists no such agent. */
+    const agentListed = (agentId: string) =>
+      (tasks.snapshot().taskAgents ?? []).find((agent) => agent.id === agentId);
     /** Waits until the task list says an agent's sandbox stands open, answering whether it waited: false at once where it already says so, or does not know. */
     const sandboxOpened = (agentId: string) =>
       Effect.scoped(
