@@ -37,6 +37,7 @@ import { useInboxDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
 import { agentName } from "../tasks/agent-model.js";
+import { InboxAgentSections } from "../tasks/inbox-agent-sections.js";
 import {
   INBOX_COLUMNS,
   INBOX_VIEW,
@@ -73,6 +74,7 @@ import { type HeldTaskInboxControl, useInboxCardDrafts } from "../tasks/use-task
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useCloudTerminalTab } from "../tasks/use-terminal-session.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
+import { protoAskThread } from "./agent-threads.js";
 import { AgentPane } from "./main-tabs.js";
 import {
   changesTabOf,
@@ -559,6 +561,25 @@ export const DesktopInbox = memo(function DesktopInbox({
             >
               <div className={INBOX_VIEW} ref={columns.ref} data-columns={columns.shown}>
                 <InboxList
+                  sections={
+                    narrowedTask === undefined ? (
+                      <InboxAgentSections
+                        groups={standing}
+                        agents={tasks.liveAgents ?? []}
+                        tasks={tasks.tasks}
+                        models={tasks.agents.models}
+                        onOpenAgent={(agent) => {
+                          if (agent.planId !== null && agent.planId !== undefined)
+                            tasks.onShowAgent(agent.planId, agent.id);
+                        }}
+                        onOpenThread={(agent, item) => {
+                          if (agent.planId === null || agent.planId === undefined) return;
+                          protoAskThread(agent.id, item.id);
+                          tasks.onShowAgent(agent.planId, agent.id);
+                        }}
+                      />
+                    ) : undefined
+                  }
                   view={list}
                   chosen={chosen?.item.id}
                   columns={columns.shown}

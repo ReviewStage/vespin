@@ -94,6 +94,7 @@ import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
+import { ProtoAgentHead } from "../tasks/thread-anchors.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
@@ -111,7 +112,7 @@ import type { MenuEntry } from "./action-menu.js";
 import { useAgentDraftDoors, useAgentTerminalDoors } from "./agent-actions.js";
 import { ArchivedAgents } from "./agent-archive.js";
 import { AGENTS_SECTION } from "./agent-entries.js";
-import { AgentThreads, useAgentThreadViews } from "./agent-threads.js";
+import { AgentThreads, protoThreadAsked, useAgentThreadViews } from "./agent-threads.js";
 import {
   AutomationRunSteps,
   AutomationRunStrip,
@@ -778,15 +779,13 @@ function DescriptionDocument({
   const agentThreads = useAgentThreadViews();
   const openWaitingThread = useSteadyDoor((item: InboxItem) => {
     if (openedId === undefined) return;
-    if (phone) tasks.onShowInbox({ taskId: openedId, itemId: item.id });
-    else agentThreads.onOpen(item.agentId, item.id);
+    // Note that the Inbox threads prototype drills into the thread in the agent's card on a phone too, full screen.
+    agentThreads.onOpen(item.agentId, item.id);
   });
   const tabAgent = tab === undefined ? undefined : agentOfTab(tab);
   // The column's agent whose card shows its threads in its transcript's place, which main is told is not on screen.
   const threadsAgent =
-    phone || tabAgent === undefined || agentThreads.shown(tabAgent) === undefined
-      ? undefined
-      : tabAgent;
+    tabAgent === undefined || agentThreads.shown(tabAgent) === undefined ? undefined : tabAgent;
   const { onThreadsShown } = tasks;
   useEffect(() => {
     onThreadsShown(threadsAgent);
@@ -802,6 +801,16 @@ function DescriptionDocument({
     const waiting = waitingOf.get(tabAgent) ?? NO_ITEMS;
     return posted.length === 0 ? undefined : { waiting, posted, onOpen: openWaitingThread };
   }, [tabAgent, boardOpen, boardSettled, waitingOf, openWaitingThread]);
+  // Note that a thread the prototype's Inbox asked for opens once its agent's tab stands.
+  useEffect(() => {
+    const asked = protoThreadAsked();
+    if (asked === undefined || tabAgent !== asked.agentId) return;
+    // Note that the thread opens once the task's own read holds it, which the card's thread reads it from.
+    if (!(threads?.posted ?? []).some((item) => item.id === asked.itemId)) return;
+    // Note that the ask stands until its thread shows, so a page drawn again on the way keeps it.
+    if (agentThreads.shown(asked.agentId)?.itemId !== asked.itemId)
+      agentThreads.onOpen(asked.agentId, asked.itemId);
+  }, [tabAgent, agentThreads, threads]);
   const reader = useMemo(() => ({ readerId: tasks.me }), [tasks.me]);
   const editAgents = useMemo(() => ({ control: agents, onOpen: openAgent }), [agents, openAgent]);
   // The task's own menu, as the task's page holds it keyed by the task
@@ -1460,22 +1469,34 @@ function DescriptionDocument({
                                 </AgentColumn>
                               ) : null
                             ) : (
-                              <AgentPane
-                                label={mainTabLabel(tab, agents)}
-                                tabbed
-                                tab={tab}
-                                agents={agents}
-                                shown={tasks.shown && !sidePanel.fullScreen}
-                                views={views}
-                                onOpenDelegation={openDelegationDoor}
-                                onOpenPullRequest={openPullRequestDoor}
-                                onOpenTarget={openTargetDoor}
-                                cards={cards}
-                                onFork={forkDoor}
-                                onContinue={continueDoor}
-                                threads={threads}
-                                hidden={agentThreadsView !== undefined}
-                              />
+                              <>
+                                <ProtoAgentHead
+                                  agent={(agents.agents ?? []).find((each) => each.id === tabAgent)}
+                                  models={agents.models}
+                                  threads={threads}
+                                  onFork={
+                                    tabAgent === undefined
+                                      ? undefined
+                                      : () => forkDoor?.({ agentId: tabAgent, opening: "" })
+                                  }
+                                />
+                                <AgentPane
+                                  label={mainTabLabel(tab, agents)}
+                                  tabbed
+                                  tab={tab}
+                                  agents={agents}
+                                  shown={tasks.shown && !sidePanel.fullScreen}
+                                  views={views}
+                                  onOpenDelegation={openDelegationDoor}
+                                  onOpenPullRequest={openPullRequestDoor}
+                                  onOpenTarget={openTargetDoor}
+                                  cards={cards}
+                                  onFork={forkDoor}
+                                  onContinue={continueDoor}
+                                  threads={threads}
+                                  hidden={agentThreadsView !== undefined}
+                                />
+                              </>
                             )}
                             {agentThreadsView}
                           </FindScope>

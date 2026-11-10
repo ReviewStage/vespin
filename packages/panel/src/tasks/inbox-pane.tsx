@@ -1577,6 +1577,7 @@ export function InboxPane({
   phone,
   newThread,
   within,
+  replyLabel,
 }: {
   /** What holds the item: its task. */
   holder: InboxHolder;
@@ -1610,6 +1611,8 @@ export function InboxPane({
    * type, once its heading has scrolled away.
    */
   within?: boolean | undefined;
+  /** The words over the reply box, the Inbox threads prototype's "Reply in thread · <agent> sees it"; none elsewhere. */
+  replyLabel?: string | undefined;
 }): React.JSX.Element {
   const now = useMinute();
   const board = useRef<HTMLDivElement>(null);
@@ -1701,6 +1704,11 @@ export function InboxPane({
   const draftReply = (place: VirtualRowPlace) => (
     <AnswerMentions value={mentions}>
       <DraftReply readerId={readerId} place={place}>
+        {replyLabel === undefined ? null : (
+          <Text variant={TEXT_VARIANT.LABEL} as={TEXT_ELEMENT.SPAN}>
+            {replyLabel}
+          </Text>
+        )}
         <InboxAnswerBox
           item={item}
           readerId={readerId}

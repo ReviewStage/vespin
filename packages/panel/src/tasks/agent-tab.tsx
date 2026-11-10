@@ -38,7 +38,6 @@ import { carryOnLineWords } from "@repo/features/carry-on-words";
 import { DEVICE_LAUNCH_UNSTARTED } from "@repo/features/device-agent-wire";
 import type { KnownNames } from "@repo/features/entity-kind";
 import { FAILURE_REASON, type FailureReason, remedyLabel } from "@repo/features/failure-remedy";
-import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
@@ -287,7 +286,13 @@ import type { SkillSource } from "./skill-picker.js";
 import { SkillCard } from "./skill-ref.js";
 import { PlanGlyph } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
-import { type AgentThreads, ThreadsDock } from "./threads-dock.js";
+import {
+  NeedYouBar,
+  ProtoThreadsProvider,
+  ThreadAnchor,
+  ThreadReplyLine,
+} from "./thread-anchors.js";
+import type { AgentThreads } from "./threads-dock.js";
 import {
   MacOwnerProvider,
   TranscriptNote,
@@ -1129,6 +1134,10 @@ function AgentPartView({
       if (part.tool === AGENT_TOOL.SHOW_IMAGE && part.state !== TOOL_STATE.OUTPUT_ERROR) {
         return <ShownPictures input={part.input} output={part.output} />;
       }
+      // Note that the Inbox threads prototype stands a post to a thread as its anchor, or a quiet line, where it was posted.
+      if (part.tool === AGENT_TOOL.POST_THREAD && part.state !== TOOL_STATE.OUTPUT_ERROR) {
+        return <ThreadAnchor input={part.input} />;
+      }
       if (delegates(part)) return <DelegationRow part={part} doors={delegation} />;
       // A call that failed keeps its row, because the row is where its error is read.
       const target = part.state === TOOL_STATE.OUTPUT_ERROR ? undefined : toolTarget(part);
@@ -1685,16 +1694,13 @@ export function AgentMessage({
     const sentAt = message.sentAt;
     // A thread's line is headed by what the member did and the thread's chip, its words without the header that names the item to the agent; a comment's by the description or page it is on, its member's words under what it is on; a Slack message's by Slack's chip, its member's words alone; never the instructions the agent was handed.
     const thread = threadLineOf(message);
+    // Note that the prototype's chat holds a reply on a thread as a quiet line, its words the thread's alone.
+    if (thread !== undefined)
+      return <ThreadReplyLine itemId={thread.item_id} sender={message.sentBy?.name} />;
     const comment = commentLineOf(message);
     const slack = slackLineOf(message);
     const shown =
-      comment !== undefined
-        ? commentLineWords(comment)
-        : slack !== undefined
-          ? slack.words
-          : thread === undefined
-            ? words
-            : threadLineWords(words, thread.event);
+      comment !== undefined ? commentLineWords(comment) : slack !== undefined ? slack.words : words;
     // A line open for writing again is written where it stands.
     if (drawnEditor !== undefined) {
       return (
@@ -1799,7 +1805,15 @@ export function AgentMessage({
   // Note that Copy waits for whole words, while Fork takes a turn of no words, or one still running, as it stands.
   const copyable = words !== "" && !moving;
   const forks = forkable && forkCut?.messageSteps !== 0;
-  const foot = (
+  // Note that the prototype's chat draws no foot under a turn that only posted to its threads, whose anchors stand alone.
+  const postsOnly =
+    message.role === MESSAGE_ROLE.ASSISTANT &&
+    message.parts.every((part) => {
+      const type =
+        typeof part === "object" && part !== null && "type" in part ? part.type : undefined;
+      return type === "step-start" || type === `tool-${AGENT_TOOL.POST_THREAD}`;
+    });
+  const foot = postsOnly ? null : (
     <TurnFoot
       workedFor={workedFor}
       copy={
@@ -3032,171 +3046,175 @@ function AgentTabView({
   );
   return (
     <AgentTabFrame ref={tab} label={name}>
-      <MacOwnerProvider value={macOwner}>
-        <AgentPicturesProvider value={pictures}>
-          <WholePartsProvider value={wholeParts}>
-            <MentionedServers value={mentioned}>
-              <UndeliveredLines value={marks}>
-                <RewindProvider value={rewind}>
-                  <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
-                    <AutomationsWanted wanted={automationLines}>
-                      <AgentTranscriptView
-                        messages={lines}
-                        brief={agent.brief}
-                        briefSender={starter === undefined ? undefined : starterActor}
-                        origin={origin}
-                        readerId={readerId}
-                        agentId={agent.id}
-                        taskId={agent.planId ?? undefined}
-                        replay={replay}
-                        delegation={{
-                          models,
-                          own: { model: agent.model, effort: agent.effort },
-                          starts:
-                            delegationStarts &&
-                            workerStarts(delegationStarts, transcript.subagents),
-                          onOpen: openSubagent,
-                          onOpenTarget: openTarget,
-                          cards,
-                          standings: transcript.subagents,
-                        }}
-                        reading={transcript.reading || holding}
-                        holding={holding}
-                        failed={transcript.failed}
-                        failedWith={transcript.failedWith}
-                        working={standing.working}
-                        phase={standing.phase}
-                        waitsUntil={standing.waitsUntil}
-                        turnId={standing.turnId ?? agent.turnId}
-                        // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
-                        startedAt={
-                          !counts
-                            ? undefined
-                            : composer.rewinding
-                              ? composer.rewoundAt
-                              : (agentWorkingSince(lines) ?? startedAt)
-                        }
-                        ended={
-                          // Note that the end line waits for a first page, so a stopped agent's tab never draws it over nothing, and gives way to the working line while the agent works.
-                          transcript.pages === 0 || standing.working
-                            ? undefined
-                            : endLineParts(
-                                standing.status,
-                                standing.failure,
-                                starter,
-                                continuable,
-                                transcript.hostLost,
-                                transcript.launchStopped === undefined
-                                  ? undefined
-                                  : {
-                                      step: transcript.launchStopped,
-                                      runtime: agent.runtime,
-                                      unstarted: transcript.launchUnstarted,
-                                    },
-                              )
-                        }
-                        endReason={endLineReason(standing.failure, starter)}
-                        keyProvider={keyProvider}
-                        onOpenApiKeys={
-                          onOpenApiKeys === undefined ? undefined : () => onOpenApiKeys(keyProvider)
-                        }
-                        endPress={endPress}
-                        endTrail={endTrail}
-                        signIn={signIn}
-                        onRetry={transcript.onRetry}
-                        onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
-                        olderFailed={transcript.olderFailed}
-                        overComposer
-                        bringIn={bringIn}
-                      />
-                    </AutomationsWanted>
-                  </ReplyDoorProvider>
-                </RewindProvider>
-              </UndeliveredLines>
-            </MentionedServers>
-          </WholePartsProvider>
-        </AgentPicturesProvider>
-      </MacOwnerProvider>
-      <AgentTabFoot>
-        <TodosDock messages={lines} working={standing.working} />
-        <PublishedDock
-          published={published}
-          agentId={agent.id}
-          taskId={agent.planId}
-          doors={doors}
-        />
-        <ThreadsDock threads={threads} />
-        <AgentPicturesProvider value={pictures}>
-          <AgentQueueDock
-            messages={queue.messages}
-            controls={controlsQueue}
-            paused={queue.paused}
-            editing={queueEditing.editing}
-            onMove={queue.move}
-            onSteer={(message) =>
-              queue.change({ change: QUEUE_CHANGE.STEER, messageId: message.id })
-            }
-            onEdit={queueEditing.edit}
-            onCancelEdit={queueEditing.cancelRow}
-            onDelete={queue.remove}
-            onResume={() => queue.change({ change: QUEUE_CHANGE.RESUME })}
-          />
-        </AgentPicturesProvider>
-        {onUnarchive !== undefined ? (
-          <ArchivedComposerNote
-            onUnarchive={onUnarchive}
-            stop={offersStop(agent) ? onStop : undefined}
-          />
-        ) : continuedNote !== undefined ? (
-          continuedNote
-        ) : (
-          <AgentComposer
+      <ProtoThreadsProvider value={threads}>
+        <MacOwnerProvider value={macOwner}>
+          <AgentPicturesProvider value={pictures}>
+            <WholePartsProvider value={wholeParts}>
+              <MentionedServers value={mentioned}>
+                <UndeliveredLines value={marks}>
+                  <RewindProvider value={rewind}>
+                    <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
+                      <AutomationsWanted wanted={automationLines}>
+                        <AgentTranscriptView
+                          messages={lines}
+                          brief={agent.brief}
+                          briefSender={starter === undefined ? undefined : starterActor}
+                          origin={origin}
+                          readerId={readerId}
+                          agentId={agent.id}
+                          taskId={agent.planId ?? undefined}
+                          replay={replay}
+                          delegation={{
+                            models,
+                            own: { model: agent.model, effort: agent.effort },
+                            starts:
+                              delegationStarts &&
+                              workerStarts(delegationStarts, transcript.subagents),
+                            onOpen: openSubagent,
+                            onOpenTarget: openTarget,
+                            cards,
+                            standings: transcript.subagents,
+                          }}
+                          reading={transcript.reading || holding}
+                          holding={holding}
+                          failed={transcript.failed}
+                          failedWith={transcript.failedWith}
+                          working={standing.working}
+                          phase={standing.phase}
+                          waitsUntil={standing.waitsUntil}
+                          turnId={standing.turnId ?? agent.turnId}
+                          // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
+                          startedAt={
+                            !counts
+                              ? undefined
+                              : composer.rewinding
+                                ? composer.rewoundAt
+                                : (agentWorkingSince(lines) ?? startedAt)
+                          }
+                          ended={
+                            // Note that the end line waits for a first page, so a stopped agent's tab never draws it over nothing, and gives way to the working line while the agent works.
+                            transcript.pages === 0 || standing.working
+                              ? undefined
+                              : endLineParts(
+                                  standing.status,
+                                  standing.failure,
+                                  starter,
+                                  continuable,
+                                  transcript.hostLost,
+                                  transcript.launchStopped === undefined
+                                    ? undefined
+                                    : {
+                                        step: transcript.launchStopped,
+                                        runtime: agent.runtime,
+                                        unstarted: transcript.launchUnstarted,
+                                      },
+                                )
+                          }
+                          endReason={endLineReason(standing.failure, starter)}
+                          keyProvider={keyProvider}
+                          onOpenApiKeys={
+                            onOpenApiKeys === undefined
+                              ? undefined
+                              : () => onOpenApiKeys(keyProvider)
+                          }
+                          endPress={endPress}
+                          endTrail={endTrail}
+                          signIn={signIn}
+                          onRetry={transcript.onRetry}
+                          onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
+                          olderFailed={transcript.olderFailed}
+                          overComposer
+                          bringIn={bringIn}
+                        />
+                      </AutomationsWanted>
+                    </ReplyDoorProvider>
+                  </RewindProvider>
+                </UndeliveredLines>
+              </MentionedServers>
+            </WholePartsProvider>
+          </AgentPicturesProvider>
+        </MacOwnerProvider>
+        <AgentTabFoot>
+          <TodosDock messages={lines} working={standing.working} />
+          <PublishedDock
+            published={published}
             agentId={agent.id}
-            status={agent.status}
-            stoppable={offersStop(agent)}
-            steers={turnUnderWay(agent)}
-            composer={composer}
-            model={model}
-            models={models}
-            modelsFailed={modelsFailed}
-            readModels={readModels}
-            usage={transcript.usage}
-            payer={transcript.payer}
-            payerSubscriptionId={transcript.payerSubscriptionId}
-            servers={servers}
-            context={transcript.context}
-            brief={agent.brief}
-            tools={(narrow) => (
-              <>
-                <AgentPlace agent={agent} readerId={readerId} move={placeMove} narrow={narrow} />
-                <ForwardChip agent={agent} />
-              </>
-            )}
-            onStop={onStop}
-            // Note that a started agent's conversation always opens on its description or
-            // task, so the box takes a follow up even before the transcript is read.
-            followsUp
-            keywords={keywords}
-            skills={skills}
-            replyDoor={replyDoor}
-            closedRemedy={closedRemedy}
-            queueing={
-              agent.runtime === undefined || !controlsQueue
-                ? undefined
-                : {
-                    working: standing.working,
-                    enterQueues,
-                    onQueue: queueEditing.queue,
-                    editing: queueEditing.editing !== undefined,
-                    onSave: queueEditing.save,
-                    onSteer: queueEditing.steer,
-                    onCancel: queueEditing.cancel,
-                  }
-            }
+            taskId={agent.planId}
+            doors={doors}
           />
-        )}
-      </AgentTabFoot>
-      {replies ? <ReplyToSelection scope={tab} onReply={replyThroughBox} /> : null}
+          <NeedYouBar threads={threads} />
+          <AgentPicturesProvider value={pictures}>
+            <AgentQueueDock
+              messages={queue.messages}
+              controls={controlsQueue}
+              paused={queue.paused}
+              editing={queueEditing.editing}
+              onMove={queue.move}
+              onSteer={(message) =>
+                queue.change({ change: QUEUE_CHANGE.STEER, messageId: message.id })
+              }
+              onEdit={queueEditing.edit}
+              onCancelEdit={queueEditing.cancelRow}
+              onDelete={queue.remove}
+              onResume={() => queue.change({ change: QUEUE_CHANGE.RESUME })}
+            />
+          </AgentPicturesProvider>
+          {onUnarchive !== undefined ? (
+            <ArchivedComposerNote
+              onUnarchive={onUnarchive}
+              stop={offersStop(agent) ? onStop : undefined}
+            />
+          ) : continuedNote !== undefined ? (
+            continuedNote
+          ) : (
+            <AgentComposer
+              agentId={agent.id}
+              status={agent.status}
+              stoppable={offersStop(agent)}
+              steers={turnUnderWay(agent)}
+              composer={composer}
+              model={model}
+              models={models}
+              modelsFailed={modelsFailed}
+              readModels={readModels}
+              usage={transcript.usage}
+              payer={transcript.payer}
+              payerSubscriptionId={transcript.payerSubscriptionId}
+              servers={servers}
+              context={transcript.context}
+              brief={agent.brief}
+              tools={(narrow) => (
+                <>
+                  <AgentPlace agent={agent} readerId={readerId} move={placeMove} narrow={narrow} />
+                  <ForwardChip agent={agent} />
+                </>
+              )}
+              onStop={onStop}
+              // Note that a started agent's conversation always opens on its description or
+              // task, so the box takes a follow up even before the transcript is read.
+              followsUp
+              keywords={keywords}
+              skills={skills}
+              replyDoor={replyDoor}
+              closedRemedy={closedRemedy}
+              queueing={
+                agent.runtime === undefined || !controlsQueue
+                  ? undefined
+                  : {
+                      working: standing.working,
+                      enterQueues,
+                      onQueue: queueEditing.queue,
+                      editing: queueEditing.editing !== undefined,
+                      onSave: queueEditing.save,
+                      onSteer: queueEditing.steer,
+                      onCancel: queueEditing.cancel,
+                    }
+              }
+            />
+          )}
+        </AgentTabFoot>
+        {replies ? <ReplyToSelection scope={tab} onReply={replyThroughBox} /> : null}
+      </ProtoThreadsProvider>
     </AgentTabFrame>
   );
 }

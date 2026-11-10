@@ -27,6 +27,23 @@ const WEB_DEPLOYMENT_DEFINES = {
  * that Vite already serves every entry page at its clean path, but not a page
  * `public/` carries, which this one is.
  */
+/** The page the Inbox threads prototype's long ask links: the expired-invite page's two layouts over the invite funnel. */
+const PROTO_PAGE = [
+  "<!doctype html><html><head><meta charset='utf-8'><title>Invite funnel</title><style>",
+  "body{font:14px/1.5 system-ui,sans-serif;margin:24px;color:#1f2328;background:#fff}",
+  "h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:24px 0 8px}p{margin:0 0 8px;color:#57606a}",
+  ".row{display:flex;gap:16px;flex-wrap:wrap}.box{flex:1;min-width:220px;border:1px solid #d0d7de;border-radius:10px;padding:16px}",
+  ".face{display:flex;align-items:center;gap:10px;margin-bottom:10px}.dot{width:32px;height:32px;border-radius:50%;background:#8b5cf6;color:#fff;display:grid;place-items:center;font-weight:600}",
+  ".btn{display:inline-block;margin-top:10px;padding:6px 12px;border-radius:8px;background:#1f2328;color:#fff;font-size:13px}.link{color:#0969da}",
+  "table{border-collapse:collapse;margin-top:8px}td,th{padding:6px 12px;border-bottom:1px solid #d0d7de;text-align:left}td:last-child{text-align:right}",
+  "</style></head><body><h1>Expired-invite page: two layouts</h1><p>What a teammate sees when their invite link has expired.</p>",
+  "<div class='row'><div class='box'><b>A · Card</b><div class='face'><div class='dot'>M</div><div><div><b>Maya Chen</b></div><div style='color:#57606a'>invited you to Acme</div></div></div>",
+  "<div>Maya's invite to Acme has expired.</div><span class='btn'>Ask Maya for a new invite</span></div>",
+  "<div class='box'><b>B · Plain</b><p style='margin-top:10px;color:#1f2328'>This invite has expired.</p><span class='link'>Back to sign in</span></div></div>",
+  "<h2>Invite funnel, last 7 days</h2><table><tr><th>Step</th><th>Invites</th></tr><tr><td>Sent</td><td>120</td></tr><tr><td>Opened</td><td>94</td></tr>",
+  "<tr><td>Accepted</td><td>71</td></tr><tr><td>Expired</td><td>9</td></tr></table></body></html>",
+].join("");
+
 function pageInMacAppAtCleanPath(): Plugin {
   return {
     name: "page-in-mac-app-at-clean-path",
@@ -35,6 +52,14 @@ function pageInMacAppAtCleanPath(): Plugin {
         const url = new URL(request.url ?? "/", "http://localhost");
         if (url.pathname === PAGE_IN_MAC_APP_PATH)
           request.url = `${url.pathname}.html${url.search}`;
+        // Note that the Inbox threads prototype serves the fixture workspace's places at their own paths in development, so a link to one opens it.
+        else if (url.pathname.startsWith("/personal")) request.url = `/app.html${url.search}`;
+        // And a page frame the fixture's agent showed, which only the service serves otherwise.
+        else if (/^\/api\/plans\/[^/]+\/pages\/[^/]+\/versions\/\d+\/frame$/u.test(url.pathname)) {
+          _response.setHeader("content-type", "text/html; charset=utf-8");
+          _response.end(PROTO_PAGE);
+          return;
+        }
         next();
       });
     },

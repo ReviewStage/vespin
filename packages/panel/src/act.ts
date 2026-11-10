@@ -24,6 +24,7 @@ import type { AGENT_CALL_FAILURE, AgentAgentAnswer } from "@repo/features/agent-
 import type { SendTrace } from "@repo/features/sentry-tracing";
 import { FAILURE_CONDITION, FAILURE_SURFACE, failureAboutOf } from "@repo/features/shown-failure";
 import { ACT_UNREACHED_WORDS } from "@repo/features/words";
+import { RUN_PROFILE } from "@repo/host/app-state";
 import {
   ACT_ERROR,
   type ActPortCallContext,
@@ -35,9 +36,14 @@ import { STATUS_TONE } from "@repo/ui";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { actPort } from "./app-bridge.js";
 import type { ShownFailure } from "./failure-report.js";
-import { fixtureClient, loadedTasksFixture } from "./tasks/tasks-fixture-loader.js";
+import {
+  fixtureClient,
+  isTaskOpen,
+  loadedTasksFixture,
+  setProtoOpenTask,
+} from "./tasks/tasks-fixture-loader.js";
 import { showToast, TOAST_HOLD } from "./toast.js";
-import { appStateIn } from "./use-app-state.js";
+import { appStateIn, appStateQuery } from "./use-app-state.js";
 
 /**
  * What each kind takes and answers, keyed by the kind. Note that a kind's own
@@ -83,6 +89,14 @@ function stagedAnswer(
   const client = fixtureClient();
   const run = client === undefined ? undefined : appStateIn(client)?.run;
   if (run?.fixtureMode !== true) return undefined;
+  // Note that the Inbox threads prototype opens a task in the window itself under the Inbox profile, whose host holds no account to open one with.
+  if (client !== undefined && run.profile === RUN_PROFILE.INBOX && isTaskOpen(kind)) {
+    setProtoOpenTask(kind === "tasks.select" ? (payload as { taskId: string }).taskId : undefined);
+    client.setQueryData(appStateQuery.queryKey, (held) =>
+      held === undefined ? held : { ...held },
+    );
+    return { answer: (kind === "tasks.select" ? true : undefined) as PortActResult<PortActKind> };
+  }
   return fixture.fixtureActAnswer(run, kind, payload);
 }
 

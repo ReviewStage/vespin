@@ -23,12 +23,15 @@
  */
 
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
+import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_RUNTIME,
+  AGENT_SENDER,
   AGENT_STATUS,
   type AgentSummary,
+  type AgentTranscriptMessage,
   CHECK_SUMMARY,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
@@ -36,11 +39,13 @@ import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wir
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
+  INBOX_ANSWER_LEAD,
   INBOX_APPROVAL_OPTION,
   INBOX_ASK,
   INBOX_ASK_STATUS,
   INBOX_FIELD,
   INBOX_MESSAGE_AUTHOR,
+  INBOX_MESSAGE_LEAD,
   INBOX_REPLY,
   INBOX_STATUS,
   INBOX_WIRE_VERSION,
@@ -59,6 +64,7 @@ import type { TasksView } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { EXPERIMENT } from "@repo/settings";
+import { MESSAGE_CHANNEL, MESSAGE_ROLE, THREAD_LINE_EVENT } from "@repo/wire";
 import { ACT_KIND } from "./acts.js";
 import {
   type AppHeldById,
@@ -76,6 +82,7 @@ import {
   FIXTURE_VIDEO_MP4,
   FIXTURE_VIDEO_WEBM,
 } from "./fixture-inbox-media.js";
+import { PROTO_EXPIRED_PAGE_PNG } from "./fixture-proto-media.js";
 import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
 
 export {
@@ -94,9 +101,38 @@ export {
  * taken any later day should still say "2h", not a month.
  */
 const LANDED = Date.now();
+
+/**
+ * The Inbox threads prototype's dev switch: `?agent-state=` in a dev tab's
+ * address names what the invitations agent is doing (working on something
+ * else, idle for days, archived, or waiting on the reader), read once as the
+ * fixture loads. Note that an idle or archived agent's whole run is set back
+ * three days (`STATE_SHIFT`), so its threads and transcript read as old.
+ */
+export const PROTO_STATE = {
+  WORKING: "working",
+  IDLE: "idle",
+  ARCHIVED: "archived",
+  WAITING: "waiting",
+} as const;
+
+export type ProtoState = (typeof PROTO_STATE)[keyof typeof PROTO_STATE];
+
+export const PROTO_AGENT_STATE: ProtoState = (() => {
+  const search = (globalThis as { location?: { search?: string } }).location?.search ?? "";
+  const named =
+    typeof URLSearchParams === "function" ? new URLSearchParams(search).get("agent-state") : null;
+  return Object.values(PROTO_STATE).find((state) => state === named) ?? PROTO_STATE.WORKING;
+})();
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;
+
+/** How far the invitations agent's run is set back: three days while it sits idle or archived. */
+const STATE_SHIFT =
+  PROTO_AGENT_STATE === PROTO_STATE.IDLE || PROTO_AGENT_STATE === PROTO_STATE.ARCHIVED
+    ? 3 * DAY
+    : 0;
 
 /** The profiles this fixture stages. */
 const STAGED_PROFILES: ReadonlySet<string> = new Set<string>([
@@ -216,6 +252,21 @@ const RECORDED = {
   VIDEO: "a3f4c647-8fb0-4cd9-b4f1-2b3c4d5e6f70",
 } as const;
 
+/** The long ask's files: the screenshot its words draw, by the attachment it is read by. */
+const LAYOUT = {
+  ITEM: fixtureId(6),
+  PICTURE: "b405d758-90c1-4dea-85a1-3c4d5e6f7081",
+} as const;
+
+const LAYOUT_PICTURE_ADDRESS = inboxAttachmentAddress(
+  { kind: LINK_DESTINATION.INBOX_ITEM, planId: TASK.INVITES, itemId: LAYOUT.ITEM },
+  LAYOUT.PICTURE,
+  FIXTURE_WORKSPACE_SLUG,
+);
+
+/** The page the long ask compares its layouts on: the task's staged page, by its address. */
+const LAYOUT_PAGE_ADDRESS = `https://vespin.dev/${FIXTURE_WORKSPACE_SLUG}/task/${FIXTURE_IDS.TASK}/page/${FIXTURE_IDS.PAGE}`;
+
 /**
  * The thread whose answer the fixture refuses, as a send no answer came back
  * for: the migration's approval, so a flow sees an answer drawn at once and
@@ -231,7 +282,56 @@ const RECORDED_PICTURE_ADDRESS = inboxAttachmentAddress(
 );
 
 /** The reference journey's task's items: a decision, an approval, a form, a notice with code, a long thread, and a notice with a picture and a recording. */
-const INVITES_ITEMS: readonly InboxItem[] = [
+const INVITES_ITEMS_NOW: readonly InboxItem[] = [
+  item(
+    6,
+    AGENT.INVITES,
+    "expired-layout",
+    "Which layout for the expired-invite page?",
+    [
+      {
+        ...agentSaid(
+          116,
+          90 * MINUTE,
+          [
+            "Before I build the expired-invite page, pick a layout. The funnel says 9 of 120 invites expired last week, so this page is seen more than I thought.",
+            "",
+            `The two layouts side by side, with the funnel under them: [@Invite funnel](${LAYOUT_PAGE_ADDRESS})`,
+            "",
+            "Today's placeholder, for comparison:",
+            "",
+            `![Today's expired-invite page](${LAYOUT_PICTURE_ADDRESS})`,
+            "",
+            "**A · Card** puts the sender's face and name over the message, with *Ask Maya for a new invite* under it. It reads warmer, and it's what the accepted page does.",
+            "",
+            "**B · Plain** is one line of text and a link back to sign-in. It's quicker to build and reads fine on a phone, but it says nothing about who invited you.",
+            "",
+            "Either way a removed sender reads as *This invite has expired*, with no button, as we settled on the copy thread.",
+          ].join("\n"),
+          {
+            type: INBOX_ASK.DECIDE,
+            options: [
+              {
+                label: "A · Card",
+                detail: "The sender's face and name, and the ask-again button.",
+              },
+              { label: "B · Plain", detail: "One line and a link back to sign-in." },
+            ],
+            recommended: "A · Card",
+            ...OPEN,
+          },
+        ),
+        files: [
+          {
+            attachmentId: LAYOUT.PICTURE,
+            name: "expired-page-today.png",
+            mediaType: AGENT_ATTACHMENT_TYPE.PNG,
+          },
+        ],
+      },
+    ],
+    { unread: true },
+  ),
   item(
     1,
     AGENT.INVITES,
@@ -406,6 +506,23 @@ const INVITES_ITEMS: readonly InboxItem[] = [
   ),
 ];
 
+/** An item set back by `STATE_SHIFT`, every instant of it, so an idle agent's threads read as old. */
+function setBack(each: InboxItem): InboxItem {
+  if (STATE_SHIFT === 0) return each;
+  return {
+    ...each,
+    postedAt: each.postedAt - STATE_SHIFT,
+    updatedAt: each.updatedAt - STATE_SHIFT,
+    ...(each.settledAt === undefined ? undefined : { settledAt: each.settledAt - STATE_SHIFT }),
+    thread: (each.thread ?? []).map((message) => ({
+      ...message,
+      createdAt: message.createdAt - STATE_SHIFT,
+    })),
+  };
+}
+
+const INVITES_ITEMS: readonly InboxItem[] = INVITES_ITEMS_NOW.map(setBack);
+
 /** The digest task's items: steps to do, an answer in words, and one answered. */
 const DIGEST_ITEMS: readonly InboxItem[] = [
   item(11, AGENT.DIGEST, "sender-domain", "Verify the digest's sender domain", [
@@ -556,17 +673,34 @@ function agentOn(
   };
 }
 
-const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
-  [
+/** The invitations agent as the prototype's state has it: at work, idle for days, archived, or done and waiting on the reader. */
+function invitesAgent(): AgentSummary {
+  const agent = agentOn(
+    AGENT.INVITES,
     TASK.INVITES,
-    agentOn(
-      AGENT.INVITES,
-      TASK.INVITES,
-      "Build teammate invitations",
-      AGENT_STATUS.RUNNING,
-      3 * DAY,
-    ),
-  ],
+    "Build teammate invitations",
+    PROTO_AGENT_STATE === PROTO_STATE.WORKING ? AGENT_STATUS.RUNNING : AGENT_STATUS.COMPLETED,
+    3 * DAY + STATE_SHIFT,
+  );
+  return PROTO_AGENT_STATE === PROTO_STATE.ARCHIVED
+    ? { ...agent, archivedAt: LANDED - 2 * DAY }
+    : agent;
+}
+
+/** The agents beside the three holding items, which the Inbox's sections stand in Running, Scheduled, and Archived. */
+const SIDE_AGENT = {
+  COPY: "c516e869-a1d2-4efb-96c2-d2e3f4051627",
+  ALERTS: "d627f97a-b2e3-4f0c-a7d3-e3f405162738",
+  LAUNCH: "e7380a8b-c3f4-4a1d-b8e4-f40516273849",
+} as const;
+
+/** When each scheduled agent wakes, which its Inbox row says: the alerts watcher, two hours on. */
+export const FIXTURE_WAKES: ReadonlyMap<string, number> = new Map([
+  [SIDE_AGENT.ALERTS, LANDED + 2 * HOUR],
+]);
+
+const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
+  [TASK.INVITES, invitesAgent()],
   [
     TASK.DIGEST,
     agentOn(AGENT.DIGEST, TASK.DIGEST, "Send the weekly digest", AGENT_STATUS.RUNNING, 4 * HOUR),
@@ -574,6 +708,39 @@ const AGENTS: ReadonlyMap<string, AgentSummary> = new Map([
   [
     TASK.ROUNDING,
     agentOn(AGENT.ROUNDING, TASK.ROUNDING, "Fix ledger rounding", AGENT_STATUS.COMPLETED, 5 * DAY),
+  ],
+  [
+    LISTED.COPY,
+    agentOn(
+      SIDE_AGENT.COPY,
+      LISTED.COPY,
+      "Draft the invite email copy",
+      AGENT_STATUS.RUNNING,
+      18 * MINUTE,
+    ),
+  ],
+  [
+    LISTED.ALERTS,
+    agentOn(
+      SIDE_AGENT.ALERTS,
+      LISTED.ALERTS,
+      "Watch the usage alerts",
+      AGENT_STATUS.COMPLETED,
+      6 * HOUR,
+    ),
+  ],
+  [
+    LISTED.LAUNCH,
+    {
+      ...agentOn(
+        SIDE_AGENT.LAUNCH,
+        LISTED.LAUNCH,
+        "Write the launch checklist",
+        AGENT_STATUS.COMPLETED,
+        6 * DAY,
+      ),
+      archivedAt: LANDED - 5 * DAY,
+    },
   ],
 ]);
 
@@ -966,9 +1133,174 @@ function noneHeldIn(workspaceIds: readonly string[]): AppHeldById<readonly never
   return Object.fromEntries(workspaceIds.map((id) => [id, { rows: [] }]));
 }
 
+/** A thread line's head, as the service writes the line it steers into the thread's agent. */
+function threadHead(each: InboxItem, answered: string | undefined): string {
+  return answered === undefined
+    ? `${INBOX_MESSAGE_LEAD} on "${each.title}" (key ${each.key}):`
+    : `${INBOX_ANSWER_LEAD} on "${each.title}" (key ${each.key}): chose ${answered}`;
+}
+
+/**
+ * Every post the invitations agent made to its threads, and every reply of
+ * the reader's steered back into it, as its transcript holds them: a post a
+ * turn of its own calling `post_thread`, a reply a thread line, each at the
+ * moment its message was written on the thread.
+ */
+function invitesThreadLines(): AgentTranscriptMessage[] {
+  return INVITES_ITEMS.flatMap((each) =>
+    (each.thread ?? []).map((message): AgentTranscriptMessage => {
+      if (message.author === INBOX_MESSAGE_AUTHOR.AGENT) {
+        return {
+          id: `proto-post-${message.id}`,
+          role: MESSAGE_ROLE.ASSISTANT,
+          parts: [
+            { type: "step-start" },
+            {
+              type: `tool-${AGENT_TOOL.POST_THREAD}`,
+              toolCallId: `proto-post-call-${message.id}`,
+              state: "output-available",
+              input: { key: each.key, title: each.title, body: message.text },
+              output: { inbox: [{ id: each.id, key: each.key }] },
+            },
+          ],
+          startedAt: message.createdAt - MINUTE,
+          finishedAt: message.createdAt,
+        };
+      }
+      const chose = message.answers?.choices?.join(", ");
+      return {
+        id: `proto-line-${message.id}`,
+        role: MESSAGE_ROLE.USER,
+        parts: [
+          {
+            type: "text",
+            text:
+              chose === undefined
+                ? `${threadHead(each, undefined)}\n\n${message.text}`
+                : threadHead(each, chose),
+          },
+        ],
+        sentAt: message.createdAt,
+        metadata: {
+          channel: MESSAGE_CHANNEL.THREAD,
+          event: chose === undefined ? THREAD_LINE_EVENT.MESSAGE : THREAD_LINE_EVENT.ANSWER,
+          item_id: each.id,
+        },
+        sentBy: { kind: AGENT_SENDER.MEMBER, userId: ADA.userId, name: ADA.name },
+      };
+    }),
+  );
+}
+
+/** The work in the chat between the threads that is none of theirs: another agent's message and its answer, and a GitHub review and its fix. */
+function invitesOtherWork(): AgentTranscriptMessage[] {
+  const messageAt = LANDED - STATE_SHIFT - DAY - 20 * HOUR;
+  const reviewAt = LANDED - STATE_SHIFT - DAY - 3 * HOUR;
+  return [
+    {
+      id: "proto-digest-message",
+      role: MESSAGE_ROLE.USER,
+      parts: [
+        {
+          type: "text",
+          text: `Message · Send the weekly digest to you:\n\nThe digest now links to pending invites. Can the invite email's subject read "Join Acme on Relay", so both say the same?\n\nReply with message_agent({ agentId: "${AGENT.DIGEST}", text }).`,
+        },
+      ],
+      sentAt: messageAt,
+      metadata: { channel: MESSAGE_CHANNEL.AGENT_MESSAGE },
+    },
+    {
+      id: "proto-digest-answer",
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        { type: "step-start" },
+        {
+          type: "tool-apply_patch",
+          toolCallId: "proto-digest-patch",
+          state: "output-available",
+          input: {
+            patchText:
+              "*** Begin Patch\n*** Update File: src/members/invite-email.tsx\n*** End Patch",
+          },
+          output: { output: "Done." },
+        },
+        {
+          type: "text",
+          text: 'The invite email\'s subject now reads "Join Acme on Relay", and I told the digest agent.',
+        },
+      ],
+      startedAt: messageAt,
+      finishedAt: messageAt + 3 * MINUTE,
+    },
+    {
+      id: "proto-review",
+      role: MESSAGE_ROLE.USER,
+      parts: [
+        {
+          type: "text",
+          text: "grace requested changes on #128: the invite token is compared with ===.",
+        },
+      ],
+      sentAt: reviewAt,
+      metadata: {
+        channel: MESSAGE_CHANNEL.GITHUB,
+        event: "review",
+        repository: "ada/relay",
+        number: 128,
+        url: "https://github.com/ada/relay/pull/128#pullrequestreview-1",
+        by: "grace",
+        verdict: "changes_requested",
+        words: "Compare the invite token in constant time.",
+        comments: 1,
+      },
+      sentBy: { kind: AGENT_SENDER.GITHUB, name: "grace" },
+    },
+    {
+      id: "proto-review-fix",
+      role: MESSAGE_ROLE.ASSISTANT,
+      parts: [
+        { type: "step-start" },
+        {
+          type: "tool-read_file",
+          toolCallId: "proto-review-read",
+          state: "output-available",
+          input: { filePath: "src/members/accept.ts" },
+          output: { content: "export async function acceptInvite(token: string) {…}" },
+        },
+        {
+          type: "tool-apply_patch",
+          toolCallId: "proto-review-patch",
+          state: "output-available",
+          input: {
+            patchText: "*** Begin Patch\n*** Update File: src/members/accept.ts\n*** End Patch",
+          },
+          output: { output: "Done." },
+        },
+        {
+          type: "tool-bash",
+          toolCallId: "proto-review-push",
+          state: "output-available",
+          input: { command: "git push", description: "Push the fix to #128" },
+          output: { stdout: "agent/invites -> agent/invites", stderr: "", exitCode: 0 },
+        },
+        {
+          type: "text",
+          text: "Fixed grace's review on #128: the token is compared with `timingSafeEqual` now, and pushed.",
+        },
+      ],
+      startedAt: reviewAt,
+      finishedAt: reviewAt + 7 * MINUTE,
+    },
+  ];
+}
+
 /** The invitations agent's transcript as the host holds one read, its run begun as its agent was started. */
 const INVITES_TRANSCRIPT = withQueued(
-  fixtureAgentTranscript(LANDED - 3 * DAY, ADA, "Build teammate invitations"),
+  fixtureAgentTranscript(LANDED - 3 * DAY - STATE_SHIFT, ADA, "Build teammate invitations", {
+    extra: [...invitesThreadLines(), ...invitesOtherWork()],
+    resendAt: LANDED - STATE_SHIFT - 8 * MINUTE,
+    running: PROTO_AGENT_STATE === PROTO_STATE.WORKING,
+  }),
 );
 
 /** A transcript with one message of the account's queued behind its turn, which the agent's composer lists over its field with Steer and Delete. */
@@ -1110,6 +1442,9 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   [ACT_KIND.AGENTS_INBOX_READ_STATE]: ({ itemId, unread }) => ({ id: itemId, unread }),
   // Note that the recording is answered as its MP4 copy to a reader that plays MP4, as the service answers one it keeps a copy of.
   [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId, playable }) => {
+    if (itemId === LAYOUT.ITEM && attachmentId === LAYOUT.PICTURE) {
+      return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: PROTO_EXPIRED_PAGE_PNG };
+    }
     if (itemId !== RECORDED.ITEM) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     if (attachmentId === RECORDED.PICTURE) {
       return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };

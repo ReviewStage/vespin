@@ -1838,3 +1838,41 @@ body,
   z-index: 1;
   pointer-events: auto;
 }
+
+/* The Inbox threads prototype (design F, `thread-anchors.tsx`): the agent's
+   head over its card, the anchors and quiet lines in its chat, and the
+   thread drilled into in the card's place. */
+.proto-agent-head {
+  flex: none;
+  padding: var(--ui-space-8) var(--ui-space-16);
+  border-bottom: 1px solid var(--ui-color-border);
+}
+
+.proto-thread-anchor {
+  max-width: 560px;
+}
+
+.proto-thread-quiet {
+  padding-block: var(--ui-space-2);
+}
+
+.proto-thread-drill {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.proto-thread-back {
+  flex: none;
+  padding: var(--ui-space-8) var(--ui-space-16) 0;
+}
+
+/* The need-you bar is one row, scrolled sideways where its threads run past it. */
+.proto-need-you-row {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.proto-need-you-row > * {
+  flex: none;
+}

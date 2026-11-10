@@ -162,6 +162,7 @@ import type { InboxRoute } from "../inbox-route.js";
 import { useRouteAccess } from "../route-gates.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoors } from "../steady-door.js";
+import { loadedTasksFixture } from "../tasks/tasks-fixture-loader.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
 import { useSurfaceOpen } from "../use-surface-open.js";
 import type { VersionHistoryRoute } from "../version-history-route.js";
@@ -1114,7 +1115,12 @@ export function useWindowHistory(input: {
   });
   // A place a narrow room stands another in the place of, as a phone has no Home, stands that one as its declaration says.
   const instead =
-    narrow && tasks.signedIn && untitled !== undefined && !isTaskPlace(untitled)
+    // Note that the Inbox threads prototype's fixture run keeps a phone's Home, which a task on its way passes through before its fixture binds it.
+    narrow &&
+    tasks.signedIn &&
+    untitled !== undefined &&
+    !isTaskPlace(untitled) &&
+    loadedTasksFixture() === undefined
       ? routed?.place.narrowInstead
       : undefined;
   const phoneWorkspace = tasks.workspace;

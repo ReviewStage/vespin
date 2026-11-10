@@ -63,11 +63,29 @@ function withFollowed(state: AppStateSnapshot, view: TasksView | undefined): App
   return { ...state, tasks };
 }
 
+/** No pull request moved, as the prototype stages them. */
+const NO_PULL_REQUEST_MOVES = new Map();
+
+/** The task the Inbox threads prototype has open in the window under the Inbox profile, whose host opens none. */
+let protoOpenTask: string | undefined;
+
+export function setProtoOpenTask(taskId: string | undefined): void {
+  protoOpenTask = taskId;
+}
+
+/** Whether an act opens or closes a task, which the prototype answers in the window. */
+export function isTaskOpen(kind: string): boolean {
+  return kind === "tasks.select" || kind === "tasks.close";
+}
+
 /** The tasks fixture with the Inbox's tasks, answers, and document laid over its own, which come last. */
 function laidOver(tasks: TasksModule, inbox: InboxModule): TasksFixture {
   const fixtureTasksView: TasksFixture["fixtureTasksView"] = (run) => {
     const view = tasks.fixtureTasksView(run);
-    return view === undefined ? undefined : inbox.inboxTasksView(run.profile, view);
+    const laid = view === undefined ? undefined : inbox.inboxTasksView(run.profile, view);
+    if (laid === undefined || run.profile !== "inbox") return laid;
+    const { activeTaskId: _held, ...rest } = laid;
+    return protoOpenTask === undefined ? rest : { ...rest, activeTaskId: protoOpenTask };
   };
   return {
     fixtureSidePanel: tasks.fixtureSidePanel,
@@ -77,11 +95,15 @@ function laidOver(tasks: TasksModule, inbox: InboxModule): TasksFixture {
     fixtureActAnswer: (run, kind, payload) =>
       inbox.inboxActAnswer(run.profile, kind, payload) ??
       tasks.fixtureActAnswer(run, kind, payload),
-    fixtureAppState: (state) =>
-      withFollowed(
-        inbox.inboxAppState(tasks.fixtureAppState(state), tasks.FIXTURE_WORKSPACE_IDS),
-        fixtureTasksView(state.run),
-      ),
+    fixtureAppState: (state) => {
+      const staged = inbox.inboxAppState(tasks.fixtureAppState(state), tasks.FIXTURE_WORKSPACE_IDS);
+      // Note that the Inbox threads prototype stages the invitations agent's pull requests on the web too, as the iPhone's fixture does, so its Pull request tab draws.
+      const parts =
+        state.run.profile === "inbox"
+          ? inbox.pullRequestPartsAppState(staged, NO_PULL_REQUEST_MOVES)
+          : staged;
+      return withFollowed(parts, fixtureTasksView(state.run));
+    },
     fixtureReader: (run) => inbox.inboxReader(run.profile),
   };
 }

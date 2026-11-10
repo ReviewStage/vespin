@@ -75,6 +75,8 @@ function asked(
 function transcriptMessages(
   startedAt: number,
   reader: { readonly userId: string; readonly name: string },
+  resendAt: number,
+  running: boolean,
 ): readonly AgentTranscriptMessage[] {
   return [
     asked(
@@ -232,7 +234,7 @@ function transcriptMessages(
     },
     asked(
       "fixture-invites-resend-ask",
-      startedAt + 70 * MINUTE,
+      resendAt,
       "Add a way to resend an invite that expired.",
       reader,
     ),
@@ -259,12 +261,28 @@ function transcriptMessages(
           },
           { output: "Done." },
         ),
-        runningPart(AGENT_TOOL.BASH, "fixture-invites-resend-test", {
-          command: "pnpm test src/members",
-          description: "Run the members tests",
-        }),
+        running
+          ? runningPart(AGENT_TOOL.BASH, "fixture-invites-resend-test", {
+              command: "pnpm test src/members",
+              description: "Run the members tests",
+            })
+          : toolPart(
+              AGENT_TOOL.BASH,
+              "fixture-invites-resend-test",
+              { command: "pnpm test src/members", description: "Run the members tests" },
+              { stdout: " ✓ src/members/invite.test.ts (6 tests)", stderr: "", exitCode: 0 },
+            ),
+        ...(running
+          ? []
+          : [
+              {
+                type: "text",
+                text: "Resend is in: an expired invite gets a fresh link, and the member list doesn't change.",
+              },
+            ]),
       ],
-      startedAt: startedAt + 70 * MINUTE,
+      startedAt: resendAt,
+      ...(running ? undefined : { finishedAt: resendAt + 6 * MINUTE }),
     },
   ];
 }
@@ -274,11 +292,27 @@ export function fixtureAgentTranscript(
   startedAt: number,
   reader: { readonly userId: string; readonly name: string },
   title: string,
+  // Note that the Inbox threads prototype lays the agent's thread posts, the replies on them, and its other work among these turns, by when each came.
+  laid: {
+    readonly extra: readonly AgentTranscriptMessage[];
+    readonly resendAt: number;
+    readonly running: boolean;
+  } = { extra: [], resendAt: startedAt + 70 * MINUTE, running: true },
 ): AppTranscript {
+  const at = (message: AgentTranscriptMessage) => message.sentAt ?? message.startedAt ?? 0;
+  const messages = [
+    ...transcriptMessages(startedAt, reader, laid.resendAt, laid.running),
+    ...laid.extra,
+  ].toSorted((a, b) => at(a) - at(b));
   return {
-    messages: transcriptMessages(startedAt, reader),
-    cursor: "3:0",
-    word: { status: AGENT_STATUS.RUNNING, runStartedAt: startedAt, title, caughtUp: true },
+    messages,
+    cursor: `${messages.length}:0`,
+    word: {
+      status: laid.running ? AGENT_STATUS.RUNNING : AGENT_STATUS.COMPLETED,
+      runStartedAt: startedAt,
+      title,
+      caughtUp: true,
+    },
     pages: 1,
   };
 }

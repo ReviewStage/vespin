@@ -9,6 +9,7 @@ import {
   NOTHING_HERE,
   taskHolder,
 } from "@repo/features/inbox-list-model";
+import { agentName } from "@repo/features/model-label";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { BackButton, FILL_ELEMENT, Fill, Toolbar, useMinute } from "@repo/ui";
@@ -29,7 +30,7 @@ import { useHeldInboxList } from "../tasks/use-held-inbox-list.js";
 import { useInboxReadMarks, useNodOnOpen, useReadOnOpen } from "../tasks/use-inbox-read-marks.js";
 import type { TaskInboxControl } from "../tasks/use-task-inbox.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { paneDoors, startedThreads } from "./desktop-inbox.js";
+import { paneDoors } from "./desktop-inbox.js";
 
 /**
  * agent-threads.tsx -- an agent's threads inside its card in the task's column: the Inbox's list of the items it posted beside the one chosen, both the window's Inbox's own.
@@ -61,7 +62,7 @@ import { paneDoors, startedThreads } from "./desktop-inbox.js";
  */
 
 /** What the card's way back says, and the place its hint names. */
-const TRANSCRIPT = { LABEL: "Transcript", PLACE: "transcript" } as const;
+const TRANSCRIPT = { LABEL: "Chat", PLACE: "the chat" } as const;
 
 /** What the list lists: every item, open or settled, as an Inbox narrowed to a task does. */
 const AGENT_LISTS = { show: INBOX_SHOW.ALL, whose: EVERYONES } as const;
@@ -100,6 +101,25 @@ function agentPaneDoors(
     ...doors,
     onOpenAgent: (each) => (each === agentId ? onBack() : doors.onOpenAgent(each)),
   };
+}
+
+/** A thread the prototype's Inbox asked to open, taken by the task's page once the agent's tab stands. */
+let protoAsked: { readonly agentId: string; readonly itemId: string } | undefined;
+
+export function protoAskThread(agentId: string, itemId: string): void {
+  protoAsked = { agentId, itemId };
+}
+
+export function protoThreadAsked():
+  | { readonly agentId: string; readonly itemId: string }
+  | undefined {
+  return protoAsked;
+}
+
+/** The agent's name as its card names it, for the thread's reply box. */
+function agentLabel(agents: TasksControl["agents"], agentId: string): string {
+  const agent = (agents.agents ?? []).find((each) => each.id === agentId);
+  return agent === undefined ? "The agent" : agentName(agent, agents.models);
 }
 
 /** Each agent's card's threads, by the agent, held while the task's page stands. */
@@ -187,7 +207,7 @@ export function AgentThreads({
     columns.onStep();
     onChoose(each.item.id);
   };
-  const pager = useInboxPager(steps, list, chosen, step, { shown: active });
+  const _pager = useInboxPager(steps, list, chosen, step, { shown: active });
   useAppCommand(APP_COMMAND.EXIT_AGENT_THREADS, active ? onBack : undefined);
   const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id, readerId: me });
   const resolveItems = useInboxResolver();
@@ -211,6 +231,36 @@ export function AgentThreads({
       />
     </ReplayUnmask>
   );
+  // Note that the Inbox threads prototype drills into the chosen thread alone, its way back the chat, and stands the list only where none is chosen.
+  if (listed !== undefined) {
+    return (
+      <Fill
+        as={FILL_ELEMENT.SECTION}
+        className="agent-threads proto-thread-drill"
+        data-popover-room=""
+      >
+        <div className="proto-thread-back">{back}</div>
+        <InboxPane
+          holder={listed.holder}
+          item={listed.item}
+          control={inbox}
+          agents={agents}
+          hidden={false}
+          onBack={undefined}
+          pager={undefined}
+          within
+          replyLabel={`Reply in thread · ${agentLabel(agents, agentId)} sees it`}
+          newThread={undefined}
+          doors={{
+            ...agentPaneDoors(tasks, listed, agentId, onBack),
+            onMark: marks.onMark,
+            onClose: resolveItems,
+            onRemind: marks.onRemind,
+          }}
+        />
+      </Fill>
+    );
+  }
   return (
     <Fill as={FILL_ELEMENT.SECTION} className="agent-threads" data-popover-room="">
       <div className={INBOX_VIEW} ref={columns.ref} data-columns={columns.shown}>
@@ -242,36 +292,12 @@ export function AgentThreads({
           onRemind={marks.onRemind}
           onPointing={onPointing}
         />
-        {listed === undefined ? (
-          <section className={INBOX_VIEW_ITEMS} hidden={columns.shown !== INBOX_COLUMNS.BOTH}>
-            <Toolbar />
-            {inbox.failed || inbox.reading ? null : (
-              <InboxPaneEmpty listed={listedRows.length} none={NOTHING_HERE} />
-            )}
-          </section>
-        ) : (
-          <InboxPane
-            holder={listed.holder}
-            item={listed.item}
-            control={inbox}
-            agents={agents}
-            hidden={columns.shown === INBOX_COLUMNS.LIST}
-            onBack={columns.onBack}
-            pager={columns.shown === INBOX_COLUMNS.ITEM ? pager : undefined}
-            within
-            newThread={
-              tasks.signedIn
-                ? startedThreads(agents.startInboxThread, (_item, itemId) => onChoose(itemId))
-                : undefined
-            }
-            doors={{
-              ...agentPaneDoors(tasks, listed, agentId, onBack),
-              onMark: marks.onMark,
-              onClose: resolveItems,
-              onRemind: marks.onRemind,
-            }}
-          />
-        )}
+        <section className={INBOX_VIEW_ITEMS} hidden={columns.shown !== INBOX_COLUMNS.BOTH}>
+          <Toolbar />
+          {inbox.failed || inbox.reading ? null : (
+            <InboxPaneEmpty listed={listedRows.length} none={NOTHING_HERE} />
+          )}
+        </section>
       </div>
     </Fill>
   );

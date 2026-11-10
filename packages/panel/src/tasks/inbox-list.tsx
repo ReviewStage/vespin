@@ -1512,7 +1512,10 @@ export function InboxList({
   onClose,
   onRemind,
   onPointing,
+  sections,
 }: {
+  /** What stands in the rows' place, the Inbox threads prototype's agent sections; the rows where none is handed. */
+  sections?: React.ReactNode;
   view: InboxListView;
   /** The id of the item the pane shows. */
   chosen: string | undefined;
@@ -1669,8 +1672,12 @@ export function InboxList({
       data-empty={String(listedItems(view).length === 0)}
       {...motionRows()}
     >
-      <InboxRows items={view.items} place={rowsPlace} row={row} />
-      {note}
+      {sections ?? (
+        <>
+          <InboxRows items={view.items} place={rowsPlace} row={row} />
+          {note}
+        </>
+      )}
     </div>
   );
   return (
