@@ -44,7 +44,7 @@ test("a plan's windows are named by their length and any one model they count, a
     [
       ["5-hour", 100, PROGRESS_TONE.ATTENTION],
       ["Weekly", 64, PROGRESS_TONE.WORKING],
-      ["Weekly · Opus", 12, PROGRESS_TONE.WORKING],
+      ["Weekly (Opus)", 12, PROGRESS_TONE.WORKING],
     ],
   );
   const [session, week, opus] = meters?.rows.map((row) => row.resets) ?? [];

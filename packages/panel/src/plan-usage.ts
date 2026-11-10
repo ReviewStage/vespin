@@ -8,7 +8,7 @@ import { PROGRESS_TONE, type UsageMeterRow } from "@repo/ui";
  * A window is named from its length, never its place in the provider's
  * answer, since Codex's primary window is usually but not always the
  * 5-hour one: "5-hour", "Weekly", "Daily", "30-day"; and a window on one
- * model alone goes on to the model's name, "Weekly · Opus". A window
+ * model alone names the model after it, "Weekly (Opus)", as Claude Code's `/usage` does. A window
  * shorter than a day says its reset as a countdown, "in 2h", and one a day
  * or longer as its weekday and time, "Thu 9:00 AM", as Claude's own usage
  * page says them, since "in 3d" leaves the hour to guess. The rows keep the
@@ -38,10 +38,10 @@ function lengthLabel(windowMins: number | undefined): string {
   return `${String(windowMins)}-minute`;
 }
 
-/** A window's name: its length, and the model it alone counts where it counts one, "Weekly · Opus". */
+/** A window's name: its length, and the model it alone counts where it counts one, "Weekly (Opus)". */
 function windowLabel(window: PlanUsage): string {
   const length = lengthLabel(window.windowMins);
-  return window.model === undefined ? length : `${length} · ${window.model}`;
+  return window.model === undefined ? length : `${length} (${window.model})`;
 }
 
 /** When a window resets: a countdown inside a day, "in 2h", and its weekday and time past one, "Thu 9:00 AM". */
