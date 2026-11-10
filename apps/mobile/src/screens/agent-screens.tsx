@@ -152,7 +152,7 @@ function AgentComposerBar({ composer }: { readonly composer: AgentComposer }) {
     composer.queued.length === 0 &&
     composer.paused === undefined &&
     composer.attached.length === 0 &&
-    composer.note === undefined ? undefined : (
+    composer.notes.length === 0 ? undefined : (
       <>
         <QueuedLines
           lines={composer.queued}
@@ -161,7 +161,9 @@ function AgentComposerBar({ composer }: { readonly composer: AgentComposer }) {
           onDelete={composer.remove}
         />
         <AttachedPictures pictures={composer.attached} onDetach={composer.detach} />
-        {composer.note === undefined ? null : <AskNote words={composer.note} />}
+        {composer.notes.map((note) => (
+          <AskNote key={note.kind} words={note.words} />
+        ))}
       </>
     );
   return (

@@ -11,7 +11,10 @@
  * one refused hands its words and pictures back to the field, the refusal
  * said over it in the panel's words, and the phone buzzes as a refusal does.
  * Stop is offered while the agent may still write (`agentStillWriting`),
- * starting or awaiting its turn included, as the panel offers it.
+ * starting or awaiting its turn included, as the panel offers it, and a
+ * second press while one is out or the agent has yet to stop sends nothing.
+ * Each of the message, its pictures, Stop, and the queue keeps its own note,
+ * so one refusal never hides another.
  */
 
 import {
@@ -44,7 +47,7 @@ import {
   selectInboxReader,
 } from "@repo/host/app-state-reads";
 import { AGENT_ENTER } from "@repo/settings";
-import type { AttachedPicture, QueuedLine } from "@repo/ui-native";
+import { type AttachedPicture, type QueuedLine, useAsyncAction } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { NotificationFeedbackType, notificationAsync } from "expo-haptics";
@@ -66,6 +69,22 @@ const PICTURE_REFUSAL = {
   TOO_MUCH: "These files are too large to send together.",
   UNREADABLE: (name: string) => `${name} couldn't be read.`,
 } as const;
+
+/** The actions that each keep a note of what did not go. */
+const COMPOSER_NOTE = {
+  SEND: "send",
+  PICTURE: "picture",
+  STOP: "stop",
+  QUEUE: "queue",
+} as const;
+
+type ComposerNoteKind = (typeof COMPOSER_NOTE)[keyof typeof COMPOSER_NOTE];
+
+/** What one action's last press that did not go said. */
+export interface ComposerNote {
+  readonly kind: ComposerNoteKind;
+  readonly words: string;
+}
 
 /** A picture attached to the message: the name the message carries it under, and the attachment it sends. */
 interface Attached {
@@ -135,8 +154,8 @@ export interface AgentComposer {
   /** Sends a queued message now; none for a reader who did not start the agent, whose queue they read only. */
   readonly steer: ((id: string) => void) | undefined;
   readonly remove: ((id: string) => void) | undefined;
-  /** What the last send, pick, Stop, or queue change that did not go said. */
-  readonly note: string | undefined;
+  /** What did not go, one note each for the last send, pick, Stop, and queue change, in that order. */
+  readonly notes: readonly ComposerNote[];
 }
 
 /**
@@ -160,23 +179,30 @@ export function useAgentComposer(
   const [words, setWords] = useState("");
   const [pictures, setPictures] = useState<readonly Attached[]>([]);
   const [sending, setSending] = useState<readonly Sending[]>([]);
-  const [note, setNote] = useState<string | undefined>(undefined);
-  const [stopping, setStopping] = useState(false);
+  const [sendNote, setSendNote] = useState<string | undefined>(undefined);
+  const [pictureNote, setPictureNote] = useState<string | undefined>(undefined);
+  const [queueNote, setQueueNote] = useState<string | undefined>(undefined);
+  const stopAction = useAsyncAction(() => STOP_FAILED);
+  // Note that a Stop the service took stands pressed past its answer, until the document shows the agent resting.
+  const [stopTaken, setStopTaken] = useState(false);
   const writing = status !== undefined && agentStillWriting(status);
   // Note that an agent on the retired runtime keeps no queue, and only its starter changes one.
   const starter = agent?.startedBy;
   const controlsQueue =
     agent?.runtime !== undefined && (starter === undefined || starter.userId === readerId);
-  // A Stop stands pressed until the agent stops writing.
+  const { clear: clearStop } = stopAction;
+  // A Stop stands pressed until the agent stops writing, and what it said goes with the turn.
   useEffect(() => {
-    if (!writing) setStopping(false);
-  }, [writing]);
+    if (writing) return;
+    setStopTaken(false);
+    clearStop();
+  }, [writing, clearStop]);
   // A send refused: its words and pictures back in the field, ahead of anything typed since, and the refusal said.
   const handBack = (sent: Sending, refusal: string) => {
     setSending((out) => out.filter(({ id }) => id !== sent.id));
     setWords((typed) => (typed.trim() === "" ? sent.words : `${sent.words}\n${typed}`));
     setPictures((held) => [...sent.pictures, ...held]);
-    setNote(refusal);
+    setSendNote(refusal);
     buzz(NotificationFeedbackType.Error);
   };
   const settled = (sent: Sending) => {
@@ -188,7 +214,7 @@ export function useAgentComposer(
     if (text === "" && pictures.length === 0) return;
     const refusal = pictureRefusal(pictures);
     if (refusal !== undefined) {
-      setNote(refusal);
+      setPictureNote(refusal);
       buzz(NotificationFeedbackType.Warning);
       return;
     }
@@ -197,7 +223,8 @@ export function useAgentComposer(
     setSending((out) => [...out, sent]);
     setWords("");
     setPictures([]);
-    setNote(undefined);
+    setSendNote(undefined);
+    setPictureNote(undefined);
     if (writing && enterQueues && controlsQueue) {
       const change = { change: QUEUE_CHANGE.ADD, id: sent.id, text, ...attachments } as const;
       acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change })
@@ -248,41 +275,41 @@ export function useAgentComposer(
           ...read.filter((each): each is Attached => typeof each !== "string"),
         ];
         setPictures(next);
-        setNote(unread ?? pictureRefusal(next));
+        setPictureNote(unread ?? pictureRefusal(next));
       })
       .catch((error: unknown) => console.error("The photo picker did not open.", error));
   };
   const detach = (id: string) => {
     setPictures((held) => held.filter((picture) => picture.id !== id));
-    setNote(undefined);
+    setPictureNote(undefined);
   };
+  // A press while a Stop is out runs nothing (`useAsyncAction`), nor one after the service took it.
   const stop = () => {
-    setStopping(true);
-    setNote(undefined);
-    acts[ACT_KIND.AGENTS_STOP]({ agentId })
-      .then((answer) => {
-        if ("failure" in answer) throw new Error(`The stop was refused: ${answer.failure}.`);
-        if (agentStillWriting(answer.agent.status)) {
-          setStopping(false);
-          setNote(STOP_NOTHING_YET);
-        }
-      })
-      .catch((error: unknown) => {
-        console.error("The stop did not go.", error);
-        setStopping(false);
-        setNote(STOP_FAILED);
-        buzz(NotificationFeedbackType.Error);
-      });
+    if (stopTaken) return;
+    void stopAction.run(() =>
+      acts[ACT_KIND.AGENTS_STOP]({ agentId })
+        .then((answer) => {
+          if ("failure" in answer) throw new Error(`The stop was refused: ${answer.failure}.`);
+          if (agentStillWriting(answer.agent.status)) return STOP_NOTHING_YET;
+          setStopTaken(true);
+          return undefined;
+        })
+        .catch((error: unknown) => {
+          console.error("The stop did not go.", error);
+          buzz(NotificationFeedbackType.Error);
+          return STOP_FAILED;
+        }),
+    );
   };
   const change = (next: AgentQueueChange) => {
-    setNote(undefined);
+    setQueueNote(undefined);
     acts[ACT_KIND.AGENTS_QUEUE]({ agentId, change: next })
       .then((answer) => {
-        if ("failure" in answer) setNote(queueRefusalWords(next.change, answer.failure));
+        if ("failure" in answer) setQueueNote(queueRefusalWords(next.change, answer.failure));
       })
       .catch((error: unknown) => {
         console.error("The queue change did not go.", error);
-        setNote(queueRefusalWords(next.change, AGENT_CALL_FAILURE.UNANSWERED));
+        setQueueNote(queueRefusalWords(next.change, AGENT_CALL_FAILURE.UNANSWERED));
       });
   };
   const queue = transcript?.word?.queue;
@@ -307,7 +334,8 @@ export function useAgentComposer(
     words,
     onWords: (typed) => {
       setWords(typed);
-      setNote(undefined);
+      setSendNote(undefined);
+      setPictureNote(undefined);
     },
     sendable: pictures.length > 0,
     send,
@@ -315,7 +343,7 @@ export function useAgentComposer(
     attach,
     detach,
     stop: writing ? stop : undefined,
-    stopping,
+    stopping: stopAction.running || stopTaken,
     queued,
     paused: queue?.paused === undefined ? undefined : pausedWords(queue.paused),
     steer: controlsQueue
@@ -324,6 +352,11 @@ export function useAgentComposer(
     remove: controlsQueue
       ? (messageId) => change({ change: QUEUE_CHANGE.DELETE, messageId })
       : undefined,
-    note,
+    notes: [
+      { kind: COMPOSER_NOTE.SEND, words: sendNote },
+      { kind: COMPOSER_NOTE.PICTURE, words: pictureNote },
+      { kind: COMPOSER_NOTE.STOP, words: stopAction.refusal },
+      { kind: COMPOSER_NOTE.QUEUE, words: queueNote },
+    ].filter((note): note is ComposerNote => note.words !== undefined),
   };
 }
