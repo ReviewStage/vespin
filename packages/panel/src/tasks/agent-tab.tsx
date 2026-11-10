@@ -69,6 +69,7 @@ import {
   TEXT_VARIANT,
   Text,
   TurnEnd,
+  USAGE_LIMIT_NOTICE_LOOK,
   UsageLimitNotice,
   useAnnounce,
 } from "@repo/ui";
@@ -675,7 +676,9 @@ function ToolCallView({
         cut={cut}
       />
       <CallPictures tool={part.tool} input={part.input} output={part.output} />
-      {limit === undefined ? null : <UsageLimitNotice notice={limit} />}
+      {limit === undefined ? null : (
+        <UsageLimitNotice notice={limit} look={USAGE_LIMIT_NOTICE_LOOK.TITLE} />
+      )}
     </>
   );
 }
@@ -764,7 +767,9 @@ function DelegationRow({
         }
         body={body}
       />
-      {limit === undefined ? null : <UsageLimitNotice notice={limit} />}
+      {limit === undefined ? null : (
+        <UsageLimitNotice notice={limit} look={USAGE_LIMIT_NOTICE_LOOK.TITLE} />
+      )}
     </>
   );
 }

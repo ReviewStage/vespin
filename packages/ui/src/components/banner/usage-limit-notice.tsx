@@ -5,6 +5,11 @@ import { STATUS_TONE } from "../../status-tone.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import { BANNER_GLYPH, BANNER_LOOK, Banner } from "./banner.js";
 
+/** How much the notice says: its title over what comes next, or its title alone, as a worker the limit stopped, which goes on with no one, says it. */
+export const USAGE_LIMIT_NOTICE_LOOK = { FULL: "full", TITLE: "title" } as const;
+export type UsageLimitNoticeLook =
+  (typeof USAGE_LIMIT_NOTICE_LOOK)[keyof typeof USAGE_LIMIT_NOTICE_LOOK];
+
 /** What the card's muted line says: the payer the turn went on with, when it resumes, or that it waits on the reader. */
 function nextWords(notice: Notice): string {
   if (notice.moved !== undefined) return `Continuing on ${notice.moved.to}`;
@@ -15,7 +20,14 @@ function nextWords(notice: Notice): string {
   return `Resumes at ${reset}`;
 }
 
-export function UsageLimitNotice({ notice }: { notice: Notice }): React.JSX.Element {
+export function UsageLimitNotice({
+  notice,
+  look = USAGE_LIMIT_NOTICE_LOOK.FULL,
+}: {
+  notice: Notice;
+  /** Its title over what comes next, or its title alone. */
+  look?: UsageLimitNoticeLook | undefined;
+}): React.JSX.Element {
   const on = notice.moved === undefined ? "" : ` on ${notice.moved.from}`;
   return (
     <Banner
@@ -27,9 +39,11 @@ export function UsageLimitNotice({ notice }: { notice: Notice }): React.JSX.Elem
       <Text as={TEXT_ELEMENT.P} variant={TEXT_VARIANT.LABEL}>
         {`${notice.agent} usage limit reached${on}`}
       </Text>
-      <Text as={TEXT_ELEMENT.P} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-        {nextWords(notice)}
-      </Text>
+      {look === USAGE_LIMIT_NOTICE_LOOK.TITLE ? null : (
+        <Text as={TEXT_ELEMENT.P} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+          {nextWords(notice)}
+        </Text>
+      )}
     </Banner>
   );
 }
