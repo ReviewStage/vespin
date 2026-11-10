@@ -449,11 +449,8 @@ test("each card opens on its harness and its Add; each credential says how it st
     ),
   );
   assert.ok(button(credential(attention, "Claude plan"), "Replace token"));
-  assert.deepEqual(
-    lineOf(credential(attention, "ana@work.test")),
-    needsHand("Signed out of Codex."),
-  );
-  assert.ok(button(credential(attention, "ana@work.test"), "Sign in again"));
+  assert.deepEqual(lineOf(credential(attention, "ana@work.test")), needsHand("Sign-in expired"));
+  assert.ok(button(credential(attention, "ana@work.test"), "Reconnect"));
   leave();
 
   // A plan at its limit says until when, its bar full in the attention ink; only Codex's offers Manage usage, which opens ChatGPT's usage settings.
@@ -769,12 +766,12 @@ test("a Codex plan connects in place through Codex's code, which goes once conne
   await vi.waitFor(() => assert.ok(!labels(page).includes("ana@work.test")));
 });
 
-test("a Codex plan OpenAI signed out offers Sign in again, which asks for a code in place", async () => {
+test("a Codex plan whose sign-in expired offers Reconnect, which asks for a code in place", async () => {
   waitOpen = Promise.withResolvers();
   held = { keys: [], subscriptions: [{ ...CHATGPT_PLAN, status: PROVIDER_KEY_STATUS.INVALID }] };
   const page = await mount();
   await vi.waitFor(() => assert.ok(credential(page, "ana@work.test")));
-  await press(credential(page, "ana@work.test"), "Sign in again");
+  await press(credential(page, "ana@work.test"), "Reconnect");
   assert.equal(sentOf(ACT_KIND.CHATGPT_DEVICE_START).length, 1);
   assert.match(page.textContent ?? "", /225Q-1343X/u);
 });

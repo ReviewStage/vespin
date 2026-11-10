@@ -18,7 +18,7 @@ import {
   integrationAccountLabel,
 } from "@repo/features/integration-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { readFailedWords } from "@repo/features/words";
+import { readFailedWords, VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   AccountWords,
@@ -88,7 +88,7 @@ const ROW_LINE = {
 
 /** What a row offers to mend its connection, on its button or in its ⋯. */
 const ROW_ACT = {
-  RECONNECT: "Reconnect",
+  RECONNECT: VERB.RECONNECT,
   ADD_ACCOUNT: "Add another account",
   RENAME: "Rename",
 } as const;
