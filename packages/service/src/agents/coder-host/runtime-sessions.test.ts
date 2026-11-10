@@ -128,6 +128,7 @@ import { TURN_DELIVERY } from "./turn-delivery-bounds.js";
 function recording(sessionPrefix: string) {
   const calls: string[] = [];
   const messages: SessionMessage[] = [];
+  const booted = new Set<string>();
   const answers: {
     open: string;
     status: number;
@@ -160,6 +161,26 @@ function recording(sessionPrefix: string) {
         return answers.handover;
       }),
     warm: () => Effect.void,
+    // Note that a first launch's boot is the Start's open, written down as one, and its session's first
+    // message, which its queue hands on as a send, is the message that open carried.
+    boot: (conversationId) =>
+      Effect.sync(() => {
+        calls.push(`open:${conversationId}`);
+        if (answers.open !== SESSION_SEND_OUTCOME.ACCEPTED) {
+          return {
+            outcome: SESSION_SEND_OUTCOME.FAILED,
+            status: answers.status,
+            ...(answers.planRefusal === undefined ? {} : { planRefusal: answers.planRefusal }),
+          } as const;
+        }
+        const sessionId = `${sessionPrefix}${randomUUID()}`;
+        booted.add(sessionId);
+        return {
+          outcome: SESSION_SEND_OUTCOME.ACCEPTED,
+          sessionId,
+          up: Effect.succeed(undefined),
+        } as const;
+      }),
     retry: (sessionId, message) =>
       Effect.sync(() => {
         calls.push(`retry:${sessionId}`);
@@ -181,8 +202,11 @@ function recording(sessionPrefix: string) {
       }),
     send: (sessionId, message) =>
       Effect.sync(() => {
-        calls.push(`send:${sessionId}`);
         messages.push(message);
+        if (booted.delete(sessionId)) {
+          return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId, deliveryId: randomUUID() };
+        }
+        calls.push(`send:${sessionId}`);
         return answers.planRefusal === undefined && answers.keyRefusal === undefined
           ? { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId, deliveryId: randomUUID() }
           : {

@@ -85,7 +85,11 @@ import {
   SHARED_FILES_DIRECTORY,
 } from "@repo/agent-runner/pins";
 import { LAUNCH_PATH, type LaunchPath } from "@repo/agent-runner/protocol";
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import {
+  agentBootScriptsEnded,
+  agentBootScriptsStarted,
+} from "@repo/database/models/agent-boot-store";
 import {
   type AgentRunnerRecord,
   forgetAgentRunnerRecord,
@@ -111,6 +115,7 @@ import {
 import {
   Brand,
   Context,
+  DateTime,
   Duration,
   Effect,
   Exit,
@@ -927,6 +932,18 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           );
     });
 
+  /** A write of the agent's first launch, which nothing waits on: a failure is logged, never the open's. */
+  const bootNoted = (
+    context: Context.Context<DatabaseServices>,
+    write: Effect.Effect<void, StoreFailure, DatabaseServices>,
+  ) =>
+    write.pipe(
+      Effect.provideContext(context),
+      Effect.catch((failure) =>
+        Effect.logWarning(`A first launch's boot was not noted: ${failure._tag}`),
+      ),
+    );
+
   /**
    * The workspace's cloud setup scripts run in the sandbox just created
    * (`SETUP_RUN_SCRIPT`), each written to its file first so no script is
@@ -936,12 +953,16 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
    * says what failed.
    */
   const setUp = (
+    context: Context.Context<DatabaseServices>,
+    agentId: string,
     sandbox: RepositorySandbox,
     opened: SandboxRunning,
     setup: SandboxSetup | undefined,
   ) =>
     Effect.gen(function* () {
       if (setup === undefined) return;
+      // The agent's first launch reads "Running scripts…" while they run, and keeps how they ended.
+      yield* bootNoted(context, agentBootScriptsStarted(agentId, yield* DateTime.nowAsDate));
       const encoder = new TextEncoder();
       const files = [
         { path: SETUP_FILE.INSTALL, script: setup.install },
@@ -959,6 +980,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         },
         REPOSITORY_REFUSAL.CHECKOUT_FAILED,
       );
+      yield* bootNoted(context, agentBootScriptsEnded(agentId, ran.exitCode));
       if (ran.exitCode !== 0) {
         yield* Effect.logWarning(`A sandbox's cloud setup exited ${ran.exitCode}`);
       }
@@ -1000,7 +1022,9 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         () => cloneAgentExtras(sandbox, checkout.extras),
       );
       // A source's snapshot ran the setup on its own disk already, which this one is a copy of.
-      if (from !== CREATED_FROM.SOURCE) yield* setUp(sandbox, opened, yield* checkout.setup);
+      if (from !== CREATED_FROM.SOURCE) {
+        yield* setUp(context, checkout.agent.id, sandbox, opened, yield* checkout.setup);
+      }
       return refill;
     });
 

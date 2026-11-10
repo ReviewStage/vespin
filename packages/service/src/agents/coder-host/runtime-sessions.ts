@@ -265,6 +265,17 @@ function routed<Turn extends SessionTurn>(
     );
 
   const sessions: AgentSessions<Turn> = {
+    boot: (conversationId) =>
+      Effect.gen(function* () {
+        const read = yield* routeOrUnread(conversationId);
+        if (Option.isNone(read)) return UNREAD;
+        const route = read.value;
+        if ("ended" in route) return ENDED;
+        const reached = harness(route.runtime, route.starter);
+        if (Option.isNone(reached)) return NOT_HERE;
+        return yield* (yield* reached.value).boot(conversationId);
+      }),
+
     open: (message) =>
       Effect.gen(function* () {
         const read = yield* routeOrUnread(message.conversationId);
