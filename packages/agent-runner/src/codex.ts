@@ -101,7 +101,7 @@
  * approval and Approve for me run Codex's workspace sandbox with the network
  * on and approval `on-request`, so Codex asks only to run a command outside
  * it or to write outside the checkout. The checkout's git folders (a
- * worktree's own and the clone's it shares) and the home caches package
+ * worktree's own and the clone's it shares, `gitFoldersOf`) and the home caches package
  * managers keep (`PACKAGE_CACHES`) are writable beside the checkout, so a
  * commit, a push, and an install run unasked. Under Ask for approval the
  * member answers each ask (`approvals.ts`): Allow is Codex's `accept`, Always
@@ -123,15 +123,16 @@
 import { randomUUID } from "node:crypto";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
+  realpathSync,
   rmSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
-import { delimiter, dirname, join, resolve } from "node:path";
+import { basename, delimiter, dirname, join, resolve, sep } from "node:path";
 import { Data, Duration, Effect, Exit, Fiber, Option, Queue, Schema, Scope, Stream } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import type { ChildProcessSpawner } from "effect/process";
@@ -665,21 +666,57 @@ const PACKAGE_CACHES = [".npm", ".cache", join(".local", "share", "pnpm")] as co
 /** A worktree's `.git` file, naming the folder its git state is in. */
 const GITDIR_LINE = /^gitdir:\s*(.+)$/m;
 
+/** The folder a clone keeps each worktree's git state under, one folder per worktree, as Git lays it out. */
+const WORKTREES_FOLDER = "worktrees";
+
+/** A path's real place, its links followed; none where it does not stand. */
+function realPathOf(path: string): string | undefined {
+  try {
+    return realpathSync(path);
+  } catch {
+    return undefined;
+  }
+}
+
+/** A file's words, trimmed; none where it cannot be read as a file. */
+function wordsOf(path: string): string | undefined {
+  try {
+    return readFileSync(path, "utf8").trim();
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * The git folders a commit in the checkout writes: its `.git` folder, or,
- * in a worktree, the folder its `.git` file names and the clone's own it
- * shares (`commondir`); none where the checkout holds no git.
+ * in a worktree, the folder its `.git` file names and the clone's `.git`
+ * above it; none where the checkout holds no git. Note that every file
+ * read here the agent can write, so a worktree's folder counts only as Git
+ * lays one out, outside the checkout under the clone's `worktrees`, naming
+ * this checkout back in its own `gitdir` file, which no agent can write
+ * where it could not write already, and the clone's is that layout's,
+ * never the `commondir` file's; a `.git` that is a link counts for nothing,
+ * so no launch makes writable a folder an earlier command pointed it at.
  */
 function gitFoldersOf(cwd: string): string[] {
   const dotGit = join(cwd, ".git");
-  const found = statSync(dotGit, { throwIfNoEntry: false });
-  if (found === undefined) return [];
+  const found = lstatSync(dotGit, { throwIfNoEntry: false });
+  if (found === undefined || found.isSymbolicLink()) return [];
   if (found.isDirectory()) return [dotGit];
-  const gitdir = GITDIR_LINE.exec(readFileSync(dotGit, "utf8"))?.[1]?.trim();
-  if (gitdir === undefined) return [];
-  const own = resolve(cwd, gitdir);
-  const common = join(own, "commondir");
-  return existsSync(common) ? [own, resolve(own, readFileSync(common, "utf8").trim())] : [own];
+  const gitdir = GITDIR_LINE.exec(wordsOf(dotGit) ?? "")?.[1]?.trim();
+  const checkout = realPathOf(cwd);
+  const own = gitdir === undefined ? undefined : realPathOf(resolve(cwd, gitdir));
+  if (own === undefined || checkout === undefined) return [];
+  const clone = dirname(dirname(own));
+  const backPointer = wordsOf(join(own, "gitdir"));
+  const namedBack =
+    backPointer !== undefined && realPathOf(resolve(own, backPointer)) === realPathOf(dotGit);
+  const laidOut =
+    basename(dirname(own)) === WORKTREES_FOLDER &&
+    !own.startsWith(`${checkout}${sep}`) &&
+    existsSync(join(clone, "HEAD")) &&
+    existsSync(join(clone, "objects"));
+  return namedBack && laidOut ? [own, clone] : [];
 }
 
 /**

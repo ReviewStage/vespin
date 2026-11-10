@@ -313,6 +313,11 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
       if (layout.codexExecutable === undefined) {
         return yield* new LaunchRefused({ reason: "no codex" });
       }
+      // Note that a Mac whose runner reads no Codex mode would run one that asks with full access, so it is refused rather than run unasked.
+      const mode = launchPermissionMode(agent);
+      if (mode !== undefined && !layout.codexModes) {
+        return yield* new LaunchRefused({ reason: "permission mode" });
+      }
       const effort = effortOf(agent.effort);
       const speed = speedKeysOf(agent);
       const written: CodexConfig = {
@@ -331,7 +336,7 @@ function codex(options: CodexSessionsOptions): RunnerHarness<{ readonly _tag: st
         integrations: yield* options.integrations(agent),
         tokenUrl,
         installedSkills: layout.installedSkills,
-        ...launchPermissionMode(agent),
+        ...mode,
       };
       return written;
     });

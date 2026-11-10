@@ -3,7 +3,15 @@
  */
 
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { it } from "@effect/vitest";
@@ -1709,5 +1717,45 @@ it.effect(
         [APPROVAL_BY.ENDED],
       );
       assert.equal(kinds(service.applied).at(-1), RUNNER_EVENT.END);
+    }),
+);
+
+it.effect(
+  "in a mode that asks, a worktree's git folders are writable as Git lays them out, and never a folder its commondir or a forged .git file points at",
+  () =>
+    Effect.gen(function* () {
+      const root = realpathSync(mkdtempSync(join(tmpdir(), "vespin-codex-worktree-")));
+      const clone = join(root, "clone", ".git");
+      const own = join(clone, "worktrees", "agent");
+      const checkout = join(root, "agent");
+      const secret = join(root, "secret");
+      mkdirSync(join(clone, "objects"), { recursive: true });
+      writeFileSync(join(clone, "HEAD"), "ref: refs/heads/main\n");
+      mkdirSync(own, { recursive: true });
+      mkdirSync(checkout);
+      mkdirSync(secret);
+      writeFileSync(join(checkout, ".git"), `gitdir: ${own}\n`);
+      writeFileSync(join(own, "gitdir"), `${join(checkout, ".git")}\n`);
+      // An earlier command pointed the shared folder elsewhere, which the next launch must not follow.
+      writeFileSync(join(own, "commondir"), `${secret}\n`);
+      const roots = (env: Record<string, string>) =>
+        Effect.gen(function* () {
+          const { spawned, write, run } = yield* launch([STOPPED], fakeService(), env);
+          yield* write({ ...CONFIG, cwd: checkout, permissionMode: PERMISSION_MODE.ASK });
+          yield* write({ type: INPUT_LINE.STOP });
+          yield* Fiber.join(run);
+          return override(spawned[0], "sandbox_workspace_write.writable_roots");
+        });
+
+      const laidOut = yield* roots(ENV);
+      // A `.git` file naming a folder that does not name this checkout back makes nothing writable.
+      const decoy = join(secret, "worktrees", "agent");
+      mkdirSync(decoy, { recursive: true });
+      writeFileSync(join(checkout, ".git"), `gitdir: ${decoy}\n`);
+      const forged = yield* roots(ENV);
+      rmSync(root, { recursive: true, force: true });
+
+      assert.equal(laidOut, `[${[own, clone].map((path) => JSON.stringify(path)).join(", ")}]`);
+      assert.equal(forged, "[]");
     }),
 );

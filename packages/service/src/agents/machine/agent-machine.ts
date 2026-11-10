@@ -122,6 +122,13 @@ export interface MachineLayout {
    * transcripts stand on its disk alone; a sandbox's such session is let go.
    */
   readonly diskSessions: boolean;
+  /**
+   * Whether the runner runs a Codex agent in the mode it is handed
+   * (`@repo/agent-runner`'s `PERMISSION_MODE`): a sandbox's, and a Mac's
+   * whose release bundles a runner that does (`MAC_MACHINE.CODEX_MODES_SINCE`);
+   * an older Mac's runs Codex with full access whatever it is handed.
+   */
+  readonly codexModes: boolean;
 }
 
 /** What a later call reads of a launch: its first event number, and what it was started with, as a digest (`runner-sessions.ts`'s `launchFingerprint`). */

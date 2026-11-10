@@ -447,12 +447,28 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         assert.equal(JSON.stringify(plan.secrets).includes("access-0"), false);
         // A Mac whose host bundles a runner from before the transcript store keeps its threads on its disk alone.
         assert.equal(plan.config.transcriptsUrl, undefined);
+        // Nor does its runner read a Codex mode, so one that asks is refused rather than run with full access.
+        const asking = yield* localAgent(AGENT_PAYER.CHATGPT_SUBSCRIPTION);
+        yield* updateAgentPermissionModeCommitted(userId, asking.id, AGENT_PERMISSION_MODE.ASK);
+        const unasked = yield* Effect.gen(function* () {
+          const sessions = yield* sessionsFor(userId).pipe(
+            Effect.provide(machines),
+            Effect.provide(services(runnerSandboxApi())),
+          );
+          return yield* deliveredOpen(sessions, yield* writtenLine(asking, "Fix the invitations."));
+        }).pipe(Effect.result);
+        assert.ok(
+          Result.isFailure(unasked) || unasked.success.outcome !== SESSION_SEND_OUTCOME.ACCEPTED,
+        );
 
         // From the host release whose runner mirrors them, they are kept at the service, its Codex home
         // named at its default under the agent's own home, which the runner mirrors from.
         yield* recordHostVersion(deviceId, "0.11.0");
         const onKept = yield* localAgent(AGENT_PAYER.CHATGPT_SUBSCRIPTION);
+        yield* updateAgentPermissionModeCommitted(userId, onKept.id, AGENT_PERMISSION_MODE.ASK);
         const kept = yield* launched(onKept);
+        // That release's runner reads the mode, so it is handed one that asks.
+        assert.equal(kept.config.permissionMode, PERMISSION_MODE.ASK);
         assert.deepEqual(
           [kept.config.transcriptsUrl, kept.secrets.env.CODEX_HOME],
           [

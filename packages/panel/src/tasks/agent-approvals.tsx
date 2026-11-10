@@ -10,7 +10,12 @@ import {
 } from "@repo/features/agent-approval-wire";
 import { AGENT_PART, type AgentPart } from "@repo/features/agent-parts";
 import { AGENT_CALL_FAILURE, type AgentApprovalAnswerView } from "@repo/features/agent-view";
-import { AGENT_RUNTIME, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
+import {
+  AGENT_RUNTIME,
+  AGENT_STATUS,
+  type AgentRuntime,
+  type AgentSummary,
+} from "@repo/features/agent-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
 import {
@@ -63,8 +68,10 @@ import type { HeldCall } from "./transcript-blocks.js";
  * next turn, which a toast says again as a change is made, since a turn under
  * way runs on the mode it started with. The host draws a change on the agent's
  * row at once and takes it back where the service refused it, which the
- * composer says under its bar. Only a Claude Code agent asks, so the chip
- * stands on no other: a Codex agent runs with full access for now. A
+ * composer says under its bar. A Codex agent's chip names the Codex app's
+ * own modes, Full access, Ask for approval, and Approve for me, with what
+ * each does there; an agent on neither harness asks nothing, so no chip
+ * stands on it. A
  * composer too narrow for the chip's words draws its shield alone, and one
  * narrower still folds it into its ⋯, which offers the three modes in its
  * place, as it does the context ring.
@@ -124,6 +131,33 @@ const MODE_WORDS = {
     hint: "Claude decides; asks when unsure",
   },
 } as const satisfies Record<AgentPermissionMode, { label: string; hint: string }>;
+
+/** What the chip and its menu call each mode on a Codex agent: the Codex app's own names, and what each does there. */
+const CODEX_MODE_WORDS = {
+  [AGENT_PERMISSION_MODE.FULL_ACCESS]: {
+    label: "Full access",
+    hint: "Runs commands and edits without asking",
+  },
+  [AGENT_PERMISSION_MODE.ASK]: {
+    label: "Ask for approval",
+    hint: "Works in a sandbox; asks before going outside it",
+  },
+  [AGENT_PERMISSION_MODE.AUTO]: {
+    label: "Approve for me",
+    hint: "Works in a sandbox; Codex reviews what goes outside it",
+  },
+} as const satisfies Record<AgentPermissionMode, { label: string; hint: string }>;
+
+/** What each mode is called and does, by the harness that runs it. */
+type ModeWords = Readonly<
+  Record<AgentPermissionMode, { readonly label: string; readonly hint: string }>
+>;
+
+/** The modes' words for each harness that asks. */
+const MODE_WORDS_OF = {
+  [AGENT_RUNTIME.CLAUDE_CODE]: MODE_WORDS,
+  [AGENT_RUNTIME.CODEX]: CODEX_MODE_WORDS,
+} as const satisfies Partial<Record<AgentRuntime, ModeWords>>;
 
 /** The shield each mode wears. */
 const MODE_GLYPH = {
@@ -195,6 +229,8 @@ function modeOf(agent: Pick<AgentSummary, "permissionMode">): AgentPermissionMod
 /** The mode chip's control: the mode it shows, a change, and why the last did not take. */
 export interface AgentModeControl {
   readonly mode: AgentPermissionMode;
+  /** What each mode is called and does on this agent's harness. */
+  readonly words: ModeWords;
   /** Changes the agent's mode from its next turn. */
   readonly choose: (mode: AgentPermissionMode) => void;
   /** Why the last change did not take, said under the composer's bar; nothing while none failed. */
@@ -222,6 +258,7 @@ export function useAgentPermissionMode(input: {
   ) {
     return undefined;
   }
+  const words = MODE_WORDS_OF[agent.runtime];
   const choose = (mode: AgentPermissionMode) => {
     if (mode === modeOf(agent)) return;
     writes.current += 1;
@@ -229,7 +266,7 @@ export function useAgentPermissionMode(input: {
     setNote(undefined);
     showToast({
       replayUnmasked: true,
-      words: `${MODE_WORDS[mode].label}. ${MODE_APPLIES}`,
+      words: `${words[mode].label}. ${MODE_APPLIES}`,
       tone: STATUS_TONE.COMPLETE,
       glyph: MODE_GLYPH[mode],
     });
@@ -240,6 +277,7 @@ export function useAgentPermissionMode(input: {
   };
   return {
     mode: modeOf(agent),
+    words,
     choose,
     note: note?.agentId === agent.id ? note.words : undefined,
   };
@@ -251,8 +289,8 @@ function modeRows(control: AgentModeControl): readonly MenuAction[] {
     const Glyph = MODE_GLYPH[mode];
     return {
       key: mode,
-      label: MODE_WORDS[mode].label,
-      detail: MODE_WORDS[mode].hint,
+      label: control.words[mode].label,
+      detail: control.words[mode].hint,
       detailPlace: MENU_DETAIL.WRAPPED,
       icon: <Glyph />,
       checked: control.mode === mode,
@@ -279,7 +317,7 @@ export function AgentModeChip({
   const menu = useMenu(true);
   const trigger = menu.trigger(riseAboveEnd);
   const Glyph = MODE_GLYPH[control.mode];
-  const label = `${MODE_THING}: ${MODE_WORDS[control.mode].label}`;
+  const label = `${MODE_THING}: ${control.words[control.mode].label}`;
   return (
     <span className={`${OVERFLOW_PRESS.MODE} flex min-w-0`}>
       <Tooltip label={label}>
@@ -291,7 +329,7 @@ export function AgentModeChip({
           {...trigger}
         >
           <Glyph />
-          {narrow ? null : <ChipName>{MODE_WORDS[control.mode].label}</ChipName>}
+          {narrow ? null : <ChipName>{control.words[control.mode].label}</ChipName>}
         </Chip>
       </Tooltip>
       {menu.drawn === undefined ? null : (
