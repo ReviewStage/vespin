@@ -785,7 +785,7 @@ const sendCommand = Command.make(
     messageId: Flag.String("message-id").pipe(
       Flag.optional,
       Flag.withDescription(
-        "With --queue, the queued message's id, a UUID you mint, so a script addresses it with `vespin agent queue` even where this send's answer was lost; sent again under the same id, it queues nothing more",
+        "With --queue, the queued message's id, a UUID you mint, so a script addresses it with `vespin agent queue` even where this send's answer was lost; sent again under the same id while that message still waits, it queues nothing more, though once it went or was deleted it queues again",
       ),
     ),
   },
@@ -1011,7 +1011,7 @@ const queueSteerCommand = Command.make(
     }),
 ).pipe(
   Command.withDescription(
-    "Send a queued message now, into the turn under way, and take it out of the queue; with -F, in new words",
+    "Send a queued message now, into the turn under way, and take it out of the queue; -F replaces its words and drops its files",
   ),
   Command.withExamples([
     { command: "vespin agent queue steer <id> <message>", description: "Send it as it stands" },
