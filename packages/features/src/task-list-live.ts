@@ -1,4 +1,5 @@
 import { Schema as EffectSchema } from "effect";
+import { AGENT_PERMISSION_MODE, agentPendingApprovalSchema } from "./agent-approval-wire.js";
 import { agentStatusAt, type StatusTurn, statusClockEdge, turnStoppable } from "./agent-status.js";
 import {
   AGENT_BRIEF,
@@ -20,7 +21,6 @@ import {
   NATIVE_AGENT_RUNTIMES,
   PULL_REQUEST_STATE,
   pullRequestAuthorOf,
-  type TasklessAgent,
   turnStatusOfWord,
 } from "./agent-wire.js";
 import { integrationConnectionOf } from "./integration-wire.js";
@@ -34,6 +34,7 @@ import {
 } from "./live-read.js";
 import { LIVE_USER_QUERY } from "./live-wire.js";
 import { readMarkOf } from "./read-mark.js";
+import { sandboxVcpus } from "./sandbox-size.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { countedNumber } from "./service-wire.js";
 import { agentMarkedPullRequest, standingFailures } from "./task-agents-model.js";
@@ -152,6 +153,8 @@ const agentLiveRowSchema = EffectSchema.Struct({
   repository: EffectSchema.NullOr(EffectSchema.String),
   starterId: EffectSchema.String,
   starterName: EffectSchema.NullOr(EffectSchema.String),
+  /** The coding agent that started this one; null where none did, and absent from a statement before it was carried. */
+  startedByAgentId: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
   automationId: EffectSchema.NullOr(EffectSchema.String),
   automationName: EffectSchema.NullOr(EffectSchema.String),
   /** The run the agent belongs to, and the automation that run belongs to; null where it belongs to none, and absent from a statement before they were carried. */
@@ -202,6 +205,10 @@ const agentLiveRowSchema = EffectSchema.Struct({
   deviceName: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
   /** Whether the agent's conversation records its sandbox's session; absent from a statement before it was carried. */
   sandboxOpen: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /** How the agent's tool calls are answered (`AGENT_PERMISSION_MODE`); absent from a statement before it was carried, which ran every agent on full access. */
+  permissionMode: EffectSchema.optionalKey(EffectSchema.String),
+  /** The tool calls the agent's runner holds for a member's answer, the oldest first; absent from a statement before they were carried. */
+  pendingApprovals: EffectSchema.optionalKey(EffectSchema.Array(agentPendingApprovalSchema)),
 });
 
 /**
@@ -495,6 +502,9 @@ function agentSummaryOf(
   const status = statusOf(row, now);
   const stoppable = status !== AGENT_STATUS.RUNNING || turnStoppable(turnOf(row));
   const runtime = NATIVE_AGENT_RUNTIMES.find((each) => each === row.runtime);
+  const permissionMode = Object.values(AGENT_PERMISSION_MODE).find(
+    (each) => each === row.permissionMode,
+  );
   const mac = macOf(row);
   const owner = agentOwnerOf({
     taskId: row.planId,
@@ -511,7 +521,9 @@ function agentSummaryOf(
       : undefined),
     ...(runtime === undefined ? undefined : { runtime }),
     title: row.title,
-    ...(row.machine === AGENT_MACHINE.DEVICE ? { machine: AGENT_MACHINE.DEVICE } : undefined),
+    ...(row.machine === AGENT_MACHINE.DEVICE
+      ? { machine: AGENT_MACHINE.DEVICE }
+      : { sandboxVcpus: sandboxVcpus(row.repository) }),
     ...(mac === undefined ? undefined : { mac }),
     createdAt: row.createdAt,
     status,
@@ -524,6 +536,7 @@ function agentSummaryOf(
     ...(row.starterName === null
       ? undefined
       : { startedBy: { userId: row.starterId, name: row.starterName } }),
+    ...(row.startedByAgentId == null ? undefined : { startedByAgentId: row.startedByAgentId }),
     ...(row.automationId === null ? undefined : { automationId: row.automationId }),
     ...(row.automationName === null ? undefined : { automationName: row.automationName }),
     ...(row.source == null ? undefined : { source: row.source }),
@@ -533,44 +546,12 @@ function agentSummaryOf(
     ...(started === undefined ? undefined : { runStartedAt: started }),
     ...(stoppable ? undefined : { stoppable: false }),
     ...(row.sandboxOpen === undefined ? undefined : { sandboxOpen: row.sandboxOpen }),
-  };
-}
-
-/** An agent with no plan as the list carries it, as its own page reads it, its status read at `now`. */
-function tasklessAgentOf(
-  row: AgentLiveRow,
-  now: number,
-  continuedBy: ContinuedBy | undefined,
-): TasklessAgent {
-  return {
-    ...agentSummaryOf(row, now, continuedBy),
-    planId: null,
-    automationId: row.automationId,
-    workspaceId: row.workspaceId,
-    repository: row.repository,
-    activityAt: activityAt(row),
-    ...(row.pinnedAt === null ? undefined : { pinnedAt: row.pinnedAt }),
-    ...(row.pinnedAt === null || row.pinPosition === null
+    ...(permissionMode === undefined || permissionMode === AGENT_PERMISSION_MODE.FULL_ACCESS
       ? undefined
-      : { pinPosition: row.pinPosition }),
-    ...readMarkOf(row),
-    ...pullRequestOf(markedOfRow(row)),
-  };
-}
-
-/** An agent's pull request as its sidebar row carries it, where it opened one, as the held list projects it. */
-function pullRequestOf(published: AgentLiveRow["published"]) {
-  if (published === null) return undefined;
-  const { number, title, url, state, checks, queued } = published;
-  return {
-    pullRequest: {
-      number,
-      title,
-      url,
-      state,
-      checks,
-      ...(queued === true ? { queued } : undefined),
-    },
+      : { permissionMode }),
+    ...(row.pendingApprovals === undefined || row.pendingApprovals.length === 0
+      ? undefined
+      : { pendingApprovals: row.pendingApprovals }),
   };
 }
 
@@ -704,7 +685,6 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
   let continued = new Map<string, Continued>();
   let groups = new Map<string, DrawnGroup>();
   let listed = new Map<string, Built<AgentLiveRow, ListedAgent>>();
-  let taskless = new Map<string, Built<AgentLiveRow, TasklessAgent>>();
   let summaries = new Map<string, Built<TaskLiveRow, TaskSummary>>();
   let drawn: TaskListDrawing | undefined;
   /** What an agent's row alone builds, its pin and its pull request, built once for as long as the row stands. */
@@ -768,19 +748,11 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
 
     // Each agent as the tabs draw it, built again where its row or those started from it moved, or the clock moved its status.
     const nextListed = new Map<string, Built<AgentLiveRow, ListedAgent>>();
-    const nextTaskless = new Map<string, Built<AgentLiveRow, TasklessAgent>>();
     let edge: number | undefined;
     for (const row of rows.agents) {
       const continuedBy = nextContinued.get(row.id)?.by;
-      if (row.planId === null) {
-        const built = rebuilt(taskless.get(row.id), row, continuedBy, now, () => ({
-          value: tasklessAgentOf(row, now, continuedBy),
-          until: clockEdgeOf(row, now),
-        }));
-        nextTaskless.set(row.id, built);
-        edge = earlierEdge(edge, built.until);
-        continue;
-      }
+      // Note that every agent stands on a task now; a row from before that was so is drawn nowhere.
+      if (row.planId === null) continue;
       const built = rebuilt(listed.get(row.id), row, continuedBy, now, () => ({
         value: listedAgentOf(row, now, continuedBy),
         until: clockEdgeOf(row, now),
@@ -806,24 +778,12 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
 
     const held = drawn;
     const keptPlans = keptItems(held?.list.plans, plans);
-    const planlessAgents = keptItems(
-      held?.list.planlessAgents,
-      [...nextTaskless.values()]
-        .toSorted((a, b) => newestFirst(a.row, b.row))
-        .map((built) => built.value),
-    );
     continued = nextContinued;
     groups = nextGroups;
     listed = nextListed;
-    taskless = nextTaskless;
     summaries = nextSummaries;
     drawn = {
-      list:
-        held !== undefined &&
-        held.list.plans === keptPlans &&
-        held.list.planlessAgents === planlessAgents
-          ? held.list
-          : { plans: keptPlans, planlessAgents },
+      list: held !== undefined && held.list.plans === keptPlans ? held.list : { plans: keptPlans },
       taskAgents: keptItems(
         held?.taskAgents,
         [...nextListed.values()]
@@ -912,8 +872,7 @@ export function agentPullRequestsOfLiveRows(rows: TaskListLiveRows): readonly Li
 /**
  * The plan list as the held read answers it with every archived agent
  * included, as the live rows stand at `now`: the plans newest started
- * first, each with its agents in brief, and the agents with no plan newest
- * started first.
+ * first, each with its agents in brief.
  */
 export function taskListOfLiveRows(rows: TaskListLiveRows, now: number): TaskListAnswer {
   return taskListDrawer()(rows, now).list;

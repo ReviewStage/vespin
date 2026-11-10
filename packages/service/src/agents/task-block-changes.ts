@@ -9,7 +9,6 @@ import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { describeWire } from "@repo/wire/effect";
 import { Data, Effect, Option, Result, Schema } from "effect";
 import { wireUuidSchema } from "../core.js";
-import { writtenTaskMention } from "./written-mentions.js";
 
 /**
  * task-block-changes.ts -- the blocks `update_task` adds and takes away, and the blocks `read_task` and its answer name.
@@ -39,7 +38,8 @@ export const TASK_BLOCK_REFUSAL = {
     "blocker, directly or through other tasks; take away the block that runs the other way first.",
 } as const;
 
-const TASK_IDS = Schema.Array(wireUuidSchema).check(Schema.isMaxLength(MAX_TASKS_PER_LIST));
+/** A list of tasks a call names, by the id `list_tasks` answered. */
+export const TASK_IDS = Schema.Array(wireUuidSchema).check(Schema.isMaxLength(MAX_TASKS_PER_LIST));
 
 /** One side of a task's blocks as a call changes it: the tasks to add, and the tasks to take away. */
 const blockChangesInput = (side: string) =>
@@ -90,12 +90,11 @@ class TaskBlockRefused extends Data.TaggedError("TaskBlockRefused")<{
   readonly words: string;
 }> {}
 
-/** A task as a block names it to the model: its id, name, where it stands, and its mention; a type, so it reads as a wire record. */
+/** A task as a block names it to the model: its id, name, and where it stands; a type, so it reads as a wire record. */
 type TaskBlockReading = {
   readonly id: string;
   readonly name: string;
   readonly status: string;
-  readonly mention: string;
 };
 
 /** Whether the call names any change of a task's blocks. */
@@ -191,44 +190,35 @@ export const writeTaskBlocks = (userId: string, writes: TaskBlockWrites) =>
   });
 
 /** The tasks under these ids as the model reads them, in their order, each one the member reaches. */
-const readingsOf = (userId: string, taskIds: readonly string[], step: string) =>
+const readingsOf = (userId: string, taskIds: readonly string[]) =>
   Effect.map(readTaskHeaders(userId, taskIds), (headers) =>
     taskIds.flatMap((taskId): TaskBlockReading[] => {
       const header = headers.get(taskId);
       if (header === undefined) return [];
-      const { name, status, number } = header;
-      return [
-        {
-          id: taskId,
-          name,
-          status,
-          mention: writtenTaskMention({ id: taskId, number }, name, step),
-        },
-      ];
+      const { name, status } = header;
+      return [{ id: taskId, name, status }];
     }),
   );
 
 /**
  * The task's blocks as the model reads them: the tasks it waits on and the
  * tasks that wait on it, each one the member reaches, the earliest added
- * first, under the workspace's step for their mentions.
+ * first.
  */
 export const taskBlockReadings = (
   userId: string,
   blocks: { readonly blockedBy?: readonly string[]; readonly blocks?: readonly string[] },
-  step: string,
 ) =>
   Effect.all({
-    blockedBy: readingsOf(userId, blocks.blockedBy ?? [], step),
-    blocks: readingsOf(userId, blocks.blocks ?? [], step),
+    blockedBy: readingsOf(userId, blocks.blockedBy ?? []),
+    blocks: readingsOf(userId, blocks.blocks ?? []),
   });
 
 /** The task's blocks as they now stand, read again after a write, as the model reads them; none where it is out of reach. */
-export const taskBlockReadingsNow = (userId: string, taskId: string, step: string) =>
+export const taskBlockReadingsNow = (userId: string, taskId: string) =>
   Effect.flatMap(readTaskBlocks(userId, taskId), (read) =>
     taskBlockReadings(
       userId,
       Option.getOrElse(read, () => ({ blockedBy: [], blocks: [] })),
-      step,
     ),
   );

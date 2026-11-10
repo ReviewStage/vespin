@@ -70,7 +70,6 @@ import { logStoreFailure } from "../http/store-failure.js";
 import { accountMiddleware, hosted, writeReceiptMiddleware } from "../orpc/base.js";
 import { pushThreadSettled } from "../push/inbox-pushes.js";
 import { settleThreadDms } from "../slack/thread-dms.js";
-import { settleAgentTaskIfFinished } from "../tasks/task-finish.js";
 import {
   acknowledgeInboxItem,
   answerInboxAsk,
@@ -106,6 +105,9 @@ export type InboxProcedureSeams = AccountResolving & {
   readonly titleModel?: InboxTitleModelOf | undefined;
 };
 
+/** What starting a thread asks of the deployment: the model an untitled thread's title is generated on, for a test. */
+export type InboxTitleSeams = Pick<InboxProcedureSeams, "titleModel">;
+
 /** The agent-title model on our own key (`../agents/coder-host/model.ts`), as an agent's own title is generated, whether or not the sender saved a key; none where the deployment holds no such key. */
 const productionTitleModel: InboxTitleModelOf = () => deploymentTitleModel();
 
@@ -116,7 +118,7 @@ const productionTitleModel: InboxTitleModelOf = () => deploymentTitleModel();
  * the deployment holds no such key, the call answers nothing, or its agent
  * retitled it first (`retitleInboxThread`).
  */
-const retitled = (seams: InboxProcedureSeams, item: InboxItem, text: string) =>
+const retitled = (seams: InboxTitleSeams, item: InboxItem, text: string) =>
   Effect.gen(function* () {
     const model = yield* (seams.titleModel ?? productionTitleModel)();
     if (model === undefined) return;
@@ -140,16 +142,15 @@ function retiredRefusal(refusal: HostedRefusal): boolean {
 const NOD: InboxReply = { reply: INBOX_REPLY.ACKNOWLEDGED };
 
 /**
- * What an item of the agent's settling asks once it is: the agent's task
- * settled done where its work is finished, and the automation run it
- * belongs to archived where it finished well, since an item put away
+ * What an item of the agent's settling asks once it is: the automation run
+ * it belongs to archived where it finished well, since an item put away
  * unanswered wakes no agent and so no settle of its turn would; and the
  * phone of the member it waited on told, so its notification is removed.
  */
-function settledForAgent(userId: string, agentId: string, itemId: string) {
+function settledForAgent(agentId: string, itemId: string) {
   return Effect.andThen(
     afterResponse("a settled thread's push", pushThreadSettled(itemId)),
-    Effect.andThen(settleAgentTaskIfFinished(userId, agentId), reconsiderRunArchive(agentId)),
+    reconsiderRunArchive(agentId),
   );
 }
 
@@ -202,7 +203,7 @@ function agentHearing(userId: string, agentId: string) {
 /**
  * An answer taken, handed to its item's agent as the member's message under
  * the answer's key through the one steer path (`coder-host/steer.ts`), then
- * counted and the agent's task settled where the answer finished its work.
+ * counted.
  * A hand-off that fails, is interrupted, or dies takes the answer back, so
  * an item never reads answered while the agent was not told; an agent whose
  * session has ended for good can hear nothing again, so its item keeps the
@@ -246,9 +247,7 @@ const handedAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   // Counted only once the hand-off stands, since a failed one withdraws the answer above.
   yield* counted;
   yield* afterResponse("an answered thread's Slack DM", settleThreadDms(itemId, chosen));
-  // The question settled may have finished the task's work, asked once the agent was told, so one
-  // woken by the answer reads as running (`tasks/task-finish.ts`).
-  yield* settledForAgent(userId, agentId, itemId);
+  yield* settledForAgent(agentId, itemId);
 });
 
 /**
@@ -266,7 +265,7 @@ const handedAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
  * whose session has ended for good can hear nothing again, so its notice
  * keeps the nod rather than waiting on the developer for ever.
  */
-const acknowledged = /* @__PURE__ */ Effect.fnUntraced(function* (
+export const acknowledgeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   writer: Effect.Effect<StoreWriter>,
   userId: string,
   itemId: string,
@@ -296,7 +295,7 @@ const acknowledged = /* @__PURE__ */ Effect.fnUntraced(function* (
   const writtenIn = txid === undefined ? {} : { txid };
   if (!inboxAnswerHeard(taken, NOD)) {
     yield* counted;
-    yield* settledForAgent(userId, taken.agentId, itemId);
+    yield* settledForAgent(taken.agentId, itemId);
     return { item: taken, taken: true, ...writtenIn };
   }
   yield* handedAnswer(
@@ -383,7 +382,7 @@ export const answerAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   const reply = inboxAnswersReply(answers, text);
   if (!inboxAnswerHeard(item, reply, attachments)) {
     yield* counted;
-    yield* settledForAgent(userId, item.agentId, itemId);
+    yield* settledForAgent(item.agentId, itemId);
     return { item, outcome, ...writtenIn };
   }
   const message = inboxAnswerMessage(
@@ -496,7 +495,7 @@ export const closeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   const dmSettled = afterResponse("a closed thread's Slack DM", settleThreadDms(itemId));
   if (!taken.needsReply && !noted) {
     yield* dmSettled;
-    yield* settledForAgent(userId, taken.agentId, itemId);
+    yield* settledForAgent(taken.agentId, itemId);
     return { item: taken, taken: true, ...writtenIn };
   }
   const handedOver = Effect.gen(function* () {
@@ -530,7 +529,7 @@ export const closeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
     );
   }
   yield* dmSettled;
-  yield* settledForAgent(userId, taken.agentId, itemId);
+  yield* settledForAgent(taken.agentId, itemId);
   return { item: taken, taken: true, ...writtenIn };
 });
 
@@ -641,8 +640,8 @@ export const messageAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
  * under its key is the one already written, handed off again, which the
  * steer's own key makes reach the agent once.
  */
-const started = /* @__PURE__ */ Effect.fnUntraced(function* (
-  seams: InboxProcedureSeams,
+export const startAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
+  seams: InboxTitleSeams,
   writer: Effect.Effect<StoreWriter>,
   userId: string,
   asked: {
@@ -709,18 +708,39 @@ const started = /* @__PURE__ */ Effect.fnUntraced(function* (
   return { item };
 });
 
-/** The item's reminder set for the member until the instant the body names, or ended where it names none: its id and read state, or not found. */
-const remindOf = /* @__PURE__ */ Effect.fnUntraced(function* (
+/** The item marked read for the member, or unread until they read it again: its id and read state, or not found where they reach no such item. */
+export const markReadAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
-  input: { readonly params: { readonly id: string }; readonly body: InboxRemindRequest },
+  itemId: string,
+  unread: boolean,
 ) {
-  const itemId = yield* pathUuid(input.params.id);
-  const { until } = input.body;
+  const marked = yield* hostedStoreOrUnavailable(
+    unread ? markInboxItemUnread(userId, itemId) : markInboxItemRead(userId, itemId),
+  );
+  if (marked === false) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  return { id: itemId, unread, ...marked };
+});
+
+/** The item's reminder set for the member until the instant named, in epoch milliseconds, or ended where none is: its id and read state, or not found where they reach no such item. */
+export const remindAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  itemId: string,
+  until: number | null,
+) {
   const marked = yield* hostedStoreOrUnavailable(
     remindInboxItem(userId, itemId, until === null ? null : new Date(until)),
   );
   if (marked === false) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   return { id: itemId, ...marked };
+});
+
+/** The reminder a request's body names, set on the item its path names. */
+const remindOf = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  input: { readonly params: { readonly id: string }; readonly body: InboxRemindRequest },
+) {
+  const itemId = yield* pathUuid(input.params.id);
+  return yield* remindAsMember(userId, itemId, input.body.until);
 });
 
 /**
@@ -767,7 +787,7 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
     answer: signedIn.answer.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
       const itemId = yield* pathUuid(input.params.id);
       const { revision, clientKey } = input.body;
-      return yield* acknowledged(writer, context.userId, itemId, {
+      return yield* acknowledgeAsMember(writer, context.userId, itemId, {
         revision,
         clientKey,
       });
@@ -792,7 +812,7 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
     }) {
       const agentId = yield* pathUuid(input.agentId);
       const { text, clientKey, attachments = [] } = input;
-      return yield* started(seams, writer, context.userId, {
+      return yield* startAsMember(seams, writer, context.userId, {
         agentId,
         title: inboxStartTitle(input),
         titled: input.title !== undefined,
@@ -817,18 +837,14 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
       context,
     }) {
       const itemId = yield* pathUuid(input.id);
-      const marked = yield* hostedStoreOrUnavailable(markInboxItemRead(context.userId, itemId));
-      if (marked === false) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-      return { id: itemId, unread: false, ...marked };
+      return yield* markReadAsMember(context.userId, itemId, false);
     }),
     markItemUnread: signedIn.markItemUnread.use(writeReceiptMiddleware).effect(function* ({
       input,
       context,
     }) {
       const itemId = yield* pathUuid(input.id);
-      const marked = yield* hostedStoreOrUnavailable(markInboxItemUnread(context.userId, itemId));
-      if (marked === false) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-      return { id: itemId, unread: true, ...marked };
+      return yield* markReadAsMember(context.userId, itemId, true);
     }),
     remindItem: signedIn.remindItem.use(writeReceiptMiddleware).effect(function* ({
       input,

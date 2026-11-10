@@ -1,16 +1,17 @@
 // markdown-model.ts -- a message's Markdown read into what the iOS app draws: blocks, and runs of words, links, and chips, each link read as the panel reads it.
 
 import { dateChipText } from "@repo/features/date-mention";
-import { type LinkPlace, readLink } from "@repo/features/link-grammar";
+import {
+  type EntityKind,
+  entityOfDestination,
+  entityOfMention,
+  entityWordHeard,
+} from "@repo/features/entity-kind";
+import { type LinkDestination, readLink } from "@repo/features/link-grammar";
+import { markdownTooDeep } from "@repo/features/markdown-nesting";
 import { markdownTree } from "@repo/features/markdown-tree";
 import { isBareLink, linkMention, MENTION_KIND, mentionName } from "@repo/features/mention-link";
 import { placeChipLook } from "@repo/features/place-chip-model";
-import {
-  type ThingKind,
-  thingOfMention,
-  thingOfPlace,
-  thingWordHeard,
-} from "@repo/features/thing-kind";
 import type {
   Definition,
   ImageReference,
@@ -80,7 +81,7 @@ export type LinkTarget =
   | {
       readonly kind: typeof LINK_TARGET.PLACE;
       readonly workspace: string;
-      readonly place: LinkPlace;
+      readonly place: LinkDestination;
       readonly href: string;
     }
   | { readonly kind: typeof LINK_TARGET.WEB; readonly href: string }
@@ -95,7 +96,7 @@ interface WordMarks {
 
 /** A mention drawn as its chip: what it names, by its kind's glyph and its name, and what VoiceOver hears for it. */
 export interface MarkdownChip {
-  readonly thing: ThingKind;
+  readonly entity: EntityKind;
   readonly name: string;
   /** Its kind's word before its name, where the name does not say it already: "pull request #42 Fix the refresh". */
   readonly heard: string;
@@ -214,9 +215,9 @@ function linkTarget(href: string): LinkTarget {
   return { kind: LINK_TARGET.NONE };
 }
 
-function chipOf(thing: ThingKind, name: string, target: LinkTarget): MarkdownChip {
-  const word = thingWordHeard(thing, name);
-  return { thing, name, heard: word === undefined ? name : `${word} ${name}`, target };
+function chipOf(entity: EntityKind, name: string, target: LinkTarget): MarkdownChip {
+  const word = entityWordHeard(entity, name);
+  return { entity, name, heard: word === undefined ? name : `${word} ${name}`, target };
 }
 
 /** No names held: the app reads none for a chip yet, so a place is called by its label, or by its kind where it has none. */
@@ -239,13 +240,13 @@ function linkChip(href: string, label: string, reading: MarkdownReading): Markdo
     return chipOf(MENTION_KIND.DATE, name, { kind: LINK_TARGET.NONE });
   }
   if (found !== undefined) {
-    return chipOf(thingOfMention(found.mention).kind, found.name, linkTarget(href));
+    return chipOf(entityOfMention(found.mention).kind, found.name, linkTarget(href));
   }
   const read = readLink(href);
   if (read === undefined) return undefined;
   const written = isBareLink(label, href) ? undefined : mentionName(label.trim());
   const look = placeChipLook(read.place, written, NO_NAMES);
-  return chipOf(thingOfPlace(read.place).kind, look.name, linkTarget(href));
+  return chipOf(entityOfDestination(read.place).kind, look.name, linkTarget(href));
 }
 
 function linkRun(
@@ -434,8 +435,9 @@ function blocksOf(nodes: readonly RootContent[], reader: Reader): MarkdownBlock[
   return nodes.flatMap((node) => blockOf(node, reader));
 }
 
-/** Markdown as the blocks the app draws, read as the panel reads it. */
+/** Markdown as the blocks the app draws, read as the panel reads it; words nested too deep to parse safely are one block of plain text. */
 export function markdownBlocks(words: string, reading: MarkdownReading): readonly MarkdownBlock[] {
+  if (markdownTooDeep(words)) return [{ kind: MARKDOWN_BLOCK.CODE, text: words }];
   const tree = markdownTree(words);
   return blocksOf(tree.children, { reading, definitions: definitionsIn(tree) });
 }

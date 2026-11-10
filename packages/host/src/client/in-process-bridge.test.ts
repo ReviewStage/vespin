@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { Context, Effect } from "effect";
 import type { AppStateDelivery } from "../app-state.js";
@@ -23,7 +23,7 @@ const RUN = {
 
 const LINK = {
   workspace: "workspace-1",
-  place: { kind: LINK_PLACE.TASK, planId: "plan-1" },
+  place: { kind: LINK_DESTINATION.TASK, planId: "plan-1" },
 } as const;
 
 /** A bridge over a fresh store. */

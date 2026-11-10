@@ -45,11 +45,12 @@ import {
   type InboxItem,
   type InboxMessage,
 } from "@repo/features/inbox-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
 import { TASK_PRIORITY, TASK_STATUS, type Task, type TaskSummary } from "@repo/features/task-wire";
 import type { TasksView } from "@repo/features/tasks-view";
+import { MP4_TYPE } from "@repo/features/video-signature";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { ACT_KIND } from "./acts.js";
@@ -58,10 +59,16 @@ import {
   type AppInboxTask,
   type AppInboxTaskHolding,
   type AppStateSnapshot,
+  OWN_TRANSCRIPT,
   RUN_PROFILE,
 } from "./app-state.js";
 import type { PortActKind, PortActPayload, PortActResult } from "./contract/index.js";
-import { FIXTURE_PICTURE_PNG, FIXTURE_VIDEO_WEBM } from "./fixture-inbox-media.js";
+import { fixtureAgentPicture, fixtureAgentTranscript } from "./fixture-agent-transcript.js";
+import {
+  FIXTURE_PICTURE_PNG,
+  FIXTURE_VIDEO_MP4,
+  FIXTURE_VIDEO_WEBM,
+} from "./fixture-inbox-media.js";
 import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
 
 /**
@@ -195,7 +202,7 @@ const RECORDED = {
 
 /** Where the recorded thread's words draw its still from: the still's address on the thread, as an agent's post names a picture it attached. */
 const RECORDED_PICTURE_ADDRESS = inboxAttachmentAddress(
-  { kind: LINK_PLACE.INBOX_ITEM, planId: TASK.INVITES, itemId: RECORDED.ITEM },
+  { kind: LINK_DESTINATION.INBOX_ITEM, planId: TASK.INVITES, itemId: RECORDED.ITEM },
   RECORDED.PICTURE,
   FIXTURE_WORKSPACE_SLUG,
 );
@@ -935,6 +942,32 @@ function noneHeldIn(workspaceIds: readonly string[]): AppHeldById<readonly never
   return Object.fromEntries(workspaceIds.map((id) => [id, { rows: [] }]));
 }
 
+/** The invitations agent's transcript as the host holds one read, its run begun as its agent was started. */
+const INVITES_TRANSCRIPT = fixtureAgentTranscript(
+  LANDED - 3 * DAY,
+  ADA,
+  "Build teammate invitations",
+);
+
+/** The transcripts main holds with the invitations agent's laid over them, one object for each of main's. */
+const STAGED_TRANSCRIPTS = new WeakMap<
+  AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT],
+  AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT]
+>();
+
+function stagedTranscripts(
+  held: AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT],
+): AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT] {
+  const kept = STAGED_TRANSCRIPTS.get(held);
+  if (kept !== undefined) return kept;
+  const staged = {
+    ...held,
+    [AGENT.INVITES]: { ...held[AGENT.INVITES], [OWN_TRANSCRIPT]: { rows: INVITES_TRANSCRIPT } },
+  };
+  STAGED_TRANSCRIPTS.set(held, staged);
+  return staged;
+}
+
 /**
  * Main's document as these profiles draw it: the account signed in, its
  * read of what waits naming the tasks holding items, and each of
@@ -960,6 +993,7 @@ export function inboxAppState(
     [LIVE_READ.PAGES]: stagedPages(state),
     [LIVE_READ.AUTOMATIONS]: noneHeldIn(workspaceIds),
     [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: noneHeldIn(workspaceIds),
+    [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
   };
 }
 
@@ -983,18 +1017,24 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   },
   // Note that a mark is taken as the service takes one, the item's state echoed, though nothing here moves, so its dot stays as staged: the host draws a mark, and none stands behind a fixture run's act door.
   [ACT_KIND.AGENTS_INBOX_READ_STATE]: ({ itemId, unread }) => ({ id: itemId, unread }),
-  [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId }) => {
+  // Note that the recording is answered as its MP4 copy to a reader that plays MP4, as the service answers one it keeps a copy of.
+  [ACT_KIND.AGENTS_INBOX_ATTACHMENT]: ({ itemId, attachmentId, playable }) => {
     if (itemId !== RECORDED.ITEM) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
     if (attachmentId === RECORDED.PICTURE) {
       return { contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: FIXTURE_PICTURE_PNG };
     }
     if (attachmentId === RECORDED.VIDEO) {
-      return { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
+      return playable === MP4_TYPE
+        ? { contentType: MP4_TYPE, base64: FIXTURE_VIDEO_MP4 }
+        : { contentType: CONVERSATION_MEDIA_TYPE.WEBM, base64: FIXTURE_VIDEO_WEBM };
     }
     return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
   },
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
+  // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
+  [ACT_KIND.AGENTS_PICTURE]: ({ pictureId }) => fixtureAgentPicture(pictureId),
+  [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,
   }),

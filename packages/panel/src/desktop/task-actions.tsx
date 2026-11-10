@@ -106,8 +106,8 @@ import {
   openTaskInTab,
   type ReadMark,
   renameTaskItem,
+  taskLinkDestination,
   taskLinkItems,
-  taskLinkPlace,
   versionHistoryItem,
 } from "../tasks/task-menu-items.js";
 import {
@@ -390,7 +390,7 @@ const SIDEBAR_ROW_KEYS: readonly KeyedCommand[] = [
 ];
 
 /** One of a sidebar row's buttons at its end: what it says and runs, and the chord its tooltip names, where it has one. */
-export interface RowMark {
+interface RowMark {
   readonly key: string;
   readonly label: string;
   readonly icon: React.JSX.Element;
@@ -401,12 +401,12 @@ export interface RowMark {
 /**
  * A sidebar row's buttons at its end, standing in the time's place while
  * the row is hovered or reached from the keyboard: a task's row draws its
- * Pin and Mark done here, and an agent's its Pin and Archive. They are the row's siblings
+ * Pin and Mark done here. They are the row's siblings
  * rather than inside it, so a press on one opens nothing, but part of the
  * row to its card, which stands while the pointer is on them and goes as
  * one is pressed (`RowHint`).
  */
-export function RowMarks({
+function RowMarks({
   marks,
   disabled = false,
 }: {
@@ -721,7 +721,7 @@ function taskActionGroups(
   const link: MenuAction[] =
     task === undefined
       ? []
-      : taskLinkItems(doors.copy, task, taskLinkPlace(tasks.workspaces, task));
+      : taskLinkItems(doors.copy, task, taskLinkDestination(tasks.workspaces, task));
   const read: MenuAction[] = task === undefined ? [] : [markReadItem(doors.read, subject)];
   const rename = renameTaskItem(doors.rename);
   // Note that the open task relates as the document holds it, whose blocks the list's row does not carry.
@@ -940,9 +940,7 @@ export function useTaskMenuItems(
   const place = useRowPlace();
   const sections = useSectionDialogs(tasks, tasks.shown && doors.drawn);
   const section =
-    task !== undefined
-      ? moveToSectionEntry({ agent: false, id: task.id }, task.workspaceId, sections, name)
-      : undefined;
+    task !== undefined ? moveToSectionEntry(task.id, task.workspaceId, sections, name) : undefined;
   const setStanding = useStandingDoor(tasks);
   const pins = usePinWrites(tasks.drawnTasks);
   const relationId = useId();

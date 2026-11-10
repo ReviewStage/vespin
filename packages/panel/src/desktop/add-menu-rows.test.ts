@@ -92,7 +92,9 @@ test("a failed agent's row in the column's \"+\" wears the failed mark and a hea
     agents: [BROKEN, HEALTHY],
     agentIds: [BROKEN.id, HEALTHY.id],
   });
-  const options = await opened(agentEntries(base.mainTabs, agents, NOTHING_HELD));
+  const options = await opened(
+    agentEntries(base.mainTabs, agents, { members: undefined, readerId: undefined }, NOTHING_HELD),
+  );
 
   assert.deepEqual(endMarks(options.get("Billing export")), ["Failed"]);
   assert.deepEqual(endMarks(options.get("Invoice sweep")), []);

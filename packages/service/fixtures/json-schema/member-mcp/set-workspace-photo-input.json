@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace whose photo to set, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "photo": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "The photo as a base64 `data:` URL of a PNG, JPEG, or WebP image (image/png, image/jpeg, image/webp), at most 100000 bytes decoded, such as a 256-pixel square; null removes it, and the member's own first workspace then shows their sign-in picture."
+    }
+  },
+  "required": [
+    "photo"
+  ],
+  "additionalProperties": false
+}

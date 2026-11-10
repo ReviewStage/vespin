@@ -35,7 +35,7 @@ tester.run("retired (example.json)", retiredRule, {
     { code: 'import { x } from "retired-example";', filename: OWNER },
     // Other classes, glyphs, props and modules, and a class only sharing a start with a retired one.
     {
-      code: 'import { BotIcon, GLYPH } from "@repo/ui/icons"; <div className="retired-examples x" data-a={GLYPH.TASK} retired={1} />;',
+      code: 'import { PlusIcon, GLYPH } from "@repo/ui/icons"; <div className="retired-examples x" data-a={GLYPH.SETTINGS} retired={1} />;',
       filename: PANEL,
     },
     { code: 'import { x } from "retired-example-not";', filename: PANEL },
@@ -216,6 +216,42 @@ tester.run("retired (more-button.json)", moreButton, {
       code: 'import { Ellipsis, MoreHorizontalIcon } from "@repo/ui/icons";',
       filename: PANEL,
       errors: [{ messageId: "retired" }, { messageId: "retired" }],
+    },
+  ],
+});
+
+// A module of the repository confined by its path, which a relative import reaches, and a glyph imported straight from Lucide.
+const OWN_MODULE = path.join(REPOSITORY_ROOT, "packages/panel/src/kept/kept-row.tsx");
+const confined = retiredRuleFor(
+  parseRetiredFile(
+    "confined.json",
+    JSON.stringify({
+      instead: "Draw it through kept/.",
+      glyphs: [{ glyph: "Zap", allow: ["packages/panel/src/kept/"] }],
+      patterns: [{ import: "packages/panel/src/kept/marks", allow: ["packages/panel/src/kept/"] }],
+    }),
+  ),
+);
+
+tester.run("retired (a repository module, and Lucide's own glyphs)", confined, {
+  valid: [
+    {
+      code: 'import { Mark } from "./marks.js"; import { ZapIcon } from "lucide-react";',
+      filename: OWN_MODULE,
+    },
+    { code: 'import { Mark } from "../kept/marks-old.js";', filename: PANEL },
+    { code: 'import { BotIcon } from "lucide-react";', filename: PANEL },
+  ],
+  invalid: [
+    {
+      code: 'import { Mark } from "../kept/marks.js"; import * as kept from "../kept/marks";',
+      filename: PANEL,
+      errors: [{ messageId: "retired" }, { messageId: "retired" }],
+    },
+    {
+      code: 'import { BotIcon, ZapIcon } from "lucide-react";',
+      filename: PANEL,
+      errors: [{ messageId: "retired" }],
     },
   ],
 });

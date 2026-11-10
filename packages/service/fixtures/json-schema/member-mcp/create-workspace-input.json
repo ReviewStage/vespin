@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "The new workspace's name, at most 64 characters, its ends trimmed."
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "additionalProperties": false
+}

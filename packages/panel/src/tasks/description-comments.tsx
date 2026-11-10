@@ -13,7 +13,7 @@ import {
   type DescriptionCommentWriter,
 } from "@repo/features/description-comment-wire";
 import type { DescriptionSection } from "@repo/features/description-document";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { FrameBox, PagePicked } from "@repo/features/page-pick";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { IRREVERSIBLE_WORDS } from "@repo/features/words";
@@ -681,14 +681,14 @@ function CommentEntry({
     confirmFailure(FAILURE_SURFACE.DESCRIPTION_COMMENT_DELETE),
   );
   const copies = useLinkItems()({
-    kind: LINK_PLACE.COMMENT,
+    kind: LINK_DESTINATION.COMMENT,
     planId: doors.control.planId,
     threadId: thread.id,
   });
   const mine = writtenByReader(entry, doors.me);
   // Note that a page thread's first comment is drawn without the quote its quote line already says.
   const shown = first ? ownWordsOf(thread, entry.words ?? "") : (entry.words ?? "");
-  // Note that a reply copies its thread's link, since a link names a comment thread and no comment of one (`LINK_PLACE.COMMENT`).
+  // Note that a reply copies its thread's link, since a link names a comment thread and no comment of one (`LINK_DESTINATION.COMMENT`).
   const edits: MenuAction[] = mine
     ? [
         {
@@ -938,7 +938,8 @@ function ReplyField({
     clientKey: string,
     attachments: readonly AgentAttachment[],
   ) => Promise<boolean>;
-  onCancel: () => void;
+  /** What Escape does once no list or dictation takes it; none gives up the caret, as a thread that stands open with nothing to close does. */
+  onCancel?: (() => void) | undefined;
   autoFocus: boolean;
   /** Why the last act on the thread did not go, which the foot says under the box; none while nothing failed. */
   failure?: string | undefined;
@@ -1330,7 +1331,7 @@ function ThreadCard({
   doors: ThreadDoors;
   /** Opens the card at rest; none where it always stands open, as in the description's comments list. */
   onOpen?: (() => void) | undefined;
-  /** Closes it, as its field's Escape asks. */
+  /** Closes it, as its field's Escape asks; none where it stands open, whose field's Escape gives up the caret. */
   onClose?: (() => void) | undefined;
   /** Whether the quote stands over it, as in the description's comments list, where its words are not beside it. */
   quote?: boolean;
@@ -1488,7 +1489,7 @@ function ThreadCard({
                     }),
                 }
           }
-          onCancel={() => onClose?.()}
+          onCancel={onClose}
           onSend={(words, clientKey, attachments) =>
             doors.control.act(thread.id, {
               action: DESCRIPTION_COMMENT_ACTION.REPLY,

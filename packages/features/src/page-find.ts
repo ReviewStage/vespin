@@ -276,7 +276,7 @@ const DOCTYPE = /^<!doctype[^>]*>/i;
  * lets stand ahead of it; 0 for a page with none there, which is in quirks
  * mode however it is served.
  */
-function doctypeEnd(html: string): number {
+export function doctypeEnd(html: string): number {
   let at = html.length - html.trimStart().length;
   while (html.startsWith("<!--", at)) {
     const close = html.indexOf("-->", at + 4);

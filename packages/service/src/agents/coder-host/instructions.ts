@@ -12,13 +12,14 @@ import {
 } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { INBOX_ANSWER_LEAD, INBOX_MESSAGE_LEAD } from "@repo/features/inbox-wire";
-import { LINK_PLACE, linkOf, taskLinkStep } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf, taskLinkStep } from "@repo/features/link-grammar";
 import { LINK_HOME, LINK_ORIGIN } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { INTEGRATION_NAMES_SAID } from "../../integrations/integrations.js";
 import { SENDER_LABEL_LEAD } from "../attached-files.js";
 import { RECORDING_CURSOR_FILE } from "../browser/recording-cursor.js";
 import { COMMAND_DESCRIPTION_INSTRUCTION } from "../command-description.js";
+import { linkRuleWords } from "../link-rule.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { offers } from "../tool-catalog/catalog.js";
 import type { AgentStanding } from "../tool-catalog/gates.js";
@@ -126,9 +127,9 @@ const CHECKS_WAIT = {
   /** Never on a watch, which a pause cannot end: by `gh pr`, or, where the agent reads its checks over REST alone, by anything. */
   NEVER_WATCH: "never run `gh pr checks --watch` or any other command that waits on CI",
   NEVER_WAIT: "never run a command that waits on CI",
-  /** What ends Claude Code's wait: GitHub's message, which its CLI takes as its next turn, or the wakeup. */
-  TOLD_AS_TURN:
-    "Once every check on the commit you pushed has finished, GitHub tells you so in a message, which comes to you as your next turn without waiting on the wakeup; where that message has already come, do not wait, and call ScheduleWakeup with `stop: true` so the wakeup you no longer need never fires.",
+  /** What ends the wait: GitHub's message, which the harness takes as the agent's next turn, or the wakeup, canceled as the harness cancels one where the message came first. */
+  TOLD_AS_TURN: (stop: string) =>
+    `Once every check on the commit you pushed has finished, GitHub tells you so in a message, which comes to you as your next turn without waiting on the wakeup; where that message has already come, do not wait, and ${stop} so the wakeup you no longer need never fires.`,
 } as const;
 
 /** The harnesses whose instructions differ in the tools they name: Claude Code and Codex, which each run their own. */
@@ -215,6 +216,20 @@ const STOP_BEFORE_TURN_END =
 const SCHEDULE_WAKEUP_WORDS =
   "wait with ScheduleWakeup for about as long as the checks usually take, though its description speaks of a /loop you are not in: its `prompt` is what to do once it fires, such as `Read the checks on pull request #<number>`, its `noop` is false, and its `reason` is one short sentence";
 
+/** How a Claude Code agent cancels the wakeup it no longer needs. */
+const SCHEDULE_WAKEUP_STOP = "call ScheduleWakeup with `stop: true`";
+
+/**
+ * How a Codex agent waits on its checks: with our `schedule_wakeup`
+ * (`wakeup-tool.ts`), since Codex has no wakeup of its own. Its turn ends
+ * once it has booked one, and the scheduled sweep hands the prompt back as
+ * the line that opens its next turn (`../../maintenance/wakeup-sweep.ts`).
+ */
+const CODEX_WAKEUP_WORDS = `wait with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` for about as long as the checks usually take: its \`delaySeconds\` is how long, and its \`prompt\` is what to do once it fires, such as \`Read the checks on pull request #<number>\`; end your turn once you have booked it, and the prompt opens your next turn when it fires`;
+
+/** How a Codex agent cancels the wakeup it no longer needs. */
+const CODEX_WAKEUP_STOP = `call \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` with \`stop: true\``;
+
 /**
  * Each harness's words. Claude Code owns the
  * shell, the files, the web, skills, to-dos, waiting, and its subagents
@@ -224,9 +239,9 @@ const SCHEDULE_WAKEUP_WORDS =
  * names. Codex likewise owns its shell, `apply_patch`, its plan tool for
  * to-dos, its subagents, its skills (`.agents/skills`, and the member's
  * installed ones, which `native-skills.ts` writes beside the checkout), and
- * web search, and
- * its shell waits on a long command inside the turn, so a Codex agent waits
- * on its checks with the command itself. A native agent's checkout is
+ * web search, but has no wakeup of its own, so a Codex agent waits on its
+ * checks with ours, `schedule_wakeup`, which ends its turn and opens the
+ * next when due (`wakeup-tool.ts`). A native agent's checkout is
  * fetched whole as it opens (`runner-sessions.ts`).
  */
 const TOOL_WORDS: Readonly<Record<CoderHarness, ToolWords>> = {
@@ -245,7 +260,7 @@ const TOOL_WORDS: Readonly<Record<CoderHarness, ToolWords>> = {
     browser: browserWords("Bash"),
     todos: `For work of more than a couple of steps, keep your to-do items with TaskCreate, one per step, and TaskUpdate, which the developer watches; they are Claude Code's own to-do items, never ${PRODUCT_NAME}'s tasks: create them all before you start, keep exactly one in progress, and mark each completed as it finishes.`,
     checks: {
-      readable: `After you push and open or update a pull request, wait on its checks rather than watching them: ${CHECKS_WAIT.NEVER_WATCH}, and ${SCHEDULE_WAKEUP_WORDS}. ${CHECKS_WAIT.TOLD_AS_TURN} Then, or once the wakeup comes without that message, read them once with \`gh pr checks <number>\`, and where some are still running, wait again. When a check fails, read why with \`gh run view <run-id> --log-failed\`, or the failing check's own details, fix the cause, push, and wait again, for at most ${CODER.CI_FIX_ROUNDS} rounds of fixes. ${CHECKS_STOP}`,
+      readable: `After you push and open or update a pull request, wait on its checks rather than watching them: ${CHECKS_WAIT.NEVER_WATCH}, and ${SCHEDULE_WAKEUP_WORDS}. ${CHECKS_WAIT.TOLD_AS_TURN(SCHEDULE_WAKEUP_STOP)} Then, or once the wakeup comes without that message, read them once with \`gh pr checks <number>\`, and where some are still running, wait again. When a check fails, read why with \`gh run view <run-id> --log-failed\`, or the failing check's own details, fix the cause, push, and wait again, for at most ${CODER.CI_FIX_ROUNDS} rounds of fixes. ${CHECKS_STOP}`,
       rest: `After you push and open or update a pull request, wait on its checks rather than watching them: ${CHECKS_WAIT.NEVER_WAIT}, and ${SCHEDULE_WAKEUP_WORDS}. Once the wakeup comes, read its checks on the commit you pushed once with \`gh api repos/{owner}/{repo}/commits/<sha>/check-runs\` and \`gh api repos/{owner}/{repo}/commits/<sha>/status\`, and where some are still running, wait again. When a check fails, read why with \`gh api repos/{owner}/{repo}/actions/jobs/<job-id>/logs\`, its job listed by \`gh api "repos/{owner}/{repo}/actions/runs?head_sha=<sha>"\` and \`gh api repos/{owner}/{repo}/actions/runs/<run-id>/jobs\`, or the failing check's own details, fix the cause, push, and wait again, for at most ${CODER.CI_FIX_ROUNDS} rounds of fixes. ${CHECKS_STOP}`,
     },
     worker: ({ readOnly, keeps }) =>
@@ -268,8 +283,8 @@ const TOOL_WORDS: Readonly<Record<CoderHarness, ToolWords>> = {
     todos:
       "For work of more than a couple of steps, keep your to-dos with Codex's plan tool (`update_plan`), which the developer watches: write the list before you start, keep exactly one item in progress, and write it again as each item finishes.",
     checks: {
-      readable: `After you push and open or update a pull request, watch its checks with \`gh pr checks <number> --watch --fail-fast\` from your shell, which waits on the command for as long as it runs, rather than checking every few seconds or polling in a loop of your own. When a check fails, read why with \`gh run view <run-id> --log-failed\`, or the failing check's own details, fix the cause, push, and watch again, for at most ${CODER.CI_FIX_ROUNDS} rounds of fixes. ${CHECKS_STOP}`,
-      rest: `After you push and open or update a pull request, read its checks on the commit you pushed with \`gh api repos/{owner}/{repo}/commits/<sha>/check-runs\` and \`gh api repos/{owner}/{repo}/commits/<sha>/status\`, waiting between reads with \`sleep <seconds>\` in your shell for about as long as the checks usually take rather than checking every few seconds. When a check fails, read why with \`gh api repos/{owner}/{repo}/actions/jobs/<job-id>/logs\`, its job listed by \`gh api "repos/{owner}/{repo}/actions/runs?head_sha=<sha>"\` and \`gh api repos/{owner}/{repo}/actions/runs/<run-id>/jobs\`, or the failing check's own details, fix the cause, push, and read again, for at most ${CODER.CI_FIX_ROUNDS} rounds of fixes. ${CHECKS_STOP}`,
+      readable: `After you push and open or update a pull request, wait on its checks rather than watching them: ${CHECKS_WAIT.NEVER_WATCH}, and ${CODEX_WAKEUP_WORDS}. ${CHECKS_WAIT.TOLD_AS_TURN(CODEX_WAKEUP_STOP)} Then, or once the wakeup comes without that message, read them once with \`gh pr checks <number>\`, and where some are still running, wait again. When a check fails, read why with \`gh run view <run-id> --log-failed\`, or the failing check's own details, fix the cause, push, and wait again, for at most ${CODER.CI_FIX_ROUNDS} rounds of fixes. ${CHECKS_STOP}`,
+      rest: `After you push and open or update a pull request, wait on its checks rather than watching them: ${CHECKS_WAIT.NEVER_WAIT}, and ${CODEX_WAKEUP_WORDS}. Once the wakeup comes, read its checks on the commit you pushed once with \`gh api repos/{owner}/{repo}/commits/<sha>/check-runs\` and \`gh api repos/{owner}/{repo}/commits/<sha>/status\`, and where some are still running, wait again. When a check fails, read why with \`gh api repos/{owner}/{repo}/actions/jobs/<job-id>/logs\`, its job listed by \`gh api "repos/{owner}/{repo}/actions/runs?head_sha=<sha>"\` and \`gh api repos/{owner}/{repo}/actions/runs/<run-id>/jobs\`, or the failing check's own details, fix the cause, push, and wait again, for at most ${CODER.CI_FIX_ROUNDS} rounds of fixes. ${CHECKS_STOP}`,
     },
     worker: ({ readOnly, keeps }) =>
       `Where Codex offers you subagents, through a tool such as \`spawn_agent\`, they are your workers: each takes a scoped job, runs on a GPT model, and answers you once it is done; several run at once. Hand workers broad searches, a comparison of approaches, and investigations independent of each other, and keep ${keeps} to yourself. Nothing holds a Codex subagent to reading, and it is handed your tools of ${PRODUCT_NAME}'s, so write this rule into each one's job: ${readOnly} It calls none of ${PRODUCT_NAME}'s tools. A worker knows only what its job says, and the developer reads it too, so write the job as short Markdown in complete sentences, never clipped notes: the goal as one plain sentence first, then the context it needs, what to inspect, what to return, and any constraints. Codex's own subagent tools reach its subagents only, never ${PRODUCT_NAME}'s agents: use \`${AGENT_TOOL.LIST_AGENTS}\` and \`${MESSAGE_AGENT_TOOL.name}\` for those. Where Codex offers you no subagents, as on a ChatGPT plan, you have no workers: do the work yourself, and never start an agent with \`${AGENT_TOOL.START_AGENT}\` in a worker's place.`,
@@ -352,7 +367,14 @@ const TASK_PLACE_WORDS = {
 
 ## Your task's status
 
-Keep your task's status current with \`${AGENT_TOOL.UPDATE_TASK}\` and your task's id. Starting you moved it to in-progress; move it back there if you take up work on a task that stands done or canceled. Mark it done once all its work is finished, any agents you started on it included: its pull request merged, or, where it needed none, the write-up delivered. Marking it done withdraws every ask still open on its threads, so mark it done only once you no longer need any of them; where you still need one, leave it in-progress until it is answered: ${PRODUCT_NAME} then marks it done by itself where its pull request merged, and otherwise you mark it done once the answer reaches you. Leave it in-progress while a pull request awaits review, and never cancel it unless the developer says to. Where another agent started you on its task, leave the status to that agent; one started on a task of its own keeps that status itself. Say in your message when you change it.`,
+You're in charge of this task's status. Keep it current with \`${AGENT_TOOL.UPDATE_TASK}\`:
+- **In progress** while you, or an agent you started, is working on it or on one of its subtasks, including while that work waits on review or merge.
+- **Done** once its own work is finished (merged, or the answer or write-up delivered), every subtask is Done or Canceled, and nothing waits on the developer.
+- **To do** when the work is planned and ready but nobody is on it yet, such as when it waits on another task.
+- **Backlog** when the developer sets it aside for later.
+- **Canceled** only when the developer says to drop it.
+
+Where another agent started you on its task, leave the status to that agent.`,
     comments: `
 
 ## Comments
@@ -440,9 +462,10 @@ ${read}${notes}`,
  * its own address, and the task's own things under the task's link, which
  * an agent on no task has none of. A pull request is named so every time,
  * its address spelled from its number where no tool answered it, since a
- * bare `#42` draws as no chip. Another agent, a page, a task, and an
- * automation are named by the mention the tool that made or listed it
- * answered, so no address is spelled by hand. An MCP server is named by its connection's
+ * bare `#42` draws as no chip. A thing of ours, an agent, a task, an
+ * automation, a member, a thread, or a page, is named by one rule
+ * (`../link-rule.ts`): its link built from the id a tool answered, under the
+ * agent's own workspace's address. An MCP server is named by its connection's
  * mention, and a skill as `/name`, since the app draws both as chips. A name
  * the app shows as a label is written in sentence case, with no period. An
  * agent with no repository is told of no file of one, and its pull request
@@ -452,32 +475,24 @@ function namingWords(
   repository: string | null,
   ownTask: OwnTask | null,
   describes: boolean,
+  workspace: string,
 ): string {
   const files =
     repository === null
       ? ""
       : `
 - A file of your repository: \`[@session-store.ts](https://github.com/${repository}/blob/HEAD/apps/web/session-store.ts)\`; a folder the same way with \`tree\` for \`blob\`; lines at a commit already on GitHub: \`[@session-store.ts:3–5](https://github.com/${repository}/blob/<commit>/apps/web/session-store.ts#L3-L5)\`.`;
-  const inboxItem = `${LINK_ORIGIN}/acme/inbox/<item-id>`;
   const taskWords =
-    ownTask === null
+    ownTask !== null && describes
       ? `
-- A page you showed, which stands on you since you work on no task, by the \`mention\` \`${AGENT_TOOL.SHOW_PAGE}\` or \`${AGENT_TOOL.READ_PAGE}\` answered: \`[@Invite funnel](${LINK_ORIGIN}/acme/agent/<agent-id>/page/<page-id>)\`.`
-      : `${
-          describes
-            ? `
 - Your task's description, whose link is \`${ownTask.link}\` and whose id is \`${ownTask.id}\`: \`[@<the task's name>](${ownTask.link})\`, and one of its sections by its heading's anchor, the heading as GitHub spells an anchor (lower case, spaces as hyphens, punctuation dropped): \`[@Rollout](${ownTask.link}#rollout)\`.`
-            : ""
-        }
-- A page shown on the task, by the \`mention\` \`${AGENT_TOOL.SHOW_PAGE}\` or \`${AGENT_TOOL.READ_PAGE}\` answered: \`[@Invite funnel](${ownTask.link}/page/<page-id>)\`.`;
+      : "";
   const where = describes
     ? "in a message, a thread, or the description. Keep a mention in the description exactly as it stands when you edit around it."
     : "in a message or a thread.";
-  return `Name a thing the developer can open as a mention: a Markdown link whose words are \`@\` and the thing's name, \`[@name](target)\`. ${PRODUCT_NAME} draws it as the thing's chip, which opens it, wherever you write it: ${where} Copy a target a tool answered rather than spelling one:${files}
+  return `Name a thing the developer can open as a mention: a Markdown link whose words are \`@\` and the thing's name, \`[@name](target)\`. ${PRODUCT_NAME} draws it as the thing's chip, which opens it, wherever you write it: ${where} Copy an address a tool answered rather than spelling one:${files}
 - A pull request or an issue on GitHub, or a Linear issue, by its own address: \`[@#42 Fix the refresh](https://github.com/${repository ?? EXAMPLE_REPOSITORY}/pull/42)\`, \`[@ACME-142 Token refresh fails](https://linear.app/acme/issue/ACME-142)\`. Write one so every time you name it, in passing and in a report to another agent among them, never as a bare \`#42\`, which draws as no chip; where no tool answered a pull request's address, spell it from its number, its repository's address with \`/pull/\` and the number.${taskWords}
-- Another agent, or another task, by the \`mention\` \`${AGENT_TOOL.LIST_AGENTS}\`, \`${AGENT_TOOL.START_AGENT}\`, or \`${AGENT_TOOL.LIST_TASKS}\` answered: \`[@Wire the desktop](${LINK_ORIGIN}/acme/agent/<agent-id>)\`, \`[@Teammate invitations](${LINK_ORIGIN}/acme/task/<number>)\`.
-- An automation, by the \`mention\` \`${AGENT_TOOL.LIST_AUTOMATIONS}\`, \`${AGENT_TOOL.CREATE_AUTOMATION}\`, or \`${AGENT_TOOL.UPDATE_AUTOMATION}\` answered, never its name in quotes: \`[@Nightly triage](${LINK_ORIGIN}/acme/automation/<automation-id>)\`.
-- One of your threads, by the \`mention\` each of your thread tools answered for it: \`[@Review the invite flow](${inboxItem})\`.
+- ${linkRuleWords(`${LINK_ORIGIN}/${workspace}`)}
 - A date, which opens nothing, by its day, or its time with the offset it is at, and a range by both ends joined by a slash, its words the date in full: \`[@Oct 20, 2026](mention://date/2026-10-20)\`, \`[@Oct 20, 2026, 3:00 PM PDT](mention://date/2026-10-20T15:00-07:00)\`, \`[@Oct 20, 2026 → Oct 24, 2026](mention://date/2026-10-20/2026-10-24)\`.
 - An MCP server, by its connection's name as your tools list it: \`[@Linear](mention://mcp/linear)\`, or \`[@Notion](mention://mcp/notion-2)\` for a second Notion account.
 
@@ -563,6 +578,9 @@ interface WorkWords {
 
 /** The repository named in the examples of an agent with none of its own. */
 const EXAMPLE_REPOSITORY = "acme/app";
+
+/** The workspace step an agent's links are written under where its caller names none, as the examples spell one. */
+const EXAMPLE_WORKSPACE = "acme";
 
 /**
  * Where an agent works: its own sandbox, or, for a local agent, straight on
@@ -856,8 +874,8 @@ const CREATE_TASK_WORDS = `\`${AGENT_TOOL.CREATE_TASK}\` makes a task of its own
 
 const CODER_SECTION_WORDS: SectionWords = {
   sorting:
-    "Sort the developer's tasks when they ask you to, and otherwise only where you split work into tasks of its own and start an agent on each, which a rollout of several pull requests does not, since its agents start on your own task: there, make one section named for that work before you start them, move each task you made into it as you go, and leave every other task where it stands, so the developer finds the rollout together rather than scattered under Tasks; on your own, delete no section you did not make.",
-  messages: `Your messages are read by the developer in ${PRODUCT_NAME}'s own window as a transcript, beside your tool calls. Lead with the outcome. Keep each message short and plain, and make the final one stand on its own: what you changed, what you ran, and what you published or why not.`,
+    "Sort the developer's tasks when they ask you to, and otherwise only where you split work into tasks of its own and start an agent on each, which child tasks of yours need not, since they stand under your task already: there, make one section named for that work before you start them, move each task you made into it as you go, and leave every other task where it stands, so the developer finds the rollout together rather than scattered under Tasks; on your own, delete no section you did not make.",
+  messages: `Your messages are read by the developer in ${PRODUCT_NAME}'s own window as a transcript, beside your tool calls. Lead with the outcome. Keep each message short and plain, and make the final one stand on its own: what you changed, what you ran, and what you published or why not. Put words the developer will send elsewhere, such as a Slack message or an email, in a fence named for where they go, \`\`\`slack with Slack's \`*bold*\`, \`_italic_\`, \`~strike~\`, \`\` \`code\` \`\`, and \`<url|label>\` links, \`\`\`email with an optional \`Subject:\` first line, or \`\`\`draft, the last two in plain text with no marks, which ${PRODUCT_NAME} draws as they will look when sent, with a Copy that keeps their formatting.`,
   createTask: CREATE_TASK_WORDS,
 };
 
@@ -912,6 +930,7 @@ export function coderInstructions(
   harness: CoderHarness = CODER_HARNESS.CLAUDE_CODE,
   machine: CoderMachine = SANDBOX_MACHINE,
   extras: readonly ExtraCheckout[] = [],
+  workspace: string = EXAMPLE_WORKSPACE,
 ): string {
   const words = BRIEF_WORDS[brief];
   const tools = toolsOn(TOOL_WORDS[harness], machine, standing);
@@ -975,7 +994,7 @@ ${memoryWords(standing)}## What your messages are
 
 ${sections.messages}
 
-${namingWords(repository, ownTask, describes)}
+${namingWords(repository, ownTask, describes, workspace)}
 
 Never print a credential, a token, or the contents of an environment file, in a message, a commit, or a pull request.`;
 }
@@ -1023,7 +1042,7 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
           id: agent.taskId,
           link: linkOf(
             {
-              kind: LINK_PLACE.TASK,
+              kind: LINK_DESTINATION.TASK,
               planId: taskLinkStep({ id: agent.taskId, number: context.taskNumber }),
             },
             context.workspace,
@@ -1045,5 +1064,6 @@ export function agentCoderInstructions(agent: Agent, context: AgentInstructionsC
       sharedFiles: context.place?.sharedFiles ?? SANDBOX_MACHINE.sharedFiles,
     },
     context.extraRepositories,
+    context.workspace,
   );
 }

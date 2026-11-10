@@ -5,8 +5,9 @@ import {
   type AgentStatus,
   type AgentSummary,
 } from "@repo/features/agent-wire";
-import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { TASK_BOUNDS, type TaskSummary } from "@repo/features/task-wire";
+import type { ToolTarget } from "@repo/features/tool-call-model";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   DraftMark,
@@ -56,7 +57,6 @@ import { stripTabTitle, UNREAD_TAB_NAMES } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import type { MAIN_TAB } from "../tasks/task-tab-model.js";
 import type { AgentThreads } from "../tasks/threads-dock.js";
-import type { ToolTarget } from "../tasks/tool-call-model.js";
 import { TRANSCRIPT_COPY } from "../tasks/transcript-copy.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTab, MainTabsControl } from "../tasks/use-main-tabs.js";
@@ -665,8 +665,10 @@ export function MainTabBars({
   };
   const doorsOf = (entry: DrawnTab): TabDoors => {
     // An agent's link is its own action (`agent-actions.tsx`).
-    const linked: LinkPlace | undefined =
-      entry.agent === undefined ? undefined : { kind: LINK_PLACE.AGENT, agentId: entry.agent.id };
+    const linked: LinkDestination | undefined =
+      entry.agent === undefined
+        ? undefined
+        : { kind: LINK_DESTINATION.AGENT, agentId: entry.agent.id };
     const { agent } = entry;
     return {
       chosen: entry.look.selected,

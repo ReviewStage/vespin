@@ -1,7 +1,7 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
 import { INTEGRATION_PROVIDER_LIST } from "@repo/features/integration-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { type HostCapability, NO_EXPERIMENTS, SETTINGS_VIEW_COUNTED_AS } from "@repo/settings";
@@ -159,8 +159,8 @@ function SettingsPageRow({
 }): React.JSX.Element {
   const page = settingsPageOf(view);
   const menu = useMenu(true);
-  const links = useLinkItems()({ kind: LINK_PLACE.SETTINGS, page: view });
-  const openInTab = useOpenInTab()({ kind: LINK_PLACE.SETTINGS, page: view });
+  const links = useLinkItems()({ kind: LINK_DESTINATION.SETTINGS, page: view });
+  const openInTab = useOpenInTab()({ kind: LINK_DESTINATION.SETTINGS, page: view });
   return (
     <li>
       <NavItem

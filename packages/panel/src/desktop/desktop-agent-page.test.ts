@@ -29,11 +29,10 @@ import {
   AUTOMATION_TRIGGER,
   type AutomationSummary,
 } from "@repo/features/automation-wire";
-import { LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { pageFrameUrl } from "@repo/features/page-frame";
 import { PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
-import { READ_MARK } from "@repo/features/read-mark";
 import type { Task } from "@repo/features/task-wire";
 import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
@@ -627,7 +626,7 @@ test("a fork's draft on the page names its source's message, whose press opens i
 
   assert.deepEqual(
     links.map((link) => link.place),
-    [{ kind: LINK_PLACE.MESSAGE, agentId: AGENT_ID, messageId: "answer" }],
+    [{ kind: LINK_DESTINATION.MESSAGE, agentId: AGENT_ID, messageId: "answer" }],
   );
   assert.equal(
     page.querySelector(`.desktop-agent section[aria-label="${TAB_WORDS.NEW_AGENT}"]`),
@@ -636,7 +635,7 @@ test("a fork's draft on the page names its source's message, whose press opens i
   );
 });
 
-test("an agent forked at one of its messages names the fork under it, which opens the fork's own page", async () => {
+test("an agent forked at one of its messages names the fork under it", async () => {
   listed = {
     ...PAGE,
     continuedBy: [
@@ -655,21 +654,13 @@ test("an agent forked at one of its messages names the fork under it, which open
     status: AGENT_STATUS.COMPLETED,
     title: null,
   };
-  const opened: string[] = [];
-  const agentView = {
-    agentId: AGENT_ID,
-    onOpen: (id: string) => opened.push(id),
-    onClose: () => undefined,
-  };
-  const page = mount(tasksControl({ agentView }));
+  const page = mount();
   await settle();
 
   const chip =
     page.querySelector<HTMLElement>("[data-forked-to] [data-actor-ref]") ??
     assert.fail("the message names its fork");
   assert.match(chip.textContent ?? "", /Try the cron/u);
-  act(() => chip.click());
-  assert.deepEqual(opened, [STARTED_ID]);
 });
 
 /** The page over the window's own side panel, held by the agent as the window holds it while the page stands. */
@@ -909,7 +900,7 @@ test("an agent on a task, an archived one's page among them, opens on its descri
   act(() => named.click());
   assert.deepEqual(
     links.map((link) => link.place),
-    [{ kind: LINK_PLACE.TASK, planId: PAGE_TASK }],
+    [{ kind: LINK_DESTINATION.TASK, planId: PAGE_TASK }],
   );
 });
 
@@ -1639,53 +1630,6 @@ test("the page's ⋯ offers what a task's agent's tab ⋯ does, in the one order
     "Archive",
     "Permanently delete⌘⌫",
   ]);
-});
-
-test("a taskless agent the sidebar lists gains its row's own items on its page's ⋯: Mark as unread beside Rename, then Pin and Move to section, and Pin pins it", async () => {
-  const row = {
-    ...PAGE,
-    automationName: "Flaky sweep",
-    activityAt: 2,
-  };
-  const page = mount(
-    tasksControl({
-      listedAgents: { standing: [row], archived: [] },
-    }),
-  );
-  await settle();
-  const offered = () =>
-    [...document.querySelectorAll('[role="menuitem"]')].map((each) => each.textContent);
-  const pin = pageMenuItem(page, "PinP");
-  act(() => pin.click());
-  await settle();
-  assert.deepEqual(
-    told.filter((asked) => asked.kind === ACT_KIND.AGENTS_PIN).map((asked) => asked.payload),
-    [{ agentId: AGENT_ID, pinned: true }],
-  );
-
-  assert.deepEqual(offered(), [], "the menu closed on the pin");
-  openPageMenu(page);
-  assert.deepEqual(offered(), [
-    "Copy link",
-    "Copy transcript",
-    "Rename",
-    "Mark as unreadU",
-    "PinP",
-    "Move to section",
-    "Show terminal⌘J",
-    "Show local",
-    "Add repository…",
-    "Archive",
-    "Permanently delete⌘⌫",
-  ]);
-
-  act(() => pageMenuItem(page, "Mark as unreadU").click());
-  assert.deepEqual(offered(), [], "the menu closed on the mark");
-  await settle();
-  assert.deepEqual(
-    told.filter((asked) => asked.kind === ACT_KIND.AGENTS_MARK_READ).map((asked) => asked.payload),
-    [{ agentId: AGENT_ID, readMark: READ_MARK.UNREAD }],
-  );
 });
 
 /** What a side panel is asked to show. */

@@ -1,12 +1,10 @@
-// collection-screens.tsx -- a tab's placeholder list and detail: the Stack's two screens in a compact window, one split view in a regular one.
+// collection-screens.tsx -- the Tasks tab's placeholder list and detail: the Stack's two screens in a compact window, one split view in a regular one.
 
-import type { SfSymbol } from "@repo/ui-native";
 import {
-  ChoiceList,
+  type BarAction,
   EmptyState,
   LIST_LOOK,
   type ListLook,
-  ListRow,
   MarkdownPage,
   PageHeader,
   ROW_ACTION_TONE,
@@ -19,20 +17,12 @@ import {
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  COLLECTION_ROUTE,
   PLACEHOLDER_REPOSITORY,
   type PlaceholderCollection,
   type PlaceholderItem,
 } from "../placeholders.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
-
-/** An act a tab's list holds in its bar by its symbol alone, such as the Inbox's Settings. */
-export type BarAction = {
-  readonly label: string;
-  readonly symbol: SfSymbol;
-  readonly onPress: () => void;
-};
 
 /** The route a collection's row opens in a compact window. */
 function itemHref(collection: PlaceholderCollection, id: string): string {
@@ -67,7 +57,7 @@ function CollectionList({ collection, look, selected, onSelect }: CollectionList
             onPress: () => setDone((previous) => new Set([...previous, item.id])),
           },
         ];
-        return collection.route === COLLECTION_ROUTE.TASKS && item.status !== undefined ? (
+        return (
           <TaskRow
             key={item.id}
             id={item.id}
@@ -75,20 +65,6 @@ function CollectionList({ collection, look, selected, onSelect }: CollectionList
             status={item.status}
             unread={item.unread}
             pullRequest={item.pullRequest}
-            at={item.at}
-            trailingActions={acts}
-          />
-        ) : (
-          <ListRow
-            key={item.id}
-            id={item.id}
-            title={item.title}
-            task={item.task}
-            line={item.line}
-            summary={item.summary}
-            unread={item.unread}
-            done={item.done}
-            face={item.face}
             at={item.at}
             trailingActions={acts}
           />
@@ -103,7 +79,6 @@ function CollectionList({ collection, look, selected, onSelect }: CollectionList
 function openNothing() {}
 
 function ItemDetail({ item }: { readonly item: PlaceholderItem }) {
-  const [picked, setPicked] = useState<readonly string[]>([]);
   if (item.words !== undefined) {
     return (
       <MarkdownPage
@@ -116,33 +91,20 @@ function ItemDetail({ item }: { readonly item: PlaceholderItem }) {
       />
     );
   }
-  if (item.ask === undefined) {
-    return <PageHeader title={item.title} summary={item.summary} status={item.status} />;
-  }
-  return (
-    <RowList look={LIST_LOOK.PLAIN}>
-      <ChoiceList
-        title={item.ask.question}
-        choices={item.ask.choices}
-        recommended={item.ask.recommended}
-        picked={picked}
-        onChange={setPicked}
-      />
-    </RowList>
-  );
+  return <PageHeader title={item.title} summary={item.summary} status={item.status} />;
 }
 
 function EmptyDetail({ collection }: { readonly collection: PlaceholderCollection }) {
   return <EmptyState title={collection.emptyDetail} symbol={collection.symbol} />;
 }
 
-// A compact window: the list under the Stack's large title, each row pushing
+// A compact window: the list under the Stack's inline title, each row pushing
 // its detail as the Stack's next screen.
 function CollectionStackList({ collection, barAction }: CollectionScreenProps) {
   const router = useRouter();
   return (
     <>
-      <Stack.Screen options={{ title: collection.title, headerLargeTitle: true }} />
+      <Stack.Screen options={{ title: collection.title }} />
       {barAction === undefined ? null : (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button

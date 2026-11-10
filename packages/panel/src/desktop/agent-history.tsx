@@ -20,6 +20,7 @@ import { GLYPH } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useRef, useState } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
+import { useMemberDirectory } from "../member-directory.js";
 import { agentName } from "../tasks/agent-model.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTabsControl } from "../tasks/use-main-tabs.js";
@@ -155,9 +156,10 @@ function HistoryPanel({
 }): React.JSX.Element {
   const [query, setQuery] = useState("");
   const { closed, archived } = historyAgents(main, agents, query);
+  const directory = useMemberDirectory();
   // Note that every row takes its look and card from the "+" rows' one builder, so a row and its tab say the same.
-  const entries = agentEntries(main, agents, held, closed);
-  const archivedEntries = agentEntries(main, agents, held, archived);
+  const entries = agentEntries(main, agents, directory, held, closed);
+  const archivedEntries = agentEntries(main, agents, directory, held, archived);
   const open = (agentId: string) => {
     onPicked();
     onOpenAgent(agentId);

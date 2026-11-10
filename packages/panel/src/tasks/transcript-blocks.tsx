@@ -4,6 +4,8 @@ import {
   type AgentTodos,
 } from "@repo/features/agent-wire";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
+import { GLYPH_STATE } from "@repo/features/glyph-state";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { readLink } from "@repo/features/link-grammar";
 import {
@@ -16,19 +18,30 @@ import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
 import { formatBytes } from "@repo/features/number-format";
 import { cardTitle } from "@repo/features/plain-words";
 import {
+  blockSays,
+  TOOL_BLOCK,
+  TOOL_STATE,
+  type ToolBlock,
+  type ToolState,
+} from "@repo/features/tool-call-block";
+import { type SentWords, todosCount } from "@repo/features/tool-call-model";
+import {
   agentCallLine,
   CALL_KIND,
   CALL_WORDS,
   type CallKind,
   type CallLine,
+  calledFile,
   callLine,
   callPlace,
   isAgentCallKind,
   isCommandKind,
   type MadeCallKind,
   madeCallLine,
+  moreFiles,
   sameFieldsBy,
   sameTurnRow,
+  siteName,
   TURN_ROW,
   type TurnRow,
 } from "@repo/features/turn-rows";
@@ -78,11 +91,10 @@ import {
   wholeRendering,
 } from "@repo/ui/github-html";
 import {
-  AppWindowIcon,
+  AlarmClockCheckIcon,
+  AlarmClockOffIcon,
   ArchiveIcon,
   ArchiveRestoreIcon,
-  BookOpenIcon,
-  BotIcon,
   CalendarCheckIcon,
   CalendarClockIcon,
   CalendarCogIcon,
@@ -120,7 +132,6 @@ import {
   UnlinkIcon,
   WrenchIcon,
 } from "@repo/ui/icons";
-import { siteName } from "@repo/ui/link-face";
 import {
   MARKDOWN_HTML_STEP,
   type MarkdownComponents,
@@ -146,7 +157,7 @@ import {
   useState,
 } from "react";
 import remarkBreaks from "remark-breaks";
-import { ACTOR_SIZE, ActorLine, ActorMark, ActorRef } from "../actor-ref.js";
+import { ActorGlyph, ActorLine, ActorRef } from "../actor-ref.js";
 import { FoldBody } from "../ai-elements/fold.js";
 import { MessageResponse } from "../ai-elements/message.js";
 import {
@@ -157,25 +168,21 @@ import {
   ReasoningTrigger,
 } from "../ai-elements/reasoning.js";
 import {
-  blockSays,
-  TOOL_BLOCK,
-  TOOL_STATE,
   Tool,
-  type ToolBlock,
   ToolContent,
   ToolHeader,
   type ToolHeaderProps,
   ToolInput,
   ToolLine,
   ToolOutput,
-  type ToolState,
   ToolStateMark,
   ToolSummary,
   ToolTerminal,
 } from "../ai-elements/tool.js";
 import { useDrawnDark } from "../drawn-dark.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { OUTSIDE_GLYPH_CLASS } from "../picture-block.js";
-import { GLYPH_STATE, StateGlyph } from "../state-glyph.js";
+import { StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
 import { useDescriptionPictureDrawer } from "./description-pictures.js";
 import { useInboxPictureDrawer } from "./inbox-pictures.js";
@@ -189,7 +196,6 @@ import { linkChip, type MentionDoors } from "./mention-chip.js";
 import { ModelLabel } from "./model-label.js";
 import { SubagentMark } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
-import { type SentWords, todosCount } from "./tool-call-model.js";
 import {
   TRANSCRIPT_CODE_AND_TABLE_COMPONENTS,
   TranscriptMarkdownSource,
@@ -924,38 +930,39 @@ export function GitHubWords({
 }
 
 /**
- * An element of the transcript's own the words are drawn with, as a skill
- * named in a sent message is drawn as its chip (`skill-chip.tsx`): the words
- * with the element written in where it stands, its tag and the attributes it
- * carries, and what draws it. Its words are taken as they are, never as
- * markdown.
+ * The elements of the transcript's own the words are drawn with, as a skill
+ * named in a sent message is drawn as its chip and a picture it names as
+ * the picture's (`skill-chip.tsx`): the words with each element written in
+ * where it stands, each element's tag and the attributes it carries, and
+ * what draws them. Their words are taken as they are, never as markdown.
  */
 export interface TranscriptElement {
   readonly markdown: string;
-  readonly tag: string;
-  readonly attributes: readonly string[];
+  readonly tags: Readonly<Record<string, readonly string[]>>;
   readonly components: MarkdownComponents;
 }
 
-/** The components and tags an element of the transcript's own is drawn with beside the transcript's own, the same objects while the element names the same. */
+/** The components and tags the elements of the transcript's own are drawn with beside the transcript's own, the same objects while the elements hand the same components and tags, which their caller keeps as constants. */
 function useElementDraw(element: TranscriptElement | undefined): {
   components: MarkdownComponents;
   allowedTags: Record<string, string[]>;
   literal: string[] | undefined;
 } {
   const extra = element?.components;
-  const tag = element?.tag;
-  const attributes = element?.attributes.join(" ");
+  const tags = element?.tags;
   return useMemo(
     () =>
-      extra === undefined || tag === undefined || attributes === undefined
+      extra === undefined || tags === undefined
         ? { components: TRANSCRIPT_COMPONENTS, allowedTags: MENTION_TAGS, literal: undefined }
         : {
             components: { ...TRANSCRIPT_COMPONENTS, ...extra },
-            allowedTags: { ...MENTION_TAGS, [tag]: attributes === "" ? [] : attributes.split(" ") },
-            literal: [tag],
+            allowedTags: {
+              ...MENTION_TAGS,
+              ...Object.fromEntries(Object.entries(tags).map(([tag, names]) => [tag, [...names]])),
+            },
+            literal: Object.keys(tags),
           },
-    [extra, tag, attributes],
+    [extra, tags],
   );
 }
 
@@ -1108,7 +1115,7 @@ const CALL_ICON = {
   [CALL_KIND.SEARCH]: SearchIcon,
   [CALL_KIND.WEB_SEARCH]: SearchIcon,
   [CALL_KIND.WEB_PAGE]: GlobeIcon,
-  [CALL_KIND.LOAD_SKILL]: BookOpenIcon,
+  [CALL_KIND.LOAD_SKILL]: () => <EntityGlyph kind={ENTITY_KIND.SKILL} />,
   [CALL_KIND.LOOK_AT_PICTURE]: ImageIcon,
   [CALL_KIND.EDIT_DESCRIPTION]: FilePenIcon,
   [CALL_KIND.TODOS]: () => <GLYPH.TODOS />,
@@ -1117,7 +1124,7 @@ const CALL_ICON = {
   [CALL_KIND.INBOX_READ]: InboxIcon,
   [CALL_KIND.INBOX_REPLY]: InboxIcon,
   [CALL_KIND.INBOX_WITHDRAW]: InboxIcon,
-  [CALL_KIND.WORKER]: BotIcon,
+  [CALL_KIND.WORKER]: () => <EntityGlyph kind={ENTITY_KIND.WORKER} />,
   [CALL_KIND.WORKER_WAIT]: HourglassIcon,
   [CALL_KIND.WORKER_CANCEL]: CircleStopIcon,
   [CALL_KIND.WORKER_MESSAGE]: SendIcon,
@@ -1149,20 +1156,22 @@ const CALL_ICON = {
   [CALL_KIND.CREATE_ISSUE]: CirclePlusIcon,
   [CALL_KIND.UPDATE_ISSUE]: FilePenIcon,
   [CALL_KIND.CREATE_TASK]: FilePlusIcon,
-  [CALL_KIND.SHOW_PAGE]: AppWindowIcon,
-  [CALL_KIND.READ_PAGE]: AppWindowIcon,
+  [CALL_KIND.SHOW_PAGE]: () => <EntityGlyph kind={ENTITY_KIND.PAGE} />,
+  [CALL_KIND.READ_PAGE]: () => <EntityGlyph kind={ENTITY_KIND.PAGE} />,
   [CALL_KIND.SHOW_IMAGE]: ImageIcon,
-  [CALL_KIND.OPEN_PULL_REQUEST]: () => <GLYPH.PULL_REQUEST />,
+  [CALL_KIND.OPEN_PULL_REQUEST]: () => <EntityGlyph kind={ENTITY_KIND.PULL_REQUEST} />,
   [CALL_KIND.SLEEP]: TimerIcon,
-  [CALL_KIND.LIST_TASKS]: () => <GLYPH.TASK />,
+  [CALL_KIND.SCHEDULE_WAKEUP]: AlarmClockCheckIcon,
+  [CALL_KIND.CANCEL_WAKEUP]: AlarmClockOffIcon,
+  [CALL_KIND.LIST_TASKS]: () => <EntityGlyph kind={ENTITY_KIND.PLAN} />,
   [CALL_KIND.REMEMBER]: () => <GLYPH.MEMORY />,
   [CALL_KIND.RECALL]: () => <GLYPH.MEMORY />,
   [CALL_KIND.READ_COMMENTS]: () => <GLYPH.COMMENT />,
   [CALL_KIND.REPLY_TO_COMMENT]: () => <GLYPH.COMMENT />,
   [CALL_KIND.RESOLVE_THREAD]: () => <GLYPH.RESOLVED />,
   [CALL_KIND.REOPEN_THREAD]: () => <GLYPH.COMMENT />,
-  [CALL_KIND.SEARCH_TOOLS]: () => <GLYPH.MCP_SERVER />,
-  [CALL_KIND.MCP_TOOL]: () => <GLYPH.MCP_SERVER />,
+  [CALL_KIND.SEARCH_TOOLS]: () => <EntityGlyph kind={ENTITY_KIND.SERVER} />,
+  [CALL_KIND.MCP_TOOL]: () => <EntityGlyph kind={ENTITY_KIND.TOOL} />,
   [CALL_KIND.OTHER]: WrenchIcon,
 } as const satisfies Record<CallKind, ComponentType<{ "aria-hidden"?: "true" }>>;
 
@@ -1193,7 +1202,7 @@ function AgentCallChip({
     return (
       <InlineRef
         look={INLINE_REF_LOOK.PILL}
-        glyph={<ActorMark actor={agent} size={ACTOR_SIZE.INLINE} />}
+        glyph={<ActorGlyph actor={agent} />}
         label={actorName(agent)}
         hint={card === undefined ? false : undefined}
         card={card}
@@ -1210,7 +1219,7 @@ function AgentCallChip({
   return (
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
-      glyph={<ActorMark actor={agent} size={ACTOR_SIZE.INLINE} />}
+      glyph={<ActorGlyph actor={agent} />}
       label={actorName(agent)}
       onPress={press}
       hintLabel={opens.hint}
@@ -1251,13 +1260,6 @@ function chippedLine(
   };
 }
 
-/** The kinds of call that name files, which a row names by the first one's chip. */
-const FILE_CALLS: ReadonlySet<CallKind> = new Set([
-  CALL_KIND.READ_FILE,
-  CALL_KIND.WRITE_FILE,
-  CALL_KIND.EDIT,
-]);
-
 /**
  * The chip a call's row names what it read or wrote by: the first file's,
  * of the task's repository, with its hover card, or the website chip of the
@@ -1276,18 +1278,13 @@ function calledChip(
       <SiteChip href={page} />
     );
   }
-  const first = FILE_CALLS.has(kind) ? files?.[0] : undefined;
+  const first = calledFile(kind, files);
   const repository = doors.place.repository;
   if (first === undefined || repository === null) return undefined;
   const target = encodeMention({ kind: MENTION_KIND.FILE, path: first }, doors.place);
   // Note that a path that climbs out of the checkout reads back as no file, or as some other page of GitHub's, so it stays words.
   if (decodeMention(target, repository)?.kind !== MENTION_KIND.FILE) return undefined;
   return linkChip(target, target, doors);
-}
-
-/** How many files a call named past the first, which its row says after the first one's chip; none for one file. */
-function moreFiles(files: readonly string[] | undefined): string | undefined {
-  return files === undefined || files.length < 2 ? undefined : `+${files.length - 1}`;
 }
 
 /** Whose Mac a transcript's Mac commands ran on, its agent's starter, the reader's own among them (`macOwnerOf`); none where the window cannot tell, whose ran on the reader's own as far as it knows. */
@@ -1908,7 +1905,7 @@ function TurnFold({
   );
 }
 
-/** One row of a turn: a block drawn by its tab, a run of calls, or a folded lead. */
+/** One row of a turn: a block drawn by its tab, or a run of calls. */
 function TurnRowView<B>({
   row,
   children,
@@ -1925,12 +1922,6 @@ function TurnRowView<B>({
           {row.blocks.map((block, index) => (
             <Fragment key={index}>{children(block)}</Fragment>
           ))}
-        </TurnFold>
-      );
-    case TURN_ROW.FOLDED:
-      return (
-        <TurnFold summary={row.summary} running={false}>
-          <TranscriptRows rows={row.rows}>{children}</TranscriptRows>
         </TurnFold>
       );
   }

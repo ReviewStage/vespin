@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { AGENT_STATUS } from "@repo/features/agent-wire";
-import { LINK_PLACE, type LinkPlace, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination, type ReadLink } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PAGE_OWNER } from "@repo/features/page-wire";
@@ -102,11 +102,9 @@ const STATE: AppStateSnapshot = (() => {
           workspaceId: ACME.id,
           repository: "acme/relay",
         },
-      ],
-      tasklessAgents: [
         {
           id: TRIAGE_AGENT,
-          planId: null,
+          planId: TASK_ID,
           turnId: null,
           title: "Triage new Sentry issues",
           model: "anthropic/claude-opus-5.5",
@@ -117,7 +115,6 @@ const STATE: AppStateSnapshot = (() => {
           automationName: "Nightly triage",
           workspaceId: ACME.id,
           repository: "acme/relay",
-          activityAt: AT,
         },
       ],
       activeTaskId: TASK_ID,
@@ -153,7 +150,7 @@ afterEach(() => {
 /** The words drawn as a transcript draws them, in a window holding `state`, every place a chip opened kept. */
 async function drawn(
   text: string,
-  opened: LinkPlace[],
+  opened: LinkDestination[],
   state: AppStateSnapshot = STATE,
 ): Promise<HTMLElement> {
   fakeActs({
@@ -257,7 +254,7 @@ test("a place the window holds no name for is called by its kind, or by its labe
 });
 
 test("a press on a place's chip opens the place in the window", async () => {
-  const opened: LinkPlace[] = [];
+  const opened: LinkDestination[] = [];
   const container = await drawn(
     `${HOME}/plan/${TASK_ID}/agent/${AGENT} then ${HOME}/person/${SAM}`,
     opened,
@@ -269,13 +266,13 @@ test("a press on a place's chip opens the place in the window", async () => {
     act(() => chip.click());
   }
   assert.deepEqual(opened, [
-    { kind: LINK_PLACE.AGENT, planId: TASK_ID, agentId: AGENT },
-    { kind: LINK_PLACE.PERSON, userId: SAM },
+    { kind: LINK_DESTINATION.AGENT, planId: TASK_ID, agentId: AGENT },
+    { kind: LINK_DESTINATION.PERSON, userId: SAM },
   ]);
 });
 
-/** An archived agent as the task list carries it, on the task given or none, on the model given. */
-function archivedAgent(id: string, planId: string | null, model: string) {
+/** An archived agent as the task list carries it, on the task given, on the model given. */
+function archivedAgent(id: string, planId: string, model: string) {
   return {
     id,
     planId,
@@ -289,26 +286,19 @@ function archivedAgent(id: string, planId: string | null, model: string) {
   };
 }
 
-test("an archived agent's chip, which no task's row names, wears the harness the task list carries for it, an older link under its task as one under none", async () => {
-  const onTask = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
-  const onNone = "6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c";
+test("an archived agent's chip, which no task's row names, wears the harness the task list carries for it, a link under its task as one under the agent alone", async () => {
+  const underTask = "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
+  const alone = "6f5e4d3c-2b1a-4f0e-9d8c-7b6a5f4e3d2c";
   const container = await drawn(
-    `${HOME}/plan/${TASK_ID}/agent/${onTask} and ${HOME}/agent/${onNone}`,
+    `${HOME}/plan/${TASK_ID}/agent/${underTask} and ${HOME}/agent/${alone}`,
     [],
     {
       ...STATE,
       tasks: {
         ...STATE.tasks,
-        taskAgents: [listedAgent(archivedAgent(onTask, TASK_ID, "openai/gpt-6.1-sol"))],
-        tasklessAgents: [
-          ...(STATE.tasks.tasklessAgents ?? []),
-          {
-            ...archivedAgent(onNone, null, "anthropic/claude-opus-5.5"),
-            automationId: null,
-            workspaceId: ACME.id,
-            repository: "acme/relay",
-            activityAt: AT,
-          },
+        taskAgents: [
+          listedAgent(archivedAgent(underTask, TASK_ID, "openai/gpt-6.1-sol")),
+          listedAgent(archivedAgent(alone, TASK_ID, "anthropic/claude-opus-5.5")),
         ],
       },
     },

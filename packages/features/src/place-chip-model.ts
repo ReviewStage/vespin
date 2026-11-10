@@ -1,6 +1,6 @@
-import { LINK_PLACE, type LinkPlace } from "./link-grammar.js";
+import { entityName, entityOfDestination, type KnownNames, NOTHING_SAID } from "./entity-kind.js";
+import { LINK_DESTINATION, type LinkDestination } from "./link-grammar.js";
 import { UNTITLED_TASK_NAME } from "./task-wire.js";
-import { type KnownNames, NOTHING_SAID, thingName, thingOfPlace } from "./thing-kind.js";
 
 /**
  * place-chip-model.ts -- a link of ours drawn in words as its chip says it: the name of the place it opens, as the window already knows it, and the task it stands under.
@@ -30,50 +30,51 @@ export interface PlaceChipLook {
 
 /** What a place is called where the window holds no name for it. */
 const KIND_NAME = {
-  [LINK_PLACE.TASK]: "Task",
-  [LINK_PLACE.SECTION]: "Section",
-  [LINK_PLACE.COMMENT]: "Comment",
-  [LINK_PLACE.HOME]: "Home",
-  [LINK_PLACE.BOARD]: "Tasks",
-  [LINK_PLACE.VERSION]: "Version",
-  [LINK_PLACE.PAGE]: "Page",
-  [LINK_PLACE.AGENT]: "Agent",
-  [LINK_PLACE.WORKER]: "Worker",
-  [LINK_PLACE.CHANGES]: "Changes",
-  [LINK_PLACE.PULL_REQUEST_THREAD]: "Review comment",
-  [LINK_PLACE.MESSAGE]: "Message",
-  [LINK_PLACE.INBOX]: "Inbox",
-  [LINK_PLACE.INBOX_ITEM]: "Inbox item",
-  [LINK_PLACE.AUTOMATIONS]: "Automations",
-  [LINK_PLACE.AUTOMATION]: "Automation",
-  [LINK_PLACE.AUTOMATION_RUN]: "Run",
-  [LINK_PLACE.SETTINGS]: "Settings",
-  [LINK_PLACE.PERSON]: "Profile",
-  [LINK_PLACE.ADMIN]: "Admin",
-} as const satisfies Record<LinkPlace["kind"], string>;
+  [LINK_DESTINATION.TASK]: "Task",
+  [LINK_DESTINATION.SECTION]: "Section",
+  [LINK_DESTINATION.COMMENT]: "Comment",
+  [LINK_DESTINATION.HOME]: "Home",
+  [LINK_DESTINATION.BOARD]: "Tasks",
+  [LINK_DESTINATION.VERSION]: "Version",
+  [LINK_DESTINATION.PAGE]: "Page",
+  [LINK_DESTINATION.AGENT]: "Agent",
+  [LINK_DESTINATION.WORKER]: "Worker",
+  [LINK_DESTINATION.CHANGES]: "Changes",
+  [LINK_DESTINATION.PULL_REQUEST_THREAD]: "Review comment",
+  [LINK_DESTINATION.MESSAGE]: "Message",
+  [LINK_DESTINATION.INBOX]: "Inbox",
+  [LINK_DESTINATION.INBOX_ITEM]: "Inbox item",
+  [LINK_DESTINATION.AUTOMATIONS]: "Automations",
+  [LINK_DESTINATION.AUTOMATION]: "Automation",
+  [LINK_DESTINATION.AUTOMATION_RUN]: "Run",
+  [LINK_DESTINATION.SETTINGS]: "Settings",
+  [LINK_DESTINATION.PERSON]: "Profile",
+  [LINK_DESTINATION.ADMIN]: "Admin",
+} as const satisfies Record<LinkDestination["kind"], string>;
 
 /** The task a place stands under, by its id, where it stands under one and is not the task itself. */
-function taskOf(place: LinkPlace): string | undefined {
-  if (place.kind === LINK_PLACE.TASK || place.kind === LINK_PLACE.VERSION) return undefined;
+function taskOf(place: LinkDestination): string | undefined {
+  if (place.kind === LINK_DESTINATION.TASK || place.kind === LINK_DESTINATION.VERSION)
+    return undefined;
   return "planId" in place ? place.planId : undefined;
 }
 
 /**
- * What a chip says of the place a link of ours opens: for a thing named live
- * (`THING_NAME`), the name the window holds for it, else the words it was
+ * What a chip says of the place a link of ours opens: for an entity named live
+ * (`ENTITY_NAME`), the name the window holds for it, else the words it was
  * labeled with; for any other, the words first, then the name held; else
  * its kind; and the task it stands under, by the name the window holds for it.
  */
 export function placeChipLook(
-  place: LinkPlace,
+  place: LinkDestination,
   label: string | undefined,
   known: KnownNames,
 ): PlaceChipLook {
   const taskId = taskOf(place);
   const under = taskId === undefined ? undefined : known.tasks.get(taskId);
-  const named = thingName(thingOfPlace(place), known, NOTHING_SAID);
+  const named = entityName(entityOfDestination(place), known, NOTHING_SAID);
   const held = named.held;
-  const untitled = place.kind === LINK_PLACE.TASK && held === UNTITLED_TASK_NAME;
+  const untitled = place.kind === LINK_DESTINATION.TASK && held === UNTITLED_TASK_NAME;
   const live = named.live && !untitled;
   const name = (live ? (held ?? label) : (label ?? held)) ?? KIND_NAME[place.kind];
   return { name, under };

@@ -1,3 +1,4 @@
+import type { AgentPartCut } from "@repo/features/agent-parts";
 import type { AgentPartView } from "@repo/features/agent-view";
 import { ACT_KIND } from "@repo/host/acts";
 import type { WireValue } from "@repo/wire";
@@ -5,7 +6,6 @@ import { queryOptions, skipToken, type UseQueryResult, useQuery } from "@tanstac
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import { askAct } from "../act.js";
 import { QUERY_ROOT } from "../query-keys.js";
-import type { AgentPartCut } from "./agent-model.js";
 
 /**
  * whole-parts.tsx -- a transcript's parts its page carried cut, read whole as the reader opens one.

@@ -31,10 +31,15 @@ import { Context, Effect, Option, Result, Schema } from "effect";
 import { HOSTED_HTTP_STATUS, jsonResponse } from "../http/http.js";
 import { HOSTED_REFUSAL } from "../http/http-effect.js";
 
-/** The member a call acts for, and the OAuth client it reached the server through. */
-export interface AdmittedMemberValues {
+/** The member a token acts for, and the OAuth client it reached the server through. */
+export interface AdmittedClaims {
   readonly userId: string;
   readonly clientId: string;
+}
+
+/** The member a call acts for, the OAuth client it reached the server through, and the deployment's base URL, which a link to one of its own routes is built on. */
+export interface AdmittedMemberValues extends AdmittedClaims {
+  readonly baseURL: string;
 }
 
 /** The admitted member, provided to each tool's effect for the one request it answers. */
@@ -93,7 +98,7 @@ const NO_MEMBER: Response = jsonResponse(
 export function admitMember(
   verify: (request: Request) => Promise<unknown>,
   request: Request,
-): Effect.Effect<Result.Result<AdmittedMemberValues, Response>> {
+): Effect.Effect<Result.Result<AdmittedClaims, Response>> {
   return Effect.tryPromise(() => verify(request)).pipe(
     Effect.map((payload) => {
       const claims = readAdmittedClaims(payload);

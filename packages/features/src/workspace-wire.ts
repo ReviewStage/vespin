@@ -2,6 +2,7 @@ import { Schema as EffectSchema } from "effect";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { RESERVED_WORKSPACE_SLUGS } from "./link-home.js";
 import {
+  isVideoPicture,
   PICTURE_TYPE,
   type Picture,
   type PictureType,
@@ -159,11 +160,14 @@ export type WorkspacePhoto = Picture;
 /**
  * The photo a `data:` URL holds, where its type is one of
  * `WORKSPACE_PHOTO_TYPE` and its bytes read as that image; nothing for any
- * other text. The one reading of a photo's URL, for the photo set and the
- * photo kept.
+ * other text, a WebM among it, which a picture may be but a photo never
+ * is. The one reading of a photo's URL, for the photo set and the photo
+ * kept.
  */
-export const workspacePhotoOfDataUrl: (text: string) => WorkspacePhoto | undefined =
-  pictureOfDataUrl;
+export function workspacePhotoOfDataUrl(text: string): WorkspacePhoto | undefined {
+  const picture = pictureOfDataUrl(text);
+  return picture === undefined || isVideoPicture(picture) ? undefined : picture;
+}
 
 /** A photo to set, as the `data:` URL it is kept as: one `workspacePhotoOfDataUrl` reads, within `WORKSPACE_PHOTO_BOUNDS.MAX_BYTES`. */
 const workspacePhotoUrlSchema = EffectSchema.String.check(

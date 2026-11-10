@@ -1,6 +1,20 @@
 import assert from "node:assert/strict";
 import { INBOX_MISSING } from "@repo/features/inbox-ask-words";
 import {
+  doDecision,
+  EMPTY_INBOX_DRAFT,
+  type InboxDraft,
+  inboxMissing,
+  inboxReply,
+  inboxThreadSend,
+  shownTicks,
+  stepParts,
+  withChoice,
+  withDoPress,
+  withStep,
+  withValue,
+} from "@repo/features/inbox-draft";
+import {
   ANSWER_TONE,
   acknowledgedOnOpen,
   agentGroups,
@@ -51,7 +65,7 @@ import {
   type InboxMessage,
   type InboxResponse,
 } from "@repo/features/inbox-wire";
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import type { AppInboxTasklessItem } from "@repo/host/app-state";
@@ -61,20 +75,8 @@ import {
   codeNotice,
   codeReadOf,
   codeWindow,
-  doDecision,
-  EMPTY_INBOX_DRAFT,
-  type InboxDraft,
   inboxBoard,
-  inboxMissing,
-  inboxReply,
-  inboxThreadSend,
-  shownTicks,
-  stepParts,
   waitsOnReader,
-  withChoice,
-  withDoPress,
-  withStep,
-  withValue,
 } from "./inbox-model.js";
 
 const AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
@@ -1368,7 +1370,7 @@ test("a thread's row says the ask itself while one is open: a choice's options, 
 test("a comment's files are drawn after its words but for a picture its words draw as one, the pictures apart from every other file; a file the words only link to, quote in code, or draw though it is no picture is still drawn", () => {
   const itemId = "a1b2c3d4-0000-4000-8000-0000000000f1";
   const place = {
-    kind: LINK_PLACE.INBOX_ITEM,
+    kind: LINK_DESTINATION.INBOX_ITEM,
     planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
     itemId,
   } as const;
@@ -1425,7 +1427,7 @@ test("a comment's files are drawn after its words but for a picture its words dr
 test("a recording an agent posted stands with a comment's pictures, never its other files: one its words draw is not named again over them, one they do not draw is played among the pictures", () => {
   const itemId = "a1b2c3d4-0000-4000-8000-0000000000f1";
   const place = {
-    kind: LINK_PLACE.INBOX_ITEM,
+    kind: LINK_DESTINATION.INBOX_ITEM,
     planId: "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10",
     itemId,
   } as const;

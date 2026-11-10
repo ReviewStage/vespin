@@ -392,6 +392,26 @@ test("the description's comments list holds each open thread whole, its reply fi
   assert.equal(container.querySelectorAll(".comment-card").length, cards.length);
 });
 
+test("Esc in a reply field of the description's comments list gives up the caret and keeps its words, as nothing there closes", () => {
+  const { container } = drawn("list");
+  const field = () =>
+    container.querySelector<HTMLElement>(
+      `.comments-list .comment-card[data-thread="${ID.OPEN}"] .composer-editor`,
+    );
+  typeInto(field(), "Worth a setting?");
+  const editor = composerEditor(field() ?? assert.fail("the reply field stands")).editor;
+  assert.equal(editor?.isFocused, true, "typing holds the caret");
+
+  act(() => {
+    editor?.view.dom.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+    );
+  });
+
+  assert.equal(editor?.isFocused, false, "Esc lets the caret go");
+  assert.equal(wordsIn(field()), "Worth a setting?");
+});
+
 test("a comment's time reads as a thread's does, a few letters, with the full moment on hover", () => {
   // Note that the window's minute counts on the real clock here, so the comment is dated from it.
   const at = Date.now() - 3 * 3_600_000 - 30_000;

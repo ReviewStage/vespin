@@ -50,8 +50,9 @@ provider verified the invited address
 (`requireEmailVerificationOnInvitation`), and the
 team and role endpoints this deployment does not mount. An owner or admin
 makes, lists, and cancels invitations through Vespin's own procedures
-(`src/accounts/workspace-invitations-procedures.ts`), which call the plugin
-server-side and mail the invitee the link through Resend where
+(`src/accounts/workspace-invitations-procedures.ts`), which write the
+plugin's `invitation` rows through the store (`invitation-store.ts`), since
+the plugin's own invitation calls take a session, and mail the invitee the link through Resend where
 `RESEND_API_KEY` and `INVITE_FROM` are set (`src/accounts/invitation-mail.ts`),
 or leave the owner to copy it where they are not. `disabledPaths` is
 read by the HTTP router alone, so the server-only `auth.api` calls a hosted
@@ -1339,8 +1340,9 @@ Beside them stand
 the agent tools (`src/agents/agent-tools.ts`): `list_agents`, every other agent on
 any task and by any member, each with its task, narrowed to one task or its
 own where asked, archived ones marked; `read_agent`, one agent of the
-workspace by its id, with what its branch published and a tail of its
-transcript, as many entries as asked, to a bound; `message_agent`, which
+workspace by its id, with what its branch published, the messages waiting
+in its queue by id, and a tail of its transcript, as many entries as asked,
+to a bound; `message_agent`, which
 sends another agent of the workspace, on any task, a message by its id that
 lands in its conversation under the caller's name, opening with the caller's
 mention and closing with how to answer it, which the service writes, seen in
@@ -1908,14 +1910,11 @@ and revokes them through `src/member-mcp/clients-procedures.ts`, at
 client but the desktop's through Drizzle on the account's bearer
 (`@repo/database/models/oauth-grants`), since every endpoint of the
 provider's that lists them takes a session, with the server's address a
-client is pointed at. A revoke runs under the Mac's Better Auth session: it
-deletes the member's access and refresh tokens for the client first, a
-store operation of our own since the provider exports none for one member
-and one client and a refresh never checks the consent, then the consent
-through the provider's own `get-consents` and `delete-consent`
-(`src/member-mcp/client-consents.ts`). A revoke that fails between the two
-answers a failure and leaves the consent, so the client stays listed with
-its Revoke rather than signing back in unasked. A JWT access token already
+client is pointed at. A revoke runs on the same bearer
+(`src/member-mcp/mcp-client-operations.ts`): it deletes the member's access
+and refresh tokens for the client and then their consent, in one
+transaction, a store operation of our own since the provider exports none
+for one member and one client and its `delete-consent` takes a session. A JWT access token already
 minted is verified against the key set alone, so it keeps working for the
 rest of its fifteen minutes, which the row says.
 
@@ -2710,6 +2709,9 @@ the rest still run, and any failure fails the cron's check-in. In order:
 - `syncLog`: the sync log's transactions older than its keep pruned.
 - `turns`: the coding agents' turns past their deadline failed with why
   (`src/agents/coder-host/reconcile.ts`), a sweep's worth of agents at a time.
+- `wakeups`: the wakeups coding agents booked with `schedule_wakeup` that are
+  due, each handed back to its agent as a line of its own
+  (`src/maintenance/wakeup-sweep.ts`), a sweep's worth at a time.
 
 A turn's row holds the deadline of the state it stands in
 (`packages/features/src/turn-deadline.ts`), written by its one writer

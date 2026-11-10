@@ -239,9 +239,9 @@ export const pollSecretMiddleware = middlewareGen<HostedContext, PollingHost>(fu
   return yield* next({ context: { pollSecret, hostVersion } });
 });
 
-/** The deployment's ring, handed on as the procedure's, or the request refused as unavailable where it holds none it can parse. */
-export const keyRingMiddleware = middlewareGen<HostedContext, { readonly ring: KeyRing }>(
-  function* ({ next }) {
+/** The deployment's ring, or unavailable where it holds none it can parse: a procedure's through `keyRingMiddleware`, and another door's, such as a member MCP tool's, read alike. */
+export const hostedKeyRing: Effect.Effect<KeyRing, HostedRefusal, HostedEnvironment> = Effect.gen(
+  function* () {
     const environment = yield* HostedEnvironment;
     const configured = environment.providerKeyEncryptionKeys;
     if (configured === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
@@ -251,7 +251,15 @@ export const keyRingMiddleware = middlewareGen<HostedContext, { readonly ring: K
       yield* Effect.logError(`The provider key encryption keys cannot be read: ${ring.failure}`);
       return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
     }
-    return yield* next({ context: { ring: ring.success } });
+    return ring.success;
+  },
+);
+
+/** The deployment's ring, handed on as the procedure's, or the request refused as unavailable where it holds none it can parse. */
+export const keyRingMiddleware = middlewareGen<HostedContext, { readonly ring: KeyRing }>(
+  function* ({ next }) {
+    const ring = yield* hostedKeyRing;
+    return yield* next({ context: { ring } });
   },
 );
 

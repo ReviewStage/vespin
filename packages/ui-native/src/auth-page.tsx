@@ -13,9 +13,10 @@ import { BrandMark } from "./brand-mark.js";
 import { Spacer } from "./screen.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
+import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The mark's size over the title, in points. */
-const AUTH_MARK_SIZE = 72;
+const AUTH_MARK_SIZE = 56;
 
 /** How wide the column stands at most, so a wide window keeps the buttons a phone's width. */
 const AUTH_COLUMN_WIDTH = 360;
@@ -51,18 +52,18 @@ export function AuthPage({ title, children, error, footnote }: AuthPageProps) {
       <BrandMark size={AUTH_MARK_SIZE} />
       <Text
         modifiers={[
-          font({ textStyle: "title2", weight: "semibold" }),
+          font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
           foregroundStyle(colors.TEXT),
           multilineTextAlignment("center"),
         ]}
       >
         {title}
       </Text>
-      <VStack spacing={SPACE.ROW}>{children}</VStack>
+      <VStack spacing={SPACE.TIGHT * 2}>{children}</VStack>
       {error === undefined ? null : (
         <Text
           modifiers={[
-            font({ textStyle: "footnote" }),
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
             foregroundStyle(colors.DANGER),
             multilineTextAlignment("center"),
           ]}
@@ -74,7 +75,7 @@ export function AuthPage({ title, children, error, footnote }: AuthPageProps) {
       {footnote === undefined ? null : (
         <Text
           modifiers={[
-            font({ textStyle: "footnote" }),
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
             foregroundStyle(colors.TEXT_MUTED),
             multilineTextAlignment("center"),
           ]}

@@ -23,6 +23,8 @@ export const NATIVE_MOMENT = {
   SESSION: "session",
   /** The store's copy of the session's transcript lost a batch the harness could not append, so it holds a gap and is never resumed from. */
   TRANSCRIPT_BROKEN: "transcript_broken",
+  /** The harness could not find the session its launch was told to resume, so the turn goes on in a fresh session handed the agent's steps so far. */
+  SESSION_LOST: "session_lost",
   /** The harness is at work: a turn opens here where none is open. */
   ACTIVE: "active",
   /** A model call answered: what follows belongs to its step. `key` is the harness's own id for the call's answer, where it names one. */
@@ -75,6 +77,10 @@ export const NATIVE_MOMENT = {
   NOTED: "noted",
   /** The plan's limit refused the harness, until when where it says; `refused` false is the limit lifting. */
   RATE_LIMIT: "rate_limit",
+  /** The harness could not reach the model's provider after its own retries, and the runner probes the provider's host for it (`@repo/agent-runner`'s `reconnect.ts`): the turn waits, still under way. */
+  CONNECTION_LOST: "connection_lost",
+  /** The provider's host answered the runner again: the turn goes on, by a carry-on line the service sends where `carryOn` asks for one. */
+  CONNECTION_RESTORED: "connection_restored",
   /** How much of its usage window the plan has used, as the harness last reported it. */
   PLAN_USAGE: "plan_usage",
   /**
@@ -112,6 +118,7 @@ export type NativeMoment =
   | { readonly kind: typeof NATIVE_MOMENT.LINE_ACCEPTED; readonly clientId: string }
   | { readonly kind: typeof NATIVE_MOMENT.SESSION; readonly sessionId: string }
   | { readonly kind: typeof NATIVE_MOMENT.TRANSCRIPT_BROKEN; readonly sessionId: string }
+  | { readonly kind: typeof NATIVE_MOMENT.SESSION_LOST }
   | { readonly kind: typeof NATIVE_MOMENT.ACTIVE }
   | { readonly kind: typeof NATIVE_MOMENT.STEP; readonly key?: string }
   | { readonly kind: typeof NATIVE_MOMENT.STEP_CLOSED }
@@ -170,6 +177,13 @@ export type NativeMoment =
     }
   | { readonly kind: typeof NATIVE_MOMENT.PLAN; readonly status: PlanStatus }
   | { readonly kind: typeof NATIVE_MOMENT.WAITING }
+  | { readonly kind: typeof NATIVE_MOMENT.CONNECTION_LOST; readonly host: string }
+  | {
+      readonly kind: typeof NATIVE_MOMENT.CONNECTION_RESTORED;
+      readonly host: string;
+      /** Whether the runner asks for a carry-on line, no line of the service's having gone next instead. */
+      readonly carryOn: boolean;
+    }
   | {
       readonly kind: typeof NATIVE_MOMENT.ENDED;
       readonly ending: NativeEnding;

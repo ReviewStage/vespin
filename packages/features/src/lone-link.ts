@@ -1,6 +1,6 @@
 import {
   GITHUB_PAGE,
-  LINK_PLACE,
+  LINK_DESTINATION,
   pullRequestAddressOf,
   readGitHubPage,
   readLink,
@@ -93,7 +93,7 @@ export function loneLinkOf(target: string): LoneLink | undefined {
   const pullRequest = pullRequestAddressOf(target);
   if (pullRequest !== undefined) return { kind: LONE_LINK.PULL_REQUEST, ...pullRequest };
   const place = readLink(target)?.place;
-  if (place?.kind === LINK_PLACE.PAGE) {
+  if (place?.kind === LINK_DESTINATION.PAGE) {
     return "planId" in place
       ? { kind: LONE_LINK.PAGE, taskId: place.planId, pageId: place.pageId }
       : { kind: LONE_LINK.PAGE, agentId: place.agentId, pageId: place.pageId };

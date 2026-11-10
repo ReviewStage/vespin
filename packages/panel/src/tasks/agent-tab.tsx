@@ -1,3 +1,20 @@
+import {
+  AGENT_PART,
+  type AgentPart,
+  type AgentPartCut,
+  agentPart,
+  agentParts,
+  agentRows,
+  callUsageLimit,
+  delegates,
+  isTodos,
+  messageWords,
+  nativeSubagent,
+  type PlacedMessage,
+  placedMessages,
+  type TurnStretch,
+  turnStretches,
+} from "@repo/features/agent-parts";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
@@ -17,9 +34,13 @@ import {
   agentMessageWords,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
+import { carryOnLineWords } from "@repo/features/carry-on-words";
 import { DEVICE_LAUNCH_UNSTARTED } from "@repo/features/device-agent-wire";
+import type { KnownNames } from "@repo/features/entity-kind";
 import { FAILURE_REASON, type FailureReason, remedyLabel } from "@repo/features/failure-remedy";
 import { threadLineWords } from "@repo/features/inbox-wire";
+import { INTEGRATION_NAME } from "@repo/features/integration-wire";
+import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import {
@@ -27,10 +48,28 @@ import {
   FAILURE_SURFACE,
   type FailureAbout,
 } from "@repo/features/shown-failure";
+import { skillWord } from "@repo/features/skill-word";
 import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
-import type { KnownNames } from "@repo/features/thing-kind";
 import { workingTime } from "@repo/features/time-format";
+import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
+import {
+  calledAgent,
+  delegationView,
+  isServerCallTool,
+  loadedSkill,
+  sentWords,
+  shownPageVersion,
+  TARGET_HINT,
+  TOOL_TARGET,
+  type ToolTarget,
+  targetLink,
+  todoFocus,
+  todosSummary,
+  toolCallView,
+  toolTarget,
+  type WorkerJobs,
+} from "@repo/features/tool-call-model";
 import {
   CALL_KIND,
   CALL_WORDS,
@@ -47,6 +86,7 @@ import {
   BUTTON_VARIANT,
   Button,
   CodeCard,
+  ConnectionLostNotice,
   DisclosureChevron,
   DocumentIcon,
   ERROR_STATE_PLACEMENT,
@@ -75,12 +115,12 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { AlarmClockCheckIcon, GLYPH, ICON_SIZE } from "@repo/ui/icons";
-import { skillWord } from "@repo/ui/skill-mention";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import {
   ACTION_RESULT_STATUS,
+  type CarryOnReason,
   type GitHubLineMetadata,
   MESSAGE_ROLE,
   type WireValue,
@@ -100,7 +140,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { ActorLine, ActorRef, AutomationCard, automationActor } from "../actor-ref.js";
+import {
+  ActorLine,
+  ActorRef,
+  AutomationCard,
+  automationActor,
+  namedAutomationActor,
+} from "../actor-ref.js";
 import {
   Conversation,
   ConversationContent,
@@ -117,7 +163,6 @@ import {
   RECEIVED_MESSAGE_CLASS,
 } from "../ai-elements/message.js";
 import { Plan, PlanContent, PlanHeader, PlanIcon, PlanTitle } from "../ai-elements/plan.js";
-import { TOOL_BLOCK, TOOL_STATE } from "../ai-elements/tool.js";
 import { appPlatform } from "../app-platform.js";
 import { AutomationsWanted, useAutomation } from "../automation-directory.js";
 import { useConnected } from "../connection.js";
@@ -132,24 +177,17 @@ import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { ForwardChip, useForwardToast } from "./agent-forward.js";
 import {
-  AGENT_PART,
-  type AgentPart,
-  type AgentPartCut,
   agentLines,
   agentMessageOf,
   agentName,
-  agentPart,
-  agentParts,
-  agentRows,
   agentWorkingSince,
   CONTINUE_AGAIN_LABEL,
   CONTINUE_LABEL,
-  callUsageLimit,
+  carryOnLineOf,
   commentLineOf,
   commentLineWords,
   continuedByIds,
   continuedByTitles,
-  delegates,
   dockedPullRequests,
   type EndLineParts,
   endLineOffersContinue,
@@ -159,16 +197,11 @@ import {
   endLineReason,
   finishedReplyLead,
   githubLineOf,
-  isTodos,
   isWakeupLine,
   lineSender,
   macOwnerOf,
   messageSender,
-  messageWords,
-  nativeSubagent,
   offersStop,
-  type PlacedMessage,
-  placedMessages,
   planPayerOf,
   providerOf,
   SENT_LINE_STATE,
@@ -176,12 +209,10 @@ import {
   slackLineOf,
   TRY_AGAIN_LABEL,
   TRYING_AGAIN_LABEL,
-  type TurnStretch,
   tabTurnOf,
   teammateStarter,
   threadLineOf,
   transcriptRowKey,
-  turnStretches,
   turnUnderWay,
   unreadOpeningLine,
   usageLimitAgentOf,
@@ -198,6 +229,7 @@ import {
   AgentPicturesProvider,
   CallPictures,
   MessageFileChips,
+  MessagePictures,
   ShownPictures,
   useAgentPictureDoor,
 } from "./agent-pictures.js";
@@ -237,14 +269,13 @@ import {
   TranscriptAgent,
 } from "./line-cards.js";
 import { CHIP_OR_LINK_FRAME, ChipOrLink, linkChip } from "./mention-chip.js";
-import type { MentionHolder } from "./mention-holder.js";
 import {
   agentMessagePlace,
   MESSAGE_GONE,
   MessagePlaceProvider,
   useMessageReveal,
 } from "./message-links.js";
-import { useMoveToCloud } from "./move-agent.js";
+import { type PlaceMove, useMovePlace, useMoveToCloud } from "./move-agent.js";
 import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
 import { briefAgent, replayOpening } from "./replay-card-model.js";
 import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
@@ -257,23 +288,6 @@ import { SkillCard } from "./skill-ref.js";
 import { PlanGlyph } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
 import { type AgentThreads, ThreadsDock } from "./threads-dock.js";
-import {
-  calledAgent,
-  delegationView,
-  isServerCallTool,
-  loadedSkill,
-  sentWords,
-  shownPageVersion,
-  TARGET_HINT,
-  TOOL_TARGET,
-  type ToolTarget,
-  targetLink,
-  todoFocus,
-  todosSummary,
-  toolCallView,
-  toolTarget,
-  type WorkerJobs,
-} from "./tool-call-model.js";
 import {
   MacOwnerProvider,
   TranscriptNote,
@@ -438,12 +452,6 @@ const WEBHOOK_BODY_LABEL = "Webhook body";
 
 /** What the header of a webhook body's card names it: the body is whatever the caller sent, so it is named for what it is rather than a language. */
 const WEBHOOK_BODY_KIND = "body";
-
-/** What an automation's sender line says beside its name once it is deleted. */
-const DELETED_WORDS = "(deleted)";
-
-/** What an automation's sender line names it where no name was kept, as an agent started before it was is. */
-const AUTOMATION_WORDS = "Automation";
 
 /**
  * What a transcript opens on where something handed it its first message:
@@ -1097,6 +1105,8 @@ function AgentPartView({
   switch (part.kind) {
     case AGENT_PART.USAGE_LIMIT:
       return <UsageLimitNotice notice={part.notice} />;
+    case AGENT_PART.CONNECTION_LOST:
+      return <ConnectionLostNotice notice={part.notice} />;
     case AGENT_PART.TEXT:
       // The agent's words alone may be replied to, never a call's output or a thought.
       return (
@@ -1342,14 +1352,36 @@ function OriginSubject({
   );
 }
 
+/** What an integration's issue is called where its event gave no title: "Sentry issue". */
+function issueWords(issue: NonNullable<AgentOrigin["issue"]>): string {
+  return issue.title ?? `${INTEGRATION_NAME[issue.provider]} issue`;
+}
+
+/**
+ * The issue an automation's integration event was about, a Sentry issue, by
+ * its title: a link opening it where the event gave its address, as the
+ * GitHub subject's is, and its words alone where the event gave none.
+ */
+function OriginIssue({ issue }: { issue: NonNullable<AgentOrigin["issue"]> }): React.JSX.Element {
+  const words = issueWords(issue);
+  if (issue.url === undefined)
+    return (
+      <OneLine className="agent-origin-subject" words={words}>
+        {words}
+      </OneLine>
+    );
+  return <ChipOrLink href={issue.url} words={words} frame={CHIP_OR_LINK_FRAME.SUBJECT} />;
+}
+
 /**
  * Who sent an automation's agent its prompt: the automation, hanging its
  * card and opening its page where the window can open it, and named plainly
  * where it cannot, deleted, someone else's personal one, or the Automations
- * experiment off; then the issue or pull request its GitHub event named,
- * and who asked for a run now. A webhook's body is the card's, never this
- * line's. Each part after the first is a line of its own, separator and
- * all, so a narrow line breaks between the parts (desktop.css).
+ * experiment off; then the issue or pull request its GitHub event named, or
+ * the issue its integration's event was about, and who asked for a run now.
+ * A webhook's body is the card's, never this line's. Each part after the
+ * first is a line of its own, separator and all, so a narrow line breaks
+ * between the parts (desktop.css).
  */
 function AutomationSender({
   automationId,
@@ -1365,15 +1397,11 @@ function AutomationSender({
 }): React.JSX.Element {
   const known = useAutomation(automationId);
   const runner = usePerson(run?.runBy);
-  const plain =
-    automationId === undefined && name !== undefined
-      ? `${name} ${DELETED_WORDS}`
-      : (name ?? AUTOMATION_WORDS);
   const subject = run?.subject;
   return (
     <ActorLine>
       {known === undefined ? (
-        <ActorRef actor={{ kind: ACTOR_KIND.AUTOMATION, name: plain, state: ACTOR_STATE.REST }} />
+        <ActorRef actor={namedAutomationActor(automationId, name)} />
       ) : (
         <ActorRef
           actor={automationActor(known.automation)}
@@ -1387,6 +1415,12 @@ function AutomationSender({
         <ActorLine>
           {" · "}
           <OriginSubject subject={subject} openGitHub={openGitHub} />
+        </ActorLine>
+      )}
+      {run?.issue === undefined ? null : (
+        <ActorLine>
+          {" · "}
+          <OriginIssue issue={run.issue} />
         </ActorLine>
       )}
       {run?.runBy === undefined ? null : (
@@ -1473,6 +1507,11 @@ function MessageSender({ actor }: { actor: Actor }): React.JSX.Element {
   );
 }
 
+/** A carry-on's head: where the turn before it was cut off and carried on by itself, in the words its reason reads (`carryOnLineWords`). */
+function CarryOnHead({ reason }: { reason: CarryOnReason }): React.JSX.Element {
+  return <SubjectLine lead={carryOnLineWords(reason)} fit={SUBJECT_FIT.OWN} />;
+}
+
 /** What a wakeup's line says the agent did, after its own chip. */
 const WAKEUP_LEAD = "woke up";
 
@@ -1533,9 +1572,8 @@ function TurnFoot({ workedFor, copy }: { workedFor: ReactNode; copy: ReactNode }
  * reached a turn while it ran is drawn inside it, as its own bubble between
  * the work before it and the work after it.
  */
-/** Where a turn's stretches are read from beside the message: its to-do lists, its workers' standings, and the lines that reached it. */
+/** Where a turn's stretches are read from beside the message: its workers' standings and the lines that reached it. */
 interface StretchPlace {
-  readonly todos: TodosPlace;
   readonly standings: ReadonlyMap<string, AgentSubagentStanding> | undefined;
   readonly arrived: readonly ArrivedLine[];
 }
@@ -1544,7 +1582,7 @@ interface StretchPlace {
 function turnStretchesOf(
   message: AgentTranscriptMessage,
   moving: boolean,
-  { todos, standings, arrived }: StretchPlace,
+  { standings, arrived }: StretchPlace,
 ): readonly TurnStretch[] {
   const workers = new Map(
     [...(standings?.values() ?? [])].map(
@@ -1553,7 +1591,6 @@ function turnStretchesOf(
   );
   return turnStretches(
     agentRows(message, moving, {
-      newestTodos: todos.kept,
       workers,
       arrived: arrived.map((line) => line.message),
     }),
@@ -1683,8 +1720,15 @@ export function AgentMessage({
       ) : thread === undefined ? null : (
         <ThreadLineHead line={thread} words={words} received={received} fit={SUBJECT_FIT.OWN} />
       );
-    // A wakeup is the agent's own line, headed by what it did, as a thread's line is.
-    const subject = isWakeupLine(message) ? <WakeupHead delay={wakeupDelay} /> : threadHead;
+    // A wakeup is the agent's own line, headed by what it did, as a thread's line is; a carry-on is headed by what cut the turn before it off.
+    const carryOn = carryOnLineOf(message);
+    const subject = isWakeupLine(message) ? (
+      <WakeupHead delay={wakeupDelay} />
+    ) : carryOn !== undefined ? (
+      <CarryOnHead reason={carryOn.reason} />
+    ) : (
+      threadHead
+    );
     const content = (
       <MessageContent>
         <SentToAgent id={message.id} arrived={message.arrivedIn !== undefined}>
@@ -1693,43 +1737,47 @@ export function AgentMessage({
       </MessageContent>
     );
     return (
-      <Message
-        from={received ? MESSAGE_ROLE.ASSISTANT : message.role}
-        className={received ? RECEIVED_MESSAGE_CLASS : undefined}
-        data-message-id={message.id}
-        data-undelivered={marked ? "" : undefined}
-      >
-        {received ? <MessageHead sender={named}>{subject}</MessageHead> : subject}
-        <MessageFileChips message={message} sending={sending} />
-        {shown === "" ? null : marked ? (
-          <MessageBeside mark={<UndeliveredMark messageId={message.id} />}>{content}</MessageBeside>
-        ) : (
-          content
-        )}
-        {/* A line of files alone stands its mark on a row of its own, kept clear of the files' fade. */}
-        {shown === "" && marked ? (
-          <MessageBeside mark={<UndeliveredMark messageId={message.id} />}>{null}</MessageBeside>
-        ) : null}
-        <MessageLine
-          align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
-          status={status}
-          at={sentAt}
-          // Note that a line of no words, files alone, still offers its Copy link, though it has nothing to copy or edit.
-          actions={
-            <CopyMessageAction
-              words={shown}
-              copyable={shown !== ""}
-              messageId={message.id}
-              // Note that a comment's or a Slack message's line is drawn from what it carries rather than its words, so it is written again nowhere, as GitHub's is not.
-              rewind={
-                shown === "" || comment !== undefined || slack !== undefined
-                  ? undefined
-                  : REWIND_ACTION.EDIT
-              }
-            />
-          }
-        />
-      </Message>
+      <MessagePictures message={message} words={shown}>
+        <Message
+          from={received ? MESSAGE_ROLE.ASSISTANT : message.role}
+          className={received ? RECEIVED_MESSAGE_CLASS : undefined}
+          data-message-id={message.id}
+          data-undelivered={marked ? "" : undefined}
+        >
+          {received ? <MessageHead sender={named}>{subject}</MessageHead> : subject}
+          <MessageFileChips message={message} sending={sending} />
+          {shown === "" ? null : marked ? (
+            <MessageBeside mark={<UndeliveredMark messageId={message.id} />}>
+              {content}
+            </MessageBeside>
+          ) : (
+            content
+          )}
+          {/* A line of files alone stands its mark on a row of its own, kept clear of the files' fade. */}
+          {shown === "" && marked ? (
+            <MessageBeside mark={<UndeliveredMark messageId={message.id} />}>{null}</MessageBeside>
+          ) : null}
+          <MessageLine
+            align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
+            status={status}
+            at={sentAt}
+            // Note that a line of no words, files alone, still offers its Copy link, though it has nothing to copy or edit.
+            actions={
+              <CopyMessageAction
+                words={shown}
+                copyable={shown !== ""}
+                messageId={message.id}
+                // Note that a comment's or a Slack message's line is drawn from what it carries rather than its words, so it is written again nowhere, as GitHub's is not.
+                rewind={
+                  shown === "" || comment !== undefined || slack !== undefined
+                    ? undefined
+                    : REWIND_ACTION.EDIT
+                }
+              />
+            }
+          />
+        </Message>
+      </MessagePictures>
     );
   }
   const { startedAt, finishedAt } = message;
@@ -1744,7 +1792,7 @@ export function AgentMessage({
     );
   const stretches =
     piece?.stretches ??
-    turnStretchesOf(message, moving, { todos, standings: delegation?.standings, arrived });
+    turnStretchesOf(message, moving, { standings: delegation?.standings, arrived });
   const first = piece?.first ?? true;
   const last =
     piece?.last === false ? -1 : stretches.findLastIndex((stretch) => stretch.line === undefined);
@@ -2112,7 +2160,6 @@ function sameRead(
   return (
     read.message === message &&
     read.moving === moving &&
-    read.place.todos === place.todos &&
     read.place.standings === place.standings &&
     read.place.arrived === place.arrived
   );
@@ -2131,7 +2178,6 @@ function useLogEntries(
   arrivals: ReadonlyMap<string, readonly ArrivedLine[]>,
 ): readonly LogEntry[] {
   const reads = useRef(new Map<string, PiecesRead>());
-  const todos = useKept(placing.todos, sameTodosPlace);
   return useMemo(() => {
     const held = reads.current;
     const next = new Map<string, PiecesRead>();
@@ -2148,7 +2194,7 @@ function useLogEntries(
         return [{ key, row, index }];
       }
       const moving = working && index === placed.length - 1;
-      const place: StretchPlace = { todos, standings, arrived };
+      const place: StretchPlace = { standings, arrived };
       const was = held.get(message.id);
       const read =
         was !== undefined && sameRead(was, message, moving, place)
@@ -2164,7 +2210,7 @@ function useLogEntries(
     });
     reads.current = next;
     return entries;
-  }, [placing, working, standings, arrivals, todos]);
+  }, [placing, working, standings, arrivals]);
 }
 
 /** Whether two runs of lines are the same lines in the same order. */
@@ -2732,6 +2778,7 @@ function AgentTabView({
   continuedNote,
   continuable = false,
   onMoveToCloud,
+  placeMove,
   bringIn,
   holding = false,
 }: {
@@ -2796,6 +2843,8 @@ function AgentTabView({
   continuable?: boolean;
   /** Moves the agent to the cloud, as Move to's Cloud does, which a launch its Mac's GitHub sign-in could not start offers; none where Move to would not. */
   onMoveToCloud?: (() => void) | undefined;
+  /** The move the box's place chip offers (`useMovePlace`); none where the chip takes no press. */
+  placeMove?: PlaceMove | undefined;
 }): React.JSX.Element {
   // Note that the messages a rewind drops are hidden at once, until the transcript reads back without them.
   const { cut } = composer;
@@ -3119,7 +3168,7 @@ function AgentTabView({
             brief={agent.brief}
             tools={(narrow) => (
               <>
-                <AgentPlace agent={agent} readerId={readerId} narrow={narrow} />
+                <AgentPlace agent={agent} readerId={readerId} move={placeMove} narrow={narrow} />
                 <ForwardChip agent={agent} />
               </>
             )}
@@ -3334,6 +3383,7 @@ function AgentTabBody({
     known: control.pullRequests.get(agent.id),
   });
   const moveToCloud = useMoveToCloud(agent, control);
+  const placeMove = useMovePlace(agent, control);
   useForwardToast(agent);
   // Note that the log never waits on the pull request's dock over the box, because its read asks GitHub and would hold every tab's first draw for a second or more.
   // Note that nothing counts as landed before the first page.
@@ -3513,6 +3563,7 @@ function AgentTabBody({
         }
         continuable={continued.length > 0 || control.continueAgent !== undefined}
         onMoveToCloud={moveToCloud}
+        placeMove={placeMove}
         endTrail={
           // Note that the box's note names them while it stands, so the transcript names them only where an archive took the box.
           continued.length === 0 || unarchive === undefined ? undefined : (

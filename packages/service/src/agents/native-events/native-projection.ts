@@ -1,8 +1,13 @@
 import { nativeTurnId, reasoningItemId } from "@repo/database/models/ids";
-import { CLAUDE_CODE_UNRECORDED_TOOL } from "@repo/features/agent-tools";
+import { CLAUDE_CODE_UNRECORDED_TOOL, UNKNOWN_TOOL } from "@repo/features/agent-tools";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
-import { type WireValue, WireValueSchema } from "@repo/wire";
-import { USAGE_LIMIT_AGENT, type UsageLimitMove } from "@repo/wire/ui-messages";
+import { type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
+import {
+  CONNECTION_LOST_PROVIDER,
+  type ConnectionLostNotice,
+  USAGE_LIMIT_AGENT,
+  type UsageLimitMove,
+} from "@repo/wire/ui-messages";
 import { Option, Schema } from "effect";
 import {
   addModelUsage,
@@ -120,6 +125,8 @@ const TurnSchema = Schema.Struct({
   running: Schema.optionalKey(Schema.Record(Schema.String, Schema.Number)),
   /** Whether the harness ended its model turn with background work still in flight, and waits on it (`NATIVE_MOMENT.WAITING`) with no step opened since. */
   waiting: Schema.optionalKey(Schema.Boolean),
+  /** The sequence of the event that told the connection to the model's provider lost, while the runner waits for the provider's host (`NATIVE_MOMENT.CONNECTION_LOST`). */
+  reconnecting: Schema.optionalKey(Schema.Number),
   /** The calls whose subagents run on in the background, by the key their end is named by (`NATIVE_MOMENT.SUBAGENT_RUNNING`). */
   subagents: Schema.optionalKey(Schema.Record(Schema.String, SubagentSchema)),
   usage: Schema.optionalKey(UsageSchema),
@@ -135,8 +142,12 @@ const TurnSchema = Schema.Struct({
   limited: Schema.optionalKey(Schema.Boolean),
   /** Whether the provider refused the credential that paid, such as a key expired or a plan signed out. */
   refused: Schema.optionalKey(Schema.Boolean),
-  /** Whether the turn's launch ended on the plan's limit and the turn waits, still open, for a launch on the next payer to go on with it (`NATIVE_WRITE.RETRY`). */
+  /** Whether the turn's launch ended on the plan's limit, or on a session it could not resume, and the turn waits, still open, for the next launch to go on with it (`NATIVE_WRITE.RETRY`). */
   retrying: Schema.optionalKey(Schema.Boolean),
+  /** Whether the harness could not find the session the turn's launch resumed (`NATIVE_MOMENT.SESSION_LOST`). */
+  sessionLost: Schema.optionalKey(Schema.Boolean),
+  /** Whether the turn already went on once in a fresh session handed the agent's steps, after its launch lost the session, so a second loss fails it. */
+  replayed: Schema.optionalKey(Schema.Boolean),
   /** The MCP servers mentioned to the agent that this turn took as it started, which its calls are handed whatever the switches say. */
   servers: Schema.optionalKey(Schema.Array(Schema.String)),
 });
@@ -207,10 +218,14 @@ export const NATIVE_WRITE = {
   CONTEXT: "context",
   /** Say a turn's failure in the log, and as an issue where its user did not expect it. */
   FAILED: "failed",
-  /** Launch the agent again on the next payer, to go on with the turn its plan's limit cut short. */
+  /** Launch the agent again, to go on with the turn its plan's limit cut short on the next payer, or, with `replay`, the turn whose session the harness could not resume in a fresh one handed the agent's steps. */
   RETRY: "retry",
   /** Hold the turn its plan's limit cut short open until the soonest limit resets, for the minute sweep to go on with it then, where no payer has room now. */
   WAIT: "wait",
+  /** Send the agent a carry-on line, the connection its runner lost to the model's provider being back (`coder-host/carry-on.ts`). */
+  CARRY_ON: "carry_on",
+  /** Land one of the runner's approval events, an ask under the turn that runs or how one was settled (`runner-approvals.ts`), in order with the turn's own writes. */
+  APPROVAL: "approval",
 } as const;
 
 export type NativeWrite =
@@ -235,8 +250,20 @@ export type NativeWrite =
       /** Whether the provider refused the credential that paid, which opens no issue where the credential is the starter's own. */
       readonly refused: boolean;
     }
-  | { readonly kind: typeof NATIVE_WRITE.RETRY; readonly turnId: string }
+  | { readonly kind: typeof NATIVE_WRITE.RETRY; readonly turnId: string; readonly replay?: true }
   | { readonly kind: typeof NATIVE_WRITE.WAIT; readonly turnId: string; readonly until: number }
+  | {
+      readonly kind: typeof NATIVE_WRITE.CARRY_ON;
+      readonly turnId: string;
+      /** The sequence of the event that told the loss, which keys this carry-on apart from the turn's others. */
+      readonly lostSequence: number;
+    }
+  | {
+      readonly kind: typeof NATIVE_WRITE.APPROVAL;
+      /** The turn that ran as the event was read; none where none did. */
+      readonly turnId: string | undefined;
+      readonly message: WireValue;
+    }
   | {
       readonly kind: typeof NATIVE_WRITE.PLAN_STATUS;
       readonly status: PlanStatus;
@@ -314,6 +341,17 @@ function withSettledCall(turn: Turn, callId: string): Turn {
   if (settled.running === undefined) return settled;
   const { [callId]: _answered, ...running } = settled.running;
   return { ...settled, running };
+}
+
+/** A call to a tool no transcript registers, as it is stored: under `UNKNOWN_TOOL`, the name it called and its input kept in its input. */
+function unknownCall(
+  called: string,
+  input: UnparsedWireValue,
+): { readonly name: string; readonly input: WireValue } {
+  return {
+    name: UNKNOWN_TOOL,
+    input: input === undefined ? { name: called } : { name: called, input },
+  };
 }
 
 /** Everything one event's moments do, gathered as they are folded. */
@@ -440,24 +478,27 @@ class Fold {
     this.#setTurn({ ...told, step: { ...step, reasoning: step.reasoning + 1 } });
   }
 
+  /**
+   * A call held and told the writer under the name it is stored under: its
+   * own where the record registers it, and `UNKNOWN_TOOL` otherwise, the name
+   * it called kept in its input, so a call the harness refused as no tool it
+   * has stands in the record as that refusal. A call of the harness's own
+   * unrecorded tools is left out, because every launch makes them and none is
+   * work a record could miss.
+   */
   #toolStarted(moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.TOOL_STARTED }>): void {
-    if (!this.#context.registered(moment.name)) {
-      // Note that a call of the harness's own unrecorded tools is left out without a word,
-      // because every launch makes them and none is work a record could miss.
-      if (!UNRECORDED_TOOLS.has(moment.name)) {
-        this.#context.report(`A call to ${moment.name} names no stored tool and is not recorded.`);
-      }
-      return;
-    }
+    if (UNRECORDED_TOOLS.has(moment.name)) return;
+    const { name, input }: { readonly name: string; readonly input: UnparsedWireValue } =
+      this.#context.registered(moment.name) ? moment : unknownCall(moment.name, moment.input);
     const turn = this.#step(undefined);
     if (turn.calls[moment.callId] !== undefined) return;
     const told = this.#tell(turn, {
       kind: RUN_EVENT.TOOL_CALL_STARTED,
       callId: moment.callId,
-      name: moment.name,
-      input: moment.input,
+      name,
+      input,
     });
-    const held = { ...told, calls: { ...told.calls, [moment.callId]: moment.name } };
+    const held = { ...told, calls: { ...told.calls, [moment.callId]: name } };
     // Note that a turn kept from before its open calls were recorded stays unknown, since a call it opened then is not in them.
     this.#setTurn(
       told.running === undefined
@@ -476,7 +517,10 @@ class Fold {
         callId: moment.callId,
         name,
         settlement: moment.settlement,
-        ...(moment.input !== undefined ? { input: moment.input } : undefined),
+        // Note that an unknown tool's call keeps the input it started with, which names the tool it called.
+        ...(moment.input !== undefined && name !== UNKNOWN_TOOL
+          ? { input: moment.input }
+          : undefined),
       }),
     );
   }
@@ -546,6 +590,7 @@ class Fold {
     this.state = moment.warm === true ? { ...cold, warm: true } : cold;
     if (ended === undefined) return;
     let turn = this.#closed(ended.turn);
+    if (this.#replayed(turn, ended.openedForEnd, moment.ending)) return;
     if (this.#retried(turn, ended.openedForEnd, moment.ending, rateLimitResetsAt)) return;
     if (turn.limited === true && moment.ending !== NATIVE_ENDING.STOPPED) {
       turn = this.#limitNotice(turn, null);
@@ -595,24 +640,37 @@ class Fold {
         turnId: turn.id,
         failure,
         detail,
-        // Note that the model's refusal is its own decision, no fault of ours, so it opens no issue.
-        expected: turn.limited === true || rateLimit !== undefined || refusal,
+        // Note that the model's refusal is its own decision, no fault of ours, so it opens no issue; nor does a provider the runner waited for in vain.
+        expected:
+          turn.limited === true ||
+          rateLimit !== undefined ||
+          refusal ||
+          turn.reconnecting !== undefined,
         refused: turn.refused === true,
       });
     }
     this.#setTurn(undefined);
   }
 
-  #limitNotice(turn: Turn, resetsAt: number | null, moved?: UsageLimitMove): Turn {
+  /** The provider the turn's model is of, as a notice names it: OpenAI's, or Anthropic's for every other. */
+  #provider(): ConnectionLostNotice["provider"] {
     const provider =
       this.#context.model === undefined
         ? undefined
         : providerModelOf(this.#context.model)?.provider;
+    return provider === MODEL_PROVIDER.OPENAI
+      ? CONNECTION_LOST_PROVIDER.OPENAI
+      : CONNECTION_LOST_PROVIDER.ANTHROPIC;
+  }
+
+  #limitNotice(turn: Turn, resetsAt: number | null, moved?: UsageLimitMove): Turn {
     return this.#tell(turn, {
       kind: RUN_EVENT.USAGE_LIMIT_REACHED,
       notice: {
         agent:
-          provider === MODEL_PROVIDER.OPENAI ? USAGE_LIMIT_AGENT.CODEX : USAGE_LIMIT_AGENT.CLAUDE,
+          this.#provider() === CONNECTION_LOST_PROVIDER.OPENAI
+            ? USAGE_LIMIT_AGENT.CODEX
+            : USAGE_LIMIT_AGENT.CLAUDE,
         resetsAt,
         ...(moved === undefined ? undefined : { moved }),
       },
@@ -662,6 +720,37 @@ class Fold {
     return true;
   }
 
+  /**
+   * Whether the turn, its launch having found no session to resume
+   * (`sessionLost`), is kept open for a launch on a fresh session handed the
+   * agent's steps so far (`NATIVE_WRITE.RETRY`'s `replay`), which lets the
+   * lost session go, rather than failed: once a turn, never for a turn
+   * opened for its launch's end, whose line no launch took, and never on a
+   * Stop. As a limited turn's retry does (`#retried`), it ends nothing and
+   * says no failure, and the launch that goes on with it takes it as its own.
+   */
+  #replayed(
+    turn: Turn,
+    openedForEnd: boolean,
+    ending: (typeof NATIVE_ENDING)[keyof typeof NATIVE_ENDING],
+  ): boolean {
+    if (turn.sessionLost !== true || turn.replayed === true) return false;
+    if (openedForEnd || ending === NATIVE_ENDING.STOPPED) return false;
+    const {
+      failure: _failure,
+      refusal: _refusal,
+      refusing: _refusing,
+      compactionFailed: _compaction,
+      limited: _limited,
+      sessionLost: _lost,
+      waiting: _waiting,
+      ...kept
+    } = turn;
+    this.#setTurn({ ...kept, retrying: true, replayed: true });
+    this.writes.push({ kind: NATIVE_WRITE.RETRY, turnId: turn.id, replay: true });
+    return true;
+  }
+
   #usage(usage: RunUsage): void {
     const turn = this.turn();
     this.#setTurn({ ...turn, usage: addModelUsage(turn.usage, usage) });
@@ -701,6 +790,11 @@ class Fold {
       case NATIVE_MOMENT.TRANSCRIPT_BROKEN:
         this.writes.push({ kind: NATIVE_WRITE.TRANSCRIPT_BROKEN, sessionId: moment.sessionId });
         return;
+      case NATIVE_MOMENT.SESSION_LOST: {
+        const turn = this.state.turn;
+        if (turn !== undefined) this.#setTurn({ ...turn, sessionLost: true });
+        return;
+      }
       case NATIVE_MOMENT.ACTIVE:
         this.turn();
         return;
@@ -826,6 +920,39 @@ class Fold {
         if (turn !== undefined) this.#setTurn({ ...this.#closed(turn), waiting: true });
         return;
       }
+      case NATIVE_MOMENT.CONNECTION_LOST: {
+        // The turn waits for the provider's host, still under way, and the transcript says so where it happened;
+        // what the model turn failed with is let go, since the loss is no failure of the turn's unless the wait is.
+        // A loss told again while the wait stands keeps the first notice, which the restore settles.
+        const turn = this.state.turn;
+        if (turn === undefined || turn.reconnecting !== undefined) return;
+        const { failure: _failure, ...kept } = this.#closed(turn);
+        const told = this.#tell(kept, {
+          kind: RUN_EVENT.CONNECTION_LOST,
+          notice: { provider: this.#provider(), restoredAt: null },
+        });
+        this.#setTurn({ ...told, reconnecting: told.told });
+        return;
+      }
+      case NATIVE_MOMENT.CONNECTION_RESTORED: {
+        const turn = this.state.turn;
+        if (turn === undefined || turn.reconnecting === undefined) return;
+        const { reconnecting, ...kept } = turn;
+        const told = this.#tell(kept, {
+          kind: RUN_EVENT.CONNECTION_RESTORED,
+          lostSequence: reconnecting,
+          restoredAt: this.#context.now,
+        });
+        this.#setTurn(told);
+        if (moment.carryOn) {
+          this.writes.push({
+            kind: NATIVE_WRITE.CARRY_ON,
+            turnId: turn.id,
+            lostSequence: reconnecting,
+          });
+        }
+        return;
+      }
       case NATIVE_MOMENT.ENDED:
         this.#ended(moment);
         return;
@@ -895,7 +1022,8 @@ function statusOf(
  * with no events, proves only that the runner lives, so it is progress only
  * where the turn is expected to be silent: it holds a call still unanswered,
  * since a harness says nothing while a command runs and only answers once it
- * ends, or it waits on background work after its model turn ended. Note that a
+ * ends, or it waits on background work after its model turn ended, or its
+ * runner waits for the model's provider to answer again. Note that a
  * turn kept from before its open calls were recorded has its heartbeats taken
  * as progress, as every heartbeat was, because a call it opened then may
  * still run; and with no turn under way there is no lease to push.
@@ -904,7 +1032,9 @@ export function turnProgressed(applied: number, state: NativeProjection): boolea
   if (applied > 0) return true;
   const turn = state.turn;
   if (turn === undefined) return false;
-  if (turn.running === undefined || turn.waiting === true) return true;
+  if (turn.running === undefined || turn.waiting === true || turn.reconnecting !== undefined) {
+    return true;
+  }
   return Object.keys(turn.running).length > 0;
 }
 

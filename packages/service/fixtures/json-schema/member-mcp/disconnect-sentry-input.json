@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "installationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "The installation, by the id list_sentry_installations answered."
+    }
+  },
+  "required": [
+    "installationId"
+  ],
+  "additionalProperties": false
+}

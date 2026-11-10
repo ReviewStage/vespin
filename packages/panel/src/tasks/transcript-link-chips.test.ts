@@ -2,13 +2,13 @@
 
 import assert from "node:assert/strict";
 import { MENTION_KIND, type Mention } from "@repo/features/mention-link";
+import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
 import { CALL_KIND, type CallKind } from "@repo/features/turn-rows";
 import { ACT_KIND } from "@repo/host/acts";
 import { Effect } from "effect";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test } from "vitest";
-import { TOOL_BLOCK, TOOL_STATE } from "../ai-elements/tool.js";
 import {
   type AnyAct,
   fakeActPort,

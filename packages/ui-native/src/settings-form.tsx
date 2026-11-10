@@ -25,15 +25,17 @@ import { Avatar } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
+import { TYPE_ROLE } from "./tokens/type.js";
 
 /** An account's face in its row, larger than a list's. */
-const ACCOUNT_FACE_SIZE = 44;
+const ACCOUNT_FACE_SIZE = 36;
 
 /**
  * The form a settings screen is: its sections (`ListSection`) of the rows
- * below. Note that it stands on the sidebar's ground with each row on the
- * surface, as the panel's settings cards stand on its page, rather than on
- * the system's grouped grays.
+ * below, under their small muted headers, every row's words in the denser
+ * scale's 15 pt. Note that it stands on the sidebar's ground with each row
+ * on the surface, as the panel's settings cards stand on its page, rather
+ * than on the system's grouped grays.
  */
 export function SettingsForm({ children }: { readonly children: ReactNode }) {
   const colors = useColors();
@@ -43,6 +45,7 @@ export function SettingsForm({ children }: { readonly children: ReactNode }) {
         scrollContentBackground("hidden"),
         background(colors.SIDEBAR),
         tint(colors.ACCENT),
+        font({ textStyle: TYPE_ROLE.ROW_TITLE }),
       ]}
     >
       {children}
@@ -64,14 +67,23 @@ export function AccountRow({ name, email, detail }: AccountRowProps) {
     <HStack spacing={SPACE.ROW + 2} modifiers={[listRowBackground(colors.SURFACE)]}>
       <Avatar name={name} size={ACCOUNT_FACE_SIZE} />
       <VStack alignment="leading" spacing={2}>
-        <Text modifiers={[font({ textStyle: "headline" }), foregroundStyle(colors.TEXT)]}>
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
+            foregroundStyle(colors.TEXT),
+          ]}
+        >
           {name}
         </Text>
-        <Text modifiers={[font({ textStyle: "subheadline" }), foregroundStyle(colors.TEXT_BODY)]}>
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_BODY)]}
+        >
           {email}
         </Text>
         {detail === undefined ? null : (
-          <Text modifiers={[font({ textStyle: "footnote" }), foregroundStyle(colors.TEXT_MUTED)]}>
+          <Text
+            modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(colors.TEXT_MUTED)]}
+          >
             {detail}
           </Text>
         )}

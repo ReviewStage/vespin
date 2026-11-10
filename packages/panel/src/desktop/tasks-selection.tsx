@@ -81,13 +81,12 @@ function moveToSection(
 ): void {
   const entries = sectionEntries(before);
   const moving = taskIds.filter((taskId) => (entries.get(taskId)?.sectionId ?? null) !== sectionId);
-  const members = moving.map((id) => ({ agent: false, id }));
   move(
-    members,
+    moving,
     sectionId,
     sectionId === null
-      ? unplaceAllWrites(members)
-      : placeAllWrites(before, members, sectionId, Date.now()),
+      ? unplaceAllWrites(moving)
+      : placeAllWrites(before, moving, sectionId, Date.now()),
   );
 }
 
@@ -137,8 +136,7 @@ function selectionActs(
   const sections = workspaceId === undefined ? [] : workspaceSections(doors.sections, workspaceId);
   const move = (sectionId: string | null) =>
     acted(() => moveToSection(doors.sections, taskIds, sectionId, doors.move));
-  const members = taskIds.map((id) => ({ agent: false, id }));
-  const put = (sectionId: string) => placeAllWrites(latest(), members, sectionId, Date.now());
+  const put = (sectionId: string) => placeAllWrites(latest(), taskIds, sectionId, Date.now());
   const sectionMenu = (workspace: string) => [
     [
       ...sections.map((section) => ({

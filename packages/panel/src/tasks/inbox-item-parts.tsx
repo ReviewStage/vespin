@@ -11,6 +11,7 @@
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
+import { GLYPH_STATE } from "@repo/features/glyph-state";
 import {
   holderAutomationId,
   holderName,
@@ -32,7 +33,7 @@ import {
   type InboxPerson,
   inboxWaitsOn,
 } from "@repo/features/inbox-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { agentStillWriting } from "@repo/features/task-agents-model";
@@ -64,7 +65,7 @@ import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor } from "../actor
 import { useAutomation } from "../automation-directory.js";
 import { useInboxItemDrafted } from "../composer-drafts.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
-import { GLYPH_STATE, StateGlyph } from "../state-glyph.js";
+import { StateGlyph } from "../state-glyph.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { providerOf } from "./agent-model.js";
 import { AgentMarkRef, type AgentSubject, lineSubject, tasklessSubject } from "./agent-ref.js";
@@ -382,7 +383,7 @@ function HolderRef({
       onPress={
         openPlace === undefined
           ? undefined
-          : () => openPlace({ kind: LINK_PLACE.TASK, planId: task.id })
+          : () => openPlace({ kind: LINK_DESTINATION.TASK, planId: task.id })
       }
       data-holder-ref=""
       data-kind={holder.kind}

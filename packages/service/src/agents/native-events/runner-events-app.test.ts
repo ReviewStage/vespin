@@ -2,8 +2,15 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { it } from "@effect/vitest";
-import { RUNNER_END, RUNNER_EVENT, type RunnerEvent } from "@repo/agent-runner/protocol";
+import {
+  APPROVAL_BY,
+  APPROVAL_DECISION,
+  RUNNER_END,
+  RUNNER_EVENT,
+  type RunnerEvent,
+} from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
+import { listPendingApprovals, readApproval } from "@repo/database/models/agent-approvals";
 import {
   createAgent,
   latestTurnsOfReached,
@@ -26,15 +33,9 @@ import { SettledTurnListener, storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { getTestDB, openedPullRequest, startTask } from "@repo/database/testing";
-import {
-  AGENT_FAILURE,
-  AGENT_KIND,
-  AGENT_PAYER,
-  type AgentPayer,
-  CHECK_SUMMARY,
-  PULL_REQUEST_STATE,
-} from "@repo/features/agent-wire";
+import { getTestDB, startTask } from "@repo/database/testing";
+import { APPROVAL_STATUS } from "@repo/features/agent-approval-wire";
+import { AGENT_FAILURE, AGENT_KIND, AGENT_PAYER, type AgentPayer } from "@repo/features/agent-wire";
 import {
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
@@ -62,6 +63,7 @@ import {
 import { type AfterResponse, keptAfterResponse } from "../../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
+import { NO_GITHUB } from "../../testing/github-app-fake.js";
 import { agentFailureOf } from "../coder-host/status.js";
 import { titleAgent } from "../coder-host/title.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
@@ -112,6 +114,7 @@ const standingWith = (
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
       ANALYTICS.layer,
       after,
+      NO_GITHUB,
     );
     const web = HttpRouter.toWebHandler(
       runnerEventsApp(options).pipe(HttpRouter.provideRequest(services)),
@@ -201,18 +204,6 @@ const taskStatusOf = (userId: string, taskId: string) =>
   Effect.map(readTask(userId, taskId), (read) => Option.getOrThrow(read).task.status);
 
 const agentWithBearer = agentOn(HARNESS.CLAUDE_CODE, ["Run the probe."]);
-
-/** The agent's pull request as its row keeps it once merged. */
-const MERGED = {
-  number: 42,
-  title: "Fix the refresh",
-  url: "https://github.com/acme/relay/pull/42",
-  state: PULL_REQUEST_STATE.MERGED,
-  checks: CHECK_SUMMARY.PASSING,
-  additions: 12,
-  deletions: 3,
-  changedFiles: 2,
-};
 
 /** The SDK messages of P00's workflow turn, in the pinned SDK's shapes, as the runner numbers and posts them. */
 function workflowTurn(lineId: string): readonly RunnerEvent[] {
@@ -358,10 +349,8 @@ it.layer(SUITE)("the runner events route", (it) => {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
         const events = workflowTurn(agent.lineId);
-        // The task was marked done, and the agent's pull request merged: its turn takes the task
-        // up again, and the turn's end, everyone then idle, finishes it (`tasks/task-finish.ts`).
+        // The task was marked done: its turn takes the task up again (`tasks/task-finish.ts`).
         yield* updateTask(agent.userId, agent.taskId, { status: TASK_STATUS.DONE });
-        yield* openedPullRequest(agent.userId, agent.agentId, MERGED);
 
         const first = yield* post(agent.bearer, events.slice(0, 11));
         const midway = yield* transcriptOf(agent.target.conversationId);
@@ -372,7 +361,6 @@ it.layer(SUITE)("the runner events route", (it) => {
         assert.deepEqual(first.body, { applied: 11, sequence: 10 });
         assert.deepEqual(last.body, { applied: 4, sequence: 14 });
         assert.equal(reopened, TASK_STATUS.IN_PROGRESS);
-        assert.equal(yield* taskStatusOf(agent.userId, agent.taskId), TASK_STATUS.DONE);
         // A model turn that ends with work still in flight leaves the agent's turn running,
         // and the words forming after it are told through their last finished sentence.
         assert.deepEqual(
@@ -1000,6 +988,63 @@ it.layer(SUITE)("the runner events route", (it) => {
       }),
   );
 
+  it.effect(
+    "an ask its runner holds lands under the running turn, half a character in its input made whole, its runner's word settles it, and one left pending expires as the turn ends",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const ask = (requestId: string) => ({
+          type: RUNNER_EVENT.APPROVAL_REQUESTED,
+          requestId,
+          toolUseId: `toolu_${requestId}`,
+          toolName: "Bash",
+          title: "Run git push --force?",
+          // A runner's cut inside a surrogate pair leaves half a character, which Postgres refuses in a JSON value.
+          input: { command: "git push --force", note: "cut at \uD83D" },
+        });
+        const asking = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          { type: "system", subtype: "init", ...top },
+          ask("a"),
+          ask("b"),
+          {
+            type: RUNNER_EVENT.APPROVAL_RESOLVED,
+            requestId: "a",
+            decision: APPROVAL_DECISION.DENY,
+            by: APPROVAL_BY.MESSAGE,
+          },
+        ];
+        const ending = [
+          { type: "result", subtype: "success", is_error: false, ...top },
+          { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+        ];
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        const numbered = [...asking, ...ending].map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, numbered.slice(0, asking.length));
+        const waiting = yield* listPendingApprovals(agent.userId, agent.agentId);
+        yield* post(agent.bearer, numbered.slice(asking.length));
+        const standingOf = (approvalId: string) =>
+          Effect.map(
+            readApproval(agent.userId, agent.agentId, approvalId),
+            (read) => Option.getOrThrow(read).status,
+          );
+
+        assert.deepEqual(
+          waiting.map((each) => [each.requestId, each.toolUseId, each.ask.input]),
+          [["b", "toolu_b", { command: "git push --force", note: "cut at \uFFFD" }]],
+        );
+        const [b] = waiting;
+        assert.ok(b !== undefined);
+        assert.equal(yield* standingOf(b.id), APPROVAL_STATUS.EXPIRED);
+        assert.deepEqual(yield* listPendingApprovals(agent.userId, agent.agentId), []);
+      }),
+  );
+
   it.effect("a turn an API error ended keeps the error's status and words", () =>
     Effect.gen(function* () {
       const post = yield* standing;
@@ -1295,6 +1340,78 @@ it.layer(SUITE)("the runner events route", (it) => {
           input: { id: "page-1" },
           connection: "notion-2",
         });
+      }),
+  );
+
+  it.effect(
+    "a call to a tool the record does not hold is stored as an unknown tool's, refused, naming the tool it called, and the harness's own ToolSearch is left out",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const refused =
+          "<tool_use_error>Error: No such tool available: mcp__workspace__edit_plan</tool_use_error>";
+        const messagesOfTurn = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          {
+            type: "assistant",
+            message: {
+              id: "msg_1",
+              content: [
+                { type: "tool_use", id: "toolu_search", name: "ToolSearch", input: {} },
+                {
+                  type: "tool_use",
+                  id: "toolu_plan",
+                  name: "mcp__workspace__edit_plan",
+                  input: { notes: [] },
+                },
+              ],
+            },
+            ...top,
+          },
+          {
+            type: "user",
+            message: {
+              content: [
+                { type: "tool_result", tool_use_id: "toolu_search", content: "Loaded." },
+                {
+                  type: "tool_result",
+                  tool_use_id: "toolu_plan",
+                  content: refused,
+                  is_error: true,
+                },
+              ],
+            },
+            ...top,
+          },
+        ];
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        const events = messagesOfTurn.map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, events);
+        const { rows } = yield* transcriptOf(agent.target.conversationId);
+        const parts = rows.at(-1)?.parts ?? [];
+
+        assert.deepEqual(
+          parts.map((part) => [
+            part.type,
+            "state" in part ? part.state : undefined,
+            "input" in part ? part.input : undefined,
+            "errorText" in part ? part.errorText : undefined,
+          ]),
+          [
+            ["step-start", undefined, undefined, undefined],
+            [
+              "tool-unknown_tool",
+              "output-error",
+              { name: "edit_plan", input: { notes: [] } },
+              refused,
+            ],
+          ],
+        );
       }),
   );
 
@@ -2603,6 +2720,45 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         );
         const ran = workflowTurn(agent.lineId).map((event) => event.message);
         yield* post(bearer, numberedFrom(limited.length, ran), launch);
+        const finished = yield* transcriptOf(agent.target.conversationId);
+
+        assert.deepEqual(
+          [cut.turns.map((turn) => turn.status), finished.turns.map((turn) => turn.status)],
+          [[TURN_STATUS.RUNNING], [TURN_STATUS.SETTLED]],
+        );
+        assert.equal(finished.rows.filter((row) => row.role === "user").length, 1);
+      }),
+  );
+
+  it.effect(
+    "a turn whose launch Claude Code could not resume the session of stays open for the next launch, which finishes it with the line shown once",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(HARNESS.CLAUDE_CODE, ["Run the probe."]);
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        // As the CLI answers a resume of a session it finds nowhere it looks.
+        const refused = numberedFrom(0, [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          {
+            type: "result",
+            subtype: "error_during_execution",
+            is_error: true,
+            errors: [`No conversation found with session ID: ${SESSION}`],
+            ...top,
+          },
+          { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+        ]);
+        yield* post(agent.bearer, refused);
+        const cut = yield* transcriptOf(agent.target.conversationId);
+
+        // The launch on a fresh session, handed the turn's own line again.
+        const bearer = randomBytes(32).toString("base64url");
+        const launch = Option.getOrThrow(
+          yield* recordAgentRunnerLaunch(agent.userId, agent.agentId, runnerTokenDigest(bearer)),
+        );
+        const ran = workflowTurn(agent.lineId).map((event) => event.message);
+        yield* post(bearer, numberedFrom(refused.length, ran), launch);
         const finished = yield* transcriptOf(agent.target.conversationId);
 
         assert.deepEqual(

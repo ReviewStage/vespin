@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { createAgent } from "@repo/database/models/agent-store";
+import { createTask } from "@repo/database/models/task-store";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
@@ -45,20 +46,21 @@ const openAccount = Effect.gen(function* () {
   return id;
 });
 
-/** An agent of the account's started on the repository's default branch on the workspace's installation. */
+/** An agent of the account's started on a task on the repository's default branch on the workspace's installation. */
 const startedIn = (userId: string, organizationId: string, repository: string) =>
-  createAgent(userId, {
-    taskId: null,
-    organizationId,
-    descriptionSnapshot: null,
-    prompt: "Bump the client",
-    idempotencyKey: randomUUID(),
-    model: "anthropic/claude-opus-5.5",
-    effort: "high",
-    repository,
-    githubAccess: GITHUB_ACCESS.APP,
-    runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-  });
+  Effect.flatMap(createTask(userId, { organizationId, repository }), (task) =>
+    createAgent(userId, {
+      taskId: task.id,
+      descriptionSnapshot: null,
+      prompt: "Bump the client",
+      idempotencyKey: randomUUID(),
+      model: "anthropic/claude-opus-5.5",
+      effort: "high",
+      repository,
+      githubAccess: GITHUB_ACCESS.APP,
+      runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+    }),
+  );
 
 it.layer(getTestDB())("the daily base drive refresh", (it) => {
   it.effect(

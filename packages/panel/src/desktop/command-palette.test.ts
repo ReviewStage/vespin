@@ -36,7 +36,6 @@ import { APP_COMMAND, type AppCommand } from "@repo/settings/shortcuts";
 import { experimentsOn, settingsView } from "@repo/settings/testing";
 import { agentTab, changesTab, fileTab, pageTab } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
-import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement, Fragment, useState } from "react";
 import { flushSync } from "react-dom";
@@ -73,7 +72,7 @@ import {
   withExperiments,
   writeExperiments,
 } from "../testing/app-state.js";
-import { withQueryClient, writeAppState, writeHandedAppState } from "../testing/copy-feedback.js";
+import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { keyPressed, reportEventTiming } from "../testing/event-timing.js";
@@ -818,47 +817,6 @@ test("an agent's row hangs its tab's card beside it while the pointer rests on i
   assert.deepEqual(shown, [["plan-1", "agent-7"]]);
 });
 
-test("an agent with no task hangs its card beside its row and is named as its tab is, by the model catalog", () => {
-  const agent = {
-    id: "agent-5",
-    planId: null,
-    title: null,
-    model: "anthropic/claude-opus-5.5",
-    effort: "high",
-    createdAt: 1,
-    status: AGENT_STATUS.COMPLETED,
-    turnId: null,
-    automationId: null,
-    workspaceId: "workspace-1",
-    repository: null,
-    activityAt: 2,
-  };
-  openPalette(
-    tasksControl({
-      agents: agentsControl({
-        models: [
-          {
-            id: "anthropic/claude-opus-5.5",
-            name: "Cataloged Opus",
-            provider: "anthropic",
-            efforts: ["high"],
-          },
-        ],
-      }),
-      listedAgents: { standing: [agent], archived: [] },
-    }),
-  );
-  chooseFilter("Tasks");
-  assert.ok(rows().includes("Cataloged Opus"), "named by the catalog, as its tab is");
-  const row = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find((option) =>
-    option.textContent?.includes("Cataloged Opus"),
-  );
-  assert.ok(row, "the agent is listed");
-  restOn(row);
-  const card = document.querySelector(".ui-tooltip-card [data-agent-card]");
-  assert.equal(card?.querySelector(".ui-hover-card-name")?.textContent, "Cataloged Opus");
-});
-
 test("an archived agent of the open task is still found, after the standing ones, saying it is archived, and choosing it opens its tab on the task", () => {
   const shown: string[] = [];
   const agent = (id: string, title: string) => ({
@@ -897,12 +855,12 @@ test("an archived agent of the open task is still found, after the standing ones
     "Inbox · Billing usage alerts",
     "Invoice export · Billing usage alerts",
     "New browser tab · Billing usage alerts",
-    "Refund export · Archived · Billing usage alerts",
+    "Refund export · Billing usage alerts · Archived",
   ]);
 
   type("refund");
-  assert.deepEqual(rows(), ["Refund export · Archived · Billing usage alerts"]);
-  press("Refund export · Archived · Billing usage alerts");
+  assert.deepEqual(rows(), ["Refund export · Billing usage alerts · Archived"]);
+  press("Refund export · Billing usage alerts · Archived");
   assert.deepEqual(shown, ["plan-1:agent-8"]);
 });
 
@@ -2360,153 +2318,6 @@ test("Tasks says a refused list with a Retry that reads it again", () => {
   assert.deepEqual(retried, [1]);
 });
 
-test("⌘K's Tasks lists the agents with no task among the tasks by their last activity, as the sidebar does, the archived after them, and opens one on its own page", () => {
-  const opened: string[] = [];
-  const oneOff = (id: string, title: string, activityAt: number) => ({
-    id,
-    planId: null,
-    model: "anthropic/claude-opus-5.5",
-    effort: "high",
-    title,
-    createdAt: 1,
-    status: AGENT_STATUS.COMPLETED,
-    turnId: null,
-    automationId: null,
-    workspaceId: "workspace-1",
-    repository: "acme/relay",
-    activityAt,
-  });
-  const task = (id: string, name: string, updatedAt: number) => ({
-    id,
-    workspaceId: "workspace-1",
-    name,
-    createdAt: 1,
-    updatedAt,
-    repository: null,
-  });
-  const control = tasksControl({
-    tasks: [task("t-1", "Rate limits", 30), task("t-2", "Retry budget", 10)],
-    listedAgents: {
-      standing: [oneOff("a-1", "Triage overnight issues", 20)],
-      archived: [{ ...oneOff("a-2", "Remove stale copy", 40), archivedAt: 41 }],
-    },
-    agentView: { agentId: undefined, onOpen: (id) => opened.push(id), onClose: () => undefined },
-  });
-  openPalette(control);
-  chooseFilter("Tasks");
-
-  assert.deepEqual(rows(), [
-    "Rate limits",
-    "Triage overnight issues · relay",
-    "Retry budget",
-    "Remove stale copy · relay · Archived",
-  ]);
-  press("Triage overnight issues · relay");
-  assert.deepEqual(opened, ["a-1"]);
-  // An archived one-off agent is listed nowhere in the sidebar, so ⌘K is its way to its page, whose Unarchive brings it back.
-  act(() => {
-    assert.ok(runAppCommand(APP_COMMAND.COMMAND_PALETTE), "⌘K is offered");
-  });
-  chooseFilter("Tasks");
-  press("Remove stale copy · relay · Archived");
-  assert.deepEqual(opened, ["a-1", "a-2"]);
-});
-
-test("on a one-off agent's page, ⌘K offers Pin agent, or Unpin agent once it is pinned, and nothing for an archived agent", async () => {
-  const asked: string[] = [];
-  // An agent's pin leaves on the act port, as the window sends it.
-  fakeActPort({
-    ...fakeActPortCalls(),
-    [ACT_KIND.AGENTS_PIN]: ({ agentId, pinned }) => {
-      asked.push(`${agentId}:${String(pinned)}`);
-      return Promise.resolve({ failure: AGENT_CALL_FAILURE.NOT_FOUND });
-    },
-  });
-  // Note that a pin is asked under the account it was pressed under, so the document stands before the first press.
-  await writeHandedAppState();
-  const agent = {
-    id: "agent-9",
-    planId: null,
-    model: "anthropic/claude-opus-5.5",
-    effort: "high",
-    title: "Triage overnight issues",
-    createdAt: 1,
-    status: AGENT_STATUS.COMPLETED,
-    turnId: null,
-    automationId: null,
-    workspaceId: "workspace-1",
-    repository: "acme/relay",
-    activityAt: 2,
-  };
-  /** The rows ⌘K lists for "pin" over the agent's page, standing as given. */
-  const pinRows = (standing: readonly (typeof agent & { pinnedAt?: number })[], archived = []) => {
-    act(() => {
-      for (const root of roots.splice(0)) root.unmount();
-    });
-    document.body.innerHTML = "";
-    openPalette(
-      tasksControl({
-        agentView: { agentId: agent.id, onOpen: () => undefined, onClose: () => undefined },
-        listedAgents: { standing, archived },
-      }),
-    );
-    type("pin");
-    return rows().filter((row) => /^(Pin|Unpin) agent$/u.test(row));
-  };
-
-  assert.deepEqual(pinRows([agent]), ["Pin agent"]);
-  press("Pin agent");
-  assert.deepEqual(pinRows([{ ...agent, pinnedAt: 3 }]), ["Unpin agent"]);
-  press("Unpin agent");
-  assert.deepEqual(pinRows([]), []);
-  await vi.waitFor(() => assert.deepEqual(asked, ["agent-9:true", "agent-9:false"]));
-});
-
-test("on a one-off agent's page, ⌘K marks the agent unread, and offers no mark while no agent's page stands", async () => {
-  const agent = {
-    id: "agent-8",
-    planId: null,
-    model: "anthropic/claude-opus-5.5",
-    effort: "high",
-    title: "Triage overnight issues",
-    createdAt: 1,
-    status: AGENT_STATUS.COMPLETED,
-    turnId: null,
-    automationId: null,
-    workspaceId: "workspace-1",
-    repository: "acme/relay",
-    activityAt: 2,
-  };
-  const marks: string[] = [];
-  fakeActPort({
-    [ACT_KIND.AGENTS_MARK_READ]: ({ agentId, readMark }) => {
-      marks.push(`${readMark}:${agentId}`);
-      return Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED });
-    },
-  });
-  const draw = (agentId: string | undefined) => {
-    act(() => {
-      for (const root of roots.splice(0)) root.unmount();
-    });
-    document.body.innerHTML = "";
-    openPalette(
-      tasksControl({
-        agentView: { agentId, onOpen: () => undefined, onClose: () => undefined },
-        listedAgents: { standing: [agent], archived: [] },
-      }),
-    );
-    type("mark");
-    return rows().filter(
-      (row) => row.startsWith("Mark as") && !row.endsWith("· Keyboard shortcuts"),
-    );
-  };
-
-  assert.deepEqual(draw(undefined), []);
-  assert.deepEqual(draw(agent.id), ["Mark as unread"]);
-  press("Mark as unread");
-  await vi.waitFor(() => assert.deepEqual(marks, [`unread:${agent.id}`]));
-});
-
 /** Draws the task on screen pinned or not, as main draws a pin it was asked; `PinnableTask` sets it as it stands. */
 let drawPin: (pinned: boolean) => void = () => undefined;
 
@@ -2872,54 +2683,6 @@ test("on a phone ⌘K's Rename task opens the task's name in the head's field", 
   assert.ok(document.activeElement === field, "the caret is in the head's field");
 });
 
-test("on a one-off agent's page, ⌘K's Archive agent archives it, and an archived agent's page offers Unarchive agent, which brings it back", async () => {
-  const agent = {
-    id: "agent-6",
-    planId: null,
-    model: "anthropic/claude-opus-5.5",
-    effort: "high",
-    title: "Triage overnight issues",
-    createdAt: 1,
-    status: AGENT_STATUS.COMPLETED,
-    turnId: null,
-    automationId: null,
-    workspaceId: "workspace-1",
-    repository: "acme/relay",
-    activityAt: 2,
-  };
-  const asked: string[] = [];
-  const draw = (listedAgents: TasksControl["listedAgents"]) => {
-    act(() => {
-      for (const root of roots.splice(0)) root.unmount();
-    });
-    document.body.innerHTML = "";
-    openPalette(
-      tasksControl({
-        agentView: { agentId: agent.id, onOpen: () => undefined, onClose: () => undefined },
-        listedAgents,
-        agents: agentsControl({
-          onArchive: (agentId, archived) => {
-            asked.push(`${agentId}:${String(archived)}`);
-            return Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED });
-          },
-        }),
-      }),
-    );
-    type("archive");
-    return rows().filter((row) => /^(Archive|Unarchive) agent$/u.test(row));
-  };
-
-  assert.deepEqual(draw({ standing: [agent], archived: [] }), ["Archive agent"]);
-  press("Archive agent");
-  await act(async () => undefined);
-  assert.deepEqual(draw({ standing: [], archived: [{ ...agent, archivedAt: 3 }] }), [
-    "Unarchive agent",
-  ]);
-  press("Unarchive agent");
-  await act(async () => undefined);
-  assert.deepEqual(asked, [`${agent.id}:true`, `${agent.id}:false`]);
-});
-
 /** The words at the end of the row listed as exactly `listed`, as a reader hears them; empty where it draws none. */
 function endWordsOf(listed: string): string {
   const row = document.querySelectorAll('[role="option"]')[rows().indexOf(listed)];
@@ -3128,7 +2891,7 @@ test("the Inbox searched lists what needs you first, each item beside its task",
   );
 });
 
-test("an Inbox item is the Inbox's own row: its agent's tile, the marks of its Inbox row and its time at its end, and its card hung beside it", async () => {
+test("an Inbox item is the Inbox's own row: the marks of its Inbox row and its time at its end, and its card hung beside it", async () => {
   paletteOverInbox({ items: [PREVIEWS, ROTATE] });
   chooseFilter("Inbox");
   await settle();
@@ -3138,7 +2901,6 @@ test("an Inbox item is the Inbox's own row: its agent's tile, the marks of its I
   );
   const [needs, answered] = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
   assert.ok(needs, "the item that needs you is listed");
-  assert.ok(needs.querySelector('.actor-mark[data-kind="agent"]'), "the agent's tile leads");
   assert.match(
     needs.querySelector(".ui-combobox-option-hint")?.textContent ?? "",
     /Needs you/u,

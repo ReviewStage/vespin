@@ -7,8 +7,8 @@ import type { GitHubPullRequestSummary, IssueState } from "@repo/features/github
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import {
   issueAddressOf,
-  LINK_PLACE,
-  type LinkPlace,
+  LINK_DESTINATION,
+  type LinkDestination,
   pullRequestAddressOf,
   taskLinkStep,
   withTaskId,
@@ -315,12 +315,12 @@ export function useNumberedTaskIdOf(): NumberedTaskIdOf {
 }
 
 /** The places a task's links name it in, which a link written by the task's number names it in too. */
-const NUMBERED_PLACES: ReadonlySet<LinkPlace["kind"]> = new Set([
-  LINK_PLACE.TASK,
-  LINK_PLACE.SECTION,
-  LINK_PLACE.COMMENT,
-  LINK_PLACE.VERSION,
-  LINK_PLACE.PAGE,
+const NUMBERED_PLACES: ReadonlySet<LinkDestination["kind"]> = new Set([
+  LINK_DESTINATION.TASK,
+  LINK_DESTINATION.SECTION,
+  LINK_DESTINATION.COMMENT,
+  LINK_DESTINATION.VERSION,
+  LINK_DESTINATION.PAGE,
 ]);
 
 /**
@@ -331,9 +331,9 @@ const NUMBERED_PLACES: ReadonlySet<LinkPlace["kind"]> = new Set([
  */
 function numberedPlaceIn(
   planning: WorkspacePlaces | undefined,
-  place: LinkPlace,
+  place: LinkDestination,
   workspace: string,
-): LinkPlace {
+): LinkDestination {
   if (!NUMBERED_PLACES.has(place.kind) || !("planId" in place)) return place;
   const task = planning?.tasks.find((each) => each.id === place.planId);
   if (planning === undefined || task?.number === undefined) return place;
@@ -342,7 +342,7 @@ function numberedPlaceIn(
 }
 
 /** How a place's link is written by its task's number where the window lists one (`numberedPlaceIn`), as Copy link writes it. */
-export function useNumberedPlace(): (place: LinkPlace, workspace: string) => LinkPlace {
+export function useNumberedPlace(): (place: LinkDestination, workspace: string) => LinkDestination {
   const planning = useWorkspacePlaces();
   return (place, workspace) => numberedPlaceIn(planning, place, workspace);
 }

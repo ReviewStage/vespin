@@ -1,5 +1,6 @@
 import { AGENT_STATUS, type AgentAttachment, type AgentSummary } from "@repo/features/agent-wire";
-import { type InboxMissing, missingWords } from "@repo/features/inbox-ask-words";
+import { INBOX_BOX_WORDS, type InboxMissing, missingWords } from "@repo/features/inbox-ask-words";
+import { type InboxDraft, inboxMissing, inboxThreadSend } from "@repo/features/inbox-draft";
 import { acknowledgedOnOpen, awaitsNod } from "@repo/features/inbox-list-model";
 import { INBOX_BOUNDS, type InboxItem, type InboxMessage } from "@repo/features/inbox-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -10,8 +11,9 @@ import { useConnected } from "../connection.js";
 import { failureShown } from "../failure-report.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { AgentComposer } from "./agent-composer.js";
+import { useInboxAcknowledger } from "./inbox-acknowledge.js";
 import { focusMissing } from "./inbox-ask-controls.js";
-import { type InboxDraft, inboxMissing, inboxNoteReading, inboxThreadSend } from "./inbox-model.js";
+import { inboxNoteReading } from "./inbox-model.js";
 import { ReplyToSelection } from "./reply-to-selection.js";
 import type { SkillSource } from "./skill-picker.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
@@ -51,7 +53,8 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
  * or the line, and says what that is under the foot's bar ("Fill in
  * Host."), until it is filled. A notice waiting on the reader's nod reads
  * Got it on Send while the box is empty, which settles it without messaging
- * the agent (`use-task-inbox.ts`'s `onAcknowledge`), and is the round Send
+ * the agent, held behind a toast whose Undo has it wait again
+ * (`inbox-acknowledge.tsx`), and is the round Send
  * again once a word or a file is in. A notice opening acknowledges
  * (`inbox-model.ts`'s `acknowledgedOnOpen`, `use-inbox-read-marks.ts`'s
  * `useNodOnOpen`) offers no Got it, since opening it was the nod. Unlike
@@ -68,8 +71,9 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
  * A reply leaves the box the moment it is sent and never holds it, as a
  * message leaves the agent's box: an item's replies go one at a time in the
  * order sent (`use-task-inbox.ts`), each standing on the thread meanwhile.
- * Only Got it and Start thread hold the box, Send busy, until they answer,
- * since each settles or opens something. Why a reply did not go is said
+ * Only Got it and Start thread hold the box, Send busy, until they go,
+ * since each settles or opens something: Got it waits behind the item's
+ * replies on their way, then draws the notice settled, its Undo on a toast. Why a reply did not go is said
  * under the foot's bar over the box's own notes, its words and files back in
  * the box; one refused because the agent is archived says so, with
  * Unarchive after it, which brings the agent back and lets the note go.
@@ -92,15 +96,6 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
 function emptyBox(draft: InboxDraft): boolean {
   return draft.note.trim() === "" && draft.attachments.length === 0;
 }
-
-/** What the note line asks for under an open question's controls, which are the answer, the note going beside it. */
-const NOTE_PLACEHOLDER = "Add a note";
-
-/** What the box asks for where no controls stand over its line: an ask of words alone, a notice, or a settled item, whose words are the reply. */
-const REPLY_PLACEHOLDER = "Reply";
-
-/** What the box's round Send is called, which is its tooltip too. */
-const SEND = "Send";
 
 /** What Send reads, in words, while the box starts a new thread. */
 const START_THREAD = "Start thread";
@@ -225,6 +220,7 @@ function AnswerCard({
   standing.current = draft;
   // Note that only a nod and a thread start hold the box; a reply leaves it at once and the next may follow.
   const sending = control.sending.has(item.id) || starting;
+  const acknowledgeHeld = useInboxAcknowledger();
   // Note that a notice opening acknowledges offers no Got it, since opening it was the nod (`useNodOnOpen`), save while its holder's held read has failed, when opening acknowledges nothing.
   const nodded = acknowledgedOnOpen(item, readerId) && !control.failed;
   const nod = awaitsNod(item) && emptyBox(draft) && !nodded && !starts;
@@ -241,7 +237,11 @@ function AnswerCard({
     setWanting(true);
     focusMissing(box.current, lacks);
   };
-  const placeholder = starts ? NEW_THREAD_PLACEHOLDER : asks ? NOTE_PLACEHOLDER : REPLY_PLACEHOLDER;
+  const placeholder = starts
+    ? NEW_THREAD_PLACEHOLDER
+    : asks
+      ? INBOX_BOX_WORDS.NOTE_PLACEHOLDER
+      : INBOX_BOX_WORDS.REPLY_PLACEHOLDER;
   // The item's agent's model and servers, which the box's chips change as the agent's own box does.
   const model = useAgentModel({ agent, choose: agents.onChoose });
   const servers = useAgentServers({
@@ -288,7 +288,7 @@ function AnswerCard({
   };
   const acknowledge = () => {
     setRefusal(undefined);
-    control.onAcknowledge(item);
+    control.onAcknowledge(item, acknowledgeHeld);
   };
   // Note that the same words and files sent again go under the key they went under, so a retry starts one thread.
   // The box lets go of what it sent at once, as a reply does, so words written while the start is out stay
@@ -368,7 +368,7 @@ function AnswerCard({
         wording={{
           placeholder,
           label: placeholder,
-          send: nod ? GOT_IT : starts ? START_THREAD : SEND,
+          send: nod ? GOT_IT : starts ? START_THREAD : INBOX_BOX_WORDS.SEND,
         }}
         maxLength={INBOX_BOUNDS.MAX_MESSAGE_CHARS}
         takesFocus={false}

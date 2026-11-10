@@ -9,6 +9,7 @@ import {
   INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
 import { AGENT_BOUNDS, AGENT_STATUS } from "@repo/features/agent-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
   INBOX_ASK,
@@ -23,7 +24,7 @@ import {
   type InboxItem,
   type InboxMessage,
 } from "@repo/features/inbox-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
 import { formatCount } from "@repo/features/number-format";
 import { pageFrameUrl } from "@repo/features/page-frame";
@@ -36,13 +37,13 @@ import { EXPERIMENT } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
-import { DocumentIcon } from "@repo/ui";
 import { Effect } from "effect";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, beforeEach, onTestFinished, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
 import { runAppCommand } from "../app-commands.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import {
   type AnyAct,
@@ -214,7 +215,7 @@ test("a teammate's open item leads with its title alone, and its box still takes
   );
 });
 
-test("the pane's crumbs lead with their tabs' glyphs, the plan's document and the agent's mark, and open the item's plan and its agent's own tab on the task, leaving the Inbox, with no other way out in its bar", async () => {
+test("the pane's crumbs lead with their tabs' glyphs, the plan's task glyph and the agent's mark, and open the item's plan and its agent's own tab on the task, leaving the Inbox, with no other way out in its bar", async () => {
   const { page, asked } = mount([], { chosen: ON_THRESHOLD });
   await settle();
   const crumbs = [
@@ -227,8 +228,8 @@ test("the pane's crumbs lead with their tabs' glyphs, the plan's document and th
   const [task, agent] = crumbs;
   assert.equal(
     task?.querySelector('[aria-hidden="true"]')?.innerHTML,
-    renderToStaticMarkup(createElement(DocumentIcon)),
-    "the plan's crumb wears its tab's document glyph",
+    renderToStaticMarkup(createElement(EntityGlyph, { kind: ENTITY_KIND.PLAN })),
+    "the plan's crumb wears a task's glyph while its status is not read, never the description's document",
   );
   assert.ok(
     agent?.querySelector('[aria-hidden="true"] .state-glyph'),
@@ -388,7 +389,7 @@ test("once the item's heading scrolls out of the thread's view, its title joins 
 
 test("an image that lands before its item's own read does is drawn all the same", async () => {
   const shot = inboxAttachmentAddress(
-    { kind: LINK_PLACE.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+    { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
     "5e8d2c1a-7b3f-4a6e-9c2d-1f4b6a8e3c71",
     "acme",
   );
@@ -415,7 +416,7 @@ test("an item's Markdown draws its own pictures, read once its item's own read l
   const after = "5e8d2c1a-7b3f-4a6e-9c2d-1f4b6a8e3c73";
   const picture = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_PLACE.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );
@@ -482,7 +483,7 @@ test("a picture of an item opens a viewer the arrow keys walk across every pictu
   const after = "5e8d2c1a-7b3f-4a6e-9c2d-1f4b6a8e3c75";
   const picture = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_PLACE.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );
@@ -531,7 +532,7 @@ test("a recording an agent's words draw plays where it stands, left out of the r
   ];
   const address = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_PLACE.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );
@@ -653,7 +654,7 @@ test("a thread draws a comment's files over its words: an agent's pictures stand
   ];
   const picture = (attachmentId: string) =>
     inboxAttachmentAddress(
-      { kind: LINK_PLACE.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
+      { kind: LINK_DESTINATION.INBOX_ITEM, planId: BILLING.id, itemId: THRESHOLD.id },
       attachmentId,
       "acme",
     );
@@ -1423,7 +1424,7 @@ test("a skill named by a settled item of an agent with no plan that a link reach
   assert.deepEqual(opened, [], "nothing leaves for GitHub");
 });
 
-test("Got it on a notice answers it with a nod, whether its agent waits to hear back or not", async () => {
+test("Got it on a notice answers it with a nod held behind its Undo, whether its agent waits to hear back or not", async () => {
   const notice = (id: string, title: string, needsReply: boolean): InboxItem => ({
     ...noticeOf(item(id, title, 6_000)),
     startedBy: TEAMMATE,
@@ -1471,8 +1472,8 @@ test("Got it on a notice answers it with a nod, whether its agent waits to hear 
   assert.deepEqual(
     nods.map(({ clientKey: _key, ...nod }) => nod),
     [
-      { itemId: quiet.id, revision: quiet.revision, reply: INBOX_REPLY.ACKNOWLEDGED },
-      { itemId: heard.id, revision: heard.revision, reply: INBOX_REPLY.ACKNOWLEDGED },
+      { itemId: quiet.id, revision: quiet.revision, reply: INBOX_REPLY.ACKNOWLEDGED, held: true },
+      { itemId: heard.id, revision: heard.revision, reply: INBOX_REPLY.ACKNOWLEDGED, held: true },
     ],
   );
 });

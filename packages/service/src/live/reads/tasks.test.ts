@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import type { LiveStatement } from "@repo/database/core/live-statement";
 import { Database } from "@repo/database/core/query";
+import { expireTurnApprovals, recordApprovalAsked } from "@repo/database/models/agent-approvals";
 import { agentOwnerFactsOf } from "@repo/database/models/agent-owners";
 import {
   archiveAgent,
@@ -12,8 +13,8 @@ import {
   pinAgent,
   pinAgentCommitted,
   renameAgentCommitted,
+  updateAgentPermissionModeCommitted,
 } from "@repo/database/models/agent-store";
-import { createAutomation, recordAutomationRun } from "@repo/database/models/automation-store";
 import { devicesNamed, registerDevice } from "@repo/database/models/device-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { addTaskBlock } from "@repo/database/models/task-block-store";
@@ -40,24 +41,17 @@ import {
   openWorkspace,
   startTask,
 } from "@repo/database/testing";
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
 import {
-  AGENT_ARCHIVER,
   AGENT_FAILURE,
   AGENT_MACHINE,
-  AGENT_OWNER,
   AGENT_STATUS,
   type AgentSummary,
   CHECK_SUMMARY,
   type ListedAgent,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
-import {
-  AUTOMATION_ACTION,
-  AUTOMATION_DEFAULT_GUARDS,
-  AUTOMATION_FIRING,
-  AUTOMATION_TRIGGER,
-} from "@repo/features/automation-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { agentsOfTask, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import {
@@ -87,7 +81,7 @@ import { Clock, Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { agentSummary, summaryAccounts, summaryDevices } from "../../agents/coder-host/status.js";
 import { continuedByOf, standingsOf } from "../../agents/coder-host/stop.js";
-import { listTasklessAgents, withTaskAgents } from "../../agents/task-agents.js";
+import { withTaskAgents } from "../../agents/task-agents.js";
 import { TURN_FAILURE } from "../../core.js";
 import { tasksRead } from "./tasks.js";
 
@@ -110,10 +104,10 @@ const openUser = Effect.gen(function* () {
   return userId;
 });
 
-/** An agent the account starts on the plan, or with no plan in the workspace, started `ago` before the list is read. */
+/** An agent the account starts on the plan, started `ago` before the list is read. */
 const openAgent = (
   userId: string,
-  place: { readonly taskId: string; readonly blank?: boolean } | { readonly workspaceId: string },
+  place: { readonly taskId: string; readonly blank?: boolean },
   ago: number,
   started: Partial<
     Pick<
@@ -124,16 +118,9 @@ const openAgent = (
 ) =>
   Effect.gen(function* () {
     const made = yield* createAgent(userId, {
-      ...("taskId" in place
-        ? place.blank === true
-          ? { taskId: place.taskId, descriptionSnapshot: null, prompt: null }
-          : { taskId: place.taskId, descriptionSnapshot: "# Invitations\n", prompt: null }
-        : {
-            taskId: null,
-            organizationId: place.workspaceId,
-            descriptionSnapshot: null,
-            prompt: "Sweep the flaky tests.",
-          }),
+      ...(place.blank === true
+        ? { taskId: place.taskId, descriptionSnapshot: null, prompt: null }
+        : { taskId: place.taskId, descriptionSnapshot: "# Invitations\n", prompt: null }),
       idempotencyKey: randomUUID(),
       model: "anthropic/claude-opus-5.5",
       effort: "high",
@@ -296,10 +283,7 @@ function countedOf(plan: HeldTaskSummary): TaskSummary {
 const heldList = (userId: string) =>
   Effect.gen(function* () {
     const tasks = yield* listTasks(userId);
-    return {
-      plans: (yield* withTaskAgents(userId, tasks)).map(countedOf),
-      planlessAgents: yield* listTasklessAgents(userId, { includeArchived: true }),
-    };
+    return { plans: (yield* withTaskAgents(userId, tasks)).map(countedOf) };
   });
 
 const PUBLISHED = {
@@ -347,7 +331,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
       Effect.gen(function* () {
         const owner = yield* openUser;
         const plan = yield* startTask(owner, { name: "Teammate invitations" });
-        const loose = yield* openAgent(owner, { workspaceId: plan.workspaceId }, 60_000);
+        const loose = yield* openAgent(owner, { taskId: plan.id }, 60_000);
 
         const renamed = Option.getOrThrow(yield* renameAgentCommitted(owner, loose.id, "Sweep"));
         const pinned = Option.getOrThrow(yield* pinAgentCommitted(owner, loose.id, true));
@@ -470,7 +454,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         const latest = yield* openAgent(owner, { taskId: plan.id }, 30_000);
         yield* turnOf(latest, TURN_STATUS.FAILED, 20_000, { settled: true });
 
-        // A settled plan the owner pinned, and an agent with no plan, pinned and archived.
+        // A settled plan the owner pinned.
         // An agent started blank, long past the starting grace: it reads completed, not failed.
         yield* openAgent(owner, { taskId: shelved.id, blank: true }, STARTING_GRACE_MILLIS * 3);
         // A failure a later agent took over from, which stays taken over once that agent is archived.
@@ -487,38 +471,6 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         yield* updateTask(owner, plan.id, { assigneeId: teammate });
         yield* updateTask(owner, shelved.id, { pinned: true });
         yield* updateTask(owner, shelved.id, { status: TASK_STATUS.DONE });
-        const loose = yield* openAgent(owner, { workspaceId: plan.workspaceId }, 10 * 60_000);
-        yield* turnOf(loose, TURN_STATUS.QUEUED, 5 * 60_000);
-        yield* pinAgent(owner, loose.id, true);
-        const gone = yield* openAgent(teammate, { workspaceId: plan.workspaceId }, 2 * 60_000);
-        yield* archiveAgent(owner, gone.id, true);
-        // An agent a run made, and one that agent started on no task.
-        const triage = Option.getOrThrow(
-          yield* createAutomation(owner, {
-            organizationId: plan.workspaceId,
-            repositories: ["acme/relay"],
-            name: "Triage new issues",
-            trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: "0 2 * * *", timezone: "UTC" },
-            action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Triage the new issues." },
-            guards: AUTOMATION_DEFAULT_GUARDS,
-            nextRunAt: null,
-            webhookSecretHash: null,
-          }),
-        );
-        const triageRun = Option.getOrThrow(
-          yield* recordAutomationRun(triage, {
-            dedupeKey: "manual-1",
-            firing: { kind: AUTOMATION_FIRING.MANUAL },
-            firedAt: new Date(NOW),
-          }),
-        );
-        const runAgent = yield* openAgent(owner, { workspaceId: plan.workspaceId }, 8 * 60_000, {
-          automationRunId: triageRun.id,
-        });
-        const runChild = yield* openAgent(owner, { workspaceId: plan.workspaceId }, 7 * 60_000, {
-          automationRunId: triageRun.id,
-          startedByAgentId: runAgent.id,
-        });
         // A local agent on the owner's Mac running Claude Code, continued and forked on a plan of its own.
         const runs = yield* startTask(owner, { name: "Local runs" });
         const deviceId = randomUUID();
@@ -533,6 +485,10 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         });
         yield* openAgent(owner, { taskId: runs.id }, 10 * 60_000, {
           startedFrom: { agentId: local.id, messageId: randomUUID(), steps: 1, totalSteps: 2 },
+        });
+        // One the local agent started with its own start_agent, which names that agent as its starter.
+        const helper = yield* openAgent(owner, { taskId: runs.id }, 5 * 60_000, {
+          startedByAgentId: local.id,
         });
         // Tasks made for the owner by a coding agent, and by the notetaker on their call.
         const followUp = yield* startTask(owner, {
@@ -550,16 +506,6 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         for (const reader of [owner, teammate, outsider]) {
           assert.deepEqual(yield* liveListOf(reader, NOW), yield* heldListOf(reader, NOW));
         }
-        // Each agent's owner, as the requirement names it: a run's agent and the child it started
-        // belong to the run, whose automation the agent itself does not name; one with no task and
-        // no run to none.
-        const { planlessAgents } = yield* heldListOf(owner, NOW);
-        const ownerOf = (agentId: string) =>
-          planlessAgents.find((agent) => agent.id === agentId)?.owner;
-        const ownedByRun = { kind: AGENT_OWNER.RUN, automationId: triage.id, runId: triageRun.id };
-        assert.deepEqual(ownerOf(runAgent.id), ownedByRun);
-        assert.deepEqual(ownerOf(runChild.id), ownedByRun);
-        assert.equal(ownerOf(loose.id), undefined);
         // Every plan's agents, the archived among them, as each plan's own list names them, for its
         // tabs, their harness, Mac, and continues among it; the live rows come in the order they
         // were started across the plans.
@@ -584,6 +530,10 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
             ),
           );
         }
+        const helperRow = taskAgentsOfLiveRows(yield* liveRowsOf(owner), NOW).find(
+          (agent) => agent.id === helper.id,
+        );
+        assert.equal(helperRow?.startedByAgentId, local.id);
         const read = yield* liveListOf(owner, NOW);
         const originOf = (taskId: string) => read.plans.find((each) => each.id === taskId)?.origin;
         assert.deepEqual(
@@ -632,15 +582,6 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
             },
           ],
           "each summary carries its newest turn as the row records it, a Stop asked and why it failed among it",
-        );
-        assert.deepEqual(
-          read.planlessAgents
-            ?.filter((agent) => [gone.id, loose.id].includes(agent.id))
-            .map((agent) => [agent.status, agent.pinnedAt !== undefined]),
-          [
-            [AGENT_STATUS.STARTING, false],
-            [AGENT_STATUS.RUNNING, true],
-          ],
         );
         assert.deepEqual((yield* liveListOf(outsider, NOW)).plans, []);
       }),
@@ -760,18 +701,19 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
     () =>
       Effect.gen(function* () {
         const owner = yield* openUser;
-        const workspace = yield* openWorkspace(owner);
-        const agent = yield* openAgent(owner, { workspaceId: workspace }, 60_000);
-        const sandboxOf = (read: {
-          readonly planlessAgents?: readonly {
-            readonly id: string;
-            readonly sandboxOpen?: boolean;
-          }[];
-        }) => read.planlessAgents?.find((each) => each.id === agent.id)?.sandboxOpen;
+        const plan = yield* startTask(owner, { name: "Teammate invitations" });
+        const agent = yield* openAgent(owner, { taskId: plan.id }, 60_000);
+        const sandboxOf = Effect.map(
+          liveRowsOf(owner),
+          (rows) =>
+            agentsOfTask(taskAgentsOfLiveRows(rows, NOW), plan.id).find(
+              (each) => each.id === agent.id,
+            )?.sandboxOpen,
+        );
 
         const starting = yield* liveListOf(owner, NOW);
         assert.deepEqual(starting, yield* heldListOf(owner, NOW));
-        assert.equal(sandboxOf(starting), false);
+        assert.equal(yield* sandboxOf, false);
 
         yield* claimRuntimeSession(
           { userId: owner, conversationId: agent.conversationId },
@@ -781,7 +723,60 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
 
         const opened = yield* liveListOf(owner, NOW);
         assert.deepEqual(opened, yield* heldListOf(owner, NOW));
-        assert.equal(sandboxOf(opened), true);
+        assert.equal(yield* sandboxOf, true);
+      }),
+  );
+
+  it.effect(
+    "an agent's permission mode reads as the held read reads it, and the asks its runner holds read live until settled",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const plan = yield* startTask(owner, { name: "Teammate invitations" });
+        const agent = yield* openAgent(owner, { taskId: plan.id }, 60_000);
+        const turnId = yield* turnOf(agent, TURN_STATUS.RUNNING, 30_000);
+        yield* updateAgentPermissionModeCommitted(owner, agent.id, AGENT_PERMISSION_MODE.ASK);
+        yield* recordApprovalAsked({
+          conversationId: agent.conversationId,
+          turnId,
+          requestId: "request-1",
+          toolUseId: "toolu_1",
+          subagentId: null,
+          toolName: "Bash",
+          title: "Run pnpm test?",
+          description: "In the checkout",
+          input: { command: "pnpm test" },
+          at: new Date(NOW - 10_000),
+        });
+        const liveOf = Effect.map(liveRowsOf(owner), (rows) =>
+          agentsOfTask(taskAgentsOfLiveRows(rows, NOW), plan.id).find(
+            (each) => each.id === agent.id,
+          ),
+        );
+
+        const asking = yield* liveOf;
+        const held = (yield* heldTaskAgentsOf(owner, plan.id, NOW)).find(
+          (each) => each.id === agent.id,
+        );
+        yield* expireTurnApprovals(agent.conversationId, turnId, new Date(NOW));
+        const settled = yield* liveOf;
+
+        assert.equal(asking?.permissionMode, AGENT_PERMISSION_MODE.ASK);
+        assert.equal(held?.permissionMode, AGENT_PERMISSION_MODE.ASK);
+        assert.deepEqual(
+          asking?.pendingApprovals?.map(({ id: _id, ...ask }) => ask),
+          [
+            {
+              toolUseId: "toolu_1",
+              toolName: "Bash",
+              title: "Run pnpm test?",
+              description: "In the checkout",
+              input: { command: "pnpm test" },
+              askedAt: NOW - 10_000,
+            },
+          ],
+        );
+        assert.equal(settled?.pendingApprovals, undefined);
       }),
   );
 
@@ -802,7 +797,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
   );
 
   it.effect(
-    "an agent with no task's pull request, the agent it continues, and its archive's task mark, a line a call spoke or took typed, and an agent only its starter sees read as the held read reads them",
+    "a line a call spoke or took typed, and an agent only its starter sees, read as the held read reads them",
     () =>
       Effect.gen(function* () {
         const db = yield* Database;
@@ -810,19 +805,6 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         const teammate = yield* openUser;
         const plan = yield* startTask(owner, { name: "Teammate invitations" });
         yield* joinWorkspace(plan.workspaceId, teammate);
-
-        // An agent with no task that opened a pull request, and one continuing it, archived as it left a task.
-        const loose = yield* openAgent(owner, { workspaceId: plan.workspaceId }, 20 * 60_000);
-        yield* openedPullRequest(owner, loose.id, PUBLISHED);
-        const continued = yield* openAgent(owner, { workspaceId: plan.workspaceId }, 10 * 60_000);
-        yield* db
-          .update(agentTable)
-          .set({
-            startedFrom: { agentId: loose.id, steps: 3, totalSteps: 5 },
-            archivedAt: new Date(NOW - 60_000),
-            archivedBy: { by: AGENT_ARCHIVER.MEMBER, userId: owner, withTask: true },
-          })
-          .where(eq(agentTable.id, continued.id));
 
         // A line a call spoke after the agent's turn settled, which opens no turn of its own.
         const spoken = yield* openAgent(owner, { taskId: plan.id }, 30 * 60_000);
@@ -867,12 +849,6 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         for (const reader of [owner, teammate]) {
           assert.deepEqual(yield* liveListOf(reader, NOW), yield* heldListOf(reader, NOW));
         }
-        const read = yield* liveListOf(owner, NOW);
-        const byId = new Map((read.planlessAgents ?? []).map((agent) => [agent.id, agent]));
-        assert.equal(byId.get(loose.id)?.pullRequest?.number, PUBLISHED.number);
-        assert.equal(byId.get(loose.id)?.pullRequest?.queued, true);
-        assert.equal(byId.get(continued.id)?.from?.agentId, loose.id);
-        assert.equal(byId.get(continued.id)?.archivedBy?.withTask, true);
         const lines = agentsOfTask(taskAgentsOfLiveRows(yield* liveRowsOf(owner), NOW), plan.id);
         assert.equal(
           lines.find((line) => line.id === spoken.id)?.status,

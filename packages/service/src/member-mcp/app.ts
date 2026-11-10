@@ -21,6 +21,7 @@
  */
 
 import { createMcpHandler, originValidationResponse } from "@modelcontextprotocol/server";
+import type { WorkspaceSeams } from "@repo/database/models/workspace-seams";
 import type { WorkspaceExperiment } from "@repo/settings";
 import { HTTP_METHOD } from "@repo/wire";
 import { Effect, Layer, Option, Result, Schema } from "effect";
@@ -30,7 +31,11 @@ import { AUTH_BASE_PATH } from "../auth/auth-policy.js";
 import { HOSTED_REFUSAL, hostedNotFoundRoute, hostedRefusing } from "../http/http-effect.js";
 import { logStoreFailure } from "../http/store-failure.js";
 import { ANY_METHOD, type WebRoutes } from "../route.js";
-import { admitMember, type MemberMcpResourceClient } from "./admission.js";
+import {
+  type AdmittedMemberValues,
+  admitMember,
+  type MemberMcpResourceClient,
+} from "./admission.js";
 import { MEMBER_MCP_PATH, MEMBER_MCP_SCOPE, memberMcpResourceUrl } from "./resource.js";
 import {
   type MemberMcpAgentSandbox,
@@ -69,6 +74,8 @@ const NO_ORIGINS: readonly string[] = [];
 export interface MemberMcpAuth {
   readonly verify: (request: Request) => Promise<unknown>;
   readonly metadata: () => Promise<object>;
+  /** The deployment's base URL, which a link to one of its own routes is built on. */
+  readonly baseURL: string;
 }
 
 /**
@@ -94,17 +101,23 @@ export function memberMcpAuth(client: MemberMcpResourceClient, baseURL: string):
         scopes_supported: Object.values(MEMBER_MCP_SCOPE),
         bearer_methods_supported: ["header"],
       }),
+    baseURL,
   };
 }
 
-/** A `tools/call` as one JSON-RPC request, read only so far as to know which tool it names and whether its arguments name the retired `plan`. */
+/** A `tools/call` as one JSON-RPC request, read only so far as to know which tool it names and whether its arguments name the retired `plan` or `relation`. */
 const toolCallSchema = Schema.Struct({
   jsonrpc: Schema.Literal("2.0"),
   id: Schema.Union([Schema.String, Schema.Number]),
   method: Schema.Literal("tools/call"),
   params: Schema.Struct({
     name: Schema.String,
-    arguments: Schema.optionalKey(Schema.Struct({ plan: Schema.optionalKey(Schema.Unknown) })),
+    arguments: Schema.optionalKey(
+      Schema.Struct({
+        plan: Schema.optionalKey(Schema.Unknown),
+        relation: Schema.optionalKey(Schema.Unknown),
+      }),
+    ),
   }),
 });
 
@@ -115,21 +128,18 @@ function renamedWords(params: (typeof toolCallSchema.Type)["params"]): string | 
   if (renamed !== undefined) {
     return `\`${name}\` was renamed \`${renamed}\`, and nothing was done: call \`${renamed}\` with the same input.`;
   }
-  if (
-    name === MEMBER_MCP_TOOL.CREATE_TASK &&
-    params.arguments !== undefined &&
-    "plan" in params.arguments
-  ) {
-    return CREATE_TASK_REFUSAL.RENAMED_DESCRIPTION;
-  }
+  if (name !== MEMBER_MCP_TOOL.CREATE_TASK || params.arguments === undefined) return undefined;
+  if ("plan" in params.arguments) return CREATE_TASK_REFUSAL.RENAMED_DESCRIPTION;
+  if ("relation" in params.arguments) return CREATE_TASK_REFUSAL.RENAMED_RELATION;
   return undefined;
 }
 
 /**
  * The answer to a call a client makes by a name since renamed, a tool's or
- * `create_task`'s `plan`: the tool's own error naming what is called so now,
- * where the SDK would answer an unknown tool or drop the field and make the
- * task empty; nothing for any other request, which the SDK answers. Note
+ * `create_task`'s `plan` or `relation`: the tool's own error naming what is
+ * called so now, where the SDK would answer an unknown tool or drop the field
+ * and make the task empty or unrelated; nothing for any other request, which
+ * the SDK answers. Note
  * that a client keeps the tools it was listed before the rename, and that
  * the result names its kind, as 2026-07-28 asks of every result, which an
  * earlier revision's client strips.
@@ -161,6 +171,7 @@ const renamedToolAnswer = /* @__PURE__ */ Effect.fn("web/memberMcpRenamedTool")(
 const mcpEndpoint = /* @__PURE__ */ Effect.fn("web/memberMcpEndpoint")(function* (
   auth: MemberMcpAuth,
   agentSandbox: MemberMcpAgentSandbox,
+  workspaces: WorkspaceSeams,
 ): Effect.fn.Return<
   HttpServerResponse.HttpServerResponse,
   never,
@@ -172,19 +183,20 @@ const mcpEndpoint = /* @__PURE__ */ Effect.fn("web/memberMcpEndpoint")(function*
   if (crossOrigin !== undefined) return HttpServerResponse.raw(crossOrigin);
   const admitted = yield* admitMember(auth.verify, request);
   if (Result.isFailure(admitted)) return HttpServerResponse.raw(admitted.failure);
+  const member: AdmittedMemberValues = { ...admitted.success, baseURL: auth.baseURL };
   // Note that the handler is built per request, because the tools run on
   // the services this request's fiber holds, which the SDK's factory is
   // handed nothing of; a handler holds nothing between requests besides.
   const renamed = yield* renamedToolAnswer(request);
   if (Option.isSome(renamed)) return HttpServerResponse.raw(renamed.value);
   // Note that a member whose workspaces' experiments cannot be read is listed none of their tools, as a workspace with them off would be.
-  const experimentsOn = yield* memberExperimentsOn(admitted.success.userId).pipe(
+  const experimentsOn = yield* memberExperimentsOn(member.userId).pipe(
     Effect.tapError(logStoreFailure),
     Effect.orElseSucceed(() => new Set<WorkspaceExperiment>()),
   );
   const services = yield* Effect.context<MemberMcpRequestServices>();
   const handler = createMcpHandler(() =>
-    memberMcpServer(services, agentSandbox, admitted.success, experimentsOn),
+    memberMcpServer(services, agentSandbox, workspaces, member, experimentsOn),
   );
   const answer = yield* Effect.promise(() => handler.fetch(request));
   return HttpServerResponse.raw(answer);
@@ -206,13 +218,14 @@ const metadataEndpoint = /* @__PURE__ */ Effect.fn("web/memberMcpMetadataEndpoin
 const metadataRoute = (auth: MemberMcpAuth) =>
   HttpRouter.add(ANY_METHOD, MEMBER_MCP_METADATA_ROUTE, hostedRefusing(metadataEndpoint(auth)));
 
-/** The group: the server, its tools reaching an agent's sandbox as the edge composes it, and its metadata over the auth service's resource client, and the hosted vocabulary's own refusal for any other path. */
+/** The group: the server, its tools reaching an agent's sandbox as the edge composes it and the organization plugin's workspace writes, and its metadata over the auth service's resource client, and the hosted vocabulary's own refusal for any other path. */
 export function memberMcpApp(
   auth: MemberMcpAuth,
   agentSandbox: MemberMcpAgentSandbox,
+  workspaces: WorkspaceSeams,
 ): WebRoutes<MemberMcpRequestServices> {
   return Layer.mergeAll(
-    HttpRouter.add(ANY_METHOD, MEMBER_MCP_PATH, mcpEndpoint(auth, agentSandbox)),
+    HttpRouter.add(ANY_METHOD, MEMBER_MCP_PATH, mcpEndpoint(auth, agentSandbox, workspaces)),
     metadataRoute(auth),
     hostedNotFoundRoute,
   );

@@ -98,7 +98,7 @@ const reviseDescription = (
     }),
   );
 
-const startAgent = (userId: string, organizationId: string, createdAt: string) =>
+const startAgent = (userId: string, organizationId: string, taskId: string, createdAt: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
     const conversationId = randomUUID();
@@ -109,6 +109,7 @@ const startAgent = (userId: string, organizationId: string, createdAt: string) =
       id: randomUUID(),
       organizationId,
       userId,
+      taskId,
       conversationId,
       model: "anthropic/claude-opus-5.5",
       effort: "high",
@@ -160,9 +161,9 @@ it.layer(getTestDB())("the Users read", (it) => {
       const workspace = yield* openWorkspace(builder);
       // Two days inside the 30-day window, and one action before it that the
       // window's count leaves out.
-      yield* createTask(builder, workspace, "2026-10-20T09:00:00Z");
-      yield* startAgent(builder, workspace, "2026-10-20T10:00:00Z");
-      yield* startAgent(builder, workspace, "2026-10-21T08:00:00Z");
+      const built = yield* createTask(builder, workspace, "2026-10-20T09:00:00Z");
+      yield* startAgent(builder, workspace, built, "2026-10-20T10:00:00Z");
+      yield* startAgent(builder, workspace, built, "2026-10-21T08:00:00Z");
       yield* createTask(builder, workspace, "2026-08-01T09:00:00Z");
       // Quiet for the window, active months before it.
       yield* createTask(lapsed, workspace, "2026-05-04T09:00:00Z");
@@ -207,9 +208,9 @@ it.layer(getTestDB())("the Users read", (it) => {
         builder,
         "2026-10-20T09:00:00Z",
       );
-      yield* startAgent(builder, workspace, "2026-10-20T08:00:00Z");
+      yield* startAgent(builder, workspace, planned, "2026-10-20T08:00:00Z");
       yield* createTask(builder, workspace, "2026-10-21T09:00:00Z");
-      yield* startAgent(builder, workspace, "2026-10-21T10:00:00Z");
+      yield* startAgent(builder, workspace, planned, "2026-10-21T10:00:00Z");
       // An agent's revision is the agent's, and a year and more ago is past the read.
       yield* reviseDescription(
         planned,

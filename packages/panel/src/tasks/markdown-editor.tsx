@@ -1,3 +1,4 @@
+import { holderTaskId } from "@repo/features/mention-holder";
 import { decodeMention } from "@repo/features/mention-link";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { ANNOUNCE, Checkbox } from "@repo/ui";
@@ -34,7 +35,6 @@ import { useAnnounceShown } from "../use-announce-shown.js";
 import { type OwnBlock, useBlockPicker } from "./block-picker.js";
 import type { EditorPictures } from "./editor-pictures.js";
 import { type MentionDoors, MentionNodeChip, pastedMentionNode } from "./mention-chip.js";
-import { holderTaskId } from "./mention-holder.js";
 import { MENTION_MENU_SIDE, type MentionSource, useMentionPicker } from "./mention-picker.js";
 import { useSelectionToolbar } from "./selection-toolbar.js";
 import { useKnownNames } from "./use-known-names.js";

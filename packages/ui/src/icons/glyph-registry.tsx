@@ -3,6 +3,8 @@ import {
   BookBookmark,
   BookOpen,
   Bot,
+  Building2,
+  Calendar,
   CircleArrowOutUpLeft,
   CircleDashed,
   CircleDot,
@@ -26,7 +28,9 @@ import {
   Globe,
   GripVertical,
   Hash,
+  Heading,
   History,
+  House,
   KeyRound,
   Layers,
   ListChecks,
@@ -41,6 +45,7 @@ import {
   PinOff,
   RotateCcw,
   Server,
+  ShieldUser,
   Split,
   Unplug,
   Users,
@@ -130,6 +135,8 @@ export const GLYPH = {
   SECTION: lucideGlyph(FolderKanban),
   REPOSITORY: lucideGlyph(FolderGit),
   PAGE: lucideGlyph(AppWindow),
+  // A heading of a task's description, the section a heading opens, as its chip and its row name it.
+  HEADING: lucideGlyph(Heading),
   // A page of the web, outside the app, as a website chip names it.
   WEBSITE: lucideGlyph(Globe),
   DESCRIPTION: DocumentIcon,
@@ -155,6 +162,14 @@ export const GLYPH = {
   CALL: WaveformIcon,
   SETTINGS: GearIcon,
   TIME: lucideGlyph(Clock),
+  // A day, as a date's chip and its picker name it; a time of day is TIME's.
+  DATE: lucideGlyph(Calendar),
+  // The workspace's Home, the page with no task open.
+  HOME: lucideGlyph(House),
+  // The Admin pages, the service's own view of its accounts and workspaces.
+  ADMIN: lucideGlyph(ShieldUser),
+  // A workspace, where no tile of its own is drawn.
+  WORKSPACE: lucideGlyph(Building2),
   // Where a task's coding agents run: the cloud, a member's Mac running the app, or a host they added.
   CLOUD: lucideGlyph(Cloud),
   DESKTOP: LaptopIcon,

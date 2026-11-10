@@ -26,7 +26,7 @@ import {
   writeSlackDefaultRepository,
 } from "@repo/database/models/slack-installation-store";
 import { writePage } from "@repo/database/models/task-pages";
-import { createTaskCommitted, deleteTask } from "@repo/database/models/task-store";
+import { createTask, createTaskCommitted, deleteTask } from "@repo/database/models/task-store";
 import { ensurePersonalWorkspace } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
@@ -626,9 +626,12 @@ it.layer(getTestDB())("a task's live reads", (it) => {
         const stranger = yield* openUser;
         const workspaceId = yield* openWorkspace(dana);
         yield* joinWorkspace(workspaceId, teammate);
-        const started = yield* createAgent(dana, {
-          taskId: null,
+        const { id: taskId } = yield* createTask(dana, {
           organizationId: workspaceId,
+          name: "Triage",
+        });
+        const started = yield* createAgent(dana, {
+          taskId,
           descriptionSnapshot: null,
           prompt: "Triage the inbox.",
           idempotencyKey: randomUUID(),

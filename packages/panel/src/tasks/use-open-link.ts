@@ -1,6 +1,6 @@
 import {
-  LINK_PLACE,
-  type LinkPlace,
+  LINK_DESTINATION,
+  type LinkDestination,
   type ReadLink,
   taskNumberOf,
   withTaskId,
@@ -21,7 +21,7 @@ import {
   useMemo,
 } from "react";
 import { appPlatform } from "../app-platform.js";
-import type { LinkPlaceName, LinkRouter } from "../places/link-places.js";
+import type { LinkDestinationName, LinkRouter } from "../places/link-places.js";
 import {
   ADDRESS,
   type Address,
@@ -66,7 +66,7 @@ import { numberedTaskIdNow } from "./use-link-standing.js";
  * leaving for the task, and a place a part names rather than a link writes,
  * an agent a message's sender names or a review thread a Pull request tab
  * jumps to, is asked of it the same way (`useOpenPlace`,
- * `OpenAddressesHere`); a task, or an agent with no task, opens a pull
+ * `OpenAddressesHere`); a task opens a pull
  * request one of its agents opened in that agent's Pull request tab, and any
  * other pull request of its repository no listed task's agent opened in a
  * Pull request tab by its number, rather than on GitHub
@@ -97,10 +97,9 @@ export type PagesHere =
       readonly agentId: string;
     } & Holding);
 
-/** The tasks and the agents on no task the window lists, as their rows name their pull requests. */
+/** The tasks the window lists, as their rows name their pull requests. */
 export interface Listed {
   readonly tasks: Parameters<typeof listedPullRequestOf>[1];
-  readonly agents: Parameters<typeof listedPullRequestOf>[2];
 }
 
 const OpenLinkContext = createContext<((link: ReadLink) => void) | undefined>(undefined);
@@ -173,28 +172,25 @@ export function OnLeavingHere({
   return createElement(OpenHereContext.Provider, { value: open }, children);
 }
 
-/** Reads the tasks and the agents on no task the window lists as they stand now. */
+/** Reads the tasks the window lists as they stand now. */
 type ListedTasksReader = () => Listed;
 
 const ListedTasksContext = createContext<ListedTasksReader | undefined>(undefined);
 
 /**
- * Hands everything under it the tasks and the agents on no task the window
- * lists, whose pull requests open in their Pull request tabs. Note that it hands a reader
+ * Hands everything under it the tasks the window lists, whose pull requests open in their Pull request tabs. Note that it hands a reader
  * standing across draws rather than the list, which is read as a link is
  * opened, because the list is new on every patch to any listed task, and
  * every part opening links would be drawn again with it.
  */
 export function ListedPullRequests({
   tasks,
-  agents,
   children,
 }: {
   tasks: Listed["tasks"];
-  agents?: Listed["agents"];
   children: ReactNode;
 }): ReactNode {
-  const read = useSteadyDoor((): Listed => ({ tasks, agents }));
+  const read = useSteadyDoor((): Listed => ({ tasks }));
   return createElement(ListedTasksContext.Provider, { value: read }, children);
 }
 
@@ -219,7 +215,7 @@ export function PullRequestsOnGitHub({ children }: { children: ReactNode }): Rea
 }
 
 /** What a place of the app pressed on a task's page or an agent's opens beside it, read as its declaration reads it. */
-type PagePlaceBeside = (place: LinkPlace, here: PagesHere) => Route;
+type PagePlaceBeside = (place: LinkDestination, here: PagesHere) => Route;
 
 /**
  * Each place of the app a task's page or an agent's opens beside it, by the
@@ -228,10 +224,10 @@ type PagePlaceBeside = (place: LinkPlace, here: PagesHere) => Route;
  * read on its own place; its own is the window's, which opens it as the
  * panel's. Every other place is the window's.
  */
-const PAGE_BESIDE: { readonly [Name in LinkPlaceName]?: PagePlaceBeside } = {
+const PAGE_BESIDE: { readonly [Name in LinkDestinationName]?: PagePlaceBeside } = {
   PAGE: (at, here) => {
     // Note that a task named by a number no one found the task for is no place a page reads on, so the window finds it on the service.
-    if (at.kind !== LINK_PLACE.PAGE || taskNumberOf(at) !== undefined) return NOTHING;
+    if (at.kind !== LINK_DESTINATION.PAGE || taskNumberOf(at) !== undefined) return NOTHING;
     const place: PagePlace = "planId" in at ? { taskId: at.planId } : { agentId: at.agentId };
     const own =
       here.kind === HERE.TASK
@@ -291,10 +287,10 @@ export function openPullRequestsHere(
 }
 
 /** The place a mention of a plan, or of one of its sections, names. */
-export function placeOfMention(mention: DescriptionMention): LinkPlace {
+export function placeOfMention(mention: DescriptionMention): LinkDestination {
   return mention.kind === MENTION_KIND.TASK
-    ? { kind: LINK_PLACE.TASK, planId: mention.taskId }
-    : { kind: LINK_PLACE.SECTION, planId: mention.taskId, anchor: mention.anchor };
+    ? { kind: LINK_DESTINATION.TASK, planId: mention.taskId }
+    : { kind: LINK_DESTINATION.SECTION, planId: mention.taskId, anchor: mention.anchor };
 }
 
 /**
@@ -335,13 +331,12 @@ export function throughWindow(
   if (address.kind === ADDRESS.PLACE) return go(address.link);
   const opened =
     address.kind === ADDRESS.PULL_REQUEST && address.onGitHub !== true && listed !== undefined
-      ? listedPullRequestOf(address.href, listed.tasks, listed.agents)
+      ? listedPullRequestOf(address.href, listed.tasks)
       : undefined;
   if (opened === undefined) return external(address);
-  const task = opened.taskId === undefined ? undefined : { planId: opened.taskId };
   const changes: ReadLink = {
     workspace: "",
-    place: { kind: LINK_PLACE.CHANGES, ...task, agentId: opened.agentId },
+    place: { kind: LINK_DESTINATION.CHANGES, planId: opened.taskId, agentId: opened.agentId },
   };
   // Note that the window goes to the Pull request tab's place as its route reads it, as a link to it would.
   return go(placeAddress(changes, router).routed?.link ?? changes);
@@ -349,8 +344,7 @@ export function throughWindow(
 
 /**
  * The address with the listed agent that opened the pull request it names,
- * however its page is spelled, among the tasks and the agents on no task the
- * window lists, so a place asked of it first leaves another task's to the
+ * however its page is spelled, among the tasks the window lists, so a place asked of it first leaves another task's to the
  * window, and with whether the account opens pull requests on GitHub; any
  * other address as it is.
  */
@@ -358,10 +352,10 @@ function withListedAgent(address: Address, listed: Listed | undefined, onGitHub:
   if (address.kind !== ADDRESS.PULL_REQUEST) return address;
   const named = { ...address, onGitHub };
   if (listed === undefined) return named;
-  return { ...named, listed: listedPullRequestOf(address.href, listed.tasks, listed.agents) };
+  return { ...named, listed: listedPullRequestOf(address.href, listed.tasks) };
 }
 
-/** Opens an address where the place it is pressed on opens it, else where the window does (`throughWindow`): a place in the app there, a listed task's or a listed agent's on no task's pull request in its Pull request tab, anything else in the browser. */
+/** Opens an address where the place it is pressed on opens it, else where the window does (`throughWindow`): a place in the app there, a listed task's pull request in its Pull request tab, anything else in the browser. */
 function openAddress(
   address: Address,
   doors: {
@@ -408,7 +402,7 @@ export function useOpenTask(): ((mention: DescriptionMention) => void) | undefin
 }
 
 /** The opener for a place in the app a part names rather than a link writes, as a link to it would open it, one of an agent's messages among them: where the place it is pressed on opens it, else in the window; nothing outside the window. */
-export function useOpenPlace(): ((place: LinkPlace) => void) | undefined {
+export function useOpenPlace(): ((place: LinkDestination) => void) | undefined {
   const openPlace = useContext(OpenLinkContext);
   const openHere = useContext(OpenHereContext);
   const router = useLinkRouter();
@@ -416,7 +410,7 @@ export function useOpenPlace(): ((place: LinkPlace) => void) | undefined {
     () =>
       openPlace === undefined
         ? undefined
-        : (place: LinkPlace) =>
+        : (place: LinkDestination) =>
             openAddress(placeAddress({ workspace: "", place }, router), {
               openPlace,
               openHere,

@@ -1070,16 +1070,14 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           view = pendingTasks.length === 0 ? rest : { ...rest, pendingTasks };
           write({
             tasks: list.plans,
-            tasklessAgents: list.planlessAgents ?? [],
             taskAgents,
             taskPullRequests,
             agentPullRequests,
             taskAgentPins,
           });
           documents.relisted();
-          const agents = [...taskAgents, ...(list.planlessAgents ?? [])];
           PubSub.publishUnsafe(listings, {
-            statuses: new Map(agents.map((agent) => [agent.id, agent.status])),
+            statuses: new Map(taskAgents.map((agent) => [agent.id, agent.status])),
             pullRequests: agentPullRequests,
           });
         },
@@ -2184,6 +2182,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         (answer): TasksPageSourceAnswer =>
           "page" in answer ? { lines: pageSourceLines(answer.page.html) } : answer,
       ),
+    // The version is read as its frame reads it (`pageRead`), its HTML whole, so it reaches the client that asked alone.
+    TASKS_PAGE_HTML: pageRead,
     // A picture's bytes are answered to the window that asked and kept by
     // its id, which no other upload is given, so they never enter the view
     // every window is told.

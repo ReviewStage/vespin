@@ -55,7 +55,7 @@ import { parsedUrl } from "./parsed-url.js";
  *   `/admin/workspace/<workspaceId>`, and a day's, `/admin/day/<YYYY-MM-DD>`.
  *
  * A place of the account's own, which no workspace holds, is linked under
- * no workspace (`ACCOUNT_PLACE`): a box's pairing, `/connect/<code>`, by the
+ * no workspace (`ACCOUNT_DESTINATION`): a box's pairing, `/connect/<code>`, by the
  * code the box shows (`HOST_WIRE.CONNECT_PATH`), where the member approves
  * or denies it. `connect` is a reserved slug, so no workspace's link is
  * ever read as one.
@@ -120,7 +120,7 @@ import { parsedUrl } from "./parsed-url.js";
  * percent-encoded, so it stays one target.
  */
 
-export const LINK_PLACE = {
+export const LINK_DESTINATION = {
   /** The workspace's Home, the page with no task open, at the workspace's own address. */
   HOME: "home",
   /** The workspace's Board, its tasks by where each stands. */
@@ -230,7 +230,10 @@ const LINK_BOUNDS = {
 const ID = /^[A-Za-z0-9_-]+$/u;
 
 /** The places a link names by its workspace's step alone, or one step after it, which a page of ours or a file could otherwise be read as. */
-const WORKSPACE_PLACES: ReadonlySet<string> = new Set([LINK_PLACE.HOME, LINK_PLACE.BOARD]);
+const WORKSPACE_PLACES: ReadonlySet<string> = new Set([
+  LINK_DESTINATION.HOME,
+  LINK_DESTINATION.BOARD,
+]);
 
 /** A page of Settings as its link spells it: lower case, words joined by hyphens. */
 const SETTINGS_PAGE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/u;
@@ -387,92 +390,95 @@ const idSchema = EffectSchema.String.check(
 
 const wholeSchema = EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(0));
 
-const linkPlaceSchema = EffectSchema.Union([
-  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_PLACE.HOME) }),
-  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_PLACE.BOARD) }),
-  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_PLACE.TASK), planId: idSchema }),
+const linkDestinationSchema = EffectSchema.Union([
+  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_DESTINATION.HOME) }),
+  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_DESTINATION.BOARD) }),
+  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_DESTINATION.TASK), planId: idSchema }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.SECTION),
+    kind: EffectSchema.Literal(LINK_DESTINATION.SECTION),
     planId: idSchema,
     anchor: EffectSchema.String.check(EffectSchema.isPattern(ANCHOR)),
   }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.COMMENT),
+    kind: EffectSchema.Literal(LINK_DESTINATION.COMMENT),
     planId: idSchema,
     threadId: idSchema,
   }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.VERSION),
+    kind: EffectSchema.Literal(LINK_DESTINATION.VERSION),
     planId: idSchema,
     revision: wholeSchema,
   }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.PAGE),
+    kind: EffectSchema.Literal(LINK_DESTINATION.PAGE),
     planId: idSchema,
     pageId: idSchema,
   }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.PAGE),
+    kind: EffectSchema.Literal(LINK_DESTINATION.PAGE),
     agentId: idSchema,
     pageId: idSchema,
   }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.AGENT),
+    kind: EffectSchema.Literal(LINK_DESTINATION.AGENT),
     planId: EffectSchema.optionalKey(idSchema),
     agentId: idSchema,
   }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.WORKER),
+    kind: EffectSchema.Literal(LINK_DESTINATION.WORKER),
     planId: EffectSchema.optionalKey(idSchema),
     agentId: idSchema,
     callId: idSchema,
   }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.CHANGES),
+    kind: EffectSchema.Literal(LINK_DESTINATION.CHANGES),
     planId: EffectSchema.optionalKey(idSchema),
     agentId: idSchema,
   }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.PULL_REQUEST_THREAD),
+    kind: EffectSchema.Literal(LINK_DESTINATION.PULL_REQUEST_THREAD),
     planId: EffectSchema.optionalKey(idSchema),
     agentId: idSchema,
     threadId: idSchema,
     view: EffectSchema.Literals(Object.values(PULL_REQUEST_THREAD_VIEW)),
   }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.MESSAGE),
+    kind: EffectSchema.Literal(LINK_DESTINATION.MESSAGE),
     planId: EffectSchema.optionalKey(idSchema),
     agentId: idSchema,
     messageId: idSchema,
   }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.INBOX),
+    kind: EffectSchema.Literal(LINK_DESTINATION.INBOX),
     planId: EffectSchema.optionalKey(idSchema),
   }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.INBOX_ITEM),
+    kind: EffectSchema.Literal(LINK_DESTINATION.INBOX_ITEM),
     planId: idSchema,
     itemId: idSchema,
   }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.INBOX_ITEM),
+    kind: EffectSchema.Literal(LINK_DESTINATION.INBOX_ITEM),
     agentId: idSchema,
     itemId: idSchema,
   }),
-  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_PLACE.INBOX_ITEM), itemId: idSchema }),
-  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_PLACE.AUTOMATIONS) }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.AUTOMATION),
+    kind: EffectSchema.Literal(LINK_DESTINATION.INBOX_ITEM),
+    itemId: idSchema,
+  }),
+  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_DESTINATION.AUTOMATIONS) }),
+  EffectSchema.Struct({
+    kind: EffectSchema.Literal(LINK_DESTINATION.AUTOMATION),
     automationId: idSchema,
   }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.AUTOMATION_RUN),
+    kind: EffectSchema.Literal(LINK_DESTINATION.AUTOMATION_RUN),
     automationId: idSchema,
     runId: idSchema,
   }),
-  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_PLACE.PERSON), userId: idSchema }),
+  EffectSchema.Struct({ kind: EffectSchema.Literal(LINK_DESTINATION.PERSON), userId: idSchema }),
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.SETTINGS),
+    kind: EffectSchema.Literal(LINK_DESTINATION.SETTINGS),
     page: EffectSchema.optionalKey(
       EffectSchema.String.check(EffectSchema.isPattern(SETTINGS_PAGE)),
     ),
@@ -481,7 +487,7 @@ const linkPlaceSchema = EffectSchema.Union([
   // section the schema does not know is refused rather than read as the
   // Overview by a struct naming none.
   EffectSchema.Struct({
-    kind: EffectSchema.Literal(LINK_PLACE.ADMIN),
+    kind: EffectSchema.Literal(LINK_DESTINATION.ADMIN),
     section: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(ADMIN_LINK_SECTION))),
     userId: EffectSchema.optionalKey(idSchema),
     workspaceId: EffectSchema.optionalKey(idSchema),
@@ -499,21 +505,21 @@ const linkPlaceSchema = EffectSchema.Union([
  * agent's place names its task only where a link written under the task
  * did, or a writer still does, so a reader finds the task by the agent.
  */
-export type LinkPlace = typeof linkPlaceSchema.Type;
+export type LinkDestination = typeof linkDestinationSchema.Type;
 
 /** The kind of place a link sends someone to. */
-export type LinkPlaceKind = LinkPlace["kind"];
+export type LinkDestinationKind = LinkDestination["kind"];
 
 /** A link read: the place it names, and the workspace it was written under, which a reader may show and never trusts. */
 export interface ReadLink {
   readonly workspace: string;
-  readonly place: LinkPlace;
+  readonly place: LinkDestination;
 }
 
-const readPlace = EffectSchema.decodeUnknownOption(linkPlaceSchema);
+const readPlace = EffectSchema.decodeUnknownOption(linkDestinationSchema);
 
 /** Whether a value is a place a link can name, as one crossing from main to a window is checked. */
-export const isLinkPlace = EffectSchema.is(linkPlaceSchema);
+export const isLinkDestination = EffectSchema.is(linkDestinationSchema);
 
 /** A step of a path written percent-encoded, parentheses included, so a link pasted into markdown stays one target. */
 export function encodedStep(step: string): string {
@@ -559,25 +565,25 @@ function taskFields(taskId: string, rest: readonly string[]) {
   if (step === STEP.AGENT && id !== undefined) return agentFields(taskId, id, more);
   // A picture in an item's words opens the item, and nothing of the picture.
   if (step === STEP.INBOX && id !== undefined && namesItemPicture(more)) {
-    return { kind: LINK_PLACE.INBOX_ITEM, planId: taskId, itemId: id };
+    return { kind: LINK_DESTINATION.INBOX_ITEM, planId: taskId, itemId: id };
   }
   if (id === undefined || more.length > 0) return undefined;
   switch (step) {
     case STEP.VERSION:
       return WHOLE.test(id)
-        ? { kind: LINK_PLACE.VERSION, planId: taskId, revision: Number(id) }
+        ? { kind: LINK_DESTINATION.VERSION, planId: taskId, revision: Number(id) }
         : undefined;
     case STEP.PAGE:
-      return { kind: LINK_PLACE.PAGE, planId: taskId, pageId: id };
+      return { kind: LINK_DESTINATION.PAGE, planId: taskId, pageId: id };
     case STEP.WORK:
-      return WHOLE.test(id) ? { kind: LINK_PLACE.TASK, planId: taskId } : undefined;
+      return WHOLE.test(id) ? { kind: LINK_DESTINATION.TASK, planId: taskId } : undefined;
     case STEP.WORKER:
-      return { kind: LINK_PLACE.TASK, planId: taskId };
+      return { kind: LINK_DESTINATION.TASK, planId: taskId };
     case STEP.INBOX:
-      return { kind: LINK_PLACE.INBOX_ITEM, planId: taskId, itemId: id };
+      return { kind: LINK_DESTINATION.INBOX_ITEM, planId: taskId, itemId: id };
     // A picture of the task's description opens the task, and nothing of the picture.
     case STEP.FILES:
-      return PICTURE_ID.test(id) ? { kind: LINK_PLACE.TASK, planId: taskId } : undefined;
+      return PICTURE_ID.test(id) ? { kind: LINK_DESTINATION.TASK, planId: taskId } : undefined;
     default:
       return undefined;
   }
@@ -587,21 +593,22 @@ function taskFields(taskId: string, rest: readonly string[]) {
 function agentFields(taskId: string | undefined, agentId: string, rest: readonly string[]) {
   const [step, id, ...more] = rest;
   const task = taskId === undefined ? {} : { planId: taskId };
-  if (step === undefined) return { kind: LINK_PLACE.AGENT, ...task, agentId };
+  if (step === undefined) return { kind: LINK_DESTINATION.AGENT, ...task, agentId };
   if (step === STEP.CHANGES && id === undefined)
-    return { kind: LINK_PLACE.CHANGES, ...task, agentId };
+    return { kind: LINK_DESTINATION.CHANGES, ...task, agentId };
   if (step === STEP.CHANGES) return threadFields(task, agentId, rest);
   if (step === STEP.INBOX && taskId === undefined && id !== undefined && namesItemPicture(more)) {
-    return { kind: LINK_PLACE.INBOX_ITEM, agentId, itemId: id };
+    return { kind: LINK_DESTINATION.INBOX_ITEM, agentId, itemId: id };
   }
   if (id === undefined || more.length > 0) return undefined;
-  if (step === STEP.MESSAGE) return { kind: LINK_PLACE.MESSAGE, ...task, agentId, messageId: id };
+  if (step === STEP.MESSAGE)
+    return { kind: LINK_DESTINATION.MESSAGE, ...task, agentId, messageId: id };
   if (step === STEP.PAGE && taskId === undefined)
-    return { kind: LINK_PLACE.PAGE, agentId, pageId: id };
+    return { kind: LINK_DESTINATION.PAGE, agentId, pageId: id };
   if (step === STEP.INBOX && taskId === undefined) {
-    return { kind: LINK_PLACE.INBOX_ITEM, agentId, itemId: id };
+    return { kind: LINK_DESTINATION.INBOX_ITEM, agentId, itemId: id };
   }
-  if (step === STEP.WORKER) return { kind: LINK_PLACE.WORKER, ...task, agentId, callId: id };
+  if (step === STEP.WORKER) return { kind: LINK_DESTINATION.WORKER, ...task, agentId, callId: id };
   return undefined;
 }
 
@@ -614,7 +621,7 @@ function threadFields(
   const [, view, step, threadId, ...more] = rest;
   if (view === undefined || !THREAD_VIEWS.has(view) || step !== STEP.THREAD) return undefined;
   if (threadId === undefined || more.length > 0) return undefined;
-  return { kind: LINK_PLACE.PULL_REQUEST_THREAD, ...task, agentId, threadId, view };
+  return { kind: LINK_DESTINATION.PULL_REQUEST_THREAD, ...task, agentId, threadId, view };
 }
 
 /** The fields a link's steps after its workspace spell, for the schema to read; nothing where they name no place. */
@@ -625,32 +632,32 @@ function placeFields(steps: readonly string[]) {
   }
   switch (step) {
     case undefined:
-      return { kind: LINK_PLACE.HOME };
+      return { kind: LINK_DESTINATION.HOME };
     case STEP.TASKS:
-      return id === undefined ? { kind: LINK_PLACE.BOARD } : undefined;
+      return id === undefined ? { kind: LINK_DESTINATION.BOARD } : undefined;
     case STEP.AGENT:
       return id === undefined ? undefined : agentFields(undefined, id, rest);
     case STEP.INBOX:
       return inboxFields(id, rest);
     case STEP.CHANNEL:
-      return id === undefined || rest.length > 0 ? undefined : { kind: LINK_PLACE.INBOX };
+      return id === undefined || rest.length > 0 ? undefined : { kind: LINK_DESTINATION.INBOX };
     case STEP.AUTOMATIONS:
-      return id === undefined ? { kind: LINK_PLACE.AUTOMATIONS } : undefined;
+      return id === undefined ? { kind: LINK_DESTINATION.AUTOMATIONS } : undefined;
     case STEP.AUTOMATION:
       if (id === undefined) return undefined;
-      if (rest.length === 0) return { kind: LINK_PLACE.AUTOMATION, automationId: id };
+      if (rest.length === 0) return { kind: LINK_DESTINATION.AUTOMATION, automationId: id };
       return rest.length === 2 && rest[0] === STEP.RUN
-        ? { kind: LINK_PLACE.AUTOMATION_RUN, automationId: id, runId: rest[1] }
+        ? { kind: LINK_DESTINATION.AUTOMATION_RUN, automationId: id, runId: rest[1] }
         : undefined;
     case STEP.PERSON:
       return id === undefined || rest.length > 0
         ? undefined
-        : { kind: LINK_PLACE.PERSON, userId: id };
+        : { kind: LINK_DESTINATION.PERSON, userId: id };
     case STEP.SETTINGS:
       if (rest.length > 0) return undefined;
       return id === undefined
-        ? { kind: LINK_PLACE.SETTINGS }
-        : { kind: LINK_PLACE.SETTINGS, page: id };
+        ? { kind: LINK_DESTINATION.SETTINGS }
+        : { kind: LINK_DESTINATION.SETTINGS, page: id };
     case STEP.ADMIN:
       return adminFields(id, rest);
     default:
@@ -660,30 +667,31 @@ function placeFields(steps: readonly string[]) {
 
 /** The Inbox's fields past its step: the Inbox itself, the Inbox narrowed to one task, `task/<taskId>`, or an item by its id alone, a picture in its words opening the item. */
 function inboxFields(step: string | undefined, rest: readonly string[]) {
-  if (step === undefined) return { kind: LINK_PLACE.INBOX };
+  if (step === undefined) return { kind: LINK_DESTINATION.INBOX };
   if (TASK_STEPS.has(step)) {
     const [taskId, ...more] = rest;
     return taskId === undefined || more.length > 0
       ? undefined
-      : { kind: LINK_PLACE.INBOX, planId: taskStepOf(taskId) };
+      : { kind: LINK_DESTINATION.INBOX, planId: taskStepOf(taskId) };
   }
   return rest.length === 0 || namesItemPicture(rest)
-    ? { kind: LINK_PLACE.INBOX_ITEM, itemId: step }
+    ? { kind: LINK_DESTINATION.INBOX_ITEM, itemId: step }
     : undefined;
 }
 
 /** The Admin place's fields past its step: its Overview, a section, an account's page, a workspace's, or a day's. */
 function adminFields(step: string | undefined, rest: readonly string[]) {
-  if (step === undefined) return { kind: LINK_PLACE.ADMIN };
+  if (step === undefined) return { kind: LINK_DESTINATION.ADMIN };
   const [id, ...more] = rest;
   if (more.length > 0) return undefined;
   if (step === STEP.USER)
-    return id === undefined ? undefined : { kind: LINK_PLACE.ADMIN, userId: id };
+    return id === undefined ? undefined : { kind: LINK_DESTINATION.ADMIN, userId: id };
   if (step === STEP.WORKSPACE)
-    return id === undefined ? undefined : { kind: LINK_PLACE.ADMIN, workspaceId: id };
-  if (step === STEP.DAY) return id === undefined ? undefined : { kind: LINK_PLACE.ADMIN, day: id };
+    return id === undefined ? undefined : { kind: LINK_DESTINATION.ADMIN, workspaceId: id };
+  if (step === STEP.DAY)
+    return id === undefined ? undefined : { kind: LINK_DESTINATION.ADMIN, day: id };
   return id === undefined && ADMIN_LINK_SECTIONS.has(step)
-    ? { kind: LINK_PLACE.ADMIN, section: step }
+    ? { kind: LINK_DESTINATION.ADMIN, section: step }
     : undefined;
 }
 
@@ -693,38 +701,40 @@ function workspaceStep(workspace: string): boolean {
 }
 
 /** A task's link, or a section's by its fragment, an empty one the task's own; the anchor read in lower case. */
-function taskLink(taskId: string, hash: string): LinkPlace | undefined {
+function taskLink(taskId: string, hash: string): LinkDestination | undefined {
   if (hash === "" || hash === "#") {
-    return Option.getOrUndefined(readPlace({ kind: LINK_PLACE.TASK, planId: taskId }));
+    return Option.getOrUndefined(readPlace({ kind: LINK_DESTINATION.TASK, planId: taskId }));
   }
   const anchor = decodedStep(hash.slice(1))?.toLowerCase();
-  return Option.getOrUndefined(readPlace({ kind: LINK_PLACE.SECTION, planId: taskId, anchor }));
+  return Option.getOrUndefined(
+    readPlace({ kind: LINK_DESTINATION.SECTION, planId: taskId, anchor }),
+  );
 }
 
 /** The path a place is written at under its workspace, each id percent-encoded. */
-function placePath(place: LinkPlace): readonly string[] {
+function placePath(place: LinkDestination): readonly string[] {
   switch (place.kind) {
-    case LINK_PLACE.HOME:
+    case LINK_DESTINATION.HOME:
       return [];
-    case LINK_PLACE.BOARD:
+    case LINK_DESTINATION.BOARD:
       return [STEP.TASKS];
-    case LINK_PLACE.TASK:
-    case LINK_PLACE.SECTION:
-    case LINK_PLACE.COMMENT:
+    case LINK_DESTINATION.TASK:
+    case LINK_DESTINATION.SECTION:
+    case LINK_DESTINATION.COMMENT:
       return [STEP.TASK, place.planId];
-    case LINK_PLACE.VERSION:
+    case LINK_DESTINATION.VERSION:
       return [STEP.TASK, place.planId, STEP.VERSION, String(place.revision)];
-    case LINK_PLACE.PAGE:
+    case LINK_DESTINATION.PAGE:
       return "planId" in place
         ? [STEP.TASK, place.planId, STEP.PAGE, place.pageId]
         : [STEP.AGENT, place.agentId, STEP.PAGE, place.pageId];
-    case LINK_PLACE.AGENT:
+    case LINK_DESTINATION.AGENT:
       return agentPath(place.planId, place.agentId);
-    case LINK_PLACE.WORKER:
+    case LINK_DESTINATION.WORKER:
       return [...agentPath(place.planId, place.agentId), STEP.WORKER, place.callId];
-    case LINK_PLACE.CHANGES:
+    case LINK_DESTINATION.CHANGES:
       return [...agentPath(place.planId, place.agentId), STEP.CHANGES];
-    case LINK_PLACE.PULL_REQUEST_THREAD:
+    case LINK_DESTINATION.PULL_REQUEST_THREAD:
       return [
         ...agentPath(place.planId, place.agentId),
         STEP.CHANGES,
@@ -732,26 +742,26 @@ function placePath(place: LinkPlace): readonly string[] {
         STEP.THREAD,
         place.threadId,
       ];
-    case LINK_PLACE.MESSAGE:
+    case LINK_DESTINATION.MESSAGE:
       return [...agentPath(place.planId, place.agentId), STEP.MESSAGE, place.messageId];
-    case LINK_PLACE.INBOX:
+    case LINK_DESTINATION.INBOX:
       return place.planId === undefined ? [STEP.INBOX] : [STEP.INBOX, STEP.TASK, place.planId];
-    case LINK_PLACE.INBOX_ITEM:
+    case LINK_DESTINATION.INBOX_ITEM:
       if ("planId" in place) return [STEP.TASK, place.planId, STEP.INBOX, place.itemId];
       return "agentId" in place
         ? [STEP.AGENT, place.agentId, STEP.INBOX, place.itemId]
         : [STEP.INBOX, place.itemId];
-    case LINK_PLACE.AUTOMATIONS:
+    case LINK_DESTINATION.AUTOMATIONS:
       return [STEP.AUTOMATIONS];
-    case LINK_PLACE.AUTOMATION:
+    case LINK_DESTINATION.AUTOMATION:
       return [STEP.AUTOMATION, place.automationId];
-    case LINK_PLACE.AUTOMATION_RUN:
+    case LINK_DESTINATION.AUTOMATION_RUN:
       return [STEP.AUTOMATION, place.automationId, STEP.RUN, place.runId];
-    case LINK_PLACE.PERSON:
+    case LINK_DESTINATION.PERSON:
       return [STEP.PERSON, place.userId];
-    case LINK_PLACE.SETTINGS:
+    case LINK_DESTINATION.SETTINGS:
       return place.page === undefined ? [STEP.SETTINGS] : [STEP.SETTINGS, place.page];
-    case LINK_PLACE.ADMIN:
+    case LINK_DESTINATION.ADMIN:
       if (place.userId !== undefined) return [STEP.ADMIN, STEP.USER, place.userId];
       if (place.workspaceId !== undefined) return [STEP.ADMIN, STEP.WORKSPACE, place.workspaceId];
       if (place.day !== undefined) return [STEP.ADMIN, STEP.DAY, place.day];
@@ -770,14 +780,14 @@ function agentPath(taskId: string | undefined, agentId: string): readonly string
  * anchor as the fragment, the task's own where the anchor is empty, and a
  * comment thread's in the task's query.
  */
-export function linkOf(place: LinkPlace, workspace: string): string {
+export function linkOf(place: LinkDestination, workspace: string): string {
   const link = [LINK_ORIGIN, workspace, ...placePath(place)]
     .map((step, index) => (index === 0 ? step : encodedStep(step)))
     .join("/");
-  if (place.kind === LINK_PLACE.SECTION && place.anchor !== "") {
+  if (place.kind === LINK_DESTINATION.SECTION && place.anchor !== "") {
     return `${link}#${encodedStep(place.anchor)}`;
   }
-  if (place.kind === LINK_PLACE.COMMENT) {
+  if (place.kind === LINK_DESTINATION.COMMENT) {
     return `${link}?${new URLSearchParams({ [COMMENT_QUERY]: place.threadId })}`;
   }
   return link;
@@ -809,7 +819,7 @@ export function readLink(target: string): ReadLink | undefined {
   const place =
     taskOwn && thread.length === 1
       ? Option.getOrUndefined(
-          readPlace({ kind: LINK_PLACE.COMMENT, planId: taskId, threadId: thread[0] }),
+          readPlace({ kind: LINK_DESTINATION.COMMENT, planId: taskId, threadId: thread[0] }),
         )
       : taskOwn
         ? taskLink(taskId, url.hash)
@@ -821,12 +831,12 @@ export function readLink(target: string): ReadLink | undefined {
 }
 
 /** The number a place names its task by in its link's workspace, `42` from `/task/42`, which the service finds the task by; nothing for a place naming its task by its id, or no task. */
-export function taskNumberOf(place: LinkPlace): number | undefined {
+export function taskNumberOf(place: LinkDestination): number | undefined {
   return "planId" in place && TASK_NUMBER.test(place.planId) ? Number(place.planId) : undefined;
 }
 
 /** The place with its task named by the id the service found for its number, everything else as it was. */
-export function withTaskId(place: LinkPlace, taskId: string): LinkPlace {
+export function withTaskId(place: LinkDestination, taskId: string): LinkDestination {
   return "planId" in place ? { ...place, planId: taskId } : place;
 }
 
@@ -843,30 +853,30 @@ export function taskLinkStep(task: {
 }
 
 /** The places of the account's own, which no workspace holds, so their links name none. */
-export const ACCOUNT_PLACE = {
+export const ACCOUNT_DESTINATION = {
   /** A box's pending pairing, by the code it shows, which the member approves or denies. */
   CONNECT: "connect",
 } as const;
 
-const accountPlaceSchema = EffectSchema.Struct({
-  kind: EffectSchema.Literal(ACCOUNT_PLACE.CONNECT),
+const accountDestinationSchema = EffectSchema.Struct({
+  kind: EffectSchema.Literal(ACCOUNT_DESTINATION.CONNECT),
   code: EffectSchema.String.check(
     EffectSchema.makeFilter((value: string) => hostUserCodeOf(value) === value),
   ),
 });
 
 /** A place of the account's own, by what finds it: a pairing's code as its eight letters. */
-type AccountPlace = typeof accountPlaceSchema.Type;
+type AccountDestination = typeof accountDestinationSchema.Type;
 
 /** The kind of place of the account's own a link sends someone to. */
-export type AccountPlaceKind = AccountPlace["kind"];
+export type AccountDestinationKind = AccountDestination["kind"];
 
 /** Whether a value is a place of the account's own, as one crossing from main to a window is checked. */
-export const isAccountPlace = EffectSchema.is(accountPlaceSchema);
+export const isAccountDestination = EffectSchema.is(accountDestinationSchema);
 
 /** A link read that names no workspace: a place of the account's own. */
 export interface AccountLink {
-  readonly place: AccountPlace;
+  readonly place: AccountDestination;
 }
 
 /** A link of ours the system hands a window: a place under the workspace it was written in, or one of the account's own. */
@@ -888,11 +898,11 @@ function readAccountLink(target: string): AccountLink | undefined {
   if (!path.startsWith(CONNECT_PREFIX)) return undefined;
   const typed = boundedStep(path.slice(CONNECT_PREFIX.length));
   const code = typed === undefined ? undefined : hostUserCodeOf(typed);
-  return code === undefined ? undefined : { place: { kind: ACCOUNT_PLACE.CONNECT, code } };
+  return code === undefined ? undefined : { place: { kind: ACCOUNT_DESTINATION.CONNECT, code } };
 }
 
 /** The link a place of the account's own is shared by, under no workspace: a pairing's, its code as the box shows it. */
-function accountLinkOf(place: AccountPlace): string {
+function accountLinkOf(place: AccountDestination): string {
   return `${LINK_ORIGIN}${hostConnectPath(place.code)}`;
 }
 

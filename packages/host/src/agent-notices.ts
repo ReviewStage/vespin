@@ -14,9 +14,8 @@ import {
   type AgentFailure,
   type AgentStatus,
   type AgentSummary,
-  type TasklessAgent,
 } from "@repo/features/agent-wire";
-import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { SOUND_WHEN, type SoundWhen } from "@repo/settings";
 import type { CompletionSound } from "@repo/wire/app-settings";
 import { Clock, Context, Duration, Effect, FiberHandle, type Scope, Stream } from "effect";
@@ -55,11 +54,8 @@ import type { AppInboxSlice, AppInboxWaitingItem } from "./app-state.js";
  * main keeps a ledger of its own, fed by every coding-agent answer that
  * passes through the acts (a list, a Start, a Stop, a transcript page) and
  * by the plan list, followed live over Neon Realtime, which carries every
- * agent on a plan and every one with no plan as each moves, so an agent on
- * a plan the developer has left is still heard and nothing is read on a
- * clock. An agent an automation started with no plan is held from the plan
- * list, which carries the account's own beside the plans, and from any
- * answer naming it. The ledger keys an agent's run by the turn its status is
+ * agent on a plan as each moves, so an agent on a plan the developer has
+ * left is still heard and nothing is read on a clock. The ledger keys an agent's run by the turn its status is
  * read from (`turnId`): a status that moves from still writing to ended under
  * one turn is that turn's end, marked once as the agent's unseen dot, until
  * its tab is shown or the window comes forward on it, and not at all while
@@ -139,7 +135,7 @@ interface Told {
   readonly kind: typeof NOTICE_KIND.AGENT_FINISHED | typeof NOTICE_KIND.ITEM_ASKED;
   readonly title: string;
   readonly body: string;
-  readonly place: LinkPlace;
+  readonly place: LinkDestination;
 }
 
 /** The notification as the OS posts it: the event it tells of, what it says, and what its click does. */
@@ -222,13 +218,13 @@ export interface AgentNoticesDependencies {
   /** A task's name as the account's list holds it; none for a task it does not. */
   taskName: (taskId: string) => string | undefined;
   /** Opens a place in the window, brought forward: a notification's click. */
-  open: (place: LinkPlace) => void;
+  open: (place: LinkDestination) => void;
   report: (line: string) => void;
 }
 
 export interface AgentNotices {
-  /** Agents as an answer carried them, on a plan or with none: a task's list, the plan list's agents with no plan, or the one a Start or a Stop answered. */
-  observeAgents(agents: readonly (AgentSummary | TasklessAgent)[]): void;
+  /** Agents as an answer carried them: a task's list, or the one a Start or a Stop answered. */
+  observeAgents(agents: readonly AgentSummary[]): void;
   /** One agent's status as a transcript page carried it; an agent no answer has named yet is left for the list. */
   observeStatus(agentId: string, status: AgentStatus): void;
   /** The agent as the answer to a message carried it: running, with a line awaiting the turn it opens. */
@@ -485,7 +481,7 @@ function agentsCounted(count: number): string {
  * the Inbox where any of them asks.
  */
 function noticeOf(burst: readonly Told[]): Omit<AgentNotice, "subject" | "onClick"> & {
-  readonly place: LinkPlace;
+  readonly place: LinkDestination;
 } {
   const [only, ...rest] = burst;
   if (only !== undefined && rest.length === 0) return only;
@@ -499,7 +495,7 @@ function noticeOf(burst: readonly Told[]): Omit<AgentNotice, "subject" | "onClic
   return {
     title: said.join(", "),
     body: [...new Set(burst.map((told) => told.title))].join(", "),
-    place: asked > 0 || newest === undefined ? { kind: LINK_PLACE.INBOX } : newest.place,
+    place: asked > 0 || newest === undefined ? { kind: LINK_DESTINATION.INBOX } : newest.place,
   };
 }
 
@@ -612,7 +608,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
                   ? LIMIT_REACHED_WORDS
                   : "Your agent failed.",
             place: {
-              kind: LINK_PLACE.AGENT,
+              kind: LINK_DESTINATION.AGENT,
               ...(agent.taskId === null ? undefined : { planId: agent.taskId }),
               agentId,
             },
@@ -750,7 +746,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
           kind: NOTICE_KIND.ITEM_ASKED,
           title: dependencies.taskName(item.planId) ?? item.agentTitle ?? UNNAMED_AGENT,
           body: item.title,
-          place: { kind: LINK_PLACE.INBOX_ITEM, planId: item.planId, itemId: item.id },
+          place: { kind: LINK_DESTINATION.INBOX_ITEM, planId: item.planId, itemId: item.id },
         });
       }
       for (const item of answer.planless ?? []) {
@@ -760,7 +756,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
           title: item.agentTitle ?? item.automationName ?? UNNAMED_AGENT,
           body: item.title,
           // Note that it is named by its id alone, because the panel then asks the service which workspace holds it, where a link under its agent opens in the workspace the window stands in.
-          place: { kind: LINK_PLACE.INBOX_ITEM, itemId: item.id },
+          place: { kind: LINK_DESTINATION.INBOX_ITEM, itemId: item.id },
         });
       }
       asking = new Set(now.keys());

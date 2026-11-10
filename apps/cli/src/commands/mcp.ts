@@ -1,5 +1,5 @@
 /**
- * mcp.ts -- `vespin mcp install <client>`: a coding agent connected to our MCP server on the service this run calls, as Settings › our MCP's connect step would.
+ * mcp.ts -- `vespin mcp install <client>`, `vespin mcp clients`, and `vespin mcp revoke <client>`: a coding agent connected to our MCP server on the service this run calls, as Settings › our MCP's connect step would, and those allowed listed and revoked as its list does.
  *
  * The commands and the address are `@repo/features/mcp-connect`'s, the
  * ones Settings shows. Claude Code, Codex, and VS Code are connected by
@@ -29,10 +29,10 @@ import {
 } from "@repo/features/mcp-connect";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { Effect, FileSystem } from "effect";
-import { Argument, Command } from "effect/cli";
+import { Argument, Command, Flag } from "effect/cli";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
-import { answer, CommandFailed, note } from "../output.js";
-import { serviceOrigin } from "../session.js";
+import { answer, CommandFailed, columns, confirmOrYes, note } from "../output.js";
+import { askService, serviceOrigin, session } from "../session.js";
 
 /** The clients `mcp install` connects, as the command line names them. */
 const MCP_CLIENT = {
@@ -165,9 +165,77 @@ const installCommand = Command.make(
   ]),
 );
 
+const clientsCommand = Command.make("clients", {}, () =>
+  Effect.gen(function* () {
+    const { hosted } = yield* session;
+    const { serverUrl, clients } = yield* askService(hosted.mcpClients.list, undefined);
+    yield* answer({
+      json: { serverUrl, clients },
+      lines:
+        clients.length === 0
+          ? [`No coding agent is connected to ${serverUrl}.`]
+          : columns(
+              clients.map((client) => [
+                client.clientId,
+                client.name ?? "(unnamed)",
+                client.allowedAt === null
+                  ? "allowed"
+                  : `allowed ${new Date(client.allowedAt).toISOString()}`,
+              ]),
+            ),
+      ids: clients.map(({ clientId }) => clientId),
+    });
+  }),
+).pipe(
+  Command.withDescription(
+    `List the coding agents you allowed on ${PRODUCT_NAME}'s MCP server; mcp revoke revokes one`,
+  ),
+  Command.withExamples([{ command: "vespin mcp clients", description: "Your connected clients" }]),
+);
+
+const revokeCommand = Command.make(
+  "revoke",
+  {
+    client: Argument.String("client").pipe(
+      Argument.withDescription("The client, by its id as mcp clients prints it"),
+    ),
+    yes: Flag.Boolean("yes").pipe(
+      Flag.withAlias("y"),
+      Flag.withDefault(false),
+      Flag.withDescription("Revoke without asking; required where stdin is no terminal"),
+    ),
+  },
+  ({ client, yes }) =>
+    Effect.gen(function* () {
+      yield* confirmOrYes(
+        `Revoke ${client}? It cannot renew its access to ${PRODUCT_NAME}, and its next sign-in asks you again.`,
+        yes,
+      );
+      const { hosted } = yield* session;
+      const { serverUrl, clients } = yield* askService(hosted.mcpClients.revoke, {
+        query: { clientId: client },
+      });
+      yield* answer({
+        json: { serverUrl, clients },
+        lines: [`Revoked ${client}.`],
+        ids: [client],
+      });
+    }),
+).pipe(
+  Command.withDescription(
+    `Revoke a coding agent you allowed on ${PRODUCT_NAME}'s MCP server: your consent and its tokens`,
+  ),
+  Command.withExamples([
+    { command: "vespin mcp revoke <client>", description: "After you confirm" },
+    { command: "vespin mcp revoke <client> --yes", description: "From a script" },
+  ]),
+);
+
 export const mcpCommand = Command.make("mcp").pipe(
-  Command.withDescription(`Connect coding agents to ${PRODUCT_NAME}'s MCP server`),
-  Command.withSubcommands([installCommand]),
+  Command.withDescription(
+    `Connect coding agents to ${PRODUCT_NAME}'s MCP server, and list or revoke those connected`,
+  ),
+  Command.withSubcommands([installCommand, clientsCommand, revokeCommand]),
   Command.withExamples([
     { command: "vespin mcp install codex", description: "Add the server to Codex" },
   ]),

@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace to remove them from, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "userId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The member's account id, as list_workspace_members answered it."
+    }
+  },
+  "required": [
+    "userId"
+  ],
+  "additionalProperties": false
+}

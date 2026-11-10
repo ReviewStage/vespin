@@ -9,9 +9,9 @@ import {
   AGENT_STATUS,
   type AgentSummary,
   CHECK_SUMMARY,
+  type ListedAgent,
   LOCAL_AGENT_REFUSAL,
   PULL_REQUEST_STATE,
-  type TasklessAgent,
 } from "@repo/features/agent-wire";
 import type { Failure } from "@repo/features/failure-remedy";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
@@ -57,7 +57,7 @@ interface Standing {
   agentId?: string;
   repository: string | null;
   listedAgents?: readonly AgentSummary[];
-  listedPage?: Pick<TasklessAgent, "id" | "workspaceId" | "repository">;
+  listedPage?: Pick<ListedAgent, "id" | "workspaceId" | "repository">;
   list?: { readonly read: boolean; readonly failed: boolean; readonly onRetry: () => void };
 }
 
@@ -480,7 +480,7 @@ test("a draft of files alone waits while another plan is open, but no relaunch b
   assert.equal(after.control().draft, undefined);
 });
 
-test("with no plan open, the agent the list carries is drawn from its row, on a task as with none, reading nothing of it, and a / reads its own repository's skills through the workspace the list names", async () => {
+test("with no plan open, the agent the list carries is drawn from its row, reading nothing of it, and a / reads its own repository's skills through the workspace the list names", async () => {
   handState(experimentsOn(EXPERIMENT.SKILLS));
   // An agent on a task works in its own repository, which its task's may have moved on from since it started.
   const place = { id: AGENT, workspaceId: "workspace-1", repository: "acme/relay-legacy" };
@@ -522,16 +522,16 @@ test("with no plan open, the agent the list carries is drawn from its row, on a 
 });
 
 test("on an agent's own page, its agent is continued and forked through the page's draft, each Start naming no task so the service puts it where that agent is, and the agent started opens; a fork let go there lets its draft go", async () => {
-  const taskless = { ...STARTED, planId: null, status: AGENT_STATUS.COMPLETED };
+  const listed = { ...STARTED, status: AGENT_STATUS.COMPLETED };
   const tab = mount({
     taskId: undefined,
     agentId: AGENT,
     repository: null,
-    listedAgents: [taskless],
+    listedAgents: [listed],
     listedPage: { id: AGENT, workspaceId: "workspace-1", repository: "acme/relay" },
   });
-  const continued = { ...taskless, id: "continued-1", status: AGENT_STATUS.STARTING };
-  const forked = { ...taskless, id: "forked-1", status: AGENT_STATUS.STARTING };
+  const continued = { ...listed, id: "continued-1", status: AGENT_STATUS.STARTING };
+  const forked = { ...listed, id: "forked-1", status: AGENT_STATUS.STARTING };
   tab.answer(ACT_KIND.AGENTS_START, { agent: continued }, { agent: forked });
   await tab.mount();
 
@@ -1180,7 +1180,6 @@ test("a task naming no repository offers its Start and a continue, and its Start
 });
 
 test("an agent's page stands on the list's row of it: a delete reads nothing again, and the agent turns to not found as the list drops it; a list that failed with no row of it says so, and its Retry reads the list again", async () => {
-  const taskless = { ...STARTED, planId: null };
   const place = { id: AGENT, workspaceId: "workspace-1", repository: null };
   const retried: string[] = [];
   const list = { read: true, failed: false, onRetry: () => retried.push("list") };
@@ -1188,7 +1187,7 @@ test("an agent's page stands on the list's row of it: a delete reads nothing aga
     taskId: undefined,
     agentId: AGENT,
     repository: null,
-    listedAgents: [taskless],
+    listedAgents: [STARTED],
     listedPage: place,
     list,
   });

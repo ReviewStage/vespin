@@ -75,7 +75,6 @@ import {
 import { calledId } from "./called-id.js";
 import { acceptedAgentChoice } from "./coder-host/start.js";
 import { workspaceAgent } from "./workspace-agents.js";
-import { workspaceStepOf, writtenAutomationMention } from "./written-mentions.js";
 
 /**
  * automation-tools.ts -- the tools a coding agent keeps its workspace's automations by: list them, make one, change one, and delete one.
@@ -291,9 +290,8 @@ export const LIST_AUTOMATIONS_TOOL = {
   name: AGENT_TOOL.LIST_AUTOMATIONS,
   description:
     "List the automations of your workspace that the developer you work for may read, newest " +
-    "first: each with its id, name, the mention it is named by, whether it is on, its trigger, " +
-    "the start of its prompt, the model and effort its runs take, its repositories, where its " +
-    "runs land, its guards, scope, " +
+    "first: each with its id, name, whether it is on, its trigger, the start of its prompt, the " +
+    "model and effort its runs take, its repositories, where its runs land, its guards, scope, " +
     "when it is next due, its newest run, and whether the developer made it. Name an " +
     "automationId to read that one whole, its prompt in full and its newest runs, each with why " +
     "it was skipped or failed and the agent it started. An automation fires on a schedule, a " +
@@ -435,8 +433,8 @@ function landingOf(summary: AutomationSummary): WireRecord | string {
   return { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: target.agentId };
 }
 
-/** One automation as an answer names it, with the mention it is named by under the workspace's step, its prompt whole or cut to the list's length. */
-function automationReading(summary: AutomationSummary, whole: boolean, step: string): WireRecord {
+/** One automation as an answer names it, its prompt whole or cut to the list's length. */
+function automationReading(summary: AutomationSummary, whole: boolean): WireRecord {
   const { prompt } = summary.action;
   const shown =
     whole || prompt.length <= LISTED_PROMPT_CHARS
@@ -445,7 +443,6 @@ function automationReading(summary: AutomationSummary, whole: boolean, step: str
   return {
     id: summary.id,
     name: summary.name,
-    mention: writtenAutomationMention(summary.id, summary.name, step),
     enabled: summary.enabled,
     trigger: { ...summary.trigger },
     prompt: shown,
@@ -580,7 +577,6 @@ export function runListAutomations(
       const workspace = yield* callerWorkspace(call.caller);
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
       const userId = callerUserId(call.caller);
-      const step = yield* workspaceStepOf(userId, workspace.value);
       const found =
         automationId === undefined
           ? undefined
@@ -596,7 +592,7 @@ export function runListAutomations(
           const summaries = yield* Effect.forEach(listed, (each) => summaryOf(userId, each));
           return {
             status: ACTION_RESULT_STATUS.ACCEPTED,
-            automations: summaries.map((summary) => automationReading(summary, false, step)),
+            automations: summaries.map((summary) => automationReading(summary, false)),
           };
         }
         const summary = yield* summaryOf(userId, found.value);
@@ -605,7 +601,7 @@ export function runListAutomations(
         );
         return {
           status: ACTION_RESULT_STATUS.ACCEPTED,
-          automation: automationReading(summary, true, step),
+          automation: automationReading(summary, true),
           runs: (yield* runSummaries(userId, runs)).map(runReading),
         };
       }).pipe(Effect.result);
@@ -633,7 +629,6 @@ export function runCreateAutomation(
       if (Option.isNone(workspace)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_WORKSPACE);
       const userId = callerUserId(call.caller);
       const id = calledId(userId, call.clientKey);
-      const step = yield* workspaceStepOf(userId, workspace.value);
       // A call run again finds the automation it made first, as it was made.
       const already = yield* workspaceAutomation(userId, workspace.value, id);
       if (Option.isSome(already)) {
@@ -641,7 +636,7 @@ export function runCreateAutomation(
         return Result.isSuccess(kept)
           ? {
               status: ACTION_RESULT_STATUS.ACCEPTED,
-              automation: automationReading(kept.success, false, step),
+              automation: automationReading(kept.success, false),
             }
           : agentToolRejected(refusalWords(kept.failure));
       }
@@ -706,7 +701,7 @@ export function runCreateAutomation(
       }
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
-        automation: automationReading(written.success.automation, false, step),
+        automation: automationReading(written.success.automation, false),
       };
     }),
   );
@@ -746,7 +741,6 @@ export function runUpdateAutomation(
       const found = yield* workspaceAutomation(userId, workspace.value, automationId);
       if (Option.isNone(found)) return agentToolRejected(AUTOMATION_TOOL_REFUSAL.NO_AUTOMATION);
       const standing = found.value;
-      const step = yield* workspaceStepOf(userId, workspace.value);
       if (rest.trigger !== undefined) {
         const schedule = yield* scheduleRefused(rest.trigger);
         if (schedule !== undefined) return agentToolRejected(schedule);
@@ -794,7 +788,7 @@ export function runUpdateAutomation(
       }
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
-        automation: automationReading(written.success.automation, false, step),
+        automation: automationReading(written.success.automation, false),
       };
     }),
   );
@@ -855,7 +849,6 @@ export function runRunAutomation(
       if (Option.isNone(found)) return agentToolRejected(AUTOMATION_TOOL_REFUSAL.NO_AUTOMATION);
       const runnable = yield* readAutomation(userId, automationId, AUTOMATION_ACCESS.RUN);
       if (Option.isNone(runnable)) return agentToolRejected(AUTOMATION_TOOL_REFUSAL.NOT_RUNNABLE);
-      const step = yield* workspaceStepOf(userId, workspace.value);
       // Note that the run reaches the agent's sessions as the deployment acting for the account it starts as, its creator, whoever fired it, as the sweep's runs do.
       const ran = yield* runAutomationNowAs(
         userId,
@@ -866,11 +859,7 @@ export function runRunAutomation(
       if (Result.isFailure(ran)) return agentToolRejected(refusalWords(ran.failure));
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
-        automation: {
-          id: runnable.value.id,
-          name: runnable.value.name,
-          mention: writtenAutomationMention(runnable.value.id, runnable.value.name, step),
-        },
+        automation: { id: runnable.value.id, name: runnable.value.name },
         run: runReading(ran.success.run),
         alreadyRan: !ran.success.made,
       };

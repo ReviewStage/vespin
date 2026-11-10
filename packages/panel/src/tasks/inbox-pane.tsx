@@ -2,6 +2,12 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { dictationKeywords } from "@repo/features/dictation-keywords";
 import { askHeadWords } from "@repo/features/inbox-ask-words";
 import {
+  answerOf,
+  askNumberedPick,
+  EMPTY_INBOX_DRAFT,
+  type InboxDraft,
+} from "@repo/features/inbox-draft";
+import {
   holderAutomationId,
   holderName,
   INBOX_HOLDER,
@@ -82,14 +88,7 @@ import { isWireString } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
 import { BotIcon, CheckIcon, ChevronDownIcon, ChevronUpIcon, ZapIcon } from "lucide-react";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  ACTOR_SIZE,
-  ActorLine,
-  ActorMark,
-  ActorRef,
-  AutomationCard,
-  commentAuthor,
-} from "../actor-ref.js";
+import { ActorGlyph, ActorLine, ActorRef, AutomationCard, commentAuthor } from "../actor-ref.js";
 import {
   Conversation,
   ConversationContent,
@@ -148,7 +147,6 @@ import {
   MessageWords,
   useMessageWriter,
 } from "./inbox-message.js";
-import { answerOf, askNumberedPick, EMPTY_INBOX_DRAFT, type InboxDraft } from "./inbox-model.js";
 import { type InboxPager, InboxPagerControls } from "./inbox-pager.js";
 import type { InboxReminder } from "./inbox-remind.js";
 import { InboxStamp } from "./inbox-stamp.js";
@@ -1439,7 +1437,7 @@ function answerNewThread(offer: InboxNewThread, item: InboxItem, by: ItemAgent):
       <InlineRef
         look={INLINE_REF_LOOK.PILL}
         fit={INLINE_REF_FIT.FLOW}
-        glyph={<ActorMark actor={tile} size={ACTOR_SIZE.INLINE} />}
+        glyph={<ActorGlyph actor={tile} />}
         label={name}
         card={<AgentCard subject={by.subject} models={by.models} />}
         onPress={by.onOpen}

@@ -2,6 +2,7 @@
 // aggregate from their own schema modules without being overwritten by it.
 export * from "./account-provider-key.js";
 export * from "./agent.js";
+export * from "./agent-approval.js";
 export * from "./agent-browser-tab.js";
 export * from "./agent-pin.js";
 export * from "./agent-pull-request.js";
@@ -10,6 +11,8 @@ export * from "./agent-read.js";
 export * from "./agent-repository.js";
 export * from "./agent-runner-lease.js";
 export * from "./agent-runner-record.js";
+export * from "./agent-sandbox.js";
+export * from "./agent-wakeup.js";
 export * from "./attachment.js";
 export * from "./auth.js";
 export * from "./automation.js";

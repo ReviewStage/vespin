@@ -12,7 +12,6 @@ import { copySessionEntries, holdsSession } from "@repo/database/models/claude-s
 import { readForkCut, readNativeRewind } from "@repo/database/models/conversation-rewind";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
 import { readTaskHeader, readTaskWorkspace } from "@repo/database/models/task-store";
-import { isWorkspaceMember } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
 import {
   type NoteFiles,
@@ -47,7 +46,7 @@ import {
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
 import { ModelCatalog } from "../../providers/model-catalog.js";
-import { admitsPlanWriter, controlsAgent } from "../agent-reach.js";
+import { admitsPlanWriter, startsFromAgent } from "../agent-reach.js";
 import { agentSandboxOf } from "../agent-sandbox-open.js";
 import { macCheckoutsOf } from "../machine/device-machine.js";
 import { MENTIONED_BOUNDS } from "../mentioned-context.js";
@@ -139,16 +138,10 @@ export type TakeoverAsk = StartWhere & {
   readonly runsOn?: AgentRunsOnRequest | undefined;
 };
 
-/**
- * Where a Start puts its agent: a task, or a workspace with no task and the
- * repository the agent clones there, or none, where any coder handed words
- * alone stands (`start.ts`'s `landingOf`); an
- * agent it is started from must stand in the same place.
- */
-export type StartWhere =
-  | { readonly taskId: string }
-  | { readonly taskId: null; readonly organizationId: string; readonly repository: string }
-  | { readonly taskId: null; readonly organizationId: string; readonly repository: null };
+/** Where a Start puts its agent: a task, which an agent it is started from must stand on too. */
+export interface StartWhere {
+  readonly taskId: string;
+}
 
 /** What the first line of a Start from another agent says it is, and names. */
 interface TakenLine {
@@ -262,23 +255,32 @@ function takeoverKindOf(from: StartFrom): Takeover {
   return from.told.messageId === undefined ? TAKEOVER.CONTINUE : TAKEOVER.FORK;
 }
 
-/** The place an agent stands in, which a Start from it puts the new agent in: its task, or, where it has none, its workspace and its repository, or none where it worked in none. */
-export function placeOfAgent(
-  agent: Pick<Agent, "taskId" | "organizationId" | "repository">,
-): StartWhere {
-  if (agent.taskId !== null) return { taskId: agent.taskId };
-  const { organizationId, repository } = agent;
-  return repository === null
-    ? { taskId: null, organizationId, repository }
-    : { taskId: null, organizationId, repository };
+/** The place an agent stands in, which a Start from it puts the new agent in: its task. */
+export function placeOfAgent(agent: Pick<Agent, "taskId">): StartWhere {
+  return { taskId: agent.taskId };
+}
+
+/**
+ * Where a Start from another agent runs where its ask names no place: where
+ * its source runs, so a continue or a fork goes on where the work was, but
+ * in the cloud for a source on another member's Mac, since a Mac runs its
+ * owner's agents alone, and a teammate takes such an agent up in the cloud
+ * unless they name a Mac of their own.
+ */
+export function inheritedPlaceOf(
+  userId: string,
+  source: Pick<Agent, "userId" | "machine" | "deviceId">,
+): { readonly machine: AgentMachineKind; readonly deviceId?: string | null | undefined } {
+  const machine = source.machine ?? AGENT_MACHINE.VERCEL;
+  if (machine === AGENT_MACHINE.DEVICE && source.userId !== userId) {
+    return { machine: AGENT_MACHINE.VERCEL };
+  }
+  return { machine, deviceId: source.deviceId };
 }
 
 /** The place alone, as a Start from another agent reads its source against it. */
 export function whereOf(place: StartWhere): StartWhere {
-  if (place.taskId !== null) return { taskId: place.taskId };
-  return place.repository === null
-    ? { taskId: null, organizationId: place.organizationId, repository: null }
-    : { taskId: null, organizationId: place.organizationId, repository: place.repository };
+  return { taskId: place.taskId };
 }
 
 /**
@@ -344,11 +346,7 @@ const madeInPlace = Effect.fnUntraced(function* (
   place: StartWhere,
 ): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices> {
   if (made.taskId !== place.taskId) return false;
-  if (place.taskId !== null) {
-    return Option.isSome(yield* hostedStoreOrUnavailable(readTaskWorkspace(userId, place.taskId)));
-  }
-  if (made.organizationId !== place.organizationId) return false;
-  return yield* hostedStoreOrUnavailable(isWorkspaceMember(userId, place.organizationId));
+  return Option.isSome(yield* hostedStoreOrUnavailable(readTaskWorkspace(userId, place.taskId)));
 });
 
 /**
@@ -417,7 +415,9 @@ const goesOnInPullRequest = (userId: string, source: Agent, stored: AgentPullReq
  * stands stopped on a snapshot (`agentSandboxOf`), a legacy one among them,
  * hands that sandbox, whose latest snapshot the new agent's is created from at its
  * first open (`../machine/sandbox-machine.ts`), so it is never woken; any
- * other has its work copied to a branch (`snapshot.ts`). Note that a
+ * other has its work copied to a branch (`snapshot.ts`), and a source on a
+ * Mac hands only the branch it pushed, since nothing of the Mac's is read
+ * for a Start, whoever asks it. Note that a
  * sandbox still running is copied rather than handed, because its snapshot
  * is its last stop's, behind what it holds now; that a source in another
  * repository than the one the new agent works in hands no sandbox, since
@@ -436,6 +436,13 @@ const sourceWorkOf = (
     copy: { copied: false, miss: SNAPSHOT_MISS.FAILED },
   };
   return Effect.gen(function* () {
+    // A source on a Mac hands only the branch it pushed: nothing is read from the Mac, whoever starts from it.
+    if (source.machine === AGENT_MACHINE.DEVICE) {
+      return {
+        on: TAKEN_ON.COPY,
+        copy: { copied: false, miss: SNAPSHOT_MISS.ON_DEVICE },
+      } satisfies SourceWork;
+    }
     const [session] =
       source.repository?.toLowerCase() === repository?.toLowerCase()
         ? yield* standingSessionsOf(source.userId, [source.conversationId])
@@ -455,10 +462,9 @@ const sourceWorkOf = (
   );
 };
 
-/** The repository the new agent clones in the place: the task's as it stands now, or the workspace place's own; none where the task names none. */
+/** The repository the new agent clones in the place: the task's as it stands now; none where the task names none. */
 const placeRepository = (userId: string, place: StartWhere) =>
   Effect.gen(function* () {
-    if (place.taskId === null) return place.repository;
     const task = yield* hostedStoreOrUnavailable(readTaskHeader(userId, place.taskId));
     return Option.isSome(task) ? task.value.repository : null;
   });
@@ -480,16 +486,12 @@ export const startFromOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   idempotencyKey: string,
 ): Effect.fn.Return<StartFrom, HostedRefusal, DatabaseServices | SourceCopyServices> {
   const [found] = yield* hostedStoreOrUnavailable(listPublishedAgentsById(userId, [from.agentId]));
-  const inPlace =
-    found !== undefined &&
-    found.agent.taskId === place.taskId &&
-    (place.taskId !== null || found.agent.organizationId === place.organizationId);
-  if (!inPlace) {
+  if (found === undefined || found.agent.taskId !== place.taskId) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
   const { agent: source, published } = found;
   // An agent on its starter's own GitHub token is continued or forked by its starter alone, before its work is copied.
-  if (!controlsAgent(userId, source)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+  if (!startsFromAgent(userId, source)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   const repository = yield* placeRepository(userId, place);
   const { lineage, carried } = yield* hostedStoreOrUnavailable(
     lineageOf(userId, source, repository),
@@ -727,7 +729,7 @@ const carriedSessionOf = Effect.fnUntraced(function* (
 ) {
   const { source } = from;
   const sourceMachine = source.machine ?? AGENT_MACHINE.VERCEL;
-  const place = ask.runsOn ?? { machine: sourceMachine, deviceId: source.deviceId };
+  const place = ask.runsOn ?? inheritedPlaceOf(userId, source);
   const [onto, off] = yield* Effect.all([
     checkoutsOn(userId, place.machine, "deviceId" in place ? place.deviceId : undefined),
     checkoutsOn(source.userId, sourceMachine, source.deviceId),

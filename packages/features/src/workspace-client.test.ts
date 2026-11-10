@@ -2,8 +2,7 @@ import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { fakeCloudApi, HTTP_STATUS, jsonResponse, recordingHttpClient } from "@repo/wire/testing";
 import { Effect } from "effect";
-import { accountBearer, sessionBearer } from "./account-call.js";
-import type { AccountSessionToken } from "./account-token.js";
+import { accountBearer } from "./account-call.js";
 import { HOSTED_API_ERROR } from "./service-wire.js";
 import { WORKSPACE_CALL_FAILURE } from "./workspace-call.js";
 import { HostedWorkspaceClient } from "./workspace-client.js";
@@ -25,13 +24,8 @@ const ACME = {
 };
 const INSTALL_URL = "https://github.com/apps/luke/installations/new?state=opaque-intent";
 
-/** The client over an account holding OAuth token `token-1` and, unless told otherwise, session `session-1`. */
-function client(
-  session: AccountSessionToken = {
-    readSessionToken: () => Effect.succeed("session-1"),
-    obtainSession: () => Effect.void,
-  },
-): HostedWorkspaceClient {
+/** The client over an account holding OAuth token `token-1`. */
+function client(): HostedWorkspaceClient {
   const token = {
     readAccessToken: () => Effect.succeed("token-1"),
     refreshAccount: () => Effect.void,
@@ -40,25 +34,7 @@ function client(
   return new HostedWorkspaceClient({
     serviceBaseUrl: "https://vespin.dev",
     credential: accountBearer(token),
-    sessionCredential: sessionBearer({ ...token, ...session }),
   });
-}
-
-/** A session the hand-off replaces: none or `before` until asked for, then `after`. */
-function handedOff(before: string | undefined, after: string) {
-  let current = before;
-  let asked = 0;
-  return {
-    session: {
-      readSessionToken: () => Effect.sync(() => current),
-      obtainSession: () =>
-        Effect.sync(() => {
-          asked += 1;
-          current = after;
-        }),
-    },
-    asked: () => asked,
-  };
 }
 
 /** A service that refuses the request with the word given. */
@@ -150,8 +126,8 @@ it.effect(
 
       assert.deepEqual(remaining, { ok: true, answer: [ADA] });
       assert.deepEqual(left, { ok: true, answer: ACME.id });
-      // Both write through Better Auth, so both carry the Mac's session, never its OAuth token.
-      assert.deepEqual(api.credentials(), ["session-1", "session-1"]);
+      // Both carry the account's OAuth token, as every workspace call does.
+      assert.deepEqual(api.credentials(), ["token-1", "token-1"]);
       assert.deepEqual(
         api.requests().map(({ method, pathname, body }) => ({
           route: `${method} ${pathname}`,
@@ -169,7 +145,7 @@ it.effect(
 );
 
 it.effect(
-  "changes a member's role and hands the workspace over under the Mac's session, answered with the members, sends an owner's role nowhere, and names a refusal",
+  "changes a member's role and hands the workspace over, answered with the members, sends an owner's role nowhere, and names a refusal",
   () =>
     Effect.gen(function* () {
       const promoted = { ...GRACE, role: "admin" };
@@ -216,8 +192,8 @@ it.effect(
       assert.deepEqual(transferred, { ok: true, answer: handedOver });
       const notPermitted = { ok: false, failure: WORKSPACE_CALL_FAILURE.NOT_PERMITTED };
       assert.deepEqual(refused, [notPermitted, notPermitted]);
-      // Both write through Better Auth, so both carry the Mac's session, never its OAuth token.
-      assert.deepEqual(api.credentials(), ["session-1", "session-1"]);
+      // Both carry the account's OAuth token, as every workspace call does.
+      assert.deepEqual(api.credentials(), ["token-1", "token-1"]);
       assert.deepEqual(
         api.requests().map(({ method, pathname, body }) => ({
           route: `${method} ${pathname}`,
@@ -238,7 +214,7 @@ it.effect(
 );
 
 it.effect(
-  "renames a workspace under the Mac's session with its name trimmed, sends a blank name nowhere, and names a refusal",
+  "renames a workspace with its name trimmed, sends a blank name nowhere, and names a refusal",
   () =>
     Effect.gen(function* () {
       const renamed = { ...ACME, name: "Acme Labs" };
@@ -263,7 +239,7 @@ it.effect(
       assert.deepEqual(answered, { ok: true, answer: renamed });
       assert.deepEqual(blank, { ok: false, failure: WORKSPACE_CALL_FAILURE.UNANSWERED });
       assert.deepEqual(refused, { ok: false, failure: WORKSPACE_CALL_FAILURE.NOT_PERMITTED });
-      assert.deepEqual(api.credentials(), ["session-1"]);
+      assert.deepEqual(api.credentials(), ["token-1"]);
       assert.deepEqual(
         api.requests().map(({ method, pathname, body }) => ({
           route: `${method} ${pathname}`,
@@ -280,7 +256,7 @@ it.effect(
 );
 
 it.effect(
-  "sets a workspace's photo or removes it under the Mac's session, sends an SVG or one past the bound nowhere, and names a refusal",
+  "sets a workspace's photo or removes it, sends an SVG or one past the bound nowhere, and names a refusal",
   () =>
     Effect.gen(function* () {
       const photo = "data:image/webp;base64,UklGRgAAAABXRUJQ";
@@ -314,7 +290,7 @@ it.effect(
       assert.deepEqual(svg, { ok: false, failure: WORKSPACE_CALL_FAILURE.UNANSWERED });
       assert.deepEqual(large, { ok: false, failure: WORKSPACE_CALL_FAILURE.UNANSWERED });
       assert.deepEqual(refused, { ok: false, failure: WORKSPACE_CALL_FAILURE.NOT_PERMITTED });
-      assert.deepEqual(api.credentials(), ["session-1", "session-1"]);
+      assert.deepEqual(api.credentials(), ["token-1", "token-1"]);
       assert.deepEqual(
         api.requests().map(({ method, pathname, body }) => ({
           route: `${method} ${pathname}`,
@@ -365,102 +341,6 @@ it.effect(
     }),
 );
 
-it.effect(
-  "with no session yet, a removal asks for one through the hand-off and is sent on it",
-  () =>
-    Effect.gen(function* () {
-      const api = fakeCloudApi({
-        "POST /api/workspaces/members/remove": { answer: () => ({ members: [ADA] }) },
-      });
-      const handOff = handedOff(undefined, "session-2");
-
-      const remaining = yield* Effect.provide(
-        client(handOff.session).removeMember(ACME.id, GRACE.userId),
-        api.layer,
-      );
-
-      assert.deepEqual(remaining, { ok: true, answer: [ADA] });
-      assert.equal(handOff.asked(), 1);
-      assert.deepEqual(api.credentials(), ["session-2"]);
-    }),
-);
-
-it.effect(
-  "a session the service no longer takes is replaced through the hand-off, and the leave sent once more",
-  () =>
-    Effect.gen(function* () {
-      const service = recordingHttpClient((request) =>
-        request.authorization === "Bearer session-2"
-          ? jsonResponse({ workspaceId: ACME.id })
-          : jsonResponse({ error: HOSTED_API_ERROR.INVALID_TOKEN }, HTTP_STATUS.UNAUTHORIZED),
-      );
-      const handOff = handedOff("session-1", "session-2");
-
-      const left = yield* Effect.provide(client(handOff.session).leave(ACME.id), service.layer);
-
-      assert.deepEqual(left, { ok: true, answer: ACME.id });
-      assert.equal(handOff.asked(), 1);
-      assert.deepEqual(
-        service.requests.map((request) => request.authorization),
-        ["Bearer session-1", "Bearer session-2"],
-      );
-    }),
-);
-
-it.effect("an account that changes during the hand-off sends nothing under the new one", () =>
-  Effect.gen(function* () {
-    const api = fakeCloudApi({
-      "POST /api/workspaces/members/remove": { answer: () => ({ members: [ADA] }) },
-    });
-    let holder = "ada@example.com";
-    let session: string | undefined;
-    const token = {
-      readAccessToken: () => Effect.succeed("token-1"),
-      refreshAccount: () => Effect.void,
-      readAccountKey: () => Effect.sync(() => holder),
-    };
-    const switched = new HostedWorkspaceClient({
-      serviceBaseUrl: "https://vespin.dev",
-      credential: accountBearer(token),
-      sessionCredential: sessionBearer({
-        ...token,
-        readSessionToken: () => Effect.sync(() => session),
-        // Another account signs in while the hand-off's browser page is open, holding a session of its own.
-        obtainSession: () =>
-          Effect.sync(() => {
-            holder = "bob@example.com";
-            session = "session-bob";
-          }),
-      }),
-    });
-
-    const removed = yield* Effect.provide(switched.removeMember(ACME.id, GRACE.userId), api.layer);
-
-    assert.deepEqual(removed, {
-      ok: false,
-      failure: WORKSPACE_CALL_FAILURE.UNANSWERED,
-    });
-    assert.equal(api.requests().length, 0);
-  }),
-);
-
-it.effect("a hand-off that leaves no session sends nothing and answers unanswered", () =>
-  Effect.gen(function* () {
-    const api = fakeCloudApi({
-      "POST /api/workspaces/leave": { answer: () => ({ workspaceId: ACME.id }) },
-    });
-    const withdrawn = {
-      readSessionToken: () => Effect.succeed(undefined),
-      obtainSession: () => Effect.void,
-    };
-
-    const left = yield* Effect.provide(client(withdrawn).leave(ACME.id), api.layer);
-
-    assert.deepEqual(left, { ok: false, failure: WORKSPACE_CALL_FAILURE.UNANSWERED });
-    assert.equal(api.requests().length, 0);
-  }),
-);
-
 const INVITATION = {
   id: "inv-1",
   email: "alan@example.com",
@@ -469,7 +349,7 @@ const INVITATION = {
   acceptUrl: "https://vespin.dev/accept-invitation.html?id=inv-1&email=alan%40example.com",
 };
 
-it.effect("invites and cancels an invitation, every call under the Mac's session", () =>
+it.effect("invites and cancels an invitation, every call", () =>
   Effect.gen(function* () {
     const api = fakeCloudApi({
       "POST /api/workspaces/invitations": {
@@ -491,7 +371,7 @@ it.effect("invites and cancels an invitation, every call under the Mac's session
 
     assert.deepEqual(made, { ok: true, answer: INVITATION });
     assert.deepEqual(left, { ok: true, answer: [] });
-    assert.deepEqual(api.credentials(), ["session-1", "session-1"]);
+    assert.deepEqual(api.credentials(), ["token-1", "token-1"]);
     assert.deepEqual(JSON.parse(api.requests()[0]?.body ?? "{}"), {
       workspaceId: ACME.id,
       email: "alan@example.com",
