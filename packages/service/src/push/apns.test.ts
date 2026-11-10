@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { createVerify, generateKeyPairSync, randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { listPushDevices, registerPushDevice } from "@repo/database/models/push-device-store";
+import { readPushDeviceStatus, registerPushDevice } from "@repo/database/models/push-device-store";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB } from "@repo/database/testing";
 import { PUSH_ENVIRONMENT } from "@repo/features/push-device-wire";
-import { ConfigProvider, Effect, Layer } from "effect";
+import { ConfigProvider, Effect, Layer, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { recordingApnsTransport } from "../testing/apns-fake.js";
 import {
@@ -28,7 +28,8 @@ import {
  * gateway the token belongs to, under a provider token Apple can verify
  * against the key, with the headers Apple routes by; the provider token is
  * reused inside Apple's window and signed afresh past it; a token Apple says
- * is gone is deleted and any other refusal or failure leaves it; and a
+ * is gone is deleted and any other refusal or failure leaves it, keeping
+ * Apple's reason on the phone's row until a push reaches Apple; and a
  * deployment without its key, or with one that is not a key, sends nothing.
  * The key is made here at run time, never committed. Synthetic accounts,
  * tokens, and words throughout.
@@ -204,7 +205,7 @@ it.layer(getTestDB())("the APNs sender", (it) => {
   );
 
   it.effect(
-    "a token Apple says is gone is deleted, and any other refusal or failure leaves it standing",
+    "a token Apple says is gone is deleted, any other refusal or failure leaves it standing with Apple's reason, and a delivery clears the reason",
     () =>
       Effect.gen(function* () {
         const account = yield* openAccount;
@@ -216,6 +217,7 @@ it.layer(getTestDB())("the APNs sender", (it) => {
           refusal(429, "TooManyRequests"),
           { status: 503, body: "" },
           new ApnsTransportFailure({ errorName: "ERR_HTTP2_STREAM_CANCEL" }),
+          OK,
         ];
         const { layer } = sender(CREDENTIALS, () => {
           const answer = answers.shift();
@@ -227,8 +229,8 @@ it.layer(getTestDB())("the APNs sender", (it) => {
           Effect.gen(function* () {
             yield* registerPushDevice(account, phone);
             const delivery = yield* send(sent);
-            const standing = (yield* listPushDevices(account)).length;
-            return [delivery, standing] as const;
+            const standing = yield* readPushDeviceStatus(account, phone);
+            return [delivery, Option.getOrUndefined(standing)?.failureReason] as const;
           });
 
         const outcomes = yield* Effect.forEach(
@@ -236,13 +238,14 @@ it.layer(getTestDB())("the APNs sender", (it) => {
           pushed,
         ).pipe(Effect.provide(layer));
         assert.deepEqual(outcomes, [
-          [APNS_DELIVERY.TOKEN_GONE, 0],
-          [APNS_DELIVERY.TOKEN_GONE, 0],
-          [APNS_DELIVERY.REFUSED, 1],
-          [APNS_DELIVERY.REFUSED, 1],
-          [APNS_DELIVERY.FAILED, 1],
-          [APNS_DELIVERY.FAILED, 1],
-          [APNS_DELIVERY.FAILED, 1],
+          [APNS_DELIVERY.TOKEN_GONE, undefined],
+          [APNS_DELIVERY.TOKEN_GONE, undefined],
+          [APNS_DELIVERY.REFUSED, "BadCollapseId"],
+          [APNS_DELIVERY.REFUSED, "InvalidProviderToken"],
+          [APNS_DELIVERY.FAILED, "TooManyRequests"],
+          [APNS_DELIVERY.FAILED, "503"],
+          [APNS_DELIVERY.FAILED, "NoAnswer"],
+          [APNS_DELIVERY.DELIVERED, null],
         ]);
       }),
   );

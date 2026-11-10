@@ -138,6 +138,14 @@ export const ACCOUNT_ASK_ACTS = declaredActs({
     door: ACT.REMOTE_WORK,
     unanswered: UNANSWERED,
   }),
+  ACCOUNT_ACTIVE: hostAct({
+    input: EffectSchema.Undefined,
+    output: EffectSchema.Void,
+    refusal: "Could not tell the service you are here on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: undefined,
+  }),
 });
 
 /** A workspace's memories, followed for Settings › Memory while it holds them, and the account's provider keys and GitHub token, each held once for the account signed in while Settings draws them. */
