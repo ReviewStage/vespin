@@ -3,6 +3,7 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
 import type { TaskStatus } from "@repo/features/task-wire";
+import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useCallback, useRef, useState } from "react";
 import {
@@ -47,6 +48,9 @@ const ANCHOR_REACH = 48;
  * the end of the rows alone and not the room the system keeps for the bar.
  */
 const TAB_BAR_ROOM = 64;
+
+/** How wide the round control that brings the newest row into view stands, in points: the system's least target. */
+const JUMP_SIZE = 44;
 
 /** What the control that brings the newest row into view says. */
 const JUMP_TO_LATEST = "Jump to latest";
@@ -96,16 +100,13 @@ const styles = StyleSheet.create({
   },
   head: { paddingHorizontal: SPACE.PAGE, paddingTop: SPACE.ROW, paddingBottom: SPACE.PAGE, gap: 6 },
   headLine: { flexDirection: "row", alignItems: "center", gap: 6 },
-  jump: {
-    position: "absolute",
-    alignSelf: "center",
-    flexDirection: "row",
+  jump: { position: "absolute", alignSelf: "center" },
+  jumpFace: {
+    width: JUMP_SIZE,
+    height: JUMP_SIZE,
+    borderRadius: JUMP_SIZE / 2,
     alignItems: "center",
-    gap: 6,
-    borderRadius: 20,
-    borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    justifyContent: "center",
   },
 });
 
@@ -506,6 +507,61 @@ export function AgentHead({ task, model, status }: AgentHeadProps) {
   );
 }
 
+/**
+ * The control that brings the newest row into view, as Messages and the
+ * chat apps draw it: a round button of Liquid Glass holding a down arrow,
+ * centered over the list's foot, standing only once the reader has scrolled
+ * back. Note that where Liquid Glass is unavailable, before iOS 26, it is
+ * drawn on the surface's ground with its edge rather than a hand-drawn copy
+ * of glass.
+ */
+function JumpToLatest({
+  bottom,
+  onPress,
+}: {
+  readonly bottom: number;
+  readonly onPress: () => void;
+}) {
+  const colors = useColors();
+  const arrow = (
+    <SymbolView
+      name="arrow.down"
+      size={MARK_SIZE.GLYPH + 2}
+      weight="semibold"
+      tintColor={colors.TEXT}
+      accessibilityElementsHidden
+    />
+  );
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={JUMP_TO_LATEST}
+      hitSlop={SPACE.TIGHT}
+      style={[styles.jump, { bottom }]}
+    >
+      {isLiquidGlassAvailable() ? (
+        <GlassView glassEffectStyle="regular" isInteractive style={styles.jumpFace}>
+          {arrow}
+        </GlassView>
+      ) : (
+        <View
+          style={[
+            styles.jumpFace,
+            {
+              backgroundColor: colors.SURFACE,
+              borderColor: colors.CHIP_EDGE,
+              borderWidth: StyleSheet.hairlineWidth,
+            },
+          ]}
+        >
+          {arrow}
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
 type AgentTranscriptProps = Omit<RowDrawing, "now"> & {
   /** The rows, oldest first (`transcriptItems`). */
   readonly items: readonly TranscriptItem[];
@@ -527,7 +583,7 @@ type AgentTranscriptProps = Omit<RowDrawing, "now"> & {
  */
 export function AgentTranscript({ items, head, empty, now, ...drawing }: AgentTranscriptProps) {
   const colors = useColors();
-  const { bottom } = useSafeAreaInsets();
+  const { bottom, left, right } = useSafeAreaInsets();
   const list = useRef<FlatList<TranscriptItem>>(null);
   // Whether the reader stands at the newest row, which the list keeps in view as rows land; it opens there.
   const anchored = useRef(true);
@@ -555,7 +611,8 @@ export function AgentTranscript({ items, head, empty, now, ...drawing }: AgentTr
         ListHeaderComponent={<>{head}</>}
         ListEmptyComponent={<>{empty}</>}
         ListFooterComponent={<View style={{ height: bottom + TAB_BAR_ROOM }} />}
-        contentContainerStyle={styles.content}
+        // Note that the rows stand inside the window's safe area at its sides too, clear of a rail the system draws there, as the folded iPhone Duo's.
+        contentContainerStyle={[styles.content, { paddingLeft: left, paddingRight: right }]}
         contentInsetAdjustmentBehavior="automatic"
         onContentSizeChange={onContentSizeChange}
         onScroll={onScroll}
@@ -567,34 +624,13 @@ export function AgentTranscript({ items, head, empty, now, ...drawing }: AgentTr
         accessibilityLabel="Transcript"
       />
       {away ? (
-        <Pressable
+        <JumpToLatest
+          bottom={bottom + TAB_BAR_ROOM}
           onPress={() => {
             anchored.current = true;
             list.current?.getScrollResponder()?.scrollToEnd({ animated: true });
           }}
-          accessibilityRole="button"
-          accessibilityLabel={JUMP_TO_LATEST}
-          style={[
-            styles.jump,
-            {
-              bottom: bottom + TAB_BAR_ROOM,
-              backgroundColor: colors.SURFACE,
-              borderColor: colors.CHIP_EDGE,
-            },
-          ]}
-        >
-          <SymbolView
-            name="arrow.down"
-            size={MARK_SIZE.GLYPH - 2}
-            tintColor={colors.ACCENT}
-            accessibilityElementsHidden
-          />
-          <Text
-            style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.ACCENT_TEXT }}
-          >
-            {JUMP_TO_LATEST}
-          </Text>
-        </Pressable>
+        />
       ) : null}
     </View>
   );
