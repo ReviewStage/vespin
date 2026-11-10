@@ -329,6 +329,9 @@
   /* How far in from a compact chip's start a box stands centered on the
      chip's mark, as a board card's box stands over its status chip. */
   --spacing-select-box-inset: calc((var(--spacing-chip-compact) - var(--spacing-select-box)) / 2);
+  /* A draft under rows that keep that gutter starts at it, its hairline taken
+     out as from the inset (`--spacing-task-row-draft`). */
+  --spacing-task-row-draft-gutter: calc(var(--spacing-select-gutter) - 1px);
   --grid-template-columns-tasks-list: var(--tasks-list-columns);
   --spacing-dialog-action-gap: var(--ui-dialog-action-gap);
   --spacing-dialog-action: var(--ui-dialog-action-width);
@@ -777,10 +780,24 @@
   --spacing-choice-fill-compact: calc(var(--ui-control-height) - var(--ui-space-4));
   --spacing-choice-segment: calc(var(--ui-control-height) - 2 * var(--ui-space-2));
   --spacing-choice-segment-compact: calc(var(--ui-control-height) - 2 * var(--ui-space-4));
+  /* The room a trough keeps above and below itself on a coarse pointer, so
+     its segments' presses reach a finger's height inside its scroll box: the
+     touch target's height less the trough's, halved, which is the control's
+     height, or a compact trough's two pixels shorter; and its corner, round
+     where it is drawn, the room's height under it left unpainted. */
+  --spacing-choice-reach: max(0px, calc((var(--ui-touch-target) - var(--ui-control-height)) / 2));
+  --spacing-choice-reach-compact: max(
+    0px,
+    calc((var(--ui-touch-target) - var(--ui-control-height)) / 2 + var(--ui-space-2))
+  );
   --spacing-caption-glyph: var(--ui-type-caption-size);
   /* A glyph at the size of the words it stands in (`ListRow`'s lead). */
   --spacing-words-glyph: 1em;
   --radius-choice-segment: calc(var(--ui-control-radius) - var(--ui-space-2));
+  --radius-choice-trough:
+    var(--ui-control-radius) / calc(var(--ui-control-radius) + var(--spacing-choice-reach));
+  --radius-choice-trough-compact:
+    var(--ui-control-radius) / calc(var(--ui-control-radius) + var(--spacing-choice-reach-compact));
   --color-choice-thumb: var(--ui-color-thumb);
   --color-tone-ink: var(--ui-tone-ink);
 

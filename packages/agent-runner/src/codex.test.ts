@@ -531,6 +531,28 @@ it.effect("interrupts the running turn on a stop and ends the launch as stopped"
   }),
 );
 
+it.effect("runs a message sent while a stop's interrupt is in flight as the next turn", () =>
+  Effect.gen(function* () {
+    const service = fakeService("sleep 600");
+    // The interrupt is answered before its turn completes, as P16 recorded it; the message then starts the next turn.
+    const script: Script = { exchanges: [...STOPPED.exchanges, RESUMED_TURN] };
+    const { spawned, write, run } = yield* launch([script], service);
+    yield* write(CONFIG);
+    yield* write(message("Run `sleep 600` and wait for it to finish.", LINE.FIRST));
+    yield* service.seen;
+    yield* write({ type: INPUT_LINE.STOP });
+    yield* write(message("What exact line did you first write to PROBE.md?", LINE.STEERED));
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    const [process] = spawned;
+    assert.deepEqual(process?.unexpected, []);
+    assert.deepEqual(received(process, "turn/start")[1]?.input, [
+      { type: "text", text: "What exact line did you first write to PROBE.md?", text_elements: [] },
+    ]);
+    assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST, LINE.STEERED]);
+  }),
+);
+
 it.effect(
   "a thread resumed in a sandbox that no longer holds its rollout has every file of it written back whole from the service's store first, across its pages, a revert's segment among them, and none whose subpath escapes its home",
   () =>

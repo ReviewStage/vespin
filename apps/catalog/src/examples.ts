@@ -21,6 +21,7 @@ import { CALENDAR_EXAMPLE } from "./examples/calendar";
 import { CARD_PRESSES_EXAMPLE } from "./examples/card-presses";
 import { CARDS_EXAMPLE } from "./examples/cards";
 import { CHECKBOXES_EXAMPLE } from "./examples/checkboxes";
+import { CHIP_POPOVERS_EXAMPLE } from "./examples/chip-popovers";
 import { CHIPS_EXAMPLE } from "./examples/chips";
 import { CHOICE_BAR_EXAMPLE } from "./examples/choice-bar";
 import { CHOICE_LIST_EXAMPLE } from "./examples/choice-list";
@@ -191,6 +192,7 @@ export const EXAMPLES: readonly Example[] = [
   BLOCK_LISTS_EXAMPLE,
   COMPOSER_FRAMES_EXAMPLE,
   COMPOSER_FOOTS_EXAMPLE,
+  CHIP_POPOVERS_EXAMPLE,
   CHIPS_EXAMPLE,
   BAR_ITEMS_EXAMPLE,
   CHOICE_BAR_EXAMPLE,

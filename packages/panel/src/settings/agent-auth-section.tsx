@@ -1,4 +1,6 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
+import { INTEGRATION_STATUS_WORDS } from "@repo/features/integration-status-words";
+import { INTEGRATION_STATUS } from "@repo/features/integration-wire";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
@@ -20,7 +22,7 @@ import {
 } from "@repo/features/provider-key-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { dueText } from "@repo/features/time-format";
-import { readingWords, SIGNED_OUT_WORDS } from "@repo/features/words";
+import { readingWords, SIGNED_OUT_WORDS, VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActPayload } from "@repo/host/contract";
 import { SETTINGS_SECTION } from "@repo/settings/settings-views";
@@ -111,9 +113,10 @@ import { ReadFailed } from "./marks.js";
  * when, its bar full in the attention ink, or what is wrong with it in the
  * attention tint; and ends in a ⋯ holding Rename, Move up and down, Replace
  * token, and Disconnect, the fix its state asks for standing beside it:
- * Replace token for a Claude token Anthropic refused, Sign in again for a
- * Codex plan OpenAI signed out, and Manage usage, which opens ChatGPT's
- * usage settings, for one at its limit. A key is named by the name the
+ * Replace token for a Claude token Anthropic refused, Reconnect for a
+ * Codex plan whose sign-in expired (Sign in again for one whose plan has no
+ * Codex, since another account mends it), and Manage usage, which opens
+ * ChatGPT's usage settings, for one at its limit. A key is named by the name the
  * account gave it, else API key and its hint, renamed in place as a Claude
  * plan is; says Ready, or what is wrong with it; and ends in a ⋯ holding
  * Rename, Move up and down, Replace key, and Remove key. With neither a plan nor a key, no agent
@@ -231,6 +234,7 @@ const WORDS = {
   KEY_NAME: "Key name",
   MOVE_UP: "Move up",
   MOVE_DOWN: "Move down",
+  RECONNECT: VERB.RECONNECT,
   SIGN_IN_AGAIN: "Sign in again",
   MANAGE_USAGE: "Manage usage",
   API_KEY: "API key",
@@ -254,7 +258,7 @@ const WORDS = {
   TOKEN_INVALID: "Anthropic rejected this token. Paste a new one.",
   TOKEN_QUOTA: "Out of usage on your Claude plan.",
   TOKEN_UNREADABLE: "This token can no longer be read. Paste a new one.",
-  CHATGPT_SIGNED_OUT: "Signed out of Codex.",
+  CHATGPT_EXPIRED: INTEGRATION_STATUS_WORDS[INTEGRATION_STATUS.EXPIRED],
   CHATGPT_UNREADABLE: "This sign-in can no longer be read.",
   CHATGPT_INELIGIBLE:
     "OpenAI says this account's plan doesn't include Codex. Sign in again to use another.",
@@ -396,8 +400,13 @@ function signInWords(plan: SubscriptionKeySummary): string {
     case PROVIDER_KEY_STATUS.INELIGIBLE:
       return WORDS.CHATGPT_INELIGIBLE;
     default:
-      return WORDS.CHATGPT_SIGNED_OUT;
+      return WORDS.CHATGPT_EXPIRED;
   }
+}
+
+/** What mends a Codex sign-in that does not stand: Sign in again as another account where the plan has no Codex, else Reconnect. */
+function signInFix(plan: SubscriptionKeySummary): string {
+  return plan.status === PROVIDER_KEY_STATUS.INELIGIBLE ? WORDS.SIGN_IN_AGAIN : WORDS.RECONNECT;
 }
 
 /** A plan's line under its name: its words, whether they need a hand, and the bar under them where its usage is known. */
@@ -1039,7 +1048,7 @@ function PlanFix({
   if (standing(plan)) return null;
   return (
     <Button variant={BUTTON_VARIANT.OUTLINE} onClick={onOpen}>
-      {chatGpt ? WORDS.SIGN_IN_AGAIN : WORDS.REPLACE_TOKEN}
+      {chatGpt ? signInFix(plan) : WORDS.REPLACE_TOKEN}
     </Button>
   );
 }
