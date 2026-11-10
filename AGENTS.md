@@ -20,15 +20,14 @@ requests.
 | `apps/mobile/scripts/simulator-screenshots.sh` | Run the iOS app's Maestro flows on the named simulators and keep their screenshots |
 
 CI runs the portable check on Linux, where `export:ios` bundles the iOS app
-with Metro beside the typecheck. The iOS app's simulators run nightly on main
-and by hand, never on a PR (`ios-simulators.yml`, on GitHub's `xcode-27`
-image): it builds the app for the simulator, runs its Maestro flows on an
-iPhone, the iPhone Duo, and an iPad, and uploads their screenshots as the
-`mobile-screenshots` artifact, which `apps/mobile/AGENTS.md` says how to read.
-No workflow runs the desktop app's tests on a Mac: the release job
-(`release.yml`'s `macos-15` job, run on a `v*` tag push or a manual dispatch)
-only builds, signs, notarizes, and verifies the app. A green PR says nothing
-about either app on a device.
+with Metro beside the typecheck. The iOS app's simulators run by hand, never
+on a PR (`ios-simulators.yml`, on GitHub's `xcode-27` image): it builds the
+app for the simulator, runs its Maestro flows on an iPhone, the iPhone Duo,
+and an iPad, and uploads their screenshots as the `mobile-screenshots`
+artifact, which `apps/mobile/AGENTS.md` says how to read. No workflow runs the
+desktop app's tests on a Mac: the release job (`release.yml`'s `macos-15` job,
+run on a `v*` tag push or a manual dispatch) only builds, signs, notarizes,
+and verifies the app. A green PR says nothing about either app on a device.
 
 A release is dated in Eastern time (America/New_York), never UTC or the
 author's own zone: its `CHANGELOG.md` heading carries the day its tag is

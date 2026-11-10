@@ -58,8 +58,7 @@ with it. Touch nothing of the developer's outside the checkout.
   vitest tests, and `export:ios` on every pull request, through the same turbo
   tasks as every workspace. It is the pull request's only gate.
 - **macOS** (`.github/workflows/ios-simulators.yml`, on GitHub's `xcode-27`
-  image) runs nightly on main and by hand on any branch, in about 100
-  minutes. It generates
+  image) runs only by hand, on any branch, in about 100 minutes. It generates
   the native project, builds the Release simulator app, runs the Maestro flows
   on the iPhone 18 Pro, the iPhone Duo as it boots, and the iPad Pro 11-inch,
   and uploads their screenshots as the `mobile-screenshots` artifact, kept
