@@ -276,6 +276,12 @@ const findInstallationsOfWorkspace = SqlSchema.findAll({
     ),
 });
 
+/**
+ * A webhook's status written on its installation's row, unless GitHub
+ * already deleted it: GitHub never brings a deleted installation back, a new
+ * install of the App comes as a new installation through a link, so a late
+ * or redelivered suspend or unsuspend leaves a deleted row deleted.
+ */
 const updateInstallationStatus = SqlSchema.void({
   Request: Schema.Struct({
     installationId: Schema.Number,
@@ -287,7 +293,12 @@ const updateInstallationStatus = SqlSchema.void({
       db
         .update(githubInstallation)
         .set({ status: row.status, updatedAt: row.now })
-        .where(eq(githubInstallation.installationId, row.installationId)),
+        .where(
+          and(
+            eq(githubInstallation.installationId, row.installationId),
+            ne(githubInstallation.status, GITHUB_INSTALLATION_STATUS.DELETED),
+          ),
+        ),
     ),
 });
 
@@ -401,7 +412,7 @@ export function linkInstallationAs(
   return Effect.flatMap(SqlClient.SqlClient, (client) => client.withTransaction(checked));
 }
 
-/** Where the installation now stands, as its webhook said; an installation no workspace is connected to moves nothing. */
+/** Where the installation now stands, as its webhook said; an installation no workspace is connected to, or one GitHub deleted, moves nothing. */
 export function setInstallationStatus(
   installationId: number,
   status: GitHubInstallationStatus,

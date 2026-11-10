@@ -13,6 +13,7 @@ import type { CatalogModel } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { ShortcutChord } from "@repo/settings/shortcuts";
 import { type ComposerNote, type ComposerRefusal, NOTE_LINE_LOOK, NoteLine } from "@repo/ui";
+import type { Actor } from "@repo/ui/actor-model";
 import { SERVER_HANDED } from "@repo/ui/agent-servers-model";
 import { GLYPH } from "@repo/ui/icons";
 import {
@@ -37,8 +38,9 @@ import {
 } from "./agent-approvals.js";
 import { AgentContextRing, ContextRingIcon } from "./agent-context.js";
 import { contextHint } from "./agent-context-model.js";
-import { noteWhileOffline } from "./agent-model.js";
+import { noteWhileOffline, paidByOf, providerOf } from "./agent-model.js";
 import { AgentModelChip } from "./agent-model-chip.js";
+import { PayerValue, usePayerPlanName } from "./agent-payer.js";
 import { type AgentServersControl, serversMenuPanel } from "./agent-servers.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide } from "./mention-picker.js";
 import { FOLD_WIDTH, MessageBox, OVERFLOW_PRESS, useMessageBox } from "./message-box.js";
@@ -292,6 +294,7 @@ export function AgentComposer({
   usage,
   payer,
   payerSubscriptionId,
+  owner,
   servers,
   plus = [],
   context,
@@ -340,6 +343,8 @@ export function AgentComposer({
   payer?: AgentPayer | undefined;
   /** The starter's subscription a plan payer runs the agent on, which the chip's menu names; nothing where the page named none. */
   payerSubscriptionId?: string | undefined;
+  /** The teammate who started the agent, whose plan or key pays for it; none for the reader's own. */
+  owner?: Actor | undefined;
   /** The MCP servers the agent is handed and their switches, which the + menu opens; none where the box offers none, whose + opens the file picker itself. */
   servers: AgentServersControl | undefined;
   /** Rows the + menu offers after MCP servers, its owner's: New task's Task relation. */
@@ -394,6 +399,24 @@ export function AgentComposer({
   approvalsWaiting?: number;
 }): React.JSX.Element {
   const connected = useConnected();
+  // Who pays, as the chip's menu names it, is the context popover's last line too.
+  const paying = model === undefined ? payer : paidByOf(payer, usage, model.runtime);
+  const planName = usePayerPlanName(
+    paying,
+    payerSubscriptionId,
+    (payer ?? usage?.payer) === undefined,
+    owner,
+  );
+  const payerValue =
+    paying === undefined ? undefined : (
+      <PayerValue
+        payer={paying}
+        provider={model === undefined ? undefined : providerOf(model.choice.model)}
+        usage={usage}
+        owner={owner}
+        planName={planName}
+      />
+    );
   // The popover the ⋯ may open in place of its hidden press.
   const [contextOpen, setContextOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -645,6 +668,7 @@ export function AgentComposer({
                 usage={usage}
                 payer={payer}
                 payerSubscriptionId={payerSubscriptionId}
+                owner={owner}
                 narrow={box.folds(FOLD_WIDTH.MODEL)}
               />
             )}
@@ -654,6 +678,7 @@ export function AgentComposer({
             <AgentContextRing
               context={context}
               brief={brief}
+              payer={payerValue}
               open={contextOpen}
               onOpenChange={box.handBack(setContextOpen)}
             />

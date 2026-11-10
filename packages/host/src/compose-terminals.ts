@@ -93,8 +93,8 @@ export const TERMINAL_OPENING_RETRY = {
   LONGEST: Duration.seconds(30),
 } as const;
 
-/** How long a connection stays open with nothing typed, printed, or shown. */
-const TERMINAL_IDLE = Duration.minutes(10);
+/** How long a connection stays open with nothing typed, printed, or shown: as long as its sandbox runs past its last use (`@repo/sandbox`'s `SANDBOX_IDLE`), so the tab hears it idle as the sandbox stops. */
+const TERMINAL_IDLE = Duration.minutes(5);
 
 /** The service's side of the terminals, as this concern asks it. */
 export type TerminalClient = Pick<

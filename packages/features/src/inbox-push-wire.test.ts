@@ -39,8 +39,6 @@ const RUN_FAILED = {
   turnId: "turn-3",
 };
 
-const { taskId: _task, ...RUN_FAILED_WITHOUT_TASK } = RUN_FAILED;
-
 const TAP = { actionId: "expo.modules.notifications.actions.DEFAULT" };
 
 describe("inboxPushResponseOf", () => {
@@ -82,16 +80,10 @@ describe("inboxPushResponseOf", () => {
       response: { route: "/inbox/item-2" },
     },
     {
-      name: "a failed run opens its task",
+      name: "a failed run opens its agent's page",
       payload: RUN_FAILED,
       action: TAP,
-      response: { route: "/tasks/task-3" },
-    },
-    {
-      name: "a failed run of an agent with no task opens the Inbox",
-      payload: RUN_FAILED_WITHOUT_TASK,
-      action: TAP,
-      response: { route: "/inbox" },
+      response: { route: "/tasks/agent/agent-3" },
     },
     {
       name: "a settled thread's background push opens nothing",

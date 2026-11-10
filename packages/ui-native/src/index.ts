@@ -45,7 +45,7 @@ export {
   type RowActionTone,
   TaskRow,
 } from "./list-row.js";
-export { Markdown, type MarkdownPlace, type MarkdownVideo, Picture } from "./markdown.js";
+export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 export { MarkdownPage } from "./markdown-page.js";
 export {
   AgentTile,

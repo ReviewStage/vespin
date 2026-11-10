@@ -2,6 +2,7 @@
  * bounds.ts -- the live view's bounds: how long a socket stands, and how fast its frames go.
  */
 
+import { SANDBOX_IDLE } from "@repo/sandbox";
 import { Duration } from "effect";
 
 export const BROWSER_LIVE_BOUNDS = {
@@ -9,13 +10,11 @@ export const BROWSER_LIVE_BOUNDS = {
   IDLE: Duration.minutes(5),
   /**
    * How long a socket stays open past the member's last input, however
-   * often its panel says it is watching: a window left open on a Browser
-   * tab nobody touches would otherwise hold its agent's sandbox, and the
-   * provisioned memory it bills, until the platform's 24-hour lifetime.
-   * Fifteen minutes, so someone reading a page is rarely cut off, and Watch
-   * again opens a new view, resuming the sandbox, for one who was.
+   * often its panel says it is watching: `SANDBOX_IDLE`, the one idle rule,
+   * so a window left open on a Browser tab nobody touches stops streaming
+   * its frames, and Watch again opens a new view.
    */
-  INPUT_IDLE: Duration.minutes(15),
+  INPUT_IDLE: SANDBOX_IDLE,
   /** How often a socket asks whether the panel has gone the idle bound silent. */
   IDLE_CHECK_EVERY: Duration.seconds(30),
   /** How often the tab is read again, for its driver and whether it still stands, where Sync cannot wake the read: no listener stands, or the tab is on no task. */

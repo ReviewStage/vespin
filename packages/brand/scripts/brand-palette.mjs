@@ -65,6 +65,7 @@ const BRAND_PALETTES = {
       ATTENTION: COPPER.LIGHT.INK,
       ATTENTION_FILL: COPPER.LIGHT.FILL,
       WORKING: "#1666aa",
+      STARTING: "#8a6a00",
       COMPLETE: "#067040",
       MERGED: "#744caf",
       AVATAR_TILE: AVATAR.TILE,
@@ -101,6 +102,7 @@ const BRAND_PALETTES = {
       // accent is too light to hold them, so the fill is the light one.
       ATTENTION_FILL: COPPER.LIGHT.FILL,
       WORKING: "#76bafe",
+      STARTING: "#f2c94c",
       COMPLETE: "#56d089",
       MERGED: "#c29fff",
       AVATAR_TILE: AVATAR.TILE,

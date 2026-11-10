@@ -123,17 +123,17 @@ import {
 import { DesktopHome } from "./desktop-home.js";
 import {
   AgentPane,
+  agentsRetry,
   DETAILS_WORDS,
   MainTabBars,
   mainTabLabel,
   newAgentStarts,
-  phoneAgentStarts,
   TaskTopbar,
 } from "./main-tabs.js";
 import { PhoneBack, PhoneHead, PlaceMore, phoneBar, phoneFindGroups } from "./phone-head.js";
 import { PlanAgents } from "./plan-agents.js";
+import { PlanHead } from "./plan-head.js";
 import { PlanPages } from "./plan-pages.js";
-import { PlanRelations } from "./plan-relations.js";
 import {
   changesTabOf,
   SIDE_PANEL_HOLDER,
@@ -969,12 +969,9 @@ function DescriptionDocument({
         shown={tasks.shown}
         onOpenAgent={(agentId) => openAgentTab(agentTab(agentId))}
         onOpenPullRequest={openPullRequestDoor}
-        // Note that New agent stands at every width, a fresh plan's one next step, as the "+" offers it.
-        starts={
-          room === SHELL_ROOM.NARROW
-            ? phoneAgentStarts(mainTabs, agents)
-            : newAgentStarts(mainTabs, agents)
-        }
+        // Note that New agent stands on the group's head at every width, as the strip's "+" offers it.
+        newAgent={newAgentStarts(mainTabs, agents)[0]}
+        starts={room === SHELL_ROOM.NARROW ? agentsRetry(agents) : []}
         phone={
           room === SHELL_ROOM.NARROW
             ? {
@@ -1019,26 +1016,39 @@ function DescriptionDocument({
       ),
     [openedId, pages, openPageTab],
   );
-  // The task's sub-tasks and relations stand over its agents, the head keyed once by the task,
-  // so another task's groups start folded rather than as this one's were left. Note that the
-  // key is the head's alone, because two siblings under one key leave the old task's drawn.
+  // A task that lists no agent offers New agent under its title, since its Agents group draws none;
+  // note that a phone's group stands for archived agents too, its head offering New agent itself.
+  const agentsGrouped = room === SHELL_ROOM.NARROW && (agents.archived?.length ?? 0) > 0;
+  const firstAgentStart = useMemo(
+    () =>
+      agents.agents?.length === 0 && !agentsGrouped
+        ? newAgentStarts(mainTabs, agents)[0]
+        : undefined,
+    [agents, mainTabs, agentsGrouped],
+  );
+  // The task's starts, sub-tasks, and relations stand over its agents, the head keyed once by the
+  // task, so another task's groups start as they open and no draft of this one's stands there.
   const descriptionHead = useCallback(
-    (room: DescriptionRoom) => (
-      <Fragment key={openedId}>
-        {opened === undefined ? null : (
-          <PlanRelations
-            task={opened}
-            tasks={tasks}
-            door={relations}
-            room={room}
-            onOpenTask={openTask}
-          />
-        )}
-        {planAgents}
-        {planPages}
-      </Fragment>
-    ),
-    [openedId, opened, tasks, relations, openTask, planAgents, planPages],
+    (room: DescriptionRoom) =>
+      opened === undefined ? (
+        <Fragment key={openedId}>
+          {planAgents}
+          {planPages}
+        </Fragment>
+      ) : (
+        <PlanHead
+          key={openedId}
+          task={opened}
+          tasks={tasks}
+          door={relations}
+          room={room}
+          newAgent={firstAgentStart}
+          agents={planAgents}
+          pages={planPages}
+          onOpenTask={openTask}
+        />
+      ),
+    [openedId, opened, tasks, relations, openTask, firstAgentStart, planAgents, planPages],
   );
   // A row in a transcript that opens a tab hangs that tab's card, read as
   // the tab reads it, so an agent, a subagent, or a file is previewed alike wherever named.
@@ -1240,7 +1250,7 @@ function DescriptionDocument({
   };
   // ⌘T on a phone starts New agent at once, since no "+" stands in sight to drop its menu.
   const newAgentOnPhone = () => {
-    const [start] = phoneAgentStarts(mainTabs, agents);
+    const [start] = newAgentStarts(mainTabs, agents);
     if (start === undefined || start.disabled === true) return;
     if (sidePanel.open) sidePanel.onToggle();
     start.onSelect();

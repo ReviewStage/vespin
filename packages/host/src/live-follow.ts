@@ -656,3 +656,12 @@ export const LIVE_STATE = {
   LIVE: "live",
   REFUSED: "refused",
 } as const;
+
+/**
+ * A follow's state: waiting on its first answer, standing on what it carries,
+ * or broken for good with what its break carries.
+ */
+export type LiveState<Standing extends object, Broken extends object = Record<never, never>> =
+  | { readonly kind: typeof LIVE_STATE.WAITING }
+  | ({ readonly kind: typeof LIVE_STATE.STANDING } & Standing)
+  | ({ readonly kind: typeof LIVE_STATE.BROKEN } & Broken);

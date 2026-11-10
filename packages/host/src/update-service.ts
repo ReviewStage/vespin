@@ -40,6 +40,12 @@ const UPDATE_CHECK_DEFAULTS = {
    * confirmation to be seen before `checking` overwrites it.
    */
   JUST_UPDATED_FIRST_CHECK_DELAY_MS: 10_000,
+  /**
+   * How long a restart press holds the install guard: long enough for the
+   * quit's teardown and Squirrel's swap, after which a run still standing
+   * was never going to quit, and the row's restart is offered again.
+   */
+  INSTALL_GRACE_MS: 2 * 60 * 1000,
 } as const;
 
 /**
@@ -76,6 +82,226 @@ function updateFailureOf(message: string): UpdateFailure | undefined {
     ? UPDATE_FAILURE.READ_ONLY_VOLUME
     : undefined;
 }
+
+/**
+ * Where the updater stands inside the service: the wire's `UpdateSnapshot`
+ * with what only the service reads folded into the states it belongs to,
+ * rather than kept as flags beside them. A run under way (`checking`,
+ * `downloading`) knows whether the developer asked for it, so a network
+ * failure anywhere in it is said rather than silent; a build in hand knows
+ * whether its install was already asked for, so repeat presses never fan out
+ * into parallel installs racing Squirrel's binary swap.
+ */
+type UpdateState =
+  | Exclude<
+      UpdateSnapshot,
+      {
+        status:
+          | typeof UPDATE_STATUS.CHECKING
+          | typeof UPDATE_STATUS.DOWNLOADING
+          | typeof UPDATE_STATUS.READY;
+      }
+    >
+  | (Extract<UpdateSnapshot, { status: typeof UPDATE_STATUS.CHECKING }> & { asked: boolean })
+  | (Extract<UpdateSnapshot, { status: typeof UPDATE_STATUS.DOWNLOADING }> & { asked: boolean })
+  | (Extract<UpdateSnapshot, { status: typeof UPDATE_STATUS.READY }> & { installing: boolean });
+
+/** Everything that may move the updater: the row's presses, the launch, and the engine's events. */
+const UPDATE_EVENT = {
+  /** A check begins, pressed or timed. */
+  CHECK: "check",
+  /** A pressed check lands on a run already under way, which it joins. */
+  JOIN: "join",
+  /** The engine says it is checking. */
+  CHECKING: "checking",
+  AVAILABLE: "available",
+  NOT_AVAILABLE: "not-available",
+  PROGRESS: "progress",
+  DOWNLOADED: "downloaded",
+  FAILED: "failed",
+  INSTALL: "install",
+  /** The install's grace passed with the run still standing. */
+  INSTALL_LAPSED: "install-lapsed",
+  /** The first launch after an install confirms it. */
+  UPDATED: "updated",
+} as const;
+
+type UpdateEventKind = (typeof UPDATE_EVENT)[keyof typeof UPDATE_EVENT];
+
+type UpdateEvent =
+  | { kind: typeof UPDATE_EVENT.CHECK; asked: boolean }
+  | { kind: typeof UPDATE_EVENT.JOIN }
+  | { kind: typeof UPDATE_EVENT.CHECKING }
+  | { kind: typeof UPDATE_EVENT.AVAILABLE; version: string }
+  | { kind: typeof UPDATE_EVENT.NOT_AVAILABLE }
+  | { kind: typeof UPDATE_EVENT.PROGRESS; progress: UpdateProgress }
+  | { kind: typeof UPDATE_EVENT.DOWNLOADED; version: string }
+  | { kind: typeof UPDATE_EVENT.FAILED; message: string }
+  | { kind: typeof UPDATE_EVENT.INSTALL }
+  | { kind: typeof UPDATE_EVENT.INSTALL_LAPSED }
+  | { kind: typeof UPDATE_EVENT.UPDATED; previousVersion: string };
+
+/**
+ * The moves each state takes; every other event is refused where it lands.
+ * A download in flight or in hand refuses a check — here we are stricter than
+ * the common updater setup: a timed tick that re-checked mid-flight would
+ * stomp the progress or the restart offer with `checking`, and a feed failure
+ * after a completed download would trade a build in hand for an error row and
+ * a cleared cache. A run under way refuses a second check too, which a pressed
+ * one joins instead, so a timed tick never makes a pressed run silent. The
+ * engine's news of a build moves any state but a build in hand or one just
+ * installed, which take no news of another.
+ */
+const UPDATE_MOVES = {
+  [UPDATE_STATUS.IDLE]: [
+    UPDATE_EVENT.CHECK,
+    UPDATE_EVENT.CHECKING,
+    UPDATE_EVENT.AVAILABLE,
+    UPDATE_EVENT.DOWNLOADED,
+    UPDATE_EVENT.UPDATED,
+  ],
+  [UPDATE_STATUS.CHECKING]: [
+    UPDATE_EVENT.JOIN,
+    UPDATE_EVENT.CHECKING,
+    UPDATE_EVENT.AVAILABLE,
+    UPDATE_EVENT.NOT_AVAILABLE,
+    UPDATE_EVENT.DOWNLOADED,
+    UPDATE_EVENT.FAILED,
+  ],
+  [UPDATE_STATUS.DOWNLOADING]: [
+    UPDATE_EVENT.JOIN,
+    UPDATE_EVENT.AVAILABLE,
+    UPDATE_EVENT.PROGRESS,
+    UPDATE_EVENT.DOWNLOADED,
+    UPDATE_EVENT.FAILED,
+  ],
+  [UPDATE_STATUS.READY]: [UPDATE_EVENT.INSTALL, UPDATE_EVENT.INSTALL_LAPSED, UPDATE_EVENT.FAILED],
+  [UPDATE_STATUS.UPDATED]: [UPDATE_EVENT.CHECK, UPDATE_EVENT.CHECKING],
+  [UPDATE_STATUS.ERROR]: [
+    UPDATE_EVENT.CHECK,
+    UPDATE_EVENT.CHECKING,
+    UPDATE_EVENT.AVAILABLE,
+    UPDATE_EVENT.DOWNLOADED,
+  ],
+} as const satisfies Record<UpdateStatus, readonly UpdateEventKind[]>;
+
+/** Moves that change only what the service reads, so nothing is broadcast. */
+const QUIET_EVENTS: ReadonlySet<UpdateEventKind> = new Set([
+  UPDATE_EVENT.JOIN,
+  UPDATE_EVENT.INSTALL,
+  UPDATE_EVENT.INSTALL_LAPSED,
+]);
+
+/** What every state carries, read off the state it moves from. */
+function standingOf(state: UpdateState) {
+  return { currentVersion: state.currentVersion, installSupported: state.installSupported };
+}
+
+/** Whether the run `state` stands in was asked for; only a run under way can have been. */
+function askedOf(state: UpdateState): boolean {
+  return (
+    (state.status === UPDATE_STATUS.CHECKING || state.status === UPDATE_STATUS.DOWNLOADING) &&
+    state.asked
+  );
+}
+
+/**
+ * Where `event` moves `state`, or `undefined` where the table refuses it.
+ * A failure is the network's when its words say so, which is silence unless
+ * the run was asked for; anything else is `error`, keeping the release the
+ * run named, if any.
+ */
+function transition(state: UpdateState, event: UpdateEvent): UpdateState | undefined {
+  const moves: readonly UpdateEventKind[] = UPDATE_MOVES[state.status];
+  if (!moves.includes(event.kind)) return undefined;
+  const standing = standingOf(state);
+  switch (event.kind) {
+    case UPDATE_EVENT.CHECK:
+      return { status: UPDATE_STATUS.CHECKING, ...standing, asked: event.asked };
+    case UPDATE_EVENT.JOIN:
+      return (state.status === UPDATE_STATUS.CHECKING ||
+        state.status === UPDATE_STATUS.DOWNLOADING) &&
+        !state.asked
+        ? { ...state, asked: true }
+        : undefined;
+    case UPDATE_EVENT.CHECKING:
+      return { status: UPDATE_STATUS.CHECKING, ...standing, asked: askedOf(state) };
+    case UPDATE_EVENT.AVAILABLE:
+      return {
+        status: UPDATE_STATUS.DOWNLOADING,
+        ...standing,
+        asked: askedOf(state),
+        latestVersion: event.version,
+      };
+    case UPDATE_EVENT.NOT_AVAILABLE:
+      return { status: UPDATE_STATUS.IDLE, ...standing, upToDate: true };
+    case UPDATE_EVENT.PROGRESS:
+      return state.status === UPDATE_STATUS.DOWNLOADING
+        ? { ...state, progress: event.progress }
+        : undefined;
+    case UPDATE_EVENT.DOWNLOADED:
+      return {
+        status: UPDATE_STATUS.READY,
+        ...standing,
+        latestVersion: event.version,
+        installing: false,
+      };
+    case UPDATE_EVENT.FAILED: {
+      if (isNetworkErrorMessage(event.message)) {
+        const idle = { status: UPDATE_STATUS.IDLE, ...standing, upToDate: false };
+        return askedOf(state) ? { ...idle, unreachable: true } : idle;
+      }
+      const latestVersion = "latestVersion" in state ? state.latestVersion : undefined;
+      const failure = updateFailureOf(event.message);
+      return {
+        status: UPDATE_STATUS.ERROR,
+        ...standing,
+        ...(latestVersion === undefined ? undefined : { latestVersion }),
+        ...(failure === undefined ? undefined : { failure }),
+      };
+    }
+    case UPDATE_EVENT.INSTALL:
+      return state.status === UPDATE_STATUS.READY && !state.installing
+        ? { ...state, installing: true }
+        : undefined;
+    case UPDATE_EVENT.INSTALL_LAPSED:
+      return state.status === UPDATE_STATUS.READY && state.installing
+        ? { ...state, installing: false }
+        : undefined;
+    case UPDATE_EVENT.UPDATED:
+      return { status: UPDATE_STATUS.UPDATED, ...standing, previousVersion: event.previousVersion };
+  }
+}
+
+/** The state as the wire carries it, without what only the service reads. */
+function snapshotOf(state: UpdateState): UpdateSnapshot {
+  switch (state.status) {
+    case UPDATE_STATUS.CHECKING:
+    case UPDATE_STATUS.DOWNLOADING: {
+      const { asked: _asked, ...snapshot } = state;
+      return snapshot;
+    }
+    case UPDATE_STATUS.READY: {
+      const { installing: _installing, ...snapshot } = state;
+      return snapshot;
+    }
+    default:
+      return state;
+  }
+}
+
+/**
+ * Where the service stands in its own life: `start()` takes it from
+ * `unstarted` once, and `stop()` ends it for good, so a start after a stop
+ * forks nothing.
+ */
+const SERVICE_LIFE = {
+  UNSTARTED: "unstarted",
+  STARTED: "started",
+  STOPPED: "stopped",
+} as const;
+
+type ServiceLife = (typeof SERVICE_LIFE)[keyof typeof SERVICE_LIFE];
 
 /** The updater lifecycle, as electron-updater announces it. */
 export interface UpdaterEngineEvents {
@@ -135,6 +361,7 @@ interface UpdateServiceOptions {
   lastRunVersion?: LastRunVersionStore;
   intervalMs?: number;
   justUpdatedFirstCheckDelayMs?: number;
+  installGraceMs?: number;
   report: (line: string) => void;
 }
 
@@ -148,7 +375,9 @@ interface UpdateServiceOptions {
  * to the releases page. An install may only be asked for once — repeat
  * presses racing Squirrel's binary swap is a known failure in
  * production — and a failed install falls out of `ready`, so the guard
- * releases with it.
+ * releases with it, as it does once the install's grace passes with the run
+ * still standing. Every move goes through `transition`, which refuses what
+ * `UPDATE_MOVES` does not list.
  */
 export class UpdateService {
   /**
@@ -175,21 +404,14 @@ export class UpdateService {
   readonly #lastRunVersion: LastRunVersionStore | undefined;
   readonly #intervalMs: number;
   readonly #justUpdatedFirstCheckDelayMs: number;
+  readonly #installGraceMs: number;
   readonly #report: (line: string) => void;
   readonly #services: Context.Context<never>;
   /** Every fiber the service forks — the timed check and the first check — lands here. */
   readonly #scope: Scope.Scope;
+  #state: UpdateState;
   #snapshot: UpdateSnapshot;
-  #latestVersion: string | undefined;
-  /**
-   * Whether the run under way began with a check the developer asked for,
-   * which stands through the download that check began, so a network failure
-   * anywhere in it is said rather than silent.
-   */
-  #asked = false;
-  #installing = false;
-  #started = false;
-  #stopped = false;
+  #life: ServiceLife = SERVICE_LIFE.UNSTARTED;
   /**
    * The timed check and the first check `start()` forks, tracked so `stop()`
    * can interrupt them directly when the scope they forked into is not this
@@ -213,36 +435,17 @@ export class UpdateService {
     this.#justUpdatedFirstCheckDelayMs =
       options.justUpdatedFirstCheckDelayMs ??
       UPDATE_CHECK_DEFAULTS.JUST_UPDATED_FIRST_CHECK_DELAY_MS;
+    this.#installGraceMs = options.installGraceMs ?? UPDATE_CHECK_DEFAULTS.INSTALL_GRACE_MS;
     this.#report = options.report;
-    this.#snapshot = this.#idle(false);
+    this.#state = idleUpdateSnapshot(this.#currentVersion, this.#engine !== undefined);
+    this.#snapshot = this.#state;
     this.#engine?.wire({
-      onChecking: () => this.#move({ ...this.#base(UPDATE_STATUS.CHECKING) }),
-      onAvailable: (version) => {
-        this.#latestVersion = version;
-        this.#move({ ...this.#base(UPDATE_STATUS.DOWNLOADING), latestVersion: version });
-      },
-      onNotAvailable: () => this.#move(this.#idle(true)),
-      onProgress: (progress) => {
-        if (this.#snapshot.status !== UPDATE_STATUS.DOWNLOADING) return;
-        this.#move({ ...this.#snapshot, progress });
-      },
-      onDownloaded: (version) => {
-        this.#latestVersion = version;
-        this.#move({ ...this.#base(UPDATE_STATUS.READY), latestVersion: version });
-      },
-      onError: (message) => {
-        // Squirrel surfacing an error instead of quitting must release the
-        // install guard, or the row's restart press dies with the attempt.
-        this.#installing = false;
-        if (isNetworkErrorMessage(message)) {
-          this.#report(`Update check could not reach the feed: ${message}`);
-          this.#move(this.#idle(false, this.#asked));
-          return;
-        }
-        this.#report(`Update failed: ${message}`);
-        void this.#engine?.clearCachedUpdate().catch(() => undefined);
-        this.#move(this.#errorSnapshot(updateFailureOf(message)));
-      },
+      onChecking: () => this.#send({ kind: UPDATE_EVENT.CHECKING }),
+      onAvailable: (version) => this.#send({ kind: UPDATE_EVENT.AVAILABLE, version }),
+      onNotAvailable: () => this.#send({ kind: UPDATE_EVENT.NOT_AVAILABLE }),
+      onProgress: (progress) => this.#send({ kind: UPDATE_EVENT.PROGRESS, progress }),
+      onDownloaded: (version) => this.#send({ kind: UPDATE_EVENT.DOWNLOADED, version }),
+      onError: (message) => this.#fail(message),
     });
   }
 
@@ -259,35 +462,15 @@ export class UpdateService {
    */
   async check({ asked = false }: { asked?: boolean } = {}): Promise<UpdateSnapshot> {
     const engine = this.#engine;
-    if (!engine || this.#installing) return this.#snapshot;
-    // A download in flight or in hand holds the row — here we are stricter
-    // than the common updater setup: a timed tick that re-checked mid-flight
-    // would stomp the progress or the restart offer with `checking`, and a
-    // feed failure after a completed download would trade a build in hand
-    // for an error row and a cleared cache.
-    if (
-      this.#snapshot.status === UPDATE_STATUS.DOWNLOADING ||
-      this.#snapshot.status === UPDATE_STATUS.READY
-    ) {
-      return this.#snapshot;
-    }
-    // Note that a new run forgets the release the last one named, so a
-    // check that fails is not mistaken for the install of a release it never
-    // found.
-    this.#asked = asked;
-    this.#latestVersion = undefined;
-    this.#move({ ...this.#base(UPDATE_STATUS.CHECKING) });
+    if (!engine) return this.#snapshot;
+    // Note that a pressed check landing on a run under way joins it rather
+    // than asking the feed again, so that run's network failure is said.
+    if (asked && this.#send({ kind: UPDATE_EVENT.JOIN })) return this.#snapshot;
+    if (!this.#send({ kind: UPDATE_EVENT.CHECK, asked })) return this.#snapshot;
     try {
       await engine.checkForUpdates();
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (isNetworkErrorMessage(message)) {
-        this.#report(`Update check could not reach the feed: ${message}`);
-        this.#move(this.#idle(false, this.#asked));
-      } else {
-        this.#report(`Update check failed: ${message}`);
-        this.#move(this.#errorSnapshot(updateFailureOf(message)));
-      }
+      this.#fail(error instanceof Error ? error.message : String(error));
     }
     return this.#snapshot;
   }
@@ -299,10 +482,18 @@ export class UpdateService {
    * can leave the app on the old version.
    */
   install(): void {
-    if (!this.#engine || this.#installing) return;
-    if (this.#snapshot.status !== UPDATE_STATUS.READY) return;
-    this.#installing = true;
-    this.#engine.quitAndInstall();
+    const engine = this.#engine;
+    if (!engine || !this.#send({ kind: UPDATE_EVENT.INSTALL })) return;
+    engine.quitAndInstall();
+    // A quit that never comes (Squirrel doing nothing, or the teardown holding
+    // it) must not hold the guard for the rest of the run.
+    const lapse = Effect.sync(() => {
+      if (!this.#send({ kind: UPDATE_EVENT.INSTALL_LAPSED })) return;
+      this.#report("Update install did not restart the app; the restart is offered again");
+    });
+    Effect.runSyncWith(this.#services)(
+      Effect.provideService(scheduleOnce(this.#installGraceMs, lapse), Scope.Scope, this.#scope),
+    );
   }
 
   /**
@@ -312,14 +503,13 @@ export class UpdateService {
    * are fibers forked into the service's own scope, which `stop()` closes.
    */
   start(): void {
-    if (this.#started || !this.#engine) return;
-    this.#started = true;
+    if (this.#life !== SERVICE_LIFE.UNSTARTED || !this.#engine) return;
+    this.#life = SERVICE_LIFE.STARTED;
     const previous = this.#lastRunVersion?.read();
     const justUpdated = previous !== undefined && previous !== this.#currentVersion;
     if (previous !== this.#currentVersion) this.#lastRunVersion?.write(this.#currentVersion);
-    if (justUpdated) {
+    if (justUpdated && this.#send({ kind: UPDATE_EVENT.UPDATED, previousVersion: previous })) {
       this.#report(`Updated: ${previous} -> ${this.#currentVersion}`);
-      this.#move({ ...this.#base(UPDATE_STATUS.UPDATED), previousVersion: previous });
     }
     const runSync = Effect.runSyncWith(this.#services);
     const work = Effect.sync(() => void this.check());
@@ -355,43 +545,41 @@ export class UpdateService {
    * launch's own and not this class's to close.
    */
   stop(): void {
-    if (this.#stopped) return;
-    this.#stopped = true;
+    if (this.#life === SERVICE_LIFE.STOPPED) return;
+    this.#life = SERVICE_LIFE.STOPPED;
     this.#repeatingCheck?.interruptUnsafe();
     this.#firstCheck?.interruptUnsafe();
   }
 
-  #base<Status extends UpdateStatus>(status: Status) {
-    return {
-      status,
-      currentVersion: this.#currentVersion,
-      installSupported: this.#engine !== undefined,
-    };
+  /**
+   * Says why a run failed and moves it where the table says, once: the
+   * engine's error event and the check's own rejection often carry the same
+   * failure, and the second lands on a state that refuses it.
+   */
+  #fail(message: string): void {
+    const failed = this.#send({ kind: UPDATE_EVENT.FAILED, message });
+    if (!failed) return;
+    if (this.#state.status !== UPDATE_STATUS.ERROR) {
+      this.#report(`Update check could not reach the feed: ${message}`);
+      return;
+    }
+    this.#report(`Update failed: ${message}`);
+    void this.#engine?.clearCachedUpdate().catch(() => undefined);
   }
 
-  #errorSnapshot(failure?: UpdateFailure): UpdateSnapshot {
-    return {
-      ...this.#base(UPDATE_STATUS.ERROR),
-      ...(this.#latestVersion === undefined ? undefined : { latestVersion: this.#latestVersion }),
-      ...(failure === undefined ? undefined : { failure }),
-    };
-  }
-
-  #idle(upToDate: boolean, unreachable = false): UpdateSnapshot {
-    const idle = {
-      ...idleUpdateSnapshot(this.#currentVersion, this.#engine !== undefined),
-      upToDate,
-    };
-    return unreachable ? { ...idle, unreachable } : idle;
-  }
-
-  #move(snapshot: UpdateSnapshot): void {
-    this.#snapshot = snapshot;
+  /** Moves the state where `event` takes it, answering whether the table allowed the move. */
+  #send(event: UpdateEvent): boolean {
+    const next = transition(this.#state, event);
+    if (next === undefined) return false;
+    this.#state = next;
+    if (QUIET_EVENTS.has(event.kind)) return true;
+    this.#snapshot = snapshotOf(next);
     try {
-      this.#onChange(snapshot);
+      this.#onChange(this.#snapshot);
     } catch {
       // A listener's failure is its own — a window torn down mid-broadcast
       // must not fail the transition that has already moved.
     }
+    return true;
   }
 }

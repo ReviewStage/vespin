@@ -1,0 +1,1 @@
+CREATE INDEX "automation_run_claimed" ON "automation_run" ("automation_id","settled_at") WHERE "claimed_at" is not null;

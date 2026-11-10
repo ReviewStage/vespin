@@ -29,7 +29,7 @@ import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { type RowAction, RowFrame, RowHead, rowPlacement } from "./list-row.js";
-import { Markdown, type MarkdownPlace } from "./markdown.js";
+import { Markdown } from "./markdown.js";
 import { AgentTile, FailedMark, TaskStatusMark, ToneGlyph, WorkingMark } from "./marks.js";
 import { PageHeader } from "./page-header.js";
 import type { SfSymbol } from "./sf-symbol.js";
@@ -355,8 +355,8 @@ type WordsRowProps = {
   readonly words: string;
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips. */
   readonly repository?: string | null | undefined;
-  /** Routes a link or a chip naming a place in the app; every other link opens in Safari. */
-  readonly onOpenPlace: (place: MarkdownPlace) => void;
+  /** Opens a link or a chip pressed, by the address it was written as, where the app draws it or in Safari. */
+  readonly onOpenLink: (address: string) => void;
 };
 
 /**
@@ -365,7 +365,7 @@ type WordsRowProps = {
  * wide as the list and as tall as the words, since SwiftUI has no piece
  * that draws the panel's Markdown.
  */
-export function WordsRow({ words, repository, onOpenPlace }: WordsRowProps) {
+export function WordsRow({ words, repository, onOpenLink }: WordsRowProps) {
   return (
     <VStack
       modifiers={[
@@ -382,7 +382,7 @@ export function WordsRow({ words, repository, onOpenPlace }: WordsRowProps) {
     >
       <RNHostView matchContents={{ vertical: true }}>
         <View>
-          <Markdown words={words} repository={repository} onOpenPlace={onOpenPlace} />
+          <Markdown words={words} repository={repository} onOpenLink={onOpenLink} />
         </View>
       </RNHostView>
     </VStack>

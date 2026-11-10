@@ -10,7 +10,7 @@ import {
   integrationAccountNames,
 } from "@repo/features/integration-wire";
 import { searchTokens } from "@repo/features/search-tokens";
-import { MCP_SERVER_LABEL, readFailedWords } from "@repo/features/words";
+import { MCP_SERVER_LABEL, readFailedWords, VERB } from "@repo/features/words";
 import { integrationFound } from "./integration-search.js";
 
 /**
@@ -66,7 +66,7 @@ type ServerRowKind = (typeof SERVER_ROW)[keyof typeof SERVER_ROW];
 /** What a row offers at its end where it offers a press but no switch. */
 export const SERVER_ACTION = {
   CONNECT: "Connect",
-  RECONNECT: "Reconnect",
+  RECONNECT: VERB.RECONNECT,
   RETRY: "Retry",
 } as const;
 

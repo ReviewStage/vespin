@@ -385,7 +385,7 @@ import { WorkedFor, WorkingLine } from "./working-time.js";
  * where the pull request the agent opened lives; every other address is
  * drawn and goes nowhere. No line here names a price: a price in the
  * window is the whole run's, said only on the model menu's last line
- * (`agentPayerLine`). Every word here is the agent's or the description's,
+ * (`agent-payer.tsx`). Every word here is the agent's or the description's,
  * which the screen recording masks. Under the transcript stands
  * the composer (`agent-composer.tsx`), with no head above either: where
  * the agent stands is its tab's glyph and the transcript's own lines, what
@@ -3227,6 +3227,7 @@ function AgentTabView({
             usage={transcript.usage}
             payer={transcript.payer}
             payerSubscriptionId={transcript.payerSubscriptionId}
+            owner={starter === undefined ? undefined : starterActor}
             servers={servers}
             mode={mode}
             approvalsWaiting={approvals.waiting}
@@ -3234,7 +3235,7 @@ function AgentTabView({
             brief={agent.brief}
             tools={(narrow) => (
               <>
-                <AgentPlace agent={agent} readerId={readerId} move={placeMove} narrow={narrow} />
+                <AgentPlace agent={agent} move={placeMove} narrow={narrow} />
                 <ForwardChip agent={agent} />
               </>
             )}
