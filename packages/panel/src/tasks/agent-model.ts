@@ -224,7 +224,7 @@ export interface PayerParts {
   readonly mark: PayerMark;
   /** Whether it is a member's own, so the line says whose: "Your", or the teammate who started the agent. */
   readonly owned: boolean;
-  /** "Claude plan", the plan by its name, "Codex plan · ana@work.com", or a key and what the run has cost on it: "Anthropic API key · $0.42 so far". */
+  /** "Claude plan", the plan by its name, "Codex plan (ana@work.com)", or a key and what the run has cost on it: "Anthropic API key · $0.42 so far". */
   readonly words: string;
   /** Whether the words name the plan, whose name may be its account's email, so a screen recording masks them. */
   readonly masked: boolean;
@@ -255,8 +255,7 @@ export function agentPayerParts(
         ? ANY_API_KEY
         : API_KEY_WORDS[provider]
       : PAYER_WORDS[payer];
-  const named =
-    planPayer(payer) && planName !== undefined ? `${plan}${LINE_SEPARATOR}${planName}` : plan;
+  const named = planPayer(payer) && planName !== undefined ? `${plan} (${planName})` : plan;
   const words =
     PRICED_PAYERS.has(payer) && costUsd !== undefined
       ? `${named}${LINE_SEPARATOR}${formatUsd(costUsd)} so far`

@@ -52,7 +52,7 @@ import type { AgentModelControl } from "./use-agent-model.js";
  * the plan the agent's harness runs on only where neither names one
  * (`paidByOf`), so a Codex agent says its plan before its first turn
  * settles. The reader's own plan is named where their keys hold the one the
- * page named ("Your Codex plan · ana@work.com", masked in a screen
+ * page named ("Your Codex plan (ana@work.com)", masked in a screen
  * recording), a new agent's the first of the reader's plans with room left.
  */
 

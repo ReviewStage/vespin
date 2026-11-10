@@ -29,8 +29,8 @@ import { useOpenLink } from "./use-open-link.js";
  * them by their person chip, "[Dean’s] Claude plan", so a teammate's agent
  * never reads as the reader's own. The app's own key names no one. The same
  * line closes the model chip's menu and the context popover. The reader's
- * own plan goes on to its name where they hold several, "Your Codex plan ·
- * ana@work.com", which a screen recording masks, since it may be an email.
+ * own plan names itself after it where they hold several, "Your Codex plan
+ * (ana@work.com)", which a screen recording masks, since it may be an email.
  *
  * An agent its starter's ChatGPT plan pays for ends the menu's line on
  * Manage usage, as OpenAI's UI guidelines ask

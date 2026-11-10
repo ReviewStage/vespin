@@ -410,7 +410,7 @@ test("an agent's payer says whose it is: the reader's own, by its name masked fr
   const [own, theirs, named] = lines.map((line) => line.textContent);
   assert.equal(own, "Your Claude plan");
   // Note that a plan's name may be the account's email, so its words are masked in a screen recording.
-  assert.equal(named, "Your Codex plan · ana@work.com");
+  assert.equal(named, "Your Codex plan (ana@work.com)");
   assert.equal(lines[2]?.querySelector("[data-replay-mask]")?.textContent, named);
   // Note that the chip's face draws the teammate's initial before their name.
   assert.match(theirs ?? "", /Theo Lindqvist’s Anthropic API key · \$0\.42 so far$/);
