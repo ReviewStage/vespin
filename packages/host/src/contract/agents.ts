@@ -67,6 +67,9 @@ import {
   hostIdParamsSchema,
   pullRequestPartParamsSchema,
   thisMacHostSetAnswerViewSchema,
+  replyButtonAnswerViewSchema,
+  replyButtonParamsSchema,
+  replyButtonPressAnswerViewSchema,
   thisMacHostSetParamsSchema,
 } from "@repo/features/agent-view";
 import {
@@ -327,6 +330,22 @@ export const AGENT_ACTS = declaredActs({
     input: agentStopParamsSchema,
     output: agentWarmAnswerViewSchema,
     refusal: "Could not keep the agent warm on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  AGENTS_REPLY_BUTTON: hostAct({
+    input: replyButtonParamsSchema,
+    output: replyButtonAnswerViewSchema,
+    refusal: "Could not read the button on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  AGENTS_REPLY_BUTTON_PRESS: hostAct({
+    input: replyButtonParamsSchema,
+    output: replyButtonPressAnswerViewSchema,
+    refusal: "Could not press the button on this system.",
     panelOnly: true,
     door: ACT.REMOTE_WORK,
     unanswered: AGENT_UNANSWERED,

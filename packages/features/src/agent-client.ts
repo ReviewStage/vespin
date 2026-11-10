@@ -102,6 +102,9 @@ import {
   type SoundIdParams,
   type SoundRenameParams,
   type SoundStateView,
+  type ReplyButtonAnswerView,
+  type ReplyButtonParams,
+  type ReplyButtonPressAnswerView,
   type SubscriptionLabelParams,
   type SubscriptionOrderParams,
 } from "./agent-view.js";
@@ -1321,6 +1324,27 @@ export class HostedAgentClient {
   /** Keeps one agent on screen warm for the next message (`agentWarmAnswerSchema`). */
   warm(agentId: string): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.agents.warm, { id: agentId });
+  }
+
+  /** One button in an agent's reply as the window draws it, or why it is not drawn. */
+  replyButton(
+    params: ReplyButtonParams,
+  ): Effect.Effect<ReplyButtonAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agents.readButton, {
+      id: params.agentId,
+      button: params.buttonId,
+    });
+  }
+
+  /** One button in an agent's reply pressed as the member, run once: the button as its press then stands, or why the press was refused. */
+  pressReplyButton(
+    params: ReplyButtonParams,
+  ): Effect.Effect<ReplyButtonPressAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(
+      this.#hosted.agents.pressButton,
+      { id: params.agentId, button: params.buttonId },
+      { deadline: HOSTED_DEADLINE.START },
+    );
   }
 
   /** Takes one agent back to just before one of the developer's lines, stopping it first where it still works, answering it as it then stands. */

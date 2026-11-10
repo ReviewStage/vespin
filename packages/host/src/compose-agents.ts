@@ -238,6 +238,8 @@ export type AgentClient = Pick<
   | "runAction"
   | "stopRunAction"
   | "boot"
+  | "replyButton"
+  | "pressReplyButton"
   | "delete"
   | "agent"
   | "pullRequest"
@@ -1106,6 +1108,9 @@ function composed(
     AGENTS_CLEAR: ({ agentId }) => asked(client.clear(agentId)),
     AGENTS_BOOT: ({ agentId }) => asked(client.boot(agentId)),
     AGENTS_WARM: ({ agentId }) => asked(client.warm(agentId)),
+    // Note that a button in a reply is asked of the service on each act and held nowhere here, since its press is the service's to keep.
+    AGENTS_REPLY_BUTTON: (params) => asked(client.replyButton(params)),
+    AGENTS_REPLY_BUTTON_PRESS: (params) => asked(client.pressReplyButton(params)),
     // Note that an agent's ports and its link are asked of the service on each act and held nowhere here, because the plug reads them again while its menu stands open.
     AGENTS_PORTS: ({ agentId }) => asked(dependencies.ports.list(agentId)),
     AGENTS_PORT_SHARED: ({ agentId }) => asked(dependencies.ports.shared(agentId)),

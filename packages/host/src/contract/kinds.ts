@@ -258,6 +258,10 @@ export const AGENT_ACT_KIND = {
   AGENTS_BOOT: "agents.boot",
   /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
+  /** A button in an agent's reply as the transcript draws it, asked of the service as it is drawn (`reply-button-wire.ts`). */
+  AGENTS_REPLY_BUTTON: "agents.replyButton",
+  /** A button in an agent's reply pressed by the member, which the service runs once. */
+  AGENTS_REPLY_BUTTON_PRESS: "agents.replyButtonPress",
   /** The ports listened on in an agent's cloud sandbox, asked of the service as the plug's menu stands open, on a host that forwards none. */
   AGENTS_PORTS: "agents.ports",
   /** The agent's port shared by public link now, asked of the service beside its ports. */
@@ -1018,6 +1022,8 @@ export const PORT_ACT_USE = {
   AGENTS_CLEAR: ACT_USE.WRITE,
   AGENTS_BOOT: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
+  AGENTS_REPLY_BUTTON: ACT_USE.FETCH,
+  AGENTS_REPLY_BUTTON_PRESS: ACT_USE.WRITE,
   AGENTS_PORTS: ACT_USE.FETCH,
   AGENTS_PORT_SHARED: ACT_USE.FETCH,
   AGENTS_PORT_SHARE: ACT_USE.WRITE,

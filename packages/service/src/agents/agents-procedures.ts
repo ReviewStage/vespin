@@ -126,6 +126,7 @@ import { startedFromBefore } from "./coder-host/takeover.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import { turnChangesOf } from "./coder-host/turn-changes.js";
 import { ranRunAction, stoppedRunAction } from "./run-actions.js";
+import { pressReplyButton, readReplyButtonView } from "./reply-buttons/press.js";
 import type { SandboxDeleteReach } from "./session-sandboxes.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
 import { AgentSandbox } from "./terminal/agent-sandbox.js";
@@ -444,6 +445,20 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       );
 
       return startAnswer(started);
+    }),
+    /** One button in the agent's reply as the window draws it. */
+    readButton: signedIn.readButton.effect(function* ({ input, context }) {
+      return yield* readReplyButtonView(context.userId, input.id, input.button);
+    }),
+    /** One button in the agent's reply pressed as the member, run once (`reply-buttons/press.ts`). */
+    pressButton: signedIn.pressButton.effect(function* ({ input, context }) {
+      return yield* pressReplyButton(
+        writer,
+        context.userId,
+        input.id,
+        input.button,
+        yield* summaryModelOf,
+      );
     }),
     /** The agent as its own page. */
     read: signedIn.read.effect(function* ({ input, context }) {

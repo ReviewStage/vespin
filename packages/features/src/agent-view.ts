@@ -763,6 +763,24 @@ export const agentRunActionStopAnswerViewSchema = answerView(agentsContract.stop
 
 export type AgentRunActionStopAnswerView = typeof agentRunActionStopAnswerViewSchema.Type;
 
+/** A button in an agent's reply read, as the window hears it: the button, or why it is not drawn. */
+export const replyButtonAnswerViewSchema = answerView(agentsContract.readButton);
+
+export type ReplyButtonAnswerView = typeof replyButtonAnswerViewSchema.Type;
+
+/** A button in an agent's reply pressed, as the window hears it: the button as its press then stands, or why the press was refused. */
+export const replyButtonPressAnswerViewSchema = answerView(agentsContract.pressButton);
+
+export type ReplyButtonPressAnswerView = typeof replyButtonPressAnswerViewSchema.Type;
+
+/** The button in an agent's reply an act names: the agent whose reply holds it, and the button. */
+export const replyButtonParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.String,
+  buttonId: EffectSchema.String,
+});
+
+export type ReplyButtonParams = typeof replyButtonParamsSchema.Type;
+
 /** One agent's transcript past a cursor, as the window asks it: the agent, and where the window stands; or, naming the delegation call that started one, a worker's transcript under the agent. */
 export const agentMessagesParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,

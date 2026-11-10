@@ -98,3 +98,33 @@ export function readReplyButtonLink(target: string): ReplyButtonLink | undefined
 
   return { workspace, agentId, buttonId };
 }
+
+/** An agent a button names: its id, and its title as its tab names it. */
+const namedAgentSchema = EffectSchema.Struct({
+  id: EffectSchema.String,
+  title: EffectSchema.String,
+});
+
+/** A button's press as it stands: when it was claimed, by whom by name where their account stands, and the agent it reached once it landed. */
+const replyButtonPressSchema = EffectSchema.Struct({
+  at: EffectSchema.Number,
+  by: EffectSchema.NullOr(EffectSchema.String),
+  agent: EffectSchema.NullOr(namedAgentSchema),
+});
+
+/**
+ * A button as the window draws it: its label, what a press does with the
+ * brief whole, where a start runs (the button agent's repository, null for
+ * none), the agent a send goes to, and its press, none until pressed.
+ */
+export const replyButtonViewSchema = EffectSchema.Struct({
+  id: EffectSchema.String,
+  agentId: EffectSchema.String,
+  label: EffectSchema.String,
+  action: replyButtonActionSchema,
+  repository: EffectSchema.NullOr(EffectSchema.String),
+  sendTo: EffectSchema.NullOr(namedAgentSchema),
+  pressed: EffectSchema.NullOr(replyButtonPressSchema),
+});
+
+export type ReplyButtonView = typeof replyButtonViewSchema.Type;
