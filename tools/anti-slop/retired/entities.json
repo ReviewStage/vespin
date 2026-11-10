@@ -27,8 +27,7 @@
       "baseline": {
         "packages/panel/src/actor-ref.tsx": 1,
         "packages/panel/src/desktop/automation-agent-run.tsx": 2,
-        "packages/panel/src/desktop/automation-runs-panel.tsx": 1,
-        "packages/panel/src/tasks/inbox-item-parts.tsx": 1
+        "packages/panel/src/desktop/automation-runs-panel.tsx": 1
       }
     },
     {
@@ -165,7 +164,6 @@
         "packages/panel/src/desktop/automations-page.tsx": 1,
         "packages/panel/src/desktop/section-icon-picker.tsx": 1,
         "packages/panel/src/tasks/agent-tab.tsx": 1,
-        "packages/panel/src/tasks/inbox-pane.tsx": 1,
         "packages/ui/src/components/landing/landing-desktop.tsx": 1,
         "packages/ui/src/components/landing/landing-scenes.tsx": 1
       }
