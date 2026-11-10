@@ -68,10 +68,11 @@ import {
   type UserIdResolver,
 } from "../http/http-effect.js";
 import { accountMiddleware, type HostedContext, hosted } from "../orpc/base.js";
+import { queueOnPage } from "./coder-host/agent-queue.js";
 import { cutMessage, wholePartOf } from "./coder-host/part-cut.js";
 import { changeAgentQueue } from "./coder-host/queue-change.js";
 import { startedBlank } from "./coder-host/status.js";
-import { steerMemberWords } from "./coder-host/steer.js";
+import { STEER_OUTCOME, steerMemberWords } from "./coder-host/steer.js";
 import { summaryOf } from "./coder-host/stop.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import {
@@ -364,7 +365,7 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
       .send.effect(function* ({ input, context }) {
         const { agent } = yield* reachedAgent(context.userId, input.params.id);
         const { retry, ...line } = input.body;
-        const { txid } = yield* steerMemberWords(
+        const { txid, outcome } = yield* steerMemberWords(
           writer,
           context.userId,
           agent,
@@ -372,6 +373,10 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
           retry === true,
         );
         const summary = yield* summaryOf(context.userId, agent);
+        // A message the agent's first launch holds waits in its queue, which the host draws it in at once.
+        if (outcome === STEER_OUTCOME.QUEUED) {
+          return { agent: summary, queued: yield* hostedStoreOrUnavailable(queueOnPage(agent.id)) };
+        }
         // The transaction that wrote the line, which the host waits to see live before it confirms the send.
         return txid === undefined ? { agent: summary } : { agent: summary, txid };
       }),
