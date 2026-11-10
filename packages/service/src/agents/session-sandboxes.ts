@@ -20,9 +20,9 @@
  * (`consumeSandboxRelease`) reads the row again under the agent's runner
  * lease, which a launch holds while it opens the sandbox, just before the
  * delete, writes it LIVE where it was opened, touched, or given a turn
- * since, and else deletes the sandbox and any other of its session, one
- * already gone counting as deleted, and writes it RELEASED. A delivery that failed comes
- * again. An agent brought back after its release opens a sandbox afresh,
+ * since, and else deletes the sandbox, and any other of its session where it
+ * is the agent's current session's own, one already gone counting as
+ * deleted, and writes it RELEASED. A delivery that failed comes again. An agent brought back after its release opens a sandbox afresh,
  * its checkout made from its repository's base drive and its pushed branch,
  * as a sandbox whose snapshot lapsed is.
  *
@@ -75,7 +75,7 @@ import {
 import { AUTH_DEPLOYMENT_ENVIRONMENT, DEPLOYMENT_ENVIRONMENT } from "../auth/auth-deployment.js";
 import { afterResponse } from "../http/after-response.js";
 import { QUEUE_ACKNOWLEDGED, queueConsumer } from "../queues/queue-consumer.js";
-import { SESSION_TAG } from "./agent-sandbox-open.js";
+import { agentSandboxName, SESSION_TAG } from "./agent-sandbox-open.js";
 import {
   ARCHIVE_SCRIPT,
   type ArchiveScript,
@@ -353,11 +353,14 @@ function sandboxReleaseDue(usedAt: Date, now: number, turnOpen: boolean): boolea
 }
 
 /**
- * The sandbox deleted with the drive it owns, and with it any other sandbox
- * of the agent's session, such as one opened under a UUID before sandboxes
- * were named after their session (`agent-sandbox-open.ts`'s
- * `legacySandboxOf`), which an archive's delete by the session's tag used to
- * take; one already gone counts as deleted.
+ * The sandbox deleted with the drive it owns, and, where it is the agent's
+ * current session's own, any other sandbox of that session with it, such as
+ * one opened under a UUID before sandboxes were named after their session
+ * (`agent-sandbox-open.ts`'s `legacySandboxOf`), which an archive's delete
+ * by the session's tag used to take; one already gone counts as deleted.
+ * Note that a sandbox of a session the agent has since moved on from is
+ * deleted by its name alone, because the current session's sandboxes are
+ * another row's.
  */
 const deletedWithSession = (
   sandboxName: string,
@@ -366,7 +369,9 @@ const deletedWithSession = (
   Effect.flatMap(Sandbox, (api) =>
     Effect.andThen(
       api.delete(sandboxName),
-      sessionId === null ? Effect.void : sessionSandboxesOver(api).deleteFor(sessionId),
+      sessionId !== null && agentSandboxName(sessionId) === sandboxName
+        ? sessionSandboxesOver(api).deleteFor(sessionId)
+        : Effect.void,
     ),
   );
 
