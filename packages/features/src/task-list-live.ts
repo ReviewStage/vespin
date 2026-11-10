@@ -384,6 +384,7 @@ function agentsSummaryOf(group: AgentGroup, now: number): TaskAgentsSummary {
       createdAt: row.createdAt,
       status: statusOf(row, now),
       at: turnOf(row) === undefined ? undefined : (row.settledAt ?? undefined),
+      failure: row.turnFailure ?? undefined,
     }));
   return {
     total: standing.length,

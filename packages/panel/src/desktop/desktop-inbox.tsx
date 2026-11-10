@@ -10,7 +10,7 @@ import {
 } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
-import type { DescriptionMention, MentionLines } from "@repo/features/mention-link";
+import type { DescriptionMention } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -54,6 +54,7 @@ import {
 import { InboxList, InboxListNote, InboxPaneEmpty } from "../tasks/inbox-list.js";
 import { useInboxPager } from "../tasks/inbox-pager.js";
 import { type InboxNewThread, InboxPane, type InboxPaneDoors } from "../tasks/inbox-pane.js";
+import type { OpenFileLines } from "../tasks/mention-chip.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
 import {
@@ -319,7 +320,7 @@ export const DesktopInbox = memo(function DesktopInbox({
         reads ?? (chosen?.holder.kind === INBOX_HOLDER.TASK ? undefined : repositoryReads(place)),
     });
   // A file the item's words or box name opens as its code does, in the panel beside the Inbox.
-  const openMentionedFile = (path: string, lines: MentionLines | undefined) =>
+  const openMentionedFile = (path: string, lines: OpenFileLines | undefined) =>
     openFile(fileRef(path, lines), lines?.commit);
   // The task's agents this Inbox read, an archived one's among them, whose Pull request tabs the panel beside the item draws.
   const { heldIds } = agents;
@@ -780,7 +781,7 @@ export function startedThreads(
 }
 
 /** A file the item names as its code names it: its path, and its lines where it names them. */
-function fileRef(path: string, lines: MentionLines | undefined): CodeRef {
+function fileRef(path: string, lines: OpenFileLines | undefined): CodeRef {
   return lines === undefined
     ? { path }
     : { path, startLine: lines.startLine, endLine: lines.endLine };

@@ -15,6 +15,7 @@ import { descriptionCommand } from "./description.js";
 import { inboxCommand } from "./inbox.js";
 import { mcpCommand } from "./mcp.js";
 import { modelsCommand } from "./models.js";
+import { sectionCommand } from "./section.js";
 import { taskCommand } from "./task.js";
 import { updateCommand } from "./update.js";
 import { versionCommand } from "./version.js";
@@ -23,6 +24,7 @@ import { workspaceCommand } from "./workspace.js";
 export const COMMANDS = [
   ...ACCOUNT_COMMANDS,
   taskCommand,
+  sectionCommand,
   descriptionCommand,
   agentCommand,
   workspaceCommand,

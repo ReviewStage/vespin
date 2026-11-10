@@ -24,7 +24,7 @@ import {
   AUTOMATION_FIRING,
   AUTOMATION_TRIGGER,
 } from "@repo/features/automation-wire";
-import { RUN_STATUS } from "@repo/features/turn-run";
+import { RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
 import { TURN_STATUS } from "@repo/wire";
 import { Effect, Layer, Option } from "effect";
 import { postTurnToSlack } from "../slack/slack-agent-starts.js";
@@ -175,6 +175,25 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
         }).pipe(Effect.provideService(SlackBot, bot));
         assert.equal(slack.posted.length, 1);
       }),
+  );
+
+  it.effect("a run its plan's usage limit stopped says so, never that the run failed", () =>
+    Effect.gen(function* () {
+      const slack = recordingSlack();
+      const bot = slackBotOver(slack.api);
+      const { agent } = yield* openDeliveringRun();
+      const delivering = Layer.succeed(SettledTurnListener, {
+        heard: (turn) => postTurnToSlack(turn).pipe(Effect.provideService(SlackBot, bot)),
+      });
+
+      yield* endedAt(agent, RUN_STATUS.FAILED, T0, undefined, TURN_FAILURE.PLAN_LIMIT).pipe(
+        Effect.provide(delivering),
+      );
+
+      const said = slack.posted[0]?.text ?? "";
+      assert.ok(said.includes("Usage limit reached"), said);
+      assert.ok(!said.includes("failed"), said);
+    }),
   );
 
   it.effect(

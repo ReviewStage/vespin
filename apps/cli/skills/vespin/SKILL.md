@@ -35,11 +35,15 @@ Other commands:
 | Command | What it does |
 | --- | --- |
 | `task list [--mine] [--status s]` · `task view <task>` · `task update <task> [--status] [--priority] [--assignee] [--name]` | Find, read, and change tasks; `--status done` marks one done |
+| `task update <task> [--parent <task\|none>] [--blocked-by <task>] [--blocks <task>] [--remove-blocked-by <task>] [--remove-blocks <task>] [--section <section\|none>]` | Put a task under a parent or back at the top; add or take away the tasks it waits on and that wait on it (each flag again for each task); keep it in one of your sidebar sections |
+| `section list` · `section create <title> [--emoji e]` · `section delete <section>` | Your sidebar sections in the workspace, with the tasks in each; make one; delete one (its tasks go back under Tasks). A section is named by id or title |
 | `description show <task>` · `description edit <task> -F <file\|->` | Print the description as Markdown; replace it whole |
 | `agent start <task> [-F prompt] [--model m --effort e] [--branch b] [--cloud\|--on <device>] [--follow\|--wait]` | Start an agent; `vespin models` lists `--model` and `--effort` values |
 | `agent continue <id> [-F note] [--at <message-id>] [--model m --effort e] [--cloud\|--on <device>] [--follow\|--wait]` | Continue an agent as the app's Continue does: it is stopped, and a new agent on its task is handed its brief and transcript, then the note. The new agent runs as you, on your own Claude or ChatGPT plan, so a teammate's agent is handed over to you. `--at` forks at one of its assistant messages instead (ids from `agent logs --json`), and it goes on. It runs on the agent's model and where it runs unless you name them |
 | `agent list [<task>] [--offset n]` · `agent view <id>` | Agents, newest first, the workspace's 50 a page (`--offset` the `nextOffset` it printed); one agent's status |
 | `agent send <id> [--queue] -F <msg\|->` · `agent stop <id>` | Message an agent, or with `--queue` queue it behind the turn under way to go once it ends (your own agents only); stop its turn (what it pushed stays) |
+| `agent diff <id> [--stat] [--number n]` | The diff of an agent's pull request as GitHub holds it, every file's patch; `--stat` one line a file, `-q` the paths; `--number` another pull request of its repository |
+| `agent pr <id> ready\|draft\|merge\|auto-merge [--method merge\|squash\|rebase] [--head sha] [--off] [--number n]` | Change the pull request on GitHub as you: mark it ready, turn it back into a draft, merge it now, or turn auto-merge on (`--off` turns it off). A merge is made against the head as it stands now unless `--head` pins the one you reviewed, by the first method the repository allows unless `--method` names one |
 | `agent ports <id>` | Ports a server listens on in a cloud agent's sandbox, and the one shared by link; none unless the sandbox is running |
 | `agent share <id> <port>` · `agent share <id>` · `agent share <id> --stop` | Share a port by public link (replacing any shared before), print the link shared now, or close it; `-q` prints the link alone |
 | `agent forward <id> [port…] [--local <port>]` | Serve a cloud agent's ports on `localhost` (the ones it listens on now, or those named) until Ctrl-C or its sandbox stops; a local port that will not listen is refused, so pick another with `--local` |
@@ -93,6 +97,15 @@ Hand someone a preview of the server a cloud agent runs on port 3000 (its sandbo
 vespin agent ports "$id"                  # what listens, and what is shared
 url=$(vespin agent share "$id" 3000 -q)   # the public link; anyone holding it can open it
 vespin agent share "$id" --stop           # close it when done
+```
+
+Review an agent's pull request, then merge it once its checks pass, against the head you read:
+
+```sh
+vespin agent diff "$id" --stat                          # the files it changes
+vespin agent diff "$id" | less                          # every patch
+head=$(vespin agent diff "$id" --json | jq -r .pullRequest.headSha)
+vespin agent pr "$id" auto-merge --head "$head"         # refused if it pushed since
 ```
 
 Answer the first unread thread:
