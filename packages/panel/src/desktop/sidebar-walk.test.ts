@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, test } from "vitest";
+import { afterEach, beforeEach, test, vi } from "vitest";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
@@ -20,15 +20,8 @@ import { tasksControl } from "../testing/tasks-control.js";
 
 const roots: Root[] = [];
 
-/**
- * Note that this test draws the whole sidebar over sixty rows and scrolls
- * it, which takes about 4 s in jsdom and runs past vitest's 5 s default on a
- * busy CI runner: profiled, the drawing, the scroll, and Home each take 1.1
- * to 1.5 s, most of it jsdom matching each mounted tooltip's
- * `[aria-describedby~=…]` lookup against the whole document (276 of them)
- * and React's development render. It is given 15 s.
- */
-const WALK_TIMEOUT_MS = 15_000;
+/** The window's height, four rows of it, so the view draws about ten rows rather than thirty. */
+const VIEW_PX = 4 * 30;
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -42,6 +35,8 @@ beforeEach(() => {
     }),
   });
   fakeAppBridge({});
+  // Note that the window is made short, because the run takes its view from the window until its scroller is measured, which jsdom never does, and in jsdom each row drawn costs a whole-document query per hinted control in it: at jsdom's own 768 px, thirty rows drawn three times ran past 5 s.
+  vi.spyOn(window, "innerHeight", "get").mockReturnValue(VIEW_PX);
 });
 
 afterEach(() => {
@@ -49,6 +44,7 @@ afterEach(() => {
     for (const root of roots.splice(0)) root.unmount();
   });
   document.body.innerHTML = "";
+  vi.restoreAllMocks();
 });
 
 /** One of sixty tasks with no repository, the newest first, so the list holds them in one run. */
@@ -78,9 +74,7 @@ function press(key: string): void {
   });
 }
 
-test("Home from the last row reaches the first one left undrawn, and ↑ and ↓ wrap at the ends", {
-  timeout: WALK_TIMEOUT_MS,
-}, () => {
+test("Home from the last row reaches the first one left undrawn, and ↑ and ↓ wrap at the ends", () => {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
@@ -91,9 +85,9 @@ test("Home from the last row reaches the first one left undrawn, and ↑ and ↓
     ".desktop-sidebar [data-slot='scroll-area']",
   );
   assert.ok(scroller, "the column scrolls");
-  layScrollerOut(scroller, 768, 60 * 30);
+  layScrollerOut(scroller, VIEW_PX, 60 * 30);
   act(() => {
-    scroller.scrollTop = 60 * 30 - 768;
+    scroller.scrollTop = 60 * 30 - VIEW_PX;
   });
   const drawn = () =>
     [...container.querySelectorAll(".desktop-sidebar ul.ui-virtual-rows > li")].map(
