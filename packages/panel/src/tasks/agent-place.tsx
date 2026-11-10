@@ -17,6 +17,7 @@ import {
   CHOICE_BAR_LOOK,
   CHOICE_BAR_SIZE,
   ChipName,
+  ChipNameAside,
   ChoiceBar,
   type ChoiceItem,
   HoverCard,
@@ -32,7 +33,6 @@ import {
   VisuallyHidden,
 } from "@repo/ui";
 import { type Actor, actorName, personActor } from "@repo/ui/actor-model";
-import { GLYPH } from "@repo/ui/icons";
 import { useMutation } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { settingMutation } from "../act-mutations.js";
@@ -42,6 +42,13 @@ import { machineName, useThisMac } from "../machine-name.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { type RunOnMacRead, useRunOnMac } from "./run-on-mac.js";
 import { DeviceGlyph } from "./runs-on.js";
+import {
+  SandboxGlyph,
+  SandboxLine,
+  SandboxStatus,
+  sandboxWords,
+  useSandboxStanding,
+} from "./sandbox-place.js";
 
 /**
  * agent-place.tsx -- the chip an agent's message box wears saying where the agent runs: its device by name, or the cloud.
@@ -59,6 +66,9 @@ import { DeviceGlyph } from "./runs-on.js";
  * assignee's or else its starter's, by their person chip, its glyph wearing
  * a dot for how it stands: online, offline, or off in this
  * Mac's Settings (`run-on-mac.ts`), which a reader hears after "Cloud".
+ * Its cloud glyph wears a dot for where the sandbox stands, off, booting, or
+ * running, which its words say after "Cloud" and its card says more of
+ * above that rule (`sandbox-place.tsx`).
  *
  * While a device has not beaten lately, asleep or with the app closed,
  * judged from how long ago the service says it last beat, the label adds
@@ -118,13 +128,16 @@ function runOnMacStands(read: RunOnMacRead): string {
  */
 function CloudChip({
   agentId,
+  sandbox,
   readerId,
   narrow,
 }: {
   agentId: string;
+  sandbox: AgentSummary["sandbox"];
   readerId: string | undefined;
   narrow: boolean;
 }): React.JSX.Element {
+  const standing = useSandboxStanding(sandbox);
   const read = useRunOnMac(agentId, (userId) => userId === readerId);
   const { members, former } = useMemberDirectory();
   const { mutate: writeSetting } = useMutation(settingMutation());
@@ -135,9 +148,10 @@ function CloudChip({
   const stands = runOnMacStands(read);
   return (
     <PlaceChip
-      glyph={<GLYPH.CLOUD aria-hidden="true" />}
+      glyph={<SandboxGlyph standing={standing} />}
       words={RUNS_ON_WORDS.CLOUD}
-      sub={undefined}
+      aside={sandboxWords(standing)}
+      sub={<SandboxLine sandbox={sandbox} />}
       note={SHARED_NOTE.CLOUD}
       said={
         owner === undefined
@@ -145,38 +159,41 @@ function CloudChip({
           : `, ${AGENT_TOOL.RUN_ON_MAC} on ${actorName(owner, { sentence: true, possessive: true })} Mac, ${stands}`
       }
       more={
-        owner === undefined ? undefined : (
-          <>
-            <HoverCardRule />
-            <HoverCardRow
-              glyph={
-                <StatusGlyph
-                  tone={read.reason === undefined ? STATUS_TONE.COMPLETE : STATUS_TONE.NEUTRAL}
-                  label={stands}
-                >
-                  <DeviceGlyph device={undefined} />
-                </StatusGlyph>
-              }
-              label={
-                <ActorLine>
-                  {`${AGENT_TOOL.RUN_ON_MAC} `}
-                  <ActorRef actor={owner} />
-                </ActorLine>
-              }
-            />
-            {read.mode !== undefined && read.standing?.owner.userId === readerId ? (
-              <ChoiceBar<MacCommandMode>
-                label={MAC_COMMANDS_LABEL}
-                items={MAC_COMMAND_CHOICES}
-                value={read.mode}
-                look={CHOICE_BAR_LOOK.SEGMENTED}
-                size={CHOICE_BAR_SIZE.COMPACT}
-                stretch
-                onChange={(mode) => writeSetting({ field: "macCommands", value: mode })}
+        <>
+          <SandboxStatus agentId={agentId} sandbox={sandbox} />
+          {owner === undefined ? null : (
+            <>
+              <HoverCardRule />
+              <HoverCardRow
+                glyph={
+                  <StatusGlyph
+                    tone={read.reason === undefined ? STATUS_TONE.COMPLETE : STATUS_TONE.NEUTRAL}
+                    label={stands}
+                  >
+                    <DeviceGlyph device={undefined} />
+                  </StatusGlyph>
+                }
+                label={
+                  <ActorLine>
+                    {`${AGENT_TOOL.RUN_ON_MAC} `}
+                    <ActorRef actor={owner} />
+                  </ActorLine>
+                }
               />
-            ) : null}
-          </>
-        )
+              {read.mode !== undefined && read.standing?.owner.userId === readerId ? (
+                <ChoiceBar<MacCommandMode>
+                  label={MAC_COMMANDS_LABEL}
+                  items={MAC_COMMAND_CHOICES}
+                  value={read.mode}
+                  look={CHOICE_BAR_LOOK.SEGMENTED}
+                  size={CHOICE_BAR_SIZE.COMPACT}
+                  stretch
+                  onChange={(mode) => writeSetting({ field: "macCommands", value: mode })}
+                />
+              ) : null}
+            </>
+          )}
+        </>
       }
       narrow={narrow}
     />
@@ -188,23 +205,26 @@ export function AgentPlace({
   readerId,
   narrow = false,
 }: {
-  agent: Pick<AgentSummary, "id" | "mac" | "machine">;
+  agent: Pick<AgentSummary, "id" | "mac" | "machine" | "sandbox">;
   /** The reader's account, whose own Mac the card calls "Your Mac". */
   readerId: string | undefined;
   /** Whether the box is too narrow for the chip's words, so it draws its glyph alone. */
   narrow?: boolean;
 }): React.JSX.Element | null {
   if (agent.machine !== AGENT_MACHINE.DEVICE) {
-    return <CloudChip agentId={agent.id} readerId={readerId} narrow={narrow} />;
+    return (
+      <CloudChip agentId={agent.id} sandbox={agent.sandbox} readerId={readerId} narrow={narrow} />
+    );
   }
   if (agent.mac === undefined) return null;
   return <MacChip mac={agent.mac} narrow={narrow} />;
 }
 
-/** The chip and its card: the glyph, the words a reader hears after "Runs on:", and the card's head and note. */
+/** The chip and its card: the glyph, the words a reader hears after "Runs on:", what stands muted after them, and the card's head and note. */
 function PlaceChip({
   glyph,
   words,
+  aside,
   sub,
   note,
   said,
@@ -214,7 +234,9 @@ function PlaceChip({
 }: {
   glyph: ReactNode;
   words: string;
-  sub: string | undefined;
+  /** Where the place stands, muted after the words: a sandbox's state. */
+  aside?: string | undefined;
+  sub: ReactNode;
   note: string;
   /** What a reader hears after the words, which the card says to the eye; none where it says nothing more. */
   said?: string | undefined;
@@ -225,7 +247,7 @@ function PlaceChip({
 }): React.JSX.Element {
   return (
     <Tooltip
-      label={`${RUNS_ON}${words}`}
+      label={aside === undefined ? `${RUNS_ON}${words}` : `${RUNS_ON}${words} · ${aside}`}
       card={
         <HoverCard>
           <HoverCardHead glyph={glyph} name={words} sub={sub} />
@@ -237,7 +259,10 @@ function PlaceChip({
       <StaticChip tone={quiet ? undefined : STATUS_TONE.ATTENTION} iconOnly={narrow}>
         {glyph}
         <VisuallyHidden>{RUNS_ON}</VisuallyHidden>
-        <ChipName>{words}</ChipName>
+        <ChipName>
+          {words}
+          {aside === undefined ? null : <ChipNameAside>{aside}</ChipNameAside>}
+        </ChipName>
         {said === undefined ? null : <VisuallyHidden>{said}</VisuallyHidden>}
       </StaticChip>
     </Tooltip>

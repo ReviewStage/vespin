@@ -10,6 +10,7 @@ import {
   Chip,
   ChipCount,
   ChipName,
+  ChipNameAside,
   GAP,
   Inline,
   MARK_PROVIDER,
@@ -232,6 +233,28 @@ function Chips(): React.JSX.Element {
             </StatusGlyph>
             <ChipName mono>localhost:3000</ChipName>
           </Chip>
+        </Inline>
+      </CatalogSection>
+      <CatalogSection id="chips-name-aside" title="Where it stands, muted after its name">
+        <Inline>
+          <StaticChip>
+            <StatusGlyph tone={STATUS_TONE.WORKING} label="Booting">
+              <GLYPH.CLOUD aria-hidden="true" />
+            </StatusGlyph>
+            <ChipName>
+              Cloud
+              <ChipNameAside>Booting</ChipNameAside>
+            </ChipName>
+          </StaticChip>
+          <StaticChip iconOnly>
+            <StatusGlyph tone={STATUS_TONE.COMPLETE} label="Running">
+              <GLYPH.CLOUD aria-hidden="true" />
+            </StatusGlyph>
+            <ChipName>
+              Cloud
+              <ChipNameAside>Running</ChipNameAside>
+            </ChipName>
+          </StaticChip>
         </Inline>
       </CatalogSection>
       <CatalogSection id="chips-outline-row" title="Outline, in a row of buttons">

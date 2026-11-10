@@ -607,6 +607,21 @@ export function ChipName(props: ChipNameProps): React.JSX.Element {
 }
 
 /**
+ * The quieter words after a chip's name, inside its `ChipName`, where it
+ * stands in its state: "Cloud · Booting". They read in the muted ink after a
+ * middle dot, are cut short with the name, and go where the name goes, so a
+ * chip drawn as its mark alone keeps them for a reader and its hint. A
+ * reader hears them after the name; the dot is the eye's alone.
+ */
+export function ChipNameAside({ children }: { children: string }): React.JSX.Element {
+  return (
+    <span className="ui-chip-name-aside text-muted-foreground">
+      <span aria-hidden="true">{" ·"}</span> {children}
+    </span>
+  );
+}
+
+/**
  * The quiet count after a chip's words, what a filter would leave out: in the
  * muted ink at fixed figures, and on a pressed filter stepped back from the
  * ground's color its words are in, rather than the muted ink it would

@@ -4,6 +4,7 @@ import {
   Avatar,
   BLOCKED_WORDS,
   BlockedMark,
+  BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
   DocumentIcon,
@@ -11,6 +12,7 @@ import {
   GAP,
   HOVER_CARD_ROW_LOOK,
   HoverCard,
+  HoverCardActs,
   HoverCardFigures,
   HoverCardHead,
   HoverCardList,
@@ -19,9 +21,13 @@ import {
   HoverCardRule,
   HoverCardScroll,
   HoverCardSkeleton,
+  HoverCardSteps,
   Inline,
   PinIcon,
   ProgressCount,
+  STATUS_TONE,
+  STEP_STATE,
+  StatusGlyph,
   TaskStatusMark,
   TooltipCard,
   UserIcon,
@@ -44,7 +50,9 @@ import { CatalogSection } from "../section";
  * is read. Each card shows once the pointer rests on
  * its control or the keyboard reaches it, and stands while the pointer is on
  * the control, on the card, or between them: the catalog's own stand-in for
- * the linger an app gives its cards.
+ * the linger an app gives its cards. A card about something under way lists
+ * its steps, done, under way, and to come, each with its time; and a card
+ * offers what may be done to its subject in a row of compact buttons.
  */
 
 /** More agents than a card's list has height for, so the example scrolls. */
@@ -344,6 +352,73 @@ function HoverCards(): React.JSX.Element {
                     { label: "Cache write", figure: "9,870" },
                   ]}
                 />
+              </HoverCard>
+            }
+          />
+          <Carded
+            label="Steps"
+            card={
+              <HoverCard>
+                <HoverCardHead
+                  glyph={
+                    <StatusGlyph tone={STATUS_TONE.WORKING} label="Booting">
+                      <GLYPH.CLOUD aria-hidden="true" />
+                    </StatusGlyph>
+                  }
+                  name="Cloud"
+                  sub="Booting · 1m 28s"
+                />
+                <HoverCardNote>
+                  This agent runs in a cloud sandbox. Set when it was started.
+                </HoverCardNote>
+                <HoverCardSteps
+                  label="Boot steps"
+                  steps={[
+                    {
+                      key: "creating",
+                      label: "Creating the sandbox",
+                      state: STEP_STATE.DONE,
+                      end: "3s",
+                    },
+                    {
+                      key: "cloning",
+                      label: "Cloning the repository",
+                      state: STEP_STATE.DONE,
+                      end: "21s",
+                    },
+                    {
+                      key: "setting-up",
+                      label: "Running setup scripts",
+                      state: STEP_STATE.CURRENT,
+                      end: "1m 04s",
+                    },
+                    { key: "starting-agent", label: "Starting the agent", state: STEP_STATE.TO_DO },
+                  ]}
+                />
+              </HoverCard>
+            }
+          />
+          <Carded
+            label="Acts"
+            card={
+              <HoverCard>
+                <HoverCardHead
+                  glyph={
+                    <StatusGlyph tone={STATUS_TONE.NEUTRAL} label="Off">
+                      <GLYPH.CLOUD aria-hidden="true" />
+                    </StatusGlyph>
+                  }
+                  name="Cloud"
+                  sub="Off · stopped 12m ago"
+                />
+                <HoverCardNote>
+                  Its disk is kept. Sending a message or opening the agent wakes it.
+                </HoverCardNote>
+                <HoverCardActs>
+                  <Button variant={BUTTON_VARIANT.OUTLINE} size={BUTTON_SIZE.COMPACT}>
+                    Wake now
+                  </Button>
+                </HoverCardActs>
               </HoverCard>
             }
           />

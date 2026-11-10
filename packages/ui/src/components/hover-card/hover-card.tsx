@@ -1,4 +1,5 @@
 import type { HTMLAttributes, ReactNode } from "react";
+import { CheckIcon } from "../../icons/lucide-glyphs.js";
 import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import type { StatusTone } from "../../status-tone.js";
 import { INLINE_REF_FIT, InlineRefFitScope } from "../inline-ref/inline-ref-fit.js";
@@ -7,6 +8,9 @@ import { useLinkAddress } from "../menu/link-address.js";
 import { ClippedLine, ONE_LINE_ELEMENT, ONE_LINE_END } from "../one-line/clipped-line.js";
 import { SCROLL_FADE, SCROLL_SIZE, ScrollArea } from "../scroll-area/scroll-area.js";
 import { Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
+import { SPINNER_SIZE, SpinnerRing } from "../spinner/spinner.js";
+import { STEP_STATE, type StepState } from "../steps/steps.js";
+import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
 
 /**
  * hover-card.tsx -- the parts every hover card is drawn from: its head, its notes, and its rule, in one type scale.
@@ -38,6 +42,13 @@ import { Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
  * thing it holds, never a count of the rest: past a few rows' height it
  * scrolls within the card, fading at the edge where more stands
  * (`HoverCardScroll`), so whatever the subject holds can be reached.
+ *
+ * A card about something under way lists its steps (`HoverCardSteps`) as
+ * rows: a check on each done, a ring on the one under way, and a muted dot
+ * on each to come, each step's time at its end in tabular numbers. What a
+ * reader may do to the subject from the card, start it or stop it, stands
+ * under what the card says as a row of compact buttons at its start
+ * (`HoverCardActs`), never stretched across the card.
  *
  * What is drawn here is the card's words alone. The surface it stands on,
  * when it shows, how long it lingers for the pointer to cross onto it, and
@@ -85,7 +96,7 @@ const NOTE =
   "ui-hover-card-note m-0 overflow-hidden text-muted-foreground wrap-anywhere [&_code]:font-mono [&_code]:text-hover-card-code pointer-coarse:[&_code]:text-caption";
 const RULE = "ui-hover-card-rule m-0 h-px w-full flex-none border-0 bg-border";
 const ROW =
-  "ui-hover-card-row group/row -mx-2 box-border flex h-menu-row w-[calc(100%+--spacing(4))] min-w-0 items-center gap-icon-gap rounded-menu-row border-0 bg-transparent px-2 py-0 text-left text-body leading-[inherit] text-foreground transition-colors duration-(--ui-duration-hover) ease-motion-exit data-[look=detail]:text-caption data-[look=detail]:leading-[inherit] data-[look=detail]:text-muted-foreground";
+  "ui-hover-card-row group/row -mx-2 box-border flex h-menu-row w-[calc(100%+--spacing(4))] min-w-0 items-center gap-icon-gap rounded-menu-row border-0 bg-transparent px-2 py-0 text-left text-body leading-[inherit] text-foreground transition-colors duration-(--ui-duration-hover) ease-motion-exit data-[look=detail]:text-caption data-[look=detail]:leading-[inherit] data-[look=detail]:text-muted-foreground data-quiet:text-muted-foreground";
 const ROW_PRESS =
   "[font-family:inherit] [font-style:inherit] [font-weight:inherit] cursor-press hover:bg-fill-strong";
 const ROW_FOCUS = "focus-visible:bg-fill-strong focus-visible:outline-none";
@@ -97,6 +108,10 @@ const ROW_END =
 const FIGURES = "ui-hover-card-figures m-0 flex flex-col gap-list-gap text-caption";
 const FIGURE =
   "ui-hover-card-figure flex justify-between gap-control-gap [&_dd]:m-0 [&_dd]:tabular-nums [&_dt]:text-muted-foreground";
+const STEPS = "ui-hover-card-steps m-0 flex list-none flex-col p-0";
+const STEP_MARK = "ui-hover-card-step-mark inline-flex items-center justify-center";
+const STEP_DOT = "ui-hover-card-step-dot size-ui-4 rounded-full bg-current";
+const ACTS = "ui-hover-card-acts flex flex-wrap items-center gap-control-gap";
 const SCROLL = "ui-hover-card-scroll -mx-2 flex max-h-hover-card-list flex-col";
 const SCROLL_BODY = "ui-hover-card-scroll-body px-2";
 
@@ -109,6 +124,12 @@ const SUB_WIDTH = "50%";
 /** How wide a skeleton's last note line stands, short of the card's edge as a note's last line ends; every line before it fills the card. */
 const LAST_NOTE_WIDTH = "80%";
 
+/** What a reader hears after a step done, and after the step under way. */
+const STEP_SAID = {
+  [STEP_STATE.DONE]: "Done",
+  [STEP_STATE.CURRENT]: "In progress",
+} as const;
+
 /** The data attributes a card's root carries, which name the card for a test or a capture. */
 type HoverCardMarks = { readonly [mark: `data-${string}`]: string | undefined };
 
@@ -116,6 +137,15 @@ type HoverCardMarks = { readonly [mark: `data-${string}`]: string | undefined };
 export interface HoverCardFigure {
   readonly label: string;
   readonly figure: ReactNode;
+}
+
+/** One of a card's steps: its key among its siblings, its words, where it stands, and its time. */
+export interface HoverCardStep {
+  readonly key: string;
+  readonly label: ReactNode;
+  readonly state: StepState;
+  /** What stands at its end: how long it took, or how long it has gone; none for a step to come. */
+  readonly end?: ReactNode;
 }
 
 /** How a card's row is set: a quieter line under its name, or a row of a list under a rule. */
@@ -376,4 +406,61 @@ export function HoverCardList({
       </Stack>
     </HoverCardScroll>
   );
+}
+
+/** A step's mark on the row's glyph column: a check done, a ring under way, a muted dot to come. */
+function StepMark({ state }: { state: StepState }): React.JSX.Element {
+  if (state === STEP_STATE.DONE) return <CheckIcon aria-hidden="true" />;
+  // Note that the ring and the dot stand in a box of their own, because the row's glyph column sizes the glyph it holds to a menu glyph's.
+  return (
+    <span className={STEP_MARK} aria-hidden="true">
+      {state === STEP_STATE.CURRENT ? (
+        <SpinnerRing size={SPINNER_SIZE.SMALL} />
+      ) : (
+        <span className={STEP_DOT} />
+      )}
+    </span>
+  );
+}
+
+/**
+ * The steps of something under way, named by `label`, in the order they
+ * are taken: each a card's row, its mark on the glyph column, its words, and
+ * its time at its end; a done step and a step to come in the muted ink, the
+ * step under way in the card's own. A reader hears a done step said done
+ * and the step under way said in progress.
+ */
+export function HoverCardSteps({
+  label,
+  steps,
+}: {
+  label: string;
+  steps: readonly HoverCardStep[];
+}): React.JSX.Element {
+  return (
+    <ol className={STEPS} aria-label={label}>
+      {steps.map((step) => (
+        <li key={step.key}>
+          <HoverCardRow
+            data-quiet={step.state === STEP_STATE.CURRENT ? undefined : ""}
+            glyph={<StepMark state={step.state} />}
+            label={
+              <>
+                {step.label}
+                {step.state === STEP_STATE.TO_DO ? null : (
+                  <VisuallyHidden>{` (${STEP_SAID[step.state]})`}</VisuallyHidden>
+                )}
+              </>
+            }
+            end={step.end}
+          />
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+/** What a reader may do to a card's subject from the card: its buttons, compact, in a row at the card's start. */
+export function HoverCardActs({ children }: { children: ReactNode }): React.JSX.Element {
+  return <div className={ACTS}>{children}</div>;
 }
