@@ -105,6 +105,9 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.UPDATE_AUTOMATION]: { automations: ["read", "change"] },
   [MEMBER_MCP_TOOL.RUN_AUTOMATION]: { automations: ["run"] },
   [MEMBER_MCP_TOOL.DELETE_AUTOMATION]: { automations: ["remove"] },
+  [MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES]: { workspaceEnvironment: ["list"] },
+  [MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE]: { workspaceEnvironment: ["put"] },
+  [MEMBER_MCP_TOOL.DELETE_ENVIRONMENT_VARIABLE]: { workspaceEnvironment: ["delete"] },
 } as const satisfies Record<MemberMcpToolName, HostedProcedureNames>;
 
 type Coverage = typeof MEMBER_MCP_COVERAGE;
@@ -333,7 +336,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     keepPicture: SCREEN_ONLY,
     pageFrame: SCREEN_ONLY,
   },
-  workspaceEnvironment: { list: NOT_YET_BUILT, put: NOT_YET_BUILT, delete: NOT_YET_BUILT },
   workspaceSandboxSetup: {
     read: NOT_YET_BUILT,
     putInstall: NOT_YET_BUILT,

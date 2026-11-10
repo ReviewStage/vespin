@@ -65,4 +65,7 @@ export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.UPDATE_AUTOMATION]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
   [MEMBER_MCP_TOOL.RUN_AUTOMATION]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
   [MEMBER_MCP_TOOL.DELETE_AUTOMATION]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
+  [MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES]: { command: ["env", "list"] },
+  [MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE]: { command: ["env", "set"] },
+  [MEMBER_MCP_TOOL.DELETE_ENVIRONMENT_VARIABLE]: { command: ["env", "delete"] },
 } as const satisfies Record<MemberMcpToolName, McpCliRow>;

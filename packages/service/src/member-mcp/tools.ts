@@ -98,6 +98,12 @@ import {
   pullRequestActionRequestSchema,
 } from "@repo/features/pull-request-write-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
+import {
+  WORKSPACE_ENVIRONMENT_BOUNDS,
+  type WorkspaceEnvironmentAnswer,
+  workspaceVariableNameSchema,
+  workspaceVariablePutRequestSchema,
+} from "@repo/features/workspace-environment-wire";
 import { WORKSPACE_BOUNDS, workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { Sandbox } from "@repo/sandbox";
 import {
@@ -107,7 +113,7 @@ import {
   type WorkspaceExperiment,
 } from "@repo/settings";
 import { describeWire, type StandardSchemaWithJson, standardSchemaOf } from "@repo/wire/effect";
-import { Effect, Option, Result, Schema } from "effect";
+import { Effect, Option, Redacted, Result, Schema } from "effect";
 import type { HttpClient } from "effect/http";
 import { forgetWorkspaceMemory, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
 import { READ_AGENT_CHANGES_INPUT, runReadAgentChanges } from "../agents/agent-changes-tool.js";
@@ -212,6 +218,7 @@ import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { agentWorkspace } from "../github/workspace-repository.js";
 import type { HostedRefusal } from "../http/http-effect.js";
+import { hostedKeyRing } from "../orpc/base.js";
 import type { PageLinks } from "../pages/page-links.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
 import {
@@ -229,6 +236,11 @@ import {
   memberCommentAnswer,
 } from "../tasks/description-comments-procedures.js";
 import type { SentryApp } from "../triggers/sentry/sentry-app-config.js";
+import {
+  deleteWorkspaceVariable,
+  listWorkspaceEnvironment,
+  putWorkspaceVariable,
+} from "../workspace-environment/workspace-environment.js";
 import { AdmittedMember, type AdmittedMemberValues } from "./admission.js";
 import { answerAskAsMember, closeThreadAsMember, readMemberInbox, replyAsMember } from "./inbox.js";
 
@@ -2140,6 +2152,145 @@ const MEMBER_DELETE_AUTOMATION_TOOL = memberMcpTool({
     ),
 });
 
+/*
+ * The workspace's environment variables, which its members' cloud agents are
+ * handed. Each runs the one operation behind Settings › Environment and its
+ * procedures (`../workspace-environment/workspace-environment.ts`) as the
+ * member, in the workspace a slug names or their only one, so it holds the
+ * member to what Settings does: any member reads the names, and only an
+ * owner or admin sets or deletes one. A value goes in through
+ * `set_environment_variable`, sealed under the deployment's ring the moment
+ * it is read, and never comes out: every answer is the names alone.
+ */
+
+/** Why an environment call took nothing, in words for one acting for the member. */
+const ENVIRONMENT_REFUSAL = {
+  NOT_FOUND: "Not run: the member belongs to no such workspace.",
+  NOT_PERMITTED: (verb: string) =>
+    `Not ${verb}: only the workspace's owners and admins set and delete its environment variables.`,
+  UNANSWERED:
+    "Not run: the workspace's environment variables could not be reached just now. The call " +
+    "may be made again.",
+} as const;
+
+/** An environment call's refusal in the member's words, the operation's verb naming what was not done. */
+function environmentRefusalWords(refusal: HostedRefusal, verb: string): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return ENVIRONMENT_REFUSAL.NOT_FOUND;
+    case HOSTED_API_ERROR.NOT_PERMITTED:
+      return ENVIRONMENT_REFUSAL.NOT_PERMITTED(verb);
+    default:
+      return ENVIRONMENT_REFUSAL.UNANSWERED;
+  }
+}
+
+/** An environment call run as the member in the workspace its slug names or their only one, answered as the names then stand, or refused in the member's words. */
+const environmentAsMember = <R>(
+  slug: string | undefined,
+  verb: string,
+  run: (
+    userId: string,
+    workspaceId: string,
+  ) => Effect.Effect<WorkspaceEnvironmentAnswer, HostedRefusal, R>,
+) =>
+  listAsMember(slug, ({ caller }) => {
+    const workspaceId = callerWorkspaceId(caller);
+    return run(callerUserId(caller), workspaceId).pipe(
+      Effect.map((answer): WireRecord => ({ workspaceId, variables: answer.variables })),
+      Effect.catch((refusal) =>
+        Effect.succeed(agentToolRejected(environmentRefusalWords(refusal, verb))),
+      ),
+    );
+  });
+
+/** The workspace an environment call is about, by its slug, where the member has more than one. */
+const ENVIRONMENT_WORKSPACE_INPUT = Schema.optionalKey(
+  describeWire(
+    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
+    `The workspace whose environment variables to act on, by the slug ` +
+      `${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; leave it out where the member belongs to ` +
+      "one workspace alone.",
+  ),
+);
+
+/** A variable's name, as a shell spells one. */
+const ENVIRONMENT_NAME_INPUT = describeWire(
+  workspaceVariableNameSchema,
+  "The variable's name: a letter or underscore, then letters, digits, and underscores, such as " +
+    "DATABASE_URL.",
+);
+
+const ListEnvironmentVariablesInputSchema = Schema.Struct({
+  workspace: ENVIRONMENT_WORKSPACE_INPUT,
+});
+
+const LIST_ENVIRONMENT_VARIABLES_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES,
+  description:
+    "List the environment variables of a workspace the member belongs to, which every cloud " +
+    "agent its members start is handed, as Settings › Environment lists them: each by its name " +
+    "with when it was last set, in epoch milliseconds, in name order. A value is never shown, " +
+    `here or anywhere, once it is set. ${WORKSPACE_WORDS}`,
+  input: ListEnvironmentVariablesInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace }) =>
+    environmentAsMember(workspace, "run", (userId, workspaceId) =>
+      listWorkspaceEnvironment(userId, workspaceId),
+    ),
+});
+
+const SetEnvironmentVariableInputSchema = Schema.Struct({
+  workspace: ENVIRONMENT_WORKSPACE_INPUT,
+  name: ENVIRONMENT_NAME_INPUT,
+  value: describeWire(
+    workspaceVariablePutRequestSchema.fields.value,
+    "The value, as the agents' environment will hold it, at most " +
+      `${WORKSPACE_ENVIRONMENT_BOUNDS.MAX_VALUE_CHARS} characters.`,
+  ),
+});
+
+const SET_ENVIRONMENT_VARIABLE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE,
+  description:
+    "Set one environment variable of a workspace the member owns or administers, as Settings › " +
+    "Environment's Add or Replace value would: every cloud agent its members start from then " +
+    "on is handed it, and one of the same name has its value replaced. The value is sealed " +
+    "the moment it arrives and is never shown again, to you, the member, or anyone, so set " +
+    "only a value the member gave you for this. Answers with the workspace's variable names as " +
+    `they then stand, never a value, or \`rejected\` and why. ${WORKSPACE_WORDS}`,
+  input: SetEnvironmentVariableInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ workspace, name, value }) =>
+    environmentAsMember(workspace, "set", (userId, workspaceId) =>
+      Effect.flatMap(hostedKeyRing, (ring) =>
+        putWorkspaceVariable(ring, userId, { workspaceId, name }, Redacted.make(value)),
+      ),
+    ),
+});
+
+const DeleteEnvironmentVariableInputSchema = Schema.Struct({
+  workspace: ENVIRONMENT_WORKSPACE_INPUT,
+  name: ENVIRONMENT_NAME_INPUT,
+});
+
+const DELETE_ENVIRONMENT_VARIABLE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.DELETE_ENVIRONMENT_VARIABLE,
+  description:
+    "Delete one environment variable of a workspace the member owns or administers, by its " +
+    `name as ${MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES} answered it, as Settings › ` +
+    "Environment's Delete would: its value is gone for good, and no cloud agent started from " +
+    "then on is handed it. Delete one only when the member asks for it. Answers with the " +
+    "workspace's variable names as they then stand, a variable already gone among them, or " +
+    `\`rejected\` and why. ${WORKSPACE_WORDS}`,
+  input: DeleteEnvironmentVariableInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ workspace, name }) =>
+    environmentAsMember(workspace, "deleted", (userId, workspaceId) =>
+      deleteWorkspaceVariable(userId, { workspaceId, name }),
+    ),
+});
+
 /** Every tool the server offers, listed in the order an agent reads them. */
 /**
  * The workspace experiments on in one of the member's workspaces at least,
@@ -2200,4 +2351,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_UPDATE_AUTOMATION_TOOL,
   MEMBER_RUN_AUTOMATION_TOOL,
   MEMBER_DELETE_AUTOMATION_TOOL,
+  LIST_ENVIRONMENT_VARIABLES_TOOL,
+  SET_ENVIRONMENT_VARIABLE_TOOL,
+  DELETE_ENVIRONMENT_VARIABLE_TOOL,
 ];

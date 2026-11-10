@@ -50,6 +50,9 @@ export const MEMBER_MCP_TOOL = {
   UPDATE_AUTOMATION: AGENT_TOOL.UPDATE_AUTOMATION,
   RUN_AUTOMATION: AGENT_TOOL.RUN_AUTOMATION,
   DELETE_AUTOMATION: AGENT_TOOL.DELETE_AUTOMATION,
+  LIST_ENVIRONMENT_VARIABLES: "list_environment_variables",
+  SET_ENVIRONMENT_VARIABLE: "set_environment_variable",
+  DELETE_ENVIRONMENT_VARIABLE: "delete_environment_variable",
 } as const;
 
 export type MemberMcpToolName = (typeof MEMBER_MCP_TOOL)[keyof typeof MEMBER_MCP_TOOL];
