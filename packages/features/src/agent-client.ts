@@ -124,7 +124,12 @@ import {
   hostedClient,
   hostedFailureFacts,
 } from "./hosted-link.js";
-import { imageBodyOf } from "./image-body.js";
+import {
+  type ImageBody,
+  type ImageBodyUnread,
+  imageBodyOf,
+  imageBodyUnread,
+} from "./image-body.js";
 import {
   INBOX_FILE_TYPE,
   type InboxAcknowledgeRequest,
@@ -292,6 +297,14 @@ function unansweredCall(answer: Exclude<CallAnswer, { readonly response: Respons
   return { ...UNANSWERED, cause: hostedFailureFacts(unanswered) };
 }
 
+/** An image's read as the window hears it: its bytes, a body the network cut as a call that never reached the service, or else unanswered. */
+function imageAnswerOf<Type extends string>(
+  read: ImageBody<Type> | ImageBodyUnread | undefined,
+): ImageBody<Type> | Failed {
+  if (read === undefined) return UNANSWERED;
+  return imageBodyUnread(read) ? unansweredCall(read) : read;
+}
+
 /** The idempotency key a write taken once under it is asked under, where one is given. */
 function keyed(key: string | undefined) {
   return key === undefined ? undefined : { idempotencyKey: key };
@@ -354,7 +367,7 @@ function playableHeaders(playable: PlayableVideoType): Record<string, string> | 
 
 /** A served file's bytes in base64 under its type: a picture, a recording, or a file an inbox answer carried or a queued message holds; unanswered under any other type. */
 function readInboxFile(response: Response): Effect.Effect<AgentInboxAttachmentView> {
-  return Effect.map(imageBodyOf(response, inboxFileTypeSchema), (file) => file ?? UNANSWERED);
+  return Effect.map(imageBodyOf(response, inboxFileTypeSchema), imageAnswerOf);
 }
 
 /** A transcript page read at once, or unanswered where the service said nothing of whether it would hold, as one too old to read at once does. */
@@ -1199,10 +1212,7 @@ export class HostedAgentClient {
         if (!answer.response.ok) {
           return Effect.map(jsonOf(answer.response), (body) => servedRefusal(unparsedWire(body)));
         }
-        return Effect.map(
-          imageBodyOf(answer.response, githubImageTypeSchema),
-          (image) => image ?? UNANSWERED,
-        );
+        return Effect.map(imageBodyOf(answer.response, githubImageTypeSchema), imageAnswerOf);
       },
     );
   }

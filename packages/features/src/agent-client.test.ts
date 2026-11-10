@@ -614,6 +614,27 @@ it.effect(
           errorName: "TypeError",
         },
       });
+      const cut = recordingHttpClient(
+        () =>
+          new Response(
+            new ReadableStream({
+              start: (controller) => controller.error(new TypeError("Load failed")),
+            }),
+            { status: 200, headers: { "content-type": "image/png" } },
+          ),
+      );
+      const unread = yield* Effect.provide(
+        client().inboxAttachment(itemId, attachmentId),
+        cut.layer,
+      );
+      assert.deepEqual(unread, {
+        failure: AGENT_CALL_FAILURE.UNANSWERED,
+        cause: {
+          _tag: FAILURE_FACT.HOSTED_UNANSWERED,
+          fault: CALL_FAULT.NETWORK,
+          errorName: "TypeError",
+        },
+      });
     }),
 );
 
