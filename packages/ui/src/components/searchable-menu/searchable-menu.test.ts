@@ -438,9 +438,17 @@ test("a list too short to search holds focus, names its highlight, and reads the
  * window's left, its menu's row from `rowLeft` to `rowRight`: the side it
  * took and how far it was pushed back over the menu. jsdom lays nothing
  * out, so the window, the room, the row, and the submenu, 200px wide and
- * drawn on the right, are answered as the panel would lay them.
+ * drawn on the right, are answered as the panel would lay them. `pressed`
+ * presses the row once its submenu stands open, as a press on a row its
+ * hover opened does.
  */
-function submenuIn(room: number, rowLeft: number, rowRight: number, bounds?: PopoverBounds) {
+function submenuIn(
+  room: number,
+  rowLeft: number,
+  rowRight: number,
+  bounds?: PopoverBounds,
+  pressed = false,
+) {
   vi.spyOn(document.documentElement, "clientWidth", "get").mockReturnValue(1200);
   vi.spyOn(document.documentElement, "clientHeight", "get").mockReturnValue(800);
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
@@ -459,6 +467,11 @@ function submenuIn(room: number, rowLeft: number, rowRight: number, bounds?: Pop
   press({ key: "ArrowUp" });
   press({ key: "ArrowUp" });
   press({ key: "ArrowRight" });
+  if (pressed) {
+    const effort =
+      document.querySelector<HTMLElement>('[aria-haspopup="listbox"]') ?? assert.fail("Effort");
+    act(() => effort.click());
+  }
   const submenu =
     document.querySelector<HTMLElement>(".ui-searchable-menu-submenu") ?? assert.fail("it opens");
   return {
@@ -469,6 +482,10 @@ function submenuIn(room: number, rowLeft: number, rowRight: number, bounds?: Pop
 
 test("a submenu that would run past the room its menu keeps to turns to the left, though the window has room", () => {
   assert.deepEqual(submenuIn(800, 300, 600), { side: "left", shift: 0 });
+});
+
+test("a submenu turned left stays there when its open row is pressed, as a press on a row its hover opened is", () => {
+  assert.deepEqual(submenuIn(800, 300, 600, undefined, true), { side: "left", shift: 0 });
 });
 
 test("a submenu of a menu bounded by the window alone opens to the right past its marked room, where the window has room", () => {

@@ -895,7 +895,8 @@ export function SearchableMenu(
   };
   /** The submenu of the row at `index`, listed or pinned, opened beside it, or in a sheet's place. */
   const openSubmenu = (index: number) => {
-    setPlace(SUBMENU_FIRST_PLACE);
+    // Note that a submenu already open on this row keeps where it was placed, because a press on a row its hover opened changes nothing the placing reads.
+    if (openAt !== index) setPlace(SUBMENU_FIRST_PLACE);
     setSubmenu({ moved: undefined });
     const pinned = index >= matches.length;
     const row = pinned ? foot[index - matches.length] : matches[index];
