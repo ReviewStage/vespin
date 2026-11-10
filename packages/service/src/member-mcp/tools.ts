@@ -56,6 +56,7 @@ import { listTaskSections } from "@repo/database/models/task-section-store";
 import { readTask, readTaskWorkspace } from "@repo/database/models/task-store";
 import { listWorkspaces } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
+import type { AgentBrowserTab } from "@repo/features/agent-browser-tab-wire";
 import { RETIRED_TOOL } from "@repo/features/agent-tools";
 import {
   AGENT_BOUNDS,
@@ -110,6 +111,13 @@ import { describeWire, type StandardSchemaWithJson, standardSchemaOf } from "@re
 import { Effect, Option, Result, Schema } from "effect";
 import type { HttpClient } from "effect/http";
 import { forgetWorkspaceMemory, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
+import {
+  BROWSER_TAKEOVER_HOLD_MS,
+  handBackAgentBrowserTab,
+  listAgentBrowserTabs,
+  openAgentBrowserTab,
+  takeOverAgentBrowserTab,
+} from "../agents/agent-browser-tabs.js";
 import { READ_AGENT_CHANGES_INPUT, runReadAgentChanges } from "../agents/agent-changes-tool.js";
 import { agentPullRequestAction } from "../agents/agent-pull-request-procedures.js";
 import {
@@ -160,6 +168,7 @@ import {
   runUpdateAutomation,
   UPDATE_AUTOMATION_TOOL,
 } from "../agents/automation-tools.js";
+import type { AgentBrowser } from "../agents/browser/agent-browser.js";
 import { MESSAGE_AGENT_REFUSAL, messageRefusalWords } from "../agents/coder-host/agent-message.js";
 import {
   DESCRIPTION_EDIT_REFUSAL,
@@ -232,10 +241,11 @@ import type { SentryApp } from "../triggers/sentry/sentry-app-config.js";
 import { AdmittedMember, type AdmittedMemberValues } from "./admission.js";
 import { answerAskAsMember, closeThreadAsMember, readMemberInbox, replyAsMember } from "./inbox.js";
 
-/** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against, an agent's sandbox its ports are read and shared in, the deployment's page links its shares answer, and the member the call acts for. */
+/** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against, an agent's sandbox its ports are read and shared in and the browser in it a tab is opened in, the deployment's page links its shares answer, and the member the call acts for. */
 export type MemberMcpServices =
   | Sandbox
   | AgentSandbox
+  | AgentBrowser
   | PageLinks
   | DatabaseServices
   | HttpClient.HttpClient
@@ -1197,6 +1207,173 @@ const SHARE_AGENT_PORT_TOOL = memberMcpTool({
   annotations: IDEMPOTENT_CHANGE,
   run: ({ agentId, port }) =>
     Effect.flatMap(memberPortsReach(agentId), (reach) => runSharePort(reach, { port })),
+});
+
+/*
+ * An agent's cloud browser's tabs, through the one operation the Browser
+ * tab's procedures run (`../agents/agent-browser-tabs.ts`), reached as the
+ * member by the agent's own rule. A tab is answered by its address and
+ * title as the service keeps them, and who drives it; never a frame, a
+ * screenshot, or the page's text.
+ */
+
+/** Why a tab call changed nothing, in words for one acting for the member. */
+const BROWSER_TAB_REFUSAL = {
+  NOT_FOUND:
+    "Not run: the member sees no such agent, or no such tab in its browser; " +
+    `${MEMBER_MCP_TOOL.LIST_AGENT_BROWSER_TABS} lists its tabs.`,
+  NOT_PERMITTED:
+    "Not run: only the agent's starter may drive its browser, since the agent works on their " +
+    "own GitHub token.",
+  RETIRED: "Not opened: the agent is archived.",
+  NOT_READY:
+    "Not opened: the agent has opened no sandbox yet, or its sandbox is starting. The call " +
+    "may be made again in a moment.",
+  NOT_AN_ADDRESS: "Not opened: give an http or https address.",
+  UNAVAILABLE:
+    "Not run: the agent's browser could not be reached just now. The call may be made again.",
+} as const;
+
+/** Each refusal of the tabs operation in the words above; any other is the browser unavailable. */
+const BROWSER_TAB_REFUSAL_WORDS = new Map<HostedRefusal["error"], string>([
+  [HOSTED_API_ERROR.NOT_FOUND, BROWSER_TAB_REFUSAL.NOT_FOUND],
+  [HOSTED_API_ERROR.NOT_PERMITTED, BROWSER_TAB_REFUSAL.NOT_PERMITTED],
+  [HOSTED_API_ERROR.AGENT_RETIRED, BROWSER_TAB_REFUSAL.RETIRED],
+  [HOSTED_API_ERROR.AGENT_NOT_READY, BROWSER_TAB_REFUSAL.NOT_READY],
+  [HOSTED_API_ERROR.INVALID_REQUEST, BROWSER_TAB_REFUSAL.NOT_AN_ADDRESS],
+]);
+
+/** Who drives a tab, as the member's agent reads it: the agent, the member, or another member. */
+const BROWSER_TAB_DRIVER = {
+  AGENT: "agent",
+  YOU: "you",
+  ANOTHER_MEMBER: "another member",
+} as const;
+
+/** A tab as the tools answer it: its id, address, title, who opened it, and who drives it until when; never its cursor. */
+function memberBrowserTab(tab: AgentBrowserTab, userId: string) {
+  const driver =
+    tab.driver === null
+      ? BROWSER_TAB_DRIVER.AGENT
+      : tab.driver.userId === userId
+        ? BROWSER_TAB_DRIVER.YOU
+        : BROWSER_TAB_DRIVER.ANOTHER_MEMBER;
+  return {
+    id: tab.id,
+    address: tab.address,
+    title: tab.title,
+    openedBy: tab.openedBy.kind,
+    driver,
+    ...(tab.driver === null ? {} : { heldUntil: new Date(tab.driver.heldUntil).toISOString() }),
+  };
+}
+
+/** A tab call run as the member: the operation's answer as accepted, or its refusal in words. */
+const browserTabAnswer = <A, R>(
+  operation: (userId: string) => Effect.Effect<A, HostedRefusal, R>,
+  answered: (answer: A, userId: string) => WireRecord,
+) =>
+  Effect.gen(function* () {
+    const member = yield* AdmittedMember;
+    return yield* operation(member.userId).pipe(
+      Effect.map((answer) => answered(answer, member.userId)),
+      Effect.catch((refusal) =>
+        Effect.succeed(
+          agentToolRejected(
+            BROWSER_TAB_REFUSAL_WORDS.get(refusal.error) ?? BROWSER_TAB_REFUSAL.UNAVAILABLE,
+          ),
+        ),
+      ),
+    );
+  });
+
+/** One tab as a write answers it. */
+const oneTab = ({ tab }: { readonly tab: AgentBrowserTab }, userId: string): WireRecord => ({
+  status: ACTION_RESULT_STATUS.ACCEPTED,
+  tab: memberBrowserTab(tab, userId),
+});
+
+/** A take-over and a hand-back name the agent and the tab. */
+const AgentBrowserTabInputSchema = Schema.Struct({
+  agentId: AgentIdInputSchema.fields.agentId,
+  tabId: describeWire(
+    wireUuidSchema,
+    `The tab's id, as ${MEMBER_MCP_TOOL.LIST_AGENT_BROWSER_TABS} answered it.`,
+  ),
+});
+
+/** An open names the agent and the address. */
+const OpenAgentBrowserTabInputSchema = Schema.Struct({
+  agentId: AgentIdInputSchema.fields.agentId,
+  address: describeWire(Schema.String, "The http or https address to open the tab at."),
+});
+
+/** How long a takeover stands, in the tools' words. */
+const TAKEOVER_WORDS =
+  `A takeover stands for ${BROWSER_TAKEOVER_HOLD_MS / 1_000} seconds past the member's last ` +
+  `take, which ${MEMBER_MCP_TOOL.TAKE_OVER_AGENT_BROWSER_TAB} moves on when called again, and ` +
+  "the tab goes back to the agent once it lapses.";
+
+const LIST_AGENT_BROWSER_TABS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_AGENT_BROWSER_TABS,
+  description:
+    "List the tabs open in the cloud browser of a coding agent the member can see, by its id, " +
+    "the oldest first, as the agent's Browser tab lists them: each by its id, address, and " +
+    "title, who opened it, the agent or a member, and who drives it, the agent, you (the " +
+    "member), or another member, with when that member's takeover lapses. Answers `accepted` " +
+    "with the tabs, or `rejected` and why.",
+  input: AgentIdInputSchema,
+  annotations: READ_ONLY,
+  run: ({ agentId }) =>
+    browserTabAnswer(
+      (userId) => listAgentBrowserTabs(userId, { agentId }),
+      ({ tabs }, userId) => ({
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        tabs: tabs.map((tab) => memberBrowserTab(tab, userId)),
+      }),
+    ),
+});
+
+const OPEN_AGENT_BROWSER_TAB_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.OPEN_AGENT_BROWSER_TAB,
+  description:
+    "Open a tab at an http or https address in the cloud browser of a coding agent the member " +
+    "can see and controls, by its id, as the member's Browser tab opens one, such as a sign-in " +
+    "page the member should finish for the agent; a stopped sandbox is resumed for it. The " +
+    "tab is taken over for the member at once, so the agent does not act on it until it is " +
+    `handed back with ${MEMBER_MCP_TOOL.HAND_BACK_AGENT_BROWSER_TAB}. ${TAKEOVER_WORDS} ` +
+    "Answers `accepted` with the tab, or `rejected` and why.",
+  input: OpenAgentBrowserTabInputSchema,
+  annotations: ADDITIVE,
+  run: ({ agentId, address }) =>
+    browserTabAnswer((userId) => openAgentBrowserTab(userId, { agentId, address }), oneTab),
+});
+
+const TAKE_OVER_AGENT_BROWSER_TAB_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.TAKE_OVER_AGENT_BROWSER_TAB,
+  description:
+    "Take over a tab in the cloud browser of a coding agent the member controls, by the " +
+    "agent's id and the tab's, as the member's Browser tab's Take over does, so the agent does " +
+    `not act on it, or move the member's own takeover on. ${TAKEOVER_WORDS} A tab another ` +
+    "member drives is left to them and answered with them as its driver. Answers `accepted` " +
+    "with the tab as it then stands, or `rejected` and why.",
+  input: AgentBrowserTabInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ agentId, tabId }) =>
+    browserTabAnswer((userId) => takeOverAgentBrowserTab(userId, { agentId }, tabId), oneTab),
+});
+
+const HAND_BACK_AGENT_BROWSER_TAB_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.HAND_BACK_AGENT_BROWSER_TAB,
+  description:
+    "Hand a tab the member drives in a coding agent's cloud browser back to the agent, by the " +
+    "agent's id and the tab's, as the member's Browser tab's Hand back does, so the agent may " +
+    "act on it again. A tab the member does not drive is left as it stands. Answers " +
+    "`accepted` with the tab as it then stands, or `rejected` and why.",
+  input: AgentBrowserTabInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ agentId, tabId }) =>
+    browserTabAnswer((userId) => handBackAgentBrowserTab(userId, { agentId }, tabId), oneTab),
 });
 
 // The member's inbox (`inbox.ts`): the threads their agents ask them things on, read and worked as theirs.
@@ -2183,6 +2360,10 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_UPDATE_AGENT_TOOL,
   LIST_AGENT_PORTS_TOOL,
   SHARE_AGENT_PORT_TOOL,
+  LIST_AGENT_BROWSER_TABS_TOOL,
+  OPEN_AGENT_BROWSER_TAB_TOOL,
+  TAKE_OVER_AGENT_BROWSER_TAB_TOOL,
+  HAND_BACK_AGENT_BROWSER_TAB_TOOL,
   READ_INBOX_TOOL,
   ANSWER_ASK_TOOL,
   REPLY_TO_THREAD_TOOL,
