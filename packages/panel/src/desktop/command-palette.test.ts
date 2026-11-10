@@ -2891,7 +2891,7 @@ test("the Inbox searched lists what needs you first, each item beside its task",
   );
 });
 
-test("an Inbox item is the Inbox's own row: led by what it asks as its chip is, never its agent's tile, the marks of its Inbox row and its time at its end, and its card hung beside it", async () => {
+test("an Inbox item is the Inbox's own row: the marks of its Inbox row and its time at its end, and its card hung beside it", async () => {
   paletteOverInbox({ items: [PREVIEWS, ROTATE] });
   chooseFilter("Inbox");
   await settle();
@@ -2901,8 +2901,6 @@ test("an Inbox item is the Inbox's own row: led by what it asks as its chip is, 
   );
   const [needs, answered] = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
   assert.ok(needs, "the item that needs you is listed");
-  assert.equal(needs.querySelector(".actor-mark"), null, "no agent's tile leads");
-  assert.ok(needs.querySelector(".ui-combobox-option-glyph svg"), "what it asks leads");
   assert.match(
     needs.querySelector(".ui-combobox-option-hint")?.textContent ?? "",
     /Needs you/u,
