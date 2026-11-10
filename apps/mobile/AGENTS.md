@@ -13,7 +13,7 @@ and `expo prebuild` generates it on every build.
 
 The app's agents run on the developer's own Mac, which has Xcode 27 and the
 simulators; the cloud sandboxes have no Xcode and see the app only through
-CI's macOS job below. Every command here runs from `apps/mobile`.
+the macOS run below. Every command here runs from `apps/mobile`.
 
 | Command | What it does |
 | --- | --- |
@@ -54,24 +54,24 @@ with it. Touch nothing of the developer's outside the checkout.
 
 ## CI
 
-Two jobs in `.github/workflows/ci.yml` cover the app.
+- **Linux** (`.github/workflows/ci.yml`) runs the typecheck, the lint, the
+  vitest tests, and `export:ios` on every pull request, through the same turbo
+  tasks as every workspace. It is the pull request's only gate.
+- **macOS** (`.github/workflows/ios-simulators.yml`, on GitHub's `xcode-27`
+  image) runs only by hand, on any branch, in about 100 minutes. It generates
+  the native project, builds the Release simulator app, runs the Maestro flows
+  on the iPhone 18 Pro, the iPhone Duo as it boots, and the iPad Pro 11-inch,
+  and uploads their screenshots as the `mobile-screenshots` artifact, kept
+  whether or not the flows passed.
 
-- **Linux** runs the typecheck, the lint, the vitest tests, and `export:ios`
-  on every pull request, through the same turbo tasks as every workspace.
-- **macOS** (`mobile`, on GitHub's `xcode-27` image) runs only on a pull
-  request that changes `apps/mobile/**`, `packages/ui-native/**`, or the
-  workflow itself, never in the merge queue, whose 30-minute status check
-  timeout the job outlasts; a run that skips it keeps the `CI` gate green. It
-  generates the native project, builds the Release simulator app, runs the
-  Maestro flows on the iPhone 18 Pro, the iPhone Duo as it boots, and the iPad
-  Pro 11-inch, and uploads their screenshots as the `mobile-screenshots`
-  artifact, kept whether or not the flows passed.
-
-Look at CI's screenshots before calling a pull request done, since the gate
-is the macOS job and not your own Mac:
+On the Mac, run the flows your change touches on the simulators yourself
+before you push. In the cloud, where there is no Xcode, ask for a run on your
+branch; Vespin's GitHub App cannot dispatch a workflow, so it is started from
+the developer's Mac (`gh workflow run ios-simulators.yml --ref <branch>`).
+Then read its screenshots:
 
 ```
-gh run list --branch <your branch> --workflow CI --limit 1 --json databaseId --jq '.[0].databaseId'
+gh run list --branch <your branch> --workflow "iOS simulators" --limit 1 --json databaseId --jq '.[0].databaseId'
 gh run download <run id> --name mobile-screenshots --dir /tmp/mobile-screenshots
 ```
 
@@ -129,8 +129,7 @@ plain.
 
 Logic is tested with vitest, under `src/**/*.test.ts`, as root `AGENTS.md`'s
 Testing section says. Screens are not unit-tested: each is checked by a Maestro
-flow under `maestro/` that drives the simulator and takes a screenshot, which
-CI keeps. A new screen adds its steps to a flow, or a flow of its own, and a
+flow under `maestro/` that drives the simulator and takes a screenshot. A new screen adds its steps to a flow, or a flow of its own, and a
 pull request with UI shows its screenshots to the developer in a thread.
 
 ## Conventions
