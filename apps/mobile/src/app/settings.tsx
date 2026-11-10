@@ -37,6 +37,7 @@ import {
 import {
   isPushNotify,
   unregisterPushDevice,
+  useFixtureRun,
   usePushDeviceKey,
   usePushDeviceStanding,
 } from "../push-device.js";
@@ -68,6 +69,7 @@ export default function SettingsScreen() {
   const notifications = useNotificationPermission();
   const device = usePushDeviceKey();
   const push = usePushDeviceStanding(device);
+  const fixture = useFixtureRun();
   // The rest of the settings, under the chosen workspace, open in Safari, since the app draws no web view.
   const manage =
     chosen === undefined
@@ -75,7 +77,7 @@ export default function SettingsScreen() {
       : linkOf({ kind: LINK_DESTINATION.SETTINGS }, chosen.slug ?? chosen.id);
   // Note that the phone is unregistered first, while the account's credential still stands, so no push of the account reaches a phone signed out of it.
   const signOut = () => {
-    unregisterPushDevice(acts, device)
+    unregisterPushDevice(acts, fixture)
       .then(() => acts[ACT_KIND.ACCOUNT_SIGN_OUT]())
       .catch((error: unknown) => console.error("The sign-out did not finish.", error));
   };

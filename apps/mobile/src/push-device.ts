@@ -30,7 +30,7 @@ import type { ActPortClient } from "@repo/host/contract";
 import { useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
 import { getDevicePushTokenAsync } from "expo-notifications";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostActs } from "./host/host-provider.js";
 import { NOTIFICATION_STANDING, useNotificationPermission } from "./notification-permission.js";
@@ -78,7 +78,7 @@ function readDeviceKey(fixture: boolean): Promise<PushDeviceKey | undefined> {
 }
 
 /** Whether this launch runs on a fixture's data rather than the service. */
-function useFixtureRun(): boolean {
+export function useFixtureRun(): boolean {
   const { data: fixture = false } = useQuery({
     ...appStateQuery,
     select: (state) => state.run.fixtureMode,
@@ -108,6 +108,9 @@ export function usePushDeviceKey(): PushDeviceKey | undefined {
 /** This launch's register of the phone under the account signed in, and the token it named, which a read of its standing waits for. */
 let registration: { readonly token: string; readonly done: Promise<void> } | undefined;
 
+/** The latest register sent, which the next one waits on, so a late answer for an account signed out of can never land after the next account's. */
+let lastRegister: Promise<void> = Promise.resolve();
+
 /**
  * The phone registered under the account signed in, once for its token
  * until a sign-out unregisters it: the register under way, or done, where
@@ -119,17 +122,20 @@ function registered(acts: ActPortClient, key: PushDeviceKey): Promise<void> {
   const bundleId = Constants.expoConfig?.ios?.bundleIdentifier;
   if (bundleId === undefined) return Promise.resolve();
   if (registration?.token === key.token) return registration.done;
-  const done = acts[ACT_KIND.PUSH_DEVICE_REGISTER]({ ...key, bundleId }).then(
-    (answer) => {
-      // Note that a register the service did not take is asked again by the next screen that reads.
-      if ("failure" in answer) registration = undefined;
-    },
-    (error: unknown) => {
-      registration = undefined;
-      console.error("The phone was not registered for notifications.", error);
-    },
-  );
+  const done = lastRegister
+    .then(() => acts[ACT_KIND.PUSH_DEVICE_REGISTER]({ ...key, bundleId }))
+    .then(
+      (answer) => {
+        // Note that a register the service did not take is asked again by the next screen that reads.
+        if ("failure" in answer) registration = undefined;
+      },
+      (error: unknown) => {
+        registration = undefined;
+        console.error("The phone was not registered for notifications.", error);
+      },
+    );
   registration = { token: key.token, done };
+  lastRegister = done;
   return done;
 }
 
@@ -151,19 +157,23 @@ export function usePushRegistration(signedIn: boolean): void {
 /**
  * The phone unregistered from the account's pushes, as a sign-out asks
  * before it signs out, so no push for the account reaches a phone signed
- * out of it; done at once where the phone holds no token.
+ * out of it. Note that the token is read here whether or not iOS still lets
+ * the app notify, since iOS hands one either way and a phone registered
+ * before a revoked permission must still leave the account. A sign-out goes
+ * on where the unregister fails, since signing out must work offline; a
+ * register left standing moves to whoever signs in next. Done at once where
+ * iOS hands no token.
  */
-export function unregisterPushDevice(
-  acts: ActPortClient,
-  key: PushDeviceKey | undefined,
-): Promise<void> {
-  if (key === undefined) return Promise.resolve();
+export function unregisterPushDevice(acts: ActPortClient, fixture: boolean): Promise<void> {
   // The next account to sign in registers the phone afresh.
   registration = undefined;
-  return acts[ACT_KIND.PUSH_DEVICE_UNREGISTER](key).then(
-    () => undefined,
-    (error: unknown) => console.error("The phone was not unregistered.", error),
-  );
+  return readDeviceKey(fixture).then((key) => {
+    if (key === undefined) return undefined;
+    return acts[ACT_KIND.PUSH_DEVICE_UNREGISTER](key).then(
+      () => undefined,
+      (error: unknown) => console.error("The phone was not unregistered.", error),
+    );
+  });
 }
 
 /** The phone's standing as Settings draws it, none until the service answers, and the "Notify me" choice made from it. */
@@ -173,6 +183,8 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
 } {
   const acts = useHostActs();
   const [standing, setStanding] = useState<PushDeviceStatusAnswer | undefined>(undefined);
+  // Which choice was made last, so an earlier one's refusal never puts back what a later one drew.
+  const picks = useRef(0);
   useEffect(() => {
     if (key === undefined) return undefined;
     let live = true;
@@ -193,14 +205,16 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
     (notify: PushNotify) => {
       if (key === undefined || standing === undefined) return;
       const before = standing.notify;
-      // Note that the choice is drawn at once and put back where the service did not take it.
+      picks.current += 1;
+      const pick = picks.current;
+      // Note that the choice is drawn at once and put back where the service did not take it, unless a later choice stands by then.
       setStanding({ ...standing, notify });
-      acts[ACT_KIND.PUSH_DEVICE_NOTIFY]({ ...key, notify }).then(
-        (answer) => {
-          if ("failure" in answer) setStanding((held) => held && { ...held, notify: before });
-        },
-        () => setStanding((held) => held && { ...held, notify: before }),
-      );
+      const putBack = () => {
+        if (pick === picks.current) setStanding((held) => held && { ...held, notify: before });
+      };
+      acts[ACT_KIND.PUSH_DEVICE_NOTIFY]({ ...key, notify }).then((answer) => {
+        if ("failure" in answer) putBack();
+      }, putBack);
     },
     [acts, key, standing],
   );
