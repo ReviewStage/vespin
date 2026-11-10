@@ -139,6 +139,7 @@ export * from "./components/rect-float/rect-float.js";
 export * from "./components/remote-surface/remote-surface.js";
 export * from "./components/repository/repository.js";
 export * from "./components/resize-edge/resize-edge.js";
+export * from "./components/resources-popover/resources-popover.js";
 export * from "./components/retry-button/retry-button.js";
 export * from "./components/reveal/reveal.js";
 export * from "./components/rolling-number/rolling-number.js";

@@ -1102,6 +1102,8 @@
     var(--ui-popover-room, 100vh)
   );
   --spacing-popover-narrow: var(--ui-popover-width-narrow);
+  /* The Resources popover's card, a table of three columns wide. */
+  --spacing-popover-wide: var(--ui-popover-width-wide);
   --spacing-page-versions-end: calc(var(--ui-control-gap) - var(--ui-space-2));
   --spacing-image-diff-side: 200px; /* off-scale: a side's least before two stop fitting to a row */
   --spacing-snippet-pending: calc(var(--snippet-rows) * var(--snippet-row));
