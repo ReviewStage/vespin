@@ -10,7 +10,7 @@
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
-import { INBOX_HOLDER, waitsOnReaderNow } from "@repo/features/inbox-list-model";
+import { waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER, type PageLine } from "@repo/features/page-wire";
 import { searchTokens } from "@repo/features/search-tokens";
@@ -108,9 +108,7 @@ function useWaiting(workspaceId: string | undefined): {
     for (const { holder, items } of groups) {
       const waiting = items.filter((item) => waitsOnReaderNow(item, readerId, now));
       for (const item of waiting) byAgent.set(item.agentId, (byAgent.get(item.agentId) ?? 0) + 1);
-      if (holder.kind === INBOX_HOLDER.TASK && waiting.length > 0) {
-        byTask.set(holder.task.id, waiting.length);
-      }
+      if (waiting.length > 0) byTask.set(holder.task.id, waiting.length);
     }
     return { byTask, byAgent };
   }, [groups, readerId]);
