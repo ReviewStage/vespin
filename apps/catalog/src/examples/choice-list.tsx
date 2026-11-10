@@ -20,10 +20,8 @@ import {
   MARK_PROVIDER,
   OPTION_MEDIA_KIND,
   OptionMedia,
-  PAGE_THUMB_SIZE,
+  PAGE_THUMB_FIT,
   PageThumb,
-  PictureSet,
-  PictureSetTile,
   PROVIDER_MARK_SIZE,
   ProviderMark,
   SETTINGS_ROW_STATE,
@@ -35,8 +33,7 @@ import {
   Text,
   TextLink,
 } from "@repo/ui";
-import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
-import { PICTURE_STATE } from "@repo/ui/picture-read";
+import { GLYPH, ICON_SIZE, ImageOffIcon } from "@repo/ui/icons";
 import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -157,78 +154,165 @@ const CREDENTIAL_ROWS: readonly ChoiceOption<string>[] = [
   },
 ];
 
-/** A screenshot of a design, as an option's thumbnail draws it. */
-const SHOT = `data:image/svg+xml,${encodeURIComponent(
-  '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200"><rect width="100%" height="100%" fill="#7aa7f4"/><rect x="24" y="24" width="160" height="18" rx="6" fill="#fff9"/><rect x="24" y="60" width="272" height="110" rx="10" fill="#fff6"/></svg>',
-)}`;
-
-/** An option's shots, as thumbnails. */
-function Shots({ words }: { words: readonly string[] }): React.JSX.Element {
-  return (
-    <PictureSet label="Shots" count={words.length} thumbnails>
-      {words.map((each) => (
-        <PictureSetTile
-          key={each}
-          state={{ kind: PICTURE_STATE.READY, url: SHOT }}
-          width={320}
-          height={200}
-          words={each}
-          onOpen={() => undefined}
-        />
-      ))}
-    </PictureSet>
-  );
+/** A made-up screenshot `width` by `height`, its ground `fill`, with a bar and a block on it, as an option's picture. */
+function shot(width: number, height: number, fill: string): string {
+  const bar = Math.max(6, Math.round(height * 0.08));
+  return `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="${fill}"/><rect x="6%" y="6%" width="50%" height="${bar}" rx="${bar / 2}" fill="#fff9"/><rect x="6%" y="24%" width="88%" height="60%" rx="8" fill="#fff5"/></svg>`,
+  )}`;
 }
 
-/** A choice between designs, each card holding its shots, a page, a recording, or a live address, and None of these after them. */
+const PAGE = `data:text/html,${encodeURIComponent("<body style='margin:0;font:48px sans-serif;background:#fff;padding:32px'><h1>Directions</h1><p>Three ways a turn could end.</p>")}`;
+
+/** A tile's thumb as an option's card draws one: whole on its ground, filling the tile. */
+function thumbOf(image: string): React.JSX.Element {
+  return <PageThumb fit={PAGE_THUMB_FIT.CONTAIN} image={image} />;
+}
+
+/** Nothing opens in the catalog. */
+const OPEN = () => undefined;
+
+/** A choice between designs, every kind and shape an option's media comes in, and None of these after them. */
 const DESIGNS: readonly ChoiceOption<string>[] = [
   {
-    value: "card",
-    label: "A done card",
-    state: "Archive, plus the follow-ups the agent mentioned.",
+    value: "kinds",
+    label: "Every kind",
+    state: "A picture, a phone shot, a recording, a page, and two links.",
     badge: "Recommended",
     below: (
       <OptionMedia
-        label="A done card"
-        pictures={<Shots words={["On a desktop", "On a phone"]} />}
-        lines={[
+        label="Every kind"
+        pieces={[
           {
-            id: "page",
-            kind: OPTION_MEDIA_KIND.PAGE,
-            title: "Done card directions",
-            thumb: <PageThumb size={PAGE_THUMB_SIZE.ROW} image={SHOT} />,
-            onOpen: () => undefined,
+            id: "desktop",
+            kind: OPTION_MEDIA_KIND.PICTURE,
+            caption: "On a desktop",
+            thumb: thumbOf(shot(1440, 900, "#5b8def")),
+            onOpen: OPEN,
           },
-        ]}
-      />
-    ),
-  },
-  {
-    value: "dock",
-    label: "Two states of the dock",
-    state: "Needs you, then Done.",
-    below: (
-      <OptionMedia
-        label="Two states of the dock"
-        lines={[
+          {
+            id: "phone",
+            kind: OPTION_MEDIA_KIND.PICTURE,
+            caption: "On a phone",
+            thumb: thumbOf(shot(390, 844, "#e07a5f")),
+            onOpen: OPEN,
+          },
           {
             id: "recording",
             kind: OPTION_MEDIA_KIND.RECORDING,
-            title: "Ticking two follow-ups",
-            thumb: <PageThumb size={PAGE_THUMB_SIZE.ROW} image={SHOT} />,
-            onOpen: () => undefined,
+            caption: "Ticking two follow-ups",
+            thumb: thumbOf(shot(1280, 720, "#81b29a")),
+            onOpen: OPEN,
+          },
+          {
+            id: "page",
+            kind: OPTION_MEDIA_KIND.PAGE,
+            caption: "Done card directions",
+            thumb: (
+              <PageThumb frame={{ title: "Directions", src: PAGE, sandbox: "allow-scripts" }} />
+            ),
+            onOpen: OPEN,
           },
           {
             id: "link",
             kind: OPTION_MEDIA_KIND.LINK,
-            title: "The dock on the preview",
-            thumb: <PageThumb size={PAGE_THUMB_SIZE.ROW} glyph={<ExternalIcon />} />,
-            onOpen: () => undefined,
+            caption: "The dock on the preview",
+            thumb: <PageThumb glyph={<ExternalIcon />} />,
+            onOpen: OPEN,
+          },
+          {
+            id: "host",
+            kind: OPTION_MEDIA_KIND.LINK,
+            caption: "preview.example.com",
+            thumb: <PageThumb glyph={<ExternalIcon />} />,
+            onOpen: OPEN,
           },
         ]}
       />
     ),
   },
+  {
+    value: "shapes",
+    label: "Odd shapes and captions",
+    state: "Square, a wide banner, a long scroll, a small icon, no caption, and a long one.",
+    below: (
+      <OptionMedia
+        label="Odd shapes and captions"
+        pieces={[
+          {
+            id: "square",
+            kind: OPTION_MEDIA_KIND.PICTURE,
+            caption: "Square avatar crop",
+            thumb: thumbOf(shot(800, 800, "#9b5de5")),
+            onOpen: OPEN,
+          },
+          {
+            id: "banner",
+            kind: OPTION_MEDIA_KIND.PICTURE,
+            caption: "Banner, 4 to 1",
+            thumb: thumbOf(shot(1600, 400, "#f15bb5")),
+            onOpen: OPEN,
+          },
+          {
+            id: "scroll",
+            kind: OPTION_MEDIA_KIND.PICTURE,
+            caption: "The whole settings page, scrolled",
+            thumb: thumbOf(shot(600, 2400, "#00bbf9")),
+            onOpen: OPEN,
+          },
+          {
+            id: "icon",
+            kind: OPTION_MEDIA_KIND.PICTURE,
+            caption: "App icon",
+            thumb: thumbOf(shot(64, 64, "#fee440")),
+            onOpen: OPEN,
+          },
+          {
+            id: "bare",
+            kind: OPTION_MEDIA_KIND.PICTURE,
+            caption: undefined,
+            thumb: thumbOf(shot(1200, 800, "#00f5d4")),
+            onOpen: OPEN,
+          },
+          {
+            id: "long",
+            kind: OPTION_MEDIA_KIND.RECORDING,
+            caption:
+              "The whole flow from opening a thread to sending the answer with a note and two files",
+            thumb: thumbOf(shot(1920, 1080, "#577590")),
+            onOpen: OPEN,
+          },
+        ]}
+      />
+    ),
+  },
+  {
+    value: "states",
+    label: "While reading, and gone",
+    state: "A picture on its way, and one whose file could not be read.",
+    below: (
+      <OptionMedia
+        label="While reading, and gone"
+        pieces={[
+          {
+            id: "reading",
+            kind: OPTION_MEDIA_KIND.PICTURE,
+            caption: "Still on its way",
+            thumb: <PageThumb />,
+            onOpen: OPEN,
+          },
+          {
+            id: "gone",
+            kind: OPTION_MEDIA_KIND.PICTURE,
+            caption: "Could not be read",
+            thumb: <PageThumb glyph={<ImageOffIcon />} />,
+            onOpen: OPEN,
+          },
+        ]}
+      />
+    ),
+  },
+  { value: "plain", label: "An option with no media", state: "Its card holds its words alone." },
   { value: "none", label: "None of these" },
 ];
 

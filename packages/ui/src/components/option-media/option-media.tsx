@@ -1,97 +1,140 @@
+import { Button as ButtonPrimitive } from "@base-ui/react/button";
 import type { ReactNode } from "react";
-import { LINE_BUTTON_LOOK, LineButton } from "../line-button/line-button.js";
+import { PlayIcon } from "../../icons/lucide-glyphs.js";
+import { PRESS_PULSE, pulseOnPress } from "../../press-pulse.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
+import { Tooltip } from "../tooltip/hint.js";
 
 /**
- * option-media.tsx -- what one option of a choice shows beside its label: its pictures as thumbnails, and a line for each page, recording, or address it points at.
+ * option-media.tsx -- what one option of a choice shows beside its label: every picture, recording, page, and address it points at, as equal tiles with a caption under each.
  *
  * An agent asking the reader to pick between designs gives each option its
  * own evidence, so the pick and what it is picked by stand in one card
- * (`ChoiceList`'s `below`). The pictures come first, as the caller's
- * `PictureSet` of thumbnails, since a full-width picture would make the
- * card taller than the choice; then one line per other piece, each a
- * `row` line button (`../line-button/line-button.tsx`) holding a small
- * thumb (`PageThumb`'s row size, a page's frame or a recording's first
- * frame) and words saying what it is and its title, "Page · Directions".
- * A press on a line opens it: a page in its tab, a recording in the
- * viewer, an address in the browser. The lines stand in a list named for
- * the option, so a reader hears how many there are and whose they are.
+ * (`ChoiceList`'s `below`). Every piece is one tile of one size, whatever it
+ * is or whatever shape it was made at: a thumb of a window's shape
+ * (`PageThumb` as wide as its tile, a picture or a recording's first frame
+ * standing whole on the thumb's ground, a page drawn small, an address's
+ * glyph), the tiles as many to a row as stay legible and wrapping under,
+ * two to a phone's card. A recording and a page wear a small mark in the
+ * thumb's corner saying what they are, since a still of either reads as a
+ * picture, a page's handed by its caller as an entity's glyph; a picture
+ * wears none, and an address's thumb is its glyph. Under each,
+ * its caption on one line, cut short where it runs long, the whole of it
+ * in a tooltip and in the tile's name.
  *
- * It takes no class or style; its outer spacing is the card's. It is drawn
- * in Tailwind utilities over the theme, with no shadcn/ui base: shadcn has
- * no strip of media.
+ * Each tile is a press opening what it shows: a picture or a recording in
+ * the viewer, a page in its tab, an address in the browser. It takes no
+ * class or style; its outer spacing is the card's. It is drawn in Tailwind
+ * utilities over the theme, with no shadcn/ui base: shadcn has no strip of
+ * media.
  */
 
-/** What a line of an option's media is, which its words lead with. */
+/** What a piece of an option's media is, which its mark and its name say. */
 export const OPTION_MEDIA_KIND = {
-  PAGE: "page",
+  PICTURE: "picture",
   RECORDING: "recording",
+  PAGE: "page",
   LINK: "link",
 } as const;
 
 export type OptionMediaKind = (typeof OPTION_MEDIA_KIND)[keyof typeof OPTION_MEDIA_KIND];
 
-/** The word each kind of line leads with. */
+/** The word each kind's press is named by, before its caption, and what stands as its caption where it has none. */
 const KIND_WORD: Record<OptionMediaKind, string> = {
-  [OPTION_MEDIA_KIND.PAGE]: "Page",
+  [OPTION_MEDIA_KIND.PICTURE]: "Picture",
   [OPTION_MEDIA_KIND.RECORDING]: "Recording",
+  [OPTION_MEDIA_KIND.PAGE]: "Page",
   [OPTION_MEDIA_KIND.LINK]: "Link",
 };
 
-/** One line of an option's media: what it is, its title, its small thumb, and what a press does. */
-export interface OptionMediaLine {
-  /** What the line is keyed by among its option's. */
+/**
+ * The mark each kind wears in its thumb's corner where its caller hands
+ * none: a recording's play; a page wears the page's own glyph, which its
+ * caller draws as every page is drawn; a picture wears none, and an address
+ * none, since its thumb is its glyph already.
+ */
+const KIND_MARK: Record<OptionMediaKind, ReactNode> = {
+  [OPTION_MEDIA_KIND.PICTURE]: null,
+  [OPTION_MEDIA_KIND.RECORDING]: <PlayIcon aria-hidden="true" />,
+  [OPTION_MEDIA_KIND.PAGE]: null,
+  [OPTION_MEDIA_KIND.LINK]: null,
+};
+
+/** One piece of an option's media: what it is, its caption, its thumb, and what a press does. */
+export interface OptionMediaPiece {
+  /** What the tile is keyed by among its option's. */
   id: string;
   kind: OptionMediaKind;
-  title: string;
-  /** A `PageThumb` of the row's size, or a glyph, standing before its words. */
+  /** Its caption: what it shows, a page's title, or an address's words; none where the agent gave none. */
+  caption: string | undefined;
+  /** A `PageThumb` of the card's size, contained, filling the tile's width. */
   thumb: ReactNode;
-  /** Opens what the line names. */
+  /** The mark in the thumb's corner saying what it is, a page's glyph; its kind's own where none is given. */
+  mark?: ReactNode;
+  /** Opens what the tile shows. */
   onOpen: () => void;
 }
 
-/** The words a line says: its kind, then its title. */
-function lineWords(line: Pick<OptionMediaLine, "kind" | "title">): string {
-  return `${KIND_WORD[line.kind]} · ${line.title}`;
+/** The words under a tile: its caption, or its kind where it has none. */
+function captionOf(piece: Pick<OptionMediaPiece, "kind" | "caption">): string {
+  return piece.caption === undefined || piece.caption.trim() === ""
+    ? KIND_WORD[piece.kind]
+    : piece.caption;
 }
 
-/** An option's media: its pictures, then a line for each other piece. */
+/** One piece as its tile: the thumb with its mark, and its caption under it, pressed as one. */
+function OptionMediaTile({ piece }: { piece: OptionMediaPiece }): React.JSX.Element {
+  const caption = captionOf(piece);
+  const mark = piece.mark ?? KIND_MARK[piece.kind];
+  return (
+    <li className="ui-option-media-tile min-w-0">
+      <Tooltip label={caption}>
+        <ButtonPrimitive
+          type="button"
+          className="group/option-media m-0 flex w-full min-w-0 flex-col gap-ui-4 rounded-control border-0 bg-transparent p-0 text-start text-inherit [font:inherit]"
+          aria-label={`${KIND_WORD[piece.kind]}: ${caption}`}
+          onClick={pulseOnPress(() => piece.onOpen(), PRESS_PULSE.QUIET)}
+        >
+          <span className="relative block transition-opacity duration-(--ui-duration-hover) group-hover/option-media:opacity-90">
+            {piece.thumb}
+            {mark === null ? null : (
+              <span className="ui-option-media-mark absolute right-ui-4 bottom-ui-4 inline-flex rounded-control bg-veil p-ui-4 text-on-veil [&_svg]:size-icon-16">
+                {mark}
+              </span>
+            )}
+          </span>
+          <Text
+            as={TEXT_ELEMENT.SPAN}
+            variant={TEXT_VARIANT.CAPTION}
+            tone={TEXT_TONE.MUTED}
+            truncate
+          >
+            {caption}
+          </Text>
+        </ButtonPrimitive>
+      </Tooltip>
+    </li>
+  );
+}
+
+/** An option's media: one tile each, of one size, in rows that wrap. */
 export function OptionMedia({
   label,
-  pictures,
-  lines,
+  pieces,
 }: {
   /** What the option's media is named: its option's label. */
   label: string;
-  /** The option's pictures, as a `PictureSet` of thumbnails; none where it has none. */
-  pictures?: ReactNode;
-  lines: readonly OptionMediaLine[];
-}): React.JSX.Element {
+  pieces: readonly OptionMediaPiece[];
+}): React.JSX.Element | null {
+  if (pieces.length === 0) return null;
   return (
-    <div className="ui-option-media flex min-w-0 flex-col gap-tight-gap">
-      {pictures}
-      {lines.length === 0 ? null : (
-        <ul
-          className="ui-option-media-lines m-0 flex list-none flex-col p-0"
-          aria-label={`${label} media`}
-        >
-          {lines.map((line) => (
-            <li key={line.id} className="min-w-0">
-              <LineButton look={LINE_BUTTON_LOOK.ROW} brightens onClick={() => line.onOpen()}>
-                <span className="ui-option-media-thumb flex-none">{line.thumb}</span>
-                <Text
-                  as={TEXT_ELEMENT.SPAN}
-                  variant={TEXT_VARIANT.CAPTION}
-                  tone={TEXT_TONE.MUTED}
-                  truncate
-                >
-                  {lineWords(line)}
-                </Text>
-              </LineButton>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
+    <ul
+      className="ui-option-media ph-no-capture m-0 grid list-none grid-cols-option-media gap-item-gap p-0"
+      aria-label={`${label} media`}
+    >
+      {pieces.map((piece) => (
+        <OptionMediaTile key={piece.id} piece={piece} />
+      ))}
+    </ul>
   );
 }
