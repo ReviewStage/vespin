@@ -33,6 +33,7 @@ import {
   type AgentInboxMessagedView,
   type AgentInboxReadAllView,
   type AgentInboxReadStateView,
+  type AgentInboxTakenBackView,
   type AgentListAnswer,
   type AgentMessageAnswerView,
   type AgentMessagesAnswerView,
@@ -132,11 +133,13 @@ import {
   type InboxMessageRequest,
   type InboxReadAllRequest,
   type InboxStartRequest,
+  type InboxTakeBackRequest,
   inboxAcknowledgeRequestSchema,
   inboxCloseRequestSchema,
   inboxMessageRequestSchema,
   inboxReadAllRequestSchema,
   inboxStartRequestSchema,
+  inboxTakeBackRequestSchema,
 } from "./inbox-wire.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import { TRANSCRIPT_NOW_QUERY, type TranscriptNowAnswer } from "./live-wire.js";
@@ -1278,6 +1281,29 @@ export class HostedAgentClient {
     return Effect.map(
       hostedCall(
         this.#hosted.inbox.close,
+        { params: { id: itemId }, body },
+        inboxWrite(HOSTED_DEADLINE.STEER, key),
+      ),
+      writtenAlreadyKept,
+    );
+  }
+
+  /**
+   * Takes back the account's own nod or close on one item, by the key it
+   * went under, however long since, under the idempotency key given where
+   * one is. It answers the item as it then stands with what came of it:
+   * taken back, refused as told to its agent, or refused as moved on.
+   */
+  takeBackInbox(
+    itemId: string,
+    request: InboxTakeBackRequest,
+    key?: string,
+  ): Effect.Effect<AgentInboxTakenBackView, never, HttpClient.HttpClient> {
+    const body = wireRequestOf(inboxTakeBackRequestSchema, request);
+    if (body === undefined) return Effect.succeed(UNANSWERED);
+    return Effect.map(
+      hostedCall(
+        this.#hosted.inbox.takeBack,
         { params: { id: itemId }, body },
         inboxWrite(HOSTED_DEADLINE.STEER, key),
       ),

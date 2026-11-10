@@ -44,6 +44,7 @@ import {
   inboxMessageRequestSchema,
   inboxReadAllRequestSchema,
   inboxStartRequestSchema,
+  inboxTakeBackRequestSchema,
 } from "./inbox-wire.js";
 import { memoryIdSchema } from "./memory-wire.js";
 import { modelChoiceSchema, modelProviderSchema } from "./models-wire.js";
@@ -263,6 +264,7 @@ const AGENT_MESSAGE_CALLS = {
   inbox: {
     answer: inboxContract.answer,
     close: inboxContract.close,
+    takeBack: inboxContract.takeBack,
     message: inboxContract.message,
     start: inboxContract.start,
     home: inboxContract.home,
@@ -893,16 +895,10 @@ const agentInboxAnswerViewSchema = EffectSchema.Union([inboxAnswerSchema, failed
 
 export type AgentInboxAnswerView = typeof agentInboxAnswerViewSchema.Type;
 
-/**
- * A nod on one notice of the inbox, Got it, as the window asks it: the
- * item, and the acknowledgment the service takes, its key the window's own;
- * and, where it is `held`, that the window offers Undo for it, held and let
- * go as a close is (`agentInboxCloseParamsSchema`).
- */
+/** A nod on one notice of the inbox, Got it, as the window asks it: the item, and the acknowledgment the service takes, its key the window's own. */
 export const agentInboxAnswerParamsSchema = EffectSchema.Struct({
   itemId: EffectSchema.NonEmptyString,
   ...inboxAcknowledgeRequestSchema.fields,
-  held: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 export type AgentInboxAnswerParams = typeof agentInboxAnswerParamsSchema.Type;
@@ -916,11 +912,10 @@ export type AgentInboxAnsweredView = typeof agentInboxAnsweredViewSchema.Type;
 
 /**
  * A close of one item without an answer, as the window asks it: the item,
- * and the close request the service takes, its key the window's own; and,
- * where it is `held`, that the window offers Undo for it, so the host draws
- * it at once and sends it only once the window lets it go
- * (`agentInboxReleaseParamsSchema`). It is heard as an answer is
- * (`agentInboxAnsweredViewSchema`).
+ * and the close request the service takes, its key the window's own. It is
+ * heard as an answer is (`agentInboxAnsweredViewSchema`). Note that a close
+ * an older build queued on disk may name `held`, which the host held it
+ * under then and now reads as nothing.
  */
 export const agentInboxCloseParamsSchema = EffectSchema.Struct({
   itemId: EffectSchema.NonEmptyString,
@@ -930,16 +925,20 @@ export const agentInboxCloseParamsSchema = EffectSchema.Struct({
 
 export type AgentInboxCloseParams = typeof agentInboxCloseParamsSchema.Type;
 
-/** A held close or nod let go by the window that asked it, by its key: sent to the service, or, where `send` is false, taken back as its Undo asks. */
-export const agentInboxReleaseParamsSchema = EffectSchema.Struct({
-  clientKey: EffectSchema.NonEmptyString,
-  send: EffectSchema.Boolean,
+/** The member's own nod or close taken back, as the window asks it: the item, and the key that nod or close went under (`inboxTakeBackRequestSchema`). */
+export const agentInboxTakeBackParamsSchema = EffectSchema.Struct({
+  itemId: EffectSchema.NonEmptyString,
+  ...inboxTakeBackRequestSchema.fields,
 });
 
-/** What letting a held close or nod go found: whether it was still held, which an Undo that came too late hears as false. */
-export const agentInboxReleasedViewSchema = EffectSchema.Struct({
-  held: EffectSchema.Boolean,
-});
+export type AgentInboxTakeBackParams = typeof agentInboxTakeBackParamsSchema.Type;
+
+/** A take-back, as the window hears it: the item as it then stands and what came of the take-back, or why there is no answer. */
+export const agentInboxTakenBackViewSchema = factsUnheard(
+  answerView(inboxContract.takeBack, { as: AGENT_INBOX_WRITE_RENAMES }),
+);
+
+export type AgentInboxTakenBackView = typeof agentInboxTakenBackViewSchema.Type;
 
 /** A message on one item's thread, as the window asks it: the item, and the message request the service takes, its key the window's own. */
 export const agentInboxMessageParamsSchema = EffectSchema.Struct({

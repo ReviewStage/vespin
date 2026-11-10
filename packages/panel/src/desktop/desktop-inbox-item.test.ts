@@ -1424,7 +1424,7 @@ test("a skill named by a settled item of an agent with no plan that a link reach
   assert.deepEqual(opened, [], "nothing leaves for GitHub");
 });
 
-test("Got it on a notice answers it with a nod held behind its Undo, whether its agent waits to hear back or not", async () => {
+test("Got it on a notice answers it with a nod, whether its agent waits to hear back or not", async () => {
   const notice = (id: string, title: string, needsReply: boolean): InboxItem => ({
     ...noticeOf(item(id, title, 6_000)),
     startedBy: TEAMMATE,
@@ -1472,8 +1472,8 @@ test("Got it on a notice answers it with a nod held behind its Undo, whether its
   assert.deepEqual(
     nods.map(({ clientKey: _key, ...nod }) => nod),
     [
-      { itemId: quiet.id, revision: quiet.revision, reply: INBOX_REPLY.ACKNOWLEDGED, held: true },
-      { itemId: heard.id, revision: heard.revision, reply: INBOX_REPLY.ACKNOWLEDGED, held: true },
+      { itemId: quiet.id, revision: quiet.revision, reply: INBOX_REPLY.ACKNOWLEDGED },
+      { itemId: heard.id, revision: heard.revision, reply: INBOX_REPLY.ACKNOWLEDGED },
     ],
   );
 });

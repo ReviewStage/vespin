@@ -64,7 +64,6 @@ import {
   item,
   itemPane,
   keyOn,
-  letResolvesGo,
   listed,
   menuItem,
   menuWords,
@@ -151,7 +150,7 @@ function optionHeads(page: HTMLElement): (string | null)[] {
   return openOptions(pane).map((each) => wordsOf(each));
 }
 
-test("an open item's ⋯ menu in the pane's bar offers Resolve, naming E, beside Mark as read or unread, Remind me, and Copy link, which settles it at once at the revision drawn, the thread saying who resolved it, and reaches the service once its Undo is gone; a settled item's menu offers the same less Resolve", async () => {
+test("an open item's ⋯ menu in the pane's bar offers Resolve, naming E, beside Mark as read or unread, Remind me, and Copy link, which settles it at once at the revision drawn, the thread saying who resolved it, and reaches the service at once; a settled item's menu offers the same less Resolve", async () => {
   world.listedWorkspace = ACME;
   const { page } = mount([], { chosen: ON_THRESHOLD });
   await settle();
@@ -175,10 +174,7 @@ test("an open item's ⋯ menu in the pane's bar offers Resolve, naming E, beside
     "You resolved this without an answer",
     "the thread says the reader resolved it, in a line of its own",
   );
-  assert.deepEqual(sent, [], "nothing reaches the service while Undo stands");
-
-  await letResolvesGo();
-  assert.deepEqual(sent, [{ itemId: THRESHOLD.id, revision: THRESHOLD.revision }]);
+  assert.deepEqual(sent.closes, [{ itemId: THRESHOLD.id, revision: THRESHOLD.revision }]);
   act(() => ellipsis().click());
   assert.deepEqual(
     menuWords(),
@@ -202,9 +198,8 @@ test("an open question's card offers its × named Resolve, which resolves the it
   act(() => resolve.click());
   await settle();
   assert.equal(document.querySelector('[role="alertdialog"]'), null, "Resolve asks nothing");
-  await letResolvesGo();
 
-  assert.deepEqual(closes, [{ itemId: THRESHOLD.id, revision: THRESHOLD.revision }]);
+  assert.deepEqual(closes.closes, [{ itemId: THRESHOLD.id, revision: THRESHOLD.revision }]);
   assert.deepEqual(sent, [], "no reply goes beside the resolve");
   assert.equal(
     composerEditor(pane).textContent,
@@ -228,8 +223,7 @@ test("an open item's row offers Resolve among its triage acts, at once; a settle
   act(() => menuItem("Resolve").click());
   await settle();
   assert.equal(document.querySelector('[role="alertdialog"]'), null, "Resolve asks nothing");
-  await letResolvesGo();
-  assert.deepEqual(sent, [{ itemId: THRESHOLD.id, revision: THRESHOLD.revision }]);
+  assert.deepEqual(sent.closes, [{ itemId: THRESHOLD.id, revision: THRESHOLD.revision }]);
   assert.ok(!rowMenu(page, threshold).includes("Resolve"), "the resolved row offers it no longer");
 });
 

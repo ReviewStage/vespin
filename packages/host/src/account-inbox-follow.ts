@@ -117,6 +117,8 @@ function entryChanged<Row extends Entry>(
   entry: Row,
 ): Row | "gone" | undefined {
   if (!changedIds(change).includes(entry.id)) return undefined;
+  // Note that an item a take-back opens again is listed once the service's read holds it open again, since the read lists only open items.
+  if (change.kind === INBOX_CHANGE.REOPENED) return undefined;
   if (change.kind === INBOX_CHANGE.REMINDED) {
     const { until } = change;
     return (entry.remindAt ?? null) === until ? undefined : { ...entry, remindAt: until };

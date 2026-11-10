@@ -50,7 +50,6 @@ import {
   itemPane,
   keyOn,
   layOut,
-  letResolvesGo,
   listEdge,
   listed,
   menuItem,
@@ -98,6 +97,7 @@ import { playMotions } from "../testing/pane-motion.js";
 import { pointerCross } from "../testing/pointer-cross.js";
 import { waitingOf } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
+import { undoLast } from "../undo-stack.js";
 
 // Landed before any box renders, as the panel lands it after its first paint.
 beforeAll(() => Effect.runPromise(editorBundleLanded));
@@ -180,7 +180,7 @@ function rowUnread(page: HTMLElement, title: string): boolean {
   );
 }
 
-test("⌘-clicking two open items chooses both across their tasks, opening neither, and the bar's Resolve resolves each at once at the revision drawn under one toast, lets the selection go, and reaches the service only once the toast is gone", async () => {
+test("⌘-clicking two open items chooses both across their tasks, opening neither, and the bar's Resolve resolves each at once at the revision drawn under one toast, lets the selection go, and reaches the service at once", async () => {
   const { page } = mount([], { toasts: true });
   await settle();
   const sent = takenCloses();
@@ -199,17 +199,13 @@ test("⌘-clicking two open items chooses both across their tasks, opening neith
   assert.match(newestToastSays() ?? "", /2 items resolved/u);
   assert.equal(selectionBar(page), null, "the selection is let go");
   assert.deepEqual(picked(page), []);
-  assert.deepEqual(sent, [], "nothing reaches the service while Undo stands");
-
-  await letResolvesGo();
   assert.deepEqual(
-    sent.map(({ itemId, revision }) => `${itemId}:${revision}`).sort(),
+    sent.closes.map(({ itemId, revision }) => `${itemId}:${revision}`).sort(),
     [`${THRESHOLD.id}:${THRESHOLD.revision}`, `${EXPIRY.id}:${EXPIRY.revision}`].sort(),
-    "both items are resolved once the toast is gone",
   );
 });
 
-test("the Undo of a resolve takes it back before any agent hears of it: the items stand open again and nothing reaches the service", async () => {
+test("⌘Z takes a resolve back at the service whenever it is pressed, its toast or not, by each close's key: the items stand open again", async () => {
   const { page } = mount([], { toasts: true });
   await settle();
   const sent = takenCloses();
@@ -220,30 +216,29 @@ test("the Undo of a resolve takes it back before any agent hears of it: the item
   act(() => barButton(page, "Resolve").click());
   await settle();
 
-  const undo = newestToastAction() ?? assert.fail("the toast offers Undo");
-  assert.equal(undo.textContent, "Undo");
-  await act(async () => undo.click());
+  assert.equal(newestToastAction()?.textContent, "Undo", "the toast offers Undo");
+  await act(() => undoLast());
   await settle();
-  await letResolvesGo();
 
-  assert.deepEqual(sent, [], "the service never hears of it");
+  assert.equal(sent.closes.length, 2, "each close reached the service");
+  assert.deepEqual(sent.takenBack.toSorted(), [THRESHOLD.id, EXPIRY.id].toSorted());
   assert.ok(
     rowMenu(page, threshold).includes("Resolve") && rowMenu(page, expiry).includes("Resolve"),
     "both stand open again",
   );
 });
 
-test("an Undo the host does not hear says so rather than too late, and its Try again takes the resolve back", async () => {
+test("an Undo the service does not hear says so, and its Try again takes the resolve back", async () => {
   const { page } = mount([], { toasts: true });
   await settle();
   const sent = takenCloses();
-  // The first Undo's release fails on its way to the host, as a dropped act port does.
+  // The first Undo's take-back fails on its way to the host, as a dropped act port does.
   let dropped = false;
   const previous = fakeActsAnswer();
   fakeActs({
     ...appBridge(),
     act: (request: AnyAct): Promise<FakeActAnswer> => {
-      if (request.kind === ACT_KIND.AGENTS_INBOX_RELEASE && !dropped) {
+      if (request.kind === ACT_KIND.AGENTS_INBOX_TAKE_BACK && !dropped) {
         dropped = true;
         return Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "The act port closed." });
       }
@@ -261,9 +256,8 @@ test("an Undo the host does not hear says so rather than too late, and its Try a
   assert.equal(retry.textContent, "Try again");
   await act(async () => retry.click());
   await settle();
-  await letResolvesGo();
 
-  assert.deepEqual(sent, [], "the service never hears of it");
+  assert.deepEqual(sent.takenBack, [THRESHOLD.id], "the Try again takes it back");
   assert.ok(rowMenu(page, "Alert at 80%?").includes("Resolve"), "it stands open again");
 });
 

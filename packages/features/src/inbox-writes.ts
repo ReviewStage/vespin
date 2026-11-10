@@ -1,9 +1,10 @@
 /**
- * inbox-writes.ts -- what a member's nod, answer, or close leaves an inbox item as, so the host draws the write before the service answers it.
+ * inbox-writes.ts -- what a member's nod, answer, or close, or its take-back, leaves an inbox item as, so the host draws the write before the service answers it.
  *
  * Every function is pure over the item as a read holds it, and answers it
  * as the service will once it has taken the write: settled by the reader,
- * now, and read, its thread's open ask answered or withdrawn.
+ * now, and read, its thread's open ask answered or withdrawn; or, taken
+ * back, open again, the ask the reader's close withdrew open again.
  */
 
 import {
@@ -135,5 +136,31 @@ export function closedNow(
     settledAt: now,
     updatedAt: Math.max(item.updatedAt, now),
     unread: false,
+  };
+}
+
+/**
+ * The item as the reader's take-back of their own nod or close leaves it,
+ * before the service says how it stands: open again and waiting on them,
+ * and the ask their close withdrew, the latest withdrawn without a reason,
+ * open again.
+ */
+export function takenBackNow(item: InboxItem, now: number): InboxItem {
+  const askId = item.thread?.findLast(
+    (message) =>
+      message.ask?.status === INBOX_ASK_STATUS.WITHDRAWN &&
+      message.ask.withdrawnReason === undefined,
+  )?.id;
+  const thread = item.thread?.map((message) => {
+    if (message.id !== askId || message.ask === undefined) return message;
+    const { withdrawnAt: _at, withdrawnBy: _by, ...ask } = message.ask;
+    return { ...message, ask: { ...ask, status: INBOX_ASK_STATUS.OPEN } };
+  });
+  const { answeredBy: _answered, closedBy: _closed, settledAt: _settled, ...open } = item;
+  return {
+    ...open,
+    status: INBOX_STATUS.OPEN,
+    ...(thread === undefined || item.status !== INBOX_STATUS.CLOSED ? undefined : { thread }),
+    updatedAt: Math.max(item.updatedAt, now),
   };
 }
