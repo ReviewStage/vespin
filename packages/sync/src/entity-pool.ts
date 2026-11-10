@@ -1,7 +1,7 @@
 /**
  * entity-pool.ts -- every row the host's reads hold, once, by kind and key: each read stands on the keys it answered, and a write is drawn over a row once and reaches every read that holds it the moment it is asked.
  *
- * A kind is declared by its client (`EntityKind`): a row's key, and how a
+ * A kind is declared by its client (`RowKind`): a row's key, and how a
  * change of the kind is drawn over a row. The pool keeps each kind's rows in
  * one collection only sync writes (`synced-collection.ts`), made the first
  * time a read stands on the kind or a write names it, for as long as the pool
@@ -88,7 +88,7 @@ export const ROW_GONE: unique symbol = Symbol("the row is gone");
 export const QUEUE_BOUND = 200;
 
 /** A kind of row, as the client that reads it declares it. */
-export interface EntityKind<Row extends object, Change> {
+export interface RowKind<Row extends object, Change> {
   /** The row's key, its entity id. */
   readonly key: (row: Row) => string;
   /**
@@ -112,7 +112,7 @@ export type FieldChange<Row> = ((row: Row) => Partial<Row> | typeof ROW_GONE) | 
 /** A kind of plain rows, keyed by `key`, whose every change is a `FieldChange`. */
 export function fieldKind<Row extends object>(
   key: (row: Row) => string,
-): EntityKind<Row, FieldChange<Row>> {
+): RowKind<Row, FieldChange<Row>> {
   return {
     key,
     drawn: (change, row) => {
@@ -252,7 +252,7 @@ export interface QueuedEntry {
 
 /** One kind of write, as its client declares it: what it changes, from its input, and how it is sent. */
 export interface WriteDeclaration<Row extends object, Change, Input, Answer> {
-  readonly kind: EntityKind<Row, Change>;
+  readonly kind: RowKind<Row, Change>;
   /** The keys of the rows the write changes. */
   readonly keys: (input: Input) => readonly string[];
   /** The change drawn over each of them. */
@@ -298,7 +298,7 @@ export interface PoolOptions {
 export interface EntityPool {
   /** Stands `read` on `kind`'s rows for the caller's scope, holding none until it answers. */
   readonly stand: <Row extends object, Change>(
-    kind: EntityKind<Row, Change>,
+    kind: RowKind<Row, Change>,
     read: PoolRead<Row, Change>,
   ) => Effect.Effect<HeldRows<Row, Change>, never, Scope.Scope>;
   /**
@@ -313,7 +313,7 @@ export interface EntityPool {
   ) => Effect.Effect<Answer>;
   /** The row `key` names of `kind`, as the reads show it with every write standing drawn over it; none where no read holds it. */
   readonly row: <Row extends object, Change>(
-    kind: EntityKind<Row, Change>,
+    kind: RowKind<Row, Change>,
     key: string,
   ) => Row | undefined;
   /** The writes waiting for the service, oldest first, as they are kept. */
@@ -393,7 +393,7 @@ function movedTo(queue: Queue, waiting: readonly Waiting[]): Effect.Effect<void>
 
 /** One kind's rows, the reads standing on them, and the writes drawn over them. */
 interface KindRows<Row extends object, Change> {
-  readonly kind: EntityKind<Row, Change>;
+  readonly kind: RowKind<Row, Change>;
   readonly synced: SyncedCollection<Row, string>;
   readonly reads: Set<Holding<Row, Change>>;
   /** The writes drawn now, oldest first, each one entry so a change written twice stands twice. */
@@ -888,7 +888,7 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
     /** Each kind's rows, by the kind's own declaration. */
     const kinds = new Map<object, unknown>();
     const rowsOf = <Row extends object, Change>(
-      kind: EntityKind<Row, Change>,
+      kind: RowKind<Row, Change>,
     ): Effect.Effect<KindRows<Row, Change>> =>
       Effect.suspend(() => {
         // SAFETY: the map is keyed by the kind itself, so what it holds for `kind` is of `kind`'s row and change.
@@ -917,7 +917,7 @@ export function entityPool(options?: PoolOptions): Effect.Effect<EntityPool, nev
         Effect.flatMap(rowsOf(declaration.kind), (rows) =>
           written(rows, queue, declaration, input),
         ),
-      row: <Row extends object, Change>(kind: EntityKind<Row, Change>, key: string) => {
+      row: <Row extends object, Change>(kind: RowKind<Row, Change>, key: string) => {
         // SAFETY: the map is keyed by the kind itself, so what it holds for `kind` is of `kind`'s row and change.
         const rows = kinds.get(kind) as KindRows<Row, Change> | undefined;
         return rows === undefined ? undefined : drawnRow(rows, key);

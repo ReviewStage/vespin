@@ -41,12 +41,10 @@ import {
   inboxStartTitle,
   inboxThreadMessage,
   inboxTodoTicks,
-  openAskOf,
 } from "@repo/features/inbox-wire";
 import { MESSAGE_CHANNEL, THREAD_LINE_EVENT, type ThreadLineMetadata } from "@repo/wire";
 import type { LanguageModel } from "ai";
 import { Effect, Option } from "effect";
-import { SqlClient } from "effect/sql";
 import { type AccountResolving, controlsAgent } from "../agents/agent-reach.js";
 import {
   accountInboxPast,
@@ -73,7 +71,6 @@ import { logStoreFailure } from "../http/store-failure.js";
 import { accountMiddleware, hosted, writeReceiptMiddleware } from "../orpc/base.js";
 import { pushThreadSettled } from "../push/inbox-pushes.js";
 import { settleThreadDms } from "../slack/thread-dms.js";
-import { reopenAgentTaskFinished, settleAgentTaskIfFinished } from "../tasks/task-finish.js";
 import {
   acknowledgeInboxItem,
   answerInboxAsk,
@@ -146,16 +143,15 @@ function retiredRefusal(refusal: HostedRefusal): boolean {
 const NOD: InboxReply = { reply: INBOX_REPLY.ACKNOWLEDGED };
 
 /**
- * What an item of the agent's settling asks once it is: the agent's task
- * settled done where its work is finished, and the automation run it
- * belongs to archived where it finished well, since an item put away
+ * What an item of the agent's settling asks once it is: the automation run
+ * it belongs to archived where it finished well, since an item put away
  * unanswered wakes no agent and so no settle of its turn would; and the
  * phone of the member it waited on told, so its notification is removed.
  */
-function settledForAgent(userId: string, agentId: string, itemId: string) {
+function settledForAgent(agentId: string, itemId: string) {
   return Effect.andThen(
     afterResponse("a settled thread's push", pushThreadSettled(itemId)),
-    Effect.andThen(settleAgentTaskIfFinished(userId, agentId), reconsiderRunArchive(agentId)),
+    reconsiderRunArchive(agentId),
   );
 }
 
@@ -208,7 +204,7 @@ function agentHearing(userId: string, agentId: string) {
 /**
  * An answer taken, handed to its item's agent as the member's message under
  * the answer's key through the one steer path (`coder-host/steer.ts`), then
- * counted and the agent's task settled where the answer finished its work.
+ * counted.
  * A hand-off that fails, is interrupted, or dies takes the answer back, so
  * an item never reads answered while the agent was not told; an agent whose
  * session has ended for good can hear nothing again, so its item keeps the
@@ -252,9 +248,7 @@ const handedAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
   // Counted only once the hand-off stands, since a failed one withdraws the answer above.
   yield* counted;
   yield* afterResponse("an answered thread's Slack DM", settleThreadDms(itemId, chosen));
-  // The question settled may have finished the task's work, asked once the agent was told, so one
-  // woken by the answer reads as running (`tasks/task-finish.ts`).
-  yield* settledForAgent(userId, agentId, itemId);
+  yield* settledForAgent(agentId, itemId);
 });
 
 /**
@@ -302,7 +296,7 @@ const acknowledged = /* @__PURE__ */ Effect.fnUntraced(function* (
   const writtenIn = txid === undefined ? {} : { txid };
   if (!inboxAnswerHeard(taken, NOD)) {
     yield* counted;
-    yield* settledForAgent(userId, taken.agentId, itemId);
+    yield* settledForAgent(taken.agentId, itemId);
     return { item: taken, taken: true, ...writtenIn };
   }
   yield* handedAnswer(
@@ -389,7 +383,7 @@ export const answerAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   const reply = inboxAnswersReply(answers, text);
   if (!inboxAnswerHeard(item, reply, attachments)) {
     yield* counted;
-    yield* settledForAgent(userId, item.agentId, itemId);
+    yield* settledForAgent(item.agentId, itemId);
     return { item, outcome, ...writtenIn };
   }
   const message = inboxAnswerMessage(
@@ -502,7 +496,7 @@ export const closeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   const dmSettled = afterResponse("a closed thread's Slack DM", settleThreadDms(itemId));
   if (!taken.needsReply && !noted) {
     yield* dmSettled;
-    yield* settledForAgent(userId, taken.agentId, itemId);
+    yield* settledForAgent(taken.agentId, itemId);
     return { item: taken, taken: true, ...writtenIn };
   }
   const handedOver = Effect.gen(function* () {
@@ -536,22 +530,22 @@ export const closeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
     );
   }
   yield* dmSettled;
-  yield* settledForAgent(userId, taken.agentId, itemId);
+  yield* settledForAgent(taken.agentId, itemId);
   return { item: taken, taken: true, ...writtenIn };
 });
 
 /**
  * Takes back a member's own nod or close, Got it or Resolve, by the key it
  * went under, as their Undo asks, however long since: the item open again,
- * waiting on them as it did, its ask open again where the close withdrew
- * one, and the agent's task back in progress where that question's settle
- * let it finish. One its agent was told of, a notice that waits to hear back
+ * waiting on them as it did, and its ask open again where the close
+ * withdrew one. Note that its task's status stands, since a settle moves no
+ * task: its agents own it. One its agent was told of, a notice that waits to hear back
  * or a close that carried a note, is refused as told, since nothing takes a
  * message to an agent back; one the item no longer stands as it left, or a
  * key that named none of the member's, is refused as moved on. Each answers
  * the item as it then stands.
  */
-export const takeBackAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
+const takeBackAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   itemId: string,
   clientKey: string,
@@ -571,18 +565,7 @@ export const takeBackAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
     item.status === INBOX_STATUS.CLOSED
       ? withdrawInboxClose(userId, itemId, clientKey)
       : withdrawInboxAnswer(userId, itemId, clientKey);
-  // A question open again holds the task its settle let finish, as it held it before, in the take-back's own transaction, so one that cannot reopen it takes nothing back.
-  const reopened = yield* hostedStoreOrUnavailable(
-    Effect.flatMap(SqlClient.SqlClient, (client) =>
-      client.withTransaction(
-        Effect.tap(withdrawn, (taken) =>
-          Option.isSome(taken) && openAskOf(taken.value.thread ?? []) !== undefined
-            ? reopenAgentTaskFinished(userId, taken.value.agentId)
-            : Effect.void,
-        ),
-      ),
-    ),
-  );
+  const reopened = yield* hostedStoreOrUnavailable(withdrawn);
   if (Option.isNone(reopened)) {
     const now = yield* hostedStoreOrUnavailable(readInboxItem(userId, itemId));
     if (Option.isNone(now)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);

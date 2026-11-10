@@ -5,7 +5,7 @@ import {
   type AgentQueueChange,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
-import type { EntityKind, EntityPool, Refused, WriteDeclaration, Written } from "@repo/sync";
+import type { EntityPool, Refused, RowKind, WriteDeclaration, Written } from "@repo/sync";
 import { Effect, Equal, MutableHashMap, Option, type Scope } from "effect";
 import type { AppTranscript } from "./app-state.js";
 import { type CarriedWaits, carriedWaits, type HeldAnswers } from "./live-collection.js";
@@ -47,7 +47,7 @@ interface QueueRow {
 type QueueChange = (queue: AgentQueue) => AgentQueue;
 
 /** An agent's queue, by the agent's id, every change of it a queue it leaves; one no read answered is drawn nothing. */
-const AGENT_QUEUE: EntityKind<QueueRow, QueueChange> = {
+const AGENT_QUEUE: RowKind<QueueRow, QueueChange> = {
   key: (row) => row.agentId,
   drawn: (change, row) => {
     if (row === undefined) return undefined;

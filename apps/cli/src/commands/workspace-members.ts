@@ -7,14 +7,16 @@
  * workspace stood under stays its own, so a link written under it still
  * opens it. Both act in the workspace `-w`, `VESPIN_WORKSPACE`, or the
  * default names (`../workspace.js`), and the service decides who may.
+ * `namedMember` reads which member a command names, by account id or email.
  */
 
 import { HOSTED_API_ERROR } from "@repo/features";
+import { CLI_EXIT } from "@repo/features/cli-exit";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import { WORKSPACE_BOUNDS } from "@repo/features/workspace-wire";
 import { Effect } from "effect";
 import { Argument, Command } from "effect/cli";
-import { answer, columns } from "../output.js";
+import { answer, CommandFailed, columns } from "../output.js";
 import { askService, session } from "../session.js";
 import { resolveWorkspace } from "../workspace.js";
 
@@ -26,6 +28,31 @@ const SLUG_REFUSAL_WORDS = {
   [HOSTED_API_ERROR.WORKSPACE_SLUG_TAKEN]:
     "Another workspace holds or held that slug; choose another.",
 } as const;
+
+/**
+ * The member of the workspace a command names, by account id or by email in
+ * any case, as `workspaces.members` lists them; a usage failure listing the
+ * members where none matches.
+ */
+export const namedMember = (workspaceId: string, named: string) =>
+  Effect.gen(function* () {
+    const { hosted } = yield* session;
+    const { members } = yield* askService(hosted.workspaces.members, { workspaceId });
+    const email = named.toLowerCase();
+    const member = members.find((one) => one.userId === named || one.email.toLowerCase() === email);
+    if (member !== undefined) {
+      return { userId: member.userId, name: member.name, email: member.email, role: member.role };
+    }
+    return yield* new CommandFailed({
+      exit: CLI_EXIT.USAGE,
+      message: [
+        `${named} names no member of the workspace by account id or email. Its members:`,
+        ...columns(members.map((one) => [one.userId, one.role, `${one.name} <${one.email}>`])).map(
+          (line) => `  ${line}`,
+        ),
+      ].join("\n"),
+    });
+  });
 
 export const workspaceMembersCommand = Command.make("members", {}, () =>
   Effect.gen(function* () {

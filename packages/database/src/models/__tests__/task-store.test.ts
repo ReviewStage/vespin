@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { AGENT_ARCHIVER, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { AGENT_ARCHIVER } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
-import { INBOX_STATUS } from "@repo/features/inbox-wire";
 import { READ_MARK } from "@repo/features/read-mark";
 import {
   DESCRIPTION_ACTOR,
@@ -16,20 +15,12 @@ import { eq, inArray } from "drizzle-orm";
 import { Clock, Effect, Option, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
-import { agentTable, type StoredPullRequest } from "../../schemas/agent.js";
+import { agentTable } from "../../schemas/agent.js";
 import { user } from "../../schemas/auth.js";
-import { inboxItem } from "../../schemas/inbox.js";
 import { conversations } from "../../schemas/storage.js";
 import { task } from "../../schemas/task.js";
 import { taskPin } from "../../schemas/task-pin.js";
-import {
-  getTestDB,
-  joinWorkspace,
-  openedPullRequest,
-  openInboxItem,
-  openTaskAgent,
-  openWorkspace,
-} from "../../testing/index.js";
+import { getTestDB, joinWorkspace, openTaskAgent, openWorkspace } from "../../testing/index.js";
 import { archiveAgent, readAgent } from "../agent-store.js";
 import {
   archiveAgentOfDoneTask,
@@ -39,14 +30,12 @@ import {
   createTaskCommittedOnce,
   createTaskOnce,
   deleteTask,
-  finishTaskWork,
   listTasks,
   nameUntitledTask,
   readTask,
   readTaskDescription,
   readTaskHeader,
   readTaskWorkspace,
-  reopenFinishedTaskWork,
   saveDescriptionText,
   setTaskParent,
   TaskAssigneeNotMember,
@@ -1001,21 +990,6 @@ it.layer(getTestDB())("a task's work beginning", (it) => {
   );
 });
 
-/** A pull request as an agent's row keeps it, standing where `state` says. */
-const pullRequestIn = (state: StoredPullRequest["state"]): StoredPullRequest => ({
-  number: 42,
-  title: "Teammate invitations",
-  url: "https://github.com/acme/api/pull/42",
-  state,
-  checks: "passing",
-  additions: 10,
-  deletions: 2,
-  changedFiles: 1,
-});
-
-/** A guard reading every agent idle. */
-const everyoneIdle = () => Effect.succeed(true);
-
 /** A guard reading every agent idle but the one named, as an archive reads them. */
 const idleBut =
   (busy: string) =>
@@ -1030,156 +1004,6 @@ const archiveOf = (dean: string, agentId: string) =>
       Option.getOrUndefined,
     ),
   );
-
-it.layer(getTestDB())("a task's work finishing", (it) => {
-  it.effect(
-    "moves a task to done once an agent's pull request merged, none is open, no question waits, and every standing agent reads idle",
-    () =>
-      Effect.gen(function* () {
-        const { dean, charles, taskId, workspace } = yield* openSharedTask;
-        const merged = yield* openTaskAgent(dean, workspace, taskId);
-        const reader = yield* openTaskAgent(charles, workspace, taskId);
-        yield* beginTaskWork(dean, taskId);
-
-        // No merged pull request yet: the reader's row keeps none, the other's is still open.
-        yield* openedPullRequest(dean, merged, pullRequestIn(PULL_REQUEST_STATE.OPEN));
-        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), false);
-        assert.equal((yield* standingOf(dean, taskId)).status, TASK_STATUS.IN_PROGRESS);
-
-        // Merged, but the guard reads one standing agent at work, and sees only the standing ones.
-        yield* openedPullRequest(dean, merged, pullRequestIn(PULL_REQUEST_STATE.MERGED));
-        const seen: string[] = [];
-        const readerBusy = (agents: readonly { readonly id: string }[]) =>
-          Effect.sync(() => {
-            seen.push(...agents.map(({ id }) => id));
-            return !agents.some(({ id }) => id === reader);
-          });
-        assert.equal(yield* finishTaskWork(dean, taskId, readerBusy), false);
-        assert.deepEqual(seen.toSorted(), [merged, reader].toSorted());
-        assert.equal((yield* standingOf(dean, taskId)).status, TASK_STATUS.IN_PROGRESS);
-
-        // Everyone idle: done, and done once, stamped when it finished; the work taken up again clears the stamp.
-        yield* TestClock.adjust("1 minute");
-        const finishedAt = yield* Clock.currentTimeMillis;
-        assert.equal(yield* finishTaskWork(charles, taskId, everyoneIdle), true);
-        assert.equal((yield* standingOf(dean, taskId)).status, TASK_STATUS.DONE);
-        assert.equal((yield* listedTask(dean, taskId)).completedAt, finishedAt);
-        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), false);
-        assert.equal(yield* beginTaskWork(dean, taskId), true);
-        assert.equal((yield* listedTask(dean, taskId)).completedAt, undefined);
-      }),
-  );
-
-  it.effect(
-    "a task its finish moved to done goes back to in progress once reopened, once; one moved to Done by hand, and one the account does not reach, stand",
-    () =>
-      Effect.gen(function* () {
-        const { dean, taskId, workspace } = yield* openSharedTask;
-        const outsider = yield* openAccount;
-        const agent = yield* openTaskAgent(dean, workspace, taskId);
-        yield* openedPullRequest(dean, agent, pullRequestIn(PULL_REQUEST_STATE.MERGED));
-        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), true);
-
-        assert.equal(yield* reopenFinishedTaskWork(outsider, taskId), false);
-        assert.equal(yield* reopenFinishedTaskWork(dean, taskId), true);
-        assert.equal(yield* reopenFinishedTaskWork(dean, taskId), false);
-        assert.equal((yield* standingOf(dean, taskId)).status, TASK_STATUS.IN_PROGRESS);
-        assert.equal((yield* listedTask(dean, taskId)).completedAt, undefined);
-
-        const asDean = { by: AGENT_ARCHIVER.MEMBER, userId: dean } as const;
-        yield* updateTask(dean, taskId, { status: TASK_STATUS.DONE }, undefined, {
-          archivedBy: asDean,
-          idle: idleBut(""),
-        });
-        assert.equal(yield* reopenFinishedTaskWork(dean, taskId), false);
-        assert.equal((yield* standingOf(dean, taskId)).status, TASK_STATUS.DONE);
-      }),
-  );
-
-  it.effect(
-    "stays while a standing agent's pull request is open or a draft, an archived agent's counting for nothing either way, and while a question waits, a notice never blocking",
-    () =>
-      Effect.gen(function* () {
-        const { dean, taskId, workspace } = yield* openSharedTask;
-        const merged = yield* openTaskAgent(dean, workspace, taskId);
-        const drafting = yield* openTaskAgent(dean, workspace, taskId);
-        yield* openedPullRequest(dean, merged, pullRequestIn(PULL_REQUEST_STATE.MERGED));
-        yield* openedPullRequest(dean, drafting, pullRequestIn(PULL_REQUEST_STATE.DRAFT));
-
-        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), false);
-        yield* openedPullRequest(dean, drafting, pullRequestIn(PULL_REQUEST_STATE.OPEN));
-        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), false);
-
-        // Archived, the draft's agent is left out, and so would the merged one be.
-        yield* archiveAgent(dean, drafting, true);
-        yield* archiveAgent(dean, merged, true);
-        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), false);
-        yield* archiveAgent(dean, merged, false);
-
-        // A question open for the developer holds the task; a notice does not.
-        const question = yield* openInboxItem(dean, workspace, taskId, merged, true);
-        yield* openInboxItem(dean, workspace, taskId, merged, false);
-        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), false);
-        assert.equal((yield* standingOf(dean, taskId)).status, TASK_STATUS.TODO);
-        yield* Database.use((db) =>
-          db
-            .update(inboxItem)
-            .set({ status: INBOX_STATUS.ANSWERED })
-            .where(eq(inboxItem.id, question)),
-        );
-        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), true);
-        assert.equal((yield* standingOf(dean, taskId)).status, TASK_STATUS.DONE);
-      }),
-  );
-
-  it.effect(
-    "waits on a pull request an agent opened before its newest, the newest merged, until the older merged too",
-    () =>
-      Effect.gen(function* () {
-        const { dean, taskId, workspace } = yield* openSharedTask;
-        const agent = yield* openTaskAgent(dean, workspace, taskId);
-        const older = { ...pullRequestIn(PULL_REQUEST_STATE.OPEN), number: 41 };
-        yield* openedPullRequest(dean, agent, older);
-        yield* openedPullRequest(dean, agent, pullRequestIn(PULL_REQUEST_STATE.MERGED));
-        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), false);
-
-        yield* openedPullRequest(dean, agent, { ...older, state: PULL_REQUEST_STATE.MERGED });
-        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), true);
-      }),
-  );
-
-  it.effect(
-    "waits on a pull request an agent opened in a repository it works in beside its own, and is done once each merged or closed with one merged",
-    () =>
-      Effect.gen(function* () {
-        const { dean, taskId, workspace } = yield* openSharedTask;
-        const agent = yield* openTaskAgent(dean, workspace, taskId);
-        yield* openedPullRequest(dean, agent, pullRequestIn(PULL_REQUEST_STATE.MERGED));
-        yield* openedPullRequest(dean, agent, pullRequestIn(PULL_REQUEST_STATE.OPEN), "acme/web");
-        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), false);
-
-        yield* openedPullRequest(dean, agent, pullRequestIn(PULL_REQUEST_STATE.CLOSED), "acme/web");
-        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), true);
-        assert.equal((yield* standingOf(dean, taskId)).status, TASK_STATUS.DONE);
-      }),
-  );
-
-  it.effect(
-    "leaves a settled task, and one of a workspace the account is not in, as they stand",
-    () =>
-      Effect.gen(function* () {
-        const { dean, taskId, workspace } = yield* openSharedTask;
-        const outsider = yield* openAccount;
-        const merged = yield* openTaskAgent(dean, workspace, taskId);
-        yield* openedPullRequest(dean, merged, pullRequestIn(PULL_REQUEST_STATE.MERGED));
-
-        assert.equal(yield* finishTaskWork(outsider, taskId, everyoneIdle), false);
-        yield* updateTask(dean, taskId, { status: TASK_STATUS.CANCELED });
-        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), false);
-        assert.equal((yield* standingOf(dean, taskId)).status, TASK_STATUS.CANCELED);
-      }),
-  );
-});
 
 it.layer(getTestDB())("a task's move to Done or Canceled", (it) => {
   it.effect.each([TASK_STATUS.DONE, TASK_STATUS.CANCELED])(

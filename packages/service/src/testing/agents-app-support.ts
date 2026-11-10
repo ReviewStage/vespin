@@ -91,6 +91,7 @@ import { hostedFetch } from "../orpc/handler.js";
 import { PageLinks } from "../pages/page-links.js";
 import { modelCatalogOf, type OfferedModel } from "../providers/model-catalog.js";
 import type { WebServices } from "../runtime.js";
+import { SlackBot, slackBotOver } from "../slack/slack-bot.js";
 import { tasksProcedures } from "../tasks/tasks-procedures.js";
 import { AGENT_KEY_RING, connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
@@ -441,6 +442,7 @@ export const standing = (
       Layer.succeed(SentryApp, sentryAppService(undefined, [])),
       Layer.succeed(PageLinks, { sandbox: undefined }),
       pullRequestLinksLayer,
+      Layer.succeed(SlackBot, slackBotOver(undefined)),
       ANALYTICS.layer,
     );
     // Every account behind a bearer is signed in on a browser of its own too, whose cookie names it.
@@ -492,7 +494,7 @@ export const standing = (
     });
     yield* Effect.addFinalizer(() => Effect.promise(() => agents.dispose()));
     const memberMcp = HttpRouter.toWebHandler(
-      memberMcpApp(memberMcpBearers(bearers), MEMBER_MCP_AGENT_SANDBOX).pipe(
+      memberMcpApp(memberMcpBearers(bearers), MEMBER_MCP_AGENT_SANDBOX, seams.workspaces).pipe(
         HttpRouter.provideRequest(services),
       ),
       { disableLogger: true },

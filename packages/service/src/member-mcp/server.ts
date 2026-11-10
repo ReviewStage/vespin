@@ -24,6 +24,7 @@
 
 import { type CallToolResult, McpServer } from "@modelcontextprotocol/server";
 import type { DatabaseServices } from "@repo/database/core/query";
+import type { WorkspaceSeams } from "@repo/database/models/workspace-seams";
 import { LINK_ORIGIN } from "@repo/features/link-home";
 import { MEMBER_MCP_TOOL } from "@repo/features/member-mcp-tool";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -32,6 +33,7 @@ import type { Sandbox } from "@repo/sandbox";
 import type { WorkspaceExperiment } from "@repo/settings";
 import { Cause, type Context, Effect, Exit, type Layer, Schema } from "effect";
 import type { HttpClient } from "effect/http";
+import { WorkspacePlugin } from "../accounts/workspace-create.js";
 import type { AgentBrowser } from "../agents/browser/agent-browser.js";
 import { linkRuleWords } from "../agents/link-rule.js";
 import type { AgentSandbox } from "../agents/terminal/agent-sandbox.js";
@@ -62,10 +64,10 @@ const SERVER_INSTRUCTIONS =
 /** What a tool answers where it could not run: the words say nothing of why, which the log line does. */
 const TOOL_FAILED = "This tool could not run just now; try it again in a moment.";
 
-/** The services a tool's effect needs beyond the admitted member and an agent's sandbox, which the request's fiber hands over. */
+/** The services a tool's effect needs beyond the admitted member, an agent's sandbox and its browser, and the plugin's workspace writes, which the request's fiber hands over. */
 export type MemberMcpRequestServices = Exclude<
   MemberMcpServices,
-  AdmittedMember | AgentSandbox | AgentBrowser
+  AdmittedMember | AgentSandbox | AgentBrowser | WorkspacePlugin
 >;
 
 /** An agent's sandbox as the edge composes it (`../agents/terminal/agent-sandbox.ts`'s `agentSandboxLayer`), which its ports are listed and shared on, and the browser in it (`../agents/browser/agent-browser.ts`'s `agentBrowserServices`), which a tab is opened in. */
@@ -94,6 +96,7 @@ const TOOL_FAILED_RESULT: CallToolResult = {
 async function throughDoor(
   services: Context.Context<MemberMcpRequestServices>,
   agentSandbox: MemberMcpAgentSandbox,
+  workspaces: WorkspaceSeams,
   member: AdmittedMemberValues,
   name: string,
   work: Effect.Effect<MemberMcpToolResult, unknown, MemberMcpServices>,
@@ -107,6 +110,7 @@ async function throughDoor(
       ),
     ),
     Effect.provide(agentSandbox),
+    Effect.provideService(WorkspacePlugin, workspaces),
     Effect.provideService(AdmittedMember, member),
   );
   const exit = await Effect.runPromiseExitWith(services)(answered);
@@ -118,6 +122,7 @@ async function throughDoor(
 export function memberMcpServer(
   services: Context.Context<MemberMcpRequestServices>,
   agentSandbox: MemberMcpAgentSandbox,
+  workspaces: WorkspaceSeams,
   member: AdmittedMemberValues,
   experimentsOn: ReadonlySet<WorkspaceExperiment>,
 ): McpServer {
@@ -127,7 +132,8 @@ export function memberMcpServer(
     server.registerTool(
       tool.name,
       { ...listedMemberMcpTool(tool, experimentsOn), annotations: tool.annotations },
-      (input) => throughDoor(services, agentSandbox, member, tool.name, tool.run(input)),
+      (input) =>
+        throughDoor(services, agentSandbox, workspaces, member, tool.name, tool.run(input)),
     );
   }
   return server;

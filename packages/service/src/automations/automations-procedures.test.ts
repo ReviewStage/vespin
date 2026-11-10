@@ -1197,7 +1197,7 @@ it.layer(getTestDB())("the automation routes", (it) => {
             AUTOMATION_SCOPE.PERSONAL,
             [`${RELAY.owner}/${RELAY.name}`],
             { kind: AUTOMATION_TARGET.NEW_AGENT },
-            false,
+            true,
           ],
           "a new automation is its owner's, on its plan's repository, a new agent each run",
         );

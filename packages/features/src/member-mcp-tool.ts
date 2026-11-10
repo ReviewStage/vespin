@@ -15,8 +15,10 @@ import { AGENT_TOOL } from "./agent-tools.js";
 /** The tools by name, each the name a model calls it by. */
 export const MEMBER_MCP_TOOL = {
   LIST_WORKSPACES: "list_workspaces",
+  CREATE_WORKSPACE: "create_workspace",
   LIST_WORKSPACE_MEMBERS: "list_workspace_members",
   SET_WORKSPACE_SLUG: "set_workspace_slug",
+  SET_WORKSPACE_PHOTO: "set_workspace_photo",
   LIST_TASKS: AGENT_TOOL.LIST_TASKS,
   READ_TASK: AGENT_TOOL.READ_TASK,
   FIND_TASK: "find_task",
@@ -104,6 +106,11 @@ export const MEMBER_MCP_TOOL = {
   REVOKE_MCP_CLIENT: "revoke_mcp_client",
   LIST_SENTRY_INSTALLATIONS: "list_sentry_installations",
   DISCONNECT_SENTRY: "disconnect_sentry",
+  READ_SLACK_BOT: "read_slack_bot",
+  UPDATE_SLACK_BOT: "update_slack_bot",
+  DISCONNECT_SLACK_BOT: "disconnect_slack_bot",
+  LIST_REPOSITORY_PINS: "list_repository_pins",
+  PIN_REPOSITORY: "pin_repository",
 } as const;
 
 export type MemberMcpToolName = (typeof MEMBER_MCP_TOOL)[keyof typeof MEMBER_MCP_TOOL];

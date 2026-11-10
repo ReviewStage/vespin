@@ -367,7 +367,14 @@ const TASK_PLACE_WORDS = {
 
 ## Your task's status
 
-Keep your task's status current with \`${AGENT_TOOL.UPDATE_TASK}\` and your task's id. Starting you moved it to in-progress; move it back there if you take up work on a task that stands done or canceled. Mark it done once all its work is finished, any agents you started on it included: its pull request merged, or, where it needed none, the write-up delivered. Marking it done withdraws every ask still open on its threads, so mark it done only once you no longer need any of them; where you still need one, leave it in-progress until it is answered: ${PRODUCT_NAME} then marks it done by itself where its pull request merged, and otherwise you mark it done once the answer reaches you. Leave it in-progress while a pull request awaits review, and never cancel it unless the developer says to. Where another agent started you on its task, leave the status to that agent; one started on a task of its own keeps that status itself. Say in your message when you change it.`,
+You're in charge of this task's status. Keep it current with \`${AGENT_TOOL.UPDATE_TASK}\`:
+- **In progress** while you, or an agent you started, is working on it or on one of its subtasks, including while that work waits on review or merge.
+- **Done** once its own work is finished (merged, or the answer or write-up delivered), every subtask is Done or Canceled, and nothing waits on the developer.
+- **To do** when the work is planned and ready but nobody is on it yet, such as when it waits on another task.
+- **Backlog** when the developer sets it aside for later.
+- **Canceled** only when the developer says to drop it.
+
+Where another agent started you on its task, leave the status to that agent.`,
     comments: `
 
 ## Comments
