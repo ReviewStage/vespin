@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { SANDBOX_STATE } from "@repo/features/agent-sandbox-wire";
 import { AGENT_MACHINE, type AgentSummary } from "@repo/features/agent-wire";
 import { RUN_ON_MAC_OFF, type RunOnMacStanding } from "@repo/features/workspace-tools-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -64,7 +65,7 @@ async function settle(): Promise<void> {
 
 /** An agent's box drawn with `agent` while the beats stand as `ages` says, each device's age, or failed where none is given, and what the box then says; on a Mac whose Settings let no agent run commands where `never`. */
 async function placeOf(
-  agent: Pick<AgentSummary, "mac" | "machine">,
+  agent: Pick<AgentSummary, "mac" | "machine" | "sandbox">,
   ages: Readonly<Record<string, number>> | undefined,
   runOnMac?: RunOnMacStanding,
   never = false,
@@ -134,8 +135,15 @@ test("a device the account does not own, which the read does not name, shows its
   assert.equal(label, "Runs on: Charles's MacBook Air");
 });
 
-test("an agent in the cloud says Cloud, whatever the beats say", async () => {
-  assert.equal(await placeOf({}, undefined), "Runs on: Cloud");
+test("an agent in the cloud says Cloud and where its sandbox stands, off where none was recorded, whatever the beats say", async () => {
+  assert.equal(await placeOf({}, undefined), "Runs on: Cloud · Off");
+  const sandbox = {
+    state: SANDBOX_STATE.RUNNING,
+    stateAt: 0,
+    steps: [],
+    runsUntil: Date.now() + 60 * 60_000,
+  };
+  assert.equal(await placeOf({ sandbox }, undefined), "Runs on: Cloud · Running");
 });
 
 /** The `run_on_mac` row the cloud chip's card ends with, once rested on: whose its person chip names and what its dot says. */
@@ -160,7 +168,7 @@ test("a cloud agent's chip says to a reader, and its card shows, the reader's ow
   const runOnMac = { on: true, owner: { userId: READER, name: "Ada Lovelace" } } as const;
   assert.equal(
     await placeOf({}, undefined, runOnMac),
-    "Runs on: Cloud, run_on_mac on your Mac, Online",
+    "Runs on: Cloud · Off, run_on_mac on your Mac, Online",
   );
   assert.deepEqual(await runOnMacRowOf(runOnMac), ["You", "Online"]);
 });
