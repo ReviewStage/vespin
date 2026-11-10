@@ -203,6 +203,8 @@ const SAMPLE_VALUE = {
   soundWhen: SOUND_WHEN.BACKGROUND,
   // The chime is the default, so another sound is the choice that has to survive a reopen.
   completionSound: COMPLETION_SOUND.QUACK,
+  // The knock is the ask's default, so another sound is the choice that has to survive a reopen.
+  askSound: COMPLETION_SOUND.QUESTION,
   // Off is the default, so a notification turned on is the choice that has to survive a reopen.
   turnNotifications: true,
   // Unanswered is the default, so answers given in setup's survey are the state that has to survive a reopen.

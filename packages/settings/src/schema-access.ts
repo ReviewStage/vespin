@@ -66,6 +66,7 @@ export const ACCOUNT_PREFERENCE_FIELDS = [
   APP_SETTING_SCHEMA.setupPlace.field,
   APP_SETTING_SCHEMA.soundWhen.field,
   APP_SETTING_SCHEMA.completionSound.field,
+  APP_SETTING_SCHEMA.askSound.field,
   APP_SETTING_SCHEMA.turnNotifications.field,
   APP_SETTING_SCHEMA.onboardingSurvey.field,
 ] as const satisfies readonly AppSettingField[];
@@ -89,7 +90,7 @@ const ACCOUNT_PREFERENCE_FIELD_SET: ReadonlySet<string> = new Set(ACCOUNT_PREFER
 
 const SHARED_PREFERENCE_FIELD_SET: ReadonlySet<string> = new Set(SHARED_PREFERENCE_FIELDS);
 
-/** The preferences each riding a part of the snapshot of its own, named as the preference is: where the account's app links open, where its pull requests open, what Enter does in an agent's box while it works, who authors an agent's commits, whether the account finished setup, where it stands in setup, when and which sound plays as an agent finishes, whether a notification is posted, and what it answered in setup's survey. */
+/** The preferences each riding a part of the snapshot of its own, named as the preference is: where the account's app links open, where its pull requests open, what Enter does in an agent's box while it works, who authors an agent's commits, whether the account finished setup, where it stands in setup, when and which sound plays as an agent finishes, which plays as something needs the account, whether a notification is posted, and what it answered in setup's survey. */
 const OWN_PART_FIELDS = [
   APP_SETTING_SCHEMA.linkOpen.field,
   APP_SETTING_SCHEMA.pullRequestOpen.field,
@@ -99,6 +100,7 @@ const OWN_PART_FIELDS = [
   APP_SETTING_SCHEMA.setupPlace.field,
   APP_SETTING_SCHEMA.soundWhen.field,
   APP_SETTING_SCHEMA.completionSound.field,
+  APP_SETTING_SCHEMA.askSound.field,
   APP_SETTING_SCHEMA.turnNotifications.field,
   APP_SETTING_SCHEMA.onboardingSurvey.field,
 ] as const satisfies readonly AccountPreferenceField[];

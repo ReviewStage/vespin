@@ -19,14 +19,14 @@ import { SchemaSettingRows } from "./schema-rows.js";
 import { SlackNotificationsRow } from "./slack-notifications-row.js";
 
 /**
- * sounds-section.tsx -- the Preferences page's Notifications group: whether a sound plays as an agent the account started finishes or asks, and which one, whether a notification is posted then, which the account carries across its Macs and the web, and the reader's own Slack notifications.
+ * sounds-section.tsx -- the Preferences page's Notifications group: whether a sound plays as an agent the account started finishes or something needs it, which one for each, whether a notification is posted then, which the account carries across its Macs and the web, and the reader's own Slack notifications.
  *
- * Every row is the schema's (`soundWhen`, `completionSound`,
+ * Every row is the schema's (`soundWhen`, `completionSound`, `askSound`,
  * `turnNotifications`), drawn by `SchemaSettingRows` like every stored
- * setting, so the settings search finds them too; the sound's row stands
- * only while a sound plays at all. Beside its pop-up stands Play, the quiet
- * `IconButton`, which plays the chosen sound through `@repo/ui`'s player, as
- * an agent's finish would. Turning notifications on asks a browser to let
+ * setting, so the settings search finds them too; the sounds' rows stand
+ * only while a sound plays at all. Beside each sound's pop-up stands Play,
+ * the quiet `IconButton`, which plays the chosen sound through `@repo/ui`'s
+ * player, as an agent's finish or an ask would. Turning notifications on asks a browser to let
  * the site post them, in that press (`AppPlatform.askForNotifications`);
  * while they are on and the system will not show them, a line under the
  * switch says so, and on a Mac opens System Settings. Note that the switch is
@@ -57,11 +57,20 @@ export function SoundsSection({
   /** The account's workspaces, whose Slack bots decide whether Slack notifications stand. */
   workspaces: readonly Workspace[];
 }): React.JSX.Element {
-  const sound = view.settings.completionSound ?? APP_SETTING_DEFAULTS.completionSound;
+  const chosen = {
+    [APP_SETTING_SCHEMA.completionSound.field]:
+      view.settings.completionSound ?? APP_SETTING_DEFAULTS.completionSound,
+    [APP_SETTING_SCHEMA.askSound.field]: view.settings.askSound ?? APP_SETTING_DEFAULTS.askSound,
+  };
   const actions = (field: AppSettingField) =>
-    field === APP_SETTING_SCHEMA.completionSound.field ? (
+    field === APP_SETTING_SCHEMA.completionSound.field ||
+    field === APP_SETTING_SCHEMA.askSound.field ? (
       <Tooltip label={PLAY}>
-        <IconButton icon={<PlayIcon />} label={PLAY} onClick={() => playCompletionSound(sound)} />
+        <IconButton
+          icon={<PlayIcon />}
+          label={PLAY}
+          onClick={() => playCompletionSound(chosen[field])}
+        />
       </Tooltip>
     ) : undefined;
   // Note that the browser is asked in the press itself, because it refuses an ask nobody made.

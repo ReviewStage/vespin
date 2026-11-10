@@ -1,15 +1,18 @@
 /**
- * completion-sound.ts -- the ids of the sounds an agent's finish can chime, their groups, and the words each is shown under.
+ * completion-sound.ts -- the ids of the sounds an agent's finish or an ask can chime, their groups, and the words each is shown under.
  *
  * The ids live in the wire package because three sides name the same set:
- * `@repo/ui` synthesizes each one, the account stores the chosen one, and
- * Settings lists them. A stored id is never renamed, since an account
+ * `@repo/ui` synthesizes each one, the account stores the one chosen for a
+ * finish and the one chosen for an ask, and Settings lists them. A stored id is never renamed, since an account
  * remembers it by this spelling.
  */
 
 /** The sounds, in the order Settings and the catalog list them. */
 export const COMPLETION_SOUND = {
   CHIME: "chime",
+  DONE: "done",
+  KNOCK: "knock",
+  QUESTION: "question",
   PING: "ping",
   MARIMBA: "marimba",
   POP: "pop",
@@ -48,6 +51,9 @@ export const COMPLETION_SOUND_GROUP_LABEL = {
 /** The group each sound is listed under. */
 export const COMPLETION_SOUND_GROUP_OF = {
   [COMPLETION_SOUND.CHIME]: COMPLETION_SOUND_GROUP.SIMPLE,
+  [COMPLETION_SOUND.DONE]: COMPLETION_SOUND_GROUP.SIMPLE,
+  [COMPLETION_SOUND.KNOCK]: COMPLETION_SOUND_GROUP.SIMPLE,
+  [COMPLETION_SOUND.QUESTION]: COMPLETION_SOUND_GROUP.SIMPLE,
   [COMPLETION_SOUND.PING]: COMPLETION_SOUND_GROUP.SIMPLE,
   [COMPLETION_SOUND.MARIMBA]: COMPLETION_SOUND_GROUP.SIMPLE,
   [COMPLETION_SOUND.POP]: COMPLETION_SOUND_GROUP.SIMPLE,
@@ -66,6 +72,9 @@ export const COMPLETION_SOUND_GROUP_OF = {
 /** The name a sound is shown under. */
 export const COMPLETION_SOUND_LABEL = {
   [COMPLETION_SOUND.CHIME]: "Chime",
+  [COMPLETION_SOUND.DONE]: "Done",
+  [COMPLETION_SOUND.KNOCK]: "Knock",
+  [COMPLETION_SOUND.QUESTION]: "Question",
   [COMPLETION_SOUND.PING]: "Ping",
   [COMPLETION_SOUND.MARIMBA]: "Marimba",
   [COMPLETION_SOUND.POP]: "Pop",

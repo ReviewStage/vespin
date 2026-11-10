@@ -118,7 +118,11 @@ function fixture() {
         holding.push(next.tasks);
         failedRuns.push(next.failedRuns);
       },
-      sound: () => ({ when: soundWhen, sound: COMPLETION_SOUND.MARIMBA }),
+      sound: () => ({
+        when: soundWhen,
+        sound: COMPLETION_SOUND.MARIMBA,
+        askSound: COMPLETION_SOUND.KNOCK,
+      }),
       notify: () => notifying,
       taskName: (taskId) => (taskId === TASK_ID ? TASK_NAME : undefined),
       open: () => undefined,
@@ -787,7 +791,7 @@ it.effect.each([
 );
 
 it.effect(
-  "an item newly asking the account chimes, while what the first answer holds and a notice that asks nothing do not",
+  "an item newly asking the account chimes the ask sound, while what the first answer holds and a notice that asks nothing do not",
   () =>
     Effect.gen(function* () {
       const f = fixture();
@@ -808,7 +812,7 @@ it.effect(
       });
       yield* settled;
 
-      assert.deepEqual([before, f.chimes.length], [0, 1]);
+      assert.deepEqual([before, f.chimes], [0, [COMPLETION_SOUND.KNOCK]]);
     }),
 );
 
@@ -833,6 +837,33 @@ it.effect("ends inside one burst chime once, and an end after it chimes again", 
 
     assert.deepEqual([burst, f.chimes.length], [1, 2]);
   }),
+);
+
+it.effect(
+  "an ask inside a finish's burst chimes the ask sound, and a finish inside an ask's burst chimes nothing",
+  () =>
+    Effect.gen(function* () {
+      const f = fixture();
+      const notices = yield* f.notices;
+      f.playSound(SOUND_WHEN.ALWAYS);
+      f.answerInbox({ items: [], cursor: "1", readAt: READ_AT });
+      yield* settled;
+
+      notices.observeAgents([ownAgent(AGENT_STATUS.RUNNING)]);
+      notices.observeAgents([ownAgent(AGENT_STATUS.COMPLETED)]);
+      yield* TestClock.adjust(Duration.millis(300));
+      f.answerInbox({
+        items: [waitingItem(ITEM_A, { waitsOn: ACCOUNT_ID, asking: true })],
+        cursor: "2",
+        readAt: READ_AT,
+      });
+      yield* settled;
+      const id = "a1b2c3d4-0000-4000-8000-000000000021";
+      notices.observeAgents([ownAgent(AGENT_STATUS.RUNNING, { id })]);
+      notices.observeAgents([ownAgent(AGENT_STATUS.COMPLETED, { id })]);
+
+      assert.deepEqual(f.chimes, [COMPLETION_SOUND.MARIMBA, COMPLETION_SOUND.KNOCK]);
+    }),
 );
 
 it.effect.each([
