@@ -1,3 +1,4 @@
+import { CONNECTION_LOST_DETAIL } from "@repo/agent-runner/protocol";
 import type { AgentOwnerFacts } from "@repo/database/models/agent-owners";
 import {
   type Agent,
@@ -9,6 +10,7 @@ import {
 } from "@repo/database/models/agent-store";
 import type { Device } from "@repo/database/models/device-store";
 import type { StoredArchive, StoredAutomationOrigin } from "@repo/database/schemas/agent";
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { originSubjectsOf } from "@repo/features/agent-origin-live";
 import {
   agentStatusAt,
@@ -45,6 +47,7 @@ import { sandboxVcpus } from "@repo/features/sandbox-size";
 import { TURN_FAILURE, TURN_STATUS, type TurnFailure } from "../../core.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import { CODER_REFUSAL } from "./bounds.js";
+import { permissionModeOf } from "./permission-mode.js";
 
 /**
  * status.ts -- where a coding agent stands, read from its newest turn.
@@ -162,9 +165,10 @@ const LAUNCH_UNSTARTED_DETAIL = ", because of ";
 
 /**
  * The host's refusal sentences, a provider's words for a prompt past the
- * window, and the words of a run its host lost or a launch it settled
- * unstarted, a failed turn's detail may carry, by the word the wire says for
- * each. Note that those last two read as `other` rather than words of their
+ * window, the words of a run its host lost or a launch it settled
+ * unstarted, and the runner's words for a provider's host it waited for in
+ * vain (`@repo/agent-runner/protocol`'s `CONNECTION_LOST_DETAIL`), a failed
+ * turn's detail may carry, by the word the wire says for each. Note that those last two read as `other` rather than words of their
  * own, because a window reads `failureReason` as one of the words it knows
  * and an older build would refuse the whole page over a new one: `other`
  * reads there as a run that ended without saying why, rather than as the
@@ -201,6 +205,7 @@ export const FAILURE_WORDS: readonly (readonly [AgentFailure, readonly string[]]
     ],
   ],
   [AGENT_FAILURE.OTHER, [HOST_AWAY_DETAIL, LAUNCH_STOPPED_DETAIL]],
+  [AGENT_FAILURE.CONNECTION_LOST, Object.values(CONNECTION_LOST_DETAIL)],
 ];
 
 /**
@@ -438,6 +443,10 @@ function summaryFields(
     ...(agent.disabledServers.length === 0
       ? undefined
       : { disabledServers: agent.disabledServers }),
+    // Note that full access is said by saying nothing, as a service before modes did; the asks are the task list's to carry.
+    ...(permissionModeOf(agent) === AGENT_PERMISSION_MODE.FULL_ACCESS
+      ? undefined
+      : { permissionMode: permissionModeOf(agent) }),
     ...(starter === undefined ? undefined : { startedBy: { userId: agent.userId, name: starter } }),
     ...(agent.startedByAgentId === null ? undefined : { startedByAgentId: agent.startedByAgentId }),
     ...(agent.automationId === null ? undefined : { automationId: agent.automationId }),

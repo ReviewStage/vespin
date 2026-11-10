@@ -12,9 +12,10 @@
  * then the notices still open, then the settled ones, each the latest
  * changed first.
  *
- * An answer, a message, a close, and a new thread are the window's own
- * (`inbox/inbox-procedures.ts`'s `answerAsMember`, `messageAsMember`,
- * `closeAsMember`, and `startAsMember`), so each is written as the
+ * An answer, a Got it on a notice, a message, a close, and a new thread
+ * are the window's own (`inbox/inbox-procedures.ts`'s `answerAsMember`,
+ * `acknowledgeAsMember`, `messageAsMember`, `closeAsMember`, and
+ * `startAsMember`), so each is written as the
  * member's and handed to the thread's agent through the one steer path,
  * which wakes an idle agent as a message typed in its tab does, and a
  * hand-off that fails takes the write back. The member's own read state,
@@ -48,6 +49,7 @@ import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { ACTION_RESULT_STATUS, HOSTED_API_ERROR, type WireRecord } from "../core.js";
 import type { HostedRefusal } from "../http/http-effect.js";
 import {
+  acknowledgeAsMember,
   answerAsMember,
   closeAsMember,
   markReadAsMember,
@@ -61,6 +63,7 @@ import { INBOX_ASK_ANSWER, markInboxRead, workspaceInboxItems } from "../inbox/i
 export const MEMBER_INBOX_TOOL = {
   READ: MEMBER_MCP_TOOL.READ_INBOX,
   ANSWER: MEMBER_MCP_TOOL.ANSWER_ASK,
+  ACKNOWLEDGE: MEMBER_MCP_TOOL.ACKNOWLEDGE_THREAD,
   REPLY: MEMBER_MCP_TOOL.REPLY_TO_THREAD,
   CLOSE: MEMBER_MCP_TOOL.CLOSE_THREAD,
   MARK_READ: MEMBER_MCP_TOOL.MARK_THREAD_READ,
@@ -74,6 +77,8 @@ const MEMBER_INBOX_REFUSAL = {
   NO_THREAD: `Not done: the member reaches no such thread, or its agent no longer stands to hear it; ${MEMBER_INBOX_TOOL.READ} names their threads.`,
   NOT_OPEN: `Not answered: that ask no longer stands open, since it was answered, replaced by a newer ask, or withdrawn; ${MEMBER_INBOX_TOOL.READ} reads the thread as it stands.`,
   NOT_FITTING: (why: string) => `Not answered: ${why}`,
+  ASKING: `Not acknowledged: the thread holds an open ask, which only an answer settles; answer it with ${MEMBER_INBOX_TOOL.ANSWER}.`,
+  UNSEEN: `Not acknowledged: the thread's agent changed it since that revision, or it was answered or closed already; ${MEMBER_INBOX_TOOL.READ} reads it as it stands.`,
   MOVED: `Not closed: the thread's agent changed it since that revision, or it was answered or closed already; ${MEMBER_INBOX_TOOL.READ} reads it as it stands.`,
   NOT_PERMITTED:
     "Not done: the thread's agent runs on its starter's own GitHub token or plan, so only its starter's words reach it.",
@@ -211,6 +216,26 @@ export function answerAskAsMember(
       return accepted(answered.item, userId);
     }),
     Effect.catch((refusal) => Effect.succeed(refusedAs(refusal))),
+  );
+}
+
+/** The member's Got it on an open thread that holds no ask, at the revision read, handed to its agent where the notice asks to be heard back; refused where the thread holds an ask or moved on since. */
+export function acknowledgeThreadAsMember(
+  userId: string,
+  asked: { readonly threadId: string; readonly revision: number },
+) {
+  const sent = { revision: asked.revision, clientKey: randomUUID() };
+  return acknowledgeAsMember(WRITER, userId, asked.threadId, sent).pipe(
+    Effect.map(({ item, taken }) =>
+      taken ? accepted(item, userId) : agentToolRejected(MEMBER_INBOX_REFUSAL.UNSEEN),
+    ),
+    Effect.catch((refusal) =>
+      Effect.succeed(
+        refusal.error === HOSTED_API_ERROR.INVALID_REQUEST
+          ? agentToolRejected(MEMBER_INBOX_REFUSAL.ASKING)
+          : refusedAs(refusal),
+      ),
+    ),
   );
 }
 

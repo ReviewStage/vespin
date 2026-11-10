@@ -18,10 +18,14 @@ import { editorBundleLanded, installEditorLayout } from "../testing/composer.js"
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { chooseMenuItem } from "../testing/phone-head.js";
 import { PendingComment } from "./pending-comments.js";
-import { ThreadActions, ThreadWritesProvider } from "./pull-request-thread-actions.js";
+import {
+  ThreadReply,
+  ThreadWritesProvider,
+  useThreadControls,
+} from "./pull-request-thread-actions.js";
 
 /**
- * held-review-words.test.ts -- the words of a GitHub thread's reply and of a pending comment's edit survive Esc: the reply or the edit opened again brings them back, and sending or saving lets them go. The box is the real one, from its bundle; GitHub is the act port's answer. Synthetic thread and comment.
+ * held-review-words.test.ts -- the words of a GitHub thread's reply survive its box being drawn again, and those of a pending comment's edit survive Esc: the reply or the edit drawn again brings them back, and sending or saving lets them go. The box is the real one, from its bundle; GitHub is the act port's answer. Synthetic thread and comment.
  */
 
 const THREAD: ReviewThread = {
@@ -85,7 +89,12 @@ async function settle(): Promise<void> {
   });
 }
 
-/** The thread's controls and a pending comment, under one tab's provider. */
+/** The thread's reply, as a card draws it from the thread's controls. */
+function Thread(): React.JSX.Element | null {
+  return createElement(ThreadReply, { controls: useThreadControls(THREAD) });
+}
+
+/** The thread's reply and a pending comment, under one tab's provider. */
 function draw(): HTMLElement {
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
@@ -95,7 +104,7 @@ function draw(): HTMLElement {
         createElement(ThreadWritesProvider, {
           value: { agentId: "agent-1", onWritten: () => undefined },
           children: [
-            createElement(ThreadActions, { key: "thread", thread: THREAD }),
+            createElement(Thread, { key: "thread" }),
             createElement(PendingComment, {
               key: "pending",
               draft: PENDING,
@@ -156,18 +165,20 @@ function typeAtEnd(element: TiptapEditorHTMLElement, words: string): void {
   });
 }
 
-test("a reply typed and let go with Esc is there when Reply… opens again, and sending it lets the words go", async () => {
+test("a reply's words are there when its thread is drawn again, and sending it lets the words go", async () => {
+  draw();
+  typeAtEnd(box(document.body, "Reply"), "Fixed in the next commit");
+  act(() => root?.unmount());
+  document.body.innerHTML = "";
+
   const container = draw();
-
-  act(() => button(container, "Reply…").click());
-  typeAtEnd(box(container, "Reply"), "Fixed in the next commit");
-  await esc(box(container, "Reply"));
-  assert.equal(container.querySelector('.ProseMirror[aria-label^="Reply"]'), null, "Esc closes it");
-
-  act(() => button(container, "Reply…").click());
   assert.match(box(container, "Reply").textContent ?? "", /Fixed in the next commit/u);
 
-  act(() => button(container, "Reply").click());
+  act(() => {
+    box(container, "Reply").dispatchEvent(
+      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }),
+    );
+  });
   await settle();
   assert.deepEqual(changes, [
     {
@@ -176,8 +187,6 @@ test("a reply typed and let go with Esc is there when Reply… opens again, and 
       body: "Fixed in the next commit",
     },
   ]);
-
-  act(() => button(container, "Reply…").click());
   assert.equal(box(container, "Reply").textContent, "", "sent words are not brought back");
 });
 
@@ -210,17 +219,6 @@ test("a pending comment's edit typed and let go with Esc is there when Edit open
   );
 });
 
-test("Cancel, unlike Esc, lets a reply's words go", async () => {
-  const container = draw();
-
-  act(() => button(container, "Reply…").click());
-  typeAtEnd(box(container, "Reply"), "Never mind");
-  act(() => button(container, "Cancel").click());
-
-  act(() => button(container, "Reply…").click());
-  assert.equal(box(container, "Reply").textContent, "");
-});
-
 /** The kind of every change asked of GitHub so far. */
 function actionsSent(): string[] {
   return changes.map((change) => change.action);
@@ -235,7 +233,6 @@ test("Enter sends a reply and saves an edit, and Shift+Enter sends neither", asy
       );
     });
 
-  act(() => button(container, "Reply…").click());
   typeAtEnd(box(container, "Reply"), "Thanks");
   press(box(container, "Reply"), { key: "Enter", shiftKey: true });
   await settle();

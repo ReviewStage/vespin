@@ -14,7 +14,7 @@ import {
   type AutomationSummary,
 } from "@repo/features/automation-wire";
 import { INBOX_MESSAGE_AUTHOR, INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { pageFrameUrl } from "@repo/features/page-frame";
 import { PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
@@ -373,8 +373,14 @@ test("a link alone on its line to a page an agent with no plan showed stands as 
     shownBy: { kind: PAGE_SHOWER.AGENT, agentId: SWEEP_AGENT },
   };
   world.agentPages = new Map([[SWEEP_AGENT, [ledger]]]);
-  const shown = linkOf({ kind: LINK_PLACE.PAGE, agentId: SWEEP_AGENT, pageId: ledger.id }, "acme");
-  const hidden = linkOf({ kind: LINK_PLACE.PAGE, agentId: STRAY_AGENT, pageId: ledger.id }, "acme");
+  const shown = linkOf(
+    { kind: LINK_DESTINATION.PAGE, agentId: SWEEP_AGENT, pageId: ledger.id },
+    "acme",
+  );
+  const hidden = linkOf(
+    { kind: LINK_DESTINATION.PAGE, agentId: STRAY_AGENT, pageId: ledger.id },
+    "acme",
+  );
   const words = [shown, `[@Their ledger](${hidden})`].join("\n\n");
   world.agentInboxes = new Map([[SWEEP_AGENT, [saying(QUARANTINE, words)]]]);
   const waiting: AppInboxTasklessItem = {

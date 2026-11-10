@@ -1,4 +1,5 @@
 import { Schema as EffectSchema } from "effect";
+import { AGENT_PERMISSION_MODE, agentPendingApprovalSchema } from "./agent-approval-wire.js";
 import { agentStatusAt, type StatusTurn, statusClockEdge, turnStoppable } from "./agent-status.js";
 import {
   AGENT_BRIEF,
@@ -204,6 +205,10 @@ const agentLiveRowSchema = EffectSchema.Struct({
   deviceName: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
   /** Whether the agent's conversation records its sandbox's session; absent from a statement before it was carried. */
   sandboxOpen: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /** How the agent's tool calls are answered (`AGENT_PERMISSION_MODE`); absent from a statement before it was carried, which ran every agent on full access. */
+  permissionMode: EffectSchema.optionalKey(EffectSchema.String),
+  /** The tool calls the agent's runner holds for a member's answer, the oldest first; absent from a statement before they were carried. */
+  pendingApprovals: EffectSchema.optionalKey(EffectSchema.Array(agentPendingApprovalSchema)),
 });
 
 /**
@@ -497,6 +502,9 @@ function agentSummaryOf(
   const status = statusOf(row, now);
   const stoppable = status !== AGENT_STATUS.RUNNING || turnStoppable(turnOf(row));
   const runtime = NATIVE_AGENT_RUNTIMES.find((each) => each === row.runtime);
+  const permissionMode = Object.values(AGENT_PERMISSION_MODE).find(
+    (each) => each === row.permissionMode,
+  );
   const mac = macOf(row);
   const owner = agentOwnerOf({
     taskId: row.planId,
@@ -538,6 +546,12 @@ function agentSummaryOf(
     ...(started === undefined ? undefined : { runStartedAt: started }),
     ...(stoppable ? undefined : { stoppable: false }),
     ...(row.sandboxOpen === undefined ? undefined : { sandboxOpen: row.sandboxOpen }),
+    ...(permissionMode === undefined || permissionMode === AGENT_PERMISSION_MODE.FULL_ACCESS
+      ? undefined
+      : { permissionMode }),
+    ...(row.pendingApprovals === undefined || row.pendingApprovals.length === 0
+      ? undefined
+      : { pendingApprovals: row.pendingApprovals }),
   };
 }
 

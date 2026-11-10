@@ -2,6 +2,7 @@
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
 import { GITHUB_PATH, GOOGLE_MARK_LAYERS } from "@repo/brand/provider-marks";
 import type { ConfigContext, ExpoConfig } from "expo/config";
@@ -167,7 +168,10 @@ const withMarketingIcon = (config: ExpoConfig): ExpoConfig =>
 type ImageSource = { readonly FILE: string } | { readonly SVG: string };
 
 // Each of `IMAGE_SETS` as a vector image set of the asset catalog, its dark
-// appearance beside its light one where it has one.
+// appearance beside its light one where it has one, and each of Lucide's
+// glyphs `@repo/ui-native` draws (`LUCIDE_SYMBOL`) as a symbol set, a custom
+// SF Symbol from the brand's outlined template, so it sizes with Dynamic
+// Type, weighs with its text, and sits on its baseline as SF Symbols do.
 const withImageSets = (config: ExpoConfig): ExpoConfig =>
   withDangerousMod(config, [
     "ios",
@@ -200,6 +204,16 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
           },
         };
         writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
+      }
+      for (const { name, svg } of LUCIDE_SYMBOL_TEMPLATES) {
+        const symbolSet = join(catalog, `${name}.symbolset`);
+        mkdirSync(symbolSet, { recursive: true });
+        writeFileSync(join(symbolSet, `${name}.svg`), svg);
+        const contents = {
+          info: { author: "xcode", version: 1 },
+          symbols: [{ filename: `${name}.svg`, idiom: "universal" }],
+        };
+        writeFileSync(join(symbolSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
       }
       return modConfig;
     },

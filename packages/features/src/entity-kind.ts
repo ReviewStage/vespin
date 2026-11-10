@@ -1,8 +1,8 @@
 import {
   issueAddressOf,
-  LINK_PLACE,
-  type LinkPlace,
-  type LinkPlaceKind,
+  LINK_DESTINATION,
+  type LinkDestination,
+  type LinkDestinationKind,
   type NumberedAddress,
   pullRequestAddressOf,
 } from "./link-grammar.js";
@@ -14,12 +14,12 @@ import { TERM } from "./words.js";
  * entity-kind.ts -- every kind of entity the app names, and what the window calls each by now.
  *
  * An entity is named in words in two ways: a mention (`mention-link.ts`), a
- * plan, a file, an agent, a pull request's page, and a link to a place in
- * the app (`link-grammar.ts`), an Inbox item, an automation, a version of a
+ * plan, a file, an agent, a pull request's page, and a link to a destination
+ * in the app (`link-grammar.ts`), an Inbox item, an automation, a version of a
  * description. Both name some of the same entities, a plan, a section, a page, an
  * agent, a person, so `ENTITY_KIND` is the one list of them all, and a
- * mention or a place is read as the `Entity` it names (`entityOfMention`,
- * `entityOfPlace`) before anything draws it.
+ * mention or a destination is read as the `Entity` it names (`entityOfMention`,
+ * `entityOfDestination`) before anything draws it.
  *
  * What draws a kind is a table keyed by `ENTITY_KIND` and typed over each
  * kind's own `Entity`, never a switch with a default: a kind added here
@@ -46,34 +46,34 @@ const OWN_KIND = {
   WORKSPACE: "workspace",
 } as const;
 
-/** Every kind of entity the app names; a mention's and a place's kinds spelled as their own, which `Entity` holds them to. */
+/** Every kind of entity the app names; a mention's and a destination's kinds spelled as their own, which `Entity` holds them to. */
 export const ENTITY_KIND = {
   PLAN: MENTION_KIND.TASK,
   SECTION: MENTION_KIND.SECTION,
-  VERSION: LINK_PLACE.VERSION,
-  COMMENT: LINK_PLACE.COMMENT,
+  VERSION: LINK_DESTINATION.VERSION,
+  COMMENT: LINK_DESTINATION.COMMENT,
   PAGE: MENTION_KIND.PAGE,
   AGENT: MENTION_KIND.AGENT,
-  WORKER: LINK_PLACE.WORKER,
+  WORKER: LINK_DESTINATION.WORKER,
   APP: MENTION_KIND.APP,
-  CHANGES: LINK_PLACE.CHANGES,
+  CHANGES: LINK_DESTINATION.CHANGES,
   PULL_REQUEST: OWN_KIND.PULL_REQUEST,
-  PULL_REQUEST_THREAD: LINK_PLACE.PULL_REQUEST_THREAD,
+  PULL_REQUEST_THREAD: LINK_DESTINATION.PULL_REQUEST_THREAD,
   ISSUE: OWN_KIND.ISSUE,
   /** A page of an integration's, a Linear issue say, or of a well-known site. */
   LINK: MENTION_KIND.LINK,
-  MESSAGE: LINK_PLACE.MESSAGE,
-  HOME: LINK_PLACE.HOME,
+  MESSAGE: LINK_DESTINATION.MESSAGE,
+  HOME: LINK_DESTINATION.HOME,
   /** The workspace's Board, which the sidebar names Tasks. */
-  BOARD: LINK_PLACE.BOARD,
-  INBOX: LINK_PLACE.INBOX,
-  INBOX_ITEM: LINK_PLACE.INBOX_ITEM,
-  AUTOMATIONS: LINK_PLACE.AUTOMATIONS,
-  AUTOMATION: LINK_PLACE.AUTOMATION,
-  AUTOMATION_RUN: LINK_PLACE.AUTOMATION_RUN,
-  SETTINGS: LINK_PLACE.SETTINGS,
+  BOARD: LINK_DESTINATION.BOARD,
+  INBOX: LINK_DESTINATION.INBOX,
+  INBOX_ITEM: LINK_DESTINATION.INBOX_ITEM,
+  AUTOMATIONS: LINK_DESTINATION.AUTOMATIONS,
+  AUTOMATION: LINK_DESTINATION.AUTOMATION,
+  AUTOMATION_RUN: LINK_DESTINATION.AUTOMATION_RUN,
+  SETTINGS: LINK_DESTINATION.SETTINGS,
   PERSON: MENTION_KIND.PERSON,
-  ADMIN: LINK_PLACE.ADMIN,
+  ADMIN: LINK_DESTINATION.ADMIN,
   FILE: MENTION_KIND.FILE,
   FOLDER: MENTION_KIND.FOLDER,
   /** An MCP server. */
@@ -88,24 +88,24 @@ export const ENTITY_KIND = {
 
 export type EntityKind = (typeof ENTITY_KIND)[keyof typeof ENTITY_KIND];
 
-/** The places a mention names too, which are read as the mention's entity. */
-type SharedPlaceKind =
-  | typeof LINK_PLACE.TASK
-  | typeof LINK_PLACE.SECTION
-  | typeof LINK_PLACE.PAGE
-  | typeof LINK_PLACE.AGENT
-  | typeof LINK_PLACE.PERSON;
+/** The destinations a mention names too, which are read as the mention's entity. */
+type SharedDestinationKind =
+  | typeof LINK_DESTINATION.TASK
+  | typeof LINK_DESTINATION.SECTION
+  | typeof LINK_DESTINATION.PAGE
+  | typeof LINK_DESTINATION.AGENT
+  | typeof LINK_DESTINATION.PERSON;
 
 /**
  * An entity, by the ids that name it and nothing of its words: as a mention
- * names it, where one does, and as a link to its place does otherwise.
+ * names it, where one does, and as a link to its destination does otherwise.
  */
 export type Entity =
   | Exclude<Mention, { readonly kind: typeof MENTION_KIND.LINK }>
   | Extract<Mention, { readonly kind: typeof MENTION_KIND.LINK }>
   | { readonly kind: typeof OWN_KIND.PULL_REQUEST; readonly url: string }
   | { readonly kind: typeof OWN_KIND.ISSUE; readonly url: string }
-  | Exclude<LinkPlace, { readonly kind: SharedPlaceKind }>
+  | Exclude<LinkDestination, { readonly kind: SharedDestinationKind }>
   /** A skill, by the name an agent runs it by. */
   | { readonly kind: typeof OWN_KIND.SKILL; readonly name: string }
   /** A repository, `owner/name`. */
@@ -116,8 +116,8 @@ export type Entity =
 /** An entity of the kind given. */
 export type EntityOf<K extends EntityKind> = Extract<Entity, { readonly kind: K }>;
 
-/** A place of the kind given. */
-type PlaceOf<K extends LinkPlaceKind> = Extract<LinkPlace, { readonly kind: K }>;
+/** A destination of the kind given. */
+type DestinationOf<K extends LinkDestinationKind> = Extract<LinkDestination, { readonly kind: K }>;
 
 /** The names the window holds, each by the id the service minted it under. */
 export interface KnownNames {
@@ -337,46 +337,51 @@ export function entityWordHeard(kind: EntityKind, name: string): string | undefi
   return said && whole ? undefined : word;
 }
 
-/** A place the entity it names already is. */
+/** A destination the entity it names already is. */
 function asEntity<P extends Entity>(place: P): Entity {
   return place;
 }
 
-/** The entity each kind of place names. */
-const PLACE_ENTITY: { readonly [K in LinkPlaceKind]: (place: PlaceOf<K>) => Entity } = {
-  [LINK_PLACE.TASK]: (place) => ({ kind: ENTITY_KIND.PLAN, taskId: place.planId }),
-  [LINK_PLACE.SECTION]: (place) => ({
+/** The entity each kind of destination names. */
+const DESTINATION_ENTITY: {
+  readonly [K in LinkDestinationKind]: (place: DestinationOf<K>) => Entity;
+} = {
+  [LINK_DESTINATION.TASK]: (place) => ({ kind: ENTITY_KIND.PLAN, taskId: place.planId }),
+  [LINK_DESTINATION.SECTION]: (place) => ({
     kind: ENTITY_KIND.SECTION,
     taskId: place.planId,
     anchor: place.anchor,
   }),
-  [LINK_PLACE.PAGE]: (place) =>
+  [LINK_DESTINATION.PAGE]: (place) =>
     "planId" in place
       ? { kind: ENTITY_KIND.PAGE, taskId: place.planId, pageId: place.pageId }
       : { kind: ENTITY_KIND.PAGE, agentId: place.agentId, pageId: place.pageId },
   // Note that an older link naming the agent under its task names the agent alone, as its mention does.
-  [LINK_PLACE.AGENT]: (place) => ({ kind: ENTITY_KIND.AGENT, agentId: place.agentId }),
-  [LINK_PLACE.PERSON]: (place) => ({ kind: ENTITY_KIND.PERSON, userId: place.userId }),
-  [LINK_PLACE.COMMENT]: asEntity,
-  [LINK_PLACE.VERSION]: asEntity,
-  [LINK_PLACE.WORKER]: asEntity,
-  [LINK_PLACE.CHANGES]: asEntity,
-  [LINK_PLACE.PULL_REQUEST_THREAD]: asEntity,
-  [LINK_PLACE.MESSAGE]: asEntity,
-  [LINK_PLACE.HOME]: asEntity,
-  [LINK_PLACE.BOARD]: asEntity,
-  [LINK_PLACE.INBOX]: asEntity,
-  [LINK_PLACE.INBOX_ITEM]: asEntity,
-  [LINK_PLACE.AUTOMATIONS]: asEntity,
-  [LINK_PLACE.AUTOMATION]: asEntity,
-  [LINK_PLACE.AUTOMATION_RUN]: asEntity,
-  [LINK_PLACE.SETTINGS]: asEntity,
-  [LINK_PLACE.ADMIN]: asEntity,
+  [LINK_DESTINATION.AGENT]: (place) => ({ kind: ENTITY_KIND.AGENT, agentId: place.agentId }),
+  [LINK_DESTINATION.PERSON]: (place) => ({ kind: ENTITY_KIND.PERSON, userId: place.userId }),
+  [LINK_DESTINATION.COMMENT]: asEntity,
+  [LINK_DESTINATION.VERSION]: asEntity,
+  [LINK_DESTINATION.WORKER]: asEntity,
+  [LINK_DESTINATION.CHANGES]: asEntity,
+  [LINK_DESTINATION.PULL_REQUEST_THREAD]: asEntity,
+  [LINK_DESTINATION.MESSAGE]: asEntity,
+  [LINK_DESTINATION.HOME]: asEntity,
+  [LINK_DESTINATION.BOARD]: asEntity,
+  [LINK_DESTINATION.INBOX]: asEntity,
+  [LINK_DESTINATION.INBOX_ITEM]: asEntity,
+  [LINK_DESTINATION.AUTOMATIONS]: asEntity,
+  [LINK_DESTINATION.AUTOMATION]: asEntity,
+  [LINK_DESTINATION.AUTOMATION_RUN]: asEntity,
+  [LINK_DESTINATION.SETTINGS]: asEntity,
+  [LINK_DESTINATION.ADMIN]: asEntity,
 };
 
-/** A place read through its kind's own entry, which keeps the kind and the place it reads together. */
-function placeEntity<K extends LinkPlaceKind>(kind: K, place: PlaceOf<K>): Entity {
-  return PLACE_ENTITY[kind](place);
+/** A destination read through its kind's own entry, which keeps the kind and the destination it reads together. */
+function destinationEntity<K extends LinkDestinationKind>(
+  kind: K,
+  place: DestinationOf<K>,
+): Entity {
+  return DESTINATION_ENTITY[kind](place);
 }
 
 /** An entity's name read through its kind's own entry. */
@@ -402,9 +407,9 @@ export function entityOfMention(mention: Mention): Entity {
   return mention;
 }
 
-/** The entity a link to a place in the app names. */
-export function entityOfPlace(place: LinkPlace): Entity {
-  return placeEntity(place.kind, place);
+/** The entity a link to a destination in the app names. */
+export function entityOfDestination(place: LinkDestination): Entity {
+  return destinationEntity(place.kind, place);
 }
 
 /** What the window calls an entity now, by its kind's entry, and whether that wins over the words it was written with. */

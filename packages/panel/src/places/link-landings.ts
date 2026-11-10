@@ -14,7 +14,7 @@ import { savesStep } from "./window-steps.js";
  * an entry holding no step the window saved, once each. An entry holding a
  * step opens nothing, since going to it stands what it saved.
  */
-export function useLinkPlaceLandings(open: (link: ReadLink) => void): void {
+export function useLinkDestinationLandings(open: (link: ReadLink) => void): void {
   const router = useRouter();
   const { history } = router;
   const location = useSyncExternalStore(history.subscribe, () => history.location);

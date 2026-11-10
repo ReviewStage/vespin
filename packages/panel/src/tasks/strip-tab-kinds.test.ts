@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import {
   agentTab,
   changesTab,
@@ -181,7 +181,7 @@ describe("a strip tab's kind answers", () => {
       look: { kind: "subagent", name: "Subagent", model: undefined, state: "rest" },
       surface: PRODUCT_SURFACE.SUBAGENT,
       of: CALL,
-      link: { kind: LINK_PLACE.WORKER, agentId: AGENT, callId: CALL },
+      link: { kind: LINK_DESTINATION.WORKER, agentId: AGENT, callId: CALL },
       drawsAgain: false,
       reopens: true,
       endsSession: false,
@@ -217,7 +217,7 @@ describe("a strip tab's kind answers", () => {
       look: { kind: "changes", pullRequest: undefined },
       surface: PRODUCT_SURFACE.PULL_REQUEST,
       of: AGENT,
-      link: { kind: LINK_PLACE.CHANGES, agentId: AGENT },
+      link: { kind: LINK_DESTINATION.CHANGES, agentId: AGENT },
       drawsAgain: false,
       reopens: true,
       endsSession: false,
@@ -289,7 +289,7 @@ describe("a strip tab's kind answers", () => {
       look: { kind: "page", title: "Page" },
       surface: PRODUCT_SURFACE.PAGE,
       of: PAGE,
-      link: { kind: LINK_PLACE.PAGE, planId: TASK, pageId: PAGE },
+      link: { kind: LINK_DESTINATION.PAGE, planId: TASK, pageId: PAGE },
       drawsAgain: false,
       reopens: true,
       endsSession: false,

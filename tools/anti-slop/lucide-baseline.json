@@ -39,11 +39,9 @@
   "packages/panel/src/tasks/fork-action.tsx": 1,
   "packages/panel/src/tasks/inbox-pane.tsx": 1,
   "packages/panel/src/tasks/issue-mark.tsx": 1,
-  "packages/panel/src/tasks/lone-link-card.tsx": 1,
   "packages/panel/src/tasks/mention-picker.tsx": 1,
   "packages/panel/src/tasks/merge-box.tsx": 1,
   "packages/panel/src/tasks/minimized-threads.tsx": 1,
-  "packages/panel/src/tasks/page-card.tsx": 1,
   "packages/panel/src/tasks/description-pictures.tsx": 1,
   "packages/panel/src/tasks/pull-request-people.tsx": 1,
   "packages/panel/src/tasks/pull-request-pickers.tsx": 1,
@@ -52,8 +50,6 @@
   "packages/panel/src/tasks/pull-request-thread-actions.tsx": 1,
   "packages/panel/src/tasks/replay-card.tsx": 1,
   "packages/panel/src/tasks/reply-to-selection.tsx": 1,
-  "packages/panel/src/tasks/skill-ref.tsx": 1,
-  "packages/panel/src/tasks/tab-look.tsx": 1,
   "packages/panel/src/tasks/use-side-panel.ts": 1,
   "packages/panel/src/tasks/view-settings.tsx": 1
 }

@@ -12,7 +12,7 @@ import {
   GLYPH_STATE,
   type GlyphState,
 } from "@repo/features/glyph-state";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { type PageLine, type PagePlace, pagePlaceId } from "@repo/features/page-wire";
 import { cardTitle } from "@repo/features/plain-words";
@@ -2821,7 +2821,7 @@ export function SidePanel({
       const { declared, link } = address.routed;
       const { place } = link;
       if (declared !== LINK_ROUTED_PLACE.AGENT && declared !== LINK_ROUTED_PLACE.MESSAGE) return;
-      if (place.kind !== LINK_PLACE.AGENT && place.kind !== LINK_PLACE.MESSAGE) return;
+      if (place.kind !== LINK_DESTINATION.AGENT && place.kind !== LINK_DESTINATION.MESSAGE) return;
       if (heldIds === undefined || heldIds.includes(place.agentId)) return;
       onCarry();
     },

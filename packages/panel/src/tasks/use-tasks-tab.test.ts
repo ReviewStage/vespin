@@ -11,8 +11,8 @@ import {
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import {
-  LINK_PLACE,
-  type LinkPlace,
+  LINK_DESTINATION,
+  type LinkDestination,
   PULL_REQUEST_THREAD_VIEW,
   type PullRequestThreadView,
   type ReadLink,
@@ -71,7 +71,7 @@ import {
   PANEL_SPAN_ATTRIBUTE,
   type PanelSpan,
 } from "../panel-spans.js";
-import { useLinkPlaceLandings } from "../places/link-landings.js";
+import { useLinkDestinationLandings } from "../places/link-landings.js";
 import { useLinkReads } from "../places/link-reads.js";
 import { PLACE_BINDING, usePlaceArrivals, usePlaceBinding } from "../places/place-binding.js";
 import { type LeaveAsk, usePlaceLeave } from "../places/place-leave.js";
@@ -464,7 +464,7 @@ function mount(
     const adminView = useAdminView();
     adminStanding = here.place === ROUTED_PLACE.ADMIN ? adminView : undefined;
     // A link place the router lands on is read by its route and opened as its link is, as the window's root has it.
-    useLinkPlaceLandings(openLanded);
+    useLinkDestinationLandings(openLanded);
     // The place standing and the task bound follow each other, as the window's root keeps them.
     const tasks = control;
     usePlaceBinding({
@@ -1264,7 +1264,9 @@ test("a Vespin link naming a task by its number opens the task the service finds
   );
   const open = (planId: string) =>
     act(() =>
-      tab.control().onOpenLink({ workspace: "acme", place: { kind: LINK_PLACE.TASK, planId } }),
+      tab
+        .control()
+        .onOpenLink({ workspace: "acme", place: { kind: LINK_DESTINATION.TASK, planId } }),
     );
 
   open("42");
@@ -1961,7 +1963,7 @@ test("a Vespin link to an Inbox item opens it in the window's Inbox as it stands
   act(() =>
     tab.control().onOpenLink({
       workspace: "renamed-since",
-      place: { kind: LINK_PLACE.INBOX_ITEM, planId: alerts, itemId },
+      place: { kind: LINK_DESTINATION.INBOX_ITEM, planId: alerts, itemId },
     }),
   );
   const underTask = opened();
@@ -1970,7 +1972,7 @@ test("a Vespin link to an Inbox item opens it in the window's Inbox as it stands
   act(() =>
     tab.control().onOpenLink({
       workspace: "renamed-since",
-      place: { kind: LINK_PLACE.INBOX_ITEM, agentId: AGENT_ID, itemId: agentItemId },
+      place: { kind: LINK_DESTINATION.INBOX_ITEM, agentId: AGENT_ID, itemId: agentItemId },
     }),
   );
   await settle();
@@ -1978,7 +1980,7 @@ test("a Vespin link to an Inbox item opens it in the window's Inbox as it stands
   act(() =>
     tab.control().onOpenLink({
       workspace: "personal",
-      place: { kind: LINK_PLACE.AUTOMATION, automationId },
+      place: { kind: LINK_DESTINATION.AUTOMATION, automationId },
     }),
   );
 
@@ -2025,7 +2027,7 @@ test("a Vespin link to an Inbox item by its id alone opens it where the service 
   act(() =>
     tab.control().onOpenLink({
       workspace: "personal",
-      place: { kind: LINK_PLACE.INBOX_ITEM, itemId },
+      place: { kind: LINK_DESTINATION.INBOX_ITEM, itemId },
     }),
   );
   await settle();
@@ -2034,7 +2036,7 @@ test("a Vespin link to an Inbox item by its id alone opens it where the service 
   act(() =>
     tab.control().onOpenLink({
       workspace: "acme",
-      place: { kind: LINK_PLACE.INBOX_ITEM, itemId: unknownId },
+      place: { kind: LINK_DESTINATION.INBOX_ITEM, itemId: unknownId },
     }),
   );
   await settle();
@@ -2047,7 +2049,7 @@ test("a Vespin link to an Inbox item by its id alone opens it where the service 
   act(() =>
     tab.control().onOpenLink({
       workspace: "acme",
-      place: { kind: LINK_PLACE.INBOX_ITEM, itemId: unknownId },
+      place: { kind: LINK_DESTINATION.INBOX_ITEM, itemId: unknownId },
     }),
   );
   await settle();
@@ -2064,13 +2066,13 @@ test.each([
     "an Inbox item named by its id alone",
     ACT_KIND.AGENTS_INBOX_ITEM_HOME,
     { agentId: AGENT_ID, planId: "alerts", workspaceId: ACME.id },
-    { kind: LINK_PLACE.INBOX_ITEM, itemId: "5d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6" },
+    { kind: LINK_DESTINATION.INBOX_ITEM, itemId: "5d1e2f3a-4b5c-4d6e-8f70-819203a4b5c6" },
   ],
   [
     "a task named by its number",
     ACT_KIND.TASKS_FIND,
     { taskId: "alerts" },
-    { kind: LINK_PLACE.TASK, planId: "42" },
+    { kind: LINK_DESTINATION.TASK, planId: "42" },
   ],
   [
     "an agent named alone",
@@ -2085,11 +2087,11 @@ test.each([
         repository: null,
       },
     },
-    { kind: LINK_PLACE.AGENT, agentId: OTHER_TASK_ID },
+    { kind: LINK_DESTINATION.AGENT, agentId: OTHER_TASK_ID },
   ],
 ] as const)(
   "a link to %s whose read lands after an Inbox row was chosen leaves the row chosen",
-  async (_read, kind, answer, place: LinkPlace) => {
+  async (_read, kind, answer, place: LinkDestination) => {
     const answers: Array<() => void> = [];
     const tab = mount(
       { shown: true, tasks: TWO_WORKSPACES },
@@ -2177,7 +2179,7 @@ test("a task's Inbox door and its link narrow the Inbox to the task, an agent's 
   act(() =>
     tab.control().onOpenLink({
       workspace: "acme",
-      place: { kind: LINK_PLACE.INBOX, planId: "alerts" },
+      place: { kind: LINK_DESTINATION.INBOX, planId: "alerts" },
     }),
   );
   const linked = narrowedTo();
@@ -2202,7 +2204,7 @@ test("a Vespin link to a person opens their page in the workspace its slug names
   act(() =>
     tab.control().onOpenLink({
       workspace: "personal",
-      place: { kind: LINK_PLACE.PERSON, userId: "user-charles" },
+      place: { kind: LINK_DESTINATION.PERSON, userId: "user-charles" },
     }),
   );
 
@@ -2219,7 +2221,7 @@ test("a Vespin link whose slug names no workspace of the account's leaves the li
   act(() =>
     tab.control().onOpenLink({
       workspace: "someone-elses",
-      place: { kind: LINK_PLACE.AUTOMATION, automationId: OTHER_TASK_ID },
+      place: { kind: LINK_DESTINATION.AUTOMATION, automationId: OTHER_TASK_ID },
     }),
   );
 
@@ -2248,7 +2250,7 @@ test("a Vespin link to a task's version opens its version history on that versio
   act(() =>
     tab.control().onOpenLink({
       workspace: "acme",
-      place: { kind: LINK_PLACE.VERSION, planId: TASK.id, revision: 3 },
+      place: { kind: LINK_DESTINATION.VERSION, planId: TASK.id, revision: 3 },
     }),
   );
   await settle();
@@ -2256,7 +2258,7 @@ test("a Vespin link to a task's version opens its version history on that versio
   act(() =>
     tab.control().onOpenLink({
       workspace: "acme",
-      place: { kind: LINK_PLACE.TASK, planId: TASK.id },
+      place: { kind: LINK_DESTINATION.TASK, planId: TASK.id },
     }),
   );
   await settle();
@@ -2284,7 +2286,7 @@ test("a Vespin link to a version of a task the service will not hand the reader 
   act(() =>
     tab.control().onOpenLink({
       workspace: "someone-elses",
-      place: { kind: LINK_PLACE.VERSION, planId: OTHER_TASK_ID, revision: 3 },
+      place: { kind: LINK_DESTINATION.VERSION, planId: OTHER_TASK_ID, revision: 3 },
     }),
   );
   tab.stand({ tasks: { ...OPEN, activeTaskId: OTHER_TASK_ID } });
@@ -2602,7 +2604,9 @@ test("the Inbox opens on nothing chosen, from its row and from a link, whatever 
   act(() => inboxDoorNow().open());
   const fromRow = inboxNow().chosen;
   choose();
-  act(() => tab.control().onOpenLink({ workspace: "acme", place: { kind: LINK_PLACE.INBOX } }));
+  act(() =>
+    tab.control().onOpenLink({ workspace: "acme", place: { kind: LINK_DESTINATION.INBOX } }),
+  );
   const fromLink = inboxNow().chosen;
 
   assert.equal(fromRow, undefined);
@@ -2645,7 +2649,9 @@ test("a start refused that was pressed on the page saying a workspace is not the
     { [ACT_KIND.TASKS_START]: () => new Promise((resolve) => answers.push(resolve)) },
   );
   await settleQueries();
-  act(() => tab.control().onOpenLink({ workspace: "ghost", place: { kind: LINK_PLACE.HOME } }));
+  act(() =>
+    tab.control().onOpenLink({ workspace: "ghost", place: { kind: LINK_DESTINATION.HOME } }),
+  );
   const handed = {
     idempotencyKey: AGENT_KEY,
     prompt: "Sweep the tests.",
@@ -4117,7 +4123,7 @@ test("New task's agent start refused after its page opened opens the card again 
   act(() =>
     tab.control().onOpenLink({
       workspace: "acme",
-      place: { kind: LINK_PLACE.VERSION, planId: TASK.id, revision: 3 },
+      place: { kind: LINK_DESTINATION.VERSION, planId: TASK.id, revision: 3 },
     }),
   );
   assert.equal(tab.control().history.open, true);

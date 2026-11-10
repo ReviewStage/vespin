@@ -265,7 +265,7 @@ const handedAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
  * whose session has ended for good can hear nothing again, so its notice
  * keeps the nod rather than waiting on the developer for ever.
  */
-const acknowledged = /* @__PURE__ */ Effect.fnUntraced(function* (
+export const acknowledgeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   writer: Effect.Effect<StoreWriter>,
   userId: string,
   itemId: string,
@@ -787,7 +787,7 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
     answer: signedIn.answer.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
       const itemId = yield* pathUuid(input.params.id);
       const { revision, clientKey } = input.body;
-      return yield* acknowledged(writer, context.userId, itemId, {
+      return yield* acknowledgeAsMember(writer, context.userId, itemId, {
         revision,
         clientKey,
       });

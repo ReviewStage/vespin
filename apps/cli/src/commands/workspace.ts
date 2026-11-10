@@ -22,7 +22,16 @@ import {
   workspaceLeaveCommand,
   workspaceTransferCommand,
 } from "./workspace-leave.js";
-import { workspaceMembersCommand, workspaceSlugCommand } from "./workspace-members.js";
+import {
+  workspaceInvitationsCommand,
+  workspaceInviteCommand,
+  workspaceMembersCommand,
+  workspaceRemoveCommand,
+  workspaceRenameCommand,
+  workspaceRoleCommand,
+  workspaceSlugCommand,
+  workspaceUninviteCommand,
+} from "./workspace-members.js";
 import { workspacePhotoCommand } from "./workspace-photo.js";
 
 /** A config file this version could not read or write, as the command's failure. */
@@ -109,6 +118,12 @@ export const workspaceCommand = Command.make("workspace").pipe(
     useCommand,
     createCommand,
     workspaceMembersCommand,
+    workspaceRemoveCommand,
+    workspaceRoleCommand,
+    workspaceInvitationsCommand,
+    workspaceInviteCommand,
+    workspaceUninviteCommand,
+    workspaceRenameCommand,
     workspaceSlugCommand,
     workspacePhotoCommand,
     workspaceLeaveCommand,

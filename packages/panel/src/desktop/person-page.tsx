@@ -7,7 +7,7 @@ import {
 import { AUTOMATION_SCOPE, type AutomationSummary } from "@repo/features/automation-wire";
 import { INBOX_HOLDER, NEEDS_YOU, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { inboxWaitsOn } from "@repo/features/inbox-wire";
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ASSIGNED_TO } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
@@ -386,7 +386,8 @@ function PersonActions({
     (workspace.role === WORKSPACE_ROLE.OWNER || workspace.role === WORKSPACE_ROLE.ADMIN);
   const email = member?.email;
   const slug = linkWorkspaceOf(tasks, standing);
-  const link = slug === undefined ? undefined : linkOf({ kind: LINK_PLACE.PERSON, userId }, slug);
+  const link =
+    slug === undefined ? undefined : linkOf({ kind: LINK_DESTINATION.PERSON, userId }, slug);
   const showTasks = you ? "Show my tasks in the sidebar" : "Show their tasks in the sidebar";
   const copies = [
     ...(link === undefined ? [] : linkItems(copy, link)),
@@ -491,8 +492,11 @@ function AutomationRow({
   const trigger = automationTriggerText(automation.trigger, automation.repositories ?? []);
   const state = STANDING_GLYPH[automationRunStanding(automation.lastRun)];
   const nextWords = automationNextText(automation, now);
-  const links = useLinkItems()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
-  const openInTab = useOpenInTab()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
+  const links = useLinkItems()({ kind: LINK_DESTINATION.AUTOMATION, automationId: automation.id });
+  const openInTab = useOpenInTab()({
+    kind: LINK_DESTINATION.AUTOMATION,
+    automationId: automation.id,
+  });
   const coarse = useCoarsePointer();
   return (
     <RowHintOptions card={<AutomationCard automation={automation} workspaceName={workspaceName} />}>

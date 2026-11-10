@@ -77,6 +77,10 @@ export const NATIVE_MOMENT = {
   NOTED: "noted",
   /** The plan's limit refused the harness, until when where it says; `refused` false is the limit lifting. */
   RATE_LIMIT: "rate_limit",
+  /** The harness could not reach the model's provider after its own retries, and the runner probes the provider's host for it (`@repo/agent-runner`'s `reconnect.ts`): the turn waits, still under way. */
+  CONNECTION_LOST: "connection_lost",
+  /** The provider's host answered the runner again: the turn goes on, by a carry-on line the service sends where `carryOn` asks for one. */
+  CONNECTION_RESTORED: "connection_restored",
   /** How much of its usage window the plan has used, as the harness last reported it. */
   PLAN_USAGE: "plan_usage",
   /**
@@ -173,6 +177,13 @@ export type NativeMoment =
     }
   | { readonly kind: typeof NATIVE_MOMENT.PLAN; readonly status: PlanStatus }
   | { readonly kind: typeof NATIVE_MOMENT.WAITING }
+  | { readonly kind: typeof NATIVE_MOMENT.CONNECTION_LOST; readonly host: string }
+  | {
+      readonly kind: typeof NATIVE_MOMENT.CONNECTION_RESTORED;
+      readonly host: string;
+      /** Whether the runner asks for a carry-on line, no line of the service's having gone next instead. */
+      readonly carryOn: boolean;
+    }
   | {
       readonly kind: typeof NATIVE_MOMENT.ENDED;
       readonly ending: NativeEnding;

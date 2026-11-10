@@ -29,7 +29,7 @@ import {
   AUTOMATION_TRIGGER,
   type AutomationSummary,
 } from "@repo/features/automation-wire";
-import { LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { pageFrameUrl } from "@repo/features/page-frame";
 import { PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
@@ -626,7 +626,7 @@ test("a fork's draft on the page names its source's message, whose press opens i
 
   assert.deepEqual(
     links.map((link) => link.place),
-    [{ kind: LINK_PLACE.MESSAGE, agentId: AGENT_ID, messageId: "answer" }],
+    [{ kind: LINK_DESTINATION.MESSAGE, agentId: AGENT_ID, messageId: "answer" }],
   );
   assert.equal(
     page.querySelector(`.desktop-agent section[aria-label="${TAB_WORDS.NEW_AGENT}"]`),
@@ -900,7 +900,7 @@ test("an agent on a task, an archived one's page among them, opens on its descri
   act(() => named.click());
   assert.deepEqual(
     links.map((link) => link.place),
-    [{ kind: LINK_PLACE.TASK, planId: PAGE_TASK }],
+    [{ kind: LINK_DESTINATION.TASK, planId: PAGE_TASK }],
   );
 });
 

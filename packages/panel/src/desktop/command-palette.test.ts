@@ -855,12 +855,12 @@ test("an archived agent of the open task is still found, after the standing ones
     "Inbox · Billing usage alerts",
     "Invoice export · Billing usage alerts",
     "New browser tab · Billing usage alerts",
-    "Refund export · Archived · Billing usage alerts",
+    "Refund export · Billing usage alerts · Archived",
   ]);
 
   type("refund");
-  assert.deepEqual(rows(), ["Refund export · Archived · Billing usage alerts"]);
-  press("Refund export · Archived · Billing usage alerts");
+  assert.deepEqual(rows(), ["Refund export · Billing usage alerts · Archived"]);
+  press("Refund export · Billing usage alerts · Archived");
   assert.deepEqual(shown, ["plan-1:agent-8"]);
 });
 
@@ -2891,7 +2891,7 @@ test("the Inbox searched lists what needs you first, each item beside its task",
   );
 });
 
-test("an Inbox item is the Inbox's own row: its agent's tile, the marks of its Inbox row and its time at its end, and its card hung beside it", async () => {
+test("an Inbox item is the Inbox's own row: the marks of its Inbox row and its time at its end, and its card hung beside it", async () => {
   paletteOverInbox({ items: [PREVIEWS, ROTATE] });
   chooseFilter("Inbox");
   await settle();
@@ -2901,7 +2901,6 @@ test("an Inbox item is the Inbox's own row: its agent's tile, the marks of its I
   );
   const [needs, answered] = [...document.querySelectorAll<HTMLElement>('[role="option"]')];
   assert.ok(needs, "the item that needs you is listed");
-  assert.ok(needs.querySelector('.actor-mark[data-kind="agent"]'), "the agent's tile leads");
   assert.match(
     needs.querySelector(".ui-combobox-option-hint")?.textContent ?? "",
     /Needs you/u,

@@ -9,10 +9,16 @@ export {
   type ButtonLook,
   type ButtonSize,
   Chip,
+  FieldChip,
+  type Scope,
+  ScopePills,
+  StatusChip,
 } from "./button.js";
 export { type Choice, ChoiceList } from "./choice-list.js";
+export { Composer } from "./composer.js";
 export { EmptyState } from "./empty-state.js";
 export { GlassBar } from "./glass-bar.js";
+export { type Glyph, isLucideSymbol, type LucideSymbol } from "./glyph.js";
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 export {
   ListRow,
@@ -23,7 +29,7 @@ export {
 } from "./list-row.js";
 export { Markdown, type MarkdownPlace, type MarkdownVideo, Picture } from "./markdown.js";
 export { MarkdownPage } from "./markdown-page.js";
-export { AgentTile, Avatar, TaskStatusMark, UnreadDot } from "./marks.js";
+export { AgentTile, Avatar, TaskStatusMark, ToneGlyph, UnreadDot } from "./marks.js";
 export { monogramOf } from "./monogram.js";
 export { PageHeader } from "./page-header.js";
 export {
@@ -31,6 +37,7 @@ export {
   ProviderButton,
   type ProviderMarkAsset,
 } from "./provider-button.js";
+export { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 export { LIST_LOOK, type ListLook, ListSection, RowList } from "./row-list.js";
 export { Screen, Spacer } from "./screen.js";
 export {
@@ -45,6 +52,7 @@ export type { SfSymbol } from "./sf-symbol.js";
 export { type BarAction, type BarMenu, type BarSearch, SplitView } from "./split-view.js";
 export { STATUS_MARK_LABEL, STATUS_MARK_LOOK } from "./status-mark-model.js";
 export {
+  PATH_PART,
   THREAD_MEDIA,
   type ThreadMedia,
   type ThreadMessage,
@@ -58,5 +66,7 @@ export {
   toneColor,
   useColors,
 } from "./tokens/colors.js";
+export { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 export { MARK_SIZE, SPACE } from "./tokens/space.js";
+export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 export { Video } from "./video.js";

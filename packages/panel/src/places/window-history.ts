@@ -140,7 +140,12 @@
  * as a move along the history stands the step it lands on.
  */
 
-import { LINK_PLACE, type ReadLink, taskLinkStep, withTaskId } from "@repo/features/link-grammar";
+import {
+  LINK_DESTINATION,
+  type ReadLink,
+  taskLinkStep,
+  withTaskId,
+} from "@repo/features/link-grammar";
 import { PANEL_PATH } from "@repo/features/link-home";
 import { type HistoryLocation, type RouterHistory, useRouter } from "@tanstack/react-router";
 import {
@@ -935,7 +940,7 @@ export function useWindowHistory(input: {
     const workspace = home?.slug ?? home?.id ?? task?.workspaceId;
     if (boundFor === undefined || workspace === undefined) return undefined;
     const planId = task === undefined ? boundFor : taskLinkStep(task);
-    return addressOf({ workspace, place: { kind: LINK_PLACE.TASK, planId } });
+    return addressOf({ workspace, place: { kind: LINK_DESTINATION.TASK, planId } });
   }, [linkedStands, linked, input.link, tasks.tasks, tasks.workspace, tasks.workspaces, boundFor]);
   // Note that a link's address stands only until its task opens with its own link drawn, or another task is bound for.
   const linkedDone = linked !== undefined && !linkedStands;
@@ -1160,7 +1165,7 @@ export function useWindowHistory(input: {
       // A narrow room's side panel is a step of its own, which its tab's link names where it has one (`links-at-hand.ts`).
       const panelLink =
         narrow && side?.link !== undefined ? withTaskId(side.link, at.task) : undefined;
-      const place = panelLink ?? { kind: LINK_PLACE.TASK, planId: at.task };
+      const place = panelLink ?? { kind: LINK_DESTINATION.TASK, planId: at.task };
       const address = addressOf({ workspace: at.workspace, place });
       const wrote = visit(
         taskPlace(address, {

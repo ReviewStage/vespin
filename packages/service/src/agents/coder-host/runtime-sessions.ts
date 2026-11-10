@@ -29,6 +29,7 @@
  * (`RUNTIME_REFUSAL.NOT_HERE`).
  */
 
+import type { INPUT_LINE, InputLine } from "@repo/agent-runner/protocol";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { readAgentHeaderOfConversation, readAgentRouting } from "@repo/database/models/agent-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
@@ -74,6 +75,21 @@ export const RUNNER_CHOICE = {
 
 export type RunnerChoice = (typeof RUNNER_CHOICE)[keyof typeof RUNNER_CHOICE];
 
+/** A member's answer to an ask as the runner's input line names it. */
+export type ApprovalLine = Extract<InputLine, { readonly type: typeof INPUT_LINE.APPROVAL }>;
+
+/** What a member's answer to an ask came to at the agent's runner (`runnerApprovalAnswered`). */
+export const RUNNER_ANSWER = {
+  /** The `approval` line was written to the runner, which hands it to the call it holds. */
+  WRITTEN: "written",
+  /** No runner of the agent runs now, so none holds the ask. */
+  NOT_LIVE: "not_live",
+  /** The runner could not be reached just now; the ask still waits. */
+  FAILED: "failed",
+} as const;
+
+export type RunnerAnswer = (typeof RUNNER_ANSWER)[keyof typeof RUNNER_ANSWER];
+
 /** What a repository added beside a native agent's own came to at the place it runs in. */
 export const RUNNER_CHECKOUT = {
   /** The credential was set for the whole set and the repository cloned into the running place. */
@@ -105,6 +121,12 @@ export type TurnHandover = (typeof TURN_HANDOVER)[keyof typeof TURN_HANDOVER];
 export interface NativeSessions<Turn extends SessionTurn = SessionTurn>
   extends AgentSessions<Turn> {
   readonly retune: (sessionId: string, conversationId: string) => Effect.Effect<RunnerChoice>;
+  /** A member's answer to an ask written to the session's runner as an `approval` line, the way its messages go (`runner-sessions.ts`); not live where no runner runs. */
+  readonly answer: (
+    sessionId: string,
+    conversationId: string,
+    line: ApprovalLine,
+  ) => Effect.Effect<RunnerAnswer>;
   /** The agent's credential set afresh for every repository it works in and each one the running place does not hold cloned there (`runner-sessions.ts`); not live where no place runs. */
   readonly checkOut: (sessionId: string, conversationId: string) => Effect.Effect<RunnerCheckout>;
   /** The session's runner ended, keeping its sandbox and the harness's session, so the next message relaunches it; whether no runner runs now. */
@@ -325,6 +347,43 @@ export const runnerChoiceApplied = (agent: {
           `a native agent's choice did not reach its runner: ${failureKind(failure)}`,
         ),
         RUNNER_CHOICE.FAILED,
+      ),
+    ),
+    Effect.annotateLogs(agentLogIds(agent)),
+  );
+
+/**
+ * A member's answer to an ask, written to the agent's runner as an
+ * `approval` line the way its messages go: the store's line in the cloud,
+ * the device's MESSAGE line on a host, acting for the agent's starter as
+ * every native call does. An agent on no harness, one whose session ended,
+ * one whose runner is not up, and a function that cannot reach the harness
+ * write nothing, since no runner holds the ask then.
+ */
+export const runnerApprovalAnswered = (
+  agent: { readonly id: string; readonly userId: string; readonly conversationId: string },
+  line: ApprovalLine,
+): Effect.Effect<RunnerAnswer, never, DatabaseServices> =>
+  Effect.gen(function* () {
+    const routing = yield* readAgentRouting(agent.userId, agent.id);
+    const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
+    if (runtime === undefined) return RUNNER_ANSWER.NOT_LIVE;
+    const native = yield* Effect.serviceOption(NativeAgentSessions);
+    const reached = Option.flatMap(native, (service) => service.sessions(runtime, agent.userId));
+    if (Option.isNone(reached)) return RUNNER_ANSWER.FAILED;
+    const sessionId = yield* recordedRuntimeSession({
+      userId: agent.userId,
+      conversationId: agent.conversationId,
+    });
+    if (sessionId === undefined || nativeRuntimeOfSession(sessionId) === undefined) {
+      return RUNNER_ANSWER.NOT_LIVE;
+    }
+    return yield* (yield* reached.value).answer(sessionId, agent.conversationId, line);
+  }).pipe(
+    Effect.catch((failure) =>
+      Effect.as(
+        Effect.logWarning(`a member's answer did not reach its runner: ${failureKind(failure)}`),
+        RUNNER_ANSWER.FAILED,
       ),
     ),
     Effect.annotateLogs(agentLogIds(agent)),

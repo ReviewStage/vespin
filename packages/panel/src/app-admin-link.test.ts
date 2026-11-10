@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { isDeepStrictEqual } from "node:util";
 import { AGENT_STATUS, type AgentPage } from "@repo/features/agent-wire";
-import { LINK_PLACE, type ReadLink, readLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type ReadLink, readLink } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
@@ -62,7 +62,7 @@ const FIRST: AppStateSnapshot = stateWith(
 
 const ADMIN_LINK: ReadLink = {
   workspace: "acme",
-  place: { kind: LINK_PLACE.ADMIN, section: "cost" },
+  place: { kind: LINK_DESTINATION.ADMIN, section: "cost" },
 };
 
 declare global {
@@ -198,15 +198,15 @@ test("a person's page loaded under a workspace the reader is not in opens the sa
 });
 
 test.each([
-  ["the Automations page", "/acme/automations", { kind: LINK_PLACE.AUTOMATIONS }],
-  ["the Board", "/acme/tasks", { kind: LINK_PLACE.BOARD }],
-  ["the Inbox", "/acme/inbox", { kind: LINK_PLACE.INBOX }],
-  ["an Inbox item", "/acme/inbox/item-1", { kind: LINK_PLACE.INBOX_ITEM, itemId: "item-1" }],
-  ["an agent's page", "/acme/agent/agent-9", { kind: LINK_PLACE.AGENT, agentId: "agent-9" }],
+  ["the Automations page", "/acme/automations", { kind: LINK_DESTINATION.AUTOMATIONS }],
+  ["the Board", "/acme/tasks", { kind: LINK_DESTINATION.BOARD }],
+  ["the Inbox", "/acme/inbox", { kind: LINK_DESTINATION.INBOX }],
+  ["an Inbox item", "/acme/inbox/item-1", { kind: LINK_DESTINATION.INBOX_ITEM, itemId: "item-1" }],
+  ["an agent's page", "/acme/agent/agent-9", { kind: LINK_DESTINATION.AGENT, agentId: "agent-9" }],
   [
     "a task's version",
     "/acme/task/7/version/3",
-    { kind: LINK_PLACE.VERSION, planId: "7", revision: 3 },
+    { kind: LINK_DESTINATION.VERSION, planId: "7", revision: 3 },
   ],
 ] as const)(
   "a link to %s already standing leaves it standing, as pressing the place standing always has",
@@ -334,7 +334,10 @@ test("an agent's link pressed in an Inbox item, its task not open, lands on the 
   const before = router.addresses().slice(0, router.at() + 1);
 
   act(() =>
-    showLink?.({ workspace: "acme", place: { kind: LINK_PLACE.AGENT, agentId: SEVEN_AGENT.id } }),
+    showLink?.({
+      workspace: "acme",
+      place: { kind: LINK_DESTINATION.AGENT, agentId: SEVEN_AGENT.id },
+    }),
   );
   await settle();
 
@@ -349,7 +352,7 @@ test("a tab landing on an agent's address, its link opened as it lands, stands t
 
   act(() => {
     router.history.push("/acme/agent/agent-9");
-    showLink?.({ workspace: "acme", place: { kind: LINK_PLACE.AGENT, agentId: "agent-9" } });
+    showLink?.({ workspace: "acme", place: { kind: LINK_DESTINATION.AGENT, agentId: "agent-9" } });
   });
   await settle();
 
@@ -360,7 +363,9 @@ test("a tab landing on an agent's address, its link opened as it lands, stands t
 test("an agent's link naming no workspace, as a notification's click hands it, opens its page under the workspace the window stands in", async () => {
   const router = await drawWindow("/acme");
 
-  act(() => showLink?.({ workspace: "", place: { kind: LINK_PLACE.AGENT, agentId: "agent-9" } }));
+  act(() =>
+    showLink?.({ workspace: "", place: { kind: LINK_DESTINATION.AGENT, agentId: "agent-9" } }),
+  );
   await settle();
 
   assert.equal(router.history.location.pathname, "/acme/agent/agent-9");
@@ -383,7 +388,7 @@ test("a Home link to a workspace the reader is not in stands the not-found place
   const router = await drawWindow("/acme");
   const steps = router.addresses().length;
 
-  act(() => showLink?.({ workspace: "ghost", place: { kind: LINK_PLACE.HOME } }));
+  act(() => showLink?.({ workspace: "ghost", place: { kind: LINK_DESTINATION.HOME } }));
   await settle();
   const standing = [router.history.location.pathname, unknownWorkspaceShown()];
   const written = router.addresses().length;
@@ -397,11 +402,11 @@ test("a Home link to a workspace the reader is not in stands the not-found place
 
 test("Back from a link to a workspace the reader is not in, pressed over a place, goes to the step before that place, as the link wrote no step", async () => {
   const router = await drawWindow("/acme");
-  act(() => showLink?.({ workspace: "acme", place: { kind: LINK_PLACE.BOARD } }));
+  act(() => showLink?.({ workspace: "acme", place: { kind: LINK_DESTINATION.BOARD } }));
   await settle();
   assert.equal(router.history.location.pathname, "/acme/tasks");
 
-  act(() => showLink?.({ workspace: "ghost", place: { kind: LINK_PLACE.BOARD } }));
+  act(() => showLink?.({ workspace: "ghost", place: { kind: LINK_DESTINATION.BOARD } }));
   await settle();
   act(() => router.history.back());
   await settle();
@@ -410,8 +415,8 @@ test("Back from a link to a workspace the reader is not in, pressed over a place
 });
 
 test.each([
-  ["an agent's page", { kind: LINK_PLACE.AGENT, agentId: "agent-9" }, "/acme/agent/agent-9"],
-  ["the Inbox", { kind: LINK_PLACE.INBOX }, "/acme/inbox"],
+  ["an agent's page", { kind: LINK_DESTINATION.AGENT, agentId: "agent-9" }, "/acme/agent/agent-9"],
+  ["the Inbox", { kind: LINK_DESTINATION.INBOX }, "/acme/inbox"],
 ] as const)(
   "%s opened over a workspace's address the reader is not in takes its place",
   async (_place, place, address) => {
@@ -456,7 +461,7 @@ test("a Home link to a workspace the reader is not in, pressed on an open task, 
   );
   const router = await drawWindow(`/acme/task/${listed.id}`);
 
-  act(() => showLink?.({ workspace: "ghost", place: { kind: LINK_PLACE.HOME } }));
+  act(() => showLink?.({ workspace: "ghost", place: { kind: LINK_DESTINATION.HOME } }));
   await settle();
 
   assert.deepEqual([router.history.location.pathname, unknownWorkspaceShown()], ["/ghost", true]);
@@ -467,7 +472,7 @@ test("a Home link to a workspace the reader is not in, pressed on an open task, 
 test("a Home link to a workspace the reader is not in, pressed over an agent's page, stands the not-found place in its place", async () => {
   const router = await drawWindow("/acme/agent/agent-9");
 
-  act(() => showLink?.({ workspace: "ghost", place: { kind: LINK_PLACE.HOME } }));
+  act(() => showLink?.({ workspace: "ghost", place: { kind: LINK_DESTINATION.HOME } }));
   await settle();
 
   assert.deepEqual([router.history.location.pathname, unknownWorkspaceShown()], ["/ghost", true]);
@@ -502,7 +507,7 @@ test("a link to a workspace the reader has since left, opened after a not-found 
     },
   );
   const router = await drawWindow("/acme");
-  act(() => showLink?.({ workspace: "ghost", place: { kind: LINK_PLACE.HOME } }));
+  act(() => showLink?.({ workspace: "ghost", place: { kind: LINK_DESTINATION.HOME } }));
   await settle();
   await deliver(
     stateWith(
@@ -514,7 +519,7 @@ test("a link to a workspace the reader has since left, opened after a not-found 
     ),
   );
 
-  act(() => showLink?.({ workspace: "acme", place: { kind: LINK_PLACE.HOME } }));
+  act(() => showLink?.({ workspace: "acme", place: { kind: LINK_DESTINATION.HOME } }));
   await settle();
 
   assert.deepEqual([router.history.location.pathname, unknownWorkspaceShown()], ["/acme", true]);

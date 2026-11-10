@@ -17,8 +17,8 @@ import {
   GITHUB_PAGE,
   gitHubFilePageRepositoryOf,
   gitHubPageLink,
-  LINK_PLACE,
-  type LinkPlace,
+  LINK_DESTINATION,
+  type LinkDestination,
   linkOf,
   linkTarget,
   MENTION_SIGIL,
@@ -476,28 +476,32 @@ function schemeFields({ host, steps, hash, search }: SchemeLink) {
 }
 
 /** The fields a place of our own spells as a mention: a task, a section, a page, an agent, or a person; nothing for a place no mention names. */
-function placeFields(place: LinkPlace, hash: string) {
+function placeFields(place: LinkDestination, hash: string) {
   // A task named by its number is no mention, because a mention names it by its id alone, and the number is the workspace's; its link opens it once found by the slug.
   if (taskNumberOf(place) !== undefined) return undefined;
   // Note that only a task's address takes a fragment, its section's anchor; a fragment past any other's names nothing.
-  if (hash !== "" && place.kind !== LINK_PLACE.TASK && place.kind !== LINK_PLACE.SECTION) {
+  if (
+    hash !== "" &&
+    place.kind !== LINK_DESTINATION.TASK &&
+    place.kind !== LINK_DESTINATION.SECTION
+  ) {
     return undefined;
   }
   switch (place.kind) {
     // Note that a task's link naming a comment thread names the task, as it did before threads had links.
-    case LINK_PLACE.TASK:
-    case LINK_PLACE.COMMENT:
+    case LINK_DESTINATION.TASK:
+    case LINK_DESTINATION.COMMENT:
       return { kind: MENTION_KIND.TASK, taskId: place.planId };
-    case LINK_PLACE.SECTION:
+    case LINK_DESTINATION.SECTION:
       return { kind: MENTION_KIND.SECTION, taskId: place.planId, anchor: place.anchor };
-    case LINK_PLACE.PAGE:
+    case LINK_DESTINATION.PAGE:
       return "planId" in place
         ? { kind: MENTION_KIND.PAGE, taskId: place.planId, pageId: place.pageId }
         : { kind: MENTION_KIND.PAGE, agentId: place.agentId, pageId: place.pageId };
     // Note that an older link naming the agent under its task names the agent alone, as every link to one is written now.
-    case LINK_PLACE.AGENT:
+    case LINK_DESTINATION.AGENT:
       return { kind: MENTION_KIND.AGENT, agentId: place.agentId };
-    case LINK_PLACE.PERSON:
+    case LINK_DESTINATION.PERSON:
       return { kind: MENTION_KIND.PERSON, userId: place.userId };
     default:
       return undefined;
@@ -512,7 +516,7 @@ function appFields(url: URL) {
     task.pathname = url.pathname.slice(0, -step.length);
     task.search = "";
     const place = readLink(task.href)?.place;
-    return place?.kind === LINK_PLACE.TASK && taskNumberOf(place) === undefined
+    return place?.kind === LINK_DESTINATION.TASK && taskNumberOf(place) === undefined
       ? { kind: MENTION_KIND.APP, taskId: place.planId }
       : undefined;
   }
@@ -770,10 +774,10 @@ export function encodeMention(mention: Mention, place: MentionPlace): string {
     case MENTION_KIND.FOLDER:
       return repositoryTarget(mention.kind, mention.path, place, undefined);
     case MENTION_KIND.TASK:
-      return linkOf({ kind: LINK_PLACE.TASK, planId: mention.taskId }, workspace);
+      return linkOf({ kind: LINK_DESTINATION.TASK, planId: mention.taskId }, workspace);
     case MENTION_KIND.SECTION:
       return linkOf(
-        { kind: LINK_PLACE.SECTION, planId: mention.taskId, anchor: mention.anchor },
+        { kind: LINK_DESTINATION.SECTION, planId: mention.taskId, anchor: mention.anchor },
         workspace,
       );
     // An MCP server has no page of its own, so it keeps the app's own form, wherever it is written.
@@ -790,20 +794,20 @@ export function encodeMention(mention: Mention, place: MentionPlace): string {
       // A page of an agent on no task stands under that agent's own address.
       return "agentId" in mention
         ? linkOf(
-            { kind: LINK_PLACE.PAGE, agentId: mention.agentId, pageId: mention.pageId },
+            { kind: LINK_DESTINATION.PAGE, agentId: mention.agentId, pageId: mention.pageId },
             workspace,
           )
         : linkOf(
-            { kind: LINK_PLACE.PAGE, planId: mention.taskId, pageId: mention.pageId },
+            { kind: LINK_DESTINATION.PAGE, planId: mention.taskId, pageId: mention.pageId },
             workspace,
           );
     // An agent stands under its workspace, whichever task it works on, as its own link does.
     case MENTION_KIND.AGENT:
-      return linkOf({ kind: LINK_PLACE.AGENT, agentId: mention.agentId }, workspace);
+      return linkOf({ kind: LINK_DESTINATION.AGENT, agentId: mention.agentId }, workspace);
     case MENTION_KIND.PERSON:
-      return linkOf({ kind: LINK_PLACE.PERSON, userId: mention.userId }, workspace);
+      return linkOf({ kind: LINK_DESTINATION.PERSON, userId: mention.userId }, workspace);
     case MENTION_KIND.APP:
-      return `${linkOf({ kind: LINK_PLACE.TASK, planId: mention.taskId }, workspace)}/${APP_STEP}`;
+      return `${linkOf({ kind: LINK_DESTINATION.TASK, planId: mention.taskId }, workspace)}/${APP_STEP}`;
     // A date has no page of its own, so it keeps the app's own form; its ends spell nothing a target must encode.
     case MENTION_KIND.DATE:
       return schemeLinkOf(

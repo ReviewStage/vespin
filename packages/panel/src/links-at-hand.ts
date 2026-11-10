@@ -1,6 +1,6 @@
 import {
-  LINK_PLACE,
-  type LinkPlace,
+  LINK_DESTINATION,
+  type LinkDestination,
   linkOf,
   type ReadLink,
   taskLinkStep,
@@ -153,18 +153,18 @@ export function slugOf(workspaces: readonly Workspace[], workspaceId: string | u
 export function panelTabPlace(
   holder: PagePlace,
   tab: SidePanelTab | undefined,
-): LinkPlace | undefined {
+): LinkDestination | undefined {
   return tab === undefined ? undefined : stripTabLink(tab, holder);
 }
 
 /** What a side panel tab's link is called, by the kind of place it names; none for a kind no tab of the panel shows. */
-function panelThing(place: LinkPlace): LinkThing | undefined {
+function panelThing(place: LinkDestination): LinkThing | undefined {
   switch (place.kind) {
-    case LINK_PLACE.PAGE:
+    case LINK_DESTINATION.PAGE:
       return LINK_THING.PAGE;
-    case LINK_PLACE.CHANGES:
+    case LINK_DESTINATION.CHANGES:
       return LINK_THING.CHANGES;
-    case LINK_PLACE.WORKER:
+    case LINK_DESTINATION.WORKER:
       return LINK_THING.WORKER;
     default:
       return undefined;
@@ -172,8 +172,8 @@ function panelThing(place: LinkPlace): LinkThing | undefined {
 }
 
 /** An Inbox item's place, by its id alone, whose agent, task, and workspace its reader asks the service for, as every Copy link of an item writes it. */
-export function inboxItemPlace(chosen: InboxChoice): LinkPlace {
-  return { kind: LINK_PLACE.INBOX_ITEM, itemId: chosen.itemId };
+export function inboxItemPlace(chosen: InboxChoice): LinkDestination {
+  return { kind: LINK_DESTINATION.INBOX_ITEM, itemId: chosen.itemId };
 }
 
 /** The links of the task drawn: its version chosen, its tabs', and its own, the most specific first. */
@@ -185,7 +185,7 @@ function taskLinks(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
   // Note that the task's links name it by its number, where it has one, as every link to it is written.
   const planId = taskLinkStep(drawn);
   const task: LinkAtHand = {
-    link: { workspace, place: { kind: LINK_PLACE.TASK, planId } },
+    link: { workspace, place: { kind: LINK_DESTINATION.TASK, planId } },
     thing: LINK_THING.TASK,
     name: drawn.name,
   };
@@ -199,7 +199,7 @@ function taskLinks(tasks: TasksControl, at: WindowAt): readonly LinkAtHand[] {
     agentId === undefined
       ? undefined
       : {
-          link: { workspace, place: { kind: LINK_PLACE.AGENT, agentId } },
+          link: { workspace, place: { kind: LINK_DESTINATION.AGENT, agentId } },
           thing: LINK_THING.AGENT,
           name: tasks.agents.agents?.find((each) => each.id === agentId)?.title ?? undefined,
         };
@@ -252,7 +252,7 @@ export function agentPageLinks(
   const page = at.pageWorkspace;
   const home = page?.agentId === agentId ? slugOf(tasks.workspaces, page.workspaceId) : listed;
   const own: LinkAtHand = {
-    link: { workspace: home, place: { kind: LINK_PLACE.AGENT, agentId } },
+    link: { workspace: home, place: { kind: LINK_DESTINATION.AGENT, agentId } },
     thing: LINK_THING.AGENT,
     step: true,
   };

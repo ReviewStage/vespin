@@ -2,6 +2,12 @@ import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { dictationKeywords } from "@repo/features/dictation-keywords";
 import { askHeadWords } from "@repo/features/inbox-ask-words";
 import {
+  answerOf,
+  askNumberedPick,
+  EMPTY_INBOX_DRAFT,
+  type InboxDraft,
+} from "@repo/features/inbox-draft";
+import {
   holderAutomationId,
   holderName,
   INBOX_HOLDER,
@@ -141,7 +147,6 @@ import {
   MessageWords,
   useMessageWriter,
 } from "./inbox-message.js";
-import { answerOf, askNumberedPick, EMPTY_INBOX_DRAFT, type InboxDraft } from "./inbox-model.js";
 import { type InboxPager, InboxPagerControls } from "./inbox-pager.js";
 import type { InboxReminder } from "./inbox-remind.js";
 import { InboxStamp } from "./inbox-stamp.js";

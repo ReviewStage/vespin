@@ -14,7 +14,7 @@ import {
   InlineRef,
 } from "@repo/ui";
 import type { SkillOption } from "@repo/ui/skill-mention";
-import { BookOpenIcon } from "lucide-react";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 import { SkillSourceBadge } from "./skill-source-badge.js";
 
@@ -43,7 +43,7 @@ import { SkillSourceBadge } from "./skill-source-badge.js";
 
 /** The book every skill leads with, in a menu's row, a settings row, and its card's head. */
 export function SkillMark(): React.JSX.Element {
-  return <BookOpenIcon aria-hidden="true" />;
+  return <EntityGlyph kind={ENTITY_KIND.SKILL} />;
 }
 
 /** A skill of the repository's, which names its `SKILL.md`. */

@@ -72,7 +72,7 @@ import {
   knownAsk,
   standingAsk,
 } from "@repo/features/inbox-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { insideCode } from "@repo/features/mention-link";
 import {
   MP4_TYPE,
@@ -2424,7 +2424,7 @@ interface LockedWorkspace {
 
 /** The item as its link names it: under its agent, whichever task it works on, whose reader finds the task by the agent. */
 function itemPlace(agent: InboxAgent, itemId: string): InboxItemPlace {
-  return { kind: LINK_PLACE.INBOX_ITEM, agentId: agent.agentId, itemId };
+  return { kind: LINK_DESTINATION.INBOX_ITEM, agentId: agent.agentId, itemId };
 }
 
 /** The address each picture of the item is written by in a message's words (`inbox-attachment-link.ts`). */

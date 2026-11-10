@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { AGENT_STATUS } from "@repo/features/agent-wire";
-import { LINK_PLACE, type LinkPlace, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination, type ReadLink } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PAGE_OWNER } from "@repo/features/page-wire";
@@ -150,7 +150,7 @@ afterEach(() => {
 /** The words drawn as a transcript draws them, in a window holding `state`, every place a chip opened kept. */
 async function drawn(
   text: string,
-  opened: LinkPlace[],
+  opened: LinkDestination[],
   state: AppStateSnapshot = STATE,
 ): Promise<HTMLElement> {
   fakeActs({
@@ -254,7 +254,7 @@ test("a place the window holds no name for is called by its kind, or by its labe
 });
 
 test("a press on a place's chip opens the place in the window", async () => {
-  const opened: LinkPlace[] = [];
+  const opened: LinkDestination[] = [];
   const container = await drawn(
     `${HOME}/plan/${TASK_ID}/agent/${AGENT} then ${HOME}/person/${SAM}`,
     opened,
@@ -266,8 +266,8 @@ test("a press on a place's chip opens the place in the window", async () => {
     act(() => chip.click());
   }
   assert.deepEqual(opened, [
-    { kind: LINK_PLACE.AGENT, planId: TASK_ID, agentId: AGENT },
-    { kind: LINK_PLACE.PERSON, userId: SAM },
+    { kind: LINK_DESTINATION.AGENT, planId: TASK_ID, agentId: AGENT },
+    { kind: LINK_DESTINATION.PERSON, userId: SAM },
   ]);
 });
 

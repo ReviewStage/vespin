@@ -1,7 +1,7 @@
 import {
-  type AccountPlaceKind,
+  type AccountDestinationKind,
   appLinkOf,
-  type LinkPlaceKind,
+  type LinkDestinationKind,
   readShownLink,
 } from "./link-grammar.js";
 import { LINK_ORIGIN } from "./link-home.js";
@@ -25,7 +25,7 @@ import { LINK_ORIGIN } from "./link-home.js";
 /** What the page hands the app: the link in the app's own scheme, and the kind of place it opens. */
 export interface OpenTarget {
   readonly appLink: string;
-  readonly kind: LinkPlaceKind | AccountPlaceKind;
+  readonly kind: LinkDestinationKind | AccountDestinationKind;
 }
 
 /** The place the page's address names, and the link that opens it in the desktop app; nothing where the address names no place. */

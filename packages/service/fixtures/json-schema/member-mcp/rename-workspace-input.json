@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace to rename, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "The new name, at most 64 characters."
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "additionalProperties": false
+}

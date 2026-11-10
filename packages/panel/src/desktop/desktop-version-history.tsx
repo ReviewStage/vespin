@@ -1,7 +1,7 @@
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import type { AgentSummary } from "@repo/features/agent-wire";
 import { descriptionSections } from "@repo/features/description-document";
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { sectionAnchors } from "@repo/features/mention-link";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { DescriptionRevisionLine } from "@repo/features/task-wire";
@@ -816,7 +816,7 @@ export function DesktopVersionHistory({
       ? undefined
       : linkOf(
           numbered(
-            { kind: LINK_PLACE.VERSION, planId: linked.taskId, revision },
+            { kind: LINK_DESTINATION.VERSION, planId: linked.taskId, revision },
             linked.place.workspace,
           ),
           linked.place.workspace,

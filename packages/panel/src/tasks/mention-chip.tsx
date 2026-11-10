@@ -10,16 +10,16 @@ import {
   ENTITY_KIND,
   ENTITY_WORD,
   entityName,
+  entityOfDestination,
   entityOfMention,
-  entityOfPlace,
   entityWordHeard,
   type KnownNames,
 } from "@repo/features/entity-kind";
 import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import {
   issueAddressOf,
-  LINK_PLACE,
-  type LinkPlace,
+  LINK_DESTINATION,
+  type LinkDestination,
   linkOf,
   MENTION_SIGIL,
   pullRequestAddressOf,
@@ -63,7 +63,6 @@ import {
   useMinute,
 } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
-import { CalendarIcon } from "@repo/ui/icons";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import type { ReactNode } from "react";
 import type {
@@ -72,6 +71,7 @@ import type {
   MentionNodeDoors,
 } from "../description-editor/contract.js";
 import { branchNote, entityCard } from "../entities/entity-card.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { type AgentTiles, entityMark } from "../entities/entity-mark.js";
 import type { LinkDrawer, MarkdownSpan } from "../markdown-message.js";
 import { LinkAutomations, useSectionHeading } from "./chip-cards.js";
@@ -648,7 +648,7 @@ function DateCard({ date }: { date: DateMention }): React.JSX.Element {
   const zone = readerZone();
   return (
     <HoverCard data-date-card="">
-      <HoverCardHead glyph={<CalendarIcon aria-hidden="true" />} name={dateWhole(date, zone)} />
+      <HoverCardHead glyph={<EntityGlyph kind={ENTITY_KIND.DATE} />} name={dateWhole(date, zone)} />
       <HoverCardNote>{dateDistance(date, now, zone)}</HoverCardNote>
     </HoverCard>
   );
@@ -667,7 +667,7 @@ function DateChip({
   return (
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
-      glyph={<CalendarIcon aria-hidden="true" />}
+      glyph={<EntityGlyph kind={ENTITY_KIND.DATE} />}
       kind={ENTITY_WORD[ENTITY_KIND.DATE]}
       label={dateChipText(date, now, readerZone())}
       name={INLINE_REF_NAME.WHOLE}
@@ -717,7 +717,7 @@ function WrittenDateChip({
 }
 
 /** The task a place in the app names, where it names one. */
-function placeTaskId(place: LinkPlace): string | undefined {
+function placeTaskId(place: LinkDestination): string | undefined {
   return "planId" in place ? place.planId : undefined;
 }
 
@@ -729,14 +729,14 @@ function PlaceGlyph({
   known,
   doors,
 }: {
-  place: LinkPlace;
+  place: LinkDestination;
   name: string;
   /** The slug of the workspace the link was written under. */
   workspace: string;
   known: KnownNames;
   doors: MentionDoors;
 }): ReactNode {
-  return entityMark(entityOfPlace(place), {
+  return entityMark(entityOfDestination(place), {
     name,
     known,
     workspace,
@@ -760,7 +760,7 @@ function PlaceChip({
   read,
 }: {
   href: string;
-  place: LinkPlace;
+  place: LinkDestination;
   /** The slug of the workspace the link was written under. */
   workspace: string;
   /** The words it was labeled with, without an `@`; none where it was written bare. */
@@ -790,7 +790,7 @@ function PlaceChip({
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
       glyph={glyph}
-      kind={entityWordHeard(entityOfPlace(place).kind, name)}
+      kind={entityWordHeard(entityOfDestination(place).kind, name)}
       label={name}
       onPress={(event) => {
         // Note that the press stops here, as a mention's does, because a click into a section opens its editor.
@@ -819,7 +819,7 @@ function PlaceCard({
   glyph,
   fallback,
 }: {
-  place: LinkPlace;
+  place: LinkDestination;
   workspace: string;
   name: string;
   /** The chip's glyph, which its card wears while what it shows is read. */
@@ -827,7 +827,7 @@ function PlaceCard({
   fallback: ReactNode;
 }): ReactNode {
   const workspaceId = useWordsWorkspaceId({ taskId: placeTaskId(place), workspace });
-  return entityCard(entityOfPlace(place), {
+  return entityCard(entityOfDestination(place), {
     own: fallback,
     glyph,
     name,
@@ -959,7 +959,7 @@ export function linkChip(
     return <NumberedLinkChip href={href} read={read} label={label} doors={placed} />;
   }
   const written = bare ? undefined : mentionName(label.trim());
-  if (read.place.kind === LINK_PLACE.INBOX_ITEM) {
+  if (read.place.kind === LINK_DESTINATION.INBOX_ITEM) {
     return (
       <InboxItemChip
         href={href}
@@ -971,7 +971,10 @@ export function linkChip(
     );
   }
   // An automation's chip reads its workspace's automations as it is drawn, so it is called and marked as its row is.
-  if (read.place.kind === LINK_PLACE.AUTOMATION || read.place.kind === LINK_PLACE.AUTOMATION_RUN) {
+  if (
+    read.place.kind === LINK_DESTINATION.AUTOMATION ||
+    read.place.kind === LINK_DESTINATION.AUTOMATION_RUN
+  ) {
     return (
       <LinkAutomations workspace={read.workspace}>
         <PlaceChip

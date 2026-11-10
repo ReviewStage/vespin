@@ -1,8 +1,9 @@
 import type { AccountSnapshot } from "@repo/credentials/snapshot";
 import type { AgentSummary } from "@repo/features/agent-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { LINK_PLACE, type LinkPlace, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination, linkOf } from "@repo/features/link-grammar";
 import {
   inPinOrder,
   type PinPlace,
@@ -110,10 +111,7 @@ import {
   ArrowDownFromLineIcon,
   ArrowUpToLineIcon,
   FolderPlusIcon,
-  HouseIcon,
-  ListTodoIcon,
   MailOpenIcon,
-  ZapIcon,
 } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, sameTab } from "@repo/ui/tab-strip-model";
@@ -124,6 +122,7 @@ import { runAppCommand, useAppCommand } from "../app-commands.js";
 import { useAutomationsPlace } from "../automations-route.js";
 import { useConnected } from "../connection.js";
 import { LinkWorkspaceProvider, openInTabOf } from "../copy-link-item.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
@@ -1452,7 +1451,7 @@ function SidebarHomeRow({
 }): React.JSX.Element {
   return (
     <NavItem
-      icon={<HouseIcon />}
+      icon={<EntityGlyph kind={ENTITY_KIND.HOME} />}
       current={current ? NAV_CURRENT.PAGE : undefined}
       aria-keyshortcuts={commandKeyshortcuts(APP_COMMAND.HOME)}
       shortcut={<Shortcut chord={APP_SHORTCUTS[APP_COMMAND.HOME].chord} />}
@@ -1492,7 +1491,7 @@ function SidebarTasksRow({
   }, IDLE_TIMEOUT_MS.PREFETCH);
   return (
     <NavItem
-      icon={<ListTodoIcon />}
+      icon={<EntityGlyph kind={ENTITY_KIND.BOARD} />}
       current={current ? NAV_CURRENT.PAGE : undefined}
       aria-keyshortcuts={commandKeyshortcuts(APP_COMMAND.TASKS)}
       shortcut={<Shortcut chord={APP_SHORTCUTS[APP_COMMAND.TASKS].chord} />}
@@ -1535,7 +1534,7 @@ function SidebarAutomationsRow({
 }): React.JSX.Element {
   return (
     <NavItem
-      icon={<ZapIcon />}
+      icon={<EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />}
       current={current ? NAV_CURRENT.PAGE : undefined}
       count={{ value: running, noun: RUNNING_NOUN, tone: STATUS_TONE.WORKING }}
       mark={failed ? stateEndMark(GLYPH_STATE.FAILED, false) : undefined}
@@ -2005,7 +2004,7 @@ function SidebarColumn({
   // Each place opens in a tab of its own on a middle-click, at its address under the listed workspace, where the window opens tabs.
   const listedStep =
     tasks.workspace === undefined ? undefined : (tasks.workspace.slug ?? tasks.workspace.id);
-  const inTab = (place: LinkPlace) =>
+  const inTab = (place: LinkDestination) =>
     listedStep === undefined ? undefined : openInTabOf(linkOf(place, listedStep));
   const places = (
     <>
@@ -2025,14 +2024,14 @@ function SidebarColumn({
               current={atHome}
               disabled={!tasks.signedIn}
               onOpen={chosen(goHome)}
-              onOpenInTab={inTab({ kind: LINK_PLACE.HOME })}
+              onOpenInTab={inTab({ kind: LINK_DESTINATION.HOME })}
             />
             <SidebarInboxRow
               waiting={waiting}
               current={inInbox}
               disabled={!tasks.signedIn}
               onOpen={chosen(openInbox)}
-              onOpenInTab={inTab({ kind: LINK_PLACE.INBOX })}
+              onOpenInTab={inTab({ kind: LINK_DESTINATION.INBOX })}
             />
           </>
         )}
@@ -2041,7 +2040,7 @@ function SidebarColumn({
             current={inBoard}
             disabled={!tasks.signedIn}
             onOpen={chosen(openBoard)}
-            onOpenInTab={inTab({ kind: LINK_PLACE.BOARD })}
+            onOpenInTab={inTab({ kind: LINK_DESTINATION.BOARD })}
             onPreload={board.preload}
           />
         )}
@@ -2051,7 +2050,7 @@ function SidebarColumn({
           running={automationsRunning}
           disabled={!tasks.signedIn}
           onOpen={chosen(openAutomations)}
-          onOpenInTab={inTab({ kind: LINK_PLACE.AUTOMATIONS })}
+          onOpenInTab={inTab({ kind: LINK_DESTINATION.AUTOMATIONS })}
         />
       </SidebarPlaces>
       <SidebarRule />

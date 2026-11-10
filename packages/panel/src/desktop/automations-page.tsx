@@ -17,7 +17,7 @@ import {
   type AutomationSummary,
 } from "@repo/features/automation-wire";
 import { GLYPH_STATE, glyphStateWords } from "@repo/features/glyph-state";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { momentText } from "@repo/features/time-format";
 import type { Workspace } from "@repo/features/workspace-wire";
@@ -328,8 +328,11 @@ function AutomationRow({
   const state = STANDING_GLYPH[automationRunStanding(automation.lastRun)];
   const next = automationNext(automation);
   const nextWords = automationNextText(automation, now);
-  const links = useLinkItems()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
-  const openInTab = useOpenInTab()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
+  const links = useLinkItems()({ kind: LINK_DESTINATION.AUTOMATION, automationId: automation.id });
+  const openInTab = useOpenInTab()({
+    kind: LINK_DESTINATION.AUTOMATION,
+    automationId: automation.id,
+  });
   // Note that the glyph is the row's decoration, so its working word is said in the row's words instead.
   const working = state === GLYPH_STATE.WORKING ? glyphStateWords(state, false) : undefined;
   const trigger = automationTriggerText(automation.trigger, automation.repositories ?? []);

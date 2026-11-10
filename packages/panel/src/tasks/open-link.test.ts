@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
 import { ACT_KIND } from "@repo/host/acts";
 import { Effect } from "effect";
 import { act, createElement, type ReactNode } from "react";
@@ -89,15 +89,18 @@ test("a Vespin link opens its place in the window, a task at its section, an age
   pressedEach((link) => opened.push(link));
 
   assert.deepEqual(opened, [
-    { workspace: "", place: { kind: LINK_PLACE.SECTION, planId: TASK_ID, anchor: "rollout" } },
-    { workspace: "", place: { kind: LINK_PLACE.TASK, planId: TASK_ID } },
+    {
+      workspace: "",
+      place: { kind: LINK_DESTINATION.SECTION, planId: TASK_ID, anchor: "rollout" },
+    },
+    { workspace: "", place: { kind: LINK_DESTINATION.TASK, planId: TASK_ID } },
     {
       workspace: "acme",
-      place: { kind: LINK_PLACE.AGENT, planId: TASK_ID, agentId: AGENT_ID },
+      place: { kind: LINK_DESTINATION.AGENT, planId: TASK_ID, agentId: AGENT_ID },
     },
     {
       workspace: "acme",
-      place: { kind: LINK_PLACE.INBOX_ITEM, agentId: AGENT_ID, itemId: ITEM_ID },
+      place: { kind: LINK_DESTINATION.INBOX_ITEM, agentId: AGENT_ID, itemId: ITEM_ID },
     },
   ]);
   assert.deepEqual(

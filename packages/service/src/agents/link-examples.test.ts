@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { AGENT_BRIEF } from "@repo/features/agent-wire";
-import { LINK_PLACE, readLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, readLink } from "@repo/features/link-grammar";
 import { decodeMention, isMentionLabel, MENTION_KIND } from "@repo/features/mention-link";
 import { test } from "vitest";
 import { standingFor } from "../testing/agent-standing.js";
@@ -69,7 +69,7 @@ function drawnAs(words: string): (string | undefined)[] {
 test("a coding agent is shown to name each kind as a mention Vespin draws as its chip, its task's own under its task's link and only where it has a task, and a thing of ours by the one link rule", () => {
   const shared = [MENTION_KIND.FILE, MENTION_KIND.FILE, MENTION_KIND.LINK, MENTION_KIND.LINK];
   // A task's own things are named by its number, a place the window draws as the task's chip once it finds the task.
-  const own = [LINK_PLACE.TASK, LINK_PLACE.SECTION];
+  const own = [LINK_DESTINATION.TASK, LINK_DESTINATION.SECTION];
   for (const brief of Object.values(AGENT_BRIEF)) {
     for (const onTask of [true, false]) {
       const words = coderInstructions(
@@ -81,7 +81,7 @@ test("a coding agent is shown to name each kind as a mention Vespin draws as its
       const told = words.slice(words.indexOf("## What your messages are"));
       assert.deepEqual(
         drawnAs(told),
-        [...shared, ...(onTask ? own : []), LINK_PLACE.AUTOMATION],
+        [...shared, ...(onTask ? own : []), LINK_DESTINATION.AUTOMATION],
         `${brief} ${onTask}`,
       );
       assert.deepEqual(
@@ -107,10 +107,10 @@ test("every address the link rule shows an author how to build is one Vespin dra
     [
       MENTION_KIND.AGENT,
       MENTION_KIND.TASK,
-      LINK_PLACE.AUTOMATION,
+      LINK_DESTINATION.AUTOMATION,
       MENTION_KIND.PERSON,
-      LINK_PLACE.INBOX_ITEM,
-      LINK_PLACE.PAGE,
+      LINK_DESTINATION.INBOX_ITEM,
+      LINK_DESTINATION.PAGE,
       MENTION_KIND.PAGE,
     ],
   );

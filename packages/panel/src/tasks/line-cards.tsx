@@ -5,7 +5,7 @@ import {
   type ReviewState,
 } from "@repo/features/agent-wire";
 import { threadLineTitle } from "@repo/features/inbox-wire";
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import {
   DISCLOSURE_FILL,
   type EventNote,
@@ -96,7 +96,7 @@ function threadLink(
   doors: MentionDoors,
 ): string | undefined {
   if (agentId === undefined || doors.place.workspace === "") return undefined;
-  return linkOf({ kind: LINK_PLACE.INBOX_ITEM, agentId, itemId }, doors.place.workspace);
+  return linkOf({ kind: LINK_DESTINATION.INBOX_ITEM, agentId, itemId }, doors.place.workspace);
 }
 
 /**
@@ -144,9 +144,9 @@ const DESCRIPTION_WORDS = "the description";
 function commentLink(line: CommentLineMetadata, doors: MentionDoors): string | undefined {
   if (line.task_id === undefined || doors.place.workspace === "") return undefined;
   return line.page_id === undefined
-    ? linkOf({ kind: LINK_PLACE.TASK, planId: line.task_id }, doors.place.workspace)
+    ? linkOf({ kind: LINK_DESTINATION.TASK, planId: line.task_id }, doors.place.workspace)
     : linkOf(
-        { kind: LINK_PLACE.PAGE, planId: line.task_id, pageId: line.page_id },
+        { kind: LINK_DESTINATION.PAGE, planId: line.task_id, pageId: line.page_id },
         doors.place.workspace,
       );
 }
