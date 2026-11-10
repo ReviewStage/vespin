@@ -4,7 +4,7 @@ import type { TerminalSummary } from "@repo/features/terminal-wire";
 import type { RunAction } from "@repo/features/workspace-sandbox-setup-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { EXPERIMENT } from "@repo/settings";
+import { EXPERIMENT, HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { PlayIcon, riseAbove, SplitButton, STATUS_TONE, useMenu } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
@@ -16,7 +16,7 @@ import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
 import { showToast, TOAST_HOLD } from "../toast.js";
-import { appStateQuery } from "../use-app-state.js";
+import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { listedAgentIn } from "./use-workspace-agents.js";
 
@@ -26,7 +26,7 @@ import { listedAgentIn } from "./use-workspace-agents.js";
  * Drawn only where the agent's workspace has the Run actions experiment on,
  * the agent runs in the cloud, and its repository has run actions. The
  * main part runs the list's first action, or stops it while it runs, as
- * ⌥⌘R does on the agent shown; the chevron drops every action, each a run
+ * ⌥⌘R does on the agent shown in the desktop app; the chevron drops every action, each a run
  * or, while it runs, a stop. A press is the only thing that runs one: a
  * stopped sandbox is resumed by the press, as opening its Terminal tab
  * resumes it, and the action's shell is then shown in the side panel's
@@ -167,6 +167,10 @@ export function RunActionsButton({
   );
   const stopped = listed !== undefined && listed.sandbox !== "running";
   const subject = shortcutSubject(SHORTCUT_SUBJECT.AGENT, agent.id);
+  // ⌥⌘R is the desktop's alone (`APP_SHORTCUTS`), so the button offers it, and its menu prints it, only where the keymap answers it.
+  const keyed =
+    useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.DESKTOP_APP) }).data ===
+    true;
   const press = (action: RunAction) => {
     setBusy(true);
     const pressed = running.has(action.id)
@@ -175,10 +179,11 @@ export function RunActionsButton({
     void pressed.finally(() => setBusy(false));
   };
   const first = actions[0];
-  useShortcutTarget(shown && offered ? subject : undefined, RUN_KEYS);
+  const keysAct = keyed && shown && offered;
+  useShortcutTarget(keysAct ? subject : undefined, RUN_KEYS);
   useAppCommand(
     APP_COMMAND.RUN_ACTION,
-    shown && first !== undefined && offered && !busy ? () => press(first) : undefined,
+    keysAct && first !== undefined && !busy ? () => press(first) : undefined,
   );
   if (!offered || first === undefined) return null;
   const firstRuns = running.has(first.id);
