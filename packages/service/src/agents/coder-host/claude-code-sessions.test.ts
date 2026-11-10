@@ -1739,6 +1739,38 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a message opening with a command the CLI runs goes bare, and one that would change the agent's row goes behind words",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+
+        yield* sessions.send(opened.sessionId, message(agent, "/compact keep the plan"));
+        yield* sessions.send(opened.sessionId, message(agent, "/effort low"));
+
+        const [compact, effort] = (yield* launchLines(api.commands[0]))
+          .filter(
+            (line): line is Extract<InputLine, { type: "message" }> =>
+              (line as InputLine).type === INPUT_LINE.MESSAGE,
+          )
+          .slice(1);
+        assert.deepEqual(compact?.content, [{ type: "text", text: "/compact keep the plan" }]);
+        // The CLI runs a command from the last text block alone, so the turn's words after it leave it words.
+        assert.deepEqual(effort?.content[0], { type: "text", text: "/effort low" });
+        assert.equal(effort?.content.length, 2);
+      }),
+  );
+
+  it.effect(
     "a change of model and effort reaches the running runner as a model line alone, a fast version as its base model with fast mode on, and a session with no runner takes nothing",
     () =>
       Effect.gen(function* () {

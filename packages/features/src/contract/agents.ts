@@ -329,6 +329,23 @@ export const agentsContract = {
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/stop` }))
     .input(idParams)
     .output(EffectSchema.flip(agentAnswerSchema)),
+  /**
+   * One agent's harness started on a fresh session in the same agent
+   * (`coder-host/clear.ts`), its transcript kept; refused while the agent
+   * works, and for one on no harness.
+   */
+  clear: declaredProcedure
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.NOT_PERMITTED,
+        HOSTED_API_ERROR.AGENT_NOT_READY,
+        HOSTED_API_ERROR.INVALID_REQUEST,
+      ),
+    )
+    .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/clear` }))
+    .input(idParams)
+    .output(EffectSchema.flip(agentAnswerSchema)),
   /** One agent on screen, kept warm for the next message while it stays there (`agentWarmAnswerSchema`). */
   warm: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))

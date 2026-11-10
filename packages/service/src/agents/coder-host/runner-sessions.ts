@@ -171,6 +171,7 @@ import {
   type AgentPermissionMode,
 } from "@repo/features/agent-approval-wire";
 import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
+import { leadingCommand } from "@repo/features/slash-command";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
 import { causeKind, failureKind } from "@repo/runtime/effect";
@@ -247,6 +248,7 @@ import { agentFailureSaid, agentLogIds, keptFailureWords, runningLogId } from ".
 import { CODER, CODER_REFUSAL } from "./bounds.js";
 import { agentFirewallSources, CheckoutRefused, type CheckoutServices } from "./checkout.js";
 import { contextWindowOf } from "./context.js";
+import { COMMAND_ROUTE, type CommandRoute, routeBesideReplay } from "./harness-commands.js";
 import { nativeSkillFiles } from "./native-skills.js";
 import { permissionModeOf } from "./permission-mode.js";
 import { restartReplayOf } from "./replay.js";
@@ -353,6 +355,8 @@ export interface RunnerHarness<E extends { readonly _tag: string }> {
   readonly skillRoots: readonly string[];
   /** What goes ahead of a message to a runner already running. */
   readonly ahead: (agent: Agent) => Effect.Effect<HarnessAhead, E | LaunchRefused, RunnerServices>;
+  /** How a message opening with the command named is handed to the harness (`harness-commands.ts`). */
+  readonly commandRoute: (name: string) => CommandRoute;
 }
 
 /** How many hex characters of a launch's fingerprint its record keeps. */
@@ -424,6 +428,30 @@ interface RunnerMessage {
   readonly files: readonly SandboxFile[];
   readonly turn: SessionTurn;
   readonly timeZone: string | undefined;
+}
+
+/**
+ * A message line's blocks as its route hands them: the turn's words ahead
+ * of the developer's, as every message goes; after them, so the harness
+ * reads the line as words rather than a command; or the developer's alone,
+ * for the harness to run as its own command or, marked, as the session's
+ * compaction (`harness-commands.ts`).
+ */
+function routedContent(
+  route: CommandRoute,
+  ahead: readonly ContentBlock[],
+  content: readonly ContentBlock[],
+): { readonly content: readonly ContentBlock[]; readonly compact?: true } {
+  switch (route) {
+    case COMMAND_ROUTE.WORDS:
+      return { content: [...ahead, ...content] };
+    case COMMAND_ROUTE.ESCAPED:
+      return { content: [...content, ...ahead] };
+    case COMMAND_ROUTE.BARE:
+      return { content };
+    case COMMAND_ROUTE.COMPACT:
+      return { content, compact: true };
+  }
 }
 
 /** The bytes a line carries beside a replay ahead of it: the turn's words, the developer's, and each picture or document counted as a file (`fileBlocksBytes`). */
@@ -1310,6 +1338,15 @@ export const runnerSessions = <
       };
     };
 
+    /** How the line's command, where its words open with one, reaches the harness; as words where a replay rides ahead of it, which must reach the session. */
+    const commandRouteOf = (content: readonly ContentBlock[], replaying: boolean): CommandRoute => {
+      const first = content.find((block) => block.type === "text");
+      const command = first === undefined ? undefined : leadingCommand(first.text);
+      if (command === undefined) return COMMAND_ROUTE.WORDS;
+      const route = harness.commandRoute(command.name);
+      return replaying ? routeBesideReplay(route) : route;
+    };
+
     /**
      * The message line with the turn's own words ahead of the developer's
      * (`turn-message.ts`), composed on what the harness's session has handed
@@ -1367,13 +1404,16 @@ export const runnerSessions = <
         const words = [replay, opened.text].filter((part) => part !== undefined);
         const ahead: readonly ContentBlock[] =
           words.length === 0 ? [] : [{ type: "text", text: words.join("\n\n") }];
+        const route = commandRouteOf(content, replay !== undefined);
+        // Note that a line the harness takes as its own command never reads the turn's words, so the session is not told it was handed them.
+        const read = route !== COMMAND_ROUTE.BARE && route !== COMMAND_ROUTE.COMPACT;
         const next: TurnHanded = {
-          ...opened.handed,
+          ...(read ? opened.handed : handed),
           experiments:
             fresh && Option.isNone(pending) ? experiments : (handed.experiments ?? experiments),
         };
         return {
-          line: { ...sent.line, content: [...ahead, ...content] },
+          line: { ...sent.line, ...routedContent(route, ahead, content) },
           handed: handedValue(next),
           taken: recordNativeTurnHanded(target, next),
         };

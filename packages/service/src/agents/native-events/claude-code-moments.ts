@@ -94,6 +94,15 @@ const readEnvelope = Schema.decodeUnknownOption(
 
 const readInit = Schema.decodeUnknownOption(Schema.Struct({ session_id: Schema.String }));
 
+/** What a compaction folded, as `SDKCompactBoundaryMessage` counts it. */
+const readCompactBoundary = Schema.decodeUnknownOption(
+  Schema.Struct({
+    compact_metadata: Schema.optionalKey(
+      Schema.Struct({ pre_tokens: Schema.optionalKey(Schema.Number) }),
+    ),
+  }),
+);
+
 /** The transcript a dropped mirror batch was of, as `SDKMirrorErrorMessage` keys it. */
 const readMirrorError = Schema.decodeUnknownOption(
   Schema.Struct({ key: Schema.Struct({ sessionId: Schema.String }) }),
@@ -785,8 +794,11 @@ function systemMoments(
         }),
         { kind: NATIVE_MOMENT.ACTIVE },
       ];
-    case SYSTEM_SUBTYPE.COMPACT_BOUNDARY:
-      return [{ kind: NATIVE_MOMENT.COMPACTED }];
+    case SYSTEM_SUBTYPE.COMPACT_BOUNDARY: {
+      const tokensBefore = Option.getOrUndefined(readCompactBoundary(message))?.compact_metadata
+        ?.pre_tokens;
+      return [{ kind: NATIVE_MOMENT.COMPACTED, notice: { tokensBefore: tokensBefore ?? null } }];
+    }
     case SYSTEM_SUBTYPE.TASK_NOTIFICATION:
       return taskNotificationMoments(message, held);
     case SYSTEM_SUBTYPE.MIRROR_ERROR:

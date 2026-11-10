@@ -820,6 +820,33 @@ it.effect("ends an idle launch at once on a stop, and on stdin closing, with no 
   }),
 );
 
+it.effect("compacts the thread in a compaction line's place, its words dropped", () =>
+  Effect.gen(function* () {
+    const service = fakeService("turn/completed");
+    const started = RESUMED_TURN.reply.find((line) => line.method === "turn/started");
+    if (started === undefined) throw new Error("the resumed turn has no turn/started");
+    const script: Script = {
+      exchanges: [
+        ...RESUME,
+        {
+          method: "thread/compact/start",
+          reply: [{ id: 3, result: {} }, started, ...RESUMED_TURN_END],
+        },
+      ],
+    };
+    const { spawned, write, run } = yield* launch([script], service);
+    yield* write({ ...CONFIG, threadId: THREAD });
+    yield* write({ ...message("/compact keep the plan", LINE.FIRST), compact: true });
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    const [process] = spawned;
+    assert.deepEqual(process?.unexpected, []);
+    assert.deepEqual(received(process, "thread/compact/start"), [{ threadId: THREAD }]);
+    assert.deepEqual(received(process, "turn/start"), []);
+    assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST]);
+  }),
+);
+
 it.effect("starts the next turn for a message Vespin sent just before the turn completed", () =>
   Effect.gen(function* () {
     const service = fakeService("turn/completed");
