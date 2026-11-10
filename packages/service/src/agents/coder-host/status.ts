@@ -9,8 +9,8 @@ import {
 } from "@repo/database/models/agent-store";
 import type { Device } from "@repo/database/models/device-store";
 import type { StoredArchive, StoredAutomationOrigin } from "@repo/database/schemas/agent";
-import { originSubjectsOf } from "@repo/features/agent-origin-live";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
+import { originSubjectsOf } from "@repo/features/agent-origin-live";
 import {
   agentStatusAt,
   type StatusTurn,
@@ -42,6 +42,7 @@ import {
   type DeviceLaunchStep,
   type DeviceLaunchUnstarted,
 } from "@repo/features/device-agent-wire";
+import { sandboxVcpus } from "@repo/features/sandbox-size";
 import { TURN_FAILURE, TURN_STATUS, type TurnFailure } from "../../core.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import { CODER_REFUSAL } from "./bounds.js";
@@ -419,7 +420,9 @@ function summaryFields(
     ...(standing.runtime === undefined ? undefined : { runtime: standing.runtime }),
     title: agent.title,
     // Note that only a local agent says where it runs, so a sandboxed agent's summary is as it was.
-    ...(agent.machine === AGENT_MACHINE.DEVICE ? { machine: agent.machine } : undefined),
+    ...(agent.machine === AGENT_MACHINE.DEVICE
+      ? { machine: agent.machine }
+      : { sandboxVcpus: sandboxVcpus(agent.repository) }),
     ...(mac === undefined ? undefined : { mac }),
     createdAt: agent.createdAt.getTime(),
     status: agentStatusOf(standing.turn, {

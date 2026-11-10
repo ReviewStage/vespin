@@ -3378,16 +3378,17 @@ export function settledTurnAgent(
 }
 
 /**
- * Archives the agent as `archiveAgent` does, but only where it stands
- * unarchived, its conversation's lines have run no further than the
- * `seenSeq` its reader saw, so an agent a message woke since stands, and it
- * has no pull request open (`noOpenPullRequest`) and no inbox item open
- * (`noOpenInboxItem`); answers whether it was archived.
+ * Archives the agent as `archiveAgent` does, by who `archivedBy` names, but
+ * only where it stands unarchived, its conversation's lines have run no
+ * further than the `seenSeq` its reader saw, so an agent a message woke
+ * since stands, and it has no pull request open (`noOpenPullRequest`) and no
+ * inbox item open (`noOpenInboxItem`); answers whether it was archived.
  */
 export function archiveUnmovedAgent(
   userId: string,
   agentId: string,
   seenSeq: number,
+  archivedBy: StoredArchive,
 ): AgentStoreEffect<boolean> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
@@ -3398,7 +3399,7 @@ export function archiveUnmovedAgent(
           agentId,
           seenSeq,
           archivedAt,
-          archivedBy: null,
+          archivedBy,
         });
         yield* settleAgentInboxItems(
           rows.map(({ id }) => id),

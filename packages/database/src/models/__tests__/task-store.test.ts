@@ -1154,10 +1154,10 @@ it.layer(getTestDB())("a task's work finishing", (it) => {
   );
 });
 
-it.layer(getTestDB())("a task's move to Done", (it) => {
-  it.effect(
-    "archives its idle agents with it and a running one as its turn ends, and a move off Done brings back those alone",
-    () =>
+it.layer(getTestDB())("a task's move to Done or Canceled", (it) => {
+  it.effect.each([TASK_STATUS.DONE, TASK_STATUS.CANCELED])(
+    "%s archives its idle agents with it and a running one as its turn ends, and a move off it brings back those alone",
+    (settled) =>
       Effect.gen(function* () {
         const { dean, charles, taskId, workspace } = yield* openSharedTask;
         const idle = yield* openTaskAgent(dean, workspace, taskId);
@@ -1166,16 +1166,16 @@ it.layer(getTestDB())("a task's move to Done", (it) => {
         yield* archiveAgent(dean, byHand, true);
         const asDean = { by: AGENT_ARCHIVER.MEMBER, userId: dean } as const;
 
-        // Dean's Done archives the idle agent as Dean, and leaves the running one at work.
-        const moved = yield* updateTask(dean, taskId, { status: TASK_STATUS.DONE }, undefined, {
+        // Dean's move archives the idle agent as Dean, and leaves the running one at work.
+        const moved = yield* updateTask(dean, taskId, { status: settled }, undefined, {
           archivedBy: asDean,
           idle: idleBut(running),
         });
-        assert.equal(Option.getOrUndefined(moved)?.status, TASK_STATUS.DONE);
+        assert.equal(Option.getOrUndefined(moved)?.status, settled);
         assert.deepEqual(yield* archiveOf(dean, idle), { ...asDean, withTask: true });
         assert.equal(yield* archiveOf(dean, running), undefined);
 
-        // Its turn ends while the task stands Done by Dean's move: archived then, as Dean.
+        // Its turn ends while the task stands as Dean moved it: archived then, as Dean.
         const ended = yield* archiveAgentOfDoneTask(charles, taskId, running, idleBut(""));
         assert.deepEqual(
           ended.map(({ id }) => id),
@@ -1183,16 +1183,44 @@ it.layer(getTestDB())("a task's move to Done", (it) => {
         );
         assert.deepEqual(yield* archiveOf(dean, running), { ...asDean, withTask: true });
 
-        // Moved off Done, the task brings back what its Done archived, and the agent archived by hand stays.
+        // Moved off it, the task brings back what that move archived, and the agent archived by hand stays.
         yield* updateTask(dean, taskId, { status: TASK_STATUS.IN_PROGRESS });
         assert.equal(yield* archiveOf(dean, idle), undefined);
         assert.equal(yield* archiveOf(dean, running), undefined);
         assert.notEqual(yield* archiveOf(dean, byHand), undefined);
 
-        // A turn ending on a task no longer Done archives nothing.
+        // A turn ending on a task no longer settled archives nothing.
         const after = yield* archiveAgentOfDoneTask(charles, taskId, running, idleBut(""));
         assert.deepEqual(after, []);
         assert.equal(yield* archiveOf(dean, running), undefined);
+      }),
+  );
+
+  it.effect(
+    "a move from Done to Canceled archives its idle agents again as the new mover, and a move off it brings them back",
+    () =>
+      Effect.gen(function* () {
+        const { dean, charles, taskId, workspace } = yield* openSharedTask;
+        const idle = yield* openTaskAgent(dean, workspace, taskId);
+        const byHand = yield* openTaskAgent(dean, workspace, taskId);
+        yield* archiveAgent(dean, byHand, true);
+        const asDean = { by: AGENT_ARCHIVER.MEMBER, userId: dean } as const;
+        const asCharles = { by: AGENT_ARCHIVER.MEMBER, userId: charles } as const;
+
+        yield* updateTask(dean, taskId, { status: TASK_STATUS.DONE }, undefined, {
+          archivedBy: asDean,
+          idle: idleBut(""),
+        });
+        yield* TestClock.adjust("1 minute");
+        yield* updateTask(charles, taskId, { status: TASK_STATUS.CANCELED }, undefined, {
+          archivedBy: asCharles,
+          idle: idleBut(""),
+        });
+        assert.deepEqual(yield* archiveOf(dean, idle), { ...asCharles, withTask: true });
+
+        yield* updateTask(dean, taskId, { status: TASK_STATUS.IN_PROGRESS });
+        assert.equal(yield* archiveOf(dean, idle), undefined);
+        assert.notEqual(yield* archiveOf(dean, byHand), undefined);
       }),
   );
 });

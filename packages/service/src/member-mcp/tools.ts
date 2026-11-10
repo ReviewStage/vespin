@@ -112,6 +112,7 @@ import {
   integrationRenameRequestSchema,
 } from "@repo/features/integration-wire";
 import { commitShaSchema } from "@repo/features/link-grammar";
+import { MCP_ACCESS_TOKEN_MINUTES, mcpClientIdSchema } from "@repo/features/mcp-client-wire";
 import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-mcp-tool";
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
 import { agentName } from "@repo/features/model-label";
@@ -155,7 +156,13 @@ import {
   type WorkspaceSandboxSetupAnswer,
   workspaceInstallScriptPutRequestSchema,
 } from "@repo/features/workspace-sandbox-setup-wire";
-import { WORKSPACE_BOUNDS, workspaceOfSlug } from "@repo/features/workspace-wire";
+import {
+  WORKSPACE_BOUNDS,
+  WORKSPACE_PHOTO_BOUNDS,
+  WORKSPACE_PHOTO_TYPE,
+  workspaceOfSlug,
+  workspacePhotoSetRequestSchema,
+} from "@repo/features/workspace-wire";
 import type { Sandbox } from "@repo/sandbox";
 import {
   EXPERIMENT,
@@ -169,7 +176,11 @@ import type { HttpClient } from "effect/http";
 import { writeOwnPreferences } from "../accounts/account-preferences.js";
 import { accountProcedureSeams } from "../accounts/account-seams.js";
 import { forgetWorkspaceMemory, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
-import { workspaceMembersRead, workspaceSlugSet } from "../accounts/workspace-operations.js";
+import {
+  workspaceMembersRead,
+  workspacePhotoSet,
+  workspaceSlugSet,
+} from "../accounts/workspace-operations.js";
 import {
   BROWSER_TAKEOVER_HOLD_MS,
   handBackAgentBrowserTab,
@@ -381,6 +392,7 @@ import {
   listMcpClientsAsMember,
   readSentryAsMember,
   renameIntegrationAsMember,
+  revokeMcpClientAsMember,
 } from "./integrations.js";
 import {
   MARK_FILES_VIEWED_FIELDS,
@@ -2011,11 +2023,12 @@ const MEMBER_UPDATE_AGENT_TOOL = memberMcpTool({
     ),
 });
 
-// A workspace's members and its slug, through the operations the hosted procedures run (`../accounts/workspace-operations.ts`), as the member.
+// A workspace's members, its slug, and its photo, through the operations the hosted procedures run (`../accounts/workspace-operations.ts`), as the member.
 
 /** Why a members read or a slug change was refused, in words the agent can act on. */
 const WORKSPACE_TOOL_REFUSAL = {
   NOT_OWNER: "Not changed: only the workspace's owner may change its slug.",
+  NOT_MANAGER: "Not changed: only the workspace's owner or an admin may set its photo.",
   SLUG_MALFORMED: `Not changed: a slug is lowercase letters and digits, with single hyphens between them, at most ${WORKSPACE_BOUNDS.MAX_SLUG_CHARS} characters.`,
   SLUG_RESERVED: `Not changed: that slug is reserved by ${PRODUCT_NAME}; choose another.`,
   SLUG_TAKEN: "Not changed: another workspace holds or held that slug; choose another.",
@@ -2038,10 +2051,18 @@ function workspaceRefusalWords(refusal: HostedRefusal): string {
   }
 }
 
+/** A photo write refused by its operation, in the agent's words: a refusal of who may names the owner and the admins. */
+function photoRefusalWords(refusal: HostedRefusal): string {
+  return refusal.error === HOSTED_API_ERROR.NOT_PERMITTED
+    ? WORKSPACE_TOOL_REFUSAL.NOT_MANAGER
+    : workspaceRefusalWords(refusal);
+}
+
 /** An operation on the workspace a slug names, or the member's only one, as the member; refused in the agent's words. */
 const workspaceAsMember = <A extends WireRecord, R>(
   slug: string | undefined,
   operation: (userId: string, workspaceId: string) => Effect.Effect<A, HostedRefusal, R>,
+  refusalWords: (refusal: HostedRefusal) => string = workspaceRefusalWords,
 ) =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
@@ -2051,7 +2072,7 @@ const workspaceAsMember = <A extends WireRecord, R>(
       Effect.map(
         (answered): WireRecord => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answered }),
       ),
-      Effect.catch((refusal) => Effect.succeed(agentToolRejected(workspaceRefusalWords(refusal)))),
+      Effect.catch((refusal) => Effect.succeed(agentToolRejected(refusalWords(refusal)))),
     );
   });
 
@@ -2115,6 +2136,49 @@ const SET_WORKSPACE_SLUG_TOOL = memberMcpTool({
       Effect.map(workspaceSlugSet(userId, workspaceId, slug), ({ workspace: changed }) => ({
         workspace: { id: changed.id, slug: changed.slug ?? slug, name: changed.name },
       })),
+    ),
+});
+
+/** A photo set names the workspace and the photo, as a `data:` URL the window would send, or null to remove it. */
+const SetWorkspacePhotoInputSchema = Schema.Struct({
+  workspace: Schema.optionalKey(
+    describeWire(
+      WORKSPACE_INPUT.schema,
+      `The workspace whose photo to set, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} ` +
+        "answered; leave it out where the member belongs to one workspace alone.",
+    ),
+  ),
+  photo: describeWire(
+    workspacePhotoSetRequestSchema.fields.photo,
+    `The photo as a base64 \`data:\` URL of a PNG, JPEG, or WebP image ` +
+      `(${Object.values(WORKSPACE_PHOTO_TYPE).join(", ")}), at most ${WORKSPACE_PHOTO_BOUNDS.MAX_BYTES} bytes decoded, such as a 256-pixel ` +
+      "square; null removes it, and the member's own first workspace then shows their sign-in picture.",
+  ),
+});
+
+const SET_WORKSPACE_PHOTO_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO,
+  description:
+    "Set or remove the photo of a workspace the member you act for belongs to, the picture " +
+    "beside its name in the sidebar and the workspace switcher, as its Settings › General page " +
+    "would. Only its owner or an admin may. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the workspace and its photo's new version, ` +
+    "null once removed, or `rejected` and why.",
+  input: SetWorkspacePhotoInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ workspace, photo }) =>
+    workspaceAsMember(
+      workspace,
+      (userId, workspaceId) =>
+        Effect.map(workspacePhotoSet(userId, workspaceId, photo), ({ workspace: changed }) => ({
+          workspace: {
+            id: changed.id,
+            slug: changed.slug ?? null,
+            name: changed.name,
+            photoVersion: changed.photoVersion ?? null,
+          },
+        })),
+      photoRefusalWords,
     ),
 });
 
@@ -4259,11 +4323,33 @@ const LIST_MCP_CLIENTS_TOOL = memberMcpTool({
     `List the outside MCP clients the member allowed to act for them on ${PRODUCT_NAME}'s MCP ` +
     "server, as Settings › MCP lists them, and the server's address: each client by its id " +
     "and name, where it signs in, when the member allowed it, and when it last renewed its " +
-    "access. The member revokes one in Settings › MCP. Answers `accepted` with them, never a " +
-    "token, or `rejected` and why.",
+    `access. ${MEMBER_MCP_TOOL.REVOKE_MCP_CLIENT} revokes one. Answers \`accepted\` with them, ` +
+    "never a token, or `rejected` and why.",
   input: NoInputSchema,
   annotations: READ_ONLY,
   run: listMcpClientsAsMember,
+});
+
+const RevokeMcpClientInputSchema = Schema.Struct({
+  clientId: describeWire(
+    mcpClientIdSchema,
+    `The client, by the id ${MEMBER_MCP_TOOL.LIST_MCP_CLIENTS} answered.`,
+  ),
+});
+
+const REVOKE_MCP_CLIENT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.REVOKE_MCP_CLIENT,
+  description:
+    "Revoke one outside MCP client the member allowed, by its id, as Revoke in Settings › MCP " +
+    "does: the member's own consent to it and the tokens it holds for them are deleted, and " +
+    "no other member's. It cannot renew its access, and its next sign-in asks the member " +
+    `again. Revoking the client making this call cuts that client off: its access ends within ` +
+    `${MCP_ACCESS_TOKEN_MINUTES} minutes and it must sign in again. A client the member never ` +
+    `allowed, or ${PRODUCT_NAME}'s own Mac or iPhone app, is left as it is. Answers \`accepted\` with ` +
+    "the clients as they then stand, never a token, or `rejected` and why.",
+  input: RevokeMcpClientInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ clientId }) => revokeMcpClientAsMember(clientId),
 });
 
 /** A Sentry call run as the member, in the workspace its slug names or their only one; refused, naming theirs, where that names none. */
@@ -4892,6 +4978,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   LIST_WORKSPACES_TOOL,
   LIST_WORKSPACE_MEMBERS_TOOL,
   SET_WORKSPACE_SLUG_TOOL,
+  SET_WORKSPACE_PHOTO_TOOL,
   MEMBER_LIST_TASKS_TOOL,
   MEMBER_READ_TASK_TOOL,
   MEMBER_FIND_TASK_TOOL,
@@ -4966,6 +5053,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   RENAME_INTEGRATION_TOOL,
   DISCONNECT_INTEGRATION_TOOL,
   LIST_MCP_CLIENTS_TOOL,
+  REVOKE_MCP_CLIENT_TOOL,
   LIST_SENTRY_INSTALLATIONS_TOOL,
   DISCONNECT_SENTRY_TOOL,
   READ_SANDBOX_SETUP_TOOL,

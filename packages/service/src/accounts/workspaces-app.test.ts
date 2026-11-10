@@ -52,7 +52,7 @@ import {
 import { EXPERIMENT } from "@repo/settings";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { jsonResponse, recordingHttpClient } from "@repo/wire/testing";
+import { jsonResponse, recordingHttpClient, webmBytes } from "@repo/wire/testing";
 import { and, eq } from "drizzle-orm";
 import {
   Cause,
@@ -2527,7 +2527,7 @@ it.effect(
 );
 
 it.effect(
-  "a photo that is not a PNG, JPEG, or WebP data: URL, whose bytes are not the image its label names, or is past the byte bound, is refused as invalid, one of a workspace the account is not in as not found, and one at the bound is set",
+  "a photo that is not a PNG, JPEG, or WebP data: URL, a WebM among them, whose bytes are not the image its label names, or is past the byte bound, is refused as invalid, one of a workspace the account is not in as not found, and one at the bound is set",
   () =>
     Effect.gen(function* () {
       const plugin = yield* openWorkspacePlugin;
@@ -2545,6 +2545,7 @@ it.effect(
           "data:image/png;base64,not base64",
           "data:image/png;base64,aGVsbG8=",
           photoOfBytes(WORKSPACE_PHOTO_TYPE.PNG, WORKSPACE_PHOTO_BOUNDS.MAX_BYTES + 1),
+          `data:video/webm;base64,${Buffer.from(webmBytes(64, 64)).toString("base64")}`,
         ]) {
           refusals.push(yield* settingPhoto(plugin, ada, acme, photo));
         }
@@ -2553,7 +2554,7 @@ it.effect(
         const set = yield* settingPhoto(plugin, ada, acme, atBound);
 
         const invalid = refusedAs(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST);
-        assert.deepEqual(refusals, [invalid, invalid, invalid, invalid, invalid, invalid]);
+        assert.deepEqual(refusals, [invalid, invalid, invalid, invalid, invalid, invalid, invalid]);
         assert.deepEqual(
           outsider,
           refusedAs(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),

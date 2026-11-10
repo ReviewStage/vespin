@@ -3,7 +3,9 @@
  *
  * Kept by service origin, as the sign-in is, since a Preview's workspaces
  * are not production's. `workspace use` writes the default; a command reads
- * it through `workspace.ts`, under `-w` and `VESPIN_WORKSPACE`.
+ * it through `workspace.ts`, under `-w` and `VESPIN_WORKSPACE`. Leaving or
+ * deleting the workspace it names forgets it, so a later command is not
+ * held to a workspace the member is no longer in.
  */
 
 import { Effect, Schema } from "effect";
@@ -46,4 +48,22 @@ export function keepWorkspace(origin: string, workspace: string) {
       services: { ...config.services, [origin]: { ...config.services[origin], workspace } },
     }),
   );
+}
+
+/**
+ * The default workspace kept for a service forgotten, where it names the
+ * workspace given by its id or slug; any other default is left as it is.
+ */
+export function forgetWorkspace(origin: string, workspace: { id: string; slug?: string | null }) {
+  const file = configPath();
+  return Effect.flatMap(readConfigFile(file, configJson, NO_CONFIG), (config) => {
+    const service = config.services[origin];
+    const kept = service?.workspace;
+    if (service === undefined || kept === undefined) return Effect.void;
+    if (kept !== workspace.id && kept !== workspace.slug) return Effect.void;
+    const { workspace: _forgotten, ...rest } = service;
+    return writeConfigFile(file, configJson, {
+      services: { ...config.services, [origin]: rest },
+    });
+  });
 }

@@ -31,6 +31,11 @@ tag push or a manual dispatch) only builds, signs, notarizes, and verifies the
 app. A green PR says nothing about the Mac app, and the one macOS check to
 wait for is the iOS app's.
 
+A release is dated in Eastern time (America/New_York), never UTC or the
+author's own zone: its `CHANGELOG.md` heading carries the day its tag is
+pushed there (`TZ=America/New_York date +%F`), and `.github/RELEASE.md` is
+the rest of cutting one.
+
 ## Layout
 
 Application logic lives in `packages/`. An app holds what is specific to

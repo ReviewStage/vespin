@@ -160,8 +160,8 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
- * The change confirmed, written (`updateTaskCommitted`), a move to Done
- * archiving the task's idle agents by `archivedBy` (`doneTaskArchive`);
+ * The change confirmed, written (`updateTaskCommitted`), a move to Done or
+ * Canceled archiving the task's idle agents by `archivedBy` (`doneTaskArchive`);
  * none where the member reaches the task no more. Its refusals under the row's lock are answered
  * by name, as `taskChangeAsked` answers them.
  */
