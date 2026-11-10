@@ -19,7 +19,7 @@
  * with its address and title, a `list` writes every page the browser
  * holds, and only a tab the agent closed is dropped. A tab a member opened
  * in the agent's browser, as one does to sign in somewhere for it
- * (`agent-browser-tabs-procedures.ts`), is answered among the tabs as one
+ * (`../agent-browser-tabs.ts`), is answered among the tabs as one
  * they opened, so the agent knows to use it once it is handed back.
  *
  * While it runs, the agent's pointer is written to the tab it points at

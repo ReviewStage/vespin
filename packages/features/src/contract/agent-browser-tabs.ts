@@ -8,7 +8,7 @@
  * stands, so a tab another member drives answers them as its driver.
  *
  * Each declares the refusals its handler answers
- * (`packages/service/src/agents/agent-browser-tabs-procedures.ts`) beyond
+ * (`packages/service/src/agents/agent-browser-tabs.ts`) beyond
  * those any procedure may: an agent, a task, or a tab out of reach as not
  * found, and an open's and a takeover's own (`OPEN_REFUSALS`).
  */
@@ -32,11 +32,13 @@ const DRIVER_PATH = `${TABS_PATH}/{tab}/driver` as const;
 
 const AGENT_TABS_PATH = `${HOSTED_SERVICE_PATH.AGENTS}/{id}/browser-tabs` as const;
 
+const AGENT_DRIVER_PATH = `${AGENT_TABS_PATH}/{tab}/driver` as const;
+
 /** An open's body: an agent's id and an address at the Browser tab's bound, every character escaped. */
 const OPEN_BODY_BYTES = 2_048 * 6 + 1_024;
 
 /**
- * What an open refuses (`agent-browser-tabs-procedures.ts`'s `openTab`): an
+ * What an open refuses (`agent-browser-tabs.ts`'s `openAgentBrowserTab`): an
  * agent, or the task it is to be on, not found, an agent not the member's
  * to drive, one archived, one that has run no sandbox yet, and a browser
  * that could not be reached or would not open the page. An address that is
@@ -53,7 +55,7 @@ const OPEN_REFUSALS = [
 /** The task or the agent a path names; the service reads an id that is no UUID as naming none. */
 const holderParamsSchema = EffectSchema.Struct({ id: EffectSchema.String });
 
-/** The task and the tab a tab's path names, read as the task's id is. */
+/** The task or the agent, and the tab, a tab's path names, read as the holder's id is. */
 const tabParamsSchema = EffectSchema.Struct({ id: EffectSchema.String, tab: EffectSchema.String });
 
 export const agentBrowserTabsContract = {
@@ -82,6 +84,18 @@ export const agentBrowserTabsContract = {
     .meta(bodyCap(OPEN_BODY_BYTES))
     .meta(openapi({ method: HTTP_METHOD.POST, path: TABS_PATH, inputStructure: "detailed" }))
     .input(exactBodyInput(holderParamsSchema, agentBrowserTabOpenRequestSchema))
+    .output(EffectSchema.flip(agentBrowserTabAnswerSchema)),
+  /** The member takes the tab over in the coding agent's browser, or renews their own takeover. */
+  agentTakeOver: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: AGENT_DRIVER_PATH }))
+    .input(tabParamsSchema)
+    .output(EffectSchema.flip(agentBrowserTabAnswerSchema)),
+  /** The member hands the tab they drive in the coding agent's browser back to it. */
+  agentHandBack: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
+    .meta(openapi({ method: HTTP_METHOD.DELETE, path: AGENT_DRIVER_PATH }))
+    .input(tabParamsSchema)
     .output(EffectSchema.flip(agentBrowserTabAnswerSchema)),
   /** The member takes the tab over, or renews their own takeover. */
   takeOver: declaredProcedure

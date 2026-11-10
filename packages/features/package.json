@@ -45,6 +45,7 @@
     "./cli-exit": "./src/cli-exit.js",
     "./cli-git-remote": "./src/cli-git-remote.js",
     "./cli-inbox-answer": "./src/cli-inbox-answer.js",
+    "./cli-pull-request-ref": "./src/cli-pull-request-ref.js",
     "./cli-remind": "./src/cli-remind.js",
     "./cli-task-ref": "./src/cli-task-ref.js",
     "./cli-transcript": "./src/cli-transcript.js",
