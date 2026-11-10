@@ -38,6 +38,7 @@ import {
 import type { EditorProps, EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import { enterKeyHint, enterSends, modEnterSends } from "../enter-sends.js";
+import { spacedAfterChip } from "./chip-spacing.js";
 import {
   COMPOSER_INPUT,
   type ComposerEditorHandle,
@@ -1009,42 +1010,25 @@ function insertedPicturesAt(
     ...(index > 0 || needsSpace($pos.nodeBefore, false) ? [schema.text(SPACE)] : []),
     schema.node(PICTURE_NODE, { name }),
   ]);
-  // Note that a space follows the last chip, and the caret stands past it, as a mention picked from its list leaves them, so the next word typed stands apart.
-  const spaced = doc.textBetween(pos, Math.min(pos + 1, doc.content.size)) === SPACE;
-  const trail = spaced ? [] : [schema.text(SPACE)];
-  const tr = editor.state.tr.insert(pos, [...chips, ...trail]);
+  const laid = editor.state.tr.insert(pos, chips);
+  const tr = spacedAfterChip(laid, laid.mapping.map(pos));
   if (textOf(tr.doc).length > maxLength) return false;
-  const after = tr.mapping.map(pos) + (spaced ? SPACE.length : 0);
-  editor.view.dispatch(
-    tr
-      .setSelection(TextSelection.create(tr.doc, after))
-      .setMeta(COMMAND_META, true)
-      .setMeta(CHIPPED_META, true)
-      .scrollIntoView(),
-  );
+  editor.view.dispatch(tr.setMeta(COMMAND_META, true).setMeta(CHIPPED_META, true).scrollIntoView());
   editor.view.focus();
   return true;
 }
 
-/** The word a trigger found written as the chip given, a space after it unless one follows, the caret after the space. */
+/** The word a trigger found written as the chip given, spaced from what follows (`spacedAfterChip`). */
 function choseChip(editor: Editor, word: ReturnType<typeof triggerAt>, chip: PmNode): void {
   if (word === undefined) return;
-  const { doc, schema } = editor.state;
-  const spaced = doc.textBetween(word.to, Math.min(word.to + 1, doc.content.size)) === SPACE;
-  const tr = editor.state.tr.replaceWith(
-    word.from,
-    word.to,
-    spaced ? [chip] : [chip, schema.text(SPACE)],
-  );
-  editor.view.dispatch(
-    tr.setSelection(TextSelection.create(tr.doc, word.from + 2)).scrollIntoView(),
-  );
+  const tr = editor.state.tr.replaceWith(word.from, word.to, chip);
+  editor.view.dispatch(spacedAfterChip(tr, word.from + chip.nodeSize).scrollIntoView());
 }
 
 /**
  * A mention made elsewhere laid in where the caret stands, over what is
- * selected, a space after it unless one follows, the caret after the
- * mention and the box focused; nothing where the box takes no words now, or the words with its
+ * selected, spaced from what follows (`spacedAfterChip`), and the box
+ * focused; nothing where the box takes no words now, or the words with its
  * link would stand past the bound, as a key typed past it is not written.
  */
 function laidInMention(
@@ -1054,12 +1038,9 @@ function laidInMention(
   mention: MentionNode,
 ): void {
   if (state.input !== COMPOSER_INPUT.EDITABLE) return;
-  const { doc, selection, schema } = editor.state;
-  const spaced =
-    doc.textBetween(selection.to, Math.min(selection.to + 1, doc.content.size)) === SPACE;
-  const chip = schema.node(MENTION_NODE, { name: mention.name, target: mention.target });
+  const chip = editor.schema.node(MENTION_NODE, { name: mention.name, target: mention.target });
   const laid = editor.state.tr.replaceSelectionWith(chip, false);
-  const tr = spaced ? laid : laid.insertText(SPACE);
+  const tr = spacedAfterChip(laid, laid.selection.from);
   if (textOf(tr.doc).length > maxLength) return;
   editor.view.dispatch(tr.scrollIntoView());
   editor.view.focus();

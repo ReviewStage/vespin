@@ -243,6 +243,17 @@ test("a word typed after a file laid in as its chip stands a space apart from it
   );
 });
 
+test("a file laid in as its chip before closing punctuation takes no space before it", async () => {
+  const container = await mounted("agent");
+  typeInComposer(container, "See.");
+  const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
+  // The document holds "See" from 1, then the period the caret now stands before.
+  act(() => editor.commands.setTextSelection(4));
+  await drop(container, [png("one.png")]);
+  typeInComposer(container, ",");
+  assert.equal(editor.getText(), "See [Picture 1],.");
+});
+
 /** The chip a file was just laid in with taken out as two Backspaces would: the first the space laid in after it, which the browser deletes itself, the second the chip whole. */
 function takeOutLastChip(container: HTMLElement): void {
   const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
