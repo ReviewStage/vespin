@@ -1,5 +1,5 @@
 /**
- * workspace-member-operations.ts -- a workspace's member removed, given a role, handed the workspace, or leaving, as the hosted procedures make each and the member MCP tools will.
+ * workspace-member-operations.ts -- a workspace's member removed, given a role, handed the workspace, or leaving, as the hosted procedures make each.
  *
  * Each is the one operation its doors run: `workspaces.removeMember`,
  * `changeRole`, `transfer`, and `leave` (`workspaces-procedures.ts`) for the

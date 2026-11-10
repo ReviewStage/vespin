@@ -29,9 +29,10 @@
  * published keys (`verifyCodexDeviceIdToken`): signed by OpenAI for Codex's
  * client and unexpired.
  *
- * Removing the plan revokes its renewable session at OpenAI's revocation
- * endpoint, which must be on OpenAI's own authorization server, first, under the same lock, retrying a failure to connect or a
- * server error a few times, and removes the row whether or not OpenAI
+ * Removing the plan first revokes its renewable session at OpenAI's
+ * revocation endpoint, which must be on OpenAI's own authorization server,
+ * under the same lock, retrying a failure to connect or a server error a
+ * few times, and removes the row whether or not OpenAI
  * confirmed it, answering which, so the account can be told to end the
  * session in ChatGPT's settings.
  *
@@ -74,7 +75,6 @@ const CHATGPT_FLOW = {
   RETIRED_THIRD_PARTY: "third_party",
 } as const;
 
-/** OpenAI's authorization server and where its published keys and revocation endpoint are read from. */
 export const CHATGPT_OAUTH = {
   /** OpenAI's authorization server: no call that carries a credential goes anywhere else. */
   ISSUER: "https://auth.openai.com",
