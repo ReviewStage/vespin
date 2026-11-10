@@ -35,7 +35,7 @@ import {
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useEffectEvent, useMemo, useSyncExternalStore } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
@@ -61,7 +61,8 @@ function refused(what: string): (error: unknown) => void {
  * it into the document, which the screen reads. Nothing while `key` is none.
  */
 function useLiveFollow(key: string | undefined, open: (key: string) => Promise<OpenedFollow>) {
-  // Note that only the key moves the follow, since `open` is made anew on each draw.
+  // Note that only the key moves the follow, `open` being read as it stands when the follow opens.
+  const opening = useEffectEvent(open);
   useEffect(() => {
     if (key === undefined) return;
     let held = true;
@@ -76,7 +77,7 @@ function useLiveFollow(key: string | undefined, open: (key: string) => Promise<O
         if (!held) break;
       }
     };
-    open(key).then(drain).catch(refused("Following a live read"));
+    opening(key).then(drain).catch(refused("Following a live read"));
     return () => {
       held = false;
       stream?.return?.().catch(refused("Letting a live read go"));
