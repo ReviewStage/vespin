@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   COLUMN_ALIGN,
+  heardLine,
   LINK_TARGET,
   MARKDOWN_BLOCK,
   MARKDOWN_RUN,
@@ -121,5 +122,21 @@ describe("markdownBlocks", () => {
   it("draws words nested too deep to parse as one block of plain text", () => {
     const deep = `${">".repeat(8000)} **hi**`;
     expect(markdownBlocks(deep, READING)).toEqual([{ kind: MARKDOWN_BLOCK.CODE, text: deep }]);
+  });
+});
+
+describe("heardLine", () => {
+  it("hears a line's chips by their kind and name, and leaves a line of words as drawn", () => {
+    const [chipLine, plainLine] = markdownBlocks(
+      "Pull request: [@#128 Invite a teammate by email](https://github.com/acme/app/pull/128)\n\n" +
+        "See [the docs](https://example.com/docs)",
+      READING,
+    );
+    expect(chipLine?.kind === MARKDOWN_BLOCK.PARAGRAPH && heardLine(chipLine.runs)).toBe(
+      "Pull request: pull request #128 Invite a teammate by email",
+    );
+    expect(plainLine?.kind === MARKDOWN_BLOCK.PARAGRAPH && heardLine(plainLine.runs)).toBe(
+      undefined,
+    );
   });
 });
