@@ -11,14 +11,20 @@
  * (`@repo/features/checkout-restore`) in the checkout, with the snapshot
  * in its variables: the working tree and the checked-out branch go back,
  * and no commit is moved. Nothing leaves the sandbox: no push, no
- * credential, so none is set at its firewall. A sandbox this step woke
- * stops `SANDBOX_IDLE` after its last touch (`@repo/sandbox`), as every idle
+ * credential, so none is set at its firewall. The restore is a use of the
+ * sandbox, touched and recorded as one (`../sandbox-use.ts`), so the
+ * unused-sandbox release counts it; a sandbox this step woke stops
+ * `SANDBOX_IDLE` after its last touch (`@repo/sandbox`), as every idle
  * sandbox does. The whole step is bounded. What it came to is an outcome the
- * rewind names to its caller: restored, the snapshot missing from the
- * checkout, as after a sandbox made anew re-cloned it, or a failure, whose
- * stderr's tail is logged with credential-shaped runs redacted.
+ * rewind names to its caller: restored, the snapshot missing, as where the
+ * sandbox that held it is released or its stopped copy is gone, or a
+ * failure, whose stderr's tail is logged with credential-shaped runs
+ * redacted. The panel offers no restore for a turn whose sandbox the ledger
+ * records gone (`@repo/database`'s `models/agent-sandboxes.ts` forgets the
+ * turn's snapshot as it is), so a miss here is the rare race with it.
  */
 
+import type { DatabaseServices } from "@repo/database/core/query";
 import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import {
   CHECKOUT_RESTORE_EXIT,
@@ -37,6 +43,7 @@ import {
 import { Duration, Effect, Option } from "effect";
 import { agentSandboxName, agentSandboxOf } from "../agent-sandbox-open.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
+import { touchAgentSandbox } from "../sandbox-use.js";
 
 export const CHECKOUT_RESTORE = {
   /** The most a rewind waits on the restore, the sandbox woken included. */
@@ -88,7 +95,14 @@ const restoreIn = (ask: RestoreAsk) =>
     if (!UP_STATUSES.has(sandbox.status) && sandbox.name !== agentSandboxName(ask.sessionId)) {
       return RESTORE_OUTCOME.MISSING;
     }
-    const running = runningOf(sandbox) ?? (yield* resumedRunning(sandbox.name));
+    // A stopped sandbox whose snapshot the provider dropped holds no checkout to put back.
+    const running =
+      runningOf(sandbox) ??
+      (yield* resumedRunning(sandbox.name).pipe(
+        Effect.catchTag("SnapshotGone", () => Effect.succeed(undefined)),
+      ));
+    if (running === undefined) return RESTORE_OUTCOME.MISSING;
+    yield* touchAgentSandbox(sandbox.name);
     const ran = yield* sandboxes.run(running, {
       command: "sh",
       args: ["-c", CHECKOUT_RESTORE_SCRIPT],
@@ -110,7 +124,7 @@ const restoreIn = (ask: RestoreAsk) =>
  */
 export const restoreCheckout = /* @__PURE__ */ Effect.fn("web/restoreCheckout")(function* (
   ask: RestoreAsk,
-): Effect.fn.Return<RestoreOutcome, never, Sandbox> {
+): Effect.fn.Return<RestoreOutcome, never, Sandbox | DatabaseServices> {
   const outcome = yield* restoreIn(ask).pipe(
     Effect.timeoutOption(CHECKOUT_RESTORE.TIMEOUT),
     Effect.catch((failure) =>
