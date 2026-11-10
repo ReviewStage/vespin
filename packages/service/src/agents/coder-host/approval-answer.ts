@@ -12,8 +12,10 @@
  * messages go: the store's line in the cloud, the device's MESSAGE line on a
  * host (`runtime-sessions.ts`'s `runnerApprovalAnswered`), and the runner's
  * own word of what it took (`APPROVAL_RESOLVED`) lands on the row
- * (`runner-approvals.ts`). Where the line could not be written, the claim is
- * handed back: pending again where the runner could not be reached just
+ * (`runner-approvals.ts`). The delivery and what follows from its outcome
+ * run to their end whatever happens to the request, so a claim is never
+ * handed back for a line that may have landed. Where the line could not be
+ * written, the claim is handed back: pending again where the runner could not be reached just
  * now, the answer refused as unavailable, to be sent again; and expired
  * where no runner of the agent runs, since none holds the ask.
  */
@@ -84,8 +86,8 @@ export const answeredApproval = /* @__PURE__ */ Effect.fnUntraced(function* (
     decision: DECISION_OF_ANSWER[request.answer],
     ...(request.message === undefined ? undefined : { message: request.message }),
   };
-  // A claim whose line never reached a runner goes back, uninterruptibly and on an interruption too, so no
-  // answer the runner never heard stands; a release that fails is said, and the answer's own outcome kept.
+  // A claim whose line never reached a runner goes back, uninterruptibly; a release that fails is said, and
+  // the answer's own outcome kept.
   const released = (to: typeof APPROVAL_STATUS.PENDING | typeof APPROVAL_STATUS.EXPIRED) =>
     releaseApprovalClaim({ agentId: agent.id, approvalId, userId, to, at }).pipe(
       Effect.catch((failure) =>
@@ -95,16 +97,25 @@ export const answeredApproval = /* @__PURE__ */ Effect.fnUntraced(function* (
       Effect.annotateLogs({ agentId: agent.id }),
       Effect.uninterruptible,
     );
-  const reached = yield* runnerApprovalAnswered(agent, line).pipe(
-    Effect.onInterrupt(() => released(APPROVAL_STATUS.PENDING)),
+  // Note that the delivery runs to its end whatever happens to the request, because a line cut off as it
+  // lands leaves no word of whether the runner has it: its outcome alone says, and the claim follows it.
+  const reached = yield* Effect.uninterruptible(
+    Effect.andThen(runnerApprovalAnswered(agent, line), (answer) =>
+      answer === RUNNER_ANSWER.WRITTEN
+        ? Effect.succeed(answer)
+        : Effect.as(
+            released(
+              answer === RUNNER_ANSWER.NOT_LIVE ? APPROVAL_STATUS.EXPIRED : APPROVAL_STATUS.PENDING,
+            ),
+            answer,
+          ),
+    ),
   );
   if (reached === RUNNER_ANSWER.WRITTEN) {
     return { approval: { id: claimed.value.id, status: claimed.value.status } };
   }
-  // The line never reached a runner: pending for another answer where the runner could not be reached just
-  // now, and expired where none runs, so no runner holds the ask.
-  const lost = reached === RUNNER_ANSWER.NOT_LIVE;
-  yield* released(lost ? APPROVAL_STATUS.EXPIRED : APPROVAL_STATUS.PENDING);
-  if (!lost) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+  // The line never reached a runner, and the claim went back: pending for another answer where the runner
+  // could not be reached just now, and expired where none runs, so no runner holds the ask.
+  if (reached === RUNNER_ANSWER.FAILED) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   return yield* refusedAsItStands(userId, agent.id, approvalId);
 });
