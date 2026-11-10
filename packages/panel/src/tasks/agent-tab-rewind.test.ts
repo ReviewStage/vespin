@@ -28,7 +28,7 @@ import { AgentTab } from "./agent-tab.js";
 
 /**
  * agent-tab-rewind.test.ts -- an edited message sent from an agent's tab asks
- * before it drops the messages after it, as Revert to here does: Cancel keeps
+ * before it drops the messages after it, as Rewind conversation to here does: Cancel keeps
  * every later message and sends nothing, Send takes the agent back and sends,
  * and the last message is sent at once. Synthetic throughout.
  */

@@ -32,6 +32,7 @@ export const MEMBER_MCP_TOOL = {
   CREATE_TASK: AGENT_TOOL.CREATE_TASK,
   UPDATE_TASK: AGENT_TOOL.UPDATE_TASK,
   CHANGE_TASK_RELATION: "change_task_relation",
+  DELETE_TASK: "delete_task",
   EDIT_DESCRIPTION: AGENT_TOOL.EDIT_DESCRIPTION,
   LIST_DESCRIPTION_REVISIONS: "list_description_revisions",
   READ_DESCRIPTION_REVISION: "read_description_revision",
@@ -72,6 +73,13 @@ export const MEMBER_MCP_TOOL = {
   DELETE_AUTOMATION: AGENT_TOOL.DELETE_AUTOMATION,
   READ_SANDBOX_SETUP: "read_sandbox_setup",
   EDIT_SANDBOX_SETUP: "edit_sandbox_setup",
+  LIST_INTEGRATIONS: "list_integrations",
+  CONNECT_INTEGRATION: "connect_integration",
+  RENAME_INTEGRATION: "rename_integration",
+  DISCONNECT_INTEGRATION: "disconnect_integration",
+  LIST_MCP_CLIENTS: "list_mcp_clients",
+  LIST_SENTRY_INSTALLATIONS: "list_sentry_installations",
+  DISCONNECT_SENTRY: "disconnect_sentry",
 } as const;
 
 export type MemberMcpToolName = (typeof MEMBER_MCP_TOOL)[keyof typeof MEMBER_MCP_TOOL];
