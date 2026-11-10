@@ -185,8 +185,10 @@ export const COMPUTER_TOOL = {
     "running is opened behind the developer's windows. The developer's Mac asks them the " +
     "first time an agent uses each app, and they may decline, in which case the call answers " +
     "`not-run`; agents are never offered terminals, password managers, System Settings, or " +
-    `${PRODUCT_NAME}. Use run_on_mac for what a shell can do; use this for what only an app's ` +
-    "window shows or takes.",
+    `${PRODUCT_NAME}. Reach for it last: an integration's tools where one serves the app, ` +
+    "run_on_mac where a shell can do it, and browser for localhost and public pages. Use this " +
+    "for what only an app's window shows or takes, a browser on the developer's Mac among them, " +
+    "such as a page that needs their own signed-in session.",
   inputSchema: COMPUTER_INPUT,
 } as const;
 
