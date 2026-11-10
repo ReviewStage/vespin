@@ -52,6 +52,7 @@ import {
 import { skillWord } from "@repo/features/skill-word";
 import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
+import type { TasksView } from "@repo/features/tasks-view";
 import { workingTime } from "@repo/features/time-format";
 import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
 import {
@@ -80,7 +81,7 @@ import {
 } from "@repo/features/turn-rows";
 import { replyFromWords } from "@repo/features/words";
 import type { AppStateSnapshot } from "@repo/host/app-state";
-import { AGENT_ENTER } from "@repo/settings";
+import { AGENT_ENTER, EXPERIMENT } from "@repo/settings";
 import {
   ANNOUNCE,
   announce,
@@ -173,8 +174,9 @@ import { failureShown, unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
-import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
+import { appStateQuery, selectAppSettingsView, selectListedTasks } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
+import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import {
   type AgentApprovalsControl,
   type AgentModeControl,
@@ -881,6 +883,18 @@ function TodosDock({
 
 /** Every task's pull requests the window's task list carries. */
 const selectTaskPullRequests = (state: AppStateSnapshot) => state.tasks.taskPullRequests;
+
+/** The workspace the agent works in, as the list names it on the agent or on its task; none before the list lands. */
+function workspaceOfAgent(
+  view: TasksView,
+  agentId: string,
+  taskId: string | null,
+): string | undefined {
+  return (
+    view.taskAgents?.find((listed) => listed.id === agentId)?.workspaceId ??
+    view.tasks.find((task) => task.id === taskId)?.workspaceId
+  );
+}
 
 /** Every pull request the agent opened, pinned over the box under the to-do list for as long as one stands, whether the agent works or has ended: the one it stands on as its tab read it, and the others its task's list names it as having opened (`dockedPullRequests`); nothing before it opened one. */
 function PublishedDock({
@@ -2933,8 +2947,16 @@ function AgentTabView({
   // reads them, and a page that moved no rewind point must draw no message again.
   const pending = composer.sent.length > 0;
   const going = useKept(composer.going, sameSet);
-  // The files go back only where the service restores them: in a cloud sandbox, not yet on a Mac.
-  const restores = agent.machine !== AGENT_MACHINE.DEVICE;
+  // The files go back only while the agent's workspace has the experiment on, and where the service
+  // restores them: in a cloud sandbox, not yet on a Mac.
+  const selectWorkspace = useCallback(
+    (state: AppStateSnapshot) => workspaceOfAgent(selectListedTasks(state), agent.id, agent.planId),
+    [agent.id, agent.planId],
+  );
+  const workspaceId = useQuery({ ...appStateQuery, select: selectWorkspace }).data;
+  const restores =
+    useWorkspaceExperiment(workspaceId, EXPERIMENT.REWIND_FILES) &&
+    agent.machine !== AGENT_MACHINE.DEVICE;
   const points = useKept(
     useMemo(
       () => rewindPoints(kept, pending, readerId, going, restores),

@@ -184,8 +184,9 @@ function takesWords(takes: Takes): string | undefined {
  * find no line. Where a rewind drops messages another member than the reader
  * (`readerId`) wrote, the points say whose and how many, for the confirm to
  * name. A line that opened a turn whose checkout its runner recorded
- * (`filesRestorable`) is one the files can go back at, where the agent runs
- * where the service restores them (`restores`), a cloud sandbox.
+ * (`filesRestorable`) is one the files can go back at, where the files go
+ * back at all (`restores`): the agent's workspace has the experiment on,
+ * and the agent runs where the service restores them, a cloud sandbox.
  */
 export function rewindPoints(
   messages: readonly AgentTranscriptMessage[],
