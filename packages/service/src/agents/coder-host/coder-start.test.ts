@@ -44,6 +44,8 @@ import {
 } from "../../testing/github-app-fake.js";
 import {
   type AgentSessions,
+  MACHINE_UP,
+  type MachineUp,
   PLAN_REFUSAL,
   RUNTIME_REFUSAL,
   SESSION_CANCEL_OUTCOME,
@@ -94,7 +96,7 @@ function fakeAgentSessions() {
       Effect.succeed({
         outcome: SESSION_SEND_OUTCOME.ACCEPTED,
         sessionId: `wrun_${randomUUID()}`,
-        up: Effect.succeed(undefined),
+        up: Effect.succeed(MACHINE_UP.READY),
       }),
     open: (message) =>
       Effect.sync(() => {
@@ -261,7 +263,7 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
-        const booting = (up: Effect.Effect<BootFailure | undefined>) =>
+        const booting = (up: Effect.Effect<BootFailure | MachineUp>) =>
           Effect.gen(function* () {
             const { opened, agentSessions } = fakeAgentSessions();
             const sessions = yield* agentSessions;
@@ -290,7 +292,7 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
             };
           });
 
-        const cameUp = yield* booting(Effect.succeed(undefined));
+        const cameUp = yield* booting(Effect.succeed(MACHINE_UP.READY));
         const neverCameUp = yield* booting(Effect.succeed(BOOT_FAILURE.MACHINE_UNAVAILABLE));
 
         assert.deepEqual(cameUp, {

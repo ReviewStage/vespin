@@ -71,6 +71,7 @@ import {
   type AgentSessions,
   KEY_REFUSAL,
   type KeyRefusal,
+  MACHINE_UP,
   PLAN_REFUSAL,
   type PlanRefusal,
   RUNTIME_REFUSAL,
@@ -179,7 +180,7 @@ function recording(sessionPrefix: string) {
         return {
           outcome: SESSION_SEND_OUTCOME.ACCEPTED,
           sessionId,
-          up: Effect.succeed(undefined),
+          up: Effect.succeed(MACHINE_UP.READY),
         } as const;
       }),
     retry: (sessionId, message) =>

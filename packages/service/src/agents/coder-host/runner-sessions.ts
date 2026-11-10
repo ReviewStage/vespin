@@ -235,6 +235,7 @@ import { LAUNCH_SWAP } from "../sandbox-firewall.js";
 import { touchAgentSandbox } from "../sandbox-use.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
+  MACHINE_UP,
   PLAN_REFUSAL,
   RUNTIME_REFUSAL,
   SESSION_CANCEL_OUTCOME,
@@ -1277,8 +1278,8 @@ export const runnerSessions = <
                 });
                 return { lines: line(config), mark };
               }
-              // Note that a runner fed on its stdin is never launched without a message, which a launch that hands on waiting lines is only for one that reads them.
-              if (opened.length === 0) return yield* new LaunchRefused({ reason: "no message" });
+              // Note that a runner fed on its stdin is launched without a message only to boot an agent's first launch,
+              // warm from its start, its first message handed it as a later line once the queue lets it go (`boot`).
               return { lines: [config, ...opened].map(line).join(""), mark };
             }),
           // Note that its first message goes with it, since the send that queued it answers failed.
@@ -2617,7 +2618,8 @@ export const runnerSessions = <
               openedPlace(agent, sessionId, layout, undefined, credential),
               CODER.RUNNER_LEASE.SEND_WAIT,
             ).pipe(
-              Effect.as(undefined),
+              // Note that a runner fed on its stdin is up once its Mac starts it, not once its launch line is written.
+              Effect.as(layout.linesRead ? MACHINE_UP.READY : MACHINE_UP.AWAITS_HOST),
               Effect.catch((failure) =>
                 Effect.as(
                   agentFailureSaid(
