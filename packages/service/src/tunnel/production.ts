@@ -9,13 +9,14 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { hasRepository, readVisibleAgent } from "@repo/database/models/agent-store";
 import { standingSessionsOf } from "@repo/database/models/recorded-session";
-import { Sandbox, touchSandbox } from "@repo/sandbox";
+import { Sandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
 import { controlsAgent } from "../agents/agent-reach.js";
 import { agentSandboxName } from "../agents/agent-sandbox-open.js";
 import type { AgentImage } from "../agents/coder-host/agent-image.js";
 import { connectPty } from "../agents/sandbox-pty.js";
+import { touchAgentSandbox } from "../agents/sandbox-use.js";
 import { AgentSandbox, agentSandboxLayer } from "../agents/terminal/agent-sandbox.js";
 import type { TunnelDependencies } from "./relay.js";
 
@@ -52,6 +53,6 @@ export const tunnelDependencies: Effect.Effect<TunnelDependencies, never, Tunnel
         ),
       open: (sessionId) => sandbox.open(sessionId),
       connect: (shell) => connectPty(sandboxes, shell),
-      touch: (sessionId) => run(touchSandbox(agentSandboxName(sessionId))),
+      touch: (sessionId) => run(touchAgentSandbox(agentSandboxName(sessionId))),
     };
   });

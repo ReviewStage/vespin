@@ -33,16 +33,9 @@ import { SettledTurnListener, storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { getTestDB, openedPullRequest, startTask } from "@repo/database/testing";
+import { getTestDB, startTask } from "@repo/database/testing";
 import { APPROVAL_STATUS } from "@repo/features/agent-approval-wire";
-import {
-  AGENT_FAILURE,
-  AGENT_KIND,
-  AGENT_PAYER,
-  type AgentPayer,
-  CHECK_SUMMARY,
-  PULL_REQUEST_STATE,
-} from "@repo/features/agent-wire";
+import { AGENT_FAILURE, AGENT_KIND, AGENT_PAYER, type AgentPayer } from "@repo/features/agent-wire";
 import {
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
@@ -210,18 +203,6 @@ const taskStatusOf = (userId: string, taskId: string) =>
 
 const agentWithBearer = agentOn(HARNESS.CLAUDE_CODE, ["Run the probe."]);
 
-/** The agent's pull request as its row keeps it once merged. */
-const MERGED = {
-  number: 42,
-  title: "Fix the refresh",
-  url: "https://github.com/acme/relay/pull/42",
-  state: PULL_REQUEST_STATE.MERGED,
-  checks: CHECK_SUMMARY.PASSING,
-  additions: 12,
-  deletions: 3,
-  changedFiles: 2,
-};
-
 /** The SDK messages of P00's workflow turn, in the pinned SDK's shapes, as the runner numbers and posts them. */
 function workflowTurn(lineId: string): readonly RunnerEvent[] {
   const envelope = { parent_tool_use_id: null, session_id: SESSION, uuid: randomUUID() };
@@ -366,10 +347,8 @@ it.layer(SUITE)("the runner events route", (it) => {
         const post = yield* standing;
         const agent = yield* agentWithBearer;
         const events = workflowTurn(agent.lineId);
-        // The task was marked done, and the agent's pull request merged: its turn takes the task
-        // up again, and the turn's end, everyone then idle, finishes it (`tasks/task-finish.ts`).
+        // The task was marked done: its turn takes the task up again (`tasks/task-finish.ts`).
         yield* updateTask(agent.userId, agent.taskId, { status: TASK_STATUS.DONE });
-        yield* openedPullRequest(agent.userId, agent.agentId, MERGED);
 
         const first = yield* post(agent.bearer, events.slice(0, 11));
         const midway = yield* transcriptOf(agent.target.conversationId);
@@ -380,7 +359,6 @@ it.layer(SUITE)("the runner events route", (it) => {
         assert.deepEqual(first.body, { applied: 11, sequence: 10 });
         assert.deepEqual(last.body, { applied: 4, sequence: 14 });
         assert.equal(reopened, TASK_STATUS.IN_PROGRESS);
-        assert.equal(yield* taskStatusOf(agent.userId, agent.taskId), TASK_STATUS.DONE);
         // A model turn that ends with work still in flight leaves the agent's turn running,
         // and the words forming after it are told through their last finished sentence.
         assert.deepEqual(

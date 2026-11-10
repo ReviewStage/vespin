@@ -16,6 +16,7 @@ import { Argument, Command } from "effect/cli";
 import { configuredWorkspace, keepWorkspace } from "../config-store.js";
 import { answer, CommandFailed } from "../output.js";
 import { askService, session } from "../session.js";
+import { createCommand } from "./workspace-create.js";
 import {
   workspaceDeleteCommand,
   workspaceLeaveCommand,
@@ -101,11 +102,12 @@ const useCommand = Command.make(
 
 export const workspaceCommand = Command.make("workspace").pipe(
   Command.withDescription(
-    "List your workspaces, choose the default one, manage its members, and leave, hand over, or delete one",
+    "List your workspaces, choose the default one, create one, manage its members, and leave, hand over, or delete one",
   ),
   Command.withSubcommands([
     listCommand,
     useCommand,
+    createCommand,
     workspaceMembersCommand,
     workspaceSlugCommand,
     workspacePhotoCommand,

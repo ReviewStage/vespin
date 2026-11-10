@@ -136,7 +136,7 @@ export function askedRow(
     repositories: made.repositories ?? [],
     taskRepository: null,
     ...targetFields(made.target ?? { kind: AUTOMATION_TARGET.NEW_AGENT }),
-    archiveSuccessful: made.archiveSuccessful ?? false,
+    archiveSuccessful: made.archiveSuccessful ?? true,
     slackDelivery: made.slackDelivery ?? false,
     createdAt: maker.at,
     mine: true,

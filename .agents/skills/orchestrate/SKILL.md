@@ -35,7 +35,7 @@ below as that one. You and the workers talk by `message_agent`.
 | Check on a silent worker | `read_agent` with its agent id |
 | Stop a worker | `stop_agent` with its agent id |
 | Continue a dead or stalled worker | `start_agent` with `from: { agentId }` and a `note` repeating the PR url and its branch, "keep this PR and open no second one", your mention link, and "report to me" |
-| Close a PR's subtask | `update_task` with `status: done` once its PR merged, unless Vespin already marked it done, or `canceled` for a PR cut from the plan, once its worker is stopped and its PR closed; then archive its worker |
+| Close a PR's subtask | `update_task` with `status: done` once its PR merged, unless its worker already marked it done, or `canceled` for a PR cut from the plan, once its worker is stopped and its PR closed; then archive its worker |
 | Archive a worker | `update_agent` with `archived: true` and a short `reason`, once the agent is idle |
 | List the rollout's agents | `list_agents` with a subtask's `taskId` for its workers, and with `thisTask` (or the rollout task's `taskId`) for the helpers |
 | Point the user at a subtask, worker, or PR | The mentions `create_task` and `start_agent` answered, and the PR's URL |
@@ -74,10 +74,9 @@ report. What the user named in the arguments or the conversation wins.
 soon as its work is done, never in a batch at the end: a PR's subtask and
 its worker once its PR has merged (or been closed because it was cut from
 the plan), a restack worker once it reports the restack done, and a stopped
-or dead worker once a continuation has taken its PR over. Vespin marks a
-subtask done by itself once its PR merges, but archives no agent then, so
-archive each worker yourself. Your own task opens no PR, so Vespin never
-finishes it: you mark it done at the end (Step 4).
+or dead worker once a continuation has taken its PR over. Nothing marks a
+subtask done by itself: its worker or you mark it done once its PR merges.
+You mark your own task done at the end (Step 4).
 
 Split the plan into small PRs and draw the dependency graph. Every PR gets
 its own subtask and its own worker on it, which builds, opens, and babysits

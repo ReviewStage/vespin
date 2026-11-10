@@ -413,7 +413,8 @@ beforeEach(() => {
       }
       if (request.kind === ACT_KIND.AUTOMATIONS_CREATE) {
         creates.push(request.payload);
-        const { workspaceId, name, trigger, action, scope, repositories } = request.payload;
+        const { workspaceId, name, trigger, action, scope, repositories, archiveSuccessful } =
+          request.payload;
         const hooked = trigger.kind === AUTOMATION_TRIGGER.WEBHOOK;
         const made = automation(42, {
           workspaceId: workspaceId ?? WORKSPACE.id,
@@ -422,6 +423,7 @@ beforeEach(() => {
           action,
           scope: scope ?? AUTOMATION_SCOPE.PERSONAL,
           repositories: repositories ?? [],
+          archiveSuccessful: archiveSuccessful ?? true,
           ...(hooked
             ? { webhookUrl: "https://vespin.dev/api/automations/made/webhook" }
             : undefined),
@@ -1356,7 +1358,7 @@ test("a new automation is created only once it is named and told its task, and t
     action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Triage the issues opened overnight." },
     scope: AUTOMATION_SCOPE.PERSONAL,
     target: { kind: AUTOMATION_TARGET.NEW_AGENT },
-    archiveSuccessful: false,
+    archiveSuccessful: true,
     slackDelivery: false,
     repositories: ["acme/ledger"],
   });

@@ -79,7 +79,6 @@ import {
 import { recordingProductAnalytics, SERVER_EVENT } from "../events/server-events.js";
 import { closeInboxItem, postInboxThread } from "../inbox/inbox-store.js";
 import { modelCatalogOf, type OfferedModel } from "../providers/model-catalog.js";
-import { settleTaskAfterTurn } from "../tasks/task-finish.js";
 import { connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
   connectWorkspaceGitHub,
@@ -937,38 +936,6 @@ it.layer(SUITE)("an automation's runs", (it) => {
           undefined,
           "an automation's choice does not become the account's default",
         );
-      }),
-  );
-
-  it.effect(
-    "a run's task is done once its turn settles well, and one whose turn failed stays in progress",
-    () =>
-      Effect.gen(function* () {
-        const agentSessions = fakeAgentSessions();
-        const { owner, automation } = yield* openAutomation({
-          guards: { ...AUTOMATION_DEFAULT_GUARDS, maxConcurrentRuns: 2 },
-        });
-        const succeeded = yield* ranTurn(
-          owner,
-          yield* startedNow(agentSessions, automation),
-          TURN_STATUS.SETTLED,
-        );
-        const failed = yield* ranTurn(
-          owner,
-          yield* startedNow(agentSessions, automation),
-          TURN_STATUS.FAILED,
-        );
-
-        // Each turn's end asks its task to settle, as the runner's events do.
-        const statuses = yield* Effect.forEach([succeeded, failed], (agent) =>
-          Effect.gen(function* () {
-            const taskId = agent.taskId ?? "";
-            yield* settleTaskAfterTurn(owner, taskId, agent.id);
-            return Option.getOrThrow(yield* readTask(owner, taskId)).task.status;
-          }),
-        );
-
-        assert.deepEqual(statuses, [TASK_STATUS.DONE, TASK_STATUS.IN_PROGRESS]);
       }),
   );
 

@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { RUN_EVENT, RUN_TURN_ORIGIN, TURN_TRIGGER } from "@repo/features/turn-run";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { TURN_ORIGIN } from "@repo/wire";
@@ -16,15 +15,10 @@ import { agentTable } from "../../schemas/agent.js";
 import { user } from "../../schemas/auth.js";
 import { conversations } from "../../schemas/storage.js";
 import { CONVERSATION_KIND, MESSAGE_SENDER } from "../../storage-vocabulary.js";
-import {
-  getTestDB,
-  openedPullRequest,
-  openWorkspace,
-  STORE_TEST_DATABASE_ENVIRONMENT,
-} from "../../testing/index.js";
+import { getTestDB, openWorkspace, STORE_TEST_DATABASE_ENVIRONMENT } from "../../testing/index.js";
 import { deleteAgent } from "../agent-store.js";
 import { readMessageByClientId } from "../message-reads.js";
-import { createTask, finishTaskWork } from "../task-store.js";
+import { createTask } from "../task-store.js";
 import { type ConversationTarget, STORE_WRITE_EFFECT, storeWriter } from "../writer.js";
 
 /**
@@ -34,8 +28,7 @@ import { type ConversationTarget, STORE_WRITE_EFFECT, storeWriter } from "../wri
  * open on a `Deferred` holds no transaction and no lock: the run stream's
  * journal lands, the take of its line into a turn finds the row at once, a
  * second send waits on the claim holding nothing and reaches the runtime after it,
- * and a task's finish or an agent's delete reads the line as work under way
- * without waiting. This file runs in CI's Postgres job, where
+ * and an agent's delete reads the line as work under way without waiting. This file runs in CI's Postgres job, where
  * `APP_STORE_TEST_DATABASE_URL` names the database (`vitest.config.ts`).
  */
 
@@ -267,69 +260,6 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
         assert.ok(Result.isSuccess(second) && Option.isSome(second.success));
         assert.deepEqual(yield* Ref.get(heard), ["first", "second"]);
         assert.ok(seqs[0] !== undefined && seqs[1] !== undefined && seqs[0] < seqs[1]);
-      }),
-  );
-
-  it.effect(
-    "a task's finish while a hand-over to one of its agents is pending reads the line as work under way, without waiting, and holds the task open",
-    () =>
-      Effect.gen(function* () {
-        const target = yield* openAgentConversation;
-        const onAnother = yield* anotherConnection;
-        const writer = yield* storeWriter({ tools: {} });
-        const db = yield* Database;
-        const workspace = yield* openWorkspace(target.userId);
-        const { id: taskId } = yield* createTask(target.userId, {
-          name: "Teammate invitations",
-          organizationId: workspace,
-        });
-        const agentId = randomUUID();
-        yield* db.insert(agentTable).values({
-          id: agentId,
-          organizationId: workspace,
-          userId: target.userId,
-          taskId,
-          conversationId: target.conversationId,
-          model: "anthropic/claude-opus-5.5",
-          effort: "high",
-          repository: "acme/api",
-          idempotencyKey: randomUUID(),
-        });
-        yield* openedPullRequest(target.userId, agentId, {
-          number: 42,
-          title: "Teammate invitations",
-          url: "https://github.com/acme/api/pull/42",
-          state: PULL_REQUEST_STATE.MERGED,
-          checks: "passing",
-          additions: 10,
-          deletions: 2,
-          changedFiles: 1,
-        });
-        // Idle where no line of the conversation awaits a turn, as `standsStopped` reads it.
-        const idleUnlessAwaiting = () =>
-          Effect.map(
-            readMessageByClientId(target.userId, target.conversationId, {}, sentLineId("tests")),
-            (read) => read.ok && read.value.length === 0,
-          );
-        const held = yield* heldDispatch(true);
-
-        const sending = yield* Effect.forkChild(
-          onAnother(
-            writer.writeAwaitingLine(
-              target,
-              { text: "Check the tests.", clientKey: "tests", sender: SENDER },
-              held.dispatch,
-            ),
-          ),
-        );
-        yield* untilBegan(held.began, sending);
-        const finished = yield* onAnother(
-          finishTaskWork(target.userId, taskId, idleUnlessAwaiting),
-        );
-        yield* Deferred.succeed(held.release, undefined);
-        yield* Fiber.join(sending);
-
-        assert.equal(finished, false);
       }),
   );
 
