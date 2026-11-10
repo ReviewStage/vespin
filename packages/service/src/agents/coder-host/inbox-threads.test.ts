@@ -366,6 +366,38 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
   );
 
   it.effect(
+    "an answer taken back opens again only an ask the moves allow: one standing replaced stays replaced",
+    () =>
+      Effect.gen(function* () {
+        const agent = yield* openAgent;
+        const asked = posted(yield* postInboxThread(agent, REGION));
+        const { id } = asked;
+        const ask = openAskOf(asked);
+        const answerKey = randomUUID();
+        yield* answerInboxAsk(agent.userId, id, {
+          answers: { ask, reply: INBOX_REPLY.CHOSE, choices: ["sfo1"] },
+          text: "",
+          clientKey: answerKey,
+        });
+        const db = yield* Database;
+        yield* db
+          .update(inboxMessage)
+          .set({
+            ask: sql`${inboxMessage.ask} || jsonb_build_object('status', ${INBOX_ASK_STATUS.REPLACED}::text)`,
+          })
+          .where(eq(inboxMessage.id, ask));
+
+        const withdrawn = Option.getOrThrow(
+          yield* withdrawInboxAnswer(agent.userId, id, answerKey),
+        );
+        assert.deepEqual(asksOf(withdrawn), [
+          [INBOX_MESSAGE_AUTHOR.AGENT, INBOX_ASK.DECIDE, INBOX_ASK_STATUS.REPLACED],
+        ]);
+        assert.equal(withdrawn.status, INBOX_STATUS.OPEN);
+      }),
+  );
+
+  it.effect(
     "an answer to an ask by its message is checked against the ask, taken once under its key with the item answered, and takes nothing once the ask is no longer the one held open",
     () =>
       Effect.gen(function* () {

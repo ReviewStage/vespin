@@ -135,4 +135,21 @@ it.layer(getTestDB())("the live activities route", (it) => {
       assert.equal(ended?.startedAt, null);
     }),
   );
+
+  it.effect("an end that names the activity it ended leaves a newer one's token standing", () =>
+    Effect.gen(function* () {
+      const { owner, phone, ask } = yield* openAccounts;
+      const [older, newer] = [token(), token()];
+      yield* ask(ACTIVITY_TOKEN_PATH, owner, { ...phone, token: older });
+      yield* ask(ACTIVITY_TOKEN_PATH, owner, { ...phone, token: newer });
+
+      assert.deepEqual(yield* ask(ENDED_PATH, owner, { ...phone, activityToken: older }), DONE);
+      const [kept] = yield* listLiveActivityPhones(owner);
+      assert.equal(kept?.activityToken, newer.toLowerCase());
+
+      assert.deepEqual(yield* ask(ENDED_PATH, owner, { ...phone, activityToken: newer }), DONE);
+      const [ended] = yield* listLiveActivityPhones(owner);
+      assert.equal(ended?.activityToken, null);
+    }),
+  );
 });

@@ -1,3 +1,4 @@
+import type { IntegrationRowStatus } from "@repo/features/integration-row-wire";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { index, jsonb, pgTable, text, uniqueIndex } from "drizzle-orm/pg-core";
 import { timestamptz } from "./_helpers.js";
@@ -48,8 +49,8 @@ export const integrationConnection = pgTable(
     connectionName: text("connection_name").notNull(),
     /** The account's name at the provider ("Acme"), or the developer's own for it; null until either is known. */
     label: text("label"),
-    /** `integration-store.ts`'s `INTEGRATION_ROW_STATUS`: pending, connected, or expired. */
-    status: text("status").notNull(),
+    /** `INTEGRATION_ROW_STATUS`: pending, connected, or expired, moved only as `integration-store.ts`'s `INTEGRATION_ROW_MOVES` allows. */
+    status: text("status").$type<IntegrationRowStatus>().notNull(),
     /** The sign-in under way's own value, which only its callback carries back; null when none is. */
     state: text("state"),
     /** When the sign-in under way began; null when none is. */

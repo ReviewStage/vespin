@@ -1,6 +1,6 @@
 import { taskHasMergedPullRequest } from "@repo/database/models/agent-store";
 import type { TaskStoreEffect } from "@repo/database/models/task-store";
-import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
+import { isTaskSettled, TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import { Effect } from "effect";
 
 /**
@@ -17,9 +17,6 @@ import { Effect } from "effect";
  * keeps its status. An unarchive puts the task back to work, In progress.
  */
 
-/** The statuses a task is finished in, which an archive leaves as they stand. */
-const SETTLED_STATUSES: ReadonlySet<TaskStatus> = new Set([TASK_STATUS.DONE, TASK_STATUS.CANCELED]);
-
 /**
  * The status an archive asked by an older build settles the task into: the
  * one it stands in where that is Done or Canceled, else Done where an agent
@@ -30,7 +27,7 @@ function archiveSettledStatus(
   taskId: string,
   standing: TaskStatus,
 ): TaskStoreEffect<TaskStatus> {
-  if (SETTLED_STATUSES.has(standing)) return Effect.succeed(standing);
+  if (isTaskSettled(standing)) return Effect.succeed(standing);
   return Effect.map(taskHasMergedPullRequest(userId, taskId), (merged) =>
     merged ? TASK_STATUS.DONE : TASK_STATUS.CANCELED,
   );

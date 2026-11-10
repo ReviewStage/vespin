@@ -15,8 +15,8 @@ import {
   Text,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
+import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { useRef, useState } from "react";
-import { useBusyPress } from "../settings/busy-press.js";
 
 /**
  * github-sign-in-card.tsx -- the card a transcript ends on where a Mac could not start its agent because the Mac's own GitHub sign-in cannot reach the repository: the command that signs in, to copy, then Retry, and Move to cloud where Move to would offer it.
@@ -74,17 +74,19 @@ export function GitHubSignInCard({
   onMoveToCloud,
   copy,
 }: GitHubSignInDoors): React.JSX.Element {
-  // Note that the press is kept in a ref as well as drawn, so a second press before the draw sends nothing.
-  const pressed = useRef(false);
+  // Note that a retry taken is kept in a ref as well as drawn, so a press before the draw sends nothing.
+  const taken = useRef(false);
   const [retried, setRetried] = useState(false);
-  const retry = useBusyPress(() => {
-    if (pressed.current) return undefined;
-    pressed.current = true;
-    return onRetry().then((took) => {
-      pressed.current = took;
-      setRetried(took);
-    });
-  });
+  const retry = useAsyncAction(rejectionWords);
+  const pressRetry = () => {
+    if (taken.current) return;
+    void retry.run(() =>
+      onRetry().then((took) => {
+        taken.current = took;
+        setRetried(took);
+      }),
+    );
+  };
   return (
     <Banner
       look={BANNER_LOOK.CARD}
@@ -100,10 +102,10 @@ export function GitHubSignInCard({
           )}
           <Button
             variant={BUTTON_VARIANT.PRIMARY}
-            busy={retry.busy}
+            busy={retry.running}
             busyLabel={GITHUB_SIGN_IN_WORDS.RETRYING}
             disabled={retried}
-            onClick={retry.onPress}
+            onClick={pressRetry}
           >
             {GITHUB_SIGN_IN_WORDS.RETRY}
           </Button>

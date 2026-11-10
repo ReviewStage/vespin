@@ -4704,6 +4704,32 @@ test("the title's edit is kept as the focus leaves its words, and where GitHub r
   await vi.waitFor(() => assert.equal(words.textContent, PULL_REQUEST.title));
 });
 
+test("the title's edit stands as typed while it is out, though a read from before it lands meanwhile", async () => {
+  let title = PULL_REQUEST.title;
+  const tab = await draw(
+    controlAnswering({
+      pullRequest: () => Promise.resolve({ pullRequest: { ...PULL_REQUEST, title } }),
+    }),
+  );
+  const sending = Promise.withResolvers<void>();
+  changeHeld = sending.promise;
+  const words = titleWords(tab);
+  typeTitle(words, "Expire invitations after a day");
+  act(() => words.blur());
+  await vi.waitFor(() => assert.equal(changes.length, 1));
+
+  // A read GitHub answered before it took the change, with a title someone else gave it.
+  title = "Expire stale invitations";
+  await pressToolbar(tab, "Refresh");
+  await settle();
+  assert.equal(words.textContent, "Expire invitations after a day");
+
+  title = "Expire invitations after a day";
+  await act(async () => sending.resolve());
+  await settle();
+  assert.equal(words.textContent, "Expire invitations after a day");
+});
+
 test("Refresh, the one its screen offers, reads Files changed again once the view was shown", async () => {
   let changeReads = 0;
   const readChanges: ReadChanges = () => {

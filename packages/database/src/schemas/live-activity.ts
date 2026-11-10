@@ -14,9 +14,16 @@ import { pushDevice } from "./push-device.js";
  * once none does (`packages/service/src/push/live-activities.ts`), clearing
  * the update token and the stamp. `sent_at` and `sent_state` are the last
  * push and the content state it carried, which the service's throttle and
- * its skip of an unchanged state read. A token Apple says is gone is
- * cleared, and the app clears the update token itself once the activity
- * ends on the phone. The row belongs to the phone, whose account it reads
+ * its skip of an unchanged state read. Refreshes of one member overlap, so
+ * every write the service makes is held to what it read: a push-to-start
+ * claims the start by stamping `started_at` where it still stands as read,
+ * and only the refresh that claimed it sends; a start Apple took stamps
+ * `sent_at` with that same instant, so a claim whose `sent_at` is older and
+ * that holds no update token is a start not yet confirmed. A token Apple
+ * says is gone is cleared where the row still holds it, and the app clears
+ * the update token itself once the activity ends on the phone. `swept_at`
+ * is when the scheduled sweep last took the row, so it comes round to every
+ * row in turn. The row belongs to the phone, whose account it reads
  * through `push_device`, and leaves with it; a phone that moves to another
  * account leaves its row behind.
  */
@@ -34,4 +41,6 @@ export const liveActivity = pgTable("live_activity", {
   sentAt: timestamptz("sent_at"),
   /** The content state the last push carried, as its JSON; null where the next push must carry the state whatever it is. */
   sentState: text("sent_state"),
+  /** When the scheduled sweep last took the phone's activity to refresh; null before the first. */
+  sweptAt: timestamptz("swept_at"),
 });

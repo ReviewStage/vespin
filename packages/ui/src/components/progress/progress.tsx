@@ -40,6 +40,20 @@ export const PROGRESS_SIZE = {
 
 export type ProgressSize = (typeof PROGRESS_SIZE)[keyof typeof PROGRESS_SIZE];
 
+/** How long a bar runs: a meter's length beside a line of words, or the whole of the room it is given, as a column of meters lines up. */
+export const PROGRESS_WIDTH = {
+  METER: "meter",
+  FILL: "fill",
+} as const;
+
+export type ProgressWidth = (typeof PROGRESS_WIDTH)[keyof typeof PROGRESS_WIDTH];
+
+/** What each width draws over the bar's own meter length. */
+const WIDTH_CLASS = {
+  [PROGRESS_WIDTH.METER]: undefined,
+  [PROGRESS_WIDTH.FILL]: "max-w-none",
+} as const satisfies Record<ProgressWidth, string | undefined>;
+
 /** The share of the work done, as a percentage held to 0–100, a value that is not a number read as none. */
 function percentOf(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -52,6 +66,7 @@ export function Progress({
   label,
   tone = PROGRESS_TONE.WORKING,
   size = PROGRESS_SIZE.REGULAR,
+  width = PROGRESS_WIDTH.METER,
 }: {
   /** How far the work has come, in percent. */
   value: number;
@@ -61,6 +76,8 @@ export function Progress({
   tone?: ProgressTone | undefined;
   /** How thick it is drawn; the hairline where none is named. */
   size?: ProgressSize | undefined;
+  /** How long it runs; a meter's length where none is named. */
+  width?: ProgressWidth | undefined;
 }): React.JSX.Element {
   const percent = percentOf(value);
   // Note that each attribute Base UI's root sets is named here, undefined where the bar never said it, because a prop given overrides the root's own.
@@ -82,5 +99,13 @@ export function Progress({
           "aria-valuenow": Math.round(percent),
           "aria-valuetext": undefined,
         } as const);
-  return <ShadcnProgress value={percent} data-tone={tone} data-size={size} {...read} />;
+  return (
+    <ShadcnProgress
+      value={percent}
+      data-tone={tone}
+      data-size={size}
+      className={WIDTH_CLASS[width]}
+      {...read}
+    />
+  );
 }

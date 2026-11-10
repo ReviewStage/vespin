@@ -8,16 +8,16 @@ import {
   listLiveActivityPhones,
   registerLiveActivityToken,
 } from "@repo/database/models/live-activity-store";
-import { registerPushDevice } from "@repo/database/models/push-device-store";
+import { registerPushDevice, setPushDeviceNotify } from "@repo/database/models/push-device-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, startTask } from "@repo/database/testing";
-import { PUSH_ENVIRONMENT } from "@repo/features/push-device-wire";
+import { PUSH_ENVIRONMENT, PUSH_NOTIFY } from "@repo/features/push-device-wire";
 import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { eq } from "drizzle-orm";
-import { DateTime, Effect, Option } from "effect";
+import { Clock, DateTime, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { recordingApnsSender } from "../testing/apns-fake.js";
 import { APNS_DELIVERY, type ApnsNotification } from "./apns.js";
@@ -34,9 +34,13 @@ import {
  * first; once none runs it ends at high priority with a dismissal date and
  * its update token is forgotten. A routine change inside the throttle waits
  * for the sweep, an ask goes at once, and an unchanged state goes nowhere. A
- * token Apple says is gone is forgotten. One member's refresh never pushes
- * another's phone. Synthetic accounts, agents, and tokens throughout; the
- * test clock stands at the epoch.
+ * token Apple says is gone is forgotten, and one registered since is kept.
+ * Refreshes that overlap start one activity, an end that crosses a new turn
+ * starts it again, a start or an end Apple did not take is tried again by
+ * the sweep, a phone set to never take a push has its activity ended, and
+ * one member's refresh that dies leaves the sweep standing. One member's
+ * refresh never pushes another's phone. Synthetic accounts, agents, and
+ * tokens throughout; the test clock starts at the epoch.
  */
 
 const BUNDLE_ID = "dev.vespin.ios";
@@ -101,6 +105,12 @@ const runningAgent = (userId: string, title: string) =>
   });
 
 /** What a push said: the token it went to, its priority, and its `aps` beside the event. */
+const events = (sent: readonly ApnsNotification[]) => sent.map((each) => each.payload.aps.event);
+
+/** The pushes that went to the tokens given, since a sweep also refreshes the members earlier tests left running. */
+const sentTo = (sent: readonly ApnsNotification[], ...tokens: string[]) =>
+  sent.filter((each) => tokens.includes(each.device.token));
+
 const said = (notification: ApnsNotification | undefined) => {
   assert.ok(notification);
   return {
@@ -255,6 +265,199 @@ it.layer(getTestDB())("a member's live activity", (it) => {
       const [noActivity] = yield* listLiveActivityPhones(member);
       assert.equal(noActivity?.activityToken, null);
       assert.equal(noActivity?.startedAt, null);
+    }).pipe(Effect.provide(sender.layer));
+  });
+
+  it.effect("a token Apple says is gone leaves the one the phone registered since", () => {
+    const rotated = token();
+    let phone: { token: string; environment: typeof PUSH_ENVIRONMENT.SANDBOX } | undefined;
+    let member = "";
+    // Note that the phone registers a new update token while the update to its old one is in flight, and Apple then says the old one is gone.
+    const sender = recordingApnsSender((notification) =>
+      notification.payload.aps.event === "update" && phone !== undefined
+        ? Effect.as(
+            Effect.orDie(
+              registerLiveActivityToken(member, phone, LIVE_ACTIVITY_TOKEN.ACTIVITY, rotated),
+            ),
+            APNS_DELIVERY.TOKEN_GONE,
+          )
+        : APNS_DELIVERY.DELIVERED,
+    );
+    return Effect.gen(function* () {
+      member = yield* openUser;
+      const registered = yield* phoneOf(member);
+      yield* runningAgent(member, "Fix the refresh");
+      yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+      yield* registerLiveActivityToken(
+        member,
+        registered.phone,
+        LIVE_ACTIVITY_TOKEN.ACTIVITY,
+        token(),
+      );
+      phone = registered.phone;
+      yield* runningAgent(member, "Ship the invitations");
+      yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ASKED);
+
+      assert.deepEqual(events(sender.sent), ["start", "update"]);
+      const [standing] = yield* listLiveActivityPhones(member);
+      assert.equal(standing?.activityToken, rotated);
+      assert.ok(standing?.startedAt);
+    }).pipe(Effect.provide(sender.layer));
+  });
+
+  it.effect("two refreshes at once start one activity", () => {
+    // Note that each push yields, so the two refreshes interleave as they would on two instances.
+    const sender = recordingApnsSender(() =>
+      Effect.as(Effect.repeat(Effect.yieldNow, { times: 5 }), APNS_DELIVERY.DELIVERED),
+    );
+    return Effect.gen(function* () {
+      const member = yield* openUser;
+      yield* phoneOf(member);
+      yield* runningAgent(member, "Fix the refresh");
+      yield* runningAgent(member, "Ship the invitations");
+
+      yield* Effect.all(
+        [
+          refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE),
+          refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE),
+        ],
+        { concurrency: "unbounded" },
+      );
+      assert.deepEqual(events(sender.sent), ["start"]);
+    }).pipe(Effect.provide(sender.layer));
+  });
+
+  it.effect("an end that crosses a new turn starts the activity again", () => {
+    let member = "";
+    // Note that a new turn begins while the end is in flight, after its own refresh read the activity standing.
+    const sender = recordingApnsSender((notification) =>
+      notification.payload.aps.event === "end"
+        ? Effect.as(
+            Effect.orDie(runningAgent(member, "Answer the reviewers")),
+            APNS_DELIVERY.DELIVERED,
+          )
+        : APNS_DELIVERY.DELIVERED,
+    );
+    return Effect.gen(function* () {
+      member = yield* openUser;
+      const { phone } = yield* phoneOf(member);
+      const first = yield* runningAgent(member, "Fix the refresh");
+      yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+      yield* registerLiveActivityToken(member, phone, LIVE_ACTIVITY_TOKEN.ACTIVITY, token());
+      yield* first.settle;
+
+      yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+      assert.deepEqual(events(sender.sent), ["start", "end", "start"]);
+      assert.equal(said(sender.sent[2]).aps["content-state"]?.running, 1);
+    }).pipe(Effect.provide(sender.layer));
+  });
+
+  it.effect("a start Apple did not take is tried again by the sweep", () => {
+    let answers = 0;
+    const sender = recordingApnsSender(() =>
+      answers++ === 0 ? APNS_DELIVERY.FAILED : APNS_DELIVERY.DELIVERED,
+    );
+    return Effect.gen(function* () {
+      const member = yield* openUser;
+      const { startToken } = yield* phoneOf(member);
+      yield* runningAgent(member, "Fix the refresh");
+      yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+      assert.deepEqual(events(sender.sent), ["start"]);
+
+      yield* TestClock.adjust("1 minute");
+      yield* refreshLiveActivities();
+      assert.deepEqual(events(sentTo(sender.sent, startToken)), ["start", "start"]);
+      const [started] = yield* listLiveActivityPhones(member);
+      assert.equal(started?.startedAt?.getTime(), yield* Clock.currentTimeMillis);
+    }).pipe(Effect.provide(sender.layer));
+  });
+
+  it.effect(
+    "an end Apple did not take is tried again by the sweep, kept by Apple for the activity's lifetime",
+    () => {
+      let endsTried = 0;
+      const sender = recordingApnsSender((notification) =>
+        notification.payload.aps.event === "end" && endsTried++ === 0
+          ? APNS_DELIVERY.FAILED
+          : APNS_DELIVERY.DELIVERED,
+      );
+      return Effect.gen(function* () {
+        const member = yield* openUser;
+        const { phone } = yield* phoneOf(member);
+        const agent = yield* runningAgent(member, "Fix the refresh");
+        yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+        const activityToken = token();
+        yield* registerLiveActivityToken(
+          member,
+          phone,
+          LIVE_ACTIVITY_TOKEN.ACTIVITY,
+          activityToken,
+        );
+        yield* agent.settle;
+
+        yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+        const [unended] = yield* listLiveActivityPhones(member);
+        assert.ok(unended?.activityToken);
+
+        yield* TestClock.adjust("1 minute");
+        yield* refreshLiveActivities();
+        const ends = sentTo(sender.sent, activityToken);
+        assert.deepEqual(events(ends), ["end", "end"]);
+        // Note that an end outlasts a phone that is off for hours: Apple keeps it until the activity would have aged out.
+        const now = yield* Clock.currentTimeMillis;
+        assert.equal(ends[1]?.expiration, Math.floor(now / 1000) + 8 * 60 * 60);
+        const [ended] = yield* listLiveActivityPhones(member);
+        assert.equal(ended?.activityToken, null);
+        assert.equal(ended?.startedAt, null);
+      }).pipe(Effect.provide(sender.layer));
+    },
+  );
+
+  it.effect("a phone set to never take a push has its standing activity ended", () => {
+    const sender = recordingApnsSender();
+    return Effect.gen(function* () {
+      const member = yield* openUser;
+      const { phone } = yield* phoneOf(member);
+      yield* runningAgent(member, "Fix the refresh");
+      yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+      yield* registerLiveActivityToken(member, phone, LIVE_ACTIVITY_TOKEN.ACTIVITY, token());
+      yield* setPushDeviceNotify(member, phone, PUSH_NOTIFY.NEVER);
+
+      yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+      assert.deepEqual(events(sender.sent), ["start", "end"]);
+      // Note that the end says nothing of the agents that run after the phone was set so.
+      assert.deepEqual(said(sender.sent[1]).aps["content-state"], {
+        running: 0,
+        waiting: 0,
+        agents: [],
+      });
+      const [ended] = yield* listLiveActivityPhones(member);
+      assert.equal(ended?.startedAt, null);
+
+      yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+      assert.equal(sender.sent.length, 2);
+    }).pipe(Effect.provide(sender.layer));
+  });
+
+  it.effect("one member's refresh that dies leaves the sweep standing", () => {
+    let doomed = "";
+    const sender = recordingApnsSender((notification) =>
+      notification.device.token === doomed
+        ? Effect.die("a broken sender")
+        : APNS_DELIVERY.DELIVERED,
+    );
+    return Effect.gen(function* () {
+      const member = yield* openUser;
+      const { phone, startToken } = yield* phoneOf(member);
+      yield* runningAgent(member, "Fix the refresh");
+      yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
+      doomed = token();
+      yield* registerLiveActivityToken(member, phone, LIVE_ACTIVITY_TOKEN.ACTIVITY, doomed);
+
+      yield* TestClock.adjust("1 minute");
+      yield* runningAgent(member, "Ship the invitations");
+      assert.ok((yield* refreshLiveActivities()) >= 1);
+      assert.deepEqual(events(sentTo(sender.sent, startToken, doomed)), ["start", "update"]);
     }).pipe(Effect.provide(sender.layer));
   });
 

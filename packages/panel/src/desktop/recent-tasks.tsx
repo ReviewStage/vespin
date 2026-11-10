@@ -1,6 +1,7 @@
 import { repositoryLabel } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import {
+  type GroupFold,
   SKELETON_SHAPE,
   Skeleton,
   SkeletonRegion,
@@ -182,9 +183,12 @@ export function RecentTasks({
 export function RecentTasksSkeleton({
   label,
   face = true,
+  fold,
 }: {
   label: string;
   face?: boolean | undefined;
+  /** How the section it stands for folds; left out, it folds nothing. */
+  fold?: GroupFold | undefined;
 }): React.JSX.Element {
   const blocks: Partial<Record<TaskRowCell, ReactNode>> = {
     [TASK_ROW_CELL.STATUS]: <Skeleton shape={SKELETON_SHAPE.CIRCLE} width={SKELETON_MARK} />,
@@ -192,7 +196,7 @@ export function RecentTasksSkeleton({
     [TASK_ROW_CELL.UPDATED]: <Skeleton width={SKELETON_TIME} />,
   };
   return (
-    <SectionSkeleton>
+    <SectionSkeleton fold={fold}>
       <SkeletonRegion label={label}>
         <GlanceRows label={label} cells={cellsOf(face)} joinsWalk={false} moves={false}>
           {(cells) =>

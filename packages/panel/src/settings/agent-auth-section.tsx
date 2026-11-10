@@ -65,16 +65,19 @@ import {
   SettingsRowMeter,
   type SettingsRowSkeletonShape,
   SettingsRowStateLine,
+  SettingsRowUsage,
   SettingsSection,
   SettingsSectionsSkeleton,
   Stack,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  type UsageMeterRow,
   useConfirmDialog,
   useMenu,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { useAsyncAction } from "@repo/ui/use-async-action";
 import { type InlineRename, type RenameWrite, useInlineRename } from "@repo/ui/use-inline-rename";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -87,6 +90,7 @@ import { useRowDrag } from "../desktop/use-row-drag.js";
 import { confirmFailure, refusedShown } from "../failure-report.js";
 import { HarnessMark } from "../harness-marks.js";
 import { providerKeysQuery, providerKeysRetryMutation } from "../live-reads.js";
+import { type PlanUsageMeters, planUsageMeters } from "../plan-usage.js";
 import { renameWrite } from "../rename-write.js";
 import { linkPressOf, useOpenLink } from "../tasks/use-open-link.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
@@ -357,29 +361,11 @@ function harnessReady(answer: ProviderKeysAnswer, provider: ProviderKeyProvider)
 
 /* ----- What a credential says ----- */
 
-/** Minutes in an hour, and in a day, which a usage window is named in. */
-const MINUTES = { HOUR: 60, DAY: 24 * 60, WEEK: 7 * 24 * 60 } as const;
-
-/** The window a plan's usage is counted in, as its line names it: "the 5-hour limit", "the weekly limit". */
-function windowWords(windowMins: number | undefined): string {
-  if (windowMins === undefined) return "its limit";
-  if (windowMins === MINUTES.WEEK) return "the weekly limit";
-  if (windowMins % MINUTES.DAY === 0) return `the ${String(windowMins / MINUTES.DAY)}-day limit`;
-  if (windowMins % MINUTES.HOUR === 0) return `the ${String(windowMins / MINUTES.HOUR)}-hour limit`;
-  return `the ${String(windowMins)}-minute limit`;
-}
-
 /** A reached limit's words, with when it resets where the provider named it: "At its limit · back at 3:40 PM". */
 function limitWords(plan: SubscriptionKeySummary, now: number): string {
   return plan.limitResetsAt === undefined
     ? WORDS.AT_LIMIT
     : `${WORDS.AT_LIMIT} · ${WORDS.BACK_AT} ${dueText(plan.limitResetsAt, now)}`;
-}
-
-/** What a plan with room says: how much of its window it has used, as last heard, or Ready before a turn has said. */
-function roomWords(plan: SubscriptionKeySummary): string {
-  if (plan.usage === undefined) return WORDS.READY;
-  return `${String(Math.round(plan.usage.usedPercent))}% of ${windowWords(plan.usage.windowMins)} used`;
 }
 
 /** What a Claude token that does not stand says. */
@@ -411,10 +397,16 @@ function signInFix(plan: SubscriptionKeySummary): string {
   return plan.status === PROVIDER_KEY_STATUS.INELIGIBLE ? WORDS.SIGN_IN_AGAIN : WORDS.RECONNECT;
 }
 
-/** A plan's line under its name: its words, whether they need a hand, and the bar under them where its usage is known. */
+/**
+ * A plan's line under its name: its words, whether they need a hand, and
+ * under them its usage, each window's meter where its usage is known
+ * (`usage`), else one full bar at its limit (`meter`). A plan with room
+ * whose usage is known says no words, since its meters say it.
+ */
 interface PlanLine {
-  readonly words: string;
+  readonly words?: string;
   readonly ok: boolean;
+  readonly usage?: PlanUsageMeters;
   readonly meter?: { readonly value: number; readonly tone: ProgressTone };
 }
 
@@ -424,22 +416,18 @@ function planLine(
   plan: SubscriptionKeySummary,
   now: number,
 ): PlanLine {
+  const usage = planUsageMeters(plan, now);
   if (plan.status === PROVIDER_KEY_STATUS.LIMIT_REACHED) {
     return {
       words: limitWords(plan, now),
       ok: false,
-      meter: { value: 100, tone: PROGRESS_TONE.ATTENTION },
+      ...(usage === undefined
+        ? { meter: { value: 100, tone: PROGRESS_TONE.ATTENTION } }
+        : { usage }),
     };
   }
-  if (standing(plan)) {
-    return {
-      words: roomWords(plan),
-      ok: true,
-      ...(plan.usage === undefined
-        ? undefined
-        : { meter: { value: plan.usage.usedPercent, tone: PROGRESS_TONE.WORKING } }),
-    };
-  }
+  if (standing(plan))
+    return usage === undefined ? { words: WORDS.READY, ok: true } : { ok: true, usage };
   const words = provider === PROVIDER_KEY_PROVIDER.ANTHROPIC ? tokenWords(plan) : signInWords(plan);
   return { words, ok: false };
 }
@@ -611,42 +599,33 @@ function usePastedSecret({
     actMutation(ACT_KIND.PROVIDER_KEYS_SAVE),
   );
   const [pasted, setPasted] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [rejection, setRejection] = useState<string | undefined>(undefined);
+  const saving = useAsyncAction(() => failed);
 
   const save = (value = pasted) => {
     const key = value.trim();
-    if (key === "" || saving) return;
+    if (key === "" || saving.running) return;
     if (!pastedKeyFits(key)) {
-      setRejection(refused(PROVIDER_KEY_REJECTION.INVALID));
+      saving.refuse(refused(PROVIDER_KEY_REJECTION.INVALID));
       return;
     }
-    setSaving(true);
-    setRejection(undefined);
-    void sendProviderKeysSave(payload(key))
-      .catch(() => undefined)
-      .then((answer) => {
-        setSaving(false);
-        if (answer === undefined || "failure" in answer) {
-          setRejection(failed);
-          return;
-        }
-        if (answer.rejected !== undefined) {
-          setRejection(refused(answer.rejected));
-          return;
-        }
+    void saving.run(() =>
+      sendProviderKeysSave(payload(key)).then((answer) => {
+        if ("failure" in answer) return failed;
+        if (answer.rejected !== undefined) return refused(answer.rejected);
         // Kept: the secret leaves the field, and the row draws the service's word for it.
         setPasted("");
         onKept();
-      });
+        return undefined;
+      }),
+    );
   };
   return {
     pasted,
-    saving,
-    rejection,
+    saving: saving.running,
+    rejection: saving.refusal,
     change: (value) => {
       setPasted(value);
-      setRejection(undefined);
+      saving.clear();
     },
     save: () => save(),
     paste: (value) => save(value),
@@ -1120,10 +1099,13 @@ function PlanRow({
   onMove,
   renames,
   onUnconfirmed,
+  alignWith,
 }: {
   provider: ProviderKeyProvider;
   plan: SubscriptionKeySummary;
   name: string;
+  /** Every plan's meter rows on the page, which its meters line up with. */
+  alignWith: readonly UsageMeterRow[];
   at: number;
   count: number;
   open: typeof STEPS.REPLACE | undefined;
@@ -1161,8 +1143,14 @@ function PlanRow({
         }
         description={
           <>
-            <State ok={line.ok}>{line.words}</State>
-            {line.meter === undefined ? null : (
+            {line.words === undefined ? null : <State ok={line.ok}>{line.words}</State>}
+            {line.usage !== undefined ? (
+              <SettingsRowUsage
+                rows={line.usage.rows}
+                heard={line.usage.heard}
+                alignWith={alignWith}
+              />
+            ) : line.meter === undefined ? null : (
               <SettingsRowMeter value={line.meter.value} tone={line.meter.tone} />
             )}
           </>
@@ -1324,9 +1312,12 @@ function HarnessCredentials({
   open,
   onOpen,
   onClose,
+  aligned,
 }: {
   provider: ProviderKeyProvider;
   answer: ProviderKeysAnswer;
+  /** What every harness's card lines up with: whether one draws grips, and every plan's meters on the page. */
+  aligned: PageAlignment;
   /** Which of this harness's steps stand open, if any. */
   open: HarnessSteps | undefined;
   onOpen: (steps: HarnessSteps) => void;
@@ -1412,6 +1403,7 @@ function HarnessCredentials({
         <SettingsOrderedRows
           label={harness.name}
           onPointerDown={drag}
+          gutter={aligned.gutter}
           rows={order.ordered.map((credential, at) => {
             const rowOpen =
               open !== undefined &&
@@ -1437,6 +1429,7 @@ function HarnessCredentials({
                     onMove={order.move}
                     renames={renames}
                     onUnconfirmed={setUnconfirmed}
+                    alignWith={aligned.meters}
                   />
                 ) : (
                   <KeyRow
@@ -1510,6 +1503,24 @@ function useCredentials({
  * changed in place, one credential's steps open at a time: signed out, a
  * read that failed, or the sections' skeleton while it is out.
  */
+/** What every harness's card on the page lines up with. */
+interface PageAlignment {
+  /** Whether any card draws grips, so every card keeps their gutter and its marks stand in one column with theirs. */
+  readonly gutter: boolean;
+  /** Every plan's meter rows on the page, so each plan's meters line up with every other's as one table. */
+  readonly meters: readonly UsageMeterRow[];
+}
+
+/** What the page's cards line up with, as the account's keys stand `now`. */
+function pageAlignment(answer: ProviderKeysAnswer, now: number): PageAlignment {
+  return {
+    gutter: HARNESSES.some(
+      (provider) => plansOf(answer, provider).length + keysOf(answer, provider).length > 1,
+    ),
+    meters: (answer.subscriptions ?? []).flatMap((plan) => planUsageMeters(plan, now)?.rows ?? []),
+  };
+}
+
 function CredentialLists({
   signedIn,
   gap,
@@ -1550,6 +1561,7 @@ function CredentialLists({
       />
     );
   }
+  const aligned = pageAlignment(answer, Date.now());
   return (
     <ReplayMask>
       <Stack gap={gap}>
@@ -1561,6 +1573,7 @@ function CredentialLists({
             open={open?.provider === provider ? open : undefined}
             onOpen={(steps) => setOpen({ ...steps, provider })}
             onClose={() => setOpen(undefined)}
+            aligned={aligned}
           />
         ))}
       </Stack>

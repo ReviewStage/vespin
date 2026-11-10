@@ -151,6 +151,8 @@ const settleByRunner = SqlSchema.findAll({
         .set({
           status,
           settledBy,
+          // The first word of it keeps the instant it landed at.
+          confirmedAt: sql`coalesce(${agentApproval.confirmedAt}, ${at}::timestamptz)`,
           // A member's answer already recorded keeps the instant it landed at.
           settledAt: sql`coalesce(${agentApproval.settledAt}, ${at}::timestamptz)`,
         })
@@ -259,6 +261,8 @@ function claimedBy(userId: string) {
   return and(
     eq(agentApproval.settledBy, APPROVAL_SETTLED_BY.MEMBER),
     eq(agentApproval.decidedByUserId, userId),
+    // Note that the runner's word confirms the answer it took, so a claim it confirmed is no longer handed back.
+    isNull(agentApproval.confirmedAt),
   );
 }
 
@@ -415,9 +419,9 @@ export function answerApproval(answer: {
 
 /**
  * Hands back a member's claim of an ask whose answer never reached the
- * runner: pending again where the runner could not be reached just now, so
- * another answer may take it, or expired where no runner holds the ask at
- * all. Only the member's own claim is touched; answers the ask as it then
+ * runner, so long as the runner has not confirmed it: pending again where
+ * the runner could not be reached just now, so another answer may take it,
+ * or expired where no runner holds the ask at all. Only the member's own claim is touched; answers the ask as it then
  * stands, or none where it is no longer their claim.
  */
 export function releaseApprovalClaim(release: {
