@@ -306,6 +306,21 @@ function pickedGroups(tree: TaskTree, picked: string): readonly TaskTreeGroup[] 
   );
 }
 
+/**
+ * The groups column's pick that shows task `id` in the middle column: the
+ * pick it stands on where that group lists the task, else Pinned or the
+ * section that lists it, else My tasks.
+ */
+function pickHolding(tree: TaskTree, id: string, current: string): string {
+  const lists = (groups: readonly TaskTreeGroup[]) =>
+    groups.some((group) => group.rows.some(({ task }) => task.id === id));
+  if (lists(pickedGroups(tree, current))) return current;
+  const named = [...(tree.pinned === undefined ? [] : [tree.pinned]), ...tree.sections].find(
+    (group) => lists([group]),
+  );
+  return named?.key ?? MY_TASKS_GROUP;
+}
+
 /** How many tasks a group's rows hold. */
 function groupCount(groups: readonly TaskTreeGroup[]): number {
   return groups.reduce((sum, group) => sum + group.rows.length, 0);
@@ -630,9 +645,18 @@ function TasksSplitScreen({
   readonly select: (id: string) => void;
 }) {
   const three = useThreeColumns();
-  const [picked, setPicked] = useState<string>(MY_TASKS_GROUP);
   const { search, setSearch, listing } = useTasksScreen();
+  const [picked, setPicked] = useState<string>(() =>
+    selected === undefined ? MY_TASKS_GROUP : pickHolding(listing.tree, selected, MY_TASKS_GROUP),
+  );
+  // Note that a selection a link or a related task made moves the groups column to a group that lists it, so its row stands beside its page.
+  const [shown, setShown] = useState(selected);
+  if (selected !== shown) {
+    setShown(selected);
+    if (selected !== undefined) setPicked(pickHolding(listing.tree, selected, picked));
+  }
   const overview = useTaskOverview(selected);
+  const read = useTasksRead();
   const account = useSettingsAccount();
   const tree = (
     <TasksTree
@@ -654,10 +678,12 @@ function TasksSplitScreen({
           }
           content={three ? tree : undefined}
           detail={
-            overview === undefined ? (
-              <EmptyState title={SELECT_A_TASK} symbol="checklist" />
-            ) : (
+            overview !== undefined ? (
               <OverviewPage key={overview.task.id} overview={overview} />
+            ) : selected !== undefined && read ? (
+              <EmptyState title={TASK_NOT_FOUND} symbol="questionmark.folder" />
+            ) : (
+              <EmptyState title={SELECT_A_TASK} symbol="checklist" />
             )
           }
           detailMenu={overview === undefined ? undefined : taskMenu(overview)}

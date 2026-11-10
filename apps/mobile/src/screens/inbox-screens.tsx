@@ -420,6 +420,37 @@ function ThreadDetail({
   );
 }
 
+/** What stands where a thread named by its id is not drawn: that the feed is still read, that it could not be, with Retry, or that it holds no such thread. */
+function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
+  const { refresh, refreshTasks } = useInboxActs();
+  if (feed === INBOX_FEED.READING) return <EmptyState title={READING_INBOX} symbol="tray" />;
+  if (feed === INBOX_FEED.FAILED) {
+    return (
+      <EmptyState
+        title={INBOX_NOT_READ}
+        symbol="exclamationmark.triangle"
+        action={{
+          label: RETRY,
+          // The feed or the task list that holds the thread failed, so both are read again.
+          onPress: () => void Promise.all([refresh(), refreshTasks()]),
+        }}
+      />
+    );
+  }
+  return <EmptyState title={THREAD_NOT_FOUND} symbol="tray" />;
+}
+
+/**
+ * A split view's detail: the thread the list selected, read by its id as a
+ * pushed screen reads it, so a link to a thread of a workspace the list does
+ * not show still opens it, and one still read, refused, or missing says so.
+ */
+function ThreadColumn({ id }: { readonly id: string }) {
+  const { listed, readerId, feed } = useInboxThread(id);
+  if (listed === undefined) return <ThreadNotDrawn feed={feed} />;
+  return <ThreadDetail listed={listed} readerId={readerId} />;
+}
+
 /** What the list screens share: the scope and its pills, the search, the listing under both, and the acts on it. */
 function useInboxScreen(chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
@@ -503,7 +534,6 @@ function InboxSplitScreen({
 }) {
   const { show, search, setSearch, listing, acts, scopes, menu } = useInboxScreen(selected);
   const account = useSettingsAccount();
-  const chosen = listing.listed.find(({ item }) => item.id === selected);
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -532,10 +562,10 @@ function InboxSplitScreen({
             </ScopePills>
           }
           detail={
-            chosen === undefined ? (
+            selected === undefined ? (
               <EmptyState title={SELECT_A_THREAD} symbol="tray" />
             ) : (
-              <ThreadDetail key={chosen.item.id} listed={chosen} readerId={listing.readerId} />
+              <ThreadColumn key={selected} id={selected} />
             )
           }
           sidebarAccount={account}
@@ -562,7 +592,6 @@ export function InboxListScreen() {
 export function InboxThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { listed, readerId, feed } = useInboxThread(id);
-  const { refresh, refreshTasks } = useInboxActs();
   if (useHandToSplit(SPLIT_TAB.INBOX, id)) return null;
   return (
     <>
@@ -573,21 +602,7 @@ export function InboxThreadScreen() {
         <ThreadDetail listed={listed} readerId={readerId} inStack />
       ) : (
         <Screen>
-          {feed === INBOX_FEED.READING ? (
-            <EmptyState title={READING_INBOX} symbol="tray" />
-          ) : feed === INBOX_FEED.FAILED ? (
-            <EmptyState
-              title={INBOX_NOT_READ}
-              symbol="exclamationmark.triangle"
-              action={{
-                label: RETRY,
-                // The feed or the task list that holds the thread failed, so both are read again.
-                onPress: () => void Promise.all([refresh(), refreshTasks()]),
-              }}
-            />
-          ) : (
-            <EmptyState title={THREAD_NOT_FOUND} symbol="tray" />
-          )}
+          <ThreadNotDrawn feed={feed} />
         </Screen>
       )}
     </>
