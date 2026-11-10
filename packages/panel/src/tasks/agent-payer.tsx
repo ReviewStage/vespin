@@ -120,14 +120,6 @@ export function usePayerPlan(
   return payerPlanOf(payer, keys?.subscriptions, subscriptionId, next, owner !== undefined);
 }
 
-/** The paying plan's usage meters, full width under its line; none before its usage is heard. */
-function PlanUsage({ plan }: { plan: SubscriptionKeySummary }): React.JSX.Element | null {
-  const meters = planUsageMeters(plan, Date.now());
-  return meters === undefined ? null : (
-    <UsageMeters rows={meters.rows} heard={meters.heard} width={USAGE_METERS_WIDTH.FILL} />
-  );
-}
-
 /**
  * The model menu's last line: who pays, its mark before it, with Manage
  * usage at its end where the reader's own ChatGPT plan does, and the plan's
@@ -144,11 +136,19 @@ export function payerLastLine(
 ): MenuLastLine | undefined {
   const parts = agentPayerParts(payer, provider, usage?.costUsd, planNameOf(plan));
   if (parts === undefined) return undefined;
+  const meters = plan === undefined ? undefined : planUsageMeters(plan, Date.now());
   const line = {
     glyph: <PayerGlyph mark={parts.mark} provider={provider} />,
     words: <PayerWords parts={parts} owner={owner} />,
     masked: parts.masked,
-    ...(plan === undefined ? undefined : { below: <PlanUsage plan={plan} /> }),
+    // Note that the meters stand under the line only where some usage was heard, so a plan with none keeps the line's own height.
+    ...(meters === undefined
+      ? undefined
+      : {
+          below: (
+            <UsageMeters rows={meters.rows} heard={meters.heard} width={USAGE_METERS_WIDTH.FILL} />
+          ),
+        }),
   };
   return payer === AGENT_PAYER.CHATGPT_SUBSCRIPTION && owner === undefined
     ? { ...line, end: <ManageUsageLink /> }
