@@ -9,16 +9,22 @@
  * agent's browser, and a preview only resume a sandbox a launch opened, and
  * their touches record that use. Each write is skipped where the row was
  * written in the last `SANDBOX_USE.WRITE_EVERY`, so a sandbox many callers
- * hold costs one write a minute. A write that fails is logged and let be: it
+ * hold costs one write a minute. A launch records its boot beside it, begun,
+ * done, or failed, and a discard the sandbox's deletion, so the task list
+ * reads it booting, running, or off. A write that fails is logged and let be: it
  * never fails a turn or an open, and the next touch writes it again.
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
+  recordAgentSandboxBooted,
+  recordAgentSandboxBootFailed,
+  recordAgentSandboxBooting,
+  recordAgentSandboxDiscarded,
   recordAgentSandboxOpen,
   recordAgentSandboxUse,
 } from "@repo/database/models/agent-sandboxes";
-import { type Sandbox, touchSandbox } from "@repo/sandbox";
+import { Sandbox, type SandboxError, touchSandbox } from "@repo/sandbox";
 import { Clock, Duration, Effect } from "effect";
 
 const SANDBOX_USE = {
@@ -40,7 +46,7 @@ const loggedIfFailed = (
 ): Effect.Effect<void, never, DatabaseServices> =>
   write.pipe(
     Effect.catch((failure) =>
-      Effect.logWarning(`a sandbox's last use was not recorded: ${failure._tag}`),
+      Effect.logWarning(`a sandbox's use was not recorded: ${failure._tag}`),
     ),
   );
 
@@ -57,8 +63,50 @@ export const recordedSandboxOpen = (
 const recordedSandboxUse = (sandboxName: string): Effect.Effect<void, never, DatabaseServices> =>
   loggedIfFailed(Effect.flatMap(useNow(sandboxName), recordAgentSandboxUse));
 
+/** An agent's sandbox in use touched, and its use recorded once the sandbox confirms it; a touch it did not confirm fails, for a caller that tries it again (`touchedWhileUsed`). */
+export const touchedAgentSandbox = (
+  sandboxName: string,
+): Effect.Effect<void, SandboxError, Sandbox | DatabaseServices> =>
+  Effect.andThen(
+    Effect.flatMap(Sandbox, (sandbox) => sandbox.touch(sandboxName)),
+    recordedSandboxUse(sandboxName),
+  );
+
 /** An agent's sandbox in use touched, and its use recorded; a touch the sandbox did not confirm is logged by `touchSandbox`. */
 export const touchAgentSandbox = (
   sandboxName: string,
 ): Effect.Effect<void, never, Sandbox | DatabaseServices> =>
   Effect.andThen(touchSandbox(sandboxName), recordedSandboxUse(sandboxName));
+
+/** A boot of the agent's sandbox begun now, recorded so the task list reads it booting. */
+export const recordedSandboxBooting = (
+  agentId: string,
+  sandboxName: string,
+): Effect.Effect<void, never, DatabaseServices> =>
+  loggedIfFailed(
+    Effect.flatMap(Clock.currentTimeMillis, (now) =>
+      recordAgentSandboxBooting(agentId, sandboxName, new Date(now)),
+    ),
+  );
+
+/** The sandbox's boot done now, its runner handed its first lines. */
+export const recordedSandboxBooted = (
+  sandboxName: string,
+): Effect.Effect<void, never, DatabaseServices> =>
+  loggedIfFailed(
+    Effect.flatMap(Clock.currentTimeMillis, (now) =>
+      recordAgentSandboxBooted(sandboxName, new Date(now)),
+    ),
+  );
+
+/** The sandbox's boot ended without its runner, as an open or launch that failed. */
+export const recordedSandboxBootFailed = (
+  sandboxName: string,
+): Effect.Effect<void, never, DatabaseServices> =>
+  loggedIfFailed(recordAgentSandboxBootFailed(sandboxName));
+
+/** The sandbox deleted by its session's discard. */
+export const recordedSandboxDiscarded = (
+  sandboxName: string,
+): Effect.Effect<void, never, DatabaseServices> =>
+  loggedIfFailed(recordAgentSandboxDiscarded(sandboxName));

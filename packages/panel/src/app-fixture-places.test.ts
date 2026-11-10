@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { ACCOUNT_PLACE, LINK_PLACE, type ShownLink } from "@repo/features/link-grammar";
+import { ACCOUNT_DESTINATION, LINK_DESTINATION, type ShownLink } from "@repo/features/link-grammar";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { type AppStateSnapshot, NO_ACCESS, RUN_PROFILE } from "@repo/host/app-state";
 import { type AppBridge, bridgeEntries } from "@repo/host/bridge";
@@ -379,19 +379,22 @@ it.effect.each<[string, Effect.Effect<void>, string, RegExp?]>([
   ["a Settings page chosen in ⌘K", chooseInPalette("appearance"), "/personal/settings/appearance"],
   [
     "a link to a Settings page",
-    handLink({ workspace: "personal", place: { kind: LINK_PLACE.SETTINGS, page: "appearance" } }),
+    handLink({
+      workspace: "personal",
+      place: { kind: LINK_DESTINATION.SETTINGS, page: "appearance" },
+    }),
     "/personal/settings/appearance",
   ],
   [
     "a pairing's link",
-    handLink({ place: { kind: ACCOUNT_PLACE.CONNECT, code: "ABCDEFGH" } }),
+    handLink({ place: { kind: ACCOUNT_DESTINATION.CONNECT, code: "ABCDEFGH" } }),
     "/personal/settings/hosts",
     // The code its link hands, which the Hosts page's dialog asks over once the pairing it names is read.
     /ABCD-EFGH/u,
   ],
   [
     "a link to Admin",
-    handLink({ workspace: "personal", place: { kind: LINK_PLACE.ADMIN, section: "cost" } }),
+    handLink({ workspace: "personal", place: { kind: LINK_DESTINATION.ADMIN, section: "cost" } }),
     "/personal/admin/cost",
   ],
   ["⌘⇧H (Home)", Effect.sync(() => act(() => void runAppCommand(APP_COMMAND.HOME))), "/personal"],
@@ -464,14 +467,14 @@ it.effect.each<[string, (automationId: string, runId: string) => ShownLink]>([
     "a link to the automation being edited",
     (automationId) => ({
       workspace: "personal",
-      place: { kind: LINK_PLACE.AUTOMATION, automationId },
+      place: { kind: LINK_DESTINATION.AUTOMATION, automationId },
     }),
   ],
   [
     "a link to the run of it standing",
     (automationId, runId) => ({
       workspace: "personal",
-      place: { kind: LINK_PLACE.AUTOMATION_RUN, automationId, runId },
+      place: { kind: LINK_DESTINATION.AUTOMATION_RUN, automationId, runId },
     }),
   ],
 ])("%s asks nothing and stands it, edit and all, with no step of Home between", ([_link, linkTo]) =>

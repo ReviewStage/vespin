@@ -9,7 +9,7 @@
  * page, the window past every surface, and the window's Tasks tab as it goes
  * to a place. Each surface's choice lives with it, a place in the app
  * answered by the declaration its route matched, keyed by its name
- * (`LinkPlaceName`), and a page on the web by the surface's own answers
+ * (`LinkDestinationName`), and a page on the web by the surface's own answers
  * (`pull-request-beside.ts`, `inbox-item-links.ts`'s `fileBeside`); the list
  * below is where the choices are stated together, and nothing else decides
  * them: a surface asks its own of every link pressed on it first
@@ -53,7 +53,7 @@
  */
 
 import {
-  LINK_PLACE,
+  LINK_DESTINATION,
   type PullRequestThreadView,
   pullRequestAddressOf,
   type ReadLink,
@@ -172,8 +172,8 @@ export type Thing =
   | {
       readonly kind: typeof THING.INBOX_ITEM;
       readonly itemId: string;
-      /** The task that holds it; none for an item of an agent on no task. */
-      readonly taskId: string | undefined;
+      /** The task that holds it. */
+      readonly taskId: string;
       /** The agent that posted it, where the link names it under its agent. */
       readonly agentId: string | undefined;
     };
@@ -203,11 +203,11 @@ export const NOTHING: Route = { kind: ROUTE.NOTHING };
 function mentionedLinkOf(mention: ReturnType<typeof decodeMention>): ReadLink | undefined {
   switch (mention?.kind) {
     case MENTION_KIND.TASK:
-      return { workspace: "", place: { kind: LINK_PLACE.TASK, planId: mention.taskId } };
+      return { workspace: "", place: { kind: LINK_DESTINATION.TASK, planId: mention.taskId } };
     case MENTION_KIND.SECTION:
       return {
         workspace: "",
-        place: { kind: LINK_PLACE.SECTION, planId: mention.taskId, anchor: mention.anchor },
+        place: { kind: LINK_DESTINATION.SECTION, planId: mention.taskId, anchor: mention.anchor },
       };
     default:
       return undefined;

@@ -26,6 +26,7 @@ import {
 import { PRESS_LISTENER_GUARD_RULE } from "./shared/press-listener-guard.ts";
 import { namesRetired, RETIRED_GUARD_RULE } from "./shared/retired.ts";
 import { ROW_BEHAVIOR_GUARD_RULE } from "./shared/row-behavior-guard.ts";
+import { namesSandboxDelete, SANDBOX_DELETE_GUARD_RULE } from "./shared/sandbox-delete-guard.ts";
 import { SETTINGS_ROW_END_GUARD_RULE } from "./shared/settings-row-end-guard.ts";
 import { SHADCN_FOCUS_GUARD_RULE, SHADCN_SOURCE } from "./shared/shadcn-focus-guard.ts";
 import { callsSubjectBuilder, SHORTCUT_FLAG_GUARD_RULE } from "./shared/shortcut-flag-guard.ts";
@@ -48,7 +49,8 @@ import {
  * file holding one that would silence `skeleton-through-components`,
  * `settings-row-end`, `row-behavior-in-row`, whose list of row components
  * is the only way past it, on any TypeScript file holding one that would
- * silence `one-message-box`, whose list of builders is the only way past it, or `async-press-needs-busy`, whose baseline is the
+ * silence `one-message-box`, whose list of builders is the only way past it, or
+ * `sandbox-delete-in-one-place`, whose list of deleters is the only way past it, or `async-press-needs-busy`, whose baseline is the
  * only way past it, on a
  * JSX-capable file outside `@repo/ui` holding one that would silence
  * `no-open-page-from-button`, `no-raw-heading-outside-ui` or
@@ -138,6 +140,17 @@ const GUARDS = [
       namesBoxPart(readFileSync(absolute, "utf8")),
     remedy:
       "Draw the box with useMessageBox and MessageBox (or MessageField) from message-box.tsx, adding the slot or option it lacks there, or name a box that differs on purpose in tools/anti-slop/message-box.json with its reason",
+  },
+  {
+    rule: SANDBOX_DELETE_GUARD_RULE,
+    sources: TYPESCRIPT_SOURCE,
+    // A file that reaches no sandbox and names no helper has nothing to silence; the guards' own tests spell fixtures.
+    watches: (absolute: string) =>
+      !path.relative(REPOSITORY_ROOT, absolute).startsWith("tools/anti-slop/") &&
+      existsSync(absolute) &&
+      namesSandboxDelete(readFileSync(absolute, "utf8")),
+    remedy:
+      "Delete the agent's sandbox through packages/service/src/agents/session-sandboxes.ts, or name a file that must delete one in tools/anti-slop/sandbox-deletes.json with its reason",
   },
   {
     rule: SKELETON_GUARD_RULE,

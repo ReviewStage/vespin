@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { INBOX_STATUS } from "@repo/features/inbox-wire";
+import { INBOX_ASK_STATUS, INBOX_STATUS } from "@repo/features/inbox-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { Deferred, Effect, Fiber, Layer } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
@@ -11,6 +11,7 @@ import { Database, type DatabaseServices } from "../../core/query.js";
 import { sqlClientOverUrl } from "../../core/sql-client.js";
 import { user } from "../../schemas/auth.js";
 import { inboxItem } from "../../schemas/inbox.js";
+import { inboxMessage } from "../../schemas/inbox-message.js";
 import {
   getTestDB,
   openInboxItem,
@@ -29,7 +30,8 @@ import { createTask, updateTask } from "../task-store.js";
  * written its row and skipped the item already closed; the undo waits on
  * that row rather than reading past it, and hands the item to the act once
  * it commits, so the item never stands open under an archived agent or a
- * task Done. This file runs in CI's Postgres job, where
+ * task Done; and an ask the undo read withdrawn that another write moves
+ * before the undo reaches it is left as that write stood it. This file runs in CI's Postgres job, where
  * `APP_STORE_TEST_DATABASE_URL` names the database (`vitest.config.ts`).
  */
 
@@ -86,6 +88,21 @@ const standingOf = (itemId: string) =>
       .from(inboxItem)
       .where(eq(inboxItem.id, itemId));
     return row ?? assert.fail("the item is gone");
+  });
+
+/** How the item's one ask stands, and the ask the item holds open. */
+const askOf = (itemId: string) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const [message] = yield* db
+      .select({ status: sql<string>`${inboxMessage.ask} ->> 'status'` })
+      .from(inboxMessage)
+      .where(eq(inboxMessage.itemId, itemId));
+    const [item] = yield* db
+      .select({ openAsk: inboxItem.openAskMessageId })
+      .from(inboxItem)
+      .where(eq(inboxItem.id, itemId));
+    return { status: message?.status, openAsk: item?.openAsk };
   });
 
 /** The act run in a transaction on another connection, held open once it has written until released. */
@@ -160,6 +177,41 @@ it.layer(getTestDB())("an inbox item's undo racing the other act that settles it
         assert.deepEqual(yield* standingOf(itemId), {
           status: INBOX_STATUS.CLOSED,
           closedReason: "Its task is done.",
+        });
+      }),
+  );
+
+  it.effect(
+    "a task moved off done leaves alone an ask another write moved after the undo read it withdrawn",
+    () =>
+      Effect.gen(function* () {
+        const onAnother = yield* anotherConnection;
+        const { dean, taskId, itemId } = yield* openQuestion;
+        yield* updateTask(dean, taskId, { status: TASK_STATUS.DONE });
+        yield* TestClock.adjust("1 minute");
+
+        const replace = yield* heldOnAnother(
+          onAnother,
+          Effect.flatMap(Database, (db) =>
+            db
+              .update(inboxMessage)
+              .set({
+                ask: sql`${inboxMessage.ask} || jsonb_build_object('status', ${INBOX_ASK_STATUS.REPLACED}::text)`,
+              })
+              .where(eq(inboxMessage.itemId, itemId)),
+          ),
+        );
+        const reopening = yield* Effect.forkChild(
+          onAnother(updateTask(dean, taskId, { status: TASK_STATUS.IN_PROGRESS })),
+        );
+        yield* untilWaitingOrDone(reopening);
+        yield* Deferred.succeed(replace.release, undefined);
+        yield* Fiber.join(replace.fiber);
+        yield* Fiber.join(reopening);
+
+        assert.deepEqual(yield* askOf(itemId), {
+          status: INBOX_ASK_STATUS.REPLACED,
+          openAsk: null,
         });
       }),
   );

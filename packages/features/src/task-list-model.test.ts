@@ -10,12 +10,9 @@ import {
   repositoryParts,
   SHOWN_STATUSES,
   TASK_ORDER,
-  type TaskRow,
-  taskRow,
-  taskRowName,
-  taskRowsAssignedTo,
-  taskRowsInStatuses,
+  tasksAssignedTo,
   tasksById,
+  tasksInStatuses,
   taskTime,
 } from "./task-list-model.js";
 import {
@@ -57,15 +54,11 @@ function task(
   };
 }
 
-const names = (groups: readonly { rows: readonly TaskRow[] }[]) =>
-  groups.map((group) => group.rows.map(taskRowName));
-
-/** The tasks grouped by repository, as their rows are. */
-const groupsByRepository = (tasks: readonly TaskSummary[]): readonly RepositoryGroup[] =>
-  repositoryGroups(tasks.map(taskRow));
+const names = (groups: readonly RepositoryGroup[]) =>
+  groups.map((group) => group.tasks.map((each) => each.name));
 
 test("a repository group lists its tasks newest updated first, the time each row shows", () => {
-  const groups = groupsByRepository([
+  const groups = repositoryGroups([
     task("old", "acme/relay", 3, 10),
     task("touched", "acme/relay", 1, 30),
     task("new", "acme/relay", 2, 20),
@@ -81,9 +74,9 @@ test("a row shows when its task was started under Created, and its last update o
 });
 
 test("two repositories sharing a name are told apart by their owners", () => {
-  const groups = groupsByRepository([task("a", "acme/site", 1, 2), task("b", "labs/site", 1, 1)]);
+  const groups = repositoryGroups([task("a", "acme/site", 1, 2), task("b", "labs/site", 1, 1)]);
   expect(repositoryLabel("acme/site", groups)).toBe("acme/site");
-  expect(repositoryLabel("labs/site", groupsByRepository([task("b", "labs/site", 1, 1)]))).toBe(
+  expect(repositoryLabel("labs/site", repositoryGroups([task("b", "labs/site", 1, 1)]))).toBe(
     "site",
   );
 });
@@ -114,7 +107,7 @@ test("a task whose agent ended a turn after another task's description was edite
       pullRequestTotal: 0,
     },
   };
-  const groups = groupsByRepository([edited, worked]);
+  const groups = repositoryGroups([edited, worked]);
   expect(names(groups)).toEqual([["Agent finished at 800", "Description edited at 500"]]);
   expect(taskTime(worked, TASK_ORDER.UPDATED)).toBe(800);
   expect(taskTime(edited, TASK_ORDER.UPDATED)).toBe(500);
@@ -155,9 +148,9 @@ test("the list leaves the backlog and the settled out, and keeps a row with no s
     standing("Shipped", TASK_STATUS.DONE, TASK_PRIORITY.LOW, 3),
     standing("Also filed", TASK_STATUS.BACKLOG, TASK_PRIORITY.LOW, 4),
     standing("Older service", undefined, undefined, 5),
-  ].map(taskRow);
+  ];
 
-  expect(taskRowsInStatuses(rows, SHOWN_STATUSES).map(taskRowName)).toEqual([
+  expect(tasksInStatuses(rows, SHOWN_STATUSES).map((each) => each.name)).toEqual([
     "Under way",
     "Older service",
   ]);
@@ -169,34 +162,34 @@ function assigned(
   updatedAt: number,
   assignee: keyof typeof NAMES,
   creator?: keyof typeof NAMES,
-): TaskRow {
-  return taskRow({
+): TaskSummary {
+  return {
     ...task(name, "acme/relay", 1, updatedAt, creator),
     assignee: { userId: assignee, name: NAMES[assignee] },
-  });
+  };
 }
 
 test("the rows assigned to one member are the tasks they are on, and every row for Anyone", () => {
   const rows = [
-    taskRow({
+    {
       ...task("Dean's on it", "acme/relay", 1, 10, CHARLES),
       assignee: { userId: DEAN, name: "Dean" },
-    }),
-    taskRow(task("No one's on it", "acme/relay", 1, 20, DEAN)),
+    },
+    task("No one's on it", "acme/relay", 1, 20, DEAN),
   ];
   const member = { kind: ASSIGNED_TO.MEMBER, userId: DEAN } as const;
-  expect(taskRowsAssignedTo(rows, member, CHARLES).map(taskRowName)).toEqual(["Dean's on it"]);
-  expect(taskRowsAssignedTo(rows, { kind: ASSIGNED_TO.ANYONE }, DEAN)).toHaveLength(2);
+  expect(tasksAssignedTo(rows, member, CHARLES).map((each) => each.name)).toEqual(["Dean's on it"]);
+  expect(tasksAssignedTo(rows, { kind: ASSIGNED_TO.ANYONE }, DEAN)).toHaveLength(2);
 });
 
 test("Me holds the reader's tasks and the tasks no one is on that they created, but not a teammate's unassigned task or one they made for someone else", () => {
   const rows = [
     assigned("Charles made it, Dean's on it", 10, DEAN, CHARLES),
-    taskRow(task("Dean made it, no one's on it", "acme/relay", 1, 20, DEAN)),
+    task("Dean made it, no one's on it", "acme/relay", 1, 20, DEAN),
     assigned("Dean made it, Maya's on it", 30, MAYA, DEAN),
-    taskRow(task("Charles made it, no one's on it", "acme/relay", 1, 40, CHARLES)),
+    task("Charles made it, no one's on it", "acme/relay", 1, 40, CHARLES),
   ];
-  expect(taskRowsAssignedTo(rows, { kind: ASSIGNED_TO.ME }, DEAN).map(taskRowName)).toEqual([
+  expect(tasksAssignedTo(rows, { kind: ASSIGNED_TO.ME }, DEAN).map((each) => each.name)).toEqual([
     "Charles made it, Dean's on it",
     "Dean made it, no one's on it",
   ]);
@@ -218,11 +211,11 @@ function drawnNames(
   every: readonly TaskSummary[] = tasks,
 ): string[] {
   return drawnTaskRows(
-    tasks.map(taskRow),
+    tasks,
     (taskId) => opened.includes(taskId),
-    (row) => taskRowName(row) === standing,
+    (each) => each.name === standing,
     tasksById(every),
-  ).map(({ row, depth }) => `${"  ".repeat(depth)}${taskRowName(row)}`);
+  ).map(({ task: each, depth }) => `${"  ".repeat(depth)}${each.name}`);
 }
 
 const TREE = [

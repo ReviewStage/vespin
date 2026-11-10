@@ -20,3 +20,16 @@ const REGULAR_WIDTH_MIN_POINTS = 600;
 export function windowSizeClass(width: number): WindowSizeClass {
   return width >= REGULAR_WIDTH_MIN_POINTS ? WINDOW_SIZE_CLASS.REGULAR : WINDOW_SIZE_CLASS.COMPACT;
 }
+
+/**
+ * The narrowest window, in points, that stands three columns, such as a
+ * list's groups beside the group's rows beside the row's page: an iPad's in
+ * landscape is over it, and one in portrait, the unfolded iPhone Duo's, and
+ * a Split View pane are under it, where two columns stand.
+ */
+const THREE_COLUMNS_MIN_POINTS = 1100;
+
+/** Whether a window `width` points wide stands three columns. */
+export function standsThreeColumns(width: number): boolean {
+  return width >= THREE_COLUMNS_MIN_POINTS;
+}

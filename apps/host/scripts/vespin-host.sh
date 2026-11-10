@@ -158,7 +158,7 @@ uninstall_account() {
   if [ "$left" = yes ]; then
     printf 'Vespin host is removed from this account and from Vespin.\n'
   else
-    printf 'Vespin host is removed from this account. Remove it in Settings › Hosts too, if it is still listed.\n'
+    printf 'Vespin host is removed from this account. Remove it in Settings › Machines too, if it is still listed.\n'
   fi
 }
 

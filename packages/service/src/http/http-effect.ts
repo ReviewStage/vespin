@@ -1,4 +1,5 @@
 import type { StoreFailure } from "@repo/database/core/query";
+import type { ApprovalStatus } from "@repo/features/agent-approval-wire";
 import type {
   ExtraRepositoryRefusal,
   LocalAgentRefusal,
@@ -84,6 +85,8 @@ export const HOSTED_REFUSAL_STATUS = {
   [HOSTED_API_ERROR.MEMORY_OFF]: HOSTED_HTTP_STATUS.FORBIDDEN,
   [HOSTED_API_ERROR.MEMORY_CREDENTIAL]: HOSTED_HTTP_STATUS.BAD_REQUEST,
   [HOSTED_API_ERROR.MEMORY_FULL]: HOSTED_HTTP_STATUS.CONFLICT,
+  [HOSTED_API_ERROR.APPROVAL_SETTLED]: HOSTED_HTTP_STATUS.CONFLICT,
+  [HOSTED_API_ERROR.PERMISSION_MODE_REFUSED]: HOSTED_HTTP_STATUS.CONFLICT,
 } as const;
 
 type HostedRefusalSlug = keyof typeof HOSTED_REFUSAL_STATUS;
@@ -104,6 +107,7 @@ export type HostedRefusal = {
   readonly minimumVersion?: string;
   readonly heldUntil?: number;
   readonly hostRemoved?: true;
+  readonly approvalStatus?: ApprovalStatus;
 };
 
 /**
@@ -214,6 +218,10 @@ export const HOSTED_REFUSAL = {
   MEMORY_CREDENTIAL: { error: HOSTED_API_ERROR.MEMORY_CREDENTIAL },
   /** The workspace holds as many memories as it may; nothing was written. */
   MEMORY_FULL: { error: HOSTED_API_ERROR.MEMORY_FULL },
+  /** An answer named an ask that no longer waits (`approvalSettled`, which names how it stands); nothing reached the agent. */
+  APPROVAL_SETTLED: { error: HOSTED_API_ERROR.APPROVAL_SETTLED },
+  /** A mode that asks named for an agent whose harness never asks; nothing was written. */
+  PERMISSION_MODE_REFUSED: { error: HOSTED_API_ERROR.PERMISSION_MODE_REFUSED },
 } as const satisfies Record<string, HostedRefusal>;
 
 /** A plan's usage limit reached, with when it resets in epoch milliseconds where the provider said, so the words can name it. */
@@ -245,6 +253,11 @@ export function extraRepositoryRefused(
     extraRepositoryRefusal,
     ...(refusedRepository === undefined ? undefined : { refusedRepository }),
   };
+}
+
+/** An answer to an ask that no longer waits refused, named so the words can say how it stands. */
+export function approvalSettled(approvalStatus: ApprovalStatus): HostedRefusal {
+  return { ...HOSTED_REFUSAL.APPROVAL_SETTLED, approvalStatus };
 }
 
 /** A host's daemon below the floor given, named so the daemon can say which version to upgrade to. */

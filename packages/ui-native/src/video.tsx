@@ -10,6 +10,9 @@ import { TEXT_SIZE } from "./tokens/type.js";
 /** What a video says where the system's player cannot play it, such as a WebM, which iOS's player has no reader for. */
 const CANNOT_PLAY = "This video can't play here.";
 
+/** What the system's player stands as to a flow that drives the app, once it holds the video's file. */
+const VIDEO_PLAYER_ID = "video-player";
+
 /** What opens a video the player cannot play where it plays. */
 const OPEN_IN_SAFARI = "Open in Safari";
 
@@ -51,18 +54,23 @@ export function Video({ source, label, onOpenElsewhere }: VideoProps) {
     return () => listening.remove();
   }, [player]);
   if (source === undefined || failed) {
+    // Note that a well offering Open in Safari stands as two elements to VoiceOver, its words and its link, since one element would hide the link.
+    const offers = failed && onOpenElsewhere !== undefined;
     return (
       <View
         style={[styles.frame, styles.unplayable, { backgroundColor: colors.WELL }]}
-        accessible
-        accessibilityLabel={failed ? `${label}. ${CANNOT_PLAY}` : label}
+        accessible={!offers}
+        accessibilityLabel={offers ? undefined : failed ? `${label}. ${CANNOT_PLAY}` : label}
       >
         {failed ? (
-          <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+          <Text
+            style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}
+            accessibilityLabel={`${label}. ${CANNOT_PLAY}`}
+          >
             {CANNOT_PLAY}
           </Text>
         ) : null}
-        {failed && onOpenElsewhere !== undefined ? (
+        {offers ? (
           <Pressable onPress={onOpenElsewhere} accessibilityRole="link" hitSlop={SPACE.ROW}>
             <Text
               style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.ACCENT_TEXT }}
@@ -82,6 +90,7 @@ export function Video({ source, label, onOpenElsewhere }: VideoProps) {
       fullscreenOptions={{ enable: true }}
       allowsPictureInPicture
       accessibilityLabel={label}
+      testID={VIDEO_PLAYER_ID}
       style={[styles.frame, { backgroundColor: colors.WELL }]}
     />
   );

@@ -1,4 +1,4 @@
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import type { SettingsLink, SettingsView } from "@repo/settings/settings-views";
 import { TEXT_BUTTON_TONE, TextButton } from "@repo/ui";
 import { createContext, useContext } from "react";
@@ -50,7 +50,9 @@ export function SettingsPageLink({
   const openSettings = useOpenSettings();
   const workspace = useLinkWorkspace();
   const href =
-    workspace === undefined ? undefined : linkOf({ kind: LINK_PLACE.SETTINGS, page }, workspace);
+    workspace === undefined
+      ? undefined
+      : linkOf({ kind: LINK_DESTINATION.SETTINGS, page }, workspace);
   return (
     <TextButton
       tone={TEXT_BUTTON_TONE.ACCENT}

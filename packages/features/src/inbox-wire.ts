@@ -249,6 +249,19 @@ export const INBOX_STATUS = {
 
 export type InboxStatus = (typeof INBOX_STATUS)[keyof typeof INBOX_STATUS];
 
+/**
+ * The statuses an item may move to from each it stands in: a post opens it
+ * whatever it stands in; a member's answer or nod, a close, and a settle
+ * take only an open one; an answer or a member's close taken back, and a
+ * settle undone, open it again. Every write of an item's status guards on
+ * the statuses this lists as moving to the one it writes (`statusesMovingTo`).
+ */
+export const INBOX_STATUS_MOVES = {
+  [INBOX_STATUS.OPEN]: [INBOX_STATUS.OPEN, INBOX_STATUS.ANSWERED, INBOX_STATUS.CLOSED],
+  [INBOX_STATUS.ANSWERED]: [INBOX_STATUS.OPEN],
+  [INBOX_STATUS.CLOSED]: [INBOX_STATUS.OPEN],
+} as const satisfies Record<InboxStatus, readonly InboxStatus[]>;
+
 /** How the developer answered an item. */
 export const INBOX_REPLY = {
   /** Picked one or more of a choice's options. */
@@ -302,6 +315,39 @@ export const INBOX_ASK_STATUS = {
   /** The agent took it back, with why. */
   WITHDRAWN: "withdrawn",
 } as const;
+
+export type InboxAskStatus = (typeof INBOX_ASK_STATUS)[keyof typeof INBOX_ASK_STATUS];
+
+/**
+ * The statuses an ask may move to from each it stands in: an open one is
+ * answered, replaced by a later post, or withdrawn; an answer taken back,
+ * and a withdrawal undone, open it again; a replaced one stays so. Every
+ * write of an ask's status guards on the statuses this lists as moving to
+ * the one it writes (`statusesMovingTo`).
+ */
+export const INBOX_ASK_STATUS_MOVES = {
+  [INBOX_ASK_STATUS.OPEN]: [
+    INBOX_ASK_STATUS.ANSWERED,
+    INBOX_ASK_STATUS.REPLACED,
+    INBOX_ASK_STATUS.WITHDRAWN,
+  ],
+  [INBOX_ASK_STATUS.ANSWERED]: [INBOX_ASK_STATUS.OPEN],
+  [INBOX_ASK_STATUS.REPLACED]: [],
+  [INBOX_ASK_STATUS.WITHDRAWN]: [INBOX_ASK_STATUS.OPEN],
+} as const satisfies Record<InboxAskStatus, readonly InboxAskStatus[]>;
+
+/**
+ * The statuses among `from`, every one by default, that the moves table
+ * lets move to `to`: what a write moving a row to `to` holds the row's
+ * status to, so a move the table does not list matches no row.
+ */
+export function statusesMovingTo<Status extends string>(
+  moves: Readonly<Record<Status, readonly Status[]>>,
+  to: Status,
+  from: readonly Status[] = Object.keys(moves) as Status[],
+): Status[] {
+  return from.filter((status) => moves[status].includes(to));
+}
 
 /**
  * The options a version 4 approval stands for as a `decide` ask, and the
@@ -1032,6 +1078,36 @@ export const inboxCloseRequestSchema = EffectSchema.Struct({
 });
 
 export type InboxCloseRequest = typeof inboxCloseRequestSchema.Type;
+
+/**
+ * A member's own nod or close taken back, by the key it was sent under, so
+ * the item waits on them again as it did before: Undo's inverse of Got it
+ * and of Resolve, which the member may ask for whenever they like.
+ */
+export const inboxTakeBackRequestSchema = EffectSchema.Struct({
+  clientKey: filledText(INBOX_BOUNDS.MAX_CLIENT_KEY_CHARS),
+});
+
+export type InboxTakeBackRequest = typeof inboxTakeBackRequestSchema.Type;
+
+/**
+ * What came of a take-back: the nod or close taken back, the item open
+ * again; refused because its agent was told of it, a message to it that
+ * nothing takes back; or refused because the item no longer stands as that
+ * nod or close left it, answered, closed, or posted over since, or the key
+ * named none.
+ */
+export const INBOX_TAKE_BACK = {
+  TAKEN: "taken",
+  TOLD: "told",
+  MOVED_ON: "moved-on",
+} as const;
+
+/** What a take-back comes back as: the item as it then stands, and what came of the take-back. */
+export const inboxTakenBackSchema = EffectSchema.Struct({
+  item: inboxItemSchema,
+  outcome: EffectSchema.Literals(Object.values(INBOX_TAKE_BACK)),
+});
 
 /** How a member's close opens, in the message that tells the agent of it. */
 export const INBOX_CLOSE_LEAD = "Thread closed";

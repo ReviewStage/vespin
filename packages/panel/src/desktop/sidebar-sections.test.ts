@@ -12,10 +12,10 @@ import {
 import { applySectionWrite } from "@repo/features/task-section-writes";
 import { sectionTaskIds, workspaceSections } from "@repo/features/task-sections-model";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
+import { type PinMove, TASK_MARK, type TaskMark } from "@repo/features/tasks-model";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import { type PinMove, TASK_MARK, type TaskMark } from "@repo/ui/tasks-model";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, onTestFinished, test, vi } from "vitest";

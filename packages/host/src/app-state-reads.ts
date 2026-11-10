@@ -8,11 +8,14 @@
  * neither carries the other's React.
  */
 
-import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
+import { agentDefaultOf } from "@repo/features/account-preferences-live";
 import { type AgentTranscriptKey, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import type { ListedAgent } from "@repo/features/agent-wire";
+import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/inbox-list-model";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
 import {
   type AccountExperiment,
   type AccountExperimentChoices,
@@ -179,8 +182,6 @@ export const selectTasks = (state: AppStateSnapshot) => state.tasks;
 export const selectInbox = (state: AppStateSnapshot) => state.inbox;
 export const selectInboxWaiting = (state: AppStateSnapshot) => state.inbox.waiting;
 export const selectInboxTasks = (state: AppStateSnapshot) => state.inbox.tasks;
-export const selectInboxTaskless = (state: AppStateSnapshot) => state.inbox.taskless;
-export const selectInboxAgents = (state: AppStateSnapshot) => state.inbox.agents;
 export const selectFailedRuns = (state: AppStateSnapshot) => state.inbox.failedRuns;
 export const selectPullRequestPublished = (state: AppStateSnapshot) =>
   state[LIVE_READ.PULL_REQUEST_PUBLISHED];
@@ -190,6 +191,9 @@ export const selectNetwork = (state: AppStateSnapshot) => state.network;
 export const selectSessionReplay = (state: AppStateSnapshot) => state.sessionReplay;
 export const selectPortForwarding = (state: AppStateSnapshot) => state.portForwarding;
 export const selectMirrors = (state: AppStateSnapshot) => state.mirrors;
+
+/** Where the task list's read stands: not yet asked, on its way, read, or refused. */
+export const selectTaskListStatus = (state: AppStateSnapshot) => state.tasks.listStatus;
 
 /** The account's workspaces, which tell their readers only as the list moves, not as the tasks beside it do. */
 export const selectWorkspaces = (state: AppStateSnapshot) => state.tasks.workspaces;
@@ -285,20 +289,13 @@ export function memoizedSelect<Inputs extends unknown[], A>(
   };
 }
 
-/** No holder of either kind read: the feed before it first answers. */
-const NO_INBOX_READS: InboxReads = {
-  [INBOX_SCOPE_KIND.PLAN]: new Map(),
-  [INBOX_SCOPE_KIND.AGENT]: new Map(),
-};
+/** No task's feed read: the feed before it first answers. */
+const NO_INBOX_READS: InboxReads = new Map();
 
-/** The account's feed of every item as the list model reads it: each holder's items by kind and then by id. */
+/** The account's feed of every item as the list model reads it: each task's items by the task's id. */
 function feedReads(feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS]): InboxReads {
   const rows = feed.rows;
-  if (rows === undefined) return NO_INBOX_READS;
-  return {
-    [INBOX_SCOPE_KIND.PLAN]: new Map(Object.entries(rows[INBOX_SCOPE_KIND.PLAN])),
-    [INBOX_SCOPE_KIND.AGENT]: new Map(Object.entries(rows[INBOX_SCOPE_KIND.AGENT])),
-  };
+  return rows === undefined ? NO_INBOX_READS : new Map(Object.entries(rows[INBOX_SCOPE_KIND.PLAN]));
 }
 
 /** Each workspace's select of its Inbox's holders as last made (`selectInboxGroupsIn`), by the workspace's id. */
@@ -310,8 +307,8 @@ const inboxGroupSelects = new Map<
 /**
  * Every holder of Inbox items in one workspace as the window's Inbox groups
  * them (`@repo/features/inbox-list-model`'s `inboxGroups`), as a `select`:
- * each task of the workspace the host says holds items, and each of its
- * agents with no task, with every item of theirs the account's feed holds,
+ * each task of the workspace the host says holds items, with every item of
+ * theirs the account's feed holds,
  * settled ones too, so a scope of the list model reads them as the panel's
  * Inbox, which lists the chosen workspace's alone, does. No workspace named
  * groups every workspace's. One select per workspace, made once and kept,
@@ -332,8 +329,6 @@ export function selectInboxGroupsIn(
           workspaceId === undefined
             ? listed
             : listed.filter((task) => task.workspaceId === workspaceId),
-        agents: inbox.agents,
-        workspaceId,
       }),
   );
   inboxGroupSelects.set(workspaceId, select);
@@ -375,6 +370,19 @@ export function selectInboxFeed(state: AppStateSnapshot): InboxFeed {
   const feed = state[LIVE_READ.INBOX_ITEMS];
   if (feed.rows !== undefined) return INBOX_FEED.ANSWERED;
   return feed.failed === true ? INBOX_FEED.FAILED : INBOX_FEED.READING;
+}
+
+/**
+ * Whether the account's feed holds a thread on any task: true for one the
+ * feed read before the task list that holds it, which `inboxGroups` cannot
+ * group until that list is read (`selectTaskListStatus`).
+ */
+export function inboxFeedHolds(state: AppStateSnapshot, itemId: string | undefined): boolean {
+  const rows = state[LIVE_READ.INBOX_ITEMS].rows;
+  if (rows === undefined || itemId === undefined) return false;
+  return Object.values(rows[INBOX_SCOPE_KIND.PLAN]).some((items) =>
+    items.some((item) => item.id === itemId),
+  );
 }
 
 /** What a workspace's choices are read from: its entry on the account's list. */
@@ -429,4 +437,29 @@ export function selectTranscript(
 ): (state: AppStateSnapshot) => AppHostRead<AppTranscript> | undefined {
   return (state) =>
     state[LIVE_READ.TRANSCRIPT][transcript.agentId]?.[transcript.callId ?? OWN_TRANSCRIPT];
+}
+
+/** The models the account may start an agent on, and the devices that may run one, as the host holds their read (`ACT_KIND.AGENTS_MODELS_FOLLOW`); none before it is read or while no one is signed in. */
+export function selectModels(state: AppStateSnapshot): AppHostRead<ModelsAnswer> | undefined {
+  const accountId = signedInAccountId(state.account);
+  return accountId === undefined ? undefined : state[LIVE_READ.MODELS][accountId];
+}
+
+/**
+ * The model and effort an agent starts on where its Start names none, as the
+ * panel's model chip reads it: the account's stored default, else the
+ * catalog's fallback once the models are read; none before either is read.
+ */
+export function selectAgentDefault(state: AppStateSnapshot): ModelChoice | undefined {
+  const accountId = signedInAccountId(state.account);
+  if (accountId === undefined) return undefined;
+  const stored = state[LIVE_READ.ACCOUNT_PREFERENCES][accountId]?.rows?.agent;
+  return agentDefaultOf(stored, state[LIVE_READ.MODELS][accountId] ?? {});
+}
+
+/** The repositories a workspace's GitHub reaches, or every workspace's under `EVERY_WORKSPACE`, as the host holds their read (`ACT_KIND.TASKS_REPOSITORIES_FOLLOW`), as a `select`; none before it is read. */
+export function selectRepositoryList(
+  scope: string,
+): (state: AppStateSnapshot) => AppHostRead<GitHubRepositoriesAnswer> | undefined {
+  return (state) => state[LIVE_READ.REPOSITORY_LISTS][scope];
 }

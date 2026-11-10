@@ -2,8 +2,15 @@ import assert from "node:assert/strict";
 import { randomBytes, randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { it } from "@effect/vitest";
-import { RUNNER_END, RUNNER_EVENT, type RunnerEvent } from "@repo/agent-runner/protocol";
+import {
+  APPROVAL_BY,
+  APPROVAL_DECISION,
+  RUNNER_END,
+  RUNNER_EVENT,
+  type RunnerEvent,
+} from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
+import { listPendingApprovals, readApproval } from "@repo/database/models/agent-approvals";
 import {
   createAgent,
   latestTurnsOfReached,
@@ -22,11 +29,16 @@ import {
 } from "@repo/database/models/provider-key-store";
 import { readTask, updateTask } from "@repo/database/models/task-store";
 import { lapsedTurnsOf, releaseWaitedTurns } from "@repo/database/models/turn-state";
-import { SettledTurnListener, storeWriter } from "@repo/database/models/writer";
+import {
+  SettledTurnListener,
+  StartedTurnListener,
+  storeWriter,
+} from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, startTask } from "@repo/database/testing";
+import { APPROVAL_STATUS } from "@repo/features/agent-approval-wire";
 import { AGENT_FAILURE, AGENT_KIND, AGENT_PAYER, type AgentPayer } from "@repo/features/agent-wire";
 import {
   PROVIDER_KEY_KIND,
@@ -55,6 +67,7 @@ import {
 import { type AfterResponse, keptAfterResponse } from "../../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../../http/http.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
+import { NO_GITHUB } from "../../testing/github-app-fake.js";
 import { agentFailureOf } from "../coder-host/status.js";
 import { titleAgent } from "../coder-host/title.js";
 import { CODER_TOOL_SET } from "../coder-host/tool-set.js";
@@ -95,7 +108,9 @@ const standingWith = (
   options: RunnerEventsOptions,
   after:
     | Layer.Layer<AfterResponse>
-    | Layer.Layer<SettledTurnListener> = Layer.empty as Layer.Layer<AfterResponse>,
+    | Layer.Layer<
+        SettledTurnListener | StartedTurnListener
+      > = Layer.empty as Layer.Layer<AfterResponse>,
 ) =>
   Effect.gen(function* () {
     const services = Layer.mergeAll(
@@ -105,6 +120,7 @@ const standingWith = (
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
       ANALYTICS.layer,
       after,
+      NO_GITHUB,
     );
     const web = HttpRouter.toWebHandler(
       runnerEventsApp(options).pipe(HttpRouter.provideRequest(services)),
@@ -795,18 +811,24 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
-    "a turn the batch settles is heard once its transaction is over, so what it said is committed",
+    "a turn the batch starts and settles is heard started, then settled, each once its transaction is over, so what it said is committed",
     () =>
       Effect.gen(function* () {
-        const heard: { readonly turnId: string; readonly inTransaction: boolean }[] = [];
-        const listener = Layer.succeed(SettledTurnListener, {
-          heard: (turn) =>
-            Effect.flatMap(SqlClient.SqlClient, (client) =>
-              Effect.map(Effect.serviceOption(client.transactionService), (open) => {
-                heard.push({ turnId: turn.turnId, inTransaction: Option.isSome(open) });
-              }),
-            ),
-        });
+        const heard: {
+          readonly kind: string;
+          readonly turnId: string;
+          readonly inTransaction: boolean;
+        }[] = [];
+        const hear = (kind: string) => (turn: { readonly turnId: string }) =>
+          Effect.flatMap(SqlClient.SqlClient, (client) =>
+            Effect.map(Effect.serviceOption(client.transactionService), (open) => {
+              heard.push({ kind, turnId: turn.turnId, inTransaction: Option.isSome(open) });
+            }),
+          );
+        const listener = Layer.merge(
+          Layer.succeed(StartedTurnListener, { heard: hear("started") }),
+          Layer.succeed(SettledTurnListener, { heard: hear("settled") }),
+        );
         const post = yield* standingWith({}, listener);
         const agent = yield* agentWithBearer;
         const envelope = { parent_tool_use_id: null, session_id: SESSION, uuid: randomUUID() };
@@ -826,9 +848,13 @@ it.layer(SUITE)("the runner events route", (it) => {
         yield* post(agent.bearer, events);
 
         assert.deepEqual(
-          heard.map((each) => each.inTransaction),
-          [false],
+          heard.map((each) => [each.kind, each.inTransaction]),
+          [
+            ["started", false],
+            ["settled", false],
+          ],
         );
+        assert.equal(heard[0]?.turnId, heard[1]?.turnId);
       }),
   );
 
@@ -975,6 +1001,63 @@ it.layer(SUITE)("the runner events route", (it) => {
         assert.notEqual(Option.getOrThrow(context).compactedAt, null);
         // Only the last turn's kind stands, so the next message says the call's words no longer hold and hands the task again.
         assert.deepEqual(yield* readNativeTurnHanded(agent.target), { spoken: true });
+      }),
+  );
+
+  it.effect(
+    "an ask its runner holds lands under the running turn, half a character in its input made whole, its runner's word settles it, and one left pending expires as the turn ends",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const ask = (requestId: string) => ({
+          type: RUNNER_EVENT.APPROVAL_REQUESTED,
+          requestId,
+          toolUseId: `toolu_${requestId}`,
+          toolName: "Bash",
+          title: "Run git push --force?",
+          // A runner's cut inside a surrogate pair leaves half a character, which Postgres refuses in a JSON value.
+          input: { command: "git push --force", note: "cut at \uD83D" },
+        });
+        const asking = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          { type: "system", subtype: "init", ...top },
+          ask("a"),
+          ask("b"),
+          {
+            type: RUNNER_EVENT.APPROVAL_RESOLVED,
+            requestId: "a",
+            decision: APPROVAL_DECISION.DENY,
+            by: APPROVAL_BY.MESSAGE,
+          },
+        ];
+        const ending = [
+          { type: "result", subtype: "success", is_error: false, ...top },
+          { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+        ];
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        const numbered = [...asking, ...ending].map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, numbered.slice(0, asking.length));
+        const waiting = yield* listPendingApprovals(agent.userId, agent.agentId);
+        yield* post(agent.bearer, numbered.slice(asking.length));
+        const standingOf = (approvalId: string) =>
+          Effect.map(
+            readApproval(agent.userId, agent.agentId, approvalId),
+            (read) => Option.getOrThrow(read).status,
+          );
+
+        assert.deepEqual(
+          waiting.map((each) => [each.requestId, each.toolUseId, each.ask.input]),
+          [["b", "toolu_b", { command: "git push --force", note: "cut at \uFFFD" }]],
+        );
+        const [b] = waiting;
+        assert.ok(b !== undefined);
+        assert.equal(yield* standingOf(b.id), APPROVAL_STATUS.EXPIRED);
+        assert.deepEqual(yield* listPendingApprovals(agent.userId, agent.agentId), []);
       }),
   );
 
@@ -2137,7 +2220,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
                       windowDurationMins: 300,
                       resetsAt: resetsAt / 1000,
                     },
-                    secondary: null,
+                    secondary: { usedPercent: 40, windowDurationMins: 10080, resetsAt: null },
                     rateLimitReachedType: "rate_limit_reached",
                   },
                 },
@@ -2152,12 +2235,19 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
             row.id === second,
             row.status,
             row.limitResetsAt?.toISOString() ?? null,
-            row.usagePercent,
-            row.usageWindowMins,
+            row.usageWindows,
           ]),
           [
-            [false, PROVIDER_KEY_STATUS.UNVERIFIED, null, null, null],
-            [true, PROVIDER_KEY_STATUS.LIMIT_REACHED, new Date(resetsAt).toISOString(), 100, 300],
+            [false, PROVIDER_KEY_STATUS.UNVERIFIED, null, null],
+            [
+              true,
+              PROVIDER_KEY_STATUS.LIMIT_REACHED,
+              new Date(resetsAt).toISOString(),
+              [
+                { usedPercent: 100, windowMins: 300, resetsAt },
+                { usedPercent: 40, windowMins: 10080 },
+              ],
+            ],
           ],
         );
       }),
@@ -2457,8 +2547,23 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         yield* launch(ran(agent.lineIds[0] ?? ""));
 
         const resetsAt = Date.UTC(2026, 9, 21, 15, 40);
+        const weekResetsAt = Date.UTC(2026, 9, 25, 9);
+        // The week's reading on every model, and one on Opus alone, which is a window of its own beside it.
+        const weekOf = (rateLimitType: string, utilization: number) => ({
+          type: "rate_limit_event",
+          rate_limit_info: {
+            status: "allowed",
+            rateLimitType,
+            resetsAt: weekResetsAt / 1000,
+            utilization,
+          },
+          uuid: randomUUID(),
+          ...top,
+        });
         yield* launch(
           failedClaudeLaunch(agent.lineIds[1] ?? "", [
+            weekOf("seven_day", 0.4),
+            weekOf("seven_day_opus", 0.9),
             {
               type: "rate_limit_event",
               rate_limit_info: {
@@ -2501,14 +2606,18 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           [PROVIDER_KEY_STATUS.INVALID, null],
           [PROVIDER_KEY_STATUS.INVALID, null],
         ]);
-        // The usage the limit reported stays the plan's latest, in percent of its five hours, through the turns after it.
+        // The usage the limit reported stays the plan's latest, in percent of its five hours beside its weeks, through the turns after it.
         const [row] = yield* listProviderKeyRows(
           agent.userId,
           PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
         );
         assert.deepEqual(
-          [row?.usagePercent, row?.usageWindowMins, row?.usageResetsAt?.toISOString()],
-          [100, 300, new Date(resetsAt).toISOString()],
+          row?.usageWindows?.toSorted((a, b) => (a.windowMins ?? 0) - (b.windowMins ?? 0)),
+          [
+            { usedPercent: 100, windowMins: 300, resetsAt },
+            { usedPercent: 40, windowMins: 10080, resetsAt: weekResetsAt },
+            { usedPercent: 90, windowMins: 10080, model: "Opus", resetsAt: weekResetsAt },
+          ],
         );
       }),
   );

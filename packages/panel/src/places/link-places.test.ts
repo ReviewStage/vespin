@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import type { LinkPlace } from "@repo/features/link-grammar";
+import type { LinkDestination } from "@repo/features/link-grammar";
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { it } from "vitest";
@@ -30,7 +30,7 @@ const ROUTER = createPanelRouter(
 );
 
 /** The place in the app a link names, matched on the route tree. */
-function placeAt(href: string): LinkPlace {
+function placeAt(href: string): LinkDestination {
   const address = addressOf(href, ROUTER);
   assert.equal(address.kind, ADDRESS.PLACE, href);
   assert.notEqual(address.routed, undefined, href);

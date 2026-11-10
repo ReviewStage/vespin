@@ -1,8 +1,8 @@
-import { PICTURE_BOUNDS } from "@repo/features/picture-wire";
 import {
   descriptionAttachmentAddress,
   descriptionAttachmentOf,
 } from "@repo/features/description-attachment-link";
+import { PICTURE_BOUNDS } from "@repo/features/picture-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { PICTURE_KEEP_FAILURE } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
@@ -31,6 +31,13 @@ import { type ReactNode, useCallback, useLayoutEffect, useRef, useState } from "
 import { createPortal } from "react-dom";
 import { actMutation } from "../act-mutations.js";
 import { useAppCommand } from "../app-commands.js";
+import type {
+  DescriptionEditorHandle,
+  DescriptionEditorPictures,
+  PictureNode,
+  PictureNodeDoors,
+  PictureTaken,
+} from "../description-editor/contract.js";
 import { failureShown, pictureUnread } from "../failure-report.js";
 import { encodeImage } from "../feedback-images.js";
 import {
@@ -41,18 +48,11 @@ import {
   PictureBlock,
 } from "../picture-block.js";
 import { keepPictureRead, pictureQuery } from "../picture-query.js";
-import type {
-  PictureNode,
-  PictureNodeDoors,
-  PictureTaken,
-  DescriptionEditorHandle,
-  DescriptionEditorPictures,
-} from "../description-editor/contract.js";
-import { documentScrollerOf } from "./document-frame.js";
 import {
   type DescriptionPicturesDoor,
   useDescriptionPicturesDoor,
 } from "./description-pictures.js";
+import { documentScrollerOf } from "./document-frame.js";
 
 /**
  * editor-pictures.tsx -- a description's pictures in its editor: laid in from a paste, a drop, or Insert image, kept on the service as they wait, and drawn in each picture's node with its tools.

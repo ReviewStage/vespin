@@ -20,6 +20,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import type { MenuEntry } from "./action-menu.js";
 import { useFittedColumns } from "./fitted-columns.js";
 import { nestsOf } from "./nested-rows.js";
+import { QUICK_ADD_ORDER, type QuickAdd, QuickAddLines, rowQuickAddLine } from "./quick-add.js";
 import { openedTaskOf, taskRowTab } from "./task-actions.js";
 import { openPullRequests, TaskListRow } from "./task-list-row.js";
 import { useStandingDoor } from "./task-row-parts.js";
@@ -49,7 +50,9 @@ import { useTasksSelection } from "./tasks-selection.js";
  * level and its place among its siblings (`nestsOf`), and fold the
  * rows nested under it (`fold`), whose owner keeps whether they stand open
  * and hands only the rows drawn. A row may lead its menu with groups of
- * its owner's (`menu`).
+ * its owner's (`menu`). Where its owner adds tasks to it in place
+ * (`adding`), the quick add's draft and the adds still out stand after its
+ * rows, in its own cells (`quick-add.tsx`).
  */
 
 /** One row of the list: the task, what leads it, how deep it is nested, and the rows it folds. */
@@ -112,11 +115,12 @@ function drawnCells(
   return RELATED_TASK_CELLS.filter((cell) => filled[cell] ?? true);
 }
 
-/** The list of `rows`, named by `label`. */
+/** The list of `rows`, named by `label`, and the lines of the quick add `adding` names after them. */
 export function RelatedTasks({
   tasks,
   label,
   rows,
+  adding,
   room,
   onOpenTask,
 }: {
@@ -124,6 +128,8 @@ export function RelatedTasks({
   label: string;
   /** The rows drawn, in order, those folded away left out. */
   rows: readonly RelatedTaskRow[];
+  /** The quick add whose lines stand after the rows, in the rows' own cells, named `label`; none for a list nothing is added to in place. */
+  adding?: { readonly quick: QuickAdd; readonly label: string } | undefined;
   /** Where the plan's head stands: the scroller the rows are drawn near the view of. */
   room: DescriptionRoom;
   /** Opens a row's task, as the surface the list stands on opens a task. */
@@ -172,6 +178,20 @@ export function RelatedTasks({
         keys={keys}
         overscan={finding ? keys.length : undefined}
         fit={fit}
+        after={
+          adding === undefined || !adding.quick.shown
+            ? undefined
+            : {
+                label: adding.label,
+                lines: (
+                  <QuickAddLines
+                    quick={adding.quick}
+                    line={rowQuickAddLine(cells, true)}
+                    order={QUICK_ADD_ORDER.ADDS_FIRST}
+                  />
+                ),
+              }
+        }
       >
         {(index, place) => {
           const row = rows[index];

@@ -197,7 +197,7 @@ function sameTitle(one: Place, other: Place): boolean {
   return mine?.label === theirs?.label && mine?.detail === theirs?.detail;
 }
 
-/** The task an Inbox item stands on; none for one on an agent with no task, or named by its id alone. */
+/** The task an Inbox item stands on; none for one named by its id alone. */
 function choiceTask(choice: InboxChoice): string | undefined {
   return "taskId" in choice ? choice.taskId : undefined;
 }

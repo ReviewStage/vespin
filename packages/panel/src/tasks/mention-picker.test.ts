@@ -9,7 +9,7 @@ import {
   AUTOMATION_TRIGGER,
 } from "@repo/features/automation-wire";
 import { INBOX_STATUS, INBOX_WIRE_VERSION, type InboxItem } from "@repo/features/inbox-wire";
-import { LINK_PLACE, readLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, readLink } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { decodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
@@ -33,7 +33,7 @@ import { MentionNodeChip } from "./mention-chip.js";
 import { MENTION_MENU_SIDE, type MentionPicker, useMentionPicker } from "./mention-picker.js";
 
 /**
- * mention-picker.test.ts -- the `@` list as the editor's reports drive it: a list closed with Escape, which fades out before it goes; on a plan, the workspace's other tasks found by their keys, its Inbox threads by their titles, and its automations by their names; and in New task's box, which no member directory stands around, the workspace's people.
+ * mention-picker.test.ts -- the `@` list as the editor's reports drive it: a list closed with Escape, which fades out before it goes; a highlight kept on its row as rows read late land above it; on a plan, the workspace's other tasks found by their keys, its Inbox threads by their titles, and its automations by their names; and in New task's box, which no member directory stands around, the workspace's people.
  */
 
 let root: Root | undefined;
@@ -45,8 +45,8 @@ afterEach(() => {
   Reflect.deleteProperty(Element.prototype, "getAnimations");
 });
 
-/** The list drawn as a plan's box draws it, over a description whose one section is Margins, the latest it answered kept for the test to drive. */
-function mounted() {
+/** The list drawn as a plan's box draws it, over a description whose one section is Margins, each mention picked recorded and the latest it answered kept for the test to drive. */
+function mounted(chosen: MentionNode[] = []) {
   let latest: MentionPicker | undefined;
   function Picker() {
     const room = useRef<HTMLDivElement>(null);
@@ -60,7 +60,7 @@ function mounted() {
       },
       room,
       side: MENTION_MENU_SIDE.ABOVE,
-      onChoose: () => undefined,
+      onChoose: (mention) => chosen.push(mention),
     });
     return createElement("div", { ref: room }, latest.menu);
   }
@@ -122,6 +122,56 @@ test("an @ list closed with Escape stays drawn, inert, with its rows while it fa
   assert.equal(page.querySelector(".ui-rect-float"), null, "the list goes once it has faded");
 });
 
+test("a row read late above the highlighted one moves it down, and Enter still writes the row that was highlighted", async () => {
+  handState(experimentsOn(EXPERIMENT.DESCRIPTIONS), {
+    tasks: {
+      ...IDLE_TASKS_VIEW,
+      workspaces: [workspace("workspace-acme", "Acme", "acme")],
+      tasks: [task("plan-1", "workspace-acme", 1, "Ship the palette")],
+    },
+  });
+  const reads = handHostReads({});
+  // The workspace's people are held unread, then laid on once the list stands.
+  holdMembers(reads.deliverMembers, () => undefined);
+  const chosen: MentionNode[] = [];
+  const { picker, page } = mounted(chosen);
+  await act(async () => {
+    picker().onTrigger(word("mar"));
+    for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+  });
+  assert.deepEqual(rows(page), ["Margins"]);
+
+  await act(async () => {
+    reads.deliverMembers({
+      "workspace-acme": {
+        rows: {
+          members: [
+            {
+              userId: "user-mara",
+              name: "Mara Lind",
+              email: "mara@example.com",
+              role: WORKSPACE_ROLE.ADMIN,
+            },
+          ],
+        },
+      },
+    });
+    for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+  });
+  await vi.waitFor(() => assert.deepEqual(rows(page), ["Mara Lind", "Margins"]));
+  act(() => {
+    picker().onKey(new KeyboardEvent("keydown", { key: "Enter", cancelable: true }));
+  });
+
+  const [picked] = chosen;
+  assert.ok(picked, "Enter writes a mention");
+  assert.deepEqual(decodeMention(picked.target, null), {
+    kind: MENTION_KIND.SECTION,
+    taskId: "plan-1",
+    anchor: "margins",
+  });
+});
+
 /** The list drawn as a description's editor draws it, on `plan-1` of the Stage workspace, each mention picked recorded. */
 async function mountedOnDescription(chosen: MentionNode[]) {
   let latest: MentionPicker | undefined;
@@ -159,10 +209,10 @@ async function mountedOnDescription(chosen: MentionNode[]) {
   };
 }
 
-/** The rows the open list draws, by name and the detail beside it. */
+/** The rows the open list draws, by name, the detail beside it, and what stands at its end, as a task's key does. */
 const detailedRows = (page: HTMLElement) =>
   [...page.querySelectorAll('[role="option"]')].map((row) =>
-    [".ui-combobox-option-label", ".ui-combobox-option-detail"]
+    [".ui-combobox-option-label", ".ui-combobox-option-detail", ".ui-combobox-option-hint"]
       .map((part) => row.querySelector(part)?.textContent)
       .filter((words) => words !== undefined)
       .join(" · "),
@@ -271,7 +321,6 @@ test("on a plan, the workspace's Inbox threads are found by their title, the pla
             "plan-1": [thread("item-palette", "Keep the palette's margins?", 10)],
             "plan-acme": [thread("item-acme", "Keep Acme's links?", 50)],
           },
-          [INBOX_SCOPE_KIND.AGENT]: {},
         },
       },
     },
@@ -296,7 +345,7 @@ test("on a plan, the workspace's Inbox threads are found by their title, the pla
   assert.equal(picked.name, "Keep the meter's old alerts?");
   assert.deepEqual(readLink(picked.target), {
     workspace: "stage",
-    place: { kind: LINK_PLACE.INBOX_ITEM, itemId: "item-billing" },
+    place: { kind: LINK_DESTINATION.INBOX_ITEM, itemId: "item-billing" },
   });
 
   // The box draws the thread's link as the thread's chip, not as its words.
@@ -395,7 +444,7 @@ test("on a plan, the workspace's automations are found by their name, a pick wri
   assert.equal(picked.name, "Deploy notes");
   assert.deepEqual(readLink(picked.target), {
     workspace: "stage",
-    place: { kind: LINK_PLACE.AUTOMATION, automationId: "automation-notes" },
+    place: { kind: LINK_DESTINATION.AUTOMATION, automationId: "automation-notes" },
   });
 });
 

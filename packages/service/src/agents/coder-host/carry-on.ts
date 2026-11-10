@@ -121,9 +121,18 @@ const CUT_OFF_WORDS = {
     "the connection to the model's provider was lost, and is back now",
 } as const satisfies Record<CarryOnReason, string>;
 
-/** The one key a carry-on of the turn named is sent under, so a repeat sends once. */
-export function carryOnKey(turnId: string): string {
-  return JSON.stringify([MESSAGE_CHANNEL.CARRY_ON, turnId]);
+/**
+ * The one key a carry-on of the turn named is sent under, so a repeat sends
+ * once: per turn, since a turn cut off by its runner is carried on once;
+ * per occurrence where the turn stays open and may be carried on again, as
+ * a turn whose connection to the provider drops more than once is.
+ */
+export function carryOnKey(turnId: string, occurrence?: number): string {
+  return JSON.stringify(
+    occurrence === undefined
+      ? [MESSAGE_CHANNEL.CARRY_ON, turnId]
+      : [MESSAGE_CHANNEL.CARRY_ON, turnId, occurrence],
+  );
 }
 
 /** What the carry-on line says carried it. */
@@ -228,6 +237,8 @@ export const carriedOn = /* @__PURE__ */ Effect.fn("web/carriedOn")(function* (
   agent: Agent,
   turnId: string,
   reason: CarryOnReason,
+  /** Which carry-on of the turn this is, where the turn may be carried on more than once (`carryOnKey`). */
+  occurrence?: number,
 ) {
   return yield* Effect.gen(function* () {
     const agentSessions = yield* sessionsFor(agent.userId);
@@ -238,7 +249,7 @@ export const carriedOn = /* @__PURE__ */ Effect.fn("web/carriedOn")(function* (
       agent,
       {
         text: carryOnPrompt(reason),
-        clientKey: carryOnKey(turnId),
+        clientKey: carryOnKey(turnId, occurrence),
         sender: { kind: MESSAGE_SENDER.APP },
         metadata: carryOnLine(reason),
       },

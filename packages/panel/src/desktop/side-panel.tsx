@@ -12,7 +12,7 @@ import {
   GLYPH_STATE,
   type GlyphState,
 } from "@repo/features/glyph-state";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { type PageLine, type PagePlace, pagePlaceId } from "@repo/features/page-wire";
 import { cardTitle } from "@repo/features/plain-words";
@@ -88,6 +88,7 @@ import { useQueries, useQuery } from "@tanstack/react-query";
 import { createStore, useSelector } from "@tanstack/react-store";
 import { absurd } from "effect";
 import {
+  Activity,
   Fragment,
   type ReactNode,
   useCallback,
@@ -196,6 +197,7 @@ import { useOpenTerminalTab } from "../tasks/use-terminal-session.js";
 import { useWindowAccount } from "../tasks/window-account.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useFileTreeWidth } from "./folded-groups.js";
+import { type KeptPage, keptPagesAfter } from "./kept-pages.js";
 import { AgentMenuTab } from "./main-tabs.js";
 import { PULL_REQUEST_TAB, pullRequestTabLoaded } from "./pages-on-demand.js";
 import { paneTiming, pastRightEdge } from "./pane-motion.js";
@@ -2036,6 +2038,74 @@ function TaskPagePane({
   return <PagePane {...pane} comments={control === undefined ? undefined : { control, doors }} />;
 }
 
+/** The page tabs a panel draws: those it keeps (`keptPagesAfter`), in the order they were first kept, the one `tab` shows among them. */
+function useKeptPages(
+  tab: SidePanelTab | undefined,
+  pages: readonly DrawnPage[],
+): readonly DrawnPage[] {
+  const [kept, setKept] = useState<readonly KeptPage[]>([]);
+  const shown = pages.find((each) => sameTab(each.tab, tab))?.tab;
+  const next = keptPagesAfter(
+    kept,
+    pages.map((each) => each.tab),
+    shown,
+  );
+  if (next !== kept) setKept(next);
+  return next.flatMap((each) => pages.filter((page) => sameTab(page.tab, each.tab)));
+}
+
+/**
+ * The page tabs a panel keeps drawn, the one shown and the rest hidden
+ * under React's `Activity` (`kept-pages.ts`), each handing its ⋯ for its
+ * own tab. Note that `Activity` takes down a hidden page's effects, its
+ * find, its links, and its comments' listeners among them, and brings them
+ * back up as it is shown again, so a page hidden hears nothing of the
+ * window and is told what it missed on its return.
+ */
+function KeptPageTabs({
+  pages,
+  tab,
+  findActive,
+  agents,
+  onOpenTarget,
+  onTabActions,
+}: {
+  pages: readonly DrawnPage[];
+  /** The tab the panel shows, which may be none of these. */
+  tab: SidePanelTab;
+  /** Whether the panel holds the window's keys, so the page shown finds in itself. */
+  findActive: boolean;
+  agents: AgentsControl;
+  onOpenTarget: (target: ToolTarget) => void;
+  onTabActions: (tab: SidePanelTab, actions: TabActionGroups | undefined) => void;
+}): React.JSX.Element {
+  return (
+    <>
+      {pages.map(({ tab: pageTab, line: page, place }) => {
+        const shown = sameTab(pageTab, tab);
+        return (
+          <Activity key={tabKey(pageTab)} mode={shown ? "visible" : "hidden"}>
+            <HandTabActionsContext.Provider value={(actions) => onTabActions(pageTab, actions)}>
+              <TaskPagePane
+                place={place}
+                page={page}
+                findActive={shown && findActive}
+                doors={{
+                  agents: {
+                    control: agents,
+                    onOpen: (agent) => onOpenTarget({ kind: TOOL_TARGET.AGENT, agent }),
+                  },
+                  me: agents.me,
+                }}
+              />
+            </HandTabActionsContext.Provider>
+          </Activity>
+        );
+      })}
+    </>
+  );
+}
+
 function TabContent({
   tab,
   taskId,
@@ -2049,7 +2119,6 @@ function TabContent({
   agentsOf,
   standings,
   shown,
-  findActive,
   onOpenTarget,
   cards,
   onWorkerStatus,
@@ -2085,8 +2154,6 @@ function TabContent({
   standings: WorkerStandings;
   /** Whether the panel is on screen, so a subagent's tab knows to follow its transcript. */
   shown: boolean;
-  /** Whether the panel holds the window's keys, so a page's tab finds in its source. */
-  findActive: boolean;
   /** Opens what a row of a tab is about in the tab that draws it, as a page comment's opens an agent's tab. */
   onOpenTarget: (target: ToolTarget) => void;
   /** What a worker's rows hang, its agent's cards (`taskCards`). */
@@ -2168,25 +2235,10 @@ function TabContent({
       );
     }
     case STRIP_TAB_KIND.PAGE: {
-      const drawn = pages.find((each) => each.tab.page === tab.page);
+      // A page drawn stands among the pages the panel keeps, beside the tab's body (`KeptPageTabs`).
+      if (pages.some((each) => sameTab(each.tab, tab))) return null;
       // The tab stands for a page its place no longer lists only until the panel moves on, a render away.
-      if (drawn === undefined) return <SpinnerRegion delay label={readingWords("the page")} />;
-      const { line: page, place } = drawn;
-      return (
-        <TaskPagePane
-          key={page.id}
-          place={place}
-          page={page}
-          findActive={findActive}
-          doors={{
-            agents: {
-              control: agents,
-              onOpen: (agent) => onOpenTarget({ kind: TOOL_TARGET.AGENT, agent }),
-            },
-            me: agents.me,
-          }}
-        />
-      );
+      return <SpinnerRegion delay label={readingWords("the page")} />;
     }
     case STRIP_TAB_KIND.CHANGES: {
       // Note that a link in a pull request's own tab, to its earlier entries or a reply, leaves for GitHub, because the tab already is that pull request.
@@ -2790,6 +2842,8 @@ export function SidePanel({
     const line = listed?.find((each) => each.id === tab.page);
     return line === undefined ? [] : [{ tab, line, place }];
   });
+  // The page tabs drawn, the one shown and those kept hidden beside it, so a return finds each page as it was left.
+  const keptPages = useKeptPages(tab, pageTabs);
   // The strip is named by its tab as the panel draws it: a file by its whole path, and an agent the task does not list by the word for one.
   const label =
     tab === undefined
@@ -2821,7 +2875,7 @@ export function SidePanel({
       const { declared, link } = address.routed;
       const { place } = link;
       if (declared !== LINK_ROUTED_PLACE.AGENT && declared !== LINK_ROUTED_PLACE.MESSAGE) return;
-      if (place.kind !== LINK_PLACE.AGENT && place.kind !== LINK_PLACE.MESSAGE) return;
+      if (place.kind !== LINK_DESTINATION.AGENT && place.kind !== LINK_DESTINATION.MESSAGE) return;
       if (heldIds === undefined || heldIds.includes(place.agentId)) return;
       onCarry();
     },
@@ -2990,6 +3044,14 @@ export function SidePanel({
           active={keys && focused && stripTabTakesFind(tab)}
           subject={{ task: taskId, tab }}
         >
+          <KeptPageTabs
+            pages={keptPages}
+            tab={tab}
+            findActive={keys && focused}
+            agents={agents}
+            onOpenTarget={onOpenTarget}
+            onTabActions={handTabActions}
+          />
           {/* Note that whatever the tab's body hands its ⋯ is handed for this tab, at any depth of the body (`useTabActions`). */}
           <HandTabActionsContext.Provider value={(actions) => handTabActions(tab, actions)}>
             <TabContent
@@ -3005,7 +3067,6 @@ export function SidePanel({
               agentsOf={agentsOf}
               standings={standings}
               shown={keys}
-              findActive={keys && focused}
               onOpenTarget={onOpenTarget}
               cards={cards}
               onWorkerStatus={views.onWorkerStatus}

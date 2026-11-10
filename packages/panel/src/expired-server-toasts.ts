@@ -18,6 +18,7 @@
 import { SIGN_IN } from "@repo/features/integration-sign-in";
 import { INTEGRATION_NAME, INTEGRATION_STATUS } from "@repo/features/integration-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { VERB } from "@repo/features/words";
 import { STATUS_TONE } from "@repo/ui";
 import { type NamedServer, namedServers } from "@repo/ui/agent-servers-model";
 import { useEffect, useRef } from "react";
@@ -46,7 +47,7 @@ type Says = (typeof SAYS)[keyof typeof SAYS];
 
 /** What a server's toast is pressed by. */
 const ACTION = {
-  RECONNECT: "Reconnect",
+  RECONNECT: VERB.RECONNECT,
   RETRY: "Retry",
 } as const;
 

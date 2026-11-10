@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { NOTIFICATIONS_STATUS } from "@repo/settings/settings-controls";
@@ -10,7 +11,6 @@ import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views"
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { UPDATE_STATUS } from "@repo/settings/update";
 import { PROFILE } from "@repo/ui";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { act, createElement, type ReactElement, useEffect, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";

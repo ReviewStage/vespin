@@ -74,7 +74,8 @@ import { useTouchHold } from "./touch-hold.js";
  * menu's other items on its way there leaves it standing (`submenu-aim.ts`);
  * pressing, Right, or Enter takes the keyboard in, to its search field
  * first, as the pointer arriving in it does, while resting on the item
- * leaves the keyboard in the menu. Its keys are its own; Escape, or Left where it moves no caret,
+ * leaves the keyboard in the menu. Its keys are its own, a chord it leaves going on to the window's
+ * shortcuts; Escape, or Left where it moves no caret,
  * goes back to the item, and Escape there closes the menu. It is handed
  * its way back and the menu's close, and the menu stands while the window
  * is away from it, as a sign-in it began in the browser takes it.
@@ -143,10 +144,11 @@ export const MENU_ITEM_MARK = {
 
 export type MenuItemMark = (typeof MENU_ITEM_MARK)[keyof typeof MENU_ITEM_MARK];
 
-/** Where an item's detail stands: a second line under its label, or beside it on the one line, as a picker's row says a person's email. */
+/** Where an item's detail stands: a second line under its label, beside it on the one line, as a picker's row says a person's email, or under it on as many lines as its words take, as a mode's hint says what the mode does. */
 export const MENU_DETAIL = {
   UNDER: "under",
   BESIDE: "beside",
+  WRAPPED: "wrapped",
 } as const;
 
 export type MenuDetailPlace = (typeof MENU_DETAIL)[keyof typeof MENU_DETAIL];
@@ -217,6 +219,8 @@ export interface MenuAction {
   card?: React.ReactNode;
   /** Whether its label and detail are a person's words, a repository's or a workspace's name, kept masked in a screen recording even in a menu that unmasks its own (`replayUnmasked`). */
   replayMasked?: boolean | undefined;
+  /** Whether its detail alone is a person's words, such as the command serving a port, kept masked in a screen recording while its label shows. */
+  detailMasked?: boolean | undefined;
 }
 
 /**
@@ -239,6 +243,10 @@ export interface MenuSubmenu {
   label: string;
   /** Whether its label names a person's thing, kept masked in a screen recording even in a menu that unmasks its own (`replayUnmasked`). */
   replayMasked?: boolean | undefined;
+  /** A muted word beside the label, such as what serves a port. */
+  detail?: string | undefined;
+  /** Whether its detail is a person's words, kept masked in a screen recording while its label shows. */
+  detailMasked?: boolean | undefined;
   icon?: React.JSX.Element;
   items: readonly MenuAction[];
   /** Printed muted before its chevron: the shortcut that opens it, as the app draws it. */
@@ -720,6 +728,7 @@ function ItemBody({
       </>
     );
   }
+  const detailMasked = action.replayMasked === true || action.detailMasked === true;
   return (
     <>
       {glyph}
@@ -736,12 +745,18 @@ function ItemBody({
         >
           <ItemWords masked={action.replayMasked}>{action.label}</ItemWords>
         </OneLine>
-        <OneLine
-          className={cn("ui-menu-item-detail", beside && "min-w-0 flex-[0_1000_auto]")}
-          words={action.detail}
-        >
-          <ItemWords masked={action.replayMasked}>{action.detail}</ItemWords>
-        </OneLine>
+        {action.detailPlace === MENU_DETAIL.WRAPPED ? (
+          <span className="ui-menu-item-detail whitespace-normal">
+            <ItemWords masked={detailMasked}>{action.detail}</ItemWords>
+          </span>
+        ) : (
+          <OneLine
+            className={cn("ui-menu-item-detail", beside && "min-w-0 flex-[0_1000_auto]")}
+            words={action.detail}
+          >
+            <ItemWords masked={detailMasked}>{action.detail}</ItemWords>
+          </OneLine>
+        )}
       </span>
       <ItemEnd action={action} />
     </>
@@ -1118,9 +1133,25 @@ function Submenu({
         }}
       >
         <MenuGlyph>{entry.icon}</MenuGlyph>
-        <OneLine className="ui-menu-item-label min-w-0 flex-1" words={entry.label}>
-          <ItemWords masked={entry.replayMasked}>{entry.label}</ItemWords>
-        </OneLine>
+        {entry.detail === undefined ? (
+          <OneLine className="ui-menu-item-label min-w-0 flex-1" words={entry.label}>
+            <ItemWords masked={entry.replayMasked}>{entry.label}</ItemWords>
+          </OneLine>
+        ) : (
+          <span
+            className="ui-menu-item-copy flex min-w-0 flex-1 flex-row items-baseline gap-ui-8"
+            data-place={MENU_DETAIL.BESIDE}
+          >
+            <OneLine className="ui-menu-item-label min-w-0 flex-initial" words={entry.label}>
+              <ItemWords masked={entry.replayMasked}>{entry.label}</ItemWords>
+            </OneLine>
+            <OneLine className="ui-menu-item-detail min-w-0 flex-[0_1000_auto]" words={entry.detail}>
+              <ItemWords masked={entry.replayMasked === true || entry.detailMasked === true}>
+                {entry.detail}
+              </ItemWords>
+            </OneLine>
+          </span>
+        )}
         {entry.hint === undefined ? null : <span className="ui-menu-item-hint">{entry.hint}</span>}
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent
@@ -1274,11 +1305,18 @@ function PanelItem({
   );
 }
 
+/** Whether a key pressed in a panel is a Command or Control chord nothing in it took, which is the window's to answer. */
+function windowChord(event: React.KeyboardEvent): boolean {
+  return (event.metaKey || event.ctrlKey) && !event.defaultPrevented;
+}
+
 /**
  * A panel standing beside the item that opened it, drawn over the window
  * as the menu is, at the width it asks, placed once it is drawn and again
  * as it or its menu change size. Its keys are its own, never the menu's
- * nor its owner's: Escape, or Left where it moves no caret, goes back to
+ * nor its owner's, but for a Command or Control chord nothing in it took,
+ * which goes on to the window's shortcuts as it would from the menu
+ * itself: Escape, or Left where it moves no caret, goes back to
  * its item, unless the panel took the key itself, as one going back a
  * page of its own does. Focus leaving it for anywhere but its menu, the
  * menu's opener, or a card hung from either closes the menu.
@@ -1376,7 +1414,8 @@ function MenuPanelLayer({
         if (event.pointerType !== "touch" && box.current !== null) focusInto(box.current);
       }}
       onKeyDown={(event) => {
-        event.stopPropagation();
+        // Note that a chord nothing in the panel took is let on to the window, because its keymap is what runs ⌘N and the rest, and a panel holding every key left them dead while it stood.
+        if (!windowChord(event)) event.stopPropagation();
         if (event.defaultPrevented || isComposingKey(event)) return;
         if (event.key !== "Escape" && !(event.key === "ArrowLeft" && leftLeaves(event.target))) {
           return;
@@ -1821,7 +1860,12 @@ function SheetRows({
             !("onSelect" in entry) ? (
               <SheetItem
                 key={entry.label}
-                action={{ ...entry, opens: true, onSelect: () => undefined }}
+                action={{
+                  ...entry,
+                  detailPlace: MENU_DETAIL.BESIDE,
+                  opens: true,
+                  onSelect: () => undefined,
+                }}
                 submenu={entry.label}
                 onChoose={() => onOpen(entry.label)}
               />

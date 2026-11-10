@@ -10,6 +10,7 @@
 
 import type { AdminWorkspaceDetail, AdminWorkspaceMember } from "@repo/features/admin-answer-wire";
 import { formatCount } from "@repo/features/number-format";
+import { githubAccountPageUrl } from "@repo/features/tasks-model";
 import { formatDate } from "@repo/features/time-format";
 import { readFailedWords } from "@repo/features/words";
 import {
@@ -34,7 +35,6 @@ import {
   type DataTableColumns,
   DataTableSkeleton,
 } from "@repo/ui/data-table";
-import { githubAccountPageUrl } from "@repo/ui/tasks-model";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { NOT_FOUND_THING, NotFound } from "../../not-found.js";

@@ -4,6 +4,7 @@ import {
   type AgentTodos,
 } from "@repo/features/agent-wire";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { readLink } from "@repo/features/link-grammar";
@@ -92,11 +93,8 @@ import {
 import {
   AlarmClockCheckIcon,
   AlarmClockOffIcon,
-  AppWindowIcon,
   ArchiveIcon,
   ArchiveRestoreIcon,
-  BookOpenIcon,
-  BotIcon,
   CalendarCheckIcon,
   CalendarClockIcon,
   CalendarCogIcon,
@@ -182,6 +180,7 @@ import {
   ToolTerminal,
 } from "../ai-elements/tool.js";
 import { useDrawnDark } from "../drawn-dark.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { OUTSIDE_GLYPH_CLASS } from "../picture-block.js";
 import { StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
@@ -1116,7 +1115,7 @@ const CALL_ICON = {
   [CALL_KIND.SEARCH]: SearchIcon,
   [CALL_KIND.WEB_SEARCH]: SearchIcon,
   [CALL_KIND.WEB_PAGE]: GlobeIcon,
-  [CALL_KIND.LOAD_SKILL]: BookOpenIcon,
+  [CALL_KIND.LOAD_SKILL]: () => <EntityGlyph kind={ENTITY_KIND.SKILL} />,
   [CALL_KIND.LOOK_AT_PICTURE]: ImageIcon,
   [CALL_KIND.EDIT_DESCRIPTION]: FilePenIcon,
   [CALL_KIND.TODOS]: () => <GLYPH.TODOS />,
@@ -1125,7 +1124,7 @@ const CALL_ICON = {
   [CALL_KIND.INBOX_READ]: InboxIcon,
   [CALL_KIND.INBOX_REPLY]: InboxIcon,
   [CALL_KIND.INBOX_WITHDRAW]: InboxIcon,
-  [CALL_KIND.WORKER]: BotIcon,
+  [CALL_KIND.WORKER]: () => <EntityGlyph kind={ENTITY_KIND.WORKER} />,
   [CALL_KIND.WORKER_WAIT]: HourglassIcon,
   [CALL_KIND.WORKER_CANCEL]: CircleStopIcon,
   [CALL_KIND.WORKER_MESSAGE]: SendIcon,
@@ -1157,22 +1156,22 @@ const CALL_ICON = {
   [CALL_KIND.CREATE_ISSUE]: CirclePlusIcon,
   [CALL_KIND.UPDATE_ISSUE]: FilePenIcon,
   [CALL_KIND.CREATE_TASK]: FilePlusIcon,
-  [CALL_KIND.SHOW_PAGE]: AppWindowIcon,
-  [CALL_KIND.READ_PAGE]: AppWindowIcon,
+  [CALL_KIND.SHOW_PAGE]: () => <EntityGlyph kind={ENTITY_KIND.PAGE} />,
+  [CALL_KIND.READ_PAGE]: () => <EntityGlyph kind={ENTITY_KIND.PAGE} />,
   [CALL_KIND.SHOW_IMAGE]: ImageIcon,
-  [CALL_KIND.OPEN_PULL_REQUEST]: () => <GLYPH.PULL_REQUEST />,
+  [CALL_KIND.OPEN_PULL_REQUEST]: () => <EntityGlyph kind={ENTITY_KIND.PULL_REQUEST} />,
   [CALL_KIND.SLEEP]: TimerIcon,
   [CALL_KIND.SCHEDULE_WAKEUP]: AlarmClockCheckIcon,
   [CALL_KIND.CANCEL_WAKEUP]: AlarmClockOffIcon,
-  [CALL_KIND.LIST_TASKS]: () => <GLYPH.TASK />,
+  [CALL_KIND.LIST_TASKS]: () => <EntityGlyph kind={ENTITY_KIND.PLAN} />,
   [CALL_KIND.REMEMBER]: () => <GLYPH.MEMORY />,
   [CALL_KIND.RECALL]: () => <GLYPH.MEMORY />,
   [CALL_KIND.READ_COMMENTS]: () => <GLYPH.COMMENT />,
   [CALL_KIND.REPLY_TO_COMMENT]: () => <GLYPH.COMMENT />,
   [CALL_KIND.RESOLVE_THREAD]: () => <GLYPH.RESOLVED />,
   [CALL_KIND.REOPEN_THREAD]: () => <GLYPH.COMMENT />,
-  [CALL_KIND.SEARCH_TOOLS]: () => <GLYPH.MCP_SERVER />,
-  [CALL_KIND.MCP_TOOL]: () => <GLYPH.MCP_SERVER />,
+  [CALL_KIND.SEARCH_TOOLS]: () => <EntityGlyph kind={ENTITY_KIND.SERVER} />,
+  [CALL_KIND.MCP_TOOL]: () => <EntityGlyph kind={ENTITY_KIND.TOOL} />,
   [CALL_KIND.OTHER]: WrenchIcon,
 } as const satisfies Record<CallKind, ComponentType<{ "aria-hidden"?: "true" }>>;
 
@@ -1319,7 +1318,34 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     errorText: string | undefined;
     /** For a call whose answer its page carried cut, its ends and its whole read, which its body asks for as it opens. */
     cut?: CutBody | undefined;
+    /** For a call the agent holds for an answer: where the ask stands in words, on the line; what the body says of who asks and why, over the input; and the answers' presses, under the row while it waits. None for the rest. */
+    held?: HeldCall | undefined;
   };
+
+/** A call held for an answer, as its row draws it (`TranscriptTool`'s `held`). */
+export interface HeldCall {
+  readonly status: string;
+  /** Whether it still waits on an answer, which holds the call rather than working it. */
+  readonly waiting: boolean;
+  readonly about: string | undefined;
+  readonly actions: ReactNode;
+}
+
+/**
+ * Whether a held call's row stands open, and its toggle: open while the call
+ * waits, so what it would do stands above its answers without a press, and
+ * closed again as it is answered, as a finished row stands; a press opens
+ * and closes it between.
+ */
+function useHeldOpen(waiting: boolean): { open: boolean; onOpenChange: (open: boolean) => void } {
+  const [open, setOpen] = useState(waiting);
+  const [was, setWas] = useState(waiting);
+  if (was !== waiting) {
+    setWas(waiting);
+    setOpen(waiting);
+  }
+  return { open, onOpenChange: setOpen };
+}
 
 /**
  * One tool call: its row saying what it did, closed until clicked, and its
@@ -1330,7 +1356,8 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
  * subject the input says whole, a read's path or a search's pattern
  * (`blockSays`); a description stays, since the body does not say it. A
  * call that made something names it by its chip, as a call about an agent
- * names the agent by its own; one that read, wrote, or edited files names
+ * names the agent by its own; a call the agent holds for an answer stands
+ * open while it waits (`useHeldOpen`); one that read, wrote, or edited files names
  * the first by its chip, and one that fetched a page names it by its
  * website chip (`calledChip`), which stays as the row opens.
  */
@@ -1350,6 +1377,7 @@ export function TranscriptTool({
   output,
   errorText,
   cut,
+  held,
   ...props
 }: TranscriptToolProps): ReactNode {
   const Icon = CALL_ICON[kind];
@@ -1362,8 +1390,9 @@ export function TranscriptTool({
         : { line: { ...callLine(kind, moreFiles(files), undefined), code: false }, chip: called };
   const command = isCommandKind(kind);
   const macOwner = useContext(MacOwnerContext);
-  return (
-    <Tool {...props}>
+  const opened = useHeldOpen(held?.waiting === true);
+  const row = (
+    <Tool {...props} {...(held === undefined ? undefined : opened)}>
       <ToolHeader
         state={state}
         icon={
@@ -1389,8 +1418,13 @@ export function TranscriptTool({
             callPlace(kind, server)
           )
         }
+        status={held?.status}
+        paused={held?.waiting}
       />
       <ToolContent bare>
+        {held?.about === undefined ? null : (
+          <NoteLine look={NOTE_LINE_LOOK.INSET}>{held.about}</NoteLine>
+        )}
         {input.kind === TOOL_BLOCK.COMMAND ? (
           cut === undefined ? (
             <ToolTerminal input={input} block={output} errorText={errorText} />
@@ -1420,6 +1454,14 @@ export function TranscriptTool({
         )}
       </ToolContent>
     </Tool>
+  );
+  // A held call's answers stand under its row, set in to its words, as long as it waits.
+  if (held?.actions === undefined || held.actions === null) return row;
+  return (
+    <>
+      {row}
+      <div className="tool-held ml-transcript-gutter">{held.actions}</div>
+    </>
   );
 }
 

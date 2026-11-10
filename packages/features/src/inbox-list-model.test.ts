@@ -7,7 +7,7 @@ import {
   INBOX_WIRE_VERSION,
   type InboxItem,
 } from "./inbox-wire.js";
-import { LINK_PLACE } from "./link-grammar.js";
+import { LINK_DESTINATION } from "./link-grammar.js";
 
 /**
  * inbox-list-model.test.ts -- a thread's message as a client draws it: what
@@ -25,7 +25,7 @@ const MOVIE = "50b37e6f-8192-43a4-9f40-6b7c8d9eafb5";
 /** One of the item's files' addresses, as an agent's post names it in its words. */
 function address(attachmentId: string): string {
   return inboxAttachmentAddress(
-    { kind: LINK_PLACE.INBOX_ITEM, planId: PLAN, itemId: ITEM },
+    { kind: LINK_DESTINATION.INBOX_ITEM, planId: PLAN, itemId: ITEM },
     attachmentId,
     "acme",
   );

@@ -4,7 +4,8 @@
 # Usage: scripts/simulator-screenshots.sh <path to Vespin.app> <output directory> <simulator name>...
 #
 # Each simulator is booted, handed the app, driven through every flow under
-# maestro/, and shut down again, so the Mac holds no booted simulator once
+# maestro/ and the notification flow under maestro/notification/, and shut
+# down again, so the Mac holds no booted simulator once
 # the run ends. Every flow runs once in the light appearance and once in the
 # dark, and a device's screenshots land under
 # <output>/<device slug>/<appearance>/debug/<flow>/takeScreenshot/.
@@ -100,18 +101,41 @@ erase_simulator() {
     set_appearance "$1" "$2"
 }
 
-# Runs every flow under maestro/ once on the booted simulator `$1`, from a
-# clean app, its output under `$2`, which a run before it is cleared from.
-# Maestro's own debug output, the screenshot it takes when a step fails among
-# it, lands beside the flow's screenshots, so a failure can be read.
-run_flows() {
-    rm -rf "$2"
-    xcrun simctl terminate "$1" "$bundle_id" 2>/dev/null || true
+# Runs the Maestro flow or flows at `$3` on the simulator `$1`, its output
+# under `$2`. Maestro's own debug output, the screenshot it takes when a step
+# fails among it, lands beside the flow's screenshots, so a failure can be
+# read.
+run_maestro() {
     maestro --udid "$1" test \
         --test-output-dir "$2" \
         --debug-output "$2/debug" \
         --flatten-debug-output \
-        "$APP_DIRECTORY/maestro"
+        "$3"
+}
+
+# Runs the notification flow on the booted simulator `$1`, its output under
+# `$2`: Maestro cannot send a push, so the app is sent to the background,
+# `ask.apns` pushed to it, and the notification tapped.
+run_notification_flow() {
+    local notification="$APP_DIRECTORY/maestro/notification"
+    run_maestro "$1" "$2" "$notification/background.yaml" || return 1
+    xcrun simctl push "$1" "$bundle_id" "$notification/ask.apns" || return 1
+    run_maestro "$1" "$2" "$notification/open.yaml"
+}
+
+# Runs every flow under maestro/ once on the booted simulator `$1`, from a
+# clean app, its output under `$2`, which a run before it is cleared from,
+# then the notification flow, and fails where either failed. Note that the
+# notification flow runs whatever the others did, so its screenshots are
+# kept even where another flow fails, and that each step returns its own
+# failure, since `set -e` stands aside inside the `until` that calls this.
+run_flows() {
+    rm -rf "$2"
+    xcrun simctl terminate "$1" "$bundle_id" 2>/dev/null || true
+    local failed=0
+    run_maestro "$1" "$2" "$APP_DIRECTORY/maestro" || failed=1
+    run_notification_flow "$1" "$2/notification" || failed=1
+    return "$failed"
 }
 
 failed=0

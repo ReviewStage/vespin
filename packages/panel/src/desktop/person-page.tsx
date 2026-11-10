@@ -5,12 +5,13 @@ import {
   automationTriggerText,
 } from "@repo/features/automation-list-model";
 import { AUTOMATION_SCOPE, type AutomationSummary } from "@repo/features/automation-wire";
-import { INBOX_HOLDER, NEEDS_YOU, waitsOnReaderNow } from "@repo/features/inbox-list-model";
+import { NEEDS_YOU, waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { inboxWaitsOn } from "@repo/features/inbox-wire";
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ASSIGNED_TO } from "@repo/features/task-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
+import { type Noun, TERM } from "@repo/features/words";
 import { WORKSPACE_ROLE, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { SETTINGS_SECTION, SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -98,6 +99,7 @@ import { useAgentsSelection } from "./agents-selection.js";
 import { STANDING_GLYPH } from "./automation-runs-panel.js";
 import { automationNextText } from "./automation-words.js";
 import {
+  PERSON_SECTION_FOLD,
   PersonBody,
   PersonLineSkeleton,
   PersonReadingSkeleton,
@@ -141,7 +143,8 @@ import { useAutomations } from "./use-automations.js";
  * Item's and an automation's Copy link, each link written under the
  * workspace the page stands in. Its lists move: a row arriving slides in, one
  * leaving slides out, and one taken from a section into another glides
- * across. Escape leaves the page.
+ * across. Each section folds on a press on its head, its count read with
+ * its noun, as a task's Overview's groups do. Escape leaves the page.
  */
 
 /** What a page's head says under a name, by who the person is to the workspace. */
@@ -173,18 +176,26 @@ function headName(person: Actor): string {
   return person.kind === ACTOR_KIND.PERSON ? person.name : actorName(person);
 }
 
-/** A section: its name and count, then its rows. */
+/** A section: its name and count, then its rows, folding on a press on its head. */
 function PersonSection({
   title,
   count,
+  noun,
   children,
 }: {
   title: string;
   count: number;
+  noun: Noun;
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <PersonSectionFrame label={title} title={title} count={count}>
+    <PersonSectionFrame
+      label={title}
+      title={title}
+      count={count}
+      noun={noun}
+      fold={PERSON_SECTION_FOLD}
+    >
       <List label={title} inset={LIST_INSET.ROW} moves>
         {children}
       </List>
@@ -197,6 +208,9 @@ const ITEMS_NOT_READ = "Some inbox items could not be read.";
 
 /** What an automation's row is, naming its ⋯ and menu "Automation actions". */
 const AUTOMATION_THING = "Automation";
+
+/** What the Automations section's count counts. */
+const AUTOMATION_NOUN = { one: "automation", many: "automations" } as const satisfies Noun;
 
 /**
  * One of their agents as a row, the row the task's own agents stand in at
@@ -295,7 +309,13 @@ function PersonAgentsSection({
     tasks.shown,
   );
   return (
-    <PersonSectionFrame label={title} title={title} count={agents.length}>
+    <PersonSectionFrame
+      label={title}
+      title={title}
+      count={agents.length}
+      noun={TERM.AGENT}
+      fold={PERSON_SECTION_FOLD}
+    >
       <ReplayMask>
         <VirtualTaskRows
           id={selection.regionId}
@@ -386,7 +406,8 @@ function PersonActions({
     (workspace.role === WORKSPACE_ROLE.OWNER || workspace.role === WORKSPACE_ROLE.ADMIN);
   const email = member?.email;
   const slug = linkWorkspaceOf(tasks, standing);
-  const link = slug === undefined ? undefined : linkOf({ kind: LINK_PLACE.PERSON, userId }, slug);
+  const link =
+    slug === undefined ? undefined : linkOf({ kind: LINK_DESTINATION.PERSON, userId }, slug);
   const showTasks = you ? "Show my tasks in the sidebar" : "Show their tasks in the sidebar";
   const copies = [
     ...(link === undefined ? [] : linkItems(copy, link)),
@@ -491,8 +512,11 @@ function AutomationRow({
   const trigger = automationTriggerText(automation.trigger, automation.repositories ?? []);
   const state = STANDING_GLYPH[automationRunStanding(automation.lastRun)];
   const nextWords = automationNextText(automation, now);
-  const links = useLinkItems()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
-  const openInTab = useOpenInTab()({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id });
+  const links = useLinkItems()({ kind: LINK_DESTINATION.AUTOMATION, automationId: automation.id });
+  const openInTab = useOpenInTab()({
+    kind: LINK_DESTINATION.AUTOMATION,
+    automationId: automation.id,
+  });
   const coarse = useCoarsePointer();
   return (
     <RowHintOptions card={<AutomationCard automation={automation} workspaceName={workspaceName} />}>
@@ -602,7 +626,7 @@ function PersonLine({ person }: { person: Actor }): React.ReactNode {
  * newest first, wearing no face, since the page's head says whose they
  * are; and under it, where it leaves some out and the sidebar filters by
  * person, the foot that says how many more there are and lists every one
- * in the sidebar (`onShowAll`).
+ * in the sidebar (`onShowAll`), folding away with the rows.
  */
 function PersonTasks({
   title,
@@ -620,16 +644,26 @@ function PersonTasks({
   onShowAll?: (() => void) | undefined;
 }): React.JSX.Element | null {
   if (listed.length === 0) return null;
-  // Note that the section and its foot are one block of the page, so the page's gap between sections stands above both and the foot stands close under the rows.
+  // Note that the foot stands in the section, close under the rows, so a fold puts it away with them.
   return (
-    <Stack gap={GAP.TIGHT}>
-      <PersonSectionFrame label={title} title={title} count={listed.length}>
+    <PersonSectionFrame
+      label={title}
+      title={title}
+      count={listed.length}
+      noun={TERM.TASK}
+      fold={PERSON_SECTION_FOLD}
+    >
+      <Stack gap={GAP.TIGHT}>
         <PersonTaskRows title={title} listed={listed} tasks={tasks} unread={unread} />
-      </PersonSectionFrame>
-      {onShowAll === undefined ? null : (
-        <ShowMoreRow more={listed.length - PERSON_TASKS_SHOWN} shown={false} onToggle={onShowAll} />
-      )}
-    </Stack>
+        {onShowAll === undefined ? null : (
+          <ShowMoreRow
+            more={listed.length - PERSON_TASKS_SHOWN}
+            shown={false}
+            onToggle={onShowAll}
+          />
+        )}
+      </Stack>
+    </PersonSectionFrame>
   );
 }
 
@@ -724,11 +758,8 @@ function PersonColumn({
   // An item is theirs where it waits on them (`inboxWaitsOn`), on a task its assignee or else its agent's starter, by the list followed live from a service that names neither.
   // On the reader's own page it must also wait on them now as the sidebar's Inbox row counts it (`waitsOnReaderNow`), so one with a reminder still ahead is left out until it comes due.
   const waiting = read.items.filter(
-    ({ holder, item }) =>
-      (inboxWaitsOn(item)?.userId ??
-        (holder.kind === INBOX_HOLDER.TASK
-          ? agentStarter(liveAgents, item.agentId)
-          : undefined)) === userId &&
+    ({ item }) =>
+      (inboxWaitsOn(item)?.userId ?? agentStarter(liveAgents, item.agentId)) === userId &&
       (!you || waitsOnReaderNow(item, tasks.me, now)),
   );
   // Nobody the workspace's members or those who left name, as a link to someone outside it opens, is not found here; until both are read, nobody is.
@@ -807,7 +838,11 @@ function PersonColumn({
               </ErrorState>
             </div>
           ) : !tasks.listRead && personPageEmpty(page) ? (
-            <RecentTasksSkeleton label={`Reading ${theirs} tasks…`} face={false} />
+            <RecentTasksSkeleton
+              label={`Reading ${theirs} tasks…`}
+              face={false}
+              fold={PERSON_SECTION_FOLD}
+            />
           ) : null}
           {page.working.length === 0 ? null : (
             <PersonAgentsSection
@@ -828,7 +863,7 @@ function PersonColumn({
               </ErrorState>
             </div>
           ) : waiting.length === 0 && read.reading ? (
-            <SectionSkeleton>
+            <SectionSkeleton fold={PERSON_SECTION_FOLD}>
               <InboxListSkeleton />
             </SectionSkeleton>
           ) : null}
@@ -837,7 +872,9 @@ function PersonColumn({
               label={waitingTitle}
               title={waitingTitle}
               count={waiting.length}
+              noun={TERM.INBOX_ITEM}
               tone={you ? STATUS_TONE.ATTENTION : undefined}
+              fold={PERSON_SECTION_FOLD}
             >
               <InboxItemRows
                 label={waitingTitle}
@@ -870,7 +907,7 @@ function PersonColumn({
             />
           )}
           {automations.length === 0 ? null : (
-            <PersonSection title="Automations" count={automations.length}>
+            <PersonSection title="Automations" count={automations.length} noun={AUTOMATION_NOUN}>
               <AutomationRows automations={automations} tasks={tasks} now={now} />
             </PersonSection>
           )}

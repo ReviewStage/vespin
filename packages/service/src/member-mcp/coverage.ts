@@ -79,6 +79,12 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.CREATE_WORKSPACE]: { workspaces: ["create"] },
   [MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS]: { workspaces: ["members"] },
   [MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG]: { workspaces: ["setSlug"] },
+  [MEMBER_MCP_TOOL.RENAME_WORKSPACE]: { workspaces: ["rename"] },
+  [MEMBER_MCP_TOOL.REMOVE_WORKSPACE_MEMBER]: { workspaces: ["removeMember"] },
+  [MEMBER_MCP_TOOL.CHANGE_WORKSPACE_MEMBER_ROLE]: { workspaces: ["changeRole"] },
+  [MEMBER_MCP_TOOL.LIST_WORKSPACE_INVITATIONS]: { workspaceInvitations: ["list"] },
+  [MEMBER_MCP_TOOL.INVITE_TO_WORKSPACE]: { workspaceInvitations: ["invite"] },
+  [MEMBER_MCP_TOOL.CANCEL_WORKSPACE_INVITATION]: { workspaceInvitations: ["cancel"] },
   [MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO]: { workspaces: ["setPhoto"] },
   [MEMBER_MCP_TOOL.LIST_TASKS]: { plans: ["list"], taskSections: ["list"] },
   [MEMBER_MCP_TOOL.READ_TASK]: { plans: ["open"] },
@@ -142,6 +148,7 @@ export const MEMBER_MCP_COVERAGE = {
   },
   [MEMBER_MCP_TOOL.READ_INBOX]: { inbox: ["account", "task", "agent"] },
   [MEMBER_MCP_TOOL.ANSWER_ASK]: { inbox: ["message"] },
+  [MEMBER_MCP_TOOL.ACKNOWLEDGE_THREAD]: { inbox: ["answer"] },
   [MEMBER_MCP_TOOL.REPLY_TO_THREAD]: { inbox: ["message"] },
   [MEMBER_MCP_TOOL.CLOSE_THREAD]: { inbox: ["close"] },
   [MEMBER_MCP_TOOL.MARK_THREAD_READ]: { inbox: ["markItemRead", "markItemUnread"] },
@@ -204,6 +211,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP]: { workspaceSandboxSetup: ["putInstall", "putRepository"] },
   [MEMBER_MCP_TOOL.LIST_INTEGRATIONS]: { integrations: ["statuses", "settle"] },
   [MEMBER_MCP_TOOL.CONNECT_INTEGRATION]: { integrations: ["connect"] },
+  [MEMBER_MCP_TOOL.LIST_INTEGRATION_TOOLS]: { integrations: ["tools"] },
   [MEMBER_MCP_TOOL.RENAME_INTEGRATION]: { integrations: ["rename"] },
   [MEMBER_MCP_TOOL.DISCONNECT_INTEGRATION]: { integrations: ["disconnect"] },
   [MEMBER_MCP_TOOL.LIST_MCP_CLIENTS]: { mcpClients: ["list"] },
@@ -276,6 +284,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   agentPages: { frame: SCREEN_ONLY },
   agents: {
+    // Note that an ask is held for a person's own answer, so no agent answers one for them.
+    answerApproval: SECURITY,
     reviewOptions: SCREEN_ONLY,
     workspaceTools: SCREEN_ONLY,
     // Note that a Terminal tab is interactive, so the CLI's `vespin agent shell` reaches it and no tool does.
@@ -303,11 +313,10 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   inbox: {
     home: SCREEN_ONLY,
-    answer: NOT_YET_BUILT,
+    takeBack: NOT_YET_BUILT,
   },
   integrations: {
     github: NEEDS_BROWSER,
-    tools: NOT_YET_BUILT,
     cancel: NEEDS_BROWSER,
   },
   live: {
@@ -357,9 +366,12 @@ export const MEMBER_MCP_EXCLUSIONS = {
     claimRequest: INTERNAL,
     answerRequest: INTERNAL,
   },
+  liveActivities: { startToken: INTERNAL, activityToken: INTERNAL, ended: INTERNAL },
   macCommands: { waiting: INTERNAL, settle: INTERNAL, claim: INTERNAL, listening: INTERNAL },
   pullRequests: { reviewOptions: SCREEN_ONLY },
   pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },
+  // A page the member hovers, read for their own screen: an agent reads a page with its own tools.
+  linkPreviews: { read: SCREEN_ONLY },
   supportAccess: { grant: SECURITY, revoke: SECURITY },
   taskFiles: {
     skills: SCREEN_ONLY,
@@ -367,19 +379,11 @@ export const MEMBER_MCP_EXCLUSIONS = {
     pageFrame: SCREEN_ONLY,
   },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
-  workspaceInvitations: {
-    list: NOT_YET_BUILT,
-    invite: NOT_YET_BUILT,
-    cancel: NOT_YET_BUILT,
-    offer: NEEDS_BROWSER,
-  },
+  workspaceInvitations: { offer: NEEDS_BROWSER },
   workspaceSentry: { install: NEEDS_BROWSER },
   workspaceSlackBot: { connect: NEEDS_BROWSER },
   workspaces: {
-    rename: NOT_YET_BUILT,
     setExperiment: INTERNAL,
-    removeMember: NOT_YET_BUILT,
-    changeRole: NOT_YET_BUILT,
     transfer: DESTRUCTIVE,
     leave: DESTRUCTIVE,
     delete: DESTRUCTIVE,

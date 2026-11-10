@@ -5,7 +5,7 @@ import {
   type AgentStatus,
   type AgentSummary,
 } from "@repo/features/agent-wire";
-import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { TASK_BOUNDS, type TaskSummary } from "@repo/features/task-wire";
 import type { ToolTarget } from "@repo/features/tool-call-model";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -456,17 +456,14 @@ function NewAgentButton({
 }
 
 /**
- * What a phone's Overview offers after the task's agents in place of the
- * column's hidden "+" (`plan-agents.tsx`): New agent as the "+" offers it
- * (`newAgentStarts`), and the agents' read again where it never landed, as
- * the strip's Retry offers it.
+ * What a phone's Overview offers after the task's agents, where no strip
+ * stands to offer it (`plan-agents.tsx`): the agents' read again where it
+ * never landed, as the strip's Retry offers it.
  */
-export function phoneAgentStarts(main: MainTabsControl, agents: AgentsControl): MenuAction[] {
-  const retry: MenuAction[] =
-    agents.listFailed && agents.agents === undefined
-      ? [{ label: RETRY_AGENTS, onSelect: agents.onRetryList }]
-      : [];
-  return [...newAgentStarts(main, agents), ...retry];
+export function agentsRetry(agents: AgentsControl): MenuAction[] {
+  return agents.listFailed && agents.agents === undefined
+    ? [{ label: RETRY_AGENTS, onSelect: agents.onRetryList }]
+    : [];
 }
 
 /** The row the column's tabs stand in, which is its toolbar's title: the strip, what follows it, and the "+" last. */
@@ -665,8 +662,10 @@ export function MainTabBars({
   };
   const doorsOf = (entry: DrawnTab): TabDoors => {
     // An agent's link is its own action (`agent-actions.tsx`).
-    const linked: LinkPlace | undefined =
-      entry.agent === undefined ? undefined : { kind: LINK_PLACE.AGENT, agentId: entry.agent.id };
+    const linked: LinkDestination | undefined =
+      entry.agent === undefined
+        ? undefined
+        : { kind: LINK_DESTINATION.AGENT, agentId: entry.agent.id };
     const { agent } = entry;
     return {
       chosen: entry.look.selected,

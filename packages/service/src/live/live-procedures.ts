@@ -17,7 +17,7 @@
  * inbox is one such read (`accountInboxRead`).
  *
  * `GET /api/live/tasks` answers the task list the same way: the tasks the
- * account reaches and every agent of them and with no task, as statements
+ * account reaches and every agent of them, as statements
  * built with the account's id (`task-list-live.ts`), woken by a write to
  * the account's topic or to one of its workspaces' (`tasksRead`). Asked
  * with `&sync=`, it is answered in delta mode (`liveDeltaParts`): the rows

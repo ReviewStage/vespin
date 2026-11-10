@@ -1,5 +1,5 @@
 /**
- * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, and `-authServer stub`, which signs in against an account service the app answers itself.
+ * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, and `-liveActivity true`, which starts a fixture run's Live Activity.
  *
  * iOS registers a launch argument of the form `-key value` in the app's
  * `NSUserDefaults` argument domain, which React Native's `Settings` reads,
@@ -16,6 +16,9 @@ import { Platform, Settings } from "react-native";
 const LAUNCH_ARGUMENT = {
   FIXTURE: "fixture",
   AUTH_SERVER: "authServer",
+  AGENT: "agent",
+  PULL_REQUEST: "pullRequest",
+  LIVE_ACTIVITY: "liveActivity",
 } as const;
 
 /** The one account service a launch argument may name in place of the real one. */
@@ -32,4 +35,26 @@ export function launchFixtureProfile(): RunProfile | undefined {
 export function launchStubsAuthServer(): boolean {
   if (Platform.OS !== "ios") return false;
   return Settings.get(LAUNCH_ARGUMENT.AUTH_SERVER) === STUB_AUTH_SERVER;
+}
+
+/** The agent this launch opens on, as `-agent <id>` names it, as a flow reaches an agent's page; none on any other platform, and where none is named. */
+export function launchAgent(): string | undefined {
+  if (Platform.OS !== "ios") return undefined;
+  const named: unknown = Settings.get(LAUNCH_ARGUMENT.AGENT);
+  return typeof named === "string" && named !== "" ? named : undefined;
+}
+
+/** The pull request of the launch's agent this launch opens on, as `-pullRequest <number>` names it; none on any other platform, and where none is named. */
+export function launchPullRequest(): number | undefined {
+  if (Platform.OS !== "ios") return undefined;
+  const named: unknown = Settings.get(LAUNCH_ARGUMENT.PULL_REQUEST);
+  const number = typeof named === "number" ? named : Number(named);
+  return Number.isInteger(number) && number > 0 ? number : undefined;
+}
+
+/** Whether this launch starts a fixture run's own Live Activity, as `-liveActivity true` asks (`maestro/live-activity.yaml`); never on any other platform. */
+export function launchLiveActivity(): boolean {
+  if (Platform.OS !== "ios") return false;
+  const named: unknown = Settings.get(LAUNCH_ARGUMENT.LIVE_ACTIVITY);
+  return named === true || named === "true" || named === 1;
 }

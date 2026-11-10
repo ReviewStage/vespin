@@ -716,10 +716,10 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
           review: "review-required",
           checks: "pending",
         });
-        // Note that whether the member may edit the description is read on their own token, beside the App's reads.
+        // Note that what the member may do to the pull request is read on their own token, beside the App's reads.
         assert.ok(
           calls
-            .filter((call) => !call.query.includes("ViewerCanUpdate"))
+            .filter((call) => !call.query.includes("ViewerRights"))
             .every((call) => call.authorization === `Bearer ${GITHUB_FIXTURE_INSTALLATION_TOKEN}`),
         );
         assert.equal(without?.title, read?.title);
@@ -1578,16 +1578,20 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
   );
 
   it.effect(
-    "the pull request's header says whether the member reading may edit its description, as GitHub answers on their own token, and not where they hold no sign-in or GitHub would not answer",
+    "the pull request's header says whether the member reading may edit its description and merge it past its base's rules, as GitHub answers on their own token, and not where they hold no sign-in or GitHub would not answer",
     () =>
       Effect.gen(function* () {
         const canUpdate = (call: GraphqlCall) => {
-          if (!call.query.includes("ViewerCanUpdate")) return Response.json({ data: null });
+          if (!call.query.includes("ViewerRights")) return Response.json({ data: null });
           if (call.authorization === "Bearer ghu_broken") {
             return Response.json({ message: "Server Error" }, { status: 502 });
           }
+          // Note that each right answers for a different member, so a right read off the other's field is caught.
           const viewerCanUpdate = call.authorization === "Bearer ghu_teammate";
-          return Response.json({ data: { repository: { pullRequest: { viewerCanUpdate } } } });
+          const viewerCanMergeAsAdmin = call.authorization === "Bearer ghu_standing";
+          return Response.json({
+            data: { repository: { pullRequest: { viewerCanUpdate, viewerCanMergeAsAdmin } } },
+          });
         };
         const header = (
           opened: { readonly ask: (request: Request) => Effect.Effect<Answer> },
@@ -1605,26 +1609,25 @@ it.layer(getTestDB())("changing an agent's pull request", (it) => {
         const broken = yield* published({ otherToken: "ghu_broken", answer: canUpdate });
 
         const teammate = yield* header(two, two.other, two.agent.id);
-        assert.deepEqual(
-          [teammate?.canEditDescription, teammate?.body],
-          [true, "Invitations expire."],
-        );
-        assert.equal((yield* header(two, two.owner, two.agent.id))?.canEditDescription, false);
-        assert.equal(
-          (yield* header(unsigned, unsigned.other, unsigned.agent.id))?.canEditDescription,
+        const rights = (read: typeof teammate) => [read?.canEditDescription, read?.canBypassRules];
+        assert.deepEqual(rights(teammate), [true, false]);
+        assert.equal(teammate?.body, "Invitations expire.");
+        assert.deepEqual(rights(yield* header(two, two.owner, two.agent.id)), [false, true]);
+        assert.deepEqual(rights(yield* header(unsigned, unsigned.other, unsigned.agent.id)), [
           false,
-        );
-        assert.equal(
-          (yield* header(broken, broken.other, broken.agent.id))?.canEditDescription,
           false,
-        );
+        ]);
+        assert.deepEqual(rights(yield* header(broken, broken.other, broken.agent.id)), [
+          false,
+          false,
+        ]);
         assert.deepEqual(
           two.calls
-            .filter((call) => call.query.includes("ViewerCanUpdate"))
+            .filter((call) => call.query.includes("ViewerRights"))
             .map((call) => call.authorization),
           ["Bearer ghu_teammate", "Bearer ghu_standing"],
         );
-        assert.ok(unsigned.calls.every((call) => !call.query.includes("ViewerCanUpdate")));
+        assert.ok(unsigned.calls.every((call) => !call.query.includes("ViewerRights")));
       }),
   );
 

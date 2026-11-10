@@ -4,23 +4,23 @@ import { RNHostView, ScrollView, VStack } from "@expo/ui/swift-ui";
 import { frame } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { View } from "react-native";
-import { Markdown, type MarkdownPlace } from "./markdown.js";
+import { Markdown } from "./markdown.js";
 import { PageHeader } from "./page-header.js";
 import { SPACE } from "./tokens/space.js";
 
-const WORDS_FRAME = { paddingHorizontal: SPACE.PAGE, paddingBottom: SPACE.PAGE } as const;
+const WORDS_FRAME = { paddingHorizontal: SPACE.EDGE, paddingBottom: SPACE.PAGE } as const;
 
 type MarkdownPageProps = {
   readonly title: string;
   /** A line under the title: where the thing stands, or what it asks. */
   readonly summary?: string | undefined;
-  /** A task's status, drawn over the title as a task's page heads itself. */
+  /** A task's status, drawn as its chip under the title. */
   readonly status?: TaskStatus | undefined;
   readonly words: string;
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips. */
   readonly repository?: string | null | undefined;
-  /** Routes a link or a chip naming a place in the app; every other link opens in Safari. */
-  readonly onOpenPlace: (place: MarkdownPlace) => void;
+  /** Opens a link or a chip pressed, by the address it was written as, where the app draws it or in Safari. */
+  readonly onOpenLink: (address: string) => void;
   /** Whether a person typed the words line by line, whose line breaks are kept. */
   readonly typed?: boolean | undefined;
 };
@@ -37,7 +37,7 @@ export function MarkdownPage({
   status,
   words,
   repository,
-  onOpenPlace,
+  onOpenLink,
   typed,
 }: MarkdownPageProps) {
   return (
@@ -50,12 +50,7 @@ export function MarkdownPage({
         <PageHeader title={title} summary={summary} status={status} />
         <RNHostView matchContents={{ vertical: true }}>
           <View style={WORDS_FRAME}>
-            <Markdown
-              words={words}
-              repository={repository}
-              onOpenPlace={onOpenPlace}
-              typed={typed}
-            />
+            <Markdown words={words} repository={repository} onOpenLink={onOpenLink} typed={typed} />
           </View>
         </RNHostView>
       </VStack>

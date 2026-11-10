@@ -34,7 +34,7 @@ import {
   integrationOfRemoteTool,
   integrationRemoteCallSchema,
 } from "./integration-wire.js";
-import { LINK_PLACE, type LinkPlace, linkOf } from "./link-grammar.js";
+import { LINK_DESTINATION, type LinkDestination, linkOf } from "./link-grammar.js";
 import { holderTaskId, type MentionHolder } from "./mention-holder.js";
 import type { ModelChoice } from "./models-wire.js";
 import { cardTitle } from "./plain-words.js";
@@ -1288,10 +1288,10 @@ export type ToolTarget =
 /** The place in the app a row naming a task names: the task, or one of its agents where the row names one. */
 export function placeOfTaskTarget(
   target: Extract<ToolTarget, { readonly kind: typeof TOOL_TARGET.TASK }>,
-): LinkPlace {
+): LinkDestination {
   return target.agent === undefined
-    ? { kind: LINK_PLACE.TASK, planId: target.task }
-    : { kind: LINK_PLACE.AGENT, planId: target.task, agentId: target.agent };
+    ? { kind: LINK_DESTINATION.TASK, planId: target.task }
+    : { kind: LINK_DESTINATION.AGENT, planId: target.task, agentId: target.agent };
 }
 
 /** What the hover over a row says it opens, by its target's kind. */
@@ -1509,25 +1509,31 @@ export interface TargetPlace {
 export function targetLink(target: ToolTarget, place: TargetPlace): string | undefined {
   if (target.kind === TOOL_TARGET.PULL_REQUEST) return target.url;
   if (place.workspace === "") return undefined;
-  const linked = (at: LinkPlace) => linkOf(at, place.workspace);
+  const linked = (at: LinkDestination) => linkOf(at, place.workspace);
   switch (target.kind) {
     case TOOL_TARGET.TASK:
-      return linked({ kind: LINK_PLACE.TASK, planId: target.task });
+      return linked({ kind: LINK_DESTINATION.TASK, planId: target.task });
     case TOOL_TARGET.DESCRIPTION: {
       const taskId = holderTaskId(place.holder);
-      return taskId === undefined ? undefined : linked({ kind: LINK_PLACE.TASK, planId: taskId });
+      return taskId === undefined
+        ? undefined
+        : linked({ kind: LINK_DESTINATION.TASK, planId: taskId });
     }
     case TOOL_TARGET.PAGE: {
       const holder = place.holder;
       if (holder === undefined) return undefined;
       return "taskId" in holder
-        ? linked({ kind: LINK_PLACE.PAGE, planId: holder.taskId, pageId: target.page })
-        : linked({ kind: LINK_PLACE.PAGE, agentId: holder.agentId, pageId: target.page });
+        ? linked({ kind: LINK_DESTINATION.PAGE, planId: holder.taskId, pageId: target.page })
+        : linked({ kind: LINK_DESTINATION.PAGE, agentId: holder.agentId, pageId: target.page });
     }
     case TOOL_TARGET.INBOX:
       return target.item === undefined || place.agentId === undefined
         ? undefined
-        : linked({ kind: LINK_PLACE.INBOX_ITEM, agentId: place.agentId, itemId: target.item });
+        : linked({
+            kind: LINK_DESTINATION.INBOX_ITEM,
+            agentId: place.agentId,
+            itemId: target.item,
+          });
     case TOOL_TARGET.AGENT:
       return undefined;
   }

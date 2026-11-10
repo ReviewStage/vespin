@@ -16,6 +16,7 @@ import {
   Banner,
   BUTTON_VARIANT,
   Button,
+  ConnectionLostNotice,
   GAP,
   PauseIcon,
   PlayIcon,
@@ -27,7 +28,7 @@ import {
   UsageLimitNotice,
   ViewingAsBanner,
 } from "@repo/ui";
-import { USAGE_LIMIT_AGENT } from "@repo/wire/ui-messages";
+import { CONNECTION_LOST_PROVIDER, USAGE_LIMIT_AGENT } from "@repo/wire/ui-messages";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -141,6 +142,19 @@ function Banners(): React.JSX.Element {
               agent: USAGE_LIMIT_AGENT.CODEX,
               resetsAt: null,
               moved: { from: "dean@acme.dev", to: "API key · sk-…a91F" },
+            }}
+          />
+        </Stack>
+      </CatalogSection>
+      <CatalogSection id="banner-connection-lost" title="Connection lost">
+        <Stack gap={GAP.FIELD}>
+          <ConnectionLostNotice
+            notice={{ provider: CONNECTION_LOST_PROVIDER.ANTHROPIC, restoredAt: null }}
+          />
+          <ConnectionLostNotice
+            notice={{
+              provider: CONNECTION_LOST_PROVIDER.OPENAI,
+              restoredAt: Date.UTC(2026, 10, 9, 23, 40),
             }}
           />
         </Stack>

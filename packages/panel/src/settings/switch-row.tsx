@@ -1,8 +1,7 @@
 import { searchAnchorProps } from "@repo/settings/settings-anchors";
-import { SettingsRow, type SettingsRowDensity, Switch } from "@repo/ui";
+import { SavedTick, SettingsRow, type SettingsRowDensity, Switch } from "@repo/ui";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { useEffect } from "react";
-import { SettingMarks } from "./marks.js";
 import type { RowChange } from "./row-write.js";
 
 /**
@@ -23,7 +22,6 @@ export function SwitchRow({
   detail,
   checked,
   anchor,
-  changed,
   disabled,
   locked,
   density,
@@ -38,8 +36,6 @@ export function SwitchRow({
   checked: boolean;
   /** The id a pressed search result lands on: marked on the switch itself, which then takes the keyboard. */
   anchor?: string;
-  /** Whether the stored value differs from the default, which earns the mark. */
-  changed?: boolean;
   /** Whether the switch rests for a reason of its caller's; a write in flight never rests it. */
   disabled?: boolean;
   /** Why the reader may not change it, where they may not, said as its tooltip (`Switch`'s `locked`). */
@@ -57,7 +53,7 @@ export function SwitchRow({
   return (
     <SettingsRow
       label={<ReplayWords unmasked={labelReplayUnmasked}>{label}</ReplayWords>}
-      adornment={<SettingMarks changed={changed} saves={write?.savedAt ?? 0} />}
+      adornment={<SavedTick saves={write?.savedAt ?? 0} />}
       description={detail}
       density={density}
       labelsControl

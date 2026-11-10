@@ -35,7 +35,7 @@ tester.run("retired (example.json)", retiredRule, {
     { code: 'import { x } from "retired-example";', filename: OWNER },
     // Other classes, glyphs, props and modules, and a class only sharing a start with a retired one.
     {
-      code: 'import { BotIcon, GLYPH } from "@repo/ui/icons"; <div className="retired-examples x" data-a={GLYPH.TASK} retired={1} />;',
+      code: 'import { PlusIcon, GLYPH } from "@repo/ui/icons"; <div className="retired-examples x" data-a={GLYPH.SETTINGS} retired={1} />;',
       filename: PANEL,
     },
     { code: 'import { x } from "retired-example-not";', filename: PANEL },

@@ -12,7 +12,8 @@ import { FAILURE_REASON, remedyLabel, retriesBesideRemedy } from "@repo/features
 import type { CatalogModel } from "@repo/features/models-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { ShortcutChord } from "@repo/settings/shortcuts";
-import type { ComposerNote, ComposerRefusal } from "@repo/ui";
+import { type ComposerNote, type ComposerRefusal, NOTE_LINE_LOOK, NoteLine } from "@repo/ui";
+import type { Actor } from "@repo/ui/actor-model";
 import { SERVER_HANDED } from "@repo/ui/agent-servers-model";
 import { GLYPH } from "@repo/ui/icons";
 import {
@@ -29,10 +30,17 @@ import { modEnterSends } from "../enter-sends.js";
 import { failureShown } from "../failure-report.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { PANEL_SPAN } from "../panel-spans.js";
+import {
+  AgentModeChip,
+  type AgentModeControl,
+  DENIES_WAITING,
+  modeOverflow,
+} from "./agent-approvals.js";
 import { AgentContextRing, ContextRingIcon } from "./agent-context.js";
 import { contextHint } from "./agent-context-model.js";
-import { noteWhileOffline } from "./agent-model.js";
+import { noteWhileOffline, paidByOf, planNameOf, providerOf } from "./agent-model.js";
 import { AgentModelChip } from "./agent-model-chip.js";
+import { PayerValue, usePayerPlan } from "./agent-payer.js";
 import { type AgentServersControl, serversMenuPanel } from "./agent-servers.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide } from "./mention-picker.js";
 import { FOLD_WIDTH, MessageBox, OVERFLOW_PRESS, useMessageBox } from "./message-box.js";
@@ -58,7 +66,10 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * pinned over the card (`agent-published.tsx`, `agent-tab.tsx`), so the
  * foot holds only what the next message goes with; at the right,
  * in this order, the model chip naming what the agent runs on, which opens
- * the menu that changes it for the next step (`agent-model-chip.tsx`),
+ * the menu that changes it for the next step (`agent-model-chip.tsx`), a
+ * Claude Code agent's permission mode chip, which opens the menu that
+ * changes how its tool calls are answered from its next turn
+ * (`agent-approvals.tsx`),
  * the ring that shows, once a step has ended, how full the agent's model's
  * context is and opens what fills it (`agent-context.tsx`), the
  * microphone, and the round button. The box takes a message to the agent:
@@ -67,7 +78,9 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * box is an editor (`composer-field.tsx`) that holds plain words and a
  * chosen skill's chip, and the message is its words as a string. A
  * message sent while a turn runs steers it, so the agent sees it at its
- * next step; sent idle, it opens a new turn. The box reads the same
+ * next step; sent idle, it opens a new turn. While a tool call waits on an
+ * answer, the box says over its field that a message sent now denies it,
+ * as the service does. The box reads the same
  * whatever the agent is doing: one size, the same chips, no hint under it,
  * and one placeholder asking for a follow up, since a started agent's
  * conversation opens on its description or task, because the tab's glyph and the transcript's "Working…"
@@ -281,6 +294,7 @@ export function AgentComposer({
   usage,
   payer,
   payerSubscriptionId,
+  owner,
   servers,
   plus = [],
   context,
@@ -305,6 +319,8 @@ export function AgentComposer({
   listSide = MENTION_MENU_SIDE.ABOVE,
   queueing,
   answer,
+  mode,
+  approvalsWaiting = 0,
 }: {
   /** The agent the box writes to, which its `@` list does not offer; none for a draft not yet started. */
   agentId?: string | undefined;
@@ -327,6 +343,8 @@ export function AgentComposer({
   payer?: AgentPayer | undefined;
   /** The starter's subscription a plan payer runs the agent on, which the chip's menu names; nothing where the page named none. */
   payerSubscriptionId?: string | undefined;
+  /** The teammate who started the agent, whose plan or key pays for it; none for the reader's own. */
+  owner?: Actor | undefined;
   /** The MCP servers the agent is handed and their switches, which the + menu opens; none where the box offers none, whose + opens the file picker itself. */
   servers: AgentServersControl | undefined;
   /** Rows the + menu offers after MCP servers, its owner's: New task's Task relation. */
@@ -375,8 +393,27 @@ export function AgentComposer({
   queueing?: ComposerQueueing | undefined;
   /** What an Inbox thread's answer lays over the agent's box; none for a message to the agent. */
   answer?: ComposerAnswer | undefined;
+  /** The agent's permission mode and its chip's change; none for an agent that never asks, which draws no chip. */
+  mode?: AgentModeControl | undefined;
+  /** How many of the agent's tool calls wait on an answer, which a message sent now denies. */
+  approvalsWaiting?: number;
 }): React.JSX.Element {
   const connected = useConnected();
+  // Who pays, as the chip's menu names it, is the context popover's last line too.
+  const paying = model === undefined ? payer : paidByOf(payer, usage, model.runtime);
+  const planName = planNameOf(
+    usePayerPlan(paying, payerSubscriptionId, (payer ?? usage?.payer) === undefined, owner),
+  );
+  const payerValue =
+    paying === undefined ? undefined : (
+      <PayerValue
+        payer={paying}
+        provider={model === undefined ? undefined : providerOf(model.choice.model)}
+        usage={usage}
+        owner={owner}
+        planName={planName}
+      />
+    );
   // The popover the ⋯ may open in place of its hidden press.
   const [contextOpen, setContextOpen] = useState(false);
   const [stopping, setStopping] = useState(false);
@@ -474,9 +511,9 @@ export function AgentComposer({
       : { ...refusedNote(composer.closed), mends: closedRemedy }) ??
     own ??
     (sendNote === undefined
-      ? model?.note === undefined
+      ? (model?.note ?? mode?.note) === undefined
         ? undefined
-        : refusedNote(model.note)
+        : refusedNote(model?.note ?? mode?.note ?? "")
       : {
           words: sendNote.text,
           // Note that a send's failure is reported as the answer that refused it, where its note holds one,
@@ -606,7 +643,14 @@ export function AgentComposer({
       <MessageBox
         box={box}
         className={closed ? "opacity-60" : answer === undefined ? undefined : "inbox-answer"}
-        head={answer?.question}
+        head={
+          answer?.question ??
+          (approvalsWaiting > 0 && !closed ? (
+            <NoteLine look={NOTE_LINE_LOOK.LIST} data-approval-hint="">
+              {DENIES_WAITING}
+            </NoteLine>
+          ) : undefined)
+        }
         plus={plusRows}
         tools={tools?.(box.folds(FOLD_WIDTH.TOOLS))}
         actions={
@@ -621,20 +665,25 @@ export function AgentComposer({
                 usage={usage}
                 payer={payer}
                 payerSubscriptionId={payerSubscriptionId}
+                owner={owner}
                 narrow={box.folds(FOLD_WIDTH.MODEL)}
               />
+            )}
+            {mode === undefined ? null : (
+              <AgentModeChip control={mode} narrow={box.folds(FOLD_WIDTH.MODEL)} />
             )}
             <AgentContextRing
               context={context}
               brief={brief}
+              payer={payerValue}
               open={contextOpen}
               onOpenChange={box.handBack(setContextOpen)}
             />
           </>
         }
-        more={
-          context === undefined
-            ? undefined
+        more={[
+          ...(context === undefined
+            ? []
             : [
                 {
                   press: OVERFLOW_PRESS.CONTEXT,
@@ -646,8 +695,9 @@ export function AgentComposer({
                     },
                   ],
                 },
-              ]
-        }
+              ]),
+          ...modeOverflow(mode),
+        ]}
         beforeSend={beforeSend?.(box.folds(FOLD_WIDTH.ACTIONS))}
         send={{
           label: sendWay?.label ?? sendLabel,

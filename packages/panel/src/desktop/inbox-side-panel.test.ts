@@ -257,7 +257,7 @@ async function inbox(
   });
   // The account's feed holds the task's one item, which the Inbox draws from.
   handInboxItems({
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [ITEM] }, [INBOX_SCOPE_KIND.AGENT]: {} },
+    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [ITEM] } },
   });
   // The host lays the agent's transcript, which names a page of its task, once its tab holds it.
   pushedTranscripts(() => [TRANSCRIPT]);

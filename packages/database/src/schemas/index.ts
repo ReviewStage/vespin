@@ -2,11 +2,11 @@
 // aggregate from their own schema modules without being overwritten by it.
 export * from "./account-provider-key.js";
 export * from "./agent.js";
+export * from "./agent-approval.js";
 export * from "./agent-browser-tab.js";
 export * from "./agent-pin.js";
 export * from "./agent-pull-request.js";
 export * from "./agent-queue.js";
-export * from "./agent-read.js";
 export * from "./agent-repository.js";
 export * from "./agent-runner-lease.js";
 export * from "./agent-runner-record.js";
@@ -36,6 +36,7 @@ export * from "./inbox-message.js";
 export * from "./installed-skill.js";
 export * from "./integration.js";
 export * from "./integration-installation.js";
+export * from "./live-activity.js";
 export * from "./mac-command.js";
 export * from "./memory.js";
 export * from "./native-call-key.js";

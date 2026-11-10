@@ -2769,6 +2769,38 @@ test("a Run now the service refuses says why under the name, and a new automatio
   assert.match(fresh.textContent ?? "", /No runs yet\./u);
 });
 
+test("a Run now refused while a save is out leaves the save's check to land, and its own refusal standing", async () => {
+  heldChanges = [];
+  runRefusal = AUTOMATION_CALL_FAILURE.NOT_PERMITTED;
+  // The check's motion never finishes, so a check that landed stands to be read.
+  Object.defineProperty(HTMLElement.prototype, "getAnimations", {
+    configurable: true,
+    value(this: HTMLElement) {
+      return this.classList.contains("ui-button-done") ? [new EventTarget()] : [];
+    },
+  });
+  onTestFinished(() => {
+    Reflect.deleteProperty(HTMLElement.prototype, "getAnimations");
+  });
+  const page = mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
+  await settle();
+  type(page.querySelector("input[aria-label='Automation name']"), "Sweep");
+  const save = button("Save");
+
+  act(() => save.click());
+  await settle();
+  act(() => button("Run now").click());
+  await settle();
+  heldChanges[0]?.();
+  await settle();
+
+  assert.ok(save.querySelector(".ui-button-done"), "Save shows its check");
+  assert.equal(
+    page.querySelector("[role='alert']")?.textContent,
+    "Only its creator, or the workspace's owners and admins, can run it.",
+  );
+});
+
 /** A run of the sweep that started the CI digest agent, which a press on its row opens. */
 const SWEEP_RUN = {
   id: "1c2d3e4f-5a6b-4c7d-8e9f-0a1b2c3d4e5f",

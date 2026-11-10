@@ -1,6 +1,6 @@
 /** hidden-panel-pushes.test.ts -- what a panel no one can see is pushed, as its window hides and shows. */
 
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { RunMode } from "@repo/host";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { initialAppState } from "@repo/host/client";
@@ -11,7 +11,7 @@ import { PanelManager } from "./panel-manager";
 import { windowPushes } from "./window-pushes";
 
 /** An app link to a task, as the system hands one to the app. */
-const LINK = { workspace: "workspace-1", place: { kind: LINK_PLACE.TASK, planId: "task-1" } };
+const LINK = { workspace: "workspace-1", place: { kind: LINK_DESTINATION.TASK, planId: "task-1" } };
 
 /**
  * What a panel no one can see is pushed: no document while it is hidden, the

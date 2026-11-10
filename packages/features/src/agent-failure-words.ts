@@ -48,6 +48,8 @@ const AGENT_FAILURE_WORDS = {
   [AGENT_FAILURE.LINE_UNTAKEN]: "no machine picked the turn up in time",
   [AGENT_FAILURE.PLAN_LIMIT]: "the plan hit its usage limit and the turn could not go on",
   [AGENT_FAILURE.REFUSAL]: "the model declined to continue this conversation",
+  [AGENT_FAILURE.CONNECTION_LOST]:
+    "the connection to the model's provider was lost and did not come back",
   [AGENT_FAILURE.OTHER]: undefined,
 } as const satisfies Record<AgentFailure, string | undefined>;
 
@@ -91,7 +93,7 @@ const HARNESS_NAMES = {
 /** Why a host's launch never started, by the reason the host said, as the sentence that says it and how to mend it. */
 const LAUNCH_UNSTARTED_WORDS = {
   [DEVICE_LAUNCH_UNSTARTED.GITHUB_SIGN_IN]:
-    "The host couldn't start this agent: this Mac's GitHub sign-in can't reach the repository. Sign in with gh auth login, or set up SSH for the repository, then send a message to try again.",
+    "The machine couldn't start this agent: its GitHub sign-in can't reach the repository. Sign in with gh auth login, or set up SSH for the repository, then send a message to try again.",
 } as const satisfies Record<DeviceLaunchUnstarted, string>;
 
 /**
@@ -111,7 +113,7 @@ export function launchStoppedWords(
     step === DEVICE_LAUNCH_STEP.STARTING && runtime !== undefined
       ? `starting ${HARNESS_NAMES[runtime]}`
       : LAUNCH_STOPPED_WORDS[step];
-  return `The host couldn't start this agent: it failed while ${doing}. Send a message to try again.`;
+  return `The machine couldn't start this agent: it failed while ${doing}. Send a message to try again.`;
 }
 
 /** Whether only a new agent goes on past this failure, rather than a message to the agent that failed. */

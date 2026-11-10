@@ -1,4 +1,4 @@
-# inbox.yaml -- the Inbox's list under its scopes, its search, a row's swipe and long press, and a thread with a picture opened full screen and a video in the system's player.
+# inbox.yaml -- the Inbox's list under its scope pills, the account's photo in its bar, its ⋯ menu, its search, a row's swipe and long press, and a thread with a picture opened full screen and a video in the system's player.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -12,14 +12,20 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
 - assertVisible: "Recorded the invite flow"
+# The account's photo leads the bar, heard as Settings: the fixture's account
+# has no picture, so its letters stand in it.
+- assertVisible: "Settings"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-list
-# View options: the scopes, Open checked, and Mark all as read under them. All
-# lists the settled threads too.
-- tapOn: "View options"
-- assertVisible: "Questions"
+# The ⋯ menu: Mark all as read. A tap off the menu closes it.
+- tapOn: "More"
 - assertVisible: "Mark all as read"
-- takeScreenshot: inbox-view-options
+- takeScreenshot: inbox-more
+- tapOn:
+    point: "50%, 90%"
+- waitForAnimationToEnd
+# The scope pills over the list, Open chosen: All lists the settled threads
+# too.
 - tapOn: "All"
 - scrollUntilVisible:
     element: "Which day the digest goes out"
@@ -27,11 +33,10 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: inbox-all
 - scrollUntilVisible:
-    element: "Search inbox"
+    element: "Recorded the invite flow"
     direction: UP
 - waitForAnimationToEnd
-- tapOn: "View options"
-- tapOn: "Open"
+- tapOn: "Open.*"
 # A swipe from the leading edge reveals Mark as read or unread, which a full
 # swipe would press at once, so the flow swipes partway, where a compact
 # window stands a row; a long press offers the same in the row's menu.
@@ -51,12 +56,22 @@ appId: dev.vespin.ios
 - assertVisible: "Mark as read"
 - takeScreenshot: inbox-menu
 - tapOn: "Mark as read"
-- scrollUntilVisible:
-    element: "Recorded the invite flow"
-    direction: UP
-# A thread opens on its path and subject, then each message as a comment: the
-# agent's tile, name and time over its words, its picture drawn where the
-# words name it, and its recording after the message that sent it.
+# Note that the list is scrolled back to its first row, rather than to the
+# first point this row shows, because the folded Duo then stands it against the
+# top edge, where a tap a point or two higher no longer opens it. Neither row
+# can be scrolled to the middle, since a list at its top scrolls no further,
+# and a window that shows the row already scrolls not at all.
+- runFlow:
+    when:
+      notVisible: "Recorded the invite flow"
+    commands:
+      - scrollUntilVisible:
+          element: "Who can withdraw an invite\\?"
+          direction: UP
+# A thread opens on its path small in the bar and its title as the page's
+# heading, then each message: the agent's tile, name and time over its words,
+# its picture drawn where the words name it, and its recording after the
+# message that sent it, played in place from its MP4 copy.
 - tapOn: "Recorded the invite flow"
 - assertVisible: ".*walked the invite flow.*"
 - waitForAnimationToEnd
@@ -71,14 +86,30 @@ appId: dev.vespin.ios
     element: "invite-flow.webm.*"
     direction: DOWN
 - waitForAnimationToEnd
+# The recording is read as its MP4 copy, which iOS's player plays in place:
+# the flow waits for the player to hold the file, so a read that never lands
+# fails here rather than leaving an empty well in the screenshot.
+- extendedWaitUntil:
+    visible:
+      id: "video-player"
+    timeout: 15000
+- assertNotVisible: ".*can't play here.*"
 - takeScreenshot: inbox-video
-# Back on the list, the search narrows it to the threads whose words hold
-# every word typed. It comes last, since its keyboard stands over the rows.
+# Back on the list, the search, a round glass button in the bar, narrows it to
+# the threads whose words hold every word typed. It comes last, since its
+# keyboard stands over the rows.
 - tapOn: "Inbox"
-- scrollUntilVisible:
-    element: "Search inbox"
-    direction: UP
 - waitForAnimationToEnd
+# A compact window's search is the bar's round button, named as the Search
+# tab is, so the first of the two is pressed; a split view's sidebar holds the
+# field itself.
+- runFlow:
+    when:
+      notVisible: "Search inbox"
+    commands:
+      - tapOn:
+          text: "Search"
+          index: 0
 - tapOn: "Search inbox"
 - inputText: "digest"
 - assertVisible: "Verify the digest's sender domain"

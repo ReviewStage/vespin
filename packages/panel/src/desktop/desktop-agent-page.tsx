@@ -6,7 +6,7 @@ import {
 } from "@repo/features/agent-wire";
 import { dictationKeywords } from "@repo/features/dictation-keywords";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
@@ -41,7 +41,7 @@ import {
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
 import { AutomationDirectory } from "../automation-directory.js";
@@ -151,7 +151,9 @@ import type { TaskHeadBack } from "./task-pane-switcher.js";
  * its name's field, Show terminal, Archive, and Permanently delete; ⌘J and
  * New terminal open its terminal as on a task (`terminal-commands.tsx`). An archived agent takes no message, so
  * its composer gives way to its own Unarchive, which its ⋯ offers in
- * Archive's place, and it is not renamed. An agent the task list does not carry,
+ * Archive's place, and it is not renamed; one archived while its page
+ * stands, by its ⋯ or by its task marked done or canceled, leaves the page
+ * for Home. An agent the task list does not carry,
  * deleted or of a workspace the reader is not in, as a link may name, is not
  * found, and nothing of it is drawn. Whoever sent it a message is read against its
  * workspace's members, as on a plan, and the automation whose run started
@@ -425,6 +427,16 @@ function DesktopAgentPage({
     me: tasks.me,
   });
   const agent = agents.agents?.[0] ?? agents.archived?.[0];
+  // An agent archived while its page stands, as marking its task done or canceled archives it, leaves the page for Home.
+  // Note that only the move into archived does, because an agent opened archived, from History or a link, is read where it stands.
+  const archived = agent === undefined ? undefined : agent.archivedAt !== undefined;
+  const wasArchived = useRef(archived);
+  const { onGoHome } = tasks;
+  useEffect(() => {
+    const archivedHere = archived === true && wasArchived.current === false;
+    if (archived !== undefined) wasArchived.current = archived;
+    if (archivedHere) onGoHome();
+  }, [archived, onGoHome]);
   // The run that started an automation's agent, held while its page stands; an agent the list names no automation of has none, and asks nothing.
   const run = useQuery(agentOriginQuery(agent?.automationName === undefined ? undefined : agentId));
   // Note that the models come from the open task's agents where this page has not read them, so
@@ -509,17 +521,17 @@ function DesktopAgentPage({
       openPlace?.(
         item === undefined
           ? planId === null
-            ? { kind: LINK_PLACE.INBOX }
-            : { kind: LINK_PLACE.INBOX, planId }
+            ? { kind: LINK_DESTINATION.INBOX }
+            : { kind: LINK_DESTINATION.INBOX, planId }
           : planId === null
-            ? { kind: LINK_PLACE.INBOX_ITEM, agentId, itemId: item }
-            : { kind: LINK_PLACE.INBOX_ITEM, planId, itemId: item },
+            ? { kind: LINK_DESTINATION.INBOX_ITEM, agentId, itemId: item }
+            : { kind: LINK_DESTINATION.INBOX_ITEM, planId, itemId: item },
       );
     }
     if (target.kind === TOOL_TARGET.TASK) openPlace?.(placeOfTaskTarget(target));
     // Its plan's card names its task, an archived agent's among them, whose press opens the plan.
     if (target.kind === TOOL_TARGET.DESCRIPTION && planId !== null) {
-      openPlace?.({ kind: LINK_PLACE.TASK, planId });
+      openPlace?.({ kind: LINK_DESTINATION.TASK, planId });
     }
     // An agent's chip, such as one it was continued or forked to, opens that agent's own page.
     if (target.kind === TOOL_TARGET.AGENT) tasks.agentView.onOpen(target.agent);
@@ -567,7 +579,7 @@ function DesktopAgentPage({
         : (link: ReadLink) => {
             const { place } = link;
             const own =
-              (place.kind === LINK_PLACE.AGENT || place.kind === LINK_PLACE.MESSAGE) &&
+              (place.kind === LINK_DESTINATION.AGENT || place.kind === LINK_DESTINATION.MESSAGE) &&
               place.agentId === agentId;
             if (own) setDrafting(undefined);
             openLink(link);

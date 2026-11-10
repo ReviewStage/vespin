@@ -22,12 +22,6 @@ export const RUN_ON_MAC_REASON = {
 
 export type RunOnMacReason = (typeof RUN_ON_MAC_REASON)[keyof typeof RUN_ON_MAC_REASON];
 
-/** What the dot on the Mac a card names says of each reason. */
-export const RUN_ON_MAC_REASON_WORDS = {
-  [RUN_ON_MAC_REASON.SETTINGS_OFF]: "Off in Settings",
-  [RUN_ON_MAC_REASON.MAC_AWAY]: "Offline",
-} as const satisfies Record<RunOnMacReason, string>;
-
 /** What decides whether `run_on_mac` is on: this Mac's setting, where the reader may be told it, and the service's answer. */
 export interface RunOnMacInput {
   /** Whether this Mac's Settings let no agent run commands on it; false where the reader is not the agent's starter or reads on no Mac. */

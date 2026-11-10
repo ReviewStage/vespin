@@ -1,5 +1,5 @@
 /**
- * setup.ts -- `vespin setup show` and `edit`: the workspace's cloud sandbox setup, its install script and each repository's setup script, as Settings › Cloud setup reads and saves them.
+ * setup.ts -- `vespin setup show` and `edit`: the workspace's cloud sandbox setup, its install script and each repository's setup script, as Settings › Cloud environment reads and saves them.
  *
  * `show` reads the setup through `workspaceSandboxSetup.read` for the
  * workspace the command acts in; `--repo` narrows it to one repository's

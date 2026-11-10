@@ -429,8 +429,8 @@ export const START_AGENT_REFUSAL = {
   ALSO_NO_REPOSITORY:
     "Not started: the agent works in no repository of its own for alsoRepositories to stand " +
     "beside; name its repository, or leave alsoRepositories out.",
-  DEVICE_REMOVED: `Not started: the host it would run on was removed. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add the host again.`,
-  NO_DEVICES: `Not started: the member has no device registered to run agents on. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add a Mac or a host in Settings › Hosts.`,
+  DEVICE_REMOVED: `Not started: the machine it would run on was removed. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add the machine again.`,
+  NO_DEVICES: `Not started: the member has no device registered to run agents on. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add a machine in Settings › Machines.`,
   NO_SOURCE:
     "Not started: no agent of your workspace has that id to start from; " +
     `${AGENT_TOOL.LIST_AGENTS} names them.`,
@@ -485,7 +485,7 @@ const LOCAL_AGENT_REFUSAL_WORDS = {
   [LOCAL_AGENT_REFUSAL.CODEX]: `Not started: the device it would run on has no Codex set up yet, so it cannot run this model. Start on a Claude model, or in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.NO_HARNESS]: `Not started: the device it would run on cannot run this model. Start on another model, or in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.PREPARING]: `Not started: the device it would run on is still getting ready for local agents, downloading Claude Code, Codex, and GitHub's CLI. Try again in a few minutes, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
-  [LOCAL_AGENT_REFUSAL.SETUP_FAILED]: `Not started: the device it would run on couldn't set up local agents, since its download of Claude Code, Codex, or GitHub's CLI failed. Ask the member to turn Bring your own host off and on in Settings › Hosts on that Mac, or to restart vespin-host on that Linux server, to try again, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
+  [LOCAL_AGENT_REFUSAL.SETUP_FAILED]: `Not started: the device it would run on couldn't set up local agents, since its download of Claude Code, Codex, or GitHub's CLI failed. Ask the member to turn Bring your own machine off and on in Settings › Machines on that Mac, or to restart vespin-host on that Linux server, to try again, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN]: `Not started: the repository is reached on the member's own GitHub token, and the device it would run on has a vespin-host too old to work in such a repository on its own GitHub sign-in. Ask the member to update that host, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
 } as const satisfies Record<
   Exclude<LocalAgentRefusal, typeof LOCAL_AGENT_REFUSAL.NOT_OWNER>,
@@ -1223,6 +1223,9 @@ export const UPDATE_AGENT_REFUSAL = {
   UNAVAILABLE_ADD:
     "Not added: the service could not be reached just now. The call may be made again.",
   SELF: "Not archived: that id is your own, and an agent does not archive itself; say you are done, and the developer archives you.",
+  STILL_WORKING:
+    "Not archived: that agent is still working. Wait until its turn ends and call again, or stop " +
+    `it with ${AGENT_TOOL.STOP_AGENT} first where it should not go on. Nothing else asked was changed.`,
   NOT_READY:
     "Not archived: that agent's turn is still coming up, so there is no turn to stop yet; call " +
     "again in a moment. Nothing else asked was changed.",
@@ -1345,7 +1348,7 @@ const UPDATE_AGENT_INPUT = Schema.Struct({
       Schema.Boolean,
       "true to archive it, as the developer's Archive agent would: it leaves the sidebar, its " +
         "task's tabs, and every list but the archived ones, takes no message, and is not woken, " +
-        "its transcript, branch, and pull request kept; a turn still running is stopped first, " +
+        "its transcript, branch, and pull request kept; refused while it is still working, " +
         "and never yourself. false to bring an archived one back.",
     ),
   ),
@@ -1385,8 +1388,8 @@ export const UPDATE_AGENT_TOOL = {
     "or bring it back, or add a repository it works in beside its own, alone. Name at least " +
     "one change; an archive is checked first, and the rest land together or not at all. Archive an idle helper agent whose work is done, such as one " +
     "whose pull request merged, or one the developer asked you to clean up, with a short reason " +
-    "its archived banner shows beside your name; a turn still running is stopped first, and " +
-    "no agent archives itself. Change a teammate's agent still in use only where the developer " +
+    "its archived banner shows beside your name; one still working is refused until its turn " +
+    "ends, and no agent archives itself. Change a teammate's agent still in use only where the developer " +
     "asked for it. Answers `accepted` " +
     "with the agent as it then stands, whether archived among " +
     "it, or `rejected` and why; a rejected model or effort lists the choices. Then say which " +
@@ -1750,7 +1753,7 @@ const startedReading = (agent: Agent, offered: readonly OfferedModel[], ownTask:
       modelName: modelLabel(agent.model, offered),
       effort: agent.effort,
       status: standing(agent).status,
-      onYourTask: agent.taskId !== null && agent.taskId === ownTask,
+      onYourTask: agent.taskId === ownTask,
     };
   });
 
@@ -2149,7 +2152,7 @@ const sourceLanding = (
     if (named !== undefined && named !== source.taskId) {
       return Result.fail(START_AGENT_REFUSAL.SOURCE_OTHER_TASK);
     }
-    // An agent with no task is started from in its own workspace, on the repository it cloned, or in none.
+    // A start from an agent lands on the source's own task.
     const place = placeOfAgent(source);
     // A fork names one of the source's own messages, and leaves the source going on beside it.
     if (from.messageId !== undefined) {
@@ -2889,7 +2892,8 @@ const archiveRefusalWords = (refusal: HostedRefusal, agent: Agent) =>
  * caller's member, given another list of servers switched off, or archived
  * or brought back, each by the one operation the app's menu runs
  * (`agent-change.ts`). A choice is checked before anything is written, so
- * one refused changes nothing; an archive goes first, stopping a turn still
+ * one refused changes nothing; an archive goes first, an agent's refused
+ * for one still starting or working and a member's stopping a turn still
  * running as the app's does, so one refused changes nothing either; and
  * every other change asked is written in one transaction, so none stands
  * where another failed.
@@ -2939,6 +2943,21 @@ export function runUpdateAgent(
       // The catalog's own reading of the choice is written, a window the model does not offer apart dropped.
       const choice = accepted === undefined ? undefined : Result.getOrUndefined(accepted);
       let agent = found.value.agent;
+      // Note that an agent archives only an idle agent, because stopping another's work is a member's call.
+      if (archived === true && callerAgent(caller) !== undefined) {
+        const { status } = (yield* standingsOf([agent]))(agent);
+        const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(
+          agent.conversationId,
+        );
+        // A turn whose Stop is on its way reads as canceled, yet is still ending.
+        if (
+          status === AGENT_STATUS.STARTING ||
+          status === AGENT_STATUS.RUNNING ||
+          stopStands(turn)
+        ) {
+          return agentToolRejected(UPDATE_AGENT_REFUSAL.STILL_WORKING);
+        }
+      }
       if (archived !== undefined) {
         const archive = yield* Effect.result(
           archivedAgent(

@@ -38,14 +38,13 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
  */
 const PAGE_CAPABILITY = {
   [SETTINGS_VIEW.ACCOUNT]: null,
+  [SETTINGS_VIEW.PREFERENCES]: null,
   [SETTINGS_VIEW.WORKSPACE]: null,
   [SETTINGS_VIEW.ENVIRONMENT]: null,
-  [SETTINGS_VIEW.CLOUD_SETUP]: null,
   [SETTINGS_VIEW.AGENTS]: null,
   [SETTINGS_VIEW.HOSTS]: null,
   [SETTINGS_VIEW.INTEGRATIONS]: null,
   [SETTINGS_VIEW.MCP]: null,
-  [SETTINGS_VIEW.CLI]: null,
   [SETTINGS_VIEW.SKILLS]: null,
   [SETTINGS_VIEW.MEMORY]: null,
   [SETTINGS_VIEW.APPEARANCE]: null,

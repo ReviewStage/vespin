@@ -36,7 +36,6 @@
 
 import { randomUUID } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
-import { agentOwnerFactsOf } from "@repo/database/models/agent-owners";
 import {
   type Agent,
   type AgentCommitted,
@@ -44,7 +43,6 @@ import {
   hasRepository,
   listAgentLines,
   listWorkspaceAgentLines,
-  markAgentReadCommitted,
   nativeRouteOfReached,
   readVisibleAgentWorkspace,
 } from "@repo/database/models/agent-store";
@@ -52,6 +50,7 @@ import { devicesNamed } from "@repo/database/models/device-store";
 import { readTaskWorkspace } from "@repo/database/models/task-store";
 import { isWorkspaceMember, readAccountNames } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
+import { PERMISSION_MODE_APPLIES } from "@repo/features/agent-approval-wire";
 import { runtimeChoiceRefusal } from "@repo/features/agent-runtime-models";
 import {
   AGENT_ARCHIVER,
@@ -91,7 +90,7 @@ import {
   rewoundAgentById,
   warmedAgent,
 } from "./agent-lifecycle.js";
-import { reachedAgentById } from "./agent-reach.js";
+import { controlsAgent, reachedAgentById } from "./agent-reach.js";
 import {
   askedPullRequest,
   githubReadRefusal,
@@ -100,6 +99,8 @@ import {
 } from "./asked-pull-request.js";
 import { queueAtTouch } from "./coder-host/agent-queue.js";
 import { addAgentRepository } from "./coder-host/agent-repository-add.js";
+import { answeredApproval } from "./coder-host/approval-answer.js";
+import { harnessTakesMode } from "./coder-host/permission-mode.js";
 import {
   agentPullRequestReach,
   instancePublishedCache,
@@ -165,19 +166,10 @@ const listedSummaries = /* @__PURE__ */ Effect.fnUntraced(function* (
     agents.map((agent) => agent.id),
   );
   const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices(agents)));
-  const owners = yield* hostedStoreOrUnavailable(agentOwnerFactsOf(agents));
   const now = yield* Clock.currentTimeMillis;
   return {
     agents: agents.map((agent) =>
-      agentSummary(
-        agent,
-        standing(agent.conversationId),
-        now,
-        names,
-        owners,
-        continuedBy(agent.id),
-        macs,
-      ),
+      agentSummary(agent, standing(agent.conversationId), now, names, continuedBy(agent.id), macs),
     ),
   };
 });
@@ -423,7 +415,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       );
       return startAnswer(started);
     }),
-    /** The agent as its own page, an agent with no task as much as one on a task. */
+    /** The agent as its own page. */
     read: signedIn.read.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
       // An open of the agent hands on, past its answer, the queue a hand-off cut off left claimed, once
@@ -437,7 +429,6 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       const names = yield* hostedStoreOrUnavailable(readAccountNames(pageAccounts(agent)));
       const continuedBy = yield* continuedByOf(userId, [agent.id]);
       const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices([agent])));
-      const owners = yield* hostedStoreOrUnavailable(agentOwnerFactsOf([agent]));
       const now = yield* Clock.currentTimeMillis;
       return {
         agent: agentPage(
@@ -445,7 +436,6 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
           standing(agent.conversationId),
           now,
           names,
-          owners,
           continuedBy(agent.id),
           macs,
         ),
@@ -457,7 +447,8 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
      * tab falls back to the model's name. `archived` archives the agent,
      * stopping a turn still running first as a Stop does, or brings it back.
      * `pinned` pins it for the asking member alone, or unpins it.
-     * `readMark` moves the asking member's own read mark of it.
+     * `readMark`, which a released desktop still sends, changes nothing,
+     * since an agent is read through its task's mark alone.
      * `disabledServers` replaces the list of MCP servers switched off for
      * it, which its next turn reads as it starts. `addRepository` adds a
      * repository beside the ones it works in, checked out and told to it
@@ -468,7 +459,9 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
      * account's default is untouched. An agent on a provider's own harness
      * takes only what its runtime runs (`agent-runtime-models.ts`), refused
      * as invalid otherwise, and a runner of it that runs is handed the change
-     * as a `model` line at once (`runnerChoiceApplied`).
+     * as a `model` line at once (`runnerChoiceApplied`). A permission mode,
+     * set only by a member who controls the agent and one that asks only on
+     * Claude Code, reaches it from its next turn, which the answer says.
      */
     change: signedIn.change.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.params.id);
@@ -497,18 +490,29 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
           yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { pinned, position })),
         );
       }
-      if ("readMark" in body) {
-        return yield* committedAgent(
-          userId,
-          yield* hostedStoreOrUnavailable(markAgentReadCommitted(userId, agent.id, body.readMark)),
-        );
-      }
+      if ("readMark" in body) return { agent: yield* summaryOf(userId, agent) };
       if ("disabledServers" in body) {
         const { disabledServers } = body;
         return yield* committedAgent(
           userId,
           yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { disabledServers })),
         );
+      }
+      if ("permissionMode" in body) {
+        const { permissionMode } = body;
+        // Only who steers the agent sets how its calls are asked, and only Claude Code asks.
+        if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+        const route = Option.getOrUndefined(
+          yield* hostedStoreOrUnavailable(nativeRouteOfReached(agent.conversationId)),
+        );
+        if (!harnessTakesMode(route?.runtime, permissionMode)) {
+          return yield* Effect.fail(HOSTED_REFUSAL.PERMISSION_MODE_REFUSED);
+        }
+        const changed = yield* committedAgent(
+          userId,
+          yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { permissionMode })),
+        );
+        return { ...changed, permissionModeApplies: PERMISSION_MODE_APPLIES.NEXT_TURN };
       }
       if ("addRepository" in body) {
         // The member adds it as `update_agent` does, and the agent hears it in its conversation.
@@ -532,6 +536,11 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /** The agent deleted for good (`agent-lifecycle.ts`), stopped for good first, by any member who reaches it. */
     delete: signedIn.delete.effect(function* ({ input, context }) {
       return yield* deletedAgent(writer, context.userId, input.id);
+    }),
+    /** One ask the agent's runner holds answered by a member who controls it, written to the runner and settled (`approval-answer.ts`). */
+    answerApproval: signedIn.answerApproval.effect(function* ({ input, context }) {
+      const { userId, agent } = yield* reachedAgentById(context.userId, input.params.id);
+      return yield* answeredApproval(userId, agent, input.params.approval, input.body);
     }),
     /** The agent stopped: the harness's cancel of the turn under way, then the row's stamp; an agent with no turn running is answered as it stands. */
     stop: signedIn.stop.effect(function* ({ input, context }) {

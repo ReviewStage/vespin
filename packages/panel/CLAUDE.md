@@ -74,7 +74,8 @@ Undo on a toast only the undo stack builds (`undo-stack.ts`), whose Undo runs th
 entry, as ⌘Z does; `TOAST_ONLY_UNDO` declares the writes whose Undo is the toast's alone. Three acts
 are the exceptions and act on the press: merging a pull request from its merge control
 and submitting a review, as GitHub-style review tools do, and Stop on an agent's turn,
-whose work so far stands; removing a pull request from a merge queue still asks. In the
+whose work so far stands; removing a pull request from a merge queue still asks, and so
+does Bypass rules and merge…, a merge past its base's rules, its act in red. In the
 desktop window it asks through `<ConfirmDialog>`, a modal over the window held by
 `useConfirmDialog`: title, what goes, Cancel focused and the act last.
 Settings asks the same way, from a row's button or its ⋯ menu. A question does not

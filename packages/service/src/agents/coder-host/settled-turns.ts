@@ -1,18 +1,19 @@
 /**
- * settled-turns.ts -- what hears of each coding agent turn the store writer settles, wherever it was settled: the deployment's count of it, the report to the agent's starter, the turn on Slack, an automation run's result or a reply in its agent's thread, the push of a failed one to its member's phone, the archive of a finished automation run, and the agent's queue handed on.
+ * settled-turns.ts -- what hears of each coding agent turn the store writer settles, wherever it was settled: the deployment's count of it, the report to the agent's starter, the turn on Slack, an automation run's result or a reply in its agent's thread, the push of a failed one to its member's phone, their Live Activity, the archive of a finished automation run, and the agent's queue handed on.
  *
  * The writer tells its `SettledTurnListener` once the settle's transaction
  * is done (`@repo/database/models/writer`), whichever path settled the turn:
  * the relay's or a runner's own end, a Stop, a lost session's, or the
  * sweep's abandon. This is the one listener the deployment provides
- * (`../../runtime.ts`), and it does six things with each turn: counts it
+ * (`../../runtime.ts`), and it does seven things with each turn: counts it
  * (`../../events/server-events.ts`), hands its final message to the agent
  * that started it, where one did (`starter-report.ts`), and posts it on
  * Slack, as a DM of an automation run's result to its owner where the run's
  * automation asks for it, or else in the agent's current Slack thread,
  * where one speaks for it (`../../slack/slack-agent-starts.ts`), pushes a
  * failed one to the phones of the member who started the agent
- * (`../../push/inbox-pushes.ts`), and archives the automation run the agent belongs to where its last agent
+ * (`../../push/inbox-pushes.ts`), refreshes that member's Live Activity,
+ * which ends once none of their agents runs (`../../push/live-activities.ts`), and archives the automation run the agent belongs to where its last agent
  * finished well (`../../automations/run-archive.ts`), and hands on the
  * agent's queue, or pauses it where the turn failed (`agent-queue.ts`), so a
  * queue goes on however its turn ended. Each runs
@@ -41,6 +42,7 @@ import type { GitHubApp } from "../../github/github-app.js";
 import { afterResponse } from "../../http/after-response.js";
 import { ApnsSender } from "../../push/apns.js";
 import { pushFailedTurn } from "../../push/inbox-pushes.js";
+import { LIVE_ACTIVITY_CAUSE, refreshLiveActivity } from "../../push/live-activities.js";
 import { postTurnToSlack } from "../../slack/slack-agent-starts.js";
 import type { SlackBot } from "../../slack/slack-bot.js";
 import { queueAfterSettle } from "./agent-queue.js";
@@ -48,7 +50,7 @@ import { routedSessions } from "./runtime-sessions.js";
 import { reportToStarter } from "./starter-report.js";
 
 /** The work run on the pool rather than on a transaction the settle ran inside, which has ended by the time the answer has left. */
-const outsideTransaction = <A, E>(
+export const outsideTransaction = <A, E>(
   work: Effect.Effect<A, E, DatabaseServices>,
 ): Effect.Effect<A, E, DatabaseServices> =>
   Effect.flatMap(SqlClient.SqlClient, (client) =>
@@ -100,6 +102,19 @@ export const settledTurnListener: Layer.Layer<
             ),
         }),
       );
+    const refreshed = (turn: SettledAgentTurn) =>
+      afterResponse(
+        "a settled turn's live activity",
+        Option.match(apns, {
+          onNone: () => Effect.void,
+          onSome: (sender) =>
+            outsideTransaction(
+              refreshLiveActivity(turn.userId, LIVE_ACTIVITY_CAUSE.ROUTINE).pipe(
+                Effect.provideService(ApnsSender, sender),
+              ),
+            ),
+        }),
+      );
     const archived = (turn: SettledAgentTurn) =>
       afterResponse(
         "a finished automation run's archive",
@@ -118,6 +133,7 @@ export const settledTurnListener: Layer.Layer<
             reported(turn),
             posted(turn),
             pushed(turn),
+            refreshed(turn),
             archived(turn),
             handedOn(turn),
           ],

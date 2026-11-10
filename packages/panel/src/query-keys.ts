@@ -26,9 +26,9 @@ export const QUERY_ROOT = {
   /** The admin screens' reads and writes (`admin/admin-queries.ts`), each next keyed by its procedure. */
   ADMIN: "admin",
   HOST_PAIRING: "host-pairing",
-  /** Settings › Environment: a workspace's variables by name (`settings/environment-page.tsx`). */
+  /** Settings › Cloud environment's Variables: a workspace's variables by name (`settings/environment-variables-section.tsx`). */
   WORKSPACE_ENVIRONMENT: "workspace-environment",
-  /** Settings › Cloud setup: a workspace's install script and each repository's setup script (`settings/cloud-setup-page.tsx`). */
+  /** Settings › Cloud environment's scripts: a workspace's install script and each repository's setup and archive scripts (`settings/cloud-setup-sections.tsx`). */
   WORKSPACE_SANDBOX_SETUP: "workspace-sandbox-setup",
   INSTALLED_SKILL: "installed-skill",
   INSTALLED_SKILL_PREVIEW: "installed-skill-preview",
@@ -38,6 +38,8 @@ export const QUERY_ROOT = {
   AGENT_PART: "agent-part",
   /** The window's one app-state document (`use-app-state.ts`'s `appStateQuery`), read by no id. */
   APP_STATE: "appState",
+  /** A web page's preview for the card a plain link hangs, by the link's address (`tasks/link-preview-card.tsx`). */
+  LINK_PREVIEW: "link-preview",
   TASK_FILE: "task-file",
   TASK_TREE: "task-tree",
   PAGE_SOURCE: "page-source",

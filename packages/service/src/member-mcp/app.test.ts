@@ -649,6 +649,10 @@ it.effect(
           ],
           [MEMBER_MCP_TOOL.REPLY_TO_THREAD, { threadId: rows.strangerItem, text: "Approve it." }],
           [
+            MEMBER_MCP_TOOL.ACKNOWLEDGE_THREAD,
+            { threadId: rows.strangerItem, revision: strangerAsk.revision },
+          ],
+          [
             MEMBER_MCP_TOOL.CLOSE_THREAD,
             { threadId: rows.strangerItem, revision: strangerAsk.revision },
           ],
@@ -1449,6 +1453,51 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
   );
 
   it.effect(
+    "an outside agent acknowledges a notice the member saw, and is refused one that holds an ask, which only an answer settles",
+    () =>
+      Effect.gen(function* () {
+        const { owner, task, ask, mcpFetch } = yield* openTask({});
+        const { agent } = yield* startedAgent(owner, task.id, ask);
+        const where = { userId: owner, taskId: task.id, agentId: agent.id };
+        const notice = yield* postInboxThread(where, {
+          key: "deploy-done",
+          title: "Deployed to staging",
+          body: "Staging runs the new build.",
+        });
+        const asking = yield* postInboxThread(where, {
+          key: "invite-expiry",
+          title: "How long should an invitation stand?",
+          body: "An invitation nobody accepts expires after this.",
+          ask: { type: INBOX_ASK.DECIDE, options: [{ label: "7 days" }, { label: "30 days" }] },
+        });
+        assert.ok(Result.isSuccess(notice) && Result.isSuccess(asking));
+        const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+        const call = (name: string, args: Record<string, unknown>) =>
+          Effect.promise(async () =>
+            decodeAnswer(await client.callTool({ name, arguments: args })),
+          );
+
+        const nodded = yield* call(MEMBER_MCP_TOOL.ACKNOWLEDGE_THREAD, {
+          threadId: notice.success.id,
+          revision: notice.success.revision,
+        });
+        const refused = yield* call(MEMBER_MCP_TOOL.ACKNOWLEDGE_THREAD, {
+          threadId: asking.success.id,
+          revision: asking.success.revision,
+        });
+        yield* Effect.promise(() => client.close());
+
+        assert.notEqual(nodded.isError, true, nodded.content[0].text);
+        assert.equal(
+          decodeWritten(JSON.parse(nodded.content[0].text)).thread.status,
+          INBOX_STATUS.ANSWERED,
+        );
+        assert.equal(refused.isError, true);
+        assert.ok(refused.content[0].text.includes(MEMBER_MCP_TOOL.ANSWER_ASK));
+      }),
+  );
+
+  it.effect(
     "an outside agent rewinds the member's agent to just before a line by the lineId read_agent names, dropping it, then deletes the agent for good",
     () =>
       Effect.gen(function* () {
@@ -1843,6 +1892,77 @@ it.effect(
       });
       assert.notEqual(photo.isError, true, photo.content[0].text);
       assert.equal(typeof JSON.parse(photo.content[0].text).workspace.photoVersion, "string");
+    }),
+);
+
+it.effect(
+  "an admin acting through the server invites on the deployment's own origin and cancels, but gives no role, which the owner gives before removing them",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch, services } = yield* standing;
+      const owner = yield* Effect.promise(() => signUp(auth));
+      const admin = yield* Effect.promise(() => signUp(auth));
+      yield* Effect.gen(function* () {
+        const workspaceId = yield* openWorkspace(owner.userId);
+        yield* joinWorkspace(workspaceId, admin.userId, WORKSPACE_ROLE.ADMIN);
+      }).pipe(Effect.provide(services));
+      const callAs = (cookie: string, name: string, args: Record<string, unknown>) =>
+        Effect.gen(function* () {
+          const token = yield* Effect.promise(() =>
+            mintedToken(auth, cookie, {
+              clientId: MCP_CLIENT.id,
+              scope: [MEMBER_MCP_SCOPE.MCP],
+              resource: RESOURCE,
+            }),
+          );
+          const { client } = yield* connected(fetch, token, REVISION.MODERN);
+          const answer = decodeAnswer(
+            yield* Effect.promise(() => client.callTool({ name, arguments: args })),
+          );
+          yield* Effect.promise(() => client.close());
+          return answer;
+        });
+      const rolesOf = (text: string) =>
+        JSON.parse(text).members.map(({ userId, role }: { userId: string; role: string }) => [
+          userId,
+          role,
+        ]);
+
+      const invited = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.INVITE_TO_WORKSPACE, {
+        email: "Newcomer@Example.com",
+        role: WORKSPACE_ROLE.MEMBER,
+      });
+      const invitation = JSON.parse(invited.content[0].text).invitation;
+      const listed = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.LIST_WORKSPACE_INVITATIONS, {});
+      const canceled = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.CANCEL_WORKSPACE_INVITATION, {
+        invitationId: invitation.id,
+      });
+      const unranked = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.CHANGE_WORKSPACE_MEMBER_ROLE, {
+        userId: owner.userId,
+        role: WORKSPACE_ROLE.MEMBER,
+      });
+      const demoted = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.CHANGE_WORKSPACE_MEMBER_ROLE, {
+        userId: admin.userId,
+        role: WORKSPACE_ROLE.MEMBER,
+      });
+      const removed = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.REMOVE_WORKSPACE_MEMBER, {
+        userId: admin.userId,
+      });
+
+      assert.notEqual(invited.isError, true, invited.content[0].text);
+      assert.equal(invitation.email, "newcomer@example.com");
+      assert.ok(invitation.acceptUrl.startsWith(`${MEMBER_MCP_TEST.ORIGIN}/`));
+      assert.deepEqual(
+        JSON.parse(listed.content[0].text).invitations.map(({ id }: { id: string }) => id),
+        [invitation.id],
+      );
+      assert.deepEqual(JSON.parse(canceled.content[0].text).invitations, []);
+      assert.equal(unranked.isError, true);
+      assert.deepEqual(rolesOf(demoted.content[0].text), [
+        [owner.userId, WORKSPACE_ROLE.OWNER],
+        [admin.userId, WORKSPACE_ROLE.MEMBER],
+      ]);
+      assert.deepEqual(rolesOf(removed.content[0].text), [[owner.userId, WORKSPACE_ROLE.OWNER]]);
     }),
 );
 
