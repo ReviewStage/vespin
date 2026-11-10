@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import assert from "node:assert/strict";
 import { resolveObjectURL } from "node:buffer";
+import { getOpenAPIMeta } from "@orpc/openapi";
 import { hostedContract } from "@repo/features/contract";
 import { LINK_PLATFORM } from "@repo/features/link-open";
-import { getOpenAPIMeta } from "@orpc/openapi";
 import { afterEach, test, vi } from "vitest";
 import { downloadText, webPlatform } from "../src/app/web-platform";
 

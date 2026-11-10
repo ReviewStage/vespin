@@ -158,6 +158,8 @@ export interface SteerLine {
   readonly metadata?: AwaitingLineMetadata | undefined;
   /** The words the servers handed to the next turn are read from where they are not all of `text`: an automation's own prompt, never a webhook body or a GitHub event's words beside it; `text` otherwise. */
   readonly serverWords?: string | undefined;
+  /** The words what the line mentions is read from where they are not all of `text`: a Start's own prompt, never a source agent's replay beside it, and none at all for a Start handed only the description; `text` otherwise. */
+  readonly mentionWords?: string | undefined;
 }
 
 /** Another coding agent as the row of a line it sends keeps it: by its name, id, and model. */
@@ -418,6 +420,7 @@ const heldWhileBooting = Effect.fnUntraced(function* (
         sender: line.sender,
         ...(line.metadata === undefined ? undefined : { metadata: line.metadata }),
         ...(line.serverWords === undefined ? undefined : { serverWords: line.serverWords }),
+        ...(line.mentionWords === undefined ? undefined : { mentionWords: line.mentionWords }),
       },
     }),
   );
@@ -506,14 +509,17 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   // and another agent's message links its sender to name who said it, so only what else it mentions is noted.
   const reviewers = line.sender.kind === MESSAGE_SENDER.GITHUB;
   const pointed =
-    line.metadata?.channel === MESSAGE_CHANNEL.AGENT_MESSAGE
+    line.mentionWords ??
+    (line.metadata?.channel === MESSAGE_CHANNEL.AGENT_MESSAGE
       ? withoutMemberLinks(line.text)
-      : line.text;
-  // GitHub is asked beside the mentions' read, each judged in turn as above.
+      : line.text);
+  // GitHub is asked beside the mentions' read, each judged in turn as above. Note that a Start's own first line is
+  // never asked of GitHub again as its queue hands it on, since its Start reached the repository as it made the agent.
+  const started = line.metadata?.channel === MESSAGE_CHANNEL.START;
   const reached = yield* Effect.all(
     {
       repository: Effect.result(
-        agent.repository === null
+        agent.repository === null || started
           ? Effect.void
           : workspaceRepository(
               workspace.value,

@@ -1,9 +1,9 @@
 import { readdir, readFile } from "node:fs/promises";
 import { extname, join, posix, relative, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import { hostedContract } from "@repo/features/contract";
 import { getOpenAPIMeta } from "@orpc/openapi";
 import { walkProcedureContractsSync } from "@orpc/server";
+import { hostedContract } from "@repo/features/contract";
 import { Predicate, Schema } from "effect";
 import ts from "typescript";
 import { functionAliasPath, HAND_WRITTEN_FUNCTIONS } from "./build-output.js";

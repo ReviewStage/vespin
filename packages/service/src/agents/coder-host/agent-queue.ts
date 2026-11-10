@@ -51,7 +51,7 @@ import { bootHolds } from "@repo/features/agent-boot";
 import { type AgentQueue, QUEUE_PAUSE, type QueuePause } from "@repo/features/agent-queue-wire";
 import { AGENT_MACHINE, AGENT_STATUS } from "@repo/features/agent-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { TURN_STATUS } from "@repo/wire";
+import { MESSAGE_CHANNEL, TURN_STATUS } from "@repo/wire";
 import { Clock, DateTime, Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { recordServerEvent, SERVER_EVENT } from "../../events/server-events.js";
@@ -194,6 +194,9 @@ export const sendQueued = Effect.fn("web/sendQueued")(function* (
       ...(message.line?.serverWords === undefined
         ? undefined
         : { serverWords: message.line.serverWords }),
+      ...(message.line?.mentionWords === undefined
+        ? undefined
+        : { mentionWords: message.line.mentionWords }),
     },
     STEER_DELIVERY.NOW,
   );
@@ -202,7 +205,11 @@ export const sendQueued = Effect.fn("web/sendQueued")(function* (
       Effect.logWarning("agent-queue: a first launch's hand-off did not end", cause),
     ),
   );
-  const members = message.line === undefined || message.line.sender.kind === MESSAGE_SENDER.MEMBER;
+  // Note that only a member's own message counts as one sent, never a Start's first, which its Start counted.
+  const members =
+    message.line === undefined ||
+    (message.line.sender.kind === MESSAGE_SENDER.MEMBER &&
+      message.line.metadata?.channel !== MESSAGE_CHANNEL.START);
   if (sent !== undefined && members) {
     yield* recordServerEvent(
       SERVER_EVENT.MESSAGE_SEND,

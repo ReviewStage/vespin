@@ -29,6 +29,7 @@ import {
 } from "../agents/sessions/agent-sessions.js";
 import { connectAgentApiKeys } from "../testing/agent-credentials.js";
 import { githubReaching } from "../testing/github-app-fake.js";
+import { bootedAtOnce } from "../testing/native-harness-fake.js";
 import { sweepAgentWakeups, WAKEUP_SWEEP } from "./wakeup-sweep.js";
 
 /**
@@ -51,6 +52,7 @@ const RETRY_MS = Duration.toMillis(WAKEUP_SWEEP.RETRY);
 function fakeAgentSessions(refusing = false) {
   const sent: { readonly sessionId: string; readonly message: SessionMessage }[] = [];
   const sessions: AgentSessions = {
+    boot: bootedAtOnce,
     open: () =>
       Effect.succeed({
         outcome: SESSION_SEND_OUTCOME.ACCEPTED,

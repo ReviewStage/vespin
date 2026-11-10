@@ -91,6 +91,7 @@ import {
   validateModelChoice,
 } from "../../providers/model-catalog.js";
 import { mentionedServers } from "../mentioned-context.js";
+import { readMentioned } from "../mentioned-reads.js";
 import {
   type AgentSessions,
   RUNTIME_REFUSAL,
@@ -873,12 +874,26 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
   const brief = landing.place;
   // The words a mention is read from: the prompt with any note after it, or a description start's note
   // alone; never the replay of another agent, whose words name what it read, not what to hand on.
-  const { serverWords } = rules.mentionWords(brief.prompt);
+  const { words, serverWords } = rules.mentionWords(brief.prompt);
   // The files of the source's brief that fit, then those the note carries; a fresh start's are its own,
   // a prompt's or, on the description, the note's, such as the pictures `start_agent` hands on.
   const { attachments } = rules;
-  // Note that what the first message mentions is read as the agent's queue hands it on, as any line's is (`steer.ts`).
-  const [reached, branch] = yield* bothInOrder(reach, branchOf);
+  // What the words mention of the plan's pages and agents is read before the agent is made, so a read
+  // that fails leaves no agent its retry would find; the first message reads it again as its queue hands
+  // it on, as any line's is (`steer.ts`).
+  const mentions =
+    words === undefined
+      ? Effect.void
+      : Effect.asVoid(
+          hostedStoreOrUnavailable(
+            readMentioned(userId, words, {
+              task: landing.task,
+              workspaceId: landing.workspaceId,
+            }),
+          ),
+        );
+  // GitHub's answers and the store's reads of the mentions wait on none of each other, so they are asked together.
+  const [[reached, branch]] = yield* bothInOrder(bothInOrder(reach, branchOf), mentions);
   // Where it runs, the runtime, and the payer are decided as the agent is made, by the place it names or else its source or its starter's default, and its model, and never change.
   const where = yield* machineOfStart(userId, ask, rules.source, landing.task);
   // A start from another agent works in the repositories its source worked in beside its own, unless it names others.
@@ -944,8 +959,19 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
       // The first message waits in the agent's queue while its machine boots, as it was sent, and goes
       // once the machine is up (`boot.ts`), so it says what it is and who sent it there; the runtime says
       // why a boot it refused was refused.
+      const sessions = yield* agentSessions.pipe(
+        Effect.tapError((refusal) =>
+          discardedAt(
+            userId,
+            agent,
+            `the agent's runtime could not be reached to start a coding agent: ${refusal.error}`,
+            refusal.error,
+            { failure: SERVER_AGENT_START_FAILURE.UNREACHABLE, startedBy: starterOf(ask) },
+          ),
+        ),
+      );
       asked = true;
-      return yield* startBoot(agent, {
+      return yield* startBoot(sessions, agent, {
         id: randomUUID(),
         sendKey: randomUUID(),
         text: handed,
@@ -953,6 +979,8 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
         line: {
           ...openingOf(agent, ask, brief, rules.startLine),
           ...(serverWords === undefined ? undefined : { serverWords }),
+          // Note that a Start's mentions are read from its own words alone, none for the description, as the Start reads them.
+          mentionWords: words ?? "",
         },
       }).pipe(
         Effect.tapError((refusal) =>

@@ -23,10 +23,11 @@ test("the route key picks the member and the request is restored to the route's 
   const task = recording();
   const dispatcher = dispatchRoutes(new Map([["plans/plan", task.route]]));
   const response = await dispatcher.fetch(
-    new Request(
-      `https://app.test/api/default.js?${DISPATCH_QUERY.ROUTE}=plans/plan&id=t1&wait=1`,
-      { method: "POST", body: "hello", headers: { "content-type": "text/plain" } },
-    ),
+    new Request(`https://app.test/api/default.js?${DISPATCH_QUERY.ROUTE}=plans/plan&id=t1&wait=1`, {
+      method: "POST",
+      body: "hello",
+      headers: { "content-type": "text/plain" },
+    }),
   );
   assert.equal(response.status, 200);
   assert.equal(await response.text(), "hello");
