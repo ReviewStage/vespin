@@ -60,6 +60,7 @@ import {
   settleLapsedTurns,
   settleRunnerLostTurns,
 } from "@repo/database/models/abandoned-turns";
+import { failAgentBoot, lapsedAgentBoots } from "@repo/database/models/agent-boot-store";
 import {
   type Agent,
   recordAgentRunnerToken,
@@ -81,6 +82,7 @@ import {
   runningTurnSandboxes,
 } from "@repo/database/models/turn-state";
 import { storeWriter } from "@repo/database/models/writer";
+import { BOOT_FAILURE } from "@repo/features/agent-boot";
 import { AGENT_MACHINE, DEVICE_LEASE } from "@repo/features/agent-wire";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { causeKind } from "@repo/runtime/effect";
@@ -543,9 +545,38 @@ export const reconciledBeforeWrite = (agent: ReconciledAgent) =>
  * how many turns were settled, and fails, once all have run, where any
  * agent's reap failed, so the sweep's monitor sees it.
  */
+/**
+ * The agents' first launches past their deadline with no word from their
+ * machines, a sweep's worth, each failed as one that never answered, its
+ * queue paused with its messages kept for Retry (`failAgentBoot`), as a
+ * queued turn past its pickup deadline is failed; answers how many it
+ * failed. A boot its machine moved on meanwhile is left as it stands, since
+ * each fail names the attempt it read.
+ */
+const reapLapsedBoots = (now: Date) =>
+  Effect.gen(function* () {
+    const boots = yield* lapsedAgentBoots(now, RECONCILE_SWEEP.AGENTS);
+    let failed = 0;
+    for (const boot of boots) {
+      if (yield* failAgentBoot(boot.agentId, BOOT_FAILURE.NO_RESPONSE, now, boot.attempt)) {
+        failed += 1;
+        yield* Effect.logWarning("an agent's first launch was failed past its deadline").pipe(
+          Effect.annotateLogs({ agentId: boot.agentId, phase: boot.phase }),
+        );
+      }
+    }
+    return failed;
+  });
+
 export const reconcileAgents = /* @__PURE__ */ Effect.fn("web/reconcileAgents")(function* (
   now: number,
 ) {
+  // Note that a boot past its deadline is failed beside the turns, since it is the turn a first launch has not yet queued.
+  const boots = yield* reapLapsedBoots(new Date(now)).pipe(
+    Effect.catchCause((cause) =>
+      Effect.as(Effect.logError(`lapsed first launches were not failed: ${causeKind(cause)}`), 0),
+    ),
+  );
   const agents = yield* lapsedAgents(new Date(now), RECONCILE_SWEEP.AGENTS);
   const exits = yield* Effect.forEach(agents, (agent) => Effect.exit(reconcileAgent(agent)), {
     concurrency: RECONCILE_SWEEP.CONCURRENCY,
@@ -563,8 +594,8 @@ export const reconcileAgents = /* @__PURE__ */ Effect.fn("web/reconcileAgents")(
       `an agent's lapsed turns were not reaped: ${causeKind(exit.cause)}`,
     ).pipe(Effect.annotateLogs(agent === undefined ? {} : agentLogIds(agent)));
   }
-  if (failures > 0) return yield* new ReapsFailed({ failures, settled });
-  return settled;
+  if (failures > 0) return yield* new ReapsFailed({ failures, settled: settled + boots });
+  return settled + boots;
 });
 
 /**

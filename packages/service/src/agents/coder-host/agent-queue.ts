@@ -27,7 +27,11 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import { agentBootHandedOff, agentBootOf } from "@repo/database/models/agent-boot-store";
+import {
+  agentBootHandedOff,
+  agentBootOf,
+  endAgentBoot,
+} from "@repo/database/models/agent-boot-store";
 import {
   type AgentQueueRead,
   agentQueueNow,
@@ -311,6 +315,12 @@ export const queueAtTurnEnd = Effect.fn("web/queueAtTurnEnd")(function* (
   sessionsFor: QueueSessions,
   agent: Agent,
 ) {
+  // A first launch whose first message went is over once its turn ends, so a later cold start reads as it always has.
+  yield* endAgentBoot(agent.id).pipe(
+    Effect.catchCause((cause) =>
+      Effect.logWarning("agent-queue: a first launch's boot was not ended", cause),
+    ),
+  );
   const turns = yield* latestTurnsOfReached([agent.conversationId]).pipe(
     Effect.catchCause((cause) =>
       Effect.as(Effect.logWarning("agent-queue: a turn read failed", cause), undefined),

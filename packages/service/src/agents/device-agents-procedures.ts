@@ -58,6 +58,7 @@
  */
 
 import { isIP } from "node:net";
+import { readAgent } from "@repo/database/models/agent-store";
 import {
   answerDeviceAgentRequest,
   claimDeviceAgentRequest,
@@ -73,7 +74,7 @@ import {
   pollHostPairing,
 } from "@repo/database/models/host-pairing-store";
 import { enrollOwnDevice, hostsOf, registerHost } from "@repo/database/models/host-store";
-import type { DeviceAgentRelease } from "@repo/features/device-agent-wire";
+import { DEVICE_LAUNCH_STEP, type DeviceAgentRelease } from "@repo/features/device-agent-wire";
 import { HOST_RELEASE } from "@repo/features/host-release";
 import {
   HOST_PAIRING_POLL_STATUS,
@@ -92,6 +93,7 @@ import {
   presentedHostVersion,
 } from "../auth/device-secret.js";
 import { recordServerEvent, SERVER_EVENT, SERVER_HOST_KIND } from "../events/server-events.js";
+import { afterResponse } from "../http/after-response.js";
 import {
   HOSTED_REFUSAL,
   hostedStoreOrUnavailable,
@@ -108,6 +110,7 @@ import {
   pollSecretMiddleware,
 } from "../orpc/base.js";
 import { queueAtTouch } from "./coder-host/agent-queue.js";
+import { bootBecameReady } from "./coder-host/boot.js";
 import { hostWriteCarriedOn } from "./coder-host/carry-on.js";
 import { routedSessions } from "./coder-host/runtime-sessions.js";
 import {
@@ -355,11 +358,20 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
       // Note that the step is traced on the request's span, since the working line never words it: a launch's breakdown is read off these spans.
       yield* Effect.annotateCurrentSpan("launchStep", input.step);
       yield* followed(context, input.deviceId);
-      return yield* keptOrNotFound(
-        yield* hostedStoreOrUnavailable(
-          stepDeviceAgentLaunch(context.userId, input.deviceId, input.id, input.step),
-        ),
+      const stepped = yield* hostedStoreOrUnavailable(
+        stepDeviceAgentLaunch(context.userId, input.deviceId, input.id, input.step),
       );
+      // A launch starting its runner is the Mac's machine up for the agent's first launch, which hands its queue on:
+      // the lines go on the runner's stdin behind its launch, so the first message reaches it once it runs.
+      if (Option.isSome(stepped) && input.step === DEVICE_LAUNCH_STEP.STARTING) {
+        yield* afterResponse(
+          "a Mac's first launch up",
+          Effect.flatMap(readAgent(context.userId, stepped.value), (agent) =>
+            Option.isSome(agent) ? bootBecameReady(agent.value) : Effect.void,
+          ),
+        );
+      }
+      return yield* keptOrNotFound(Option.isSome(stepped));
     }),
     settleLine: deviceAgents.settleLine.effect(function* ({ context, input }) {
       yield* followed(context, input.deviceId);
