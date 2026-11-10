@@ -1,7 +1,8 @@
-// transcript-look.ts -- the SF Symbol each kind of call leads its line with, the closest to the panel's lucide glyph for the same kind (`transcript-blocks.tsx`'s `CALL_ICON`).
+// transcript-look.ts -- the glyph each kind of call leads its line with: the SF Symbol closest to the panel's Lucide glyph for the same kind (`transcript-blocks.tsx`'s `CALL_ICON`), or Lucide's own for a mark of ours SF Symbols has no drawing of.
 
 import { CALL_KIND, type CallKind } from "@repo/features/turn-rows";
-import type { SfSymbol } from "./sf-symbol.js";
+import type { Glyph } from "./glyph.js";
+import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 
 /** The glyph each kind of call leads its line with. */
 export const CALL_SYMBOL = {
@@ -55,7 +56,7 @@ export const CALL_SYMBOL = {
   [CALL_KIND.SHOW_PAGE]: "macwindow",
   [CALL_KIND.READ_PAGE]: "macwindow",
   [CALL_KIND.SHOW_IMAGE]: "photo",
-  [CALL_KIND.OPEN_PULL_REQUEST]: "arrow.triangle.pull",
+  [CALL_KIND.OPEN_PULL_REQUEST]: LUCIDE_SYMBOL.GIT_PULL_REQUEST,
   [CALL_KIND.SLEEP]: "timer",
   [CALL_KIND.SCHEDULE_WAKEUP]: "alarm",
   [CALL_KIND.CANCEL_WAKEUP]: "bell.slash",
@@ -72,4 +73,4 @@ export const CALL_SYMBOL = {
   [CALL_KIND.SHARE_PORT]: "link",
   [CALL_KIND.UNSHARE_PORT]: "personalhotspot.slash",
   [CALL_KIND.OTHER]: "wrench.and.screwdriver",
-} as const satisfies Record<CallKind, SfSymbol>;
+} as const satisfies Record<CallKind, Glyph>;
