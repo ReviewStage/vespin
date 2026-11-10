@@ -24,11 +24,11 @@
 
 import type { LiveRead } from "@repo/features/live-wire";
 import {
-  type EntityKind,
   type EntityPool,
   type FieldChange,
   type ROW_GONE,
   type RowCollection,
+  type RowKind,
   rowOf,
   syncedCollection,
 } from "@repo/sync";
@@ -239,7 +239,7 @@ export type RowWrite<Row> = <Answer>(
  */
 export function rowWriteOn<Row extends object>(
   pool: EntityPool,
-  kind: EntityKind<Row, FieldChange<Row>>,
+  kind: RowKind<Row, FieldChange<Row>>,
 ): RowWrite<Row> {
   return (key, change, written) =>
     pool.write(

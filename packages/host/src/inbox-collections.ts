@@ -28,7 +28,7 @@
  */
 
 import { INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
-import type { EntityKind, Refused, Written } from "@repo/sync";
+import type { Refused, RowKind, Written } from "@repo/sync";
 import { Effect, type Scope } from "effect";
 import { confirmWrite, type TxWait } from "./live-follow.js";
 
@@ -127,7 +127,7 @@ export function changedIds(change: InboxChange): readonly string[] {
 }
 
 /** An inbox item as the pool holds it, by its id, every write to it a change the item's reads draw over it. */
-export const INBOX_ITEM: EntityKind<InboxItem, InboxChange> = {
+export const INBOX_ITEM: RowKind<InboxItem, InboxChange> = {
   key: (item) => item.id,
   drawn: (change, item) => (item === undefined ? undefined : changedItem(change, item)),
 };
