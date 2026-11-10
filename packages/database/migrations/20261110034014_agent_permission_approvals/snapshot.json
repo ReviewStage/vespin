@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "dcb061fd-747a-4ab9-8c6c-86e92d9c0acf",
-  "prevIds": ["4f141dbf-6f1a-4b90-a43c-14f97865bf9d", "806b24a3-c355-4f7c-8926-bc498e837214"],
+  "id": "a1b0075d-a0bf-4297-80b5-3da884303c03",
+  "prevIds": ["f7174574-d0d0-4f13-942d-c515b2a0858c"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -12510,6 +12510,19 @@
       "table": "workspace_repository_setup"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'setup'",
+      "generated": null,
+      "identity": null,
+      "name": "kind",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_repository_setup"
+    },
+    {
       "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
@@ -16190,6 +16203,13 @@
           "asc": true,
           "nullsFirst": false,
           "opclass": null
+        },
+        {
+          "value": "kind",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
         }
       ],
       "isUnique": true,
@@ -16197,7 +16217,7 @@
       "with": "",
       "method": "btree",
       "concurrently": false,
-      "name": "workspace_repository_setup_organization_repository",
+      "name": "workspace_repository_setup_organization_repository_kind",
       "entityType": "indexes",
       "schema": "public",
       "table": "workspace_repository_setup"
