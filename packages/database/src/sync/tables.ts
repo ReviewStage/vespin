@@ -152,9 +152,8 @@ export const agentPullRequestSync = defineSyncTable(agentPullRequest, {
  * A tool call an agent's runner held for a member's answer, on its agent's
  * topic and, through its agent, that agent's task's and workspace's, so the
  * task list hears an ask arrive and settle as it hears the agent move. Note
- * that what the ask says is ignored, because it is written once as the ask
- * lands and never changed, and an update comparing it would weigh the
- * call's whole input at its settle.
+ * that what the ask says is watched though it is written once as the ask
+ * lands, because the task list's live read carries it.
  */
 export const agentApprovalSync = defineSyncTable(agentApproval, {
   topics: [
@@ -169,7 +168,6 @@ export const agentApprovalSync = defineSyncTable(agentApproval, {
       ],
     },
   ],
-  ignore: [agentApproval.ask],
   log: LOG.EVERY,
 });
 
