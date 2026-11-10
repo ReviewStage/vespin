@@ -5,7 +5,6 @@
  * (`../coder-host/runtime-sessions.ts` routes each conversation to its own).
  */
 
-import type { BootFailure } from "@repo/features/agent-boot";
 import { failureKind } from "@repo/runtime/effect";
 import type { UserContent } from "ai";
 import { Data, type Effect, Schema as EffectSchema } from "effect";
@@ -197,24 +196,7 @@ export interface SessionMessage<Turn extends SessionTurn = SessionTurn> {
  * client composed for one kind alone would pass for one that sends any
  * kind, and the narrowing would hold nothing.
  */
-/**
- * An agent's machine booted for its first launch: refused at once where the
- * launch could not begin (its plan, its key, its Mac), as an open is;
- * otherwise its session claimed, and `up`, the machine opening and its
- * runner launched with no message, which answers why it failed where it did
- * and nothing once the runner is up.
- */
-export type MachineBoot =
-  | SessionFailed
-  | {
-      readonly outcome: typeof SESSION_SEND_OUTCOME.ACCEPTED;
-      readonly sessionId: string;
-      readonly up: Effect.Effect<BootFailure | undefined>;
-    };
-
 export interface AgentSessions<Turn extends SessionTurn = SessionTurn> {
-  /** Boots the conversation's agent's machine for its first launch, a session claimed for it with no message, whose first line its queue hands on once the machine is up (`coder-host/boot.ts`). */
-  readonly boot: (conversationId: string) => Effect.Effect<MachineBoot, SessionUnreachable>;
   /** Opens a session over the conversation with its first message; the answer names the session, whose first turn is the message's. */
   readonly open: (
     message: SessionMessage<Turn>,

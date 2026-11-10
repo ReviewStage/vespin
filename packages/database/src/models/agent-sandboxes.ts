@@ -234,7 +234,9 @@ const markReleased = SqlSchema.void({
  * apply; null for no session.
  */
 export function sandboxNamedFor(session: SQLWrapper): SQL<string | null> {
-  return sql<string | null>`'agent-sandbox-' || left(encode(sha256(${session}::bytea), 'hex'), 32)`;
+  return sql<
+    string | null
+  >`'agent-sandbox-' || left(encode(sha256(${session}::bytea), 'hex'), 32)`;
 }
 
 /** A boot of the agent's sandbox begun at `at`: its row LIVE, booting since then. */

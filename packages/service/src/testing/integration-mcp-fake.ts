@@ -10,6 +10,8 @@
  * other provider is one this deployment never set up.
  */
 
+import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
+import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import {
@@ -19,8 +21,6 @@ import {
   ListToolsRequestSchema,
   McpError,
 } from "@modelcontextprotocol/sdk/types.js";
-import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
-import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { Effect, Redacted } from "effect";
 import type { ConnectorService } from "../integrations/integration-connect.js";
 import { INTEGRATION } from "../integrations/integrations.js";

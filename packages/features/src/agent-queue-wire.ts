@@ -56,7 +56,7 @@ const queuedMessageSchema = EffectSchema.Struct({
   /**
    * Who a line sent while the agent's machine booted goes as, by the name the
    * transcript would draw it under, where that is not `queuedBy` typing it:
-   * an automation, GitHub, another agent, or the app itself. Absent for a
+   * an automation, GitHub, another agent, or Vespin itself. Absent for a
    * member's own message, and from a service older than it.
    */
   from: EffectSchema.optionalKey(EffectSchema.Struct({ name: EffectSchema.String })),

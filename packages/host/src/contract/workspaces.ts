@@ -4,8 +4,8 @@ import { workspaceSentryAnswerSchema } from "@repo/features/sentry-install-wire"
 import { workspaceSlackBotAnswerSchema } from "@repo/features/slack-bot-wire";
 import {
   tasksWorkspaceCreateParamsSchema,
-  tasksWorkspaceDeleteParamsSchema,
   tasksWorkspaceExperimentSetParamsSchema,
+  tasksWorkspaceDeleteParamsSchema,
   tasksWorkspaceInvitationCancelParamsSchema,
   tasksWorkspaceInviteParamsSchema,
   tasksWorkspaceLeaveParamsSchema,

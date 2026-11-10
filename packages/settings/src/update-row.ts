@@ -1,6 +1,11 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { commitLabel, devBuildDetail } from "./dev-build.js";
-import { type RunningBuild, UPDATE_FAILURE, UPDATE_STATUS, type UpdateSnapshot } from "./update.js";
+import {
+  type RunningBuild,
+  UPDATE_FAILURE,
+  UPDATE_STATUS,
+  type UpdateSnapshot,
+} from "./update.js";
 
 /** The one action the row's button offers in each state. */
 export const UPDATE_ROW_ACTION = {

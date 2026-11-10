@@ -1145,10 +1145,7 @@ function Submenu({
             <OneLine className="ui-menu-item-label min-w-0 flex-initial" words={entry.label}>
               <ItemWords masked={entry.replayMasked}>{entry.label}</ItemWords>
             </OneLine>
-            <OneLine
-              className="ui-menu-item-detail min-w-0 flex-[0_1000_auto]"
-              words={entry.detail}
-            >
+            <OneLine className="ui-menu-item-detail min-w-0 flex-[0_1000_auto]" words={entry.detail}>
               <ItemWords masked={entry.replayMasked === true || entry.detailMasked === true}>
                 {entry.detail}
               </ItemWords>

@@ -33,6 +33,7 @@ import type { INPUT_LINE, InputLine } from "@repo/agent-runner/protocol";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { readAgentHeaderOfConversation, readAgentRouting } from "@repo/database/models/agent-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
+import type { BootFailure } from "@repo/features/agent-boot";
 import {
   AGENT_MACHINE,
   type AgentMachineKind,
@@ -58,6 +59,7 @@ import {
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
+  type SessionFailed,
   type SessionMessage,
   type SessionTurn,
 } from "../sessions/agent-sessions.js";
@@ -117,6 +119,21 @@ export const TURN_HANDOVER = {
 
 export type TurnHandover = (typeof TURN_HANDOVER)[keyof typeof TURN_HANDOVER];
 
+/**
+ * An agent's machine booted for its first launch: refused at once where the
+ * launch could not begin (its plan, its key, its Mac), as an open is;
+ * otherwise its session claimed, and `up`, the machine opening and its
+ * runner launched with no message, which answers why it failed where it did
+ * and nothing once the runner is up.
+ */
+export type MachineBoot =
+  | SessionFailed
+  | {
+      readonly outcome: typeof SESSION_SEND_OUTCOME.ACCEPTED;
+      readonly sessionId: string;
+      readonly up: Effect.Effect<BootFailure | undefined>;
+    };
+
 /** A native harness's sessions: the `AgentSessions` interface, the agent's model and effort as they stand handed to a running runner, and its repositories as they stand checked out in the place it runs in. */
 export interface NativeSessions<Turn extends SessionTurn = SessionTurn>
   extends AgentSessions<Turn> {
@@ -141,6 +158,8 @@ export interface NativeSessions<Turn extends SessionTurn = SessionTurn>
     sessionId: string,
     conversationId: string,
   ) => Effect.Effect<TurnHandover, { readonly _tag: string }>;
+  /** The agent's machine booted for its first launch, a session claimed for it afresh, with no message (`runner-sessions.ts`'s `boot`). */
+  readonly boot: (conversationId: string) => Effect.Effect<MachineBoot>;
   /** The session's runner launched with no message past the answer, where none runs, for an agent on screen (`runner-sessions.ts`'s `warm`); it answers at once and fails nothing. */
   readonly warm: (sessionId: string, conversationId: string) => Effect.Effect<void>;
   /**
@@ -265,17 +284,6 @@ function routed<Turn extends SessionTurn>(
     );
 
   const sessions: AgentSessions<Turn> = {
-    boot: (conversationId) =>
-      Effect.gen(function* () {
-        const read = yield* routeOrUnread(conversationId);
-        if (Option.isNone(read)) return UNREAD;
-        const route = read.value;
-        if ("ended" in route) return ENDED;
-        const reached = harness(route.runtime, route.starter);
-        if (Option.isNone(reached)) return NOT_HERE;
-        return yield* (yield* reached.value).boot(conversationId);
-      }),
-
     open: (message) =>
       Effect.gen(function* () {
         const read = yield* routeOrUnread(message.conversationId);
@@ -472,6 +480,34 @@ export const turnHandedOver = (turn: {
     }
     return yield* (yield* reached.value).deliverTurn(sessionId, turn.conversationId);
   }).pipe(Effect.annotateLogs(agentLogIds({ conversationId: turn.conversationId })));
+
+/**
+ * The agent's machine booted for its first launch, acting for its starter
+ * as every native call does (`NativeSessions`'s `boot`); refused as not
+ * reachable here where the agent runs on no harness this function holds.
+ */
+export const machineBooted = (agent: {
+  readonly id: string;
+  readonly userId: string;
+  readonly conversationId: string;
+}): Effect.Effect<MachineBoot, never, DatabaseServices> =>
+  Effect.gen(function* () {
+    const routing = yield* readAgentRouting(agent.userId, agent.id);
+    const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
+    if (runtime === undefined) return ENDED;
+    const native = yield* Effect.serviceOption(NativeAgentSessions);
+    const reached = Option.flatMap(native, (service) => service.sessions(runtime, agent.userId));
+    if (Option.isNone(reached)) return NOT_HERE;
+    return yield* (yield* reached.value).boot(agent.conversationId);
+  }).pipe(
+    Effect.catch((failure) =>
+      Effect.as(
+        Effect.logWarning(`a native agent's machine was not booted: ${failureKind(failure)}`),
+        UNREAD,
+      ),
+    ),
+    Effect.annotateLogs(agentLogIds(agent)),
+  );
 
 /**
  * A cloud agent a client has on screen kept warm, acting for the agent's

@@ -223,50 +223,48 @@ it.effect("a shared port's link is told beside the ports until the service close
   }),
 );
 
-it.effect(
-  "the forwarded ports follow each read, each with what serves it, for one agent at a time",
-  () =>
-    Effect.gen(function* () {
-      const { set, serve, listeners, told } = yield* subject();
-      serve(AGENT_ID, [3000, 5173]);
-      serve(OTHER_AGENT_ID, [8080], { 8080: "storybook dev" });
+it.effect("the forwarded ports follow each read, each with what serves it, for one agent at a time", () =>
+  Effect.gen(function* () {
+    const { set, serve, listeners, told } = yield* subject();
+    serve(AGENT_ID, [3000, 5173]);
+    serve(OTHER_AGENT_ID, [8080], { 8080: "storybook dev" });
 
-      yield* set({ agentId: AGENT_ID, on: true });
-      yield* settle;
-      assert.deepEqual([...listeners.keys()].sort(), [3000, 5173]);
+    yield* set({ agentId: AGENT_ID, on: true });
+    yield* settle;
+    assert.deepEqual([...listeners.keys()].sort(), [3000, 5173]);
 
-      // The server on 3000 stopped and one on 4000 started: the next read lets one go and listens on the other.
-      serve(AGENT_ID, [4000, 5173]);
-      yield* TestClock.adjust(PORT_FORWARD.LOOK_EVERY);
-      yield* settle;
-      assert.deepEqual([...listeners.keys()].sort(), [4000, 5173]);
+    // The server on 3000 stopped and one on 4000 started: the next read lets one go and listens on the other.
+    serve(AGENT_ID, [4000, 5173]);
+    yield* TestClock.adjust(PORT_FORWARD.LOOK_EVERY);
+    yield* settle;
+    assert.deepEqual([...listeners.keys()].sort(), [4000, 5173]);
 
-      // Forwarding another agent lets every port of the first go.
-      const other = yield* set({
-        agentId: OTHER_AGENT_ID,
-        on: true,
-      });
-      yield* settle;
-      assert.deepEqual([...listeners.keys()], [8080]);
-      assert.deepEqual(told(), {
-        agentId: OTHER_AGENT_ID,
-        on: true,
-        running: true,
-        ports: [
-          {
-            port: 8080,
-            localPort: 8080,
-            state: PORT_FORWARD_STATE.LISTENING,
-            label: "storybook dev",
-          },
-        ],
-      });
-      assert.deepEqual(other, { on: true, running: false, ports: [] });
+    // Forwarding another agent lets every port of the first go.
+    const other = yield* set({
+      agentId: OTHER_AGENT_ID,
+      on: true,
+    });
+    yield* settle;
+    assert.deepEqual([...listeners.keys()], [8080]);
+    assert.deepEqual(told(), {
+      agentId: OTHER_AGENT_ID,
+      on: true,
+      running: true,
+      ports: [
+        {
+          port: 8080,
+          localPort: 8080,
+          state: PORT_FORWARD_STATE.LISTENING,
+          label: "storybook dev",
+        },
+      ],
+    });
+    assert.deepEqual(other, { on: true, running: false, ports: [] });
 
-      yield* set({ agentId: OTHER_AGENT_ID, on: false });
-      assert.deepEqual([...listeners.keys()], []);
-      assert.equal(told(), null);
-    }),
+    yield* set({ agentId: OTHER_AGENT_ID, on: false });
+    assert.deepEqual([...listeners.keys()], []);
+    assert.equal(told(), null);
+  }),
 );
 
 it.effect("forwarding is let go once a sandbox seen running stops", () =>

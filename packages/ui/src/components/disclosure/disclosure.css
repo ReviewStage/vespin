@@ -138,14 +138,14 @@
      because the touch-density test reads a rule's selectors by its commas. */
   @media (hover: hover) {
     .ui-disclosure-frame:has(
-        > details > .ui-disclosure-summary:not([data-look="transcript"]):hover
-      )::before {
+      > details > .ui-disclosure-summary:not([data-look="transcript"]):hover
+    )::before {
       background: var(--ui-color-fill-strong);
     }
 
     .ui-disclosure-frame:has(> details > .ui-disclosure-summary:not([data-look="transcript"])):has(
-        > :not(details):hover
-      )::before {
+      > :not(details):hover
+    )::before {
       background: var(--ui-color-fill-strong);
     }
   }
