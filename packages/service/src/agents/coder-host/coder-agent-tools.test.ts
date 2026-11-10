@@ -2649,6 +2649,12 @@ test("update_agent refuses to archive an agent still working, stopping nothing a
     await database.run(readAgent(agents.teammates.userId, agents.teammates.id)),
   );
   assert.deepEqual([teammates.title, teammates.archivedAt], [null, null]);
+  // A turn stopped but still ending is refused too, until its end.
+  await call(AGENT_TOOL.STOP_AGENT, { agentId: agents.teammates.id });
+  assert.deepEqual(
+    await archive(agents.teammates.id),
+    rejected(UPDATE_AGENT_REFUSAL.STILL_WORKING),
+  );
   assert.deepEqual(await archive(agents.caller.id), rejected(UPDATE_AGENT_REFUSAL.SELF));
   assert.deepEqual(await archive(agents.otherWorkspaces.id), rejected(AGENT_TOOL_REFUSAL.NO_AGENT));
   assert.deepEqual(await archive(agents.strangers.id), rejected(AGENT_TOOL_REFUSAL.NO_AGENT));

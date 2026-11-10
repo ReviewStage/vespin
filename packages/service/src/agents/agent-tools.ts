@@ -2946,7 +2946,15 @@ export function runUpdateAgent(
       // Note that an agent archives only an idle agent, because stopping another's work is a member's call.
       if (archived === true && callerAgent(caller) !== undefined) {
         const { status } = (yield* standingsOf([agent]))(agent);
-        if (status === AGENT_STATUS.STARTING || status === AGENT_STATUS.RUNNING) {
+        const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(
+          agent.conversationId,
+        );
+        // A turn whose Stop is on its way reads as canceled, yet is still ending.
+        if (
+          status === AGENT_STATUS.STARTING ||
+          status === AGENT_STATUS.RUNNING ||
+          stopStands(turn)
+        ) {
           return agentToolRejected(UPDATE_AGENT_REFUSAL.STILL_WORKING);
         }
       }
