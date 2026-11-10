@@ -53,6 +53,7 @@ import {
   mintPreviewHandoff,
   mintPreviewSession,
   PREVIEW_LINK,
+  PREVIEW_NAME_KIND,
   PREVIEW_TOKEN_LIFETIME,
   type PreviewMember,
   type PreviewName,
@@ -144,9 +145,11 @@ const webRequest = Effect.gen(function* () {
   return yield* Effect.orDie(HttpServerRequest.toWeb(yield* HttpServerRequest.HttpServerRequest));
 });
 
-/** The agent a preview's name names to the account: the one on the task it names whose id has its head; none where it names none the account reaches. */
+/** The agent a preview's name names to the account: the one it names by id, or the one on the task it names whose id has its head; none where it names none the account reaches. */
 const previewAgentFor = (userId: string, name: PreviewName) =>
-  hostedStoreOrUnavailable(agentIdOfTaskNumber(userId, name.slug, name.number, name.agentHead));
+  name.kind === PREVIEW_NAME_KIND.AGENT
+    ? Effect.succeed(Option.some(name.agentId))
+    : hostedStoreOrUnavailable(agentIdOfTaskNumber(userId, name.slug, name.number, name.agentHead));
 
 /** Whether a preview's name names, to a token's member, the agent the token admits them to. */
 const namesTokenAgent = (name: PreviewName, member: PreviewMember) =>

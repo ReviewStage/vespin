@@ -6,6 +6,7 @@ import type { PageSandbox } from "../pages/page-links.js";
 import {
   mintPreviewHandoff,
   mintPreviewSession,
+  PREVIEW_NAME_KIND,
   previewNameOf,
   previewNameOfHost,
   previewOrigin,
@@ -47,6 +48,7 @@ describe("preview links", () => {
     const { host } = new URL(previewOrigin(SANDBOX, name));
     assert.equal(host, "acme-labs-2617-8c1a6a.vespin.page");
     assert.deepEqual(previewNameOfHost(SANDBOX, host), {
+      kind: PREVIEW_NAME_KIND.TASK,
       slug: "acme-labs",
       number: 2617,
       agentHead: "8c1a6a",
@@ -58,11 +60,21 @@ describe("preview links", () => {
       "x.vespin.page",
       "acme-0-8c1a6a.vespin.page",
       "acme-2617-8c1a6.vespin.page",
-      "8c1a6a4f3d2e4d8b8b666f4c7a2e3b21.vespin.page",
       `${host}.evil.test`,
     ]) {
       assert.equal(previewNameOfHost(SANDBOX, other), undefined, other);
     }
+  });
+
+  it("names a preview by its agent's id where its task's name would not fit in a DNS label", () => {
+    const long = `personal-${"a".repeat(32)}-${"b".repeat(36)}`;
+    const name = previewNameOf(long, 1, MEMBER.agentId);
+    const { host } = new URL(previewOrigin(SANDBOX, name));
+    assert.equal(host, "8c1a6a4f3d2e4d8b8b666f4c7a2e3b21.vespin.page");
+    assert.deepEqual(previewNameOfHost(SANDBOX, host), {
+      kind: PREVIEW_NAME_KIND.AGENT,
+      agentId: MEMBER.agentId,
+    });
   });
 
   it("returns only to a path of the preview's own", () => {

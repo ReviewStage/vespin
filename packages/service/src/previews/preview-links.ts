@@ -8,7 +8,10 @@
  * from the app's, so nothing the agent's app runs reaches the app's cookies.
  * The host names the agent only to a member who reaches its task
  * (`task-number-store.ts`'s `agentIdOfTaskNumber`), so it is read again for
- * the member each token admits. That host answers
+ * the member each token admits. Where that name would not fit in one DNS
+ * label, as a long slug's would not, the host is the agent's id without its
+ * dashes instead, which every link shared before the task's name was used
+ * also is. That host answers
  * only a member who holds its cookie, and a member gets one by signing in on
  * the app: the app checks the member reaches the agent, mints a handoff
  * token a minute long, and sends the browser to the preview host, which
@@ -57,19 +60,27 @@ export const PREVIEW_TOKEN_LIFETIME = {
 /** How many of an agent's id's hex digits its preview host ends with, enough to tell apart the agents on one task. */
 const AGENT_HEAD_DIGITS = 6;
 
-/**
- * A preview host's label: a workspace's slug (`workspace-wire.ts`'s pattern),
- * its task's number, and the head of the agent's id. A slug's 48 characters
- * leave a task number seven digits in the 63 a DNS label holds.
- */
-const PREVIEW_LABEL = /^([a-z0-9]+(?:-[a-z0-9]+)*)-([1-9][0-9]{0,6})-([0-9a-f]{6})$/u;
+/** The most characters one DNS label holds. */
+const MAX_LABEL_CHARS = 63;
 
-/** What a preview host names: the agent's task, by its workspace's slug and its number, and the head of the agent's id. */
-export interface PreviewName {
-  readonly slug: string;
-  readonly number: number;
-  readonly agentHead: string;
-}
+/** A preview host's label by its task: a workspace's slug, its task's number, and the head of the agent's id. */
+const TASK_LABEL = /^([a-z0-9]+(?:-[a-z0-9]+)*)-([1-9][0-9]*)-([0-9a-f]{6})$/u;
+
+/** A preview host's label by its agent alone: the agent's id, its dashes dropped. */
+const AGENT_LABEL = /^[0-9a-f]{32}$/u;
+
+/** How a preview host names its agent. */
+export const PREVIEW_NAME_KIND = { TASK: "task", AGENT: "agent" } as const;
+
+/** What a preview host names: the agent's task, by its workspace's slug and its number, and the head of the agent's id; or, where that is too long for a label, the agent's id. */
+export type PreviewName =
+  | {
+      readonly kind: typeof PREVIEW_NAME_KIND.TASK;
+      readonly slug: string;
+      readonly number: number;
+      readonly agentHead: string;
+    }
+  | { readonly kind: typeof PREVIEW_NAME_KIND.AGENT; readonly agentId: string };
 
 /** Who a token admits, to which agent's preview. */
 export interface PreviewMember {
@@ -93,23 +104,40 @@ function sameText(offered: string, held: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-/** The name of an agent's preview, from its task's workspace slug and number and the agent's id. */
-export function previewNameOf(slug: string, number: number, agentId: string): PreviewName {
-  return { slug, number, agentHead: agentId.slice(0, AGENT_HEAD_DIGITS) };
-}
-
 /** A preview host's label for its name. */
 export function previewLabel(name: PreviewName): string {
-  return `${name.slug}-${name.number}-${name.agentHead}`.toLowerCase();
+  return name.kind === PREVIEW_NAME_KIND.TASK
+    ? `${name.slug}-${name.number}-${name.agentHead}`.toLowerCase()
+    : name.agentId.replaceAll("-", "").toLowerCase();
+}
+
+/** The name of an agent's preview: by its task's workspace slug and number where that fits in a label, by the agent's id otherwise. */
+export function previewNameOf(slug: string, number: number, agentId: string): PreviewName {
+  const byTask: PreviewName = {
+    kind: PREVIEW_NAME_KIND.TASK,
+    slug,
+    number,
+    agentHead: agentId.slice(0, AGENT_HEAD_DIGITS),
+  };
+  const fits = previewLabel(byTask).length <= MAX_LABEL_CHARS;
+  return fits ? byTask : { kind: PREVIEW_NAME_KIND.AGENT, agentId };
 }
 
 /** The name a preview host's label spells, or none for a label that spells none. */
 export function previewNameOfLabel(label: string): PreviewName | undefined {
-  const match = PREVIEW_LABEL.exec(label.toLowerCase());
+  const bare = label.toLowerCase();
+  if (AGENT_LABEL.test(bare)) {
+    const agentId = [8, 12, 16, 20].reduceRight(
+      (id, at) => `${id.slice(0, at)}-${id.slice(at)}`,
+      bare,
+    );
+    return { kind: PREVIEW_NAME_KIND.AGENT, agentId };
+  }
+  const match = bare.length <= MAX_LABEL_CHARS ? TASK_LABEL.exec(bare) : null;
   if (match === null) return undefined;
   const [, slug, number, agentHead] = match;
   if (slug === undefined || number === undefined || agentHead === undefined) return undefined;
-  return { slug, number: Number(number), agentHead };
+  return { kind: PREVIEW_NAME_KIND.TASK, slug, number: Number(number), agentHead };
 }
 
 /** The preview host an agent's shared port is served on. */
