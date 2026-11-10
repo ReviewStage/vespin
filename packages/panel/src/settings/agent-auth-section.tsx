@@ -2,6 +2,8 @@ import { signedInAccountId } from "@repo/credentials/snapshot";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
+  apiKeyName,
+  PLAN_NAME,
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_REJECTION,
@@ -12,6 +14,7 @@ import {
   type ProviderKeySummary,
   type ProviderKeysAnswer,
   pastedKeyFits,
+  planNamesOf,
   SUBSCRIPTION_LABEL_MAX_CHARS,
   type SubscriptionKeySummary,
 } from "@repo/features/provider-key-wire";
@@ -95,13 +98,13 @@ import { ReadFailed } from "./marks.js";
  * agent-auth-section.tsx -- the agents' credentials, Settings › Agents' and setup's Connect an agent alike: a card each for Claude and Codex, its plans and its API key in the one order new turns try them, each added, replaced, renamed, reordered, and removed in place.
  *
  * The account holds as many plans per harness as it adds (Claude's
- * `claude setup-token`, or the Codex sign-in through ChatGPT) and one API
- * key. Each harness is a card of its own, opening on a header row: its
- * harness's mark and name, and Add, whose menu adds a plan, or the API key
- * while none is saved. Under it its plans and its key stand in the
- * account's order, each led by its provider's logo and dragged up and down
- * by its grip (`@repo/ui`'s `SettingsOrderedRows`) or moved from its ⋯. A
- * turn starts on the first with room, a key always having it, which the
+ * `claude setup-token`, or the Codex sign-in through ChatGPT), and as many
+ * API keys. Each harness is a card of its own, opening on a header row: its
+ * harness's mark and name, and Add, whose menu adds a plan or an API key.
+ * Under it its plans and its keys stand in the account's order, each led
+ * by its provider's logo and dragged up and down by its grip (`@repo/ui`'s
+ * `SettingsOrderedRows`) or moved from its ⋯. A turn starts on the first
+ * with room, a key having it unless its provider refused it for credit, which the
  * page's own line under its title says once for both
  * (`../desktop/desktop-settings.tsx`'s `pageDescription`). A plan is
  * named by the name the account gave it, renamed in place for a Claude
@@ -114,9 +117,10 @@ import { ReadFailed } from "./marks.js";
  * token, and Disconnect, the fix its state asks for standing beside it:
  * Replace token for a Claude token Anthropic refused, Sign in again for a
  * Codex plan OpenAI signed out, and Manage usage, which opens ChatGPT's
- * usage settings, for one at its limit. The key is named for its provider,
- * says API key and its hint, and ends in a ⋯ holding Move up and down,
- * Replace key, and Remove key. With neither a plan nor a key, no agent
+ * usage settings, for one at its limit. A key is named by the name the
+ * account gave it, else API key and its hint, renamed in place as a Claude
+ * plan is; says Ready, or what is wrong with it; and ends in a ⋯ holding
+ * Rename, Move up and down, Replace key, and Remove key. With neither a plan nor a key, no agent
  * starts on that provider's models, since our key pays for no coding agent.
  * Calls and dictation run on the OpenAI API key alone, so every answer here
  * is handed to the window too (`../openai-key.tsx`), and removing that key
@@ -181,7 +185,7 @@ const HARNESS = {
   [PROVIDER_KEY_PROVIDER.ANTHROPIC]: {
     name: "Claude",
     mark: MODEL_PROVIDER.ANTHROPIC,
-    planName: "Claude plan",
+    planName: PLAN_NAME[PROVIDER_KEY_PROVIDER.ANTHROPIC],
     plan: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
     planMark: MARK_PROVIDER.CLAUDE,
     keyName: "Anthropic",
@@ -193,7 +197,7 @@ const HARNESS = {
   [PROVIDER_KEY_PROVIDER.OPENAI]: {
     name: "Codex",
     mark: MODEL_PROVIDER.OPENAI,
-    planName: "Codex plan",
+    planName: PLAN_NAME[PROVIDER_KEY_PROVIDER.OPENAI],
     plan: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
     planMark: MARK_PROVIDER.CHATGPT,
     keyName: "OpenAI",
@@ -228,6 +232,7 @@ const WORDS = {
   BACK_AT: "back at",
   RENAME: "Rename",
   PLAN_NAME: "Plan name",
+  KEY_NAME: "Key name",
   MOVE_UP: "Move up",
   MOVE_DOWN: "Move down",
   SIGN_IN_AGAIN: "Sign in again",
@@ -264,7 +269,7 @@ const WORDS = {
   CLAUDE_DISCONNECT_FAILED: "Couldn't disconnect your Claude plan. Try again.",
   CHATGPT_DISCONNECT_FAILED: "Couldn't disconnect your Codex plan. Try again.",
   REORDER_FAILED: "Couldn't reorder. Try again.",
-  RENAME_FAILED: "Couldn't rename your plan. Try again.",
+  RENAME_FAILED: "Couldn't rename it. Try again.",
 } as const;
 
 /** What a confirmed removal answers where it went. */
@@ -317,12 +322,12 @@ function plansOf(
     .toSorted((a, b) => a.position - b.position);
 }
 
-/** The provider's API key among the account's keys, or none. */
-function keyOf(
+/** The provider's API keys among the account's keys. */
+function keysOf(
   answer: ProviderKeysAnswer,
   provider: ProviderKeyProvider,
-): ProviderKeySummary | undefined {
-  return answer.keys.find((one) => one.provider === provider);
+): readonly ProviderKeySummary[] {
+  return answer.keys.filter((one) => one.provider === provider);
 }
 
 /** Whether a stored plan still stands: kept, answered, or only waiting on its limit to reset. */
@@ -341,32 +346,10 @@ function keyStanding(status: ProviderKeyStatus): boolean {
 
 /** Whether the harness can start an agent now: a plan short of its limit, or a key that stands. */
 function harnessReady(answer: ProviderKeysAnswer, provider: ProviderKeyProvider): boolean {
-  const key = keyOf(answer, provider);
   return (
     plansOf(answer, provider).some(
       (plan) => standing(plan) && plan.status !== PROVIDER_KEY_STATUS.LIMIT_REACHED,
-    ) ||
-    (key !== undefined && keyStanding(key.status))
-  );
-}
-
-/**
- * Each plan's name by its id: the name the account gave it, else the
- * ChatGPT account it signed in as, else its harness's plan name, numbered
- * by when it was added where the harness holds more than one, so a plan
- * keeps its number however it is reordered.
- */
-function planNames(
-  provider: ProviderKeyProvider,
-  plans: readonly SubscriptionKeySummary[],
-): ReadonlyMap<string, string> {
-  const { planName } = HARNESS[provider];
-  const added = plans.toSorted((a, b) => a.addedAt - b.addedAt);
-  return new Map(
-    added.map((plan, at) => [
-      plan.id,
-      plan.label ?? plan.email ?? (plans.length > 1 ? `${planName} ${at + 1}` : planName),
-    ]),
+    ) || keysOf(answer, provider).some((key) => keyStanding(key.status))
   );
 }
 
@@ -454,13 +437,13 @@ function planLine(
   return { words, ok: false };
 }
 
-/** What an API key's line says, by the provider it names: API key and its hint, or what is wrong with it. */
+/** What an API key's line says, by the provider it names: Ready, its hint where its name hides it, or what is wrong with it. */
 function keyLineWords(provider: ProviderKeyProvider, key: ProviderKeySummary): string {
   const name = HARNESS[provider].keyName;
   switch (key.status) {
     case PROVIDER_KEY_STATUS.VERIFIED:
     case PROVIDER_KEY_STATUS.UNVERIFIED:
-      return `${WORDS.API_KEY} · ${key.hint}`;
+      return key.label === undefined ? WORDS.READY : `${WORDS.API_KEY} · ${key.hint}`;
     case PROVIDER_KEY_STATUS.INVALID:
       return `${name} rejected this key.`;
     case PROVIDER_KEY_STATUS.QUOTA_EXCEEDED:
@@ -736,14 +719,18 @@ function setupTokenPaste(placement: TokenPlacement): PasteKind {
   };
 }
 
-/** The provider's API key, pasted. */
-function keyPaste(provider: ProviderKeyProvider): PasteKind {
+/** An API key of the provider's, pasted: added at the bottom of the order, or in place of the key `replacing` names. */
+function keyPaste(provider: ProviderKeyProvider, replacing?: string): PasteKind {
   return {
     first: keyFirst(provider),
     label: WORDS.PASTE_KEY,
     placeholder: HARNESS[provider].keyShape,
     running: WORDS.CHECKING_KEY,
-    payload: (key) => ({ provider, key }),
+    payload: (key) => ({
+      provider,
+      key,
+      ...(replacing === undefined ? undefined : { subscriptionId: replacing }),
+    }),
     failed: WORDS.SAVE_KEY_FAILED,
     refused: (rejection) => keyRejectionWords(provider, rejection),
   };
@@ -854,23 +841,24 @@ function usePlanRemoval(
   );
 }
 
-/** The provider's API key's Remove, asked first. */
-function useKeyRemoval(
-  provider: ProviderKeyProvider,
-  key: ProviderKeySummary | undefined,
-): DialogConfirm {
+/** One of the provider's API keys' Remove, by its id, asked first. */
+function useKeyRemoval(provider: ProviderKeyProvider, key: ProviderKeySummary): DialogConfirm {
   const { mutateAsync: sendProviderKeysRemove, ...keyRemoving } = useMutation(
     actMutation(ACT_KIND.PROVIDER_KEYS_REMOVE),
   );
+  const keyId = key.id;
   const remove = useCallback(
     (): Promise<ActionResult> =>
-      sendProviderKeysRemove({ provider })
+      sendProviderKeysRemove({
+        provider,
+        ...(keyId === undefined ? undefined : { subscriptionId: keyId }),
+      })
         .catch(() => undefined)
         .then((answer): ActionResult => {
           if (answer === undefined || "failure" in answer) return KEY_REMOVE_REFUSED;
           return ACCEPTED_KEY;
         }),
-    [sendProviderKeysRemove, provider],
+    [sendProviderKeysRemove, provider, keyId],
   );
   const removalAct = useConfirmAct(keyRemoving, {
     send: remove,
@@ -878,7 +866,7 @@ function useKeyRemoval(
     failed: () => KEY_REMOVE_REFUSED,
   });
   return useConfirmDialog(
-    { subject: key !== undefined, surfaceOpen: true },
+    { subject: true, surfaceOpen: true },
     removalAct,
     confirmFailure(FAILURE_SURFACE.AGENT_KEY_REMOVE),
   );
@@ -886,7 +874,7 @@ function useKeyRemoval(
 
 /* ----- Ordering and naming the credentials ----- */
 
-/** One row of a harness's order: one of its plans, or its API key. */
+/** One row of a harness's order: one of its plans, or one of its API keys. */
 type Credential =
   | { readonly plan: SubscriptionKeySummary; readonly id: string }
   | { readonly key: ProviderKeySummary; readonly id: string };
@@ -906,13 +894,13 @@ function addedOf(credential: Credential): number {
   return "plan" in credential ? credential.plan.addedAt : credential.key.addedAt;
 }
 
-/** The harness's plans and its key in the account's order: by place, then the earlier added, as a turn tries them. */
+/** The harness's plans and its keys in the account's order: by place, then the earlier added, as a turn tries them. */
 function credentialsOf(
   plans: readonly SubscriptionKeySummary[],
-  key: ProviderKeySummary | undefined,
+  keys: readonly ProviderKeySummary[],
 ): readonly Credential[] {
   // Note that a key from a service that names no id is still drawn; the order it is sent in names an id no row holds, which the service passes over.
-  const keyed: Credential[] = key === undefined ? [] : [{ key, id: key.id ?? KEY_WITHOUT_ID }];
+  const keyed: Credential[] = keys.map((key) => ({ key, id: key.id ?? KEY_WITHOUT_ID }));
   return [...plans.map((plan) => ({ plan, id: plan.id })), ...keyed].toSorted(
     (a, b) => placeOf(a) - placeOf(b) || addedOf(a) - addedOf(b),
   );
@@ -930,7 +918,7 @@ function useCredentialOrder(
 ): {
   ordered: readonly Credential[];
   move: (from: number, to: number) => void;
-  rename: (plan: SubscriptionKeySummary, label: string) => void;
+  rename: (credential: Credential, label: string) => void;
   refused: string | undefined;
 } {
   const { mutateAsync: sendReorder } = useMutation(actMutation(ACT_KIND.SUBSCRIPTIONS_REORDER));
@@ -961,9 +949,10 @@ function useCredentialOrder(
         if (answer === undefined || "failure" in answer) setRefused(WORDS.REORDER_FAILED);
       });
   };
-  const rename = (plan: SubscriptionKeySummary, label: string) => {
+  const rename = (credential: Credential, label: string) => {
     setRefused(undefined);
-    void sendRename({ provider, kind, subscriptionId: plan.id, label })
+    const renamed = "plan" in credential ? kind : PROVIDER_KEY_KIND.API_KEY;
+    void sendRename({ provider, kind: renamed, subscriptionId: credential.id, label })
       .catch(() => undefined)
       .then((answer) => {
         if (answer === undefined || "failure" in answer) setRefused(WORDS.RENAME_FAILED);
@@ -986,7 +975,7 @@ function moveActions(
 
 /* ----- A harness's list ----- */
 
-/** What a harness's steps stand open for: adding a plan, a plan's own replace or rename, or its key. */
+/** What a harness's steps stand open for: adding a plan or a key, or a row's own replace or rename. */
 const STEPS = {
   ADD: "add",
   REPLACE: "replace",
@@ -1022,18 +1011,13 @@ function CancelPress({ onCancel }: { onCancel: () => void }): React.JSX.Element 
   );
 }
 
-/**
- * The header's Add, whose menu adds the harness's plan, or its API key while
- * none is saved; what it opens stands under the header.
- */
+/** The header's Add, whose menu adds the harness's plan or an API key; what it opens stands under the header. */
 function AddPress({
   provider,
-  keyHeld,
   press,
   onOpen,
 }: {
   provider: ProviderKeyProvider;
-  keyHeld: boolean;
   press: React.RefObject<HTMLButtonElement | null>;
   onOpen: (steps: typeof STEPS.ADD | typeof STEPS.KEY) => void;
 }): React.JSX.Element {
@@ -1056,7 +1040,7 @@ function AddPress({
           groups={[
             [
               { label: harness.planName, onSelect: () => onOpen(STEPS.ADD) },
-              ...(keyHeld ? [] : [{ label: WORDS.API_KEY, onSelect: () => onOpen(STEPS.KEY) }]),
+              { label: WORDS.API_KEY, onSelect: () => onOpen(STEPS.KEY) },
             ],
           ]}
           replayUnmasked
@@ -1223,10 +1207,11 @@ function PlanRow({
 }
 
 /**
- * The harness's API key's row in the same order: its provider's logo, its
- * provider's name, and API key and its hint, or what is wrong with it; Replace key
- * beside a ⋯ where its provider refused it, and a ⋯ holding Move up and
- * down, Replace key, and Remove key. Its replace's steps open under it.
+ * One of the harness's API keys' rows in the same order: its provider's
+ * logo, its name, renamed in place as a Claude plan is, and Ready, or what
+ * is wrong with it; Replace key beside a ⋯ where its provider refused it,
+ * and a ⋯ holding Rename, Move up and down, Replace key, and Remove key.
+ * Its replace's steps open under it.
  */
 function KeyRow({
   provider,
@@ -1234,56 +1219,89 @@ function KeyRow({
   at,
   count,
   open,
-  door,
   onOpen,
   onClose,
   onMove,
+  onRename,
 }: {
   provider: ProviderKeyProvider;
   apiKey: ProviderKeySummary;
   at: number;
   count: number;
-  open: boolean;
-  /** Its ⋯, which its closing steps hand the focus back to. */
-  door: React.RefObject<HTMLButtonElement | null>;
-  onOpen: () => void;
+  open: typeof STEPS.REPLACE | typeof STEPS.RENAME | undefined;
+  onOpen: (steps: typeof STEPS.REPLACE | typeof STEPS.RENAME) => void;
   onClose: () => void;
   onMove: (from: number, to: number) => void;
+  onRename: (label: string) => void;
 }): React.JSX.Element {
   const harness = HARNESS[provider];
   const removal = useKeyRemoval(provider, apiKey);
+  const door = useRef<HTMLButtonElement | null>(null);
+  const name = apiKeyName(apiKey);
+  // Note that a key from a service that names no id has nothing to rename it or replace it by.
+  const named = apiKey.id !== undefined;
+  const wasOpen = useRef(open);
+  // The focus goes back to the ⋯ as its replace's steps go, wherever their going left it on nothing.
+  useEffect(() => {
+    const was = wasOpen.current;
+    wasOpen.current = open;
+    if (was !== STEPS.REPLACE || open !== undefined) return;
+    const lost = document.activeElement === null || document.activeElement === document.body;
+    if (lost) door.current?.focus();
+  }, [open]);
   return (
     <>
       <SettingsRow
         leading={<ProviderMark provider={harness.planMark} size={PROVIDER_MARK_SIZE.ROW} />}
-        label={harness.keyName}
+        label={
+          <InlineEdit
+            value={name}
+            label={WORDS.KEY_NAME}
+            editing={open === STEPS.RENAME}
+            look={INLINE_EDIT_LOOK.INPUT}
+            maxLength={SUBSCRIPTION_LABEL_MAX_CHARS}
+            onEnd={({ value }) => {
+              onClose();
+              if (value !== undefined) onRename(value);
+            }}
+          />
+        }
         description={
           <State ok={keyStanding(apiKey.status)}>{keyLineWords(provider, apiKey)}</State>
         }
         controls={SETTINGS_ROW_CONTROLS.BESIDE}
         end={() => (
           <CredentialMenu
-            thing={`${harness.keyName} ${WORDS.API_KEY}`}
+            thing={name}
             door={door}
             groups={[
-              [...moveActions(at, count, onMove), { label: WORDS.REPLACE_KEY, onSelect: onOpen }],
+              [
+                ...(named ? [{ label: WORDS.RENAME, onSelect: () => onOpen(STEPS.RENAME) }] : []),
+                ...moveActions(at, count, onMove),
+                { label: WORDS.REPLACE_KEY, onSelect: () => onOpen(STEPS.REPLACE) },
+              ],
               [{ label: WORDS.REMOVE_KEY, danger: true, onSelect: removal.ask }],
             ]}
           />
         )}
         below={
-          open
+          open === STEPS.REPLACE
             ? () => (
-                <PasteSteps kind={keyPaste(provider)} held onKept={onClose} onEscape={onClose} />
+                <PasteSteps
+                  kind={keyPaste(provider, apiKey.id)}
+                  held
+                  onKept={onClose}
+                  onEscape={onClose}
+                />
               )
             : undefined
         }
       >
         {() =>
-          open ? (
+          open === STEPS.REPLACE ? (
             <CancelPress onCancel={onClose} />
           ) : keyStanding(apiKey.status) ? null : (
-            <Button variant={BUTTON_VARIANT.OUTLINE} onClick={onOpen}>
+            <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => onOpen(STEPS.REPLACE)}>
               {WORDS.REPLACE_KEY}
             </Button>
           )
@@ -1295,11 +1313,11 @@ function KeyRow({
 }
 
 /**
- * A harness's card: its header, whose Add adds a plan or its key, then its
- * plans and its key in the order new turns try them, each dragged by its
+ * A harness's card: its header, whose Add adds a plan or a key, then its
+ * plans and its keys in the order new turns try them, each dragged by its
  * grip or moved from its ⋯. Each row ends in its press, its steps opening
  * under it while `open` names it, an add's under the header. The focus goes
- * back to Add, or to the key's ⋯, as their steps go.
+ * back to Add as an add's steps go.
  */
 function HarnessCredentials({
   provider,
@@ -1317,26 +1335,22 @@ function HarnessCredentials({
 }): React.JSX.Element {
   const harness = HARNESS[provider];
   const plans = plansOf(answer, provider);
-  const key = keyOf(answer, provider);
-  const order = useCredentialOrder(provider, credentialsOf(plans, key));
+  const keys = keysOf(answer, provider);
+  const order = useCredentialOrder(provider, credentialsOf(plans, keys));
   const drag = useRowDrag(order.move, { handle: SETTINGS_ORDER_HANDLE });
   const [unconfirmed, setUnconfirmed] = useState(false);
   const addPress = useRef<HTMLButtonElement | null>(null);
-  const keyDoor = useRef<HTMLButtonElement | null>(null);
   const handBack = useRef<typeof STEPS.ADD | typeof STEPS.KEY | undefined>(undefined);
-  const names = planNames(provider, plans);
-  const keyHeld = key !== undefined;
-  // Note that a key's steps stand under the header while it adds one, and under the key's own row while they replace it.
-  const adding =
-    open?.steps === STEPS.ADD || (open?.steps === STEPS.KEY && !keyHeld) ? open.steps : undefined;
+  const names = planNamesOf(provider, plans);
+  const adding = open?.steps === STEPS.ADD || open?.steps === STEPS.KEY ? open.steps : undefined;
 
   // Note that the focus goes back to the row's press wherever the steps' going left it on nothing, and again once a credential they kept draws in its place, since the keys the host lays can land a draw after the steps go.
   useEffect(() => {
     const back = handBack.current;
     if (open !== undefined || back === undefined) return;
     const lost = document.activeElement === null || document.activeElement === document.body;
-    if (lost) (back === STEPS.KEY && keyHeld ? keyDoor : addPress).current?.focus();
-  }, [open, plans.length, keyHeld]);
+    if (lost) addPress.current?.focus();
+  }, [open, plans.length, keys.length]);
   const close = (steps: typeof STEPS.ADD | typeof STEPS.KEY) => () => {
     handBack.current = steps;
     onClose();
@@ -1387,7 +1401,7 @@ function HarnessCredentials({
       >
         {() =>
           adding === undefined ? (
-            <AddPress provider={provider} keyHeld={keyHeld} press={addPress} onOpen={openSteps} />
+            <AddPress provider={provider} press={addPress} onOpen={openSteps} />
           ) : (
             <CancelPress onCancel={close(adding)} />
           )
@@ -1397,43 +1411,47 @@ function HarnessCredentials({
         <SettingsOrderedRows
           label={harness.name}
           onPointerDown={drag}
-          rows={order.ordered.map((credential, at) => ({
-            key: credential.id,
-            row:
-              "plan" in credential ? (
-                <PlanRow
-                  provider={provider}
-                  plan={credential.plan}
-                  name={names.get(credential.id) ?? harness.planName}
-                  at={at}
-                  count={order.ordered.length}
-                  open={
-                    open !== undefined &&
-                    "subscriptionId" in open &&
-                    open.subscriptionId === credential.id
-                      ? open.steps
-                      : undefined
-                  }
-                  onOpen={(steps) => onOpen({ steps, subscriptionId: credential.id })}
-                  onClose={onClose}
-                  onMove={order.move}
-                  onRename={(label) => order.rename(credential.plan, label)}
-                  onUnconfirmed={setUnconfirmed}
-                />
-              ) : (
-                <KeyRow
-                  provider={provider}
-                  apiKey={credential.key}
-                  at={at}
-                  count={order.ordered.length}
-                  open={open?.steps === STEPS.KEY && keyHeld}
-                  door={keyDoor}
-                  onOpen={() => openSteps(STEPS.KEY)}
-                  onClose={close(STEPS.KEY)}
-                  onMove={order.move}
-                />
-              ),
-          }))}
+          rows={order.ordered.map((credential, at) => {
+            const rowOpen =
+              open !== undefined &&
+              "subscriptionId" in open &&
+              open.subscriptionId === credential.id
+                ? open.steps
+                : undefined;
+            const onRowOpen = (steps: typeof STEPS.REPLACE | typeof STEPS.RENAME) =>
+              onOpen({ steps, subscriptionId: credential.id });
+            return {
+              key: credential.id,
+              row:
+                "plan" in credential ? (
+                  <PlanRow
+                    provider={provider}
+                    plan={credential.plan}
+                    name={names.get(credential.id) ?? harness.planName}
+                    at={at}
+                    count={order.ordered.length}
+                    open={rowOpen}
+                    onOpen={onRowOpen}
+                    onClose={onClose}
+                    onMove={order.move}
+                    onRename={(label) => order.rename(credential, label)}
+                    onUnconfirmed={setUnconfirmed}
+                  />
+                ) : (
+                  <KeyRow
+                    provider={provider}
+                    apiKey={credential.key}
+                    at={at}
+                    count={order.ordered.length}
+                    open={rowOpen}
+                    onOpen={onRowOpen}
+                    onClose={onClose}
+                    onMove={order.move}
+                    onRename={(label) => order.rename(credential, label)}
+                  />
+                ),
+            };
+          })}
         />
       )}
       {order.refused === undefined ? null : (

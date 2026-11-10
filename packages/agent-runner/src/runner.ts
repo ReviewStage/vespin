@@ -103,6 +103,19 @@ import { transcriptStore } from "./transcripts.js";
 /** The variable that bounds how long the CLI's first turn waits on a pending MCP server, in milliseconds (Claude Code 2.1.274 on). */
 const CLAUDE_CODE_MCP_STARTUP_WAIT = "CLAUDE_CODE_MCP_STARTUP_WAIT_MS";
 
+/**
+ * The variables that set how long the CLI keeps its prompt cache: the main
+ * conversation's alone, "5m" or "1h", which leaves workers and other
+ * subagents on the CLI's default (`MAIN`); every request's an hour, set to
+ * "1" (`ALL`); and every request's five minutes, over both (`FORCE_SHORT`)
+ * (CLI 2.1.304, as its binary reads them).
+ */
+const PROMPT_CACHE_TTL = {
+  MAIN: "CLAUDE_CODE_PROMPT_CACHE_TTL",
+  ALL: "ENABLE_PROMPT_CACHING_1H",
+  FORCE_SHORT: "FORCE_PROMPT_CACHING_5M",
+} as const;
+
 /** The name our MCP server is registered under, so its tools reach the model as `mcp__workspace__<tool>` (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
 const MCP_SERVER = "workspace";
 
@@ -235,6 +248,13 @@ function queryOptions(
       ...SANDBOX_TOOL_ENV,
       [RUNNER_ENV.BEARER]: undefined,
       [CLAUDE_CODE_MCP_STARTUP_WAIT]: "0",
+      // Note that the main conversation alone keeps its cache for an hour, and only where the config asks for it,
+      // whatever the runner's own environment holds, so the other half keeps the CLI's default.
+      [PROMPT_CACHE_TTL.MAIN]: config.promptCacheHour === true ? "1h" : undefined,
+      [PROMPT_CACHE_TTL.ALL]: undefined,
+      ...(config.promptCacheHour === true
+        ? { [PROMPT_CACHE_TTL.FORCE_SHORT]: undefined }
+        : undefined),
     },
     // Note that the SDK puts an HTTP server's config, headers and all, in the
     // CLI's argv, which any process in the sandbox can read, so ours is an
@@ -341,15 +361,17 @@ const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, t
       const content = value.content;
       // SAFETY: a line's uuid is checked against the UUID pattern as the line is read.
       const uuid = (value.uuid as UUID | undefined) ?? randomUUID();
+      // A message resent to a session that holds it goes to the CLI under a uuid of its own, which the CLI would drop.
+      const prompt = value.resent === true ? randomUUID() : uuid;
       return yield* launch.admission.withPermit(
         Effect.gen(function* () {
           yield* launch.trace.taken;
           const running = yield* Ref.getAndSet(launch.turnRunning, true);
           yield* Ref.set(launch.warm, false);
-          yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(uuid));
+          yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(prompt));
           // Posted ahead of the hand-off, so it is numbered before anything the CLI says of the message.
           yield* launch.sink.emit({ type: RUNNER_EVENT.ACCEPTED, uuid });
-          yield* Queue.offer(launch.prompts, userMessage(uuid, content, running));
+          yield* Queue.offer(launch.prompts, userMessage(prompt, content, running));
         }),
       );
     }

@@ -30,6 +30,7 @@ import type { Sandbox } from "@repo/sandbox";
 import type { WorkspaceExperiment } from "@repo/settings";
 import { Cause, type Context, Effect, Exit, type Layer, Schema } from "effect";
 import type { HttpClient } from "effect/http";
+import type { AgentBrowser } from "../agents/browser/agent-browser.js";
 import type { AgentSandbox } from "../agents/terminal/agent-sandbox.js";
 import { ACTION_RESULT_STATUS } from "../core.js";
 import { AdmittedMember, type AdmittedMemberValues } from "./admission.js";
@@ -47,11 +48,14 @@ const SERVER_INFO = { name: `${PRODUCT_NAME}`, version: "1.0.0" } as const;
 const TOOL_FAILED = "This tool could not run just now; try it again in a moment.";
 
 /** The services a tool's effect needs beyond the admitted member and an agent's sandbox, which the request's fiber hands over. */
-export type MemberMcpRequestServices = Exclude<MemberMcpServices, AdmittedMember | AgentSandbox>;
+export type MemberMcpRequestServices = Exclude<
+  MemberMcpServices,
+  AdmittedMember | AgentSandbox | AgentBrowser
+>;
 
-/** An agent's sandbox as the edge composes it (`../agents/terminal/agent-sandbox.ts`'s `agentSandboxLayer`), which its ports are listed and shared on. */
+/** An agent's sandbox as the edge composes it (`../agents/terminal/agent-sandbox.ts`'s `agentSandboxLayer`), which its ports are listed and shared on, and the browser in it (`../agents/browser/agent-browser.ts`'s `agentBrowserServices`), which a tab is opened in. */
 export type MemberMcpAgentSandbox = Layer.Layer<
-  AgentSandbox,
+  AgentSandbox | AgentBrowser,
   never,
   HttpClient.HttpClient | DatabaseServices | Sandbox
 >;

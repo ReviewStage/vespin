@@ -5,8 +5,8 @@ import { countedNumber } from "./service-wire.js";
 /**
  * provider-key-wire.ts -- the account's own Anthropic and OpenAI API keys, as the desktop saves, reads, and removes them.
  *
- * `/api/account/provider-keys` holds at most one key per provider for the
- * signed-in account. A key travels once, in the body of the `PUT` that saves
+ * `/api/account/provider-keys` holds as many keys per provider as the
+ * signed-in account saves. A key travels once, in the body of the `PUT` that saves
  * it, and never again: every answer names what the key is — its provider, a
  * hint of its first and last characters, when it was added, and how the
  * provider last answered it — and never the key itself. A save is checked
@@ -191,6 +191,8 @@ const providerKeySummarySchema = EffectSchema.Struct({
   id: EffectSchema.optionalKey(EffectSchema.String),
   /** Where the key stands in its provider's order, among its plans; absent from a service that predates it, which pays with it last. */
   position: EffectSchema.optionalKey(countedNumber),
+  /** The name the account gave it; absent for the name it is shown by default. */
+  label: EffectSchema.optionalKey(EffectSchema.String),
 });
 
 export type ProviderKeySummary = typeof providerKeySummarySchema.Type;
@@ -284,9 +286,10 @@ export function pastedKeyFits(pasted: string): boolean {
 
 /**
  * Saving a key for a provider (PUT); a request naming no kind saves an API
- * key, replacing the provider's one. A subscription replaces the one its id
- * names, or is added at the bottom of the account's order where `add` says
- * so, or replaces the first of its kind where it names neither.
+ * key. A credential replaces the one of its kind its id names, keeping that
+ * one's place and name, or is added at the bottom of the account's order
+ * where `add` says so; where it names neither, an API key is added and a
+ * subscription replaces the first of its kind.
  */
 export const providerKeySaveRequestSchema = EffectSchema.Struct({
   provider: providerSchema,
@@ -311,13 +314,13 @@ const subscriptionLabelSchema = EffectSchema.NullOr(
 );
 
 /**
- * Naming one of the account's subscriptions (PUT): the provider, its kind,
- * the subscription, and its new name, or none for its default. A
- * subscription the account does not hold changes nothing.
+ * Naming one of the account's subscriptions or API keys (PUT): the
+ * provider, its kind, its id, and its new name, or none for its default.
+ * One the account does not hold changes nothing.
  */
 export const subscriptionLabelRequestSchema = EffectSchema.Struct({
   provider: providerSchema,
-  kind: subscriptionKindSchema,
+  kind: providerKeyKindSchema,
   subscriptionId: subscriptionIdSchema,
   label: subscriptionLabelSchema,
 });
@@ -331,7 +334,7 @@ export const subscriptionLabelRequestSchema = EffectSchema.Struct({
  */
 export const subscriptionOrderRequestSchema = EffectSchema.Struct({
   provider: providerSchema,
-  kind: subscriptionKindSchema,
+  kind: providerKeyKindSchema,
   subscriptionIds: EffectSchema.Array(subscriptionIdSchema).check(
     EffectSchema.isMaxLength(SUBSCRIPTION_ORDER_MAX),
   ),
@@ -443,3 +446,46 @@ export const chatGptDevicePollAnswerSchema = EffectSchema.Struct({
 });
 
 export type ChatGptDevicePollAnswer = typeof chatGptDevicePollAnswerSchema.Type;
+
+/** What a plan of the provider's is called wherever a surface names it and the account gave it no name. */
+export const PLAN_NAME = {
+  [PROVIDER_KEY_PROVIDER.ANTHROPIC]: "Claude plan",
+  [PROVIDER_KEY_PROVIDER.OPENAI]: "Codex plan",
+} as const satisfies Record<ProviderKeyProvider, string>;
+
+/** What a plan is named by: the name the account gave it, the ChatGPT account it signed in as, and when it was added. */
+export interface NamedPlan {
+  readonly id: string;
+  readonly label?: string | undefined;
+  readonly email?: string | undefined;
+  readonly addedAt: number;
+}
+
+/**
+ * Each of the provider's plans' name by its id, as Settings lists them and
+ * a limit's notice names them: the name the account gave it, else the
+ * ChatGPT account it signed in as, else its plan's name, numbered by when it
+ * was added where the account holds more than one, so a plan keeps its
+ * number however it is reordered.
+ */
+export function planNamesOf(
+  provider: ProviderKeyProvider,
+  plans: readonly NamedPlan[],
+): ReadonlyMap<string, string> {
+  const planName = PLAN_NAME[provider];
+  const added = plans.toSorted((a, b) => a.addedAt - b.addedAt);
+  return new Map(
+    added.map((plan, at) => [
+      plan.id,
+      plan.label ?? plan.email ?? (plans.length > 1 ? `${planName} ${at + 1}` : planName),
+    ]),
+  );
+}
+
+/** An API key's name wherever a surface names it: the name the account gave it, else its masked hint ("API key · sk-…a91F"). */
+export function apiKeyName(key: {
+  readonly label?: string | null | undefined;
+  readonly hint: string;
+}): string {
+  return key.label ?? `API key · ${key.hint}`;
+}

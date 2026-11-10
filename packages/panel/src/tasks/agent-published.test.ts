@@ -10,7 +10,7 @@ import { afterEach, test } from "vitest";
 import { handSettings } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { longPress, underAFinger } from "../testing/finger.js";
-import { BranchChip, LinesChanged, type PublishedDoors, PublishedRow } from "./agent-published.js";
+import { LinesChanged, type PublishedDoors, PublishedRow } from "./agent-published.js";
 
 /**
  * agent-published.test.ts -- the pull request's row pinned over an agent's
@@ -18,8 +18,7 @@ import { BranchChip, LinesChanged, type PublishedDoors, PublishedRow } from "./a
  * the pull request on GitHub where none does; where the press opened the
  * tab, its right-click offers GitHub's page instead, beside the branch's
  * copies; where the account opens pull requests on GitHub, the other way
- * round. The box's foot wears the branch's chip only while no pull
- * request stands. Synthetic ids.
+ * round. Synthetic ids.
  */
 
 const URL = "https://github.com/acme/relay/pull/42";
@@ -146,25 +145,6 @@ test("where no panel takes the tab, the pull request's row opens it on GitHub", 
   const { row, asked } = drawRow(false);
   act(() => row.click());
   assert.deepEqual(asked, [`github ${URL}`]);
-});
-
-test("the box's foot wears the branch's chip, opening the branch compared on GitHub, only while no pull request stands", () => {
-  const { doors, asked } = doorsAsked(true);
-  const branchOnly = { ...PUBLISHED, pullRequest: null };
-  const chip =
-    drawn(createElement(BranchChip, { published: branchOnly, doors })) ??
-    assert.fail("the branch's chip stands");
-  act(() => chip.click());
-  assert.deepEqual(asked, [
-    "github https://github.com/acme/relay/compare/luke/expiry-job?expand=1",
-  ]);
-  act(() => root?.unmount());
-
-  assert.equal(
-    drawn(createElement(BranchChip, { published: PUBLISHED, doors })),
-    null,
-    "a pull request's row stands over the box instead",
-  );
 });
 
 test("the pull request's row reads as every place names it, its number then its title", () => {

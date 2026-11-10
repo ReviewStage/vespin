@@ -117,6 +117,18 @@ function launchCredential(
   };
 }
 
+/**
+ * The half of Claude Code agents whose launches keep the main conversation's
+ * prompt cache for an hour rather than the CLI's default five minutes, its
+ * workers left on that default: those whose id, a UUID
+ * as Postgres writes it, begins with one of these hex digits. Note that the
+ * weekly agent audit reads this rule to tell the halves apart, recomputing it
+ * from `agent.id` alone (`left(agent.id::text, 1) between '0' and '7'`), so
+ * it changes only with the audit's query. An agent on a Claude subscription
+ * is left out whatever its id, since the CLI already caches for an hour there.
+ */
+const PROMPT_CACHE_HOUR_DIGITS: ReadonlySet<string> = new Set("01234567");
+
 /** The effort the CLI takes for the agent's own, where it names one of the SDK's. */
 function effortOf(effort: string): Effort | undefined {
   return Object.values(EFFORT).find((level) => level === effort);
@@ -183,15 +195,15 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
   });
 
   /**
-   * The account's Anthropic API key opened, as the CLI's documented
+   * The account's Anthropic API key the launch chose opened, as the CLI's documented
    * `ANTHROPIC_API_KEY` (https://code.claude.com/docs/en/agent-sdk/quickstart),
    * for a launch the starter's key pays for, or a Preview's stand-in where
    * that key is gone or unreadable (`accounts/own-api-key.ts`); refused
    * where neither is.
    */
-  const apiKeyCredential = Effect.gen(function* () {
+  const apiKeyCredential = Effect.fnUntraced(function* (keyId: string | undefined) {
     const environment = yield* HostedEnvironment;
-    const key = yield* ownApiKeyOf(userId, PROVIDER_KEY_PROVIDER.ANTHROPIC, environment);
+    const key = yield* ownApiKeyOf(userId, PROVIDER_KEY_PROVIDER.ANTHROPIC, environment, keyId);
     if (key === undefined) {
       return yield* new LaunchRefused({ reason: "no API key", keyRefusal: KEY_REFUSAL.MISSING });
     }
@@ -237,6 +249,10 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
       const model = providerModelOf(agent.model);
       if (model === undefined) return yield* Effect.fail(new LaunchRefused({ reason: "model" }));
       const effort = effortOf(agent.effort);
+      // Note that the launch chose and recorded who pays before its config is written.
+      const { payer } = yield* recordedPayer(agent);
+      const cacheHour =
+        payer === AGENT_PAYER.API_KEY && PROMPT_CACHE_HOUR_DIGITS.has(agent.id.charAt(0));
       const written: ClaudeCodeConfig = {
         harness: RUNNER_HARNESS.CLAUDE_CODE,
         cwd: layout.checkoutPath,
@@ -244,6 +260,7 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
         model: model.modelId,
         ...(effort === undefined ? undefined : { effort }),
         ...(model.speed === MODEL_SPEED.FAST ? { fast: true } : undefined),
+        ...(cacheHour ? { promptCacheHour: true } : undefined),
         append: yield* options.instructions(agent, layout),
         ...(resume === undefined ? undefined : { resume }),
         ...(rewindBefore === undefined ? undefined : { rewindBefore }),
@@ -300,7 +317,7 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
       Effect.gen(function* () {
         const turn = yield* turnPayerOf(userId, agent.id, MODEL_PROVIDER.ANTHROPIC);
         return yield* turn.payer === AGENT_PAYER.API_KEY
-          ? apiKeyCredential
+          ? apiKeyCredential(turn.subscriptionId)
           : planCredential(turn.subscriptionId);
       }),
     config,

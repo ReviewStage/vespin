@@ -29,6 +29,7 @@ import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import type { PortActPayload } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
 import { STATUS_TONE } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import {
   mutationOptions,
@@ -729,24 +730,27 @@ interface PendingStart {
 /**
  * Starts a new agent on the open task from one of its agents' whole
  * transcript, with the developer's words and the files attached to them as
- * its note where given, and where `runsOn` names, which moves the agent
- * there (`move-agent.tsx`); answers why it did not start, or nothing once
- * it did.
+ * its note where given, where `runsOn` names, which moves the agent
+ * there (`move-agent.tsx`), and on `choice` where one is given, which a
+ * refused turn's offer names (`refusal-offer.ts`), else on the source's
+ * own; answers why it did not start, or nothing once it did.
  */
 export type AgentContinuer = (
   agentId: string,
   note?: string,
   attachments?: readonly AgentAttachment[],
   runsOn?: AgentRunsOnRequest,
+  choice?: ModelChoice,
 ) => Promise<Failure | undefined>;
 
-/** A continue on its way or asked again: the task or the page's agent it was pressed on, the key the press minted, the note and files it carried, and where it moves the agent, if anywhere. */
+/** A continue on its way or asked again: the task or the page's agent it was pressed on, the key the press minted, the note and files it carried, where it moves the agent, if anywhere, and the choice it runs on, if one was named. */
 interface PendingContinue {
   on: string;
   key: string;
   note: string | undefined;
   attachments: readonly AgentAttachment[];
   runsOn: AgentRunsOnRequest | undefined;
+  choice: ModelChoice | undefined;
 }
 
 /** Whether two presses name the same place, or both none. */
@@ -948,6 +952,18 @@ export function useAgents(input: {
       }),
     [toast],
   );
+  const limitReached = useCallback(
+    (words: string) =>
+      toast({
+        replayUnmasked: true,
+        words,
+        tone: STATUS_TONE.ATTENTION,
+        // The clock the usage-limit card wears, so a limit reads as the one thing wherever it is said.
+        glyph: GLYPH.TIME,
+        hold: TOAST_HOLD.FAILED,
+      }),
+    [toast],
+  );
   // Note that the acts and the opening are read through a ref, because the
   // tab hands new closures on every render and a read is owed to the task
   // opening, not to a render.
@@ -1121,7 +1137,13 @@ export function useAgents(input: {
   // Note that a press carries the key its agent's last press minted while the
   // service has not answered it and the words, files, and place are the same,
   // so a press asked again opens the agent the first may already have started.
-  const continueAgent: AgentContinuer = async (sourceId, note, attachments = [], runsOn) => {
+  const continueAgent: AgentContinuer = async (
+    sourceId,
+    note,
+    attachments = [],
+    runsOn,
+    choice,
+  ) => {
     if (startsOn === undefined) return undefined;
     const held = continues.current.get(sourceId);
     const carried = note !== undefined || attachments.length > 0 ? (note ?? "") : undefined;
@@ -1130,10 +1152,18 @@ export function useAgents(input: {
       held.on === startsOn &&
       held.note === carried &&
       sameFiles(held.attachments, attachments) &&
-      samePlace(held.runsOn, runsOn)
+      samePlace(held.runsOn, runsOn) &&
+      sameChoice(held.choice, choice)
         ? held.key
         : mintKey();
-    continues.current.set(sourceId, { on: startsOn, key, note: carried, attachments, runsOn });
+    continues.current.set(sourceId, {
+      on: startsOn,
+      key,
+      note: carried,
+      attachments,
+      runsOn,
+      choice,
+    });
     // Note that only this press's own key is let go, because another press of the agent, to another
     // place or with other words, may have replaced it while this one was out.
     const forgetPress = () => {
@@ -1145,6 +1175,7 @@ export function useAgents(input: {
       ...(carried === undefined ? undefined : { note: carried }),
       ...(attachments.length === 0 ? undefined : { attachments }),
       ...(runsOn === undefined ? undefined : { runsOn }),
+      ...(choice === undefined ? undefined : choiceRequest(choice)),
     });
     if ("failure" in answer) {
       // Only a service that never answered is asked again under the same key.
@@ -1157,10 +1188,12 @@ export function useAgents(input: {
       };
       // Note that a move is chosen from a menu, which has no line beside it to say why, so its
       // refusal is said in a toast wherever the developer stands.
-      if (runsOn !== undefined) failed(refused.text, shown);
-      else if ((latest.current.taskId ?? latest.current.agentId) !== startsOn) {
-        failed(START_FAILED_AWAY, shown);
-      }
+      const away = (latest.current.taskId ?? latest.current.agentId) !== startsOn;
+      // A plan's reached limit is said calmly in its own words, never as a failure to start.
+      if (answer.failure === AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED) {
+        if (runsOn !== undefined || away) limitReached(refused.text);
+      } else if (runsOn !== undefined) failed(refused.text, shown);
+      else if (away) failed(START_FAILED_AWAY, shown);
       return refused;
     }
     forgetPress();

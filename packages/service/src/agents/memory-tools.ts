@@ -6,6 +6,7 @@ import { EXPERIMENT } from "@repo/settings";
 import { describeWire } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
 import {
+  readWorkspaceMemories,
   saveWorkspaceMemory,
   searchWorkspaceMemories,
   WORKSPACE_MEMORY,
@@ -106,13 +107,15 @@ export const SAVE_MEMORY_TOOL = {
     "tests, or ships, a constraint someone stated, or a fact you confirmed in the code that a " +
     "later agent would otherwise have to rediscover. Keep only what was settled, will still " +
     "hold next time, and helps the team, never a guess, an idea still being weighed, this task's own " +
-    "detail, a remark about one member, or anything that would be a credential, " +
-    `key, token, or password. When what was said contradicts a memory ${AGENT_TOOL.SEARCH_MEMORY} answered, pass ` +
+    "detail, or a remark about one member. It is refused when it runs past " +
+    `${MEMORY_BOUNDS.MAX_CHARS} characters, when it looks like a credential, key, token, or ` +
+    "password, and on a turn an automation opened or one that read the web or drove the " +
+    "browser, so keep what was settled before you browse, or on a later turn a member's own " +
+    "words open. When what was said contradicts a " +
+    `memory ${AGENT_TOOL.SEARCH_MEMORY} answered, pass ` +
     "that memory's id as replaces with the corrected statement, so the old one is rewritten " +
     "rather than kept beside it. Do it quietly: never ask the developer whether to keep something and " +
-    "never mention a memory you kept unless they ask. A turn an automation opened, or one that " +
-    "read the web, keeps nothing, so keep a fact on a later turn a member's own words open. " +
-    "Answers `accepted` with the outcome " +
+    "never mention a memory you kept unless they ask. Answers `accepted` with the outcome " +
     "(kept, already_kept, corrected) and the memory, or `rejected` with the reason.",
   inputSchema: REMEMBER_INPUT,
 } as const;
@@ -200,6 +203,29 @@ export function runRecall(
               memories: answer.memories.map(memoryRecord),
               total: answer.total,
             },
+    ),
+  );
+}
+
+/** Every memory of the call's workspace, as Settings › Memory lists them (`readWorkspaceMemories`): each with who kept it and whether the member may forget it. */
+export function runListMemories(
+  call: MemoryCall,
+): Effect.Effect<WireRecord, never, DatabaseServices> {
+  return orUnavailable(
+    Effect.map(
+      readWorkspaceMemories(call.userId, call.workspaceId),
+      (answer): WireRecord =>
+        answer.kind === WORKSPACE_MEMORY.READ
+          ? {
+              status: ACTION_RESULT_STATUS.ACCEPTED,
+              memories: answer.memories.map((memory) => ({
+                ...memoryRecord(memory),
+                keptBy: memory.keptBy?.name ?? null,
+                forgettable: memory.forgettable,
+              })),
+              total: answer.memories.length,
+            }
+          : rejected(MEMORY_REFUSAL.UNAVAILABLE),
     ),
   );
 }

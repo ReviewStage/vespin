@@ -79,6 +79,7 @@ export type AccountAsksClient = Pick<
   | "removeGitHubToken"
   | "forgetMemory"
   | "transcribeDictation"
+  | "markActive"
 >;
 
 export interface AccountAsksDependencies extends AccountGateDependencies {
@@ -384,6 +385,8 @@ function actsOf(
     ),
     // Note that the clip passes through once and is noted nowhere, because its words are the developer's voice.
     DICTATION_TRANSCRIBE: (clip) => asked(client.transcribeDictation(clip)),
+    // Note that the beat carries nothing and its answer is read by no one, so a signed-out window's is dropped at the gate.
+    ACCOUNT_ACTIVE: () => Effect.asVoid(asked(client.markActive())),
     // A removal is drawn gone over the held hosts the moment it is asked.
     HOSTS_REMOVE: declaredWrite(
       pool,

@@ -1063,6 +1063,33 @@ it.effect(
       assert.equal(options.env?.PLAYWRIGHT_BROWSERS_PATH, "0");
       // The first turn waits on no server the CLI may connect in the background.
       assert.equal(options.env?.CLAUDE_CODE_MCP_STARTUP_WAIT_MS, "0");
+      // The main conversation alone keeps its prompt cache for an hour, and only where the config asks for it,
+      // whatever the runner's own environment holds.
+      const inheritedEnv = {
+        ...ENV,
+        CLAUDE_CODE_PROMPT_CACHE_TTL: "1h",
+        ENABLE_PROMPT_CACHING_1H: "1",
+        FORCE_PROMPT_CACHING_5M: "1",
+      };
+      const cacheEnvOf = (config: RunnerConfig) =>
+        Effect.gen(function* () {
+          const launched = yield* launch(SHORT_TURN, fakeService(), inheritedEnv);
+          yield* launched.write(config);
+          yield* launched.write(FIRST_MESSAGE);
+          yield* Fiber.join(launched.run);
+          const env = launched.cli.options?.env;
+          return [
+            env?.CLAUDE_CODE_PROMPT_CACHE_TTL,
+            env?.ENABLE_PROMPT_CACHING_1H,
+            env?.FORCE_PROMPT_CACHING_5M,
+          ];
+        });
+      assert.deepEqual(yield* cacheEnvOf(CONFIG), [undefined, undefined, "1"]);
+      assert.deepEqual(yield* cacheEnvOf({ ...CONFIG, promptCacheHour: true }), [
+        "1h",
+        undefined,
+        undefined,
+      ]);
     }),
 );
 
@@ -1394,6 +1421,24 @@ it.effect.each([
     assert.equal(cli.options?.resume, resume);
     assert.equal(cli.options?.resumeSessionAt, at);
   }),
+);
+
+it.effect(
+  "hands the CLI a message resent to a session that holds it under a uuid of its own, which the CLI answers",
+  () =>
+    Effect.gen(function* () {
+      const line = "20000000-0000-4000-8000-000000000001";
+      const service = fakeService();
+      const { cli, write, run } = yield* launch(SHORT_TURN, service, ENV, [line]);
+      yield* write(CONFIG);
+      yield* write({ ...FIRST_MESSAGE, uuid: line, resent: true });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      const accepted = service.applied.flatMap(({ message }) =>
+        "type" in message && message.type === RUNNER_EVENT.ACCEPTED ? [message.uuid] : [],
+      );
+      assert.deepEqual([accepted, cli.prompts.length], [[line], 1]);
+    }),
 );
 
 it.effect(

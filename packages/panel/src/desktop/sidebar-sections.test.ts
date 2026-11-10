@@ -819,18 +819,18 @@ test("two sections titled alike are two items in Move to section, on one task's 
   );
 });
 
-/** The scope switcher, whose menu offers New section. */
-function scopeSwitcher(sidebar: HTMLElement): HTMLButtonElement {
+/** The Tasks head's New section, which names a section in place. */
+function newSectionButton(sidebar: HTMLElement): HTMLButtonElement {
   return (
-    sidebar.querySelector<HTMLButtonElement>('.sidebar-scope button[aria-haspopup="menu"]') ??
-    assert.fail("no scope switcher")
+    sidebar.querySelector<HTMLButtonElement>(
+      '.sidebar-tasks-head button[aria-label="New section"]',
+    ) ?? assert.fail("no New section on the Tasks head")
   );
 }
 
-/** Chooses New section in the scope switcher's menu, which names a section in place. */
+/** Presses the Tasks head's New section, which names a section in place. */
 function newSectionInPlace(sidebar: HTMLElement): HTMLInputElement {
-  act(() => scopeSwitcher(sidebar).click());
-  act(() => item("New section").click());
+  act(() => newSectionButton(sidebar).click());
   return sectionNameField();
 }
 
@@ -926,7 +926,7 @@ test("New section's field is labeled, and Enter on a blank name marks it invalid
   assert.deepEqual(writes, [], "no section is made from a blank name");
 });
 
-test("New section in the scope switcher's menu names a section in place, with no dialog, and Return makes it", async () => {
+test("New section on the Tasks head names a section in place, with no dialog, and Return makes it", async () => {
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes);
 
@@ -945,7 +945,7 @@ test("New section in the scope switcher's menu names a section in place, with no
   assert.equal(document.querySelector('input[aria-label="Section name"]'), null);
 });
 
-test("Escape on a section named in place makes nothing and hands the focus back to the scope switcher", async () => {
+test("Escape on a section named in place makes nothing and hands the focus back to New section", async () => {
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes);
 
@@ -955,7 +955,7 @@ test("Escape on a section named in place makes nothing and hands the focus back 
 
   assert.deepEqual(writes, []);
   assert.equal(document.querySelector('input[aria-label="Section name"]'), null);
-  assert.equal(document.activeElement, scopeSwitcher(sidebar));
+  assert.equal(document.activeElement, newSectionButton(sidebar));
 });
 
 test("Rename names a section in place, and Return keeps the new name with the icon it wears", async () => {

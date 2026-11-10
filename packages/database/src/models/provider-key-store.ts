@@ -24,16 +24,15 @@ import type { TaskStoreEffect, TaskStoreFailure } from "./task-store.js";
  * account, so no account reads, replaces, or removes another's key. What
  * goes in and out is sealed: this module never sees a key in the clear,
  * and a row read here is opened by its caller with the ring the
- * environment holds. A save of an API key replaces the provider's one API
- * key whole, as a new key added now and verified now, since a key is saved
- * only once its provider accepted it, with whether its organization may run
- * fast mode as the save's own fast request found it. A subscription
- * credential is a row of its own kind, saved unverified, since no provider
- * is asked about it before an agent runs on it, and an account holds as
- * many of a kind as it adds, each its own id, in the account's order. A
- * call that names a subscription by its id reaches that one; one that names
- * none reaches the first of its kind in that order, which is the one every
- * agent runs on until a turn chooses among them. A status is written
+ * environment holds. An account holds as many credentials of a kind as it
+ * adds, API keys and subscriptions alike, each its own row and id, in the
+ * account's one order per provider. An API key is saved verified, since a
+ * key is saved only once its provider accepted it, with whether its
+ * organization may run fast mode as the save's own fast request found it; a
+ * subscription credential is saved unverified, since no provider is asked
+ * about it before an agent runs on it. A call that names a row by its id
+ * reaches that one; one that names none reaches the first of its kind in
+ * that order. A status is written
  * against the sealed key a step ran on, so a step on a key since replaced
  * marks nothing of its successor.
  *
@@ -233,30 +232,6 @@ const savedColumns = (write: typeof SavedSchema.Type) => ({
 
 const IdSchema = Schema.Struct({ id: Schema.String });
 
-/** The provider's one API key written at `position`, or written over the one it held, which keeps its own. */
-const upsertApiKey = SqlSchema.findOne({
-  Request: Schema.Struct({ ...SavedSchema.fields, position: Schema.Int }),
-  Result: IdSchema,
-  execute: (write) =>
-    Database.use((db) =>
-      db
-        .insert(accountProviderKey)
-        .values({
-          userId: write.userId,
-          provider: write.provider,
-          kind: write.kind,
-          position: write.position,
-          ...savedColumns(write),
-        })
-        .onConflictDoUpdate({
-          target: [accountProviderKey.userId, accountProviderKey.provider],
-          targetWhere: eq(accountProviderKey.kind, PROVIDER_KEY_KIND.API_KEY),
-          set: savedColumns(write),
-        })
-        .returning({ id: accountProviderKey.id }),
-    ),
-});
-
 /**
  * The account's credentials of the provider, its plans and its API key
  * alike, locked, in the one order they pay in: what a save chooses the row
@@ -408,12 +383,13 @@ const updateStatus = SqlSchema.void({
     ),
 });
 
-/** The statuses an agent's turn may write on its plan's row, as `setPlanStatus` says. */
+/** The statuses an agent's turn may write on the row that paid for it, as `setPlanStatus` says: a key's quota among them. */
 const PlanStatusSchema = Schema.Literals([
   PROVIDER_KEY_STATUS.VERIFIED,
   PROVIDER_KEY_STATUS.INVALID,
   PROVIDER_KEY_STATUS.LIMIT_REACHED,
   PROVIDER_KEY_STATUS.INELIGIBLE,
+  PROVIDER_KEY_STATUS.QUOTA_EXCEEDED,
 ]);
 
 /** A plan's status as a turn found it, on whatever credential the row holds now, as `setPlanStatus` bounds it. */
@@ -574,11 +550,11 @@ export function listAccountProviderKeyRows(
   return findAccountRows({ userId });
 }
 
-/** Which subscription a save of one lands on; an API key's save names none, since a provider holds one. */
+/** Which row of its kind a save lands on, a subscription's or an API key's. */
 export interface SubscriptionPlacement {
-  /** The subscription to replace, by its id; one the account no longer holds is added at the bottom instead. */
+  /** The row to replace, by its id; one the account no longer holds is added at the bottom instead. */
   readonly subscriptionId?: string;
-  /** Whether to add it at the bottom of the account's order rather than replace the first of its kind. */
+  /** Whether to add it at the bottom of the account's order rather than replace the first of its kind; an API key is always added unless an id is named. */
   readonly add?: boolean;
   /** The account a ChatGPT subscription signed in as: a stored subscription signed in as it is replaced, whatever else the save names. */
   readonly accountEmail?: string;
@@ -604,12 +580,13 @@ function landingOf(
 /**
  * Keeps a credential for the account as added now, an API key verified, a
  * subscription credential unverified, with its fast access where the save
- * found it, and answers the id of the row it landed on. An API key replaces
- * the provider's one API key. A subscription replaces the one `placement`
- * names, as `landingOf` reads it: by default the first of its kind, so a
- * caller that names none replaces the one agents run on, and is added at
- * the bottom of the account's order where it names none to replace or adds.
- * The provider's credentials of another kind stay as they are.
+ * found it, and answers the id of the row it landed on. It replaces the row
+ * of its kind `placement` names, as `landingOf` reads it, which keeps its
+ * place and name: a subscription by default the first of its kind, so a
+ * caller that names none replaces the one agents run on, and an API key
+ * only the one its id names, since an account may keep several. Where it
+ * names none to replace, or adds, it is added at the bottom of the account's
+ * order. The provider's credentials of another kind stay as they are.
  */
 export function saveProviderKey(
   userId: string,
@@ -632,21 +609,15 @@ export function saveProviderKey(
     client.withTransaction(
       Effect.gen(function* () {
         const rows = yield* lockProviderRows({ userId, provider });
-        // An upsert or insert that returned no row is the database breaking its own contract, not an outcome.
-        if (kind === PROVIDER_KEY_KIND.API_KEY) {
-          // Note that a key replaced keeps its place, which the upsert leaves as it stood.
-          return (yield* upsertApiKey({ ...write, position: bottomOf(rows) }).pipe(
-            Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
-          )).id;
-        }
         const id = landingOf(
           rows.filter((row) => row.kind === kind),
-          placement,
+          kind === PROVIDER_KEY_KIND.API_KEY ? { ...placement, add: true } : placement,
         );
         if (id !== undefined) {
           yield* overwriteSubscription({ ...placed, id });
           return id;
         }
+        // An insert that returned no row is the database breaking its own contract, not an outcome.
         return (yield* insertSubscription({ ...placed, position: bottomOf(rows) }).pipe(
           Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
         )).id;
@@ -746,7 +717,7 @@ export function setProviderKeyForAgents(
 }
 
 /**
- * Names the account's subscription of this kind and id, or clears its name
+ * Names the account's subscription or API key of this kind and id, or clears its name
  * where `label` is null, so it is shown by its default again; naming one it
  * does not hold moves nothing.
  */

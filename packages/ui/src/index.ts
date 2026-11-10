@@ -94,7 +94,6 @@ export * from "./components/menu/link-address.js";
 export * from "./components/menu/menu.js";
 export * from "./components/menu/menu-surface.js";
 export * from "./components/menu/touch-hold.js";
-export * from "./components/menu-keys/menu-keys.js";
 export * from "./components/menu-section/menu-section.js";
 export * from "./components/message/message.js";
 export * from "./components/message/message-failed-mark.js";

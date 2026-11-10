@@ -7,15 +7,7 @@ import {
   type ProviderKeyStatus,
 } from "@repo/features/provider-key-wire";
 import { sql } from "drizzle-orm";
-import {
-  boolean,
-  doublePrecision,
-  index,
-  integer,
-  pgTable,
-  text,
-  uniqueIndex,
-} from "drizzle-orm/pg-core";
+import { boolean, doublePrecision, index, integer, pgTable, text } from "drizzle-orm/pg-core";
 import { timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
 
@@ -23,10 +15,10 @@ import { user } from "./auth.js";
  * One of an account's own provider credentials, an API key or a
  * subscription's credential as its kind says, sealed by
  * `models/provider-key-seal.ts`: no column holds the key or the data key in
- * the clear. A provider holds at most one API key, and as many
- * subscriptions of a kind as the account adds, each its own row in the
- * account's order (`position`), so a provider's API key and its
- * subscriptions stand side by side. The hint is the one part of the key
+ * the clear. A provider holds as many API keys, and as many subscriptions
+ * of a kind, as the account adds, each its own row in the account's order
+ * (`position`), so a provider's API keys and its subscriptions stand side
+ * by side. The hint is the one part of the key
  * kept readable, its prefix and last four characters, so the account can
  * tell its keys apart. Saving over a row replaces its credential whole,
  * removing one deletes it, and every row leaves with the account.
@@ -83,17 +75,13 @@ export const accountProviderKey = pgTable(
     usageResetsAt: timestamptz("usage_resets_at"),
     /** Where the credential stands in its provider's one order, its plans and its API key alike, the first paying first. */
     position: integer("position").notNull().default(0),
-    /** The name the account gave the subscription; null for the name it is shown by default. */
+    /** The name the account gave the subscription or API key; null for the name it is shown by default. */
     label: text("label"),
     /** The email of the account a ChatGPT subscription signed in as, as its ID token named it; null for every other kind. */
     accountEmail: text("account_email"),
     createdAt: timestamptz("created_at").notNull(),
   },
   (table) => [
-    // A provider holds one API key per account, which a save replaces.
-    uniqueIndex("account_provider_key_api_key")
-      .on(table.userId, table.provider)
-      .where(sql`${table.kind} = 'api_key'`),
     // An account's subscriptions of a kind are read in their order.
     index("account_provider_key_order").on(
       table.userId,
