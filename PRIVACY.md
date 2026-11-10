@@ -58,7 +58,8 @@ as written, not end-to-end encrypted, and our operators can read them.
 When you rest the pointer on a plain web link in a conversation, a thread, or
 a description, Vespin shows a card of the page it opens: its title,
 description, site name, icon, and picture. To draw it, the Service fetches
-that page, and the icon and picture it names, from our servers, so the site
+that page, and the icon and picture it names, from our servers over HTTPS
+only, so the site
 sees a request from Vespin and never from your Mac or browser, with no cookie
 or credential of yours. The Service refuses addresses inside a network and
 keeps what a page answered for a few minutes, keyed by the address alone and

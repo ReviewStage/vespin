@@ -11,7 +11,7 @@ import { type HopAnswer, type HopRequest, readLinkPreview } from "./link-preview
 /**
  * link-preview-read.test.ts -- a page is read for a link's card only where
  * its address, every redirect's, and every picture's stand on the public
- * internet: a private, loopback, link-local, or metadata address, in IPv4
+ * internet over HTTPS: a plaintext address, a private, loopback, link-local, or metadata address, in IPv4
  * or IPv6, mapped or not, a host that resolves to one, and a redirect into
  * one are refused before a byte is sent there; a connection goes only to
  * the addresses the check saw, the name resolved once per hop, so a name
@@ -98,20 +98,21 @@ const PAGE = "https://docs.example.com/guide";
 
 it.effect.each([
   { name: "a scheme that is not the web's", href: "ftp://files.example.com/readme" },
+  { name: "a plaintext web address", href: "http://docs.example.com/guide?token=abc" },
   { name: "a credential in the address", href: "https://user:secret@docs.example.com/" },
   { name: "a port that is not the web's", href: "https://docs.example.com:8443/" },
-  { name: "a loopback name", href: "http://localhost/admin" },
-  { name: "a bare name with no dot", href: "http://intranet/" },
-  { name: "a loopback IPv4 address", href: "http://127.0.0.1/" },
-  { name: "a loopback IPv6 address", href: "http://[::1]/" },
-  { name: "a private IPv4 address", href: "http://10.0.0.5/" },
-  { name: "a private IPv4 address in 172.16/12", href: "http://172.31.255.1/" },
-  { name: "a private IPv4 address in 192.168/16", href: "http://192.168.1.1/" },
-  { name: "the cloud metadata address", href: "http://169.254.169.254/latest/meta-data/" },
-  { name: "the cloud metadata address in IPv6", href: "http://[fd00:ec2::254]/latest/meta-data/" },
-  { name: "a private IPv4 address mapped into IPv6", href: "http://[::ffff:10.0.0.1]/" },
-  { name: "a link-local IPv6 address", href: "http://[fe80::1]/" },
-  { name: "the unspecified address", href: "http://0.0.0.0/" },
+  { name: "a loopback name", href: "https://localhost/admin" },
+  { name: "a bare name with no dot", href: "https://intranet/" },
+  { name: "a loopback IPv4 address", href: "https://127.0.0.1/" },
+  { name: "a loopback IPv6 address", href: "https://[::1]/" },
+  { name: "a private IPv4 address", href: "https://10.0.0.5/" },
+  { name: "a private IPv4 address in 172.16/12", href: "https://172.31.255.1/" },
+  { name: "a private IPv4 address in 192.168/16", href: "https://192.168.1.1/" },
+  { name: "the cloud metadata address", href: "https://169.254.169.254/latest/meta-data/" },
+  { name: "the cloud metadata address in IPv6", href: "https://[fd00:ec2::254]/latest/meta-data/" },
+  { name: "a private IPv4 address mapped into IPv6", href: "https://[::ffff:10.0.0.1]/" },
+  { name: "a link-local IPv6 address", href: "https://[fe80::1]/" },
+  { name: "the unspecified address", href: "https://0.0.0.0/" },
   {
     name: "a host that resolves to a private address",
     href: "https://intranet.example.com/",
@@ -125,7 +126,7 @@ it.effect.each([
   {
     name: "a redirect to the cloud metadata address",
     href: "https://docs.example.com/go",
-    answers: { "https://docs.example.com/go": () => redirect("http://169.254.169.254/") },
+    answers: { "https://docs.example.com/go": () => redirect("https://169.254.169.254/") },
   },
   {
     name: "a redirect to a host that resolves to a private address",

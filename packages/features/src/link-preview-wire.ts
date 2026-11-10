@@ -10,8 +10,8 @@ import { Schema as EffectSchema } from "effect";
  * its icon and Open Graph picture, each picture's bytes in base64 under
  * the type they sniff as, so the window draws it from a `data:` URL of its
  * own and loads nothing from a third party. A page the service may not
- * read (`LINK_PREVIEW_REFUSAL.ADDRESS`): one not on the web, or at an
- * address inside a network rather than on the internet; one it could not
+ * read (`LINK_PREVIEW_REFUSAL.ADDRESS`): one not on the web over HTTPS, or
+ * at an address inside a network rather than on the internet; one it could not
  * read in time, that is no HTML, or that answered nothing is `UNREAD`. The
  * bounds are the policy, held here alone so moving one is one edit: a page
  * says each thing in at most so many characters, and a picture past its
@@ -52,7 +52,7 @@ export type LinkPreviewPictureType =
 
 /** Why a page has no preview: its address is none the service reads, or the page could not be read. */
 export const LINK_PREVIEW_REFUSAL = {
-  /** The address is not a web page's, or names a host inside a network rather than on the internet. */
+  /** The address is not an HTTPS web page's, or names a host inside a network rather than on the internet. */
   ADDRESS: "address",
   /** The page did not answer in time, answered no HTML, or answered an error. */
   UNREAD: "unread",

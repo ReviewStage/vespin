@@ -138,13 +138,13 @@ export function charsetOf(headBytes: Uint8Array): string | undefined {
   return META_CHARSET.exec(headOf(latin))?.[1]?.toLowerCase();
 }
 
-/** An address a page names, made absolute against the page's own; none where it makes no web address. */
+/** An address a page names, made absolute against the page's own; none where it makes no HTTPS web address, as the guard reads none. */
 function absolute(address: string | undefined, page: URL): string | undefined {
   if (address === undefined) return undefined;
   const spelled = address.trim();
   if (spelled === "" || !URL.canParse(spelled, page)) return undefined;
   const url = new URL(spelled, page);
-  return url.protocol === "http:" || url.protocol === "https:" ? url.href : undefined;
+  return url.protocol === "https:" ? url.href : undefined;
 }
 
 /** What a page's head says of the page, from its markup and its own address. */

@@ -3,8 +3,9 @@
  *
  * A preview is a fetch of an address a member hovered, from the service's
  * own network, so what it may reach is held here before any byte is sent.
- * Only `http` and `https` are read, on their own ports, with no credential
- * in the address; a host is named by a public name with a dot in it, never
+ * Only `https` is read, on its own port, with no credential in the
+ * address, since an address may carry a token of the member's that a
+ * plaintext fetch would show to whoever watches the service's path out; a host is named by a public name with a dot in it, never
  * by a LAN or loopback name (`REFUSED_HOST_SUFFIXES`); and every address
  * the host resolves to must be public: none of the private, loopback,
  * link-local, carrier-grade NAT, multicast, reserved, documentation, or
@@ -22,9 +23,8 @@
 
 import { isIPv4, isIPv6 } from "node:net";
 
-/** The schemes a page is read over, each on its own port alone. */
+/** The scheme a page is read over, on its own port alone. */
 const WEB_PORT = {
-  "http:": "80",
   "https:": "443",
 } as const;
 
@@ -170,7 +170,7 @@ function refusedHostName(hostname: string): boolean {
 
 /**
  * The address as a page the service may read, before its host is resolved:
- * an `http` or `https` address on its own port with no credential, naming
+ * an `https` address on its own port with no credential, naming
  * a host by a public name, or by a public address literal; none for
  * anything else.
  */
