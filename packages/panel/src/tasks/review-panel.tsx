@@ -12,8 +12,9 @@ import {
 } from "@repo/ui";
 import { GLYPH, MessageSquarePlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
-import { type ReactNode, useId, useRef } from "react";
-import { CommentEditor } from "./comment-editor.js";
+import { type ReactNode, type RefObject, useId, useMemo, useRef } from "react";
+import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
+import { MessageField, useMessageBox } from "./message-box.js";
 import { PENDING_WORDS } from "./pending-comments.js";
 import { ACTS_AT_END_CLASS } from "./pull-request-look.js";
 
@@ -22,7 +23,10 @@ import { ACTS_AT_END_CLASS } from "./pull-request-look.js";
  *
  * The panel says where the review goes, lists the pending comments it
  * holds, takes an optional summary comment, and ends with Discard, while
- * a review is held, then Cancel and the send. What the review says of a
+ * a review is held, then Cancel and the send. The summary is written in the
+ * composer's own field (`MessageField`), as every comment is, so it takes
+ * `@` where the review's comments do, a page's, and none where they go to
+ * GitHub, whose owner stands it under no `@` list. What the review says of a
  * pull request (Comment, Approve, Request changes) stands between the
  * summary and the note where the caller offers it; a page offers none.
  * Escape closes it, Enter in the summary sends, a press outside or the
@@ -82,6 +86,8 @@ interface ReviewDraft {
   readonly setBody: (body: string) => void;
   /** Whether the summary may not be sent as it stands, past what a comment carries. */
   readonly over: boolean;
+  /** The most a summary carries, as a comment where the review goes does. */
+  readonly maxLength: number;
   readonly submit: () => void;
 }
 
@@ -117,7 +123,30 @@ function ReviewPanel({
   onClose: () => void;
   onLeave: (left: EventTarget | null) => void;
 }): React.JSX.Element {
-  const field = useRef<HTMLElement>(null);
+  const box = useMessageBox({
+    draft: draft.body,
+    setDraft: draft.setBody,
+    placeholder: words.placeholder,
+    label: words.body,
+    maxLength: draft.maxLength,
+    onSubmit: () => {
+      if (!sending) draft.submit();
+    },
+    held: sending,
+    takesFiles: false,
+    focus: true,
+    focusedByOwner: true,
+  });
+  // Note that the field is read as the panel asks for it, once the panel stands, because the panel hands the focus before an effect of its owner could find the words; where the editor lands later, the words take the focus themselves.
+  const { room } = box;
+  const field = useMemo<RefObject<HTMLElement | null>>(
+    () => ({
+      get current() {
+        return room.current?.querySelector<HTMLElement>(EDITOR_ROOT_SELECTOR) ?? null;
+      },
+    }),
+    [room],
+  );
   return (
     <PopoverPanel
       open={open}
@@ -139,18 +168,7 @@ function ReviewPanel({
           ))}
         </BlockList>
       )}
-      <CommentEditor
-        label={words.body}
-        placeholder={words.placeholder}
-        value={draft.body}
-        onChange={draft.setBody}
-        busy={sending}
-        focus
-        fieldRef={field}
-        onSubmit={() => {
-          if (!sending) draft.submit();
-        }}
-      />
+      <MessageField box={box} className="review-summary" />
       {choices}
       {note}
       <ReplayUnmask>

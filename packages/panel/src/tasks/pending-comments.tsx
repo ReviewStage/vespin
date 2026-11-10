@@ -36,7 +36,8 @@ import { ReplyForm, type ReplyFormWords } from "./reply-form.js";
  * comment drawn so is told apart by that key (`PendingCommentsProvider`),
  * and draws itself Pending, in the member's own name, with a ⋯ where every
  * comment wears one (`CommentMenu`): beside a reply's name, and at the head
- * of the card a thread it starts stands in. Its Edit opens its words in
+ * of the card a thread it starts stands in, its Pending right after its
+ * name, as GitHub says it. Its Edit opens its words in
  * place, and its Delete asks first, since it cannot be undone. Each is one change on GitHub as the member
  * (`PULL_REQUEST_ACTION.EDIT_REVIEW_COMMENT`, `DELETE_REVIEW_COMMENT`),
  * which the service holds to their own pending review on this pull
@@ -284,12 +285,8 @@ export function PendingComment({
       nameRef={<ActorRef actor={writer} nameOnly />}
       at={head.at}
       now={head.now}
-      trailing={
-        <>
-          <PendingWords />
-          {acts.menu}
-        </>
-      }
+      status={<PendingWords />}
+      trailing={acts.menu}
     >
       {acts.body(words)}
     </Comment>

@@ -3449,7 +3449,7 @@ function PinPreview({
   words,
   files = NO_PREVIEW_FILES,
 }: {
-  head: Pick<Parameters<typeof Comment>[0], "author" | "nameRef" | "at" | "now" | "trailing">;
+  head: Pick<Parameters<typeof Comment>[0], "author" | "nameRef" | "status" | "at" | "now">;
   words: string;
   files?: readonly Pick<FileChip, "name" | "mediaType">[] | undefined;
 }): React.JSX.Element {
@@ -3532,7 +3532,8 @@ function heldWords(comment: HeldComment): string {
 
 /**
  * A comment held in the reader's review, drawn as a posted comment is, in
- * their name: Pending where its time would stand, and its ⋯ at the head's
+ * their name: Pending right after the name, where its time would stand,
+ * whether or not its ⋯ is shown, and its ⋯ at the head's
  * end with Edit, which opens its words in place in a posted comment's edit
  * field, and Delete, which takes it out of the review at once with Undo.
  * Where it stands apart from its element, in the Review panel, its quote line
@@ -3602,15 +3603,13 @@ export function PendingPageComment({
       <Comment
         author={author}
         nameRef={nameRef}
+        status={<PendingWords />}
         trailing={
-          <>
-            <PendingWords />
-            {editing === undefined ? (
-              <div className="comment-tools">
-                <CommentMenu groups={groups} />
-              </div>
-            ) : null}
-          </>
+          editing === undefined ? (
+            <div className="comment-tools">
+              <CommentMenu groups={groups} />
+            </div>
+          ) : undefined
         }
       >
         {title === undefined ? null : (
@@ -3677,7 +3676,7 @@ function HeldPin({
       preview={
         first === undefined ? null : (
           <PinPreview
-            head={{ author, nameRef, trailing: <PendingWords /> }}
+            head={{ author, nameRef, status: <PendingWords /> }}
             words={heldWords(first)}
             files={first.attachments}
           />
@@ -3726,7 +3725,7 @@ function DraftPin({
       onHover={onHint}
       preview={
         <PinPreview
-          head={{ author, nameRef, trailing: <DraftWords /> }}
+          head={{ author, nameRef, status: <DraftWords /> }}
           words={words}
           files={files}
         />

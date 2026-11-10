@@ -1444,13 +1444,8 @@ function ThreadComment({
         nameRef: <ActorRef actor={writer} nameOnly />,
         at: comment.at,
         now,
-        trailing:
-          draft === undefined ? undefined : (
-            <>
-              <PendingWords />
-              {acts.menu}
-            </>
-          ),
+        status: draft === undefined ? undefined : <PendingWords />,
+        trailing: draft === undefined ? undefined : acts.menu,
       };
   return (
     <AnnotationComment reply={reply} className="pull-request-thread-comment">

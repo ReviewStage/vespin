@@ -1437,6 +1437,22 @@
   margin-inline: calc(-1 * var(--ui-control-inset));
 }
 
+/* A review's summary is the composer's own field (`review-panel.tsx`) in a
+   text field's frame: it stands three lines at a text area's insets, as a
+   comment's box opens, and grows a line at a time to the composer's cap. */
+.review-summary .agent-composer-field {
+  --agent-composer-field-block: calc(2 * var(--ui-space-6));
+}
+
+.review-summary .agent-composer-input {
+  min-height: calc(3 * var(--ui-type-body-leading) + var(--agent-composer-field-block));
+  padding: var(--ui-space-6) var(--ui-control-inset);
+}
+
+.review-summary .agent-composer-placeholder {
+  padding: var(--ui-space-6) var(--ui-control-inset) 0;
+}
+
 .comment-editor-frame:has(> .comment-editor-head) {
   padding-inline-end: calc(var(--ui-control-height) + var(--ui-space-4));
 }
