@@ -710,6 +710,10 @@ function fakeService() {
         ),
       ),
     markActive: () => Effect.sync(() => void asked.push("active")),
+    registerPushDevice: () => Effect.succeed({ done: true as const }),
+    unregisterPushDevice: () => Effect.succeed({ done: true as const }),
+    pushDeviceStatus: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
+    setPushDeviceNotify: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
     transcribeDictation: (clip) =>
       Effect.sync(() => {
         asked.push(`transcribe:${clip.audio}:${clip.keywords.join(",")}`);

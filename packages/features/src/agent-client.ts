@@ -69,6 +69,12 @@ import {
   type ProviderKeyRemoveParams,
   type ProviderKeySaveParams,
   type ProviderKeysAnswerView,
+  type PushDeviceDoneAnswerView,
+  type PushDeviceKeyParams,
+  type PushDeviceNotifyAnswerView,
+  type PushDeviceNotifyParams,
+  type PushDeviceRegisterParams,
+  type PushDeviceStatusAnswerView,
   type SubscriptionLabelParams,
   type SubscriptionOrderParams,
 } from "./agent-view.js";
@@ -163,6 +169,12 @@ import {
   type PullRequestActionRequest,
   pullRequestActionRequestSchema,
 } from "./pull-request-write-wire.js";
+import {
+  pushDeviceNotifyRequestSchema,
+  pushDeviceRegisterRequestSchema,
+  pushDeviceStatusRequestSchema,
+  pushDeviceUnregisterRequestSchema,
+} from "./push-device-wire.js";
 import type { RepositoryUnreached } from "./repository-reach-wire.js";
 import { agentGitHubImagePath, agentPicturePath, inboxAttachmentPath } from "./service-paths.js";
 import {
@@ -612,6 +624,42 @@ export class HostedAgentClient {
           : { [PROVIDER_KEY_QUERY.SUBSCRIPTION_ID]: params.subscriptionId }),
       },
     });
+  }
+
+  /** The phone the app runs on registered for pushes under the account; a registration the service would refuse by shape never travels. */
+  registerPushDevice(
+    params: PushDeviceRegisterParams,
+  ): Effect.Effect<PushDeviceDoneAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(pushDeviceRegisterRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.pushDevices.register, admitted);
+  }
+
+  /** The phone unregistered from the account's pushes, as a sign-out does; a key the service would refuse by shape never travels. */
+  unregisterPushDevice(
+    params: PushDeviceKeyParams,
+  ): Effect.Effect<PushDeviceDoneAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(pushDeviceUnregisterRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.pushDevices.unregister, admitted);
+  }
+
+  /** The phone's "Notify me" and how its pushes fared; not found where the account holds no such phone. */
+  pushDeviceStatus(
+    params: PushDeviceKeyParams,
+  ): Effect.Effect<PushDeviceStatusAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(pushDeviceStatusRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.pushDevices.status, admitted);
+  }
+
+  /** The phone's "Notify me" set; not found where the account holds no such phone. */
+  setPushDeviceNotify(
+    params: PushDeviceNotifyParams,
+  ): Effect.Effect<PushDeviceNotifyAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(pushDeviceNotifyRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.pushDevices.notify, admitted);
   }
 
   /** Tells the service the member used this client just now, which holds their phone's pushes (`presence-wire.ts`); its answer is read by no one. */

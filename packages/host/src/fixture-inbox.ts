@@ -48,6 +48,7 @@ import {
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
+import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
 import { TASK_PRIORITY, TASK_STATUS, type Task, type TaskSummary } from "@repo/features/task-wire";
 import type { TasksView } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
@@ -1038,6 +1039,16 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,
   }),
+  // The phone's registration is taken, and its pushes stand working, the last reaching Apple a few minutes before the run landed; a "Notify me" set is taken though nothing here moves, so the screen draws the choice it made itself.
+  [ACT_KIND.PUSH_DEVICE_REGISTER]: () => ({ done: true }),
+  [ACT_KIND.PUSH_DEVICE_UNREGISTER]: () => ({ done: true }),
+  [ACT_KIND.PUSH_DEVICE_STATUS]: () => ({
+    notify: PUSH_NOTIFY.AWAY,
+    lastDeliveredAt: LANDED - 4 * MINUTE,
+    failingSince: null,
+    failureReason: null,
+  }),
+  [ACT_KIND.PUSH_DEVICE_NOTIFY]: () => ({ done: true }),
 };
 
 /**
