@@ -380,6 +380,16 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
     },
     plugins: [
       "expo-router",
+      // A message's photo is picked in the system's photo picker, which reads
+      // only what the person picks, so no camera or microphone is asked for.
+      [
+        "expo-image-picker",
+        {
+          photosPermission: "Vespin attaches the photos you pick to a message to an agent.",
+          cameraPermission: false,
+          microphonePermission: false,
+        },
+      ],
       [
         "expo-splash-screen",
         {

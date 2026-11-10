@@ -21,6 +21,7 @@ the macOS run below. Every command here runs from `apps/mobile`.
 | `pnpm start` | Metro alone, for a Debug app already installed |
 | `xcrun simctl launch booted dev.vespin.ios -fixture inbox` | Launch the installed app on the host's Inbox fixture, as the Maestro flows do, so it reads no server |
 | `xcrun simctl launch booted dev.vespin.ios -authServer stub` | Launch it signed out against the stubbed account service, as `maestro/sign-in.yaml` does |
+| `xcrun simctl launch booted dev.vespin.ios -fixture inbox -agent 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5` | Launch it on the Inbox fixture, opened on its invitations agent's page, as `maestro/agent.yaml` does |
 | `scripts/simulator-build.sh` | Generate `ios/` and build a Release app for the simulator, its bundle embedded, naming the `.app` on its last line |
 | `scripts/simulator-screenshots.sh <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
 | `xcrun simctl io booted screenshot shot.png` | One screenshot of the booted simulator by hand |
@@ -118,14 +119,23 @@ A `-fixture <profile>` launch argument (`src/host/launch-arguments.ts`)
 stands the host on the desktop's synthetic data instead of the service, the
 Inbox profile's threads and the tasks holding them among it
 (`@repo/host/fixture-inbox`), the acts the profile stages, such as a mark,
-a thread's file read, or a reply or a resolve, answered by the fixture, the
+a thread's file read, a reply or a resolve, an agent's message, queue
+change, or Stop, or a New agent or New task start, answered by the fixture,
+the models and repositories those sheets pick among staged, the
 migration's approval refused so a flow sees a refused answer taken back
 (`fixtureActs` in `src/host/fixture-host.ts`), which is how the Maestro
-flows run with no server. A `-authServer stub` launch argument
+flows run with no server. A change to one of the fixture agent's pull
+requests is taken as GitHub would take it and moves it on the document,
+merged or out of the queue (`pullRequestPartsAppState`), so a flow sees its
+press land. A `-authServer stub` launch argument
 instead signs in against an account service the app answers itself
 (`src/host/stub-auth-server.ts`), whose authorization page grants at once,
 which is how `maestro/sign-in.yaml` signs in, relaunches signed in, and
-signs out. What Hermes lacks of the web platform
+signs out. A `-agent <id>` launch argument opens the app on
+that agent's page, as `maestro/agent.yaml` reaches the Inbox fixture's
+invitations agent, whose transcript the fixture holds, and `-pullRequest
+<number>` beside it opens that agent's pull request on its own screen, as
+`maestro/pull-request.yaml` reaches the fixture's failing and queued ones. What Hermes lacks of the web platform
 the host stands on is polyfilled in one place, `src/host/polyfills.ts`, each
 with a line on why; Shiki stays out of the app, and a fenced block is drawn
 plain.
@@ -149,6 +159,10 @@ pull request with UI shows its screenshots to the developer in a thread.
   `List`, `Section`, `Form`, `NavigationSplitView`, and the rest), the
   developer's choice of Nov 8, 2026. A React Native view draws only what
   SwiftUI has no piece for: message markdown and the agent transcript.
+  The transcript is the app's one React Native list (`AgentTranscript`), lazy
+  and anchored at its newest row, and a page an agent showed is its one web
+  view (`SealedPage`, through `react-native-webview`), handed the page's HTML
+  with no network and no navigation.
 - **Every control comes from `@repo/ui-native`**, the app's design system
   (`packages/ui-native/AGENTS.md`), as the web's come from `@repo/ui`. A
   screen composes its components and imports neither `@expo/ui` nor

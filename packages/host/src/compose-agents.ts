@@ -1,5 +1,4 @@
 import type { HostedAgentClient, HostedAgentPortsClient } from "@repo/features";
-import { ACCOUNT_INBOX_REPOSITORYLESS } from "@repo/features/account-inbox-wire";
 import { ACCOUNT_PREFERENCES_READ } from "@repo/features/account-preferences-live";
 import { AGENT_ORIGIN_READ } from "@repo/features/agent-origin-live";
 import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
@@ -443,16 +442,7 @@ export function composeAgents(
     });
     const accounts = yield* accountInboxes({
       seal: (userId, poll, after) =>
-        asked(
-          client.liveRead(
-            ACCOUNT_INBOX_READ,
-            {
-              userId,
-              [ACCOUNT_INBOX_REPOSITORYLESS.QUERY]: ACCOUNT_INBOX_REPOSITORYLESS.INCLUDE,
-            },
-            poll ? { after } : undefined,
-          ),
-        ),
+        asked(client.liveRead(ACCOUNT_INBOX_READ, { userId }, poll ? { after } : undefined)),
       pool: dependencies.pool,
       accountWide,
     });

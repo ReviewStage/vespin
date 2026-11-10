@@ -1,3 +1,4 @@
+import { STOP_FAILED, STOP_NOTHING_YET } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
   type AgentAttachment,
@@ -95,8 +96,6 @@ import {
   type SentLine,
   START_FAILED_AWAY,
   START_NEEDS_TASK,
-  STOP_FAILED,
-  STOP_NOTHING_YET,
   startFailureNote,
 } from "./agent-model.js";
 import {

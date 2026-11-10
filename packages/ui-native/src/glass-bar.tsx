@@ -1,6 +1,6 @@
 // glass-bar.tsx -- the Liquid Glass bar a composer stands in at a screen's foot, and the dock that pins it there above the keyboard.
 
-import { Host, HStack } from "@expo/ui/swift-ui";
+import { Host, HStack, VStack } from "@expo/ui/swift-ui";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { type ReactNode, useEffect, useState } from "react";
 import { Keyboard, StyleSheet, View } from "react-native";
@@ -50,18 +50,34 @@ function useKeyboardHeight(): number {
 /**
  * A bar of glass holding a composer's field and its buttons, floating over
  * the content it scrolls above, as the system's own bars do. Its children
- * are SwiftUI pieces, laid in a row on a host of its own. It stands inside
+ * are SwiftUI pieces, laid in a row on a host of its own, under its head
+ * where it has one. It stands inside
  * the screen's bottom safe area, which the tab bar's height is part of, so
  * the bar sits above the tab bar rather than under it. Note that where
  * Liquid Glass is unavailable, before iOS 26, the bar is drawn on the
  * surface's ground with its edge rather than a hand-drawn copy of glass.
  */
-export function GlassBar({ children }: { readonly children: ReactNode }) {
+export function GlassBar({
+  children,
+  head,
+}: {
+  readonly children: ReactNode;
+  /** What stands over the row inside the same glass, such as a composer's queued messages and attached pictures; nothing where none is given. */
+  readonly head?: ReactNode;
+}) {
   const colors = useColors();
   const keyboard = useKeyboardHeight() > 0;
+  const row = <HStack spacing={SPACE.ROW}>{children}</HStack>;
   const content = (
     <Host matchContents={{ vertical: true }} style={styles.content}>
-      <HStack spacing={SPACE.ROW}>{children}</HStack>
+      {head === undefined ? (
+        row
+      ) : (
+        <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
+          {head}
+          {row}
+        </VStack>
+      )}
     </Host>
   );
   const bar = isLiquidGlassAvailable() ? (

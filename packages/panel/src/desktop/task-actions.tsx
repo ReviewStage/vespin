@@ -9,6 +9,14 @@ import {
   type Task,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import {
+  DOCUMENT_REGION,
+  RENAME_FAILED_NOTE,
+  SETTLED_STATUS,
+  settleOffered,
+  TASK_MARK,
+  type TaskMark,
+} from "@repo/features/tasks-model";
 import { IRREVERSIBLE_WORDS } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
@@ -47,14 +55,6 @@ import { type AssigneeFace, accountActor, assigneeFace, creatorActor } from "@re
 import { confirmAsked } from "@repo/ui/confirm-state";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
-import {
-  DOCUMENT_REGION,
-  RENAME_FAILED_NOTE,
-  SETTLED_STATUS,
-  settleOffered,
-  TASK_MARK,
-  type TaskMark,
-} from "@repo/ui/tasks-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import type { VirtualRowPlace } from "@repo/ui/virtual-rows";
 import { useMutation, useQuery } from "@tanstack/react-query";

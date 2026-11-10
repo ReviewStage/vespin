@@ -4,7 +4,6 @@ import { it } from "@effect/vitest";
 import type { LiveStatement } from "@repo/database/core/live-statement";
 import { Database } from "@repo/database/core/query";
 import { expireTurnApprovals, recordApprovalAsked } from "@repo/database/models/agent-approvals";
-import { agentOwnerFactsOf } from "@repo/database/models/agent-owners";
 import {
   archiveAgent,
   createAgent,
@@ -232,17 +231,8 @@ const heldTaskAgentsOf = (userId: string, taskId: string, now: number) =>
       agents.map((agent) => agent.id),
     );
     const macs = yield* devicesNamed(summaryDevices(agents));
-    const owners = yield* agentOwnerFactsOf(agents);
     return agents.map((agent) =>
-      agentSummary(
-        agent,
-        standing(agent.conversationId),
-        now,
-        names,
-        owners,
-        continuedBy(agent.id),
-        macs,
-      ),
+      agentSummary(agent, standing(agent.conversationId), now, names, continuedBy(agent.id), macs),
     );
   });
 

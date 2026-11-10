@@ -47,6 +47,7 @@ import {
   unplaceAllWrites,
 } from "@repo/features/task-sections-model";
 import type { TaskAgentPin, TaskSummary } from "@repo/features/task-wire";
+import { repositoryPageUrl, TASK_MARK } from "@repo/features/tasks-model";
 import type { UpdateControl } from "@repo/settings/settings-controls";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -115,7 +116,6 @@ import {
 } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, sameTab } from "@repo/ui/tab-strip-model";
-import { repositoryPageUrl, TASK_MARK } from "@repo/ui/tasks-model";
 import { useVirtualRuns, VIRTUAL_ROW_KEY_ATTRIBUTE } from "@repo/ui/virtual-rows";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { runAppCommand, useAppCommand } from "../app-commands.js";

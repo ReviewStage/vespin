@@ -3,8 +3,6 @@
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
   ANSWER_TONE,
-  holderName,
-  INBOX_HOLDER,
   INBOX_MEDIA,
   INBOX_NOT_READ,
   INBOX_READ_MARK,
@@ -164,8 +162,8 @@ function InboxRows({
             id={item.id}
             title={cardTitle(item.title)}
             task={{
-              name: holderName(holder),
-              status: holder.kind === INBOX_HOLDER.TASK ? holder.task.status : undefined,
+              name: holder.task.name,
+              status: holder.task.status,
             }}
             line={inboxLineKind(item)}
             summary={inboxPreview(item, (member) => inboxMemberName(member, readerId))}
@@ -282,10 +280,7 @@ function ThreadDetail({
   const { holder, item } = listed;
   const openPlace = useOpenPlace();
   const titles = useAgentTitles();
-  const agentName =
-    titles.get(item.agentId) ??
-    (holder.kind === INBOX_HOLDER.AGENT ? holder.agent.agentTitle : null) ??
-    UNTITLED_AGENT;
+  const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
   const messages = useMemo(
     () => inboxThreadMessages(item, agentName, readerId),
     [item, agentName, readerId],
@@ -317,15 +312,15 @@ function ThreadDetail({
     [messages],
   );
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
-  const workspaceId =
-    holder.kind === INBOX_HOLDER.TASK ? holder.task.workspaceId : holder.agent.workspaceId;
+  const { workspaceId } = holder.task;
   const workspace = workspaces.find(({ id }) => id === workspaceId);
   // A video the system's player cannot read opens with its thread on vespin.dev in Safari, which plays it.
   const openOnWeb = () => {
-    const place =
-      holder.kind === INBOX_HOLDER.TASK
-        ? { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id }
-        : { kind: LINK_DESTINATION.INBOX_ITEM, agentId: holder.agent.agentId, itemId: item.id };
+    const place = {
+      kind: LINK_DESTINATION.INBOX_ITEM,
+      planId: holder.task.id,
+      itemId: item.id,
+    } as const;
     const address = linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
     openURL(address).catch((error: unknown) => console.error("The thread did not open.", error));
   };
@@ -375,16 +370,14 @@ function ThreadDetail({
       onOpenElsewhere: openOnWeb,
     };
   };
-  const path = [holderName(holder), agentName];
+  const path = [holder.task.name, agentName];
   const page = (
     <ThreadPage
       path={path}
-      status={holder.kind === INBOX_HOLDER.TASK ? holder.task.status : undefined}
+      status={holder.task.status}
       title={cardTitle(item.title)}
       messages={drawn}
-      repository={
-        holder.kind === INBOX_HOLDER.TASK ? holder.task.repository : holder.agent.repository
-      }
+      repository={holder.task.repository}
       onOpenPlace={openPlace}
       pictureSource={pictureSource}
       videoAt={videoAt}

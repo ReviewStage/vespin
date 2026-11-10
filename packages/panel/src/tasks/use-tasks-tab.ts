@@ -22,6 +22,20 @@ import type {
   TaskRelationKind,
   TaskSummary,
 } from "@repo/features/task-wire";
+import {
+  DOCUMENT_REGION,
+  type DocumentRegion,
+  documentRegion,
+  renamedRegion,
+  renamedView,
+  sidebarTasks,
+  TASK_MARK,
+  TASKS_PAGE,
+  type TaskMark,
+  type TaskNames,
+  type TasksPage,
+  tasksPage,
+} from "@repo/features/tasks-model";
 import { TASK_CALL_FAILURE, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -41,20 +55,6 @@ import {
   sameTab,
   subagentTab,
 } from "@repo/ui/tab-strip-model";
-import {
-  DOCUMENT_REGION,
-  type DocumentRegion,
-  documentRegion,
-  renamedRegion,
-  renamedView,
-  sidebarTasks,
-  TASK_MARK,
-  TASKS_PAGE,
-  type TaskMark,
-  type TaskNames,
-  type TasksPage,
-  tasksPage,
-} from "@repo/ui/tasks-model";
 import { useStateWithRef } from "@repo/ui/use-state-with-ref";
 import {
   mutationOptions,
@@ -209,13 +209,11 @@ import { sayRestored } from "./version-view.js";
  * the window's toast. The side panel stands as it was behind it.
  */
 
-/** The item chosen in the window's Inbox, and the task it belongs to. */
-/** The item chosen in the window's Inbox, by the task it stands on, or, for an agent with no task, by its agent. */
+/** The item chosen in the window's Inbox, by the task it stands on. */
 export type InboxChoice =
-  // Note that an item of a task names the agent that posted it too, which its link is written under, but for one an older link named under its task alone; not as `agentId`, which tells a choice on no task.
+  // Note that an item of a task names the agent that posted it too, which its link is written under, but for one an older link named under its task alone.
   (
     | { readonly taskId: string; readonly itemAgentId?: string; readonly itemId: string }
-    | { readonly agentId: string; readonly itemId: string }
     // An item a link named by its id alone that the account may not read, which the Inbox says is missing.
     | { readonly itemId: string }
   ) & {
@@ -685,25 +683,12 @@ function sidebarList(tasks: readonly TaskSummary[]): readonly TaskSummary[] {
   return [...pinned, ...rest];
 }
 
-/** The Inbox's choice of the item a link names: under its task, its agent, or by its id alone. */
-function inboxChoiceOf(place: InboxItemPlace): InboxChoice {
-  if ("planId" in place) return { taskId: place.planId, itemId: place.itemId };
-  return "agentId" in place
-    ? { agentId: place.agentId, itemId: place.itemId }
-    : { itemId: place.itemId };
-}
-
-/** The task an Inbox choice stands on; none for one on no task, or named by its id alone. */
+/** The task an Inbox choice stands on; none for one named by its id alone. */
 function choiceTaskOf(choice: InboxChoice): string | undefined {
   return "taskId" in choice ? choice.taskId : undefined;
 }
 
-/** The agent with no task an Inbox choice stands on; none for one on a task, or named by its id alone. */
-function choiceAgentOf(choice: InboxChoice): string | undefined {
-  return "agentId" in choice ? choice.agentId : undefined;
-}
-
-/** The agent that posted an item of a task an Inbox choice stands on; none for one on no task, or named by its task alone. */
+/** The agent that posted an item of a task an Inbox choice stands on; none for one named by its task alone, or by its id alone. */
 function choiceItemAgentOf(choice: InboxChoice): string | undefined {
   return "taskId" in choice ? choice.itemAgentId : undefined;
 }
@@ -1109,27 +1094,18 @@ export function useTasksTab(input: {
     [pageAgent],
   );
   // The Inbox lists the listed workspace's items alone, so a choice another workspace's list made gives way with it.
-  // Note that an agent's with no task is held to the listed workspace by the list itself, which lists its workspace's alone.
   const inboxChosen = listedInboxChoice(inboxView?.chosen, {
     tasks: tasks.tasks,
     workspace: listedWorkspace,
   });
-  // While the Inbox stands, the panel beside it is the chosen item's task's, or its agent's where it
-  // has no task, as that agent's page's is: what the item opens there, its files, its task's pages,
-  // and its agents' pull requests, and none of the fixed kinds, which the task's page draws.
+  // While the Inbox stands, the panel beside it is the chosen item's task's: what the item opens
+  // there, its files, its task's pages, and its agents' pull requests, and none of the fixed kinds,
+  // which the task's page draws.
   const inboxTask = inboxChosen === undefined ? undefined : choiceTaskOf(inboxChosen);
-  const inboxAgent = inboxChosen === undefined ? undefined : choiceAgentOf(inboxChosen);
-  // Note that an item of an agent on no task opens that agent's own pages beside it (`inbox-item-links.ts`), and that the
-  // pages are held in the host while drawn and a while after, so choosing another item of the task, or the task again, reads none anew.
+  // Note that the pages are held in the host while drawn and a while after, so choosing another item of the task, or the task again, reads none anew.
   const inboxPages = useQuery(
     pagesQuery(
-      inboxView === undefined
-        ? undefined
-        : inboxTask !== undefined
-          ? { taskId: inboxTask }
-          : inboxAgent !== undefined
-            ? { agentId: inboxAgent }
-            : undefined,
+      inboxView === undefined || inboxTask === undefined ? undefined : { taskId: inboxTask },
     ),
   ).data;
   // An agent on no task shows its pages on itself, which its page's panel draws as a task's draws its own.
@@ -1140,10 +1116,6 @@ export function useTasksTab(input: {
   ).data;
   const agentPageIds = useMemo(() => (agentPages ?? NO_PAGES).map((page) => page.id), [agentPages]);
   const inboxPageIds = useMemo(() => (inboxPages ?? NO_PAGES).map((page) => page.id), [inboxPages]);
-  const inboxAgents = useMemo(
-    () => (inboxAgent === undefined ? NO_IDS : [inboxAgent]),
-    [inboxAgent],
-  );
   const inboxTaskAgents = useInboxTaskAgents(inboxView === undefined ? undefined : inboxTask);
   // The cloud Browser tabs, which the panel draws by its holder: an agent's page its agent's,
   // on a task or on none, and a task's own panel its agents', never the Inbox's.
@@ -1185,7 +1157,7 @@ export function useTasksTab(input: {
         : { place: { taskId: panelTaskId }, repository: panelRepository },
     [panelTaskId, panelRepository],
   );
-  const panelPagesAgent = inboxView !== undefined ? inboxAgent : pageAgent;
+  const panelPagesAgent = inboxView !== undefined ? undefined : pageAgent;
   const panelPages = useMemo(
     () =>
       panelTaskId !== undefined
@@ -1217,7 +1189,7 @@ export function useTasksTab(input: {
     stagedPanel,
     inboxView !== undefined
       ? {
-          id: inboxTask ?? inboxAgent,
+          id: inboxTask,
           holds: NO_HOLDS,
           bare: true,
           files: panelFileReads,
@@ -1236,23 +1208,15 @@ export function useTasksTab(input: {
             agent: columnAgent,
           }
         : { id: pageAgent, holds: NO_HOLDS, pages: panelPages },
-    inboxView !== undefined ? inboxAgents : (pageAgents ?? mainTabs.openAgents),
+    inboxView !== undefined ? NO_IDS : (pageAgents ?? mainTabs.openAgents),
     NO_IDS,
     inboxView !== undefined ? inboxPageIds : pageAgents === undefined ? pages : agentPageIds,
     // Note that the task's agents in the Inbox are its own read's (`desktop-inbox.tsx`), which the panel draws a Pull request tab by (`use-inbox-task-agents.ts`).
-    inboxView !== undefined
-      ? inboxAgent === undefined
-        ? inboxTaskAgents.agentIds
-        : inboxAgents
-      : (pageAgents ?? agents.agentIds),
+    inboxView !== undefined ? inboxTaskAgents.agentIds : (pageAgents ?? agents.agentIds),
     input.room,
     cloudBrowsers,
     // Every agent of the task, an archived one among them, whose Pull request tab stands as a live agent's does.
-    inboxView !== undefined
-      ? inboxAgent === undefined
-        ? inboxTaskAgents.heldIds
-        : inboxAgents
-      : (pageAgents ?? agents.heldIds),
+    inboxView !== undefined ? inboxTaskAgents.heldIds : (pageAgents ?? agents.heldIds),
     cloudBrowserAgents,
   );
   const { keys: tabKeys, onKeys, onKeysTaken } = useColumnKeys();
@@ -2406,15 +2370,16 @@ export function useTasksTab(input: {
     // An item of a task the account lists is shown in the task's own workspace, whatever the slug says.
     const holder = planId === null ? undefined : viewed.tasks.find((task) => task.id === planId);
     const linked = linkedHome(holder?.workspaceId ?? workspace);
+    // Note that an item whose task was not found, its agent read as standing on none, is named by its id alone, which the Inbox says is missing where no read holds it.
     const chosen: InboxChoice =
-      holder !== undefined
-        ? {
-            taskId: holder.id,
+      planId === null
+        ? { itemId: place.itemId, opened: true }
+        : {
+            taskId: planId,
             ...("agentId" in place ? { itemAgentId: place.agentId } : undefined),
             itemId: place.itemId,
             opened: true,
-          }
-        : { ...inboxChoiceOf(place), opened: true };
+          };
     // Note that only the narrowing of the Inbox standing is kept, so a link opened from elsewhere opens on every task's list.
     const narrowed = inboxView?.standingIn === undefined ? undefined : inboxView.narrowed;
     standInbox(inboxIn(linked.id, narrowed), chosen, linked.list);
@@ -2432,13 +2397,11 @@ export function useTasksTab(input: {
     // Note that the item the Inbox already stands on, once asked after, stands again at once, so the door keeps it standing rather than waiting on the service while the window leaves it;
     // one the service did not find is asked after again below, as a link to it always asks.
     const standing = inboxView?.chosen;
-    const asked =
-      standing !== undefined &&
-      ("taskId" in standing || "agentId" in standing || standing.opened === true);
+    const asked = standing !== undefined && ("taskId" in standing || standing.opened === true);
     if (inboxView?.standingIn !== undefined && asked && standing.itemId === place.itemId) {
       const at = { workspace: inboxView.standingIn, narrowed: inboxView.narrowed };
       standInbox(at, { ...standing, opened: true });
-      if ("taskId" in standing || "agentId" in standing) return;
+      if ("taskId" in standing) return;
     }
     const current = linkRead();
     const opening = keepLinkLanded();

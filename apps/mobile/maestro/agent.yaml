@@ -1,0 +1,69 @@
+# agent.yaml -- an agent's page: its transcript opened at its newest turn, still running, a call opened on its body, a run of calls opened, the pictures and the recording it showed, the pull request it opened as its card, and the page it showed opened whole.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, whose invitations agent holds a
+# transcript three turns long (`@repo/host/fixture-inbox`), and opened on its
+# page by `-agent <id>`, since the task's Overview that leads there is the
+# Tasks tab's; nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+- assertVisible: "Add a way to resend an invite that expired."
+- waitForAnimationToEnd
+- takeScreenshot: agent-latest
+# A call opens in place on its body: a command as a terminal, its prompt over
+# what it printed.
+- tapOn: "Edited.*"
+- assertVisible: "Input"
+- waitForAnimationToEnd
+- takeScreenshot: agent-call
+- tapOn: "Edited.*"
+# The second turn: the page it showed as a card, and its recording, which the
+# system's player cannot play, offering Safari in its place.
+# Note that the card is left near the top as it scrolls in, clear of Jump to
+# latest, which floats over the middle of a short window such as the Duo's.
+- scrollUntilVisible:
+    element: "Invite funnel, Page"
+    direction: UP
+- waitForAnimationToEnd
+- takeScreenshot: agent-page-card
+- tapOn: "Invite funnel, Page"
+- extendedWaitUntil:
+    visible: "Invites sent in the staging workspace.*"
+    timeout: 30000
+- takeScreenshot: agent-page
+- tapOn:
+    id: "BackButton"
+    optional: true
+# The first turn finished: its run of calls folded under one line, the
+# pictures it showed standing apart after it.
+- scrollUntilVisible:
+    element: "The invite dialog"
+    direction: UP
+    centerElement: true
+- waitForAnimationToEnd
+- takeScreenshot: agent-pictures
+# The pull request it opened after them, as its card with Review.
+- scrollUntilVisible:
+    element: "#128 Invite a teammate by email"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: agent-pull-request
+- scrollUntilVisible:
+    element: ".*tool calls.*"
+    direction: UP
+- waitForAnimationToEnd
+- tapOn: ".*tool calls.*"
+- assertVisible: "Read.*"
+- waitForAnimationToEnd
+- takeScreenshot: agent-fold
+# Read back, the list offers to jump to the newest row.
+- tapOn: "Jump to latest"
+- assertVisible: "Add a way to resend an invite that expired."
+- waitForAnimationToEnd
+- takeScreenshot: agent-jump

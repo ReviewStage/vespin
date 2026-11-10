@@ -10,7 +10,7 @@
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
-import { INBOX_HOLDER, waitsOnReaderNow } from "@repo/features/inbox-list-model";
+import { waitsOnReaderNow } from "@repo/features/inbox-list-model";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER, type PageLine } from "@repo/features/page-wire";
 import { searchTokens } from "@repo/features/search-tokens";
@@ -35,10 +35,11 @@ import {
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useEffectEvent, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { useLiveFollow } from "../host/live-follow.js";
 
 /** No task list read yet. */
 const NO_TASKS: AppStateSnapshot["tasks"]["tasks"] = [];
@@ -46,43 +47,9 @@ const NO_TASKS: AppStateSnapshot["tasks"]["tasks"] = [];
 /** No holder of Inbox items read yet. */
 const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
 
-/** A follow as the act port answers it: a stream that carries nothing until it is let go. */
-type OpenedFollow = AsyncIteratorObject<unknown, unknown, unknown>;
-
 /** Says on the console an act the host refused, which the next delivery of the document corrects. */
 function refused(what: string): (error: unknown) => void {
   return (error) => console.error(`${what} did not go.`, error);
-}
-
-/**
- * Holds the follow `open` opens for as long as the screen holds `key`, as
- * the panel holds a live read while its query is active
- * (`@repo/panel`'s `live-reads.ts`): the host follows the read and writes
- * it into the document, which the screen reads. Nothing while `key` is none.
- */
-function useLiveFollow(key: string | undefined, open: (key: string) => Promise<OpenedFollow>) {
-  // Note that only the key moves the follow, `open` being read as it stands when the follow opens.
-  const opening = useEffectEvent(open);
-  useEffect(() => {
-    if (key === undefined) return;
-    let held = true;
-    let stream: OpenedFollow | undefined;
-    const drain = async (opened: OpenedFollow) => {
-      stream = opened;
-      if (!held) {
-        await opened.return?.();
-        return;
-      }
-      for await (const _ of opened) {
-        if (!held) break;
-      }
-    };
-    opening(key).then(drain).catch(refused("Following a live read"));
-    return () => {
-      held = false;
-      stream?.return?.().catch(refused("Letting a live read go"));
-    };
-  }, [key]);
 }
 
 /** The workspace the phone works in, among the account's, as Settings chose it. */
@@ -108,9 +75,7 @@ function useWaiting(workspaceId: string | undefined): {
     for (const { holder, items } of groups) {
       const waiting = items.filter((item) => waitsOnReaderNow(item, readerId, now));
       for (const item of waiting) byAgent.set(item.agentId, (byAgent.get(item.agentId) ?? 0) + 1);
-      if (holder.kind === INBOX_HOLDER.TASK && waiting.length > 0) {
-        byTask.set(holder.task.id, waiting.length);
-      }
+      if (waiting.length > 0) byTask.set(holder.task.id, waiting.length);
     }
     return { byTask, byAgent };
   }, [groups, readerId]);

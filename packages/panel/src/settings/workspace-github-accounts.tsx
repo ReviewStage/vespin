@@ -5,6 +5,7 @@ import {
   type GitHubRepository,
 } from "@repo/features/github-repositories-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { githubAccountPictureUrl } from "@repo/features/tasks-model";
 import { countWords, readFailedWords, readingWords, TERM } from "@repo/features/words";
 import type { WorkspaceGithubInstallation } from "@repo/features/workspace-wire";
 import {
@@ -14,7 +15,6 @@ import {
   SETTINGS_ROW_INDENT,
   SettingsRowMark,
 } from "@repo/ui";
-import { githubAccountPictureUrl } from "@repo/ui/tasks-model";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import type { MenuAction } from "../desktop/action-menu.js";

@@ -17,7 +17,7 @@
  */
 
 import { PANEL_PATH } from "@repo/features/link-home";
-import { TASKS_PAGE } from "@repo/ui/tasks-model";
+import { TASKS_PAGE } from "@repo/features/tasks-model";
 import { QueryClient } from "@tanstack/react-query";
 import {
   type AnyRouter,

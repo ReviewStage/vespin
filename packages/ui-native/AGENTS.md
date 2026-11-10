@@ -17,8 +17,11 @@ builds a control of its own.
   `ScopePills`, `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
   answer's fields, and `AskNote` for what a send that did not go said),
-  `PullRequestCard`, `AuthPage` and `ProviderButton`, `SettingsForm` and its
-  rows, `AccountButton`, and the marks (`UnreadDot`, `NeedsYouDot`,
+  `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
+  for its checks and reviewers, `WriteNoteRow`), `ConfirmAsk` (the system's
+  alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
+  rows, with `WordsField` and `MenuPickRow` for a sheet that starts work,
+  `AccountButton`, and the marks (`UnreadDot`, `NeedsYouDot`,
   `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
   asset catalog holds). `GlassBar` is a bar of Liquid
@@ -26,13 +29,25 @@ builds a control of its own.
   over its foot above the keyboard, and `Composer` the rounded field a
   thread or a transcript ends with, in one, or `ComposerFoot`, the same
   field at a SwiftUI column's foot in the system's own glass, where no React
-  Native bar can stand, such as a split view's detail.
+  Native bar can stand, such as a split view's detail. Its round button is
+  Send, or, with nothing typed, Stop while an agent works, and its head,
+  inside the same glass, holds an agent's `QueuedLines` (Steer and Delete),
+  its `AttachedPictures`, and an `AskNote`.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through
   `expo-video`, which says so in its place where the player cannot read the
-  file. `Pressable`, `TextInput`, and the
-  rest of React Native's controls appear only here.
+  file. An agent's transcript is `AgentTranscript`, the app's one React
+  Native list (a lazy `FlatList`, drawn newest last and anchored there, with
+  Jump to latest once the reader scrolls back), under `AgentHead`; its rows
+  are read by `transcript-model.ts` from the panel's own parts, folds, and
+  call lines (`@repo/features/agent-parts`, `turn-rows`, `tool-call-model`),
+  the agent's thinking left out, and each call leads with the glyph for its
+  kind, as the rows' glyphs are chosen (`transcript-look.ts`). A pull
+  request an agent opened stands under its call as `PullRequestCard`, as the
+  task list holds it now. A page an agent showed is `SealedPage`, the app's
+  one web view, handed the page's HTML sealed by `@repo/features/sealed-page`. `Pressable`,
+  `TextInput`, and the rest of React Native's controls appear only here.
 - **Markdown** is drawn by `Markdown` in React Native views, and a page of
   it by `MarkdownPage`, which hosts them in SwiftUI's scroller through
   `RNHostView`. Its words are parsed by `@repo/features/markdown-tree`, the
@@ -120,7 +135,15 @@ navigation, tab bar, swipes, menus, sheets and glass.
   boolean's toggle, the rows a SwiftUI `Form` holds, drawn in a card because
   a `Form` scrolls on its own inside the thread's scroll) and the pull request
   (`PullRequestCard`: its state's glyph, its title, its lines in green and
-  red, and its acts as pills), each on `SURFACE` inside a hairline.
+  red, and its acts as pills; a press on it opens its own page), each on
+  `SURFACE` inside a hairline.
+- **A pull request's page** reads as the panel's Pull request tab, from the
+  same model (`@repo/features/pull-request-model`): its state as a chip in
+  GitHub's color, the merge queue's in the attention ink with its place
+  ("Queued #2"), its branches, and GitHub's sentence of whether it merges;
+  its checks and reviewers as rows, each glyph the SF Symbol closest to the
+  panel's (`pull-request-look.ts`); and its acts in the bar, an act that
+  asks first asking in `ConfirmAsk`.
 - **The tab bar** is `NativeTabs`: icons alone in a compact window, through
   its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
   New task; a regular window's sidebar keeps its labels.

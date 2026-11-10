@@ -372,10 +372,10 @@ export const agentTable = pgTable(
     idempotencyKey: text("idempotency_key").notNull(),
     createdAt: createdAt(),
     /**
-     * The instant every member without a read mark of their own
-     * (`agent-read.ts`) has read the agent through, as a task's
-     * `read_through` is (`task.ts`): stamped on the agents that stood as
-     * read marks moved to the service, null on one started since.
+     * The instant every member had read the agent through when read marks
+     * moved to the service, as a task's `read_through` is (`task.ts`),
+     * null on one started since. Nothing reads it now that an agent is read
+     * through its task's mark alone.
      */
     readThrough: timestamptz("read_through"),
   },

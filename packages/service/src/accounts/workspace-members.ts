@@ -131,7 +131,7 @@ export function formerOf(organizationId: string): SQL | undefined {
         queryBuilder
           .select({ id: inboxItem.answeredBy })
           .from(inboxItem)
-          // Note that an item is the workspace's by its own column, since an agent with no task holds items too.
+          // Note that an item is the workspace's by its own column.
           .where(
             and(eq(inboxItem.organizationId, organizationId), isNotNull(inboxItem.answeredBy)),
           ),

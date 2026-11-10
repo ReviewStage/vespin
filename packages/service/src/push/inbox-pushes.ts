@@ -299,7 +299,7 @@ function failedTurnNotification(agent: Agent, turnId: string, failure: string | 
           agentName(agent),
           failure === TURN_FAILURE.PLAN_LIMIT ? LIMIT_REACHED_WORDS : RUN_FAILED_BODY,
         ),
-        "thread-id": agent.taskId ?? agent.id,
+        "thread-id": agent.taskId,
         category: PUSH_CATEGORY.RUN_FAILED,
         "mutable-content": 1,
         sound: "default",
@@ -307,7 +307,7 @@ function failedTurnNotification(agent: Agent, turnId: string, failure: string | 
       },
       kind: PUSH_KIND.RUN_FAILED,
       agentId: agent.id,
-      ...(agent.taskId === null ? undefined : { taskId: agent.taskId }),
+      taskId: agent.taskId,
       turnId,
     },
   });

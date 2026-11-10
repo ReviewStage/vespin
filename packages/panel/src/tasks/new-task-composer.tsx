@@ -8,6 +8,7 @@ import {
   type TaskCreateRelation,
   type TaskCreateRelationKind,
 } from "@repo/features/task-wire";
+import { workspaceReaches } from "@repo/features/tasks-model";
 import { TERM } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
@@ -20,7 +21,6 @@ import {
   Text,
   VisuallyHidden,
 } from "@repo/ui";
-import { workspaceReaches } from "@repo/ui/tasks-model";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAgentDefault } from "../account-choices.js";

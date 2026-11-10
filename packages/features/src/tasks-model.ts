@@ -1,10 +1,5 @@
-import { PRODUCT_NAME } from "@repo/features/product-name";
-import {
-  TASK_STATUS,
-  type Task,
-  type TaskStatus,
-  type TaskSummary,
-} from "@repo/features/task-wire";
+import { PRODUCT_NAME } from "./product-name.js";
+import { TASK_STATUS, type Task, type TaskStatus, type TaskSummary } from "./task-wire.js";
 import {
   type HeldDescriptionDocument,
   type RepositoryCallFailure,
@@ -12,8 +7,8 @@ import {
   TASK_CALL_FAILURE,
   TASK_PARENT_FAILURE,
   type TasksView,
-} from "@repo/features/tasks-view";
-import type { Workspace } from "@repo/features/workspace-wire";
+} from "./tasks-view.js";
+import type { Workspace } from "./workspace-wire.js";
 
 /**
  * tasks-model.ts -- what the panel's Tasks tab draws, decided from the document alone.

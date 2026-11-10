@@ -472,10 +472,10 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   );
 }
 
-/** The task's agents as the panel's Agents group lists them, New agent after them, and the line of its threads that need you. */
+/** The task's agents as the panel's Agents group lists them, New agent after them, which opens its sheet, and the line of its threads that need you. */
 function OverviewAgents({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
-  const { task, workspace } = overview;
+  const { task } = overview;
   return (
     <ListSection title={WORDS.AGENTS} count={overview.agents.length}>
       {overview.agents.map(({ agent, waiting, pullRequest }) => (
@@ -501,7 +501,7 @@ function OverviewAgents({ overview }: { readonly overview: TaskOverview }) {
         symbol="plus"
         label={WORDS.NEW_AGENT}
         tone={LINK_ROW_TONE.ACCENT}
-        onPress={() => openOnWeb({ kind: LINK_DESTINATION.TASK, planId: task.id }, workspace)}
+        onPress={() => router.push({ pathname: "/start-agent", params: { task: task.id } })}
       />
       {overview.waitingElsewhere === 0 ? null : (
         <LinkRow
@@ -552,12 +552,10 @@ function OverviewPage({ overview }: { readonly overview: TaskOverview }) {
   });
   const related = new Set(overview.tasks.map((each) => each.id));
   const agents = new Set(overview.agents.map(({ agent }) => agent.id));
-  // A related task opens on its own Overview; an agent opens on vespin.dev, where its transcript stands until the app draws one.
+  // A related task opens on its own Overview, and an agent on its page, where its transcript and its composer stand.
   const open = (id: string) => {
     if (related.has(id)) router.push(`/tasks/${encodeURIComponent(id)}`);
-    else if (agents.has(id)) {
-      openOnWeb({ kind: LINK_DESTINATION.AGENT, planId: task.id, agentId: id }, overview.workspace);
-    }
+    else if (agents.has(id)) router.push(`/tasks/agent/${encodeURIComponent(id)}`);
   };
   return (
     <RowList look={LIST_LOOK.PLAIN} onSelect={open}>

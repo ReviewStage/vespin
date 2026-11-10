@@ -1,5 +1,6 @@
 import { CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { remedyLabel } from "@repo/features/failure-remedy";
+import { effortFor, effortLabel, effortsOf } from "@repo/features/model-effort";
 import {
   agentFallbackChoice,
   type CatalogModel,
@@ -41,9 +42,6 @@ import {
   choiceModelId,
   choiceOn,
   contextWindowsOf,
-  effortFor,
-  effortLabel,
-  effortsOf,
   FAST_ACCESS_URL,
   FAST_WORD,
   fastRestingNote,
