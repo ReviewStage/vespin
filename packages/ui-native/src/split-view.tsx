@@ -1,4 +1,4 @@
-// split-view.tsx -- a regular window's list and detail side by side, as SwiftUI's own NavigationSplitView, the sidebar's bar holding its acts, its menu, and its search.
+// split-view.tsx -- a regular window's list and detail side by side, as SwiftUI's own NavigationSplitView, the sidebar's bar holding its acts, its menu, and its search, and the detail's its path and menu.
 
 import {
   Divider,
@@ -12,8 +12,10 @@ import {
   useNativeState,
 } from "@expo/ui/swift-ui";
 import { navigationSplitViewStyle, searchable } from "@expo/ui/swift-ui/modifiers";
+import type { TaskStatus } from "@repo/features/task-wire";
 import { type ReactNode, useState } from "react";
 import type { SfSymbol } from "./sf-symbol.js";
+import { PathTitle } from "./thread-page.js";
 
 /** An act a bar holds by its symbol alone, such as Settings. */
 export type BarAction = {
@@ -41,6 +43,8 @@ export type BarMenu = {
     readonly disabled?: boolean | undefined;
     readonly onPress: () => void;
   }[];
+  /** Menus within it, after its acts, such as a task's Status. */
+  readonly submenus?: readonly BarMenu[] | undefined;
 };
 
 /** A list's search, the system's field in the sidebar: what it says before anything is typed, and what is called with each change. */
@@ -60,6 +64,18 @@ type SplitViewProps = {
   readonly sidebarMenu?: BarMenu | undefined;
   /** A search field over the sidebar's list. */
   readonly sidebarSearch?: BarSearch | undefined;
+  /**
+   * A middle column between the sidebar and the detail, such as the tasks of
+   * the group the sidebar picked, for a window wide enough to stand three
+   * columns; two columns where none is given.
+   */
+  readonly content?: ReactNode | undefined;
+  /** A menu in the detail's bar, such as a task's ⋯. */
+  readonly detailMenu?: BarMenu | undefined;
+  /** The detail's path, small and muted in its bar's middle, after its task's ring, as a pushed page's bar names it. */
+  readonly detailPath?:
+    | { readonly path: readonly string[]; readonly status?: TaskStatus | undefined }
+    | undefined;
 };
 
 /** A bar's menu as SwiftUI's: each choice a toggle the system checks, then a rule, then each act. */
@@ -84,6 +100,9 @@ export function BarMenuButton({ menu }: { readonly menu: BarMenu }) {
           {...(action.disabled === true ? { disabled: true } : {})}
         />
       ))}
+      {(menu.submenus ?? []).map((submenu) => (
+        <BarMenuButton key={submenu.label} menu={submenu} />
+      ))}
     </Menu>
   );
 }
@@ -94,7 +113,7 @@ function SidebarColumn({
   sidebarAction,
   sidebarMenu,
   sidebarSearch,
-}: Omit<SplitViewProps, "detail">) {
+}: Omit<SplitViewProps, "detail" | "content" | "detailMenu" | "detailPath">) {
   const text = useNativeState("");
   const bar =
     sidebarAction === undefined && sidebarMenu === undefined ? (
@@ -140,12 +159,13 @@ function SidebarColumn({
  * The list beside its detail, for a regular-width window such as an iPad's
  * or the unfolded iPhone Duo's. The split view draws each column's
  * navigation bar itself, so the screen around it shows no header of its own.
+ * A window wide enough stands a middle column between them (`content`).
  * Note that the columns start out all shown and balanced, because SwiftUI's
  * automatic style hides the sidebar of a portrait iPad until it is asked
  * for, and the list is what the window is wide enough to keep beside the
  * detail; a person may still hide it, which the split view reports back.
  */
-export function SplitView({ detail, ...sidebar }: SplitViewProps) {
+export function SplitView({ detail, content, detailMenu, detailPath, ...sidebar }: SplitViewProps) {
   const [columns, setColumns] = useState<NavigationSplitViewVisibility>("all");
   return (
     <NavigationSplitView
@@ -156,7 +176,30 @@ export function SplitView({ detail, ...sidebar }: SplitViewProps) {
       <NavigationSplitView.Sidebar>
         <SidebarColumn {...sidebar} />
       </NavigationSplitView.Sidebar>
-      <NavigationSplitView.Detail>{detail}</NavigationSplitView.Detail>
+      {content === undefined ? null : (
+        <NavigationSplitView.Content>{content}</NavigationSplitView.Content>
+      )}
+      <NavigationSplitView.Detail>
+        {detailMenu === undefined && detailPath === undefined ? (
+          detail
+        ) : (
+          <Toolbar>
+            {detail}
+            <Toolbar.Content>
+              {detailPath === undefined ? null : (
+                <ToolbarItem placement="principal">
+                  <PathTitle path={detailPath.path} status={detailPath.status} />
+                </ToolbarItem>
+              )}
+              {detailMenu === undefined ? null : (
+                <ToolbarItem placement="topBarTrailing">
+                  <BarMenuButton menu={detailMenu} />
+                </ToolbarItem>
+              )}
+            </Toolbar.Content>
+          </Toolbar>
+        )}
+      </NavigationSplitView.Detail>
     </NavigationSplitView>
   );
 }

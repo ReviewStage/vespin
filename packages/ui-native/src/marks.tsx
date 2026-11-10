@@ -1,18 +1,22 @@
-// marks.tsx -- the small marks a row leads with: the unread dot, a task's status, a person's avatar, an agent's tile, and a glyph in its tone.
+// marks.tsx -- the small marks a row leads or ends with: the unread dot, a task's status, a person's avatar, an agent's tile, the needs-you, working, and failed marks, and a glyph in its tone.
 
-import { Circle, Image, RoundedRectangle, Text, ZStack } from "@expo/ui/swift-ui";
+import { Circle, Image, ProgressView, RoundedRectangle, Text, ZStack } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
   accessibilityLabel,
+  controlSize,
   font,
   foregroundStyle,
   frame,
   opacity,
+  tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { NEEDS_YOU } from "@repo/features/inbox-list-model";
+import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { type Glyph, isLucideSymbol } from "./glyph.js";
 import { monogramOf } from "./monogram.js";
-import { STATUS_MARK_LABEL, STATUS_MARK_LOOK } from "./status-mark-model.js";
+import { STATUS_MARK_LOOK } from "./status-mark-model.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { MARK_SIZE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -90,7 +94,7 @@ export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
       systemName={look.symbol}
       size={MARK_SIZE.GLYPH}
       color={toneColor(colors, look.tone)}
-      modifiers={[accessibilityLabel(STATUS_MARK_LABEL[status])]}
+      modifiers={[accessibilityLabel(TASK_STATUS_WORDS[status])]}
     />
   );
 }
@@ -147,5 +151,47 @@ export function AgentTile({ name, size = MARK_SIZE.AVATAR }: AvatarProps) {
         modifiers={[accessibilityHidden()]}
       />
     </ZStack>
+  );
+}
+
+/** The dot a row ends with where a thread of it waits on the reader, in the attention ink, heard as Needs you. */
+export function NeedsYouDot() {
+  const colors = useColors();
+  return (
+    <Circle
+      modifiers={[
+        frame({ width: MARK_SIZE.DOT, height: MARK_SIZE.DOT }),
+        foregroundStyle(colors.ATTENTION),
+        accessibilityLabel(NEEDS_YOU.LABEL),
+      ]}
+    />
+  );
+}
+
+/** What a failed mark is heard as. */
+const FAILED_WORDS = "Failed";
+
+/** The mark a failed agent's row, or its task's, ends with: the filled alert in the danger ink, heard as Failed. */
+export function FailedMark() {
+  const colors = useColors();
+  return (
+    <Image
+      systemName="exclamationmark.circle.fill"
+      color={colors.DANGER}
+      modifiers={[font({ textStyle: TYPE_ROLE.TIME }), accessibilityLabel(FAILED_WORDS)]}
+    />
+  );
+}
+
+/** What a working mark is heard as. */
+const WORKING_WORDS = "Working";
+
+/** The system's spinner, small and in the working ink, where an agent is at work. */
+export function WorkingMark() {
+  const colors = useColors();
+  return (
+    <ProgressView
+      modifiers={[controlSize("mini"), tint(colors.WORKING), accessibilityLabel(WORKING_WORDS)]}
+    />
   );
 }

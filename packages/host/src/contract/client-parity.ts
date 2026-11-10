@@ -5,18 +5,19 @@
  * act port, but each offers its member a different share of it: the desktop
  * all of it, the web all but what only an app on the Mac can carry, and the
  * iOS app what its screens have been built for: today its sign-in and
- * sign-out, and the Inbox: its list, which the host reads from the account
+ * sign-out; the Inbox: its list, which the host reads from the account
  * gate opening with no act of the app's, its read marks, its retry, its
- * pictures, and a thread's answer, reply, and resolve. Nothing else says
- * which share, so this table is what keeps the gaps known: every kind in
- * `PORT_ACT_KIND` has a row, and a kind added without one, or a row whose
- * act is gone, does not build. A client offers an act where a member can do
- * what the act does there, though the client may reach it another way; a
- * client that does not names why. `NOT_YET` is the backlog, a row a client's
- * next screen replaces; `BY_DESIGN` is a gap the platform makes, such as a
- * shell on the Mac from a phone, which no screen would close.
- * `client-parity.test.ts` holds the iOS column to the platform kinds the iOS
- * host refuses.
+ * pictures, and a thread's answer, reply, and resolve; and the Tasks tab:
+ * its tree, read from the same list, a task's status set, and a task's
+ * description and pages followed. Nothing else says which share, so this
+ * table is what keeps the gaps known: every kind in `PORT_ACT_KIND` has a
+ * row, and a kind added without one, or a row whose act is gone, does not
+ * build. A client offers an act where a member can do what the act does
+ * there, though the client may reach it another way; a client that does not
+ * names why. `NOT_YET` is the backlog, a row a client's next screen
+ * replaces; `BY_DESIGN` is a gap the platform makes, such as a shell on the
+ * Mac from a phone, which no screen would close. `client-parity.test.ts`
+ * holds the iOS column to the platform kinds the iOS host refuses.
  */
 
 import { PORT_ACT_KIND, type PortActKind } from "./kinds.js";
@@ -94,7 +95,7 @@ const IOS = {
   PRESENCE: byDesign("The phone isn't a desk; presence comes from the desktop and the web only"),
   SETTINGS: byDesign("iOS v1 opens Settings in Safari"),
   SIGN_IN_SHEET: byDesign("The system's authentication sheet cancels its own sign-in"),
-  TASKS: notYet("iOS v1's Tasks tab is a placeholder, with no task screens behind it"),
+  TASKS: notYet("iOS v1's Tasks tab and task page don't offer this yet"),
   TRANSCRIPT_REVIEW: notYet("In review for iOS (#8008)"),
   UPDATER: byDesign("The App Store updates the app"),
   WAVE_5: notYet("Answering, replying, and messaging and starting agents are iOS wave 5"),
@@ -300,7 +301,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.ADMIN_READ]: panel(IOS.ADMIN),
   [PORT_ACT_KIND.ADMIN_FAVORITE]: panel(IOS.ADMIN),
   [PORT_ACT_KIND.GITHUB_DISCONNECT]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.TASKS_SET_STANDING]: panel(notYet("In review for iOS (#7943)")),
+  [PORT_ACT_KIND.TASKS_SET_STANDING]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_FILE]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_TREE]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_SKILLS]: panel(IOS.COMPOSER),
@@ -318,8 +319,8 @@ export const CLIENT_PARITY = {
     web: PANEL_PAGE_FRAME,
     ios: IOS.TRANSCRIPT_REVIEW,
   },
-  [PORT_ACT_KIND.TASKS_PAGES_FOLLOW]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_DOCUMENT_FOLLOW]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_PAGES_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_DOCUMENT_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_DOCUMENT_RETRY]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_HISTORY_FOLLOW]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_HISTORY_RETRY]: panel(IOS.TASKS),

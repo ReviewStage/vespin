@@ -145,11 +145,11 @@ function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standi
 }
 
 /**
- * A split view's detail column's bar: the thread's path, small and muted
- * after its task's ring, in the bar's middle, as a compact window's stack
- * draws it in its own bar.
+ * A split view's detail column's bar: a page's path, small and muted after
+ * its task's ring, in the bar's middle, as a compact window's stack draws it
+ * in its own bar.
  */
-function PathTitle({ path, status }: Pick<ThreadPageProps, "path" | "status">) {
+export function PathTitle({ path, status }: Pick<ThreadPageProps, "path" | "status">) {
   const colors = useColors();
   return (
     <HStack spacing={SPACE.TIGHT + 2}>

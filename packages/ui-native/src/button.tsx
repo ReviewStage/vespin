@@ -23,11 +23,11 @@ import {
   strokeBorder,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactNode } from "react";
 import { Avatar, TaskStatusMark } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
-import { STATUS_MARK_LABEL } from "./status-mark-model.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -264,5 +264,5 @@ export function FieldChip(props: FieldChipProps) {
 
 /** A task's status as its chip: the ring and the status's name. */
 export function StatusChip({ status }: { readonly status: TaskStatus }) {
-  return <FieldChip label={STATUS_MARK_LABEL[status]} status={status} />;
+  return <FieldChip label={TASK_STATUS_WORDS[status]} status={status} />;
 }

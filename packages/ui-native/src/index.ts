@@ -39,7 +39,16 @@ export {
 } from "./list-row.js";
 export { Markdown, type MarkdownPlace, type MarkdownVideo, Picture } from "./markdown.js";
 export { MarkdownPage } from "./markdown-page.js";
-export { AgentTile, Avatar, TaskStatusMark, ToneGlyph, UnreadDot } from "./marks.js";
+export {
+  AgentTile,
+  Avatar,
+  FailedMark,
+  NeedsYouDot,
+  TaskStatusMark,
+  ToneGlyph,
+  UnreadDot,
+  WorkingMark,
+} from "./marks.js";
 export { monogramOf } from "./monogram.js";
 export { PageHeader } from "./page-header.js";
 export {
@@ -60,7 +69,19 @@ export {
 } from "./settings-form.js";
 export type { SfSymbol } from "./sf-symbol.js";
 export { type BarAction, type BarMenu, type BarSearch, SplitView } from "./split-view.js";
-export { STATUS_MARK_LABEL, STATUS_MARK_LOOK } from "./status-mark-model.js";
+export { STATUS_MARK_LOOK } from "./status-mark-model.js";
+export {
+  AGENT_ROW_STATE,
+  AgentRow,
+  type AgentRowState,
+  GroupRow,
+  LINK_ROW_TONE,
+  LinkRow,
+  type LinkRowTone,
+  RelationRow,
+  TaskHead,
+  WordsRow,
+} from "./task-rows.js";
 export {
   PATH_PART,
   THREAD_MEDIA,

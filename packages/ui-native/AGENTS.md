@@ -7,21 +7,25 @@ builds a control of its own.
 - **SwiftUI first.** A component wraps `@expo/ui`'s SwiftUI (`Host`, `List`,
   `Section`, swipe actions, `ContextMenu`, `NavigationSplitView`, the
   system's buttons and `ContentUnavailableView`) in the piece a screen asks
-  for: `Screen`, `RowList` and `ListSection`, `ListRow` and `TaskRow`, `SplitView`
-  (its sidebar's bar holding an act, a `BarMenu` such as the ⋯ menu, and a
-  search), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
+  for: `Screen`, `RowList` and `ListSection`, `ListRow` and `TaskRow` (a
+  task on one line, its sub-tasks folded under the panel's chevron), a task
+  page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `GroupRow`, `LinkRow`,
+  and `WordsRow` for its description), `SplitView` (two columns or three, its
+  sidebar's bar holding an act, a `BarMenu` such as the ⋯ menu, and a
+  search, and its detail's bar the page's path and a `BarMenu` such as a
+  task's ⋯), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
   `ScopePills`, `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
   answer's fields, and `AskNote` for what a send that did not go said),
   `PullRequestCard`, `AuthPage` and `ProviderButton`, `SettingsForm` and its
-  rows, and the marks (`UnreadDot`, `TaskStatusMark`, `Avatar`, `AgentTile`,
-  and `BrandMark`, the Keel mark the app's asset catalog holds). `GlassBar`
-  is a bar of Liquid Glass through `expo-glass-effect`, `GlassDock` the
-  screen that pins one over its foot above the keyboard, and `Composer` the
-  rounded field a thread or a transcript ends with, in one, or
-  `ComposerFoot`, the same field at a SwiftUI column's foot in the system's
-  own glass, where no React Native bar can stand, such as a split view's
-  detail.
+  rows, and the marks (`UnreadDot`, `NeedsYouDot`, `WorkingMark`,
+  `FailedMark`, `TaskStatusMark`, `Avatar`, `AgentTile`, and `BrandMark`, the
+  Keel mark the app's asset catalog holds). `GlassBar` is a bar of Liquid
+  Glass through `expo-glass-effect`, `GlassDock` the screen that pins one
+  over its foot above the keyboard, and `Composer` the rounded field a
+  thread or a transcript ends with, in one, or `ComposerFoot`, the same
+  field at a SwiftUI column's foot in the system's own glass, where no React
+  Native bar can stand, such as a split view's detail.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through
@@ -53,10 +57,12 @@ builds a control of its own.
   Only a control's states and a label's hierarchy are the system's.
 - **Rows carry the panel's facts.** `ListRow` is an Inbox thread (the task's
   status ring, the thread's title and time, and the glyph and words of what
-  it asks, then the task's name), and `TaskRow` a task on one line; an avatar
-  stands only where the panel's row has one. A glyph is the SF Symbol
-  closest to the panel's Lucide glyph for the same thing
-  (`inbox-line-model.ts`, `status-mark-model.ts`), except a mark of ours that
+  it asks, then the task's name), `TaskRow` a task on one line (its status
+  ring, its name, and at its end a thread that needs you, a failed agent,
+  one at work, or its pull request, then its key), and `AgentRow` an agent
+  on a task's page; an avatar stands only where the panel's row has one. A
+  glyph is the SF Symbol closest to the panel's Lucide glyph for the same
+  thing (`inbox-line-model.ts`, `status-mark-model.ts`), except a mark of ours that
   SF Symbols has no drawing of (a pull request in each state, a branch, a
   decide ask), which is Lucide's own (`glyph.ts`'s `Glyph`, drawn by
   `ToneGlyph`): `@repo/brand`'s generator outlines it, at the `lucide-react`

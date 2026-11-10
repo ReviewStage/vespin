@@ -432,6 +432,9 @@ importers:
       '@repo/host':
         specifier: workspace:*
         version: link:../../packages/host
+      '@repo/settings':
+        specifier: workspace:*
+        version: link:../../packages/settings
       '@repo/ui-native':
         specifier: workspace:*
         version: link:../../packages/ui-native
@@ -511,9 +514,6 @@ importers:
       '@repo/runtime':
         specifier: workspace:*
         version: link:../../packages/runtime
-      '@repo/settings':
-        specifier: workspace:*
-        version: link:../../packages/settings
       '@repo/wire':
         specifier: workspace:*
         version: link:../../packages/wire
