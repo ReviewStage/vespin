@@ -347,8 +347,7 @@ it.layer(getTestDB())("an agent's title", (it) => {
         const organizationId = yield* openWorkspace(owner);
         const started = Option.getOrThrow(
           yield* createAgent(owner, {
-            taskId: null,
-            organizationId,
+            taskId: (yield* createTask(owner, { organizationId })).id,
             descriptionSnapshot: null,
             prompt: HANDED,
             idempotencyKey: randomUUID(),
@@ -405,8 +404,7 @@ it.layer(getTestDB())("an agent's title", (it) => {
         const handed = `${words}\n\n---\n\nA member wrote this to Vespin's Slack bot in a Slack thread.\n\n<slack-thread>\n<@U01>: the billing export is broken too\n</slack-thread>`;
         const { agent } = Option.getOrThrow(
           yield* createAgent(owner, {
-            taskId: null,
-            organizationId: yield* openWorkspace(owner),
+            taskId: (yield* createTask(owner, { organizationId: yield* openWorkspace(owner) })).id,
             descriptionSnapshot: null,
             prompt: handed,
             idempotencyKey: randomUUID(),
@@ -462,8 +460,7 @@ it.layer(getTestDB())("an agent's title", (it) => {
         );
         const started = Option.getOrThrow(
           yield* createAgent(owner, {
-            taskId: null,
-            organizationId,
+            taskId: (yield* createTask(owner, { organizationId })).id,
             descriptionSnapshot: null,
             prompt: handed,
             idempotencyKey: randomUUID(),
@@ -527,8 +524,7 @@ const journaledAgent = Effect.gen(function* () {
   const owner = yield* openGithubUser();
   const organizationId = yield* openWorkspace(owner);
   const started = yield* createAgent(owner, {
-    taskId: null,
-    organizationId,
+    taskId: (yield* createTask(owner, { organizationId })).id,
     descriptionSnapshot: null,
     prompt: DESCRIPTION_TEXT,
     idempotencyKey: randomUUID(),

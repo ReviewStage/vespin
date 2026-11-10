@@ -92,6 +92,7 @@ import {
 } from "./launch.js";
 import { readLines } from "./lines.js";
 import { openMcpRelay } from "./mcp-relay.js";
+import { type ClaudeCodeMemoryWatch, claudeCodeMemoryWatch } from "./out-of-memory.js";
 import { SANDBOX_TOOL_ENV } from "./pins.js";
 import {
   APPROVAL_BY,
@@ -307,6 +308,7 @@ function queryOptions(
   env: RunnerInput["env"],
   servers: Readonly<Record<string, McpSdkServerConfigWithInstance>>,
   onStop: HookCallback,
+  memoryWatch: ClaudeCodeMemoryWatch,
   from: ResumePoint,
   store: SessionStore | undefined,
   approvals: Approvals,
@@ -347,7 +349,7 @@ function queryOptions(
     // SDK server the runner relays over the CLI's own stdio (`mcp-relay.ts`), as is each integration's.
     mcpServers: { ...servers },
     sandbox: { enabled: false },
-    hooks: { Stop: [{ hooks: [onStop] }] },
+    hooks: { Stop: [{ hooks: [onStop] }], ...memoryWatch.hooks },
   };
   if (config.effort !== undefined) options.effort = config.effort;
   // Note that a headless CLI runs fast mode only where its flag settings opt in.
@@ -388,6 +390,8 @@ function userMessage(
 /** The launch's state, shared by its two loops. */
 interface Launch {
   readonly session: ClaudeCodeSession;
+  /** A command's answer as posted, with the line saying it was killed out of memory where it was (`out-of-memory.ts`). */
+  readonly annotate: (message: SDKMessage) => SDKMessage;
   readonly prompts: Queue.Queue<SDKUserMessage, Cause.Done>;
   readonly sink: EventSink;
   /** The tool calls held for the member's answer, in a launch whose mode asks. */
@@ -616,7 +620,7 @@ const takeMessage = Effect.fn("agent-runner/takeMessage")(function* (
       ),
     );
   }
-  yield* launch.sink.emit(message);
+  yield* launch.sink.emit(launch.annotate(message));
   if (message.type !== SDK_MESSAGE.RESULT) return;
   const inFlight = MutableRef.getAndSet(launch.inFlight, undefined);
   if (yield* Ref.get(launch.stopping)) {
@@ -882,7 +886,17 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   const approvals = yield* makeApprovals(sink);
   // The CLI is spawned and initialized before the service's lines are taken, which wait in
   // their queue meanwhile, so its first message goes to a CLI ready for it.
-  const options = queryOptions(config, context.env, servers, onStop, from, store, approvals);
+  const memoryWatch = claudeCodeMemoryWatch();
+  const options = queryOptions(
+    config,
+    context.env,
+    servers,
+    onStop,
+    memoryWatch,
+    from,
+    store,
+    approvals,
+  );
   const started = yield* trace
     .step(
       RUNNER_SPAN.CLI,
@@ -900,6 +914,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   const provider = providerTargetOf(context.env[ANTHROPIC_BASE_URL] ?? ANTHROPIC_API_HOST);
   const launch: Launch = {
     session,
+    annotate: memoryWatch.annotate,
     prompts,
     sink,
     approvals,

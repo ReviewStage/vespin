@@ -449,7 +449,7 @@ export const createAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
       webhookSecretHash: webhook?.hash ?? null,
       scope,
       ...target,
-      archiveSuccessful: made.archiveSuccessful ?? false,
+      archiveSuccessful: made.archiveSuccessful ?? true,
       slackDelivery: made.slackDelivery ?? false,
     }),
   );

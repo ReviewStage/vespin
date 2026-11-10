@@ -176,7 +176,6 @@ import {
   type SandboxError,
   type SandboxFile,
   SandboxUnavailable,
-  touchSandbox,
 } from "@repo/sandbox";
 import { TURN_STATUS, type WireValue } from "@repo/wire";
 import type { UserContent } from "ai";
@@ -226,6 +225,7 @@ import { deploymentLifecycle } from "../machine/agent-machines.js";
 import { extraCheckoutPaths } from "../repository-sandbox-contract.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import { LAUNCH_SWAP } from "../sandbox-firewall.js";
+import { touchAgentSandbox } from "../sandbox-use.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
   PLAN_REFUSAL,
@@ -2228,7 +2228,7 @@ export const runnerSessions = <
         if (Option.isNone(found) || found.value.agentId !== agent.id) return;
         // An agent on screen is its sandbox in use: a running one is touched, a stopped one resumed by the launch below.
         if (found.value.machine === AGENT_MACHINE.VERCEL && found.value.running !== undefined) {
-          yield* touchSandbox(found.value.name);
+          yield* touchAgentSandbox(found.value.name);
         }
         const live = found.value.runner;
         if (live !== undefined) {

@@ -237,6 +237,7 @@ const insertRevision = (taskId: string, userId: string, at: Date) =>
 /** A coding agent in the workspace, started at the instant, with the pull request it merged where one is given. */
 const insertAgent = (
   organizationId: string,
+  taskId: string,
   userId: string,
   createdAt: Date,
   merged?: { number: number; at: Date },
@@ -251,6 +252,7 @@ const insertAgent = (
     yield* db.insert(agentTable).values({
       id,
       organizationId,
+      taskId,
       userId,
       conversationId,
       model: "anthropic/claude-opus-5.5",
@@ -330,14 +332,14 @@ const seedWorld = Effect.gen(function* () {
   yield* insertAccount("alan", "Alan Turing", USER_ROLE.ADMIN);
 
   const northwind = yield* insertWorkspace("Northwind", ["grace", "linus", "margaret"]);
-  yield* insertTask(northwind, "grace", daysAgo(1));
-  yield* insertTask(northwind, "linus", daysAgo(6));
+  const graceTask = yield* insertTask(northwind, "grace", daysAgo(1));
+  const linusTask = yield* insertTask(northwind, "linus", daysAgo(6));
   yield* insertTask(northwind, "grace", daysAgo(40));
-  yield* insertAgent(northwind, "grace", daysAgo(1), { number: 7, at: daysAgo(1) });
+  yield* insertAgent(northwind, graceTask, "grace", daysAgo(1), { number: 7, at: daysAgo(1) });
   // A continued agent publishes the same pull request, which counts once.
-  yield* insertAgent(northwind, "grace", daysAgo(1), { number: 7, at: daysAgo(1) });
-  yield* insertAgent(northwind, "linus", daysAgo(2), { number: 8, at: daysAgo(0) });
-  yield* insertAgent(northwind, "linus", daysAgo(30), { number: 3, at: daysAgo(29) });
+  yield* insertAgent(northwind, graceTask, "grace", daysAgo(1), { number: 7, at: daysAgo(1) });
+  yield* insertAgent(northwind, linusTask, "linus", daysAgo(2), { number: 8, at: daysAgo(0) });
+  yield* insertAgent(northwind, linusTask, "linus", daysAgo(30), { number: 3, at: daysAgo(29) });
   yield* insertInstallation(northwind, "northwind", GITHUB_INSTALLATION_STATUS.ACTIVE);
   yield* insertInvitation(northwind, "grace", INVITATION_STATUS.ACCEPTED, daysAgo(10));
   yield* insertInvitation(northwind, "grace", INVITATION_STATUS.ACCEPTED, daysAgo(-5));

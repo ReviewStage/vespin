@@ -20,7 +20,6 @@ import {
   type AgentInboxReadStateParams,
   type AgentInboxReadStateView,
   type AgentInboxRemindParams,
-  type AgentMarkReadParams,
   type AgentPinParams,
   type AgentRenameParams,
   type AgentServersParams,
@@ -31,7 +30,6 @@ import {
   agentInboxReadAllParamsSchema,
   agentInboxReadStateParamsSchema,
   agentInboxRemindParamsSchema,
-  agentMarkReadParamsSchema,
   agentPinParamsSchema,
   agentRenameParamsSchema,
   agentStartParamsSchema,
@@ -59,7 +57,6 @@ import { commitShaSchema } from "@repo/features/link-grammar";
 import { LIVE_READ, type LiveRead } from "@repo/features/live-wire";
 import type { ModelsAnswer } from "@repo/features/models-wire";
 import { PULL_REQUEST_CHAPTERS_READ } from "@repo/features/pull-request-chapters-live";
-import { markedAs } from "@repo/features/read-mark";
 import { PLAYABLE_VIDEO_TYPE } from "@repo/features/video-signature";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
 import { carried, GATEWAY_EVENT, GATEWAY_METHOD } from "@repo/gateway";
@@ -189,7 +186,6 @@ const AGENT_QUEUED_WRITE = {
   START: "agents.start",
   RENAME: "agents.rename",
   PIN: "agents.pin",
-  MARK_READ: "agents.markRead",
 } as const;
 
 /**
@@ -247,7 +243,6 @@ export type AgentClient = Pick<
   | "changeQueue"
   | "archive"
   | "pin"
-  | "markRead"
   | "stop"
   | "rewind"
   | "warm"
@@ -826,14 +821,6 @@ function composed(
     ({ agentId, ...request }, key) => asked(client.pin(agentId, request, key)),
     { name: AGENT_QUEUED_WRITE.PIN, input: agentPinParamsSchema },
   );
-  /** The reader's read mark, drawn on the agent's row at once, and kept once the list carries the service's. */
-  const markedRead = agentWrite<AgentMarkReadParams>(
-    ({ readMark }) =>
-      (row) =>
-        markedAs(readMark, row, kernel.now()),
-    ({ agentId, ...request }, key) => asked(client.markRead(agentId, request, key)),
-    { name: AGENT_QUEUED_WRITE.MARK_READ, input: agentMarkReadParamsSchema },
-  );
   /**
    * A Start, on a task or from another agent, which draws no row, since
    * only the service names its agent, which the list then carries. Where
@@ -1233,7 +1220,6 @@ function composed(
     }),
     AGENTS_ARCHIVE: declaredWrite(dependencies.pool, archived),
     AGENTS_PIN: declaredWrite(dependencies.pool, pinned),
-    AGENTS_MARK_READ: declaredWrite(dependencies.pool, markedRead),
     // Note that a repository added draws nothing on the agent's row, which lists no repositories, so it is asked and answered alone.
     AGENTS_ADD_REPOSITORY: ({ agentId, addRepository }) =>
       asked(client.addRepository(agentId, { addRepository })),

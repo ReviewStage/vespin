@@ -1046,8 +1046,6 @@ export type AgentPinRequest = typeof agentPinRequestSchema.Type;
  */
 export const agentReadRequestSchema = EffectSchema.Struct({ readMark: readMarkSchema });
 
-export type AgentReadRequest = typeof agentReadRequestSchema.Type;
-
 /**
  * Switching the agent's MCP servers (PATCH): the whole list of those off,
  * which replaces the list standing, so two quick changes land as the later
@@ -1112,8 +1110,10 @@ export const AGENT_LIST_ARCHIVED = {
 
 /**
  * Who archived an agent: a member from the window, the app on a call for the
- * member on it, or another coding agent of the workspace for the member who
- * started that agent, through its `archive_agent` tool.
+ * member on it or on its own for the agent's starter (an automation run or a
+ * Slack agent that finished, with why), or another coding agent of the
+ * workspace for the member who started that agent, through its
+ * `archive_agent` tool.
  */
 export const AGENT_ARCHIVER = {
   MEMBER: "member",
@@ -1221,6 +1221,8 @@ export const agentSummarySchema = EffectSchema.Struct({
   title: EffectSchema.NullOr(EffectSchema.String),
   /** Where its runner runs, said only of a local agent on its starter's device; absent for one in a sandbox, and from a service older than it. */
   machine: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_MACHINE.DEVICE)),
+  /** The vCPUs its sandbox opens with (`@repo/features/sandbox-size`), each with its memory; absent for a local agent, and from a service older than it. */
+  sandboxVcpus: EffectSchema.optionalKey(countedNumber),
   /**
    * The Mac a local agent runs on, by its own name, and the epoch
    * milliseconds it last beat, which a reader holds against its own clock

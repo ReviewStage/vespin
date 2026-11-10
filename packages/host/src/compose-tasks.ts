@@ -1068,16 +1068,14 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           view = pendingTasks.length === 0 ? rest : { ...rest, pendingTasks };
           write({
             tasks: list.plans,
-            tasklessAgents: list.planlessAgents ?? [],
             taskAgents,
             taskPullRequests,
             agentPullRequests,
             taskAgentPins,
           });
           documents.relisted();
-          const agents = [...taskAgents, ...(list.planlessAgents ?? [])];
           PubSub.publishUnsafe(listings, {
-            statuses: new Map(agents.map((agent) => [agent.id, agent.status])),
+            statuses: new Map(taskAgents.map((agent) => [agent.id, agent.status])),
             pullRequests: agentPullRequests,
           });
         },

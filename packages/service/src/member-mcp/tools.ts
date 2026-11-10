@@ -112,6 +112,7 @@ import {
   integrationRenameRequestSchema,
 } from "@repo/features/integration-wire";
 import { commitShaSchema } from "@repo/features/link-grammar";
+import { MCP_ACCESS_TOKEN_MINUTES, mcpClientIdSchema } from "@repo/features/mcp-client-wire";
 import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-mcp-tool";
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
 import { agentName } from "@repo/features/model-label";
@@ -130,11 +131,18 @@ import {
 } from "@repo/features/pull-request-write-wire";
 import { workspaceSentryDisconnectRequestSchema } from "@repo/features/sentry-install-wire";
 import {
+  type WorkspaceSlackBot,
+  workspaceSlackBotChannelRequestSchema,
+} from "@repo/features/slack-bot-wire";
+import {
   CODE_PATH_MAX_CHARS,
   codeLineSchema,
   DESCRIPTION_HISTORY_BOUNDS,
   type DescriptionRevisionLine,
   descriptionRevisionSeqSchema,
+  REPOSITORY_PIN_BOUNDS,
+  type RepositoryPin,
+  repositoryPinRequestSchema,
   TASK_FILE_BOUNDS,
   TASK_FILE_REFUSAL,
   TASK_STATUS,
@@ -145,11 +153,31 @@ import {
 } from "@repo/features/task-wire";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
 import {
+  WORKSPACE_ENVIRONMENT_BOUNDS,
+  type WorkspaceEnvironmentAnswer,
+  workspaceVariableNameSchema,
+  workspaceVariablePutRequestSchema,
+} from "@repo/features/workspace-environment-wire";
+import {
+  workspaceInvitationCancelSchema,
+  workspaceInviteRequestSchema,
+} from "@repo/features/workspace-invitation-wire";
+import {
   REPOSITORY_SCRIPT_KIND,
   type WorkspaceSandboxSetupAnswer,
   workspaceInstallScriptPutRequestSchema,
 } from "@repo/features/workspace-sandbox-setup-wire";
-import { WORKSPACE_BOUNDS, workspaceOfSlug } from "@repo/features/workspace-wire";
+import {
+  WORKSPACE_BOUNDS,
+  WORKSPACE_PHOTO_BOUNDS,
+  WORKSPACE_PHOTO_TYPE,
+  workspaceCreateRequestSchema,
+  workspaceMemberRemovalSchema,
+  workspaceMemberRoleSchema,
+  workspaceOfSlug,
+  workspacePhotoSetRequestSchema,
+  workspaceRenameRequestSchema,
+} from "@repo/features/workspace-wire";
 import type { Sandbox } from "@repo/sandbox";
 import {
   EXPERIMENT,
@@ -158,12 +186,27 @@ import {
   type WorkspaceExperiment,
 } from "@repo/settings";
 import { describeWire, type StandardSchemaWithJson, standardSchemaOf } from "@repo/wire/effect";
-import { Effect, Option, Result, Schema } from "effect";
+import { Effect, Option, Redacted, Result, Schema } from "effect";
 import type { HttpClient } from "effect/http";
 import { writeOwnPreferences } from "../accounts/account-preferences.js";
 import { accountProcedureSeams } from "../accounts/account-seams.js";
+import { createdWorkspace, WorkspacePlugin } from "../accounts/workspace-create.js";
+import {
+  workspaceInvitationCancel,
+  workspaceInvitationsRead,
+  workspaceInvite,
+} from "../accounts/workspace-invitation-operations.js";
+import {
+  workspaceMemberRemove,
+  workspaceMemberRoleChange,
+} from "../accounts/workspace-member-operations.js";
 import { forgetWorkspaceMemory, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
-import { workspaceMembersRead, workspaceSlugSet } from "../accounts/workspace-operations.js";
+import {
+  workspaceMembersRead,
+  workspacePhotoSet,
+  workspaceRename,
+  workspaceSlugSet,
+} from "../accounts/workspace-operations.js";
 import {
   BROWSER_TAKEOVER_HOLD_MS,
   handBackAgentBrowserTab,
@@ -193,6 +236,7 @@ import {
   LIST_AGENTS_TOOL,
   LIST_TASKS_TOOL,
   orStoreRefusal,
+  queueRecord,
   READ_PAGE_CHARS,
   READ_PAGE_REFUSAL,
   READ_PAGE_TOOL,
@@ -291,6 +335,7 @@ import {
 import {
   ACTION_RESULT_STATUS,
   HOSTED_API_ERROR,
+  type HostedApiError,
   type WireRecord,
   wireUuidSchema,
 } from "../core.js";
@@ -298,6 +343,7 @@ import { HostedEnvironment } from "../environment.js";
 import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import type { GitHubApp } from "../github/github-app.js";
 import type { PullRequestLinks } from "../github/pull-request-links.js";
+import { pinRepository, readRepositoryPins } from "../github/repository-pins.js";
 import {
   listWorkspaceRepositories,
   readPlaceFile,
@@ -319,8 +365,17 @@ import {
 } from "../installed-skills/installed-skills.js";
 import { parseSkillPaste } from "../installed-skills/skill-paste.js";
 import type { IntegrationConnect } from "../integrations/integration-connect.js";
+import { hostedKeyRing } from "../orpc/base.js";
 import type { PageLinks } from "../pages/page-links.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
+import type { SlackBot } from "../slack/slack-bot.js";
+import {
+  changeSlackChannel,
+  disconnectSlackBot,
+  readSlackBot,
+  setSlackDefaultRepository,
+  setSlackNotifications,
+} from "../slack/slack-bot-operations.js";
 import {
   COMMENT_TOOL_REFUSAL,
   commentAnswerRead,
@@ -345,6 +400,11 @@ import { readTaskFile } from "../tasks/task-file.js";
 import { readTaskTree } from "../tasks/task-tree.js";
 import type { SentryApp } from "../triggers/sentry/sentry-app-config.js";
 import {
+  deleteWorkspaceVariable,
+  listWorkspaceEnvironment,
+  putWorkspaceVariable,
+} from "../workspace-environment/workspace-environment.js";
+import {
   readSandboxSetup,
   saveInstallScript,
   saveRepositorySetup,
@@ -368,6 +428,7 @@ import {
   listMcpClientsAsMember,
   readSentryAsMember,
   renameIntegrationAsMember,
+  revokeMcpClientAsMember,
 } from "./integrations.js";
 import {
   MARK_FILES_VIEWED_FIELDS,
@@ -378,9 +439,10 @@ import {
   runReadPullRequest,
 } from "./pull-request-tools.js";
 
-/** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against and a workspace's installations are read through, Vercel Connect the member's own integrations are read, begun, and ended through, the pull request links a link's read is kept in, an agent's sandbox its ports are read and shared in and the browser in it a tab is opened in, the deployment's page links its shares answer, and the member the call acts for. */
+/** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against and a workspace's installations are read through, Vercel Connect the member's own integrations are read, begun, and ended through, the pull request links a link's read is kept in, an agent's sandbox its ports are read and shared in and the browser in it a tab is opened in, the deployment's page links its shares answer, the organization plugin a workspace is created through, and the member the call acts for. */
 export type MemberMcpServices =
   | Sandbox
+  | WorkspacePlugin
   | AgentSandbox
   | AgentBrowser
   | PageLinks
@@ -392,6 +454,7 @@ export type MemberMcpServices =
   | HostedEnvironment
   | SentryApp
   | IntegrationConnect
+  | SlackBot
   | AdmittedMember;
 
 /** A tool's input declaration: a wire schema the emitter can show and the reader can read. */
@@ -514,6 +577,18 @@ const listAsMember = <R>(
     const workspace = yield* listedWorkspace(member.userId, slug);
     if (Result.isFailure(workspace)) return agentToolRejected(workspace.failure);
     return yield* read(memberCaller(member, workspace.success));
+  });
+
+/** A call run as the member, in the workspace its slug names or their only one, as a list is; refused, naming theirs, where that names none. */
+const asMemberInWorkspace = (
+  slug: string | undefined,
+  run: (userId: string, workspaceId: string) => Effect.Effect<object, never, MemberMcpServices>,
+) =>
+  Effect.gen(function* () {
+    const member = yield* AdmittedMember;
+    const workspace = yield* listedWorkspace(member.userId, slug);
+    if (Result.isFailure(workspace)) return agentToolRejected(workspace.failure);
+    return yield* run(member.userId, workspace.success);
   });
 
 /** A read by id run as the member, about the workspace that holds what it names as the member reaches it; refused in the read's own words where they reach none. */
@@ -1635,7 +1710,7 @@ function memberStartAgentWords(handed: string, newTaskPrompt: string): string {
     "Start a new coding agent as the member, exactly as their own Start would: on a task " +
     `they can open by its taskId, ${handed}; or on a new task made for it in ` +
     "the workspace named, named as its agent is, assigned to the member, in the repository " +
-    `named or none, and done by itself once its agents finish well${newTaskPrompt}. ` +
+    `named or none${newTaskPrompt}. ` +
     "This one call carries everything the agent is told as it starts, and the " +
     "agent sets to work on it at once. Its checkout is the repository's default branch, or " +
     "the branch named, which must already be on GitHub. It runs on the model and effort " +
@@ -1764,7 +1839,7 @@ const MEMBER_MESSAGE_AGENT_TOOL = memberMcpTool({
     "why nothing was sent. With queue, it waits behind the agent's turn instead, and answers " +
     "`accepted` with `delivery` `queued` and how many messages stand `ahead` of it, or " +
     `\`handed-on\` where the agent stood idle and it goes at once, unconfirmed, since a refusal puts it back and pauses the queue; and \`paused\` with why where ` +
-    "the queue stands paused, which sends nothing until the member resumes it in the app. " +
+    `the queue stands paused, which sends nothing until ${MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE} resumes it. ` +
     FOLLOW_WORDS,
   input: MessageAgentInputSchema,
   annotations: ADDITIVE,
@@ -1773,6 +1848,142 @@ const MEMBER_MESSAGE_AGENT_TOOL = memberMcpTool({
       (userId) => agentWorkspace(userId, { id: asked.agentId }),
       MESSAGE_AGENT_REFUSAL.NO_AGENT,
       (call) => memberMessage(call, asked),
+    ),
+});
+
+/** A queued message, by the id `read_agent`'s queue lists it by. */
+const QUEUED_MESSAGE_ID_INPUT = describeWire(
+  wireUuidSchema,
+  `The queued message's id, as ${MEMBER_MCP_TOOL.READ_AGENT}'s queue lists it.`,
+);
+
+/** A queued message's new words, which replace its own and the files it carried. */
+const QUEUED_WORDS_INPUT = describeWire(
+  MessageAgentInputSchema.fields.text,
+  "Its new words, as the member's own: they replace its words, and it goes without the files " +
+    "it carried.",
+);
+
+/** A change to an agent's queue, by its kind, as the member's queue controls make it: every kind but a message added, which `message_agent`'s queue adds. */
+const MemberQueueChangeSchema = Schema.Union([
+  Schema.Struct({ change: Schema.Literal(QUEUE_CHANGE.RESUME) }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.HOLD),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+    held: describeWire(
+      Schema.Boolean,
+      "true to hold it, as the member's Edit does, so the queue sends what stands ahead of it " +
+        "and nothing from it on; false to let it go again.",
+    ),
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.EDIT),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+    text: QUEUED_WORDS_INPUT,
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.DELETE),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.REORDER),
+    order: describeWire(
+      Schema.Array(wireUuidSchema).check(Schema.isMaxLength(AGENT_QUEUE_BOUNDS.MAX_MESSAGES)),
+      "Every message the queue holds, by its id, each once, in the order they are to go.",
+    ),
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.STEER),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+    text: Schema.optionalKey(QUEUED_WORDS_INPUT),
+  }),
+]);
+
+/** A change to a queue names the agent and the change. */
+const ChangeAgentQueueInputSchema = Schema.Struct({
+  agentId: AgentIdInputSchema.fields.agentId,
+  change: describeWire(
+    MemberQueueChangeSchema,
+    "The change: resume the paused queue; hold a message or let it go; edit its words; " +
+      "delete it; reorder the queue; or steer a message into the turn under way now, with new " +
+      "words or as it stands.",
+  ),
+});
+
+type ChangeAgentQueueInput = typeof ChangeAgentQueueInputSchema.Type;
+
+/** Why a queue change changed nothing, in the member's tool's words. */
+const CHANGE_QUEUE_REFUSAL = {
+  NOT_STARTER: "Not changed: only the member who started that agent changes its queue.",
+  NO_MESSAGE:
+    "Not changed: that agent's queue holds no message of that id; it may have gone already. " +
+    `${MEMBER_MCP_TOOL.READ_AGENT} lists the queue.`,
+  BAD_ORDER:
+    "Not changed: name every message the queue holds, each once, in the order they are to go; " +
+    `${MEMBER_MCP_TOOL.READ_AGENT} lists them.`,
+  UNAVAILABLE: "Not changed: the service could not change the queue just now; try again.",
+} as const;
+
+/** The words for a refusal of a queue change. */
+function changeQueueRefusalWords(refusal: HostedRefusal): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_PERMITTED:
+      return CHANGE_QUEUE_REFUSAL.NOT_STARTER;
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return CHANGE_QUEUE_REFUSAL.NO_MESSAGE;
+    case HOSTED_API_ERROR.INVALID_REQUEST:
+      return CHANGE_QUEUE_REFUSAL.BAD_ORDER;
+    default:
+      return CHANGE_QUEUE_REFUSAL.UNAVAILABLE;
+  }
+}
+
+/**
+ * One change to an agent's queue as the member, through the change their
+ * queue controls make (`changeAgentQueue`): refused for an agent of no
+ * workspace of the call's or an archived one, as a message is, and
+ * answered with the queue as it then stands.
+ */
+const memberQueueChange = (call: AgentCall, { agentId, change }: ChangeAgentQueueInput) =>
+  orStoreRefusal(
+    Effect.gen(function* () {
+      const found = yield* workspaceAgentOf(call.caller, agentId);
+      if (Option.isNone(found)) return agentToolRejected(MESSAGE_AGENT_REFUSAL.NO_AGENT);
+      const { agent } = found.value;
+      if (agent.archivedAt !== null) return agentToolRejected(MESSAGE_AGENT_REFUSAL.ARCHIVED);
+      const changed = yield* Effect.result(
+        changeAgentQueue(callerUserId(call.caller), agent, change),
+      );
+      if (Result.isFailure(changed)) {
+        return agentToolRejected(changeQueueRefusalWords(changed.failure));
+      }
+      return {
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        queue: queueRecord(changed.success),
+        agent: { id: agent.id, title: agentName(agent), model: agent.model },
+      };
+    }),
+  );
+
+const CHANGE_AGENT_QUEUE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE,
+  description:
+    "Change the queue of a coding agent the member started, by its id, as their queue " +
+    `controls would: the messages ${MEMBER_MCP_TOOL.MESSAGE_AGENT}'s queue left waiting behind ` +
+    `its turn, which ${MEMBER_MCP_TOOL.READ_AGENT} lists by id. Resume a queue a Stop, a ` +
+    "failed turn, or a refused hand-off paused; hold a message, so the queue stops at it, or " +
+    "let it go; edit its words; delete it; reorder the queue; or steer a message into the turn " +
+    "under way now, which takes it out of the queue. Only the agent's starter changes its " +
+    "queue. Where the agent stands idle, the change hands the next message on at once, as a " +
+    "turn's end would. Answers `accepted` with the queue as it then stands, or `rejected` and " +
+    `why nothing changed. ${FOLLOW_WORDS}`,
+  input: ChangeAgentQueueInputSchema,
+  annotations: DESTRUCTIVE,
+  run: (asked) =>
+    writeAsMember(
+      (userId) => agentWorkspace(userId, { id: asked.agentId }),
+      MESSAGE_AGENT_REFUSAL.NO_AGENT,
+      (call) => memberQueueChange(call, asked),
     ),
 });
 
@@ -1862,49 +2073,127 @@ const MEMBER_UPDATE_AGENT_TOOL = memberMcpTool({
     ),
 });
 
-// A workspace's members and its slug, through the operations the hosted procedures run (`../accounts/workspace-operations.ts`), as the member.
+// A workspace, its members, and its invitations, through the operations the hosted procedures run (`../accounts/workspace-operations.ts`, `workspace-member-operations.ts`, `workspace-invitation-operations.ts`), as the member.
 
-/** Why a members read or a slug change was refused, in words the agent can act on. */
-const WORKSPACE_TOOL_REFUSAL = {
-  NOT_OWNER: "Not changed: only the workspace's owner may change its slug.",
-  SLUG_MALFORMED: `Not changed: a slug is lowercase letters and digits, with single hyphens between them, at most ${WORKSPACE_BOUNDS.MAX_SLUG_CHARS} characters.`,
-  SLUG_RESERVED: `Not changed: that slug is reserved by ${PRODUCT_NAME}; choose another.`,
-  SLUG_TAKEN: "Not changed: another workspace holds or held that slug; choose another.",
-  UNANSWERED: "Not run: the workspace could not be read just now. The call may be made again.",
-} as const;
+/** What a workspace call's refusals say, by the error its operation refused with; any other is `WORKSPACE_UNANSWERED`. */
+type WorkspaceRefusalWords = { readonly [Error in HostedApiError]?: string };
 
-/** A workspace read or write refused by its operation, in the agent's words. */
-function workspaceRefusalWords(refusal: HostedRefusal): string {
-  switch (refusal.error) {
-    case HOSTED_API_ERROR.NOT_PERMITTED:
-      return WORKSPACE_TOOL_REFUSAL.NOT_OWNER;
-    case HOSTED_API_ERROR.WORKSPACE_SLUG_MALFORMED:
-      return WORKSPACE_TOOL_REFUSAL.SLUG_MALFORMED;
-    case HOSTED_API_ERROR.WORKSPACE_SLUG_RESERVED:
-      return WORKSPACE_TOOL_REFUSAL.SLUG_RESERVED;
-    case HOSTED_API_ERROR.WORKSPACE_SLUG_TAKEN:
-      return WORKSPACE_TOOL_REFUSAL.SLUG_TAKEN;
-    default:
-      return WORKSPACE_TOOL_REFUSAL.UNANSWERED;
-  }
-}
+/** A workspace call refused for no reason of the member's. */
+const WORKSPACE_UNANSWERED =
+  "Not run: the workspace could not be read just now. The call may be made again.";
+
+/** A member named by an account id the workspace does not hold. */
+const NO_SUCH_MEMBER = `nobody of that account id is a member of the workspace; ${MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS} names them.`;
+
+/** Why a slug change was refused, in words the agent can act on. */
+const SLUG_REFUSAL_WORDS = {
+  [HOSTED_API_ERROR.NOT_PERMITTED]: "Not changed: only the workspace's owner may change its slug.",
+  [HOSTED_API_ERROR.WORKSPACE_SLUG_MALFORMED]: `Not changed: a slug is lowercase letters and digits, with single hyphens between them, at most ${WORKSPACE_BOUNDS.MAX_SLUG_CHARS} characters.`,
+  [HOSTED_API_ERROR.WORKSPACE_SLUG_RESERVED]: `Not changed: that slug is reserved by ${PRODUCT_NAME}; choose another.`,
+  [HOSTED_API_ERROR.WORKSPACE_SLUG_TAKEN]:
+    "Not changed: another workspace holds or held that slug; choose another.",
+} as const satisfies WorkspaceRefusalWords;
+
+/** Why a rename was refused. */
+const RENAME_REFUSAL_WORDS = {
+  [HOSTED_API_ERROR.NOT_PERMITTED]:
+    "Not renamed: only the workspace's owner or an admin may rename it, and an account's " +
+    "first workspace, named for its owner, is never renamed.",
+} as const satisfies WorkspaceRefusalWords;
+
+/** Why a member's removal was refused. */
+const REMOVE_MEMBER_REFUSAL_WORDS = {
+  [HOSTED_API_ERROR.NOT_PERMITTED]:
+    "Not removed: the owner removes an admin or a member, and an admin a member alone; " +
+    "nobody removes the owner, or themselves, whose way out is leaving.",
+  [HOSTED_API_ERROR.NOT_FOUND]: `Not removed: ${NO_SUCH_MEMBER}`,
+} as const satisfies WorkspaceRefusalWords;
+
+/** Why a role change was refused. */
+const MEMBER_ROLE_REFUSAL_WORDS = {
+  [HOSTED_API_ERROR.NOT_PERMITTED]:
+    "Not changed: only the workspace's owner gives a role, and never to themselves.",
+  [HOSTED_API_ERROR.NOT_FOUND]: `Not changed: ${NO_SUCH_MEMBER}`,
+} as const satisfies WorkspaceRefusalWords;
+
+/** Why an invitations read was refused. */
+const INVITATIONS_REFUSAL_WORDS = {
+  [HOSTED_API_ERROR.NOT_PERMITTED]:
+    "Not read: only the workspace's owner or an admin reads its invitations.",
+} as const satisfies WorkspaceRefusalWords;
+
+/** Why an invitation was refused. */
+const INVITE_REFUSAL_WORDS = {
+  [HOSTED_API_ERROR.NOT_PERMITTED]:
+    "Not invited: only the workspace's owner or an admin invites, the owner alone as an admin; " +
+    "or the address is not one an invitation may go to; or the workspace already holds as many " +
+    "pending invitations as it may.",
+  [HOSTED_API_ERROR.ALREADY_INVITED]:
+    "Not invited: that address is already a member's, or already holds a pending invitation.",
+} as const satisfies WorkspaceRefusalWords;
+
+/** Why an invitation's cancel was refused. */
+const CANCEL_INVITATION_REFUSAL_WORDS = {
+  [HOSTED_API_ERROR.NOT_PERMITTED]:
+    "Not canceled: only the workspace's owner or an admin cancels its invitations.",
+  [HOSTED_API_ERROR.NOT_FOUND]: `Not canceled: no pending invitation of the workspace has that id; ${MEMBER_MCP_TOOL.LIST_WORKSPACE_INVITATIONS} lists them.`,
+} as const satisfies WorkspaceRefusalWords;
+
+/** Why a photo change was refused. */
+const PHOTO_REFUSAL_WORDS = {
+  [HOSTED_API_ERROR.NOT_PERMITTED]:
+    "Not changed: only the workspace's owner or an admin may set its photo.",
+} as const satisfies WorkspaceRefusalWords;
 
 /** An operation on the workspace a slug names, or the member's only one, as the member; refused in the agent's words. */
 const workspaceAsMember = <A extends WireRecord, R>(
   slug: string | undefined,
-  operation: (userId: string, workspaceId: string) => Effect.Effect<A, HostedRefusal, R>,
+  refusalWords: WorkspaceRefusalWords,
+  operation: (
+    member: AdmittedMemberValues,
+    workspaceId: string,
+  ) => Effect.Effect<A, HostedRefusal, R>,
 ) =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
     const workspace = yield* listedWorkspace(member.userId, slug);
     if (Result.isFailure(workspace)) return agentToolRejected(workspace.failure);
-    return yield* operation(member.userId, workspace.success).pipe(
+    return yield* operation(member, workspace.success).pipe(
       Effect.map(
         (answered): WireRecord => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answered }),
       ),
-      Effect.catch((refusal) => Effect.succeed(agentToolRejected(workspaceRefusalWords(refusal)))),
+      Effect.catch((refusal) =>
+        Effect.succeed(agentToolRejected(refusalWords[refusal.error] ?? WORKSPACE_UNANSWERED)),
+      ),
     );
   });
+
+/** The members as a tool answers them, owners first, then admins, then members. */
+function membersAnswered(
+  members: readonly {
+    readonly userId: string;
+    readonly name: string;
+    readonly email: string;
+    readonly role: string;
+  }[],
+) {
+  return members.map(({ userId, name, email, role }) => ({ userId, name, email, role }));
+}
+
+/** The origin an invitation's accept link is on: the deployment's own, as the hosted procedure's is the request's. */
+function invitationOrigin(member: AdmittedMemberValues): string {
+  return new URL(member.baseURL).origin;
+}
+
+/** The workspace a write acts on, by the slug `list_workspaces` answered, its words naming what the write does there. */
+const workspaceToChange = (what: string) =>
+  Schema.optionalKey(
+    describeWire(
+      WORKSPACE_INPUT.schema,
+      `The workspace ${what}, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; leave it ` +
+        "out where the member belongs to one workspace alone.",
+    ),
+  );
 
 /** A members read names the workspace it reads. */
 const ListWorkspaceMembersInputSchema = Schema.Struct({ workspace: WORKSPACE_INPUT });
@@ -1920,14 +2209,9 @@ const LIST_WORKSPACE_MEMBERS_TOOL = memberMcpTool({
   input: ListWorkspaceMembersInputSchema,
   annotations: READ_ONLY,
   run: ({ workspace }) =>
-    workspaceAsMember(workspace, (userId, workspaceId) =>
+    workspaceAsMember(workspace, {}, ({ userId }, workspaceId) =>
       Effect.map(workspaceMembersRead(userId, workspaceId), ({ members, former }) => ({
-        members: members.map(({ userId: id, name, email, role }) => ({
-          userId: id,
-          name,
-          email,
-          role,
-        })),
+        members: membersAnswered(members),
         ...(former === undefined
           ? {}
           : { former: former.map(({ userId: id, name }) => ({ userId: id, name })) }),
@@ -1937,13 +2221,7 @@ const LIST_WORKSPACE_MEMBERS_TOOL = memberMcpTool({
 
 /** A slug change names the workspace it changes and the slug it takes. */
 const SetWorkspaceSlugInputSchema = Schema.Struct({
-  workspace: Schema.optionalKey(
-    describeWire(
-      WORKSPACE_INPUT.schema,
-      `The workspace whose slug to change, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} ` +
-        "answered; leave it out where the member belongs to one workspace alone.",
-    ),
-  ),
+  workspace: workspaceToChange("whose slug to change"),
   slug: describeWire(
     Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
     "The new slug: lowercase letters and digits, with single hyphens between them.",
@@ -1962,9 +2240,215 @@ const SET_WORKSPACE_SLUG_TOOL = memberMcpTool({
   input: SetWorkspaceSlugInputSchema,
   annotations: IDEMPOTENT_CHANGE,
   run: ({ workspace, slug }) =>
-    workspaceAsMember(workspace, (userId, workspaceId) =>
+    workspaceAsMember(workspace, SLUG_REFUSAL_WORDS, ({ userId }, workspaceId) =>
       Effect.map(workspaceSlugSet(userId, workspaceId, slug), ({ workspace: changed }) => ({
         workspace: { id: changed.id, slug: changed.slug ?? slug, name: changed.name },
+      })),
+    ),
+});
+
+/** A rename names the workspace and its new name. */
+const RenameWorkspaceInputSchema = Schema.Struct({
+  workspace: workspaceToChange("to rename"),
+  name: describeWire(
+    workspaceRenameRequestSchema.fields.name,
+    `The new name, at most ${WORKSPACE_BOUNDS.MAX_NAME_CHARS} characters.`,
+  ),
+});
+
+const RENAME_WORKSPACE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.RENAME_WORKSPACE,
+  description:
+    "Rename a workspace the member you act for owns or is an admin of, as its Settings › " +
+    "General page would. An account's first workspace is named for its owner and is never " +
+    "renamed. The slug stays as it stood, so every link still opens it. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the workspace under its new name, or ` +
+    "`rejected` and why.",
+  input: RenameWorkspaceInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ workspace, name }) =>
+    workspaceAsMember(workspace, RENAME_REFUSAL_WORDS, ({ userId }, workspaceId) =>
+      Effect.map(workspaceRename(userId, workspaceId, name), ({ workspace: renamed }) => ({
+        workspace: {
+          id: renamed.id,
+          name: renamed.name,
+          ...(renamed.slug === undefined ? {} : { slug: renamed.slug }),
+        },
+      })),
+    ),
+});
+
+/** The member a removal or a role change acts on, by account id. */
+const MEMBER_USER_ID_INPUT = describeWire(
+  workspaceMemberRemovalSchema.fields.userId,
+  `The member's account id, as ${MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS} answered it.`,
+);
+
+/** A removal names the workspace and the member it removes. */
+const RemoveWorkspaceMemberInputSchema = Schema.Struct({
+  workspace: workspaceToChange("to remove them from"),
+  userId: MEMBER_USER_ID_INPUT,
+});
+
+const REMOVE_WORKSPACE_MEMBER_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.REMOVE_WORKSPACE_MEMBER,
+  description:
+    "Remove another member from a workspace, as its Settings › Members page would: the owner " +
+    "removes an admin or a member, and an admin a member alone. Nobody removes the owner, or " +
+    "themselves, whose way out is leaving in the app. The one removed loses the workspace at " +
+    "once, and stays named on the tasks they were on as a former member. Coming back takes a new " +
+    `invitation. ${WORKSPACE_WORDS} Answers \`accepted\` with the members as they then ` +
+    "stand, or `rejected` and why.",
+  input: RemoveWorkspaceMemberInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ workspace, userId: removed }) =>
+    workspaceAsMember(workspace, REMOVE_MEMBER_REFUSAL_WORDS, ({ userId }, workspaceId) =>
+      Effect.map(workspaceMemberRemove(userId, workspaceId, removed), ({ members }) => ({
+        members: membersAnswered(members),
+      })),
+    ),
+});
+
+/** A role change names the workspace, the member, and the role they take. */
+const ChangeWorkspaceMemberRoleInputSchema = Schema.Struct({
+  workspace: workspaceToChange("the member is in"),
+  userId: MEMBER_USER_ID_INPUT,
+  role: describeWire(
+    workspaceMemberRoleSchema.fields.role,
+    "The role they take: admin, who manages the workspace's members and settings beside the " +
+      "owner, or member.",
+  ),
+});
+
+const CHANGE_WORKSPACE_MEMBER_ROLE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.CHANGE_WORKSPACE_MEMBER_ROLE,
+  description:
+    "Make another member of a workspace the member you act for owns an admin, or an admin a " +
+    "member, as its Settings › Members page would. Only the owner may, and never of " +
+    `themselves. ${WORKSPACE_WORDS} Answers \`accepted\` with the members as they then stand, ` +
+    "or `rejected` and why.",
+  input: ChangeWorkspaceMemberRoleInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ workspace, userId: changed, role }) =>
+    workspaceAsMember(workspace, MEMBER_ROLE_REFUSAL_WORDS, ({ userId }, workspaceId) =>
+      Effect.map(workspaceMemberRoleChange(userId, workspaceId, changed, role), ({ members }) => ({
+        members: membersAnswered(members),
+      })),
+    ),
+});
+
+/** An invitations read names the workspace it reads. */
+const ListWorkspaceInvitationsInputSchema = Schema.Struct({
+  workspace: workspaceToChange("whose invitations to list"),
+});
+
+const LIST_WORKSPACE_INVITATIONS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_WORKSPACE_INVITATIONS,
+  description:
+    "List the pending invitations of a workspace the member you act for owns or is an admin " +
+    "of, as its Settings › Members page shows them, soonest to expire first: each with its id, " +
+    "the address it was sent to, the role it offers, when it expires, and its accept link, " +
+    `which only the invited address's account accepts. ${WORKSPACE_WORDS} Answers ` +
+    "`accepted` with them, or `rejected` and why.",
+  input: ListWorkspaceInvitationsInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace }) =>
+    workspaceAsMember(workspace, INVITATIONS_REFUSAL_WORDS, (member, workspaceId) =>
+      workspaceInvitationsRead(member.userId, workspaceId, invitationOrigin(member)),
+    ),
+});
+
+/** An invitation names the workspace, the address, and the role it offers. */
+const InviteToWorkspaceInputSchema = Schema.Struct({
+  workspace: workspaceToChange("to invite them to"),
+  email: describeWire(
+    workspaceInviteRequestSchema.fields.email,
+    "The address to invite, whose account alone may accept.",
+  ),
+  role: describeWire(
+    workspaceInviteRequestSchema.fields.role,
+    "The role it offers: member, or admin, which only the owner may offer.",
+  ),
+});
+
+const INVITE_TO_WORKSPACE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.INVITE_TO_WORKSPACE,
+  description:
+    "Invite an address to a workspace the member you act for owns or is an admin of, as its " +
+    "Settings › Members page would: the owner may invite an admin, and an owner or an admin a " +
+    "member. The invitation is emailed to the address where the deployment sends mail, and " +
+    "expires in 48 hours. Only the invited address's account accepts it. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the invitation and its accept link, to ` +
+    "hand on where no email goes, or `rejected` and why: not permitted, or the address is " +
+    "already a member's or already invited.",
+  input: InviteToWorkspaceInputSchema,
+  annotations: ADDITIVE,
+  run: ({ workspace, email, role }) =>
+    workspaceAsMember(workspace, INVITE_REFUSAL_WORDS, (member, workspaceId) =>
+      workspaceInvite(member.userId, { workspaceId, email, role }, invitationOrigin(member)),
+    ),
+});
+
+/** A cancel names the workspace and the invitation it cancels. */
+const CancelWorkspaceInvitationInputSchema = Schema.Struct({
+  workspace: workspaceToChange("the invitation is to"),
+  invitationId: describeWire(
+    workspaceInvitationCancelSchema.fields.invitationId,
+    `The invitation's id, as ${MEMBER_MCP_TOOL.LIST_WORKSPACE_INVITATIONS} answered it.`,
+  ),
+});
+
+const CANCEL_WORKSPACE_INVITATION_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.CANCEL_WORKSPACE_INVITATION,
+  description:
+    "Cancel a pending invitation to a workspace the member you act for owns or is an admin " +
+    "of, as its Settings › Members page would, so its accept link stops working. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the invitations still pending, or ` +
+    "`rejected` and why.",
+  input: CancelWorkspaceInvitationInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ workspace, invitationId }) =>
+    workspaceAsMember(workspace, CANCEL_INVITATION_REFUSAL_WORDS, (member, workspaceId) =>
+      workspaceInvitationCancel(member.userId, workspaceId, invitationId, invitationOrigin(member)),
+    ),
+});
+
+/** A photo set names the workspace and the photo, as a `data:` URL the window would send, or null to remove it. */
+const SetWorkspacePhotoInputSchema = Schema.Struct({
+  workspace: Schema.optionalKey(
+    describeWire(
+      WORKSPACE_INPUT.schema,
+      `The workspace whose photo to set, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} ` +
+        "answered; leave it out where the member belongs to one workspace alone.",
+    ),
+  ),
+  photo: describeWire(
+    workspacePhotoSetRequestSchema.fields.photo,
+    `The photo as a base64 \`data:\` URL of a PNG, JPEG, or WebP image ` +
+      `(${Object.values(WORKSPACE_PHOTO_TYPE).join(", ")}), at most ${WORKSPACE_PHOTO_BOUNDS.MAX_BYTES} bytes decoded, such as a 256-pixel ` +
+      "square; null removes it, and the member's own first workspace then shows their sign-in picture.",
+  ),
+});
+
+const SET_WORKSPACE_PHOTO_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO,
+  description:
+    "Set or remove the photo of a workspace the member you act for belongs to, the picture " +
+    "beside its name in the sidebar and the workspace switcher, as its Settings › General page " +
+    "would. Only its owner or an admin may. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the workspace and its photo's new version, ` +
+    "null once removed, or `rejected` and why.",
+  input: SetWorkspacePhotoInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ workspace, photo }) =>
+    workspaceAsMember(workspace, PHOTO_REFUSAL_WORDS, ({ userId }, workspaceId) =>
+      Effect.map(workspacePhotoSet(userId, workspaceId, photo), ({ workspace: changed }) => ({
+        workspace: {
+          id: changed.id,
+          slug: changed.slug ?? null,
+          name: changed.name,
+          photoVersion: changed.photoVersion ?? null,
+        },
       })),
     ),
 });
@@ -2370,7 +2854,7 @@ function readOrRefused<A extends object>(
 }
 
 /** A repository operation run as the member, in the workspace its slug names or their only one, accepted with what it found or rejected in its refusal's words. */
-const asMemberInWorkspace = <A extends object, R>(
+const repositoryAsMember = <A extends object, R>(
   slug: string | undefined,
   run: (userId: string, workspaceId: string) => Effect.Effect<A, HostedRefusal | string, R>,
 ) =>
@@ -2421,7 +2905,7 @@ const LIST_REPOSITORIES_TOOL = memberMcpTool({
   input: ListRepositoriesInputSchema,
   annotations: READ_ONLY,
   run: ({ workspace }) =>
-    asMemberInWorkspace(workspace, (userId, workspaceId) =>
+    repositoryAsMember(workspace, (userId, workspaceId) =>
       Effect.gen(function* () {
         const listed = yield* listWorkspaceRepositories(userId, workspaceId);
         const added = yield* workspaceTokenRepositories(userId, workspaceId);
@@ -2454,7 +2938,7 @@ const SET_TOKEN_REPOSITORY_TOOL = memberMcpTool({
   input: SetTokenRepositoryInputSchema,
   annotations: IDEMPOTENT_CHANGE,
   run: ({ workspace, repository, added }) =>
-    asMemberInWorkspace(workspace, (userId, workspaceId) =>
+    repositoryAsMember(workspace, (userId, workspaceId) =>
       setWorkspaceTokenRepository(userId, { workspaceId, repository, added }),
     ),
 });
@@ -2494,7 +2978,7 @@ const READ_REPOSITORY_FILE_TOOL = memberMcpTool({
   input: ReadRepositoryFileInputSchema,
   annotations: READ_ONLY,
   run: ({ workspace, repository, path, firstLine = 1, commit }) =>
-    asMemberInWorkspace(workspace, (userId, workspaceId) =>
+    repositoryAsMember(workspace, (userId, workspaceId) =>
       Effect.flatMap(
         readPlaceFile(
           userId,
@@ -2543,7 +3027,7 @@ const LIST_REPOSITORY_FOLDER_TOOL = memberMcpTool({
   input: ListRepositoryFolderInputSchema,
   annotations: READ_ONLY,
   run: ({ workspace, repository, path = "", recursive }) =>
-    asMemberInWorkspace(workspace, (userId, workspaceId) =>
+    repositoryAsMember(workspace, (userId, workspaceId) =>
       Effect.flatMap(
         readPlaceTree(
           userId,
@@ -2581,7 +3065,7 @@ const LIST_REPOSITORY_SKILLS_TOOL = memberMcpTool({
   input: ListRepositorySkillsInputSchema,
   annotations: READ_ONLY,
   run: ({ workspace, repository }) =>
-    asMemberInWorkspace(workspace, (userId, workspaceId) =>
+    repositoryAsMember(workspace, (userId, workspaceId) =>
       Effect.flatMap(readPlaceSkills(userId, workspaceId, repository ?? null, true), readOrRefused),
     ),
 });
@@ -2610,7 +3094,7 @@ const READ_GITHUB_ISSUE_TOOL = memberMcpTool({
   input: ReadGitHubIssueInputSchema,
   annotations: READ_ONLY,
   run: ({ workspace, repository, number }) =>
-    asMemberInWorkspace(workspace, (userId, workspaceId) =>
+    repositoryAsMember(workspace, (userId, workspaceId) =>
       Effect.gen(function* () {
         const place = { workspaceId, repository };
         const pullRequest = yield* readPlacePullRequest(userId, place, number);
@@ -4110,24 +4594,34 @@ const LIST_MCP_CLIENTS_TOOL = memberMcpTool({
     `List the outside MCP clients the member allowed to act for them on ${PRODUCT_NAME}'s MCP ` +
     "server, as Settings › MCP lists them, and the server's address: each client by its id " +
     "and name, where it signs in, when the member allowed it, and when it last renewed its " +
-    "access. The member revokes one in Settings › MCP. Answers `accepted` with them, never a " +
-    "token, or `rejected` and why.",
+    `access. ${MEMBER_MCP_TOOL.REVOKE_MCP_CLIENT} revokes one. Answers \`accepted\` with them, ` +
+    "never a token, or `rejected` and why.",
   input: NoInputSchema,
   annotations: READ_ONLY,
   run: listMcpClientsAsMember,
 });
 
-/** A Sentry call run as the member, in the workspace its slug names or their only one; refused, naming theirs, where that names none. */
-const sentryAsMember = (
-  slug: string | undefined,
-  run: (userId: string, workspaceId: string) => Effect.Effect<object, never, MemberMcpServices>,
-) =>
-  Effect.gen(function* () {
-    const member = yield* AdmittedMember;
-    const workspace = yield* listedWorkspace(member.userId, slug);
-    if (Result.isFailure(workspace)) return agentToolRejected(workspace.failure);
-    return yield* run(member.userId, workspace.success);
-  });
+const RevokeMcpClientInputSchema = Schema.Struct({
+  clientId: describeWire(
+    mcpClientIdSchema,
+    `The client, by the id ${MEMBER_MCP_TOOL.LIST_MCP_CLIENTS} answered.`,
+  ),
+});
+
+const REVOKE_MCP_CLIENT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.REVOKE_MCP_CLIENT,
+  description:
+    "Revoke one outside MCP client the member allowed, by its id, as Revoke in Settings › MCP " +
+    "does: the member's own consent to it and the tokens it holds for them are deleted, and " +
+    "no other member's. It cannot renew its access, and its next sign-in asks the member " +
+    `again. Revoking the client making this call cuts that client off: its access ends within ` +
+    `${MCP_ACCESS_TOKEN_MINUTES} minutes and it must sign in again. A client the member never ` +
+    `allowed, or ${PRODUCT_NAME}'s own Mac or iPhone app, is left as it is. Answers \`accepted\` with ` +
+    "the clients as they then stand, never a token, or `rejected` and why.",
+  input: RevokeMcpClientInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ clientId }) => revokeMcpClientAsMember(clientId),
+});
 
 const ListSentryInstallationsInputSchema = Schema.Struct({ workspace: WORKSPACE_INPUT });
 
@@ -4141,7 +4635,7 @@ const LIST_SENTRY_INSTALLATIONS_TOOL = memberMcpTool({
     "browser, in the app. Answers `accepted` with them, or `rejected` and why.",
   input: ListSentryInstallationsInputSchema,
   annotations: READ_ONLY,
-  run: ({ workspace }) => sentryAsMember(workspace, readSentryAsMember),
+  run: ({ workspace }) => asMemberInWorkspace(workspace, readSentryAsMember),
 });
 
 const DisconnectSentryInputSchema = Schema.Struct({
@@ -4163,7 +4657,7 @@ const DISCONNECT_SENTRY_TOOL = memberMcpTool({
   input: DisconnectSentryInputSchema,
   annotations: DESTRUCTIVE,
   run: ({ workspace, installationId }) =>
-    sentryAsMember(workspace, (userId, workspaceId) =>
+    asMemberInWorkspace(workspace, (userId, workspaceId) =>
       disconnectSentryAsMember(userId, workspaceId, installationId),
     ),
 });
@@ -4380,18 +4874,6 @@ const skillAnswer = <A extends object, R>(
     onSuccess: (answer) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answer }),
   });
 
-/** A skill call about the workspace its slug names, or the member's only one, as the member. */
-const skillsInWorkspace = <R>(
-  slug: string | undefined,
-  run: (userId: string, workspaceId: string) => Effect.Effect<WireRecord, never, R>,
-) =>
-  Effect.gen(function* () {
-    const member = yield* AdmittedMember;
-    const workspace = yield* listedWorkspace(member.userId, slug);
-    if (Result.isFailure(workspace)) return agentToolRejected(workspace.failure);
-    return yield* run(member.userId, workspace.success);
-  });
-
 /** A skill call about one skill by its id, as the member. */
 const skillAsMember = <R>(run: (userId: string) => Effect.Effect<WireRecord, never, R>) =>
   Effect.flatMap(AdmittedMember, (member) => run(member.userId));
@@ -4479,7 +4961,7 @@ const LIST_INSTALLED_SKILLS_TOOL = memberMcpTool({
   input: ListInstalledSkillsInputSchema,
   annotations: READ_ONLY,
   run: ({ workspace }) =>
-    skillsInWorkspace(workspace, (userId, workspaceId) =>
+    asMemberInWorkspace(workspace, (userId, workspaceId) =>
       skillAnswer(listSkills(userId, workspaceId), ABOUT_WORKSPACE),
     ),
 });
@@ -4511,7 +4993,7 @@ const PREVIEW_SKILL_INSTALL_TOOL = memberMcpTool({
   input: PreviewSkillInstallInputSchema,
   annotations: READ_ONLY,
   run: ({ workspace, source }) =>
-    skillsInWorkspace(workspace, (userId, workspaceId) =>
+    asMemberInWorkspace(workspace, (userId, workspaceId) =>
       Effect.map(
         skillAnswer(previewSkillPaste(userId, { text: source, workspaceId }), ABOUT_WORKSPACE),
         // Note that a paste the preview reads as neither source nor text is answered as no preview at all.
@@ -4540,7 +5022,7 @@ const INSTALL_SKILL_TOOL = memberMcpTool({
     // Note that a GitHub install takes the commit its preview pinned, as Add skill's always does, so what installs is what the member was shown.
     parseSkillPaste(source).kind === SKILL_PASTE_KIND.SOURCE && asked.sha === undefined
       ? Effect.succeed(agentToolRejected(SKILL_TOOL_REFUSAL.UNPINNED))
-      : skillsInWorkspace(workspace, (userId, workspaceId) =>
+      : asMemberInWorkspace(workspace, (userId, workspaceId) =>
           skillAnswer(
             Effect.map(
               installSkills(userId, { ...asked, text: source, workspaceId }),
@@ -4571,6 +5053,448 @@ const REMOVE_INSTALLED_SKILL_TOOL = memberMcpTool({
     ),
 });
 
+/*
+ * The workspace's Slack bot and the member's repository pins. The bot is
+ * read and set through the operations its Settings rows run
+ * (`../slack/slack-bot-operations.ts`), so an owner or admin alone sets its
+ * repositories and channels, and any member their own notifications; the
+ * pins are the member's own, through the sidebar's operations
+ * (`../github/repository-pins.ts`).
+ */
+
+/** Why a Slack bot or pin change was not made, in words the agent can act on. */
+const SETTINGS_REFUSAL = {
+  NO_BOT:
+    "Not made: the workspace's Slack bot is not connected; an owner or admin connects it in " +
+    `${PRODUCT_NAME}'s Settings.`,
+  NOT_PERMITTED:
+    "Not made: only an owner or admin of the workspace may set its Slack bot's repository or " +
+    "channels, or disconnect it.",
+  NOT_REACHABLE:
+    "Not made: the GitHub installation connected to the workspace reaches no repository of " +
+    "that name.",
+  GITHUB_UNANSWERED: "Not made: GitHub could not be reached just now. The call may be made again.",
+  TOO_MANY_PINS: `Not made: the member already holds ${REPOSITORY_PIN_BOUNDS.MAX_PINS} pins, the most there may be; unpin one first.`,
+  UNAVAILABLE:
+    "Not made: Slack, or this deployment's Slack bot, could not be reached just now. The call " +
+    "may be made again.",
+} as const;
+
+/** A refusal of the Slack bot's or the pins' operations, in the agent's words. */
+function settingsRefusalWords(refusal: HostedRefusal): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return SETTINGS_REFUSAL.NO_BOT;
+    case HOSTED_API_ERROR.NOT_PERMITTED:
+      return SETTINGS_REFUSAL.NOT_PERMITTED;
+    case HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE:
+      return SETTINGS_REFUSAL.NOT_REACHABLE;
+    case HOSTED_API_ERROR.GITHUB_UNANSWERED:
+      return SETTINGS_REFUSAL.GITHUB_UNANSWERED;
+    case HOSTED_API_ERROR.INVALID_REQUEST:
+      return SETTINGS_REFUSAL.TOO_MANY_PINS;
+    default:
+      return SETTINGS_REFUSAL.UNAVAILABLE;
+  }
+}
+
+/** The bot as an agent reads it: the wire's answer bar the transaction a desktop waits for. */
+function slackBotRecord({ txid: _txid, ...slackBot }: WorkspaceSlackBot): WireRecord {
+  return slackBot;
+}
+
+/** The workspace a Slack bot call is about, by its slug, where the member has more than one. */
+const SLACK_WORKSPACE_INPUT = Schema.optionalKey(
+  describeWire(
+    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
+    `The workspace whose Slack bot it is, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} ` +
+      "answered; leave it out where the member belongs to one workspace alone.",
+  ),
+);
+
+/** A repository named for Slack starts, as GitHub spells it, or null to clear it. */
+const slackRepositoryInput = (words: string) =>
+  Schema.optionalKey(
+    describeWire(
+      Schema.NullOr(githubRepositoryFullNameSchema),
+      `${words}, as owner/name, one the workspace's GitHub reaches; null clears it.`,
+    ),
+  );
+
+const ReadSlackBotInputSchema = Schema.Struct({ workspace: SLACK_WORKSPACE_INPUT });
+
+const READ_SLACK_BOT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.READ_SLACK_BOT,
+  description:
+    "Read the workspace's own Slack bot as its Settings show it: whether this deployment holds " +
+    "the bot (configured), the Slack team it is connected to (absent while it is not), whether " +
+    "it writes the member the threads that wait on them (notifications), the repository an " +
+    "agent started from Slack works in where its message names none (defaultRepository), and, " +
+    "to an owner or admin, the team's channels, each with its id, name, whether it is private, " +
+    "whether the bot is in it, and its own default repository where one is named. " +
+    `${WORKSPACE_WORDS} ${MEMBER_MCP_TOOL.UPDATE_SLACK_BOT} sets them.`,
+  input: ReadSlackBotInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace }) =>
+    asMemberInWorkspace(workspace, (userId, workspaceId) =>
+      readSlackBot(userId, workspaceId).pipe(
+        Effect.map(slackBotRecord),
+        Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
+      ),
+    ),
+});
+
+/** A change of the bot names the workspace and, each optional, the member's switch, the workspace's repository, and one channel. */
+const UpdateSlackBotInputSchema = Schema.Struct({
+  workspace: SLACK_WORKSPACE_INPUT,
+  notifications: Schema.optionalKey(
+    describeWire(
+      Schema.Boolean,
+      "Whether the bot writes the member, in Slack, the threads that wait on them; the member's " +
+        "own switch, which holds in every workspace.",
+    ),
+  ),
+  defaultRepository: slackRepositoryInput(
+    "The repository an agent started from Slack works in where its message names none",
+  ),
+  channel: Schema.optionalKey(
+    describeWire(
+      Schema.Struct({
+        channelId: describeWire(
+          workspaceSlackBotChannelRequestSchema.fields.channelId,
+          `The channel, by the id ${MEMBER_MCP_TOOL.READ_SLACK_BOT} lists it by.`,
+        ),
+        member: Schema.optionalKey(
+          describeWire(
+            Schema.Boolean,
+            "true to put the bot in the channel, a public one alone; false to take it out, " +
+              "which forgets the channel's repository.",
+          ),
+        ),
+        repository: slackRepositoryInput(
+          "The repository an agent started from this channel works in where its message names none",
+        ),
+      }),
+      "One channel of the team to change.",
+    ),
+  ),
+});
+
+const UPDATE_SLACK_BOT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.UPDATE_SLACK_BOT,
+  description:
+    "Set the workspace's own Slack bot as its Settings do, each change optional and made in " +
+    "this order: the member's own notifications from it (any member), the workspace's default " +
+    "repository for Slack starts, and one channel, putting the bot in a public channel or " +
+    "taking it out and naming or clearing its default repository (an owner or admin alone, and " +
+    "only once the bot is connected). Connecting and disconnecting the bot is not done here. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the bot as it then stands, as ` +
+    `${MEMBER_MCP_TOOL.READ_SLACK_BOT} reads it, or \`rejected\` and why, the changes before ` +
+    "the refused one standing.",
+  input: UpdateSlackBotInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ workspace, notifications, defaultRepository, channel }) =>
+    asMemberInWorkspace(workspace, (userId, workspaceId) =>
+      Effect.gen(function* () {
+        let slackBot: WorkspaceSlackBot | undefined;
+        if (notifications !== undefined) {
+          slackBot = yield* setSlackNotifications(userId, workspaceId, notifications);
+        }
+        if (defaultRepository !== undefined) {
+          slackBot = yield* setSlackDefaultRepository(userId, workspaceId, defaultRepository);
+        }
+        if (channel !== undefined) {
+          slackBot = yield* changeSlackChannel(userId, workspaceId, channel);
+        }
+        slackBot ??= yield* readSlackBot(userId, workspaceId);
+        return { status: ACTION_RESULT_STATUS.ACCEPTED, slackBot: slackBotRecord(slackBot) };
+      }).pipe(
+        Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
+      ),
+    ),
+});
+
+const DISCONNECT_SLACK_BOT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.DISCONNECT_SLACK_BOT,
+  description:
+    "Disconnect the workspace's own Slack bot, as its Disconnect in Settings does: the bot " +
+    "starts no agent from Slack and writes no member of the workspace from then on, and every " +
+    "member's Slack id it kept is forgotten, with its default repositories, though the bot " +
+    "stays installed in the Slack team until its admins remove it there. Connecting it again " +
+    "is done in the app. Only an owner or an admin of the workspace may; disconnecting one not " +
+    "connected changes nothing. Disconnect it only when the member asks for it. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the bot as it ` +
+    `then stands, as ${MEMBER_MCP_TOOL.READ_SLACK_BOT} reads it, or \`rejected\` and why.`,
+  input: ReadSlackBotInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ workspace }) =>
+    asMemberInWorkspace(workspace, (userId, workspaceId) =>
+      disconnectSlackBot(userId, workspaceId).pipe(
+        Effect.map((slackBot) => ({
+          status: ACTION_RESULT_STATUS.ACCEPTED,
+          slackBot: slackBotRecord(slackBot),
+        })),
+        Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
+      ),
+    ),
+});
+
+/** The pins as an agent reads them: the wire's answer bar the transaction a desktop waits for. */
+function pinsRecord({ pins }: { readonly pins: readonly RepositoryPin[] }): WireRecord {
+  return { pins: pins.map(({ repository, pinnedAt }) => ({ repository, pinnedAt })) };
+}
+
+const LIST_REPOSITORY_PINS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_REPOSITORY_PINS,
+  description:
+    "List the repositories the member pinned in their sidebar, which groups their tasks by " +
+    "repository, newest pinned first: each as owner/name with when it was pinned, in " +
+    "milliseconds since the epoch. The pins are the member's own, in every workspace.",
+  input: NoInputSchema,
+  annotations: READ_ONLY,
+  run: () =>
+    Effect.gen(function* () {
+      const member = yield* AdmittedMember;
+      return yield* readRepositoryPins(member.userId).pipe(
+        Effect.map(pinsRecord),
+        Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
+      );
+    }),
+});
+
+/** A pin names the repository and whether it is pinned, as the sidebar's own request does. */
+const PinRepositoryInputSchema = Schema.Struct({
+  repository: describeWire(
+    repositoryPinRequestSchema.fields.repository,
+    "The repository, as owner/name.",
+  ),
+  pinned: describeWire(
+    repositoryPinRequestSchema.fields.pinned,
+    "true to pin it, false to unpin it.",
+  ),
+});
+
+const PIN_REPOSITORY_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.PIN_REPOSITORY,
+  description:
+    "Pin a repository in the member's sidebar, or unpin it, as their sidebar's Pin does: a " +
+    "pin names the repository alone and asks GitHub nothing, and pinning one already pinned, " +
+    `or unpinning one that is not, changes nothing. At most ${REPOSITORY_PIN_BOUNDS.MAX_PINS} ` +
+    "stand at once. Answers `accepted` with the pins as they then stand, as " +
+    `${MEMBER_MCP_TOOL.LIST_REPOSITORY_PINS} lists them, or \`rejected\` and why.`,
+  input: PinRepositoryInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ repository, pinned }) =>
+    Effect.gen(function* () {
+      const member = yield* AdmittedMember;
+      return yield* pinRepository(member.userId, repository, pinned).pipe(
+        Effect.map((pins) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...pinsRecord(pins) })),
+        Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
+      );
+    }),
+});
+
+/*
+ * The workspace's environment variables, which its members' cloud agents are
+ * handed. Each runs the one operation behind Settings › Environment and its
+ * procedures (`../workspace-environment/workspace-environment.ts`) as the
+ * member, in the workspace a slug names or their only one, so it holds the
+ * member to what Settings does: any member reads the names, and only an
+ * owner or admin sets or deletes one. A value goes in through
+ * `set_environment_variable`, sealed under the deployment's ring the moment
+ * it is read, and never comes out: every answer is the names alone.
+ */
+
+/** Why an environment call took nothing, in words for one acting for the member. */
+const ENVIRONMENT_REFUSAL = {
+  NOT_FOUND: "Not run: the member belongs to no such workspace.",
+  NOT_PERMITTED: (verb: string) =>
+    `Not ${verb}: only the workspace's owners and admins set and delete its environment variables.`,
+  UNANSWERED:
+    "Not run: the workspace's environment variables could not be reached just now. The call " +
+    "may be made again.",
+  NO_KEY_RING:
+    "Not set: this deployment holds no key to seal a value under, so no environment variable " +
+    "can be set here until its operator configures one. Calling again will not help.",
+} as const;
+
+/** An environment call's refusal in the member's words, the operation's verb naming what was not done. */
+function environmentRefusalWords(refusal: HostedRefusal, verb: string): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return ENVIRONMENT_REFUSAL.NOT_FOUND;
+    case HOSTED_API_ERROR.NOT_PERMITTED:
+      return ENVIRONMENT_REFUSAL.NOT_PERMITTED(verb);
+    default:
+      return ENVIRONMENT_REFUSAL.UNANSWERED;
+  }
+}
+
+/** An environment call run as the member in the workspace its slug names or their only one, answered as the names then stand, or refused in the member's words. */
+const environmentAsMember = <R>(
+  slug: string | undefined,
+  verb: string,
+  run: (
+    userId: string,
+    workspaceId: string,
+  ) => Effect.Effect<WorkspaceEnvironmentAnswer, HostedRefusal, R>,
+) =>
+  listAsMember(slug, ({ caller }) => {
+    const workspaceId = callerWorkspaceId(caller);
+    return run(callerUserId(caller), workspaceId).pipe(
+      Effect.map((answer): WireRecord => ({ workspaceId, variables: answer.variables })),
+      Effect.catch((refusal) =>
+        Effect.succeed(agentToolRejected(environmentRefusalWords(refusal, verb))),
+      ),
+    );
+  });
+
+/** The workspace an environment call is about, by its slug, where the member has more than one. */
+const ENVIRONMENT_WORKSPACE_INPUT = Schema.optionalKey(
+  describeWire(
+    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
+    `The workspace whose environment variables to act on, by the slug ` +
+      `${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; leave it out where the member belongs to ` +
+      "one workspace alone.",
+  ),
+);
+
+/** A variable's name, as a shell spells one. */
+const ENVIRONMENT_NAME_INPUT = describeWire(
+  workspaceVariableNameSchema,
+  "The variable's name: a letter or underscore, then letters, digits, and underscores, such as " +
+    "DATABASE_URL.",
+);
+
+const ListEnvironmentVariablesInputSchema = Schema.Struct({
+  workspace: ENVIRONMENT_WORKSPACE_INPUT,
+});
+
+const LIST_ENVIRONMENT_VARIABLES_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES,
+  description:
+    "List the environment variables of a workspace the member belongs to, which every cloud " +
+    "agent its members start is handed, as Settings › Environment lists them: each by its name " +
+    "with when it was last set, in epoch milliseconds, in name order. A value is never shown, " +
+    `here or anywhere, once it is set. ${WORKSPACE_WORDS}`,
+  input: ListEnvironmentVariablesInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace }) =>
+    environmentAsMember(workspace, "run", (userId, workspaceId) =>
+      listWorkspaceEnvironment(userId, workspaceId),
+    ),
+});
+
+const SetEnvironmentVariableInputSchema = Schema.Struct({
+  workspace: ENVIRONMENT_WORKSPACE_INPUT,
+  name: ENVIRONMENT_NAME_INPUT,
+  value: describeWire(
+    workspaceVariablePutRequestSchema.fields.value,
+    "The value, as the agents' environment will hold it, at most " +
+      `${WORKSPACE_ENVIRONMENT_BOUNDS.MAX_VALUE_CHARS} characters.`,
+  ),
+});
+
+const SET_ENVIRONMENT_VARIABLE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE,
+  description:
+    "Set one environment variable of a workspace the member owns or administers, as Settings › " +
+    "Environment's Add or Replace value would: every cloud agent its members start from then " +
+    "on is handed it, and one of the same name has its value replaced. The value is sealed " +
+    "the moment it arrives and is never shown again, to you, the member, or anyone, so set " +
+    "only a value the member gave you for this. Answers with the workspace's variable names as " +
+    `they then stand, never a value, or \`rejected\` and why. ${WORKSPACE_WORDS}`,
+  input: SetEnvironmentVariableInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ workspace, name, value }) =>
+    // Note that a deployment holding no ring never comes to hold one on a retry, so it is refused in words of its own.
+    Effect.flatMap(Effect.result(hostedKeyRing), (ring) =>
+      Result.isFailure(ring)
+        ? Effect.succeed(agentToolRejected(ENVIRONMENT_REFUSAL.NO_KEY_RING))
+        : environmentAsMember(workspace, "set", (userId, workspaceId) =>
+            putWorkspaceVariable(ring.success, userId, { workspaceId, name }, Redacted.make(value)),
+          ),
+    ),
+});
+
+const DeleteEnvironmentVariableInputSchema = Schema.Struct({
+  workspace: ENVIRONMENT_WORKSPACE_INPUT,
+  name: ENVIRONMENT_NAME_INPUT,
+});
+
+const DELETE_ENVIRONMENT_VARIABLE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.DELETE_ENVIRONMENT_VARIABLE,
+  description:
+    "Delete one environment variable of a workspace the member owns or administers, by its " +
+    `name as ${MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES} answered it, as Settings › ` +
+    "Environment's Delete would: its value is gone for good, and no cloud agent started from " +
+    "then on is handed it. Delete one only when the member asks for it. Answers with the " +
+    "workspace's variable names as they then stand, a variable already gone among them, or " +
+    `\`rejected\` and why. ${WORKSPACE_WORDS}`,
+  input: DeleteEnvironmentVariableInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ workspace, name }) =>
+    environmentAsMember(workspace, "deleted", (userId, workspaceId) =>
+      deleteWorkspaceVariable(userId, { workspaceId, name }),
+    ),
+});
+
+/*
+ * A workspace created. The member's new workspace is made through the one
+ * operation the hosted create runs (`../accounts/workspace-create.ts`), the
+ * member its owner, as Create workspace in the window makes it.
+ */
+
+/** Why a create made nothing, in words for one acting for the member. */
+const CREATE_WORKSPACE_REFUSAL = {
+  UNMADE:
+    "Not confirmed: the workspace could not be made, or was made and could not be read back; " +
+    `check ${MEMBER_MCP_TOOL.LIST_WORKSPACES} before trying again.`,
+} as const;
+
+/** A create names the workspace, held as the window holds a name. */
+const CreateWorkspaceInputSchema = Schema.Struct({
+  name: describeWire(
+    workspaceCreateRequestSchema.fields.name,
+    `The new workspace's name, at most ${WORKSPACE_BOUNDS.MAX_NAME_CHARS} characters, its ends trimmed.`,
+  ),
+});
+
+const CREATE_WORKSPACE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.CREATE_WORKSPACE,
+  description:
+    "Create a new workspace, with the member you act for as its owner, as Create workspace in " +
+    "the app makes one. Its slug, the first step of its links, is spelled from its name. Create " +
+    "one only when the member asks for a new workspace. Answers `accepted` with the workspace's " +
+    "id, slug, name, and the member's role in it, which every other tool names it by; or " +
+    "`rejected` and why.",
+  input: CreateWorkspaceInputSchema,
+  annotations: ADDITIVE,
+  run: ({ name }) =>
+    Effect.gen(function* () {
+      const member = yield* AdmittedMember;
+      const seams = yield* WorkspacePlugin;
+      return yield* createdWorkspace(seams, member.userId, name).pipe(
+        Effect.map((workspace) => ({
+          status: ACTION_RESULT_STATUS.ACCEPTED,
+          workspace: {
+            id: workspace.id,
+            slug: workspace.slug,
+            name: workspace.name,
+            role: workspace.role,
+          },
+        })),
+        // Note that the refusal is logged by its slug alone, because the plugin's own words may quote the name.
+        Effect.catch((refusal) =>
+          Effect.as(
+            Effect.logWarning(`Workspace not created: ${refusal.error}`),
+            agentToolRejected(CREATE_WORKSPACE_REFUSAL.UNMADE),
+          ),
+        ),
+      );
+    }),
+});
+
 /** Every tool the server offers, listed in the order an agent reads them. */
 /**
  * The workspace experiments on in one of the member's workspaces at least,
@@ -4598,6 +5522,13 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   LIST_WORKSPACES_TOOL,
   LIST_WORKSPACE_MEMBERS_TOOL,
   SET_WORKSPACE_SLUG_TOOL,
+  RENAME_WORKSPACE_TOOL,
+  REMOVE_WORKSPACE_MEMBER_TOOL,
+  CHANGE_WORKSPACE_MEMBER_ROLE_TOOL,
+  LIST_WORKSPACE_INVITATIONS_TOOL,
+  INVITE_TO_WORKSPACE_TOOL,
+  CANCEL_WORKSPACE_INVITATION_TOOL,
+  SET_WORKSPACE_PHOTO_TOOL,
   MEMBER_LIST_TASKS_TOOL,
   MEMBER_READ_TASK_TOOL,
   MEMBER_FIND_TASK_TOOL,
@@ -4622,6 +5553,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_DELETE_SECTION_TOOL,
   MEMBER_START_AGENT_TOOL,
   MEMBER_MESSAGE_AGENT_TOOL,
+  CHANGE_AGENT_QUEUE_TOOL,
   MEMBER_STOP_AGENT_TOOL,
   MEMBER_UPDATE_AGENT_TOOL,
   REWIND_AGENT_TOOL,
@@ -4671,6 +5603,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   RENAME_INTEGRATION_TOOL,
   DISCONNECT_INTEGRATION_TOOL,
   LIST_MCP_CLIENTS_TOOL,
+  REVOKE_MCP_CLIENT_TOOL,
   LIST_SENTRY_INSTALLATIONS_TOOL,
   DISCONNECT_SENTRY_TOOL,
   READ_SANDBOX_SETUP_TOOL,
@@ -4680,4 +5613,13 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   PREVIEW_SKILL_INSTALL_TOOL,
   INSTALL_SKILL_TOOL,
   REMOVE_INSTALLED_SKILL_TOOL,
+  READ_SLACK_BOT_TOOL,
+  UPDATE_SLACK_BOT_TOOL,
+  DISCONNECT_SLACK_BOT_TOOL,
+  LIST_REPOSITORY_PINS_TOOL,
+  PIN_REPOSITORY_TOOL,
+  LIST_ENVIRONMENT_VARIABLES_TOOL,
+  SET_ENVIRONMENT_VARIABLE_TOOL,
+  DELETE_ENVIRONMENT_VARIABLE_TOOL,
+  CREATE_WORKSPACE_TOOL,
 ];

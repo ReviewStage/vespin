@@ -21,6 +21,7 @@ import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
 import { getTestDB, openWorkspace } from "../../testing/index.js";
 import { readAgentPullRequests, recordAgentPullRequests } from "../agent-pull-requests.js";
 import { createAgent } from "../agent-store.js";
+import { createTask } from "../task-store.js";
 
 const openAccount = Effect.gen(function* () {
   const db = yield* Database;
@@ -29,12 +30,12 @@ const openAccount = Effect.gen(function* () {
   return id;
 });
 
-/** An agent of the account's in its workspace with no task, in `acme/api`; its id. */
+/** An agent of the account's on a task of its workspace, in `acme/api`; its id. */
 const openAgent = (userId: string, organizationId: string) =>
-  Effect.map(
-    createAgent(userId, {
-      taskId: null,
-      organizationId,
+  Effect.gen(function* () {
+    const { id: taskId } = yield* createTask(userId, { organizationId, name: "Invitations" });
+    const started = yield* createAgent(userId, {
+      taskId,
       descriptionSnapshot: null,
       prompt: "Expire teammate invitations",
       idempotencyKey: randomUUID(),
@@ -43,9 +44,9 @@ const openAgent = (userId: string, organizationId: string) =>
       repository: "acme/api",
       githubAccess: GITHUB_ACCESS.APP,
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-    }),
-    (started) => Option.getOrThrow(started).agent.id,
-  );
+    });
+    return Option.getOrThrow(started).agent.id;
+  });
 
 /** A read of pull request `number` of `acme/api` from its own branch, in the state named. */
 const read = (number: number, state: PullRequestState) => ({

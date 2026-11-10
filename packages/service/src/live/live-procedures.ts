@@ -176,7 +176,7 @@ import {
 } from "@repo/features/live-wire";
 import { Duration, Effect, Option } from "effect";
 import { SqlClient } from "effect/sql";
-import { pluginWriteOrUnavailable } from "../accounts/workspaces-procedures.js";
+import { pluginWriteOrUnavailable } from "../accounts/workspace-create.js";
 import { heldUntil } from "../http/held-read.js";
 import {
   HOSTED_REFUSAL,

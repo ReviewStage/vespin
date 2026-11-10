@@ -7,7 +7,7 @@ import {
   type AgentRunsOnRequest,
   type AgentSummary,
   CONTEXT_WINDOW,
-  type TasklessAgent,
+  type ListedAgent,
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import type {
@@ -857,13 +857,13 @@ export function useAgents(input: {
   /** The open task's repository, or null while it names none. */
   repository: string | null;
   /**
-   * Every agent the task list followed live carries, on a task or with
-   * none, the archived ones among them; none where it is not followed, or
-   * does not list the open task.
+   * Every agent the task list followed live carries, the archived ones
+   * among them; none where it is not followed, or does not list the open
+   * task.
    */
   listedAgents?: readonly AgentSummary[] | undefined;
   /** The page's agent as the task list carries it, with its workspace and its repository. */
-  listedPage?: Pick<TasklessAgent, "id" | "workspaceId" | "repository"> | undefined;
+  listedPage?: Pick<ListedAgent, "id" | "workspaceId" | "repository"> | undefined;
   /** Where the task list's read stands, which the page's agent is drawn from: read, failed, and its Try again; none on a task, whose agents the task's own tab waits on. */
   list?:
     | { readonly read: boolean; readonly failed: boolean; readonly onRetry: () => void }

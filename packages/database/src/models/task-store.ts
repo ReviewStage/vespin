@@ -1,9 +1,4 @@
-import {
-  AGENT_KIND,
-  AGENT_MACHINE,
-  type AgentMachineKind,
-  PULL_REQUEST_STATE,
-} from "@repo/features/agent-wire";
+import { AGENT_KIND, AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
 import type { DescriptionSectionWriter } from "@repo/features/description-document";
 import {
   type DescriptionAgentEdit,
@@ -15,7 +10,6 @@ import {
   type GitHubAccess,
   sameRepository,
 } from "@repo/features/github-repositories-wire";
-import { INBOX_STATUS } from "@repo/features/inbox-wire";
 import { agentName } from "@repo/features/model-label";
 import { READ_MARK, type ReadMark } from "@repo/features/read-mark";
 import {
@@ -38,19 +32,7 @@ import {
   UNKNOWN_AGENT_LABEL,
   UNTITLED_TASK_NAME,
 } from "@repo/features/task-wire";
-import {
-  and,
-  desc,
-  eq,
-  gte,
-  inArray,
-  isNotNull,
-  isNull,
-  ne,
-  notInArray,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, ne, type SQL, sql } from "drizzle-orm";
 import { Data, DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import {
@@ -62,7 +44,6 @@ import {
 } from "../core/query.js";
 import { CURRENT_TXID, TxidRowSchema } from "../core/txid.js";
 import { agentTable, type StoredArchive } from "../schemas/agent.js";
-import { agentPullRequest } from "../schemas/agent-pull-request.js";
 import { attachment } from "../schemas/attachment.js";
 import { inboxItem } from "../schemas/inbox.js";
 import { conversations } from "../schemas/storage.js";
@@ -167,35 +148,25 @@ export interface TaskDeleteGuard {
  */
 export type TaskMoveGuard<E, R> = (repository: string | null) => Effect.Effect<void, E, R>;
 
-/** One of the task's standing agents as a finish reads it, under its conversation's lock. */
+/** One of the task's standing agents as a turn's end reads it, under its conversation's lock. */
 export type TaskStandingAgent = typeof TaskStandingAgentSchema.Type;
 
 /**
- * What a finish of a task's work runs under the task's lock: whether every
- * one of its standing agents stands idle, neither starting nor running, read
- * under their conversations' locks, all of them at once, since they share
- * the transaction's one connection.
- */
-export type TaskFinishGuard<R> = (
-  agents: readonly TaskStandingAgent[],
-) => Effect.Effect<boolean, StoreFailure, R>;
-
-/**
  * Which of the task's standing agents stand idle, neither starting nor
- * running, read under their conversations' locks as a finish reads them:
+ * running, read under their conversations' locks as a turn's end reads them:
  * their ids.
  */
 type TaskIdleGuard<R> = (
   agents: readonly TaskStandingAgent[],
 ) => Effect.Effect<ReadonlySet<string>, StoreFailure, R>;
 
-/** How a task moved to Done archives its idle agents with it: as whom, and how it reads them idle. */
+/** How a task moved to Done or Canceled archives its idle agents with it: as whom, and how it reads them idle. */
 export interface TaskDoneArchive<R> {
   readonly archivedBy: StoredArchive;
   readonly idle: TaskIdleGuard<R>;
 }
 
-/** One agent a task's Done archived with it: the member who started it, under whom its device lets it go, and its conversation, whose sandbox is stopped. */
+/** One agent a task's Done or Canceled archived with it: the member who started it, under whom its device lets it go, and its conversation, whose sandbox is stopped. */
 export type TaskArchivedAgent = typeof TaskArchivedAgentSchema.Type;
 
 /** One save a coding agent made, with the agent named as its row names it now. */
@@ -1608,7 +1579,7 @@ function columnChangesOf(
       : {
           status: changes.status,
           completedAt: completedAtOf(changes.status, now),
-          doneBy: changes.status === TASK_STATUS.DONE ? (doneBy ?? null) : null,
+          doneBy: SETTLED.includes(changes.status) ? (doneBy ?? null) : null,
         }),
     ...(changes.priority === undefined ? undefined : { priority: changes.priority }),
     ...(changes.assigneeId === undefined ? undefined : { assigneeId: changes.assigneeId }),
@@ -1699,8 +1670,8 @@ const TaskArchivedAgentSchema = Schema.Struct({
 /**
  * The task's agents still standing unarchived, or the one named among them,
  * each with its conversation locked, the lock every write of its lines and
- * turns takes, in the conversations' order, so two finishes of one task never
- * wait on each other. A line handed to an agent stands awaiting from before
+ * turns takes, in the conversations' order, so two turns ending on one task
+ * never wait on each other. A line handed to an agent stands awaiting from before
  * its runtime hears it (`dispatch-claim.ts`), so the caller's guard reads
  * such an agent at work.
  */
@@ -1789,8 +1760,8 @@ const clearArchives = SqlSchema.void({
  * The task's standing agents, or the one named among them, that the guard
  * reads idle under their conversations' locks, archived with the task at
  * `now` by the archiver given, marked `withTask` so the task's move off
- * Done brings them back; who they are. An agent that is the archiver itself
- * stands: one moving its own task to Done is still answering whoever asked,
+ * Done or Canceled brings them back; who they are. An agent that is the archiver itself
+ * stands: one moving its own task to Done or Canceled is still answering whoever asked,
  * and is never archived by that move, at once or as its turn ends. The caller
  * settles their open asks once the task's own are settled, so those read as
  * the task's.
@@ -1818,7 +1789,7 @@ const archivedIdleWithTask = Effect.fnUntraced(function* <R>(
 });
 
 /**
- * The agents the task's Done stamped at `completedAt` archived with it, and
+ * The agents the task's Done or Canceled stamped at `completedAt` archived with it, and
  * those archived with it as their turns ended since, brought back, each
  * opening again the items its archive settled (`inbox-settle.ts`); one
  * archived on its own stays archived.
@@ -1847,13 +1818,13 @@ const broughtBackWithTask = Effect.fnUntraced(function* (taskId: string, complet
  * to work again opens again the items that move settled (`inbox-settle.ts`).
  *
  * Where the caller hands `doneArchive`, a change that moves the task to Done
- * records the archiver given as who moved it there, and archives with it, at
- * its finish's stamp, every standing agent the guard reads idle, as that
- * archiver, the archiving agent itself left standing; one still at work
- * stands, and is archived as its turn ends while the task still stands Done
- * (`archiveAgentOfDoneTask`). A move to Done without one records no one, and
- * archives nothing then or later. Any change that moves the task off Done
- * brings back every agent that Done archived with it, and no other.
+ * or Canceled records the archiver given as who moved it there, and archives
+ * with it, at its finish's stamp, every standing agent the guard reads idle,
+ * as that archiver, the archiving agent itself left standing; one still at
+ * work stands, and is archived as its turn ends while the task still stands
+ * so (`archiveAgentOfDoneTask`). A move there without one records no one, and
+ * archives nothing then or later. Any change that moves the task off Done or
+ * Canceled brings back every agent that move archived with it, and no other.
  */
 export function updateTask<E = never, R = never, RA = never>(
   userId: string,
@@ -1875,8 +1846,8 @@ export function updateTask<E = never, R = never, RA = never>(
 /**
  * A task changed, as `updateTask` changes one, the transaction the change
  * committed in, read from the write that changed the row or the reader's pin,
- * none where the change wrote neither, and the agents its move to Done
- * archived, which the caller lets go of as an archive by hand does.
+ * none where the change wrote neither, and the agents its move to Done or
+ * Canceled archived, which the caller lets go of as an archive by hand does.
  */
 export function updateTaskCommitted<E = never, R = never, RA = never>(
   userId: string,
@@ -1963,21 +1934,24 @@ export function updateTaskCommitted<E = never, R = never, RA = never>(
               );
         const txid =
           written ?? Option.getOrUndefined(pinned)?.txid ?? Option.getOrUndefined(marked)?.txid;
-        // A task moved to Done archives its idle agents with it, and one moved off Done brings them back.
-        // Note that this runs before its agents and items move, so the write locks each agent's
-        // conversation before its row and agent rows before item rows, in the order an archive does.
-        const archived =
-          columns.status === TASK_STATUS.DONE && doneArchive !== undefined
-            ? yield* archivedIdleWithTask(taskId, undefined, doneArchive, now)
-            : [];
+        // A task moved to Done or Canceled archives its idle agents with it, and one moved off them brings
+        // them back, before a move between the two archives them again under its own stamp. Note that this
+        // runs before its agents and items move, so the write locks each agent's conversation before its
+        // row and agent rows before item rows, in the order an archive does.
         const finishedAt = locked.value.completedAt;
         if (
           columns.status !== undefined &&
-          locked.value.status === TASK_STATUS.DONE &&
+          SETTLED.includes(locked.value.status) &&
           finishedAt !== null
         ) {
           yield* broughtBackWithTask(taskId, finishedAt);
         }
+        const archived =
+          columns.status !== undefined &&
+          SETTLED.includes(columns.status) &&
+          doneArchive !== undefined
+            ? yield* archivedIdleWithTask(taskId, undefined, doneArchive, now)
+            : [];
         if (changes.organizationId !== undefined) {
           yield* followingAgentsAndInbox(taskId, row.organizationId);
           if (row.organizationId !== locked.value.organizationId) {
@@ -2094,24 +2068,6 @@ export function nameUntitledTask(
   return Effect.map(nameUntitled({ userId, taskId, name: named }), Option.isSome);
 }
 
-const findStartMadeTask = SqlSchema.findOneOption({
-  Request: Schema.Struct({ taskId: Schema.String }),
-  Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ taskId }) =>
-    Database.use((db) =>
-      db
-        .select({ id: task.id })
-        .from(task)
-        .where(and(eq(task.id, taskId), eq(task.madeByStart, true)))
-        .limit(1),
-    ),
-});
-
-/** Whether the task is one `start_agent` made for the agent it started, which finishes with no merge asked. */
-export function isStartTask(taskId: string): TaskStoreEffect<boolean> {
-  return Effect.map(findStartMadeTask({ taskId }), Option.isSome);
-}
-
 const assignUnassigned = SqlSchema.findOneOption({
   Request: TaskKeySchema,
   Result: TxidRowSchema,
@@ -2178,128 +2134,8 @@ export function beginTaskWorkCommitted(
   return beginTask({ userId, taskId });
 }
 
-/** The statuses a task's work is settled in, which a finish leaves as they are and a start or a turn reopens. */
+/** The statuses a task's work is settled in, which a start or a turn reopens. */
 const SETTLED: readonly TaskStatus[] = [TASK_STATUS.DONE, TASK_STATUS.CANCELED];
-
-/** The pull request states under which an agent's pull request still waits on review or on being marked ready. */
-const OPEN_PULL_REQUEST_STATES: readonly string[] = [
-  PULL_REQUEST_STATE.OPEN,
-  PULL_REQUEST_STATE.DRAFT,
-];
-
-/**
- * Where every pull request the task's standing agents opened stands, as
- * GitHub last answered (`agent_pull_request`): each agent's newest and those
- * it opened before, in its own repository or one it works in beside it.
- */
-const findStandingPullRequestStates = SqlSchema.findAll({
-  Request: Schema.Struct({ taskId: Schema.String }),
-  Result: Schema.Struct({ state: Schema.String }),
-  execute: ({ taskId }) =>
-    Database.use((db) =>
-      db
-        .select({ state: agentPullRequest.state })
-        .from(agentPullRequest)
-        .innerJoin(agentTable, eq(agentTable.id, agentPullRequest.agentId))
-        .where(and(eq(agentTable.taskId, taskId), isNull(agentTable.archivedAt))),
-    ),
-});
-
-/**
- * One inbox item of the task holding a question open for the developer:
- * open, and holding an ask open, which a notice, a post that asked nothing
- * and waits on their nod alone, never does (the inbox store's own `ASKING`,
- * `packages/service/src/inbox/inbox-store.ts`).
- */
-const findOpenQuestion = SqlSchema.findOneOption({
-  Request: Schema.Struct({ taskId: Schema.String }),
-  Result: TaskIdRowSchema,
-  execute: ({ taskId }) =>
-    Database.use((db) =>
-      db
-        .select({ id: inboxItem.id })
-        .from(inboxItem)
-        .where(
-          and(
-            eq(inboxItem.taskId, taskId),
-            eq(inboxItem.status, INBOX_STATUS.OPEN),
-            isNotNull(inboxItem.openAskMessageId),
-          ),
-        )
-        .limit(1),
-    ),
-});
-
-/** The one write that settles a task done: the status, and when it was finished, by no one by hand, under the lock the finish holds, on a task not settled already. */
-const finishTask = SqlSchema.findOneOption({
-  Request: Schema.Struct({ taskId: Schema.String, now: Schema.Date }),
-  Result: TaskIdRowSchema,
-  execute: ({ taskId, now }) =>
-    Database.use((db) =>
-      db
-        .update(task)
-        .set({
-          status: TASK_STATUS.DONE,
-          completedAt: completedAtOf(TASK_STATUS.DONE, now),
-          doneBy: null,
-        })
-        .where(and(eq(task.id, taskId), notInArray(task.status, [...SETTLED])))
-        .returning({ id: task.id }),
-    ),
-});
-
-/**
- * Moves a task whose work is finished to done, and answers whether it moved.
- * The work is finished where every standing agent of the task, the archived
- * left out, stands idle by the caller's guard, none of them has a pull
- * request still open or a draft, at least one of them has a merged one, and
- * no inbox item of the task holds a question open for the developer. A task
- * already done or canceled, one the account does not reach, and one whose
- * work is not finished stand as they were, so asking at every moment that
- * may have finished it is safe: a turn's end, a pull request first seen
- * merged, an inbox question settled. Everything is read under the task's
- * row lock, each agent under its conversation's,
- * so a start or a turn racing the finish either landed before the read,
- * which then refuses, or waits on the lock and reopens the task after.
- * Like any change it is not a save, so the list's order stands. A finish
- * settles the task's open inbox items that still ask, and leaves its
- * notices open until a member opens them (`inbox-settle.ts`). It archives
- * no agent, then or as a turn ends, since someone may be talking to one:
- * only a member's or an agent's move to Done does (`updateTaskCommitted`).
- * A task an automation's run or a Slack message made for itself asks no
- * merged pull request, `mergeRequired` false, since its agent may publish
- * nothing, and its caller's
- * guard holds its agents to having finished well instead.
- */
-export function finishTaskWork<R = never>(
-  userId: string,
-  taskId: string,
-  idle: TaskFinishGuard<R>,
-  mergeRequired = true,
-): Effect.Effect<boolean, TaskStoreFailure, DatabaseServices | R> {
-  return Effect.flatMap(SqlClient.SqlClient, (client) =>
-    client.withTransaction(
-      Effect.gen(function* () {
-        const locked = yield* lockTask({ userId, taskId });
-        if (Option.isNone(locked)) return false;
-        if (SETTLED.includes(locked.value.status)) return false;
-        const pullRequests = yield* findStandingPullRequestStates({ taskId });
-        if (pullRequests.some(({ state }) => OPEN_PULL_REQUEST_STATES.includes(state)))
-          return false;
-        const merged = pullRequests.some(({ state }) => state === PULL_REQUEST_STATE.MERGED);
-        if (mergeRequired && !merged) return false;
-        if (Option.isSome(yield* findOpenQuestion({ taskId }))) return false;
-        const agents = yield* lockStandingAgents({ taskId });
-        if (!(yield* idle(agents))) return false;
-        const now = yield* DateTime.nowAsDate;
-        const finished = yield* finishTask({ taskId, now });
-        if (Option.isNone(finished)) return false;
-        yield* settleTaskInboxItems(taskId, TASK_STATUS.DONE, now);
-        return true;
-      }),
-    ),
-  );
-}
 
 /** Where the task stands and who moved it to Done by hand, its row locked until the caller commits; none where the account reaches no such task. */
 const lockDoneBy = SqlSchema.findOneOption({
@@ -2317,14 +2153,14 @@ const lockDoneBy = SqlSchema.findOneOption({
 
 /**
  * Archives the agent with its task where a member or an agent moved the task
- * to Done and the guard reads the agent idle under its conversation's lock,
+ * to Done or Canceled and the guard reads the agent idle under its conversation's lock,
  * as that move archived the task's idle agents, at this moment and as whoever
  * moved it: what a turn's end asks of an agent still at work when its task
- * moved to Done. A Done made by our own finish archives nothing, and neither
- * does one the agent made itself (`archivedIdleWithTask`). A turn's start
+ * moved to Done or Canceled. A move the agent made itself archives nothing
+ * (`archivedIdleWithTask`). A turn's start
  * takes the task up again (`beginTaskWork`), which clears who moved it, so a
- * Done this reads was made while the agent's turn ran. The task is read under
- * its row's lock first, so a move off Done at once either lands before, and
+ * Done or Canceled this reads was made while the agent's turn ran. The task is read under
+ * its row's lock first, so a move off it at once either lands before, and
  * nothing is archived, or waits and brings the agent back. Answers the agent
  * where it was archived; none otherwise.
  */
@@ -2338,7 +2174,7 @@ export function archiveAgentOfDoneTask<R = never>(
     client.withTransaction(
       Effect.gen(function* () {
         const locked = yield* lockDoneBy({ userId, taskId });
-        if (Option.isNone(locked) || locked.value.status !== TASK_STATUS.DONE) return [];
+        if (Option.isNone(locked) || !SETTLED.includes(locked.value.status)) return [];
         const archivedBy = locked.value.doneBy;
         if (archivedBy === null) return [];
         const now = yield* DateTime.nowAsDate;

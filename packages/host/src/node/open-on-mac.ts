@@ -1,4 +1,5 @@
 import path from "node:path";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import { shellQuoted } from "@repo/features/shell-quote";
 import type { MirrorPlatformSeam } from "../effect/seams.js";
 
@@ -27,6 +28,17 @@ export function worktreesRoot(home: string): string {
 
 /** The folder under the root the app's clones live in. */
 const CLONES_FOLDER = "clones";
+
+/** Where an archived agent's snapshot stands in the shared clone, under its id, until its next launch rebuilds its worktree from it. */
+function archiveRef(agentId: string): string {
+  return `refs/vespin/archive/${agentId}`;
+}
+
+/** Who a snapshot's commit is by, set by the script, since the box's own Git may name no one. */
+const SNAPSHOT_IDENTITY = [
+  `export GIT_AUTHOR_NAME=${shellQuoted(PRODUCT_NAME)} GIT_COMMITTER_NAME=${shellQuoted(PRODUCT_NAME)}`,
+  "export GIT_AUTHOR_EMAIL=noreply@vespin.dev GIT_COMMITTER_EMAIL=noreply@vespin.dev",
+];
 
 /** The folder under the root each cloud agent's mirror lives in, by the agent's id. */
 const MIRRORS_FOLDER = "mirrors";
@@ -176,13 +188,18 @@ export function repositoryReachedScript(input: {
  * left half made never stands where the next launch would trust it; the
  * next takes it away, entry and all. A step that fails takes away what it
  * made too (`UNMADE`), and the script ends with its failure, having said
- * which.
+ * which. Where the agent was archived on this box with work its head lacks
+ * (`agentSnapshotScript`), the worktree is made at the snapshot's parent
+ * instead, fetching nothing, its files restored from the snapshot, and the
+ * snapshot's ref deleted once the worktree stands.
  */
 export function agentWorktreeScript(input: {
   /** The repository as `owner/name`, cloned from GitHub the first time. */
   readonly repository: string;
   readonly clone: string;
   readonly worktree: string;
+  /** The agent's id, which names its snapshot's ref. */
+  readonly agentId: string;
   /** The branch the agent starts from; none for GitHub's default branch. */
   readonly branch: string | null;
   /** Where the repository is cloned from; GitHub's over HTTPS unless a test names its own. */
@@ -197,27 +214,34 @@ export function agentWorktreeScript(input: {
     `clone=${shellQuoted(input.clone)}`,
     `worktree=${shellQuoted(input.worktree)}`,
     `branch=${shellQuoted(input.branch ?? "")}`,
+    `archive=${shellQuoted(archiveRef(input.agentId))}`,
     `https=${shellQuoted(input.remote ?? `https://github.com/${input.repository}.git`)}`,
     ...SHARED_CLONE,
     "brought_in() {",
     "  cloned || return 1",
     '  cd "$clone" || return 1',
-    '  if [ -n "$branch" ]; then',
+    "  restoring=",
+    '  if head="$(git rev-parse --verify --quiet "$archive^1^{commit}")"; then',
+    "    restoring=1",
+    '  elif [ -n "$branch" ]; then',
     '    git fetch origin "+refs/heads/$branch:refs/remotes/origin/$branch" || return 1',
-    '    fetched="refs/remotes/origin/$branch"',
+    '    head="$(git rev-parse --verify --quiet "refs/remotes/origin/$branch^{commit}")" || return 1',
     "  else",
     // Note that the default branch is fetched by GitHub's own HEAD into a ref of its own, never FETCH_HEAD, which another open of the shared clone may write over.
     '    git fetch origin "+HEAD:refs/agent/default-head" || return 1',
-    '    fetched="refs/agent/default-head"',
+    '    head="$(git rev-parse --verify --quiet "refs/agent/default-head^{commit}")" || return 1',
     "  fi",
-    '  head="$(git rev-parse --verify --quiet "$fetched^{commit}")" || return 1',
     '  mkdir -p "$(dirname "$worktree")" || return 1',
     '  making="$worktree.making"',
     '  rm -rf "$making" || return 1',
     // Note that forcing twice takes over the entry a launch cut off left for the same place, locked or not, which Git would otherwise refuse.
     '  git worktree add --quiet --force --force --detach "$making" "$head" || { unmade; return 1; }',
+    '  if [ -n "$restoring" ]; then',
+    '    git -C "$making" restore --source="$archive" --worktree -- . || { unmade; return 1; }',
+    "  fi",
     '  if [ -e "$worktree" ]; then rmdir "$worktree" || { unmade; return 1; }; fi',
     '  git worktree move "$making" "$worktree" || { unmade; return 1; }',
+    '  if [ -n "$restoring" ]; then git update-ref -d "$archive"; fi',
     "}",
     ...UNMADE,
     '[ -e "$worktree/.git" ] && exit 0',
@@ -227,6 +251,45 @@ export function agentWorktreeScript(input: {
     '  echo "▸ Could not make the agent\'s worktree of ${branch:-the default branch}." >&2',
     '  exit "$status"',
     "fi",
+    "",
+  ].join("\n");
+}
+
+/**
+ * The script, its values quoted, that saves an archived agent's work in its
+ * worktree before its folder is removed: every file Git does not ignore,
+ * added to an index of its own copied from the worktree's, so the
+ * worktree's own staging stands untouched, written as a commit on the
+ * worktree's head under the agent's ref in the shared clone
+ * (`archiveRef`), which its next launch on this box rebuilds the worktree
+ * from (`agentWorktreeScript`). A worktree whose files are its head's saves
+ * nothing, as does a folder holding no repository. It exits 0 only where
+ * nothing is left unsaved, so a discard keeps the folder otherwise.
+ */
+export function agentSnapshotScript(input: {
+  readonly worktree: string;
+  /** The agent's id, which names its snapshot's ref. */
+  readonly agentId: string;
+}): string {
+  return [
+    ...LOGIN_PATH,
+    ...SNAPSHOT_IDENTITY,
+    `worktree=${shellQuoted(input.worktree)}`,
+    `archive=${shellQuoted(archiveRef(input.agentId))}`,
+    '[ -e "$worktree/.git" ] || exit 0',
+    'cd "$worktree" || exit 1',
+    'head="$(git rev-parse --verify --quiet "HEAD^{commit}")" || exit 1',
+    'own_index="$(git rev-parse --path-format=absolute --git-path index)" || exit 1',
+    'scratch="$(mktemp -d)" || exit 1',
+    "trap 'rm -rf \"$scratch\"' EXIT",
+    'export GIT_INDEX_FILE="$scratch/index"',
+    // Note that the worktree's own index is copied for the stat of every file it lists, so only what changed is read again.
+    'if [ -e "$own_index" ]; then cp "$own_index" "$GIT_INDEX_FILE" || exit 1; fi',
+    "git add -A || exit 1",
+    'tree="$(git write-tree)" || exit 1',
+    '[ "$tree" = "$(git rev-parse "$head^{tree}")" ] && exit 0',
+    'commit="$(git commit-tree -p "$head" -m "Archived agent work" "$tree")" || exit 1',
+    'git update-ref "$archive" "$commit"',
     "",
   ].join("\n");
 }

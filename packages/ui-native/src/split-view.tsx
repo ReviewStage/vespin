@@ -1,15 +1,53 @@
-// split-view.tsx -- a regular window's list and detail side by side, as SwiftUI's own NavigationSplitView.
+// split-view.tsx -- a regular window's list and detail side by side, as SwiftUI's own NavigationSplitView, the sidebar's bar holding its acts, its menu, and its search.
 
 import {
+  Divider,
+  Menu,
   NavigationSplitView,
   type NavigationSplitViewVisibility,
   Button as SwiftUIButton,
+  Toggle,
   Toolbar,
   ToolbarItem,
+  useNativeState,
 } from "@expo/ui/swift-ui";
-import { navigationSplitViewStyle } from "@expo/ui/swift-ui/modifiers";
+import { navigationSplitViewStyle, searchable } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useState } from "react";
 import type { SfSymbol } from "./sf-symbol.js";
+
+/** An act a bar holds by its symbol alone, such as Settings. */
+export type BarAction = {
+  readonly label: string;
+  readonly symbol: SfSymbol;
+  readonly onPress: () => void;
+};
+
+/**
+ * A bar's menu, as a list's View options: the choices one of which is on,
+ * such as a list's scopes, checked as the system checks them, and the acts
+ * under them, such as Mark all as read.
+ */
+export type BarMenu = {
+  readonly label: string;
+  readonly symbol: SfSymbol;
+  readonly choices: readonly {
+    readonly label: string;
+    readonly on: boolean;
+    readonly onPress: () => void;
+  }[];
+  readonly actions: readonly {
+    readonly label: string;
+    readonly symbol: SfSymbol;
+    readonly disabled?: boolean | undefined;
+    readonly onPress: () => void;
+  }[];
+};
+
+/** A list's search, the system's field in the sidebar: what it says before anything is typed, and what is called with each change. */
+export type BarSearch = {
+  readonly placeholder: string;
+  readonly onChange: (text: string) => void;
+};
 
 type SplitViewProps = {
   /** The list, drawn as the sidebar column: a `RowList` in its sidebar look. */
@@ -17,10 +55,86 @@ type SplitViewProps = {
   /** The selected row's page, or an `EmptyState` before one is picked. */
   readonly detail: ReactNode;
   /** An act in the sidebar's bar, by its symbol alone, such as Settings: what a compact window's header holds. */
-  readonly sidebarAction?:
-    | { readonly label: string; readonly symbol: SfSymbol; readonly onPress: () => void }
-    | undefined;
+  readonly sidebarAction?: BarAction | undefined;
+  /** A menu in the sidebar's bar, such as the Inbox's View options. */
+  readonly sidebarMenu?: BarMenu | undefined;
+  /** A search field over the sidebar's list. */
+  readonly sidebarSearch?: BarSearch | undefined;
 };
+
+/** A bar's menu as SwiftUI's: each choice a toggle the system checks, then a rule, then each act. */
+function MenuItem({ menu }: { readonly menu: BarMenu }) {
+  return (
+    <Menu label={menu.label} systemImage={menu.symbol}>
+      {menu.choices.map((choice) => (
+        <Toggle
+          key={choice.label}
+          label={choice.label}
+          isOn={choice.on}
+          onIsOnChange={() => choice.onPress()}
+        />
+      ))}
+      {menu.actions.length === 0 ? null : <Divider />}
+      {menu.actions.map((action) => (
+        <SwiftUIButton
+          key={action.label}
+          label={action.label}
+          systemImage={action.symbol}
+          onPress={action.onPress}
+          {...(action.disabled === true ? { disabled: true } : {})}
+        />
+      ))}
+    </Menu>
+  );
+}
+
+/** The sidebar's column: its list under the bar's acts and menu, and its search where it has one. */
+function SidebarColumn({
+  sidebar,
+  sidebarAction,
+  sidebarMenu,
+  sidebarSearch,
+}: Omit<SplitViewProps, "detail">) {
+  const text = useNativeState("");
+  const bar =
+    sidebarAction === undefined && sidebarMenu === undefined ? (
+      sidebar
+    ) : (
+      <Toolbar>
+        {sidebar}
+        <Toolbar.Content>
+          {sidebarMenu === undefined ? null : (
+            <ToolbarItem placement="topBarTrailing">
+              <MenuItem menu={sidebarMenu} />
+            </ToolbarItem>
+          )}
+          {sidebarAction === undefined ? null : (
+            <ToolbarItem placement="topBarTrailing">
+              <SwiftUIButton
+                label={sidebarAction.label}
+                systemImage={sidebarAction.symbol}
+                onPress={sidebarAction.onPress}
+              />
+            </ToolbarItem>
+          )}
+        </Toolbar.Content>
+      </Toolbar>
+    );
+  if (sidebarSearch === undefined) return bar;
+  return (
+    <Toolbar
+      modifiers={[
+        searchable(text, {
+          placement: "sidebar",
+          prompt: sidebarSearch.placeholder,
+          onChange: sidebarSearch.onChange,
+        }),
+      ]}
+    >
+      {bar}
+    </Toolbar>
+  );
+}
 
 /**
  * The list beside its detail, for a regular-width window such as an iPad's
@@ -31,7 +145,7 @@ type SplitViewProps = {
  * for, and the list is what the window is wide enough to keep beside the
  * detail; a person may still hide it, which the split view reports back.
  */
-export function SplitView({ sidebar, detail, sidebarAction }: SplitViewProps) {
+export function SplitView({ detail, ...sidebar }: SplitViewProps) {
   const [columns, setColumns] = useState<NavigationSplitViewVisibility>("all");
   return (
     <NavigationSplitView
@@ -40,22 +154,7 @@ export function SplitView({ sidebar, detail, sidebarAction }: SplitViewProps) {
       modifiers={[navigationSplitViewStyle("balanced")]}
     >
       <NavigationSplitView.Sidebar>
-        {sidebarAction === undefined ? (
-          sidebar
-        ) : (
-          <Toolbar>
-            {sidebar}
-            <Toolbar.Content>
-              <ToolbarItem placement="topBarTrailing">
-                <SwiftUIButton
-                  label={sidebarAction.label}
-                  systemImage={sidebarAction.symbol}
-                  onPress={sidebarAction.onPress}
-                />
-              </ToolbarItem>
-            </Toolbar.Content>
-          </Toolbar>
-        )}
+        <SidebarColumn {...sidebar} />
       </NavigationSplitView.Sidebar>
       <NavigationSplitView.Detail>{detail}</NavigationSplitView.Detail>
     </NavigationSplitView>

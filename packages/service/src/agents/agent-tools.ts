@@ -38,6 +38,7 @@ import {
 import { isWorkspaceMember } from "@repo/database/models/workspace-store";
 import type { ConversationTarget, StoreWriter } from "@repo/database/models/writer";
 import type { StoredArchive } from "@repo/database/schemas/agent";
+import type { AgentQueue } from "@repo/features/agent-queue-wire";
 import { START_NOTE_HEADING } from "@repo/features/agent-replay";
 import {
   harnessNameOf,
@@ -119,6 +120,7 @@ import { createTaskAsked } from "../tasks/task-create-relation.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
 import { agentStarterName, startsFromAgent } from "./agent-reach.js";
 import { calledId } from "./called-id.js";
+import { queueOnPage } from "./coder-host/agent-queue.js";
 import { addAgentRepository, addedRepositoryLine } from "./coder-host/agent-repository-add.js";
 import {
   forwardedImageRefusalWords,
@@ -280,6 +282,8 @@ export const AGENT_TOOL_BOUNDS = {
   PAGE_ROWS: 20,
   /** The most characters an agent's latest activity carries in the list. */
   ACTIVITY_CHARS: 160,
+  /** The most characters a queued message's words carry in `read_agent`'s queue. */
+  QUEUED_CHARS: 160,
 } as const;
 
 /** Why a call ran nothing, or sent nothing, in words the model can act on. */
@@ -1090,7 +1094,7 @@ function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
     `stand as a task of its own, make it with ${AGENT_TOOL.CREATE_TASK} first. Where you work ` +
     "on no task, taskId left out starts it on a new task made for it, named as its agent is, " +
     "assigned to the member you work for, in the repository you work in or the one repository " +
-    `names, and done by itself once its agents finish well${NEW_TASK_PROMPT_WORDS[words]}. ` +
+    `names${NEW_TASK_PROMPT_WORDS[words]}. ` +
     "This one call carries everything the agent is told as " +
     "it starts, and the agent sets to work on it at once, so never follow it with a message to " +
     "the agent it started; message it only when there is something new to say. Its checkout is " +
@@ -2016,7 +2020,26 @@ function readAgentEntry({ messageId, lineId, text }: PageEntry): WireRecord {
   };
 }
 
-/** One call of `read_agent`: the agent as the list reads it, and the page of its transcript asked, its newest where none is named. */
+/**
+ * An agent's queue as `read_agent` and the member MCP's `change_agent_queue`
+ * say it: each message waiting behind its turn, in the order they go, by its
+ * id, its words cut short, how many files go with it, and whether a member
+ * holds it to edit, which stops the hand-off at it; and why the queue
+ * stands paused, which sends nothing until it is resumed.
+ */
+export function queueRecord(queue: AgentQueue): WireRecord {
+  return {
+    messages: queue.messages.map((message) => ({
+      id: message.id,
+      text: cutText(message.text, AGENT_TOOL_BOUNDS.QUEUED_CHARS),
+      ...(message.files === undefined ? undefined : { files: message.files.length }),
+      ...(message.editing ? { held: true } : undefined),
+    })),
+    ...(queue.paused === undefined ? undefined : { paused: { ...queue.paused } }),
+  };
+}
+
+/** One call of `read_agent`: the agent as the list reads it, its queue where messages wait in it, and the page of its transcript asked, its newest where none is named. */
 export function runReadAgent(
   call: AgentReadCall,
   input: UnparsedWireValue,
@@ -2043,12 +2066,14 @@ export function runReadAgent(
       const published = yield* publishedOf(callerUserId(call.caller), agent);
       const read = yield* transcriptPage(agent, page);
       if (read === undefined) return agentToolRejected(AGENT_TOOL_REFUSAL.UNREADABLE_TRANSCRIPT);
+      const queue = yield* queueOnPage(agent.id);
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         agent: readingRecord(reading),
         ...(published === undefined
           ? undefined
           : { published: { branch: published.branch, pullRequest: published.pullRequest } }),
+        ...(queue.messages.length === 0 ? undefined : { queue: queueRecord(queue) }),
         ...pageAnswer(page, read, readAgentEntry),
       };
     }),

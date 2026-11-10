@@ -14,6 +14,7 @@ import { apiCommand } from "./api.js";
 import { automationCommand } from "./automation.js";
 import { commentCommand } from "./comment.js";
 import { descriptionCommand } from "./description.js";
+import { envCommand } from "./env.js";
 import { githubCommand } from "./github.js";
 import { inboxCommand } from "./inbox.js";
 import { integrationsCommand } from "./integrations.js";
@@ -29,6 +30,7 @@ import { sectionCommand } from "./section.js";
 import { sentryCommand } from "./sentry.js";
 import { setupCommand } from "./setup.js";
 import { skillsCommand } from "./skills.js";
+import { slackCommand } from "./slack.js";
 import { taskCommand } from "./task.js";
 import { updateCommand } from "./update.js";
 import { versionCommand } from "./version.js";
@@ -44,9 +46,11 @@ export const COMMANDS = [
   agentCommand,
   prCommand,
   workspaceCommand,
+  envCommand,
   githubCommand,
   repoCommand,
   setupCommand,
+  slackCommand,
   inboxCommand,
   memoryCommand,
   automationCommand,

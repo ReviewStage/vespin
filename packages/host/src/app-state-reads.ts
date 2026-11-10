@@ -1,5 +1,5 @@
 /**
- * app-state-reads.ts -- what a window reads of the host's document over its bridge: the one rule a delivery is adopted by, the following of the document from its first whole read, the selects a surface reads one slice through, and the Inbox's rows and holders read from it.
+ * app-state-reads.ts -- what a window reads of the host's document over its bridge: the one rule a delivery is adopted by, the following of the document from its first whole read, the selects a surface reads one slice through, and the Inbox's holders read from it.
  *
  * The panel reads these through `@repo/panel`'s `use-app-state.ts`, which
  * writes each reading into its Query client, and the Expo app through a
@@ -10,9 +10,8 @@
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { type AgentTranscriptKey, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
-import type { ListedAgent, TasklessAgent } from "@repo/features/agent-wire";
+import type { ListedAgent } from "@repo/features/agent-wire";
 import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/inbox-list-model";
-import { INBOX_ASK, type InboxMessage, recommendedLabels } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
 import {
   type AccountExperiment,
@@ -286,103 +285,6 @@ export function memoizedSelect<Inputs extends unknown[], A>(
   };
 }
 
-/** The line a row's last message is: an ask's own kind, or words said with nothing asked. */
-export const INBOX_ROW_LINE = {
-  ...INBOX_ASK,
-  SAID: "said",
-} as const;
-
-export type InboxRowLine = (typeof INBOX_ROW_LINE)[keyof typeof INBOX_ROW_LINE];
-
-/** One option of a decide ask as a row's detail offers it: its label, and the trade-off where the agent wrote one. */
-export type InboxRowChoice = { readonly label: string; readonly detail?: string };
-
-/** A decide ask as a row's detail draws it: its question, its options, and the labels the agent recommends. */
-export type InboxRowAsk = {
-  readonly question: string;
-  readonly choices: readonly InboxRowChoice[];
-  readonly recommended: readonly string[];
-};
-
-/** One Inbox row: a thread waiting on the developer, as a list and its detail draw it. */
-export type InboxRow = {
-  readonly id: string;
-  readonly title: string;
-  /** The thread's last line, or what kind of thread it is where it holds no words yet. */
-  readonly summary: string;
-  /** When the thread last changed, in epoch milliseconds. */
-  readonly at: number;
-  readonly unread?: boolean;
-  readonly line: InboxRowLine;
-  readonly ask?: InboxRowAsk;
-};
-
-/** What a row says under its title where its thread holds no words. */
-const INBOX_ROW_WORDS = {
-  ASKING: "An agent is waiting on your answer.",
-  NOTICE: "An agent posted a notice.",
-} as const;
-
-/** The first line of a message's words, or none where it holds no words. */
-function firstLine(text: string): string | undefined {
-  return text
-    .split("\n")
-    .map((line) => line.trim())
-    .find((line) => line !== "");
-}
-
-/** The kind an ask is, where this build knows it; none for a kind from a newer service. */
-function askKindOf(message: InboxMessage | undefined): InboxRowLine | undefined {
-  const type = message?.ask?.type;
-  return Object.values(INBOX_ASK).find((kind) => kind === type);
-}
-
-/** A decide ask on a message, as a row's detail draws it; none for any other message. Note that the ask is told by its options, since a kind from a newer service shares no literal to tell it by. */
-function rowAskOf(message: InboxMessage | undefined): InboxRowAsk | undefined {
-  const ask = message?.ask;
-  if (message === undefined || ask === undefined || !("options" in ask)) return undefined;
-  return {
-    question: firstLine(message.text) ?? "",
-    choices: ask.options.map(({ label, detail }) => ({
-      label,
-      ...(detail === undefined ? {} : { detail }),
-    })),
-    recommended: recommendedLabels(ask),
-  };
-}
-
-/**
- * The Inbox's rows from the document: every item waiting on the developer
- * (`inbox.waiting`), in the order the host lists them, each read whole from
- * the account's feed where the feed holds its task, so its last message
- * says what it asks. Note that an item from a service before `asking` was
- * said counts as asking, as the host counts it.
- */
-export function inboxRowsOf(
-  inbox: AppStateSnapshot["inbox"],
-  feed: AppStateSnapshot[typeof LIVE_READ.INBOX_ITEMS],
-): readonly InboxRow[] {
-  return inbox.waiting.flatMap(({ taskId, items }) =>
-    items.map((waiting): InboxRow => {
-      const held = feed.rows?.[INBOX_SCOPE_KIND.PLAN][taskId]?.find(({ id }) => id === waiting.id);
-      const latest = held?.thread?.at(-1);
-      const asking = waiting.asking !== false;
-      const ask = rowAskOf(latest);
-      return {
-        id: waiting.id,
-        title: waiting.title,
-        summary:
-          (latest === undefined ? undefined : firstLine(latest.text)) ??
-          (asking ? INBOX_ROW_WORDS.ASKING : INBOX_ROW_WORDS.NOTICE),
-        at: held?.updatedAt ?? waiting.postedAt,
-        ...(held?.unread === undefined ? {} : { unread: held.unread }),
-        line: askKindOf(latest) ?? INBOX_ROW_LINE.SAID,
-        ...(ask === undefined ? {} : { ask }),
-      };
-    }),
-  );
-}
-
 /** No holder of either kind read: the feed before it first answers. */
 const NO_INBOX_READS: InboxReads = {
   [INBOX_SCOPE_KIND.PLAN]: new Map(),
@@ -443,12 +345,12 @@ export function selectInboxReader(state: AppStateSnapshot): string | undefined {
   return state.account.status === ACCOUNT_STATUS.SIGNED_IN ? state.account.id : undefined;
 }
 
-/** Every agent's title the task list holds, by the agent's id, as a `select`: the agents on its tasks and those with none, an agent with no title yet left out. Made anew only as the list moves. */
+/** Every agent's title the task list holds, by the agent's id, as a `select`: the agents on its tasks, an agent with no title yet left out. Made anew only as the list moves. */
 export const selectAgentTitles = memoizedSelect(
   (state: AppStateSnapshot) => [state.tasks],
   (tasks): ReadonlyMap<string, string> =>
     new Map(
-      [...(tasks.taskAgents ?? []), ...(tasks.tasklessAgents ?? [])].flatMap(({ id, title }) =>
+      (tasks.taskAgents ?? []).flatMap(({ id, title }) =>
         title === null ? [] : [[id, title] as const],
       ),
     ),
@@ -511,16 +413,14 @@ export function selectWorkspaceExperiment(
   return (state) => workspaceExperimentOnIn(state, workspaceId, experiment);
 }
 
-/** One agent as the task list follows it, on a task or on none. */
-export type FollowedAgent = ListedAgent | TasklessAgent;
+/** One agent as the task list follows it. */
+export type FollowedAgent = ListedAgent;
 
-/** One agent as the task list follows it, by its id, as a `select`: on its task or on none; none where the list holds no such agent. */
+/** One agent as the task list follows it, by its id, as a `select`; none where the list holds no such agent. */
 export function selectFollowedAgent(
   agentId: string,
 ): (state: AppStateSnapshot) => FollowedAgent | undefined {
-  return (state) =>
-    state.tasks.taskAgents?.find(({ id }) => id === agentId) ??
-    state.tasks.tasklessAgents?.find(({ id }) => id === agentId);
+  return (state) => state.tasks.taskAgents?.find(({ id }) => id === agentId);
 }
 
 /** One transcript as the host holds it, the agent's own or its worker's by the call that started it, as a `select`; none where no window holds it. */

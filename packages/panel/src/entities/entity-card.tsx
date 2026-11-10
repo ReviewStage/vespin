@@ -1,6 +1,11 @@
 import { shortCommit } from "@repo/features/code-ref-words";
+import {
+  ENTITY_KIND,
+  type Entity,
+  type EntityKind,
+  type EntityOf,
+} from "@repo/features/entity-kind";
 import type { MentionLines } from "@repo/features/mention-link";
-import { THING_KIND, type Thing, type ThingKind, type ThingOf } from "@repo/features/thing-kind";
 import { HoverCardSkeleton } from "@repo/ui";
 import type { ReactNode } from "react";
 import { AppCard } from "../actor-ref.js";
@@ -12,24 +17,24 @@ import {
   SectionChipCard,
   UnreadPageCard,
   VersionChipCard,
-} from "./chip-cards.js";
-import { FileCard } from "./file-ref.js";
-import { InboxItemChipCard } from "./inbox-item-chip.js";
+} from "../tasks/chip-cards.js";
+import { FileCard } from "../tasks/file-ref.js";
+import { InboxItemChipCard } from "../tasks/inbox-item-chip.js";
 import {
   AgentPullRequestChipCard,
   MentionedAgentCard,
   PullRequestChipCard,
-} from "./mentioned-agent-card.js";
-import { ServerCard } from "./server-card.js";
-import { TAB_KIND } from "./tab-look.js";
+} from "../tasks/mentioned-agent-card.js";
+import { ServerCard } from "../tasks/server-card.js";
+import { TAB_KIND } from "../tasks/tab-look.js";
 
 /**
- * thing-card.tsx -- the card a chip hangs for each kind of thing it names, one entry per kind (`@repo/features/thing-kind`).
+ * entity-card.tsx -- the card a chip hangs for each kind of entity it names, one entry per kind (`@repo/features/entity-kind`).
  *
- * A mention's chip and an app link's chip both hang their thing's card
- * through `thingCard`, so a plan's chip hangs the plan's card whichever way
- * it was written. The table is keyed by every `THING_KIND` and typed over
- * each kind's own `Thing`, so a kind added there fails to compile until it
+ * A mention's chip and an app link's chip both hang their entity's card
+ * through `entityCard`, so a plan's chip hangs the plan's card whichever way
+ * it was written. The table is keyed by every `ENTITY_KIND` and typed over
+ * each kind's own `Entity`, so a kind added there fails to compile until it
  * says what card it hangs. A kind with no card of its own yet hangs the
  * chip's own, its glyph and name, and says so by name, `OWN_CARD`. A plan
  * hangs the card its own tab hangs (`tabCard`), and an agent and a pull
@@ -39,8 +44,8 @@ import { TAB_KIND } from "./tab-look.js";
  * and stands in with the chip's own only where the read answers nothing.
  */
 
-/** What a chip hands its thing's card: the card it draws of its own, and where it stands. */
-export interface ThingCardAt {
+/** What a chip hands its entity's card: the card it draws of its own, and where it stands. */
+export interface EntityCardAt {
   /** The chip's own card, its glyph and its name, which a kind with none of its own hangs, and any card stands in with where the window holds nothing. */
   readonly own: ReactNode;
   /** The chip's glyph, which a card waiting on its read wears. */
@@ -58,16 +63,16 @@ export interface ThingCardAt {
 }
 
 /** The card a kind hangs. */
-type ThingCard<T> = (thing: T, at: ThingCardAt) => ReactNode;
+type EntityCard<T> = (entity: T, at: EntityCardAt) => ReactNode;
 
 /** The cards, one entry per kind. */
-type ThingCards = { readonly [K in ThingKind]: ThingCard<ThingOf<K>> };
+type EntityCards = { readonly [K in EntityKind]: EntityCard<EntityOf<K>> };
 
 /** Where a file or a folder no lines pin is read: the head of its repository's default branch, as its link names it. */
 const DEFAULT_BRANCH_WORDS = "On the default branch";
 
 /** A kind with no card of its own, which hangs the chip's own: its glyph and its name. */
-const OWN_CARD: ThingCard<Thing> = (_thing, at) => at.own;
+const OWN_CARD: EntityCard<Entity> = (_entity, at) => at.own;
 
 /** What a file's card says of the lines a mention pins: where they run, and the commit they were read at. */
 function linesNote(lines: MentionLines | undefined): string | undefined {
@@ -80,18 +85,18 @@ function linesNote(lines: MentionLines | undefined): string | undefined {
 }
 
 /** A card's one waiting state while what it shows is read: the chip's glyph and name over a line standing in for the rest. */
-function reading(at: ThingCardAt): ReactNode {
+function reading(at: EntityCardAt): ReactNode {
   return <HoverCardSkeleton glyph={at.glyph} name={at.name} />;
 }
 
 /** An MCP server's card, or one of its tools': its server's row as the MCP popover draws it. */
-const SERVER_CARD: ThingCard<ThingOf<typeof THING_KIND.SERVER | typeof THING_KIND.TOOL>> = (
+const SERVER_CARD: EntityCard<EntityOf<typeof ENTITY_KIND.SERVER | typeof ENTITY_KIND.TOOL>> = (
   server,
 ) => <ServerCard provider={server.provider} connection={server.connection} />;
 
 /** An automation's card, or one of its runs': the automation's, read in the workspace its link names. */
-const AUTOMATION_CARD: ThingCard<
-  ThingOf<typeof THING_KIND.AUTOMATION | typeof THING_KIND.AUTOMATION_RUN>
+const AUTOMATION_CARD: EntityCard<
+  EntityOf<typeof ENTITY_KIND.AUTOMATION | typeof ENTITY_KIND.AUTOMATION_RUN>
 > = (automation, at) => (
   <AutomationChipCard
     automationId={automation.automationId}
@@ -102,11 +107,11 @@ const AUTOMATION_CARD: ThingCard<
   />
 );
 
-/** The card each kind hangs, as the window hangs it wherever it names the thing; the chip's own standing in where the window holds none. */
-const THING_CARD: ThingCards = {
-  [THING_KIND.PLAN]: (plan, at) =>
+/** The card each kind hangs, as the window hangs it wherever it names the entity; the chip's own standing in where the window holds none. */
+const ENTITY_CARD: EntityCards = {
+  [ENTITY_KIND.PLAN]: (plan, at) =>
     tabCard({ kind: TAB_KIND.PLAN, taskId: plan.taskId, name: at.name }),
-  [THING_KIND.SECTION]: (section, at) => (
+  [ENTITY_KIND.SECTION]: (section, at) => (
     <SectionChipCard
       taskId={section.taskId}
       anchor={section.anchor}
@@ -115,11 +120,11 @@ const THING_CARD: ThingCards = {
       fallback={at.own}
     />
   ),
-  [THING_KIND.VERSION]: (version, at) => (
+  [ENTITY_KIND.VERSION]: (version, at) => (
     <VersionChipCard taskId={version.planId} revision={version.revision} fallback={at.own} />
   ),
-  [THING_KIND.COMMENT]: OWN_CARD,
-  [THING_KIND.PAGE]: (page, at) => (
+  [ENTITY_KIND.COMMENT]: OWN_CARD,
+  [ENTITY_KIND.PAGE]: (page, at) => (
     <PageChipCard
       place={"taskId" in page ? { taskId: page.taskId } : { agentId: page.agentId }}
       pageId={page.pageId}
@@ -127,12 +132,12 @@ const THING_CARD: ThingCards = {
       fallback={<UnreadPageCard glyph={at.glyph} name={at.name} />}
     />
   ),
-  [THING_KIND.AGENT]: (agent, at) => (
+  [ENTITY_KIND.AGENT]: (agent, at) => (
     <MentionedAgentCard agentId={agent.agentId} reading={reading(at)} fallback={at.own} />
   ),
-  [THING_KIND.WORKER]: OWN_CARD,
-  [THING_KIND.APP]: () => <AppCard />,
-  [THING_KIND.CHANGES]: (changes, at) => (
+  [ENTITY_KIND.WORKER]: OWN_CARD,
+  [ENTITY_KIND.APP]: () => <AppCard />,
+  [ENTITY_KIND.CHANGES]: (changes, at) => (
     <AgentPullRequestChipCard
       agentId={changes.agentId}
       taskId={changes.planId}
@@ -140,23 +145,23 @@ const THING_CARD: ThingCards = {
       fallback={at.own}
     />
   ),
-  [THING_KIND.PULL_REQUEST]: (pullRequest, at) => (
+  [ENTITY_KIND.PULL_REQUEST]: (pullRequest, at) => (
     <PullRequestChipCard url={pullRequest.url} reading={reading(at)} fallback={at.own} />
   ),
-  [THING_KIND.PULL_REQUEST_THREAD]: OWN_CARD,
-  [THING_KIND.ISSUE]: OWN_CARD,
-  [THING_KIND.LINK]: OWN_CARD,
-  [THING_KIND.MESSAGE]: OWN_CARD,
-  [THING_KIND.HOME]: OWN_CARD,
-  [THING_KIND.BOARD]: OWN_CARD,
-  [THING_KIND.INBOX]: OWN_CARD,
-  [THING_KIND.INBOX_ITEM]: (item, at) => <InboxItemChipCard place={item} fallback={at.own} />,
-  [THING_KIND.AUTOMATIONS]: OWN_CARD,
-  [THING_KIND.AUTOMATION]: AUTOMATION_CARD,
-  [THING_KIND.AUTOMATION_RUN]: AUTOMATION_CARD,
-  [THING_KIND.SETTINGS]: OWN_CARD,
+  [ENTITY_KIND.PULL_REQUEST_THREAD]: OWN_CARD,
+  [ENTITY_KIND.ISSUE]: OWN_CARD,
+  [ENTITY_KIND.LINK]: OWN_CARD,
+  [ENTITY_KIND.MESSAGE]: OWN_CARD,
+  [ENTITY_KIND.HOME]: OWN_CARD,
+  [ENTITY_KIND.BOARD]: OWN_CARD,
+  [ENTITY_KIND.INBOX]: OWN_CARD,
+  [ENTITY_KIND.INBOX_ITEM]: (item, at) => <InboxItemChipCard place={item} fallback={at.own} />,
+  [ENTITY_KIND.AUTOMATIONS]: OWN_CARD,
+  [ENTITY_KIND.AUTOMATION]: AUTOMATION_CARD,
+  [ENTITY_KIND.AUTOMATION_RUN]: AUTOMATION_CARD,
+  [ENTITY_KIND.SETTINGS]: OWN_CARD,
   // A person hangs their card as the members of the workspace their link names draw them.
-  [THING_KIND.PERSON]: (person, at) => (
+  [ENTITY_KIND.PERSON]: (person, at) => (
     <PersonChipCard
       userId={person.userId}
       workspace={at.workspace}
@@ -164,26 +169,26 @@ const THING_CARD: ThingCards = {
       fallback={at.own}
     />
   ),
-  [THING_KIND.ADMIN]: OWN_CARD,
-  [THING_KIND.FILE]: (file, at) => (
+  [ENTITY_KIND.ADMIN]: OWN_CARD,
+  [ENTITY_KIND.FILE]: (file, at) => (
     <FileCard
       path={file.path}
       repository={at.repository}
       note={linesNote(file.lines) ?? branchNote(at.repository)}
     />
   ),
-  [THING_KIND.FOLDER]: OWN_CARD,
-  [THING_KIND.SERVER]: SERVER_CARD,
-  [THING_KIND.TOOL]: SERVER_CARD,
-  [THING_KIND.SKILL]: OWN_CARD,
-  [THING_KIND.REPOSITORY]: OWN_CARD,
-  [THING_KIND.WORKSPACE]: OWN_CARD,
-  [THING_KIND.DATE]: OWN_CARD,
+  [ENTITY_KIND.FOLDER]: OWN_CARD,
+  [ENTITY_KIND.SERVER]: SERVER_CARD,
+  [ENTITY_KIND.TOOL]: SERVER_CARD,
+  [ENTITY_KIND.SKILL]: OWN_CARD,
+  [ENTITY_KIND.REPOSITORY]: OWN_CARD,
+  [ENTITY_KIND.WORKSPACE]: OWN_CARD,
+  [ENTITY_KIND.DATE]: OWN_CARD,
 };
 
-/** A thing's card drawn through its kind's own entry. */
-function cardOf<K extends ThingKind>(kind: K, thing: ThingOf<K>, at: ThingCardAt): ReactNode {
-  return THING_CARD[kind](thing, at);
+/** An entity's card drawn through its kind's own entry. */
+function cardOf<K extends EntityKind>(kind: K, entity: EntityOf<K>, at: EntityCardAt): ReactNode {
+  return ENTITY_CARD[kind](entity, at);
 }
 
 /** What a file's or a folder's card says of where it is read with no lines pinned: the repository's default branch, where a repository names it. */
@@ -191,7 +196,7 @@ export function branchNote(repository: string | undefined): string | undefined {
   return repository === undefined ? undefined : DEFAULT_BRANCH_WORDS;
 }
 
-/** The card a thing hangs, by its kind's entry. */
-export function thingCard(thing: Thing, at: ThingCardAt): ReactNode {
-  return cardOf(thing.kind, thing, at);
+/** The card an entity hangs, by its kind's entry. */
+export function entityCard(entity: Entity, at: EntityCardAt): ReactNode {
+  return cardOf(entity.kind, entity, at);
 }

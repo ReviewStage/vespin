@@ -114,8 +114,8 @@ export function automationTrail(
 /**
  * Opens the agent of an automation's run where it works: on its task, its
  * tab chosen, as any agent on a task opens, so the run's other agents stand
- * beside it as tabs; on its own page where it has no task, or where the
- * window does not list it.
+ * beside it as tabs; on its own page where the window does not list it on
+ * a task, which reads it or says it is not found.
  */
 export function openRunAgent(
   tasks: Pick<TasksControl, "liveAgents" | "onShowAgent" | "agentView">,

@@ -11,7 +11,6 @@ import {
   AGENT_STATUS,
   type AgentStatus,
   type AgentSummary,
-  type TasklessAgent,
 } from "@repo/features/agent-wire";
 import { AUTOMATION_RUN_REASON } from "@repo/features/automation-wire";
 import { SOUND_WHEN, type SoundWhen } from "@repo/settings";
@@ -454,49 +453,12 @@ it.effect(
       ]);
     }),
 );
-/** The automation the planless agents below were started by. */
-const AUTOMATION_NAME = "Morning Sentry triage";
-
-/** An agent an automation started with no plan, as the plan list carries it, started by the signed-in account unless a test says. */
-function tasklessAgent(status: AgentStatus, patch: Partial<TasklessAgent> = {}): TasklessAgent {
-  return {
-    ...agent(status, { title: "Triage overnight issues" }),
-    planId: null,
-    automationId: "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04",
-    automationName: AUTOMATION_NAME,
-    workspaceId: "workspace-acme",
-    repository: "acme/relay",
-    startedBy: { userId: ACCOUNT_ID, name: "Dean" },
-    activityAt: 1_800_000_000_000,
-    ...patch,
-  };
-}
-
-it.effect(
-  "an automation's agent with no plan, held from the plan list, is dotted as its turn ends",
-  () =>
-    Effect.gen(function* () {
-      const f = fixture();
-      const notices = yield* f.notices;
-      f.focus(false);
-
-      notices.observeAgents([tasklessAgent(AGENT_STATUS.RUNNING)]);
-      notices.observeAgents([tasklessAgent(AGENT_STATUS.COMPLETED)]);
-      yield* settled;
-
-      assert.deepEqual(f.unseen.at(-1), [AGENT_ID]);
-    }),
-);
-it.effect.each([
-  { held: "on a plan", planId: TASK_ID },
-  { held: "with no plan", planId: null },
-])("a teammate's agent $held is dotted as its turn ends, as the account's own is", ({ planId }) =>
+it.effect("a teammate's agent is dotted as its turn ends, as the account's own is", () =>
   Effect.gen(function* () {
     const f = fixture();
     const notices = yield* f.notices;
     f.focus(false);
     const theirs = agent(AGENT_STATUS.RUNNING, {
-      planId,
       startedBy: { userId: "user-sam", name: "Sam" },
     });
 
