@@ -61,11 +61,18 @@ const NO_REVISION_WORDS = {
 /** A revision's number, as `history` lists it. */
 const revisionWords = "The revision's number, as vespin description history lists it";
 
+/** Whether a number can name a revision, which counts from one; checked before the service is asked. */
+const namesRevision = (seq: number) => seq >= 1;
+
+/** Why a number names no revision. */
+const notRevision = (seq: number) => `A revision counts from 1, so ${seq} names none.`;
+
 const showCommand = Command.make(
   "show",
   {
     task: taskArgument,
     revision: Flag.Int("revision").pipe(
+      Flag.filter(namesRevision, notRevision),
       Flag.withAlias("r"),
       Flag.withDescription(`${revisionWords}, to print the description as it stood after it`),
       Flag.optional,
@@ -162,6 +169,7 @@ const historyCommand = Command.make(
   {
     task: taskArgument,
     before: Flag.Int("before").pipe(
+      Flag.filter(namesRevision, notRevision),
       Flag.withDescription("Read the older revisions before this one: the earlier a page printed"),
       Flag.optional,
     ),
@@ -204,7 +212,10 @@ const restoreCommand = Command.make(
   "restore",
   {
     task: taskArgument,
-    revision: Argument.Int("revision").pipe(Argument.withDescription(revisionWords)),
+    revision: Argument.Int("revision").pipe(
+      Argument.filter(namesRevision, notRevision),
+      Argument.withDescription(revisionWords),
+    ),
   },
   ({ task, revision }) =>
     Effect.gen(function* () {
