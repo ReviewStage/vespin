@@ -69,8 +69,9 @@ A pull request merges on the Linux checks alone, with no device check first;
 device problems show in the TestFlight builds. For screenshots, ask for a run
 on your branch: Vespin's GitHub App cannot dispatch a workflow, so it is
 started from the developer's Mac (`gh workflow run ios-simulators.yml --ref
-<branch>`). A run on all three simulators takes over two hours, so name fewer
-for a quicker look (`-f simulators="iPhone 18 Pro,iPad Pro 11-inch (M5)"`).
+<branch>`). Each simulator takes about an hour, every flow in the light
+appearance and the dark, after a 20-minute build, so name fewer for a quicker
+look (`-f simulators="iPhone 18 Pro"`).
 Then read its screenshots:
 
 ```
@@ -81,10 +82,13 @@ gh run download <run id> --name mobile-screenshots --dir /tmp/mobile-screenshots
 Each simulator's pictures, in each appearance, are under
 `/tmp/mobile-screenshots/<slug>/<light|dark>/debug/<flow>/takeScreenshot/`,
 named as the flow's `takeScreenshot` steps name them; a failed step's own
-screenshot is under `debug/<flow>/screenshots/` beside them. The notification
-flow, whose push Maestro cannot send, runs apart: the script runs
-`maestro/notification/background.yaml`, pushes `ask.apns` with
-`xcrun simctl push`, and runs `open.yaml`, its output under
+screenshot is under `debug/<flow>/screenshots/` beside them. A flow that
+failed runs once more, alone, its second run under `<light|dark>/retry/`
+laid out the same way. The notification flow, whose push Maestro cannot
+send, runs apart: the script installs the app afresh, lets it notify through
+the applesimutils Maestro installs (Maestro's own `permissions` cannot grant
+notifications), runs `maestro/notification/background.yaml`, pushes
+`ask.apns` with `xcrun simctl push`, and runs `open.yaml`, its output under
 `<light|dark>/notification/`.
 
 ## The host

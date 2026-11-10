@@ -18,6 +18,9 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: new-task-sheet
 - inputText: "Let a workspace owner revoke a pending invite."
+# Note that iOS's hideKeyboard is a short drag at the screen's middle, which
+# lowers the keyboard because the sheet's form lowers it on a drag
+# (`SettingsForm`); the words field's return key types a new line.
 - hideKeyboard
 # The repository's menu offers what the workspace's GitHub reaches.
 - tapOn: "Repository.*"

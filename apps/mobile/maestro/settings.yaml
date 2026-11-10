@@ -18,7 +18,9 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - scrollUntilVisible:
     element: "When I'm away"
-- assertVisible: "Working"
+# Note that the row is one element, its name and value heard together, and a
+# text matches an element's whole words.
+- assertVisible: "Notifications, Working"
 - waitForAnimationToEnd
 - takeScreenshot: settings-notifications
 # A choice is drawn at once, as the fixture takes it.

@@ -39,10 +39,10 @@ function GuardedScreens() {
       <Stack.Protected guard={signedIn}>
         <Stack.Screen name="index" />
         <Stack.Screen name="(tabs)" />
-        {/* Note that the sheet's title is named here as well as on its screen, so its first frame never reads the route's name. */}
+        {/* Note that each sheet's title is named here as well as on its screen, so it never reads the route's name, which New task has kept when opened from the tab bar's round +. */}
         <Stack.Screen name="settings" options={{ presentation: "modal", title: "Settings" }} />
-        <Stack.Screen name="start-task" options={{ presentation: "modal" }} />
-        <Stack.Screen name="start-agent" options={{ presentation: "modal" }} />
+        <Stack.Screen name="start-task" options={{ presentation: "modal", title: "New task" }} />
+        <Stack.Screen name="start-agent" options={{ presentation: "modal", title: "New agent" }} />
       </Stack.Protected>
       <Stack.Protected guard={!signedIn}>
         <Stack.Screen name="sign-in" />
