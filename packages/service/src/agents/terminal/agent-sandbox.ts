@@ -73,12 +73,16 @@ import {
 } from "./preview-relay.js";
 import {
   holdsTerminal,
+  interruptTerminal,
   killTerminal,
   listTerminals,
+  type RunActionStart,
   renameTerminal,
+  startRunAction,
   startTerminal,
   TMUX_EXIT,
   terminalsOf,
+  typeIntoTerminal,
 } from "./tmux.js";
 
 /** A sandbox's statuses, read as the tab reads them; one the provider named none of reads as stopped. */
@@ -156,6 +160,20 @@ export interface AgentSandboxService {
     terminalId: string,
     title: string | undefined,
   ) => ShellEffect<TerminalSummary>;
+  /**
+   * A run action run in the agent's running sandbox: its shell where one
+   * already runs it, its command typed again into its shell where that shell
+   * stands idle, or a new shell started for it under the id given; so a
+   * second press never starts the action twice. A stopped sandbox is never
+   * woken here.
+   */
+  readonly run: (
+    sessionId: string,
+    terminalId: string,
+    run: RunActionStart,
+  ) => ShellEffect<TerminalSummary>;
+  /** What a run action's shell runs interrupted, the shell and its output left standing; none standing for the action is not found. */
+  readonly interrupt: (sessionId: string, actionId: string) => ShellEffect<void>;
   /** A shell named anew. */
   readonly rename: (sessionId: string, terminalId: string, title: string) => ShellEffect<void>;
   /** A shell ended, with whatever it ran. */
@@ -323,6 +341,44 @@ function agentSandboxOver(
           return shell === undefined
             ? Result.fail({ kind: SHELL_REFUSAL.NOT_FOUND })
             : Result.succeed(shell);
+        }),
+      ),
+    run: (sessionId, terminalId, run) =>
+      inRunning(sessionId, (running) =>
+        Effect.gen(function* () {
+          const shells = () =>
+            Effect.flatMap(api.run(running, listTerminals()), (listed) => {
+              const read = terminalsOf(listed);
+              return read === undefined
+                ? Effect.fail(new SandboxUnavailable({}))
+                : Effect.succeed(read);
+            });
+          const standing = (yield* shells()).find((shell) => shell.runAction === run.actionId);
+          if (standing?.running === true) return Result.succeed(standing);
+          const ask =
+            standing === undefined
+              ? startRunAction(terminalId, run)
+              : typeIntoTerminal(standing.id, run.command);
+          const started = yield* api.run(running, ask);
+          // A shell tmux could not start or type into is an outage: its id is the service's own or one tmux just listed.
+          if (started.exitCode !== 0) return yield* Effect.fail(new SandboxUnavailable({}));
+          const shell = (yield* shells()).find((each) => each.id === (standing?.id ?? terminalId));
+          return shell === undefined
+            ? Result.fail({ kind: SHELL_REFUSAL.NOT_FOUND })
+            : Result.succeed(shell);
+        }),
+      ),
+    interrupt: (sessionId, actionId) =>
+      inRunning(sessionId, (running) =>
+        Effect.gen(function* () {
+          const listed = terminalsOf(yield* api.run(running, listTerminals()));
+          if (listed === undefined) return yield* Effect.fail(new SandboxUnavailable({}));
+          const shell = listed.find((each) => each.runAction === actionId);
+          if (shell === undefined) return Result.fail({ kind: SHELL_REFUSAL.NOT_FOUND });
+          const interrupted = yield* api.run(running, interruptTerminal(shell.id));
+          return interrupted.exitCode === 0
+            ? Result.succeed(undefined)
+            : Result.fail({ kind: SHELL_REFUSAL.NOT_FOUND });
         }),
       ),
     rename: (sessionId, terminalId, title) => onShell(sessionId, renameTerminal(terminalId, title)),

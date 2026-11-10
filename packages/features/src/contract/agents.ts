@@ -207,6 +207,15 @@ const terminalParams = EffectSchema.Struct({
   terminal: EffectSchema.String,
 });
 
+/** One of an agent's repository's run actions a path names, read as ids by the handler. */
+const runActionParams = EffectSchema.Struct({
+  id: EffectSchema.String,
+  action: EffectSchema.String,
+});
+
+/** One agent's run of one of its repository's run actions. */
+const RUN_ACTION_PATH = `${AGENT_PATH}/run-actions/{action}` as const;
+
 /** How many of a workspace's agents a page passes over, as its query carries it: a whole number from zero. */
 const offsetQuery = EffectSchema.NumberFromString.pipe(
   EffectSchema.decodeTo(EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(0))),
@@ -405,6 +414,21 @@ export const agentsContract = {
       }),
     )
     .input(exactBodyInput(terminalParams, terminalRenameRequestSchema))
+    .output(EffectSchema.flip(terminalsAnswerSchema)),
+  /**
+   * One of the agent's repository's run actions run in its running
+   * sandbox, behind the Run actions experiment, answering its shell: the one
+   * already running it, or one it was typed into or started in now. A
+   * stopped sandbox is refused, never woken.
+   */
+  runAction: shellProcedure
+    .meta(openapi({ method: HTTP_METHOD.POST, path: RUN_ACTION_PATH }))
+    .input(runActionParams)
+    .output(EffectSchema.flip(terminalCreatedAnswerSchema)),
+  /** What one run action's shell runs interrupted, the shell left standing, answering the shells as they stand after. */
+  stopRunAction: shellProcedure
+    .meta(openapi({ method: HTTP_METHOD.POST, path: `${RUN_ACTION_PATH}/stop` }))
+    .input(runActionParams)
     .output(EffectSchema.flip(terminalsAnswerSchema)),
   /** One shell ended, answering the shells as they stand after. */
   endTerminal: shellProcedure

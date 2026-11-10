@@ -14,6 +14,11 @@
  * output scrolling into the terminal's own scrollback. Every command runs as
  * the sandbox's default user, on a server of its own (`TMUX.SOCKET`).
  *
+ * A run action's shell is one such session too, started for the action
+ * (`startRunAction`): named for its label, marked with its id, and with the
+ * action's command typed into its shell, so the tab shows the command, its
+ * output, and its prompt once it ends, as if the developer had typed it.
+ *
  * tmux prints a control character in a format's value as `_`, so a list
  * cannot separate its fields with one; each free-text field is read on its
  * own and travels in base64, which no name, title, or path can break.
@@ -31,6 +36,8 @@ export const TMUX = {
   SESSION_PREFIX: "terminal-",
   /** The session option a developer-given name rides in. */
   TITLE_OPTION: "@terminal_title",
+  /** The session option a run action's id rides in, on a shell started for one. */
+  RUN_ACTION_OPTION: "@run_action",
   /** Where a new shell stands: the agent's checkout. */
   START_DIRECTORY: REPOSITORY_SANDBOX_CONTRACT.PATH.CHECKOUT,
   /**
@@ -46,7 +53,8 @@ const SHELLS: ReadonlySet<string> = new Set(["bash", "zsh", "sh", "dash", "fish"
 
 /**
  * Lists the tab's sessions, one line each: the session's name, when it was
- * created, then its title, foreground command, and folder, each in base64.
+ * created, then its title, foreground command, folder, and run action, each
+ * in base64.
  * A tmux with no server holds no session, which is an empty list; any other
  * failure exits nonzero.
  */
@@ -59,7 +67,7 @@ const LIST_SCRIPT = [
   `field() { tmux display-message -p -t "=$1:" "$2" | base64 | tr -d '\\n'; }`,
   `printf '%s\\n' "$listed" | while read -r name created; do`,
   `  case "$name" in ${TMUX.SESSION_PREFIX}*) ;; *) continue ;; esac`,
-  `  printf '%s %s %s %s %s\\n' "$name" "$created" "$(field "$name" '#{${TMUX.TITLE_OPTION}}')" "$(field "$name" '#{pane_current_command}')" "$(field "$name" '#{pane_current_path}')"`,
+  `  printf '%s %s %s %s %s %s\\n' "$name" "$created" "$(field "$name" '#{${TMUX.TITLE_OPTION}}')" "$(field "$name" '#{pane_current_command}')" "$(field "$name" '#{pane_current_path}')" "$(field "$name" '#{${TMUX.RUN_ACTION_OPTION}}')"`,
   "done",
 ].join("\n");
 
@@ -115,6 +123,49 @@ export function startTerminal(terminalId: string, title: string | undefined): Co
   );
 }
 
+/** What a run action's shell is started with: the action's id, its label for the tab, its command, and the workspace's variables its shell holds. */
+export interface RunActionStart {
+  readonly actionId: string;
+  readonly label: string;
+  readonly command: string;
+  readonly environment: Readonly<Record<string, string>>;
+}
+
+/**
+ * Starts a run action's shell detached in the agent's checkout, under its
+ * id, named for the action's label and marked with its id, the workspace's
+ * variables in its environment, and types the action's command into it.
+ */
+export function startRunAction(terminalId: string, run: RunActionStart): CommandAsk {
+  const environment = Object.entries(run.environment).flatMap(([name, value]) => [
+    "-e",
+    `${name}=${value}`,
+  ]);
+  const target = optionTargetOf(terminalId);
+  return tmux([
+    ...["new-session", "-d", "-s", sessionOf(terminalId), "-c", TMUX.START_DIRECTORY],
+    ...environment,
+    ...[";", "set-option", "-t", target, TMUX.TITLE_OPTION, run.label],
+    ...[";", "set-option", "-t", target, TMUX.RUN_ACTION_OPTION, run.actionId],
+    ...[";", "send-keys", "-t", target, "-l", run.command],
+    ...[";", "send-keys", "-t", target, "Enter"],
+  ]);
+}
+
+/** Types a command into a shell that stands, as a run action pressed again in its idle shell runs it there anew. */
+export function typeIntoTerminal(terminalId: string, command: string): CommandAsk {
+  const target = optionTargetOf(terminalId);
+  return tmux([
+    ...["send-keys", "-t", target, "-l", command],
+    ...[";", "send-keys", "-t", target, "Enter"],
+  ]);
+}
+
+/** Interrupts what a shell runs, as Control-C typed into it would, and leaves the shell and what it printed standing. */
+export function interruptTerminal(terminalId: string): CommandAsk {
+  return tmux(["send-keys", "-t", optionTargetOf(terminalId), "C-c"]);
+}
+
 /** Attaches a terminal's PTY to a shell that stands; one that does not is never started here, which only the shell route does. */
 export function attachTerminal(terminalId: string): CommandAsk {
   return tmux(["attach-session", "-t", targetOf(terminalId)]);
@@ -149,12 +200,13 @@ export function killTerminal(terminalId: string): CommandAsk {
 export function terminalsOf(run: CommandRun): readonly TerminalSummary[] | undefined {
   if (run.exitCode !== 0) return undefined;
   const listed = run.stdout.split("\n").flatMap((line) => {
-    const [name, created, title, command, cwd] = line.split(" ");
+    const [name, created, title, command, cwd, runAction] = line.split(" ");
     if (name === undefined || !name.startsWith(TMUX.SESSION_PREFIX)) return [];
     const id = readId(unparsedWire(name.slice(TMUX.SESSION_PREFIX.length)));
     if (Result.isFailure(id)) return [];
     const foreground = fieldOf(command);
     const named = fieldOf(title);
+    const action = fieldOf(runAction);
     return [
       {
         created: Number(created ?? 0),
@@ -164,6 +216,7 @@ export function terminalsOf(run: CommandRun): readonly TerminalSummary[] | undef
           command: foreground,
           cwd: fieldOf(cwd),
           running: foreground !== "" && !SHELLS.has(foreground),
+          ...(action === "" ? {} : { runAction: action }),
         },
       },
     ];

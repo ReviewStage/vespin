@@ -656,7 +656,7 @@ function recordOf(found: FoundPlace, userId: string, agentId: string) {
  * machine; none on a Mac, nor in a deployment with no ring, under which
  * none could have been set.
  */
-function workspaceEnvironmentOf(agent: Agent, machine: AgentMachineKind) {
+export function workspaceEnvironmentOf(agent: Agent, machine: AgentMachineKind) {
   return Effect.gen(function* () {
     if (machine !== AGENT_MACHINE.VERCEL) return {};
     const keys = (yield* HostedEnvironment).providerKeyEncryptionKeys;

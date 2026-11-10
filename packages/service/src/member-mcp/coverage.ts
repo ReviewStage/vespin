@@ -293,6 +293,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     openTerminal: SCREEN_ONLY,
     renameTerminal: SCREEN_ONLY,
     endTerminal: SCREEN_ONLY,
+    runAction: NOT_YET_BUILT,
+    stopRunAction: NOT_YET_BUILT,
   },
   dictation: { transcribe: SCREEN_ONLY },
   events: { record: INTERNAL },

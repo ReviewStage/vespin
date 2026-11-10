@@ -253,6 +253,99 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
       }),
   );
 
+  it.effect(
+    "a run action starts one shell, and a second press while it runs starts nothing, while one in an idle shell is typed there again; a stopped sandbox is refused, never woken",
+    () =>
+      Effect.gen(function* () {
+        const action = "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a01";
+        const run = { actionId: action, label: "Dev server", command: "pnpm dev", environment: {} };
+        // tmux as the run leaves it: the shell it starts lists as running the command, marked with its action.
+        let shells: string[] = [];
+        let foreground = "node";
+        const sandbox = memorySandbox({
+          run: ({ ask }) => {
+            const scriptAt = ask.args.indexOf("-c") + 1;
+            const tmuxArgs = ask.args.slice(scriptAt + 2);
+            if (tmuxArgs.length === 0) return ran(0, shells.join("\n"));
+            if (tmuxArgs[0] === "new-session") {
+              const id = (tmuxArgs[tmuxArgs.indexOf("-s") + 1] ?? "").replace("terminal-", "");
+              shells = [
+                [
+                  `terminal-${id}`,
+                  "100",
+                  field("Dev server"),
+                  field(foreground),
+                  field("/workspace/repository"),
+                  field(action),
+                ].join(" "),
+              ];
+            }
+            return ran(0);
+          },
+        });
+        sandbox.stand({
+          name: SANDBOX,
+          status: SANDBOX_STATUS.RUNNING,
+          running: RUNNING_SESSION,
+          tags: { sessionId: SESSION },
+        });
+        const layer = Layer.provide(
+          agentSandboxLayer,
+          Layer.mergeAll(
+            LOCAL_AGENT_ENVIRONMENT,
+            Layer.succeed(AgentImage, FIXTURE_IMAGE),
+            sandbox.layer,
+          ),
+        );
+        const stopped = standing(SANDBOX_STATUS.STOPPED);
+        const other = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
+
+        const { first, again } = yield* Effect.gen(function* () {
+          const agentSandbox = yield* AgentSandbox;
+          const first = yield* agentSandbox.run(SESSION, SHELL, run);
+          const again = yield* agentSandbox.run(SESSION, other, run);
+          return { first, again };
+        }).pipe(Effect.provide(layer));
+        const startedBefore = sandbox.state.commands.length;
+        foreground = "bash";
+        shells = shells.map((line) => line.replace(field("node"), field("bash")));
+        const idle = yield* Effect.flatMap(AgentSandbox, (agentSandbox) =>
+          agentSandbox.run(SESSION, other, run),
+        ).pipe(Effect.provide(layer));
+        const refused = yield* Effect.flatMap(AgentSandbox, (agentSandbox) =>
+          agentSandbox.run(SESSION, SHELL, run),
+        ).pipe(Effect.provide(stopped.layer));
+
+        assert.deepEqual(
+          first,
+          Result.succeed({
+            id: SHELL,
+            title: "Dev server",
+            command: "node",
+            cwd: "/workspace/repository",
+            running: true,
+            runAction: action,
+          }),
+        );
+        assert.deepEqual(again, first);
+        const started = sandbox.state.commands.filter((command) =>
+          command.ask.args.includes("new-session"),
+        );
+        assert.equal(started.length, 1);
+        const typed = sandbox.state.commands
+          .slice(startedBefore)
+          .filter((command) => command.ask.args.includes("send-keys"));
+        assert.equal(typed.length, 1);
+        assert.ok(typed[0]?.ask.args.includes("pnpm dev"));
+        assert.equal(Result.isSuccess(idle) && idle.success.id, SHELL);
+        assert.deepEqual(
+          refused,
+          Result.fail({ kind: SHELL_REFUSAL.NOT_RUNNING, sandbox: SANDBOX_STATE.STOPPED }),
+        );
+        assert.deepEqual(stopped.state.resumed, []);
+      }),
+  );
+
   it.effect("a list tmux could not give is an outage, never a sandbox with no shells", () =>
     Effect.gen(function* () {
       const api = standing(SANDBOX_STATUS.RUNNING, [], 1);
