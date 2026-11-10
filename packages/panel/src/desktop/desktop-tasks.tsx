@@ -1016,10 +1016,15 @@ function DescriptionDocument({
       ),
     [openedId, pages, openPageTab],
   );
-  // A task that lists no agent offers New agent under its title, since its Agents group draws none.
+  // A task that lists no agent offers New agent under its title, since its Agents group draws none;
+  // note that a phone's group stands for archived agents too, its head offering New agent itself.
+  const agentsGrouped = room === SHELL_ROOM.NARROW && (agents.archived?.length ?? 0) > 0;
   const firstAgentStart = useMemo(
-    () => (agents.agents?.length === 0 ? newAgentStarts(mainTabs, agents)[0] : undefined),
-    [agents, mainTabs],
+    () =>
+      agents.agents?.length === 0 && !agentsGrouped
+        ? newAgentStarts(mainTabs, agents)[0]
+        : undefined,
+    [agents, mainTabs, agentsGrouped],
   );
   // The task's starts, sub-tasks, and relations stand over its agents, the head keyed once by the
   // task, so another task's groups start as they open and no draft of this one's stands there.
