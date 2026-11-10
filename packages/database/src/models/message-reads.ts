@@ -720,13 +720,28 @@ export function runningChildTurns(
   );
 }
 
+/** The last `tail` of a message's parts, in order, cut out of the jsonb where it is stored, so a reader after the newest parts alone never carries the whole array out. */
+function partsTail(tail: number) {
+  return sql`(select coalesce(jsonb_agg(tail.part order by tail.place), '[]'::jsonb) from jsonb_array_elements(${messages.parts}) with ordinality as tail(part, place) where tail.place > jsonb_array_length(${messages.parts}) - ${tail})`.mapWith(
+    messages.parts,
+  );
+}
+
 const findNewestJournalOf = SqlSchema.findAll({
-  Request: Schema.Struct({ conversationIds: Schema.Array(Schema.String) }),
+  Request: Schema.Struct({
+    conversationIds: Schema.Array(Schema.String),
+    tailParts: Schema.optional(Schema.Int),
+  }),
   Result: SelectedMessageRowSchema,
-  execute: ({ conversationIds }) =>
+  execute: ({ conversationIds, tailParts }) =>
     Database.use((db) =>
       db
-        .selectDistinctOn([messages.conversationId], MESSAGE_FIELDS)
+        .selectDistinctOn(
+          [messages.conversationId],
+          tailParts === undefined
+            ? MESSAGE_FIELDS
+            : { ...MESSAGE_FIELDS, parts: partsTail(tailParts) },
+        )
         .from(messages)
         .innerJoin(conversations, MESSAGE_CONVERSATION_STANDS)
         .where(
@@ -741,26 +756,30 @@ const findNewestJournalOf = SqlSchema.findAll({
 
 /**
  * The newest turn journal of each conversation named, whoever owns it, keyed
- * by conversation: `listJournals`' newest for many at once. A conversation
- * with none, or whose journal does not read, is absent. Only for ids a gate
- * already read, as `latestTurnsOfReached`.
+ * by conversation: `listJournals`' newest for many at once, or only the last
+ * `tailParts` of each one's parts where that is all its reader looks at. A
+ * conversation with none, or whose journal does not read, is absent. Only for
+ * ids a gate already read, as `latestTurnsOfReached`.
  */
 export function newestJournalsOfReached(
   conversationIds: readonly string[],
   tools: ToolSet,
+  tailParts?: number,
 ): Effect.Effect<ReadonlyMap<string, StoredMessageRecord>, StoreFailure, DatabaseServices> {
   if (conversationIds.length === 0) return Effect.succeed(new Map());
-  return Effect.flatMap(findNewestJournalOf({ conversationIds }), (selected) =>
-    // Note that each row is read on its own, so one unreadable journal leaves out its conversation alone.
-    Effect.map(
-      Effect.forEach(selected, (row) => readSelected([row], tools)),
-      (reads) =>
-        new Map(
-          reads
-            .flatMap((read) => (read.ok ? read.value : []))
-            .map((record) => [record.conversationId, record]),
-        ),
-    ),
+  return Effect.flatMap(
+    findNewestJournalOf({ conversationIds, ...optionalField("tailParts", tailParts) }),
+    (selected) =>
+      // Note that each row is read on its own, so one unreadable journal leaves out its conversation alone.
+      Effect.map(
+        Effect.forEach(selected, (row) => readSelected([row], tools)),
+        (reads) =>
+          new Map(
+            reads
+              .flatMap((read) => (read.ok ? read.value : []))
+              .map((record) => [record.conversationId, record]),
+          ),
+      ),
   );
 }
 
