@@ -165,17 +165,22 @@ test("Allow on a held call's row sends the answer, and the row says it was allow
   assert.ok(call.textContent?.includes("Allowed"));
 });
 
-test("a Codex agent's composer offers no permission mode, where a Claude Code agent's does", async () => {
+test("a Codex agent's composer names the Codex app's modes, where a Claude Code agent's names Claude Code's", async () => {
   const claude = await drawnTab(CLAUDE_AGENT);
-  assert.notEqual(modeChip(claude.container), null);
+  const claudeChip = modeChip(claude.container)?.getAttribute("aria-label");
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 
-  const { permissionMode: _mode, pendingApprovals: _asks, ...plain } = CLAUDE_AGENT;
+  const { pendingApprovals: _asks, ...plain } = CLAUDE_AGENT;
   const codex = await drawnTab({
     ...plain,
     model: "openai/gpt-5.5",
     runtime: AGENT_RUNTIME.CODEX,
   });
-  assert.equal(modeChip(codex.container), null);
+  const codexChip = modeChip(codex.container)?.getAttribute("aria-label");
+
+  assert.deepEqual(
+    [claudeChip, codexChip],
+    ["Permission mode: Ask before edits", "Permission mode: Ask for approval"],
+  );
 });
