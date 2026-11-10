@@ -50,6 +50,8 @@ Other commands:
 | `inbox list [--unread]` · `inbox view <thread>` | Threads agents posted, and one thread with its open ask |
 | `inbox answer <thread> <option>` · `inbox answer <thread> -F <json\|->` · `inbox reply <thread> -F <msg\|->` · `inbox close <thread>` | Answer a decide's option, `done` for a to-do, or a form as JSON by field; write on the thread; close it |
 | `agent shells <id>` · `agent shell <id> [<shell>] [--title t]` | An agent's Terminal tab shells; open a new one, or attach to one, in this terminal (Ctrl-] detaches). `shell` is interactive and refuses to run piped, so a coding agent hands it to the person |
+| `slack show` · `slack set [--notifications on\|off] [--repo <owner/name\|none>] [--channel <channel> [--join\|--leave]]` · `slack disconnect [--yes]` | The workspace's Slack bot: its team, your notifications, the repository Slack starts work in, and (to an owner or admin) its channels. `set` changes your notifications, the workspace's repository, or with `--channel` (id or name) puts the bot in a public channel or takes it out, and `--repo` sets that channel's own. `disconnect` asks first unless `--yes`, which a script must pass; connecting the bot is done in the app |
+| `repo pins` · `repo pin <owner/name>` · `repo unpin <owner/name>` | The repositories you pinned in your sidebar, newest first; pin or unpin one |
 
 `description edit` replaces the whole description, so run `description show` first and edit that; piped, `show` prints JSON, so take its `body` (`jq -r .body`). Run `vespin <group> --help` for any flag not listed here.
 

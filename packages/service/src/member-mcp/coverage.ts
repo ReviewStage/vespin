@@ -105,6 +105,13 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.UPDATE_AUTOMATION]: { automations: ["read", "change"] },
   [MEMBER_MCP_TOOL.RUN_AUTOMATION]: { automations: ["run"] },
   [MEMBER_MCP_TOOL.DELETE_AUTOMATION]: { automations: ["remove"] },
+  [MEMBER_MCP_TOOL.READ_SLACK_BOT]: { workspaceSlackBot: ["read"] },
+  [MEMBER_MCP_TOOL.UPDATE_SLACK_BOT]: {
+    workspaceSlackBot: ["read", "notifications", "repository", "channel"],
+  },
+  [MEMBER_MCP_TOOL.DISCONNECT_SLACK_BOT]: { workspaceSlackBot: ["disconnect"] },
+  [MEMBER_MCP_TOOL.LIST_REPOSITORY_PINS]: { repositoryPins: ["list"] },
+  [MEMBER_MCP_TOOL.PIN_REPOSITORY]: { repositoryPins: ["set"] },
 } as const satisfies Record<MemberMcpToolName, HostedProcedureNames>;
 
 type Coverage = typeof MEMBER_MCP_COVERAGE;
@@ -324,7 +331,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     overviewConversation: NOT_YET_BUILT,
   },
   pushDevices: { register: INTERNAL, unregister: INTERNAL },
-  repositoryPins: { list: NOT_YET_BUILT, set: NOT_YET_BUILT },
   supportAccess: { grant: SECURITY, revoke: SECURITY },
   taskFiles: {
     file: NOT_YET_BUILT,
@@ -351,14 +357,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     installations: NOT_YET_BUILT,
     disconnect: NOT_YET_BUILT,
   },
-  workspaceSlackBot: {
-    read: NOT_YET_BUILT,
-    connect: NEEDS_BROWSER,
-    disconnect: NOT_YET_BUILT,
-    notifications: NOT_YET_BUILT,
-    repository: NOT_YET_BUILT,
-    channel: NOT_YET_BUILT,
-  },
+  workspaceSlackBot: { connect: NEEDS_BROWSER },
   workspaces: {
     create: NOT_YET_BUILT,
     rename: NOT_YET_BUILT,

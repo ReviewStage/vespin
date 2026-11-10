@@ -50,6 +50,11 @@ export const MEMBER_MCP_TOOL = {
   UPDATE_AUTOMATION: AGENT_TOOL.UPDATE_AUTOMATION,
   RUN_AUTOMATION: AGENT_TOOL.RUN_AUTOMATION,
   DELETE_AUTOMATION: AGENT_TOOL.DELETE_AUTOMATION,
+  READ_SLACK_BOT: "read_slack_bot",
+  UPDATE_SLACK_BOT: "update_slack_bot",
+  DISCONNECT_SLACK_BOT: "disconnect_slack_bot",
+  LIST_REPOSITORY_PINS: "list_repository_pins",
+  PIN_REPOSITORY: "pin_repository",
 } as const;
 
 export type MemberMcpToolName = (typeof MEMBER_MCP_TOOL)[keyof typeof MEMBER_MCP_TOOL];

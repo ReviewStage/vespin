@@ -97,7 +97,16 @@ import {
   type PullRequestWriteAnswer,
   pullRequestActionRequestSchema,
 } from "@repo/features/pull-request-write-wire";
-import { TASK_STATUS } from "@repo/features/task-wire";
+import {
+  type WorkspaceSlackBot,
+  workspaceSlackBotChannelRequestSchema,
+} from "@repo/features/slack-bot-wire";
+import {
+  REPOSITORY_PIN_BOUNDS,
+  type RepositoryPin,
+  repositoryPinRequestSchema,
+  TASK_STATUS,
+} from "@repo/features/task-wire";
 import { WORKSPACE_BOUNDS, workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { Sandbox } from "@repo/sandbox";
 import {
@@ -210,10 +219,19 @@ import {
 import { HostedEnvironment } from "../environment.js";
 import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import type { GitHubApp } from "../github/github-app.js";
+import { pinRepository, readRepositoryPins } from "../github/repository-pins.js";
 import { agentWorkspace } from "../github/workspace-repository.js";
 import type { HostedRefusal } from "../http/http-effect.js";
 import type { PageLinks } from "../pages/page-links.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
+import type { SlackBot } from "../slack/slack-bot.js";
+import {
+  changeSlackChannel,
+  disconnectSlackBot,
+  readSlackBot,
+  setSlackDefaultRepository,
+  setSlackNotifications,
+} from "../slack/slack-bot-operations.js";
 import {
   COMMENT_TOOL_REFUSAL,
   commentAnswerRead,
@@ -243,6 +261,7 @@ export type MemberMcpServices =
   | ModelCatalog
   | HostedEnvironment
   | SentryApp
+  | SlackBot
   | AdmittedMember;
 
 /** A tool's input declaration: a wire schema the emitter can show and the reader can read. */
@@ -2140,6 +2159,257 @@ const MEMBER_DELETE_AUTOMATION_TOOL = memberMcpTool({
     ),
 });
 
+/*
+ * The workspace's Slack bot and the member's repository pins. The bot is
+ * read and set through the operations its Settings rows run
+ * (`../slack/slack-bot-operations.ts`), so an owner or admin alone sets its
+ * repositories and channels, and any member their own notifications; the
+ * pins are the member's own, through the sidebar's operations
+ * (`../github/repository-pins.ts`).
+ */
+
+/** Why a Slack bot or pin change was not made, in words the agent can act on. */
+const SETTINGS_REFUSAL = {
+  NO_BOT:
+    "Not made: the workspace's Slack bot is not connected; an owner or admin connects it in " +
+    `${PRODUCT_NAME}'s Settings.`,
+  NOT_PERMITTED:
+    "Not made: only an owner or admin of the workspace may set its Slack bot's repository or " +
+    "channels, or disconnect it.",
+  NOT_REACHABLE:
+    "Not made: the GitHub installation connected to the workspace reaches no repository of " +
+    "that name.",
+  GITHUB_UNANSWERED: "Not made: GitHub could not be reached just now. The call may be made again.",
+  TOO_MANY_PINS: `Not made: the member already holds ${REPOSITORY_PIN_BOUNDS.MAX_PINS} pins, the most there may be; unpin one first.`,
+  UNAVAILABLE:
+    "Not made: Slack, or this deployment's Slack bot, could not be reached just now. The call " +
+    "may be made again.",
+} as const;
+
+/** A refusal of the Slack bot's or the pins' operations, in the agent's words. */
+function settingsRefusalWords(refusal: HostedRefusal): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return SETTINGS_REFUSAL.NO_BOT;
+    case HOSTED_API_ERROR.NOT_PERMITTED:
+      return SETTINGS_REFUSAL.NOT_PERMITTED;
+    case HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE:
+      return SETTINGS_REFUSAL.NOT_REACHABLE;
+    case HOSTED_API_ERROR.GITHUB_UNANSWERED:
+      return SETTINGS_REFUSAL.GITHUB_UNANSWERED;
+    case HOSTED_API_ERROR.INVALID_REQUEST:
+      return SETTINGS_REFUSAL.TOO_MANY_PINS;
+    default:
+      return SETTINGS_REFUSAL.UNAVAILABLE;
+  }
+}
+
+/** The bot as an agent reads it: the wire's answer bar the transaction a desktop waits for. */
+function slackBotRecord({ txid: _txid, ...slackBot }: WorkspaceSlackBot): WireRecord {
+  return slackBot;
+}
+
+/** A call as the member about the workspace its slug names or their only one, as a list is; refused, naming theirs, where that names none. */
+const asMemberIn = <R>(
+  slug: string | undefined,
+  work: (userId: string, workspaceId: string) => Effect.Effect<WireRecord, never, R>,
+) =>
+  Effect.gen(function* () {
+    const member = yield* AdmittedMember;
+    const workspace = yield* listedWorkspace(member.userId, slug);
+    if (Result.isFailure(workspace)) return agentToolRejected(workspace.failure);
+    return yield* work(member.userId, workspace.success);
+  });
+
+/** The workspace a Slack bot call is about, by its slug, where the member has more than one. */
+const SLACK_WORKSPACE_INPUT = Schema.optionalKey(
+  describeWire(
+    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
+    `The workspace whose Slack bot it is, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} ` +
+      "answered; leave it out where the member belongs to one workspace alone.",
+  ),
+);
+
+/** A repository named for Slack starts, as GitHub spells it, or null to clear it. */
+const slackRepositoryInput = (words: string) =>
+  Schema.optionalKey(
+    describeWire(
+      Schema.NullOr(githubRepositoryFullNameSchema),
+      `${words}, as owner/name, one the workspace's GitHub reaches; null clears it.`,
+    ),
+  );
+
+const ReadSlackBotInputSchema = Schema.Struct({ workspace: SLACK_WORKSPACE_INPUT });
+
+const READ_SLACK_BOT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.READ_SLACK_BOT,
+  description:
+    "Read the workspace's own Slack bot as its Settings show it: whether this deployment holds " +
+    "the bot (configured), the Slack team it is connected to (absent while it is not), whether " +
+    "it writes the member the threads that wait on them (notifications), the repository an " +
+    "agent started from Slack works in where its message names none (defaultRepository), and, " +
+    "to an owner or admin, the team's channels, each with its id, name, whether it is private, " +
+    "whether the bot is in it, and its own default repository where one is named. " +
+    `${WORKSPACE_WORDS} ${MEMBER_MCP_TOOL.UPDATE_SLACK_BOT} sets them.`,
+  input: ReadSlackBotInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace }) =>
+    asMemberIn(workspace, (userId, workspaceId) =>
+      readSlackBot(userId, workspaceId).pipe(
+        Effect.map(slackBotRecord),
+        Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
+      ),
+    ),
+});
+
+/** A change of the bot names the workspace and, each optional, the member's switch, the workspace's repository, and one channel. */
+const UpdateSlackBotInputSchema = Schema.Struct({
+  workspace: SLACK_WORKSPACE_INPUT,
+  notifications: Schema.optionalKey(
+    describeWire(
+      Schema.Boolean,
+      "Whether the bot writes the member, in Slack, the threads that wait on them; the member's " +
+        "own switch, which holds in every workspace.",
+    ),
+  ),
+  defaultRepository: slackRepositoryInput(
+    "The repository an agent started from Slack works in where its message names none",
+  ),
+  channel: Schema.optionalKey(
+    describeWire(
+      Schema.Struct({
+        channelId: describeWire(
+          workspaceSlackBotChannelRequestSchema.fields.channelId,
+          `The channel, by the id ${MEMBER_MCP_TOOL.READ_SLACK_BOT} lists it by.`,
+        ),
+        member: Schema.optionalKey(
+          describeWire(
+            Schema.Boolean,
+            "true to put the bot in the channel, a public one alone; false to take it out, " +
+              "which forgets the channel's repository.",
+          ),
+        ),
+        repository: slackRepositoryInput(
+          "The repository an agent started from this channel works in where its message names none",
+        ),
+      }),
+      "One channel of the team to change.",
+    ),
+  ),
+});
+
+const UPDATE_SLACK_BOT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.UPDATE_SLACK_BOT,
+  description:
+    "Set the workspace's own Slack bot as its Settings do, each change optional and made in " +
+    "this order: the member's own notifications from it (any member), the workspace's default " +
+    "repository for Slack starts, and one channel, putting the bot in a public channel or " +
+    "taking it out and naming or clearing its default repository (an owner or admin alone, and " +
+    "only once the bot is connected). Connecting and disconnecting the bot is not done here. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the bot as it then stands, as ` +
+    `${MEMBER_MCP_TOOL.READ_SLACK_BOT} reads it, or \`rejected\` and why, the changes before ` +
+    "the refused one standing.",
+  input: UpdateSlackBotInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ workspace, notifications, defaultRepository, channel }) =>
+    asMemberIn(workspace, (userId, workspaceId) =>
+      Effect.gen(function* () {
+        let slackBot = yield* readSlackBot(userId, workspaceId);
+        if (notifications !== undefined) {
+          slackBot = yield* setSlackNotifications(userId, workspaceId, notifications);
+        }
+        if (defaultRepository !== undefined) {
+          slackBot = yield* setSlackDefaultRepository(userId, workspaceId, defaultRepository);
+        }
+        if (channel !== undefined) {
+          slackBot = yield* changeSlackChannel(userId, workspaceId, channel);
+        }
+        return { status: ACTION_RESULT_STATUS.ACCEPTED, slackBot: slackBotRecord(slackBot) };
+      }).pipe(
+        Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
+      ),
+    ),
+});
+
+const DISCONNECT_SLACK_BOT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.DISCONNECT_SLACK_BOT,
+  description:
+    "Disconnect the workspace's own Slack bot, as its Disconnect in Settings does: the bot " +
+    "starts no agent from Slack and writes no member of the workspace from then on, and every " +
+    "member's Slack id it kept is forgotten, with its default repositories, though the bot " +
+    "stays installed in the Slack team until its admins remove it there. Connecting it again " +
+    "is done in the app. Only an owner or an admin of the workspace may; disconnecting one not " +
+    `connected changes nothing. ${WORKSPACE_WORDS} Answers \`accepted\` with the bot as it ` +
+    `then stands, as ${MEMBER_MCP_TOOL.READ_SLACK_BOT} reads it, or \`rejected\` and why.`,
+  input: ReadSlackBotInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ workspace }) =>
+    asMemberIn(workspace, (userId, workspaceId) =>
+      disconnectSlackBot(userId, workspaceId).pipe(
+        Effect.map((slackBot) => ({
+          status: ACTION_RESULT_STATUS.ACCEPTED,
+          slackBot: slackBotRecord(slackBot),
+        })),
+        Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
+      ),
+    ),
+});
+
+/** The pins as an agent reads them: the wire's answer bar the transaction a desktop waits for. */
+function pinsRecord({ pins }: { readonly pins: readonly RepositoryPin[] }): WireRecord {
+  return { pins: pins.map(({ repository, pinnedAt }) => ({ repository, pinnedAt })) };
+}
+
+const LIST_REPOSITORY_PINS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_REPOSITORY_PINS,
+  description:
+    "List the repositories the member pinned in their sidebar, which groups their tasks by " +
+    "repository, newest pinned first: each as owner/name with when it was pinned, in " +
+    "milliseconds since the epoch. The pins are the member's own, in every workspace.",
+  input: NoInputSchema,
+  annotations: READ_ONLY,
+  run: () =>
+    Effect.gen(function* () {
+      const member = yield* AdmittedMember;
+      return yield* readRepositoryPins(member.userId).pipe(
+        Effect.map(pinsRecord),
+        Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
+      );
+    }),
+});
+
+/** A pin names the repository and whether it is pinned, as the sidebar's own request does. */
+const PinRepositoryInputSchema = Schema.Struct({
+  repository: describeWire(
+    repositoryPinRequestSchema.fields.repository,
+    "The repository, as owner/name.",
+  ),
+  pinned: describeWire(
+    repositoryPinRequestSchema.fields.pinned,
+    "true to pin it, false to unpin it.",
+  ),
+});
+
+const PIN_REPOSITORY_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.PIN_REPOSITORY,
+  description:
+    "Pin a repository in the member's sidebar, or unpin it, as their sidebar's Pin does: a " +
+    "pin names the repository alone and asks GitHub nothing, and pinning one already pinned, " +
+    `or unpinning one that is not, changes nothing. At most ${REPOSITORY_PIN_BOUNDS.MAX_PINS} ` +
+    "stand at once. Answers `accepted` with the pins as they then stand, as " +
+    `${MEMBER_MCP_TOOL.LIST_REPOSITORY_PINS} lists them, or \`rejected\` and why.`,
+  input: PinRepositoryInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ repository, pinned }) =>
+    Effect.gen(function* () {
+      const member = yield* AdmittedMember;
+      return yield* pinRepository(member.userId, repository, pinned).pipe(
+        Effect.map((pins) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...pinsRecord(pins) })),
+        Effect.catch((refusal) => Effect.succeed(agentToolRejected(settingsRefusalWords(refusal)))),
+      );
+    }),
+});
+
 /** Every tool the server offers, listed in the order an agent reads them. */
 /**
  * The workspace experiments on in one of the member's workspaces at least,
@@ -2200,4 +2470,9 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_UPDATE_AUTOMATION_TOOL,
   MEMBER_RUN_AUTOMATION_TOOL,
   MEMBER_DELETE_AUTOMATION_TOOL,
+  READ_SLACK_BOT_TOOL,
+  UPDATE_SLACK_BOT_TOOL,
+  DISCONNECT_SLACK_BOT_TOOL,
+  LIST_REPOSITORY_PINS_TOOL,
+  PIN_REPOSITORY_TOOL,
 ];

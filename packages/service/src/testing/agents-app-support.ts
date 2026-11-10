@@ -90,6 +90,7 @@ import { hostedFetch } from "../orpc/handler.js";
 import { PageLinks } from "../pages/page-links.js";
 import { modelCatalogOf, type OfferedModel } from "../providers/model-catalog.js";
 import type { WebServices } from "../runtime.js";
+import { SlackBot, slackBotOver } from "../slack/slack-bot.js";
 import { tasksProcedures } from "../tasks/tasks-procedures.js";
 import { AGENT_KEY_RING, connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
@@ -439,6 +440,7 @@ export const standing = (
       integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
       Layer.succeed(SentryApp, sentryAppService(undefined, [])),
       Layer.succeed(PageLinks, { sandbox: undefined }),
+      Layer.succeed(SlackBot, slackBotOver(undefined)),
       ANALYTICS.layer,
     );
     // Every account behind a bearer is signed in on a browser of its own too, whose cookie names it.
