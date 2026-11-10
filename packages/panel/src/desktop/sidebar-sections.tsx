@@ -97,7 +97,7 @@ import { useRowDrag, useRunRowDrag } from "./use-row-drag.js";
  * fold is, with Rename and Change icon, which turn its head into its editor
  * in place (`GroupHeaderEditor`), the icon well in the glyph's cell and the
  * name where the title stood, and Delete section on its ⋯ and a right-click;
- * New section in the scope switcher's menu names a new one the same way, at the foot of
+ * New section on the Tasks head names a new one the same way, at the foot of
  * the sections; and between them, while it holds rows, what acts
  * on all of them at once: Mark all as read while any task is unread, Status,
  * which sets its tasks all at one and asks nothing, as a repository's does,
@@ -133,7 +133,7 @@ const SECTION_DELETED = "Section deleted";
 /** What opens a section's head with its icon's picker open, on its menu: Change icon where it wears one, Add icon where it wears none. */
 const ICON_ACT = { CHANGE: "Change icon", ADD: "Add icon" } as const;
 
-/** What makes a section, as the scope switcher's menu and every Move to section name it. */
+/** What makes a section, as the Tasks head's button and every Move to section name it. */
 export const NEW_SECTION = "New section";
 
 /** What the dialog was opened to do: make a section in a workspace, perhaps with more written with it, and the words saying what moves into it. */
@@ -661,8 +661,6 @@ interface SectionContext {
   readonly edits: SectionEdits;
   /** Whether a row is the open one, the open task's or the agent's whose page stands, which a fold leaves standing. */
   readonly current: (row: TaskRow) => boolean;
-  /** Whether a row stands under its section's fold: the open one, or one a thread of which waits on the reader (`needsYouOf`). */
-  readonly standsFolded: (row: TaskRow) => boolean;
   /** Whether a task is unread, as its row's weight says. */
   readonly unread: (task: TaskSummary) => boolean;
   /** Whether the sidebar is in sight, which the menus close without. */
@@ -843,7 +841,7 @@ function SidebarSection({
   const { section } = drawn;
   const { tasks } = context;
   const folded = context.folded(section.id);
-  const standing = drawn.rows.filter(context.standsFolded);
+  const standing = drawn.rows.filter(context.current);
   const menu = useMenu(tasks.shown && context.inSight);
   const ellipsis = useRef<HTMLButtonElement | null>(null);
   const reads = useReadMarks();
