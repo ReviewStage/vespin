@@ -37,6 +37,7 @@ import {
 import { DEVICE_LAUNCH_UNSTARTED } from "@repo/features/device-agent-wire";
 import { FAILURE_REASON, type FailureReason, remedyLabel } from "@repo/features/failure-remedy";
 import { threadLineWords } from "@repo/features/inbox-wire";
+import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
@@ -136,7 +137,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { ActorLine, ActorRef, AutomationCard, automationActor } from "../actor-ref.js";
+import {
+  ActorLine,
+  ActorRef,
+  AutomationCard,
+  automationActor,
+  namedAutomationActor,
+} from "../actor-ref.js";
 import {
   Conversation,
   ConversationContent,
@@ -440,12 +447,6 @@ const WEBHOOK_BODY_LABEL = "Webhook body";
 
 /** What the header of a webhook body's card names it: the body is whatever the caller sent, so it is named for what it is rather than a language. */
 const WEBHOOK_BODY_KIND = "body";
-
-/** What an automation's sender line says beside its name once it is deleted. */
-const DELETED_WORDS = "(deleted)";
-
-/** What an automation's sender line names it where no name was kept, as an agent started before it was is. */
-const AUTOMATION_WORDS = "Automation";
 
 /**
  * What a transcript opens on where something handed it its first message:
@@ -1344,14 +1345,36 @@ function OriginSubject({
   );
 }
 
+/** What an integration's issue is called where its event gave no title: "Sentry issue". */
+function issueWords(issue: NonNullable<AgentOrigin["issue"]>): string {
+  return issue.title ?? `${INTEGRATION_NAME[issue.provider]} issue`;
+}
+
+/**
+ * The issue an automation's integration event was about, a Sentry issue, by
+ * its title: a link opening it where the event gave its address, as the
+ * GitHub subject's is, and its words alone where the event gave none.
+ */
+function OriginIssue({ issue }: { issue: NonNullable<AgentOrigin["issue"]> }): React.JSX.Element {
+  const words = issueWords(issue);
+  if (issue.url === undefined)
+    return (
+      <OneLine className="agent-origin-subject" words={words}>
+        {words}
+      </OneLine>
+    );
+  return <ChipOrLink href={issue.url} words={words} frame={CHIP_OR_LINK_FRAME.SUBJECT} />;
+}
+
 /**
  * Who sent an automation's agent its prompt: the automation, hanging its
  * card and opening its page where the window can open it, and named plainly
  * where it cannot, deleted, someone else's personal one, or the Automations
- * experiment off; then the issue or pull request its GitHub event named,
- * and who asked for a run now. A webhook's body is the card's, never this
- * line's. Each part after the first is a line of its own, separator and
- * all, so a narrow line breaks between the parts (desktop.css).
+ * experiment off; then the issue or pull request its GitHub event named, or
+ * the issue its integration's event was about, and who asked for a run now.
+ * A webhook's body is the card's, never this line's. Each part after the
+ * first is a line of its own, separator and all, so a narrow line breaks
+ * between the parts (desktop.css).
  */
 function AutomationSender({
   automationId,
@@ -1367,15 +1390,11 @@ function AutomationSender({
 }): React.JSX.Element {
   const known = useAutomation(automationId);
   const runner = usePerson(run?.runBy);
-  const plain =
-    automationId === undefined && name !== undefined
-      ? `${name} ${DELETED_WORDS}`
-      : (name ?? AUTOMATION_WORDS);
   const subject = run?.subject;
   return (
     <ActorLine>
       {known === undefined ? (
-        <ActorRef actor={{ kind: ACTOR_KIND.AUTOMATION, name: plain, state: ACTOR_STATE.REST }} />
+        <ActorRef actor={namedAutomationActor(automationId, name)} />
       ) : (
         <ActorRef
           actor={automationActor(known.automation)}
@@ -1389,6 +1408,12 @@ function AutomationSender({
         <ActorLine>
           {" · "}
           <OriginSubject subject={subject} openGitHub={openGitHub} />
+        </ActorLine>
+      )}
+      {run?.issue === undefined ? null : (
+        <ActorLine>
+          {" · "}
+          <OriginIssue issue={run.issue} />
         </ActorLine>
       )}
       {run?.runBy === undefined ? null : (
