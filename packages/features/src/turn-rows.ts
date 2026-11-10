@@ -110,6 +110,10 @@ export const CALL_KIND = {
   OPEN_PULL_REQUEST: "open-pull-request",
   /** A pause a coding agent took (`sleep`) before it checked again on what takes time, its row naming how long. */
   SLEEP: "sleep",
+  /** A wakeup a coding agent booked for later (`schedule_wakeup`), its row naming how long until it fires. */
+  SCHEDULE_WAKEUP: "schedule-wakeup",
+  /** The wakeup a coding agent booked canceled (`schedule_wakeup` with `stop`). */
+  CANCEL_WAKEUP: "cancel-wakeup",
   /** The workspace's tasks listed (`list_tasks`). */
   LIST_TASKS: "list-tasks",
   /** A fact kept in the workspace's shared memory (`save_memory`, or `remember` in an older transcript), its row saying it. */
@@ -190,6 +194,8 @@ export const CALL_WORDS = {
   [CALL_KIND.SHOW_IMAGE]: { verb: "Showed", code: true },
   [CALL_KIND.OPEN_PULL_REQUEST]: { verb: "Opened pull request", code: false },
   [CALL_KIND.SLEEP]: { verb: "Waited", code: false },
+  [CALL_KIND.SCHEDULE_WAKEUP]: { verb: "Set a wakeup in", code: false },
+  [CALL_KIND.CANCEL_WAKEUP]: { verb: "Canceled the wakeup", code: false },
   [CALL_KIND.LIST_TASKS]: { verb: "Listed the tasks", code: false },
   [CALL_KIND.REMEMBER]: { verb: "Saved to memory:", code: false },
   [CALL_KIND.RECALL]: { verb: "Searched memory", code: false },

@@ -110,7 +110,7 @@ const nativeCoderInstructions = (
           Effect.orElseSucceed(() => agent.organizationId),
         ),
         agentTaskNumber(userId, agent),
-        standingOfAgent(Option.some(agent)),
+        standingOfAgent(Option.some(agent), harness),
         hasRepository(agent)
           ? agentExtraCheckouts(userId, agent)
           : Effect.succeed<readonly ExtraCheckout[]>([]),

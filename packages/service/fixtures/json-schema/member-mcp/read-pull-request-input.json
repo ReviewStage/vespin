@@ -1,0 +1,47 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 140,
+      "description": "The pull request's repository, as owner/name, one the workspace's GitHub installation reaches."
+    },
+    "number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The pull request's number."
+    },
+    "part": {
+      "type": "string",
+      "enum": [
+        "overview",
+        "checks",
+        "conversation",
+        "changes"
+      ],
+      "description": "What to read: overview (the default), checks, conversation, or changes."
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "description": "With changes, one file by its path as files names it, to read its patch as well."
+    },
+    "offset": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "With conversation or changes, the nextOffset an earlier read answered, to read the next page; leave it out for the first."
+    }
+  },
+  "required": [
+    "repository",
+    "number"
+  ],
+  "additionalProperties": false
+}
