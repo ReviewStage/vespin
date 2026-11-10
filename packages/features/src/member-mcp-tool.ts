@@ -101,6 +101,7 @@ export const MEMBER_MCP_TOOL = {
   RENAME_INTEGRATION: "rename_integration",
   DISCONNECT_INTEGRATION: "disconnect_integration",
   LIST_MCP_CLIENTS: "list_mcp_clients",
+  REVOKE_MCP_CLIENT: "revoke_mcp_client",
   LIST_SENTRY_INSTALLATIONS: "list_sentry_installations",
   DISCONNECT_SENTRY: "disconnect_sentry",
 } as const;

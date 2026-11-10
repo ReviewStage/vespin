@@ -95,6 +95,7 @@ import { type Agent, hasRepository, type WithRepository } from "@repo/database/m
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
+import { sandboxVcpus } from "@repo/features/sandbox-size";
 import {
   type ListedSandbox,
   type OpenedSandbox,
@@ -144,7 +145,7 @@ import {
   readBaseDrive,
 } from "../base-drive.js";
 import { AgentImage } from "../coder-host/agent-image.js";
-import { CODER, sandboxVcpus } from "../coder-host/bounds.js";
+import { CODER } from "../coder-host/bounds.js";
 import {
   type AgentExtraRead,
   type AgentRepositoryRead,

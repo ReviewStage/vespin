@@ -761,6 +761,7 @@ it.layer(getTestDB())("the coding-agent store's archive of an agent left as it w
         const starter = yield* openAccount;
         const workspace = yield* openWorkspace(starter);
         const { agentId, conversationId } = yield* workspaceAgent(starter, workspace);
+        const byApp = { by: AGENT_ARCHIVER.APP, userId: starter, reason: "Run finished" } as const;
         const db = yield* Database;
         const [read] = yield* db
           .select({ seq: conversations.nextMessageSeq })
@@ -773,7 +774,7 @@ it.layer(getTestDB())("the coding-agent store's archive of an agent left as it w
           .set({ nextMessageSeq: read.seq + 1 })
           .where(eq(conversations.id, conversationId));
 
-        const stale = yield* archiveUnmovedAgent(starter, agentId, read.seq);
+        const stale = yield* archiveUnmovedAgent(starter, agentId, read.seq, byApp);
         // Its pull request reopened after the read, which moves no line of its conversation.
         const pullRequest = (state: PullRequestState) =>
           recordAgentPullRequests(starter, agentId, [
@@ -793,23 +794,25 @@ it.layer(getTestDB())("the coding-agent store's archive of an agent left as it w
             },
           ]);
         yield* pullRequest(PULL_REQUEST_STATE.OPEN);
-        const reopened = yield* archiveUnmovedAgent(starter, agentId, read.seq + 1);
+        const reopened = yield* archiveUnmovedAgent(starter, agentId, read.seq + 1, byApp);
         yield* pullRequest(PULL_REQUEST_STATE.MERGED);
         // A question it posted after the read, which moves no line of its conversation either.
         const asked = yield* openInboxItem(starter, workspace, null, agentId, true);
-        const waiting = yield* archiveUnmovedAgent(starter, agentId, read.seq + 1);
+        const waiting = yield* archiveUnmovedAgent(starter, agentId, read.seq + 1, byApp);
         yield* db
           .update(inboxItem)
           .set({ status: INBOX_STATUS.CLOSED })
           .where(eq(inboxItem.id, asked));
-        const current = yield* archiveUnmovedAgent(starter, agentId, read.seq + 1);
-        const again = yield* archiveUnmovedAgent(starter, agentId, read.seq + 1);
+        const current = yield* archiveUnmovedAgent(starter, agentId, read.seq + 1, byApp);
+        const again = yield* archiveUnmovedAgent(starter, agentId, read.seq + 1, byApp);
 
         assert.deepEqual(
           [stale, reopened, waiting, current, again],
           [false, false, false, true, false],
         );
-        assert.ok(Option.getOrThrow(yield* readAgent(starter, agentId)).archivedAt !== null);
+        const archived = Option.getOrThrow(yield* readAgent(starter, agentId));
+        assert.ok(archived.archivedAt !== null);
+        assert.deepEqual(archived.archivedBy, byApp);
       }),
   );
 });

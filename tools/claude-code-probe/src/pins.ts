@@ -25,7 +25,7 @@ export const PROBE_SANDBOX = {
   CHECKOUT: "/workspace/repository",
   /** Long enough for the image, three launches, and a stop and resume between them. */
   TIMEOUT_MS: 60 * 60 * 1_000,
-  /** The size this repository's own coding agents run at (`CODER.SANDBOX_VCPUS_BY_REPOSITORY`). */
+  /** The size this repository's own coding agents run at (`@repo/features/sandbox-size`'s `SANDBOX_SIZE.VCPUS_BY_REPOSITORY`). */
   VCPUS: 4,
 } as const;
 

@@ -151,6 +151,7 @@ import {
   TOOL_PART_STATE,
 } from "@repo/wire/ui-messages";
 import { Clock, Effect, Option, Result, Schema } from "effect";
+import { AUTOMATIC_ARCHIVE_REASON } from "../agents/agent-change.js";
 import { calledId } from "../agents/called-id.js";
 import {
   productionSummaryModel,
@@ -1029,6 +1030,7 @@ const archivedWhenFinished = (agent: Agent) =>
         },
       ],
       now,
+      AUTOMATIC_ARCHIVE_REASON.SLACK_FINISHED,
     );
   }).pipe(
     Effect.catchCause((cause) =>

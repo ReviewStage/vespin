@@ -131,7 +131,7 @@ export function settleTaskIfFinished(
 /**
  * What a coding agent's turn ending asks of its task: moved to done where
  * the turn finished its work, and else, where a member or another agent
- * moved the task to Done while the agent worked, the agent archived with it
+ * moved the task to Done or Canceled while the agent worked, the agent archived with it
  * as them and let go of; each failure logged.
  */
 export function settleTaskAfterTurn(

@@ -33,6 +33,7 @@ import {
 } from "./live-read.js";
 import { LIVE_USER_QUERY } from "./live-wire.js";
 import { readMarkOf } from "./read-mark.js";
+import { sandboxVcpus } from "./sandbox-size.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { countedNumber } from "./service-wire.js";
 import { agentMarkedPullRequest, standingFailures } from "./task-agents-model.js";
@@ -512,7 +513,9 @@ function agentSummaryOf(
       : undefined),
     ...(runtime === undefined ? undefined : { runtime }),
     title: row.title,
-    ...(row.machine === AGENT_MACHINE.DEVICE ? { machine: AGENT_MACHINE.DEVICE } : undefined),
+    ...(row.machine === AGENT_MACHINE.DEVICE
+      ? { machine: AGENT_MACHINE.DEVICE }
+      : { sandboxVcpus: sandboxVcpus(row.repository) }),
     ...(mac === undefined ? undefined : { mac }),
     createdAt: row.createdAt,
     status,
