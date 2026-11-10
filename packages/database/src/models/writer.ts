@@ -105,9 +105,11 @@ import {
   holdQueuedTurns,
   holdTurn,
   queueTurn,
+  recordTurnSnapshot,
   requeueUntaken,
   startTurn,
   stopTurn,
+  type TurnCheckoutSnapshot,
 } from "./turn-state.js";
 
 /**
@@ -481,9 +483,14 @@ type LostLinesResent = Result.Result<
  * client id of the row it was written under, which the runner was handed
  * with the line.
  */
+/** The line a turn took, by its words or its client id, with the checkout as the runner recorded it before the turn where the line opened one (`turn-state.ts`'s `TurnCheckoutSnapshot`). */
 type AwaitingLineTake =
   | { readonly text: string; readonly turnId: string }
-  | { readonly clientId: string; readonly turnId: string };
+  | {
+      readonly clientId: string;
+      readonly turnId: string;
+      readonly snapshot?: TurnCheckoutSnapshot | undefined;
+    };
 
 /**
  * The longest the hand-over to the runtime inside an awaiting line's write may
@@ -2583,6 +2590,10 @@ const takeAwaitingLine = /* @__PURE__ */ Effect.fnUntraced(function* (
   take: AwaitingLineTake,
 ): Effect.fn.Return<AwaitingLineTaken, StoreFailure, DatabaseServices> {
   if (Option.isNone(yield* turnRow(context, take.turnId))) return Result.fail(NO_TURN);
+  // The checkout the runner recorded before the turn is the turn's, whichever lines it took.
+  if ("snapshot" in take && take.snapshot !== undefined) {
+    yield* recordTurnSnapshot(context.target, take.turnId, take.snapshot);
+  }
   const awaiting = yield* findAwaitingLines({ conversationId: context.target.conversationId });
   const runAmong = (lines: typeof awaiting) =>
     "clientId" in take

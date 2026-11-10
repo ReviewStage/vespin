@@ -96,6 +96,19 @@ const TurnStatusSchema = Schema.Literals(Object.values(TURN_STATUS));
 
 const IdSchema = Schema.Struct({ id: Schema.String });
 
+/** The agent's checkout as it stood before a turn, as its runner recorded it (`turns.snapshot_*`). */
+export interface TurnCheckoutSnapshot {
+  readonly commit: string;
+  readonly head: string | null;
+  readonly branch: string | null;
+}
+
+const TurnCheckoutSnapshotSchema = Schema.Struct({
+  commit: Schema.String,
+  head: Schema.NullOr(Schema.String),
+  branch: Schema.NullOr(Schema.String),
+});
+
 /**
  * That a turn still open stands lapsed at the instant given: past the
  * deadline of the state it stands in, or past its cap from its start.
@@ -297,6 +310,25 @@ const pushDeadlines = SqlSchema.findAll({
           ),
         )
         .returning({ id: turns.id }),
+    ),
+});
+
+const writeSnapshot = SqlSchema.void({
+  Request: Schema.Struct({
+    turnId: Schema.String,
+    conversationId: Schema.String,
+    snapshot: TurnCheckoutSnapshotSchema,
+  }),
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set({
+          snapshotCommit: row.snapshot.commit,
+          snapshotHead: row.snapshot.head,
+          snapshotBranch: row.snapshot.branch,
+        })
+        .where(and(eq(turns.id, row.turnId), eq(turns.conversationId, row.conversationId))),
     ),
 });
 
@@ -963,6 +995,19 @@ export function dropAwaitingNothing(
       }),
     { discard: true },
   );
+}
+
+/**
+ * Records on the turn the checkout as it stood before it, as the runner
+ * reported it with the turn's first line; a later report of the same turn
+ * writes over it, as a line resent to a fresh launch is recorded afresh.
+ */
+export function recordTurnSnapshot(
+  target: TurnTarget,
+  turnId: string,
+  snapshot: TurnCheckoutSnapshot,
+): TurnStateEffect<void> {
+  return writeSnapshot({ turnId, conversationId: target.conversationId, snapshot });
 }
 
 /**

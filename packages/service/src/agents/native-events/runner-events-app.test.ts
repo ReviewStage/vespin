@@ -760,6 +760,39 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
+    "the checkout an ACCEPTED carries, as the runner recorded it before the turn, lands on the turn's row, its branch and HEAD absent where the runner named none",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const commit = "0123456789abcdef0123456789abcdef01234567";
+        const events = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId, snapshot: { commit } },
+          {
+            type: "system",
+            subtype: "init",
+            parent_tool_use_id: null,
+            session_id: SESSION,
+            uuid: randomUUID(),
+          },
+        ].map((message, sequence) => ({ sequence, message }) as RunnerEvent);
+
+        yield* post(agent.bearer, events);
+        const [row] = yield* Effect.flatMap(Database, (db) =>
+          db
+            .select({
+              commit: turns.snapshotCommit,
+              head: turns.snapshotHead,
+              branch: turns.snapshotBranch,
+            })
+            .from(turns)
+            .where(eq(turns.conversationId, agent.target.conversationId)),
+        );
+        assert.deepEqual(row, { commit, head: null, branch: null });
+      }),
+  );
+
+  it.effect(
     "a warm launch's IDLE settles its turn as a turn's end does and is told once, its heartbeats touch no sandbox, and the END that retires it later settles nothing more",
     () =>
       Effect.gen(function* () {
