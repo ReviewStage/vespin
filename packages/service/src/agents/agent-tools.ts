@@ -1348,7 +1348,7 @@ const UPDATE_AGENT_INPUT = Schema.Struct({
       Schema.Boolean,
       "true to archive it, as the developer's Archive agent would: it leaves the sidebar, its " +
         "task's tabs, and every list but the archived ones, takes no message, and is not woken, " +
-        "its transcript, branch, and pull request kept; a turn still running is stopped first, " +
+        "its transcript, branch, and pull request kept; refused while it is still working, " +
         "and never yourself. false to bring an archived one back.",
     ),
   ),
