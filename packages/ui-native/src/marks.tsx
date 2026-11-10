@@ -1,6 +1,14 @@
-// marks.tsx -- the small marks a row leads or ends with: the unread dot, a task's status, a person's avatar, an agent's tile, the needs-you, working, and failed marks, and a glyph in its tone.
+// marks.tsx -- the small marks a row leads or ends with: the unread dot, a task's status, a person's avatar or photo, an agent's tile, the needs-you, working, and failed marks, and a glyph in its tone.
 
-import { Circle, Image, ProgressView, RoundedRectangle, Text, ZStack } from "@expo/ui/swift-ui";
+import {
+  Circle,
+  Image,
+  ProgressView,
+  RNHostView,
+  RoundedRectangle,
+  Text,
+  ZStack,
+} from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
   accessibilityLabel,
@@ -11,9 +19,12 @@ import {
   opacity,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { accountPictureAt, pinnedPictureUrl } from "@repo/features/account-picture";
 import { NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
+import { useState } from "react";
+import { Image as Photo, PixelRatio, View } from "react-native";
 import { type Glyph, isLucideSymbol } from "./glyph.js";
 import { monogramOf } from "./monogram.js";
 import { STATUS_MARK_LOOK } from "./status-mark-model.js";
@@ -106,9 +117,53 @@ type AvatarProps = {
   readonly size?: number | undefined;
 };
 
-/** A person's letters on the brand's avatar tile, as GitHub shows the product's own. */
-export function Avatar({ name, size = MARK_SIZE.AVATAR }: AvatarProps) {
+/**
+ * A photo clipped to the avatar's circle, in a React Native view SwiftUI
+ * hosts at the avatar's size, as a thread's pictures are drawn, since
+ * SwiftUI's own image reads a local file alone. It is never heard, since the
+ * avatar it stands in is heard as the person's name.
+ */
+function AvatarPhoto({
+  address,
+  size,
+  onFail,
+}: {
+  readonly address: string;
+  readonly size: number;
+  readonly onFail: () => void;
+}) {
+  const round = { width: size, height: size, borderRadius: size / 2, overflow: "hidden" } as const;
+  return (
+    <RNHostView>
+      <View
+        style={round}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
+        <Photo source={{ uri: address }} onError={onFail} style={round} />
+      </View>
+    </RNHostView>
+  );
+}
+
+/**
+ * A person's face on the brand's avatar tile: their photo where a picture is
+ * given, from a host `@repo/features/account-picture` lets a picture load
+ * from and asked for at the size it is drawn, and their letters otherwise.
+ * Note that the letters stand under the photo, so they show while it loads
+ * and stay once it fails, which takes the photo away.
+ */
+export function Avatar({
+  name,
+  size = MARK_SIZE.AVATAR,
+  picture,
+}: AvatarProps & {
+  /** The address of the person's photo, such as their sign-in picture; their letters alone where none is given. */
+  readonly picture?: string | undefined;
+}) {
   const colors = useColors();
+  const pinned = pinnedPictureUrl(picture);
+  const [failed, setFailed] = useState<string | undefined>(undefined);
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityLabel(name)]}>
       <Circle modifiers={[foregroundStyle(colors.AVATAR_TILE)]} />
@@ -121,6 +176,13 @@ export function Avatar({ name, size = MARK_SIZE.AVATAR }: AvatarProps) {
       >
         {monogramOf(name)}
       </Text>
+      {pinned === undefined || pinned === failed ? null : (
+        <AvatarPhoto
+          address={accountPictureAt(pinned, size * PixelRatio.get())}
+          size={size}
+          onFail={() => setFailed(pinned)}
+        />
+      )}
     </ZStack>
   );
 }

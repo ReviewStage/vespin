@@ -30,6 +30,10 @@ export const STUB_ACCOUNT = {
   sub: "stub-account",
   email: "ada@example.com",
   name: "Ada Lovelace",
+  // Note that the picture is GitHub's own Octocat, the one address a flow
+  // reaches past the app, so the bar's photo and Settings' are drawn from a
+  // real sign-in picture; where it does not load, the letters stand instead.
+  picture: "https://avatars.githubusercontent.com/u/583231?v=4",
 } as const;
 
 /** The account's workspaces, as the live read's rows name them: its own first, and one it was invited to. */

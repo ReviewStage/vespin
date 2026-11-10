@@ -61,6 +61,7 @@ import { openURL } from "expo-linking";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
+import { SettingsBarButton, useSettingsAccount } from "../settings-button.js";
 import {
   type TaskOverview,
   type TasksListing,
@@ -586,8 +587,9 @@ function useTasksScreen() {
   return { search, setSearch, listing };
 }
 
-// A compact window: the tree under the Stack's inline title, its search a
-// round glass button in the bar, each row pushing its task as the Stack's
+// A compact window: the tree under the Stack's inline title, the account's
+// photo opening Settings at the bar's leading edge and its search a round
+// glass button at its trailing one, each row pushing its task as the Stack's
 // next screen.
 function TasksStackList() {
   const router = useRouter();
@@ -603,6 +605,7 @@ function TasksStackList() {
           onCancelButtonPress={() => setSearch("")}
         />
       </Stack.Screen>
+      <SettingsBarButton />
       <Screen>
         <TasksTree
           listing={listing}
@@ -626,6 +629,7 @@ function TasksSplitScreen() {
   const [picked, setPicked] = useState<string>(MY_TASKS_GROUP);
   const { search, setSearch, listing } = useTasksScreen();
   const overview = useTaskOverview(selected);
+  const account = useSettingsAccount();
   const tree = (
     <TasksTree
       listing={listing}
@@ -658,6 +662,7 @@ function TasksSplitScreen() {
               ? undefined
               : { path: taskPath(overview.task, overview.workspace), status: overview.task.status }
           }
+          sidebarAccount={account}
           sidebarSearch={{ placeholder: SEARCH_TASKS, onChange: setSearch }}
         />
       </Screen>

@@ -1,4 +1,4 @@
-// split-view.tsx -- a regular window's list and detail side by side, as SwiftUI's own NavigationSplitView, the sidebar's bar holding its acts, its menu, and its search, and the detail's its path and menu.
+// split-view.tsx -- a regular window's list and detail side by side, as SwiftUI's own NavigationSplitView, the sidebar's bar holding the account's photo, its acts, its menu, and its search, and the detail's its path and menu.
 
 import {
   Divider,
@@ -14,6 +14,7 @@ import {
 import { navigationSplitViewStyle, searchable } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { type ReactNode, useState } from "react";
+import { AccountBarItem, type BarAccount } from "./account-button.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { PathTitle } from "./thread-page.js";
 
@@ -56,6 +57,8 @@ export type BarSearch = {
 type SplitViewProps = {
   /** The list, drawn as the sidebar column: a `RowList` in its sidebar look. */
   readonly sidebar: ReactNode;
+  /** The account's photo at the leading edge of the sidebar's bar, opening Settings, as a compact window's header stands it. */
+  readonly sidebarAccount?: BarAccount | undefined;
   /** The selected row's page, or an `EmptyState` before one is picked. */
   readonly detail: ReactNode;
   /** An act in the sidebar's bar, by its symbol alone, such as Settings: what a compact window's header holds. */
@@ -110,18 +113,24 @@ export function BarMenuButton({ menu }: { readonly menu: BarMenu }) {
 /** The sidebar's column: its list under the bar's acts and menu, and its search where it has one. */
 function SidebarColumn({
   sidebar,
+  sidebarAccount,
   sidebarAction,
   sidebarMenu,
   sidebarSearch,
 }: Omit<SplitViewProps, "detail" | "content" | "detailMenu" | "detailPath">) {
   const text = useNativeState("");
   const bar =
-    sidebarAction === undefined && sidebarMenu === undefined ? (
+    sidebarAccount === undefined && sidebarAction === undefined && sidebarMenu === undefined ? (
       sidebar
     ) : (
       <Toolbar>
         {sidebar}
         <Toolbar.Content>
+          {sidebarAccount === undefined ? null : (
+            <ToolbarItem placement="topBarLeading">
+              <AccountBarItem {...sidebarAccount} />
+            </ToolbarItem>
+          )}
           {sidebarMenu === undefined ? null : (
             <ToolbarItem placement="topBarTrailing">
               <BarMenuButton menu={sidebarMenu} />

@@ -18,9 +18,10 @@ builds a control of its own.
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
   answer's fields, and `AskNote` for what a send that did not go said),
   `PullRequestCard`, `AuthPage` and `ProviderButton`, `SettingsForm` and its
-  rows, and the marks (`UnreadDot`, `NeedsYouDot`, `WorkingMark`,
-  `FailedMark`, `TaskStatusMark`, `Avatar`, `AgentTile`, and `BrandMark`, the
-  Keel mark the app's asset catalog holds). `GlassBar` is a bar of Liquid
+  rows, `AccountButton`, and the marks (`UnreadDot`, `NeedsYouDot`,
+  `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
+  or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
+  asset catalog holds). `GlassBar` is a bar of Liquid
   Glass through `expo-glass-effect`, `GlassDock` the screen that pins one
   over its foot above the keyboard, and `Composer` the rounded field a
   thread or a transcript ends with, in one, or `ComposerFoot`, the same
@@ -93,7 +94,10 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
-  button is the chevron alone. Nothing draws a copy of glass.
+  button is the chevron alone. The account's photo leads each tab's root bar
+  and opens Settings (`AccountButton`, `SplitView`'s `sidebarAccount`): the
+  system stands it in the same round glass, the photo clipped to a circle
+  inside. Nothing draws a copy of glass.
 - **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
   unread dot in the margin, a 14 pt leading mark in an 18 pt column (the
   status ring, or the ask's glyph on an agent's own thread), the words from

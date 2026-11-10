@@ -40,7 +40,6 @@ import {
 } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
-  type BarAction,
   type BarMenu,
   DOCK_ROOM,
   EmptyState,
@@ -76,6 +75,7 @@ import {
   useThreadMedia,
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
+import { SettingsBarButton, useSettingsAccount } from "../settings-button.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { OpenAskCard, ThreadComposer, threadMenu } from "./inbox-ask.js";
@@ -235,11 +235,10 @@ function scopePills(
   }));
 }
 
-/** The Inbox's ⋯ menu: Mark all as read, and the bar's own act, such as Settings, under it. */
+/** The Inbox's ⋯ menu: Mark all as read. */
 function moreMenu(
   unread: readonly string[],
   markAll: (itemIds: readonly string[]) => void,
-  barAction: BarAction | undefined,
 ): BarMenu {
   return {
     ...MORE,
@@ -251,7 +250,6 @@ function moreMenu(
         disabled: unread.length === 0,
         onPress: () => markAll(unread),
       },
-      ...(barAction === undefined ? [] : [barAction]),
     ],
   };
 }
@@ -429,27 +427,23 @@ function ThreadDetail({
 }
 
 /** What the list screens share: the scope and its pills, the search, the listing under both, and the acts on it. */
-function useInboxScreen(barAction: BarAction | undefined, chosen?: string | undefined) {
+function useInboxScreen(chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
   const [search, setSearch] = useState("");
   const listing = useInboxListing({ show, search, chosen });
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);
-  const menu = moreMenu(listing.unread, acts.markAll, barAction);
+  const menu = moreMenu(listing.unread, acts.markAll);
   return { show, search, setSearch, listing, acts, scopes, menu };
 }
 
-type InboxListScreenProps = {
-  /** The act the list's bar holds beside its menu, such as Settings. */
-  readonly barAction?: BarAction | undefined;
-};
-
 // A compact window: the list under the Stack's inline title and the scope
-// pills, its search and its ⋯ menu as round glass buttons in the bar, each
+// pills, the account's photo opening Settings at the bar's leading edge, and
+// its search and its ⋯ menu as round glass buttons at its trailing one, each
 // row pushing its thread as the Stack's next screen.
-function InboxStackList({ barAction }: InboxListScreenProps) {
+function InboxStackList() {
   const router = useRouter();
-  const { show, search, setSearch, listing, acts, scopes, menu } = useInboxScreen(barAction);
+  const { show, search, setSearch, listing, acts, scopes, menu } = useInboxScreen();
   return (
     <>
       <Stack.Screen options={{ title: INBOX_TITLE }}>
@@ -461,6 +455,7 @@ function InboxStackList({ barAction }: InboxListScreenProps) {
           onCancelButtonPress={() => setSearch("")}
         />
       </Stack.Screen>
+      <SettingsBarButton />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={menu.symbol} accessibilityLabel={menu.label}>
           {menu.actions.map((action) => (
@@ -501,15 +496,14 @@ function InboxStackList({ barAction }: InboxListScreenProps) {
 }
 
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the list
-// under its scope pills as the split view's sidebar, its search and ⋯ menu in
-// the sidebar's bar, and the selected thread beside it. The Stack's header
-// steps aside, since the split view draws each column's navigation bar itself.
-function InboxSplitScreen({ barAction }: InboxListScreenProps) {
+// under its scope pills as the split view's sidebar, the account's photo, its
+// search and ⋯ menu in the sidebar's bar, and the selected thread beside it.
+// The Stack's header steps aside, since the split view draws each column's
+// navigation bar itself.
+function InboxSplitScreen() {
   const [selected, setSelected] = useState<string | undefined>(undefined);
-  const { show, search, setSearch, listing, acts, scopes, menu } = useInboxScreen(
-    barAction,
-    selected,
-  );
+  const { show, search, setSearch, listing, acts, scopes, menu } = useInboxScreen(selected);
+  const account = useSettingsAccount();
   const chosen = listing.listed.find(({ item }) => item.id === selected);
   return (
     <>
@@ -545,6 +539,7 @@ function InboxSplitScreen({ barAction }: InboxListScreenProps) {
               <ThreadDetail key={chosen.item.id} listed={chosen} readerId={listing.readerId} />
             )
           }
+          sidebarAccount={account}
           sidebarMenu={menu}
           sidebarSearch={{ placeholder: SEARCH_INBOX, onChange: setSearch }}
         />
@@ -554,13 +549,9 @@ function InboxSplitScreen({ barAction }: InboxListScreenProps) {
 }
 
 /** The Inbox tab's root screen: its list, laid out by the window's size class. */
-export function InboxListScreen({ barAction }: InboxListScreenProps) {
+export function InboxListScreen() {
   const sizeClass = useWindowSizeClass();
-  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
-    <InboxSplitScreen barAction={barAction} />
-  ) : (
-    <InboxStackList barAction={barAction} />
-  );
+  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? <InboxSplitScreen /> : <InboxStackList />;
 }
 
 /** The Inbox's pushed screen: one thread, named by the route's `id`, its path small in the bar over its heading. */

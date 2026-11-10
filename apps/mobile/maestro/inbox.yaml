@@ -1,4 +1,4 @@
-# inbox.yaml -- the Inbox's list under its scope pills, its ⋯ menu, its search, a row's swipe and long press, and a thread with a picture opened full screen and a video in the system's player.
+# inbox.yaml -- the Inbox's list under its scope pills, the account's photo in its bar, its ⋯ menu, its search, a row's swipe and long press, and a thread with a picture opened full screen and a video in the system's player.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -12,13 +12,14 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
 - assertVisible: "Recorded the invite flow"
+# The account's photo leads the bar, heard as Settings: the fixture's account
+# has no picture, so its letters stand in it.
+- assertVisible: "Settings"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-list
-# The ⋯ menu: Mark all as read, and Settings under it. A tap off the menu
-# closes it.
+# The ⋯ menu: Mark all as read. A tap off the menu closes it.
 - tapOn: "More"
 - assertVisible: "Mark all as read"
-- assertVisible: "Settings"
 - takeScreenshot: inbox-more
 - tapOn:
     point: "50%, 90%"

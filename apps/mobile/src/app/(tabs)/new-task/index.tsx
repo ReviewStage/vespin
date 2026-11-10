@@ -3,6 +3,7 @@
 import { BUTTON_LOOK, Button, Chip, EmptyState, GlassBar, Screen, Spacer } from "@repo/ui-native";
 import { Stack } from "expo-router";
 import { useState } from "react";
+import { SettingsBarButton } from "../../../settings-button.js";
 
 /** The models the placeholder's chips pick among, until the host's catalog names them. */
 const PLACEHOLDER_MODELS = ["Opus 5.5", "Fable 5.1"] as const;
@@ -12,6 +13,7 @@ export default function NewTaskScreen() {
   return (
     <>
       <Stack.Screen options={{ title: "New task" }} />
+      <SettingsBarButton />
       <Screen>
         <EmptyState
           title="New task"
