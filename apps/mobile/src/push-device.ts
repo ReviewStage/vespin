@@ -138,7 +138,12 @@ export function usePushRegistration(signedIn: boolean): void {
   const acts = useHostActs();
   const key = usePushDeviceKey();
   useEffect(() => {
-    if (!signedIn || key === undefined) return;
+    if (!signedIn) {
+      // Note that a sign-out the app did not start, such as a refused renewal, runs no unregister, so the next account registers afresh.
+      registration = undefined;
+      return;
+    }
+    if (key === undefined) return;
     registered(acts, key).catch(() => undefined);
   }, [acts, signedIn, key]);
 }
