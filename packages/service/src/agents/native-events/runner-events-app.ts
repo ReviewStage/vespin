@@ -39,6 +39,7 @@ import {
 } from "@repo/features/provider-key-wire";
 import { SANDBOX_IDLE, SANDBOX_TOUCH_EVERY, type Sandbox, touchSandbox } from "@repo/sandbox";
 import { HTTP_METHOD, type WireValue, WireValueSchema } from "@repo/wire";
+import type { UsageLimitMove } from "@repo/wire/ui-messages";
 import {
   Cause,
   Clock,
@@ -702,26 +703,32 @@ function endsOnLimit(state: NativeProjection, moments: readonly NativeMoment[]):
   );
 }
 
+/** What a batch that ends a turn on the plan's limit reads once: the payers it moves between, or when it may wait until. */
+interface AfterLimit {
+  readonly moved?: UsageLimitMove | undefined;
+  readonly resetsBeside?: number | undefined;
+}
+
 /**
- * Whether a turn the plan's limit, or its key's quota, cut short may go on
- * with the next payer (`roomAfterLimit`), and where none has room, when the
- * soonest limit among the other subscriptions resets (`soonestResetBeside`),
- * which it may wait for: only for an agent its plan or its API key pays
- * for, past the subscription or key it ran on.
+ * Where a turn the plan's limit, or its key's quota, cut short may go on
+ * with the next payer, the payers it moves between (`roomAfterLimit`), and
+ * where none has room, when the soonest limit among the other subscriptions
+ * resets (`soonestResetBeside`), which it may wait for: only for an agent
+ * its plan or its API key pays for, past the subscription or key it ran on.
  */
 function roomAfterLimitOf(applying: Applying) {
   return Effect.gen(function* () {
     const provider = providerModelOf(applying.model)?.provider;
-    if (provider === undefined || applying.payer === undefined) return { room: false };
+    if (provider === undefined || applying.payer === undefined) return {};
     if (applying.payer !== AGENT_PAYER.API_KEY && PLAN_ROW[applying.payer] === undefined) {
-      return { room: false };
+      return {};
     }
     const { userId } = applying.target;
-    if (yield* roomAfterLimit(userId, provider, applying.subscriptionId)) return { room: true };
+    const moved = yield* roomAfterLimit(userId, provider, applying.subscriptionId);
+    if (moved !== undefined) return { moved } satisfies AfterLimit;
     return {
-      room: false,
       resetsBeside: yield* soonestResetBeside(userId, provider, applying.subscriptionId),
-    };
+    } satisfies AfterLimit;
   });
 }
 
@@ -753,9 +760,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
     const writes: NativeWrite[] = [];
     const reports: string[] = [];
     // Whether another payer has room, or when a limit resets, read once and only for a batch that ends a turn on the plan's limit.
-    let afterLimit:
-      | { readonly room: boolean; readonly resetsBeside?: number | undefined }
-      | undefined;
+    let afterLimit: AfterLimit | undefined;
     for (const { sequence, message } of events) {
       const held: NativeHeld = {
         callName: (callId) => state.turn?.calls[callId],
@@ -774,7 +779,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
         queuedTurnId,
         model: applying.model,
         ownKey: applying.payer === AGENT_PAYER.API_KEY,
-        retryLimited: afterLimit?.room === true,
+        movedAfterLimit: afterLimit?.moved,
         resetsBeside: afterLimit?.resetsBeside,
         registered,
         report: (said) => reports.push(said),

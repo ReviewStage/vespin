@@ -2525,7 +2525,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
   );
 
   it.effect(
-    "a turn the plan's limit cuts short, with another subscription standing, stays open for the next launch, which finishes it with the line shown once",
+    "a turn the plan's limit cuts short, with another subscription standing, says which plan it moves to and stays open for the next launch, which finishes it with the line shown once",
     () =>
       Effect.gen(function* () {
         const post = yield* standing;
@@ -2538,9 +2538,9 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           { keyVersion: 1, sealedDataKey: "sealed-data-key", sealedKey: "sealed-second-token" },
           "sk-ant-oat01…second",
           null,
-          new Date(0),
+          new Date(1000),
           null,
-          { add: true },
+          { add: true, label: "Personal plan" },
         );
         yield* recordAgentPayer(
           agent.userId,
@@ -2572,8 +2572,16 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         const cut = yield* transcriptOf(agent.target.conversationId);
         assert.ok(!JSON.stringify(cut.rows).includes("You've hit your session limit"));
         assert.deepEqual(
-          cut.rows.flatMap((row) => row.parts.filter((part) => part.type === "data-usage-limit")),
-          [],
+          cut.rows.flatMap((row) =>
+            row.parts.flatMap((part) => (part.type === "data-usage-limit" ? [part.data] : [])),
+          ),
+          [
+            {
+              agent: "Claude",
+              resetsAt: null,
+              moved: { from: "Claude plan 1", to: "Personal plan" },
+            },
+          ],
         );
 
         // The launch on the next subscription, handed the turn's own line again.

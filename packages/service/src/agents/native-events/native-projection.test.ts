@@ -94,7 +94,7 @@ test("a warm runner a newer launch cut off with no turn under way or queued fail
   ]);
 });
 
-test("an exhausted payer pool leaves a notice at the pause, while a payer with room retries silently", () => {
+test("an exhausted payer pool leaves a notice at the pause, and a payer with room one naming both payers", () => {
   const context = {
     conversationId: "c_projection",
     sequence: 0,
@@ -112,17 +112,18 @@ test("an exhausted payer pool leaves a notice at the pause, while a payer with r
     { kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.LIMIT_REACHED },
     { kind: NATIVE_MOMENT.ENDED, ending: NATIVE_ENDING.FAILED },
   ] as const;
-  const notices = (retryLimited: boolean) =>
+  const moved = { from: "Work plan", to: "API key · sk-…a91F" };
+  const notices = (movedAfterLimit: typeof moved | undefined) =>
     projectMoments(heldProjection(null), moments, {
       ...context,
-      retryLimited,
+      movedAfterLimit,
     }).writes.flatMap((write) =>
       write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.USAGE_LIMIT_REACHED
         ? [write.event.notice]
         : [],
     );
-  assert.deepEqual(notices(false), [{ agent: "Claude", resetsAt: 60000 }]);
-  assert.deepEqual(notices(true), []);
+  assert.deepEqual(notices(undefined), [{ agent: "Claude", resetsAt: 60000 }]);
+  assert.deepEqual(notices(moved), [{ agent: "Claude", resetsAt: null, moved }]);
   const stopped = projectMoments(
     heldProjection(null),
     moments.filter((moment) => moment.kind !== NATIVE_MOMENT.RATE_LIMIT),
@@ -156,7 +157,7 @@ test("a successful result after a reported limit ends without a usage-limit noti
       queuedTurnId: undefined,
       model: "anthropic/claude-opus-5.5",
       ownKey: false,
-      retryLimited: true,
+      movedAfterLimit: { from: "Work plan", to: "Personal plan" },
       registered: () => true,
       report: () => undefined,
     },

@@ -395,3 +395,17 @@ test("a usage limit with no known reset tells the reader to send a message", () 
   assert.ok(container.textContent?.includes("Codex usage limit reached"));
   assert.ok(container.textContent?.includes("Send a message to continue"));
 });
+
+test("a usage limit that moved the turn on names the payer it ran out on and the one it continues on", () => {
+  const { container } = drawn({
+    type: "data-usage-limit",
+    data: {
+      agent: "Claude",
+      resetsAt: null,
+      moved: { from: "Work plan", to: "API key · sk-…a91F" },
+    },
+  });
+  assert.ok(container.textContent?.includes("Claude usage limit reached on Work plan"));
+  assert.ok(container.textContent?.includes("Continuing on API key · sk-…a91F"));
+  assert.ok(!container.textContent?.includes("Send a message to continue"));
+});
