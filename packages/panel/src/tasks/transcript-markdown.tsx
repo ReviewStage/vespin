@@ -213,20 +213,21 @@ function DraftLink({ url, children }: { url: string; children: ReactNode }): Rea
 }
 
 /**
- * A fenced block as the transcript draws it: words an agent wrote to be
- * sent elsewhere, fenced ```slack, ```email, or ```draft, in a
- * `DraftCard` as they will look when sent (`@repo/ui/draft-text`), its
- * Copy putting them on the clipboard as rich text; any other block in a
- * `CodeCard` (`CodeFence`).
+ * Words an agent wrote to be sent elsewhere, fenced ```slack, ```email, or
+ * ```draft, in a `DraftCard` as they will look when sent
+ * (`@repo/ui/draft-text`), its Copy putting them on the clipboard as rich
+ * text; none for any other fence, which its place draws as code. A
+ * transcript's block and an Inbox to-do's step draw a draft alike.
  */
-export function TranscriptCodeBlock({
-  className,
-  node,
-}: ComponentProps<"code"> & MarkdownNodeProps): ReactNode {
-  const language = LANGUAGE_CLASS.exec(className ?? "")?.[1] ?? "";
-  const code = blockText(node).replace(/\n$/u, "");
-  const draft = draftKindOf(language);
-  if (draft === undefined) return <CodeFence language={language} code={code} />;
+export function DraftFence({
+  language,
+  code,
+}: {
+  language: string | undefined;
+  code: string;
+}): ReactNode {
+  const draft = draftKindOf(language ?? "");
+  if (draft === undefined) return null;
   return (
     <DraftCard
       kind={draft}
@@ -236,6 +237,17 @@ export function TranscriptCodeBlock({
       copyText={copyThroughShell}
     />
   );
+}
+
+/** A fenced block as the transcript draws it: a draft as it will look when sent (`DraftFence`), and any other block in a `CodeCard` (`CodeFence`). */
+export function TranscriptCodeBlock({
+  className,
+  node,
+}: ComponentProps<"code"> & MarkdownNodeProps): ReactNode {
+  const language = LANGUAGE_CLASS.exec(className ?? "")?.[1] ?? "";
+  const code = blockText(node).replace(/\n$/u, "");
+  if (draftKindOf(language) === undefined) return <CodeFence language={language} code={code} />;
+  return <DraftFence language={language} code={code} />;
 }
 
 /**

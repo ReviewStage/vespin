@@ -17,7 +17,7 @@
  *
  * Every line break stands where the agent put it. A copy is the body
  * alone, as HTML (each mark its element, each link an anchor, each line
- * break a `<br>`) and as the plain words beside it, a link's address after
+ * break a `<br>`, each space HTML would collapse a non-breaking one) and as the plain words beside it, a link's address after
  * its label where the two differ, so it pastes into Slack or Mail with its
  * links and bold and into a plain field as readable words.
  */
@@ -177,11 +177,15 @@ function escapeHtml(text: string): string {
     .replaceAll('"', "&quot;");
 }
 
-/** Runs as HTML, each line break a `<br>`. */
+/** A space HTML would collapse: one after a space or a line break. */
+const COLLAPSED_SPACE = /(?<=[ \n]) /gu;
+
+/** Runs as HTML, each line break a `<br>`, and each space HTML would collapse a non-breaking one, so a run of spaces or an indent pastes as written. */
 function runsHtml(runs: readonly DraftRun[]): string {
   return runs
     .map((run) => {
-      if (run.kind === DRAFT_RUN.TEXT) return escapeHtml(run.text).replaceAll("\n", "<br>");
+      if (run.kind === DRAFT_RUN.TEXT)
+        return escapeHtml(run.text).replace(COLLAPSED_SPACE, "&nbsp;").replaceAll("\n", "<br>");
       if (run.kind === DRAFT_RUN.LINK)
         return `<a href="${escapeHtml(run.url)}">${runsHtml(run.runs)}</a>`;
       const element = MARK_ELEMENT[run.mark];

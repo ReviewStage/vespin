@@ -39,6 +39,13 @@ it.each<{ name: string; kind: DraftKind; text: string; html: string; plain: stri
     html: "Dear *Sam*,<br><br>Thanks",
     plain: "Dear *Sam*,\n\nThanks",
   },
+  {
+    name: "a draft's runs of spaces and indented lines, kept when pasted as HTML",
+    kind: DRAFT_KIND.DRAFT,
+    text: "Totals:   3\n  - one",
+    html: "Totals: &nbsp;&nbsp;3<br>&nbsp;&nbsp;- one",
+    plain: "Totals:   3\n  - one",
+  },
 ])("$name", ({ kind, text, html, plain }) => {
   expect(draftCopy(readDraft(kind, text))).toEqual({ html, text: plain });
 });
