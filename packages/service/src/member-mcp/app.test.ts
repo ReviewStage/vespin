@@ -489,6 +489,7 @@ it.effect(
           [MEMBER_MCP_TOOL.READ_TASK, { taskId: rows.strangerTask }],
           [MEMBER_MCP_TOOL.READ_AGENT, { agentId: rows.strangerAgent }],
           [MEMBER_MCP_TOOL.READ_AGENT_CHANGES, { agentId: rows.strangerAgent }],
+          [MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT, { agentId: rows.strangerAgent }],
           [MEMBER_MCP_TOOL.READ_INBOX, { workspace: slugOf(rows.elsewhere) }],
           [
             MEMBER_MCP_TOOL.ANSWER_ASK,
@@ -519,6 +520,7 @@ it.effect(
           [MEMBER_MCP_TOOL.READ_TASK, { taskId: rows.ownTask }],
           [MEMBER_MCP_TOOL.READ_AGENT, { agentId: rows.ownAgent }],
           [MEMBER_MCP_TOOL.READ_AGENT_CHANGES, { agentId: rows.ownAgent }],
+          [MEMBER_MCP_TOOL.READ_AGENT_TRANSCRIPT, { agentId: rows.ownAgent }],
         ] as const,
         ([name, args]) => call(name, args),
       );
@@ -674,6 +676,7 @@ it.effect(
             MEMBER_MCP_TOOL.SAVE_MEMORY,
             { workspace: `workspace-${rows.own}`, text: "Planted.", replaces: memoryId },
           ],
+          [MEMBER_MCP_TOOL.LIST_MEMORIES, { workspace }],
           [MEMBER_MCP_TOOL.FORGET_MEMORY, { workspace, memoryId }],
           [MEMBER_MCP_TOOL.LIST_AUTOMATIONS, { workspace }],
           [MEMBER_MCP_TOOL.LIST_AUTOMATIONS, { automationId }],
@@ -1269,8 +1272,65 @@ it.effect(
       assert.equal(returns.length, 1);
       assert.ok(
         returns[0]?.startsWith(`${ORIGIN}/api/account/integrations/connected?state=`),
-        returns[0],
+        String(returns[0]),
       );
+    }),
+);
+
+it.effect(
+  "an admin acting through the server reads the workspace's members but is refused its slug, which the owner changes",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch, services } = yield* standing;
+      const owner = yield* Effect.promise(() => signUp(auth));
+      const admin = yield* Effect.promise(() => signUp(auth));
+      const workspaceId = yield* Effect.gen(function* () {
+        const workspaceId = yield* openWorkspace(owner.userId);
+        yield* joinWorkspace(workspaceId, admin.userId, WORKSPACE_ROLE.ADMIN);
+        return workspaceId;
+      }).pipe(Effect.provide(services));
+      const callAs = (cookie: string, name: string, args: Record<string, unknown>) =>
+        Effect.gen(function* () {
+          const token = yield* Effect.promise(() =>
+            mintedToken(auth, cookie, {
+              clientId: MCP_CLIENT.id,
+              scope: [MEMBER_MCP_SCOPE.MCP],
+              resource: RESOURCE,
+            }),
+          );
+          const { client } = yield* connected(fetch, token, REVISION.MODERN);
+          const answer = decodeAnswer(
+            yield* Effect.promise(() => client.callTool({ name, arguments: args })),
+          );
+          yield* Effect.promise(() => client.close());
+          return answer;
+        });
+
+      const members = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS, {});
+      const refused = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG, {
+        slug: "seats",
+      });
+      const changed = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG, {
+        slug: "seats",
+      });
+
+      assert.notEqual(members.isError, true, members.content[0].text);
+      assert.deepEqual(
+        JSON.parse(members.content[0].text).members.map(
+          ({ userId, role }: { userId: string; role: string }) => [userId, role],
+        ),
+        [
+          [owner.userId, WORKSPACE_ROLE.OWNER],
+          [admin.userId, WORKSPACE_ROLE.ADMIN],
+        ],
+      );
+      assert.equal(refused.isError, true);
+      assert.notEqual(changed.isError, true, changed.content[0].text);
+      assert.deepEqual(JSON.parse(changed.content[0].text).workspace, {
+        id: workspaceId,
+        slug: "seats",
+        name: "Test Workspace",
+      });
     }),
 );
 

@@ -2196,24 +2196,29 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   opacity: 0.6;
 }
 
-/* The composer answers its card's width, not the window's, so it holds in
-   the main column and the side panel alike (`agent-composer.tsx`). The
-   presses never give way, the model chip's words do first, and the ⋯
-   stands only once it has something to take in. The card is a `ui-room`
-   too, so the badge saying where the agent runs gives up its words under
-   it (`agent-place.tsx`) rather than under a room around the box. */
-.agent-composer > form {
-  container: composer ui-room / inline-size;
+/* A message box answers its card's width, not the window's, so it holds in
+   the main column, the side panel, and a comment's margin alike
+   (`message-box.tsx`). The presses never give way, a chip's words do
+   first, and the ⋯ stands only once it has something to take in. An
+   agent's card is a `ui-room` too, so the badge saying where the agent runs
+   gives up its words under it (`agent-place.tsx`) rather than under a room
+   around the box. */
+.message-box {
+  container: composer / inline-size;
 }
 
-.agent-composer-actions > .agent-context {
+.agent-composer > .message-box {
+  container-name: composer ui-room;
+}
+
+.message-box-actions > .agent-context {
   flex: none;
 }
 
 /* The foot's end, which stands whole in every other box, gives way where it
    holds these presses, so the model chip's words are cut short before the
    row runs past the card. */
-.ui-composer-foot-end:has(> .agent-composer-actions) {
+.ui-composer-foot-end:has(> .message-box-actions) {
   flex-shrink: 1;
   min-width: 0;
 }
@@ -2225,19 +2230,19 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
    the ⋯ stands. */
 /* off-scale: 400px, a card under which the box folds its own presses into its ⋯ (composer-foot.css) */
 @container composer (width < 400px) {
-  .agent-composer .agent-context-button,
-  .agent-composer > form .agent-composer-actions:has(.agent-context-button) .dictate-button {
+  .message-box .agent-context-button,
+  .message-box-actions:has(.agent-context-button) .dictate-button {
     display: none;
   }
 
-  .agent-composer-actions > .agent-context {
+  .message-box-actions > .agent-context {
     position: absolute;
     top: 0;
     right: 0;
     height: 100%;
   }
 
-  .agent-composer-actions:has(.agent-context-button) .agent-composer-more {
+  .message-box-actions:has(.agent-context-button) .message-box-more {
     display: inline-flex;
   }
 }
@@ -2246,12 +2251,12 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
    the microphone with them, leaving what the agent published, the model,
    the ⋯, and Send. */
 @container composer (width < 240px) {
-  .agent-composer .agent-composer-attach,
-  .agent-composer > form .dictate-button {
+  .message-box .message-box-attach,
+  .message-box .dictate-button {
     display: none;
   }
 
-  .agent-composer-actions .agent-composer-more {
+  .message-box-actions .message-box-more {
     display: inline-flex;
   }
 }
@@ -2825,17 +2830,12 @@ svg.lucide {
   height: 13px;
 }
 
-/* The field that answers a thread, or starts one, on `@repo/ui`'s
-   `ComposerFrame`: a reply as every box in the window is, an edit in the
-   card's well, a first comment bare on the card. What stands here lays out
-   what it holds. */
+/* The field that answers a thread, starts one, or edits a comment, on the
+   message box (`message-box.tsx`): a reply as every box in the window is, an
+   edit in the card's well, a first comment bare on the card. What stands
+   here lays out what it holds. */
 .comment-field {
   --comment-field-inline: var(--ui-space-8);
-  /* The plain field's insets and height (`PlainCommentText`), the editor's below. */
-  --ui-text-area-inset-start: var(--ui-space-8);
-  --ui-text-area-inset-inline: var(--comment-field-inline);
-  --ui-text-area-inset-end: var(--ui-space-2);
-  --ui-text-area-least: 36px; /* off-scale: one line and its padding, as the editor stands */
   margin-top: var(--ui-control-gap);
 }
 
@@ -2854,23 +2854,20 @@ svg.lucide {
 }
 
 .comment-field .agent-composer-input {
-  min-height: 36px; /* off-scale: one line and its padding, as the plain field stands */
+  min-height: 36px; /* off-scale: one line and its padding */
   padding: var(--ui-row-inset) var(--comment-field-inline) var(--ui-space-2);
   line-height: 1.45;
 }
 
-/* A field's foot, a reply's `ComposerFoot` and an edit's Cancel and Save,
-   holds its tools a size under a page's, at the field's padding; a
-   dictation's strip stands at their height. A finger keeps the page's size,
-   so on a coarse pointer the tools stand a touch target tall and Dictate's
-   press never reaches Reply. */
-.comment-field-foot,
+/* A field's foot, its `ComposerFoot`, holds its tools a size under a
+   page's, at the field's padding; a dictation's strip stands at their
+   height. A finger keeps the page's size, so on a coarse pointer the tools
+   stand a touch target tall and Dictate's press never reaches Reply. */
 .comment-field .ui-composer-foot {
   padding: var(--ui-space-2) var(--ui-item-gap) var(--ui-item-gap);
 }
 
 @media not all and (pointer: coarse) {
-  .comment-field-foot,
   .comment-field .ui-composer-foot {
     --ui-control-height: 26px; /* off-scale: a field's foot holds its tools a size under a page's */
   }
@@ -2879,14 +2876,6 @@ svg.lucide {
 /* The files over a reply's words (`ComposerBody`) stand at its foot's inset. */
 .comment-field .ui-composer-files {
   padding: var(--ui-item-gap) var(--ui-item-gap) 0;
-}
-
-.comment-field-foot {
-  display: flex;
-  min-height: 26px; /* off-scale: as its tools */
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-item-gap);
 }
 
 /* A thread's first comment is the card itself (`COMPOSER_LOOK.BARE`): its
