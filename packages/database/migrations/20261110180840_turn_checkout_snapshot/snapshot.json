@@ -1,8 +1,12 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "acbc7275-5486-4d7f-8705-1f3141937c90",
-  "prevIds": ["1c40ee28-9ae2-4014-b786-aa5a6529505c", "6f77414f-3bda-46ba-86c8-3dbff5e18674"],
+  "id": "a3bc7f91-ccfd-4d1e-a26f-f010c61927e8",
+  "prevIds": [
+    "20b4afc6-9024-4622-bd80-a537dfe74071",
+    "5e620699-3ec1-40ef-958b-057ab782d789",
+    "71363fb1-20e2-469a-b396-1abffa6e11c4"
+  ],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -61,12 +65,6 @@
     {
       "isRlsEnabled": false,
       "name": "queued_message",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "agent_read",
       "entityType": "tables",
       "schema": "public"
     },
@@ -378,6 +376,12 @@
     },
     {
       "isRlsEnabled": false,
+      "name": "live_activity",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
       "name": "mac_command",
       "entityType": "tables",
       "schema": "public"
@@ -547,12 +551,6 @@
     {
       "isRlsEnabled": false,
       "name": "task_read",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "agent_section_entry",
       "entityType": "tables",
       "schema": "public"
     },
@@ -1540,19 +1538,6 @@
       "table": "agent"
     },
     {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "read_through",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "agent"
-    },
-    {
       "type": "uuid",
       "typeSchema": null,
       "notNull": true,
@@ -2271,58 +2256,6 @@
       "table": "queued_message"
     },
     {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "user_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "agent_read"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "agent_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "agent_read"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "read_through",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "agent_read"
-    },
-    {
-      "type": "boolean",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": "false",
-      "generated": null,
-      "identity": null,
-      "name": "marked_unread",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "agent_read"
-    },
-    {
       "type": "uuid",
       "typeSchema": null,
       "notNull": true,
@@ -2578,6 +2511,19 @@
       "generated": null,
       "identity": null,
       "name": "state",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_sandbox"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "booting_since",
       "entityType": "columns",
       "schema": "public",
       "table": "agent_sandbox"
@@ -8774,6 +8720,84 @@
       "default": null,
       "generated": null,
       "identity": null,
+      "name": "push_device_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "live_activity"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "start_token",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "live_activity"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "activity_token",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "live_activity"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "started_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "live_activity"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "sent_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "live_activity"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "sent_state",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "live_activity"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
       "name": "id",
       "entityType": "columns",
       "schema": "public",
@@ -12022,71 +12046,6 @@
       "table": "task_read"
     },
     {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "user_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "agent_section_entry"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "agent_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "agent_section_entry"
-    },
-    {
-      "type": "uuid",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "section_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "agent_section_entry"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": false,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "position",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "agent_section_entry"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "added_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "agent_section_entry"
-    },
-    {
       "type": "uuid",
       "typeSchema": null,
       "notNull": true,
@@ -13245,27 +13204,6 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "queued_message"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "agent_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "agent_read_agent",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "agent_read"
     },
     {
       "nameExplicit": true,
@@ -16127,48 +16065,6 @@
       "nameExplicit": true,
       "columns": [
         {
-          "value": "agent_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "agent_section_entry_agent",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "agent_section_entry"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "section_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "agent_section_entry_section",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "agent_section_entry"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
           "value": "user_id",
           "isExpression": false,
           "asc": true,
@@ -16698,32 +16594,6 @@
       "entityType": "fks",
       "schema": "public",
       "table": "queued_message"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["user_id"],
-      "schemaTo": "public",
-      "tableTo": "user",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "agent_read_user_id_user_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "agent_read"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["agent_id"],
-      "schemaTo": "public",
-      "tableTo": "agent",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "agent_read_agent_id_agent_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "agent_read"
     },
     {
       "nameExplicit": false,
@@ -17923,6 +17793,19 @@
     },
     {
       "nameExplicit": false,
+      "columns": ["push_device_id"],
+      "schemaTo": "public",
+      "tableTo": "push_device",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "live_activity_push_device_id_push_device_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "live_activity"
+    },
+    {
+      "nameExplicit": false,
       "columns": ["user_id"],
       "schemaTo": "public",
       "tableTo": "user",
@@ -18605,45 +18488,6 @@
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
-      "name": "agent_section_entry_user_id_user_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "agent_section_entry"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["agent_id"],
-      "schemaTo": "public",
-      "tableTo": "agent",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "agent_section_entry_agent_id_agent_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "agent_section_entry"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["section_id"],
-      "schemaTo": "public",
-      "tableTo": "task_section",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "agent_section_entry_section_id_task_section_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "agent_section_entry"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["user_id"],
-      "schemaTo": "public",
-      "tableTo": "user",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
       "name": "task_section_user_id_user_id_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -18848,14 +18692,6 @@
       "table": "agent_pull_request"
     },
     {
-      "columns": ["user_id", "agent_id"],
-      "nameExplicit": false,
-      "name": "agent_read_pkey",
-      "entityType": "pks",
-      "schema": "public",
-      "table": "agent_read"
-    },
-    {
       "columns": ["agent_id", "position"],
       "nameExplicit": false,
       "name": "agent_repository_pkey",
@@ -18990,14 +18826,6 @@
       "entityType": "pks",
       "schema": "public",
       "table": "task_read"
-    },
-    {
-      "columns": ["user_id", "agent_id"],
-      "nameExplicit": false,
-      "name": "agent_section_entry_pkey",
-      "entityType": "pks",
-      "schema": "public",
-      "table": "agent_section_entry"
     },
     {
       "columns": ["user_id", "task_id"],
@@ -19445,6 +19273,14 @@
       "name": "integration_install_intent_pkey",
       "schema": "public",
       "table": "integration_install_intent",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["push_device_id"],
+      "nameExplicit": false,
+      "name": "live_activity_pkey",
+      "schema": "public",
+      "table": "live_activity",
       "entityType": "pks"
     },
     {
