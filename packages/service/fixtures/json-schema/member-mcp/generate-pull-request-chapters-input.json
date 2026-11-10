@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "properties": {
+    "agentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "description": "An agent whose pull request to read, by its id as list_agents answered it; leave it out to name a repository's pull request instead."
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 140,
+      "description": "The repository whose pull request to read, as owner/name, with number; leave it out with agentId."
+    },
+    "number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The pull request's number: with repository, the one to read; with agentId, another pull request of the agent's repository, left out for the agent's own."
+    },
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "With repository, the workspace whose GitHub installation reaches it, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}

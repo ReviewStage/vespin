@@ -68,7 +68,7 @@ export interface TaskListView {
   readonly finishedSubTasks: boolean;
 }
 
-/** What the scope switcher says for Me and Anyone; a member's list is called by their name (the panel's `tasksHeadWords`). */
+/** What the Tasks head says for Me and Anyone; a member's list is called by their name (the panel's `tasksHeadWords`). */
 export const TASKS_HEAD_WORDS = {
   [ASSIGNED_TO.ME]: "My tasks",
   [ASSIGNED_TO.ANYONE]: "Everyone's tasks",

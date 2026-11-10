@@ -26,6 +26,7 @@ import { noRunPromiseOutsideEdgesRule } from "./rules/no-run-promise-outside-edg
 import { noShadcnFocusRingRule } from "./rules/no-shadcn-focus-ring.ts";
 import { noShortcutFlagRule } from "./rules/no-shortcut-flag.ts";
 import { noSourceReadInTestRule } from "./rules/no-source-read-in-test.ts";
+import { oneMessageBoxRule } from "./rules/one-message-box.ts";
 import { retiredRule } from "./rules/retired.ts";
 import { rowBehaviorInRowRule } from "./rules/row-behavior-in-row.ts";
 import { settingsRowEndRule } from "./rules/settings-row-end.ts";
@@ -69,6 +70,7 @@ const antiSlopPlugin = eslintCompatPlugin({
     "no-shadcn-focus-ring": noShadcnFocusRingRule,
     "no-shortcut-flag": noShortcutFlagRule,
     "no-source-read-in-test": noSourceReadInTestRule,
+    "one-message-box": oneMessageBoxRule,
     retired: retiredRule,
     "row-behavior-in-row": rowBehaviorInRowRule,
     "settings-row-end": settingsRowEndRule,

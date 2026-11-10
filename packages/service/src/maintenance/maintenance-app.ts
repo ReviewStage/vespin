@@ -9,6 +9,7 @@ import { republishQueuedTurns } from "../agents/coder-host/turn-delivery.js";
 import { HostedEnvironment } from "../environment.js";
 import { effectPassthrough, hostedNotFoundRoute } from "../http/http-effect.js";
 import { type CronMonitor, sentryCronCheckIns } from "../observability/sentry.js";
+import { releaseHeldPushes } from "../push/inbox-pushes.js";
 import { ANY_METHOD, type WebRoutes } from "../route.js";
 import { MAINTENANCE_SWEEP, MAINTENANCE_SWEEP_PATH } from "./maintenance-bounds.js";
 import { handleMaintenanceSweep } from "./maintenance-sweep.js";
@@ -44,6 +45,7 @@ const maintenanceSweepEffect = /* @__PURE__ */ Effect.fn("web/maintenanceSweepEf
     republishTurns: republishQueuedTurns,
     keepSandboxesUp: keepRunningSandboxesUp,
     resumeWaitedTurns,
+    releaseHeldPushes,
   });
 });
 
