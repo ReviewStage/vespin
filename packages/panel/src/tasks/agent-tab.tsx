@@ -316,6 +316,7 @@ import {
   TranscriptWords,
 } from "./transcript-blocks.js";
 import { drawnMessageWords, drawnRowsWords } from "./transcript-copy.js";
+import { TurnFilesOn, TurnFilesRow } from "./turn-files.js";
 import { keptPieces, PIECE_ROWS, pieceKey, type TurnPiece, turnPieces } from "./turn-pieces.js";
 import {
   UndeliveredLines,
@@ -1592,11 +1593,21 @@ const NO_ARRIVED: readonly ArrivedLine[] = [];
  * turn's words, which stand on no bubble. A turn still running
  * offers no Copy, because its words are not yet whole.
  */
-function TurnFoot({ workedFor, copy }: { workedFor: ReactNode; copy: ReactNode }): ReactNode {
+function TurnFoot({
+  workedFor,
+  copy,
+  files,
+}: {
+  workedFor: ReactNode;
+  copy: ReactNode;
+  /** The files the turn changed, over its line (`turn-files.tsx`); none while the turn runs. */
+  files: ReactNode;
+}): ReactNode {
   if (workedFor === null && copy === null) return null;
   return (
     // Note that the room above is the row's rather than the worked line's, because the buttons are taller than the words and centering them would push the words down.
     <div className="agent-turn-foot mt-tight-gap" data-turn-foot="">
+      {files}
       <MessageLine
         align={MESSAGE_LINE_ALIGN.START}
         inset={MESSAGE_LINE_INSET.FLUSH}
@@ -1847,6 +1858,7 @@ export function AgentMessage({
   const foot = (
     <TurnFoot
       workedFor={workedFor}
+      files={moving ? null : <TurnFilesRow message={message} />}
       copy={
         copyable || (forks && forkOffered) ? (
           <CopyMessageAction
@@ -3122,84 +3134,86 @@ function AgentTabView({
             <MentionedServers value={mentioned}>
               <UndeliveredLines value={marks}>
                 <RewindProvider value={rewind}>
-                  <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
-                    <AutomationsWanted wanted={automationLines}>
-                      <ApprovalsProvider asks={approvals.asks}>
-                        <AgentTranscriptView
-                          messages={lines}
-                          brief={agent.brief}
-                          briefSender={starter === undefined ? undefined : starterActor}
-                          origin={origin}
-                          readerId={readerId}
-                          agentId={agent.id}
-                          taskId={agent.planId}
-                          replay={replay}
-                          delegation={{
-                            models,
-                            own: { model: agent.model, effort: agent.effort },
-                            starts:
-                              delegationStarts &&
-                              workerStarts(delegationStarts, transcript.subagents),
-                            onOpen: openSubagent,
-                            onOpenTarget: openTarget,
-                            cards,
-                            standings: transcript.subagents,
-                          }}
-                          reading={transcript.reading || holding}
-                          holding={holding}
-                          failed={transcript.failed}
-                          failedWith={transcript.failedWith}
-                          working={standing.working}
-                          phase={standing.phase}
-                          waitsUntil={standing.waitsUntil}
-                          turnId={standing.turnId ?? agent.turnId}
-                          // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
-                          startedAt={
-                            !counts
-                              ? undefined
-                              : composer.rewinding
-                                ? composer.rewoundAt
-                                : (agentWorkingSince(lines) ?? startedAt)
-                          }
-                          ended={
-                            // Note that the end line waits for a first page, so a stopped agent's tab never draws it over nothing, and gives way to the working line while the agent works.
-                            transcript.pages === 0 || standing.working
-                              ? undefined
-                              : endLineParts(
-                                  standing.status,
-                                  standing.failure,
-                                  starter,
-                                  continuable,
-                                  transcript.hostLost,
-                                  transcript.launchStopped === undefined
-                                    ? undefined
-                                    : {
-                                        step: transcript.launchStopped,
-                                        runtime: agent.runtime,
-                                        unstarted: transcript.launchUnstarted,
-                                      },
-                                )
-                          }
-                          endReason={endLineReason(standing.failure, starter)}
-                          keyProvider={keyProvider}
-                          onOpenApiKeys={
-                            onOpenApiKeys === undefined
-                              ? undefined
-                              : () => onOpenApiKeys(keyProvider)
-                          }
-                          endPress={endPress}
-                          endTrail={endTrail}
-                          signIn={signIn}
-                          onRetry={transcript.onRetry}
-                          onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
-                          olderFailed={transcript.olderFailed}
-                          overComposer
-                          bringIn={bringIn}
-                          approvals={mode === undefined ? undefined : approvals}
-                        />
-                      </ApprovalsProvider>
-                    </AutomationsWanted>
-                  </ReplyDoorProvider>
+                  <TurnFilesOn value={restores}>
+                    <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
+                      <AutomationsWanted wanted={automationLines}>
+                        <ApprovalsProvider asks={approvals.asks}>
+                          <AgentTranscriptView
+                            messages={lines}
+                            brief={agent.brief}
+                            briefSender={starter === undefined ? undefined : starterActor}
+                            origin={origin}
+                            readerId={readerId}
+                            agentId={agent.id}
+                            taskId={agent.planId}
+                            replay={replay}
+                            delegation={{
+                              models,
+                              own: { model: agent.model, effort: agent.effort },
+                              starts:
+                                delegationStarts &&
+                                workerStarts(delegationStarts, transcript.subagents),
+                              onOpen: openSubagent,
+                              onOpenTarget: openTarget,
+                              cards,
+                              standings: transcript.subagents,
+                            }}
+                            reading={transcript.reading || holding}
+                            holding={holding}
+                            failed={transcript.failed}
+                            failedWith={transcript.failedWith}
+                            working={standing.working}
+                            phase={standing.phase}
+                            waitsUntil={standing.waitsUntil}
+                            turnId={standing.turnId ?? agent.turnId}
+                            // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
+                            startedAt={
+                              !counts
+                                ? undefined
+                                : composer.rewinding
+                                  ? composer.rewoundAt
+                                  : (agentWorkingSince(lines) ?? startedAt)
+                            }
+                            ended={
+                              // Note that the end line waits for a first page, so a stopped agent's tab never draws it over nothing, and gives way to the working line while the agent works.
+                              transcript.pages === 0 || standing.working
+                                ? undefined
+                                : endLineParts(
+                                    standing.status,
+                                    standing.failure,
+                                    starter,
+                                    continuable,
+                                    transcript.hostLost,
+                                    transcript.launchStopped === undefined
+                                      ? undefined
+                                      : {
+                                          step: transcript.launchStopped,
+                                          runtime: agent.runtime,
+                                          unstarted: transcript.launchUnstarted,
+                                        },
+                                  )
+                            }
+                            endReason={endLineReason(standing.failure, starter)}
+                            keyProvider={keyProvider}
+                            onOpenApiKeys={
+                              onOpenApiKeys === undefined
+                                ? undefined
+                                : () => onOpenApiKeys(keyProvider)
+                            }
+                            endPress={endPress}
+                            endTrail={endTrail}
+                            signIn={signIn}
+                            onRetry={transcript.onRetry}
+                            onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
+                            olderFailed={transcript.olderFailed}
+                            overComposer
+                            bringIn={bringIn}
+                            approvals={mode === undefined ? undefined : approvals}
+                          />
+                        </ApprovalsProvider>
+                      </AutomationsWanted>
+                    </ReplyDoorProvider>
+                  </TurnFilesOn>
                 </RewindProvider>
               </UndeliveredLines>
             </MentionedServers>

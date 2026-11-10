@@ -116,20 +116,42 @@ const PATCH_FILE_HEADER = /^\*\*\* (?:Add|Update|Delete) File: (.+)$/u;
 /** The header that moves the file the header before it names, as `apply_patch` spells it. */
 const PATCH_MOVE_HEADER = /^\*\*\* Move to: (.+)$/u;
 
+/** One file a patch touches: its path, and the lines the patch adds to it and removes from it. */
+export interface PatchFile {
+  readonly path: string;
+  readonly added: number;
+  readonly removed: number;
+}
+
 /**
- * The files a patch touches, in the order its headers name them. Note that
- * a file it moves is named where it moved to, in its old path's place,
- * because the old path names nothing once the patch is applied.
+ * The files a patch touches, in the order its headers name them, each with
+ * the lines added and removed under its header. Note that a file it moves is
+ * named where it moved to, in its old path's place, because the old path
+ * names nothing once the patch is applied; and that a header line is no
+ * added line, though it opens with its own marks.
  */
-function patchPaths(patchText: string): readonly string[] {
-  const paths: string[] = [];
-  for (const line of patchText.split("\n")) {
-    const moved = PATCH_MOVE_HEADER.exec(line.trimEnd())?.[1];
-    if (moved !== undefined && paths.length > 0) paths[paths.length - 1] = moved;
-    const named = PATCH_FILE_HEADER.exec(line.trimEnd())?.[1];
-    if (named !== undefined) paths.push(named);
+export function patchFiles(patchText: string): readonly PatchFile[] {
+  const files: { path: string; added: number; removed: number }[] = [];
+  for (const raw of patchText.split("\n")) {
+    const line = raw.trimEnd();
+    const moved = PATCH_MOVE_HEADER.exec(line)?.[1];
+    const last = files.at(-1);
+    if (moved !== undefined && last !== undefined) last.path = moved;
+    const named = PATCH_FILE_HEADER.exec(line)?.[1];
+    if (named !== undefined) {
+      files.push({ path: named, added: 0, removed: 0 });
+      continue;
+    }
+    if (last === undefined || line.startsWith("***")) continue;
+    if (line.startsWith("+")) last.added += 1;
+    else if (line.startsWith("-")) last.removed += 1;
   }
-  return paths;
+  return files;
+}
+
+/** The files a patch touches, in the order its headers name them (`patchFiles`). */
+function patchPaths(patchText: string): readonly string[] {
+  return patchFiles(patchText).map((file) => file.path);
 }
 
 /** Where a value is drawn as JSON, how it reads: pretty-printed, a string as it is. */

@@ -254,6 +254,7 @@
     "./skill-word": "./src/skill-word.js",
     "./mention-holder": "./src/mention-holder.js",
     "./tool-call-model": "./src/tool-call-model.js",
+    "./turn-files": "./src/turn-files.js",
     "./agent-parts": "./src/agent-parts.js",
     "./glyph-state": "./src/glyph-state.js",
     "./sealed-page": "./src/sealed-page.js"

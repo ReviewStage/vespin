@@ -8,12 +8,7 @@ import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { readLink } from "@repo/features/link-grammar";
-import {
-  decodeMention,
-  encodeMention,
-  MENTION_KIND,
-  mayNameMention,
-} from "@repo/features/mention-link";
+import { mayNameMention } from "@repo/features/mention-link";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
 import { formatBytes } from "@repo/features/number-format";
 import { cardTitle } from "@repo/features/plain-words";
@@ -191,7 +186,7 @@ import {
   inlineCodeTarget,
 } from "./inline-code-target.js";
 import { LoneLinkCard } from "./lone-link-card.js";
-import { linkChip, type MentionDoors } from "./mention-chip.js";
+import { fileChip, linkChip, type MentionDoors } from "./mention-chip.js";
 import { ModelLabel } from "./model-label.js";
 import { SubagentMark } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
@@ -1278,12 +1273,7 @@ function calledChip(
     );
   }
   const first = calledFile(kind, files);
-  const repository = doors.place.repository;
-  if (first === undefined || repository === null) return undefined;
-  const target = encodeMention({ kind: MENTION_KIND.FILE, path: first }, doors.place);
-  // Note that a path that climbs out of the checkout reads back as no file, or as some other page of GitHub's, so it stays words.
-  if (decodeMention(target, repository)?.kind !== MENTION_KIND.FILE) return undefined;
-  return linkChip(target, target, doors);
+  return first === undefined ? undefined : fileChip(first, doors);
 }
 
 /** Whose Mac a transcript's Mac commands ran on, its agent's starter, the reader's own among them (`macOwnerOf`); none where the window cannot tell, whose ran on the reader's own as far as it knows. */
