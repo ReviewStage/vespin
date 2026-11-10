@@ -645,7 +645,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
   );
 
   it.effect(
-    "tools/list names every Vespin tool the agent's harness has no equal of, each with its catalog entry's schema, and none the harness has, its wakeup among them",
+    "tools/list names every Vespin tool the agent's harness has no equal of, each with its catalog entry's schema, and none the harness has",
     () =>
       Effect.gen(function* () {
         const fetch = yield* standing;
@@ -659,11 +659,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         yield* Effect.promise(() => client.close());
 
         const names = listed.tools.map((tool) => tool.name);
-        // A Claude Code agent waits with its CLI's own `ScheduleWakeup`, so ours is left off its list.
-        assert.deepEqual(
-          [...names].sort(),
-          SERVED_TOOLS.filter((name) => name !== "schedule_wakeup").sort(),
-        );
+        assert.deepEqual([...names].sort(), [...SERVED_TOOLS].sort());
         for (const native of HARNESS_TOOLS) assert.ok(!names.includes(native), native);
         const standingOn = {
           agent: Option.none(),
@@ -713,7 +709,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         );
         return agent;
       }),
-      withheld: ["browser", "run_on_mac", "list_ports", "share_port", "schedule_wakeup"],
+      withheld: ["browser", "run_on_mac", "list_ports", "share_port"],
     },
   ])(
     "tools/list leaves out what the catalog's gates offer no agent $why, and the memory, the description's, and the turn's end tools where its starter has Memory, Task descriptions, and Done and follow-ups off",

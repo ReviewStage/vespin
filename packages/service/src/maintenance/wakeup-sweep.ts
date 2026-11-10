@@ -1,14 +1,12 @@
 /**
  * wakeup-sweep.ts -- the scheduled sweep's delivery of the wakeups coding agents booked with `schedule_wakeup`.
  *
- * A coding agent on a harness with no wakeup of its own booked one
- * (`../agents/coder-host/wakeup-tool.ts`): a prompt and the instant it
+ * A coding agent booked one (`../agents/coder-host/wakeup-tool.ts`): a prompt and the instant it
  * comes due, kept in the store (`@repo/database/models/agent-wakeups`), and
  * ended its turn. Once a wakeup is due, the sweep hands its prompt to the
  * agent as a line sent by the agent itself, since the words are its own,
  * the one way a line reaches an agent (`steerAgent`), which opens its next
- * turn in the session it resumes, as the CLI's own wakeup opens a Claude
- * Code agent's; the line is marked the app's (`APP_LINE_METADATA`), which
+ * turn in the session it resumes; the line is marked the app's (`APP_LINE_METADATA`), which
  * the transcript draws as the agent waking up. The line goes under a key of
  * the wakeup's own, so a delivery repeated after one that landed is told
  * once.

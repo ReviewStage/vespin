@@ -208,40 +208,35 @@ const STOP_BEFORE_TURN_END =
   "Stop every process you started in the background, a server among them, before you end your turn, because one left running holds its port and your sandbox past it.";
 
 /**
- * How a Claude Code agent waits on its checks. Note that ScheduleWakeup's own
- * description speaks of a /loop, which an agent of ours runs none of, so the
- * words say what each field it requires takes here: the prompt the wakeup
- * delivers, which wakes the agent's next turn in the CLI the runner keeps up while it waits.
+ * How an agent waits on its checks, on either harness: with our
+ * `schedule_wakeup` (`wakeup-tool.ts`), whose turn ends once it has booked
+ * one, so its sandbox stops while it waits, and the scheduled sweep hands
+ * the prompt back as the line that opens its next turn
+ * (`../../maintenance/wakeup-sweep.ts`).
  */
-const SCHEDULE_WAKEUP_WORDS =
-  "wait with ScheduleWakeup for about as long as the checks usually take, though its description speaks of a /loop you are not in: its `prompt` is what to do once it fires, such as `Read the checks on pull request #<number>`, its `noop` is false, and its `reason` is one short sentence";
+const WAKEUP_WORDS = `wait with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` for about as long as the checks usually take: its \`delaySeconds\` is how long, and its \`prompt\` is what to do once it fires, such as \`Read the checks on pull request #<number>\`; end your turn once you have booked it, and the prompt opens your next turn when it fires`;
 
-/** How a Claude Code agent cancels the wakeup it no longer needs. */
-const SCHEDULE_WAKEUP_STOP = "call ScheduleWakeup with `stop: true`";
+/** How an agent cancels the wakeup it no longer needs. */
+const WAKEUP_STOP = `call \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` with \`stop: true\``;
 
-/**
- * How a Codex agent waits on its checks: with our `schedule_wakeup`
- * (`wakeup-tool.ts`), since Codex has no wakeup of its own. Its turn ends
- * once it has booked one, and the scheduled sweep hands the prompt back as
- * the line that opens its next turn (`../../maintenance/wakeup-sweep.ts`).
- */
-const CODEX_WAKEUP_WORDS = `wait with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` for about as long as the checks usually take: its \`delaySeconds\` is how long, and its \`prompt\` is what to do once it fires, such as \`Read the checks on pull request #<number>\`; end your turn once you have booked it, and the prompt opens your next turn when it fires`;
-
-/** How a Codex agent cancels the wakeup it no longer needs. */
-const CODEX_WAKEUP_STOP = `call \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` with \`stop: true\``;
+/** How an agent on either harness waits on its checks and fixes what fails, by whether it reads them with `gh pr` or over REST alone. */
+const CHECKS_WORDS: ToolWords["checks"] = {
+  readable: `After you push and open or update a pull request, wait on its checks rather than watching them: ${CHECKS_WAIT.NEVER_WATCH}, and ${WAKEUP_WORDS}. ${CHECKS_WAIT.TOLD_AS_TURN(WAKEUP_STOP)} Then, or once the wakeup comes without that message, read them once with \`gh pr checks <number>\`, and where some are still running, wait again. When a check fails, read why with \`gh run view <run-id> --log-failed\`, or the failing check's own details, fix the cause, push, and wait again, for at most ${CODER.CI_FIX_ROUNDS} rounds of fixes. ${CHECKS_STOP}`,
+  rest: `After you push and open or update a pull request, wait on its checks rather than watching them: ${CHECKS_WAIT.NEVER_WAIT}, and ${WAKEUP_WORDS}. Once the wakeup comes, read its checks on the commit you pushed once with \`gh api repos/{owner}/{repo}/commits/<sha>/check-runs\` and \`gh api repos/{owner}/{repo}/commits/<sha>/status\`, and where some are still running, wait again. When a check fails, read why with \`gh api repos/{owner}/{repo}/actions/jobs/<job-id>/logs\`, its job listed by \`gh api "repos/{owner}/{repo}/actions/runs?head_sha=<sha>"\` and \`gh api repos/{owner}/{repo}/actions/runs/<run-id>/jobs\`, or the failing check's own details, fix the cause, push, and wait again, for at most ${CODER.CI_FIX_ROUNDS} rounds of fixes. ${CHECKS_STOP}`,
+};
 
 /**
  * Each harness's words. Claude Code owns the
- * shell, the files, the web, skills, to-dos, waiting, and its subagents
+ * shell, the files, the web, skills, to-dos, and its subagents
  * (the `Agent` tool), so a Claude Code agent is told of those by the names
  * Claude Code gives them, and never of ours that it is not offered; the
  * tools that touch the app stay ours, over our MCP server, under their own
  * names. Codex likewise owns its shell, `apply_patch`, its plan tool for
  * to-dos, its subagents, its skills (`.agents/skills`, and the member's
  * installed ones, which `native-skills.ts` writes beside the checkout), and
- * web search, but has no wakeup of its own, so a Codex agent waits on its
- * checks with ours, `schedule_wakeup`, which ends its turn and opens the
- * next when due (`wakeup-tool.ts`). A native agent's checkout is
+ * web search. Waiting is ours on both: an agent waits on its checks with
+ * `schedule_wakeup`, which ends its turn and opens the next when due
+ * (`CHECKS_WORDS`). A native agent's checkout is
  * fetched whole as it opens (`runner-sessions.ts`).
  */
 const TOOL_WORDS: Readonly<Record<CoderHarness, ToolWords>> = {
@@ -259,10 +254,7 @@ const TOOL_WORDS: Readonly<Record<CoderHarness, ToolWords>> = {
     installedSkills: `A word like \`/name\` in the developer's message names one of the skills your developer installed into ${PRODUCT_NAME}, which Claude Code lists as \`${INSTALLED_SKILLS.PLUGIN}:<name>\`. Load it with Claude Code's Skill tool before anything else, and follow what it answers.`,
     browser: browserWords("Bash"),
     todos: `For work of more than a couple of steps, keep your to-do items with TaskCreate, one per step, and TaskUpdate, which the developer watches; they are Claude Code's own to-do items, never ${PRODUCT_NAME}'s tasks: create them all before you start, keep exactly one in progress, and mark each completed as it finishes.`,
-    checks: {
-      readable: `After you push and open or update a pull request, wait on its checks rather than watching them: ${CHECKS_WAIT.NEVER_WATCH}, and ${SCHEDULE_WAKEUP_WORDS}. ${CHECKS_WAIT.TOLD_AS_TURN(SCHEDULE_WAKEUP_STOP)} Then, or once the wakeup comes without that message, read them once with \`gh pr checks <number>\`, and where some are still running, wait again. When a check fails, read why with \`gh run view <run-id> --log-failed\`, or the failing check's own details, fix the cause, push, and wait again, for at most ${CODER.CI_FIX_ROUNDS} rounds of fixes. ${CHECKS_STOP}`,
-      rest: `After you push and open or update a pull request, wait on its checks rather than watching them: ${CHECKS_WAIT.NEVER_WAIT}, and ${SCHEDULE_WAKEUP_WORDS}. Once the wakeup comes, read its checks on the commit you pushed once with \`gh api repos/{owner}/{repo}/commits/<sha>/check-runs\` and \`gh api repos/{owner}/{repo}/commits/<sha>/status\`, and where some are still running, wait again. When a check fails, read why with \`gh api repos/{owner}/{repo}/actions/jobs/<job-id>/logs\`, its job listed by \`gh api "repos/{owner}/{repo}/actions/runs?head_sha=<sha>"\` and \`gh api repos/{owner}/{repo}/actions/runs/<run-id>/jobs\`, or the failing check's own details, fix the cause, push, and wait again, for at most ${CODER.CI_FIX_ROUNDS} rounds of fixes. ${CHECKS_STOP}`,
-    },
+    checks: CHECKS_WORDS,
     worker: ({ readOnly, keeps }) =>
       `Claude Code's Agent tool hands a scoped job to a worker, which Claude Code calls a subagent: give it \`subagent_type: "${CLAUDE_CODE_WORKER}"\`, ${PRODUCT_NAME}'s worker, which runs on your model and answers you once it is done; several run at once. SendMessage only sends more to a worker of yours, by its name or id; another agent is reached with \`${MESSAGE_AGENT_TOOL.name}\`. Hand workers broad searches, a comparison of approaches, and investigations independent of each other, and keep ${keeps} to yourself: ${readOnly} A worker knows only what its job says, and the developer reads it too, so write the job as short Markdown in complete sentences, never clipped notes: the goal as one plain sentence first, then the context it needs, what to inspect, what to return, and any constraints.`,
     integrations: NATIVE_INTEGRATION_WORDS,
@@ -282,10 +274,7 @@ const TOOL_WORDS: Readonly<Record<CoderHarness, ToolWords>> = {
     browser: browserWords("your shell"),
     todos:
       "For work of more than a couple of steps, keep your to-dos with Codex's plan tool (`update_plan`), which the developer watches: write the list before you start, keep exactly one item in progress, and write it again as each item finishes.",
-    checks: {
-      readable: `After you push and open or update a pull request, wait on its checks rather than watching them: ${CHECKS_WAIT.NEVER_WATCH}, and ${CODEX_WAKEUP_WORDS}. ${CHECKS_WAIT.TOLD_AS_TURN(CODEX_WAKEUP_STOP)} Then, or once the wakeup comes without that message, read them once with \`gh pr checks <number>\`, and where some are still running, wait again. When a check fails, read why with \`gh run view <run-id> --log-failed\`, or the failing check's own details, fix the cause, push, and wait again, for at most ${CODER.CI_FIX_ROUNDS} rounds of fixes. ${CHECKS_STOP}`,
-      rest: `After you push and open or update a pull request, wait on its checks rather than watching them: ${CHECKS_WAIT.NEVER_WAIT}, and ${CODEX_WAKEUP_WORDS}. Once the wakeup comes, read its checks on the commit you pushed once with \`gh api repos/{owner}/{repo}/commits/<sha>/check-runs\` and \`gh api repos/{owner}/{repo}/commits/<sha>/status\`, and where some are still running, wait again. When a check fails, read why with \`gh api repos/{owner}/{repo}/actions/jobs/<job-id>/logs\`, its job listed by \`gh api "repos/{owner}/{repo}/actions/runs?head_sha=<sha>"\` and \`gh api repos/{owner}/{repo}/actions/runs/<run-id>/jobs\`, or the failing check's own details, fix the cause, push, and wait again, for at most ${CODER.CI_FIX_ROUNDS} rounds of fixes. ${CHECKS_STOP}`,
-    },
+    checks: CHECKS_WORDS,
     worker: ({ readOnly, keeps }) =>
       `Where Codex offers you subagents, through a tool such as \`spawn_agent\`, they are your workers: each takes a scoped job, runs on a GPT model, and answers you once it is done; several run at once. Hand workers broad searches, a comparison of approaches, and investigations independent of each other, and keep ${keeps} to yourself. Nothing holds a Codex subagent to reading, and it is handed your tools of ${PRODUCT_NAME}'s, so write this rule into each one's job: ${readOnly} It calls none of ${PRODUCT_NAME}'s tools. A worker knows only what its job says, and the developer reads it too, so write the job as short Markdown in complete sentences, never clipped notes: the goal as one plain sentence first, then the context it needs, what to inspect, what to return, and any constraints. Codex's own subagent tools reach its subagents only, never ${PRODUCT_NAME}'s agents: use \`${AGENT_TOOL.LIST_AGENTS}\` and \`${MESSAGE_AGENT_TOOL.name}\` for those. Where Codex offers you no subagents, as on a ChatGPT plan, you have no workers: do the work yourself, and never start an agent with \`${AGENT_TOOL.START_AGENT}\` in a worker's place.`,
     integrations: NATIVE_INTEGRATION_WORDS,
