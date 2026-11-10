@@ -28,7 +28,6 @@
         "packages/panel/src/actor-ref.tsx": 1,
         "packages/panel/src/desktop/automation-agent-run.tsx": 2,
         "packages/panel/src/desktop/automation-runs-panel.tsx": 1,
-        "packages/panel/src/desktop/command-palette.tsx": 1,
         "packages/panel/src/tasks/inbox-item-parts.tsx": 1
       }
     },

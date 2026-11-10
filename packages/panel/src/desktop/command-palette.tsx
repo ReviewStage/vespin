@@ -139,7 +139,6 @@ import {
   type CommandGroup,
   type CommandItem,
 } from "@repo/ui/command";
-import { GLYPH } from "@repo/ui/icons";
 import {
   hitRangesIn,
   SEARCH_TIER,
@@ -164,7 +163,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { AssigneeFaceMark, AutomationCard } from "../actor-ref.js";
+import {
+  ACTOR_SIZE,
+  ActorMark,
+  AssigneeFaceMark,
+  AutomationCard,
+  automationActor,
+} from "../actor-ref.js";
 import {
   appCommandOffered,
   runAppCommand,
@@ -202,7 +207,7 @@ import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { useChangesPeopleOf } from "../tasks/changes-people.js";
 import { FileCard, fileLook } from "../tasks/file-ref.js";
 import { refusalLine } from "../tasks/file-tab-model.js";
-import { InboxItemCard, InboxItemEnd, ItemMark } from "../tasks/inbox-item-parts.js";
+import { InboxItemCard, InboxItemEnd, inboxItemGlyph } from "../tasks/inbox-item-parts.js";
 import { refusedAnswer, taskTreeQueryOptions } from "../tasks/repository-reads.js";
 import { agentEndMark, openPlanStanding, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import { markReadItem, type OpenTaskRename, useTaskRenameOffer } from "../tasks/task-menu-items.js";
@@ -1046,7 +1051,8 @@ function archivedAgentRows(
     return {
       ...look,
       replayMasked: true,
-      detail: [ARCHIVED_WORD, taskName].filter((word) => word !== undefined).join(" · "),
+      // Note that the task leads and Archived follows, as every agent menu says it (`agentMenuRow`).
+      detail: [taskName, ARCHIVED_WORD].filter((word) => word !== undefined).join(" · "),
       endMark: agentEndMark(agent, true),
       card: (
         <AgentCard
@@ -1094,7 +1100,8 @@ function automationRows(
     const trigger = automationTriggerText(automation.trigger, automation.repositories ?? []);
     return {
       replayMasked: true,
-      icon: <GLYPH.AUTOMATION />,
+      // Note that it wears its tile, what fires it and how its last run went, as the Automations page, its chip, and the @ list draw it.
+      icon: <ActorMark actor={automationActor(automation)} size={ACTOR_SIZE.INLINE} />,
       label: automation.name,
       // Note that its task's name, which finds it too, is said after what fires it, so a row it found says why.
       detail: automation.planName === null ? trigger : `${trigger} · ${automation.planName}`,
@@ -1160,15 +1167,8 @@ function inboxRow(
     const snippet = snippetOf(words.keywords ?? [], [item.title, words.label, name], seams.tokens);
     return {
       replayMasked: true,
-      icon: (
-        <ItemMark
-          holder={holder}
-          agentId={item.agentId}
-          models={seams.models}
-          readerId={seams.readerId}
-          plain
-        />
-      ),
+      // Note that it leads with what it asks, as its chip and the @ list's row do, never its agent's tile, which its holder's words already name.
+      icon: inboxItemGlyph(item),
       detail: snippet === undefined ? name : `${name} · ${snippet}`,
       endMark: <InboxItemEnd listed={listed} now={seams.now} readerId={seams.readerId} />,
       card: (
