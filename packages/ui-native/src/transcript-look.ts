@@ -57,6 +57,8 @@ export const CALL_SYMBOL = {
   [CALL_KIND.SHOW_IMAGE]: "photo",
   [CALL_KIND.OPEN_PULL_REQUEST]: "arrow.triangle.pull",
   [CALL_KIND.SLEEP]: "timer",
+  [CALL_KIND.SCHEDULE_WAKEUP]: "alarm",
+  [CALL_KIND.CANCEL_WAKEUP]: "bell.slash",
   [CALL_KIND.LIST_TASKS]: "checklist",
   [CALL_KIND.REMEMBER]: "brain",
   [CALL_KIND.RECALL]: "brain",
