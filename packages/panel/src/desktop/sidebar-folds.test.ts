@@ -24,8 +24,7 @@ import { ArchivedAgents } from "./agent-archive.js";
  * sidebar-folds.test.ts -- every group that folds folds under one
  * header, `GroupHeader`: the sidebar's Pinned and repositories, and the summary's archived
  * agents, alike but for what each counts, each unrolling as it opens, and a
- * folded group leaving the task open, and a repository's the tasks that need
- * the reader, standing.
+ * folded group leaving the task open standing.
  */
 
 const roots: Root[] = [];
@@ -138,7 +137,7 @@ test("Pinned folds on its name, counts its pins folded, and leaves the pin that 
   assert.deepEqual(names(), ["Invite expiry", "Retry audit"]);
 });
 
-test("a folded repository leaves the task that is open and the task that needs you standing, and unfolds to every task", () => {
+test("a folded repository leaves only the task that is open standing, one that needs you folded away with the rest, and unfolds to every task", () => {
   handInbox({
     waiting: [
       {
@@ -165,7 +164,7 @@ test("a folded repository leaves the task that is open and the task that needs y
   assert.deepEqual(names(), ["Billing export", "Invite expiry", "Retry audit", "Webhook retries"]);
 
   act(() => fold(sidebar, "relay").click());
-  assert.deepEqual(names(), ["Billing export", "Invite expiry", "Webhook retries"]);
+  assert.deepEqual(names(), ["Billing export", "Invite expiry"]);
 
   act(() => fold(sidebar, "relay").click());
   assert.deepEqual(names(), ["Billing export", "Invite expiry", "Retry audit", "Webhook retries"]);

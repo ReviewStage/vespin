@@ -3,6 +3,7 @@
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, test } from "vitest";
+import { OutsideLink } from "./outside-link.js";
 import { TEXT_LINK_CURRENT, TEXT_LINK_LOOK, TextLink } from "./text-link.js";
 
 /**
@@ -11,7 +12,8 @@ import { TEXT_LINK_CURRENT, TEXT_LINK_LOOK, TextLink } from "./text-link.js";
  * announced as current, as the page or as the part of the site; an external
  * link in a new tab opens there and is still named by its words alone; a
  * link with no address is its words and no link; and its press is heard
- * before the browser follows it, a middle-click's as a click's.
+ * before the browser follows it, a middle-click's as a click's. An
+ * OutsideLink hands its address to its opener, and is not followed.
  */
 
 const roots: Root[] = [];
@@ -140,4 +142,26 @@ test("a TextLink with no address is its words, and no link", () => {
 
   expect(container.querySelector("a")).toBeNull();
   expect(container.textContent).toBe("the docs");
+});
+
+test("an OutsideLink hands its address to its opener and tells its step, and the browser does not follow it", () => {
+  const opened: string[] = [];
+  let told = 0;
+  const container = mount(
+    createElement(OutsideLink, {
+      href: "https://example.com/keys",
+      open: (href: string) => opened.push(href),
+      onOpened: () => {
+        told += 1;
+      },
+      children: "Open the console",
+    }),
+  );
+  const link = container.querySelector("a");
+  expect(link?.getAttribute("href")).toBe("https://example.com/keys");
+  const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+  act(() => {
+    link?.dispatchEvent(click);
+  });
+  expect([opened, told, click.defaultPrevented]).toEqual([["https://example.com/keys"], 1, true]);
 });

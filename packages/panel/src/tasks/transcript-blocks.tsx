@@ -78,6 +78,8 @@ import {
   wholeRendering,
 } from "@repo/ui/github-html";
 import {
+  AlarmClockCheckIcon,
+  AlarmClockOffIcon,
   AppWindowIcon,
   ArchiveIcon,
   ArchiveRestoreIcon,
@@ -146,7 +148,7 @@ import {
   useState,
 } from "react";
 import remarkBreaks from "remark-breaks";
-import { ACTOR_SIZE, ActorLine, ActorMark, ActorRef } from "../actor-ref.js";
+import { ActorGlyph, ActorLine, ActorRef } from "../actor-ref.js";
 import { FoldBody } from "../ai-elements/fold.js";
 import { MessageResponse } from "../ai-elements/message.js";
 import {
@@ -1154,6 +1156,8 @@ const CALL_ICON = {
   [CALL_KIND.SHOW_IMAGE]: ImageIcon,
   [CALL_KIND.OPEN_PULL_REQUEST]: () => <GLYPH.PULL_REQUEST />,
   [CALL_KIND.SLEEP]: TimerIcon,
+  [CALL_KIND.SCHEDULE_WAKEUP]: AlarmClockCheckIcon,
+  [CALL_KIND.CANCEL_WAKEUP]: AlarmClockOffIcon,
   [CALL_KIND.LIST_TASKS]: () => <GLYPH.TASK />,
   [CALL_KIND.REMEMBER]: () => <GLYPH.MEMORY />,
   [CALL_KIND.RECALL]: () => <GLYPH.MEMORY />,
@@ -1193,7 +1197,7 @@ function AgentCallChip({
     return (
       <InlineRef
         look={INLINE_REF_LOOK.PILL}
-        glyph={<ActorMark actor={agent} size={ACTOR_SIZE.INLINE} />}
+        glyph={<ActorGlyph actor={agent} />}
         label={actorName(agent)}
         hint={card === undefined ? false : undefined}
         card={card}
@@ -1210,7 +1214,7 @@ function AgentCallChip({
   return (
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
-      glyph={<ActorMark actor={agent} size={ACTOR_SIZE.INLINE} />}
+      glyph={<ActorGlyph actor={agent} />}
       label={actorName(agent)}
       onPress={press}
       hintLabel={opens.hint}

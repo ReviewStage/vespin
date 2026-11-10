@@ -56,6 +56,7 @@ import { EXPERIMENT, WORKSPACE_EXPERIMENT_LIST } from "@repo/settings";
 import { settleJsonSchemaGolden } from "@repo/wire/testing";
 import { eq, sql } from "drizzle-orm";
 import { Clock, DateTime, Effect, Option, Result, Schema } from "effect";
+import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { readWorkspaceMemories, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
 import { recordMemberDescriptionNotes } from "../agents/coder-host/description-edit.js";
@@ -74,6 +75,7 @@ import {
   openTask,
   PUBLISHED,
   PULL_REQUEST_NODE_ID,
+  publishedPullRequest,
   publishedPullRequestDrafted,
   RELAY_FULL_NAME,
   startedAgent,
@@ -275,6 +277,11 @@ const decodeHead = Schema.decodeUnknownSync(
 );
 
 /** A tool's answer as the agent reads it: whether it is the tool's error, and its JSON text read. */
+/** The member's default as list_models answers it. */
+const decodeDefault = Schema.decodeUnknownSync(
+  Schema.Struct({ default: Schema.Struct({ model: Schema.String, effort: Schema.String }) }),
+);
+
 const decodeAnswer = Schema.decodeUnknownSync(
   Schema.Struct({
     isError: Schema.optionalKey(Schema.Boolean),
@@ -554,7 +561,7 @@ it.effect(
 );
 
 it.effect(
-  "a member makes, starts, messages, stops, changes, shares a port of, plans, comments, remembers, and runs nothing in a workspace they are not in",
+  "a member makes, starts, messages, stops, changes, shares a port of, drives a browser of, plans, comments, remembers, and runs nothing in a workspace they are not in",
   () =>
     Effect.gen(function* () {
       const { auth, fetch, services } = yield* standing;
@@ -590,6 +597,12 @@ it.effect(
           { userId: stranger.userId, taskId: task.id },
           { notes: [DESCRIPTION_NOTE] },
         );
+        // A later save, past the window that joins it to the first, so revision 1 holds text the description no longer does.
+        yield* TestClock.adjust("11 minutes");
+        yield* recordMemberDescriptionNotes(
+          { userId: stranger.userId, taskId: task.id },
+          { notes: [{ ...DESCRIPTION_NOTE, text: "Invoices lag." }] },
+        );
         const { text } = Option.getOrThrow(yield* readTask(stranger.userId, task.id));
         const from = text.indexOf(DESCRIPTION_NOTE.text);
         const started = yield* startDescriptionCommentThread(
@@ -624,6 +637,7 @@ it.effect(
           memoryId: kept.memory.id,
           automationId: Option.getOrThrow(automation).id,
           agentId: yield* openTaskAgent(stranger.userId, elsewhere, task.id),
+          revisions: yield* listRevisions(stranger.userId, task.id),
         };
       }).pipe(Effect.provide(services));
       const token = yield* Effect.promise(() =>
@@ -645,6 +659,9 @@ it.effect(
             MEMBER_MCP_TOOL.EDIT_DESCRIPTION,
             { taskId, notes: [{ kind: NOTE_KIND.ADD, section: "Problem", text: "Planted." }] },
           ],
+          [MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS, { taskId }],
+          [MEMBER_MCP_TOOL.READ_DESCRIPTION_REVISION, { taskId, seq: 1 }],
+          [MEMBER_MCP_TOOL.RESTORE_DESCRIPTION_REVISION, { taskId, seq: 1 }],
           [MEMBER_MCP_TOOL.CREATE_SECTION, { workspace, title: "Planted" }],
           [MEMBER_MCP_TOOL.DELETE_SECTION, { sectionId: rows.sectionId }],
           [MEMBER_MCP_TOOL.START_AGENT, { taskId }],
@@ -655,6 +672,10 @@ it.effect(
           [MEMBER_MCP_TOOL.UPDATE_AGENT, { agentId, archived: true }],
           [MEMBER_MCP_TOOL.LIST_AGENT_PORTS, { agentId }],
           [MEMBER_MCP_TOOL.SHARE_AGENT_PORT, { agentId, port: 3000 }],
+          [MEMBER_MCP_TOOL.LIST_AGENT_BROWSER_TABS, { agentId }],
+          [MEMBER_MCP_TOOL.OPEN_AGENT_BROWSER_TAB, { agentId, address: "https://example.com/" }],
+          [MEMBER_MCP_TOOL.TAKE_OVER_AGENT_BROWSER_TAB, { agentId, tabId: randomUUID() }],
+          [MEMBER_MCP_TOOL.HAND_BACK_AGENT_BROWSER_TAB, { agentId, tabId: randomUUID() }],
           [MEMBER_MCP_TOOL.READ_COMMENTS, { taskId }],
           [
             MEMBER_MCP_TOOL.COMMENT_ON_DESCRIPTION,
@@ -680,6 +701,8 @@ it.effect(
           [MEMBER_MCP_TOOL.UPDATE_AUTOMATION, { automationId, name: "Renamed" }],
           [MEMBER_MCP_TOOL.RUN_AUTOMATION, { automationId }],
           [MEMBER_MCP_TOOL.DELETE_AUTOMATION, { automationId }],
+          [MEMBER_MCP_TOOL.READ_SANDBOX_SETUP, { workspace }],
+          [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP, { workspace, script: "Planted." }],
         ] as const,
         ([name, args]) =>
           Effect.promise(async () => {
@@ -698,6 +721,7 @@ it.effect(
       const after = yield* Effect.gen(function* () {
         return {
           task: yield* readTask(stranger.userId, taskId),
+          revisions: yield* listRevisions(stranger.userId, taskId),
           sections: yield* listTaskSections(stranger.userId),
           agent: yield* readAgent(stranger.userId, agentId),
           threads: yield* readDescriptionCommentThreads(stranger.userId, taskId),
@@ -715,12 +739,19 @@ it.effect(
         assert.ok(
           !answer.text.includes(taskId) &&
             !answer.text.includes(rows.elsewhere) &&
-            !answer.text.includes("A stranger's"),
+            !answer.text.includes("A stranger's") &&
+            !answer.text.includes("Invoices lag."),
         );
       }
       const task = Option.getOrThrow(after.task);
       assert.equal(task.task.name, "A stranger's task");
+      // Revision 1 is the first save alone, so a restore of it would have changed the description and added a revision.
+      assert.deepEqual(
+        rows.revisions.revisions.map(({ seq }) => seq),
+        [2, 1],
+      );
       assert.equal(task.text, rows.text);
+      assert.deepEqual(after.revisions, rows.revisions);
       assert.deepEqual(
         Option.getOrThrow(after.threads).map((thread) => ({
           status: thread.status,
@@ -961,6 +992,122 @@ it.effect(
           [
             "mergePullRequest",
             { id, method: "SQUASH", head: PUBLISHED.headSha },
+            `Bearer ${MEMBER_GITHUB_TOKEN}`,
+          ],
+        ],
+      );
+    }),
+);
+
+it.effect(
+  "an outside agent reads any pull request of the member's workspace by its repository and number, its files with the member's viewed marks, and marks one viewed on the member's own GitHub sign-in",
+  () =>
+    Effect.gen(function* () {
+      const calls: GraphqlCall[] = [];
+      const installation = freshInstallation();
+      const files = [
+        {
+          filename: "src/invite.ts",
+          status: "modified",
+          additions: 3,
+          deletions: 1,
+          changes: 4,
+          patch: "@@ -1 +1 @@",
+        },
+        {
+          filename: "src/expire.ts",
+          status: "added",
+          additions: 1,
+          deletions: 0,
+          changes: 1,
+          patch: "@@ -0,0 +1 @@",
+        },
+      ];
+      const github = githubReaching(
+        [installation],
+        undefined,
+        undefined,
+        graphqlAnswering(
+          calls,
+          (call) =>
+            Response.json({
+              data: call.query.includes("mutation")
+                ? {}
+                : call.query.includes("viewerViewedState")
+                  ? {
+                      repository: {
+                        pullRequest: {
+                          files: {
+                            nodes: [{ path: "src/invite.ts", viewerViewedState: "VIEWED" }],
+                            pageInfo: { hasNextPage: false, endCursor: null },
+                          },
+                        },
+                      },
+                    }
+                  : { repository: { pullRequest: { id: PULL_REQUEST_NODE_ID } } },
+            }),
+          (sent) =>
+            new URL(sent.url).pathname ===
+            `/repos/${RELAY_FULL_NAME}/pulls/${PUBLISHED.number}/files`
+              ? Response.json(files)
+              : publishedPullRequest(sent),
+        ),
+      );
+      const { auth, fetch, services } = yield* memberMcpStanding({ github: github.layer });
+      const member = yield* Effect.promise(() => signUp(auth));
+      yield* Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        yield* signInWithGitHub(member.userId, {
+          ...standingGithubRow(now),
+          accessToken: MEMBER_GITHUB_TOKEN,
+        });
+        const workspaceId = yield* openWorkspace(member.userId);
+        yield* connectWorkspaceGitHub(workspaceId, installation);
+      }).pipe(Effect.provide(services));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const named = { repository: RELAY_FULL_NAME, number: PUBLISHED.number };
+      const call = (name: string, args: Record<string, unknown>) =>
+        Effect.promise(async () => decodeAnswer(await client.callTool({ name, arguments: args })));
+
+      const changes = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, { ...named, part: "changes" });
+      const missing = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, { ...named, number: 13 });
+      const marked = yield* call(MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED, {
+        ...named,
+        paths: ["src/expire.ts"],
+        viewed: true,
+      });
+      yield* Effect.promise(() => client.close());
+
+      assert.notEqual(changes.isError, true, changes.content[0].text);
+      assert.deepEqual(
+        JSON.parse(changes.content[0].text).files.map(
+          ({ path, viewed }: { path: string; viewed: string }) => [path, viewed],
+        ),
+        [
+          ["src/invite.ts", "viewed"],
+          ["src/expire.ts", "unviewed"],
+        ],
+      );
+      // A number the repository holds no pull request under is refused as the hosted read refuses it.
+      assert.equal(missing.isError, true);
+      assert.match(missing.content[0].text, /no pull request of that number/u);
+      assert.notEqual(marked.isError, true, marked.content[0].text);
+      assert.deepEqual(
+        calls.flatMap((one) => {
+          const mutation = mutationOf(one);
+          return mutation === undefined ? [] : [[mutation, one.variables, one.authorization]];
+        }),
+        [
+          [
+            "markFileAsViewed",
+            { id: PULL_REQUEST_NODE_ID, path: "src/expire.ts" },
             `Bearer ${MEMBER_GITHUB_TOKEN}`,
           ],
         ],
@@ -1219,6 +1366,44 @@ it.effect(
       assert.equal(forgot.refused, false);
       assert.ok(forgotten.kind === WORKSPACE_MEMORY.READ);
       assert.deepEqual(forgotten.memories, []);
+    }),
+);
+
+it.effect(
+  "a member's default model is changed only to a choice they are offered, as Settings changes it, and list_models reads it back",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch } = yield* standing;
+      const member = yield* Effect.promise(() => signUp(auth));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const call = (name: string, args: Record<string, unknown>) =>
+        Effect.promise(async () => {
+          const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
+          return { refused: answer.isError === true, text: answer.content[0].text };
+        });
+
+      const before = yield* call(MEMBER_MCP_TOOL.LIST_MODELS, {});
+      const unoffered = yield* call(MEMBER_MCP_TOOL.UPDATE_PREFERENCES, {
+        model: "anthropic/claude-opus-5.5",
+        effort: "high",
+      });
+      const after = yield* call(MEMBER_MCP_TOOL.LIST_MODELS, {});
+      yield* Effect.promise(() => client.close());
+
+      // The catalog here offers nothing, so no choice is one the member may move their default to.
+      assert.equal(unoffered.refused, true);
+      assert.match(unoffered.text, /not offered that model/u);
+      assert.deepEqual(
+        decodeDefault(JSON.parse(after.text)),
+        decodeDefault(JSON.parse(before.text)),
+      );
     }),
 );
 
