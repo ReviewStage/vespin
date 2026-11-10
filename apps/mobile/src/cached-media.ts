@@ -15,13 +15,27 @@ const VIDEO_EXTENSION: Readonly<Record<string, string>> = {
   [CONVERSATION_MEDIA_TYPE.WEBM]: "webm",
 };
 
+/** Each write still under way, by the address of the file it writes, so a second read of one video waits on the first rather than writing over it. */
+const writing = new Map<string, Promise<string>>();
+
+/** A video's bytes written under a name of their own and moved into place as `file`, answering its address once they are all on disk. */
+async function written(file: File, name: string, base64: string): Promise<string> {
+  const partial = new File(Paths.cache, `${name}${WRITING_SUFFIX}`);
+  // A write an earlier launch left unfinished is cleared rather than written over.
+  if (partial.exists) partial.delete();
+  await partial.write(base64, { encoding: "base64" });
+  await partial.move(file, { overwrite: true });
+  return file.uri;
+}
+
 /**
  * Where a video's bytes were written for the system's player to read: a
  * file of the app's caches named `<prefix>-<id>.<extension>`, written once,
  * so a recording read again is the file already written, and answered only
  * once its bytes are all on disk. Note that the bytes are written under a
  * name of their own and moved into place, so a write cut short, as the app
- * is closed, never stands as the file a later read finds; that an MP4 plays
+ * is closed, never stands as the file a later read finds; that a read of a
+ * video another read is still writing waits on that write; that an MP4 plays
  * only under its extension; and that a WebM, which iOS's player cannot read,
  * says so in the player's place.
  */
@@ -35,10 +49,9 @@ export async function cachedVideo(
   const name = extension === undefined ? `${prefix}-${id}` : `${prefix}-${id}.${extension}`;
   const file = new File(Paths.cache, name);
   if (file.exists) return file.uri;
-  const writing = new File(Paths.cache, `${name}${WRITING_SUFFIX}`);
-  // A write an earlier launch left unfinished is cleared rather than written over.
-  if (writing.exists) writing.delete();
-  await writing.write(base64, { encoding: "base64" });
-  await writing.move(file, { overwrite: true });
-  return file.uri;
+  const under = writing.get(file.uri);
+  if (under !== undefined) return under;
+  const write = written(file, name, base64).finally(() => writing.delete(file.uri));
+  writing.set(file.uri, write);
+  return write;
 }
