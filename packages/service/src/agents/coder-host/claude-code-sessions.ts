@@ -258,6 +258,7 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
       const written: ClaudeCodeConfig = {
         harness: RUNNER_HARNESS.CLAUDE_CODE,
         cwd: layout.checkoutPath,
+        agentId: agent.id,
         executable: layout.claudeExecutable ?? CLAUDE_EXECUTABLE,
         model: model.modelId,
         ...(effort === undefined ? undefined : { effort }),

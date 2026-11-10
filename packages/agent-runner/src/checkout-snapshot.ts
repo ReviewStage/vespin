@@ -8,19 +8,22 @@
  * a copy of the checkout's own index, kept beside it under `.git`, so the
  * index's stat cache carries over and only the files changed since are
  * hashed, and the checkout's own index, its working tree, its branch, and
- * `HEAD` are never touched. The commit stands under a ref named for when
- * it was taken and for the line (`CHECKOUT_SNAPSHOT.REF_PREFIX`), the one
- * id the runner holds, which the service ties to the turn the line opened
- * as it records the ACCEPTED event that carries the snapshot; a restore
- * finds the commit by what the turn's row says, so the ref only keeps it
- * from being collected. The ref is one of the worktree's own
- * (`refs/worktree/`), so a Mac's worktree keeps its own apart from the
- * clone it was cut from and they go when the worktree does; a sandbox's
- * clone keeps them as any ref. The ref never leaves the machine: it is
- * not pushed, and a commit is signed by no one, made under a name of the
+ * `HEAD` are never touched. The commit stands under a ref named for the
+ * agent, for when it was taken, and for the line
+ * (`CHECKOUT_SNAPSHOT.REF_PREFIX`), the line's id being the one the
+ * runner holds, which the service ties to the turn the line opened as it
+ * records the ACCEPTED event that carries the snapshot; a restore finds
+ * the commit by what the turn's row says, so the ref only keeps it from
+ * being collected. The ref is one of the clone's own, beside an archived
+ * agent's (`refs/vespin/archive/`): on a Mac it stands in the shared clone
+ * the agent's worktree was cut from, so it outlives the worktree, which an
+ * archive removes and a later launch rebuilds, and each agent's refs stand
+ * under its own id, so one agent's prune touches no other's; a sandbox's
+ * clone keeps them as any ref. The ref never leaves the machine: it is not
+ * pushed, and a commit is signed by no one, made under a name of the
  * runner's own rather than the agent's identity. Each snapshot prunes the
- * refs beyond the newest `KEEP`, newest by the stamp in their names, and
- * lets `git gc --auto` collect what they held. A snapshot that fails, or runs past its bound, is a miss the turn
+ * agent's refs beyond the newest `KEEP`, newest by the stamp in their
+ * names, and lets `git gc --auto` collect what they held. A snapshot that fails, or runs past its bound, is a miss the turn
  * goes on without, logged, so a rewind to before that turn offers no restore.
  */
 
@@ -45,7 +48,11 @@ const SNAPSHOT_COMMITTER = {
 
 export interface CheckoutSnapshotsShape {
   /** The checkout at `cwd` recorded under the line's id, as above; none where it could not be, which is logged. */
-  readonly take: (cwd: string, lineId: string) => Effect.Effect<CheckoutSnapshot | undefined>;
+  readonly take: (
+    cwd: string,
+    agentId: string,
+    lineId: string,
+  ) => Effect.Effect<CheckoutSnapshot | undefined>;
 }
 
 export class CheckoutSnapshots extends Context.Service<CheckoutSnapshots, CheckoutSnapshotsShape>()(
@@ -88,9 +95,9 @@ const SNAPSHOT_SCRIPT = [
 /** How many digits the stamp a ref opens with is padded to, so the refs sort by it as text for as long as epoch milliseconds fit. */
 const STAMP_DIGITS = 16;
 
-/** The ref a snapshot taken at `now` for the line stands under: its stamp first, so the refs sort by when they were taken, then the line's id. */
-export function snapshotRef(now: number, lineId: string): string {
-  return `${CHECKOUT_SNAPSHOT.REF_PREFIX}${String(now).padStart(STAMP_DIGITS, "0")}-${lineId}`;
+/** The ref a snapshot taken at `now` for the agent's line stands under: the agent's id, then its stamp, so the refs sort by when they were taken, then the line's id. */
+export function snapshotRef(agentId: string, now: number, lineId: string): string {
+  return `${CHECKOUT_SNAPSHOT.REF_PREFIX}${agentId}/${String(now).padStart(STAMP_DIGITS, "0")}-${lineId}`;
 }
 
 const SHA = /^[0-9a-f]{40,64}$/u;
@@ -122,6 +129,7 @@ function stderrTail(stderr: string): string {
 const takeIn = Effect.fn("agent-runner/checkoutSnapshot")(function* (
   env: Readonly<Record<string, string | undefined>>,
   cwd: string,
+  agentId: string,
   lineId: string,
 ): Effect.fn.Return<CheckoutSnapshot | undefined, never, ChildProcessSpawner.ChildProcessSpawner> {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -133,7 +141,7 @@ const takeIn = Effect.fn("agent-runner/checkoutSnapshot")(function* (
           "-c",
           SNAPSHOT_SCRIPT,
           "sh",
-          snapshotRef(yield* Clock.currentTimeMillis, lineId),
+          snapshotRef(agentId, yield* Clock.currentTimeMillis, lineId),
           String(CHECKOUT_SNAPSHOT.KEEP),
         ],
         {
@@ -194,8 +202,8 @@ export function checkoutSnapshotsLive(
   return Layer.effect(
     CheckoutSnapshots,
     Effect.map(ChildProcessSpawner.ChildProcessSpawner, (spawner) => ({
-      take: (cwd, lineId) =>
-        takeIn(env, cwd, lineId).pipe(
+      take: (cwd, agentId, lineId) =>
+        takeIn(env, cwd, agentId, lineId).pipe(
           Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
         ),
     })),

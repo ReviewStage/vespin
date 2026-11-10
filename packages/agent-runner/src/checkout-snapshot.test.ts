@@ -24,6 +24,12 @@ const LIVE = checkoutSnapshotsLive({ PATH: process.env.PATH, HOME: process.env.H
   ),
 );
 
+const AGENT = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
+const OTHER_AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";
+
+/** Where the agent's snapshots stand. */
+const AGENT_REFS = `${CHECKOUT_SNAPSHOT.REF_PREFIX}${AGENT}/`;
+
 const LINE = {
   FIRST: "6b1f5d0c-3a51-4c56-9d0e-2f1c4b7a8e01",
   SECOND: "6b1f5d0c-3a51-4c56-9d0e-2f1c4b7a8e02",
@@ -79,17 +85,20 @@ it.layer(LIVE)("the checkout's snapshot", (it) => {
         const before = git(cwd, "status", "--porcelain");
 
         const snapshots = yield* CheckoutSnapshots;
-        const snapshot = yield* snapshots.take(cwd, LINE.FIRST);
+        const snapshot = yield* snapshots.take(cwd, AGENT, LINE.FIRST);
 
         assert.ok(snapshot !== undefined);
         assert.deepEqual(
           { head: snapshot.head, branch: snapshot.branch },
           { head, branch: "main" },
         );
-        const [ref] = git(cwd, "for-each-ref", "--format=%(refname)", CHECKOUT_SNAPSHOT.REF_PREFIX)
+        const [ref] = git(cwd, "for-each-ref", "--format=%(refname)", AGENT_REFS)
           .split("\n")
           .filter((each) => each.endsWith(`-${LINE.FIRST}`));
-        assert.ok(ref !== undefined, "the snapshot stands under a ref named for the line");
+        assert.ok(
+          ref !== undefined,
+          "the snapshot stands under a ref named for the agent and the line",
+        );
         assert.equal(git(cwd, "rev-parse", ref), snapshot.commit);
         assert.equal(git(cwd, "rev-parse", `${snapshot.commit}^`), head);
         assert.deepEqual(treeOf(cwd, snapshot.commit), {
@@ -115,21 +124,30 @@ it.layer(LIVE)("the checkout's snapshot", (it) => {
         // Each is taken a moment after the last, as turns are, so their stamps order them.
         yield* TestClock.adjust("1 millis");
         writeFileSync(join(cwd, "kept.txt"), `turn ${index}\n`);
-        assert.ok((yield* snapshots.take(cwd, line)) !== undefined);
+        assert.ok((yield* snapshots.take(cwd, AGENT, line)) !== undefined);
       }
+      // Another agent's snapshot in the same clone, which the first agent's prune leaves alone.
+      yield* TestClock.adjust("1 millis");
+      assert.ok((yield* snapshots.take(cwd, OTHER_AGENT, LINE.SECOND)) !== undefined);
       // The oldest goes and the rest stand, named for the lines they were taken under.
-      const kept = git(cwd, "for-each-ref", "--format=%(refname)", CHECKOUT_SNAPSHOT.REF_PREFIX)
+      const kept = git(cwd, "for-each-ref", "--format=%(refname)", AGENT_REFS)
         .split("\n")
         .filter((ref) => ref !== "")
-        // The line's id follows the stamp, past the first dash after the prefix.
-        .map((ref) => ref.slice(ref.indexOf("-", CHECKOUT_SNAPSHOT.REF_PREFIX.length) + 1));
+        // The line's id follows the stamp, past the first dash after the agent's prefix.
+        .map((ref) => ref.slice(ref.indexOf("-", AGENT_REFS.length) + 1));
       assert.deepEqual(kept.sort(), [...lines.slice(1)].sort());
+      assert.equal(
+        git(cwd, "for-each-ref", "--format=%(refname)", CHECKOUT_SNAPSHOT.REF_PREFIX).split("\n")
+          .length,
+        CHECKOUT_SNAPSHOT.KEEP + 1,
+        "the other agent's stands",
+      );
 
       const empty = mkdtempSync(join(tmpdir(), "checkout-snapshot-empty-"));
       yield* Effect.addFinalizer(() => Effect.sync(() => rmSync(empty, { recursive: true })));
       git(empty, "init", "--quiet", "--initial-branch=main");
       writeFileSync(join(empty, "first.txt"), "before any commit\n");
-      const snapshot = yield* snapshots.take(empty, LINE.FIRST);
+      const snapshot = yield* snapshots.take(empty, AGENT, LINE.FIRST);
       assert.ok(snapshot !== undefined);
       assert.deepEqual(
         { head: snapshot.head, branch: snapshot.branch },
@@ -144,7 +162,34 @@ it.layer(LIVE)("the checkout's snapshot", (it) => {
       const cwd = mkdtempSync(join(tmpdir(), "checkout-snapshot-none-"));
       yield* Effect.addFinalizer(() => Effect.sync(() => rmSync(cwd, { recursive: true })));
       const snapshots = yield* CheckoutSnapshots;
-      assert.equal(yield* snapshots.take(cwd, LINE.FIRST), undefined);
+      assert.equal(yield* snapshots.take(cwd, AGENT, LINE.FIRST), undefined);
     }),
+  );
+
+  it.effect(
+    "a snapshot taken in a worktree stands in the clone it was cut from, and outlives the worktree, as an archive removes one",
+    () =>
+      Effect.gen(function* () {
+        const clone = repository();
+        yield* Effect.addFinalizer(() => Effect.sync(() => rmSync(clone, { recursive: true })));
+        const worktree = join(clone, "..", `${AGENT}-worktree`);
+        git(clone, "worktree", "add", "--quiet", "--detach", worktree, "HEAD");
+        yield* Effect.addFinalizer(() =>
+          Effect.sync(() => rmSync(worktree, { recursive: true, force: true })),
+        );
+        writeFileSync(join(worktree, "kept.txt"), "as edited in the worktree\n");
+        const snapshots = yield* CheckoutSnapshots;
+        const snapshot = yield* snapshots.take(worktree, AGENT, LINE.FIRST);
+        assert.ok(snapshot !== undefined);
+
+        rmSync(worktree, { recursive: true, force: true });
+        git(clone, "worktree", "prune");
+
+        assert.equal(git(clone, "cat-file", "-t", snapshot.commit), "commit");
+        assert.ok(
+          git(clone, "for-each-ref", "--format=%(refname)", AGENT_REFS).endsWith(`-${LINE.FIRST}`),
+          "the ref stands in the clone",
+        );
+      }),
   );
 });
