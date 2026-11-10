@@ -82,7 +82,7 @@ function StepsExample(): React.JSX.Element {
         </Steps>
       </CatalogSection>
       <CatalogSection id="steps-outside" title="Done outside the app, and the wait">
-        <OutsideSteps waiting="Waiting for a host to join">
+        <OutsideSteps waiting="Waiting for a machine to connect">
           <Step number={1} title="Run this on a Mac or Linux server" state={STEP_STATE.CURRENT}>
             <CopyField
               label="Install command"

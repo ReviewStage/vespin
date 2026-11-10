@@ -127,12 +127,12 @@ import { MenuRow } from "./menu-row.js";
  */
 
 const SECTION_TITLE = {
-  HOSTS: "Your hosts",
-  ADD: "Add a host",
+  HOSTS: "Your machines",
+  ADD: "Add a machine",
 } as const;
 
 const WORDS = {
-  NONE: "No hosts yet.",
+  NONE: "No machines yet.",
   ONLINE: "Online",
   OFFLINE: "Offline",
   SETTING_UP: "Setting up…",
@@ -141,7 +141,7 @@ const WORDS = {
   APPROVE: "Open the link it prints, and approve its code",
   LOGGED_IN: "A Mac runs your agents only while its user is logged in.",
   INSTALL_FIELD: "Install command",
-  WAITING: "Waiting for a host to join",
+  WAITING: "Waiting for a machine to connect",
   CONNECTED: "is connected.",
 } as const;
 
@@ -159,7 +159,7 @@ const UNREACHED: ActionResult = {
 /** A remove the service answered with a refusal, said in the dialog that asked. */
 const REMOVE_REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
-  reason: "Could not remove this host. Try again.",
+  reason: "Could not remove this machine. Try again.",
 };
 /** Turning This Mac off, refused by the service, said in the dialog that asked. */
 const TURN_OFF_REFUSED: ActionResult = {
@@ -250,7 +250,7 @@ const THIS_MAC_WORDS = {
 /** What turning This Mac off asks first: it takes the host off this Mac, and its agents' folders where the member leaves that checked. */
 const THIS_MAC_OFF = {
   title: "Turn off agents on this Mac?",
-  body: `${PRODUCT_NAME} removes its host from this Mac, and any agent running here stops. Their tasks and transcripts stay in ${PRODUCT_NAME}.`,
+  body: `${PRODUCT_NAME} removes itself from this Mac, and any agent running here stops. Their tasks and transcripts stay in ${PRODUCT_NAME}.`,
   verb: "Turn off",
   running: "Turning off",
 } as const;
@@ -383,7 +383,7 @@ function RemoveHostDialog({
       question={{
         title: `Remove ${asked?.label ?? ""}?`,
         body: REMOVED,
-        verb: "Remove host",
+        verb: "Remove",
         running: "Removing",
         loss: CONFIRM_LOSS.IRREVERSIBLE,
         replayUnmasked: true,
@@ -591,12 +591,12 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
         </>
       ) : read.isError ? (
         <ReadFailed
-          line={readFailedWords("your hosts")}
+          line={readFailedWords("your machines")}
           surface={FAILURE_SURFACE.HOSTS_READ}
           onRetry={() => retry.mutate()}
         />
       ) : (
-        <SettingsRowsSkeleton label={readingWords("your hosts")} rows={HOSTS_SKELETON} />
+        <SettingsRowsSkeleton label={readingWords("your machines")} rows={HOSTS_SKELETON} />
       )}
     </SettingsSection>
   );

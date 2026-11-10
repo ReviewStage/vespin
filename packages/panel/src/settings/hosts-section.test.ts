@@ -156,14 +156,17 @@ test("a host that joins while the page stands is said to be connected in the wai
   await settle();
   // Note that the page stands on the account's first list, read once it reaches the hosts' query, before a host joins.
   await vi.waitFor(() => assert.ok(pageText().includes(`curl -fsSL ${SCRIPT} | sh`)));
-  assert.ok(pageText().includes("Waiting for a host to join"), pageText());
+  assert.ok(pageText().includes("Waiting for a machine to connect"), pageText());
 
   hosts.push({ id: "9b2d4f6a-1c3e-4a5b-8d7f-0e2a4c6b8d31", name: "hel-02" });
   act(lay);
   await settle();
 
   await vi.waitFor(() => assert.ok(pageText().includes("hel-02 is connected."), pageText()));
-  assert.ok(!pageText().includes("Waiting for a host to join"), "the wait gives way to the host");
+  assert.ok(
+    !pageText().includes("Waiting for a machine to connect"),
+    "the wait gives way to the host",
+  );
   assert.ok(pageText().includes("hel-02Setting up… · Linux server"), pageText());
 });
 
@@ -324,10 +327,10 @@ test("a refused Remove is said in the dialog that asked it, though the list drew
   await settle();
   removeOf("sfo-02");
 
-  await press("Remove host");
+  await press("Remove");
 
   const said = document.querySelector('[role="alertdialog"]')?.textContent ?? "";
-  assert.ok(said.includes("Could not remove this host. Try again."), said);
+  assert.ok(said.includes("Could not remove this machine. Try again."), said);
 });
 
 test("a host the service still lists for this Mac while it is off stands as any host does, with its Remove", async () => {

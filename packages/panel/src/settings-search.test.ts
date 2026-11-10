@@ -190,8 +190,12 @@ test("an experiment is found by its name, what it brings, and what other apps ca
   for (const query of ["how your team works", "later tasks"]) {
     assert.deepEqual(experimentalFound(query, true), ["Memory"], query);
   }
-  assert.deepEqual(experimentalFound("hosts", true), ["Bring your own host"], "the page it holds");
-  const experiments = ["Task descriptions", "Bring your own host", "Skills", "Memory"];
+  assert.deepEqual(
+    experimentalFound("machines", true),
+    ["Bring your own machine"],
+    "the page it holds",
+  );
+  const experiments = ["Task descriptions", "Bring your own machine", "Skills", "Memory"];
   for (const query of ["beta", "labs"]) {
     assert.deepEqual(experimentalFound(query, true), experiments, query);
   }
@@ -368,15 +372,15 @@ test("letters typed in order do not find a row: thm no longer finds Theme", () =
 });
 
 test("a page is found by its own name and leads its rows, the best page first, each page then the rows under it", () => {
-  const found = searchSettings(settingsSearchCorpus(FULL_INPUT), "hosts");
+  const found = searchSettings(settingsSearchCorpus(FULL_INPUT), "machines");
   const stops = found === undefined ? [] : settingsSearchStops(found);
 
-  assert.deepEqual(found?.groups[0]?.marks, [{ start: 0, end: 5 }]);
+  assert.deepEqual(found?.groups[0]?.marks, [{ start: 0, end: 8 }]);
   assert.deepEqual(
     stops.slice(0, 2).map((stop) => [stop.page, stop.entry?.label]),
     [
       [SETTINGS_VIEW.HOSTS, undefined],
-      [SETTINGS_VIEW.HOSTS, "Add hosts"],
+      [SETTINGS_VIEW.HOSTS, "Add a machine"],
     ],
   );
   assert.ok(

@@ -429,8 +429,8 @@ export const START_AGENT_REFUSAL = {
   ALSO_NO_REPOSITORY:
     "Not started: the agent works in no repository of its own for alsoRepositories to stand " +
     "beside; name its repository, or leave alsoRepositories out.",
-  DEVICE_REMOVED: `Not started: the host it would run on was removed. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add the host again.`,
-  NO_DEVICES: `Not started: the member has no device registered to run agents on. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add a Mac or a host in Settings › Hosts.`,
+  DEVICE_REMOVED: `Not started: the machine it would run on was removed. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add the machine again.`,
+  NO_DEVICES: `Not started: the member has no device registered to run agents on. Start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}, or ask the member to add a machine in Settings › Machines.`,
   NO_SOURCE:
     "Not started: no agent of your workspace has that id to start from; " +
     `${AGENT_TOOL.LIST_AGENTS} names them.`,
@@ -485,7 +485,7 @@ const LOCAL_AGENT_REFUSAL_WORDS = {
   [LOCAL_AGENT_REFUSAL.CODEX]: `Not started: the device it would run on has no Codex set up yet, so it cannot run this model. Start on a Claude model, or in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.NO_HARNESS]: `Not started: the device it would run on cannot run this model. Start on another model, or in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.PREPARING]: `Not started: the device it would run on is still getting ready for local agents, downloading Claude Code, Codex, and GitHub's CLI. Try again in a few minutes, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
-  [LOCAL_AGENT_REFUSAL.SETUP_FAILED]: `Not started: the device it would run on couldn't set up local agents, since its download of Claude Code, Codex, or GitHub's CLI failed. Ask the member to turn Bring your own host off and on in Settings › Hosts on that Mac, or to restart vespin-host on that Linux server, to try again, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
+  [LOCAL_AGENT_REFUSAL.SETUP_FAILED]: `Not started: the device it would run on couldn't set up local agents, since its download of Claude Code, Codex, or GitHub's CLI failed. Ask the member to turn Bring your own machine off and on in Settings › Machines on that Mac, or to restart vespin-host on that Linux server, to try again, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
   [LOCAL_AGENT_REFUSAL.GITHUB_SIGN_IN]: `Not started: the repository is reached on the member's own GitHub token, and the device it would run on has a vespin-host too old to work in such a repository on its own GitHub sign-in. Ask the member to update that host, or start it in the cloud with runsOn ${IN_THE_CLOUD_WORDS}.`,
 } as const satisfies Record<
   Exclude<LocalAgentRefusal, typeof LOCAL_AGENT_REFUSAL.NOT_OWNER>,

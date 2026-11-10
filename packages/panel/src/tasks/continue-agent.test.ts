@@ -421,7 +421,7 @@ test("a failed agent whose host settled its launch unstarted ends on the step it
   const line = tab.endLine() ?? assert.fail("the turn ends on its line");
   assert.match(
     line.textContent ?? "",
-    /The host couldn't start this agent: it failed while starting Codex\. Send a message to try again\./,
+    /The machine couldn't start this agent: it failed while starting Codex\. Send a message to try again\./,
   );
   assert.doesNotMatch(line.textContent ?? "", /Failed:/);
 });

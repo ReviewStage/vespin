@@ -242,11 +242,11 @@ export function AgentPlace({
   return <MacChip mac={agent.mac} move={move} narrow={narrow} />;
 }
 
-/** The id of the row that opens Settings › Hosts, which no place's id is. */
+/** The id of the row that opens Settings › Machines, which no place's id is. */
 const SET_UP_ROW = "set-up-a-host";
 
 /** What the row says that sends a member with no device to add one. */
-const SET_UP_WORDS = { LABEL: "Set up a Mac", DETAIL: "Settings › Hosts" } as const;
+const SET_UP_WORDS = { LABEL: "Set up a Mac", DETAIL: "Settings › Machines" } as const;
 
 /**
  * The chip as the move control: a toolbar picker ending in its chevron, its

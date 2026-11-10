@@ -32,7 +32,7 @@ const SETTINGS_PAGE = {
   [SETTINGS_VIEW.ENVIRONMENT]: { title: "Environment", icon: <KeyRoundIcon /> },
   [SETTINGS_VIEW.CLOUD_SETUP]: { title: "Cloud setup", icon: <CloudCogIcon /> },
   [SETTINGS_VIEW.AGENTS]: { title: "Agents", icon: <GLYPH.AGENT /> },
-  [SETTINGS_VIEW.HOSTS]: { title: "Hosts", icon: <GLYPH.HOST /> },
+  [SETTINGS_VIEW.HOSTS]: { title: "Machines", icon: <GLYPH.HOST /> },
   [SETTINGS_VIEW.INTEGRATIONS]: { title: "Integrations", icon: <PlugIcon /> },
   // Note that the outside agents' page is named and marked for the product, never the protocol alone, because the MCP glyph and "MCP servers" are what the window calls the servers its own agents use.
   [SETTINGS_VIEW.MCP]: { title: `${PRODUCT_NAME} MCP`, icon: <ProductMark small glyph /> },

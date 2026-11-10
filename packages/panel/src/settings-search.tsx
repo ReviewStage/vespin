@@ -392,13 +392,16 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           ],
         }
       : undefined,
-    // The Hosts page's Add hosts button, drawn once an account is signed in, under the machines the service lists.
+    // The Machines page's Add a machine button, drawn once an account is signed in, under the machines the service lists.
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.ADD_HOSTS,
-          label: "Add hosts",
+          label: "Add a machine",
           page: SETTINGS_VIEW.HOSTS,
-          haystack: ["Add hosts", "machine host server linux mac install vespin-host"],
+          haystack: [
+            "Add a machine",
+            "machines machine hosts host server linux mac install vespin-host",
+          ],
         }
       : undefined,
     // The Workspace page's groups, as it draws them for the workspace it
@@ -617,7 +620,7 @@ export interface SettingsSearchOutcome {
  * find nothing, so "thm" is not Theme. A blank query is no search at all.
  *
  * A page is found by its own name as well as through the rows it holds, so
- * "hosts" finds the Hosts page itself. The kept rows come back under their
+ * "machines" finds the Machines page itself. The kept rows come back under their
  * page, because that is how the results are drawn, each page's rows best
  * first and equals in the corpus's order; and the pages come back best
  * first, each as good as the best of its own name and its rows, equals in

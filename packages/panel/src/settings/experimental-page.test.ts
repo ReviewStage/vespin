@@ -133,7 +133,7 @@ test("the workspace's experiments and the account's own stand in two groups, eac
   ]);
   assert.deepEqual(
     [...page.querySelectorAll('[role="switch"]')].map((each) => each.getAttribute("aria-label")),
-    ["Task descriptions", "Memory", "Bring your own host", "Skills"],
+    ["Task descriptions", "Memory", "Bring your own machine", "Skills"],
   );
 });
 

@@ -56,7 +56,7 @@ const MESSAGE_RETIRED = "This agent has ended. Continue in a new one.";
 
 /** What a message to an agent whose host its starter removed says, and a Start that would run there, wherever it is drawn: only a new agent in the cloud or the host added again goes on from here. */
 export const HOST_REMOVED =
-  "This host was removed. Start a new agent in the cloud or add it again.";
+  "This machine was removed. Start a new agent in the cloud or add it again.";
 
 /** What a message that did not reach the agent says of itself, which a surface without Retry follows with Try again. */
 export const MESSAGE_NOT_SENT = "The message could not be sent.";
@@ -98,11 +98,11 @@ const DEVICE_WAKE = {
   [DEVICE_PLATFORM.LINUX]: "Check that it's on, connected, and running vespin-host",
 } as const satisfies Record<DevicePlatform, string>;
 
-/** How a device whose setup failed tries it again, by its platform: Bring your own host turned off and on in Settings › Hosts on a Mac, whose desktop app keeps its host running, or a Linux server's own `vespin-host` restarted. */
+/** How a device whose setup failed tries it again, by its platform: Bring your own machine turned off and on in Settings › Machines on a Mac, whose desktop app keeps its host running, or a Linux server's own `vespin-host` restarted. */
 const SETUP_RETRY = {
   [DEVICE_PLATFORM.DARWIN]:
-    "Open Settings › Hosts on that Mac and turn Bring your own host off and on",
-  [DEVICE_PLATFORM.LINUX]: "Run systemctl --user restart vespin-host on that host",
+    "Open Settings › Machines on that Mac and turn Bring your own machine off and on",
+  [DEVICE_PLATFORM.LINUX]: "Run systemctl --user restart vespin-host on that server",
 } as const satisfies Record<DevicePlatform, string>;
 
 /**

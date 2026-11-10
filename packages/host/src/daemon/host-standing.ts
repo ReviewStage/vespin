@@ -84,7 +84,7 @@ function refusalReport(
   const script = `${serviceOrigin}${HOST_WIRE.INSTALL_SCRIPT_PATH}`;
   return refusal === HOST_STANDING.UPGRADE_NEEDED
     ? `${PRODUCT_NAME} host: upgrade needed: ${PRODUCT_NAME} no longer accepts this version. Rerun the install command to upgrade in place: ${hostUpgradeCommand(script)}`
-    : `${PRODUCT_NAME} host: ${PRODUCT_NAME} refused this box's secret, so it was removed in Settings › Hosts. Stopping its agents. Add it again with Add hosts, and rerun the install command it shows.`;
+    : `${PRODUCT_NAME} host: ${PRODUCT_NAME} refused this box's secret, so it was removed in Settings › Machines. Stopping its agents. Add it again with Add a machine, and rerun the install command it shows.`;
 }
 
 /** The host's standing with the service, as its calls heard it, and the client every call of its goes through. */
