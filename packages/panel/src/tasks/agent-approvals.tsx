@@ -3,13 +3,13 @@ import {
   type AgentPendingApproval,
   type AgentPermissionMode,
   APPROVAL_ANSWER,
+  APPROVAL_BOUNDS,
   APPROVAL_STATUS,
   type ApprovalAnswerRequest,
   type ApprovalStatus,
 } from "@repo/features/agent-approval-wire";
-import type { AgentApprovalAnswerView } from "@repo/features/agent-view";
+import { AGENT_CALL_FAILURE, type AgentApprovalAnswerView } from "@repo/features/agent-view";
 import { AGENT_RUNTIME, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
-import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
   APPROVAL_CARD_ANSWER,
@@ -162,8 +162,12 @@ const SETTLED_WORDS = {
   ALREADY_DENIED: "Already denied",
 } as const;
 
-/** Why an answer did not go, said under the card's row. */
-const ANSWER_FAILED = "The answer did not reach the agent. Try again.";
+/** Why an answer did not go, said under the card's row: refused as not the reader's to answer or gone, or not heard back, which a press again may mend. */
+const ANSWER_FAILED = {
+  NOT_PERMITTED: "Only a member who controls this agent can answer it.",
+  NOT_FOUND: "This approval is no longer here.",
+  UNANSWERED: "The answer did not reach the agent. Try again.",
+} as const;
 
 /** Who asks, where a subagent does. */
 const SUBAGENT_ASKS = "Asked by a subagent";
@@ -480,15 +484,25 @@ function answeredAsk(ask: HeldAsk, answered: ApprovalActAnswer, agentId: string)
   if ("approvalStatus" in answered && answered.approvalStatus !== undefined) {
     return { ...ask, answering: undefined, settled: ALREADY_LINE[answered.approvalStatus] };
   }
+  // Note that a refusal names why, and only an answer not heard back asks for another press.
+  const refused =
+    answered.failure === AGENT_CALL_FAILURE.NOT_PERMITTED ||
+    answered.failure === AGENT_CALL_FAILURE.NOT_FOUND;
   return {
     ...ask,
     answering: undefined,
     error: {
-      words: ANSWER_FAILED,
+      words:
+        answered.failure === AGENT_CALL_FAILURE.NOT_PERMITTED
+          ? ANSWER_FAILED.NOT_PERMITTED
+          : answered.failure === AGENT_CALL_FAILURE.NOT_FOUND
+            ? ANSWER_FAILED.NOT_FOUND
+            : ANSWER_FAILED.UNANSWERED,
       failure: failureShown({
         surface: FAILURE_SURFACE.AGENT_APPROVAL,
-        cause: "cause" in answered ? answered.cause : FAILURE_REASON.OTHER,
+        cause: "cause" in answered && answered.cause !== undefined ? answered.cause : answered,
         about: { agentId },
+        ...(refused ? { refused: true } : undefined),
       }),
     },
   };
@@ -532,6 +546,7 @@ export function AgentApprovalCard({ ask }: { ask: ApprovalView }): React.JSX.Ele
       answering={ask.answering}
       settled={ask.settled}
       error={ask.error}
+      noteMaxLength={APPROVAL_BOUNDS.MAX_MESSAGE_CHARS}
       onAnswer={ask.onAnswer}
     />
   );
@@ -579,21 +594,26 @@ export function transcriptCallIds(
   return ids;
 }
 
-/** The asks no drawn call holds, a subagent's among them, at the transcript's foot. */
-export function LooseApprovals({
-  asks,
-  callIds,
-}: {
-  asks: readonly ApprovalView[];
-  callIds: ReadonlySet<string>;
-}): React.JSX.Element | null {
-  const loose = asks.filter(
+/** The asks no drawn call holds, a subagent's among them, which stand at the transcript's foot. */
+export function looseApprovals(
+  asks: readonly ApprovalView[],
+  callIds: ReadonlySet<string>,
+): readonly ApprovalView[] {
+  return asks.filter(
     (ask) => ask.approval.subagentId !== undefined || !callIds.has(ask.approval.toolUseId),
   );
-  if (loose.length === 0) return null;
+}
+
+/** The asks no drawn call holds, at the transcript's foot (`looseApprovals`). */
+export function LooseApprovals({
+  asks,
+}: {
+  asks: readonly ApprovalView[];
+}): React.JSX.Element | null {
+  if (asks.length === 0) return null;
   return (
     <div className="agent-loose-approvals flex flex-col gap-control-gap">
-      {loose.map((ask) => (
+      {asks.map((ask) => (
         <AgentApprovalCard key={ask.approval.id} ask={ask} />
       ))}
     </div>

@@ -179,6 +179,7 @@ import {
   ApprovalsProvider,
   CallApproval,
   LooseApprovals,
+  looseApprovals,
   transcriptCallIds,
   useAgentApprovals,
   useAgentPermissionMode,
@@ -698,7 +699,6 @@ function ToolCallView({
         errorText={part.errorText}
         cut={cut}
       />
-      <CallApproval callId={part.callId} />
       <CallPictures tool={part.tool} input={part.input} output={part.output} />
       {limit === undefined ? null : (
         <UsageLimitNotice notice={limit} look={USAGE_LIMIT_NOTICE_LOOK.TITLE} />
@@ -1104,6 +1104,60 @@ function CutReasoningView({ cut }: { cut: AgentPartCut }): ReactNode {
   return <TranscriptReasoning text={whole.kind === AGENT_PART.REASONING ? whole.text : ""} />;
 }
 
+/** One tool call's row, drawn as its kind asks: a cut answer, pictures shown, a delegation, a call that made or names something, a to-do list, a skill loaded, or a plain call. */
+function ToolPartView({
+  part,
+  delegation,
+  todos,
+}: {
+  part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>;
+  delegation: DelegationDoors | undefined;
+  todos: TodosPlace;
+}): ReactNode {
+  // Only an answer the window draws as words is cut (`part-cut.ts`), so the call draws as any call's row.
+  if (part.cut !== undefined) {
+    return <CutToolCallView part={part} cut={part.cut} jobs={delegation?.jobs} />;
+  }
+  // A set of pictures the agent showed, or is showing, is drawn as itself; one refused keeps its row, where its error is read.
+  if (part.tool === AGENT_TOOL.SHOW_IMAGE && part.state !== TOOL_STATE.OUTPUT_ERROR) {
+    return <ShownPictures input={part.input} output={part.output} />;
+  }
+  if (delegates(part)) return <DelegationRow part={part} doors={delegation} />;
+  // A call that failed keeps its row, because the row is where its error is read.
+  const target = part.state === TOOL_STATE.OUTPUT_ERROR ? undefined : toolTarget(part);
+  if (target !== undefined && target.kind !== TOOL_TARGET.AGENT) {
+    return <MadeCallView part={part} target={target} doors={delegation} />;
+  }
+  const openTarget = delegation?.onOpenTarget;
+  if (target !== undefined && openTarget !== undefined) {
+    return (
+      <TargetCallView
+        part={part}
+        target={target}
+        doors={delegation}
+        onOpen={() => openTarget(target)}
+      />
+    );
+  }
+  if (isTodos(part)) {
+    return (
+      <TodosRow
+        part={part}
+        todos={todosOfPart(part, todos.lists)}
+        live={part.callId === todos.live}
+      />
+    );
+  }
+  return toolCallView(part).kind === CALL_KIND.LOAD_SKILL ? (
+    <LoadedSkillView part={part} />
+  ) : // A call about an agent names it by the cards the window hands now (`LiveDoors`).
+  calledAgent(part) === undefined ? (
+    <MadeCallView part={part} target={undefined} doors={delegation} />
+  ) : (
+    <AgentCallView part={part} jobs={delegation?.jobs} doors={delegation} />
+  );
+}
+
 /** One part of the agent's turn, drawn by its kind. */
 function AgentPartView({
   part,
@@ -1133,50 +1187,14 @@ function AgentPartView({
       ) : (
         <CutReasoningView cut={part.cut} />
       );
-    case AGENT_PART.TOOL: {
-      // Only an answer the window draws as words is cut (`part-cut.ts`), so the call draws as any call's row.
-      if (part.cut !== undefined) {
-        return <CutToolCallView part={part} cut={part.cut} jobs={delegation?.jobs} />;
-      }
-      // A set of pictures the agent showed, or is showing, is drawn as itself; one refused keeps its row, where its error is read.
-      if (part.tool === AGENT_TOOL.SHOW_IMAGE && part.state !== TOOL_STATE.OUTPUT_ERROR) {
-        return <ShownPictures input={part.input} output={part.output} />;
-      }
-      if (delegates(part)) return <DelegationRow part={part} doors={delegation} />;
-      // A call that failed keeps its row, because the row is where its error is read.
-      const target = part.state === TOOL_STATE.OUTPUT_ERROR ? undefined : toolTarget(part);
-      if (target !== undefined && target.kind !== TOOL_TARGET.AGENT) {
-        return <MadeCallView part={part} target={target} doors={delegation} />;
-      }
-      const openTarget = delegation?.onOpenTarget;
-      if (target !== undefined && openTarget !== undefined) {
-        return (
-          <TargetCallView
-            part={part}
-            target={target}
-            doors={delegation}
-            onOpen={() => openTarget(target)}
-          />
-        );
-      }
-      if (isTodos(part)) {
-        return (
-          <TodosRow
-            part={part}
-            todos={todosOfPart(part, todos.lists)}
-            live={part.callId === todos.live}
-          />
-        );
-      }
-      return toolCallView(part).kind === CALL_KIND.LOAD_SKILL ? (
-        <LoadedSkillView part={part} />
-      ) : // A call about an agent names it by the cards the window hands now (`LiveDoors`).
-      calledAgent(part) === undefined ? (
-        <MadeCallView part={part} target={undefined} doors={delegation} />
-      ) : (
-        <AgentCallView part={part} jobs={delegation?.jobs} doors={delegation} />
+    case AGENT_PART.TOOL:
+      // A call the agent holds for an answer draws its card under its row, whichever row draws it.
+      return (
+        <>
+          <ToolPartView part={part} delegation={delegation} todos={todos} />
+          <CallApproval callId={part.callId} />
+        </>
       );
-    }
     // A step boundary is the model's own pacing, and the parts keep one rhythm across it.
     case AGENT_PART.STEP_START:
     case AGENT_PART.OTHER:
@@ -2554,16 +2572,17 @@ function AgentTranscriptView({
     const description = carded ? first : undefined;
     const task = carded || blank ? undefined : first;
     // What stands after the messages is drawn inside the last of them, which grows as TanStack's streaming reply does, so the virtualizer measures it with the row and the log holds nothing past its rows.
+    // Note that an ask no drawn call holds stands at the foot after the turn too, settled there as it settled.
+    const loose = approvals === undefined ? [] : looseApprovals(approvals.asks, callIds);
     const trailing =
       !working &&
+      loose.length === 0 &&
       ended === undefined &&
       limitNotice === undefined &&
       endTrail === undefined &&
       !(failed && connected) ? null : (
         <>
-          {working && approvals !== undefined ? (
-            <LooseApprovals asks={approvals.asks} callIds={callIds} />
-          ) : null}
+          <LooseApprovals asks={loose} />
           {working && !waitingNotice ? (
             <WorkingLine
               startedAt={startedAt}

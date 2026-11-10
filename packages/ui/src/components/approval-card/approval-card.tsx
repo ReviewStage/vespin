@@ -29,7 +29,8 @@ import { TextArea } from "../text-field/text-field.js";
  * accent, which lets this call through; Always allow for this agent, which
  * lets every call like it through while the agent's runner runs; and Deny…,
  * which opens a small note under the row for the words that tell the agent
- * why, optional, with Deny to send it and Cancel to close it again. Enter
+ * why, optional and held to the bound its owner names, with Deny to send
+ * it and Cancel to close it again. Enter
  * in the note denies, Escape cancels. Each is a control's height, a
  * finger's on a coarse pointer, as every button is. While an answer is out
  * (`answering`), its press stands busy and the others take nothing, and a
@@ -138,10 +139,12 @@ function ApprovalDetailText({ detail }: { detail: ApprovalDetail }): React.JSX.E
 /** The note a denial opens: the words that tell the agent why, then Cancel and Deny. */
 function DenyNote({
   busy,
+  maxLength,
   onDeny,
   onCancel,
 }: {
   busy: boolean;
+  maxLength: number | undefined;
   onDeny: (message: string | undefined) => void;
   onCancel: () => void;
 }): React.JSX.Element {
@@ -160,6 +163,7 @@ function DenyNote({
         rows={2}
         grow
         autoFocus
+        maxLength={maxLength}
         busy={busy}
         onSubmit={deny}
         onEscape={busy ? undefined : onCancel}
@@ -189,6 +193,7 @@ export function ApprovalCard({
   answering,
   error,
   settled,
+  noteMaxLength,
   onAnswer,
 }: {
   /** The ask's sentence, the CLI's: "Claude wants to run a command". */
@@ -205,6 +210,8 @@ export function ApprovalCard({
   error?: ShownError | undefined;
   /** How the ask stands once settled, which folds the card into its line; none while it waits. */
   settled?: ApprovalSettled | undefined;
+  /** The most characters a denial's note takes, which its field stops at; no bound where none is named. */
+  noteMaxLength?: number | undefined;
   /** Answers the ask, a denial with the note's words where it has some. */
   onAnswer: (answer: ApprovalCardAnswer, message?: string) => void;
 }): React.JSX.Element {
@@ -250,6 +257,7 @@ export function ApprovalCard({
         {denying ? (
           <DenyNote
             busy={answering === APPROVAL_CARD_ANSWER.DENY}
+            maxLength={noteMaxLength}
             onDeny={(message) => onAnswer(APPROVAL_CARD_ANSWER.DENY, message)}
             onCancel={() => setDenying(false)}
           />
