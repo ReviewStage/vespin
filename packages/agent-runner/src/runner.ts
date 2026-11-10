@@ -943,7 +943,10 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     ended: yield* Deferred.make<RunnerEnd>(),
     failure: yield* Ref.make(""),
     firstSequence: config.firstSequence,
-    snapshot: (lineId) => snapshots.take(config.cwd, config.agentId, lineId),
+    snapshot: (lineId) =>
+      config.agentId === undefined
+        ? Effect.succeed(undefined)
+        : snapshots.take(config.cwd, config.agentId, lineId),
     providerHost: provider.host,
     probeTarget: probeTargetOf(context.env, provider),
     reconnecting: yield* Ref.make<Reconnecting | undefined>(undefined),
