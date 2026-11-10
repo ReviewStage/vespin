@@ -3,7 +3,10 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { GITHUB_INSTALLATION_STATUS } from "@repo/database/github-installation-vocabulary";
-import { INTEGRATION_ROW_STATUS } from "@repo/database/integration-vocabulary";
+import {
+  INTEGRATION_ROW_STATUS,
+  type IntegrationRowStatus,
+} from "@repo/database/integration-vocabulary";
 import { createTask } from "@repo/database/models/task-store";
 import { accountProviderKey } from "@repo/database/schemas/account-provider-key";
 import { agentTable } from "@repo/database/schemas/agent";
@@ -331,7 +334,7 @@ it.layer(getTestDB())("the reliability read's accounts that need attention", (it
             },
           ]),
         );
-        const connection = (userId: string, status: string, updatedAt: Date) => ({
+        const connection = (userId: string, status: IntegrationRowStatus, updatedAt: Date) => ({
           id: randomUUID(),
           userId,
           provider: INTEGRATION_PROVIDER.NOTION,

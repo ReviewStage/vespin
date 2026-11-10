@@ -35,8 +35,10 @@ import {
   type ThreadLineMetadata,
   TURN_ORIGIN,
   TURN_STATUS,
+  TURN_TERMINAL,
   type TurnOrigin,
   type TurnStatus,
+  type TurnTerminalStatus,
   type TypedAskMetadata,
   UNKNOWN_ACTION_STATUS,
   type UnparsedWireValue,
@@ -620,7 +622,7 @@ const TURN_ORIGIN_OF_RUN_ORIGIN = {
   [RUN_TURN_ORIGIN.CHILD]: TURN_ORIGIN.CHILD,
 } as const satisfies Record<RunTurnOrigin, TurnOrigin>;
 
-function turnStatusOf(status: RunStatus): TurnStatus {
+function turnStatusOf(status: RunStatus): TurnTerminalStatus {
   switch (status) {
     case RUN_STATUS.SUCCEEDED:
       return TURN_STATUS.SETTLED;
@@ -638,11 +640,7 @@ function turnStatusOf(status: RunStatus): TurnStatus {
 /** The longest a failed turn's detail is kept, in characters, cut from the end here whatever its teller sent. */
 const TURN_FAILURE_DETAIL = { CHARS: 2000 } as const;
 
-const TERMINAL_TURN_STATUSES: ReadonlySet<TurnStatus> = new Set([
-  TURN_STATUS.SETTLED,
-  TURN_STATUS.CANCELED,
-  TURN_STATUS.FAILED,
-]);
+const TERMINAL_TURN_STATUSES: ReadonlySet<TurnStatus> = new Set(TURN_TERMINAL);
 
 type ToolPart = ToolUIPart<UITools>;
 

@@ -17,6 +17,7 @@ import { LANDED, landedMark } from "../landed/landed.js";
 import { GAP, type Gap, Inline } from "../layout/layout.js";
 import { PROGRESS_SIZE, Progress, type ProgressTone } from "../progress/progress.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
+import { type UsageMeterRow, UsageMeters } from "../usage-meters/usage-meters.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
 
 /**
@@ -385,6 +386,24 @@ export function SettingsRowMeter({
   );
 }
 
+/** How much of each of its usage windows a row's plan has used, as meters under its state line (`UsageMeters`). */
+export function SettingsRowUsage({
+  rows,
+  heard,
+  alignWith,
+}: {
+  rows: readonly UsageMeterRow[];
+  heard?: string | undefined;
+  /** Every row of the meters in the rows around it, which these line up with as one table (`UsageMeters`). */
+  alignWith?: readonly UsageMeterRow[] | undefined;
+}): React.JSX.Element {
+  return (
+    <span className="ui-settings-row-usage mt-ui-6 block">
+      <UsageMeters rows={rows} heard={heard} alignWith={alignWith} />
+    </span>
+  );
+}
+
 /** Where a row's subject stands, as its line under the name says it. */
 export const SETTINGS_ROW_STATE = {
   CONNECTED: "connected",
@@ -455,6 +474,17 @@ export function SettingsRowValue({ children }: { children: ReactNode }): React.J
 /** The room of a row's ⋯ on a row with none, so every row's value ends in one column. */
 export function SettingsRowActSlot(): React.JSX.Element {
   return <span className="ui-settings-row-act-slot w-control flex-none" aria-hidden="true" />;
+}
+
+/**
+ * A row's control standing in for presses not yet shown: no wider than
+ * nothing, but as tall as a control, so the row's line already stands as tall
+ * as the Discard and Save an edit will bring, and their arrival moves nothing.
+ */
+export function SettingsRowControlHold(): React.JSX.Element {
+  return (
+    <span className="ui-settings-row-control-hold h-control w-0 flex-none" aria-hidden="true" />
+  );
 }
 
 /** What is true of a saved credential, on one muted line beside its presses: its hint, its login, its status, wrapping between facts, never inside one. */

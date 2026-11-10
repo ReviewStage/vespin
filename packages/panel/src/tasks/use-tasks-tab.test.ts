@@ -768,6 +768,20 @@ test("an agent's start pressed on Home's own composer and refused opens no dialo
     repository: refused?.card.repository,
     says: refused?.note.text.length !== 0,
   };
+  // A start from the dialog over Home, refused in turn, lets its page go to the refusal it stood over.
+  act(() => tab.control().newTask.onOpenIn("acme/web"));
+  const second = handedStart();
+  await act(async () => {
+    await tab.control().newTask.start("", "acme/web", undefined, {
+      handed: second,
+      card: {
+        ...card,
+        repository: "acme/web",
+        press: { key: second.idempotencyKey, ask: { ...ask, repository: "acme/web" } },
+      },
+    });
+  });
+  const keptUnder = tab.control().newTask.homeRefused?.refused.card.repository;
   act(() => inboxDoorNow().open());
   act(() => tab.control().onGoHome());
 
@@ -777,6 +791,7 @@ test("an agent's start pressed on Home's own composer and refused opens no dialo
     repository: "acme/api",
     says: true,
   });
+  assert.equal(keptUnder, "acme/api", "a dialog's refused start leaves Home's refusal standing");
   assert.equal(
     tab.control().newTask.homeRefused,
     undefined,

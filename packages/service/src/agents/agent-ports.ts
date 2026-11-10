@@ -71,7 +71,7 @@ const linkOf = (id: string, route: string) =>
 export function listAgentPorts(userId: string, id: string): PortsEffect<ListeningPortsAnswer> {
   return Effect.flatMap(cloudSession(userId, id), (sessionId) =>
     sessionId === undefined
-      ? Effect.succeed({ running: false, ports: [] })
+      ? Effect.succeed({ running: false, ports: [], labels: [] })
       : onSandbox((sandbox) => sandbox.listeningPorts(sessionId)),
   );
 }

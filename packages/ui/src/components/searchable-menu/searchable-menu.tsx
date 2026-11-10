@@ -2,6 +2,7 @@ import { searchTokens } from "@repo/features/search-tokens";
 import { APP_SHORTCUTS, type KeyedCommand } from "@repo/settings/shortcuts";
 import { Fragment, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
+import { ICON_SIZE } from "../../icons/icon-size.js";
 import { type SearchSubject, searchHit } from "../../search-score.js";
 import { REPLAY_MASKED, ReplayWords } from "../../session-replay-marks.js";
 import {
@@ -24,6 +25,7 @@ import {
   comboboxOptionId,
 } from "../combobox/combobox.js";
 import { useComboboxField } from "../combobox/use-combobox-field.js";
+import { GLYPH_INK, GlyphSlot } from "../glyph-slot/glyph-slot.js";
 import { LIST_DENSITY, List, ListRow } from "../list-row/list-row.js";
 import { MENU_ITEM_MARK, MenuItem } from "../menu/menu.js";
 import { MenuReplayUnmasked } from "../menu/menu-replay.js";
@@ -96,7 +98,9 @@ import { RowHint, RowHintOptions, Tooltip } from "../tooltip/hint.js";
  * the owner's, which says where it stands and how wide. An owner whose pick
  * acts at once may head it with what a pick does ("Add a sub-task"), led by
  * the folded way back to the menu it was chosen from where there is one, as
- * a sheet's head draws a submenu's (`MenuHead`). Its owner holds it
+ * a sheet's head draws a submenu's (`MenuHead`). An owner may also stand
+ * what the rows are for over them (`lead`), pressed by nothing, as a cloud
+ * sandbox's status stands over the places to move its agent to. Its owner holds it
  * drawn through its exit (`useDisclosure`), handing it `leaving`, which
  * leaves it inert and fading, focus already handed back.
  *
@@ -231,11 +235,16 @@ export interface MenuHead {
 
 /** The menu's last line, pressed by nothing: who pays for the agent, and the link that manages it where its provider asks for one. */
 export interface MenuLastLine {
-  words: string;
+  /** The line's words, which may hold an inline reference among them: whose plan pays. */
+  words: React.ReactNode;
+  /** A mark before the words, set apart from them: the plan's harness, or a key. */
+  glyph?: React.ReactNode;
   /** Whether its words name a person's thing, a plan by its account's email, kept masked in a screen recording even in a menu that unmasks its own. */
   masked?: boolean | undefined;
   /** A link at the line's end, set apart from the words: Manage usage. */
   end?: React.ReactNode;
+  /** What stands under the line, inset as its words are: the plan's usage meters. */
+  below?: React.ReactNode;
 }
 
 /** Which side of the menu a submenu stands on: beside its row to the right, or to the left where there is no room. */
@@ -295,16 +304,27 @@ const FOOT = "ui-searchable-menu-foot block flex-none border-t border-border p-m
 const NOTE =
   "ui-searchable-menu-note px-row-inset pt-ui-4 pb-0 [.ui-searchable-menu-submenu>&]:pb-menu-inset";
 
+/** What stands over the rows, inset as a popover card's content is, behind a hairline from them. */
+const LEAD =
+  "ui-searchable-menu-lead flex flex-none flex-col gap-block-gap border-b border-border p-card-inset-snug text-caption";
+
 /** The menu's last line, in a block of its own behind the pinned rows' hairline, its words inset as a row's are. */
 const LAST_LINE =
   "ui-searchable-menu-last-line block flex-none border-t border-border p-menu-inset";
 
 /** The last line's words and the link at its end, set apart: the words take the room, the link keeps to one line. */
 const LAST_LINE_BODY =
-  "ui-searchable-menu-last-line-body flex items-baseline justify-between gap-ui-8 px-row-inset";
+  "ui-searchable-menu-last-line-body flex items-center justify-between gap-ui-8 px-row-inset";
 
 /** The link at the last line's end, never broken across lines. */
 const LAST_LINE_END = "ui-searchable-menu-last-line-end flex-none whitespace-nowrap";
+
+/** What stands under the last line, inset as its words are. */
+const LAST_LINE_BELOW = "ui-searchable-menu-last-line-below px-row-inset pt-ui-6 pb-ui-4";
+
+/** The last line's mark and words, the mark centered on the words' first line. */
+const LAST_LINE_WORDS =
+  "ui-searchable-menu-last-line-words flex min-w-0 items-center gap-icon-gap text-muted-foreground";
 
 /**
  * The head over the field, its words inset as a row's are, or after the way
@@ -550,9 +570,16 @@ function LastLine({ line }: { line: MenuLastLine }): React.JSX.Element {
   return (
     <div className={LAST_LINE}>
       <div className={LAST_LINE_BODY}>
-        <Text as={TEXT_ELEMENT.P} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-          {line.masked === true ? <ReplayWords masked>{line.words}</ReplayWords> : line.words}
-        </Text>
+        <span className={LAST_LINE_WORDS}>
+          {line.glyph === undefined ? null : (
+            <GlyphSlot ink={GLYPH_INK.INHERIT} size={ICON_SIZE.SMALL}>
+              {line.glyph}
+            </GlyphSlot>
+          )}
+          <Text as={TEXT_ELEMENT.P} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+            {line.masked === true ? <ReplayWords masked>{line.words}</ReplayWords> : line.words}
+          </Text>
+        </span>
         {line.end === undefined ? null : (
           <span className={LAST_LINE_END}>
             <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
@@ -561,6 +588,7 @@ function LastLine({ line }: { line: MenuLastLine }): React.JSX.Element {
           </span>
         )}
       </div>
+      {line.below === undefined ? null : <div className={LAST_LINE_BELOW}>{line.below}</div>}
     </div>
   );
 }
@@ -695,6 +723,8 @@ export function SearchableMenu(
     foot?: readonly FootRow[] | undefined;
     /** What a pick does, said over the field, led by the way back to the menu it was chosen from where there is one. */
     head?: MenuHead | undefined;
+    /** What stands over the rows, read before them and pressed by nothing: a sandbox's status over the places to move it to. */
+    lead?: React.ReactNode;
     /** One muted line under its own hairline, after the pinned rows: who pays for the agent. */
     lastLine?: MenuLastLine | undefined;
     /** The menu is on its way out: drawn fading, and taking nothing. */
@@ -1073,6 +1103,9 @@ export function SearchableMenu(
     />
   );
 
+  // What stands over the rows, at the rows' inset, under a hairline of its own.
+  const lead = props.lead === undefined ? null : <div className={LEAD}>{props.lead}</div>;
+
   // The submenu standing beside its row, which a sheet never draws there.
   const beside = sheet ? undefined : open;
   const pinnedRows = footed ? (
@@ -1148,6 +1181,7 @@ export function SearchableMenu(
       >
         {open === undefined ? (
           <>
+            {lead}
             {rowList}
             {footRows}
           </>
@@ -1172,6 +1206,7 @@ export function SearchableMenu(
       onBlur={(event) => props.onLeave(event.relatedTarget)}
     >
       {props.head === undefined ? null : <Head head={props.head} unmasked={unmasked} />}
+      {lead}
       {searchField}
       {rowList}
       {open === undefined || footAt >= 0 || rowBox === undefined ? null : (

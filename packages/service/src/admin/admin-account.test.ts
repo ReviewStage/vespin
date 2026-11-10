@@ -3,7 +3,10 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { GITHUB_INSTALLATION_STATUS } from "@repo/database/github-installation-vocabulary";
-import { INTEGRATION_ROW_STATUS } from "@repo/database/integration-vocabulary";
+import {
+  INTEGRATION_ROW_STATUS,
+  type IntegrationRowStatus,
+} from "@repo/database/integration-vocabulary";
 import { agentPullRequest } from "@repo/database/schemas";
 import { accountProviderKey } from "@repo/database/schemas/account-provider-key";
 import { agentTable, type StoredPullRequest } from "@repo/database/schemas/agent";
@@ -236,7 +239,7 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
       ]);
     const connection = (
       provider: (typeof INTEGRATION_PROVIDER)[keyof typeof INTEGRATION_PROVIDER],
-      status: string,
+      status: IntegrationRowStatus,
       daysAgo: number,
     ) => ({
       id: randomUUID(),

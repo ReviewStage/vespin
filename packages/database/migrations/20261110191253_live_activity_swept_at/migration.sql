@@ -1,0 +1,1 @@
+ALTER TABLE "live_activity" ADD COLUMN "swept_at" timestamp with time zone;

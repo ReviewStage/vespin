@@ -50,12 +50,16 @@ function stillRunning(agentId: string) {
   });
 }
 
-/** What a forward says of its ports once each listens. */
-function forwardingLines(forwards: readonly ForwardedPort[]): string[] {
-  return forwards.map(
-    (forward) =>
-      `Forwarding http://localhost:${forward.localPort} to the sandbox's ${forward.port}`,
-  );
+/** What a forward says of its ports once each listens, each with what serves it where that was read. */
+function forwardingLines(
+  forwards: readonly ForwardedPort[],
+  labels: ReadonlyMap<number, string>,
+): string[] {
+  return forwards.map((forward) => {
+    const label = labels.get(forward.port);
+    const served = label === undefined ? "" : ` (${label})`;
+    return `Forwarding http://localhost:${forward.localPort} to the sandbox's ${forward.port}${served}`;
+  });
 }
 
 export const forwardCommand = Command.make(
@@ -111,6 +115,7 @@ export const forwardCommand = Command.make(
         openSocket: openTerminalSocketOverWs,
         listen: listenOnLoopbackOverNet,
       };
+      const labels = new Map((listed.labels ?? []).map(({ port, label }) => [port, label]));
       yield* Effect.scoped(
         Effect.gen(function* () {
           const forwards = yield* Effect.forEach(wanted, (port) =>
@@ -134,9 +139,10 @@ export const forwardCommand = Command.make(
               ports: forwards.map((forward) => ({
                 port: forward.port,
                 localPort: forward.localPort,
+                label: labels.get(forward.port),
               })),
             },
-            lines: forwardingLines(forwards),
+            lines: forwardingLines(forwards, labels),
             ids: forwards.map((forward) => String(forward.localPort)),
           });
           yield* note("Press Ctrl-C to stop.");

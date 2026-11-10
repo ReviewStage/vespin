@@ -29,7 +29,7 @@
  */
 
 import { INBOX_ASK_STATUS, INBOX_STATUS } from "@repo/features/inbox-wire";
-import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
+import { TASK_SETTLED, TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import {
   type AnyColumn,
   and,
@@ -186,7 +186,10 @@ const TASK_COMPLETED_AT = qualified(task, task.completedAt);
 const AGENT_STILL_ARCHIVED = sql`exists (select 1 from ${agentTable} where ${AGENT_ID} = ${ITEM_AGENT} and ${AGENT_ARCHIVED_AT} is not null)`;
 
 /** Whether the item's task stands Done or Canceled: the other act that settles an item an archive closed. */
-const TASK_STILL_SETTLED = sql`exists (select 1 from ${task} where ${TASK_ID} = ${ITEM_TASK} and ${TASK_STATUS_COLUMN} in (${TASK_STATUS.DONE}, ${TASK_STATUS.CANCELED}) and ${TASK_COMPLETED_AT} is not null)`;
+const TASK_STILL_SETTLED = sql`exists (select 1 from ${task} where ${TASK_ID} = ${ITEM_TASK} and ${TASK_STATUS_COLUMN} in (${sql.join(
+  TASK_SETTLED.map((status) => sql`${status}`),
+  sql`, `,
+)}) and ${TASK_COMPLETED_AT} is not null)`;
 
 /** The condition that the item is one the settle named closed: of the task or the agents, for its reason, at its stamp. */
 function settledBy({ by, ids, reason, now }: typeof SettleRequestSchema.Type) {

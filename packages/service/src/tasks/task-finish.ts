@@ -13,11 +13,12 @@ import { archivedWithDoneTask } from "../agents/agent-change.js";
  *
  * Only a member's or an agent's move to Done archives the task's agents
  * standing idle with it, as them (`task-store.ts`'s `updateTaskCommitted`),
- * never the agent that moved it. An agent still at work then, a turn whose
- * Stop is on its way among it, since its runner still holds its folder, is
- * not stopped: its turn's end archives it, as whoever moved the task, where
- * the task still stands Done by their move (`settleTaskAfterTurn`, through
- * `agent-change.ts`'s `archivedWithDoneTask`).
+ * but the agent that moved it. An agent still at work then, a turn whose
+ * Stop is on its way among it, since its runner still holds its folder, and
+ * the agent that moved the task, are not stopped: the turn's end archives
+ * each, as whoever moved the task, where the task still stands Done by their
+ * move (`settleTaskAfterTurn`, through `agent-change.ts`'s
+ * `archivedWithDoneTask`).
  *
  * The other way, a task done or canceled moves back to in progress when an
  * agent is started on it (`coder-host/start.ts`) and when a coding agent's
@@ -39,9 +40,10 @@ function logged<A>(what: string, move: Effect.Effect<A, unknown, DatabaseService
 }
 
 /**
- * What a coding agent's turn ending asks of its task: where a member or
- * another agent moved the task to Done or Canceled while the agent worked,
- * the agent archived with it as them and let go of; a failure logged.
+ * What a coding agent's turn ending asks of its task: where a member, another
+ * agent, or the agent itself moved the task to Done or Canceled while the
+ * agent worked, the agent archived with it as them and let go of; a failure
+ * logged.
  */
 export function settleTaskAfterTurn(
   userId: string,

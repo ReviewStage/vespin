@@ -19,11 +19,10 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { PREVIEW_SIGN_IN } from "@repo/features/preview-sign-in";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
-import { SANDBOX_TOUCH_EVERY, type Sandbox, type SandboxError } from "@repo/sandbox";
+import type { Sandbox, SandboxError } from "@repo/sandbox";
 import { HTTP_METHOD } from "@repo/wire";
 import { Clock, Duration, Effect, Layer, Option } from "effect";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { touchAgentSandbox } from "../agents/sandbox-use.js";
 import {
   AgentSandbox,
   type AgentSandboxService,
@@ -317,7 +316,7 @@ export interface PreviewProxySeams {
 }
 
 /** Any method, any path, on a preview host alone. */
-const proxyEndpoint = (seams: PreviewProxySeams, touched: Map<string, number>) =>
+const proxyEndpoint = (seams: PreviewProxySeams) =>
   Effect.gen(function* () {
     const request = yield* webRequest;
     const sandbox = yield* pageSandbox;
@@ -358,13 +357,6 @@ const proxyEndpoint = (seams: PreviewProxySeams, touched: Map<string, number>) =
       return status ? statusAnswer(false) : wakingPage(request);
     }
     if (status) return statusAnswer(yield* serverAnswers(preview.url));
-    if (now - (touched.get(preview.name) ?? 0) >= Duration.toMillis(SANDBOX_TOUCH_EVERY)) {
-      touched.set(preview.name, now);
-      yield* afterResponse(
-        "a preview kept its agent's sandbox up",
-        touchAgentSandbox(preview.name),
-      );
-    }
     return yield* passedOn(request, preview.url, previewOrigin(sandbox, agentId), asked);
   });
 
@@ -372,7 +364,5 @@ const proxyEndpoint = (seams: PreviewProxySeams, touched: Map<string, number>) =
 export function previewProxyApp(
   seams: PreviewProxySeams,
 ): WebRoutes<DatabaseServices | PageLinks | Sandbox> {
-  // When each sandbox was last kept up by a visit, so a busy preview touches it at most once a minute per instance.
-  const touched = new Map<string, number>();
-  return HttpRouter.add(ANY_METHOD, ANY_PATH, hostedRefusing(proxyEndpoint(seams, touched)));
+  return HttpRouter.add(ANY_METHOD, ANY_PATH, hostedRefusing(proxyEndpoint(seams)));
 }

@@ -1428,7 +1428,7 @@ export const agentMessageAnswerSchema = EffectSchema.Struct({
  * is on screen, at once and then every minute while it stays there. The
  * service answers at once and keeps a cloud agent's sandbox and runner
  * warm past it, launching the runner with no message where none runs, so
- * a message goes straight into the running session; it lets them go three
+ * a message goes straight into the running session; it lets them go five
  * minutes after the later of the agent's last turn's end and the last such
  * call. A Mac's agent, an archived one, and one the caller may not message
  * are answered the same and kept warm by nothing.

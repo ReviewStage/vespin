@@ -43,6 +43,7 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
   type AgentTurn,
+  type AgentUsage,
   CONTEXT_WINDOW,
   type ContextWindow,
   LOCAL_AGENT_REFUSAL,
@@ -142,61 +143,71 @@ import { Option, Predicate, Schema } from "effect";
 /** The words that separate the parts of a line. */
 const LINE_SEPARATOR = " · ";
 
-/** Each payer as the model menu's last line names it; a key's line goes on to what the agent has cost. */
+/** Each payer as its line names it, after whose it is; a key's line goes on to what the agent has cost. */
 const PAYER_WORDS = {
-  [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: "Using Claude plan",
-  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Using Codex plan",
+  [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: "Claude plan",
+  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Codex plan",
   [AGENT_PAYER.APP]: `${PRODUCT_NAME}'s API key`,
-  [AGENT_PAYER.MAC_SIGN_IN]: "Using your Mac's sign-in",
+  [AGENT_PAYER.MAC_SIGN_IN]: "Mac's sign-in",
 } as const satisfies Record<Exclude<AgentPayer, typeof AGENT_PAYER.API_KEY>, string>;
-
-/** Each plan payer as the model menu's last line leads a plan it names: "Using Codex · ana@work.com". */
-const PLAN_PAYER_WORDS = {
-  [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: "Using Claude",
-  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Using Codex",
-} as const satisfies Partial<Record<AgentPayer, string>>;
-
-type PlanPayer = keyof typeof PLAN_PAYER_WORDS;
 
 /** The kind of plan each plan payer runs on. */
 const PLAN_PAYER_KIND = {
   [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
   [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
-} as const satisfies Record<PlanPayer, ProviderKeyKind>;
+} as const satisfies Partial<Record<AgentPayer, ProviderKeyKind>>;
+
+type PlanPayer = keyof typeof PLAN_PAYER_KIND;
 
 function planPayer(payer: AgentPayer | undefined): payer is PlanPayer {
-  return payer !== undefined && payer in PLAN_PAYER_WORDS;
+  return payer !== undefined && payer in PLAN_PAYER_KIND;
 }
 
 /**
- * The name of the reader's own plan that pays for the agent, for the model
- * menu's last line: the subscription the page named, or, for one a new
- * agent would start on (`next`), the first of the payer's kind in the
- * reader's order with room left, as a turn picks it; by the name the reader
- * gave it, else the ChatGPT account it signed in as. Nothing for a plan the
- * reader does not hold, a teammate's, or one with neither name.
+ * The reader's own plan that pays for the agent, for the model menu's last
+ * line: the subscription the page named, or, for one a new agent would
+ * start on (`next`), the first of the payer's kind in the reader's order
+ * with room left, as a turn picks it. Nothing for a plan the reader does not
+ * hold or a teammate's agent (`teammate`), whose starter's plan pays and
+ * whose page may name none yet, since the reader's own next plan is never
+ * the one that pays there.
  */
+export function payerPlanOf(
+  payer: AgentPayer | undefined,
+  subscriptions: readonly SubscriptionKeySummary[] | undefined,
+  subscriptionId: string | undefined,
+  next: boolean,
+  teammate = false,
+): SubscriptionKeySummary | undefined {
+  if (teammate || !planPayer(payer) || subscriptions === undefined) return undefined;
+  const kind = PLAN_PAYER_KIND[payer];
+  return subscriptionId !== undefined
+    ? subscriptions.find((one) => one.id === subscriptionId && one.kind === kind)
+    : next
+      ? subscriptions
+          .filter((one) => one.kind === kind)
+          .toSorted((a, b) => a.position - b.position)
+          .find(
+            (one) =>
+              one.status === PROVIDER_KEY_STATUS.VERIFIED ||
+              one.status === PROVIDER_KEY_STATUS.UNVERIFIED,
+          )
+      : undefined;
+}
+
+/** The reader's own plan that pays (`payerPlanOf`) by its name: the one the reader gave it, else the ChatGPT account it signed in as; nothing for one with neither. */
 export function payerPlanName(
   payer: AgentPayer | undefined,
   subscriptions: readonly SubscriptionKeySummary[] | undefined,
   subscriptionId: string | undefined,
   next: boolean,
+  teammate = false,
 ): string | undefined {
-  if (!planPayer(payer) || subscriptions === undefined) return undefined;
-  const kind = PLAN_PAYER_KIND[payer];
-  const plan =
-    subscriptionId !== undefined
-      ? subscriptions.find((one) => one.id === subscriptionId && one.kind === kind)
-      : next
-        ? subscriptions
-            .filter((one) => one.kind === kind)
-            .toSorted((a, b) => a.position - b.position)
-            .find(
-              (one) =>
-                one.status === PROVIDER_KEY_STATUS.VERIFIED ||
-                one.status === PROVIDER_KEY_STATUS.UNVERIFIED,
-            )
-        : undefined;
+  return planNameOf(payerPlanOf(payer, subscriptions, subscriptionId, next, teammate));
+}
+
+/** A plan by its name: the one the reader gave it, else the ChatGPT account it signed in as. */
+export function planNameOf(plan: SubscriptionKeySummary | undefined): string | undefined {
   return plan?.label ?? plan?.email;
 }
 
@@ -212,36 +223,62 @@ const ANY_API_KEY = "API key";
 /** The payers billed by the token, whose line says what the agent has cost so far. */
 const PRICED_PAYERS: ReadonlySet<AgentPayer> = new Set([AGENT_PAYER.API_KEY, AGENT_PAYER.APP]);
 
+/** How a payer's line marks it: its plan's harness, a key, or the Mac it signed in on. */
+export const PAYER_MARK = {
+  PLAN: "plan",
+  KEY: "key",
+  MAC: "mac",
+} as const;
+
+export type PayerMark = (typeof PAYER_MARK)[keyof typeof PAYER_MARK];
+
+/** Who pays for an agent, as its line draws it: the mark, whether a member owns it, and the words after whose. */
+export interface PayerParts {
+  readonly mark: PayerMark;
+  /** Whether it is a member's own, so the line says whose: "Your", or the teammate who started the agent. */
+  readonly owned: boolean;
+  /** "Claude plan", the plan by its name, "Codex plan (ana@work.com)", or a key and what the run has cost on it: "Anthropic API key · $0.42 so far". */
+  readonly words: string;
+  /** Whether the words name the plan, whose name may be its account's email, so a screen recording masks them. */
+  readonly masked: boolean;
+}
+
 /**
- * Who pays for the agent, for the model menu's last line: "Using ChatGPT
- * plan", "Using Claude plan", or a key by its provider and what the run has
- * cost on it, "OpenAI API key · $0.42 so far", the key alone where the
- * service could not price every step; nothing where no payer is named.
- * Note that a plan's line names no tokens, since the composer's context
- * ring already says how full the window is and a subscription has no bill
- * per token, and that the price is the whole run's, the agent's own turns
- * and its workers', at the catalog's list prices.
+ * Who pays for the agent, in parts for its line: "Claude plan", "ChatGPT
+ * plan", or a key by its provider and what the run has cost on it,
+ * "Anthropic API key · $0.42 so far", the key alone where the service could
+ * not price every step; nothing where no payer is named. Every payer but the
+ * app's own key is a member's, the agent's starter's, so its line says whose
+ * before the words. Note that a plan's line names no tokens, since the
+ * composer's context ring already says how full the window is and a
+ * subscription has no bill per token, and that the price is the whole run's,
+ * the agent's own turns and its workers', at the catalog's list prices.
  */
-export function agentPayerLine(
+export function agentPayerParts(
   payer: AgentPayer | undefined,
   provider: ModelProvider | undefined,
   costUsd: number | undefined,
   /** The plan that pays, by its name, where the reader's own keys name it (`payerPlanName`). */
   planName?: string | undefined,
-): string | undefined {
+): PayerParts | undefined {
   if (payer === undefined) return undefined;
-  if (planPayer(payer) && planName !== undefined) {
-    return `${PLAN_PAYER_WORDS[payer]}${LINE_SEPARATOR}${planName}`;
-  }
-  const words =
+  const plan =
     payer === AGENT_PAYER.API_KEY
       ? provider === undefined
         ? ANY_API_KEY
         : API_KEY_WORDS[provider]
       : PAYER_WORDS[payer];
-  return PRICED_PAYERS.has(payer) && costUsd !== undefined
-    ? `${words}${LINE_SEPARATOR}${formatUsd(costUsd)} so far`
-    : words;
+  const named = planPayer(payer) && planName !== undefined ? `${plan} (${planName})` : plan;
+  const words =
+    PRICED_PAYERS.has(payer) && costUsd !== undefined
+      ? `${named}${LINE_SEPARATOR}${formatUsd(costUsd)} so far`
+      : named;
+  const mark = planPayer(payer)
+    ? PAYER_MARK.PLAN
+    : payer === AGENT_PAYER.MAC_SIGN_IN
+      ? PAYER_MARK.MAC
+      : PAYER_MARK.KEY;
+  return { mark, owned: payer !== AGENT_PAYER.APP, words, masked: named !== plan };
 }
 
 /**
@@ -473,7 +510,7 @@ export interface LaunchStopped {
  * whose host settled its launch unstarted (`launchStopped`) names the step
  * the launch stopped at and that a message tries again.
  * Note that it names no price, because a price in the window means the
- * whole run's, which the model menu's last line says (`agentPayerLine`).
+ * whole run's, which the model menu's last line says (`agent-payer.tsx`).
  */
 export function endLineParts(
   status: AgentStatus,
@@ -824,7 +861,7 @@ export function modelConnectWords(model: CatalogModel): string | undefined {
 
 /**
  * Why a choice cannot run, and the press that connects what would run it:
- * the note a model menu and Settings' Default model stand under the choice
+ * the note a model menu and Settings' Model row stand under the choice
  * where no plan or API key of the account's pays for its model, as
  * an account finds the Claude default it stored once its Claude credential
  * is gone; none for a choice something pays for, or one the catalog no
@@ -899,6 +936,15 @@ function credentialMissingFailure(
  * its plan runs (`agent-runtime-choice.ts`); none for an agent on the
  * retired runtime, which a key paid for.
  */
+/** Who pays for the agent: the page's payer, then the settled turns', then the plan its harness runs on where neither names one. */
+export function paidByOf(
+  payer: AgentPayer | undefined,
+  usage: AgentUsage | undefined,
+  runtime: AgentRuntime | undefined,
+): AgentPayer | undefined {
+  return payer ?? usage?.payer ?? planPayerOf(runtime);
+}
+
 export function planPayerOf(runtime: AgentRuntime | undefined): AgentPayer | undefined {
   if (runtime === AGENT_RUNTIME.CLAUDE_CODE) return AGENT_PAYER.CLAUDE_SUBSCRIPTION;
   if (runtime === AGENT_RUNTIME.CODEX) return AGENT_PAYER.CHATGPT_SUBSCRIPTION;
