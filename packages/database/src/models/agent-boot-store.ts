@@ -307,21 +307,25 @@ export function agentBootScriptsEnded(agentId: string, setupExit: number): Agent
 }
 
 /**
- * The agent's runner up (STARTING | RUNNING_SCRIPTS -> HANDING_OFF), with
- * the setup scripts' exit code where they ran, so its queue's head goes
- * next; straight to READY where nothing stands queued. Answers the boot
- * where it moved, none where it stood elsewhere: an earlier poll moved it.
+ * The agent's runner up (STARTING | RUNNING_SCRIPTS -> HANDING_OFF) under
+ * `attempt`, with the setup scripts' exit code where they ran, so its
+ * queue's head goes next; straight to READY where nothing stands queued.
+ * Answers the boot where it moved, none where it stood elsewhere or under
+ * another attempt: an earlier poll moved it, or Retry replaced the machine
+ * that came up.
  */
 export function agentBootRunnerUp(
   agentId: string,
   at: Date,
   setupExit: number | undefined,
+  attempt: number,
 ): AgentBootEffect<Option.Option<AgentBootRow>> {
   return underAgentQueueLock(
     agentId,
     Effect.gen(function* () {
       const holds = yield* queueHoldsInLock(agentId);
       return yield* moved(agentId, {
+        attempt,
         from: BOOTING_PHASES,
         to: holds ? BOOT_PHASE.HANDING_OFF : BOOT_PHASE.READY,
         at,
