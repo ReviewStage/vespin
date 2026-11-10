@@ -1,6 +1,7 @@
 import { TextLink as SharedTextLink, TEXT_LINK_LOOK, type TextLinkLook, Tooltip } from "@repo/ui";
 import { linkFace } from "@repo/ui/link-face";
 import type { ReactNode } from "react";
+import { LinkPreviewCard } from "./tasks/link-preview-card.js";
 import { opensAsLink } from "./tasks/use-open-link.js";
 
 /**
@@ -26,6 +27,14 @@ import { opensAsLink } from "./tasks/use-open-link.js";
  * going nowhere. A label that is more than words, one an edit or a
  * version's change marks inside, is drawn as it is and never cut short, so
  * its caret and its marks stay where they stand.
+ *
+ * A link the window opens hangs the page's own card in its hint's place
+ * (`tasks/link-preview-card.tsx`), what the page says of itself as the
+ * service reads it, so a reader sees where a link goes before pressing
+ * it, as a chip's card says what the chip names; the whole address stays
+ * the hint's words, said of the link, and the card says it too on a line
+ * of its own. A link going nowhere hangs none, since the window would
+ * open nothing the card previews.
  */
 
 /**
@@ -59,7 +68,7 @@ export function TextLink({
   const face = words === undefined ? undefined : linkFace(href, words);
   const opens = onOpen !== undefined && opensAsLink(href);
   return (
-    <Tooltip label={hintOf(href)}>
+    <Tooltip label={hintOf(href)} card={opens ? <LinkPreviewCard href={href} /> : undefined}>
       <SharedTextLink
         href={opens ? href : undefined}
         look={look}

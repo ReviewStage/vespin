@@ -30,6 +30,7 @@ import {
   type TaskStanding,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { TASK_MARK } from "@repo/features/tasks-model";
 import {
   noneYetWords,
   REFRESH_FAILED_WORDS,
@@ -84,7 +85,6 @@ import {
 import { actorName, creatorActor, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
 import { GLYPH, ListTodoIcon, PinIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { TASK_MARK } from "@repo/ui/tasks-model";
 import {
   COMPLETED_WINDOW,
   LIST_COLUMN,

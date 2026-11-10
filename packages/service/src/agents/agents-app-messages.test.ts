@@ -69,6 +69,7 @@ import { INBOX_ASK, INBOX_CURSOR_START, inboxAnswerSchema } from "@repo/features
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
+import { READ_MARK } from "@repo/features/read-mark";
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import {
   heldTaskListAnswerSchema,
@@ -720,7 +721,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
   );
 
   it.effect(
-    "a member's Archive of a teammate's agent records the member on it, which its summary names, and an Unarchive clears it",
+    "a member's Archive of a teammate's agent records the member on it, which its summary names, an Unarchive clears it, and a released desktop's read mark of it changes nothing",
     () =>
       Effect.gen(function* () {
         const { other, task, agent, ask } = yield* messagedAgent(fakeAgentSessions(), {
@@ -740,6 +741,19 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         assert.equal(archived.archivedBy?.agent, undefined);
         const back = yield* changed(false);
         assert.deepEqual([back.archivedAt, back.archivedBy], [undefined, undefined]);
+        // A released desktop still moves its read mark of an agent, which is read through its task's alone, so it is answered the agent as it stands.
+        const marked = readAnswer(
+          agentAnswerSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* ask(
+            request(AGENT, other, {
+              method: "PATCH",
+              id: agent.id,
+              body: { readMark: READ_MARK.UNREAD },
+            }),
+          ),
+        );
+        assert.deepEqual(marked, { agent: back });
       }),
   );
 

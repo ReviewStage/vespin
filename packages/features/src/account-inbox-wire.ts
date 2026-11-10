@@ -29,12 +29,12 @@ import { countedNumber, wireUuidSchema } from "./service-wire.js";
  * held open while nothing changed past the cursor, as a task's inbox read
  * is, and starts from the task read's own start (`INBOX_CURSOR_START`).
  *
- * An item of an agent an automation started with no task waits too, in
- * the workspace the agent belongs to, but under keys of its own beside the
- * tasks' (`planless`, `automations`) rather than in `items` and `plans`,
- * which name a task: a build that reads only those drops the keys it does
- * not know, as every service answer is read (`readServiceAnswer`), and
- * never meets an item it cannot place.
+ * An item of an agent with no task was carried under keys of its own
+ * beside the tasks' (`planless`, `automations`, `agents`) rather than in
+ * `items` and `plans`, which name a task. Every agent works on a task now,
+ * so those keys hold nothing; they stay declared because the service still
+ * answers them, empty, to a released desktop that reads them. This build
+ * reads none of them: an answer ignores a key its reader does not name.
  *
  * A run of one of the account's own automations that failed to start rides
  * the same read, under `failedRuns`, and moves the same cursor, so its
@@ -169,8 +169,6 @@ export const accountInboxAutomationSchema = EffectSchema.Struct({
   updatedAt: countedNumber,
 });
 
-export type AccountInboxAutomation = typeof accountInboxAutomationSchema.Type;
-
 /**
  * One agent with no task the account's read lists as holding inbox items, as
  * a task is listed for its own: how many it holds, open and settled alike,
@@ -191,8 +189,6 @@ export const accountInboxAgentSchema = EffectSchema.Struct({
   repository: accountTasklessEntrySchema.fields.repository,
   workspaceId: accountTasklessEntrySchema.fields.workspaceId,
 });
-
-export type AccountInboxAgent = typeof accountInboxAgentSchema.Type;
 
 /** A run of one of the account's own automations that failed to start: the run, its automation by id and name, the workspace it stands in, why, and when. */
 export const accountFailedRunSchema = EffectSchema.Struct({

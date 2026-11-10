@@ -12,9 +12,9 @@ import {
   type DescriptionRevisionLine,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { UPDATE_STATUS } from "@repo/settings/update";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { act, createElement } from "react";
 import { createRoot } from "react-dom/client";
@@ -219,7 +219,7 @@ test("the Inbox's list says its feed could not be read as the sidebar does, and 
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]: () => {
-      deliver({ rows: { [INBOX_SCOPE_KIND.PLAN]: {}, [INBOX_SCOPE_KIND.AGENT]: {} } });
+      deliver({ rows: { [INBOX_SCOPE_KIND.PLAN]: {} } });
       return Promise.resolve(undefined);
     },
   });

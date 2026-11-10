@@ -728,6 +728,29 @@ test("an agent's start still out lets its words go, so New task opened before it
   assert.match(card.note() ?? "", /Vespin cannot reach acme\/web\./u);
 });
 
+test("a refusal opens the card again on its words ahead of those written in New task while the start was out", async () => {
+  let answer: (refused: Failure | undefined) => void = () => undefined;
+  const card = await mount(
+    new Promise<Failure | undefined>((resolve) => {
+      answer = resolve;
+    }),
+  );
+  card.type("Dark mode");
+  await card.key("Enter");
+  await card.reopen();
+  card.type("Light mode");
+  await card.key("Escape");
+  await act(async () =>
+    answer({ reason: FAILURE_REASON.OTHER, text: "Vespin cannot reach acme/web." }),
+  );
+  await settle();
+
+  assert.deepEqual(
+    [...card.field().querySelectorAll("p")].map((line) => line.textContent),
+    ["Dark mode", "Light mode"],
+  );
+});
+
 test("words typed before the workspaces are read stay in the box as the workspace lands, over its older draft, and are its draft", async () => {
   const card = await mount();
   await card.list("workspace-personal");

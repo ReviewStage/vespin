@@ -2847,12 +2847,16 @@ const MERGING: PullRequestMerging = {
   checks: CHECK_SUMMARY.PASSING,
 };
 
-/** The plan's agents, its pull request standing as given and merged as given. */
-function merging(merge: MergeState, merged: Partial<PullRequestMerging> = {}): AgentsControl {
+/** The plan's agents, its pull request standing as given and merged as given, the member reading it able to bypass its base's rules where said. */
+function merging(
+  merge: MergeState,
+  merged: Partial<PullRequestMerging> = {},
+  canBypassRules = false,
+): AgentsControl {
   return controlAnswering({
     pullRequest: () =>
       Promise.resolve({
-        pullRequest: { ...PULL_REQUEST, merge, merging: { ...MERGING, ...merged } },
+        pullRequest: { ...PULL_REQUEST, merge, canBypassRules, merging: { ...MERGING, ...merged } },
       }),
   });
 }
@@ -2915,6 +2919,7 @@ function mergeCases() {
             ...PULL_REQUEST,
             state: PULL_REQUEST_STATE.DRAFT,
             merge: MERGE_STATE.DRAFT,
+            canBypassRules: true,
             merging: MERGING,
           },
         }),
@@ -2942,8 +2947,8 @@ function mergeCases() {
       { ...none, press: "Merge pull request", look: "primary", chevron: false },
     ],
     [
-      "checks running",
-      merging(MERGE_STATE.BLOCKED, { checks: CHECK_SUMMARY.PENDING }),
+      "checks running, auto-merge offered before any bypass",
+      merging(MERGE_STATE.BLOCKED, { checks: CHECK_SUMMARY.PENDING }, true),
       { ...none, press: "Enable auto-merge", look: "outline", chevron: true },
     ],
     [
@@ -2989,8 +2994,8 @@ function mergeCases() {
       },
     ],
     [
-      "conflicts",
-      merging(MERGE_STATE.CONFLICTS),
+      "conflicts, which no bypass merges",
+      merging(MERGE_STATE.CONFLICTS, {}, true),
       held("Conflicts", "danger", "Conflicts with main"),
     ],
     [
@@ -2999,8 +3004,8 @@ function mergeCases() {
       held("Behind", "attention", "Behind main; it must be brought up to date"),
     ],
     [
-      "checking",
-      merging(MERGE_STATE.UNKNOWN),
+      "checking, which no bypass merges",
+      merging(MERGE_STATE.UNKNOWN, {}, true),
       held("Checking", "working", "GitHub is still checking whether it merges"),
     ],
     [
@@ -3087,11 +3092,15 @@ test("a pull request ready to merge offers the first method the repository allow
   ]);
 });
 
-test("auto-merge is offered while checks run, and turned off once on; a merge queue's base offers Merge when ready; each is asked of the service for the agent at once, and Remove from queue asks first", async () => {
+test("auto-merge is offered while checks run, and turned off once on; a merge queue's base offers Merge when ready; each is asked of the service for the agent at once, and Remove from queue asks first, as Bypass rules and merge… does, naming what it bypasses, for a member GitHub lets merge a blocked pull request past its base's rules", async () => {
+  const queueQuestion = {
+    answer: "Remove from queue",
+    says: /could impact other pull requests in the queue/u,
+  };
   const cases: readonly (readonly [
     AgentsControl,
     string,
-    string | undefined,
+    { readonly answer: string; readonly says: RegExp } | undefined,
     PullRequestActionRequest,
   ])[] = [
     [
@@ -3123,21 +3132,40 @@ test("auto-merge is offered while checks run, and turned off once on; a merge qu
         autoMerge: { method: null },
       }),
       "Remove from queue",
-      "Remove from queue",
+      queueQuestion,
       { action: PULL_REQUEST_ACTION.DEQUEUE },
     ],
+    [
+      controlAnswering({
+        pullRequest: () =>
+          Promise.resolve({
+            pullRequest: {
+              ...PULL_REQUEST,
+              merge: MERGE_STATE.BLOCKED,
+              canBypassRules: true,
+              merging: { ...MERGING, review: REVIEW_DECISION.REVIEW_REQUIRED },
+            },
+          }),
+      }),
+      "Bypass rules and merge…",
+      {
+        answer: "Bypass rules and merge",
+        says: /A required review is missing\. This merges it into main now by squash/u,
+      },
+      { action: PULL_REQUEST_ACTION.MERGE, method: MERGE_METHOD.SQUASH, headSha: "c0ffee1" },
+    ],
   ];
-  for (const [control, label, answer, request] of cases) {
+  for (const [control, label, question, request] of cases) {
     changes = [];
     const tab = await draw(control);
     await pressBox(tab, label);
-    if (answer !== undefined) {
+    if (question !== undefined) {
       assert.deepEqual(changes, [], `${label} asks first`);
       assert.match(
         document.querySelector('[role="dialog"], [role="alertdialog"]')?.textContent ?? "",
-        /could impact other pull requests in the queue/u,
+        question.says,
       );
-      await answerQuestion(answer);
+      await answerQuestion(question.answer);
     }
     assert.deepEqual(changes, [[AGENT.id, request]], label);
     act(() => root?.unmount());

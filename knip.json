@@ -33,7 +33,13 @@
       "project": ["src/**", "scripts/**"]
     },
     "apps/mobile": {
-      "entry": ["src/app/**/*.tsx", "app.config.ts", "babel.config.js", "metro.config.js"],
+      "entry": [
+        "index.ts",
+        "src/app/**/*.tsx",
+        "app.config.ts",
+        "babel.config.js",
+        "metro.config.js"
+      ],
       "project": ["src/**", "scripts/**"],
       "ignoreDependencies": ["effect", "@expo/ui", "expo-glass-effect", "expo-video"]
     },

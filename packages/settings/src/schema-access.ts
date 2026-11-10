@@ -357,8 +357,6 @@ interface SchemaSettingRow {
   field: AppSettingField;
   /** The setting as it describes itself now: its words and its value. */
   entry: DescribedSetting;
-  /** Whether the stored value differs from the default, which earns the mark. */
-  changed: boolean;
   /** The pop-up's own current token and options, for a choice row. */
   control?: { value: string; options: readonly SettingOption[]; search?: string | undefined };
 }
@@ -394,7 +392,6 @@ export function settingRowsForPage(
     return descriptionsFor(field, read).map((entry) => ({
       field,
       entry,
-      changed: stored !== definition.default,
       ...(control
         ? {
             control: {

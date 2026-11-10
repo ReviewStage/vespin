@@ -7,11 +7,11 @@ import {
   withTaskId,
 } from "@repo/features/link-grammar";
 import type { PagePlace } from "@repo/features/page-wire";
+import { DOCUMENT_REGION } from "@repo/features/tasks-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import type { SettingsView } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION } from "@repo/ui/tasks-model";
 import { createContext, useContext, useEffect, useState } from "react";
 import type { AdminView } from "./admin/routing.js";
 import { useAppCommand } from "./app-commands.js";

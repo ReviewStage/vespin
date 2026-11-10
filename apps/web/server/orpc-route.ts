@@ -17,6 +17,7 @@ import { resolveHostedUserId } from "@repo/service/auth/bearer";
 import { resolveBrowserSessionUserId } from "@repo/service/auth/browser-session";
 import { githubUnlink } from "@repo/service/github/github-unlink";
 import { integrationsAppSeams } from "@repo/service/integrations/integration-seams";
+import { nodeLinkReach } from "@repo/service/link-previews/node-link-reach";
 import { memberMcpResourceUrl } from "@repo/service/member-mcp/resource";
 import { type HostedFetch, hostedFetch } from "@repo/service/orpc/handler";
 import { type HostedRouterSeams, hostedRouter } from "@repo/service/orpc/router";
@@ -66,6 +67,7 @@ const DEPLOYMENT_SEAMS: HostedRouterSeams = {
   ...integrationsAppSeams(),
   resolveUserId: resolveHostedUserId,
   resolveSessionUserId: resolveBrowserSessionUserId,
+  linkReach: nodeLinkReach,
   unlinkGitHub: githubUnlink(auth.api),
   supportAccess: supportAccessCalls(auth.api),
   memberMcpServerUrl: memberMcpResourceUrl(authDeployment(process.env).baseURL),

@@ -165,7 +165,7 @@ jobs:
           sha256sum -c ./*.sha256
           gh release create "$TAG" --draft --latest=false --verify-tag \
             --title "Vespin host $VERSION" \
-            --notes "Vespin's host daemon $VERSION for linux-x64, linux-arm64, and darwin-arm64. Install it from Settings › Hosts › Add hosts." \
+            --notes "Vespin's host daemon $VERSION for linux-x64, linux-arm64, and darwin-arm64. Install it from Settings › Machines › Add a machine." \
             ./*.tar.gz ./*.sha256
           gh release edit "$TAG" --draft=false --latest=false
           echo "Move HOST_RELEASE (packages/features/src/host-release.ts) to $VERSION with these digests:"

@@ -14,7 +14,7 @@ export const EXPERIMENT = {
   MEMORY: "memory",
   /** Skills: the skills a member installs into the app for their agents, managed in Settings › Skills, and the `/` list of skills in a box written to an agent. */
   SKILLS: "skills",
-  /** Bring your own host: agents that run on the member's own Macs and Linux machines, This Mac among them, set up in Settings › Hosts, rather than only in our cloud. */
+  /** Bring your own machine: agents that run on the member's own Macs and Linux machines, This Mac among them, set up in Settings › Machines, rather than only in our cloud. */
   BRING_YOUR_OWN_HOST: "bring-your-own-host",
   /** Descriptions: a task's description its coding agents keep current as they work, its comments and version history, and the tools and instructions they write it and answer its comments with. */
   DESCRIPTIONS: "descriptions",
@@ -75,35 +75,30 @@ export const EXPERIMENTS = [
   {
     key: EXPERIMENT.DESCRIPTIONS,
     name: "Task descriptions",
-    detail:
-      "Give each task a description its agents keep current as they work, with comments on it and its version history.",
+    detail: "Tasks get a description their agents keep up to date, with comments and history.",
     owner: "Dean",
     since: "2026-11-05",
   },
   {
     key: EXPERIMENT.BRING_YOUR_OWN_HOST,
-    name: "Bring your own host",
+    name: "Bring your own machine",
     detail:
       "Run agents on your own Macs and Linux machines. " +
-      `Their transcripts and the files their tools read still reach ${PRODUCT_NAME}.`,
+      `Their transcripts and the files they read are still sent to ${PRODUCT_NAME}.`,
     owner: "Charles",
     since: "2026-10-30",
   },
   {
     key: EXPERIMENT.SKILLS,
     name: "Skills",
-    detail:
-      `Install skills into ${PRODUCT_NAME} for your agents to use, ` +
-      "and name one with / in a message to an agent.",
+    detail: "Install skills for your agents, and use one by typing / in a message.",
     owner: "Charles",
     since: "2026-10-30",
   },
   {
     key: EXPERIMENT.MEMORY,
     name: "Memory",
-    detail:
-      "Your agents keep settled facts about how your team works and recall them in later work, " +
-      "shared across your workspace.",
+    detail: "Agents remember how your team works and use it in later tasks.",
     owner: "Dean",
     since: "2026-10-23",
   },

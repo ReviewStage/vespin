@@ -1209,6 +1209,19 @@
   margin-inline-start: auto;
 }
 
+/* A phone's merge control stands on a row of its own under the title's,
+   spanning it, so the pill and what stands beside it keep one line, and its
+   press is the screen's width across rather than wrapped to a ragged line at
+   the row's end. The row stands nowhere where the control offers nothing. */
+.pull-request-merge-row {
+  display: flex;
+  margin-block-start: var(--ui-control-gap);
+}
+
+.pull-request-merge-row:empty {
+  display: none;
+}
+
 /* A narrow header, a phone's or the side panel's at its least, gives the
    title a line of its own over the pill and the controls, which stand
    under it at the row's two ends; beside them it would wrap a word to a
@@ -1478,7 +1491,7 @@
    never wraps onto a line of its own: it overhangs the title's end into its
    inset and the header's own (`--column-inset`), the title keeping just
    enough of an inset that the two hold it. The field takes the title's own
-   type and room. */
+   type and room, bare as a task's name renames. */
 .pull-request-title.pull-request-title-editable {
   padding-inline-end: max(
     var(--row-inset),
@@ -1502,12 +1515,16 @@
 }
 
 .pull-request-title-edit {
-  display: inline-block;
+  display: inline-flex;
   position: relative;
   width: 0;
   overflow: visible;
   inset-inline-start: var(--ui-space-2);
-  vertical-align: middle;
+  /* Note that the pencil hangs past the line by as much as it is taller,
+     so the line stands its own leading and the words do not move as the
+     field opens in their place. */
+  margin-block: calc((1lh - var(--ui-space-24)) / 2);
+  vertical-align: top;
   opacity: 0;
   transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
 }
@@ -2239,6 +2256,16 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   }
 
   .message-box-actions:has(.agent-context-button) .message-box-more {
+    display: inline-flex;
+  }
+
+  /* The permission mode chip goes into the ⋯ too, which offers the modes
+     in its place (`agent-approvals.tsx`). */
+  .message-box .agent-mode-button {
+    display: none;
+  }
+
+  .message-box-actions:has(.agent-mode-button) .message-box-more {
     display: inline-flex;
   }
 }

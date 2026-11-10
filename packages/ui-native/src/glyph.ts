@@ -1,6 +1,7 @@
 // glyph.ts -- a mark's glyph: an SF Symbol, or one of Lucide's the app's asset catalog holds as a custom symbol.
 
 import type { SfSymbol } from "./sf-symbol.js";
+import type { StatusTone } from "./tokens/colors.js";
 import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 
 /** One of Lucide's glyphs, by the name the app's asset catalog holds its symbol set under. */
@@ -21,3 +22,6 @@ const LUCIDE_SYMBOLS: ReadonlySet<Glyph> = new Set(Object.values(LUCIDE_SYMBOL))
 export function isLucideSymbol(glyph: Glyph): glyph is LucideSymbol {
   return LUCIDE_SYMBOLS.has(glyph);
 }
+
+/** A mark's glyph and the tone it is drawn in. */
+export type MarkLook = { readonly symbol: Glyph; readonly tone: StatusTone };

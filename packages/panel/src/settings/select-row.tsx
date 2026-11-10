@@ -25,7 +25,6 @@ export function SelectRow<Value extends string | number>({
   parse,
   placeholder,
   anchor,
-  changed,
   busy: restBusy,
   density,
   width,
@@ -51,8 +50,6 @@ export function SelectRow<Value extends string | number>({
   placeholder?: string | undefined;
   /** The id a pressed search result lands on: marked on the chip itself, which then takes the keyboard. */
   anchor?: string;
-  /** Whether the stored value differs from the default, which earns the mark. */
-  changed?: boolean;
   /**
    * A sibling write in flight. Two pop-ups that store one setting share a
    * rest so one save cannot finish behind the other.
@@ -74,7 +71,6 @@ export function SelectRow<Value extends string | number>({
       label={label}
       labelReplayUnmasked={labelReplayUnmasked}
       detail={detail}
-      changed={changed}
       saves={write?.savedAt}
       error={refusalShown(write?.refusal, FAILURE_SURFACE.SETTING_WRITE) ?? error}
       density={density}

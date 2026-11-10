@@ -15,7 +15,6 @@ import { BackButton, FILL_ELEMENT, Fill, Toolbar, useMinute } from "@repo/ui";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useCallback, useMemo, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
-import { type AutomationsDoor, useAutomationsDoor } from "../places/routed-doors.js";
 import { useInboxResolver } from "../tasks/inbox-close.js";
 import {
   INBOX_COLUMNS,
@@ -92,13 +91,10 @@ function agentPaneDoors(
   listed: InboxListed,
   agentId: string,
   onBack: () => void,
-  openAutomations: AutomationsDoor["open"],
 ): InboxPaneDoors {
   const doors = paneDoors(tasks, listed.holder, {
     panelFor: tasks.activeTaskId,
     openPlace: (_place, elsewhere) => elsewhere(),
-    place: undefined,
-    openAutomations,
   });
   return {
     ...doors,
@@ -154,7 +150,6 @@ export function AgentThreads({
   onBack: () => void;
 }): React.JSX.Element {
   const { agents, me } = tasks;
-  const automations = useAutomationsDoor(tasks);
   const { open, settled } = inbox.board;
   // Note that a reminder is weighed on the window's clock, as the Inbox weighs it.
   const now = useMinute();
@@ -270,7 +265,7 @@ export function AgentThreads({
                 : undefined
             }
             doors={{
-              ...agentPaneDoors(tasks, listed, agentId, onBack, automations.open),
+              ...agentPaneDoors(tasks, listed, agentId, onBack),
               onMark: marks.onMark,
               onClose: resolveItems,
               onRemind: marks.onRemind,

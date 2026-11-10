@@ -729,6 +729,29 @@ test("an item that opens a panel opens it beside the standing menu with its fiel
   expect(document.activeElement).toBe(more);
 });
 
+test("a chord pressed in a panel goes on to the window's shortcuts, where a key it types stays the panel's", () => {
+  mount(createElement(Harness, { groups: plusGroups([]) }));
+  press(button("More"));
+  key("ArrowDown");
+  key("ArrowRight");
+  expect(searching()).toBe(true);
+  const heard: string[] = [];
+  const hear = (event: KeyboardEvent) => heard.push(event.metaKey ? `⌘${event.key}` : event.key);
+  window.addEventListener("keydown", hear);
+  try {
+    act(() => {
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "n", metaKey: true, bubbles: true, cancelable: true }),
+      );
+    });
+    key("a");
+  } finally {
+    window.removeEventListener("keydown", hear);
+  }
+  expect(heard).toEqual(["⌘n"]);
+  expect(serversPanel()).not.toBeNull();
+});
+
 test("the mouse resting on an item that opens a panel opens it with the keyboard left in the menu, arriving in the panel takes the keyboard in, and resting on another item closes it", () => {
   mount(createElement(Harness, { groups: plusGroups([]) }));
   press(button("More"));

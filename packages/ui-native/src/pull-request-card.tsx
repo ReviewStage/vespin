@@ -1,8 +1,9 @@
-// pull-request-card.tsx -- a pull request as a transcript or a thread draws it: a compact bordered card of its state's glyph, its title, and its line counts, with its acts as small pills under it.
+// pull-request-card.tsx -- a pull request as a transcript or a thread draws it: a compact bordered card of its state's glyph, its title, and its line counts, which opens its page, with its acts as small pills under it.
 
-import { HStack, Spacer, Text, VStack } from "@expo/ui/swift-ui";
+import { Button, HStack, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import {
   background,
+  buttonStyle,
   font,
   foregroundStyle,
   lineLimit,
@@ -38,6 +39,8 @@ type PullRequestCardProps = {
   readonly deletions?: number | undefined;
   /** Its acts, drawn as small pills under the card. */
   readonly acts?: readonly PullRequestAct[] | undefined;
+  /** Opens its own page, as a press on the card asks; none where it has no page to open. */
+  readonly onOpen?: (() => void) | undefined;
 };
 
 /** A line count as the card ends with it: "+1.9k", "−312". */
@@ -59,47 +62,57 @@ export function PullRequestCard({
   additions,
   deletions,
   acts = [],
+  onOpen,
 }: PullRequestCardProps) {
   const colors = useColors();
   const look = PULL_REQUEST_LOOK[state];
   const count = [font({ textStyle: TYPE_ROLE.TIME }), monospacedDigit()];
-  return (
-    <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
-      <HStack
-        spacing={SPACE.ROW}
+  const card = (
+    <HStack
+      spacing={SPACE.ROW}
+      modifiers={[
+        padding({ horizontal: SPACE.EDGE - 4, vertical: SPACE.ROW }),
+        background(colors.SURFACE, shapes.roundedRectangle({ cornerRadius: RADIUS.CARD })),
+        strokeBorder({
+          content: colors.CHIP_EDGE,
+          shape: "roundedRectangle",
+          cornerRadius: RADIUS.CARD,
+          style: { lineWidth: HAIRLINE },
+        }),
+      ]}
+    >
+      <ToneGlyph glyph={look.symbol} tone={look.tone} textStyle={TYPE_ROLE.ROW_TITLE} />
+      <Text
         modifiers={[
-          padding({ horizontal: SPACE.EDGE - 4, vertical: SPACE.ROW }),
-          background(colors.SURFACE, shapes.roundedRectangle({ cornerRadius: RADIUS.CARD })),
-          strokeBorder({
-            content: colors.CHIP_EDGE,
-            shape: "roundedRectangle",
-            cornerRadius: RADIUS.CARD,
-            style: { lineWidth: HAIRLINE },
-          }),
+          font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "medium" }),
+          foregroundStyle(colors.TEXT),
+          lineLimit(1),
         ]}
       >
-        <ToneGlyph glyph={look.symbol} tone={look.tone} textStyle={TYPE_ROLE.ROW_TITLE} />
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "medium" }),
-            foregroundStyle(colors.TEXT),
-            lineLimit(1),
-          ]}
-        >
-          {number === undefined ? title : `#${number} ${title}`}
+        {number === undefined ? title : `#${number} ${title}`}
+      </Text>
+      <Spacer />
+      {additions === undefined ? null : (
+        <Text modifiers={[...count, foregroundStyle(colors.COMPLETE)]}>
+          {lineCount("+", additions)}
         </Text>
-        <Spacer />
-        {additions === undefined ? null : (
-          <Text modifiers={[...count, foregroundStyle(colors.COMPLETE)]}>
-            {lineCount("+", additions)}
-          </Text>
-        )}
-        {deletions === undefined ? null : (
-          <Text modifiers={[...count, foregroundStyle(colors.DANGER)]}>
-            {lineCount("−", deletions)}
-          </Text>
-        )}
-      </HStack>
+      )}
+      {deletions === undefined ? null : (
+        <Text modifiers={[...count, foregroundStyle(colors.DANGER)]}>
+          {lineCount("−", deletions)}
+        </Text>
+      )}
+    </HStack>
+  );
+  return (
+    <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
+      {onOpen === undefined ? (
+        card
+      ) : (
+        <Button onPress={onOpen} modifiers={[buttonStyle("plain")]}>
+          {card}
+        </Button>
+      )}
       {acts.length === 0 ? null : (
         <HStack spacing={SPACE.TIGHT + 2}>
           {acts.map((act) => (

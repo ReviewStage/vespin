@@ -87,11 +87,19 @@ import {
   type IntegrationsProcedureSeams,
   integrationsProcedures,
 } from "../integrations/integrations-procedures.js";
+import {
+  type LinkPreviewsProcedureSeams,
+  linkPreviewsProcedures,
+} from "../link-previews/link-preview-procedures.js";
 import { type LiveProcedureSeams, liveProcedures } from "../live/live-procedures.js";
 import {
   type McpClientsProcedureSeams,
   mcpClientsProcedures,
 } from "../member-mcp/clients-procedures.js";
+import {
+  type LiveActivitiesProcedureSeams,
+  liveActivitiesProcedures,
+} from "../push/live-activities-procedures.js";
 import {
   type PushDevicesProcedureSeams,
   pushDevicesProcedures,
@@ -141,6 +149,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   InboxProcedureSeams &
   InstalledSkillsProcedureSeams &
   IntegrationsProcedureSeams &
+  LinkPreviewsProcedureSeams &
   LiveProcedureSeams &
   DeviceAgentsProcedureSeams &
   MacCommandsProcedureSeams &
@@ -150,6 +159,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   DescriptionCommentsProcedureSeams &
   PullRequestChaptersProcedureSeams &
   PushDevicesProcedureSeams &
+  LiveActivitiesProcedureSeams &
   RepositoryPinsProcedureSeams &
   RepositoryPullRequestProcedureSeams &
   SupportAccessProcedureSeams &
@@ -185,7 +195,9 @@ export function hostedRouter(seams: HostedRouterSeams) {
     inbox: inboxProcedures(seams),
     installedSkills: installedSkillsProcedures(seams),
     integrations: integrationsProcedures(seams),
+    linkPreviews: linkPreviewsProcedures(seams),
     live: liveProcedures(seams),
+    liveActivities: liveActivitiesProcedures(seams),
     deviceAgents: deviceAgentsProcedures(seams),
     macCommands: macCommandsProcedures(seams),
     mcpClients: mcpClientsProcedures(seams),

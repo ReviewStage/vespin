@@ -2,6 +2,7 @@
 
 import { EmptyState, Screen } from "@repo/ui-native";
 import { Stack } from "expo-router";
+import { SettingsBarButton } from "../../../settings-button.js";
 
 export default function SearchScreen() {
   return (
@@ -9,6 +10,7 @@ export default function SearchScreen() {
       <Stack.Screen options={{ title: "Search" }}>
         <Stack.SearchBar placeholder="Search" />
       </Stack.Screen>
+      <SettingsBarButton />
       <Screen>
         <EmptyState
           title="Search"

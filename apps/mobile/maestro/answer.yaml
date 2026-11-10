@@ -1,0 +1,191 @@
+# answer.yaml -- a thread's ask answered from the phone, each kind once: a decide's pick, a refused approval taken back, an answer's fields, a do's steps marked done, an answer in words, a reply, and Resolve.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as `inbox.yaml` is, so no server is
+# reached: the fixture takes each reply and resolve as the service would, but
+# for the migration's approval, which it refuses (`@repo/host/fixture-inbox`).
+# Each thread is opened from a fresh launch, so a compact window's pushed
+# thread and a regular window's split view are reached the same way, with no
+# back button between them.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Who can withdraw an invite?"
+- waitForAnimationToEnd
+# A decide: the options as a card of radio rows, the recommended tagged; a
+# pick lights Send, which sends it with the note typed, and the thread reads
+# it answered at once: the card gone, and the answer's stamp under "You".
+- tapOn: "Who can withdraw an invite?"
+- assertVisible: "The member who sent it"
+- waitForAnimationToEnd
+- takeScreenshot: answer-decide
+- tapOn: "Both, Recommended.*"
+- assertVisible: "Add a note"
+- takeScreenshot: answer-decide-picked
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Chose Both"
+    timeout: 5000
+- assertNotVisible: "The member who sent it"
+- waitForAnimationToEnd
+- takeScreenshot: answer-decide-sent
+
+# A refused answer: the approval is drawn answered at once, then taken back
+# as the fixture refuses it, its pick back on the card and the refusal said
+# under it.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Run the memberships migration on preview?"
+- waitForAnimationToEnd
+- tapOn: "Run the memberships migration on preview?"
+- assertVisible: "Decline"
+- tapOn: "Approve, Recommended.*"
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "No answer came back. Try again."
+    timeout: 5000
+- assertVisible: "Decline"
+- waitForAnimationToEnd
+- takeScreenshot: answer-refused
+
+# An answer's fields: a select's menu with its recommended option said so, a
+# toggle, and a number on the decimal pad; Send submits what was filled.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- scrollUntilVisible:
+    element: "Invite limits"
+    direction: DOWN
+    centerElement: true
+- waitForAnimationToEnd
+- tapOn: "Invite limits"
+- assertVisible: "Choose"
+- waitForAnimationToEnd
+- takeScreenshot: answer-fields
+- tapOn: "Choose"
+- tapOn: "Every member \\(recommended\\)"
+- tapOn: "Email the sender when an invite is accepted.*"
+# The number comes last, since the decimal pad has no key that puts it away:
+# the composer rides above it, so Send is pressed with the pad still up.
+# Words that read as no number hold the answer back, rather than send it
+# without them.
+- tapOn:
+    id: "answer-field-Invites a member may send a day"
+- inputText: "."
+- tapOn: "Send"
+- assertVisible: "Write a number in Invites a member may send a day."
+- eraseText: 1
+- inputText: "20"
+- waitForAnimationToEnd
+- takeScreenshot: answer-fields-filled
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Submitted"
+    timeout: 5000
+- assertNotVisible: "Choose"
+
+# A do: its steps as checkbox rows, one ticked by hand, then Mark done, which
+# sends at once with every step ticked.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- scrollUntilVisible:
+    element: "Verify the digest's sender domain"
+    direction: DOWN
+    centerElement: true
+- waitForAnimationToEnd
+- tapOn: "Verify the digest's sender domain"
+- assertVisible: "Mark done"
+- tapOn: ".*Add the three DNS records.*"
+- assertVisible: ".*your registrar\\., ticked"
+- waitForAnimationToEnd
+- takeScreenshot: answer-do
+- tapOn: "Mark done"
+- extendedWaitUntil:
+    visible: "Done 3/3"
+    timeout: 5000
+- assertNotVisible: "Mark done"
+- waitForAnimationToEnd
+- takeScreenshot: answer-do-sent
+
+# An answer in words: the composer's own words are the answer.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- scrollUntilVisible:
+    element: "The digest's subject line"
+    direction: DOWN
+    centerElement: true
+- waitForAnimationToEnd
+- tapOn: "The digest's subject line"
+- tapOn:
+    id: "composer-field"
+- inputText: "What shipped in Relay this week"
+- takeScreenshot: answer-words
+- tapOn: "Send"
+- extendedWaitUntil:
+    visible: "Answered"
+    timeout: 5000
+- assertVisible: "What shipped in Relay this week"
+# A drag down the thread puts the keyboard away, as the thread's scroll lets it.
+- swipe:
+    start: "50%, 30%"
+    end: "50%, 60%"
+- waitForAnimationToEnd
+- takeScreenshot: answer-words-sent
+
+# A reply on a notice, which asks nothing: drawn at the thread's foot at once.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- scrollUntilVisible:
+    element: "acceptInvite can add a member twice"
+    direction: DOWN
+    centerElement: true
+- waitForAnimationToEnd
+- tapOn: "acceptInvite can add a member twice"
+- assertVisible: "Reply"
+- tapOn:
+    id: "composer-field"
+- inputText: "Thanks, one transaction sounds right."
+- tapOn: "Send"
+- assertVisible: "Thanks, one transaction sounds right."
+# A drag down the thread puts the keyboard away, as the thread's scroll lets it.
+- swipe:
+    start: "50%, 30%"
+    end: "50%, 60%"
+- waitForAnimationToEnd
+- takeScreenshot: reply-sent
+
+# Resolve, from the thread's ⋯ menu: the thread settles without an answer,
+# its heading saying so, and the menu offers it no more.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- scrollUntilVisible:
+    element: "What the expired invite page says"
+    direction: DOWN
+    centerElement: true
+- waitForAnimationToEnd
+- tapOn: "What the expired invite page says"
+- waitForAnimationToEnd
+- tapOn:
+    text: "More"
+    index: -1
+- assertVisible: "Resolve"
+- takeScreenshot: resolve-menu
+- tapOn: "Resolve"
+- assertVisible: "Resolved"
+- waitForAnimationToEnd
+- takeScreenshot: resolve-sent

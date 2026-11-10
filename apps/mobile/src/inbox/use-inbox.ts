@@ -5,7 +5,8 @@
  * model's (`@repo/features/inbox-list-model`), which the panel's Inbox reads
  * too, over the holders the host's document groups
  * (`@repo/host/app-state-reads`' `selectInboxGroupsIn`); this only reads them
- * into the app's Query client and sends the panel's acts on the host's port.
+ * into the app's Query client and sends the panel's acts on the host's port,
+ * each thread drawn with the reader's sends still out (`use-thread-answer.ts`).
  */
 
 import {
@@ -24,7 +25,7 @@ import {
 } from "@repo/features/inbox-list-model";
 import { searchTokens } from "@repo/features/search-tokens";
 import { TASKS_READ } from "@repo/features/tasks-view";
-import { MP4_TYPE, WEBM_TYPE } from "@repo/features/video-signature";
+import { MP4_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
@@ -38,12 +39,17 @@ import {
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
-import { File, Paths } from "expo-file-system";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
+import { cachedVideo } from "../cached-media.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { dismissThreadNotifications } from "../notification-task.js";
+import { useSendsDrawn } from "./use-thread-answer.js";
+
+/** What a thread's videos are named under among the app's caches. */
+const INBOX_MEDIA_PREFIX = "inbox";
 
 /** The defaults key the Inbox's scope is kept under, as the panel keeps its window's. */
 const INBOX_SCOPE_KEY = "inboxScope";
@@ -63,7 +69,7 @@ function useInboxGroups(): ReturnType<ReturnType<typeof selectInboxGroupsIn>> {
     ...appStateQuery,
     select: selectInboxGroupsIn(chosen?.id),
   });
-  return groups;
+  return useSendsDrawn(groups);
 }
 
 /** The scope kept, or Open, the panel's own first scope, where none was ever chosen. */
@@ -160,10 +166,11 @@ export function useInboxThread(id: string | undefined): {
   readonly readerId: string | undefined;
   readonly feed: InboxFeed;
 } {
-  const { data: groups = NO_GROUPS } = useQuery({
+  const { data: read = NO_GROUPS } = useQuery({
     ...appStateQuery,
     select: selectInboxGroupsIn(undefined),
   });
+  const groups = useSendsDrawn(read);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const { data: answered = INBOX_FEED.READING } = useQuery({
     ...appStateQuery,
@@ -227,7 +234,8 @@ export function useInboxActs(): {
 /**
  * Marks the thread read once it is opened, as the panel's pane does, and
  * once again each time it is opened anew; a thread read already is told
- * nothing.
+ * nothing. Its notifications still shown are removed as it opens, read or
+ * not, since the thread is on screen.
  */
 export function useReadOnOpen(listed: InboxListed | undefined): void {
   const { mark } = useInboxActs();
@@ -235,39 +243,12 @@ export function useReadOnOpen(listed: InboxListed | undefined): void {
   const unread = listed !== undefined && isUnread(listed.item);
   // Note that the mark is sent as a thread opens, never again as it is read, so only the thread's id moves it.
   useEffect(() => {
-    if (id !== undefined && unread) mark(id, false);
+    if (id === undefined) return;
+    if (unread) mark(id, false);
+    dismissThreadNotifications(id).catch((error: unknown) =>
+      console.error("The thread's notifications were not removed.", error),
+    );
   }, [id]);
-}
-
-/** The extension each video the player reads is written under, which AVFoundation reads a file's container by. */
-const VIDEO_EXTENSION: Readonly<Record<string, string>> = {
-  [MP4_TYPE]: "mp4",
-  [WEBM_TYPE]: "webm",
-};
-
-/**
- * Where a video's bytes were written for the system's player to read: a file
- * of the app's caches, named by the attachment and its type's extension, so
- * it is written once. Note that the bytes are written beside it first and
- * moved into place once the write settles, so the player is never handed a
- * file still being written, and a write cut short never stands as the file a
- * later read finds.
- */
-async function cachedFile(
-  attachmentId: string,
-  contentType: string,
-  base64: string,
-): Promise<string> {
-  const extension = VIDEO_EXTENSION[contentType];
-  const name =
-    extension === undefined ? `inbox-${attachmentId}` : `inbox-${attachmentId}.${extension}`;
-  const file = new File(Paths.cache, name);
-  if (file.exists) return file.uri;
-  const writing = new File(Paths.cache, `${name}.writing`);
-  if (writing.exists) writing.delete();
-  await writing.write(base64, { encoding: "base64" });
-  await writing.move(file);
-  return file.uri;
 }
 
 /**
@@ -321,7 +302,12 @@ export function useThreadMedia(
           if (!("base64" in read)) throw new Error(`The file was not read: ${read.failure}.`);
           const source =
             each.kind === INBOX_MEDIA.VIDEO
-              ? await cachedFile(each.attachmentId, read.contentType, read.base64)
+              ? await cachedVideo(
+                  INBOX_MEDIA_PREFIX,
+                  each.attachmentId,
+                  read.contentType,
+                  read.base64,
+                )
               : `data:${read.contentType};base64,${read.base64}`;
           if (asked.current.itemId !== itemId) return;
           setSources((held) => new Map(held).set(each.attachmentId, source));

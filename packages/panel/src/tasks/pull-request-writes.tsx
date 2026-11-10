@@ -1,3 +1,4 @@
+import { REPOSITORY_UNREACHED_NOTE } from "@repo/features/agent-refusal-words";
 import {
   AGENT_CALL_FAILURE,
   type AgentCallFailure,
@@ -11,6 +12,12 @@ import {
 } from "@repo/features/agent-wire";
 import { saidWords } from "@repo/features/integration-health";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import {
+  PULL_REQUEST_STATE_LABEL,
+  PULL_REQUEST_WRITE_WORDS,
+  QUEUE_WARNING,
+  queuedLabel,
+} from "@repo/features/pull-request-model";
 import {
   PULL_REQUEST_ACTION,
   PULL_REQUEST_WRITE_BOUNDS,
@@ -71,7 +78,6 @@ import { confirmFailure, failureShown } from "../failure-report.js";
 import { useGitHubConnection } from "../github-connect.js";
 import { OPEN_SETTINGS_LABEL, useOpenSettings } from "../open-settings.js";
 import { useToast, useWithdrawToast } from "../toast.js";
-import { PULL_REQUEST_STATE_LABEL, queuedLabel, REPOSITORY_UNREACHED_NOTE } from "./agent-model.js";
 import { PULL_REQUEST_TONE, PullRequestMark } from "./pull-request-mark.js";
 import { usePullRequestNumber } from "./pull-request-number.js";
 import { agentPullRequestWrite, usePullRequestSource } from "./pull-request-source.js";
@@ -145,13 +151,11 @@ const ACTION_WORDS = {
 
 /** The line's own words. */
 const WRITE_WORDS = {
-  SIGN_IN: "Sign in with GitHub to make this change as you.",
+  SIGN_IN: PULL_REQUEST_WRITE_WORDS.SIGN_IN,
   SIGN_IN_PRESS: "Sign in with GitHub",
   DISMISS: "Dismiss",
-  /** Our sentence on a change GitHub refused, which GitHub's own words follow on a line of their own. */
-  REFUSED: "GitHub refused this change.",
-  /** Who said the words quoted under a refusal. */
-  SOURCE: "GitHub",
+  REFUSED: PULL_REQUEST_WRITE_WORDS.REFUSED,
+  SOURCE: PULL_REQUEST_WRITE_WORDS.SOURCE,
   /** A repository out of the workspace's reach, and where it is given back: the workspace's GitHub in Settings, whose Manage on GitHub chooses the App's repositories. */
   UNREACHED: `${REPOSITORY_UNREACHED_NOTE} Choose which repositories ${PRODUCT_NAME} can see.`,
 } as const;
@@ -160,11 +164,11 @@ const WRITE_WORDS = {
 function failureWords(failure: AgentCallFailure): string {
   switch (failure) {
     case AGENT_CALL_FAILURE.NOT_FOUND:
-      return "This pull request can no longer be found.";
+      return PULL_REQUEST_WRITE_WORDS.NOT_FOUND;
     case AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE:
       return WRITE_WORDS.UNREACHED;
     default:
-      return "GitHub could not be reached. Try again in a moment.";
+      return PULL_REQUEST_WRITE_WORDS.UNREACHED;
   }
 }
 
@@ -397,10 +401,6 @@ const ACTION_GLYPHS = {
   [PULL_REQUEST_ACTION.CLOSE]: <GitPullRequestClosedIcon aria-hidden="true" />,
   [PULL_REQUEST_ACTION.REOPEN]: <GitPullRequestIcon aria-hidden="true" />,
 } as const satisfies Record<StateAction, React.JSX.Element>;
-
-/** What leaving GitHub's merge queue costs the pull requests behind it, said as the merge box's Remove from queue and a queued Close each ask. */
-export const QUEUE_WARNING =
-  "Removing this pull request from the queue could impact other pull requests in the queue.";
 
 /** The question Close asks of a pull request in the merge queue, since reopening it does not queue it again. */
 const CLOSE_QUEUED_QUESTION: DialogQuestion = {
@@ -668,9 +668,10 @@ export function PullRequestTitleLine({
 
 /**
  * The pull request's title and number, the number wrapping with the
- * title's last word, its pencil opening a field over the
- * title where its words may be changed: kept on Enter, or as the focus
- * leaves, where they changed and are not empty, and given up on Escape.
+ * title's last word, its pencil opening a bare field in the title's place,
+ * as a task's name renames, where its words may be changed: kept on Enter,
+ * or as the focus leaves, where they changed and are not empty, and given
+ * up on Escape.
  * The title stands as it was until GitHub answers with the new one, its
  * pencil unavailable while the write is out.
  */
@@ -699,7 +700,7 @@ export function PullRequestTitle({
           label={TITLE_WORDS.FIELD}
           editing
           maxLength={PULL_REQUEST_WRITE_BOUNDS.MAX_TITLE_CHARS}
-          look={INLINE_EDIT_LOOK.INPUT}
+          look={INLINE_EDIT_LOOK.FIELD}
           onEnd={end}
         />
       </PullRequestTitleLine>

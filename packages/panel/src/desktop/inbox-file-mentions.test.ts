@@ -156,7 +156,7 @@ async function inbox() {
   });
   // The account's feed holds the task's one item, which the Inbox draws from.
   handInboxItems({
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [ITEM] }, [INBOX_SCOPE_KIND.AGENT]: {} },
+    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: [ITEM] } },
   });
   function Page() {
     // Note that the item stands chosen at its address, as a press on its row chooses it.

@@ -83,7 +83,7 @@ import { plainCodeLines } from "@repo/host/task-code-remote";
 import { Cause, ConfigProvider, Context, Effect, Layer, Path, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
 import type * as HttpClient from "effect/http/HttpClient";
-import { stageFixture } from "./fixture-host.js";
+import { fixtureActs, stageFixture } from "./fixture-host.js";
 import { inProcessChannel } from "./in-process-channel.js";
 
 /**
@@ -392,7 +392,13 @@ export function composeMobile(
   const launched = Layer.unwrap(
     Effect.map(ComposedMobileTag, (mobile) => {
       const standing = Layer.mergeAll(
-        Layer.succeed(MobileHostTag, { bridge: mobile.bridge, acts: mobile.acts }),
+        Layer.succeed(MobileHostTag, {
+          bridge: mobile.bridge,
+          acts:
+            options.fixture === undefined
+              ? mobile.acts
+              : fixtureActs(mobile.acts, options.fixture, mobile.state),
+        }),
         effectServiceLayer(mobile.operator, report),
       ).pipe(Layer.provideMerge(hostStandingLayer));
       const staged = options.fixture === undefined ? Layer.empty : stagedFixture(mobile.state);

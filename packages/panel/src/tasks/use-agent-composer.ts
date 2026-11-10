@@ -1,3 +1,4 @@
+import type { RefusedCall } from "@repo/features/agent-refusal-words";
 import { newerTurn } from "@repo/features/agent-status";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import {
@@ -21,12 +22,12 @@ import {
   closesComposer,
   heldSentLines,
   messageFailureNote,
-  type RefusedCall,
   SENT_LINE_STATE,
   type SentLine,
   unreadSentLines,
 } from "./agent-model.js";
 import { type FailedLine, failedLines as failedLinesHeld, failedLinesOf } from "./failed-lines.js";
+import type { HeldUpdate } from "./refused-send.js";
 
 /**
  * use-agent-composer.ts -- the message box under an agent's transcript as one control: the words being written, the messages on their way, the ones that did not go, and the lines sent that the transcript has not read back.
@@ -266,6 +267,8 @@ export interface HeldComposer extends AgentComposerControl {
   readonly going: ReadonlySet<string>;
   /** Settles once every line the box sent so far has been answered, which a message queued behind them waits for, so it never goes ahead of them. */
   readonly sendsSettled: () => Promise<void>;
+  /** Moves the box's words and files on together from what its draft holds as the change lands, as a refused send put back does (`refused-send.ts`). */
+  readonly updateHeld: HeldUpdate;
 }
 
 export function useAgentComposer(input: {
@@ -616,6 +619,11 @@ export function useAgentComposer(input: {
     attachments: shown.attachments,
     setAttachments: (next) =>
       kept.update((was) => ({ ...was, attachments: next(was.attachments) })),
+    updateHeld: (next) =>
+      kept.update((was) => {
+        const moved = next(was);
+        return moved === undefined ? was : { ...was, ...moved };
+      }),
     sending: false,
     note: held.closed === undefined ? (held.revertFailed?.note ?? held.remedied?.note) : undefined,
     closed: held.closed,

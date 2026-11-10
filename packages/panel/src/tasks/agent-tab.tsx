@@ -174,6 +174,18 @@ import { useBusyPress } from "../settings/busy-press.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
+import {
+  type AgentApprovalsControl,
+  type AgentModeControl,
+  ApprovalsProvider,
+  heldCallPart,
+  looseApprovals,
+  transcriptCallIds,
+  useAgentApprovals,
+  useAgentPermissionMode,
+  useCallHeld,
+  waitingOnYouWords,
+} from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { ForwardChip, useForwardToast } from "./agent-forward.js";
 import {
@@ -312,7 +324,11 @@ import {
   useUndeliveredLines,
   useUnsentLines,
 } from "./undelivered-mark.js";
-import { type HeldComposer, useAgentComposer } from "./use-agent-composer.js";
+import {
+  type HeldComposer,
+  type MessageSender as MessageWriter,
+  useAgentComposer,
+} from "./use-agent-composer.js";
 import { type AgentModelControl, useAgentModel } from "./use-agent-model.js";
 import { useAgentPullRequest } from "./use-agent-pull-request.js";
 import { useAgentQueue, useQueueEditing } from "./use-agent-queue.js";
@@ -654,6 +670,8 @@ function ToolCallView({
   cut?: CutBody | undefined;
 }): ReactNode {
   const view = toolCallView({ ...part, jobs });
+  // A call the agent holds for an answer says so on its own row, its answers under it.
+  const held = useCallHeld(part.callId);
   // A worker the plan's limit ended draws the limit's notice in its answer's place.
   const limit = callUsageLimit(part);
   const server = useServerName(view);
@@ -683,6 +701,7 @@ function ToolCallView({
         output={limit === undefined ? view.output : undefined}
         errorText={part.errorText}
         cut={cut}
+        held={held}
       />
       <CallPictures tool={part.tool} input={part.input} output={part.output} />
       {limit === undefined ? null : (
@@ -1089,6 +1108,60 @@ function CutReasoningView({ cut }: { cut: AgentPartCut }): ReactNode {
   return <TranscriptReasoning text={whole.kind === AGENT_PART.REASONING ? whole.text : ""} />;
 }
 
+/** One tool call's row, drawn as its kind asks: a cut answer, pictures shown, a delegation, a call that made or names something, a to-do list, a skill loaded, or a plain call. */
+function ToolPartView({
+  part,
+  delegation,
+  todos,
+}: {
+  part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>;
+  delegation: DelegationDoors | undefined;
+  todos: TodosPlace;
+}): ReactNode {
+  // Only an answer the window draws as words is cut (`part-cut.ts`), so the call draws as any call's row.
+  if (part.cut !== undefined) {
+    return <CutToolCallView part={part} cut={part.cut} jobs={delegation?.jobs} />;
+  }
+  // A set of pictures the agent showed, or is showing, is drawn as itself; one refused keeps its row, where its error is read.
+  if (part.tool === AGENT_TOOL.SHOW_IMAGE && part.state !== TOOL_STATE.OUTPUT_ERROR) {
+    return <ShownPictures input={part.input} output={part.output} />;
+  }
+  if (delegates(part)) return <DelegationRow part={part} doors={delegation} />;
+  // A call that failed keeps its row, because the row is where its error is read.
+  const target = part.state === TOOL_STATE.OUTPUT_ERROR ? undefined : toolTarget(part);
+  if (target !== undefined && target.kind !== TOOL_TARGET.AGENT) {
+    return <MadeCallView part={part} target={target} doors={delegation} />;
+  }
+  const openTarget = delegation?.onOpenTarget;
+  if (target !== undefined && openTarget !== undefined) {
+    return (
+      <TargetCallView
+        part={part}
+        target={target}
+        doors={delegation}
+        onOpen={() => openTarget(target)}
+      />
+    );
+  }
+  if (isTodos(part)) {
+    return (
+      <TodosRow
+        part={part}
+        todos={todosOfPart(part, todos.lists)}
+        live={part.callId === todos.live}
+      />
+    );
+  }
+  return toolCallView(part).kind === CALL_KIND.LOAD_SKILL ? (
+    <LoadedSkillView part={part} />
+  ) : // A call about an agent names it by the cards the window hands now (`LiveDoors`).
+  calledAgent(part) === undefined ? (
+    <MadeCallView part={part} target={undefined} doors={delegation} />
+  ) : (
+    <AgentCallView part={part} jobs={delegation?.jobs} doors={delegation} />
+  );
+}
+
 /** One part of the agent's turn, drawn by its kind. */
 function AgentPartView({
   part,
@@ -1120,50 +1193,8 @@ function AgentPartView({
       ) : (
         <CutReasoningView cut={part.cut} />
       );
-    case AGENT_PART.TOOL: {
-      // Only an answer the window draws as words is cut (`part-cut.ts`), so the call draws as any call's row.
-      if (part.cut !== undefined) {
-        return <CutToolCallView part={part} cut={part.cut} jobs={delegation?.jobs} />;
-      }
-      // A set of pictures the agent showed, or is showing, is drawn as itself; one refused keeps its row, where its error is read.
-      if (part.tool === AGENT_TOOL.SHOW_IMAGE && part.state !== TOOL_STATE.OUTPUT_ERROR) {
-        return <ShownPictures input={part.input} output={part.output} />;
-      }
-      if (delegates(part)) return <DelegationRow part={part} doors={delegation} />;
-      // A call that failed keeps its row, because the row is where its error is read.
-      const target = part.state === TOOL_STATE.OUTPUT_ERROR ? undefined : toolTarget(part);
-      if (target !== undefined && target.kind !== TOOL_TARGET.AGENT) {
-        return <MadeCallView part={part} target={target} doors={delegation} />;
-      }
-      const openTarget = delegation?.onOpenTarget;
-      if (target !== undefined && openTarget !== undefined) {
-        return (
-          <TargetCallView
-            part={part}
-            target={target}
-            doors={delegation}
-            onOpen={() => openTarget(target)}
-          />
-        );
-      }
-      if (isTodos(part)) {
-        return (
-          <TodosRow
-            part={part}
-            todos={todosOfPart(part, todos.lists)}
-            live={part.callId === todos.live}
-          />
-        );
-      }
-      return toolCallView(part).kind === CALL_KIND.LOAD_SKILL ? (
-        <LoadedSkillView part={part} />
-      ) : // A call about an agent names it by the cards the window hands now (`LiveDoors`).
-      calledAgent(part) === undefined ? (
-        <MadeCallView part={part} target={undefined} doors={delegation} />
-      ) : (
-        <AgentCallView part={part} jobs={delegation?.jobs} doors={delegation} />
-      );
-    }
+    case AGENT_PART.TOOL:
+      return <ToolPartView part={part} delegation={delegation} todos={todos} />;
     // A step boundary is the model's own pacing, and the parts keep one rhythm across it.
     case AGENT_PART.STEP_START:
     case AGENT_PART.OTHER:
@@ -2345,6 +2376,7 @@ function AgentTranscriptView({
   working,
   phase = WORKING_PHASE.WORKING,
   waitsUntil,
+  approvals,
   turnId,
   startedAt,
   ended: turnEnded,
@@ -2391,6 +2423,8 @@ function AgentTranscriptView({
   phase?: WorkingPhase;
   /** When the open turn waits on a usage reset, whose native notice replaces the working line. */
   waitsUntil?: number | undefined;
+  /** The agent's asks, whose count the working line says while one waits, and those no drawn call holds, drawn over it; none where the agent never asks. */
+  approvals?: AgentApprovalsControl | undefined;
   /** The current turn, whose own native notice replaces its generic failure line. */
   turnId?: string | null | undefined;
   /** When the run under way began, which the working line counts from; none where unknown, when the line only shimmers. */
@@ -2494,6 +2528,8 @@ function AgentTranscriptView({
   );
   const log = useRef<HTMLDivElement>(null);
   const rowsHandle = useRef<VirtualRowsHandle>(null);
+  // The calls the log draws, so an ask no drawn call holds stands at its foot.
+  const callIds = useMemo(() => transcriptCallIds(messages), [messages]);
   // Note that the rows' words are read only while a find bar stands open over the tab.
   const finding = useFindOpen();
   const findRows = useMemo(
@@ -2536,15 +2572,32 @@ function AgentTranscriptView({
     const description = carded ? first : undefined;
     const task = carded || blank ? undefined : first;
     // What stands after the messages is drawn inside the last of them, which grows as TanStack's streaming reply does, so the virtualizer measures it with the row and the log holds nothing past its rows.
+    // Note that an ask no drawn call holds stands at the foot after the turn too, settled there as it settled.
+    const loose = approvals === undefined ? [] : looseApprovals(approvals.asks, callIds);
     const trailing =
       !working &&
+      loose.length === 0 &&
       ended === undefined &&
       limitNotice === undefined &&
       endTrail === undefined &&
       !(failed && connected) ? null : (
         <>
+          {loose.length === 0 ? null : (
+            <div className="agent-loose-approvals flex flex-col">
+              {loose.map((ask) => (
+                <ToolCallView key={ask.approval.id} part={heldCallPart(ask.approval)} />
+              ))}
+            </div>
+          )}
           {working && !waitingNotice ? (
-            <WorkingLine startedAt={startedAt} words={workingLineWords(phase, waitsUntil)} />
+            <WorkingLine
+              startedAt={startedAt}
+              words={
+                approvals !== undefined && approvals.waiting > 0
+                  ? waitingOnYouWords(approvals.waiting)
+                  : workingLineWords(phase, waitsUntil)
+              }
+            />
           ) : null}
           {limitNotice}
           {ended === undefined && endTrail === undefined ? null : (
@@ -2752,6 +2805,8 @@ function AgentTabView({
   composer,
   model,
   servers,
+  mode,
+  approvals,
   published,
   threads,
   doors,
@@ -2798,6 +2853,10 @@ function AgentTabView({
   composer: HeldComposer;
   model: AgentModelControl | undefined;
   servers: AgentServersControl;
+  /** The agent's permission mode and its chip's change; none for an agent that never asks. */
+  mode: AgentModeControl | undefined;
+  /** The agent's asks, drawn on their calls and counted on the working line. */
+  approvals: AgentApprovalsControl;
   /** What the agent published, once the service has said; nothing before. */
   published: AgentPullRequestAnswer | undefined;
   /** The threads the agent posted that wait on the developer (`ThreadsDock`). */
@@ -3041,75 +3100,80 @@ function AgentTabView({
                 <RewindProvider value={rewind}>
                   <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
                     <AutomationsWanted wanted={automationLines}>
-                      <AgentTranscriptView
-                        messages={lines}
-                        brief={agent.brief}
-                        briefSender={starter === undefined ? undefined : starterActor}
-                        origin={origin}
-                        readerId={readerId}
-                        agentId={agent.id}
-                        taskId={agent.planId ?? undefined}
-                        replay={replay}
-                        delegation={{
-                          models,
-                          own: { model: agent.model, effort: agent.effort },
-                          starts:
-                            delegationStarts &&
-                            workerStarts(delegationStarts, transcript.subagents),
-                          onOpen: openSubagent,
-                          onOpenTarget: openTarget,
-                          cards,
-                          standings: transcript.subagents,
-                        }}
-                        reading={transcript.reading || holding}
-                        holding={holding}
-                        failed={transcript.failed}
-                        failedWith={transcript.failedWith}
-                        working={standing.working}
-                        phase={standing.phase}
-                        waitsUntil={standing.waitsUntil}
-                        turnId={standing.turnId ?? agent.turnId}
-                        // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
-                        startedAt={
-                          !counts
-                            ? undefined
-                            : composer.rewinding
-                              ? composer.rewoundAt
-                              : (agentWorkingSince(lines) ?? startedAt)
-                        }
-                        ended={
-                          // Note that the end line waits for a first page, so a stopped agent's tab never draws it over nothing, and gives way to the working line while the agent works.
-                          transcript.pages === 0 || standing.working
-                            ? undefined
-                            : endLineParts(
-                                standing.status,
-                                standing.failure,
-                                starter,
-                                continuable,
-                                transcript.hostLost,
-                                transcript.launchStopped === undefined
-                                  ? undefined
-                                  : {
-                                      step: transcript.launchStopped,
-                                      runtime: agent.runtime,
-                                      unstarted: transcript.launchUnstarted,
-                                    },
-                              )
-                        }
-                        endReason={endLineReason(standing.failure, starter)}
-                        keyProvider={keyProvider}
-                        onOpenApiKeys={
-                          onOpenApiKeys === undefined ? undefined : () => onOpenApiKeys(keyProvider)
-                        }
-                        endPress={endPress}
-                        endTrail={endTrail}
-                        signIn={signIn}
-                        onRetry={transcript.onRetry}
-                        onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
-                        olderFailed={transcript.olderFailed}
-                        overComposer
-                        bringIn={bringIn}
-                      />
+                      <ApprovalsProvider asks={approvals.asks}>
+                        <AgentTranscriptView
+                          messages={lines}
+                          brief={agent.brief}
+                          briefSender={starter === undefined ? undefined : starterActor}
+                          origin={origin}
+                          readerId={readerId}
+                          agentId={agent.id}
+                          taskId={agent.planId ?? undefined}
+                          replay={replay}
+                          delegation={{
+                            models,
+                            own: { model: agent.model, effort: agent.effort },
+                            starts:
+                              delegationStarts &&
+                              workerStarts(delegationStarts, transcript.subagents),
+                            onOpen: openSubagent,
+                            onOpenTarget: openTarget,
+                            cards,
+                            standings: transcript.subagents,
+                          }}
+                          reading={transcript.reading || holding}
+                          holding={holding}
+                          failed={transcript.failed}
+                          failedWith={transcript.failedWith}
+                          working={standing.working}
+                          phase={standing.phase}
+                          waitsUntil={standing.waitsUntil}
+                          turnId={standing.turnId ?? agent.turnId}
+                          // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
+                          startedAt={
+                            !counts
+                              ? undefined
+                              : composer.rewinding
+                                ? composer.rewoundAt
+                                : (agentWorkingSince(lines) ?? startedAt)
+                          }
+                          ended={
+                            // Note that the end line waits for a first page, so a stopped agent's tab never draws it over nothing, and gives way to the working line while the agent works.
+                            transcript.pages === 0 || standing.working
+                              ? undefined
+                              : endLineParts(
+                                  standing.status,
+                                  standing.failure,
+                                  starter,
+                                  continuable,
+                                  transcript.hostLost,
+                                  transcript.launchStopped === undefined
+                                    ? undefined
+                                    : {
+                                        step: transcript.launchStopped,
+                                        runtime: agent.runtime,
+                                        unstarted: transcript.launchUnstarted,
+                                      },
+                                )
+                          }
+                          endReason={endLineReason(standing.failure, starter)}
+                          keyProvider={keyProvider}
+                          onOpenApiKeys={
+                            onOpenApiKeys === undefined
+                              ? undefined
+                              : () => onOpenApiKeys(keyProvider)
+                          }
+                          endPress={endPress}
+                          endTrail={endTrail}
+                          signIn={signIn}
+                          onRetry={transcript.onRetry}
+                          onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
+                          olderFailed={transcript.olderFailed}
+                          overComposer
+                          bringIn={bringIn}
+                          approvals={mode === undefined ? undefined : approvals}
+                        />
+                      </ApprovalsProvider>
                     </AutomationsWanted>
                   </ReplyDoorProvider>
                 </RewindProvider>
@@ -3165,6 +3229,8 @@ function AgentTabView({
             payer={transcript.payer}
             payerSubscriptionId={transcript.payerSubscriptionId}
             servers={servers}
+            mode={mode}
+            approvalsWaiting={approvals.waiting}
             context={transcript.context}
             brief={agent.brief}
             tools={(narrow) => (
@@ -3357,12 +3423,24 @@ function AgentTabBody({
 }): React.JSX.Element {
   const { messages } = transcript;
   const starter = teammateStarter(agent.startedBy, control.me);
+  const approvals = useAgentApprovals({ agent, write: control.onAnswerApproval });
+  const { messageSent } = approvals;
+  const { onMessage } = control;
+  // Note that a message sent while a call waits denies it, which its card then says.
+  const send = useCallback<MessageWriter>(
+    (...sent) => {
+      const answered = onMessage(...sent);
+      messageSent(answered);
+      return answered;
+    },
+    [messageSent, onMessage],
+  );
   const composer = useAgentComposer({
     agentId: agent.id,
     taskId: agent.planId,
     messages: transcript.messages,
     running: agent.status === AGENT_STATUS.RUNNING,
-    send: control.onMessage,
+    send,
     rewind: control.onRewind,
     payer: planPayerOf(agent.runtime),
     starter,
@@ -3373,6 +3451,7 @@ function AgentTabBody({
         : () => onOpenTarget({ kind: TOOL_TARGET.AGENT, agent: agent.id }),
   });
   const model = useAgentModel({ agent, choose: control.onChoose });
+  const mode = useAgentPermissionMode({ agent, write: control.onPermissionMode });
   const servers = useAgentServers({
     agent,
     write: control.onSwitchServers,
@@ -3515,6 +3594,8 @@ function AgentTabBody({
         composer={sent === composer.sent ? composer : { ...composer, sent }}
         model={model}
         servers={servers}
+        mode={mode}
+        approvals={approvals}
         published={published}
         threads={threads}
         doors={{

@@ -12,12 +12,12 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-# CI is Linux but for the iOS app's simulator job, which only a Mac can run;
-# the packaged macOS app is proven by the release workflow before anything
-# ships. Every job below bar `CI`, which only reads the others' results, is
-# independent and runs at once, so a run takes as long as its longest job: the
-# tests, which are the bulk of `check.sh`, are spread across runners rather
-# than run behind the lint and typecheck.
+# CI is Linux only: the packaged macOS app is proven by the release workflow
+# before anything ships, and the iOS app's simulators run by hand
+# (`ios-simulators.yml`). Every job below bar `CI`, which only reads the
+# others' results, is independent and runs at once, so a run takes as long as
+# its longest job: the tests, which are the bulk of `check.sh`, are spread
+# across runners rather than run behind the lint and typecheck.
 #
 # The TypeScript checks and the tests run through Turborepo (`turbo.json`),
 # which replays a task whose inputs it has already seen pass. Its cache is
@@ -228,92 +228,16 @@ jobs:
           image: ${{ steps.stage.outputs.image }}
           timeout-seconds: 1800
 
-  # Whether a pull request touches what the iOS app is built from: the app,
-  # its design system, or this workflow. The simulator job below runs only
-  # then, since a Mac runner costs ten times a Linux one and most pull
-  # requests leave the app alone, and it is compared with its base's merge
-  # base. Note that neither job runs in the merge queue, because the queue
-  # waits 30 minutes for the `CI` gate to report (the ruleset's status check
-  # timeout) and the simulator job takes about 50, so a group holding it was
-  # counted failed and dropped after its run had passed: the pull request's
-  # own run is the app's gate, and the queue reruns the portable checks.
-  mobile-changed:
-    name: iOS app changed
-    if: ${{ github.event_name == 'pull_request' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    outputs:
-      changed: ${{ steps.diff.outputs.changed }}
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          fetch-depth: 0
-      - id: diff
-        run: |
-          base=$(git merge-base "origin/$GITHUB_BASE_REF" HEAD)
-          if git diff --quiet "$base" HEAD -- apps/mobile packages/ui-native .github/workflows/ci.yml; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          fi
-
-  # The iOS app built and driven on the simulators, which only a Mac can do:
-  # Expo generates the native project from `apps/mobile/app.config.ts`, Xcode
-  # builds it for the simulator, and Maestro runs the flows under
-  # `apps/mobile/maestro/` on an iPhone, the iPhone Duo as it boots, folded,
-  # and an iPad for the regular-width layout the unfolded Duo shows, since no
-  # supported command folds or unfolds the Duo simulator. Their screenshots
-  # are the artifact, which `apps/mobile/AGENTS.md` says how to read. The
-  # image is GitHub's Xcode 27 one, whose label names the Xcode major rather
-  # than a macOS version, and which carries the iOS 27.1 runtime the Duo
-  # simulator needs; the Xcode point release is pinned below.
-  mobile:
-    name: iOS app on the simulators
-    needs: mobile-changed
-    if: ${{ needs.mobile-changed.outputs.changed == 'true' }}
-    runs-on: xcode-27
-    # Note that a green run takes about 90 minutes (a 25-minute build, then
-    # an hour of flows), and a retried flow adds up to 15, so the cap leaves
-    # room above that until the simulators run in parallel.
-    timeout-minutes: 140
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
-        with:
-          xcode-version: "27.2"
-      - uses: ./.github/actions/setup
-      - name: Install Maestro
-        run: |
-          curl -fsSL "https://get.maestro.mobile.dev" | bash
-          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
-        env:
-          MAESTRO_VERSION: 2.12.1
-      - name: Generate the native project and build for the simulator
-        run: apps/mobile/scripts/simulator-build.sh "$RUNNER_TEMP/derived-data"
-      - name: Run the Maestro flows
-        run: |
-          apps/mobile/scripts/simulator-screenshots.sh \
-            "$RUNNER_TEMP/derived-data/Build/Products/Release-iphonesimulator/Vespin.app" \
-            "$RUNNER_TEMP/screenshots" \
-            "iPhone 18 Pro" "iPhone Duo" "iPad Pro 11-inch (M5)"
-      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        if: ${{ always() }}
-        with:
-          name: mobile-screenshots
-          path: ${{ runner.temp }}/screenshots
-          if-no-files-found: error
-
   # The one check the ruleset requires, so a job or slice added above is
   # required without a ruleset edit. It passes only where every job it needs
-  # succeeded or was skipped by its own `if`, which is the iOS app's jobs' on
-  # a run that leaves the app alone or in the merge queue. Note that it runs
-  # whatever became of them, because a job skipped behind a failed `needs`
-  # reports skipped too, and a skipped required check counts as passed; the
-  # failed job it stood behind is what fails this one.
+  # succeeded or was skipped by its own `if`. Note that it runs whatever
+  # became of them, because a job skipped behind a failed `needs` reports
+  # skipped too, and a skipped required check counts as passed; the failed job
+  # it stood behind is what fails this one.
   ci:
     name: CI
     if: ${{ always() }}
-    needs: [portable, tests, postgres, agent-image, mobile-changed, mobile]
+    needs: [portable, tests, postgres, agent-image]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

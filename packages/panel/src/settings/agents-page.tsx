@@ -1,7 +1,7 @@
 import { CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { remedyLabel } from "@repo/features/failure-remedy";
+import { effortFor, effortLabel, effortsOf } from "@repo/features/model-effort";
 import {
-  agentFallbackChoice,
   type CatalogModel,
   MODEL_PROVIDER,
   MODEL_SPEED,
@@ -17,6 +17,7 @@ import {
   CHOICE_BAR_LOOK,
   ChoiceBar,
   ErrorState,
+  SavedTick,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
   SettingsRow,
@@ -41,9 +42,6 @@ import {
   choiceModelId,
   choiceOn,
   contextWindowsOf,
-  effortFor,
-  effortLabel,
-  effortsOf,
   FAST_ACCESS_URL,
   FAST_WORD,
   fastRestingNote,
@@ -65,7 +63,7 @@ import {
 import { useRepositoryRemedy } from "../tasks/repository-remedy.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { AgentAuthSection } from "./agent-auth-section.js";
-import { ReadFailed, SettingMarks } from "./marks.js";
+import { ReadFailed } from "./marks.js";
 import { PickerRow } from "./picker-row.js";
 import { type RowWrite, refusalToast, rowWrite } from "./row-write.js";
 import { SwitchRow } from "./switch-row.js";
@@ -108,8 +106,7 @@ import { SwitchRow } from "./switch-row.js";
  * the host draws over the account's preferences on the press, so the rows
  * stay live while it is out; the model, Effort, and Context rows each write through
  * a mutation of their own (`row-write.ts`), so each says its own refusal under it and ticks Saved
- * once its write lands, and Modified while it differs from the fallback this
- * account would start on with none stored. Fast is a `SwitchRow` like every other settings switch, so its
+ * once its write lands. Fast is a `SwitchRow` like every other settings switch, so its
  * refusal is said in a toast as the switch flips back. With no account signed in
  * there is no default to show, and the page says so.
  *
@@ -180,8 +177,6 @@ function DefaultRows({
     onSettled: refusalToast(choiceRefused),
   });
   const listed = models?.find((model) => model.id === choice.model);
-  // Modified reads against the default this account would run on with none stored, as its credentials decide it.
-  const fallback = agentFallbackChoice(models ?? []);
   const remedy = useRepositoryRemedy();
   // A default nothing pays for says so under the model row, with the press that connects it.
   const unrunnable = models === undefined ? undefined : unrunnableChoice(models, choice);
@@ -234,7 +229,6 @@ function DefaultRows({
         label="Default model"
         labelReplayUnmasked
         detail={note}
-        changed={read.base !== fallback.model}
         saves={modelWrite.savedAt}
         error={refusalShown(modelWrite.refusal, FAILURE_SURFACE.SETTING_WRITE)}
         value={read.base}
@@ -283,12 +277,7 @@ function DefaultRows({
       {base?.ultrafast !== undefined ? (
         <SettingsRow
           label={SPEED_LABEL}
-          adornment={
-            <SettingMarks
-              changed={read.speed !== MODEL_SPEED.STANDARD}
-              saves={speedWrite.savedAt}
-            />
-          }
+          adornment={<SavedTick saves={speedWrite.savedAt} />}
           error={refusalShown(speedWrite.refusal, FAILURE_SURFACE.SETTING_WRITE)}
         >
           {() => (
@@ -350,9 +339,7 @@ function DefaultRows({
       )}
       <SettingsRow
         label="Effort"
-        adornment={
-          <SettingMarks changed={choice.effort !== fallback.effort} saves={effortWrite.savedAt} />
-        }
+        adornment={<SavedTick saves={effortWrite.savedAt} />}
         error={refusalShown(effortWrite.refusal, FAILURE_SURFACE.SETTING_WRITE)}
       >
         {() => (
@@ -369,9 +356,7 @@ function DefaultRows({
       {windows === undefined ? null : (
         <SettingsRow
           label="Context"
-          adornment={
-            <SettingMarks changed={window !== CONTEXT_WINDOW.LONG} saves={contextWrite.savedAt} />
-          }
+          adornment={<SavedTick saves={contextWrite.savedAt} />}
           description={longWindowNote(windows)}
           error={refusalShown(contextWrite.refusal, FAILURE_SURFACE.SETTING_WRITE)}
         >
@@ -416,7 +401,7 @@ function AgentsSection({
   const onRetryModels = useCallback(() => retryModels(), [retryModels]);
 
   return (
-    <SettingsSection title="Default model">
+    <SettingsSection title="New agents">
       {!signedIn ? (
         <SettingsLine>{PAGE_LINE.SIGNED_OUT}</SettingsLine>
       ) : drawn.choice !== undefined && (models !== undefined || modelsFailed) ? (

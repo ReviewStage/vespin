@@ -49,7 +49,7 @@ type MenuRowActions = readonly MenuAction[] | readonly (readonly MenuAction[])[]
 /** A row's words as the shared row draws them, and the control standing before its ⋯. */
 interface MenuRowWords {
   label: ReactNode;
-  /** What rides the label's line without naming the row: a Modified word, a mark. */
+  /** What rides the label's line without naming the row: a Saved tick, a mark. */
   adornment?: ReactNode;
   description?: ReactNode;
   /** What went wrong with the row's last act, and the failure beneath it, or nothing while none did. */

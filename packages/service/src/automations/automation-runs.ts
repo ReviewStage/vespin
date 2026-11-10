@@ -468,7 +468,7 @@ const steerClaimed = Effect.fnUntraced(function* (
   }
   yield* attachRunAgent(run.id, agentId);
   // The agent's own task is every run's that goes to it.
-  if (found.value.taskId !== null) yield* attachRunTask(run.id, found.value.taskId);
+  yield* attachRunTask(run.id, found.value.taskId);
   return Option.some<AutomationRunOutcome>({
     status: AUTOMATION_RUN_STATUS.STARTED,
     agentId: agentId,

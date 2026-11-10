@@ -4,6 +4,7 @@ import {
   REVIEW_STATE,
   type ReviewState,
 } from "@repo/features/agent-wire";
+import { REVIEW_WORDS } from "@repo/features/pull-request-model";
 import { type Actor, githubActor } from "@repo/ui/actor-model";
 import {
   CheckIcon,
@@ -34,15 +35,6 @@ import { useMemberDirectory } from "../member-directory.js";
  * recording, as the Changes tab is. The pull request's card names them too,
  * each reviewer on a row of its own (`pull-request-card.tsx`).
  */
-
-/** Where a reviewer stands, in the words their face's pill, a comment's line, and their row on the pull request's card say it. */
-export const REVIEW_WORDS = {
-  [REVIEW_STATE.APPROVED]: "Approved",
-  [REVIEW_STATE.CHANGES_REQUESTED]: "Changes requested",
-  [REVIEW_STATE.DISMISSED]: "Dismissed",
-  [REVIEW_STATE.COMMENTED]: "Commented",
-  [REVIEW_STATE.REQUESTED]: "Review requested",
-} as const satisfies Record<ReviewState, string>;
 
 /** The glyph a reviewer's standing wears, as GitHub draws each. */
 const REVIEW_GLYPHS = {

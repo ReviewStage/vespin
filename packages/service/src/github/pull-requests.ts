@@ -2770,18 +2770,25 @@ export function viewerPendingReviewOf(
   );
 }
 
-/** Whether the member reading may edit the pull request, as GitHub answers on their own token. */
-const VIEWER_CAN_UPDATE_QUERY = `query ViewerCanUpdate($owner: String!, $name: String!, $number: Int!) {
-  repository(owner: $owner, name: $name) { pullRequest(number: $number) { viewerCanUpdate } }
+/** What the member reading may do to the pull request, as GitHub answers on their own token: edit it, and merge it past its base's rules. */
+const VIEWER_RIGHTS_QUERY = `query ViewerRights($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) { viewerCanUpdate viewerCanMergeAsAdmin }
+  }
 }`;
 
-const ViewerCanUpdateAnswerSchema = Schema.Struct({
+const ViewerRightsAnswerSchema = Schema.Struct({
   data: Schema.optionalKey(
     Schema.NullOr(
       Schema.Struct({
         repository: Schema.NullOr(
           Schema.Struct({
-            pullRequest: Schema.NullOr(Schema.Struct({ viewerCanUpdate: Schema.Boolean })),
+            pullRequest: Schema.NullOr(
+              Schema.Struct({
+                viewerCanUpdate: Schema.Boolean,
+                viewerCanMergeAsAdmin: Schema.Boolean,
+              }),
+            ),
           }),
         ),
       }),
@@ -2789,32 +2796,49 @@ const ViewerCanUpdateAnswerSchema = Schema.Struct({
   ),
 });
 
+/** What the member reading may do to a pull request: edit its description, and merge it without waiting for its base's rules. */
+export interface ViewerRights {
+  readonly canEditDescription: boolean;
+  readonly canBypassRules: boolean;
+}
+
+/** What a member may do where GitHub would not say: nothing. */
+export const NO_VIEWER_RIGHTS: ViewerRights = { canEditDescription: false, canBypassRules: false };
+
 /**
- * Whether the member may edit the pull request's description, read on
- * their own token, since a read on the App's token answers for the App's
- * bot; not where GitHub would not answer them, which leaves the description
- * unedited rather than failing the read, said once in the log.
+ * What the member may do to the pull request, read on their own token,
+ * since a read on the App's token answers for the App's bot: edit its
+ * description, and merge it past its base's rules, as GitHub's own bypass
+ * offers an admin. Nothing where GitHub would not answer them, which
+ * leaves the description unedited and the rules standing rather than
+ * failing the read, said once in the log.
  */
-export function viewerCanUpdateOf(
+export function viewerRightsOf(
   token: Redacted.Redacted,
   fullName: string,
   number: number,
-): Effect.Effect<boolean, never, HttpClient.HttpClient> {
+): Effect.Effect<ViewerRights, never, HttpClient.HttpClient> {
   const [owner = "", name = ""] = fullName.split("/");
   const request = githubPost(GRAPHQL_PATH, token, {
-    query: VIEWER_CAN_UPDATE_QUERY,
+    query: VIEWER_RIGHTS_QUERY,
     variables: { owner, name, number },
   });
   return Effect.scoped(
-    Effect.flatMap(send(request), (response) => readBody(response, ViewerCanUpdateAnswerSchema)),
+    Effect.flatMap(send(request), (response) => readBody(response, ViewerRightsAnswerSchema)),
   ).pipe(
-    Effect.map((answer) => answer.data?.repository?.pullRequest?.viewerCanUpdate === true),
+    Effect.map((answer) => {
+      const pull = answer.data?.repository?.pullRequest;
+      return {
+        canEditDescription: pull?.viewerCanUpdate === true,
+        canBypassRules: pull?.viewerCanMergeAsAdmin === true,
+      };
+    }),
     Effect.catch((failure) =>
       Effect.as(
         Effect.logWarning(
-          `whether the member may edit pull request ${number} was not read: ${failure._tag}`,
+          `what the member may do to pull request ${number} was not read: ${failure._tag}`,
         ),
-        false,
+        NO_VIEWER_RIGHTS,
       ),
     ),
   );

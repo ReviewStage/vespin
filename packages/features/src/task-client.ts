@@ -36,9 +36,12 @@ import type {
   GitHubRepositoryPullRequestAnswer,
 } from "./github-repositories-wire.js";
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
+import { HOSTED_CALL_FAILURE } from "./hosted-failure.js";
 import { HOSTED_DEADLINE, type HostedClient, hostedClient } from "./hosted-link.js";
 import { imageBodyOf } from "./image-body.js";
 import { WRITE_UNTAKEN, type WriteUntaken, writeUntakenOf } from "./keyed-write.js";
+import type { LinkPreviewView } from "./link-preview-view.js";
+import { LINK_PREVIEW_QUERY } from "./link-preview-wire.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import type { PagePlace, PageVersion } from "./page-wire.js";
 import {
@@ -566,6 +569,15 @@ export class HostedTaskClient {
     if (query === undefined) return Effect.succeed(undefined);
     return Effect.map(hostedCall(this.#hosted.taskFiles.file, { id: taskId, ...query }), (read) =>
       "failure" in read ? undefined : read,
+    );
+  }
+
+  /** What a web page a plain link names says of itself, for the card the link hangs, read by the service (`link-preview-wire.ts`): its answer, or unanswered, a braked ask among it, since the card says the host alone for any of these. */
+  linkPreview(url: string): Effect.Effect<LinkPreviewView, never, HttpClient.HttpClient> {
+    return Effect.map(
+      hostedCall(this.#hosted.linkPreviews.read, { [LINK_PREVIEW_QUERY.URL]: url }),
+      (answer): LinkPreviewView =>
+        "failure" in answer ? { ...answer, failure: HOSTED_CALL_FAILURE.UNANSWERED } : answer,
     );
   }
 

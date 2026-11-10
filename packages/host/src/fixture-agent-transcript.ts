@@ -1,5 +1,5 @@
 /**
- * fixture-agent-transcript.ts -- the transcript the Inbox fixture's invitations agent holds, long enough to scroll: its words, its thinking, its calls, the pictures and the recording it showed, and the page it showed, still at work on its last turn.
+ * fixture-agent-transcript.ts -- the transcript the Inbox fixture's invitations agent holds, long enough to scroll: its words, its thinking, its calls, the pictures and the recording it showed, the page it showed, and the pull request it opened, still at work on its last turn.
  *
  * The Inbox fixture lays it on the document where the host holds an
  * agent's transcript (`LIVE_READ.TRANSCRIPT`), so the panel's agent page
@@ -66,7 +66,8 @@ function asked(
 /**
  * The transcript, its instants counted from `startedAt`, its turns written
  * by `reader`, the account the fixture signs in as: the ask that began the
- * run and the agent's work on it, the dialog and its email shown; a second
+ * run and the agent's work on it, the dialog and its email shown and its
+ * pull request opened; a second
  * ask, answered with the funnel's page and a recording of an invite
  * accepted; and a third the agent is still working on, its last call
  * running.
@@ -148,6 +149,13 @@ function transcriptMessages(
           type: "text",
           text: "The dialog takes an address and a role, and the email links back to the workspace.\n\n- An invite expires after **seven days**.\n- A used or withdrawn link reads *This invite is no longer valid*.",
         },
+        // Note that the pull request is the one the fixture's task list holds for this agent (`fixture-inbox.ts`'s `INVITES_PULL_REQUEST`).
+        toolPart(
+          AGENT_TOOL.OPEN_PULL_REQUEST,
+          "fixture-invites-pull-request",
+          { head: "agent/invites", title: "Invite a teammate by email", body: "Invites by email." },
+          { url: "https://github.com/ada/relay/pull/128", number: 128 },
+        ),
       ],
       startedAt,
       finishedAt: startedAt + 9 * MINUTE,

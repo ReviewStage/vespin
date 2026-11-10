@@ -88,7 +88,6 @@ import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { VIRTUAL_ROWS_ANCHOR, VirtualRows } from "@repo/ui/virtual-rows";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
-import { useAccountPreferences } from "../account-choices.js";
 import { actMutation, pressMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark, actorMarkWidth, YouBadge } from "../actor-ref.js";
 import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "../confirm-act.js";
@@ -117,10 +116,8 @@ import { useInviteDialog } from "./invite-dialog.js";
 import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { WORKSPACE_CONNECTIONS } from "./pages.js";
-import { refusalToast, rowWrite } from "./row-write.js";
 import { shownWorkspace } from "./settings-rows.js";
 import { AddSlackChannel, SlackBotChannelRows } from "./slack-bot-channels.js";
-import { SwitchRow } from "./switch-row.js";
 import { GitHubAccountRows, type ShownConnection } from "./workspace-github-accounts.js";
 import {
   AddTokenRepository,
@@ -294,11 +291,6 @@ const SLACK_MARK = (
     <ProviderMark provider={INTEGRATION_PROVIDER.SLACK} />
   </SettingsRowMark>
 );
-
-/** A write whose answer only says it was kept, so its error alone refuses it. */
-function answeredAll(): undefined {
-  return undefined;
-}
 
 /** The most rows that stand for the members while they are read, however many the workspace counts. */
 const MEMBERS_SKELETON_MOST = 5;
@@ -1543,41 +1535,9 @@ function ManagedSlackBot({
 }
 
 /**
- * The reader's own Slack notifications, under the bot's row once it is
- * connected: one switch, on until they turn it off, which holds in every
- * workspace whose bot is connected. It is their account's preference, which
- * no row of the workspace carries, so it draws the account's preferences
- * row the host holds for the session (`LIVE_READ.ACCOUNT_PREFERENCES`),
- * drawn once that row is read; the host draws a turn over the row on the
- * press, and a refusal puts it back.
- */
-function SlackNotificationsRow({ workspaceId }: { workspaceId: string }): React.JSX.Element | null {
-  const mutation = useMutation({
-    ...actMutation(ACT_KIND.WORKSPACE_SLACK_BOT_NOTIFICATIONS),
-    onSettled: refusalToast(answeredAll),
-  });
-  const on = useAccountPreferences().data?.slackNotifications;
-  if (on === undefined) return null;
-  return (
-    <SwitchRow
-      label="Slack notifications"
-      labelReplayUnmasked
-      checked={on}
-      changed={!on}
-      write={rowWrite(mutation, {
-        ask: (notifications: boolean) => ({ workspaceId, notifications }),
-        refused: answeredAll,
-        drawn: (asked) => asked.notifications,
-      })}
-    />
-  );
-}
-
-/**
  * An owner's or an admin's bot row, and folded under it, where the bot is
- * connected, its repositories and channels (`slack-bot-channels.tsx`) and
- * the reader's own switch: the channels are Slack's own list, which the host
- * holds while the row shows.
+ * connected, its repositories and channels (`slack-bot-channels.tsx`): the
+ * channels are Slack's own list, which the host holds while the row shows.
  */
 function ManagedSlackBotRows({
   workspace,
@@ -1600,17 +1560,14 @@ function ManagedSlackBotRows({
       )}
       rows={
         slack.team === undefined ? undefined : (
-          <>
-            <SlackBotChannelRows workspace={workspace} slack={slack} channels={channels.data} />
-            <SlackNotificationsRow workspaceId={workspace.id} />
-          </>
+          <SlackBotChannelRows workspace={workspace} slack={slack} channels={channels.data} />
         )
       }
     />
   );
 }
 
-/** The bot's row, and folded under it, where the bot is connected, an owner's or admin's repositories and channels and the reader's own switch. */
+/** The bot's row, and folded under it, where the bot is connected and the reader manages the workspace, its repositories and channels. */
 function SlackBotRows({
   workspace,
   slack,
@@ -1620,7 +1577,7 @@ function SlackBotRows({
 }): React.JSX.Element {
   if (managesWorkspace(workspace))
     return <ManagedSlackBotRows workspace={workspace} slack={slack} />;
-  // Note that the rows stand side by side as the card's own, as GitHub's do, so the card rules a line between each.
+  // Note that a member's row folds nothing, but stands in the fold so its end keeps the chevron's room, as every row of the card does.
   return (
     <SettingsRowsFold
       label={SLACK_BOT_FOLD}
@@ -1632,9 +1589,6 @@ function SlackBotRows({
           end={() => chevron}
         />
       )}
-      rows={
-        slack.team === undefined ? undefined : <SlackNotificationsRow workspaceId={workspace.id} />
-      }
     />
   );
 }
@@ -1642,9 +1596,9 @@ function SlackBotRows({
 /**
  * The workspace's Slack bot: drawn only where the deployment holds
  * our bot, an owner's or an admin's to connect for everyone, and for a
- * member, read only, where it is connected or the ask to have it, with
- * the reader's own Slack notifications under it once it is connected; a
- * read that did not land says so in the row's place, with Retry. It is
+ * member, read only, where it is connected or the ask to have it; the
+ * reader's own Slack notifications stand on Preferences
+ * (`slack-notifications-row.tsx`). A read that did not land says so in the row's place, with Retry. It is
  * drawn as the host holds the workspace's integrations, as Sentry's is.
  */
 function WorkspaceSlackBotRow({ workspace }: { workspace: Workspace }): React.JSX.Element | null {
@@ -1679,7 +1633,7 @@ export interface WorkspaceSettingsControl {
 
 /** What the slug's dialog says: the ⋯ item that opens it, which is its title too, and its act. */
 const SLUG_WORDS = {
-  CHANGE: "Change slug",
+  CHANGE: "Change URL",
   SAVE: "Save",
   SAVING: "Saving",
 } as const;
@@ -1733,7 +1687,7 @@ function useSlugDialog(workspace: Workspace): SlugAsk {
       }
     >
       <FormField
-        label="Slug"
+        label="URL path"
         description={
           <>
             {LINK_HOME.HOST}/<ReplayMask>{slug}</ReplayMask>
