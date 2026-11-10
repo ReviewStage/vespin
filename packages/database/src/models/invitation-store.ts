@@ -1,10 +1,3 @@
-import { randomUUID } from "node:crypto";
-import { and, eq, gt } from "drizzle-orm";
-import { Effect, Option, Schema } from "effect";
-import { SqlSchema } from "effect/sql";
-import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
-import { invitation, member, user } from "../schemas/auth.js";
-
 /**
  * invitation-store.ts -- a workspace's invitations read, made, and canceled on the organization plugin's own rows by the service.
  *
@@ -22,11 +15,18 @@ import { invitation, member, user } from "../schemas/auth.js";
  * (`packages/service/src/accounts/`); this module keeps only the rows.
  */
 
-/** The plugin's word for an invitation not yet accepted, rejected, or canceled. */
-const PENDING = "pending";
+import { randomUUID } from "node:crypto";
+import { and, eq, gt } from "drizzle-orm";
+import { Effect, Option, Schema } from "effect";
+import { SqlSchema } from "effect/sql";
+import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
+import { invitation, member, user } from "../schemas/auth.js";
 
-/** The plugin's word for an invitation its workspace withdrew. */
-const CANCELED = "canceled";
+/** The plugin's words for an invitation's status that the service writes or reads: not yet accepted, rejected, or canceled; and withdrawn by its workspace. */
+export const INVITATION_STATUS = {
+  PENDING: "pending",
+  CANCELED: "canceled",
+} as const;
 
 export type InvitationStoreEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
@@ -85,7 +85,7 @@ const findPending = SqlSchema.findAll({
         .where(
           and(
             eq(invitation.organizationId, organizationId),
-            eq(invitation.status, PENDING),
+            eq(invitation.status, INVITATION_STATUS.PENDING),
             gt(invitation.expiresAt, now),
           ),
         ),
@@ -113,7 +113,7 @@ const insertInvitation = SqlSchema.findOne({
     Database.use((db) =>
       db
         .insert(invitation)
-        .values({ ...made, status: PENDING })
+        .values({ ...made, status: INVITATION_STATUS.PENDING })
         .returning(INVITATION_COLUMNS),
     ),
 });
@@ -125,12 +125,12 @@ const updateCanceled = SqlSchema.findAll({
     Database.use((db) =>
       db
         .update(invitation)
-        .set({ status: CANCELED })
+        .set({ status: INVITATION_STATUS.CANCELED })
         .where(
           and(
             eq(invitation.id, invitationId),
             eq(invitation.organizationId, organizationId),
-            eq(invitation.status, PENDING),
+            eq(invitation.status, INVITATION_STATUS.PENDING),
           ),
         )
         .returning({ id: invitation.id }),

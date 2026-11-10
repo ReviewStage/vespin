@@ -24,6 +24,7 @@
 import {
   cancelWorkspaceInvitation,
   createWorkspaceInvitation,
+  INVITATION_STATUS,
   type InvitationRow,
   isWorkspaceMemberAddress,
   listWorkspaceInvitations,
@@ -47,9 +48,6 @@ import { HOSTED_REFUSAL, hostedStoreOrUnavailable } from "../http/http-effect.js
 import { readAccountPerson, readAccountPicture } from "./account-person.js";
 import { InvitationMail } from "./invitation-mail.js";
 import { managedWorkspace } from "./workspace-access.js";
-
-/** The plugin's word for an invitation not yet accepted, rejected, or canceled. */
-const INVITATION_PENDING = "pending";
 
 /** How long an invitation stands before it expires: Better Auth 1.7.7's organization plugin's default `invitationExpiresIn`, 48 hours. */
 const INVITATION_EXPIRES_IN_MS = 48 * 60 * 60 * 1_000;
@@ -90,7 +88,7 @@ function pendingInvitations(
   now: number,
 ): readonly WorkspaceInvitation[] {
   return invitations
-    .filter((one) => one.status === INVITATION_PENDING && one.expiresAt.getTime() > now)
+    .filter((one) => one.status === INVITATION_STATUS.PENDING && one.expiresAt.getTime() > now)
     .toSorted((first, second) => first.expiresAt.getTime() - second.expiresAt.getTime())
     .flatMap((one) => {
       const role = invitationRoleOf(one.role);

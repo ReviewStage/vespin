@@ -1,11 +1,3 @@
-import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
-import { and, eq } from "drizzle-orm";
-import { Effect, Schema } from "effect";
-import { SqlSchema } from "effect/sql";
-import * as SqlClient from "effect/sql/SqlClient";
-import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
-import { invitation, member, organization } from "../schemas/auth.js";
-
 /**
  * organization-store.ts -- a workspace's members, name, photo, and the workspace itself written to the organization plugin's own rows by the service.
  *
@@ -23,6 +15,14 @@ import { invitation, member, organization } from "../schemas/auth.js";
  * the caller's to hold (`packages/service/src/accounts/`); this module keeps
  * only the rows.
  */
+
+import { WORKSPACE_ROLE, type WorkspaceRole } from "@repo/features/workspace-wire";
+import { and, eq } from "drizzle-orm";
+import { Effect, Schema } from "effect";
+import { SqlSchema } from "effect/sql";
+import * as SqlClient from "effect/sql/SqlClient";
+import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
+import { invitation, member, organization } from "../schemas/auth.js";
 
 export type OrganizationStoreEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
