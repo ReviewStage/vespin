@@ -57,7 +57,7 @@ import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
 import { ComposerField, type ComposerFieldPictures } from "./composer-field.js";
 import { type ComposerPickers, useComposerPickers } from "./composer-pickers.js";
 import { DictateButton, DictationStrip } from "./dictation-strip.js";
-import { PictureChip, usePictureViewer } from "./picture-chips.js";
+import { PictureChip, usePictureViewer, type WordPictures } from "./picture-chips.js";
 import { ComposerQuoteView } from "./reply-to-selection.js";
 import type { DictationControl } from "./use-dictation.js";
 
@@ -181,6 +181,8 @@ interface MessageBoxOptions extends PickerOptions {
   readonly holder?: AttachedFilesOptions["holder"];
   /** The most files the box takes; a message's where none is given, fewer where the owner draws files of its own beside them (`carried`). */
   readonly most?: number | undefined;
+  /** Pictures the owner holds beside the box's own, a comment's edit's kept of the comment's: drawn as their chips where the words name them, and named past by any picture the box takes. */
+  readonly carriedPictures?: WordPictures | undefined;
   /** Whether the box takes files at all; a comment's edit keeps the files it was sent with. */
   readonly takesFiles?: boolean | undefined;
   /** Whether words pasted long enough to bury the message come as a text file, as an agent's box takes them. */
@@ -407,6 +409,7 @@ function useBoxPictures(
   takes: boolean,
   draft: string,
   attachments: readonly AgentAttachment[],
+  carried: WordPictures | undefined,
 ): BoxPictures {
   const names = useMemo(
     () => new Set(attachments.filter(isPictureFile).map((file) => file.name)),
@@ -430,15 +433,19 @@ function useBoxPictures(
   if (!takes) return { beside: attachments, field: undefined, viewer: null };
   return {
     beside: attachments.filter((file) => !inWords.includes(file)),
+    // Note that a picture the owner holds is drawn by the owner's chip, and the box's own by the box's.
     field: {
-      names,
-      chip: (name) => (
-        <PictureChip
-          name={name}
-          file={chips.find((chip) => chip.name === name)}
-          onOpen={viewer.open}
-        />
-      ),
+      names: carried === undefined ? names : new Set([...names, ...carried.names]),
+      chip: (name) =>
+        carried !== undefined && !names.has(name) ? (
+          carried.chip(name)
+        ) : (
+          <PictureChip
+            name={name}
+            file={chips.find((chip) => chip.name === name)}
+            onOpen={viewer.open}
+          />
+        ),
     },
     viewer: viewer.viewer,
   };
@@ -511,6 +518,7 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
   const files = useAttachedFiles({
     holder: options.holder,
     most: options.most,
+    named: options.carriedPictures === undefined ? undefined : [...options.carriedPictures.names],
     held: options.held === true || options.takesFiles === false,
     onRefusal: (words) => say(SAID.FILE, words),
     words: options.draft,
@@ -524,7 +532,12 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
           }
         : undefined,
   });
-  const pictures = useBoxPictures(options.takesPictures === true, options.draft, files.attachments);
+  const pictures = useBoxPictures(
+    options.takesPictures === true,
+    options.draft,
+    files.attachments,
+    options.carriedPictures,
+  );
   const { draft, placeholder, keywords = NO_KEYWORDS, ...picked } = options;
   const pickers = useComposerPickers({
     ...picked,

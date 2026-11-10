@@ -24,7 +24,9 @@ import { AttachedFileChips } from "./attached-file-chips.js";
  * (`../use-attached-files.ts`), held to the bounds a message to an agent is.
  * Its edit draws the files it keeps as the comment draws them, each with
  * its × to take it off (`KeptCommentFiles`), before the files added, which
- * its box draws.
+ * its box draws. A picture its words name (`[Picture 1]`) is drawn in
+ * the words, where its marker stands, rather than in the row
+ * (`useWordPictures`), written and posted alike.
  */
 
 /** How a plan's comment's file is read: as the plan's attachment, which its pictures read too. */
@@ -33,7 +35,10 @@ function readDescriptionFile(planId: string, attachmentId: string) {
 }
 
 /** A comment's files as chips, each read once and kept as the plan's pictures are (`../picture-query.ts`). */
-function useCommentFileChips(planId: string, files: readonly DescriptionCommentFile[]): FileChip[] {
+export function useCommentFileChips(
+  planId: string,
+  files: readonly DescriptionCommentFile[],
+): FileChip[] {
   const reads = useQueries({
     queries: files.map((file) => pictureQuery(planId, file.attachmentId, readDescriptionFile)),
     combine: (results) => results.map((result) => result.data),
@@ -48,15 +53,9 @@ function useCommentFileChips(planId: string, files: readonly DescriptionCommentF
   });
 }
 
-/** A comment's files over its words. */
-export function CommentFiles({
-  planId,
-  files,
-}: {
-  planId: string;
-  files: readonly DescriptionCommentFile[];
-}): React.ReactNode {
-  const chips = useCommentFileChips(planId, files);
+/** A comment's files over its words, as chips; none where it carries none or its words draw every one. */
+export function CommentFiles({ chips }: { chips: readonly FileChip[] }): React.ReactNode {
+  if (chips.length === 0) return null;
   return (
     <div className="comment-files mx-0 mt-tight-gap mb-item-gap">
       <AttachedFileChips files={chips} />
@@ -64,16 +63,13 @@ export function CommentFiles({
   );
 }
 
-/** The files a comment's edit keeps of those the comment carries, each read as the comment's are, with its × to take it off by its place among them. */
+/** The files a comment's edit keeps of those the comment carries, as chips, each with its × to take it off by its place among them. */
 export function KeptCommentFiles({
-  planId,
-  files,
+  chips,
   onRemove,
 }: {
-  planId: string;
-  files: readonly DescriptionCommentFile[];
+  chips: readonly FileChip[];
   onRemove: (index: number) => void;
 }): React.ReactNode {
-  const chips = useCommentFileChips(planId, files);
   return <AttachedFileChips files={chips} onRemove={onRemove} />;
 }

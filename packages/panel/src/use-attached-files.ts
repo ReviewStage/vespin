@@ -219,6 +219,8 @@ export interface AttachedFilesOptions {
   readonly pictures?: AttachedPictures | undefined;
   /** The box's words as it opens, whose markers name the pictures its chips hold already, as a draft kept or a message opened for editing does. */
   readonly words?: string | undefined;
+  /** The names of pictures the owner holds beside the box's, a comment's edit's kept of the comment's, which a picture the box takes is named past. */
+  readonly named?: readonly string[] | undefined;
 }
 
 /** The files a box holds and the ways it takes more and lets them go. */
@@ -280,6 +282,7 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
       ...heldNow().map((file) => file.name),
       ...stashed.current.keys(),
       ...minted.current,
+      ...(latest.current.named ?? []),
     ];
     const attachments = read.attachments.map((file) => {
       if (!file.mediaType.startsWith("image/")) return file;

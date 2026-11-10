@@ -1,4 +1,5 @@
 import { chipBase64, type FileChip } from "@repo/features/attachment-model";
+import { isPictureName, pictureMarkers } from "@repo/features/picture-marker";
 import { PictureRef } from "@repo/ui";
 import { createContext, type ReactNode, useState } from "react";
 import { AttachmentViewer } from "./attachment-viewer.js";
@@ -64,4 +65,45 @@ export function usePictureViewer(files: readonly FileChip[]): {
       />
     );
   return { open: setViewing, viewer };
+}
+
+/**
+ * The pictures among a message's files that its words name, each drawn
+ * where its marker stands as its chip and opening over the window, walking
+ * them in the order the words name them, and the names of those it draws
+ * in place, which its files' row leaves out; nothing where the words name
+ * none, as every message written before markers.
+ */
+export function useWordPictures(
+  files: readonly FileChip[],
+  words: string,
+): {
+  readonly pictures: WordPictures | undefined;
+  readonly inWords: ReadonlySet<string>;
+  readonly viewer: ReactNode;
+} {
+  const named = [...new Set(pictureMarkers(words).map((marker) => marker.name))];
+  const placed = named.flatMap((name) => {
+    const file = files.find(
+      (each) => each.name === name && isPictureName(name) && each.mediaType.startsWith("image/"),
+    );
+    return file === undefined ? [] : [file];
+  });
+  const viewer = usePictureViewer(placed.filter((file) => file.url !== ""));
+  const inWords = new Set(placed.map((file) => file.name));
+  if (placed.length === 0) return { pictures: undefined, inWords, viewer: viewer.viewer };
+  return {
+    pictures: {
+      names: inWords,
+      chip: (name) => (
+        <PictureChip
+          name={name}
+          file={placed.find((file) => file.name === name)}
+          onOpen={viewer.open}
+        />
+      ),
+    },
+    inWords,
+    viewer: viewer.viewer,
+  };
 }
