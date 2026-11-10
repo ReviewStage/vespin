@@ -52,11 +52,10 @@ test("words picked inside a chip's name under a bold run quote the chip's link i
       createElement(
         "strong",
         null,
-        createElement(
-          WrittenAs,
-          { markdown: "[@invite.ts](https://example.com/invite.ts)" },
-          createElement("span", null, "invite.ts"),
-        ),
+        createElement(WrittenAs, {
+          markdown: "[@invite.ts](https://example.com/invite.ts)",
+          children: createElement("span", null, "invite.ts"),
+        }),
       ),
     ),
   );
