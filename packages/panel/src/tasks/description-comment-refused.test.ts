@@ -199,7 +199,13 @@ async function attachFile(card: HTMLElement, name: string): Promise<void> {
 /** The files the card's field holds, by name. */
 function heldFiles(card: HTMLElement): (string | null)[] {
   const field = card.querySelector(".comment-field") ?? assert.fail("no reply field");
-  return [...field.querySelectorAll('[aria-label="Attached files"] > li')].map(attachmentChipName);
+  const row = [...field.querySelectorAll('[aria-label="Attached files"] > li')];
+  // Note that a file the words name stands there as its chip, which opens it by its name.
+  const inWords = [...field.querySelectorAll('[data-chip="fileChip"] [aria-label^="Open "]')];
+  return [
+    ...row.map(attachmentChipName),
+    ...inWords.map((chip) => chip.getAttribute("aria-label")?.slice("Open ".length) ?? null),
+  ];
 }
 
 test("a refused reply goes back above the words typed while it was out, and neither is dropped", async () => {
@@ -222,8 +228,8 @@ test("a refused reply's files go back before the files added while it was out", 
   writeExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS));
   const card = drawn(() => answer.promise);
   const field = composerEditor(card);
-  await attachFile(card, "before.txt");
   writeInComposer(field, "Like this.");
+  await attachFile(card, "before.txt");
   pressInComposer(field, "Enter");
   assert.deepEqual(heldFiles(card), [], "the files go with the words");
 
@@ -231,7 +237,7 @@ test("a refused reply's files go back before the files added while it was out", 
   await act(async () => answer.resolve(false));
 
   assert.deepEqual(heldFiles(card), ["before.txt", "after.txt"]);
-  assert.equal(composerWords(field), "Like this.");
+  assert.equal(composerWords(field), "Like this. [File: before.txt]\n\n[File: after.txt]");
 });
 
 /** Draws the thread, sends `refused`, types `newer` while it is out, and has the service refuse it; later sends land. */
@@ -334,8 +340,8 @@ test("a reply refused while only the reader's address was known stands with its 
     email: DEAN.email,
   });
   const field = composerEditor(card);
-  await attachFile(card, "invite.txt");
   writeInComposer(field, TOO_LONG.REFUSED);
+  await attachFile(card, "invite.txt");
   pressInComposer(field, "Enter");
   writeInComposer(field, TOO_LONG.NEWER);
   await act(async () => answer.resolve(false));
@@ -344,10 +350,8 @@ test("a reply refused while only the reader's address was known stands with its 
   redrawAs(DEAN);
   const line = card.querySelector("[data-unsent]") ?? assert.fail("no line marked as not sent");
   assert.ok(line.textContent?.includes("Not for v1."));
-  assert.deepEqual(
-    [...line.querySelectorAll('[aria-label="Attached files"] > li')].map(attachmentChipName),
-    ["invite.txt"],
-  );
+  // Note that the file its words name stands in them as its chip, as a posted comment's does.
+  assert.ok(line.querySelector('[aria-label="Open invite.txt"]'), "the file stands in its words");
   const retry = [...line.querySelectorAll("button")].find((each) => each.textContent === "Retry");
   assert.ok(retry, "the line offers Retry");
   await act(async () => retry.click());

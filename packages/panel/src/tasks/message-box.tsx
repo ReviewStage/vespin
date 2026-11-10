@@ -1,5 +1,5 @@
 import type { AgentAttachment } from "@repo/features/agent-wire";
-import { pictureMarkers } from "@repo/features/picture-marker";
+import { fileMarkers } from "@repo/features/file-marker";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { pasteCutWords } from "@repo/features/words";
 import {
@@ -44,7 +44,6 @@ import type { KeystrokeSpanName } from "../panel-spans.js";
 import {
   type AttachedFiles,
   type AttachedFilesOptions,
-  isPictureFile,
   useAttachedFiles,
 } from "../use-attached-files.js";
 import {
@@ -54,10 +53,10 @@ import {
   attachmentRow,
 } from "./attach-files-button.js";
 import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
-import { ComposerField, type ComposerFieldPictures } from "./composer-field.js";
+import { ComposerField, type ComposerFieldFiles } from "./composer-field.js";
 import { type ComposerPickers, useComposerPickers } from "./composer-pickers.js";
 import { DictateButton, DictationStrip } from "./dictation-strip.js";
-import { PictureChip, usePictureViewer, type WordPictures } from "./picture-chips.js";
+import { useWordFileViewer, WordFileChip, type WordFiles } from "./file-chips.js";
 import { ComposerQuoteView } from "./reply-to-selection.js";
 import type { DictationControl } from "./use-dictation.js";
 
@@ -73,8 +72,10 @@ import type { DictationControl } from "./use-dictation.js";
  * Send does: the files, whether one is still read, the box's own note, and
  * how narrow the card stands. `MessageBox` draws the card: the shared
  * composer card (`../ai-elements/prompt-input.tsx`), a form whose Send and
- * Enter both submit it, its files over its field, after any the owner
- * draws first (`carried`), in `@repo/ui`'s `ComposerBody`, and its foot (`ComposerFoot`): the + at the left, which
+ * Enter both submit it, each file it takes written into its words as its
+ * chip where the caret stood (`file-chips.tsx`), and the files its words
+ * do not name in a row over its field, after any the owner draws first
+ * (`carried`), in `@repo/ui`'s `ComposerBody`, and its foot (`ComposerFoot`): the + at the left, which
  * opens the file picker or, where the owner hands rows (`plus`), a menu of
  * Attachment and those rows; the owner's `tools` after it; at the right the
  * owner's `actions`, the microphone, the ⋯, and the owner's `beforeSend`;
@@ -181,14 +182,12 @@ interface MessageBoxOptions extends PickerOptions {
   readonly holder?: AttachedFilesOptions["holder"];
   /** The most files the box takes; a message's where none is given, fewer where the owner draws files of its own beside them (`carried`). */
   readonly most?: number | undefined;
-  /** Pictures the owner holds beside the box's own, a comment's edit's kept of the comment's: drawn as their chips where the words name them, and named past by any picture the box takes. */
-  readonly carriedPictures?: WordPictures | undefined;
-  /** Whether the box takes files at all; a comment's edit keeps the files it was sent with. */
+  /** Files the owner holds beside the box's own, a comment's edit's kept of the comment's: drawn as their chips where the words name them, and named past by any file the box takes. */
+  readonly carriedFiles?: WordFiles | undefined;
+  /** Whether the box takes files at all, each written into its words as its chip; a field-only box sends words alone. */
   readonly takesFiles?: boolean | undefined;
   /** Whether words pasted long enough to bury the message come as a text file, as an agent's box takes them. */
   readonly pastesTextAsFile?: boolean | undefined;
-  /** Whether a picture handed to the box goes into its words as its chip (`picture-chips.tsx`), as an agent's box takes one; beside its words where unsaid. */
-  readonly takesPictures?: boolean | undefined;
   /** The words a dictation is likely to say (`dictation-keywords.ts`); none for a comment. */
   readonly keywords?: readonly string[] | undefined;
   /** A key the field's lists and dictation left, answering whether the owner took it. */
@@ -210,7 +209,7 @@ interface MessageBoxOptions extends PickerOptions {
 /** What `MessageBox` and `MessageField` draw a box from, which its owner never reads. */
 interface Drawn {
   readonly options: MessageBoxOptions;
-  readonly pictures: BoxPictures;
+  readonly inWords: BoxFiles;
   readonly module: DescriptionEditorModule | undefined;
   readonly pickers: ComposerPickers;
   readonly takesFocus: boolean;
@@ -391,56 +390,53 @@ export function ComposerActions({ children }: { children: ReactNode }): React.JS
   );
 }
 
-/** The pictures a box holds as its words name them: the files drawn beside the words, the field's picture chips, and the viewer a chip opens. */
-interface BoxPictures {
+/** The files a box holds as its words name them: the files drawn beside the words, the field's file chips, and the viewer a chip opens. */
+interface BoxFiles {
   readonly beside: readonly AgentAttachment[];
-  readonly field: ComposerFieldPictures | undefined;
+  readonly field: ComposerFieldFiles | undefined;
   readonly viewer: ReactNode;
 }
 
 /**
- * The box's pictures: each picture whose marker the words hold drawn there
- * as its chip, opening over the window and walking the pictures in the
- * order the words name them, and every other file beside the words, as
- * every file stood before pictures went into the words; where the box
- * takes none into its words, every file beside them.
+ * The box's files: each file whose marker the words hold drawn there as its
+ * chip, opening over the window and walking the files in the order the
+ * words name them, and every other file beside the words, as every file
+ * stood before files went into the words: one the words could not take, its
+ * editor not loaded or its bound reached, or whose chip was copied into
+ * code. Where the box takes none into its words, every file beside them.
  */
-function useBoxPictures(
+function useBoxFiles(
   takes: boolean,
   draft: string,
   attachments: readonly AgentAttachment[],
-  carried: WordPictures | undefined,
-): BoxPictures {
-  const names = useMemo(
-    () => new Set(attachments.filter(isPictureFile).map((file) => file.name)),
-    [attachments],
-  );
-  // Note that the words are read once for every picture they name, in the order they first name each.
+  carried: WordFiles | undefined,
+): BoxFiles {
+  const names = useMemo(() => new Set(attachments.map((file) => file.name)), [attachments]);
+  // Note that the words are read once for every file they name, in the order they first name each.
   const { inWords, ordered } = useMemo(() => {
     if (!takes) return { inWords: [], ordered: [] };
-    const named = new Set(pictureMarkers(draft).map((marker) => marker.name));
-    const pictures = attachments.filter(isPictureFile);
+    const named = new Set(fileMarkers(draft).map((marker) => marker.name));
     return {
-      inWords: pictures.filter((file) => named.has(file.name)),
+      inWords: attachments.filter((file) => named.has(file.name)),
       ordered: [...named].flatMap((name) => {
-        const file = pictures.find((each) => each.name === name);
+        const file = attachments.find((each) => each.name === name);
         return file === undefined ? [] : [file];
       }),
     };
   }, [takes, draft, attachments]);
   const chips = attachmentChips(ordered);
-  const viewer = usePictureViewer(chips);
+  const viewer = useWordFileViewer(chips);
   if (!takes) return { beside: attachments, field: undefined, viewer: null };
   return {
     beside: attachments.filter((file) => !inWords.includes(file)),
-    // Note that a picture the owner holds is drawn by the owner's chip, and the box's own by the box's.
+    // Note that a file the owner holds is drawn by the owner's chip, and the box's own by the box's.
     field: {
       names: carried === undefined ? names : new Set([...names, ...carried.names]),
       chip: (name) =>
         carried !== undefined && !names.has(name) ? (
           carried.chip(name)
         ) : (
-          <PictureChip
+          <WordFileChip
             name={name}
             file={chips.find((chip) => chip.name === name)}
             onOpen={viewer.open}
@@ -459,7 +455,7 @@ function BoxField({
   box: MessageBoxControl;
   onEnter: () => void;
 }): React.JSX.Element {
-  const { options, module, pickers, takesFocus, say, pictures } = box[DRAWN];
+  const { options, module, pickers, takesFocus, say, inWords } = box[DRAWN];
   const { files } = box;
   const held = options.held === true;
   const takesFiles = options.takesFiles !== false;
@@ -496,7 +492,7 @@ function BoxField({
       onEnter={onEnter}
       onPasteFiles={takesFiles ? files.paste : () => false}
       onPasteText={options.pastesTextAsFile === true ? files.pasteText : undefined}
-      pictures={pictures.field}
+      files={inWords.field}
       quote={(quote) => <ComposerQuoteView quote={quote} held={held || box.dictating} />}
     />
   );
@@ -515,29 +511,24 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
   const bundle = useQuery(useSideBundles().descriptionEditor);
   // Whether the editor stood as the box first drew, which an owner that focuses the field focuses.
   const [mountedFirst] = useState(bundle.data !== undefined);
+  const takesFiles = options.takesFiles !== false;
   const files = useAttachedFiles({
     holder: options.holder,
     most: options.most,
-    named: options.carriedPictures === undefined ? undefined : [...options.carriedPictures.names],
-    held: options.held === true || options.takesFiles === false,
+    named: options.carriedFiles === undefined ? undefined : [...options.carriedFiles.names],
+    held: options.held === true || !takesFiles,
     onRefusal: (words) => say(SAID.FILE, words),
     words: options.draft,
-    pictures:
-      options.takesPictures === true
-        ? {
-            place: () => {
-              const mark = editor.current?.mark();
-              return mark === undefined ? undefined : (names) => mark.insertPictures(names);
-            },
-          }
-        : undefined,
+    inWords: takesFiles
+      ? {
+          place: () => {
+            const mark = editor.current?.mark();
+            return mark === undefined ? undefined : (names) => mark.insertFiles(names);
+          },
+        }
+      : undefined,
   });
-  const pictures = useBoxPictures(
-    options.takesPictures === true,
-    options.draft,
-    files.attachments,
-    options.carriedPictures,
-  );
+  const inWords = useBoxFiles(takesFiles, options.draft, files.attachments, options.carriedFiles);
   const { draft, placeholder, keywords = NO_KEYWORDS, ...picked } = options;
   const pickers = useComposerPickers({
     ...picked,
@@ -576,7 +567,7 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
     handBack,
     [DRAWN]: {
       options,
-      pictures,
+      inWords,
       module: bundle.data,
       pickers,
       takesFocus:
@@ -626,7 +617,7 @@ export function MessageBox({
   /** What the owner says under the bar over the box's own notes; nothing where it has nothing to say, which says the box's. */
   note?: ComposerNote | undefined;
 }): React.JSX.Element {
-  const { options, module, pictures } = box[DRAWN];
+  const { options, module, inWords } = box[DRAWN];
   const { files, room, dictation } = box;
   const picker = useRef<AttachPicker>(null);
   const held = options.held === true;
@@ -679,19 +670,20 @@ export function MessageBox({
         files={
           takesFiles ? (
             <>
+              {/* Note that the row holds only files the words do not name: one the words could not take, its editor not loaded or its bound reached, one whose marker stands in code, and a comment's own files sent before markers (`carried`). */}
               {carried}
               <AttachedFileChips
-                files={attachmentChips(pictures.beside)}
+                files={attachmentChips(inWords.beside)}
                 onRemove={
                   held
                     ? undefined
                     : (index) => {
-                        const file = pictures.beside[index];
+                        const file = inWords.beside[index];
                         if (file !== undefined) files.remove(files.attachments.indexOf(file));
                       }
                 }
               />
-              {pictures.viewer}
+              {inWords.viewer}
             </>
           ) : undefined
         }

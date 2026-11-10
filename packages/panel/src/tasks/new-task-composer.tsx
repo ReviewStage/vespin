@@ -1,5 +1,6 @@
 import { AGENT_BOUNDS, AGENT_STATUS, hasWordsOrFiles } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
+import { wordsWithoutMarkers } from "@repo/features/file-marker";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import type { MacOffer, ModelChoice } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -561,8 +562,9 @@ export function NewTaskComposer({
     setPickedByHand(true);
   };
   const said = words.trim();
-  // Note that an automation's agent starts on words alone, since the brief fences them as the request.
-  const filled = forAutomation ? said !== "" : hasWordsOrFiles(said, attachments);
+  // Note that an automation's agent starts on words alone, since the brief fences them as the request, and a file's marker is no words of the request's.
+  const requested = wordsWithoutMarkers(said).trim() !== "";
+  const filled = forAutomation ? requested : hasWordsOrFiles(said, attachments);
   // An agent needs something to work on, words or files, and works in no repository where none is chosen.
   // Note that an agent nothing of the account's pays for is held here, with the press that connects one, rather than refused once pressed; a bare task needs none.
   const unpaid =
@@ -802,7 +804,7 @@ export function NewTaskComposer({
         wording={startsBare ? BARE_WORDS : PURPOSE_WORDS[purpose]}
         // Note that an automation's agent is held without words, since its brief fences them as the request, files alone saying none.
         sendable={
-          !devicesUnread && (startsBare || unpaid === undefined) && (!forAutomation || said !== "")
+          !devicesUnread && (startsBare || unpaid === undefined) && (!forAutomation || requested)
         }
         model={choice === undefined ? undefined : { choice, note: undefined, choose }}
         models={newTask.models}

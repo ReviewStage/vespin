@@ -1,4 +1,5 @@
 import { AGENT_BOUNDS, type AgentAttachment, base64Bytes } from "@repo/features/agent-wire";
+import type { FileChip } from "@repo/features/attachment-model";
 import { textChange } from "@repo/features/description-comment-anchor";
 import {
   DESCRIPTION_COMMENT_ACTION,
@@ -14,9 +15,9 @@ import {
   type DescriptionCommentWriter,
 } from "@repo/features/description-comment-wire";
 import type { DescriptionSection } from "@repo/features/description-document";
+import { fileMarkers } from "@repo/features/file-marker";
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import type { FrameBox, PagePicked } from "@repo/features/page-pick";
-import { isPictureName, pictureMarkers } from "@repo/features/picture-marker";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { IRREVERSIBLE_WORDS } from "@repo/features/words";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -159,10 +160,10 @@ import {
 } from "./description-comment-files.js";
 import { EDITOR_ROOM_CLASS } from "./description-document-editor.js";
 import type { EditAgents } from "./edit-ref.js";
+import { useWordFiles, WordFileChip, type WordFiles } from "./file-chips.js";
 import { MessageBox, useMessageBox } from "./message-box.js";
 import { type HeldComment, PAGE_REVIEW_WORDS, type PageReviewControl } from "./page-review.js";
 import { PendingWords } from "./pending-comments.js";
-import { PictureChip, useWordPictures, type WordPictures } from "./picture-chips.js";
 import { pressPlace, ReplyPress, roomAround } from "./reply-to-selection.js";
 import { useMentionLink } from "./task-mentions.js";
 import { useOpenLink } from "./use-open-link.js";
@@ -906,17 +907,13 @@ function CommentEditField({
   // The comment's own files the edit keeps, which their × takes off.
   const kept = files.filter((file) => !held.files.dropped.includes(file.attachmentId));
   const keptChips = useCommentFileChips(planId, kept);
-  // Note that a kept picture the words name is drawn in them, as the box draws one of its own, and the rest in the row over them.
-  const shown = useWordPictures(keptChips, value);
-  const keptPictures: WordPictures = {
-    names: new Set(
-      kept
-        .filter((file) => isPictureName(file.name) && file.mediaType.startsWith("image/"))
-        .map((file) => file.name),
-    ),
+  // Note that a kept file the words name is drawn in them, as the box draws one of its own, and the rest in the row over them.
+  const shown = useWordFiles(keptChips, value);
+  const keptFiles: WordFiles = {
+    names: new Set(kept.map((file) => file.name)),
     chip: (name) =>
-      shown.pictures?.chip(name) ?? (
-        <PictureChip
+      shown.files?.chip(name) ?? (
+        <WordFileChip
           name={name}
           file={keptChips.find((chip) => chip.name === name)}
           onOpen={() => undefined}
@@ -939,8 +936,7 @@ function CommentEditField({
       attachments: held.files.attachments,
       update: (next) => held.update((was) => ({ ...was, attachments: next(was.attachments) })),
     },
-    takesPictures: true,
-    carriedPictures: keptPictures,
+    carriedFiles: keptFiles,
     onLeave: onCancel,
     onSubmit: () => {
       if (!box.files.reading) onSave({ kept, added: box.files.attachments });
@@ -1032,57 +1028,62 @@ function ownWordsOf(thread: DescriptionCommentThread, words: string): string {
   return thread.page?.element === undefined ? words : leadQuoteDropped(words, thread.quote);
 }
 
-/** A comment's words as Markdown, its mentions drawn as their chips, as a message's are, and each picture of its own they name (`pictures`) drawn where its marker stands. */
+/** A comment's words as Markdown, its mentions drawn as their chips, as a message's are, and each file of its own they name (`files`) drawn where its marker stands. */
 function CommentWords({
   words,
-  pictures,
+  files,
 }: {
   words: string;
-  pictures?: WordPictures | undefined;
+  files?: WordFiles | undefined;
 }): React.JSX.Element {
   const link = useMentionLink();
   const openLink = useOpenLink();
   return (
     <MarkdownMessage
-      words={pictures === undefined ? words : withPictureImages(words, pictures.names)}
+      words={files === undefined ? words : withFileImages(words, files.names)}
       className="comment-words block text-body-foreground wrap-anywhere"
       link={link}
       openLink={openLink}
       picture={
-        pictures === undefined
+        files === undefined
           ? undefined
           : (src) => {
-              const name = pictureNameOf(src);
-              return name === undefined ? undefined : pictures.chip(name);
+              const name = fileNameOf(src);
+              return name === undefined ? undefined : files.chip(name);
             }
       }
     />
   );
 }
 
-/** Where a picture's marker is written as an image, so the words' own image drawer draws its chip: a link within the page, which every link transform keeps. */
-const PICTURE_SOURCE = "#picture:";
+/** Where a file's marker is written as an image, so the words' own image drawer draws its chip: a link within the page, which every link transform keeps. */
+const FILE_SOURCE = "#file:";
 
-/** The words with each marker outside code that names one of `names` written as an image of that picture, so it is drawn where it stands. */
-function withPictureImages(words: string, names: ReadonlySet<string>): string {
+/**
+ * The words with each marker outside code that names one of `names` written
+ * as an image of that file, so it is drawn where it stands. Note that the
+ * image says nothing of the file but its source, its name encoded there,
+ * because a name may spell Markdown that would read in its words.
+ */
+function withFileImages(words: string, names: ReadonlySet<string>): string {
   let written = "";
   let at = 0;
-  for (const marker of pictureMarkers(words)) {
+  for (const marker of fileMarkers(words)) {
     if (!names.has(marker.name)) continue;
-    written += `${words.slice(at, marker.start)}![${marker.name}](${PICTURE_SOURCE}${encodeURIComponent(marker.name)})`;
+    written += `${words.slice(at, marker.start)}![](${FILE_SOURCE}${encodeURIComponent(marker.name)})`;
     at = marker.end;
   }
   return written + words.slice(at);
 }
 
-/** The picture an image written by `withPictureImages` names; nothing for any other image. */
-function pictureNameOf(src: string): string | undefined {
-  return src.startsWith(PICTURE_SOURCE)
-    ? decodeURIComponent(src.slice(PICTURE_SOURCE.length))
+/** The file an image written by `withFileImages` names; nothing for any other image. */
+function fileNameOf(src: string): string | undefined {
+  return src.startsWith(FILE_SOURCE)
+    ? decodeURIComponent(src.slice(FILE_SOURCE.length))
     : undefined;
 }
 
-/** A posted comment's files and words: the pictures its words name drawn in them, and its other files over them. */
+/** A posted comment's files and words: the files its words name drawn in them, and its other files over them. */
 function PostedComment({
   planId,
   files,
@@ -1093,18 +1094,18 @@ function PostedComment({
   words: string;
 }): React.JSX.Element {
   const chips = useCommentFileChips(planId, files);
-  const shown = useWordPictures(chips, words);
+  const shown = useWordFiles(chips, words);
   return (
     <>
-      {/* Note that a comment's files stand over its words, as the field held them and as every message's do. */}
+      {/* Note that a comment's files its words do not name stand over its words, as every message's do: those sent before markers, or named only in code. */}
       <CommentFiles chips={chips.filter((chip) => !shown.inWords.has(chip.name))} />
-      <CommentWords words={words} pictures={shown.pictures} />
+      <CommentWords words={words} files={shown.files} />
       {shown.viewer}
     </>
   );
 }
 
-/** A posted comment's words alone, the pictures they name drawn in them, as a folded card shows them. */
+/** A posted comment's words alone, the files they name drawn in them, as a folded card shows them. */
 function PostedWords({
   planId,
   files,
@@ -1115,16 +1116,16 @@ function PostedWords({
   words: string;
 }): React.JSX.Element {
   const chips = useCommentFileChips(planId, files);
-  const shown = useWordPictures(chips, words);
+  const shown = useWordFiles(chips, words);
   return (
     <>
-      <CommentWords words={words} pictures={shown.pictures} />
+      <CommentWords words={words} files={shown.files} />
       {shown.viewer}
     </>
   );
 }
 
-/** A comment the window holds and the service has not taken, a held one or one not sent: the pictures its words name drawn in them, and its other files over them. */
+/** A comment the window holds and the service has not taken, a held one or one not sent: the files its words name drawn in them, and its other files over them. */
 function UnpostedComment({
   attachments,
   words,
@@ -1133,11 +1134,11 @@ function UnpostedComment({
   words: string;
 }): React.JSX.Element {
   const chips = attachmentChips(attachments);
-  const shown = useWordPictures(chips, words);
+  const shown = useWordFiles(chips, words);
   return (
     <>
       <AttachedFileChips files={chips.filter((chip) => !shown.inWords.has(chip.name))} />
-      <CommentWords words={words} pictures={shown.pictures} />
+      <CommentWords words={words} files={shown.files} />
       {shown.viewer}
     </>
   );
@@ -1189,8 +1190,6 @@ function ReplyField({
     placeholder: label,
     label,
     maxLength: DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS,
-    // Note that a picture handed to a comment goes into its words as its chip, as it does in an agent's box.
-    takesPictures: true,
     onLeave: onCancel,
     onSubmit: () => submit(),
     focus: autoFocus,
@@ -3428,19 +3427,33 @@ export function threadsByElement(
   return by;
 }
 
-/** What the pointer over a pin is told: the first comment whole, as its thread draws it, scrolling in the card where it is long. */
+/** A preview's files by their names and types alone, which it draws and opens none of. */
+const NO_PREVIEW_FILES: readonly Pick<FileChip, "name" | "mediaType">[] = [];
+
+/**
+ * What the pointer over a pin is told: the first comment whole, as its
+ * thread draws it, scrolling in the card where it is long, each file its
+ * words name drawn there as its chip by its name and type alone, since a
+ * preview reads no file's bytes and opens none.
+ */
 function PinPreview({
   head,
   words,
+  files = NO_PREVIEW_FILES,
 }: {
   head: Pick<Parameters<typeof Comment>[0], "author" | "nameRef" | "at" | "now" | "trailing">;
   words: string;
+  files?: readonly Pick<FileChip, "name" | "mediaType">[] | undefined;
 }): React.JSX.Element {
+  const shown = useWordFiles(
+    files.map((file) => ({ name: file.name, mediaType: file.mediaType, url: "" })),
+    words,
+  );
   return (
     <HoverCard>
       <Comment {...head}>
         <HoverCardScroll>
-          <CommentWords words={words} />
+          <CommentWords words={words} files={shown.files} />
         </HoverCardScroll>
       </Comment>
     </HoverCard>
@@ -3487,6 +3500,7 @@ function PagePin({
           <PinPreview
             head={{ author, nameRef, at: first.at, now }}
             words={ownWordsOf(thread, first.words ?? "")}
+            files={first.files}
           />
         )
       }
@@ -3659,6 +3673,7 @@ function HeldPin({
           <PinPreview
             head={{ author, nameRef, trailing: <PendingWords /> }}
             words={heldWords(first)}
+            files={first.attachments}
           />
         )
       }
@@ -3683,11 +3698,13 @@ function DraftWords(): React.JSX.Element {
  */
 function DraftPin({
   words,
+  files,
   stands,
   onOpen,
   onHint,
 }: {
   words: string;
+  files: readonly AgentAttachment[];
   stands: CommentPinStands;
   onOpen: () => void;
   onHint: (over: boolean) => void;
@@ -3701,7 +3718,13 @@ function DraftPin({
       stands={stands}
       onPress={onOpen}
       onHover={onHint}
-      preview={<PinPreview head={{ author, nameRef, trailing: <DraftWords /> }} words={words} />}
+      preview={
+        <PinPreview
+          head={{ author, nameRef, trailing: <DraftWords /> }}
+          words={words}
+          files={files}
+        />
+      }
     />
   );
 }
@@ -3811,7 +3834,13 @@ export function PageCommentLayer({
   onStarted: (threadId: string) => void;
   onCancel: () => void;
   /** The comment started and let go with words of the writer's own, its words and the element it was started on, none on the whole page; none where no such draft waits. */
-  drafted: { readonly words: string; readonly element: DraftPageElement | undefined } | undefined;
+  drafted:
+    | {
+        readonly words: string;
+        readonly attachments: readonly AgentAttachment[];
+        readonly element: DraftPageElement | undefined;
+      }
+    | undefined;
   /** Opens the draft again where it was started, `box` where its element stands in the frame, none on the whole page. */
   onReopen: (box: FrameBox | undefined) => void;
 }): React.JSX.Element {
@@ -3912,6 +3941,7 @@ export function PageCommentLayer({
         >
           <DraftPin
             words={drafted.words}
+            files={drafted.attachments}
             stands={pinStands(draftMark.box)}
             onOpen={() => {
               if (review?.editing === true) return;
