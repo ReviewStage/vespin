@@ -1,6 +1,6 @@
 ---
 name: vespin
-description: Drive Vespin from a shell with the `vespin` command: create tasks, read and write their descriptions, start coding agents and wait on them, check out an agent's branch, share a cloud agent's port by preview link, and answer the inbox threads agents post. Load it when asked to work with Vespin tasks, their descriptions, agents, or inbox from a terminal, to script or pipe Vespin, or to wait on an agent and bring its branch local. Prefer Vespin's MCP server only when you have no shell.
+description: Drive Vespin from a shell with the `vespin` command: create tasks, read and write their descriptions, start coding agents and wait on them, check out an agent's branch, share a cloud agent's port by preview link, and answer, start, mark read, and set reminders on inbox threads. Load it when asked to work with Vespin tasks, their descriptions, agents, or inbox from a terminal, to script or pipe Vespin, or to wait on an agent and bring its branch local. Prefer Vespin's MCP server only when you have no shell.
 ---
 
 # vespin
@@ -45,6 +45,9 @@ Other commands:
 | `agent forward <id> [port…] [--local <port>]` | Serve a cloud agent's ports on `localhost` (the ones it listens on now, or those named) until Ctrl-C or its sandbox stops; a local port that will not listen is refused, so pick another with `--local` |
 | `inbox list [--unread]` · `inbox view <thread>` | Threads agents posted, and one thread with its open ask |
 | `inbox answer <thread> <option>` · `inbox answer <thread> -F <json\|->` · `inbox reply <thread> -F <msg\|->` · `inbox close <thread>` | Answer a decide's option, `done` for a to-do, or a form as JSON by field; write on the thread; close it |
+| `inbox read <thread>` · `inbox unread <thread>` · `inbox read-all` | Mark a thread read, or unread until you read it again; mark every thread of the workspace read. Yours alone; no agent hears of it |
+| `inbox remind <thread> <when>` (or `snooze`) · `inbox remind <thread> --clear` | Keep a thread out of your inbox until `tomorrow`, `fri 3pm`, or `nov 12 9:30am` (a day alone at 9 AM, in your zone); end the reminder |
+| `inbox start <agent> [-t <title>] -F <msg\|->` | Start a thread with an agent; it reaches the agent as your message, and it answers on the thread |
 | `agent shells <id>` · `agent shell <id> [<shell>] [--title t]` | An agent's Terminal tab shells; open a new one, or attach to one, in this terminal (Ctrl-] detaches). `shell` is interactive and refuses to run piped, so a coding agent hands it to the person |
 
 `description edit` replaces the whole description, so run `description show` first and edit that; piped, `show` prints JSON, so take its `body` (`jq -r .body`). Run `vespin <group> --help` for any flag not listed here.

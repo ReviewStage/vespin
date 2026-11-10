@@ -92,6 +92,11 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.ANSWER_ASK]: { inbox: ["message"] },
   [MEMBER_MCP_TOOL.REPLY_TO_THREAD]: { inbox: ["message"] },
   [MEMBER_MCP_TOOL.CLOSE_THREAD]: { inbox: ["close"] },
+  [MEMBER_MCP_TOOL.MARK_THREAD_READ]: { inbox: ["markItemRead", "markItemUnread"] },
+  [MEMBER_MCP_TOOL.MARK_INBOX_READ]: { inbox: ["markAllRead"] },
+  // `snoozeItem` is `remindItem` under the path an older desktop still calls.
+  [MEMBER_MCP_TOOL.REMIND_THREAD]: { inbox: ["remindItem", "snoozeItem"] },
+  [MEMBER_MCP_TOOL.START_THREAD]: { inbox: ["start"] },
   [MEMBER_MCP_TOOL.AGENT_PULL_REQUEST_ACTION]: { agentPullRequests: ["action"] },
   [MEMBER_MCP_TOOL.READ_COMMENTS]: { descriptionComments: ["read"] },
   [MEMBER_MCP_TOOL.COMMENT_ON_DESCRIPTION]: { plans: ["open"], descriptionComments: ["start"] },
@@ -219,12 +224,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   inbox: {
     home: SCREEN_ONLY,
     answer: NOT_YET_BUILT,
-    start: NOT_YET_BUILT,
-    markItemRead: NOT_YET_BUILT,
-    markItemUnread: NOT_YET_BUILT,
-    remindItem: NOT_YET_BUILT,
-    snoozeItem: NOT_YET_BUILT,
-    markAllRead: NOT_YET_BUILT,
   },
   installedSkills: {
     list: NOT_YET_BUILT,

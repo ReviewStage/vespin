@@ -165,6 +165,9 @@ const decodeInbox = Schema.decodeUnknownSync(
 const decodeWritten = Schema.decodeUnknownSync(
   Schema.Struct({ thread: Schema.Struct({ status: Schema.String }) }),
 );
+const decodeStarted = Schema.decodeUnknownSync(
+  Schema.Struct({ thread: Schema.Struct({ id: Schema.String, title: Schema.String }) }),
+);
 const decodeAgents = Schema.decodeUnknownSync(Schema.Struct({ agents: IdsSchema }));
 const decodeListed = Schema.decodeUnknownSync(
   Schema.Struct({
@@ -497,6 +500,13 @@ it.effect(
             MEMBER_MCP_TOOL.CLOSE_THREAD,
             { threadId: rows.strangerItem, revision: strangerAsk.revision },
           ],
+          [MEMBER_MCP_TOOL.MARK_THREAD_READ, { threadId: rows.strangerItem, read: false }],
+          [MEMBER_MCP_TOOL.MARK_INBOX_READ, { workspace: slugOf(rows.elsewhere) }],
+          [
+            MEMBER_MCP_TOOL.REMIND_THREAD,
+            { threadId: rows.strangerItem, at: "2030-01-07T09:00-08:00" },
+          ],
+          [MEMBER_MCP_TOOL.START_THREAD, { agentId: rows.strangerAgent, text: "Approve it." }],
           [
             MEMBER_MCP_TOOL.AGENT_PULL_REQUEST_ACTION,
             {
@@ -1028,6 +1038,56 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         );
         const handed = JSON.stringify(agentSessions.sent.at(-1)?.message.message);
         assert.ok(handed.includes(INBOX_ANSWER_LEAD) && handed.includes("30 days"), handed);
+      }),
+  );
+
+  it.effect(
+    "an outside agent starts a thread with the member's agent, which takes it up as the member's message, and marks it unread and sets its reminder for the member",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, task, ask, mcpFetch } = yield* openTask({ agentSessions });
+        const { agent, target } = yield* startedAgent(owner, task.id, ask);
+        const sessionId = agentSessions.opened[0]?.sessionId ?? "";
+        assert.equal(
+          yield* claimRuntimeSession(target, sessionId, yield* DateTime.nowAsDate),
+          true,
+        );
+        const before = agentSessions.sent.length;
+        const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+        const call = (name: string, args: Record<string, unknown>) =>
+          Effect.promise(async () => {
+            const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
+            assert.notEqual(answer.isError, true, `${name}: ${answer.content[0].text}`);
+            return JSON.parse(answer.content[0].text);
+          });
+
+        const started = decodeStarted(
+          yield* call(MEMBER_MCP_TOOL.START_THREAD, {
+            agentId: agent.id,
+            title: "Flaky checkout test",
+            text: "Can you look at the flaky checkout test?",
+          }),
+        );
+        const unread = yield* call(MEMBER_MCP_TOOL.MARK_THREAD_READ, {
+          threadId: started.thread.id,
+          read: false,
+        });
+        const reminded = yield* call(MEMBER_MCP_TOOL.REMIND_THREAD, {
+          threadId: started.thread.id,
+          at: "2030-01-07T09:00-08:00",
+        });
+        yield* Effect.promise(() => client.close());
+
+        assert.equal(started.thread.title, "Flaky checkout test");
+        assert.deepEqual(
+          agentSessions.sent.slice(before).map((each) => [each.authorization, each.sessionId]),
+          [[harnessFor(owner), sessionId]],
+        );
+        const handed = JSON.stringify(agentSessions.sent.at(-1)?.message.message);
+        assert.ok(handed.includes("flaky checkout test"), handed);
+        assert.equal(unread.unread, true);
+        assert.deepEqual([reminded.remindAt, reminded.unread], ["2030-01-07T17:00:00.000Z", true]);
       }),
   );
 });

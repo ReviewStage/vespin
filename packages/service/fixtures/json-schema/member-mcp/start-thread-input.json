@@ -1,0 +1,28 @@
+{
+  "type": "object",
+  "properties": {
+    "agentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "description": "The agent's id, as list_agents answered it."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160,
+      "description": "The thread's subject; leave it out to have it titled from the message."
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 8000,
+      "description": "The member's message, in Markdown, short and complete."
+    }
+  },
+  "required": [
+    "agentId",
+    "text"
+  ],
+  "additionalProperties": false
+}
