@@ -36,6 +36,8 @@ export interface PageLeave {
   readonly unsavedDescriptionWords: (unsaved: boolean) => void;
   /** Takes `go`, a way out of this tab, once the standing ask says to, or at once where none stands. */
   readonly leave: (go: () => void) => void;
+  /** Whether a way out would ask first: a page's ask stands, or a description holds words not saved. */
+  readonly holdsWork: () => boolean;
 }
 
 export function pageLeave(page: LeavingPage): PageLeave {
@@ -96,7 +98,9 @@ export function pageLeave(page: LeavingPage): PageLeave {
     ask(() => take(go));
   };
 
-  return { unsavedWork, unsavedDescriptionWords, leave };
+  const holdsWork = (): boolean => standing !== undefined || descriptionWords;
+
+  return { unsavedWork, unsavedDescriptionWords, leave, holdsWork };
 }
 
 /** This tab's ways out, over its own window. */
