@@ -8,6 +8,14 @@
  */
 export const MARKDOWN_NESTING_LIMIT = 64;
 
+/**
+ * How much more emphasis a fenced block's lines may leave open, since code
+ * opens `**` and `*.ts` without closing them. A fence the scan misreads, which
+ * a list item or a quote can make it do, so hides at most this much, not the
+ * thousands that take the parser seconds.
+ */
+const FENCE_NESTING_LIMIT = MARKDOWN_NESTING_LIMIT * 16;
+
 /** A tab stands for this many columns of indent. */
 const TAB_COLUMNS = 4;
 
@@ -64,10 +72,16 @@ function containers(text: string, from: number, end: number, indent: number): [n
  * close takes it away, by the flanking rule alone, so intraword underscores
  * and a bullet or a rule add nothing.
  */
-function emphasisAfter(text: string, from: number, end: number, open: number): number {
+function emphasisAfter(
+  text: string,
+  from: number,
+  end: number,
+  open: number,
+  limit: number,
+): number {
   let depth = open;
   let at = from;
-  while (at < end && depth <= MARKDOWN_NESTING_LIMIT) {
+  while (at < end && depth <= limit) {
     const code = text.charCodeAt(at);
     if (code !== 42 && code !== 95) {
       at += 1;
@@ -109,9 +123,12 @@ function lineHas(
  * its cost is the words' length, whatever they hold: a quote or a list is
  * read from the markers and indent that open it, on every line, since the
  * parser overflows on those wherever they stand; emphasis from a count of the
- * runs left open since the last blank line, which a fenced block's lines
- * leave out, opened and closed as CommonMark's fences are. It reads a little
- * more than the parser nests, so a false answer means the parser holds.
+ * runs left open since the last blank line, a fenced block's lines allowed
+ * more (`FENCE_NESTING_LIMIT`) since code leaves marks open. A fence opens and
+ * closes as CommonMark's does at the top level and after a line's markers, and
+ * the larger limit bounds what a fence read wrongly beyond that can hide. It
+ * reads a little more than the parser nests, so a false answer means the
+ * parser holds.
  */
 export function markdownTooDeep(text: string): boolean {
   let fence = 0;
@@ -145,11 +162,13 @@ export function markdownTooDeep(text: string): boolean {
           !lineHas(text, words + run, end, (c) => !isSpace(c))
         )
           fence = 0;
+        else open = emphasisAfter(text, words, end, open, FENCE_NESTING_LIMIT);
+        if (open > FENCE_NESTING_LIMIT) return true;
       } else if (run >= 3 && !(code === 96 && lineHas(text, words + run, end, (c) => c === 96))) {
         fence = code;
         fenceLength = run;
       } else {
-        open = emphasisAfter(text, words, end, open);
+        open = emphasisAfter(text, words, end, open, MARKDOWN_NESTING_LIMIT);
         if (open > MARKDOWN_NESTING_LIMIT) return true;
       }
     }

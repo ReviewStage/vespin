@@ -17,6 +17,8 @@ const TOO_DEEP = {
   "quote markers inside a fence": `\`\`\`\n${">".repeat(8000)}\n\`\`\`\n`,
   "emphasis after a fence a longer opener holds open": `\`\`\`\`\n\`\`\`\n\`\`\`\`\n${"*_".repeat(50)}a`,
   "emphasis after a fence opened in a list item": `- \`\`\`\n  x\n  \`\`\`\n\n${"*_".repeat(5000)}a`,
+  "emphasis after a list item's unclosed fence": `- \`\`\`\n\n${"*_".repeat(5000)}a`,
+  "emphasis after a fence closed at the list item's indent": `- \`\`\`\n    \`\`\`\n\n${"*_".repeat(5000)}a`,
   "emphasis opened and never closed": "*_".repeat(5000) + "a",
   "emphasis nested around a word": `${"*_".repeat(5000)}a${"_*".repeat(5000)}`,
 } as const;
@@ -32,6 +34,7 @@ const NORMAL = {
   "a banner of stars": `${"*".repeat(500)} title ${"*".repeat(500)}`,
   "unclosed emphasis in a fence": `\`\`\`c\n${"int **argv;\n".repeat(100)}\`\`\`\n`,
   "a fence inside a list item": `- \`\`\`c\n${"  int **argv;\n".repeat(100)}  \`\`\`\n`,
+  "a fenced list of globs": `\`\`\`\n${"src/**/*.ts\n".repeat(100)}\`\`\`\n`,
   "a shorter fence inside a longer one": `\`\`\`\`\n\`\`\`\n${"int **argv;\n".repeat(100)}\`\`\`\`\n`,
   "a closer with trailing words": `\`\`\`\n\`\`\` js\n${"int **argv;\n".repeat(100)}\`\`\`\n`,
 } as const;
