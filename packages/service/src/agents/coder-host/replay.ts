@@ -216,6 +216,10 @@ const isAgentAttachmentType = Schema.is(Schema.Literals(Object.values(AGENT_ATTA
 const NO_BRANCH_WORDS =
   "It left no branch to build on, and its work could not be copied from its sandbox, so start from the repository's default branch.";
 
+/** The same for a source on a Mac, whose checkout a Start never reads, so its work stays there. */
+const NO_BRANCH_ON_MAC_WORDS =
+  "It left no branch to build on, and what it did stays on the Mac it ran on, so start from the repository's default branch.";
+
 /** A text cut to the bound on one line, ending in an ellipsis where it was cut. */
 function cutLine(text: string, maximumChars: number): string {
   return cutText(text.replace(/\s+/gu, " ").trim(), maximumChars);
@@ -720,7 +724,8 @@ function whereOf(
     );
   }
   if (source.branch === null) {
-    return carried === undefined ? NO_BRANCH_WORDS : carriedWhere(carried);
+    if (carried !== undefined) return carriedWhere(carried);
+    return copy.miss === SNAPSHOT_MISS.ON_DEVICE ? NO_BRANCH_ON_MAC_WORDS : NO_BRANCH_WORDS;
   }
   // Note that a Mac's checkout is never read for a Start, so what the source did not push stays on that Mac.
   const unpushed =
