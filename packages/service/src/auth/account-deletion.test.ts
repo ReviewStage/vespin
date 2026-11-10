@@ -24,6 +24,7 @@ import { githubInstallation } from "@repo/database/schemas/github-installation";
 import { conversations } from "@repo/database/schemas/storage";
 import {
   DEVICE_LAYOUT,
+  openAgentOnOwnTask,
   openMigratedPglite,
   openTaskAgent,
   sqlClientOverPglite,
@@ -211,7 +212,7 @@ const openWorkspaces = (
       createdAt: now,
       updatedAt: now,
     });
-    const agentId = yield* openTaskAgent(grace, solo.id, null);
+    const agentId = yield* openAgentOnOwnTask(grace, solo.id);
     const [agent] = yield* db
       .select({ conversationId: agentTable.conversationId })
       .from(agentTable)
@@ -239,7 +240,7 @@ const openWorkspaces = (
       ...DEVICE_LAYOUT,
       capabilities: [DEVICE_CAPABILITY.DISCARD],
     });
-    const local = yield* openTaskAgent(grace, solo.id, null);
+    const local = yield* openAgentOnOwnTask(grace, solo.id);
     yield* db
       .update(agentTable)
       .set({ machine: AGENT_MACHINE.DEVICE, deviceId: mac, repository: "acme/relay" })

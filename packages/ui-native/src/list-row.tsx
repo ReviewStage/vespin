@@ -22,10 +22,11 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
+import type { InboxLineKind } from "@repo/features/inbox-list-model";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceText } from "@repo/features/time-format";
 import type { ReactElement } from "react";
-import { INBOX_LINE_LOOK, type InboxLine, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { Avatar, TaskStatusMark, UnreadDot } from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, toneColor, useColors } from "./tokens/colors.js";
@@ -64,10 +65,10 @@ type ListRowProps = RowActs & {
   readonly id: string;
   /** The thread's title, the row's second line. */
   readonly title: string;
-  /** The task the thread stands in, named on the first line after its status ring. */
-  readonly task?: { readonly name: string; readonly status: TaskStatus } | undefined;
+  /** What holds the thread, named on the first line: its task after the task's status ring, or an agent's own by its name alone. */
+  readonly task?: { readonly name: string; readonly status?: TaskStatus | undefined } | undefined;
   /** What the thread's last line is, which picks the glyph leading it. */
-  readonly line?: InboxLine | undefined;
+  readonly line?: InboxLineKind | undefined;
   /** The thread's last line: an ask's options or steps, or the last message's words. */
   readonly summary?: string | undefined;
   /** Whether the thread is unread, which leads it with the dot and sets its words in the full ink. */
@@ -186,7 +187,7 @@ function ThreadHead(props: ListRowProps & { readonly colors: BrandColors; readon
   const { task, face, at, now, colors, ink } = props;
   return (
     <HStack spacing={SPACE.TIGHT + 2} alignment="center">
-      {task === undefined ? null : <TaskStatusMark status={task.status} />}
+      {task?.status === undefined ? null : <TaskStatusMark status={task.status} />}
       {task === undefined ? null : (
         <Text
           modifiers={[

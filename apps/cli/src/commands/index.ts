@@ -14,6 +14,7 @@ import { apiCommand } from "./api.js";
 import { automationCommand } from "./automation.js";
 import { commentCommand } from "./comment.js";
 import { descriptionCommand } from "./description.js";
+import { envCommand } from "./env.js";
 import { githubCommand } from "./github.js";
 import { inboxCommand } from "./inbox.js";
 import { integrationsCommand } from "./integrations.js";
@@ -45,6 +46,7 @@ export const COMMANDS = [
   agentCommand,
   prCommand,
   workspaceCommand,
+  envCommand,
   githubCommand,
   repoCommand,
   setupCommand,

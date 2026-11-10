@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { AGENT_STATUS, type AgentSummary, type TasklessAgent } from "@repo/features/agent-wire";
+import { AGENT_STATUS, type AgentStatus, type ListedAgent } from "@repo/features/agent-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
@@ -409,11 +409,11 @@ test("a dialog over the window keeps ⌃Tab, so nothing moves behind it", async 
   assert.deepEqual(visits, []);
 });
 
-/** An agent with no task, listed in the window, as the sidebar lists it. */
-function listedAgent(status: TasklessAgent["status"]): TasklessAgent {
+/** An agent on the task, listed in the window as the list followed live carries it. */
+function listedAgent(status: AgentStatus): ListedAgent {
   return {
     id: "0a1b2c3d-0000-4000-8000-200000000001",
-    planId: null,
+    planId: TASK,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: "Sweep flaky tests",
@@ -421,56 +421,40 @@ function listedAgent(status: TasklessAgent["status"]): TasklessAgent {
     status,
     turnId: null,
     startedBy: { userId: "user-ada", name: "Ada Lovelace" },
-    automationId: null,
     workspaceId: "workspace-acme",
     repository: "acme/relay",
-    activityAt: 1,
   };
 }
 
-/** The switcher's cards, held over the Inbox with the agent's page the screen behind; listed with no task where nothing else lists it. */
-async function agentCardAfter(
-  agent: Pick<AgentSummary, "id" | "title">,
-  listed: Partial<TasksControl> = { listedAgents: { standing: [], archived: [] } },
-): Promise<HTMLElement | undefined> {
+/** The switcher's cards, held over the Inbox with the agent's page the screen behind, the window listing the agent. */
+async function agentCardAfter(agent: ListedAgent): Promise<HTMLElement | undefined> {
   handCapabilities(DESKTOP_CAPABILITIES);
   const page = placeScreen(ROUTED_PLACE.AGENT, `/acme/agents/${agent.id}`, undefined, {
     agentId: agent.id,
   });
-  await mounted(windowSteps([INBOX, page]).steps, { ...tasksControl(), ...listed });
+  await mounted(windowSteps([INBOX, page]).steps, { ...tasksControl(), liveAgents: [agent] });
   tab();
   tab();
   return cards().find((card) => card.textContent?.includes(agent.title ?? ""));
 }
 
-/** The switcher's card of an agent with no task, listed as the sidebar lists it. */
-function tasklessCardAfter(status: TasklessAgent["status"]): Promise<HTMLElement | undefined> {
-  const agent = listedAgent(status);
-  return agentCardAfter(agent, { listedAgents: { standing: [agent], archived: [] } });
-}
-
 test("an agent's page whose turn failed says so at its card's end, as its row and its tab do", async () => {
-  const card = await tasklessCardAfter(AGENT_STATUS.FAILED);
+  const card = await agentCardAfter(listedAgent(AGENT_STATUS.FAILED));
   assert.ok(card?.querySelector(".failed-mark"));
 });
 
 test("an agent's page that finished says nothing at its card's end", async () => {
-  const card = await tasklessCardAfter(AGENT_STATUS.COMPLETED);
+  const card = await agentCardAfter(listedAgent(AGENT_STATUS.COMPLETED));
   assert.ok(card);
   assert.equal(card.querySelector(".failed-mark"), null);
 });
 
 test("an automation's agent on its run's task is named by its title and its automation, not as a bare agent", async () => {
-  const { workspaceId, repository, ...summary } = listedAgent(AGENT_STATUS.COMPLETED);
-  const agent: AgentSummary = {
-    ...summary,
-    planId: TASK,
+  const card = await agentCardAfter({
+    ...listedAgent(AGENT_STATUS.COMPLETED),
     title: "Draft standup entry",
     automationId: "automation-standup",
     automationName: "Daily standup",
-  };
-  const card = await agentCardAfter(agent, {
-    liveAgents: [{ ...agent, workspaceId, repository }],
   });
   // The card is found by the agent's title, so a bare "Agent" finds none.
   assert.match(card?.textContent ?? "", /Daily standup/);

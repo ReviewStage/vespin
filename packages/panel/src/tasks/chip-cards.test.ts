@@ -198,20 +198,19 @@ const STATE: AppStateSnapshot = (() => {
     tasks: {
       ...IDLE_TASKS_VIEW,
       tasks: [TASK],
-      tasklessAgents: [
+      // The agent that showed a page on itself, as an older link names it, now on the plan.
+      taskAgents: [
         {
           id: SWEEP_AGENT,
-          planId: null,
+          planId: TASK_ID,
           turnId: null,
           title: "Sweep the flaky tests",
           model: "anthropic/claude-opus-5.5",
           effort: "high",
           status: AGENT_STATUS.COMPLETED,
           createdAt: AT,
-          automationId: null,
           workspaceId: ACME.id,
           repository: "acme/relay",
-          activityAt: AT,
         },
       ],
       workspaces: [ACME, BETA],

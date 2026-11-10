@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { it } from "@effect/vitest";
 import type { Client } from "@modelcontextprotocol/client";
 import { Database } from "@repo/database/core/query";
+import { queueAgentMessage } from "@repo/database/models/agent-queue-store";
 import { createAgent, readAgent } from "@repo/database/models/agent-store";
 import {
   createAutomation,
@@ -19,9 +20,11 @@ import {
 } from "@repo/database/models/description-comments";
 import { listRevisions } from "@repo/database/models/description-revisions";
 import { listMemories, rememberMemory } from "@repo/database/models/memory-store";
+import { parseKeyRing } from "@repo/database/models/provider-key-seal";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { listTaskSections, writeTaskSections } from "@repo/database/models/task-section-store";
 import { createTask, readTask } from "@repo/database/models/task-store";
+import { openWorkspaceEnvironment } from "@repo/database/models/workspace-environment-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
@@ -30,11 +33,12 @@ import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-voc
 import {
   getTestDB,
   joinWorkspace,
+  openAgentOnOwnTask,
   openInboxItem,
   openTaskAgent,
   openWorkspace,
 } from "@repo/database/testing";
-import { AGENT_ARCHIVER, AGENT_PAYER } from "@repo/features/agent-wire";
+import { AGENT_ARCHIVER, AGENT_PAYER, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import {
   AUTOMATION_ACTION,
   AUTOMATION_DEFAULT_GUARDS,
@@ -53,7 +57,12 @@ import { INSTALLED_SKILL_SCOPE } from "@repo/features/installed-skill-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
-import { DESCRIPTION_ACTOR, TASK_RELATION_KIND, TASK_STATUS } from "@repo/features/task-wire";
+import {
+  DESCRIPTION_ACTOR,
+  TASK_RELATION_KIND,
+  TASK_STATUS,
+  UNTITLED_TASK_NAME,
+} from "@repo/features/task-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { EXPERIMENT, WORKSPACE_EXPERIMENT_LIST } from "@repo/settings";
 import { settleJsonSchemaGolden } from "@repo/wire/testing";
@@ -62,6 +71,7 @@ import { Clock, DateTime, Effect, Option, Result, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { readWorkspaceMemories, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
+import { START_AGENT_REFUSAL } from "../agents/agent-tools.js";
 import { recordMemberDescriptionNotes } from "../agents/coder-host/description-edit.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { EXPERIMENT_OFF_REFUSAL } from "../agents/workspace-experiment-on.js";
@@ -69,7 +79,7 @@ import { DESKTOP_OAUTH_CLIENT } from "../auth/oauth-clients.js";
 import { ACTION_RESULT_STATUS } from "../core.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { postInboxThread, readInboxItem } from "../inbox/inbox-store.js";
-import { connectAgentApiKeys } from "../testing/agent-credentials.js";
+import { AGENT_KEY_RING, connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
   fakeAgentSessions,
   freshInstallation,
@@ -189,6 +199,14 @@ const decodeStarted = Schema.decodeUnknownSync(
   Schema.Struct({ thread: Schema.Struct({ id: Schema.String, title: Schema.String }) }),
 );
 const decodeAgents = Schema.decodeUnknownSync(Schema.Struct({ agents: IdsSchema }));
+/** An agent's queue as read_agent and change_agent_queue answer it, each message by its id and words. */
+const decodeQueue = Schema.decodeUnknownSync(
+  Schema.Struct({
+    queue: Schema.Struct({
+      messages: Schema.Array(Schema.Struct({ id: Schema.String, text: Schema.String })),
+    }),
+  }),
+);
 const decodeListed = Schema.decodeUnknownSync(
   Schema.Struct({
     workspaces: Schema.Array(
@@ -441,6 +459,64 @@ it.effect.each(Object.values(REVISION))(
           },
         ],
       });
+    }),
+);
+
+it.effect(
+  "the member reads their agent's queue with read_agent and changes it with change_agent_queue, a reorder that leaves a message out refused",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch, services } = yield* standing;
+      const member = yield* Effect.promise(() => signUp(auth));
+      const rows = yield* Effect.gen(function* () {
+        const workspace = yield* openWorkspace(member.userId);
+        const task = yield* createTask(member.userId, {
+          organizationId: workspace,
+          name: "Seat billing",
+        });
+        const agentId = yield* openTaskAgent(member.userId, workspace, task.id);
+        // Note that the messages are planted in the store, since a queue change would hand the first to the idle agent.
+        const first = randomUUID();
+        const second = randomUUID();
+        yield* queueAgentMessage(member.userId, agentId, { id: first, text: "First" });
+        yield* queueAgentMessage(member.userId, agentId, { id: second, text: "Second" });
+        return { agentId, first, second };
+      }).pipe(Effect.provide(services));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const call = (name: string, args: Record<string, unknown>) =>
+        Effect.promise(async () => {
+          const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
+          return { refused: answer.isError === true, text: answer.content[0].text };
+        });
+      const { agentId, first, second } = rows;
+
+      const read = yield* call(MEMBER_MCP_TOOL.READ_AGENT, { agentId });
+      const reordered = yield* call(MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE, {
+        agentId,
+        change: { change: QUEUE_CHANGE.REORDER, order: [second] },
+      });
+      const deleted = yield* call(MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE, {
+        agentId,
+        change: { change: QUEUE_CHANGE.DELETE, messageId: first },
+      });
+      yield* Effect.promise(() => client.close());
+
+      assert.deepEqual(decodeQueue(JSON.parse(read.text)).queue.messages, [
+        { id: first, text: "First" },
+        { id: second, text: "Second" },
+      ]);
+      assert.equal(deleted.refused, false, deleted.text);
+      assert.deepEqual(decodeQueue(JSON.parse(deleted.text)).queue.messages, [
+        { id: second, text: "Second" },
+      ]);
+      assert.equal(reordered.refused, true, reordered.text);
     }),
 );
 
@@ -701,6 +777,10 @@ it.effect(
           [MEMBER_MCP_TOOL.START_AGENT, { from: { agentId } }],
           [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello." }],
           [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello.", queue: true }],
+          [
+            MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE,
+            { agentId, change: { change: QUEUE_CHANGE.RESUME } },
+          ],
           [MEMBER_MCP_TOOL.STOP_AGENT, { agentId }],
           [MEMBER_MCP_TOOL.UPDATE_AGENT, { agentId, archived: true }],
           [MEMBER_MCP_TOOL.LIST_AGENT_PORTS, { agentId }],
@@ -818,7 +898,7 @@ it.effect(
       const agentId = yield* Effect.gen(function* () {
         const own = yield* openWorkspace(member.userId);
         yield* descriptionsIn(own, member.userId, true);
-        return yield* openTaskAgent(member.userId, own, null);
+        return yield* openAgentOnOwnTask(member.userId, own);
       }).pipe(Effect.provide(services));
       const token = yield* Effect.promise(() =>
         mintedToken(auth, member.cookie, {
@@ -1212,6 +1292,48 @@ it.effect(
       );
     }),
 );
+it.layer(getTestDB())("a member's start_agent on no task", (it) => {
+  it.effect(
+    "starts the agent on a task made for it, untitled for the agent's title to name, assigned to the member, in progress with a blank description, in the repository named, and refuses a branch with no repository",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, mcpFetch } = yield* openTask({ agentSessions });
+        const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+        const call = (args: Record<string, unknown>) =>
+          Effect.promise(async () =>
+            decodeAnswer(
+              await client.callTool({ name: MEMBER_MCP_TOOL.START_AGENT, arguments: args }),
+            ),
+          );
+        const prompt = "Sweep the stale invitations.";
+        const started = yield* call({ prompt, repository: RELAY_FULL_NAME });
+        const bare = yield* call({ prompt, repository: null, branch: "release" });
+        yield* Effect.promise(() => client.close());
+
+        assert.notEqual(started.isError, true, started.content[0].text);
+        const agentId: unknown = JSON.parse(started.content[0].text).agent?.id;
+        assert.ok(typeof agentId === "string", started.content[0].text);
+        const agent = Option.getOrThrow(yield* readAgent(owner, agentId));
+        assert.ok(agent.prompt?.includes(prompt), "the prompt is handed to the agent");
+        const made = Option.getOrThrow(yield* readTask(owner, agent.taskId));
+        assert.deepEqual(
+          [
+            made.task.name,
+            made.task.assignee?.userId,
+            made.task.status,
+            made.task.repository,
+            made.text,
+          ],
+          [UNTITLED_TASK_NAME, owner, TASK_STATUS.IN_PROGRESS, RELAY_FULL_NAME, ""],
+        );
+        assert.ok(
+          bare.content[0].text.includes(START_AGENT_REFUSAL.BRANCH_NO_REPOSITORY),
+          bare.content[0].text,
+        );
+      }),
+  );
+});
 
 it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
   it.effect(
@@ -1748,6 +1870,123 @@ it.effect(
 
       assert.equal(answer.isError, true);
       assert.match(answer.content[0].text, /call it first/u);
+    }),
+);
+
+/** The names a workspace environment tool answers, never a value. */
+const decodeVariableNames = Schema.decodeUnknownSync(
+  Schema.Struct({ variables: Schema.Array(Schema.Struct({ name: Schema.String })) }),
+);
+
+/** The server standing with a ring a set variable is sealed under, as a deployment's. */
+const keyedStanding = memberMcpStanding({ keyRing: AGENT_KEY_RING });
+
+it.effect(
+  "an owner sets and deletes a workspace environment variable its agents are handed, no answer carrying its value; a plain member reads its name and is refused a set",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch, services } = yield* keyedStanding;
+      const owner = yield* Effect.promise(() => signUp(auth));
+      const plain = yield* Effect.promise(() => signUp(auth));
+      const workspaceId = yield* Effect.gen(function* () {
+        const id = yield* openWorkspace(owner.userId);
+        yield* joinWorkspace(id, plain.userId);
+        return id;
+      }).pipe(Effect.provide(services));
+      const workspace = `workspace-${workspaceId}`;
+      const value = "postgres://owner:s3cret@db.test/app";
+      const callerAs = (cookie: string) =>
+        Effect.gen(function* () {
+          const token = yield* Effect.promise(() =>
+            mintedToken(auth, cookie, {
+              clientId: MCP_CLIENT.id,
+              scope: [MEMBER_MCP_SCOPE.MCP],
+              resource: RESOURCE,
+            }),
+          );
+          const { client } = yield* connected(fetch, token, REVISION.MODERN);
+          const call = (name: string, args: Record<string, unknown>) =>
+            Effect.promise(async () => {
+              const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
+              const { text } = answer.content[0];
+              return { refused: answer.isError === true, text, read: JSON.parse(text) };
+            });
+          return { client, call };
+        });
+      const ring = Result.getOrThrow(parseKeyRing(AGENT_KEY_RING));
+      const handed = openWorkspaceEnvironment(ring, workspaceId).pipe(Effect.provide(services));
+
+      const asOwner = yield* callerAs(owner.cookie);
+      const asPlain = yield* callerAs(plain.cookie);
+      const set = yield* asOwner.call(MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE, {
+        workspace,
+        name: "DATABASE_URL",
+        value,
+      });
+      const afterSet = yield* handed;
+      const listed = yield* asPlain.call(MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES, {
+        workspace,
+      });
+      const refused = yield* asPlain.call(MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE, {
+        workspace,
+        name: "DATABASE_URL",
+        value: "postgres://plain@db.test/app",
+      });
+      const deleted = yield* asOwner.call(MEMBER_MCP_TOOL.DELETE_ENVIRONMENT_VARIABLE, {
+        workspace,
+        name: "DATABASE_URL",
+      });
+      const afterDelete = yield* handed;
+      yield* Effect.promise(() => Promise.all([asOwner.client.close(), asPlain.client.close()]));
+
+      assert.equal(set.refused, false);
+      assert.deepEqual(afterSet, { DATABASE_URL: value });
+      assert.equal(listed.refused, false);
+      assert.deepEqual(
+        decodeVariableNames(listed.read).variables.map(({ name }) => name),
+        ["DATABASE_URL"],
+      );
+      assert.equal(refused.refused, true);
+      assert.deepEqual(decodeVariableNames(deleted.read).variables, []);
+      assert.deepEqual(afterDelete, {});
+      for (const answered of [set, listed, refused, deleted]) {
+        assert.ok(!answered.text.includes("s3cret"));
+      }
+    }),
+);
+
+it.effect(
+  "an owner's set on a deployment holding no key ring is refused in words that say a retry will not help, and nothing is stored",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch, services } = yield* standing;
+      const owner = yield* Effect.promise(() => signUp(auth));
+      const workspaceId = yield* openWorkspace(owner.userId).pipe(Effect.provide(services));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, owner.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const answer = decodeAnswer(
+        yield* Effect.promise(() =>
+          client.callTool({
+            name: MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE,
+            arguments: { workspace: `workspace-${workspaceId}`, name: "DATABASE_URL", value: "x" },
+          }),
+        ),
+      );
+      yield* Effect.promise(() => client.close());
+      const ring = Result.getOrThrow(parseKeyRing(AGENT_KEY_RING));
+      const stored = yield* openWorkspaceEnvironment(ring, workspaceId).pipe(
+        Effect.provide(services),
+      );
+
+      assert.equal(answer.isError, true);
+      assert.match(answer.content[0].text, /Calling again will not help/u);
+      assert.deepEqual(stored, {});
     }),
 );
 

@@ -1,4 +1,4 @@
-// markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, links, mention chips, and pictures that open full screen.
+// markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, links, mention chips, and pictures that open full screen and zoom.
 
 import { readerZone } from "@repo/features/date-mention";
 import type { LinkPlace } from "@repo/features/link-grammar";
@@ -17,6 +17,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   COLUMN_ALIGN,
   type ColumnAlign,
@@ -33,6 +34,7 @@ import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, TEXT_SIZE } from "./tokens/type.js";
+import { Video } from "./video.js";
 
 /** A place in the app a link names, as `@repo/features/link-grammar` reads it, and the address it was written as. */
 export interface MarkdownPlace {
@@ -102,9 +104,6 @@ const CHIP_DROP = 0.22;
 /** How wide a list's marker column stands, in body sizes. */
 const MARKER_WIDTH = 1.4;
 
-/** How far below the screen's top the full-screen picture's Done stands, clear of the status bar and the Dynamic Island. */
-const VIEWER_CLOSE_TOP = 60;
-
 const styles = StyleSheet.create({
   flow: { gap: SPACE.ROW },
   item: { flexDirection: "row", gap: SPACE.TIGHT },
@@ -125,13 +124,7 @@ const styles = StyleSheet.create({
   },
   picture: { width: "100%", borderRadius: 8 },
   viewer: { flex: 1, backgroundColor: "black", justifyContent: "center" },
-  viewerPicture: { width: "100%", height: "100%" },
-  viewerClose: {
-    position: "absolute",
-    top: VIEWER_CLOSE_TOP,
-    right: SPACE.PAGE,
-    padding: SPACE.ROW,
-  },
+  viewerClose: { position: "absolute", padding: SPACE.ROW },
 });
 
 /** What drawing a run needs beyond the run: the colors, the reader's text scale, and the doors a press opens. */
@@ -141,6 +134,10 @@ interface Drawing {
   /** The widest a chip may stand, the window's width, which a chip's name is cut to. */
   readonly lineWidth: number;
   readonly openPlace: (place: MarkdownPlace) => void;
+  /** The address a picture is drawn from, by the address its words name it by; none while it is on its way. */
+  readonly pictureSource: (written: string) => string | undefined;
+  /** The video a picture's address names, played in its place; none where the address names a picture. */
+  readonly videoAt: (written: string) => MarkdownVideo | undefined;
 }
 
 function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
@@ -416,19 +413,36 @@ function CodeView({ text, drawing }: { readonly text: string; readonly drawing: 
   );
 }
 
-/** A picture at the message's width, which a press opens full screen over everything, closed by Done. */
-function PictureView({
-  source,
-  alt,
-  drawing,
-}: {
-  readonly source: string;
+/** The most a full-screen picture zooms in to, as a pinch takes it. */
+const VIEWER_MAX_ZOOM = 4;
+
+type PictureProps = {
+  /** The address the picture is drawn from; none while its bytes are still on their way, which stands its well alone. */
+  readonly source: string | undefined;
+  /** What the picture shows, heard in its place. */
   readonly alt: string;
-  readonly drawing: Drawing;
-}) {
+};
+
+/**
+ * A picture at its message's width, which a press opens full screen over
+ * everything, where a pinch zooms it and Done closes it. Done stands at the
+ * leading top corner inside the safe area, as Quick Look's does, clear of
+ * what the system draws at the trailing corner: the clock of the folded
+ * iPhone Duo's outer display, beside its rail. Note that a picture
+ * still on its way stands as its well at the shape a picture most often
+ * is, so the words under it do not jump twice.
+ */
+export function Picture({ source, alt }: PictureProps) {
+  const colors = useColors();
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [aspect, setAspect] = useState<number | undefined>(undefined);
   const [full, setFull] = useState(false);
   const heard = alt === "" ? "Picture" : alt;
+  const well = [styles.picture, { aspectRatio: aspect ?? 16 / 9, backgroundColor: colors.WELL }];
+  if (source === undefined) {
+    return <View style={well} accessible accessibilityLabel={heard} />;
+  }
   return (
     <>
       <Pressable
@@ -441,13 +455,10 @@ function PictureView({
           source={{ uri: source }}
           resizeMode="contain"
           onLoad={(event) => {
-            const { width, height } = event.nativeEvent.source;
-            if (width > 0 && height > 0) setAspect(width / height);
+            const loaded = event.nativeEvent.source;
+            if (loaded.width > 0 && loaded.height > 0) setAspect(loaded.width / loaded.height);
           }}
-          style={[
-            styles.picture,
-            { aspectRatio: aspect ?? 16 / 9, backgroundColor: drawing.colors.WELL },
-          ]}
+          style={well}
         />
       </Pressable>
       <Modal
@@ -458,18 +469,27 @@ function PictureView({
         onRequestClose={() => setFull(false)}
       >
         <View style={styles.viewer} accessibilityViewIsModal>
-          <Image
-            source={{ uri: source }}
-            resizeMode="contain"
-            accessibilityLabel={heard}
-            style={styles.viewerPicture}
-          />
+          <ScrollView
+            maximumZoomScale={VIEWER_MAX_ZOOM}
+            minimumZoomScale={1}
+            bouncesZoom
+            centerContent
+            showsHorizontalScrollIndicator={false}
+            showsVerticalScrollIndicator={false}
+          >
+            <Image
+              source={{ uri: source }}
+              resizeMode="contain"
+              accessibilityLabel={heard}
+              style={{ width, height }}
+            />
+          </ScrollView>
           <Pressable
             onPress={() => setFull(false)}
             accessibilityRole="button"
             accessibilityLabel="Done"
             testID="markdown-picture-done"
-            style={styles.viewerClose}
+            style={[styles.viewerClose, { top: insets.top, left: insets.left + SPACE.ROW }]}
           >
             <Text style={{ fontSize: TEXT_SIZE.BODY, fontWeight: "600", color: "white" }}>
               Done
@@ -478,6 +498,23 @@ function PictureView({
         </View>
       </Modal>
     </>
+  );
+}
+
+/** A picture's block: the video its address names, played in its place, or the picture. */
+function PictureBlock({
+  source,
+  alt,
+  drawing,
+}: {
+  readonly source: string;
+  readonly alt: string;
+  readonly drawing: Drawing;
+}) {
+  const video = drawing.videoAt(source);
+  if (video === undefined) return <Picture source={drawing.pictureSource(source)} alt={alt} />;
+  return (
+    <Video source={video.source} label={video.label} onOpenElsewhere={video.onOpenElsewhere} />
   );
 }
 
@@ -518,7 +555,7 @@ function BlockView({
         <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.CHIP_EDGE }} />
       );
     case MARKDOWN_BLOCK.PICTURE:
-      return <PictureView source={block.source} alt={block.alt} drawing={drawing} />;
+      return <PictureBlock source={block.source} alt={block.alt} drawing={drawing} />;
   }
 }
 
@@ -541,7 +578,28 @@ type MarkdownProps = {
   readonly onOpenPlace: (place: MarkdownPlace) => void;
   /** Whether a person typed the words line by line, whose line breaks are kept; an agent's join as Markdown reads them. */
   readonly typed?: boolean | undefined;
+  /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way. Each is drawn from the address it names where none is given. */
+  readonly pictureSource?: ((written: string) => string | undefined) | undefined;
+  /** The video a picture's address names, such as a recording a thread carried, played in its place; every address names a picture where none is given. */
+  readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
 };
+
+/** A video the words name as a picture, played in its place: the file it plays from, none while it is on its way, its name, and where it opens where the player cannot read it. */
+export interface MarkdownVideo {
+  readonly source: string | undefined;
+  readonly label: string;
+  readonly onOpenElsewhere?: (() => void) | undefined;
+}
+
+/** Each picture drawn from the address its words name it by. */
+function namedSource(written: string): string {
+  return written;
+}
+
+/** No address naming a video. */
+function noVideo(): undefined {
+  return undefined;
+}
 
 /**
  * Words drawn as the Markdown they were written in, as the panel draws a
@@ -550,7 +608,14 @@ type MarkdownProps = {
  * scheme and at the reader's Dynamic Type size. It draws no scroller of its
  * own, so a screen stands it in its own.
  */
-export function Markdown({ words, repository = null, onOpenPlace, typed }: MarkdownProps) {
+export function Markdown({
+  words,
+  repository = null,
+  onOpenPlace,
+  typed,
+  pictureSource = namedSource,
+  videoAt = noVideo,
+}: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
   const blocks = useMemo(
@@ -562,6 +627,8 @@ export function Markdown({ words, repository = null, onOpenPlace, typed }: Markd
     fontScale,
     lineWidth: width - SPACE.PAGE * 2,
     openPlace: onOpenPlace,
+    pictureSource,
+    videoAt,
   };
   return (
     <View style={styles.flow}>

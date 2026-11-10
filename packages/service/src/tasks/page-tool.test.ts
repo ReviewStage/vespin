@@ -7,13 +7,7 @@ import { listPages, readPageVersion } from "@repo/database/models/task-pages";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, startTask } from "@repo/database/testing";
-import {
-  PAGE_OWNER,
-  PAGE_SHOWER,
-  type PageOwner,
-  type PageShower,
-  taskPageOwner,
-} from "@repo/features/page-wire";
+import { PAGE_SHOWER, type PageShower, taskPageOwner } from "@repo/features/page-wire";
 import { unparsedWire, type WireBoundaryInput, type WireRecord } from "@repo/wire";
 import { Effect, Option, Schema } from "effect";
 import { ACTION_RESULT_STATUS } from "../core.js";
@@ -28,8 +22,7 @@ import {
  * `show_page`, every agent's one tool for a page, through its public
  * function against a real dialect: inline HTML makes a page the task lists,
  * a page named again takes its next version, a secret file is never read,
- * and another account's task takes no page. An agent on no task shows its
- * pages on itself, named by its own address, and revises none but its own.
+ * and another account's task takes no page.
  * Synthetic accounts, tasks, agents, and pages throughout.
  */
 
@@ -37,18 +30,13 @@ const CHECKOUT = "/vercel/sandbox/repository";
 
 const FUNNEL = "<!doctype html><h1>Invite funnel</h1><script>document.title = 'é'</script>";
 
-/** A coding agent of the account's, on the task named or, in the workspace, on none, as the agent showing a page. */
-const openAgent = (userId: string, place: { taskId: string } | { organizationId: string }) =>
+/** A coding agent of the account's, on the task named, as the agent showing a page. */
+const openAgent = (userId: string, place: { taskId: string }) =>
   Effect.map(
     createAgent(userId, {
-      ...("taskId" in place
-        ? { taskId: place.taskId, descriptionSnapshot: null, prompt: null }
-        : {
-            taskId: null,
-            organizationId: place.organizationId,
-            descriptionSnapshot: null,
-            prompt: "Chart it",
-          }),
+      taskId: place.taskId,
+      descriptionSnapshot: null,
+      prompt: null,
       idempotencyKey: randomUUID(),
       model: "anthropic/claude-opus-5.5",
       effort: "high",
@@ -226,49 +214,5 @@ it.layer(getTestDB())("show_page", (it) => {
       );
       assert.deepEqual(yield* listPages(task.userId, taskPageOwner(task.taskId)), []);
     }),
-  );
-
-  it.effect(
-    "an agent on no task shows a page on itself, named under its own address, revises it, and is refused a page that is not its own",
-    () =>
-      Effect.gen(function* () {
-        const task = yield* openTask;
-        const agentId = yield* openAgent(task.userId, { organizationId: task.workspaceId });
-        const owner: PageOwner = { kind: PAGE_OWNER.AGENT, agentId };
-        const shower: PageShower = { kind: PAGE_SHOWER.AGENT, agentId };
-        const { sandbox } = sandboxWith({ [`${CHECKOUT}/funnel.html`]: FUNNEL });
-        const binding = { userId: task.userId, owner, sandbox };
-        const onTask = shownPage(
-          yield* show({ ...task, sandbox }, { title: "Plan", path: "funnel.html" }, task.agent),
-        );
-
-        const first = yield* show(binding, { title: "Funnel", path: "funnel.html" }, shower);
-        const page = shownPage(first);
-        const again = shownPage(
-          yield* show(binding, { title: "Funnel", path: "funnel.html", page: page.id }, shower),
-        );
-
-        assert.deepEqual(first, {
-          status: ACTION_RESULT_STATUS.ACCEPTED,
-          page: {
-            id: page.id,
-            version: 1,
-            agentId,
-          },
-        });
-        assert.deepEqual(again, { id: page.id, version: 2 });
-        assert.deepEqual(
-          (yield* listPages(task.userId, owner)).map(({ id, version }) => ({ id, version })),
-          [{ id: page.id, version: 2 }],
-        );
-        assert.deepEqual(
-          (yield* listPages(task.userId, task.owner)).map(({ id }) => id),
-          [onTask.id],
-        );
-        assert.deepEqual(
-          yield* show(binding, { title: "Plan", path: "funnel.html", page: onTask.id }, shower),
-          refused(SHOW_PAGE_REFUSAL.NO_OWN_PAGE),
-        );
-      }),
   );
 });

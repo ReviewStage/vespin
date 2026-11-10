@@ -5,10 +5,7 @@ import { Database } from "@repo/database/core/query";
 import { listRepositoryPins, setRepositoryPin } from "@repo/database/models/repository-pin-store";
 import { listTaskSections, writeTaskSections } from "@repo/database/models/task-section-store";
 import { createTask } from "@repo/database/models/task-store";
-import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
-import { conversations } from "@repo/database/schemas/storage";
-import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
 import { SIDEBAR_READ, type SidebarRows, sidebarRowsOfLive } from "@repo/features/sidebar-live";
 import {
@@ -41,29 +38,6 @@ const openSharedWorkspace = Effect.gen(function* () {
   return { dean, charles, workspace, first, second };
 });
 
-/** An agent with no task the account started in the workspace. */
-const openAgent = (userId: string, organizationId: string) =>
-  Effect.gen(function* () {
-    const db = yield* Database;
-    const id = randomUUID();
-    const conversationId = randomUUID();
-    yield* db
-      .insert(conversations)
-      .values({ id: conversationId, userId, kind: CONVERSATION_KIND.AGENT });
-    yield* db.insert(agentTable).values({
-      id,
-      organizationId,
-      userId,
-      conversationId,
-      model: "anthropic/claude-opus-5.5",
-      effort: "high",
-      prompt: "Sweep the flaky tests.",
-      repository: "acme/api",
-      idempotencyKey: randomUUID(),
-    });
-    return id;
-  });
-
 /** A write the test expects taken, answering the sections as they then stand. */
 const written = (userId: string, write: TaskSectionWrite) =>
   Effect.map(writeTaskSections(userId, write), (answer) => {
@@ -85,13 +59,6 @@ const place = (taskId: string, sectionId: string | null, position?: string): Tas
   taskId,
   sectionId,
   ...(position === undefined ? undefined : { position }),
-});
-
-const placeAgent = (agentId: string, sectionId: string, position: string): TaskSectionWrite => ({
-  kind: TASK_SECTION_WRITE.PLACE_AGENT,
-  agentId,
-  sectionId,
-  position,
 });
 
 /** Every part's rows in one order, by what keys each, since the host orders them as the held reads do. */
@@ -139,7 +106,6 @@ it.layer(getTestDB())("the account's sidebar's live read", (it) => {
         yield* written(dean, place(first, launch));
         yield* TestClock.adjust("1 minute");
         yield* written(dean, place(second, launch, "a1"));
-        yield* written(dean, placeAgent(yield* openAgent(dean, workspace), later, "a0"));
         yield* setRepositoryPin(dean, "acme/relay", true);
         yield* TestClock.adjust("1 minute");
         yield* setRepositoryPin(dean, "acme/web", true);
@@ -154,7 +120,7 @@ it.layer(getTestDB())("the account's sidebar's live read", (it) => {
         const deans = yield* liveSidebarOf(dean);
         assert.deepEqual(
           [deans.sections.length, deans.entries.length, deans.agentEntries.length],
-          [2, 2, 1],
+          [2, 2, 0],
         );
         assert.deepEqual(
           deans.pins.map((pin) => pin.repository),

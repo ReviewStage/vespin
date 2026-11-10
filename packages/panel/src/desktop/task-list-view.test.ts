@@ -1,13 +1,6 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
-import {
-  AGENT_STATUS,
-  CHECK_SUMMARY,
-  PULL_REQUEST_STATE,
-  type TasklessAgent,
-} from "@repo/features/agent-wire";
 import { TASK_STATUS, type TaskStatus, type TaskSummary } from "@repo/features/task-wire";
 import type { Workspace, WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -17,16 +10,14 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { appCommandOffered, runAppCommand } from "../app-commands.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
-import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
+import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handHostReads, handMembers } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { restOn } from "../testing/hint-rest.js";
 import { tasksControl } from "../testing/tasks-control.js";
-import { newestToastSays } from "../testing/toast.js";
 import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
-import { SIDEBAR_OVERLAY } from "./sidebar-collapse.js";
 
 /**
  * task-list-view.test.ts -- the sidebar's Tasks section lists the work under
@@ -61,10 +52,7 @@ const TASK_LIST = 'nav[aria-label$="tasks"]';
 const roots: Root[] = [];
 
 beforeEach(() => {
-  openedAgents = [];
-  copied = [];
-  fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
-  pinsAsked = [];
+  fakeAppPlatform(QUIET_PANEL);
   window.localStorage.clear();
   window.sessionStorage.clear();
   Object.defineProperty(window, "matchMedia", {
@@ -76,13 +64,6 @@ beforeEach(() => {
     }),
   });
   fakeAppBridge({});
-  // An agent's pin leaves on the act port, as the window sends it.
-  fakeActPort({
-    [ACT_KIND.AGENTS_PIN]: ({ agentId, pinned }) => {
-      pinsAsked.push(`${agentId}:${String(pinned)}`);
-      return Promise.resolve({ failure: AGENT_CALL_FAILURE.NOT_FOUND });
-    },
-  });
   handMembers(() => ({ rows: { members: MEMBERS } }));
 });
 
@@ -134,51 +115,6 @@ const ASSIGNED = TASKS.map((each) =>
       : each,
 );
 
-/** An agent an automation of `starter`'s started with no task, on `repository`, last moving at `activityAt`. */
-function oneOff(
-  id: string,
-  title: string,
-  repository: string,
-  starter: string,
-  activityAt: number,
-  archivedAt?: number,
-): TasklessAgent {
-  return {
-    id,
-    planId: null,
-    model: "anthropic/claude-opus-5.5",
-    effort: "high",
-    title,
-    createdAt: 1,
-    status: AGENT_STATUS.COMPLETED,
-    turnId: null,
-    startedBy: { userId: starter, name: starter === DEAN ? "Dean Stratakos" : "Charles Pan" },
-    automationId: "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04",
-    automationName: "Morning Sentry triage",
-    workspaceId: ACME.id,
-    repository,
-    activityAt,
-    // Its pull request still open, the finished run holds the reader, so it stands under Tasks (`finished-runs.ts`).
-    pullRequest: {
-      number: 7,
-      title,
-      url: `https://github.com/${repository}/pull/7`,
-      state: PULL_REQUEST_STATE.OPEN,
-      checks: CHECK_SUMMARY.PASSING,
-    },
-    ...(archivedAt === undefined ? undefined : { archivedAt }),
-  };
-}
-
-/** The agents' pages the sidebar opened, in order. */
-let openedAgents: string[] = [];
-
-/** What the window copied, in order. */
-let copied: string[] = [];
-
-/** Each agent's pin the sidebar asked for, in order, as `agentId:pinned`. */
-let pinsAsked: string[] = [];
-
 /** The window's router the sidebar last mounted stands under, which its doors move. */
 let sidebarRouter: TestWindowRouter = windowRouter();
 
@@ -190,13 +126,8 @@ function keepAnyone(workspace: Workspace = ACME): void {
   );
 }
 
-/** The sidebar listing `plans` in `workspace`, read by Dean, with `agents` among them and the page of `agentShown` standing. */
-function mountSidebar(
-  workspace: Workspace,
-  tasks: readonly TaskSummary[] = TASKS,
-  agents: readonly TasklessAgent[] = [],
-  agentShown?: string,
-): HTMLElement {
+/** The sidebar listing `plans` in `workspace`, read by Dean. */
+function mountSidebar(workspace: Workspace, tasks: readonly TaskSummary[] = TASKS): HTMLElement {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -207,15 +138,6 @@ function mountSidebar(
     workspace,
     workspaces: [workspace],
     me: DEAN,
-    listedAgents: {
-      standing: agents.filter((agent) => agent.archivedAt === undefined),
-      archived: agents.filter((agent) => agent.archivedAt !== undefined),
-    },
-    agentView: {
-      agentId: agentShown,
-      onOpen: (agentId) => openedAgents.push(agentId),
-      onClose: () => undefined,
-    },
   });
   act(() =>
     root.render(
@@ -341,9 +263,8 @@ function lastMenuItems(): string[] {
 async function mountRead(
   workspace: Workspace,
   tasks?: readonly TaskSummary[],
-  agents?: readonly TasklessAgent[],
 ): Promise<HTMLElement> {
-  const sidebar = mountSidebar(workspace, tasks, agents);
+  const sidebar = mountSidebar(workspace, tasks);
   await act(async () => undefined);
   return sidebar;
 }
@@ -635,227 +556,6 @@ test("a workspace nobody shares offers ⌘K no filtering by person", async () =>
   assert.equal(appCommandOffered(APP_COMMAND.SHOW_MY_TASKS), false);
   assert.equal(appCommandOffered(APP_COMMAND.SHOW_EVERYONES_TASKS), false);
   assert.equal(appCommandOffered(APP_COMMAND.LIST_TASKS_UNGROUPED), true);
-});
-
-const TRIAGE = oneOff("a-1", "Triage overnight issues", "acme/relay", DEAN, 550);
-const SWEEP = oneOff("a-2", "Sweep flaky tests", "acme/console", CHARLES, 100);
-
-test("a one-off agent stands among its repository's tasks by its last activity, led by its harness mark and ending with its automation's clock, and a press opens its page", () => {
-  keepAnyone();
-  const sidebar = mountSidebar(ACME, TASKS, [TRIAGE, SWEEP]);
-  assert.deepEqual(groupNames(sidebar), ["console", "relay"]);
-  assert.deepEqual(
-    taskRows(sidebar).map((row) => row.name),
-    [
-      "Billing empty states",
-      "Sweep flaky tests",
-      "Triage overnight issues",
-      "Retry webhooks",
-      "Fix flaky deploy",
-    ],
-  );
-  const row = [
-    ...sidebar.querySelectorAll<HTMLButtonElement>(
-      ".sidebar-tasks > li > button:has(.sidebar-agent-glyph)",
-    ),
-  ].find((each) => each.textContent?.includes("Triage overnight issues") === true);
-  assert.ok(row, "the agent's row stands");
-  assert.ok(row.querySelector(".sidebar-agent-glyph svg"), "it leads with its harness mark");
-  assert.ok(row.querySelector(".sidebar-task-time .actor-mark"), "it ends with its starter");
-
-  act(() => row.click());
-  assert.deepEqual(openedAgents, ["a-1"]);
-});
-
-test("your own list holds the one-off agents you started, and not a teammate's", async () => {
-  const sidebar = await mountRead(ACME, TASKS, [TRIAGE, SWEEP]);
-  assert.deepEqual(
-    taskRows(sidebar).map((row) => row.name),
-    ["Triage overnight issues", "Retry webhooks"],
-  );
-});
-
-test("an archived one-off agent stands nowhere in the list", async () => {
-  const shelved = oneOff("a-3", "Digest of open pull requests", "acme/relay", DEAN, 45, 60);
-  const sidebar = await mountRead(ACME, TASKS, [TRIAGE, shelved]);
-  assert.ok(!taskRows(sidebar).some((row) => row.name === "Digest of open pull requests"));
-});
-
-test("an automation's run that finished and holds nothing of the reader's stands nowhere, and a list of only such runs holds no tasks", async () => {
-  const { pullRequest: _, ...finished } = oneOff("a-4", "Nightly digest", "acme/relay", DEAN, 45);
-  const among = await mountRead(ACME, TASKS, [TRIAGE, finished]);
-  assert.ok(!taskRows(among).some((row) => row.name === "Nightly digest"));
-  assert.ok(taskRows(among).some((row) => row.name === "Triage overnight issues"));
-
-  const alone = await mountRead(ACME, [], [finished]);
-  assert.deepEqual(taskRows(alone), []);
-  assert.match(alone.textContent ?? "", /No tasks yet\./u);
-});
-
-test("the agent whose page stands is the row the sidebar marks", () => {
-  const sidebar = mountSidebar(ACME, TASKS, [TRIAGE], "a-1");
-  const marked = [...sidebar.querySelectorAll('[aria-current="page"]')].map(
-    (row) => row.querySelector(".ui-list-row-title")?.firstChild?.textContent,
-  );
-  assert.deepEqual(marked, ["Triage overnight issues"]);
-});
-
-test("with no task but a one-off agent standing, the list holds the agent", async () => {
-  const sidebar = await mountRead(ACME, [], [TRIAGE]);
-  assert.deepEqual(
-    taskRows(sidebar).map((row) => row.name),
-    ["Triage overnight issues"],
-  );
-});
-
-test("a one-off agent's row offers Copy link on a right-click, copying the agent's link under its workspace, and says Link copied", async () => {
-  const sidebar = await mountRead({ ...ACME, slug: "acme" }, TASKS, [TRIAGE]);
-  const row = [
-    ...sidebar.querySelectorAll<HTMLButtonElement>(
-      ".sidebar-tasks > li > button:has(.sidebar-agent-glyph)",
-    ),
-  ].find((each) => each.textContent?.includes("Triage overnight issues") === true);
-  assert.ok(row, "the agent's row stands");
-  act(() => {
-    row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-  });
-  await act(async () => menuItem("Copy link").click());
-
-  assert.deepEqual(copied, ["https://vespin.dev/acme/agent/a-1"]);
-  assert.equal(newestToastSays(), "Link copied");
-});
-
-test("a one-off agent's menu goes with a floating sidebar as it is put away", async () => {
-  const container = document.createElement("div");
-  document.body.append(container);
-  const root = createRoot(container);
-  roots.push(root);
-  const props = sidebarProps(
-    tasksControl({
-      tasks: [...TASKS],
-      workspace: { ...ACME, slug: "acme" },
-      workspaces: [{ ...ACME, slug: "acme" }],
-      me: DEAN,
-      listedAgents: { standing: [TRIAGE], archived: [] },
-    }),
-  );
-  const float = (overlay: (typeof SIDEBAR_OVERLAY)[keyof typeof SIDEBAR_OVERLAY]) =>
-    act(() =>
-      root.render(
-        withQueryClient(
-          drawnSidebar({
-            ...props,
-            sidebar: { ...props.sidebar, collapsed: true, overlay },
-          }),
-        ),
-      ),
-    );
-  float(SIDEBAR_OVERLAY.OPEN);
-  await act(async () => undefined);
-  const row = container.querySelector<HTMLButtonElement>(
-    ".sidebar-tasks > li > button:has(.sidebar-agent-glyph)",
-  );
-  assert.ok(row, "the agent's row stands");
-  act(() => {
-    row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-  });
-  const opened = document.querySelectorAll('[role="menuitem"]').length;
-
-  float(SIDEBAR_OVERLAY.CLOSED);
-
-  assert.equal(opened, 7);
-  assert.equal(document.querySelectorAll('[role="menuitem"]').length, 0);
-});
-
-/** The menu a right-click on the agent's row named `title` opens, by its items' words. */
-function agentMenu(sidebar: HTMLElement, title: string): string[] {
-  const row = [
-    ...sidebar.querySelectorAll<HTMLButtonElement>(
-      ".sidebar-tasks > li > button:has(.sidebar-agent-glyph)",
-    ),
-  ].find((each) => each.textContent?.includes(title) === true);
-  assert.ok(row, `the row of ${title} stands`);
-  act(() => {
-    row.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
-  });
-  return [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')].map(itemLabel);
-}
-
-test("a pinned one-off agent stands under Pinned beside the pinned tasks, newest pinned first, and not among its repository's tasks", () => {
-  const pinned = { ...TRIAGE, pinnedAt: 950 };
-  keepAnyone();
-  const sidebar = mountSidebar(ACME, TASKS, [pinned, SWEEP]);
-  const section = sidebar.querySelector('nav[aria-label="Pinned"]');
-  assert.deepEqual(
-    [...(section?.querySelectorAll(".ui-list-row-title") ?? [])].map(
-      (name) => name.firstChild?.textContent,
-    ),
-    ["Triage overnight issues", "Release checklist"],
-  );
-  assert.ok(section?.querySelector(".sidebar-agent-glyph svg"), "it wears its mark");
-  assert.ok(
-    !taskRows(sidebar).some((row) => row.name === "Triage overnight issues"),
-    "a pinned agent is not listed again under Tasks",
-  );
-  assert.ok(taskRows(sidebar).some((row) => row.name === "Sweep flaky tests"));
-});
-
-test("a one-off agent's row offers the agent's one menu: Copy link, Rename and Mark as unread, Pin, or Unpin once pinned, and Move to section, Archive, and Permanently delete last", async () => {
-  const sidebar = await mountRead({ ...ACME, slug: "acme" }, TASKS, [
-    TRIAGE,
-    { ...SWEEP, pinnedAt: 950 },
-  ]);
-
-  assert.deepEqual(agentMenu(sidebar, "Triage overnight issues"), [
-    "Copy link",
-    "Rename",
-    "Mark as unread",
-    "Pin",
-    "Move to section",
-    "Archive",
-    "Permanently delete",
-  ]);
-  await act(async () => menuItem("Pin").click());
-  // Note that Sweep stands under Pinned, in a list that reorders, whose rows offer to move.
-  assert.deepEqual(agentMenu(sidebar, "Sweep flaky tests"), [
-    "Copy link",
-    "Rename",
-    "Mark as unread",
-    "Unpin",
-    "Move to section",
-    "Archive",
-    "Move down",
-    "Permanently delete",
-  ]);
-  await act(async () => menuItem("Unpin").click());
-  assert.deepEqual(pinsAsked, ["a-1:true", "a-2:false"]);
-});
-
-/** The buttons a sidebar row named `title` draws at its end, by their names. */
-function rowMarks(sidebar: HTMLElement, title: string): string[] {
-  const item = [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li")].find(
-    (each) => each.querySelector("button")?.textContent?.includes(title) === true,
-  );
-  assert.ok(item, `the row of ${title} stands`);
-  return [...item.querySelectorAll(".ui-list-row-actions button")].map(
-    (button) => button.getAttribute("aria-label") ?? "",
-  );
-}
-
-test("a one-off agent's row draws Pin and Archive at its end where a task's row draws Pin and Mark done, and its Pin pins it", async () => {
-  const sidebar = await mountRead({ ...ACME, slug: "acme" }, TASKS, [TRIAGE]);
-  const task = TASKS[0] ?? assert.fail("a task stands");
-
-  assert.deepEqual(rowMarks(sidebar, task.name), ["Pin", "Mark done"]);
-  assert.deepEqual(rowMarks(sidebar, "Triage overnight issues"), ["Pin", "Archive"]);
-  const pin = [
-    ...(sidebar.querySelectorAll<HTMLButtonElement>(
-      '.ui-list-row-actions button[aria-label="Pin"]',
-    ) ?? []),
-  ].find((button) => button.closest("li")?.textContent?.includes("Triage overnight issues"));
-  assert.ok(pin);
-  await act(async () => pin.click());
-  assert.deepEqual(pinsAsked, ["a-1:true"]);
 });
 
 /** A task of the workspace's standing in `status`. */

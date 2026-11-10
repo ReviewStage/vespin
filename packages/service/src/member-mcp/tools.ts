@@ -112,6 +112,7 @@ import {
   integrationRenameRequestSchema,
 } from "@repo/features/integration-wire";
 import { commitShaSchema } from "@repo/features/link-grammar";
+import { MCP_ACCESS_TOKEN_MINUTES, mcpClientIdSchema } from "@repo/features/mcp-client-wire";
 import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-mcp-tool";
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
 import { agentName } from "@repo/features/model-label";
@@ -152,6 +153,12 @@ import {
 } from "@repo/features/task-wire";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
 import {
+  WORKSPACE_ENVIRONMENT_BOUNDS,
+  type WorkspaceEnvironmentAnswer,
+  workspaceVariableNameSchema,
+  workspaceVariablePutRequestSchema,
+} from "@repo/features/workspace-environment-wire";
+import {
   REPOSITORY_SCRIPT_KIND,
   type WorkspaceSandboxSetupAnswer,
   workspaceInstallScriptPutRequestSchema,
@@ -165,7 +172,7 @@ import {
   type WorkspaceExperiment,
 } from "@repo/settings";
 import { describeWire, type StandardSchemaWithJson, standardSchemaOf } from "@repo/wire/effect";
-import { Effect, Option, Result, Schema } from "effect";
+import { Effect, Option, Redacted, Result, Schema } from "effect";
 import type { HttpClient } from "effect/http";
 import { writeOwnPreferences } from "../accounts/account-preferences.js";
 import { accountProcedureSeams } from "../accounts/account-seams.js";
@@ -200,6 +207,7 @@ import {
   LIST_AGENTS_TOOL,
   LIST_TASKS_TOOL,
   orStoreRefusal,
+  queueRecord,
   READ_PAGE_CHARS,
   READ_PAGE_REFUSAL,
   READ_PAGE_TOOL,
@@ -327,6 +335,7 @@ import {
 } from "../installed-skills/installed-skills.js";
 import { parseSkillPaste } from "../installed-skills/skill-paste.js";
 import type { IntegrationConnect } from "../integrations/integration-connect.js";
+import { hostedKeyRing } from "../orpc/base.js";
 import type { PageLinks } from "../pages/page-links.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
 import type { SlackBot } from "../slack/slack-bot.js";
@@ -361,6 +370,11 @@ import { readTaskFile } from "../tasks/task-file.js";
 import { readTaskTree } from "../tasks/task-tree.js";
 import type { SentryApp } from "../triggers/sentry/sentry-app-config.js";
 import {
+  deleteWorkspaceVariable,
+  listWorkspaceEnvironment,
+  putWorkspaceVariable,
+} from "../workspace-environment/workspace-environment.js";
+import {
   readSandboxSetup,
   saveInstallScript,
   saveRepositorySetup,
@@ -384,6 +398,7 @@ import {
   listMcpClientsAsMember,
   readSentryAsMember,
   renameIntegrationAsMember,
+  revokeMcpClientAsMember,
 } from "./integrations.js";
 import {
   MARK_FILES_VIEWED_FIELDS,
@@ -1793,7 +1808,7 @@ const MEMBER_MESSAGE_AGENT_TOOL = memberMcpTool({
     "why nothing was sent. With queue, it waits behind the agent's turn instead, and answers " +
     "`accepted` with `delivery` `queued` and how many messages stand `ahead` of it, or " +
     `\`handed-on\` where the agent stood idle and it goes at once, unconfirmed, since a refusal puts it back and pauses the queue; and \`paused\` with why where ` +
-    "the queue stands paused, which sends nothing until the member resumes it in the app. " +
+    `the queue stands paused, which sends nothing until ${MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE} resumes it. ` +
     FOLLOW_WORDS,
   input: MessageAgentInputSchema,
   annotations: ADDITIVE,
@@ -1802,6 +1817,142 @@ const MEMBER_MESSAGE_AGENT_TOOL = memberMcpTool({
       (userId) => agentWorkspace(userId, { id: asked.agentId }),
       MESSAGE_AGENT_REFUSAL.NO_AGENT,
       (call) => memberMessage(call, asked),
+    ),
+});
+
+/** A queued message, by the id `read_agent`'s queue lists it by. */
+const QUEUED_MESSAGE_ID_INPUT = describeWire(
+  wireUuidSchema,
+  `The queued message's id, as ${MEMBER_MCP_TOOL.READ_AGENT}'s queue lists it.`,
+);
+
+/** A queued message's new words, which replace its own and the files it carried. */
+const QUEUED_WORDS_INPUT = describeWire(
+  MessageAgentInputSchema.fields.text,
+  "Its new words, as the member's own: they replace its words, and it goes without the files " +
+    "it carried.",
+);
+
+/** A change to an agent's queue, by its kind, as the member's queue controls make it: every kind but a message added, which `message_agent`'s queue adds. */
+const MemberQueueChangeSchema = Schema.Union([
+  Schema.Struct({ change: Schema.Literal(QUEUE_CHANGE.RESUME) }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.HOLD),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+    held: describeWire(
+      Schema.Boolean,
+      "true to hold it, as the member's Edit does, so the queue sends what stands ahead of it " +
+        "and nothing from it on; false to let it go again.",
+    ),
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.EDIT),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+    text: QUEUED_WORDS_INPUT,
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.DELETE),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.REORDER),
+    order: describeWire(
+      Schema.Array(wireUuidSchema).check(Schema.isMaxLength(AGENT_QUEUE_BOUNDS.MAX_MESSAGES)),
+      "Every message the queue holds, by its id, each once, in the order they are to go.",
+    ),
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.STEER),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+    text: Schema.optionalKey(QUEUED_WORDS_INPUT),
+  }),
+]);
+
+/** A change to a queue names the agent and the change. */
+const ChangeAgentQueueInputSchema = Schema.Struct({
+  agentId: AgentIdInputSchema.fields.agentId,
+  change: describeWire(
+    MemberQueueChangeSchema,
+    "The change: resume the paused queue; hold a message or let it go; edit its words; " +
+      "delete it; reorder the queue; or steer a message into the turn under way now, with new " +
+      "words or as it stands.",
+  ),
+});
+
+type ChangeAgentQueueInput = typeof ChangeAgentQueueInputSchema.Type;
+
+/** Why a queue change changed nothing, in the member's tool's words. */
+const CHANGE_QUEUE_REFUSAL = {
+  NOT_STARTER: "Not changed: only the member who started that agent changes its queue.",
+  NO_MESSAGE:
+    "Not changed: that agent's queue holds no message of that id; it may have gone already. " +
+    `${MEMBER_MCP_TOOL.READ_AGENT} lists the queue.`,
+  BAD_ORDER:
+    "Not changed: name every message the queue holds, each once, in the order they are to go; " +
+    `${MEMBER_MCP_TOOL.READ_AGENT} lists them.`,
+  UNAVAILABLE: "Not changed: the service could not change the queue just now; try again.",
+} as const;
+
+/** The words for a refusal of a queue change. */
+function changeQueueRefusalWords(refusal: HostedRefusal): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_PERMITTED:
+      return CHANGE_QUEUE_REFUSAL.NOT_STARTER;
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return CHANGE_QUEUE_REFUSAL.NO_MESSAGE;
+    case HOSTED_API_ERROR.INVALID_REQUEST:
+      return CHANGE_QUEUE_REFUSAL.BAD_ORDER;
+    default:
+      return CHANGE_QUEUE_REFUSAL.UNAVAILABLE;
+  }
+}
+
+/**
+ * One change to an agent's queue as the member, through the change their
+ * queue controls make (`changeAgentQueue`): refused for an agent of no
+ * workspace of the call's or an archived one, as a message is, and
+ * answered with the queue as it then stands.
+ */
+const memberQueueChange = (call: AgentCall, { agentId, change }: ChangeAgentQueueInput) =>
+  orStoreRefusal(
+    Effect.gen(function* () {
+      const found = yield* workspaceAgentOf(call.caller, agentId);
+      if (Option.isNone(found)) return agentToolRejected(MESSAGE_AGENT_REFUSAL.NO_AGENT);
+      const { agent } = found.value;
+      if (agent.archivedAt !== null) return agentToolRejected(MESSAGE_AGENT_REFUSAL.ARCHIVED);
+      const changed = yield* Effect.result(
+        changeAgentQueue(callerUserId(call.caller), agent, change),
+      );
+      if (Result.isFailure(changed)) {
+        return agentToolRejected(changeQueueRefusalWords(changed.failure));
+      }
+      return {
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        queue: queueRecord(changed.success),
+        agent: { id: agent.id, title: agentName(agent), model: agent.model },
+      };
+    }),
+  );
+
+const CHANGE_AGENT_QUEUE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE,
+  description:
+    "Change the queue of a coding agent the member started, by its id, as their queue " +
+    `controls would: the messages ${MEMBER_MCP_TOOL.MESSAGE_AGENT}'s queue left waiting behind ` +
+    `its turn, which ${MEMBER_MCP_TOOL.READ_AGENT} lists by id. Resume a queue a Stop, a ` +
+    "failed turn, or a refused hand-off paused; hold a message, so the queue stops at it, or " +
+    "let it go; edit its words; delete it; reorder the queue; or steer a message into the turn " +
+    "under way now, which takes it out of the queue. Only the agent's starter changes its " +
+    "queue. Where the agent stands idle, the change hands the next message on at once, as a " +
+    "turn's end would. Answers `accepted` with the queue as it then stands, or `rejected` and " +
+    `why nothing changed. ${FOLLOW_WORDS}`,
+  input: ChangeAgentQueueInputSchema,
+  annotations: DESTRUCTIVE,
+  run: (asked) =>
+    writeAsMember(
+      (userId) => agentWorkspace(userId, { id: asked.agentId }),
+      MESSAGE_AGENT_REFUSAL.NO_AGENT,
+      (call) => memberQueueChange(call, asked),
     ),
 });
 
@@ -4139,11 +4290,33 @@ const LIST_MCP_CLIENTS_TOOL = memberMcpTool({
     `List the outside MCP clients the member allowed to act for them on ${PRODUCT_NAME}'s MCP ` +
     "server, as Settings › MCP lists them, and the server's address: each client by its id " +
     "and name, where it signs in, when the member allowed it, and when it last renewed its " +
-    "access. The member revokes one in Settings › MCP. Answers `accepted` with them, never a " +
-    "token, or `rejected` and why.",
+    `access. ${MEMBER_MCP_TOOL.REVOKE_MCP_CLIENT} revokes one. Answers \`accepted\` with them, ` +
+    "never a token, or `rejected` and why.",
   input: NoInputSchema,
   annotations: READ_ONLY,
   run: listMcpClientsAsMember,
+});
+
+const RevokeMcpClientInputSchema = Schema.Struct({
+  clientId: describeWire(
+    mcpClientIdSchema,
+    `The client, by the id ${MEMBER_MCP_TOOL.LIST_MCP_CLIENTS} answered.`,
+  ),
+});
+
+const REVOKE_MCP_CLIENT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.REVOKE_MCP_CLIENT,
+  description:
+    "Revoke one outside MCP client the member allowed, by its id, as Revoke in Settings › MCP " +
+    "does: the member's own consent to it and the tokens it holds for them are deleted, and " +
+    "no other member's. It cannot renew its access, and its next sign-in asks the member " +
+    `again. Revoking the client making this call cuts that client off: its access ends within ` +
+    `${MCP_ACCESS_TOKEN_MINUTES} minutes and it must sign in again. A client the member never ` +
+    `allowed, or ${PRODUCT_NAME}'s own Mac or iPhone app, is left as it is. Answers \`accepted\` with ` +
+    "the clients as they then stand, never a token, or `rejected` and why.",
+  input: RevokeMcpClientInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ clientId }) => revokeMcpClientAsMember(clientId),
 });
 
 const ListSentryInstallationsInputSchema = Schema.Struct({ workspace: WORKSPACE_INPUT });
@@ -4817,6 +4990,151 @@ const PIN_REPOSITORY_TOOL = memberMcpTool({
     }),
 });
 
+/*
+ * The workspace's environment variables, which its members' cloud agents are
+ * handed. Each runs the one operation behind Settings › Environment and its
+ * procedures (`../workspace-environment/workspace-environment.ts`) as the
+ * member, in the workspace a slug names or their only one, so it holds the
+ * member to what Settings does: any member reads the names, and only an
+ * owner or admin sets or deletes one. A value goes in through
+ * `set_environment_variable`, sealed under the deployment's ring the moment
+ * it is read, and never comes out: every answer is the names alone.
+ */
+
+/** Why an environment call took nothing, in words for one acting for the member. */
+const ENVIRONMENT_REFUSAL = {
+  NOT_FOUND: "Not run: the member belongs to no such workspace.",
+  NOT_PERMITTED: (verb: string) =>
+    `Not ${verb}: only the workspace's owners and admins set and delete its environment variables.`,
+  UNANSWERED:
+    "Not run: the workspace's environment variables could not be reached just now. The call " +
+    "may be made again.",
+  NO_KEY_RING:
+    "Not set: this deployment holds no key to seal a value under, so no environment variable " +
+    "can be set here until its operator configures one. Calling again will not help.",
+} as const;
+
+/** An environment call's refusal in the member's words, the operation's verb naming what was not done. */
+function environmentRefusalWords(refusal: HostedRefusal, verb: string): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return ENVIRONMENT_REFUSAL.NOT_FOUND;
+    case HOSTED_API_ERROR.NOT_PERMITTED:
+      return ENVIRONMENT_REFUSAL.NOT_PERMITTED(verb);
+    default:
+      return ENVIRONMENT_REFUSAL.UNANSWERED;
+  }
+}
+
+/** An environment call run as the member in the workspace its slug names or their only one, answered as the names then stand, or refused in the member's words. */
+const environmentAsMember = <R>(
+  slug: string | undefined,
+  verb: string,
+  run: (
+    userId: string,
+    workspaceId: string,
+  ) => Effect.Effect<WorkspaceEnvironmentAnswer, HostedRefusal, R>,
+) =>
+  listAsMember(slug, ({ caller }) => {
+    const workspaceId = callerWorkspaceId(caller);
+    return run(callerUserId(caller), workspaceId).pipe(
+      Effect.map((answer): WireRecord => ({ workspaceId, variables: answer.variables })),
+      Effect.catch((refusal) =>
+        Effect.succeed(agentToolRejected(environmentRefusalWords(refusal, verb))),
+      ),
+    );
+  });
+
+/** The workspace an environment call is about, by its slug, where the member has more than one. */
+const ENVIRONMENT_WORKSPACE_INPUT = Schema.optionalKey(
+  describeWire(
+    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
+    `The workspace whose environment variables to act on, by the slug ` +
+      `${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; leave it out where the member belongs to ` +
+      "one workspace alone.",
+  ),
+);
+
+/** A variable's name, as a shell spells one. */
+const ENVIRONMENT_NAME_INPUT = describeWire(
+  workspaceVariableNameSchema,
+  "The variable's name: a letter or underscore, then letters, digits, and underscores, such as " +
+    "DATABASE_URL.",
+);
+
+const ListEnvironmentVariablesInputSchema = Schema.Struct({
+  workspace: ENVIRONMENT_WORKSPACE_INPUT,
+});
+
+const LIST_ENVIRONMENT_VARIABLES_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES,
+  description:
+    "List the environment variables of a workspace the member belongs to, which every cloud " +
+    "agent its members start is handed, as Settings › Environment lists them: each by its name " +
+    "with when it was last set, in epoch milliseconds, in name order. A value is never shown, " +
+    `here or anywhere, once it is set. ${WORKSPACE_WORDS}`,
+  input: ListEnvironmentVariablesInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace }) =>
+    environmentAsMember(workspace, "run", (userId, workspaceId) =>
+      listWorkspaceEnvironment(userId, workspaceId),
+    ),
+});
+
+const SetEnvironmentVariableInputSchema = Schema.Struct({
+  workspace: ENVIRONMENT_WORKSPACE_INPUT,
+  name: ENVIRONMENT_NAME_INPUT,
+  value: describeWire(
+    workspaceVariablePutRequestSchema.fields.value,
+    "The value, as the agents' environment will hold it, at most " +
+      `${WORKSPACE_ENVIRONMENT_BOUNDS.MAX_VALUE_CHARS} characters.`,
+  ),
+});
+
+const SET_ENVIRONMENT_VARIABLE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE,
+  description:
+    "Set one environment variable of a workspace the member owns or administers, as Settings › " +
+    "Environment's Add or Replace value would: every cloud agent its members start from then " +
+    "on is handed it, and one of the same name has its value replaced. The value is sealed " +
+    "the moment it arrives and is never shown again, to you, the member, or anyone, so set " +
+    "only a value the member gave you for this. Answers with the workspace's variable names as " +
+    `they then stand, never a value, or \`rejected\` and why. ${WORKSPACE_WORDS}`,
+  input: SetEnvironmentVariableInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ workspace, name, value }) =>
+    // Note that a deployment holding no ring never comes to hold one on a retry, so it is refused in words of its own.
+    Effect.flatMap(Effect.result(hostedKeyRing), (ring) =>
+      Result.isFailure(ring)
+        ? Effect.succeed(agentToolRejected(ENVIRONMENT_REFUSAL.NO_KEY_RING))
+        : environmentAsMember(workspace, "set", (userId, workspaceId) =>
+            putWorkspaceVariable(ring.success, userId, { workspaceId, name }, Redacted.make(value)),
+          ),
+    ),
+});
+
+const DeleteEnvironmentVariableInputSchema = Schema.Struct({
+  workspace: ENVIRONMENT_WORKSPACE_INPUT,
+  name: ENVIRONMENT_NAME_INPUT,
+});
+
+const DELETE_ENVIRONMENT_VARIABLE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.DELETE_ENVIRONMENT_VARIABLE,
+  description:
+    "Delete one environment variable of a workspace the member owns or administers, by its " +
+    `name as ${MEMBER_MCP_TOOL.LIST_ENVIRONMENT_VARIABLES} answered it, as Settings › ` +
+    "Environment's Delete would: its value is gone for good, and no cloud agent started from " +
+    "then on is handed it. Delete one only when the member asks for it. Answers with the " +
+    "workspace's variable names as they then stand, a variable already gone among them, or " +
+    `\`rejected\` and why. ${WORKSPACE_WORDS}`,
+  input: DeleteEnvironmentVariableInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ workspace, name }) =>
+    environmentAsMember(workspace, "deleted", (userId, workspaceId) =>
+      deleteWorkspaceVariable(userId, { workspaceId, name }),
+    ),
+});
+
 /** Every tool the server offers, listed in the order an agent reads them. */
 /**
  * The workspace experiments on in one of the member's workspaces at least,
@@ -4868,6 +5186,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_DELETE_SECTION_TOOL,
   MEMBER_START_AGENT_TOOL,
   MEMBER_MESSAGE_AGENT_TOOL,
+  CHANGE_AGENT_QUEUE_TOOL,
   MEMBER_STOP_AGENT_TOOL,
   MEMBER_UPDATE_AGENT_TOOL,
   REWIND_AGENT_TOOL,
@@ -4917,6 +5236,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   RENAME_INTEGRATION_TOOL,
   DISCONNECT_INTEGRATION_TOOL,
   LIST_MCP_CLIENTS_TOOL,
+  REVOKE_MCP_CLIENT_TOOL,
   LIST_SENTRY_INSTALLATIONS_TOOL,
   DISCONNECT_SENTRY_TOOL,
   READ_SANDBOX_SETUP_TOOL,
@@ -4931,4 +5251,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   DISCONNECT_SLACK_BOT_TOOL,
   LIST_REPOSITORY_PINS_TOOL,
   PIN_REPOSITORY_TOOL,
+  LIST_ENVIRONMENT_VARIABLES_TOOL,
+  SET_ENVIRONMENT_VARIABLE_TOOL,
+  DELETE_ENVIRONMENT_VARIABLE_TOOL,
 ];

@@ -310,6 +310,7 @@ const followingDevice = (
         deviceArch: DEVICE_ARCH.ARM64,
         deviceCapabilities: [],
         worktreeScript: () => "exit 0",
+        snapshotScript: () => "exit 0",
         repositoryReachedScript: () => REACH_CHECK,
       }),
     );

@@ -1,5 +1,5 @@
 import { AGENT_BOUNDS, type AgentSummary, type ListedAgent } from "@repo/features/agent-wire";
-import { summaryOfTaskless, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
+import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
@@ -9,7 +9,7 @@ import { appStateQuery, selectTasks } from "../use-app-state.js";
  * use-workspace-agents.ts -- a workspace's newest agents as the task list the host holds carries them: what an automation's Agent picker and an `@` list offer before a word is typed.
  *
  * The task list carries every agent of the account's workspaces the
- * account may see, on a task or on none, the archived among them, under the
+ * account may see, the archived among them, under the
  * gate the service lists a workspace's agents by. So a workspace's newest,
  * or its newest on one repository, are drawn from it rather than asked of
  * the service: the unarchived ones, the newest started first, at most as
@@ -51,7 +51,7 @@ function newestOf(
     return tasks?.listStatus === TASKS_READ.FAILED ? AGENTS_FAILED : undefined;
   }
   const repositoryNamed = repository?.toLowerCase();
-  const agents = [...onTasks, ...(tasks?.tasklessAgents ?? []).map(summaryOfTaskless)]
+  const agents = onTasks
     .filter(
       (agent) =>
         agent.workspaceId === workspaceId &&
@@ -76,19 +76,16 @@ export function useWorkspaceAgents(
 }
 
 /**
- * The agent `agentId` names as the task list carries it, on a task or on
- * none, archived or not; none where the list holds no such agent, which
+ * The agent `agentId` names as the task list carries it, archived or not;
+ * none where the list holds no such agent, which
  * may yet be one on a task the list has not carried live, so a caller
  * that must know reads it of the service then.
  */
 export function listedAgentIn(
-  tasks: Pick<TasksView, "taskAgents" | "tasklessAgents"> | undefined,
+  tasks: Pick<TasksView, "taskAgents"> | undefined,
   agentId: string,
 ): ListedAgent | undefined {
-  const onTask = tasks?.taskAgents?.find((agent) => agent.id === agentId);
-  if (onTask !== undefined) return onTask;
-  const taskless = tasks?.tasklessAgents?.find((agent) => agent.id === agentId);
-  return taskless === undefined ? undefined : summaryOfTaskless(taskless);
+  return tasks?.taskAgents?.find((agent) => agent.id === agentId);
 }
 
 /** The agent `agentId` names as the task list carries it, past the newest and archived alike; none while none is named, or where the list holds no such agent. */

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { createAgent } from "@repo/database/models/agent-store";
+import { createTask } from "@repo/database/models/task-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
@@ -52,8 +53,7 @@ it.layer(getTestDB())("a coding agent's transcript", (it) => {
       Effect.gen(function* () {
         const owner = yield* openGithubUser();
         const started = yield* createAgent(owner, {
-          taskId: null,
-          organizationId: yield* openWorkspace(owner),
+          taskId: (yield* createTask(owner, { organizationId: yield* openWorkspace(owner) })).id,
           descriptionSnapshot: null,
           prompt: "Answer the open asks.",
           idempotencyKey: randomUUID(),

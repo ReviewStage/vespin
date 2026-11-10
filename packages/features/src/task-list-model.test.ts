@@ -1,8 +1,6 @@
 import { expect, test } from "vitest";
-import { AGENT_STATUS } from "./agent-wire.js";
 import {
   ASSIGNED_TO,
-  agentRow,
   childTaskCounts,
   createdByOnly,
   drawnTaskRows,
@@ -136,45 +134,6 @@ test("an agent's activity older than the description's own edit leaves the descr
   expect(taskTime(summary, TASK_ORDER.CREATED)).toBe(1);
 });
 
-/** An agent an automation of `starter`'s started with no task, on `repository`, started at `createdAt`, last moving at `activityAt`. */
-function oneOff(
-  title: string | null,
-  repository: string,
-  createdAt: number,
-  activityAt: number,
-  starter: keyof typeof NAMES,
-): TaskRow {
-  return agentRow({
-    id: title ?? "untitled",
-    planId: null,
-    model: "anthropic/claude-opus-5.5",
-    effort: "high",
-    title,
-    createdAt,
-    status: AGENT_STATUS.COMPLETED,
-    turnId: null,
-    startedBy: { userId: starter, name: NAMES[starter] },
-    automationId: "automation-1",
-    automationName: "Morning Sentry triage",
-    workspaceId: "workspace-acme",
-    repository,
-    activityAt,
-  });
-}
-
-test("a one-off agent stands among the tasks of its repository by its last activity", () => {
-  const rows = [
-    taskRow(task("Retry webhooks", "acme/relay", 10, 40)),
-    oneOff("Triage overnight issues", "acme/relay", 30, 60, DEAN),
-    taskRow(task("Billing export", "acme/relay", 20, 50)),
-    oneOff("Sweep flaky tests", "acme/console", 5, 70, DEAN),
-  ];
-  expect(names(repositoryGroups(rows))).toEqual([
-    ["Sweep flaky tests"],
-    ["Triage overnight issues", "Billing export", "Retry webhooks"],
-  ]);
-});
-
 /** A task standing in `status` at `priority`, last updated at `updatedAt`. */
 function standing(
   name: string,
@@ -217,37 +176,29 @@ function assigned(
   });
 }
 
-test("the rows assigned to one member are the tasks they are on and the one-off agents they started, and every row for Anyone", () => {
+test("the rows assigned to one member are the tasks they are on, and every row for Anyone", () => {
   const rows = [
     taskRow({
       ...task("Dean's on it", "acme/relay", 1, 10, CHARLES),
       assignee: { userId: DEAN, name: "Dean" },
     }),
     taskRow(task("No one's on it", "acme/relay", 1, 20, DEAN)),
-    oneOff("Dean's agent", "acme/relay", 1, 30, DEAN),
-    oneOff("Charles's agent", "acme/relay", 1, 40, CHARLES),
   ];
   const member = { kind: ASSIGNED_TO.MEMBER, userId: DEAN } as const;
-  expect(taskRowsAssignedTo(rows, member, CHARLES).map(taskRowName)).toEqual([
-    "Dean's on it",
-    "Dean's agent",
-  ]);
-  expect(taskRowsAssignedTo(rows, { kind: ASSIGNED_TO.ANYONE }, DEAN)).toHaveLength(4);
+  expect(taskRowsAssignedTo(rows, member, CHARLES).map(taskRowName)).toEqual(["Dean's on it"]);
+  expect(taskRowsAssignedTo(rows, { kind: ASSIGNED_TO.ANYONE }, DEAN)).toHaveLength(2);
 });
 
-test("Me holds the reader's tasks, their one-off agents, and the tasks no one is on that they created, but not a teammate's unassigned task or one they made for someone else", () => {
+test("Me holds the reader's tasks and the tasks no one is on that they created, but not a teammate's unassigned task or one they made for someone else", () => {
   const rows = [
     assigned("Charles made it, Dean's on it", 10, DEAN, CHARLES),
     taskRow(task("Dean made it, no one's on it", "acme/relay", 1, 20, DEAN)),
     assigned("Dean made it, Maya's on it", 30, MAYA, DEAN),
     taskRow(task("Charles made it, no one's on it", "acme/relay", 1, 40, CHARLES)),
-    oneOff("Dean's agent", "acme/relay", 1, 50, DEAN),
-    oneOff("Charles's agent", "acme/relay", 1, 60, CHARLES),
   ];
   expect(taskRowsAssignedTo(rows, { kind: ASSIGNED_TO.ME }, DEAN).map(taskRowName)).toEqual([
     "Charles made it, Dean's on it",
     "Dean made it, no one's on it",
-    "Dean's agent",
   ]);
 });
 

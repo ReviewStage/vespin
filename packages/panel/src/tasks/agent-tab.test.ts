@@ -697,27 +697,25 @@ test("a message or a start another agent was sent shows its words whole under it
   assert.equal(sentNothing.container.querySelector("details"), null, "nothing was sent to show");
 });
 
-/** Main's document holding one agent on no task, running on Codex, as the plan list carries it. */
+/** Main's document holding one agent on another task, running on Codex, as the plan list carries it. */
 function stateHoldingCodexAgent(agentId: string): AppStateSnapshot {
   const snapshot = signedInAs({ id: "user-sam", email: "sam@example.com", name: "Sam Okafor" });
   return {
     ...snapshot,
     tasks: {
       ...IDLE_TASKS_VIEW,
-      tasklessAgents: [
+      taskAgents: [
         {
           id: agentId,
-          planId: null,
+          planId: "task-audit",
           turnId: null,
           title: "Retry audit",
           model: "openai/gpt-6.1-sol",
           effort: "high",
           status: AGENT_STATUS.COMPLETED,
           createdAt: 1_000,
-          automationId: null,
           workspaceId: "workspace-acme",
           repository: "acme/relay",
-          activityAt: 1_000,
         },
       ],
     },

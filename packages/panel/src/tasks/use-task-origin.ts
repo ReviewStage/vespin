@@ -34,10 +34,10 @@ interface ListedAgent {
 /** An agent as a task it made draws it. */
 function originAgentOf(
   agent: ListedAgent,
-  taskId: string | null | undefined,
+  taskId: string | null,
   taskNames: ReadonlyMap<string, string>,
 ): OriginAgent {
-  const taskName = taskId === null || taskId === undefined ? undefined : taskNames.get(taskId);
+  const taskName = taskId === null ? undefined : taskNames.get(taskId);
   return {
     name: agentName(agent),
     provider: providerOf(agent.model),
@@ -48,7 +48,7 @@ function originAgentOf(
   };
 }
 
-/** Every agent the window holds, by id: every task's, followed live, and those with no task. */
+/** Every agent the window holds, by id: every task's, followed live. */
 const selectOriginAgents = memoizedSelect(
   (state) => [state.tasks],
   (planning): ReadonlyMap<string, OriginAgent> => {
@@ -56,9 +56,6 @@ const selectOriginAgents = memoizedSelect(
     const names = new Map(planning.tasks.map((task) => [task.id, task.name]));
     for (const agent of planning.taskAgents ?? []) {
       agents.set(agent.id, originAgentOf(agent, agent.planId, names));
-    }
-    for (const agent of planning.tasklessAgents ?? []) {
-      agents.set(agent.id, originAgentOf(agent, undefined, names));
     }
     return agents;
   },

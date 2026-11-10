@@ -116,18 +116,6 @@ const agentOn = (
     idempotencyKey: randomUUID(),
   });
 
-/** An agent of the member's in the workspace on no task and no repository, handed the prompt given, its workspace's Task descriptions on. */
-const tasklessAgentOn = (userId: string, workspaceId: string) =>
-  describingAgent(userId, {
-    ...ON_CLAUDE_CODE,
-    taskId: null,
-    organizationId: workspaceId,
-    descriptionSnapshot: null,
-    prompt: "Answer the open comments.",
-    repository: null,
-    idempotencyKey: randomUUID(),
-  });
-
 /** An account with one agent on a task of its workspace, with the brief given. */
 const openAgent = (brief?: AgentBriefText) =>
   Effect.gen(function* () {
@@ -391,7 +379,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
   );
 
   it.effect(
-    "an agent's comment call naming no task or a task of another workspace is refused and changes no thread, and it reads a teammate's task's comments",
+    "an agent's comment call naming a task of another workspace is refused and changes no thread, and it reads a teammate's task's comments",
     () =>
       Effect.gen(function* () {
         const userId = yield* openGithubUser();
@@ -406,14 +394,13 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
           name: "Side project",
           organizationId: yield* openWorkspace(userId),
         });
-        const thread = yield* openThread(teammate, theirs.id);
+        yield* openThread(teammate, theirs.id);
         const outsideThread = yield* openThread(userId, elsewhere.id);
-        const agent = yield* tasklessAgentOn(userId, own.workspaceId);
+        const agent = yield* agentOn(userId, own.id);
         const admitted = admittedOf(agent);
         const reply = (input: Readonly<Record<string, string>>) =>
           runAgentComment(admitted, AGENT_TOOL.REPLY_TO_COMMENT, unparsedWire(input), true);
 
-        const unnamed = yield* reply({ thread, words: "Done." });
         const outside = yield* reply({ taskId: elsewhere.id, thread: outsideThread, words: "x" });
         const read = yield* runAgentComment(
           admitted,
@@ -422,10 +409,6 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
           true,
         );
 
-        assert.deepEqual(unnamed, {
-          status: ACTION_RESULT_STATUS.REJECTED,
-          reason: COMMENT_TOOL_REFUSAL.NO_TASK_NAMED,
-        });
         assert.deepEqual(outside, {
           status: ACTION_RESULT_STATUS.REJECTED,
           reason: COMMENT_TOOL_REFUSAL.NO_TASK,

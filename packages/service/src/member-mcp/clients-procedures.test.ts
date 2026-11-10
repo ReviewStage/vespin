@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import type { DatabaseServices } from "@repo/database/core/query";
+import { Database, type DatabaseServices } from "@repo/database/core/query";
+import { oauthClient, oauthRefreshToken } from "@repo/database/schemas/auth";
 import { HOSTED_SERVICE_PATH } from "@repo/features";
 import type { WireBoundaryInput } from "@repo/wire";
 import { type Context, Effect, Option, Schema } from "effect";
 import { afterEach, vi } from "vitest";
 import { AUTH_BASE_PATH } from "../auth/auth-policy.js";
+import { DESKTOP_OAUTH_CLIENT, IOS_OAUTH_CLIENT } from "../auth/oauth-clients.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { hostedFetch } from "../orpc/handler.js";
 import type { WebServices } from "../runtime.js";
@@ -186,5 +189,44 @@ it.effect(
 
       assert.deepEqual(listedIds(yield* clients.list(owner.userId)), [clientId]);
       assert.equal(yield* refreshed(auth, clientId, ownerRefresh), "refreshed");
+    }),
+);
+
+it.effect(
+  "a revoke of the Mac's or the iPhone's own client leaves the member signed in on it",
+  () =>
+    Effect.gen(function* () {
+      const { auth, services } = yield* memberMcpStanding();
+      const owner = yield* Effect.promise(() => signUp(auth));
+      const firstParty = [DESKTOP_OAUTH_CLIENT.id, IOS_OAUTH_CLIENT.id];
+      const held = Effect.gen(function* () {
+        const db = yield* Database;
+        const rows = yield* db.select().from(oauthRefreshToken);
+        return rows.filter((row) => row.userId === owner.userId).map((row) => row.clientId);
+      }).pipe(Effect.provide(services));
+      yield* Effect.gen(function* () {
+        const db = yield* Database;
+        yield* db
+          .insert(oauthClient)
+          .values({ id: IOS_OAUTH_CLIENT.id, clientId: IOS_OAUTH_CLIENT.id, redirectUris: [] })
+          .onConflictDoNothing();
+        yield* db.insert(oauthRefreshToken).values(
+          firstParty.map((clientId) => ({
+            id: randomUUID(),
+            token: randomUUID(),
+            userId: owner.userId,
+            clientId,
+            scopes: ["openid", "offline_access"],
+          })),
+        );
+      }).pipe(Effect.provide(services));
+      const clients = resource(
+        yield* Effect.context<DatabaseServices>().pipe(Effect.provide(services)),
+      );
+
+      for (const clientId of firstParty) {
+        assert.equal((yield* clients.revoke(owner.userId, clientId)).status, HOSTED_HTTP_STATUS.OK);
+      }
+      assert.deepEqual([...(yield* held)].sort(), [...firstParty].sort());
     }),
 );
