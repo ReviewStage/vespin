@@ -538,6 +538,14 @@ export function usageLimitAgentOf(provider: ModelProvider | undefined): UsageLim
   return provider === MODEL_PROVIDER.OPENAI ? USAGE_LIMIT_AGENT.CODEX : USAGE_LIMIT_AGENT.CLAUDE;
 }
 
+/** Whether a refusal a note keeps is the plan's usage limit's (`AGENT_PLAN_LIMIT_REACHED`). */
+export function refusedAtLimit(refusal: unknown): boolean {
+  return (
+    Predicate.hasProperty(refusal, "failure") &&
+    refusal.failure === AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED
+  );
+}
+
 /** What mends a failed turn from its end line: the API keys' page for a key refused; nothing else there is the developer's to mend. */
 export function endLineReason(failure: AgentFailure | undefined, starter?: string): FailureReason {
   // A teammate's key is theirs to mend, so the reader is offered no Settings of their own.
