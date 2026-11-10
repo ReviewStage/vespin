@@ -447,6 +447,28 @@ function afterStepOf(line: AgentTranscriptMessage): number {
 }
 
 /**
+ * The summary of a turn's last `end_turn`, where that call was taken, which
+ * is what its developer reads as the turn's reply; none where the turn ended
+ * no other way than in its own words, or the call was refused or has not answered.
+ */
+export function endTurnSummary(parts: readonly AgentPart[]): string | undefined {
+  // Note that the last call stands for the turn, so a later refused one hides an earlier one taken.
+  const ended = parts.findLast(
+    (part) => part.kind === AGENT_PART.TOOL && part.tool === AGENT_TOOL.END_TURN,
+  );
+  return ended?.kind === AGENT_PART.TOOL &&
+    ended.state === TOOL_STATE.OUTPUT_AVAILABLE &&
+    // Note that a call a turn ended before it answered is kept as available too, so only an answer that took it counts.
+    isRecord(ended.output) &&
+    ended.output.status === ACTION_RESULT_STATUS.ACCEPTED &&
+    isRecord(ended.input) &&
+    isWireString(ended.input.summary) &&
+    ended.input.summary.trim() !== ""
+    ? ended.input.summary.trim()
+    : undefined;
+}
+
+/**
  * One of the agent's turns as the rows every transcript draws, folded as
  * `turn-rows.ts` folds a turn. A step boundary and a part
  * this build does not draw are left out, because the parts keep one rhythm
@@ -463,9 +485,18 @@ export function agentRows(
   moving: boolean,
   { workers = NO_WORKERS, arrived = [] }: AgentTurnPlace = {},
 ): readonly TurnRow<AgentPart>[] {
-  const parts = drawnParts(message, arrived);
+  const drawn = drawnParts(message, arrived);
+  // Note that a turn that ended with `end_turn` reads its summary as its reply, and the words it wrote on the way as notes, which fold away with its work.
+  const summary = moving ? undefined : endTurnSummary(drawn);
+  const reply: AgentPart | undefined =
+    summary === undefined ? undefined : { kind: AGENT_PART.TEXT, text: summary };
+  const parts = reply === undefined ? drawn : [...drawn, reply];
   const reading: RowReading<AgentPart> = {
     ...AGENT_READING,
+    part: (part) =>
+      reply !== undefined && part.kind === AGENT_PART.TEXT && part !== reply
+        ? ROW_PART.NOTE
+        : AGENT_READING.part(part),
     running: (part) =>
       AGENT_READING.running(part) ||
       (part.kind === AGENT_PART.TOOL && workers.get(part.callId) === TOOL_STATE.INPUT_AVAILABLE),
@@ -558,9 +589,11 @@ export function turnStretches(rows: readonly TurnRow<AgentPart>[]): readonly Tur
   return stretches;
 }
 
-/** A message's words: its text parts, one paragraph each, which is what a copy of a turn carries and what the developer's line reads as. */
+/** A message's words: the summary of the turn's `end_turn` where it ended with one, which is its reply, or else its text parts, one paragraph each; what a copy of a turn carries and what the developer's line reads as. */
 export function messageWords(message: AgentTranscriptMessage): string {
-  return agentParts(message)
-    .flatMap((part) => (part.kind === AGENT_PART.TEXT ? [part.text] : []))
-    .join("\n\n");
+  const parts = agentParts(message);
+  return (
+    endTurnSummary(parts) ??
+    parts.flatMap((part) => (part.kind === AGENT_PART.TEXT ? [part.text] : [])).join("\n\n")
+  );
 }
