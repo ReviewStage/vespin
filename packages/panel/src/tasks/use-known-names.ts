@@ -9,7 +9,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { taskKey } from "@repo/features/workspace-key";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useRef } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useAutomation } from "../automation-directory.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { appStateQuery, memoizedSelect } from "../use-app-state.js";
@@ -234,14 +234,12 @@ export function useWordTargetsFor(words: string): {
   readonly drawnUnder: ReadonlyMap<string, string>;
 } {
   const targets = useWordTargets();
-  const held = useRef(targets);
-  if (
-    held.current !== targets &&
-    !sameTargets(keyTargetsIn(words, held.current), keyTargetsIn(words, targets))
-  ) {
-    held.current = targets;
+  // Note that the listing is held in state, set as it is drawn, so a draw React throws away holds nothing.
+  const [held, hold] = useState(targets);
+  if (held !== targets && !sameTargets(keyTargetsIn(words, held), keyTargetsIn(words, targets))) {
+    hold(targets);
   }
-  return { targets, drawnUnder: held.current };
+  return { targets, drawnUnder: held };
 }
 
 /**
