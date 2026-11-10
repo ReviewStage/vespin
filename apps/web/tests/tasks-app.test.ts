@@ -719,7 +719,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
       );
       assert.deepEqual(yield* ask(request(TASKS, other)), {
         status: HOSTED_HTTP_STATUS.OK,
-        body: { plans: [], planlessAgents: [] },
+        body: { plans: [] },
       });
       assert.equal((yield* ask(request(ONE_TASK(taskId), owner))).status, HOSTED_HTTP_STATUS.OK);
       // The reads that need only where the plan stands, not its document, refuse it as the open does, and a plan that is none alike.
@@ -905,7 +905,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         );
         assert.deepEqual(yield* ask(request(TASKS, owner)), {
           status: HOSTED_HTTP_STATUS.OK,
-          body: { plans: [], planlessAgents: [] },
+          body: { plans: [] },
         });
       }),
   );

@@ -169,8 +169,6 @@ export const accountInboxAutomationSchema = EffectSchema.Struct({
   updatedAt: countedNumber,
 });
 
-export type AccountInboxAutomation = typeof accountInboxAutomationSchema.Type;
-
 /**
  * One agent with no task the account's read lists as holding inbox items, as
  * a task is listed for its own: how many it holds, open and settled alike,
@@ -191,8 +189,6 @@ export const accountInboxAgentSchema = EffectSchema.Struct({
   repository: accountTasklessEntrySchema.fields.repository,
   workspaceId: accountTasklessEntrySchema.fields.workspaceId,
 });
-
-export type AccountInboxAgent = typeof accountInboxAgentSchema.Type;
 
 /** A run of one of the account's own automations that failed to start: the run, its automation by id and name, the workspace it stands in, why, and when. */
 export const accountFailedRunSchema = EffectSchema.Struct({

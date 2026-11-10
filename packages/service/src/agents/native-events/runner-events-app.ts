@@ -1007,7 +1007,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     yield* sayTurnFailed(failed, harness, applying.payer, {
       agentId: agent.value.id,
       conversationId: target.conversationId,
-      ...(taskId === null ? undefined : { taskId }),
+      taskId,
       ...(runtimeSessionId === undefined ? undefined : { sandboxSessionId: runtimeSessionId }),
     });
   }
@@ -1054,10 +1054,10 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   // The task follows the turns the batch moved, once their rows are written: a turn starting takes
   // it up, and a turn's end archives the agent with a task moved to Done while it worked
   // (`tasks/task-finish.ts`).
-  if (taskId !== null && applied.value.turns.started) {
+  if (applied.value.turns.started) {
     yield* reopenTaskForWork(target.userId, taskId);
   }
-  if (taskId !== null && applied.value.turns.ended) {
+  if (applied.value.turns.ended) {
     yield* settleTaskAfterTurn(target.userId, taskId, agent.value.id);
   }
   // Note that the title runs after the answer, kept awake past it, because the runner need not wait on a model.

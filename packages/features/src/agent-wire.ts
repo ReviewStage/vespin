@@ -1046,8 +1046,9 @@ export type AgentPinRequest = typeof agentPinRequestSchema.Type;
 
 /**
  * Moving the asking member's own read mark of an agent with no task (PATCH),
- * as `read-mark.ts` says each mark moves it; every other member's stands.
- * The answer is the agent as it then stands.
+ * which a released desktop still sends. Every agent stands on a task, read
+ * through its task's mark alone, so the service changes nothing and answers
+ * the agent as it stands.
  */
 export const agentReadRequestSchema = EffectSchema.Struct({ readMark: readMarkSchema });
 
@@ -1585,46 +1586,6 @@ export const listedAgentSchema = EffectSchema.Struct({
 });
 
 export type ListedAgent = typeof listedAgentSchema.Type;
-
-/**
- * One agent with no plan as the plan list carries it beside the plans, so
- * the sidebar lists it among them: the agent as the tabs draw it, its
- * automation's name among them, the automation, workspace, and repository
- * its own page names, and when it last moved, which orders it among the
- * plans by their last update, when the reader pinned it, where they did,
- * and the pull request it opened, where it opened one.
- * The run that started it is its page's alone, so a list of many carries no
- * prompt.
- */
-export const tasklessAgentSchema = EffectSchema.Struct({
-  ...agentSummarySchema.fields,
-  automationId: agentPageSchema.fields.automationId,
-  workspaceId: agentPageSchema.fields.workspaceId,
-  repository: agentPageSchema.fields.repository,
-  /** Epoch milliseconds the agent last moved: its start, or its newest run to end's end, whichever is later; a run's start is none. */
-  activityAt: countedNumber,
-  /** Epoch milliseconds the reader pinned the agent, a pin being each member's own; absent while they have not, and from a service before agents were pinned. */
-  pinnedAt: EffectSchema.optionalKey(countedNumber),
-  /** Where the reader's pin stands in the sidebar's Pinned section once they dragged it (`pin-order.ts`); absent while it stands by `pinnedAt`. */
-  pinPosition: EffectSchema.optionalKey(EffectSchema.String),
-  /** Epoch milliseconds the reader read the agent through (`read-mark.ts`), the service's instant; absent from a service before read marks were kept. */
-  readThrough: EffectSchema.optionalKey(countedNumber),
-  /** Whether the reader marked the agent unread and has not opened it since; absent from a service before read marks were kept. */
-  markedUnread: EffectSchema.optionalKey(EffectSchema.Boolean),
-  /** The pull request it opened, as GitHub last answered the service, which its row's card shows as a task's row's card shows its own; absent while it opened none, and from a service before it was sent. */
-  pullRequest: EffectSchema.optionalKey(
-    EffectSchema.Struct({
-      number: agentPullRequestSchema.fields.number,
-      title: agentPullRequestSchema.fields.title,
-      url: agentPullRequestSchema.fields.url,
-      state: agentPullRequestSchema.fields.state,
-      checks: agentPullRequestSchema.fields.checks,
-      queued: agentPullRequestSchema.fields.queued,
-    }),
-  ),
-});
-
-export type TasklessAgent = typeof tasklessAgentSchema.Type;
 
 /** What became of one file: made, changed in place, removed, or moved, with or without changes. */
 export const CHANGED_FILE_STATUS = {
