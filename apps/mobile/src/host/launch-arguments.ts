@@ -1,5 +1,5 @@
 /**
- * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, and `-liveActivity true`, which starts a fixture run's Live Activity.
+ * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, `-pullRequest <number>` beside it, which opens on that pull request of the agent's, `-liveActivity true`, which starts a fixture run's Live Activity, and `-sentryTest <js|native>`, which sends a test crash report.
  *
  * iOS registers a launch argument of the form `-key value` in the app's
  * `NSUserDefaults` argument domain, which React Native's `Settings` reads,
@@ -19,7 +19,16 @@ const LAUNCH_ARGUMENT = {
   AGENT: "agent",
   PULL_REQUEST: "pullRequest",
   LIVE_ACTIVITY: "liveActivity",
+  SENTRY_TEST: "sentryTest",
 } as const;
+
+/** The test reports `-sentryTest` may ask for: a handled JavaScript error, or a native crash. */
+export const LAUNCH_SENTRY_TEST = {
+  JS: "js",
+  NATIVE: "native",
+} as const;
+
+export type LaunchSentryTest = (typeof LAUNCH_SENTRY_TEST)[keyof typeof LAUNCH_SENTRY_TEST];
 
 /** The one account service a launch argument may name in place of the real one. */
 const STUB_AUTH_SERVER = "stub";
@@ -57,4 +66,11 @@ export function launchLiveActivity(): boolean {
   if (Platform.OS !== "ios") return false;
   const named: unknown = Settings.get(LAUNCH_ARGUMENT.LIVE_ACTIVITY);
   return named === true || named === "true" || named === 1;
+}
+
+/** The test report this launch asks Sentry for, as `-sentryTest <js|native>` names it (`crash-reports.ts`); none on any other platform, and none for a word that is no test. */
+export function launchSentryTest(): LaunchSentryTest | undefined {
+  if (Platform.OS !== "ios") return undefined;
+  const named: unknown = Settings.get(LAUNCH_ARGUMENT.SENTRY_TEST);
+  return Object.values(LAUNCH_SENTRY_TEST).find((test) => test === named);
 }

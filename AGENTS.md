@@ -180,11 +180,12 @@ component, or add the component or variant there.
   with their default data collection, but that the service's
   leaves out model inputs and outputs and request bodies
   (`packages/service/src/observability/sentry.ts`, the desktop's
-  `Sentry.init`, and the web app's
-  browser SDK, `apps/web/src/app/web-sentry-sdk.ts`, with the desktop renderer's
+  `Sentry.init`, the web app's
+  browser SDK, `apps/web/src/app/web-sentry-sdk.ts`, and the iOS app's React
+  Native SDK, `apps/mobile/src/crash-reports.ts`, with the desktop renderer's
   token filters, `@repo/features/sentry-breadcrumbs`), so what a request, a log
   line, a local variable, or an error's words carries may still reach Sentry
-  from the desktop and the browser, and a log line, a local variable, or an
+  from the desktop, the browser, and the iOS app, and a log line, a local variable, or an
   error's words from any of them; a credential among it is replaced only where
   Sentry's denylist catches it by name, and `PRIVACY.md` says so.
 - Session replay records the rendered panel with every word masked

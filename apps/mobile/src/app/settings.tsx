@@ -1,6 +1,7 @@
 // settings.tsx -- the app's Settings, a SwiftUI Form in a sheet: the account, the workspace the app works in, notifications and when this phone takes them, Manage on vespin.dev for the rest of the settings, and Sign out.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
+import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LINK_ORIGIN } from "@repo/features/link-home";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -40,6 +41,7 @@ import {
   usePushDeviceKey,
   usePushDeviceStanding,
 } from "../push-device.js";
+import { useSurfaceOpen } from "../surface-open.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../screen-boundary.js";
 
@@ -60,6 +62,7 @@ export default function SettingsScreen() {
   const colors = useColors();
   const router = useRouter();
   const acts = useHostActs();
+  useSurfaceOpen(PRODUCT_SURFACE.SETTINGS);
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen, choose } = useChosenWorkspace(workspaces);

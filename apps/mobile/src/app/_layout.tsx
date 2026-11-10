@@ -7,13 +7,14 @@ import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { hide as hideSplash } from "expo-splash-screen";
 import { useEffect } from "react";
+import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
 
-export { ScreenFailure as ErrorBoundary } from "@repo/ui-native";
+export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
 /**
  * The screens, each behind the account's standing: the tabs, Settings, and
@@ -22,9 +23,9 @@ export { ScreenFailure as ErrorBoundary } from "@repo/ui-native";
  * sign-in lands on the Inbox. A fixture run stands signed in as its
  * profile's account. While an account is signed in, the phone registers
  * itself for its pushes once a launch (`push-device.ts`), a tapped
- * notification opens its thread (`notifications.ts`), and a Stop pressed on
+ * notification opens its thread (`notifications.ts`), a Stop pressed on
  * the Live Activity of its running agents goes through the host
- * (`live-activity/`).
+ * (`live-activity/`), and its crash reports name it (`crash-reports.ts`).
  */
 function GuardedScreens() {
   const { data: signedIn = false } = useQuery({
@@ -34,6 +35,7 @@ function GuardedScreens() {
   usePushRegistration(signedIn);
   useInboxNotifications(signedIn);
   useLiveActivity(signedIn);
+  useCrashReportAccount();
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={signedIn}>

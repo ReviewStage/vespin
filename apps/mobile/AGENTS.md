@@ -22,6 +22,7 @@ the macOS run below. Every command here runs from `apps/mobile`.
 | `xcrun simctl launch booted dev.vespin.ios -fixture inbox` | Launch the installed app on the host's Inbox fixture, as the Maestro flows do, so it reads no server |
 | `xcrun simctl launch booted dev.vespin.ios -authServer stub` | Launch it signed out against the stubbed account service, as `maestro/sign-in.yaml` does |
 | `xcrun simctl launch booted dev.vespin.ios -fixture inbox -agent 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5` | Launch it on the Inbox fixture, opened on its invitations agent's page, as `maestro/agent.yaml` does |
+| `xcrun simctl launch booted dev.vespin.ios -sentryTest js` | Send Sentry a test report from a live launch (`native` crashes the app instead, sent on the next launch), to check a build's reports arrive symbolicated (`src/crash-reports.ts`); `xcrun devicectl device process launch --device <iPhone> dev.vespin.ios -sentryTest js` does it on a connected iPhone |
 | `scripts/simulator-build.sh` | Generate `ios/` and build a Release app for the simulator, its bundle embedded, naming the `.app` on its last line |
 | `scripts/simulator-screenshots.sh <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
 | `xcrun simctl io booted screenshot shot.png` | One screenshot of the booted simulator by hand |

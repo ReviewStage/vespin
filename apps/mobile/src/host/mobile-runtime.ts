@@ -9,7 +9,7 @@
 
 import type { RunProfile } from "@repo/host/app-state";
 import { followStream, type OpenedStream } from "@repo/host/follow-stream";
-import { Effect, Fiber, type Layer, ManagedRuntime } from "effect";
+import { Effect, Fiber, Layer, ManagedRuntime } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
@@ -30,6 +30,8 @@ export interface MobileHostStartOptions {
   readonly device: DeviceSeams;
   /** The client every service call goes out on; the device's fetch where none is given. */
   readonly httpClient?: Layer.Layer<HttpClient.HttpClient>;
+  /** Effect's reporters the host's runtime stands on, Sentry's among them; Effect's own where none is given. */
+  readonly errorReporting?: Layer.Layer<never>;
 }
 
 /** A stream the screens hold open on the act port, such as a transcript's follow, until the stop handed back is called. */
@@ -59,15 +61,19 @@ export async function startMobileHost(
   const fork = (effect: Effect.Effect<void>): void => {
     runtime.runFork(Effect.withErrorReporting(effect, { defectsOnly: true }));
   };
+  // The reporters stand beneath the host, so every fiber it forks and every act reports through them.
   runtime = ManagedRuntime.make(
-    composeMobile({
-      httpClient,
-      fork,
-      fixture: options.fixture,
-      appVersion: options.appVersion,
-      stateRoot: options.stateRoot,
-      device: options.device,
-    }),
+    Layer.provideMerge(
+      composeMobile({
+        httpClient,
+        fork,
+        fixture: options.fixture,
+        appVersion: options.appVersion,
+        stateRoot: options.stateRoot,
+        device: options.device,
+      }),
+      options.errorReporting ?? Layer.empty,
+    ),
   );
   try {
     const host = await runtime.runPromise(MobileHostTag);

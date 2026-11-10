@@ -1,8 +1,9 @@
-// metro.config.js -- Metro for the monorepo: a workspace package through its `exports`, and a `.js` import onto the `.ts` beside it.
+// metro.config.js -- Metro for the monorepo: a workspace package through its `exports`, a `.js` import onto the `.ts` beside it, and Sentry's debug ids in the bundle and its source maps.
 
 const fs = require("node:fs");
 const path = require("node:path");
 const { getDefaultConfig } = require("expo/metro-config");
+const { getSentryExpoConfig } = require("@sentry/react-native/metro");
 
 const REPOSITORY_ROOT = path.resolve(__dirname, "..", "..");
 const WORKSPACE_SCOPE = "@repo/";
@@ -49,40 +50,56 @@ function exportTarget(exportsTable, subpath) {
 
 const workspacePackages = readWorkspacePackages();
 
-const config = getDefaultConfig(__dirname);
-
-// Note that workspace packages are resolved here rather than by Metro's own
-// `exports` walk, because that walk takes an `exports` target literally and
-// `./src/index.js` is not a file in this repository: the packages are written
-// with `.js` specifiers naming the `.ts` beside them (`packages/AGENTS.md`),
-// which TypeScript, Vite, and esbuild each read that way and Metro does not.
-// A relative `./x.js` inside a package is read the same way once Metro has
-// failed to find the `.js` itself.
-config.resolver.resolveRequest = (context, moduleName, platform) => {
-  if (moduleName.startsWith(WORKSPACE_SCOPE)) {
-    const slash = moduleName.indexOf("/", WORKSPACE_SCOPE.length);
-    const packageName = slash === -1 ? moduleName : moduleName.slice(0, slash);
-    const subpath = slash === -1 ? "." : `.${moduleName.slice(slash)}`;
-    const workspacePackage = workspacePackages.get(packageName);
-    if (workspacePackage) {
-      const target = exportTarget(workspacePackage.exports, subpath);
-      const filePath = target && sourceFileFor(workspacePackage.directory, target);
-      if (!filePath) {
-        throw new Error(
-          `${moduleName} is not a door of ${packageName}: its package.json exports no "${subpath}"`,
-        );
+/** Expo's default config, its resolver taught the workspace's packages. */
+function workspaceConfig(projectRoot, options) {
+  const config = getDefaultConfig(projectRoot, options);
+  // Note that workspace packages are resolved here rather than by Metro's own
+  // `exports` walk, because that walk takes an `exports` target literally and
+  // `./src/index.js` is not a file in this repository: the packages are written
+  // with `.js` specifiers naming the `.ts` beside them (`packages/AGENTS.md`),
+  // which TypeScript, Vite, and esbuild each read that way and Metro does not.
+  // A relative `./x.js` inside a package is read the same way once Metro has
+  // failed to find the `.js` itself.
+  config.resolver.resolveRequest = (context, moduleName, platform) => {
+    if (moduleName.startsWith(WORKSPACE_SCOPE)) {
+      const slash = moduleName.indexOf("/", WORKSPACE_SCOPE.length);
+      const packageName = slash === -1 ? moduleName : moduleName.slice(0, slash);
+      const subpath = slash === -1 ? "." : `.${moduleName.slice(slash)}`;
+      const workspacePackage = workspacePackages.get(packageName);
+      if (workspacePackage) {
+        const target = exportTarget(workspacePackage.exports, subpath);
+        const filePath = target && sourceFileFor(workspacePackage.directory, target);
+        if (!filePath) {
+          throw new Error(
+            `${moduleName} is not a door of ${packageName}: its package.json exports no "${subpath}"`,
+          );
+        }
+        return { type: "sourceFile", filePath };
       }
+    }
+    try {
+      return context.resolveRequest(context, moduleName, platform);
+    } catch (error) {
+      if (!moduleName.startsWith(".") || !moduleName.endsWith(".js")) throw error;
+      const filePath = sourceFileFor(path.dirname(context.originModulePath), moduleName);
+      if (!filePath) throw error;
       return { type: "sourceFile", filePath };
     }
-  }
-  try {
-    return context.resolveRequest(context, moduleName, platform);
-  } catch (error) {
-    if (!moduleName.startsWith(".") || !moduleName.endsWith(".js")) throw error;
-    const filePath = sourceFileFor(path.dirname(context.originModulePath), moduleName);
-    if (!filePath) throw error;
-    return { type: "sourceFile", filePath };
-  }
-};
+  };
 
-module.exports = config;
+  return config;
+}
+
+// Note that the workspace's config is Sentry's base, rather than Sentry's
+// wrapped around it, because Sentry's resolvers then fall back on the
+// workspace's own; it writes a debug id into the bundle and its source map,
+// which is what Sentry matches a Hermes stack trace to its uploaded map by.
+// The SDK's web replay and feedback widget are left out of the bundle, and
+// no options file is read, since the app passes its options to `init`.
+module.exports = getSentryExpoConfig(__dirname, {
+  getDefaultConfig: workspaceConfig,
+  includeWebReplay: false,
+  includeWebFeedback: false,
+  injectReleaseForWeb: false,
+  optionsFile: false,
+});
