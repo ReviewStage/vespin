@@ -21,6 +21,9 @@ import { bundleLanded } from "./side-bundles.js";
 
 const ignore = () => undefined;
 
+/** The editor's own class, which its element wears. */
+const EDITOR_CLASS = ".composer-editor";
+
 /** What a box takes beside its control and its skills, each answering nothing, for a test of the box alone. */
 export const QUIET_COMPOSER = {
   status: AGENT_STATUS.COMPLETED,
@@ -45,9 +48,12 @@ export function installEditorLayout(): void {
   Range.prototype.getBoundingClientRect = () => new DOMRect();
 }
 
-/** The box's editor inside the container: the element the words are typed into. */
+/** The box's editor inside the container, or the container where it is the editor: the element the words are typed into. */
 export function composerEditor(container: ParentNode): TiptapEditorHTMLElement {
-  const element = container.querySelector<TiptapEditorHTMLElement>(".composer-editor");
+  const element =
+    container instanceof Element && container.matches(EDITOR_CLASS)
+      ? (container as TiptapEditorHTMLElement)
+      : container.querySelector<TiptapEditorHTMLElement>(EDITOR_CLASS);
   if (element === null) throw new Error("the box's editor is mounted");
   return element;
 }
@@ -64,6 +70,23 @@ export function typeInComposer(container: ParentNode, text: string): void {
       if (line !== "") editor.view.dispatch(editor.state.tr.insertText(line).scrollIntoView());
     });
   });
+}
+
+/** The box's words replaced by `text`, as words selected whole and typed over are; nothing empties it. */
+export function writeInComposer(container: ParentNode, text: string): void {
+  const editor = composerEditor(container).editor;
+  if (editor === undefined) throw new Error("the box's editor is running");
+  act(() => {
+    editor.view.focus();
+    editor.commands.selectAll();
+    editor.view.dispatch(editor.state.tr.deleteSelection());
+  });
+  typeInComposer(container, text);
+}
+
+/** The words the box's editor holds, a line to each of its paragraphs, as its draft spells them. */
+export function composerWords(container: ParentNode): string {
+  return composerEditor(container).editor?.getText({ blockSeparator: "\n" }) ?? "";
 }
 
 /** Words pasted into the box's editor, as the system's clipboard hands them over: plain text and no files. */

@@ -22,7 +22,7 @@ import { ActionMenu, type MenuEntry } from "../desktop/action-menu.js";
  */
 
 /** The words a + that takes any file says. */
-const ATTACH_FILES = "Attach files";
+export const ATTACH_FILES = "Attach files";
 
 /** What a box holds to open the button's picker from elsewhere. */
 export interface AttachPicker {
