@@ -6,7 +6,7 @@
  * decide's buttons are set for each push by the app's Notification Service
  * Extension (`notification-service/`), since a category's actions are fixed
  * otherwise; a failed run offers none. A tap opens the thread, or a failed
- * run's task, in whatever state the app stood, a cold launch included, since
+ * run's agent, in whatever state the app stood, a cold launch included, since
  * iOS keeps the response that launched the app (`useLastNotificationResponse`).
  *
  * Note that an action does not answer in the background: `expo-notifications`

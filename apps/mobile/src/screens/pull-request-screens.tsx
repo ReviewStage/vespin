@@ -52,10 +52,10 @@ import {
   useColors,
   WriteNoteRow,
 } from "@repo/ui-native";
-import { openURL } from "expo-linking";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { useAgentPullRequests, useFollowedAgent } from "../agents/use-agent.js";
+import { openInSafari } from "../open-link.js";
 import {
   type PullRequestKey,
   type PullRequestWrites,
@@ -77,10 +77,6 @@ const COMMENTS_ROW = "comments";
 
 /** The least a check must have run to say how long, as the panel's checks say it. */
 const RAN_AT_LEAST_MS = 1_000;
-
-function opened(address: string): void {
-  openURL(address).catch((error: unknown) => console.error("The address did not open.", error));
-}
 
 /** What a read holds once it landed; none while it is on its way or failed. */
 function landedOf<Answer extends object>(
@@ -209,7 +205,7 @@ function PullRequestToolbar({
       )}
       <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel={MENU_WORDS.MORE}>
         {url === undefined ? null : (
-          <Stack.Toolbar.MenuAction icon="safari" onPress={() => opened(url)}>
+          <Stack.Toolbar.MenuAction icon="safari" onPress={() => openInSafari(url)}>
             {MENU_WORDS.OPEN_ON_GITHUB}
           </Stack.Toolbar.MenuAction>
         )}
@@ -330,7 +326,7 @@ export function PullRequestScreen() {
           look={LIST_LOOK.PLAIN}
           onSelect={(row) => {
             const address = opens.get(row);
-            if (address !== undefined) opened(address);
+            if (address !== undefined) openInSafari(address);
           }}
           onRefresh={retry}
         >

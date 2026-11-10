@@ -20,7 +20,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { isLucideSymbol } from "./glyph.js";
-import { Markdown, type MarkdownPlace, Picture } from "./markdown.js";
+import { Markdown, Picture } from "./markdown.js";
 import { ToneGlyph } from "./marks.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
@@ -344,7 +344,8 @@ function FoldRow({
 interface RowDrawing {
   readonly repository: string | null | undefined;
   readonly now: number;
-  readonly onOpenPlace: (place: MarkdownPlace) => void;
+  /** Opens a link or a chip a message names, by the address it was written as, where the app draws it or in Safari. */
+  readonly onOpenLink: (address: string) => void;
   readonly onToggle: (item: TranscriptItem) => void;
   /** Opens a page the agent showed whole, by the item that names it. */
   readonly onOpenPage: (
@@ -388,7 +389,7 @@ function TranscriptRow({
               words={item.words}
               typed
               repository={drawing.repository}
-              onOpenPlace={drawing.onOpenPlace}
+              onOpenLink={drawing.onOpenLink}
             />
           </View>
           {item.sent === undefined ? null : (
@@ -421,7 +422,7 @@ function TranscriptRow({
           <Markdown
             words={item.words}
             repository={drawing.repository}
-            onOpenPlace={drawing.onOpenPlace}
+            onOpenLink={drawing.onOpenLink}
           />
         </View>
       );
