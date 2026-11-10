@@ -960,9 +960,10 @@ export function DesktopShell({
   // Automations page stands in the plan's place, so it draws
   // no panel to toggle; an agent's page draws the agent's own, and the Inbox
   // the chosen item's task's. The task's details take the panel's room too,
-  // so while they stand there is no panel to toggle either.
-  const descriptionToggle =
-    tasks.page === TASKS_PAGE.DOCUMENT && !standingIn && !isOverviewTab(tasks.mainTabs.tab);
+  // so while they stand there is no panel to toggle either; but a panel left
+  // filling the window over them hides them too, and its toggle is the way out.
+  const detailsShown = isOverviewTab(tasks.mainTabs.tab) && !tasks.sidePanel.fullScreen;
+  const descriptionToggle = tasks.page === TASKS_PAGE.DOCUMENT && !standingIn && !detailsShown;
   // A phone's task leads its own row with the way back to the page it was opened from, named for it (`task-pane-switcher.tsx`).
   const awayLabel = awayBack(history.away, history.onLeave).label;
   const { onLeave } = history;

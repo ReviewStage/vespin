@@ -1431,6 +1431,23 @@ test("the side panel's toggle stands beside a task's agents, and neither over th
   });
 });
 
+test("the side panel's toggle stands over a task's details while the panel is left filling the window, which hides the details too", async () => {
+  await handBridge();
+  const container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  const sidePanel = { ...tasksControl().sidePanel, open: true, fullScreen: true };
+  const shell = createElement(PlacedShell, { place: PLACE.OTHER_TASK, patch: { sidePanel } });
+  act(() => root?.render(withQueryClient(underRouter(shell, SHELL_AT.TASK))));
+  await settle();
+  const toggled = [...container.querySelectorAll("button")].some((button) =>
+    ["Show panel", "Hide panel"].includes(button.getAttribute("aria-label") ?? ""),
+  );
+  act(() => root?.unmount());
+  container.remove();
+  assert.ok(toggled, "the toggle is the way out");
+});
+
 test("the side panel's toggle stands for the Inbox's chosen item", async () => {
   const held = holdingInboxChoice({ taskId: DOCUMENT_TASK.id, itemId: "inbox-item-1" });
   await handBridge();
