@@ -164,9 +164,10 @@ public final class LiveActivityModule: Module {
   }
 
   @MainActor private func ended(activity id: String) {
-    activityTokens[id] = nil
+    let token = activityTokens.removeValue(forKey: id)
     if superseded.remove(id) != nil { return }
-    if listening.contains("onActivityEnded") { sendEvent("onActivityEnded") }
+    // The ended activity's own token, so the service clears it only while it still holds that one.
+    if listening.contains("onActivityEnded") { sendEvent("onActivityEnded", ["token": token]) }
   }
 
   /// Hands each fresh Stop request on while JavaScript listens, dropping any too old to act on.

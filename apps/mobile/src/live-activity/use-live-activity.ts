@@ -8,9 +8,9 @@
  * is sent through the host once the account signed in holds the phone
  * (`registeredPushDevice`), since the service names the phone by its APNs
  * token, and the latest of each again on every launch, since iOS may hand a
- * new one; an activity ended or dismissed on the phone is told too, so the
- * service push-to-starts a fresh one next time, and a sign-out ends it on
- * the phone. A Stop pressed on an agent's row reaches the app's native module, which
+ * new one; an activity ended or dismissed on the phone is told too, with
+ * its own token, so the service clears that token alone and push-to-starts
+ * a fresh activity next time, and a sign-out ends it on the phone. A Stop pressed on an agent's row reaches the app's native module, which
  * hands it here; the host stops the agent as the agent page's Stop does, and
  * the request is answered whatever the host said, since the activity's next
  * push says how it went. A fixture run, which no push reaches, starts an
@@ -26,7 +26,7 @@ import {
 } from "@repo/features/live-activity-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { Schema } from "effect";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import { launchLiveActivity } from "../host/launch-arguments.js";
 import { registeredPushDevice, useFixtureRun, usePushDeviceKey } from "../push-device.js";
@@ -69,30 +69,38 @@ function logRefusal(answer: { readonly failure: string } | { readonly done: true
     console.error(`The service did not take the Live Activity's change: ${answer.failure}.`);
 }
 
-/** The latest push-to-start token and activity token ActivityKit handed this launch, the activity's none once it ends, and how many activities ended. */
+/** An activity that ended on the phone and is not yet told: its update token, or none where it never handed one. */
+type EndedActivity = { readonly token: string | undefined };
+
+/** The latest push-to-start token and activity token ActivityKit handed this launch, the activity's none once it ends, and the ends not yet told. */
 function useActivityTokens(): {
   readonly start: string | undefined;
   readonly activity: string | undefined;
-  readonly ended: number;
+  readonly ends: readonly EndedActivity[];
+  readonly told: (end: EndedActivity) => void;
 } {
   const [start, setStart] = useState<string | undefined>(undefined);
   const [activity, setActivity] = useState<string | undefined>(undefined);
-  const [ended, setEnded] = useState(0);
+  const [ends, setEnds] = useState<readonly EndedActivity[]>([]);
   useEffect(() => {
     if (liveActivityModule === null) return undefined;
     const subscriptions = [
       liveActivityModule.addListener("onStartToken", ({ token }) => setStart(token)),
       liveActivityModule.addListener("onActivityToken", ({ token }) => setActivity(token)),
-      liveActivityModule.addListener("onActivityEnded", () => {
-        setActivity(undefined);
-        setEnded((count) => count + 1);
+      liveActivityModule.addListener("onActivityEnded", ({ token }) => {
+        setActivity((standing) => (standing === token ? undefined : standing));
+        setEnds((waiting) => [...waiting, { token: token ?? undefined }]);
       }),
     ];
     return () => {
       for (const subscription of subscriptions) subscription.remove();
     };
   }, []);
-  return { start, activity, ended };
+  const told = useCallback(
+    (end: EndedActivity) => setEnds((waiting) => waiting.filter((each) => each !== end)),
+    [],
+  );
+  return { start, activity, ends, told };
 }
 
 /** The Live Activity's tokens and end told to the service and its Stop sent through the host while an account is signed in, and a fixture run's own activity started or ended once a launch. */
@@ -100,7 +108,7 @@ export function useLiveActivity(signedIn: boolean): void {
   const acts = useHostActs();
   const fixture = useFixtureRun();
   const key = usePushDeviceKey();
-  const { start, activity, ended } = useActivityTokens();
+  const { start, activity, ends, told } = useActivityTokens();
   // The phone each token is sent beside, once an account is signed in and iOS has handed its APNs token.
   const phone = signedIn ? key : undefined;
   useEffect(() => {
@@ -117,12 +125,8 @@ export function useLiveActivity(signedIn: boolean): void {
         console.error("The Live Activity's push-to-start token was not sent.", error),
       );
   }, [acts, phone, start]);
-  // The count of ends the service has taken, so a change of phone never tells one again and clears the token of an activity standing since.
-  const told = useRef(0);
   useEffect(() => {
     if (phone === undefined || activity === undefined) return;
-    // Note that an end not yet taken is dropped once a newer activity's token is sent, which replaces the ended one's on the service, so no late retry clears it.
-    told.current = ended;
     registeredPushDevice(acts, phone)
       .then(() =>
         acts[ACT_KIND.LIVE_ACTIVITY_TOKEN]({
@@ -134,22 +138,53 @@ export function useLiveActivity(signedIn: boolean): void {
       .then(logRefusal, (error: unknown) =>
         console.error("The Live Activity's token was not sent.", error),
       );
-    // Note that `ended` is read, not followed, so the token is sent once for each activity, not again as ends are counted.
   }, [acts, phone, activity]);
+  // The ends sent and not yet answered, so a render while one is out never sends it twice.
+  const telling = useRef(new Set<EndedActivity>());
+  // Whether a change came while an end was out, and a count bumped to tell the ends again once one fails after it.
+  const missed = useRef(false);
+  const [retries, setRetries] = useState(0);
   useEffect(() => {
-    if (phone === undefined || ended === told.current) return;
-    // Note that an end is counted only once the service takes it, so one the host could not deliver is told again on the phone's next change.
-    acts[ACT_KIND.LIVE_ACTIVITY_ENDED]({
-      deviceToken: phone.token,
-      environment: phone.environment,
-    }).then(
-      (answer) => {
-        logRefusal(answer);
-        if (!("failure" in answer)) told.current = Math.max(told.current, ended);
-      },
-      (error: unknown) => console.error("The Live Activity's end was not told.", error),
-    );
-  }, [acts, phone, ended]);
+    if (phone === undefined) return;
+    // Note that a failure retries only after a change it ran over, so a service that refuses never loops.
+    const failed = () => {
+      if (!missed.current) return;
+      missed.current = false;
+      setRetries((count) => count + 1);
+    };
+    for (const end of ends) {
+      // Note that an end naming no token would clear whatever activity stands, so it is dropped while a newer one does.
+      if (end.token === undefined && activity !== undefined) {
+        told(end);
+        continue;
+      }
+      if (telling.current.has(end)) {
+        missed.current = true;
+        continue;
+      }
+      telling.current.add(end);
+      // Note that the end names its own token, so the service clears it alone, and a late one never clears a newer activity's.
+      acts[ACT_KIND.LIVE_ACTIVITY_ENDED]({
+        deviceToken: phone.token,
+        environment: phone.environment,
+        ...(end.token === undefined ? {} : { activityToken: end.token }),
+      }).then(
+        (answer) => {
+          logRefusal(answer);
+          telling.current.delete(end);
+          // An end the service did not take waits for the phone's next change.
+          if ("failure" in answer) failed();
+          else told(end);
+        },
+        (error: unknown) => {
+          console.error("The Live Activity's end was not told.", error);
+          telling.current.delete(end);
+          failed();
+        },
+      );
+    }
+    // Note that `retries` is followed only to tell the ends again; its value is not read.
+  }, [acts, phone, activity, ends, told, retries]);
   // Whether an account was signed in at the last render, so a sign-out is told from a launch still reading the account.
   const wasSignedIn = useRef(false);
   useEffect(() => {

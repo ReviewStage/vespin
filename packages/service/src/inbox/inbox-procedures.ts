@@ -312,8 +312,8 @@ export const acknowledgeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
 /**
  * A member's answer to the thread's open ask, taken first, with its words
  * and files, as the member's message that carries it (`answerInboxAsk`),
- * its agent brought back before it where it stands archived, which opens
- * again the ask the archive settled,
+ * its agent brought back before it where it stands archived, though an
+ * ask the archive withdrew stays withdrawn and answers as not open,
  * and then, by the rule every answer follows (`inboxAnswerHeard`), handed
  * to the agent under the answer's own lead, its files with it, under the
  * answer's key through the one steer path; otherwise kept for the agent to
@@ -349,7 +349,7 @@ export const answerAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
   const { text, clientKey, attachments, answers } = sent;
   const stored = yield* hostedStoreOrUnavailable(readInboxItem(userId, itemId));
   if (Option.isNone(stored)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-  // Note that the agent is brought back before the answer is taken, because its archive settled the ask, which the bring-back opens again.
+  // Note that the agent is brought back as every member's word on its thread brings it back, though an ask its archive withdrew stays withdrawn.
   yield* agentHearing(userId, stored.value.item.agentId);
   const answered = yield* hostedStoreOrUnavailable(
     answerInboxAsk(userId, itemId, { answers, text, clientKey, files: attachments }),

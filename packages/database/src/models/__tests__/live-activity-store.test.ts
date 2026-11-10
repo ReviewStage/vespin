@@ -160,6 +160,19 @@ it.layer(getTestDB())("the live activity store", (it) => {
         assert.equal(standing.activityToken, activityToken);
         assert.equal(standing.sentState, "{}");
         assert.deepEqual(yield* listLiveActivityPhones(other), []);
+
+        // Note that a newer activity shows nothing the service sent the one it replaced, and an update sent to that one is not recorded against it.
+        const replacing = token();
+        yield* registerLiveActivityToken(owner, phone, LIVE_ACTIVITY_TOKEN.ACTIVITY, replacing);
+        yield* recordLiveActivityPushed(owner, standing.pushDeviceId, {
+          sentAt: new Date(2_000),
+          sentState: "stale",
+          startedAt: standing.startedAt,
+          activityToken,
+        });
+        const [replaced] = yield* listLiveActivityPhones(owner);
+        assert.equal(replaced?.activityToken, replacing);
+        assert.equal(replaced?.sentState, null);
       }),
   );
 

@@ -15,8 +15,8 @@ type LiveActivityEvents = {
   readonly onStartToken: (event: { readonly token: string }) => void;
   /** An activity the service started has an update token, or a new one. */
   readonly onActivityToken: (event: { readonly token: string }) => void;
-  /** An activity ended or was dismissed on the phone. */
-  readonly onActivityEnded: () => void;
+  /** An activity ended or was dismissed on the phone, with its update token where it had handed one. */
+  readonly onActivityEnded: (event: { readonly token?: string | null }) => void;
   /** Stop was pressed on an agent's row; `answerStop` with its request once the stop is answered. */
   readonly onStop: (event: { readonly request: string; readonly agentId: string }) => void;
 };

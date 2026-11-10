@@ -325,7 +325,7 @@ export function AgentComposer({
   /** The agent the box writes to, which its `@` list does not offer; none for a draft not yet started. */
   agentId?: string | undefined;
   status: AgentStatus;
-  /** Whether Stop stands in Send's place while the box is empty: while the agent runs where unsaid, and while it may still write where the tab knows (`offersStop`). */
+  /** Whether Stop stands in Send's place while the box is empty: while the agent runs where unsaid, and while a turn runs that a Stop can cancel where the tab knows (`offersStop`). */
   stoppable?: boolean;
   /** Whether a message sent now steers a turn under way rather than opening one: where Stop stands, where unsaid (`turnUnderWay`). */
   steers?: boolean;
