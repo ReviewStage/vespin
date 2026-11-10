@@ -78,7 +78,8 @@ export const LIST_PORTS_TOOL = {
   description:
     "List the TCP ports a server listens on in your own sandbox, such as a dev server you " +
     `started, the lowest first, to choose one to share with ${AGENT_TOOL.SHARE_PORT}. Answers ` +
-    "`accepted` with whether your sandbox is running and its ports, or `rejected` and why.",
+    "`accepted` with whether your sandbox is running, its ports, and labels saying what serves " +
+    "each port where it could be read (such as `storybook dev`), or `rejected` and why.",
   inputSchema: LIST_PORTS_INPUT,
 } as const;
 

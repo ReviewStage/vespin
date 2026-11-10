@@ -78,6 +78,8 @@ interface Forwarding {
   readonly scope: Scope.Closeable;
   running: boolean;
   readonly forwards: Map<number, Forward>;
+  /** What serves each port, as the last read said. */
+  labels: ReadonlyMap<number, string>;
   /** The port shared by public link and its link; none until read, or where none is. */
   shared: { readonly port: number; readonly url: string } | undefined;
   sharedRead: boolean;
@@ -141,6 +143,7 @@ export function composePortForwards(
           return;
         }
         current.running = answer.running;
+        current.labels = new Map((answer.labels ?? []).map(({ port, label }) => [port, label]));
         const read = new Set(answer.ports);
         for (const [port, forward] of current.forwards) {
           if (read.has(port)) continue;
@@ -206,6 +209,7 @@ export function composePortForwards(
           scope: yield* Scope.fork(lifetimeScope),
           running: false,
           forwards: new Map(),
+          labels: new Map(),
           shared: undefined,
           sharedRead: false,
           shareMoves: 0,
@@ -224,19 +228,21 @@ export function composePortForwards(
       const forwards = [...forwarding.forwards.values()]
         .map((forward) => forward.forwarded)
         .sort((a, b) => a.port - b.port);
-      const { shared } = forwarding;
+      const { shared, labels } = forwarding;
       return {
         on: true,
         running: forwarding.running,
         ...(shared === undefined ? {} : { shared }),
         ports: forwards.map((forward) => {
+          const label = labels.get(forward.port);
+          const served = label === undefined ? {} : { label };
           if (forward.localPort === undefined) {
-            return { port: forward.port, state: PORT_FORWARD_STATE.UNAVAILABLE };
+            return { port: forward.port, state: PORT_FORWARD_STATE.UNAVAILABLE, ...served };
           }
           const state = forward.connected
             ? PORT_FORWARD_STATE.CONNECTED
             : PORT_FORWARD_STATE.LISTENING;
-          return { port: forward.port, localPort: forward.localPort, state };
+          return { port: forward.port, localPort: forward.localPort, state, ...served };
         }),
       };
     };
