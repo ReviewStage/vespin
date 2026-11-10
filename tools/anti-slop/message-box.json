@@ -1,0 +1,16 @@
+{
+  "parts": {
+    "ComposerField": "composer-field.js",
+    "useComposerPickers": "composer-pickers.js",
+    "PromptInput": "prompt-input.js",
+    "ComposerBody": "@repo/ui",
+    "ComposerFoot": "@repo/ui"
+  },
+  "builders": {
+    "packages/panel/src/tasks/message-box.tsx": "The one message box: its field, its `@` and `/` lists, its card, and its foot, which every box words are written in is drawn on.",
+    "packages/panel/src/tasks/agent-tab-skeleton.tsx": "The composer's skeleton draws its foot through ComposerFoot, inert, as skeleton-through-components asks of a placeholder.",
+    "packages/panel/src/feedback-dialog.tsx": "The feedback dialog's plain text box writes to no agent and takes no mentions, files, or dictation, on purpose.",
+    "packages/panel/src/tasks/reply-form.tsx": "GitHub's review reply form writes GitHub's own Markdown and keeps GitHub's controls, on purpose.",
+    "apps/catalog/src/examples/composer-foots.tsx": "The catalog shows ComposerFoot's every state with sample data and no page behind it."
+  }
+}

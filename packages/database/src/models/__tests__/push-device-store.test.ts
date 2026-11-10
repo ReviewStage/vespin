@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { PUSH_ENVIRONMENT } from "@repo/features/push-device-wire";
-import { Clock, Effect } from "effect";
+import { PUSH_ENVIRONMENT, PUSH_NOTIFY } from "@repo/features/push-device-wire";
+import { Clock, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
@@ -10,7 +10,11 @@ import { getTestDB } from "../../testing/index.js";
 import {
   deletePushDeviceToken,
   listPushDevices,
+  readPushDeviceStatus,
+  recordPushDelivered,
+  recordPushFailed,
   registerPushDevice,
+  setPushDeviceNotify,
   unregisterPushDevice,
 } from "../push-device-store.js";
 
@@ -19,7 +23,9 @@ import {
  * row, a register the account repeats only stamps it seen, one by another
  * account moves it there, the same token on the other gateway is another
  * phone, one account neither reads nor unregisters another's phone, and a
- * token Apple says is gone is deleted whichever account holds it. Synthetic
+ * token Apple says is gone is deleted whichever account holds it; a phone's
+ * "Notify me" and standing are its account's alone to read and set, and a
+ * failing run keeps when it began until a push reaches Apple. Synthetic
  * accounts and tokens throughout.
  */
 
@@ -100,6 +106,63 @@ it.layer(getTestDB())("the push device store", (it) => {
         assert.equal(yield* deletePushDeviceToken(phone), true);
         assert.equal(yield* deletePushDeviceToken(phone), false);
         assert.deepEqual(yield* listPushDevices(owner), []);
+      }),
+  );
+
+  it.effect(
+    "a phone's Notify me and standing are its account's alone, and a failing run keeps when it began until a push reaches Apple",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+        const phone = {
+          token: token(),
+          environment: PUSH_ENVIRONMENT.PRODUCTION,
+          bundleId: BUNDLE_ID,
+        };
+        yield* registerPushDevice(owner, phone);
+        const start = yield* Clock.currentTimeMillis;
+
+        assert.deepEqual(
+          yield* readPushDeviceStatus(owner, phone),
+          Option.some({
+            notify: PUSH_NOTIFY.AWAY,
+            lastDeliveredAt: null,
+            failingSince: null,
+            failureReason: null,
+          }),
+        );
+        assert.equal(yield* setPushDeviceNotify(other, phone, PUSH_NOTIFY.NEVER), false);
+        assert.ok(Option.isNone(yield* readPushDeviceStatus(other, phone)));
+        assert.equal(yield* setPushDeviceNotify(owner, phone, PUSH_NOTIFY.ALWAYS), true);
+
+        yield* recordPushDelivered(phone);
+        yield* TestClock.adjust("1 minute");
+        yield* recordPushFailed(phone, "TooManyRequests");
+        yield* TestClock.adjust("1 minute");
+        yield* recordPushFailed(phone, "InternalServerError");
+        assert.deepEqual(
+          yield* readPushDeviceStatus(owner, phone),
+          Option.some({
+            notify: PUSH_NOTIFY.ALWAYS,
+            lastDeliveredAt: start,
+            failingSince: start + 60_000,
+            failureReason: "InternalServerError",
+          }),
+        );
+
+        yield* TestClock.adjust("1 minute");
+        yield* recordPushDelivered(phone);
+        // A register again leaves the phone's choice where it stood.
+        yield* registerPushDevice(owner, phone);
+        assert.deepEqual(
+          yield* readPushDeviceStatus(owner, phone),
+          Option.some({
+            notify: PUSH_NOTIFY.ALWAYS,
+            lastDeliveredAt: start + 3 * 60_000,
+            failingSince: null,
+            failureReason: null,
+          }),
+        );
       }),
   );
 });

@@ -24,9 +24,10 @@ import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import type { DescriptionCommentsControl } from "@repo/ui/description-comments";
 import type { TiptapEditorHTMLElement } from "@tiptap/core";
+import { Effect } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, test, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
 import { useDraftsOwner } from "../composer-drafts.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
@@ -34,6 +35,12 @@ import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
 import { HandTabActionsContext, type TabActionGroups } from "../desktop/strip-tabs.js";
 import { fakeActPort } from "../testing/app-bridge.js";
 import { fakeAppPlatform } from "../testing/app-platform.js";
+import {
+  composerWords,
+  editorBundleLanded,
+  installEditorLayout,
+  writeInComposer,
+} from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { chooseMenuItem } from "../testing/phone-head.js";
@@ -160,7 +167,11 @@ function mount(
 
 const versionUrl = (version: number) => pageFrameUrl({ taskId: TASK, pageId: FUNNEL.id, version });
 
+// Landed before any field renders, as the panel lands it after its first paint.
+beforeAll(() => Effect.runPromise(editorBundleLanded));
+
 beforeEach(() => {
+  installEditorLayout();
   fakeAppPlatform({ pageFrameUrl });
   // View settings opens its syntax theme on the window's appearance, here the dark one.
   vi.stubGlobal("matchMedia", (query: string) => ({
@@ -570,7 +581,13 @@ test("Comment asks the frame for an element, an element holding threads is pinne
   postFrom(frame().contentWindow, { type: PAGE_PICK_TYPE, marks: [{ path, box }] });
   await press("Comment on the page");
   // The press in the frame is the developer's, which the window holds as the pick lands.
-  vi.stubGlobal("navigator", { ...navigator, userActivation: { isActive: true } });
+  // Note that the comment's editor reads the platform off the navigator, so the stand-in keeps it.
+  vi.stubGlobal("navigator", {
+    ...navigator,
+    platform: navigator.platform,
+    userAgent: navigator.userAgent,
+    userActivation: { isActive: true },
+  });
   postFrom(frame().contentWindow, {
     type: PAGE_PICK_TYPE,
     picked: { path: "body > h2:nth-of-type(1)", quote: "Totals", section: "", box },
@@ -617,10 +634,10 @@ test("Comment asks the frame for an element, an element holding threads is pinne
     ],
   });
   await press("Draft comment");
-  const reopened = container.querySelector<HTMLTextAreaElement>(
-    '.ui-rect-float:not([data-leaving]) textarea[aria-label="Add a comment"]',
+  const reopened = container.querySelector<HTMLElement>(
+    '.ui-rect-float:not([data-leaving]) .composer-editor[aria-label="Add a comment"]',
   );
-  assert.equal(reopened?.value, "Split by team?");
+  assert.equal(reopened === null ? undefined : composerWords(reopened), "Split by team?");
   assert.match(container.querySelector(".page-comment-float")?.textContent ?? "", /Totals/);
   // Emptied, the draft goes, so no later test opens on its words.
   typeInto(container, "Add a comment", "");
@@ -628,15 +645,9 @@ test("Comment asks the frame for an element, an element holding threads is pinne
 
 /** Types `words` into the field inside `within` named `label`, as the reader would. */
 function typeInto(within: ParentNode, label: string, words: string): void {
-  const field = within.querySelector<HTMLTextAreaElement>(`textarea[aria-label="${label}"]`);
+  const field = within.querySelector<HTMLElement>(`.composer-editor[aria-label="${label}"]`);
   assert.ok(field, `a field labeled ${label}`);
-  act(() => {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(
-      field,
-      words,
-    );
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  writeInComposer(field, words);
 }
 
 /** The page's pane over `control`, an element of it picked and `words` held on it in the reader's review, as the reader would. */
@@ -668,17 +679,11 @@ function holdOnElement(control: DescriptionCommentsControl, words: string) {
     type: PAGE_PICK_TYPE,
     picked: { path: "body > h2:nth-of-type(1)", quote: "Totals", section: "", box },
   });
-  const field = container.querySelector<HTMLTextAreaElement>(
-    'textarea[aria-label="Add a comment"]',
+  const field = container.querySelector<HTMLElement>(
+    '.composer-editor[aria-label="Add a comment"]',
   );
   assert.ok(field, "the comment is started by the element");
-  act(() => {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(
-      field,
-      words,
-    );
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  writeInComposer(field, words);
   act(() => buttonNamed(container, "Start a review").click());
   return mounted;
 }
@@ -872,15 +877,9 @@ test("a reply held in a review stands Pending as its thread's last comment, and 
   await press("Show comments");
   const column = container.querySelector<HTMLElement>(".page-comments-column");
   assert.ok(column, "the comments column stands");
-  const field = column.querySelector<HTMLTextAreaElement>('textarea[aria-label="Reply"]');
+  const field = column.querySelector<HTMLElement>('.composer-editor[aria-label="Reply"]');
   assert.ok(field, "the thread offers its reply");
-  act(() => {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(
-      field,
-      "Weekly, yes.",
-    );
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  writeInComposer(field, "Weekly, yes.");
   await act(async () => buttonNamed(column, "Start a review").click());
 
   const pending = column.querySelector("[data-pending]");
