@@ -275,6 +275,11 @@ const decodeHead = Schema.decodeUnknownSync(
 );
 
 /** A tool's answer as the agent reads it: whether it is the tool's error, and its JSON text read. */
+/** The member's default as list_models answers it. */
+const decodeDefault = Schema.decodeUnknownSync(
+  Schema.Struct({ default: Schema.Struct({ model: Schema.String, effort: Schema.String }) }),
+);
+
 const decodeAnswer = Schema.decodeUnknownSync(
   Schema.Struct({
     isError: Schema.optionalKey(Schema.Boolean),
@@ -1216,6 +1221,44 @@ it.effect(
       assert.equal(forgot.refused, false);
       assert.ok(forgotten.kind === WORKSPACE_MEMORY.READ);
       assert.deepEqual(forgotten.memories, []);
+    }),
+);
+
+it.effect(
+  "a member's default model is changed only to a choice they are offered, as Settings changes it, and list_models reads it back",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch } = yield* standing;
+      const member = yield* Effect.promise(() => signUp(auth));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const call = (name: string, args: Record<string, unknown>) =>
+        Effect.promise(async () => {
+          const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
+          return { refused: answer.isError === true, text: answer.content[0].text };
+        });
+
+      const before = yield* call(MEMBER_MCP_TOOL.LIST_MODELS, {});
+      const unoffered = yield* call(MEMBER_MCP_TOOL.UPDATE_PREFERENCES, {
+        model: "anthropic/claude-opus-5.5",
+        effort: "high",
+      });
+      const after = yield* call(MEMBER_MCP_TOOL.LIST_MODELS, {});
+      yield* Effect.promise(() => client.close());
+
+      // The catalog here offers nothing, so no choice is one the member may move their default to.
+      assert.equal(unoffered.refused, true);
+      assert.match(unoffered.text, /not offered that model/u);
+      assert.deepEqual(
+        decodeDefault(JSON.parse(after.text)),
+        decodeDefault(JSON.parse(before.text)),
+      );
     }),
 );
 

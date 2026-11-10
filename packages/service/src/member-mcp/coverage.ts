@@ -76,6 +76,7 @@ export const MEMBER_MCP_COVERAGE = {
   },
   [MEMBER_MCP_TOOL.READ_AGENT_CHANGES]: { agentPullRequests: ["pullRequest"], agents: ["changes"] },
   [MEMBER_MCP_TOOL.LIST_MODELS]: { models: ["list"], account: ["preferences"] },
+  [MEMBER_MCP_TOOL.UPDATE_PREFERENCES]: { account: ["writePreferences"] },
   [MEMBER_MCP_TOOL.READ_PAGE]: { taskFiles: ["pages", "page"], agentPages: ["list", "version"] },
   [MEMBER_MCP_TOOL.CREATE_TASK]: { plans: ["create", "editDescription"] },
   [MEMBER_MCP_TOOL.UPDATE_TASK]: { plans: ["update", "parent", "block"], taskSections: ["write"] },
@@ -139,7 +140,6 @@ type MemberMcpExclusions = {
 export const MEMBER_MCP_EXCLUSIONS = {
   account: {
     access: INTERNAL,
-    writePreferences: NOT_YET_BUILT,
     providerKeys: SECRET,
     saveProviderKey: SECRET,
     setProviderKeyForAgents: SECRET,

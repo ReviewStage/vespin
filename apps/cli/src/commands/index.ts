@@ -15,6 +15,7 @@ import { descriptionCommand } from "./description.js";
 import { inboxCommand } from "./inbox.js";
 import { mcpCommand } from "./mcp.js";
 import { modelsCommand } from "./models.js";
+import { preferencesCommand } from "./preferences.js";
 import { sectionCommand } from "./section.js";
 import { taskCommand } from "./task.js";
 import { updateCommand } from "./update.js";
@@ -30,6 +31,7 @@ export const COMMANDS = [
   workspaceCommand,
   inboxCommand,
   modelsCommand,
+  preferencesCommand,
   mcpCommand,
   apiCommand,
   updateCommand,

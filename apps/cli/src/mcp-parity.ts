@@ -36,6 +36,7 @@ export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.READ_AGENT]: { command: ["agent", "view"] },
   [MEMBER_MCP_TOOL.READ_AGENT_CHANGES]: { command: ["agent", "diff"] },
   [MEMBER_MCP_TOOL.LIST_MODELS]: { command: ["models"] },
+  [MEMBER_MCP_TOOL.UPDATE_PREFERENCES]: { command: ["preferences", "set"] },
   [MEMBER_MCP_TOOL.READ_PAGE]: { gap: MCP_CLI_GAP.NOT_YET_BUILT },
   [MEMBER_MCP_TOOL.CREATE_TASK]: { command: ["task", "create"] },
   [MEMBER_MCP_TOOL.UPDATE_TASK]: { command: ["task", "update"] },
