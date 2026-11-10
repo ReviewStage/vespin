@@ -169,7 +169,18 @@ export interface PushDeviceAddress {
   readonly bundleId: string;
 }
 
-/** The `aps` dictionary Apple reads, as far as the service writes it. */
+/** What a Live Activity push does to the activity, as its `aps.event` names it. */
+export const APNS_LIVE_ACTIVITY_EVENT = {
+  /** A push-to-start, sent to the phone's push-to-start token. */
+  START: "start",
+  UPDATE: "update",
+  END: "end",
+} as const;
+
+export type ApnsLiveActivityEvent =
+  (typeof APNS_LIVE_ACTIVITY_EVENT)[keyof typeof APNS_LIVE_ACTIVITY_EVENT];
+
+/** The `aps` dictionary Apple reads, as far as the service writes it; instants in seconds since the epoch, as Apple reads them. */
 export interface ApnsAps {
   readonly alert?: { readonly title: string; readonly body?: string };
   readonly badge?: number;
@@ -178,6 +189,18 @@ export interface ApnsAps {
   readonly "thread-id"?: string;
   readonly "mutable-content"?: 1;
   readonly "content-available"?: 1;
+  /** When a Live Activity's push was composed, which ActivityKit orders its pushes by. */
+  readonly timestamp?: number;
+  readonly event?: ApnsLiveActivityEvent;
+  /** A Live Activity's content state, as its widget decodes it. */
+  readonly "content-state"?: Readonly<Record<string, unknown>>;
+  /** When a Live Activity's content is out of date unless a later push says otherwise. */
+  readonly "stale-date"?: number;
+  /** When an ended Live Activity leaves the lock screen. */
+  readonly "dismissal-date"?: number;
+  /** A push-to-start's activity type, as the app's Swift names it, and its static attributes. */
+  readonly "attributes-type"?: string;
+  readonly attributes?: Readonly<Record<string, unknown>>;
 }
 
 /** The JSON Apple delivers: its `aps`, and the app's own keys at the top level. */

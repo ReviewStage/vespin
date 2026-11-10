@@ -8,20 +8,24 @@
  * holds, by its device token and gateway, and answers whether it held one;
  * the row is made by the first register and kept, each register setting its
  * own token. An update token registered stands for an activity on the phone,
- * so it stamps the activity started where none stood and forgets the state
- * last sent, which the next push then carries whole. The service's own
+ * so it stamps the activity started where none stood. The service's own
  * records, a push sent, an activity ended, a token Apple said is gone, name
  * the phone by the id it listed it under. The one read across accounts is
- * the sweep's: the accounts with an activity standing, by id alone.
+ * the sweep's: the accounts with an activity standing, by id alone. What
+ * the activity shows is read here too: the account's own agents, unarchived,
+ * whose turn runs, the newest turn first.
  */
 
 import { pushEnvironmentSchema, pushNotifySchema } from "@repo/features/push-device-wire";
-import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { TURN_STATUS } from "@repo/wire";
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
+import { agentTable } from "../schemas/agent.js";
 import { liveActivity } from "../schemas/live-activity.js";
 import { pushDevice } from "../schemas/push-device.js";
+import { turns } from "../schemas/storage.js";
 import { InstantColumnSchema } from "./columns.js";
 import type { PushDeviceToken } from "./push-device-store.js";
 
@@ -52,6 +56,16 @@ const LiveActivityPhoneSchema = Schema.Struct({
 });
 
 export type LiveActivityPhone = typeof LiveActivityPhoneSchema.Type;
+
+/** One of the account's agents whose turn runs: the agent, its conversation, the turn, and when the turn started. */
+const RunningAgentTurnSchema = Schema.Struct({
+  agentId: Schema.String,
+  conversationId: Schema.String,
+  turnId: Schema.String,
+  startedAt: InstantColumnSchema,
+});
+
+export type RunningAgentTurn = typeof RunningAgentTurnSchema.Type;
 
 /** What a push records of the phone's activity: when it went, the state it carried, and, for a push-to-start, that an activity now stands. */
 export interface LiveActivityPush {
@@ -121,11 +135,10 @@ const upsertActivityToken = SqlSchema.void({
         .values({ pushDeviceId, activityToken: token, startedAt: now })
         .onConflictDoUpdate({
           target: liveActivity.pushDeviceId,
-          // An activity stands on the phone now; the next push carries its state whole.
+          // An activity stands on the phone now, showing what the start that made it carried.
           set: {
             activityToken: token,
             startedAt: sql`coalesce(${liveActivity.startedAt}, ${now})`,
-            sentState: null,
           },
         }),
     ),
@@ -206,6 +219,34 @@ const findStandingMembers = SqlSchema.findAll({
     ),
 });
 
+const findRunningAgentTurns = SqlSchema.findAll({
+  Request: Schema.String,
+  Result: RunningAgentTurnSchema,
+  execute: (userId) =>
+    Database.use((db) =>
+      db
+        .select({
+          agentId: agentTable.id,
+          conversationId: agentTable.conversationId,
+          turnId: turns.id,
+          startedAt: sql<Date>`coalesce(${turns.startedAt}, ${turns.queuedAt})`.mapWith(
+            turns.queuedAt,
+          ),
+        })
+        .from(turns)
+        .innerJoin(agentTable, eq(agentTable.conversationId, turns.conversationId))
+        .where(
+          and(
+            eq(agentTable.userId, userId),
+            eq(turns.userId, userId),
+            eq(turns.status, TURN_STATUS.RUNNING),
+            isNull(agentTable.archivedAt),
+          ),
+        )
+        .orderBy(desc(turns.startedAt), desc(turns.id)),
+    ),
+});
+
 /**
  * A token ActivityKit handed the phone, registered for the account's phone
  * named by its device token and gateway, answering whether the account
@@ -277,6 +318,13 @@ export function forgetLiveActivityToken(
   return kind === LIVE_ACTIVITY_TOKEN.START
     ? clearOwnStartToken({ userId, pushDeviceId })
     : clearOwnActivity({ userId, pushDeviceId });
+}
+
+/** The account's own unarchived agents whose turn runs, the newest turn first: what the activity shows. */
+export function listRunningAgentTurns(
+  userId: string,
+): LiveActivityEffect<readonly RunningAgentTurn[]> {
+  return findRunningAgentTurns(userId);
 }
 
 /** The sweep's read: up to `limit` accounts with an activity standing on a phone, by id alone. */

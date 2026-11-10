@@ -47,6 +47,11 @@
  * settled meanwhile is never sent. A settled thread's background push is
  * never held, since it only clears what a phone already shows.
  *
+ * A post on a thread, an ask among them, and the thread settling also
+ * refresh the Live Activity of the member it waits on, whose count of
+ * threads waiting moved (`live-activities.ts`): an ask starting to wait at
+ * high priority, the rest as routine.
+ *
  * Every push is the caller's best effort, handed to `afterResponse`: a
  * runtime with no `ApnsSender`, such as most tests', or a member with no
  * phone registered, pushes nothing and reads nothing more.
@@ -92,6 +97,7 @@ import {
   readInboxItemHome,
 } from "../inbox/inbox-store.js";
 import { APNS_PUSH_TYPE, type ApnsPayload, ApnsSender } from "./apns.js";
+import { LIVE_ACTIVITY_CAUSE, refreshLiveActivity } from "./live-activities.js";
 
 /** The most characters of a title and a body an alert says; Apple caps a payload at 4 KB. */
 const ALERT_BOUND = { TITLE_CHARS: 120, BODY_CHARS: 240 } as const;
@@ -325,7 +331,13 @@ export function pushThreadPost(
   const compose = threadPostNotification(post);
   const recipient = post.item.waitsOn?.userId;
   if (compose === undefined || recipient === undefined) return Effect.void;
-  return pushToMember(recipient, compose, { itemId: post.item.id });
+  return Effect.andThen(
+    pushToMember(recipient, compose, { itemId: post.item.id }),
+    refreshLiveActivity(
+      recipient,
+      post.asked ? LIVE_ACTIVITY_CAUSE.ASKED : LIVE_ACTIVITY_CAUSE.ROUTINE,
+    ),
+  );
 }
 
 /**
@@ -343,6 +355,7 @@ export function pushThreadSettled(
       pushType: APNS_PUSH_TYPE.BACKGROUND,
       payload: { aps: { "content-available": 1, badge }, kind: PUSH_KIND.SETTLED, itemId },
     }));
+    yield* refreshLiveActivity(recipient.value, LIVE_ACTIVITY_CAUSE.ROUTINE);
   });
 }
 

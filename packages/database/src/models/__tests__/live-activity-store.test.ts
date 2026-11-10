@@ -2,16 +2,21 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { PUSH_ENVIRONMENT } from "@repo/features/push-device-wire";
-import { Effect } from "effect";
+import { TURN_ORIGIN, TURN_STATUS, type TurnStatus } from "@repo/wire";
+import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
-import { getTestDB } from "../../testing/index.js";
+import { turns } from "../../schemas/storage.js";
+import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
+import { getTestDB, startTask } from "../../testing/index.js";
+import { archiveAgent, createAgent } from "../agent-store.js";
 import {
   endLiveActivityOnPhone,
   forgetLiveActivityToken,
   LIVE_ACTIVITY_TOKEN,
   listLiveActivityMembers,
   listLiveActivityPhones,
+  listRunningAgentTurns,
   recordLiveActivityEnded,
   recordLiveActivityPushed,
   registerLiveActivityToken,
@@ -21,11 +26,12 @@ import { registerPushDevice } from "../push-device-store.js";
 /**
  * The Live Activity of an account's phones, over a real dialect: a token
  * registers only for a phone the account holds, an update token stamps the
- * activity started and forgets the state last sent, one account neither
+ * activity started where no start did, one account neither
  * reads, registers, nor records another's activity whatever phone id it
  * names, a gone token or an end forgets what it names, and a phone that
- * moves to another account leaves its activity behind. Synthetic accounts
- * and tokens throughout.
+ * moves to another account leaves its activity behind; and what it shows is
+ * the account's own unarchived agents whose turn runs, the newest turn
+ * first. Synthetic accounts, agents, and tokens throughout.
  */
 
 const BUNDLE_ID = "dev.vespin.ios";
@@ -50,9 +56,70 @@ const phoneOf = (userId: string) =>
     return phone;
   });
 
+/** An agent of the account's on a task of its own, with a turn in the status given that started at the instant given; its id and the turn's. */
+const agentWithTurn = (userId: string, status: TurnStatus, startedAt: Date) =>
+  Effect.gen(function* () {
+    const task = yield* startTask(userId, { name: "Session refresh" });
+    const started = yield* createAgent(userId, {
+      taskId: task.id,
+      idempotencyKey: randomUUID(),
+      model: "anthropic/claude-opus-5.5",
+      effort: "high",
+      repository: "acme/relay",
+      descriptionSnapshot: "# Session refresh\n",
+      prompt: null,
+      runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+    });
+    assert.ok(Option.isSome(started));
+    const { agent } = started.value;
+    const [turn] = yield* (yield* Database)
+      .insert(turns)
+      .values({
+        userId,
+        conversationId: agent.conversationId,
+        origin: TURN_ORIGIN.TYPED,
+        status,
+        queuedAt: startedAt,
+        startedAt,
+      })
+      .returning({ id: turns.id });
+    assert.ok(turn);
+    return { agentId: agent.id, turnId: turn.id };
+  });
+
 it.layer(getTestDB())("the live activity store", (it) => {
   it.effect(
-    "a token registers for the account's own phone alone, and an update token stamps the activity started with its state to send whole",
+    "what the activity shows is the account's own unarchived agents whose turn runs, the newest turn first",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+        const earlier = yield* agentWithTurn(owner, TURN_STATUS.RUNNING, new Date(1_000_000));
+        const later = yield* agentWithTurn(owner, TURN_STATUS.RUNNING, new Date(2_000_000));
+        yield* agentWithTurn(owner, TURN_STATUS.SETTLED, new Date(3_000_000));
+        const archived = yield* agentWithTurn(owner, TURN_STATUS.RUNNING, new Date(4_000_000));
+        yield* archiveAgent(owner, archived.agentId, true);
+        const theirs = yield* agentWithTurn(other, TURN_STATUS.RUNNING, new Date(5_000_000));
+
+        assert.deepEqual(
+          (yield* listRunningAgentTurns(owner)).map((each) => [
+            each.agentId,
+            each.turnId,
+            each.startedAt.getTime(),
+          ]),
+          [
+            [later.agentId, later.turnId, 2_000_000],
+            [earlier.agentId, earlier.turnId, 1_000_000],
+          ],
+        );
+        assert.deepEqual(
+          (yield* listRunningAgentTurns(other)).map((each) => each.agentId),
+          [theirs.agentId],
+        );
+      }),
+  );
+
+  it.effect(
+    "a token registers for the account's own phone alone, and an update token keeps the start's stamp and state",
     () =>
       Effect.gen(function* () {
         const { owner, other } = yield* openAccounts;
@@ -83,7 +150,7 @@ it.layer(getTestDB())("the live activity store", (it) => {
         assert.ok(standing?.startedAt);
         assert.equal(standing.startToken, startToken);
         assert.equal(standing.activityToken, activityToken);
-        assert.equal(standing.sentState, null);
+        assert.equal(standing.sentState, "{}");
         assert.deepEqual(yield* listLiveActivityPhones(other), []);
       }),
   );
