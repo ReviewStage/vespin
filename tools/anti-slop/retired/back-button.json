@@ -5,8 +5,11 @@
     {
       "glyph": "ArrowLeft",
       "allow": [
+        "packages/panel/src/tasks/attachment-viewer.tsx",
+        "packages/panel/src/tasks/cloud-browser-pane.tsx",
         "packages/ui/src/components/back-button/",
-        "packages/ui/src/components/landing/landing-desktop.tsx"
+        "packages/ui/src/components/landing/landing-desktop.tsx",
+        "packages/ui/src/icons/lucide-glyphs.tsx"
       ]
     }
   ],

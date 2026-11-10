@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import type { DatabaseServices } from "@repo/database/core/query";
-import { OrganizationRefused } from "@repo/database/models/workspace-seams";
 import { HOSTED_SERVICE_PATH } from "@repo/features";
 import type { WireBoundaryInput } from "@repo/wire";
 import { type Context, Effect, Option, Schema } from "effect";
@@ -22,7 +21,6 @@ import {
   registration,
   signUp,
 } from "../testing/member-mcp-auth.js";
-import { type ClientConsentDelete, clientConsentDelete } from "./client-consents.js";
 import { mcpClientsProcedures } from "./clients-procedures.js";
 import { MEMBER_MCP_SCOPE } from "./resource.js";
 
@@ -31,12 +29,10 @@ import { MEMBER_MCP_SCOPE } from "./resource.js";
  * service as `auth.ts` configures what a client reaches, on the test's own
  * PGlite the resource reads too (`../testing/member-mcp-auth.ts`). A client
  * registers dynamically and a member signs it in through consent; the
- * resource lists it to that member alone on their bearer, and revokes it
- * under their browser's session through the provider's own consent
- * endpoints, after which its refresh is refused and its next sign-in asks
- * again, while another member's grant of the same client stands. A revoke
- * whose consent delete fails answers a failure and leaves the client
- * listed, so the member is offered it again. Synthetic accounts.
+ * resource lists it to that member alone on their bearer, and revokes it on
+ * the same bearer, after which its refresh is refused and its next sign-in
+ * asks again, while another member's grant of the same client stands.
+ * Synthetic accounts.
  */
 
 const MCP_SCOPES = [MEMBER_MCP_SCOPE.MCP, MEMBER_MCP_SCOPE.OFFLINE_ACCESS] as const;
@@ -60,28 +56,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** A consent delete that the provider refuses, as one whose session lapsed between the two writes would be. */
-const lapsedSession: ClientConsentDelete = () =>
-  Effect.fail(new OrganizationRefused({ status: HOSTED_HTTP_STATUS.UNAUTHORIZED }));
-
-/** The resource over the standing's database and auth service: a member's bearer names them, and their cookie is their session. */
-function resource(
-  auth: MemberMcpTestAuth,
-  services: Context.Context<DatabaseServices>,
-  deleteClientConsent: ClientConsentDelete = clientConsentDelete(auth.api),
-) {
+/** The resource over the standing's database: a member's bearer names them. */
+function resource(services: Context.Context<DatabaseServices>) {
   const handle = hostedFetch({
     mcpClients: mcpClientsProcedures({
       resolveUserId: (incoming) =>
         Effect.succeed(
           Option.fromNullishOr(incoming.headers.get("authorization")?.replace(/^Bearer /u, "")),
         ),
-      resolveSessionUserId: (incoming) =>
-        Effect.tryPromise(async () => {
-          const session = await auth.api.getSession({ headers: incoming.headers });
-          return Option.fromNullishOr(session?.user.id);
-        }),
-      deleteClientConsent,
       memberMcpServerUrl: RESOURCE,
     }),
   });
@@ -102,10 +84,10 @@ function resource(
       ask(HOSTED_SERVICE_PATH.ACCOUNT_MCP_CLIENTS, {
         headers: { authorization: `Bearer ${userId}` },
       }),
-    revoke: (cookie: string, clientId: string) =>
+    revoke: (userId: string, clientId: string) =>
       ask(`${HOSTED_SERVICE_PATH.ACCOUNT_MCP_CLIENTS}?${new URLSearchParams({ clientId })}`, {
         method: "DELETE",
-        headers: { cookie },
+        headers: { authorization: `Bearer ${userId}` },
       }),
   };
 }
@@ -160,7 +142,6 @@ it.effect("a client a member signed in through consent is listed to them alone",
     const clientId = yield* registered(auth);
     yield* signedIn(auth, owner.cookie, clientId);
     const clients = resource(
-      auth,
       yield* Effect.context<DatabaseServices>().pipe(Effect.provide(services)),
     );
 
@@ -191,11 +172,10 @@ it.effect(
       const ownerRefresh = yield* signedIn(auth, owner.cookie, clientId);
       const otherRefresh = yield* signedIn(auth, other.cookie, clientId);
       const clients = resource(
-        auth,
         yield* Effect.context<DatabaseServices>().pipe(Effect.provide(services)),
       );
 
-      const revoked = yield* clients.revoke(other.cookie, clientId);
+      const revoked = yield* clients.revoke(other.userId, clientId);
       assert.equal(revoked.status, HOSTED_HTTP_STATUS.OK);
       assert.deepEqual(listedIds(revoked), []);
       assert.equal(yield* refreshed(auth, clientId, otherRefresh), "invalid_grant");
@@ -206,30 +186,5 @@ it.effect(
 
       assert.deepEqual(listedIds(yield* clients.list(owner.userId)), [clientId]);
       assert.equal(yield* refreshed(auth, clientId, ownerRefresh), "refreshed");
-    }),
-);
-
-it.effect(
-  "a revoke whose consent delete fails answers a failure and leaves the client listed, and asked again it lands",
-  () =>
-    Effect.gen(function* () {
-      const { auth, services } = yield* memberMcpStanding();
-      const owner = yield* Effect.promise(() => signUp(auth));
-      const clientId = yield* registered(auth);
-      const refreshToken = yield* signedIn(auth, owner.cookie, clientId);
-      const database = yield* Effect.context<DatabaseServices>().pipe(Effect.provide(services));
-
-      const halfDone = yield* resource(auth, database, lapsedSession).revoke(
-        owner.cookie,
-        clientId,
-      );
-      assert.equal(halfDone.status, HOSTED_HTTP_STATUS.UNAUTHORIZED);
-      assert.equal(yield* refreshed(auth, clientId, refreshToken), "invalid_grant");
-      const clients = resource(auth, database);
-      assert.deepEqual(listedIds(yield* clients.list(owner.userId)), [clientId]);
-
-      const again = yield* clients.revoke(owner.cookie, clientId);
-      assert.equal(again.status, HOSTED_HTTP_STATUS.OK);
-      assert.deepEqual(listedIds(again), []);
     }),
 );

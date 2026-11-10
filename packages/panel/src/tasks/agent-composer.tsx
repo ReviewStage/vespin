@@ -403,6 +403,8 @@ export function AgentComposer({
     held,
     holder: { attachments: composer.attachments, update: composer.setAttachments },
     pastesTextAsFile: true,
+    // Note that a box written to an agent takes pictures into its words, where the Inbox's answer box keeps them beside its words, as the Inbox draws them.
+    takesPictures: answer === undefined,
     self: agentId,
     skills,
     keywords,
@@ -552,6 +554,7 @@ export function AgentComposer({
     box.quiet();
     refocus.current = frame.current?.contains(document.activeElement) === true;
     go();
+    files.settle();
     setSends((count) => count + 1);
   };
   /** The box's message sent now: into the turn under way, or opening one. */

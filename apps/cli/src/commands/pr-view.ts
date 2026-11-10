@@ -1,10 +1,14 @@
 /**
- * pr-view.ts -- `vespin pr view`: any pull request of a repository the workspace reaches on GitHub, named by its page or as `owner/name#number`, read as its Pull request tab reads it.
+ * pr-view.ts -- `vespin pr view`: any pull request of a repository the workspace reaches on GitHub, named by its page or as `owner/name#number`, or an agent's by the agent's id, read as its Pull request tab reads it.
  *
- * With no part named it prints the pull request as GitHub holds it now
- * (`pullRequests.pullRequest`) and its overview, its description among it
- * (`pullRequests.overviewPullRequest`). `--checks` prints its head's checks
- * and deployments (`overviewChecks`), `--conversation` its comments and
+ * A pull request named by its page or as `owner/name#number` is read in
+ * the workspace the command acts in through `pullRequests.*`; anything else
+ * is an agent's id, its own pull request read through `agentPullRequests.*`
+ * and `agents.changes`, as its tab reads it, or the one of its repository
+ * `--number` names. With no part named it prints the pull request as GitHub
+ * holds it now (`pullRequest`) and its overview, its description among it
+ * (`overviewPullRequest`). `--checks` prints its head's checks and
+ * deployments (`overviewChecks`), `--conversation` its comments and
  * reviews, oldest first, with their review threads (`overviewConversation`),
  * `--diff` every changed file's patch as `agent diff` prints them
  * (`changes`), and `--stat` each file as one line with whether you marked
@@ -24,7 +28,7 @@ import {
   PULL_REQUEST_WRITE_OUTCOME,
   type PullRequestViewedAnswer,
 } from "@repo/features/pull-request-write-wire";
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { answer, CommandFailed, columns, note } from "../output.js";
 import { askService, session } from "../session.js";
@@ -34,21 +38,80 @@ import { fileDiffLines, fileStatRow } from "./agent-pull-request.js";
 /** How a pull request's argument is spelled, as a refusal names it. */
 const PULL_REQUEST_WORDS = "owner/name#number, or the pull request's page on GitHub";
 
-export const pullRequestArgument = Argument.String("pr").pipe(
-  Argument.withDescription(`The pull request, as ${PULL_REQUEST_WORDS}`),
+export const pullRequestArgument = Argument.String("pr|agent").pipe(
+  Argument.withDescription(
+    `The pull request, as ${PULL_REQUEST_WORDS}, or an agent's id for its pull request`,
+  ),
 );
 
-/** The query a pull request's argument names in the workspace this command acts in, or a usage failure where it names none. */
-export const pullRequestQuery = Effect.fnUntraced(function* (argument: string) {
+export const agentNumberFlag = Flag.Int("number").pipe(
+  Flag.optional,
+  Flag.withDescription("With an agent's id, another pull request of its repository"),
+);
+
+/** The two ways an argument names a pull request. */
+export const NAMED_BY = { REPOSITORY: "repository", AGENT: "agent" } as const;
+
+/**
+ * The pull request an argument names: a repository's, by its page or as
+ * `owner/name#number`, in the workspace this command acts in; else an
+ * agent's by its id, its own or the one `--number` names. A usage failure
+ * where `--number` comes with a pull request that names its own.
+ */
+export const pullRequestNamed = Effect.fnUntraced(function* (
+  argument: string,
+  number: Option.Option<number>,
+) {
   const named = cliPullRequestRefOf(argument);
   if (named === undefined) {
+    return {
+      by: NAMED_BY.AGENT,
+      id: argument,
+      ...(Option.isSome(number) ? { number: String(number.value) } : {}),
+    } as const;
+  }
+  if (Option.isSome(number)) {
     return yield* new CommandFailed({
       exit: CLI_EXIT.USAGE,
-      message: `Name the pull request as ${PULL_REQUEST_WORDS}.`,
+      message: "--number goes with an agent's id alone; a pull request's link names its own.",
     });
   }
   const { workspace } = yield* resolveWorkspace;
-  return { workspaceId: workspace.id, repository: named.repository, number: String(named.number) };
+  return {
+    by: NAMED_BY.REPOSITORY,
+    query: {
+      workspaceId: workspace.id,
+      repository: named.repository,
+      number: String(named.number),
+    },
+  } as const;
+});
+
+/** The pull request's reads, through the procedures the way it is named reaches: a repository's, or an agent's. */
+const readsOf = Effect.fnUntraced(function* (
+  named: Effect.Success<ReturnType<typeof pullRequestNamed>>,
+) {
+  const { hosted } = yield* session;
+  if (named.by === NAMED_BY.REPOSITORY) {
+    const { query } = named;
+    return {
+      pullRequest: askService(hosted.pullRequests.pullRequest, query),
+      overview: askService(hosted.pullRequests.overviewPullRequest, query),
+      checks: askService(hosted.pullRequests.overviewChecks, query),
+      conversation: askService(hosted.pullRequests.overviewConversation, query),
+      changes: askService(hosted.pullRequests.changes, query),
+      viewed: askService(hosted.pullRequests.viewed, query),
+    };
+  }
+  const { by: _by, ...input } = named;
+  return {
+    pullRequest: askService(hosted.agentPullRequests.pullRequest, input),
+    overview: askService(hosted.agentPullRequests.overviewPullRequest, input),
+    checks: askService(hosted.agentPullRequests.overviewChecks, input),
+    conversation: askService(hosted.agentPullRequests.overviewConversation, input),
+    changes: askService(hosted.agents.changes, input),
+    viewed: askService(hosted.agentPullRequests.viewed, input),
+  };
 });
 
 /** Words as lines indented under what they belong to, a blank line where there are none. */
@@ -129,6 +192,7 @@ export const viewCommand = Command.make(
   "view",
   {
     pr: pullRequestArgument,
+    number: agentNumberFlag,
     checks: Flag.Boolean("checks").pipe(
       Flag.withDefault(false),
       Flag.withDescription("Its head's checks and deployments"),
@@ -146,37 +210,38 @@ export const viewCommand = Command.make(
       Flag.withDescription("Each changed file as one line, with whether you marked it viewed"),
     ),
   },
-  ({ pr, checks, conversation, diff, stat }) =>
+  ({ pr, number, checks, conversation, diff, stat }) =>
     Effect.gen(function* () {
-      const { hosted } = yield* session;
-      const query = yield* pullRequestQuery(pr);
+      const reads = yield* readsOf(yield* pullRequestNamed(pr, number));
       const overview = !(checks || conversation || diff || stat);
       const json: Record<string, unknown> = {};
       const lines: string[] = [];
       let ids: readonly string[] | undefined;
       if (overview) {
-        const published = yield* askService(hosted.pullRequests.pullRequest, query);
-        const read = yield* askService(hosted.pullRequests.overviewPullRequest, query);
+        const published = yield* reads.pullRequest;
+        const read = yield* reads.overview;
         json.pullRequest = published.pullRequest;
         json.branch = published.branch;
         json.overview = read.pullRequest;
-        if (published.pullRequest !== null) {
+        if (published.pullRequest === null) {
+          lines.push("No pull request: the agent opened none yet.");
+        } else {
           lines.push(...overviewLines(published.pullRequest, read.pullRequest));
           ids = [published.pullRequest.url];
         }
       }
       if (checks) {
-        const read = yield* askService(hosted.pullRequests.overviewChecks, query);
+        const read = yield* reads.checks;
         json.checks = read.pullRequest;
         lines.push(...checksLines(read.pullRequest));
       }
       if (conversation) {
-        const read = yield* askService(hosted.pullRequests.overviewConversation, query);
+        const read = yield* reads.conversation;
         json.conversation = read.pullRequest;
         lines.push(...conversationLines(read.pullRequest));
       }
       if (diff || stat) {
-        const { pullRequest: changes } = yield* askService(hosted.pullRequests.changes, query);
+        const { pullRequest: changes } = yield* reads.changes;
         json.changes = changes;
         if (changes?.truncated === true) {
           yield* note(`GitHub listed only the first ${changes.files.length} files.`);
@@ -184,7 +249,7 @@ export const viewCommand = Command.make(
         const files = changes?.files ?? [];
         ids = files.map((file) => file.path);
         if (stat) {
-          const viewed = yield* askService(hosted.pullRequests.viewed, query);
+          const viewed = yield* reads.viewed;
           json.viewed = viewed;
           const marks = viewedMarks(viewed);
           if (marks === undefined) yield* note("Could not read which files you marked viewed.");
@@ -198,7 +263,7 @@ export const viewCommand = Command.make(
     }),
 ).pipe(
   Command.withDescription(
-    "Read any pull request of a repository the workspace reaches: its overview, checks, conversation, or diff",
+    "Read an agent's pull request, or any of a repository the workspace reaches: its overview, checks, conversation, or diff",
   ),
   Command.withExamples([
     { command: "vespin pr view acme/relay#42", description: "Its overview and description" },
@@ -211,5 +276,9 @@ export const viewCommand = Command.make(
       description: "Its files, and which you viewed",
     },
     { command: "vespin pr view acme/relay#42 --diff", description: "Every file's patch" },
+    {
+      command: "vespin pr view <agent-id> --conversation",
+      description: "The agent's own pull request's comments and reviews",
+    },
   ]),
 );

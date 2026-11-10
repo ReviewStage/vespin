@@ -873,6 +873,41 @@ test("an image a line's row names by the picture it was kept as is read through 
   assert.deepEqual(read, [kept.id]);
 });
 
+test.each([
+  { words: "Make this [Picture 1] bigger.", inWords: ["Open Picture 1"], inRow: [] },
+  { words: "Name it `[Picture 1]` in the code.", inWords: [], inRow: ["Picture 1"] },
+])(
+  "a line's picture is its chip where its words name it, and stays among its files where only code names it: $words",
+  async ({ words, inWords, inRow }) => {
+    const { container } = await drawn({
+      id: "line",
+      role: MESSAGE_ROLE.USER,
+      parts: [
+        text(words),
+        {
+          type: "file",
+          mediaType: INBOX_IMAGE_TYPE.PNG,
+          filename: "Picture 1",
+          url: "data:image/png;base64,AAAA",
+        },
+      ],
+    });
+
+    assert.deepEqual(
+      [...container.querySelectorAll('[aria-label^="Open Picture"]')]
+        .filter((chip) => chip.closest('ul[aria-label="Attached files"]') === null)
+        .map((chip) => chip.getAttribute("aria-label")),
+      inWords,
+    );
+    assert.deepEqual(
+      [...container.querySelectorAll('ul[aria-label="Attached files"] > li')].map((chip) =>
+        chip.querySelector("img")?.getAttribute("alt"),
+      ),
+      inRow,
+    );
+  },
+);
+
 test("a line still on its way draws its files going up with no share, each taking its check as the line lands", () => {
   const message: AgentTranscriptMessage = {
     id: "line-1",

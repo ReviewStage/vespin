@@ -74,6 +74,8 @@ interface PickerProps {
   disabled?: boolean | undefined;
   /** What the chip's hover says beyond its value, such as when a change takes; none where its name says enough. */
   hint?: string | undefined;
+  /** The card the chip's hover hangs in its pill's place while the menu is shut, `hint` its one-line summary, as an agent's place chip hangs where it runs. */
+  card?: React.ReactNode;
   /** The chip's edge the menu hangs from; the trailing one where none is named. */
   align?: PopoverAlign | undefined;
   /** How wide the chip stands; the settings column where none is named. */
@@ -115,6 +117,7 @@ export function Picker({
   anchor,
   disabled,
   hint,
+  card,
   align = POPOVER_ALIGN.END,
   width = CHIP_WIDTH.FIELD,
   look = CHIP_LOOK.FIELD,
@@ -150,7 +153,10 @@ export function Picker({
       className="settings-picker relative inline-flex min-w-0 flex-initial items-center"
       ref={row}
     >
-      <Tooltip label={open ? undefined : (hint ?? (iconOnly ? valueLabel : undefined))}>
+      <Tooltip
+        label={open ? undefined : (hint ?? (iconOnly ? valueLabel : undefined))}
+        card={open ? undefined : card}
+      >
         <Chip
           ref={chip}
           look={look}
