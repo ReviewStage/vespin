@@ -370,15 +370,15 @@ export function selectInboxFeed(state: AppStateSnapshot): InboxFeed {
 }
 
 /**
- * Whether the account's feed holds a thread, whatever holds it: true for one
- * the feed read before the task list that holds it, which `inboxGroups`
- * cannot group until that list is read (`selectTaskListStatus`).
+ * Whether the account's feed holds a thread on any task: true for one the
+ * feed read before the task list that holds it, which `inboxGroups` cannot
+ * group until that list is read (`selectTaskListStatus`).
  */
 export function inboxFeedHolds(state: AppStateSnapshot, itemId: string | undefined): boolean {
   const rows = state[LIVE_READ.INBOX_ITEMS].rows;
   if (rows === undefined || itemId === undefined) return false;
-  return [INBOX_SCOPE_KIND.PLAN, INBOX_SCOPE_KIND.AGENT].some((kind) =>
-    Object.values(rows[kind]).some((items) => items.some((item) => item.id === itemId)),
+  return Object.values(rows[INBOX_SCOPE_KIND.PLAN]).some((items) =>
+    items.some((item) => item.id === itemId),
   );
 }
 
