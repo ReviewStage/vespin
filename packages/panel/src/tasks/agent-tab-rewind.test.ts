@@ -227,7 +227,9 @@ test("a line sent and not yet read back follows the last message, so editing it 
 test("an edited message whose turn recorded the files offers them back in its box, and Send in the question hands the choice on with the rewind", async () => {
   const tab = await drawnTab(
     false,
-    MESSAGES.map((each) => (each.id === "middle" ? { ...each, filesRestorable: true } : each)),
+    MESSAGES.map((each) =>
+      each.id === "middle" ? { ...each, filesRestorable: true as const } : each,
+    ),
   );
   const edit = tab.message("middle").querySelector<HTMLButtonElement>('button[aria-label="Edit"]');
   assert.ok(edit);
@@ -244,7 +246,7 @@ test("an edited message whose turn recorded the files offers them back in its bo
   await settle();
   assert.ok(
     tab.dialog()?.textContent?.includes("The agent's files also go back"),
-    tab.dialog()?.textContent,
+    tab.dialog()?.textContent ?? "no question stands",
   );
   await tab.press("Send message");
 
