@@ -29,7 +29,7 @@ export interface MacResourcesView {
   readonly cpu: string;
   /** The memory of every process together, said. */
   readonly memory: string;
-  /** The rows as lines of words, one a process, its depth as indentation. */
+  /** The list as Copy puts it on the clipboard: the totals, then a line a process in the rows' order, its pid, its parent's, and its executable after its figures, so a reader can find it in Activity Monitor or `ps`. */
   readonly text: string;
 }
 
@@ -76,12 +76,14 @@ export function macResourcesView(
         memory: formatBytes(each.memory),
       };
       rows.push(row);
-      lines.push(`${"  ".repeat(depth)}${row.name}\t${row.cpu}\t${row.memory}`);
+      lines.push(
+        `${row.name} ${row.cpu} ${row.memory} (pid=${each.pid} ppid=${each.ppid} cmd=${each.command})`,
+      );
       walk(each.pid, depth + 1);
     }
   };
   walk(undefined, 0);
   const cpu = cpuWords(processes.reduce((sum, each) => sum + each.cpu, 0));
   const memory = formatBytes(processes.reduce((sum, each) => sum + each.memory, 0));
-  return { rows, cpu, memory, text: [`CPU ${cpu}\tMemory ${memory}`, ...lines].join("\n") };
+  return { rows, cpu, memory, text: [`CPU ${cpu} Memory ${memory}`, ...lines].join("\n") };
 }

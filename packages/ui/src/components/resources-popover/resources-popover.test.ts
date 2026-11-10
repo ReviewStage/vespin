@@ -46,7 +46,7 @@ function Owned(): React.JSX.Element {
     label: "Resources",
     open,
     onOpenChange: setOpen,
-    facts: [{ label: "CPU", icon: null, value: "12.0%" }],
+    facts: [{ label: "CPU", value: "12.0%" }],
     headings: { name: "Name", cpu: "CPU", memory: "Mem" },
     sort,
     onSort: setSort,

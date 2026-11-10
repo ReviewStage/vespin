@@ -27,8 +27,12 @@ const pidSchema = EffectSchema.Int.check(EffectSchema.isGreaterThan(0));
 
 const macProcessSchema = EffectSchema.Struct({
   pid: pidSchema,
-  /** The process that started it, where that is one of those answered. */
+  /** The process that started it, where that is one of those answered, which a reader nests it under. */
   parent: EffectSchema.optionalKey(pidSchema),
+  /** The process the system says started it, whoever's it is: launchd's 1 for main and the host. */
+  ppid: EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(0)),
+  /** Its executable's path as the process table lists it, without its arguments, which may carry a secret. */
+  command: EffectSchema.String,
   kind: EffectSchema.Literals(Object.values(MAC_PROCESS_KIND)),
   /** What the system or Electron calls it: a utility's service, or a child's executable. */
   name: EffectSchema.String,

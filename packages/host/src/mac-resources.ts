@@ -96,8 +96,10 @@ export function appProcesses(input: {
     answered.push({
       pid: row.pid,
       ...(parent === undefined ? {} : { parent }),
+      ppid: row.parent,
       kind,
       name: named?.name ?? executableName(row.command),
+      command: row.command,
       cpu: row.cpu,
       memory: row.memory,
     });

@@ -12,20 +12,19 @@ import {
 } from "../../shadcn/table.js";
 import { SORT_DIRECTION, type SortDirection } from "../../sort-direction.js";
 import { useClipped } from "../../use-clipped.js";
-import type { ChipPopoverFact } from "../chip-popover/chip-popover.js";
 import { COPY_LOOK, CopyButton } from "../copy-button/copy-button.js";
 import { SortHeading } from "../data-table/sort-heading.js";
 import { Fact, Facts } from "../facts/facts.js";
 import { NOTE_LINE_LOOK, NoteLine } from "../note-line/note-line.js";
 import { PopoverIconButton } from "../popover-icon-button/popover-icon-button.js";
+import { PopoverCardHead } from "../popover-panel/popover-panel.js";
 
 /**
  * resources-popover.tsx -- a glyph button that hangs what the app spends of the machine under it: its totals as facts, then each of its processes as a row of name, CPU, and memory, sorted by the column chosen.
  *
  * The button wears the memory glyph and says its name on a rest. A press
  * hangs a card from it headed by its title, a Copy of the whole list at the
- * head's end, its totals under it (`Facts`, as a cloud sandbox's CPU and
- * Memory stand), and then the table: a row per process, a child indented
+ * head's end, its totals under it in words alone (`Facts`), and then the table: a row per process, a child indented
  * under the process that started it, so a shell's commands and an agent's
  * tools stand under what ran them. A heading's press sorts by its column,
  * a name from A, a figure from the largest, the arrow on the heading chosen.
@@ -64,6 +63,12 @@ export interface ResourceRow {
   readonly memory: string;
 }
 
+/** One of the totals over the table: its label and its figure, in words alone. */
+export interface ResourceFact {
+  readonly label: string;
+  readonly value: string;
+}
+
 /** What the table's headings say. */
 export interface ResourceHeadings {
   readonly name: string;
@@ -74,11 +79,6 @@ export interface ResourceHeadings {
 /** The card the button hangs, as a popover card stands: its sections apart in one column at the caption's type, scrolling within the room its side of the button leaves. */
 const CARD =
   "ui-resources-card flex min-h-0 w-popover-wide flex-col focus-visible:outline-none gap-block-gap overflow-y-auto overscroll-contain p-card-inset-snug text-caption";
-
-/** The card's head: its title, and the Copy at its end, pulled out so its glyph lines up with the content's edge. */
-const HEAD = "-mr-2 flex items-center justify-between gap-control-gap";
-
-const TITLE = "m-0 text-section font-section";
 
 /** A cell, tighter than a page's table's, its first and last flush with the card's inset. */
 const CELL = "px-control-gap py-tight-gap first:ps-0 last:pe-0";
@@ -194,7 +194,7 @@ export function ResourcesPopover({
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The totals over the table: CPU and Memory. */
-  facts: readonly ChipPopoverFact[];
+  facts: readonly ResourceFact[];
   headings: ResourceHeadings;
   sort: ResourceSort;
   onSort: (sort: ResourceSort) => void;
@@ -218,22 +218,23 @@ export function ResourcesPopover({
       initialFocus={card}
     >
       <div ref={card} tabIndex={-1} className={CARD}>
-        <div className={HEAD}>
-          <ReplayUnmask>
-            <h2 className={TITLE}>{label}</h2>
-          </ReplayUnmask>
-          <CopyButton
-            look={COPY_LOOK.ICON}
-            text={copy.text}
-            what={copy.what}
-            copy={copy.run}
-            disabled={rows === undefined || rows.length === 0}
-          />
-        </div>
+        <PopoverCardHead
+          title={label}
+          replayUnmasked
+          actions={
+            <CopyButton
+              look={COPY_LOOK.ICON}
+              text={copy.text}
+              what={copy.what}
+              copy={copy.run}
+              disabled={rows === undefined || rows.length === 0}
+            />
+          }
+        />
         <ReplayUnmask>
           <Facts>
             {facts.map((fact) => (
-              <Fact key={fact.label} icon={fact.icon} label={fact.label}>
+              <Fact key={fact.label} label={fact.label}>
                 {fact.value}
               </Fact>
             ))}

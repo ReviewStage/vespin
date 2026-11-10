@@ -1,7 +1,6 @@
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
-import { type ChipPopoverFact, RESOURCE_SORT, type ResourceSort, ResourcesPopover } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
+import { RESOURCE_SORT, type ResourceFact, type ResourceSort, ResourcesPopover } from "@repo/ui";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { Duration } from "effect";
 import { useMemo, useState } from "react";
@@ -56,9 +55,9 @@ function MacResources(): React.JSX.Element {
     () => (data === undefined ? undefined : macResourcesView(data.processes, sort)),
     [data, sort],
   );
-  const facts: readonly ChipPopoverFact[] = [
-    { label: WORDS.CPU, icon: <GLYPH.CPU aria-hidden="true" />, value: view?.cpu ?? "—" },
-    { label: WORDS.MEMORY, icon: <GLYPH.RAM aria-hidden="true" />, value: view?.memory ?? "—" },
+  const facts: readonly ResourceFact[] = [
+    { label: WORDS.CPU, value: view?.cpu ?? "—" },
+    { label: WORDS.MEMORY, value: view?.memory ?? "—" },
   ];
   return (
     <ResourcesPopover

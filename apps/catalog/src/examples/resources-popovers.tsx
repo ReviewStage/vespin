@@ -1,11 +1,10 @@
 import {
-  type ChipPopoverFact,
   RESOURCE_SORT,
+  type ResourceFact,
   type ResourceRow,
   type ResourceSort,
   ResourcesPopover,
 } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
 import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -16,9 +15,9 @@ import { CatalogSection } from "../section";
  * under the process that started it, sorted by the column a heading chose.
  */
 
-const FACTS: readonly ChipPopoverFact[] = [
-  { label: "CPU", icon: <GLYPH.CPU aria-hidden="true" />, value: "158.6%" },
-  { label: "Memory", icon: <GLYPH.RAM aria-hidden="true" />, value: "2.8 GB" },
+const FACTS: readonly ResourceFact[] = [
+  { label: "CPU", value: "158.6%" },
+  { label: "Memory", value: "2.8 GB" },
 ];
 
 const ROWS: readonly ResourceRow[] = [
