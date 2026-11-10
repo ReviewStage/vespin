@@ -55,6 +55,18 @@ import { pressPlace, ReplyPress, roomAround, useReplyDoor } from "./reply-to-sel
 
 const readSize = Schema.decodeUnknownOption(pageSizeSchema);
 
+/**
+ * How each page's versions were last fitted in this window, by page then
+ * version, so a frame drawn again stands at the height it last stood at.
+ * Note that a transcript draws only the rows near the view, so a row holding
+ * a page is let go and drawn again as the reader scrolls past it: started
+ * over at the stand-in's height, the page would shrink by its whole height
+ * and grow back once its frame loaded again, and the log, which moves the
+ * scroll by as much as a row above the view grows or shrinks, would jump
+ * twice.
+ */
+const FITTED = new Map<string, Map<number, PageFit>>();
+
 /** Reads a message a frame posted as the words selected in it, nothing for anything else a page posts. */
 const readPick = Schema.decodeUnknownOption(pagePickAnswerSchema);
 
@@ -65,9 +77,21 @@ function embedHeight(fit: PageFit): PageEmbedHeight {
   return { kind: PAGE_EMBED_HEIGHT.STAND_IN };
 }
 
-/** How the page in `frame` is fitted, from the heights it reports against the frame's own; pending until it has. */
-function useFrameFit(frame: RefObject<HTMLIFrameElement | null>): PageFit {
-  const [fit, setFit] = useState<PageFit>(PAGE_FIT_PENDING);
+/** How the page in `frame` is fitted, from the heights it reports against the frame's own; as it was last fitted in this window, or pending, until it has. */
+function useFrameFit(
+  frame: RefObject<HTMLIFrameElement | null>,
+  pageId: string,
+  version: number,
+): PageFit {
+  const [fit, setFit] = useState<PageFit>(
+    () => FITTED.get(pageId)?.get(version) ?? PAGE_FIT_PENDING,
+  );
+  useEffect(() => {
+    if (fit.kind === PAGE_FIT.PENDING) return;
+    const versions = FITTED.get(pageId) ?? new Map<number, PageFit>();
+    versions.set(version, fit);
+    FITTED.set(pageId, versions);
+  }, [fit, pageId, version]);
   useEffect(() => {
     const hear = (event: MessageEvent) => {
       const framed = frame.current;
@@ -199,7 +223,7 @@ export function ShownPage({
   const frame = useRef<HTMLIFrameElement>(null);
   useFrameLinks(frame);
   usePageTheme(frame, PAGE_ROOM.WORDS);
-  const fit = useFrameFit(frame);
+  const fit = useFrameFit(frame, pageId, version);
   const replyDoor = useReplyDoor();
   return (
     <div className="my-block-gap">
