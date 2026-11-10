@@ -67,6 +67,9 @@ type PullRequestPart = (typeof PULL_REQUEST_PART)[keyof typeof PULL_REQUEST_PART
 /** The most changed files one page lists. */
 const FILES_PAGE = 100;
 
+/** Why the member's viewed marks were not read where GitHub or the store did not answer their read, beside the outcomes a read that landed may say. */
+const VIEWED_UNREAD = { UNANSWERED: "unanswered" } as const;
+
 /** The most conversation entries one page carries, before its bound of characters. */
 const ENTRIES_PAGE = 20;
 
@@ -261,11 +264,12 @@ const changesPart = (
 ) =>
   Effect.gen(function* () {
     const { pullRequest: changes } = yield* changesOf(reached);
-    const viewed = yield* viewedOf(userId, query);
+    // Note that the files are answered even where the marks could not be read, since they were read already.
+    const viewed = yield* viewedOf(userId, query).pipe(
+      Effect.orElseSucceed(() => ({ outcome: VIEWED_UNREAD.UNANSWERED })),
+    );
     const marks =
-      viewed.outcome === PULL_REQUEST_WRITE_OUTCOME.DONE
-        ? new Map(viewed.files.map((file) => [file.path, file.state]))
-        : undefined;
+      "files" in viewed ? new Map(viewed.files.map((file) => [file.path, file.state])) : undefined;
     const offset = asked.offset ?? 0;
     const files = changes.files.slice(offset, offset + FILES_PAGE).map((file) => ({
       path: file.path,
