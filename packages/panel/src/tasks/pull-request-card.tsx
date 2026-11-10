@@ -10,6 +10,7 @@ import {
 } from "@repo/features/agent-wire";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
+import { REVIEW_WORDS } from "@repo/features/pull-request-model";
 import { countWords, TERM } from "@repo/features/words";
 import {
   ALIGN,
@@ -35,7 +36,7 @@ import { pullRequestNumberLabel, pullRequestStateLabel } from "./agent-model.js"
 import { LinesChanged } from "./agent-published.js";
 import { AgentActorRef, type AgentSubject } from "./agent-ref.js";
 import { PullRequestMark } from "./pull-request-mark.js";
-import { REVIEW_WORDS, useNamer } from "./pull-request-people.js";
+import { useNamer } from "./pull-request-people.js";
 import type { HeldPeople } from "./use-agents.js";
 import {
   PULL_REQUEST_MOMENT,

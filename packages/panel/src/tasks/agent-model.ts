@@ -37,7 +37,6 @@ import {
   type LocalAgentRefusal,
   type NativeAgentRuntime,
   PULL_REQUEST_STATE,
-  type PullRequestState,
   type RefusedDevice,
 } from "@repo/features/agent-wire";
 import {
@@ -74,6 +73,7 @@ import {
   type ProviderKeyKind,
   type SubscriptionKeySummary,
 } from "@repo/features/provider-key-wire";
+import { PULL_REQUEST_STATE_LABEL, QUEUED_LABEL } from "@repo/features/pull-request-model";
 import {
   REPOSITORY_UNREACHED,
   type RepositoryUnreached,
@@ -2495,14 +2495,6 @@ export function agentLines(
   return [...messages, ...sent.map(sentLineMessage)];
 }
 
-/** What each pull request state is called, on the chip's label and, where it changes what the developer would do, on the row; the one map every place that says a state reads. */
-export const PULL_REQUEST_STATE_LABEL = {
-  [PULL_REQUEST_STATE.OPEN]: "Open",
-  [PULL_REQUEST_STATE.DRAFT]: "Draft",
-  [PULL_REQUEST_STATE.MERGED]: "Merged",
-  [PULL_REQUEST_STATE.CLOSED]: "Closed",
-} as const satisfies Record<PullRequestState, string>;
-
 /** The characters a branch name may hold and still stand bare in a shell; anything else is quoted. */
 const BARE_SHELL_WORD = /^[\w./-]+$/u;
 
@@ -2567,14 +2559,6 @@ export function pullRequestStateWord(
   const { state } = pullRequest;
   if (state !== PULL_REQUEST_STATE.OPEN) return PULL_REQUEST_STATE_LABEL[state];
   return pullRequest.queued === true ? QUEUED_LABEL : undefined;
-}
-
-/** What the row says of an open pull request GitHub's merge queue holds, as its tab's pill says it. */
-export const QUEUED_LABEL = "Queued";
-
-/** How a pull request the merge queue holds is said where its place is known: "Queued #3", else "Queued". */
-export function queuedLabel(position: number | undefined): string {
-  return position === undefined ? QUEUED_LABEL : `${QUEUED_LABEL} #${position}`;
 }
 
 /** Where a pull request stands in one word, as its card heads it: Queued for an open one the merge queue holds, else its state's label. */

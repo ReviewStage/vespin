@@ -2,16 +2,28 @@ import {
   type AgentOverviewPullRequest,
   CHECK_SUMMARY,
   MERGE_STATE,
-  type MergeState,
   PULL_REQUEST_STATE,
   type PullRequestMerging,
   REVIEW_DECISION,
 } from "@repo/features/agent-wire";
 import {
+  isLivePullRequest,
+  isMergeWrite,
+  MERGE_ACTION,
+  MERGE_BUSY_WORDS,
+  MERGE_METHOD_WORDS,
+  MERGE_PRESS_WORDS,
+  MERGE_WORDS,
+  type MergeAction,
+  type MergeWrite,
+  mergeActionFor,
+  mergeSentence,
+  QUEUE_WARNING,
+} from "@repo/features/pull-request-model";
+import {
   MERGE_METHOD,
   type MergeMethod,
   PULL_REQUEST_ACTION,
-  type PullRequestAction,
 } from "@repo/features/pull-request-write-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
@@ -40,8 +52,7 @@ import { type ReactNode, useState } from "react";
 import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import { confirmFailure } from "../failure-report.js";
 import { keptKey, useKept } from "../use-kept.js";
-import { queuedLabel } from "./agent-model.js";
-import { type PullRequestWrites, QUEUE_WARNING } from "./pull-request-writes.js";
+import type { PullRequestWrites } from "./pull-request-writes.js";
 
 /**
  * merge-box.tsx -- the merge control at the end of an open pull request's title row, as stage-cli's merge status is: a chip saying what holds the merge up, and beside it the one press that may be made now.
@@ -83,160 +94,6 @@ import { type PullRequestWrites, QUEUE_WARNING } from "./pull-request-writes.js"
  * pushed since. While a change is out the press stands busy, and where
  * GitHub refuses it the tab's write note says why, in GitHub's words.
  */
-
-/** What the control offers from where the pull request stands. */
-const MERGE_ACTION = {
-  MERGE: "merge",
-  MERGE_WHEN_READY: "merge-when-ready",
-  ENABLE_AUTO_MERGE: "enable-auto-merge",
-  DISABLE_AUTO_MERGE: "disable-auto-merge",
-  DEQUEUE: "dequeue",
-} as const;
-
-type MergeAction = (typeof MERGE_ACTION)[keyof typeof MERGE_ACTION];
-
-/** Each method as the press says it, as GitHub's own merge button does. */
-const PRESS_WORDS = {
-  [MERGE_METHOD.MERGE]: "Merge pull request",
-  [MERGE_METHOD.SQUASH]: "Squash and merge",
-  [MERGE_METHOD.REBASE]: "Rebase and merge",
-} as const satisfies Record<MergeMethod, string>;
-
-/** Each method as the chevron's menu offers it, as GitHub's own does. */
-const METHOD_WORDS = {
-  [MERGE_METHOD.MERGE]: "Create a merge commit",
-  [MERGE_METHOD.SQUASH]: "Squash and merge",
-  [MERGE_METHOD.REBASE]: "Rebase and merge",
-} as const satisfies Record<MergeMethod, string>;
-
-/** Each method's word where it says how auto-merge will merge. */
-const METHOD_NOUNS = {
-  [MERGE_METHOD.MERGE]: "merge commit",
-  [MERGE_METHOD.SQUASH]: "squash",
-  [MERGE_METHOD.REBASE]: "rebase",
-} as const satisfies Record<MergeMethod, string>;
-
-/** The control's own words. */
-const BOX_WORDS = {
-  MERGE_WHEN_READY: "Merge when ready",
-  ENABLE_AUTO_MERGE: "Enable auto-merge",
-  DISABLE_AUTO_MERGE: "Disable auto-merge",
-  DEQUEUE: "Remove from queue",
-  CHOOSE_METHOD: "Choose how to merge",
-  autoMerge: (method: MergeMethod | null) =>
-    method === null ? "Auto-merge is on" : `Auto-merge is on (${METHOD_NOUNS[method]})`,
-} as const;
-
-/** What the press says while a change it sent is out. */
-const BUSY_WORDS = {
-  [PULL_REQUEST_ACTION.MERGE]: "Merging",
-  [PULL_REQUEST_ACTION.ENABLE_AUTO_MERGE]: "Turning on auto-merge",
-  [PULL_REQUEST_ACTION.DISABLE_AUTO_MERGE]: "Turning off auto-merge",
-  [PULL_REQUEST_ACTION.DEQUEUE]: "Removing from queue",
-} as const;
-
-/** The changes the control sends, whose answer it waits on busy. */
-type MergeWrite = keyof typeof BUSY_WORDS;
-
-function isMergeWrite(action: PullRequestAction | undefined): action is MergeWrite {
-  return action !== undefined && action in BUSY_WORDS;
-}
-
-/** The states GitHub would merge in now: ready, or with checks nothing requires short of passing. */
-const MERGEABLE: ReadonlySet<MergeState> = new Set([MERGE_STATE.CLEAN, MERGE_STATE.UNSTABLE]);
-
-/** The one thing the control offers from where the pull request stands, or nothing. */
-function mergeActionOf(merge: MergeState, merging: PullRequestMerging): MergeAction | undefined {
-  if (merging.queued !== null) return MERGE_ACTION.DEQUEUE;
-  if (merging.autoMerge !== null) return MERGE_ACTION.DISABLE_AUTO_MERGE;
-  if (merge === MERGE_STATE.CONFLICTS || merge === MERGE_STATE.DRAFT) return undefined;
-  if (merging.queue) return MERGE_ACTION.MERGE_WHEN_READY;
-  if (merging.methods.length === 0) return undefined;
-  if (MERGEABLE.has(merge)) return MERGE_ACTION.MERGE;
-  const waiting = merging.checks === CHECK_SUMMARY.PENDING;
-  return merging.autoMergeAllowed && waiting ? MERGE_ACTION.ENABLE_AUTO_MERGE : undefined;
-}
-
-/** The press a pull request offers as it stands: none for one not open, or whose merge read has not landed. */
-function actionFor(pullRequest: AgentOverviewPullRequest): MergeAction | undefined {
-  const { merging } = pullRequest;
-  if (merging === undefined || pullRequest.state !== PULL_REQUEST_STATE.OPEN) return undefined;
-  return mergeActionOf(pullRequest.merge, merging);
-}
-
-/** Whether a pull request may still merge: open, or a draft. */
-function isLive(pullRequest: AgentOverviewPullRequest): boolean {
-  return (
-    pullRequest.state === PULL_REQUEST_STATE.OPEN || pullRequest.state === PULL_REQUEST_STATE.DRAFT
-  );
-}
-
-/** What a merge held up by its reviews leaves the reader, where no press stands in its place. */
-const HELD_WORDS = ", so it can't be merged yet";
-
-/**
- * What a merge GitHub says is blocked waits on, where the reviews or checks
- * say; none where neither does. Where its reviews hold it up and no press
- * stands (`held`), it says too that it can't be merged, so a reader shown no
- * merge press is told why there is none.
- */
-function blockedWords(merging: PullRequestMerging | undefined, held: boolean): string | undefined {
-  if (merging === undefined) return undefined;
-  const plain = (words: string) => (held ? `${words}${HELD_WORDS}` : words);
-  if (merging.review === REVIEW_DECISION.CHANGES_REQUESTED) return plain("Changes were requested");
-  if (merging.review === REVIEW_DECISION.REVIEW_REQUIRED) {
-    return plain("A required review is missing");
-  }
-  if (merging.checks === CHECK_SUMMARY.PENDING) return "Waiting on required checks";
-  if (merging.checks === CHECK_SUMMARY.FAILING) return "Required checks are failing";
-  return undefined;
-}
-
-/** Whether the pull request would merge as it stands, as GitHub's own box under a pull request says it, its base named where it matters. */
-function mergeWords(merge: MergeState, base: string): string {
-  switch (merge) {
-    case MERGE_STATE.CLEAN:
-      return "Ready to merge";
-    case MERGE_STATE.UNSTABLE:
-      return "Can merge, though some checks are not passing";
-    case MERGE_STATE.BLOCKED:
-      return "Merging is blocked by a required review or check";
-    case MERGE_STATE.BEHIND:
-      return `Behind ${base}; it must be brought up to date`;
-    case MERGE_STATE.CONFLICTS:
-      return `Conflicts with ${base}`;
-    case MERGE_STATE.DRAFT:
-      return "A draft; mark it ready for review to merge";
-    case MERGE_STATE.UNKNOWN:
-      return "GitHub is still checking whether it merges";
-  }
-}
-
-/**
- * GitHub's whole sentence for the merge, as the chip's hint and a reader
- * have it: what it waits on, or where the queue or auto-merge has it,
- * then the mergeability beside it where that says something else; where
- * its reviews hold it up and no press is offered (`action`), that it can't
- * be merged yet.
- */
-function sentenceOf(
-  pullRequest: AgentOverviewPullRequest,
-  action: MergeAction | undefined,
-): string {
-  const { merge, merging } = pullRequest;
-  const line = mergeWords(merge, pullRequest.base);
-  const blocked = merge === MERGE_STATE.BLOCKED;
-  const standing = (blocked ? blockedWords(merging, action === undefined) : undefined) ?? line;
-  const queued = merging?.queued ?? null;
-  const autoMerge = merging?.autoMerge ?? null;
-  const lead =
-    queued !== null
-      ? queuedLabel(queued.position)
-      : autoMerge !== null
-        ? BOX_WORDS.autoMerge(autoMerge.method)
-        : undefined;
-  return lead === undefined ? standing : `${lead}. ${standing}`;
-}
 
 const storedMethods = Schema.fromJsonString(
   Schema.Record(Schema.String, Schema.Literals(Object.values(MERGE_METHOD))),
@@ -355,7 +212,7 @@ function methodItems(
   choose: (method: MergeMethod) => void,
 ): readonly MenuAction[] {
   return methods.map((each) => ({
-    label: METHOD_WORDS[each],
+    label: MERGE_METHOD_WORDS[each],
     checked: each === method,
     disabled: busy,
     onSelect: () => choose(each),
@@ -416,14 +273,14 @@ function MethodPress({
         disabled={busy && busyLabel === undefined}
         onClick={onPress}
         {...busyProps(busyLabel)}
-        menu={{ label: BOX_WORDS.CHOOSE_METHOD, ...menu.trigger() }}
+        menu={{ label: MERGE_WORDS.CHOOSE_METHOD, ...menu.trigger() }}
       >
         {words}
       </SplitButton>
       {menu.drawn === undefined ? null : (
         <ActionMenu
           replayUnmasked
-          label={BOX_WORDS.CHOOSE_METHOD}
+          label={MERGE_WORDS.CHOOSE_METHOD}
           menu={menu.drawn}
           groups={[methodItems(methods, method, busy, onChoose)]}
           onClose={menu.close}
@@ -435,10 +292,10 @@ function MethodPress({
 
 /** The question Remove from queue asks first, as stage-cli's does. */
 const DEQUEUE_QUESTION: DialogQuestion = {
-  title: "Remove from the merge queue?",
+  title: MERGE_WORDS.DEQUEUE_QUESTION,
   body: QUEUE_WARNING,
-  verb: BOX_WORDS.DEQUEUE,
-  running: BUSY_WORDS[PULL_REQUEST_ACTION.DEQUEUE],
+  verb: MERGE_WORDS.DEQUEUE,
+  running: MERGE_BUSY_WORDS[PULL_REQUEST_ACTION.DEQUEUE],
   loss: CONFIRM_LOSS.AFFECTS_OTHERS,
   replayUnmasked: true,
 };
@@ -454,11 +311,11 @@ export function MergeStatus({
 }: {
   pullRequest: AgentOverviewPullRequest;
 }): React.JSX.Element | null {
-  if (!isLive(pullRequest)) return null;
-  const action = actionFor(pullRequest);
+  if (!isLivePullRequest(pullRequest)) return null;
+  const action = mergeActionFor(pullRequest);
   const face = chipOf(pullRequest, action);
   if (face === undefined) return null;
-  return <MergeChip face={face} sentence={sentenceOf(pullRequest, action)} />;
+  return <MergeChip face={face} sentence={mergeSentence(pullRequest, action)} />;
 }
 
 /**
@@ -494,8 +351,8 @@ export function MergeControl({
   // Note that a question left behind as its panel hides is let go whole, so the panel comes back asking nothing; one already answered finishes.
   if ((!shown || !inQueue) && asked && !confirm.busy) setAsked(false);
 
-  if (!isLive(pullRequest)) return null;
-  const action = actionFor(pullRequest);
+  if (!isLivePullRequest(pullRequest)) return null;
+  const action = mergeActionFor(pullRequest);
   const pending = isMergeWrite(writes.pending) ? writes.pending : undefined;
   const busy = writes.pending !== undefined;
   const headSha = merging?.headSha ?? "";
@@ -503,7 +360,7 @@ export function MergeControl({
     setAsked(true);
     confirm.ask();
   };
-  const busyAs = (write: MergeWrite) => (pending === write ? BUSY_WORDS[write] : undefined);
+  const busyAs = (write: MergeWrite) => (pending === write ? MERGE_BUSY_WORDS[write] : undefined);
   const plain = (variant: ButtonVariant, words: string, write: MergeWrite, onPress: () => void) => (
     <Button
       variant={variant}
@@ -521,7 +378,7 @@ export function MergeControl({
         return (
           <MethodPress
             variant={BUTTON_VARIANT.PRIMARY}
-            words={PRESS_WORDS[method]}
+            words={MERGE_PRESS_WORDS[method]}
             methods={methods}
             method={method}
             busy={busy}
@@ -537,7 +394,7 @@ export function MergeControl({
         return (
           <MethodPress
             variant={BUTTON_VARIANT.OUTLINE}
-            words={BOX_WORDS.ENABLE_AUTO_MERGE}
+            words={MERGE_WORDS.ENABLE_AUTO_MERGE}
             methods={methods}
             method={method}
             busy={busy}
@@ -551,19 +408,19 @@ export function MergeControl({
       case MERGE_ACTION.MERGE_WHEN_READY:
         return plain(
           BUTTON_VARIANT.PRIMARY,
-          BOX_WORDS.MERGE_WHEN_READY,
+          MERGE_WORDS.MERGE_WHEN_READY,
           PULL_REQUEST_ACTION.ENABLE_AUTO_MERGE,
           () => void writes.write({ action: PULL_REQUEST_ACTION.ENABLE_AUTO_MERGE, headSha }),
         );
       case MERGE_ACTION.DISABLE_AUTO_MERGE:
         return plain(
           BUTTON_VARIANT.OUTLINE,
-          BOX_WORDS.DISABLE_AUTO_MERGE,
+          MERGE_WORDS.DISABLE_AUTO_MERGE,
           PULL_REQUEST_ACTION.DISABLE_AUTO_MERGE,
           () => void writes.write({ action: PULL_REQUEST_ACTION.DISABLE_AUTO_MERGE }),
         );
       case MERGE_ACTION.DEQUEUE:
-        return plain(BUTTON_VARIANT.OUTLINE, BOX_WORDS.DEQUEUE, PULL_REQUEST_ACTION.DEQUEUE, () =>
+        return plain(BUTTON_VARIANT.OUTLINE, MERGE_WORDS.DEQUEUE, PULL_REQUEST_ACTION.DEQUEUE, () =>
           askDequeue(),
         );
       default:
