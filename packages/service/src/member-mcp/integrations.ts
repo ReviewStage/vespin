@@ -5,7 +5,7 @@
  * member, so it answers what Settings › Integrations and Settings › MCP
  * answer them and refuses what those refuse: the integrations read and
  * settled as the desktop's bearer reads them (`statusesAnswer`), an account
- * at a provider signed in, named, or disconnected
+ * at a provider signed in, its tools listed, named, or disconnected
  * (`integrations-procedures.ts`), the clients listed and one revoked
  * (`clients-procedures.ts`), and a workspace's Sentry installations read by
  * any member of it and one disconnected by an owner or an admin
@@ -32,6 +32,8 @@ import {
   renameAccount,
   requestedAccount,
   statusesAnswer,
+  type ToolsCache,
+  toolsAnswer,
   type UnnamedHold,
 } from "../integrations/integrations-procedures.js";
 import {
@@ -48,6 +50,9 @@ import { memberMcpResourceUrl } from "./resource.js";
  * keeps failing is asked again only once its hold has passed.
  */
 const UNNAMED: UnnamedHold = new Map();
+
+/** The tools read lately, held for as long as this instance stands, as the procedures' own are, so a read asked again soon does not ask the provider's server again. */
+const TOOLS: ToolsCache = new Map();
 
 /** Why a call did nothing, in words for one acting for the member. */
 const MEMBER_INTEGRATION_REFUSAL = {
@@ -128,6 +133,20 @@ export const connectIntegrationAsMember = ({
     // Note that the transaction is the window's to wait on, so the agent is answered the address and the account alone.
     return yield* accepted(
       Effect.map(work, ({ url, connection: signedIn }) => ({ url, connection: signedIn })),
+      MEMBER_INTEGRATION_REFUSAL.NO_ACCOUNT,
+      MEMBER_INTEGRATION_REFUSAL.UNAVAILABLE,
+    );
+  });
+
+/** The tools one of the member's accounts offers their agents, as Settings › Integrations lists them, or why its server listed none. */
+export const listIntegrationToolsAsMember = (provider: string, connection: string) =>
+  Effect.gen(function* () {
+    const member = yield* AdmittedMember;
+    const work = Effect.flatMap(namedAccount(provider, connection), (asked) =>
+      toolsAnswer(integrationAccountSeams(), TOOLS, member.userId, asked),
+    );
+    return yield* accepted(
+      Effect.map(work, (answer) => ({ connection, ...answer })),
       MEMBER_INTEGRATION_REFUSAL.NO_ACCOUNT,
       MEMBER_INTEGRATION_REFUSAL.UNAVAILABLE,
     );

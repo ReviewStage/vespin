@@ -411,6 +411,7 @@ import {
 } from "../workspace-sandbox-setup/workspace-sandbox-setup.js";
 import { AdmittedMember, type AdmittedMemberValues } from "./admission.js";
 import {
+  acknowledgeThreadAsMember,
   answerAskAsMember,
   closeThreadAsMember,
   markInboxReadAsMember,
@@ -425,6 +426,7 @@ import {
   disconnectIntegrationAsMember,
   disconnectSentryAsMember,
   listIntegrationsAsMember,
+  listIntegrationToolsAsMember,
   listMcpClientsAsMember,
   readSentryAsMember,
   renameIntegrationAsMember,
@@ -3257,6 +3259,33 @@ const ANSWER_ASK_TOOL = memberMcpTool({
     ),
 });
 
+/** A Got it names its thread and the revision it was read at. */
+const AcknowledgeThreadInputSchema = Schema.Struct({
+  threadId: THREAD_ID,
+  revision: describeWire(
+    Schema.Int.check(Schema.isGreaterThanOrEqualTo(0)),
+    `The thread's revision, as ${MEMBER_MCP_TOOL.READ_INBOX} answered it.`,
+  ),
+});
+
+const ACKNOWLEDGE_THREAD_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.ACKNOWLEDGE_THREAD,
+  description:
+    "Acknowledge a notice in the member's inbox, an open thread that holds no ask, as the " +
+    "member's Got it in the window does, at the revision " +
+    `${MEMBER_MCP_TOOL.READ_INBOX} answered, so a thread its agent changed since is not ` +
+    "settled unseen. It tells the thread's agent the member saw it, where the agent waits to " +
+    `hear; unlike ${MEMBER_MCP_TOOL.CLOSE_THREAD}, which tells it the member does not want ` +
+    `what it asked. A thread that holds an ask is refused: answer it with ` +
+    `${MEMBER_MCP_TOOL.ANSWER_ASK}. Acknowledge only what the member has seen or told you ` +
+    "to. Answers `accepted` with the thread as it then stands, or `rejected` and why it was " +
+    "not acknowledged.",
+  input: AcknowledgeThreadInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: (asked) =>
+    Effect.flatMap(AdmittedMember, (member) => acknowledgeThreadAsMember(member.userId, asked)),
+});
+
 /** A message names its thread and its words. */
 const ReplyToThreadInputSchema = Schema.Struct({
   threadId: THREAD_ID,
@@ -4549,6 +4578,24 @@ const CONNECT_INTEGRATION_TOOL = memberMcpTool({
   run: connectIntegrationAsMember,
 });
 
+const ListIntegrationToolsInputSchema = Schema.Struct({
+  connection: INTEGRATION_CONNECTION_INPUT,
+});
+
+const LIST_INTEGRATION_TOOLS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_INTEGRATION_TOOLS,
+  description:
+    "List the tools one of the member's connected integration accounts offers their agents, " +
+    "by its connection name, as Settings › Integrations lists them: each tool's name, which " +
+    "an agent calls it by, and what it does as the provider's server describes it. Where the " +
+    "server listed none, such as a grant the provider no longer honors, it answers why " +
+    `instead, which ${MEMBER_MCP_TOOL.CONNECT_INTEGRATION} may mend. Answers \`accepted\` with ` +
+    "them, never a token, or `rejected` and why, such as an account not connected.",
+  input: ListIntegrationToolsInputSchema,
+  annotations: READ_ONLY,
+  run: ({ connection }) => listIntegrationToolsAsMember(connectionProvider(connection), connection),
+});
+
 const RenameIntegrationInputSchema = Schema.Struct({
   connection: INTEGRATION_CONNECTION_INPUT,
   label: describeWire(
@@ -5574,6 +5621,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   HAND_BACK_AGENT_BROWSER_TAB_TOOL,
   READ_INBOX_TOOL,
   ANSWER_ASK_TOOL,
+  ACKNOWLEDGE_THREAD_TOOL,
   REPLY_TO_THREAD_TOOL,
   CLOSE_THREAD_TOOL,
   MARK_THREAD_READ_TOOL,
@@ -5600,6 +5648,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_DELETE_AUTOMATION_TOOL,
   LIST_INTEGRATIONS_TOOL,
   CONNECT_INTEGRATION_TOOL,
+  LIST_INTEGRATION_TOOLS_TOOL,
   RENAME_INTEGRATION_TOOL,
   DISCONNECT_INTEGRATION_TOOL,
   LIST_MCP_CLIENTS_TOOL,

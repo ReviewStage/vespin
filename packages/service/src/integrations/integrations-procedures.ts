@@ -166,7 +166,7 @@ interface ToolsRead {
 }
 
 /** The tools read lately, by user account and then by connection name, for as long as the instance stands. */
-type ToolsCache = Map<string, Map<string, ToolsRead>>;
+export type ToolsCache = Map<string, Map<string, ToolsRead>>;
 
 /** When a provider lately answered no name for an account, asked with its token (`providerAccountName`), and under which grant: a sign-in completed since names another. */
 interface UnnamedRead {
@@ -887,6 +887,61 @@ export const renameAccount = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
+ * The tools one provider's server offers the account's agents, through one
+ * account there, held in `cache` under its grant for a while. A provider
+ * with no connector here or not offered to the account, one the account has
+ * not connected, and a Connect that could not be asked are the one
+ * unavailable refusal. A grant Connect no longer holds, and a server that
+ * listed none, are an answer rather than a refusal: why, which the desktop
+ * draws in place of the connection's "Connected", and never held.
+ */
+export const toolsAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
+  seams: IntegrationAccountSeams,
+  cache: ToolsCache,
+  userId: string,
+  { provider, connectionName }: IntegrationAccountAsked,
+) {
+  const row = yield* standingGrant(seams, provider, connectionName, userId);
+  const grant = row?.connectedAt?.getTime();
+  // Note that GitHub's tools are never held, because its grant has no instant to tell a new one by.
+  const holds = INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.CONNECT;
+  const held = holds ? cache.get(userId)?.get(connectionName) : undefined;
+  if (
+    held !== undefined &&
+    held.connectedAt === grant &&
+    seams.now() - held.at < INTEGRATION_TOOLS_TTL_MS
+  ) {
+    return { tools: held.tools };
+  }
+  const name = INTEGRATION_NAME[provider];
+  const issued = yield* toolsToken(provider, userId, row);
+  // A grant no longer held is a refusal the developer mends by connecting again, not an outage.
+  if (Result.isFailure(issued)) {
+    return { problem: { reason: INTEGRATION_TOOLS_PROBLEM.REFUSED } };
+  }
+  const definition: IntegrationDefinition = INTEGRATION[provider];
+  const listed = yield* Effect.result(
+    listMcpTools(definition.MCP_URL, Redacted.value(issued.success)),
+  );
+  if (Result.isFailure(listed)) {
+    const failure = listed.failure;
+    yield* Effect.logWarning(
+      `${name}'s MCP server listed no tools: ${failure.reason}`,
+      failure.code ?? "no code",
+    );
+    return { problem: toolsProblem(failure) };
+  }
+  const tools = listed.success;
+  heldReadsSwept(cache, seams.now());
+  if (holds) {
+    const accountReads = cache.get(userId) ?? new Map<string, ToolsRead>();
+    accountReads.set(connectionName, { at: seams.now(), connectedAt: grant, tools });
+    cache.set(userId, accountReads);
+  }
+  return { tools };
+});
+
+/**
  * The integrations resource: every procedure to a signed-in caller,
  * resolved before its input is read, and a rename's body held to its cap
  * before it is. The tools read lately, and the accounts whose provider lately
@@ -929,58 +984,13 @@ export function integrationsProcedures(seams: IntegrationsProcedureSeams) {
       const adding = input.query?.add === INTEGRATION_ADD_ACCOUNT;
       return yield* beginConnect(seams, context.userId, asked, adding, context.request.url);
     }),
-    /**
-     * GET: the tools one provider's server offers the account's agents. A
-     * provider with no connector here or not offered to the account, one the
-     * account has not connected, and a Connect that could not be asked are the
-     * one unavailable refusal. A grant Connect no longer holds, and a server
-     * that listed none, are an answer rather than a refusal: why, which the
-     * desktop draws in place of the connection's "Connected", and never held.
-     */
+    /** GET: the tools one provider's server offers the caller's agents (`toolsAnswer`). */
     tools: integrations.tools.effect(function* ({ context, input }) {
-      const { provider, connectionName } = yield* requestedAccount({
+      const asked = yield* requestedAccount({
         params: { provider: input.provider },
         query: { connection: input.connection },
       });
-      const userId = context.userId;
-      const row = yield* standingGrant(seams, provider, connectionName, userId);
-      const grant = row?.connectedAt?.getTime();
-      // Note that GitHub's tools are never held, because its grant has no instant to tell a new one by.
-      const holds = INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.CONNECT;
-      const held = holds ? cache.get(userId)?.get(connectionName) : undefined;
-      if (
-        held !== undefined &&
-        held.connectedAt === grant &&
-        seams.now() - held.at < INTEGRATION_TOOLS_TTL_MS
-      ) {
-        return { tools: held.tools };
-      }
-      const name = INTEGRATION_NAME[provider];
-      const issued = yield* toolsToken(provider, userId, row);
-      // A grant no longer held is a refusal the developer mends by connecting again, not an outage.
-      if (Result.isFailure(issued)) {
-        return { problem: { reason: INTEGRATION_TOOLS_PROBLEM.REFUSED } };
-      }
-      const definition: IntegrationDefinition = INTEGRATION[provider];
-      const listed = yield* Effect.result(
-        listMcpTools(definition.MCP_URL, Redacted.value(issued.success)),
-      );
-      if (Result.isFailure(listed)) {
-        const failure = listed.failure;
-        yield* Effect.logWarning(
-          `${name}'s MCP server listed no tools: ${failure.reason}`,
-          failure.code ?? "no code",
-        );
-        return { problem: toolsProblem(failure) };
-      }
-      const tools = listed.success;
-      heldReadsSwept(cache, seams.now());
-      if (holds) {
-        const accountReads = cache.get(userId) ?? new Map<string, ToolsRead>();
-        accountReads.set(connectionName, { at: seams.now(), connectedAt: grant, tools });
-        cache.set(userId, accountReads);
-      }
-      return { tools };
+      return yield* toolsAnswer(seams, cache, context.userId, asked);
     }),
     /**
      * POST: ends the sign-in to one provider under way, under the state the row

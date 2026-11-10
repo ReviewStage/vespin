@@ -1,5 +1,5 @@
 /**
- * integrations.ts -- `vespin integrations list|connect|rename|disconnect`: the account's own integrations, as Settings › Integrations reads, begins, names, and ends them.
+ * integrations.ts -- `vespin integrations list|connect|tools|rename|disconnect`: the account's own integrations, as Settings › Integrations reads, begins, lists the tools of, names, and ends them.
  *
  * Every command is a procedure of the hosted contract
  * (`contract/integrations.ts`), and an account is named by its connection
@@ -7,8 +7,9 @@
  * parser reads for its provider (`integrationConnectionOf`). `connect`
  * never signs in: it prints the address the service answers, and opens it
  * in the browser where stdout is a terminal, so the person finishes the
- * sign-in there; `list` reads where it then stands. No answer carries a
- * token.
+ * sign-in there; `list` reads where it then stands. `tools` reads the
+ * tools one account's server offers the account's agents, or why it
+ * listed none. No answer carries a token.
  */
 
 import { HOSTED_API_ERROR } from "@repo/features";
@@ -16,6 +17,7 @@ import { CLI_EXIT } from "@repo/features/cli-exit";
 import {
   INTEGRATION_NAME,
   INTEGRATION_PROVIDER_LIST,
+  INTEGRATION_QUERY,
   type IntegrationProvider,
   integrationAccountInput,
   integrationAccountLabel,
@@ -143,6 +145,43 @@ const connectCommand = Command.make(
   ]),
 );
 
+const toolsCommand = Command.make("tools", { connection: connectionArgument }, ({ connection }) =>
+  Effect.gen(function* () {
+    const provider = yield* accountOf(connection);
+    const { hosted } = yield* session;
+    const read = yield* askService(
+      hosted.integrations.tools,
+      { provider, [INTEGRATION_QUERY.CONNECTION]: connection },
+      undefined,
+      ACCOUNT_REFUSAL,
+    );
+    // Note that a server that listed none is an answer, why, rather than a failure.
+    if ("problem" in read) {
+      const said = read.problem.message === undefined ? "" : `: ${read.problem.message}`;
+      return yield* answer({
+        json: { connection, problem: read.problem },
+        lines: [
+          `${INTEGRATION_NAME[provider]}'s server listed no tools (${read.problem.reason}${said}). vespin integrations connect ${provider} --account ${connection} signs it in again.`,
+        ],
+        ids: [],
+      });
+    }
+    yield* answer({
+      json: { connection, tools: read.tools },
+      lines:
+        read.tools.length === 0
+          ? [`${INTEGRATION_NAME[provider]}'s server offers no tools.`]
+          : columns(read.tools.map((tool) => [tool.name, tool.description.split("\n")[0] ?? ""])),
+      ids: read.tools.map(({ name }) => name),
+    });
+  }),
+).pipe(
+  Command.withDescription("List the tools one of your integration accounts offers your agents"),
+  Command.withExamples([
+    { command: "vespin integrations tools notion", description: "Notion's tools, by name" },
+  ]),
+);
+
 const renameCommand = Command.make(
   "rename",
   {
@@ -214,8 +253,16 @@ const disconnectCommand = Command.make(
 );
 
 export const integrationsCommand = Command.make("integrations").pipe(
-  Command.withDescription("List, connect, rename, and disconnect your integrations"),
-  Command.withSubcommands([listCommand, connectCommand, renameCommand, disconnectCommand]),
+  Command.withDescription(
+    "List, connect, rename, and disconnect your integrations, and list their tools",
+  ),
+  Command.withSubcommands([
+    listCommand,
+    connectCommand,
+    toolsCommand,
+    renameCommand,
+    disconnectCommand,
+  ]),
   Command.withExamples([
     { command: "vespin integrations list", description: "Your accounts and where each stands" },
   ]),

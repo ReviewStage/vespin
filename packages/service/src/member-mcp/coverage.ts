@@ -62,16 +62,8 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
 export type MemberMcpExclusionReason =
   (typeof MEMBER_MCP_EXCLUSION_REASON)[keyof typeof MEMBER_MCP_EXCLUSION_REASON];
 
-const {
-  SCREEN_ONLY,
-  NEEDS_BROWSER,
-  SECRET,
-  SECURITY,
-  DESTRUCTIVE,
-  INTERNAL,
-  RETIRED,
-  NOT_YET_BUILT,
-} = MEMBER_MCP_EXCLUSION_REASON;
+const { SCREEN_ONLY, NEEDS_BROWSER, SECRET, SECURITY, DESTRUCTIVE, INTERNAL, RETIRED } =
+  MEMBER_MCP_EXCLUSION_REASON;
 
 /** Each tool's procedures: at least one, so no row stands empty. */
 export const MEMBER_MCP_COVERAGE = {
@@ -148,6 +140,7 @@ export const MEMBER_MCP_COVERAGE = {
   },
   [MEMBER_MCP_TOOL.READ_INBOX]: { inbox: ["account", "task", "agent"] },
   [MEMBER_MCP_TOOL.ANSWER_ASK]: { inbox: ["message"] },
+  [MEMBER_MCP_TOOL.ACKNOWLEDGE_THREAD]: { inbox: ["answer"] },
   [MEMBER_MCP_TOOL.REPLY_TO_THREAD]: { inbox: ["message"] },
   [MEMBER_MCP_TOOL.CLOSE_THREAD]: { inbox: ["close"] },
   [MEMBER_MCP_TOOL.MARK_THREAD_READ]: { inbox: ["markItemRead", "markItemUnread"] },
@@ -210,6 +203,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP]: { workspaceSandboxSetup: ["putInstall", "putRepository"] },
   [MEMBER_MCP_TOOL.LIST_INTEGRATIONS]: { integrations: ["statuses", "settle"] },
   [MEMBER_MCP_TOOL.CONNECT_INTEGRATION]: { integrations: ["connect"] },
+  [MEMBER_MCP_TOOL.LIST_INTEGRATION_TOOLS]: { integrations: ["tools"] },
   [MEMBER_MCP_TOOL.RENAME_INTEGRATION]: { integrations: ["rename"] },
   [MEMBER_MCP_TOOL.DISCONNECT_INTEGRATION]: { integrations: ["disconnect"] },
   [MEMBER_MCP_TOOL.LIST_MCP_CLIENTS]: { mcpClients: ["list"] },
@@ -309,11 +303,9 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   inbox: {
     home: SCREEN_ONLY,
-    answer: NOT_YET_BUILT,
   },
   integrations: {
     github: NEEDS_BROWSER,
-    tools: NOT_YET_BUILT,
     cancel: NEEDS_BROWSER,
   },
   live: {
