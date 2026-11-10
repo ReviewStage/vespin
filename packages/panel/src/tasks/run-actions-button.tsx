@@ -22,7 +22,7 @@ import {
   shortcutSubject,
   useShortcutTarget,
 } from "../shortcut-target.js";
-import { showToast, TOAST_HOLD } from "../toast.js";
+import { showToast } from "../toast.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { listedAgentIn } from "./use-workspace-agents.js";
@@ -111,7 +111,6 @@ function pressFailed(
   showToast({
     words,
     tone: STATUS_TONE.DANGER,
-    hold: TOAST_HOLD.FAILED,
     failure: { surface: FAILURE_SURFACE.ACT, act: kind, cause, about: failureAboutOf({ agentId }) },
   });
 }
