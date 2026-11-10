@@ -1295,7 +1295,8 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
       Effect.gen(function* () {
         const legacy = found.name !== agentSandboxName(found.session);
         if (legacy && found.running !== undefined) return { place: found.running, created: false };
-        yield* recordedSandboxBooting(agent.id, found.name);
+        // Note that the boot is recorded under the session's own name, which a legacy sandbox is reopened under and the task list reads.
+        yield* recordedSandboxBooting(agent.id, agentSandboxName(found.session));
         const standing = legacy
           ? ((yield* api.get(found.name)) ?? keptOf(found).sandbox)
           : keptOf(found).sandbox;
@@ -1313,7 +1314,7 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
           place: sandboxPlace(found.session, name, running),
           created: created && from === CREATED_FROM.IMAGE,
         };
-      }).pipe(Effect.tapError(() => recordedSandboxBootFailed(found.name))),
+      }).pipe(Effect.tapError(() => recordedSandboxBootFailed(agentSandboxName(found.session)))),
 
     // The runner's unit is uploaded beside the caller's steps, and the sandbox is readied as root
     // once the steps its start waits on are done (`started`), since the readying shares the
