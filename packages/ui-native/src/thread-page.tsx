@@ -1,6 +1,15 @@
-// thread-page.tsx -- an Inbox thread as the panel's pane draws it: its path and its title as the subject, then each message as a comment, its writer's face or tile, name and time in SwiftUI and its words, pictures, and videos in React Native views.
+// thread-page.tsx -- an Inbox thread: its path small in the bar, its title as the page's heading, then each message flat, its writer's face or tile, name and time in SwiftUI and its words, pictures, and videos in React Native views.
 
-import { HStack, RNHostView, ScrollView, Spacer, Text, VStack } from "@expo/ui/swift-ui";
+import {
+  HStack,
+  RNHostView,
+  ScrollView,
+  Spacer,
+  Text,
+  Toolbar,
+  ToolbarItem,
+  VStack,
+} from "@expo/ui/swift-ui";
 import {
   font,
   foregroundStyle,
@@ -16,16 +25,20 @@ import { Markdown, type MarkdownPlace, type MarkdownVideo, Picture } from "./mar
 import { AgentTile, Avatar, TaskStatusMark } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { TYPE_ROLE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
 /** What parts a thread's path, as the panel's crumbs part a task from its agent. */
-const PATH_PART = " › ";
+export const PATH_PART = " › ";
 
-/** How far a message's words stand in from the page's edge: past the writer's face, so they line up under the name. */
-const WORDS_INSET = SPACE.PAGE + MARK_SIZE.AVATAR + SPACE.ROW;
+/** Between a writer's face and their name. */
+const WRITER_GAP = SPACE.TIGHT * 2;
+
+/** How far a message's words stand in from the page's edge: past the writer's face, under the name, where a row's words start. */
+const WORDS_INSET = SPACE.EDGE + MARK_SIZE.WRITER + WRITER_GAP;
 
 const styles = StyleSheet.create({
-  words: { paddingLeft: WORDS_INSET, paddingRight: SPACE.PAGE, gap: SPACE.ROW },
+  words: { paddingLeft: WORDS_INSET, paddingRight: SPACE.EDGE, gap: SPACE.ROW },
 });
 
 /** What a message's file is drawn as after its words: a picture, or a video in the system's player. */
@@ -69,7 +82,7 @@ type ThreadPageProps = {
   readonly path: readonly string[];
   /** The status of the task it stands in, its ring leading the path; none for an agent's own thread. */
   readonly status?: TaskStatus | undefined;
-  /** The thread's title, which leads the page as its subject. */
+  /** The thread's title, which heads the page. */
   readonly title: string;
   readonly messages: readonly ThreadMessage[];
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips. */
@@ -84,36 +97,42 @@ type ThreadPageProps = {
   readonly now?: number | undefined;
 };
 
-/** A thread's head: its path in the caption's muted ink after the task's ring, and its title as the subject. */
-function ThreadHead({ path, status, title }: Pick<ThreadPageProps, "path" | "status" | "title">) {
+/** A thread's heading under its bar: its title in 20 pt semibold. */
+function ThreadHead({ title }: Pick<ThreadPageProps, "title">) {
   const colors = useColors();
   return (
-    <VStack
-      alignment="leading"
-      spacing={SPACE.TIGHT * 2}
-      modifiers={[padding({ horizontal: SPACE.PAGE, top: SPACE.ROW, bottom: SPACE.PAGE })]}
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
+        foregroundStyle(colors.TEXT),
+        padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT }),
+      ]}
     >
-      <HStack spacing={SPACE.TIGHT + 2}>
-        {status === undefined ? null : <TaskStatusMark status={status} />}
-        <Text
-          modifiers={[
-            font({ textStyle: "subheadline" }),
-            foregroundStyle(colors.TEXT_MUTED),
-            lineLimit(1),
-          ]}
-        >
-          {path.join(PATH_PART)}
-        </Text>
-      </HStack>
+      {title}
+    </Text>
+  );
+}
+
+/**
+ * A split view's detail column's bar: the thread's path, small and muted
+ * after its task's ring, in the bar's middle, as a compact window's stack
+ * draws it in its own bar.
+ */
+function PathTitle({ path, status }: Pick<ThreadPageProps, "path" | "status">) {
+  const colors = useColors();
+  return (
+    <HStack spacing={SPACE.TIGHT + 2}>
+      {status === undefined ? null : <TaskStatusMark status={status} />}
       <Text
         modifiers={[
-          font({ textStyle: "title2", weight: "semibold" }),
-          foregroundStyle(colors.TEXT),
+          font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
+          foregroundStyle(colors.TEXT_MUTED),
+          lineLimit(1),
         ]}
       >
-        {title}
+        {path.join(PATH_PART)}
       </Text>
-    </VStack>
+    </HStack>
   );
 }
 
@@ -126,7 +145,7 @@ function MediaView({ media }: { readonly media: ThreadMedia }) {
   );
 }
 
-/** One message as the panel's comment: the writer's face or tile, name and time, and under them its words and files. */
+/** One message, flat on the page: the writer's face or tile, name in 13 pt semibold and time, and under them its words and files. */
 function MessageView({
   message,
   repository,
@@ -141,11 +160,15 @@ function MessageView({
   const { writer } = message;
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
-      <HStack spacing={SPACE.ROW} modifiers={[padding({ horizontal: SPACE.PAGE })]}>
-        {writer.agent ? <AgentTile name={writer.name} /> : <Avatar name={writer.name} />}
+      <HStack spacing={WRITER_GAP} modifiers={[padding({ horizontal: SPACE.EDGE })]}>
+        {writer.agent ? (
+          <AgentTile name={writer.name} size={MARK_SIZE.WRITER} />
+        ) : (
+          <Avatar name={writer.name} size={MARK_SIZE.WRITER} />
+        )}
         <Text
           modifiers={[
-            font({ textStyle: "subheadline", weight: "semibold" }),
+            font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" }),
             foregroundStyle(colors.TEXT),
             lineLimit(1),
           ]}
@@ -154,7 +177,7 @@ function MessageView({
         </Text>
         <Text
           modifiers={[
-            font({ textStyle: "caption" }),
+            font({ textStyle: TYPE_ROLE.TIME }),
             monospacedDigit(),
             foregroundStyle(colors.TEXT_MUTED),
           ]}
@@ -186,28 +209,37 @@ function MessageView({
 
 /**
  * A thread's page, in a `Screen` or a split view's detail alike: SwiftUI
- * scrolls it and draws its head and each comment's writer, and each
+ * scrolls it and draws its heading and each message's writer, and each
  * message's words and files stand in a React Native host as wide as the
  * page and as tall as they are, since SwiftUI has no piece that draws the
- * panel's Markdown. A message that lands while it is open is drawn at its
- * foot, as the thread's document moves.
+ * panel's Markdown. The path stands in the bar: a compact window's stack
+ * names it as the screen's title, and a split view's detail column draws it
+ * here. A message that lands while it is open is drawn at its foot, as the
+ * thread's document moves.
  */
 export function ThreadPage({ path, status, title, messages, ...drawing }: ThreadPageProps) {
   return (
-    <ScrollView>
-      <VStack
-        alignment="leading"
-        spacing={SPACE.PAGE}
-        modifiers={[
-          frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-          padding({ bottom: SPACE.PAGE }),
-        ]}
-      >
-        <ThreadHead path={path} status={status} title={title} />
-        {messages.map((message) => (
-          <MessageView key={message.id} message={message} {...drawing} />
-        ))}
-      </VStack>
-    </ScrollView>
+    <Toolbar>
+      <ScrollView>
+        <VStack
+          alignment="leading"
+          spacing={SPACE.EDGE}
+          modifiers={[
+            frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+            padding({ bottom: SPACE.PAGE }),
+          ]}
+        >
+          <ThreadHead title={title} />
+          {messages.map((message) => (
+            <MessageView key={message.id} message={message} {...drawing} />
+          ))}
+        </VStack>
+      </ScrollView>
+      <Toolbar.Content>
+        <ToolbarItem placement="principal">
+          <PathTitle path={path} status={status} />
+        </ToolbarItem>
+      </Toolbar.Content>
+    </Toolbar>
   );
 }

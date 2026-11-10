@@ -10,6 +10,7 @@ import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   AccountRow,
   ActionRow,
+  BAR_TITLE,
   ListSection,
   PickRows,
   Screen,
@@ -71,7 +72,7 @@ export default function SettingsScreen() {
           headerShown: true,
           title: "Settings",
           headerTintColor: colors.ACCENT,
-          headerTitleStyle: { color: colors.TEXT },
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerStyle: { backgroundColor: colors.SIDEBAR },
           headerShadowVisible: false,
         }}

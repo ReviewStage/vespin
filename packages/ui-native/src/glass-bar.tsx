@@ -8,7 +8,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 
-const BAR_RADIUS = 26;
+/** How round the bar stands: a rounded field, as a composer's is. */
+const BAR_RADIUS = 24;
 
 const styles = StyleSheet.create({
   // The bar's own gap above the tab bar.
@@ -16,9 +17,10 @@ const styles = StyleSheet.create({
   // The bar's SwiftUI takes the bar's width and its own height.
   content: { flexGrow: 1 },
   bar: {
-    marginHorizontal: SPACE.ROW,
-    paddingHorizontal: SPACE.ROW + 2,
-    paddingVertical: SPACE.ROW - 2,
+    marginHorizontal: SPACE.ROW + 2,
+    paddingLeft: SPACE.ROW + 4,
+    paddingRight: SPACE.TIGHT * 2,
+    paddingVertical: SPACE.TIGHT * 2,
     borderRadius: BAR_RADIUS,
   },
 });

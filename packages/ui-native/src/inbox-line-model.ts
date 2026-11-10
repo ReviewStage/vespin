@@ -12,16 +12,17 @@ type InboxLineLook = { readonly symbol: Glyph; readonly tone: StatusTone };
  * The panel's glyph for each line: Lucide's own Split for a decide ask,
  * which SF Symbols has no drawing of, and the SF Symbol closest to the
  * panel's Lucide glyph for the rest
- * (`@repo/features/inbox-list-model`'s `INBOX_LINE`), in the
- * panel's ink: what waits on you in the attention ink, and an answered ask in
- * the complete green. A plain message leads with no glyph, as the panel's.
+ * (`@repo/features/inbox-list-model`'s `INBOX_LINE`): an ask that waits on
+ * you in the attention ink, the accent's, since it wants you, and an
+ * answered or resolved thread in the muted ink, since it no longer does. A
+ * plain message leads with no glyph, as the panel's.
  */
 export const INBOX_LINE_LOOK = {
   [INBOX_LINE.DECIDE]: { symbol: LUCIDE_SYMBOL.SPLIT, tone: STATUS_TONE.ATTENTION },
   [INBOX_LINE.DO]: { symbol: "checkmark.square", tone: STATUS_TONE.ATTENTION },
   [INBOX_LINE.ANSWER]: { symbol: "pencil.line", tone: STATUS_TONE.ATTENTION },
-  [INBOX_LINE.SETTLED]: { symbol: "checkmark", tone: STATUS_TONE.COMPLETE },
-  [INBOX_LINE.RESOLVED]: { symbol: "checkmark.circle", tone: STATUS_TONE.ATTENTION },
+  [INBOX_LINE.SETTLED]: { symbol: "checkmark", tone: STATUS_TONE.NEUTRAL },
+  [INBOX_LINE.RESOLVED]: { symbol: "checkmark.circle", tone: STATUS_TONE.NEUTRAL },
   [INBOX_LINE.SAID]: undefined,
 } as const satisfies Record<InboxLineKind, InboxLineLook | undefined>;
 

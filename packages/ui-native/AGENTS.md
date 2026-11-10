@@ -8,12 +8,14 @@ builds a control of its own.
   `Section`, swipe actions, `ContextMenu`, `NavigationSplitView`, the
   system's buttons and `ContentUnavailableView`) in the piece a screen asks
   for: `Screen`, `RowList` and `ListSection`, `ListRow` and `TaskRow`, `SplitView`
-  (its sidebar's bar holding an act, a `BarMenu` such as View options, and a
-  search), `EmptyState`, `PageHeader`, `ThreadPage`, `Button` and `Chip`,
-  `ChoiceList`, `AuthPage` and `ProviderButton`, `SettingsForm` and its rows,
-  and the marks (`UnreadDot`, `TaskStatusMark`, `Avatar`, `AgentTile`, and
-  `BrandMark`, the Keel mark the app's asset catalog holds).
-  `GlassBar` is a composer's bar of Liquid Glass through `expo-glass-effect`.
+  (its sidebar's bar holding an act, a `BarMenu` such as the ⋯ menu, and a
+  search), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
+  `ScopePills`, `FieldChip` and `StatusChip`, `ChoiceList` (the ask card),
+  `PullRequestCard`, `AuthPage` and `ProviderButton`, `SettingsForm` and its
+  rows, and the marks (`UnreadDot`, `TaskStatusMark`, `Avatar`, `AgentTile`,
+  and `BrandMark`, the Keel mark the app's asset catalog holds). `GlassBar`
+  is a bar of Liquid Glass through `expo-glass-effect`, and `Composer` the
+  rounded field a thread or a transcript ends with, in one.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through
@@ -43,19 +45,68 @@ builds a control of its own.
   never the system's grays; lists stand plain, as the panel's do, never as
   inset cards; and the tint is the brand's copper, never the system's blue.
   Only a control's states and a label's hierarchy are the system's.
-- **Rows are the panel's rows.** `ListRow` is the panel's Inbox row (the
-  unread dot, the task's status ring and name with the time, the thread's
-  title, and the glyph of what it asks with its words), and `TaskRow` the
-  phone's task row; an avatar stands only where the panel's row has one. A
-  glyph is the SF Symbol closest to the panel's Lucide glyph for the same
-  thing (`inbox-line-model.ts`, `status-mark-model.ts`), in the panel's ink,
-  except a mark of ours that SF Symbols has no drawing of (a pull request in
-  each state, a branch, a decide ask), which is Lucide's own (`glyph.ts`'s
-  `Glyph`): `@repo/brand`'s generator outlines it, at the `lucide-react`
+- **Rows carry the panel's facts.** `ListRow` is an Inbox thread (the task's
+  status ring, the thread's title and time, and the glyph and words of what
+  it asks, then the task's name), and `TaskRow` a task on one line; an avatar
+  stands only where the panel's row has one. A glyph is the SF Symbol
+  closest to the panel's Lucide glyph for the same thing
+  (`inbox-line-model.ts`, `status-mark-model.ts`), except a mark of ours that
+  SF Symbols has no drawing of (a pull request in each state, a branch, a
+  decide ask), which is Lucide's own (`glyph.ts`'s `Glyph`, drawn by
+  `ToneGlyph`): `@repo/brand`'s generator outlines it, at the `lucide-react`
   `@repo/ui` pins, into a custom symbol template, and the app's config writes
   it into the asset catalog as a symbol set, so it sizes with Dynamic Type
   and weighs with its words as an SF Symbol does. Tabs, menus, swipe
   actions, and every generic glyph stay SF Symbols.
+
+## Vespin's look
+
+Denser and quieter than iOS's defaults, drawn from Linear, Cursor,
+Conductor, Claude and Codex (the developer, Nov 10, 2026), on iOS's own
+navigation, tab bar, swipes, menus, sheets and glass.
+
+- **Type scale** (`tokens/type.ts`'s `TYPE_ROLE`), each role a Dynamic Type
+  text style, never a fixed size: a row's title 15 pt (`subheadline`),
+  medium while unread and regular once read, over a 13 pt muted line
+  (`footnote`); a time 12 pt (`caption`); a group header 13 pt muted; a
+  screen's title 17 pt semibold, inline in its bar; and a page's heading,
+  a thread's or a task's title, 20 pt semibold (`title3`, the style nearest
+  21). React Native's words, Markdown's, take `PROSE_SIZE`, 15 pt, which
+  React Native scales by the reader's setting. The navigation bar's words are
+  the system's fixed sizes (`BAR_TITLE`), as its own titles stand.
+- **Inline titles, no large titles.** A tab's root shows its name small and
+  inline. A pushed page shows its path (task › agent, repository › key) small
+  and muted in the bar, `PATH_PART` joining it, with the page's own heading
+  under it; a split view's detail column draws the same path in its bar.
+- **Glass header buttons.** Back, search, filter and ⋯ are the system's own
+  bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
+  split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
+  button is the chevron alone. Nothing draws a copy of glass.
+- **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
+  unread dot in the margin, a 14 pt leading mark in an 18 pt column (the
+  status ring, or the ask's glyph on an agent's own thread), the words from
+  `ROW_INSET.TEXT`, and a hairline in `CHIP_EDGE` that starts under the
+  words.
+- **Group headers** (`ListSection`) are small and muted with a count; a
+  `foldable` one folds in place on a press, its chevron on the left.
+- **Color.** Glyphs stand in the muted ink. Copper is only for what wants
+  you: the unread dot, an ask's glyph and words, the selected tab and the
+  Inbox count, a picked option, and a primary `Button`. Status tones stand
+  on the status marks alone: a task's ring, and a pull request's state.
+- **Capsules.** `ScopePills` are a list's scopes in a row under its title,
+  the chosen one filled with the ink, and `Chip` one of them; `FieldChip`
+  and `StatusChip` read a task's status, priority and assignee. Each stands
+  on `SURFACE` inside a hairline.
+- **Cards** are kept for what a person acts on: the ask (`ChoiceList`, radio
+  rows, a "Recommended" tag and a detail line) and the pull request
+  (`PullRequestCard`: its state's glyph, its title, its lines in green and
+  red, and its acts as pills), each on `SURFACE` inside a hairline.
+- **The tab bar** is `NativeTabs`: icons alone in a compact window, through
+  its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
+  New task; a regular window's sidebar keeps its labels.
+
+## Words
+
 - **Words match the panel's** (`docs/DESIGN.md`): a row's time is
   `@repo/features/time-format`'s, a status's name the panel's.
 - **No DOM and no Electron.** React here is the `mobile` catalog's (React
