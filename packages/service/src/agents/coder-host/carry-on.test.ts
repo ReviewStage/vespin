@@ -14,12 +14,12 @@ import {
 } from "@repo/database/models/agent-queue-store";
 import { latestTurnsOf, readAgent } from "@repo/database/models/agent-store";
 import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
-import { beatDevice } from "@repo/database/models/device-store";
+import { beatDevice, registerDevice } from "@repo/database/models/device-store";
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { storeWriter } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { getTestDB } from "@repo/database/testing";
+import { DEVICE_LAYOUT, getTestDB } from "@repo/database/testing";
 import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { DEVICE_AGENT_LINE_KIND } from "@repo/features/device-agent-wire";
@@ -46,6 +46,7 @@ import {
   carryOnDecision,
   carryOnHostReturned,
   carryOnKey,
+  hostWriteCarriedOn,
 } from "./carry-on.js";
 import { reconcileAgent } from "./reconcile.js";
 import { hostAwayDetail } from "./status.js";
@@ -197,9 +198,15 @@ it.layer(getTestDB())("the carry-on decision", (it) => {
 /** No GitHub, no network, and sandboxes kept in memory, which a Mac's agent never reaches. */
 const UNREACHED = Layer.mergeAll(NO_GITHUB, noNetwork, memorySandbox().layer);
 
-/** The developer's line to the warm agent written as its send writes it, and the turn it queued started by the runner, which took the line. */
+/**
+ * The developer's line to the warm agent written as its send writes it, and
+ * the turn it queued started by the runner, which took the line. Note that
+ * the clock moves first, so the turn is queued at an instant of its own
+ * after the warm agent's first and reads as the newest.
+ */
 const turnRunning = (warm: WarmLocalAgent, text: string) =>
   Effect.gen(function* () {
+    yield* TestClock.adjust("1 second");
     const target = { userId: warm.userId, conversationId: warm.agent.conversationId };
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     yield* writer.writeAwaitingLine(
@@ -251,9 +258,8 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
         Effect.gen(function* () {
           const warm = yield* warmLocalAgent;
           const { userId, agent } = warm;
-          // Note that the clock moves between the turns, so each is queued at an instant of its own and the newest reads as such.
-          yield* TestClock.adjust("1 second");
           const lost = yield* turnRunning(warm, "Now the emails.");
+          // The clock moves before each settle too, so the carry-on's turn is queued after the lost one.
           yield* TestClock.adjust("1 second");
           yield* settledDeviceAgentLine(userId, warm.deviceId, warm.launchId, 1);
 
@@ -331,6 +337,30 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           );
           assert.equal(resumed?.status, TURN_STATUS.QUEUED);
           assert.notEqual(yield* launchClaimed(warm), undefined);
+        }),
+    );
+
+    it.effect(
+      "a Mac's register after its lease ran out carries on the turn the sweep failed, though the register itself refreshes the Mac's beat, and the beat after it carries on nothing again",
+      () =>
+        Effect.gen(function* () {
+          const warm = yield* warmLocalAgent;
+          const { userId, deviceId, agent } = warm;
+          const lost = yield* turnRunning(warm, "Now the emails.");
+          yield* TestClock.adjust("6 minutes");
+          yield* reconcileAgent(agent);
+          const hostWrite = <A, E, R>(write: Effect.Effect<A, E, R>) =>
+            hostWriteCarriedOn(sessionsFor, userId, deviceId, () => Effect.void, write);
+
+          // The host starts again: it registers, then beats.
+          yield* hostWrite(
+            registerDevice(userId, { id: deviceId, name: "Studio", ...DEVICE_LAYOUT }),
+          );
+          assert.equal(yield* carriedOnStands(warm, lost), true);
+          assert.notEqual(yield* launchClaimed(warm), undefined);
+          yield* hostWrite(beatDevice(userId, deviceId));
+
+          assert.deepEqual(yield* deviceAgentLinesWaiting(userId, deviceId), []);
         }),
     );
 

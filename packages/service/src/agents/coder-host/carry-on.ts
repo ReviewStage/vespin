@@ -10,9 +10,10 @@
  * (`settled-turns.ts`), whose queue step asks here what comes next
  * (`agent-queue.ts`'s `queueAtTurnEnd`). A turn the sweep failed for its
  * Mac quiet past its lease is one whose Mac is away, which refuses every
- * line, so nothing goes at its settle (`AWAIT_HOST`): the Mac asks for its
- * agents at its first beat back (`carryOnHostReturned`), and the carry-on,
- * or the queued message, goes then. The carry-on is a line
+ * line, so nothing goes at its settle (`AWAIT_HOST`): the Mac's first
+ * write back, its register or its beat, carries its agents on after its
+ * answer (`hostWriteCarriedOn`), and the carry-on, or the queued message,
+ * goes then. The carry-on is a line
  * the service sends the agent (`steerAgentWritten`, under the app's name
  * and the `carry_on` channel), which opens a fresh turn through the one
  * path a message takes, so the sweep's reap of the cut-off turn always
@@ -35,8 +36,8 @@
  * the turn failed as it was, with its own words.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
-import { agentQueueNow } from "@repo/database/models/agent-queue-store";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { agentQueueNow, pauseAgentQueue } from "@repo/database/models/agent-queue-store";
 import {
   type Agent,
   type AgentLatestTurn,
@@ -44,9 +45,11 @@ import {
   readAgent,
 } from "@repo/database/models/agent-store";
 import { liveDeviceAgents } from "@repo/database/models/device-agent-store";
+import { devicesNamed } from "@repo/database/models/device-store";
 import { type LostLine, storeWriter, turnOpeningLine } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
-import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
+import { AGENT_MACHINE, DEVICE_LEASE } from "@repo/features/agent-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { causeKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
@@ -55,6 +58,7 @@ import { Clock, Duration, Effect, Option } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import { MESSAGE_CHANNEL, TURN_FAILURE, TURN_STATUS } from "../../core.js";
 import type { GitHubApp } from "../../github/github-app.js";
+import { afterResponse } from "../../http/after-response.js";
 import { agentLogIds } from "./agent-log.js";
 import type { QueueSessions } from "./agent-queue.js";
 import { hostLostOf } from "./status.js";
@@ -262,23 +266,26 @@ export const carriedOn = /* @__PURE__ */ Effect.fn("web/carriedOn")(function* (
   );
 });
 
-/** How many of a Mac's agents one beat back carries on at most. */
-const HOST_RETURN = { AGENTS: 50 } as const;
+/** What hands the message queued behind a cut-off turn on in a carry-on's place, as the queue's touch does (`agent-queue.ts`'s `queueAtTouch`), which a cycle keeps from being named here. */
+export type QueueHandOn = (agent: Agent) => Effect.Effect<void, never, CarryOnServices>;
 
 /**
  * The agents of a Mac back from past its lease carried on, for the turns the
- * sweep failed naming the Mac while it was away, as the header says: each
- * decided as at its settle, the Mac now back, and the queued message handed
- * on in place of a carry-on through `handOn`, which leaves a queue paused
- * for a reason of its own as it stands. Answers how many carry-ons went.
+ * sweep failed naming the Mac while it was away, as the header says: every
+ * agent pinned to the Mac and not archived, the same list its own beat
+ * reads, each decided as at its settle, the Mac now back, and the queued
+ * message handed on in place of a carry-on through `handOn`, which leaves a
+ * queue paused for a reason of its own as it stands. A carry-on that did
+ * not go leaves the turn failed, and pauses the queue as the turn's end
+ * would have. Answers how many carry-ons went.
  */
 export const carryOnHostReturned = /* @__PURE__ */ Effect.fn("web/carryOnHostReturned")(function* (
   sessionsFor: QueueSessions,
   userId: string,
   deviceId: string,
-  handOn: (agent: Agent) => Effect.Effect<void, never, CarryOnServices>,
+  handOn: QueueHandOn,
 ) {
-  const agentIds = (yield* liveDeviceAgents(userId, deviceId)).slice(0, HOST_RETURN.AGENTS);
+  const agentIds = yield* liveDeviceAgents(userId, deviceId);
   let went = 0;
   for (const agentId of agentIds) {
     const agent = yield* readAgent(userId, agentId);
@@ -293,6 +300,45 @@ export const carryOnHostReturned = /* @__PURE__ */ Effect.fn("web/carryOnHostRet
     }
     if (decided.outcome !== CARRY_ON_OUTCOME.RESUME || turn === undefined) continue;
     if (yield* carriedOn(sessionsFor, agent.value, turn.id, decided.reason)) went += 1;
+    else yield* pauseAgentQueue(agent.value.id, QUEUE_PAUSE.TURN_FAILED);
   }
   return went;
 });
+
+/** Whether the account's Mac last beat before its lease ran out; a Mac the account does not hold reads as not. */
+const deviceAway = (userId: string, deviceId: string) =>
+  Effect.gen(function* () {
+    const device = (yield* devicesNamed([deviceId])).get(deviceId);
+    if (device === undefined || device.userId !== userId) return false;
+    const now = yield* Clock.currentTimeMillis;
+    return device.lastSeenAt.getTime() < now - DEVICE_LEASE.MS;
+  });
+
+/**
+ * A Mac's write that records it as there now, its register or its beat,
+ * with its agents carried on after the answer where the Mac was away past
+ * its lease before it (`carryOnHostReturned`). Note that whether it was
+ * away is read before the write, because the write is what refreshes the
+ * Mac's last beat, and that the register is wrapped as the beat is, since
+ * a host that restarts registers before its first beat, which would then
+ * read the Mac as never away.
+ */
+export function hostWriteCarriedOn<A, E, R>(
+  sessionsFor: QueueSessions,
+  userId: string,
+  deviceId: string,
+  handOn: QueueHandOn,
+  write: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | StoreFailure, R | CarryOnServices> {
+  return Effect.gen(function* () {
+    const away = yield* deviceAway(userId, deviceId);
+    const answer = yield* write;
+    if (away) {
+      yield* afterResponse(
+        "a returned Mac's carry-ons",
+        Effect.asVoid(carryOnHostReturned(sessionsFor, userId, deviceId, handOn)),
+      );
+    }
+    return answer;
+  });
+}
