@@ -397,10 +397,10 @@ body,
   margin-top: var(--ui-section-gap);
 }
 
-/* The scope switcher heads the groups its view filters, the sections and the
+/* The Tasks head heads the groups its view filters, the sections and the
    list, so the first of them stands a tight gap under it rather than a
    section's (sidebar-task-view.tsx). */
-.sidebar-scope-zone + .sidebar-group {
+.sidebar-tasks-head + .sidebar-group {
   margin-top: var(--ui-tight-gap);
 }
 
