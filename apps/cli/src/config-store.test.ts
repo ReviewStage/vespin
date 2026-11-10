@@ -1,3 +1,7 @@
+/**
+ * config-store.test.ts -- the default workspace forgotten after a leave or delete only where it names the workspace left.
+ */
+
 import assert from "node:assert/strict";
 import { NodeServices } from "@effect/platform-node";
 import { it } from "@effect/vitest";

@@ -16,12 +16,11 @@
  */
 
 import { HOSTED_API_ERROR } from "@repo/features";
-import { CLI_EXIT } from "@repo/features/cli-exit";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import { Effect } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { forgetWorkspace } from "../config-store.js";
-import { answer, CommandFailed, columns, confirmOrYes } from "../output.js";
+import { answer, columns, confirmOrYes, note } from "../output.js";
 import { askService, session } from "../session.js";
 import { resolveWorkspace } from "../workspace.js";
 import { namedMember } from "./workspace-members.js";
@@ -43,11 +42,17 @@ const DELETE_REFUSAL_WORDS = {
   [HOSTED_API_ERROR.NOT_FOUND]: "You are no longer a member of that workspace, or it was deleted.",
 } as const;
 
-/** The default workspace forgotten once the member is out of it, a config file it could not write as the command's failure. */
+/**
+ * The default workspace forgotten once the member is out of it. Note that a
+ * config file it could not write is said on stderr rather than failing the
+ * command, because the leave or delete has already happened and must be
+ * reported as done.
+ */
 const forgetDefault = (origin: string, workspace: { id: string; slug?: string | null }) =>
-  Effect.mapError(
-    forgetWorkspace(origin, workspace),
-    (failed) => new CommandFailed({ exit: CLI_EXIT.REFUSED, message: failed.message }),
+  Effect.catch(forgetWorkspace(origin, workspace), (failed) =>
+    note(
+      `${failed.message} The default workspace may still name it: choose another with vespin workspace use.`,
+    ),
   );
 
 /** The flag each command takes to go ahead without asking. */
