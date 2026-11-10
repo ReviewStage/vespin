@@ -370,6 +370,7 @@ it.layer(getTestDB())("a turn's one record", (it) => {
           sandboxName,
           firstSequence: 1,
           fingerprint: null,
+          permissionMode: null,
           sandboxSessionId: `sbx-${randomUUID()}`,
           commandId: `cmd-${randomUUID()}`,
         });
