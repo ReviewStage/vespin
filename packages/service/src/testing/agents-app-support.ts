@@ -51,11 +51,15 @@ import { CODER } from "../agents/coder-host/bounds.js";
 import { NATIVE_SESSION_PREFIX } from "../agents/coder-host/native-runtime.js";
 import { instancePublishedCache } from "../agents/coder-host/published.js";
 import type { SummaryModelOf } from "../agents/coder-host/replay-summary.js";
+import {
+  type ApprovalLine,
+  RUNNER_ANSWER,
+  type RunnerAnswer,
+} from "../agents/coder-host/runtime-sessions.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { messagesProcedures } from "../agents/messages-procedures.js";
 import { type SandboxDeleteReach, sessionSandboxesLayer } from "../agents/session-sandboxes.js";
 import {
-  type AgentSessions,
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
@@ -105,7 +109,11 @@ import {
 } from "../testing/github-app-fake.js";
 import { CONNECTOR_ASKED_NOTHING, integrationConnectOf } from "../testing/integration-connect.js";
 import { MEMBER_MCP_AGENT_SANDBOX } from "../testing/member-mcp-auth.js";
-import { harnessFor, scriptedHarnessLayer } from "../testing/native-harness-fake.js";
+import {
+  harnessFor,
+  type ScriptedSessions,
+  scriptedHarnessLayer,
+} from "../testing/native-harness-fake.js";
 import { keepAwakeDetached } from "../testing/session-sandboxes-fake.js";
 import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-config.js";
 
@@ -141,6 +149,8 @@ const TASK_PATH =
 /** One part of a message of an agent's or a worker's transcript, whole, at its public path on the hosted oRPC router. */
 const TRANSCRIPT_PART_PATH =
   /^\/api\/agents\/[^/]+\/(?:subagents\/[^/]+\/)?messages\/[^/]+\/parts\/[^/]+$/u;
+/** An ask of an agent's a member answers, at its public path on the hosted oRPC router. */
+const AGENT_APPROVAL_PATH = /^\/api\/agents\/[^/]+\/approvals\/[^/]+$/u;
 
 export const RELAY = { owner: "Acme", name: "Relay" } as const;
 export const RELAY_FULL_NAME = `${RELAY.owner}/${RELAY.name}`;
@@ -262,6 +272,8 @@ export function fakeAgentSessions(
     readonly resetSees?: Effect.Effect<boolean>;
     /** What happens while a cancel is out, before the harness answers it, as a turn's end racing the Stop does. */
     readonly canceling?: Effect.Effect<void>;
+    /** How a member's answer to an ask reaches the runner: written, which is the default, or as the outcome named. */
+    readonly answers?: RunnerAnswer;
   } = {},
 ) {
   const together = Latch.makeUnsafe(options.cancelsTogether === undefined);
@@ -276,9 +288,17 @@ export function fakeAgentSessions(
   const resetAs: string[] = [];
   /** What `resetSees` saw at each retire, in order. */
   const resetSaw: boolean[] = [];
+  /** Every answer to an ask written to a runner, in order, with its session. */
+  const answered: (readonly [string, ApprovalLine])[] = [];
   let sessions = 0;
   let deliveries = 0;
-  const agentSessions = (authorization: string): AgentSessions => ({
+  const agentSessions = (authorization: string): ScriptedSessions => ({
+    answer: (sessionId, _conversationId, line) =>
+      Effect.sync(() => {
+        const outcome = options.answers ?? RUNNER_ANSWER.WRITTEN;
+        if (outcome === RUNNER_ANSWER.WRITTEN) answered.push([sessionId, line]);
+        return outcome;
+      }),
     open: (message) =>
       Effect.suspend(() => {
         if (options.reachable === false) {
@@ -340,7 +360,7 @@ export function fakeAgentSessions(
         }),
       ),
   });
-  return { agentSessions, opened, sent, canceled, canceledAs, reset, resetAs, resetSaw };
+  return { agentSessions, opened, sent, canceled, canceledAs, reset, resetAs, resetSaw, answered };
 }
 
 /** The deployment's environment with no key of its own, which a test gives the one it reads, and the suite's key ring, which a sandbox's firewall record is sealed under. */
@@ -522,7 +542,11 @@ export const standing = (
           url.pathname = `/api/agents/${encodeURIComponent(id)}/subagents/${encodeURIComponent(call)}/messages/newest`;
           return routed(new Request(url, request), webServices);
         }
-        if (pathname === WORKSPACE_AGENTS || TRANSCRIPT_PART_PATH.test(pathname)) {
+        if (
+          pathname === WORKSPACE_AGENTS ||
+          TRANSCRIPT_PART_PATH.test(pathname) ||
+          AGENT_APPROVAL_PATH.test(pathname)
+        ) {
           return routed(request, webServices);
         }
         return pathname === TASKS || TASK_PATH.test(pathname)

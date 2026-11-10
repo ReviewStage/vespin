@@ -166,6 +166,10 @@ import {
 } from "@repo/database/models/workspace-sandbox-script-store";
 import { type ConversationTarget, storeWriter } from "@repo/database/models/writer";
 import type { RunnerLineFile } from "@repo/database/schemas/runner-line";
+import {
+  AGENT_PERMISSION_MODE,
+  type AgentPermissionMode,
+} from "@repo/features/agent-approval-wire";
 import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
@@ -244,11 +248,14 @@ import { CODER, CODER_REFUSAL } from "./bounds.js";
 import { agentFirewallSources, CheckoutRefused, type CheckoutServices } from "./checkout.js";
 import { contextWindowOf } from "./context.js";
 import { nativeSkillFiles } from "./native-skills.js";
+import { permissionModeOf } from "./permission-mode.js";
 import { restartReplayOf } from "./replay.js";
 import { fileBlocksBytes, REPLAY_FIT } from "./replay-summary.js";
 import { holdingRunner, holdingRunnerIfFree } from "./runner-lease.js";
 import {
+  type ApprovalLine,
   type NativeSessions,
+  RUNNER_ANSWER,
   RUNNER_CHECKOUT,
   RUNNER_CHOICE,
   TURN_HANDOVER,
@@ -573,7 +580,8 @@ function stopLine(launch: number): InputLine {
 
 /**
  * What a runner was launched with that it cannot take up while it runs: its
- * credential, and the integrations it was handed, as a digest. A warm
+ * credential, the integrations it was handed, and its permission mode
+ * where it asks, as a digest. A warm
  * runner whose fingerprint no longer matches is relaunched rather than
  * handed the next message (`sendHolding`). The digest is one-way and
  * truncated, so the record carries nothing of the credential. Note that a
@@ -588,6 +596,7 @@ function launchFingerprint(
   credential: HarnessLaunch,
   delivered: DeliveredCredentials,
   integrations: readonly IntegrationServer[],
+  mode: AgentPermissionMode,
 ): string {
   const declared = credential.credentials ?? [];
   const isHeld = (each: RunnerCredential) => delivered.swaps.has(each.slot);
@@ -605,8 +614,10 @@ function launchFingerprint(
   }));
   // Note that one slot is digested alone, under the key it was digested by, as the one a launch could hold before credentials were declared.
   const swapped = slots.length === 0 ? undefined : slots.length === 1 ? slots[0] : slots;
+  // Note that full access is digested as nothing, as every launch before modes was, so its runners stay warm across the change.
+  const asks = mode === AGENT_PERMISSION_MODE.FULL_ACCESS ? undefined : mode;
   return createHash("sha256")
-    .update(JSON.stringify({ env, names, held: swapped }))
+    .update(JSON.stringify({ env, names, held: swapped, mode: asks }))
     .digest("hex")
     .slice(0, FINGERPRINT_CHARS);
 }
@@ -1071,7 +1082,12 @@ export const runnerSessions = <
           // Note that the workspace's variables go first, so ours win a name they share.
           env: { ...environment, ...credential.env, ...delivered.env },
           extraCheckouts,
-          fingerprint: launchFingerprint(credential, delivered, integrations),
+          fingerprint: launchFingerprint(
+            credential,
+            delivered,
+            integrations,
+            permissionModeOf(agent),
+          ),
         };
       }).pipe(Effect.withSpan("web/runnerLaunchPrepared"));
 
@@ -1704,7 +1720,7 @@ export const runnerSessions = <
 
     /**
      * Whether the runner is warm, no turn of the agent's under way, and was
-     * launched with a credential or integrations that have changed since,
+     * launched with a credential, integrations, or a permission mode that have changed since,
      * which it cannot take up while it runs. A runner at work keeps going on
      * what it has, and one from before fingerprints were tagged is never
      * read as stale.
@@ -1719,7 +1735,12 @@ export const runnerSessions = <
         if (runner.fingerprint === undefined || turnRunning) return false;
         const credential = yield* harness.launch(agent, layout);
         const delivered = machine.deliverCredentials(agent, credential.credentials ?? []);
-        const now = launchFingerprint(credential, delivered, yield* options.integrations(agent));
+        const now = launchFingerprint(
+          credential,
+          delivered,
+          yield* options.integrations(agent),
+          permissionModeOf(agent),
+        );
         return now !== runner.fingerprint;
       });
 
@@ -2088,6 +2109,24 @@ export const runnerSessions = <
         // Note that it goes the way the runner's messages go, so it never overtakes, nor is overtaken by, a message's own model line.
         yield* delivered(agent, live, model);
         return RUNNER_CHOICE.WRITTEN;
+      });
+
+    /**
+     * A member's answer to an ask, under the agent's runner lease, written to
+     * the runner that runs the way its messages go. Nothing where no runner
+     * runs, or one whose command is gone, since none holds the ask then.
+     */
+    const answerHolding = (sessionId: string, conversationId: string, line: ApprovalLine) =>
+      Effect.gen(function* () {
+        const found = yield* machine.findPlace(userId, sessionId);
+        if (Option.isNone(found)) return RUNNER_ANSWER.NOT_LIVE;
+        const agent = yield* agentOf(conversationId);
+        const live = found.value.runner;
+        if (found.value.agentId !== agent.id || live === undefined) return RUNNER_ANSWER.NOT_LIVE;
+        return yield* delivered(agent, live, [line]).pipe(
+          Effect.as(RUNNER_ANSWER.WRITTEN),
+          Effect.catchIf(sandboxGone, () => Effect.succeed(RUNNER_ANSWER.NOT_LIVE)),
+        );
       });
 
     /**
@@ -2638,6 +2677,24 @@ export const runnerSessions = <
                 `A ${harness.name} checkout of an added repository failed: ${keptFailureWords(failureWords(failure))}`,
               ),
               RUNNER_CHECKOUT.FAILED,
+            ),
+          ),
+          Effect.annotateLogs(agentLogIds({ conversationId }, sessionId)),
+          Effect.provideContext(context),
+        ),
+
+      // A member's answer goes to the runner that holds the ask, as its messages go.
+      answer: (sessionId, conversationId, line) =>
+        Effect.gen(function* () {
+          const { id } = yield* agentOf(conversationId);
+          return yield* holdingRunner(id, answerHolding(sessionId, conversationId, line));
+        }).pipe(
+          Effect.catch((failure) =>
+            Effect.as(
+              Effect.logWarning(
+                `A ${harness.name} answer to an ask failed: ${keptFailureWords(failureWords(failure))}`,
+              ),
+              RUNNER_ANSWER.FAILED,
             ),
           ),
           Effect.annotateLogs(agentLogIds({ conversationId }, sessionId)),

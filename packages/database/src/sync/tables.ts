@@ -24,6 +24,7 @@
  */
 
 import { agentDelegationTable, agentTable } from "../schemas/agent.js";
+import { agentApproval } from "../schemas/agent-approval.js";
 import { agentBrowserTab } from "../schemas/agent-browser-tab.js";
 import { agentPin } from "../schemas/agent-pin.js";
 import { agentPullRequest } from "../schemas/agent-pull-request.js";
@@ -144,6 +145,31 @@ export const agentPullRequestSync = defineSyncTable(agentPullRequest, {
       ],
     },
   ],
+  log: LOG.EVERY,
+});
+
+/**
+ * A tool call an agent's runner held for a member's answer, on its agent's
+ * topic and, through its agent, that agent's task's and workspace's, so the
+ * task list hears an ask arrive and settle as it hears the agent move. Note
+ * that what the ask says is ignored, because it is written once as the ask
+ * lands and never changed, and an update comparing it would weigh the
+ * call's whole input at its settle.
+ */
+export const agentApprovalSync = defineSyncTable(agentApproval, {
+  topics: [
+    { kind: TOPIC.AGENT, column: agentApproval.agentId },
+    {
+      through: agentTable,
+      key: agentTable.id,
+      by: agentApproval.agentId,
+      topics: [
+        { kind: TOPIC.TASK, column: agentTable.taskId },
+        { kind: TOPIC.WORKSPACE, column: agentTable.organizationId },
+      ],
+    },
+  ],
+  ignore: [agentApproval.ask],
   log: LOG.EVERY,
 });
 
@@ -753,6 +779,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   taskBlockSync,
   agentSync,
   agentPullRequestSync,
+  agentApprovalSync,
   memberSync,
   userSync,
   deviceSync,

@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import type { LiveStatement } from "@repo/database/core/live-statement";
 import { Database } from "@repo/database/core/query";
+import { expireTurnApprovals, recordApprovalAsked } from "@repo/database/models/agent-approvals";
 import { agentOwnerFactsOf } from "@repo/database/models/agent-owners";
 import {
   archiveAgent,
@@ -12,6 +13,7 @@ import {
   pinAgent,
   pinAgentCommitted,
   renameAgentCommitted,
+  updateAgentPermissionModeCommitted,
 } from "@repo/database/models/agent-store";
 import { createAutomation, recordAutomationRun } from "@repo/database/models/automation-store";
 import { devicesNamed, registerDevice } from "@repo/database/models/device-store";
@@ -40,6 +42,7 @@ import {
   openWorkspace,
   startTask,
 } from "@repo/database/testing";
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
 import {
   AGENT_ARCHIVER,
@@ -789,6 +792,54 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         const opened = yield* liveListOf(owner, NOW);
         assert.deepEqual(opened, yield* heldListOf(owner, NOW));
         assert.equal(sandboxOf(opened), true);
+      }),
+  );
+
+  it.effect(
+    "an agent's permission mode reads as the held read reads it, and the asks its runner holds read live until settled",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const workspace = yield* openWorkspace(owner);
+        const agent = yield* openAgent(owner, { workspaceId: workspace }, 60_000);
+        const turnId = yield* turnOf(agent, TURN_STATUS.RUNNING, 30_000);
+        yield* updateAgentPermissionModeCommitted(owner, agent.id, AGENT_PERMISSION_MODE.ASK);
+        yield* recordApprovalAsked({
+          conversationId: agent.conversationId,
+          turnId,
+          requestId: "request-1",
+          toolUseId: "toolu_1",
+          subagentId: null,
+          toolName: "Bash",
+          title: "Run pnpm test?",
+          description: "In the checkout",
+          input: { command: "pnpm test" },
+          at: new Date(NOW - 10_000),
+        });
+        const readOf = (read: Effect.Success<ReturnType<typeof liveListOf>>) =>
+          read.planlessAgents?.find((each) => each.id === agent.id);
+
+        const asking = readOf(yield* liveListOf(owner, NOW));
+        const held = readOf(yield* heldListOf(owner, NOW));
+        yield* expireTurnApprovals(agent.conversationId, turnId, new Date(NOW));
+        const settled = readOf(yield* liveListOf(owner, NOW));
+
+        assert.equal(asking?.permissionMode, AGENT_PERMISSION_MODE.ASK);
+        assert.equal(held?.permissionMode, AGENT_PERMISSION_MODE.ASK);
+        assert.deepEqual(
+          asking?.pendingApprovals?.map(({ id: _id, ...ask }) => ask),
+          [
+            {
+              toolUseId: "toolu_1",
+              toolName: "Bash",
+              title: "Run pnpm test?",
+              description: "In the checkout",
+              input: { command: "pnpm test" },
+              askedAt: NOW - 10_000,
+            },
+          ],
+        );
+        assert.equal(settled?.pendingApprovals, undefined);
       }),
   );
 

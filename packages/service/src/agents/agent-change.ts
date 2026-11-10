@@ -5,7 +5,8 @@
  * name several, so a change is a partial (`AgentChanges`) written in one
  * transaction, either every change standing or none. A model and effort
  * moved are handed to a native runner that runs at once and counted for each
- * of the two that moved. An archive stops a turn still running first, as a
+ * of the two that moved; a permission mode is read by the agent's next
+ * launch, so it reaches the agent from its next turn. An archive stops a turn still running first, as a
  * Stop does, then stamps the agent, lets its sandbox and its device go once
  * the archive stands, and is counted where it archived an agent standing
  * unarchived; bringing one back clears whichever archive stands.
@@ -19,10 +20,12 @@ import {
   pinAgentCommitted,
   renameAgentCommitted,
   updateAgentChoiceCommitted,
+  updateAgentPermissionModeCommitted,
   updateAgentServersCommitted,
 } from "@repo/database/models/agent-store";
 import type { StoreWriter } from "@repo/database/models/writer";
 import type { StoredArchive } from "@repo/database/schemas/agent";
+import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { Data, Effect, Option } from "effect";
 import { SqlClient } from "effect/sql";
@@ -41,6 +44,8 @@ export interface AgentChanges {
   readonly pinned?: boolean | undefined;
   readonly position?: string | undefined;
   readonly disabledServers?: readonly string[] | undefined;
+  /** How its tool calls are answered from its next turn, already held to what its harness takes. */
+  readonly permissionMode?: AgentPermissionMode | undefined;
 }
 
 /** A change that found no row to write: the agent left the account's reach as it was changed, which takes every change back. */
@@ -63,7 +68,7 @@ const writtenChanges = (userId: string, agent: Agent, changes: AgentChanges) =>
           Option.isSome(changed)
             ? Effect.succeed(changed.value)
             : Effect.fail(new AgentChangeLost());
-        const { title, choice, pinned, position, disabledServers } = changes;
+        const { title, choice, pinned, position, disabledServers, permissionMode } = changes;
         let last: AgentCommitted = { agent };
         if (title !== undefined) {
           last = yield* kept(
@@ -78,6 +83,11 @@ const writtenChanges = (userId: string, agent: Agent, changes: AgentChanges) =>
         }
         if (disabledServers !== undefined) {
           last = yield* kept(yield* updateAgentServersCommitted(userId, agent.id, disabledServers));
+        }
+        if (permissionMode !== undefined) {
+          last = yield* kept(
+            yield* updateAgentPermissionModeCommitted(userId, agent.id, permissionMode),
+          );
         }
         return last;
       }),

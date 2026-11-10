@@ -79,6 +79,7 @@ import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from
 import { CURRENT_TXID } from "../core/txid.js";
 import { conversations, messages, turnlessUserLine, turns } from "../schemas/storage.js";
 import { CONVERSATION_KIND, MESSAGE_SENDER, messageSenderSchema } from "../storage-vocabulary.js";
+import { expireTurnApprovals } from "./agent-approvals.js";
 import { type HandedFile, lineParts, receivedPartsOf } from "./attached-file-parts.js";
 import { EpochMillisColumnSchema, InstantColumnSchema, nullable } from "./columns.js";
 import {
@@ -1368,6 +1369,10 @@ const turnEnded = /* @__PURE__ */ Effect.fnUntraced(function* (
     responseIds: event.responseIds,
   });
   if (!ended) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FENCED });
+  // A coding agent's asks its turn left pending expire with it, whatever ended it, since no runner answers them now.
+  if (context.kind === CONVERSATION_KIND.AGENT) {
+    yield* expireTurnApprovals(context.target.conversationId, event.turnId, settledAt);
+  }
   // A turn that ended well hands the lines it never took to a turn queued for them; one a Stop was asked of leaves them awaiting nothing, and a failed one keeps them to resend.
   if (
     context.kind === CONVERSATION_KIND.AGENT &&

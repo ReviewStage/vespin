@@ -61,6 +61,7 @@ import { KEY_REFUSAL, PLAN_REFUSAL, type SessionTurn } from "../sessions/agent-s
 import { BEARER_PREFIX } from "../workspace-mcp/bearer.js";
 import { roomAfterLimit, turnPayerOf } from "./agent-runtime-choice.js";
 import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
+import { launchPermissionMode } from "./permission-mode.js";
 import {
   type HarnessLaunch,
   type RunnerHarness,
@@ -271,6 +272,8 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
         // Note that a host's older runner, bundled before Claude Code's command sandbox was removed, refuses a config without domains.
         allowedDomains: [],
         installedSkills: layout.installedSkills,
+        // Note that the agent's mode is read at each launch, so a change reaches it from its next turn.
+        ...launchPermissionMode(agent),
       };
       return written;
     });

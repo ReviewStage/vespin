@@ -259,6 +259,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   agentPages: { frame: SCREEN_ONLY },
   agents: {
+    // Note that an ask is held for a person's own answer, so no agent answers one for them.
+    answerApproval: SECURITY,
     delete: NOT_YET_BUILT,
     warm: NOT_YET_BUILT,
     rewind: NOT_YET_BUILT,

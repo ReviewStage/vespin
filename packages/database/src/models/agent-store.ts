@@ -1,4 +1,8 @@
 import {
+  type AgentPermissionMode,
+  agentPermissionModeSchema,
+} from "@repo/features/agent-approval-wire";
+import {
   AGENT_ARCHIVER,
   AGENT_AUTHOR,
   AGENT_BRIEF,
@@ -222,6 +226,8 @@ export interface Agent {
   readonly machine?: AgentMachineKind;
   /** The Mac a local agent is pinned to; null for one in a sandbox, or once that Mac is gone. */
   readonly deviceId?: string | null;
+  /** How its tool calls are answered, which each launch reads; full access where unsaid. */
+  readonly permissionMode?: AgentPermissionMode;
 }
 
 /**
@@ -398,6 +404,7 @@ const AGENT_COLUMNS = {
   createdAt: agentTable.createdAt,
   machine: agentTable.machine,
   deviceId: agentTable.deviceId,
+  permissionMode: agentTable.permissionMode,
 };
 
 /**
@@ -441,6 +448,7 @@ const AGENT_LINE_COLUMNS = {
   createdAt: agentTable.createdAt,
   machine: agentTable.machine,
   deviceId: agentTable.deviceId,
+  permissionMode: agentTable.permissionMode,
 } as const;
 
 /** What an agent was handed as its first message, as `AGENT_LINE_COLUMNS` reads it from the row: its prompt, else the description, else nothing. */
@@ -545,6 +553,7 @@ const AgentRowSchema = Schema.Struct({
   createdAt: InstantColumnSchema,
   machine: Schema.Literals(Object.values(AGENT_MACHINE)),
   deviceId: Schema.NullOr(Schema.String),
+  permissionMode: agentPermissionModeSchema,
 });
 
 const {
@@ -831,6 +840,23 @@ const updateAgentServersRow = SqlSchema.findOneOption({
       db
         .update(agentTable)
         .set({ disabledServers })
+        .where(reachableAgent(userId, agentId))
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
+    ),
+});
+
+const updateAgentPermissionModeRow = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    permissionMode: agentPermissionModeSchema,
+  }),
+  Result: CommittedAgentRowSchema,
+  execute: ({ userId, agentId, permissionMode }) =>
+    Database.use((db) =>
+      db
+        .update(agentTable)
+        .set({ permissionMode })
         .where(reachableAgent(userId, agentId))
         .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
     ),
@@ -3002,6 +3028,18 @@ export function updateAgentServersCommitted(
 ): AgentStoreEffect<Option.Option<AgentCommitted>> {
   return Effect.map(
     updateAgentServersRow({ userId, agentId, disabledServers: storedServers(disabledServers) }),
+    Option.map(({ txid, ...agent }) => ({ agent, txid })),
+  );
+}
+
+/** The agent's permission mode changed, which its next launch reads, and the transaction its row was written in; nothing for an agent of a workspace the account is not in. */
+export function updateAgentPermissionModeCommitted(
+  userId: string,
+  agentId: string,
+  permissionMode: AgentPermissionMode,
+): AgentStoreEffect<Option.Option<AgentCommitted>> {
+  return Effect.map(
+    updateAgentPermissionModeRow({ userId, agentId, permissionMode }),
     Option.map(({ txid, ...agent }) => ({ agent, txid })),
   );
 }

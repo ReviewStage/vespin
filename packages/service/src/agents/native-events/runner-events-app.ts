@@ -107,6 +107,7 @@ import {
   turnProgressed,
   withTurnServers,
 } from "./native-projection.js";
+import { landApprovalEvent } from "./runner-approvals.js";
 import { redactKeepingPlanCodes, withoutNul } from "./runner-moments.js";
 
 /**
@@ -150,6 +151,10 @@ import { redactKeepingPlanCodes, withoutNul } from "./runner-moments.js";
  * launch, and a turn still running under an older launch, whose runner this
  * one replaced, is failed as its runner lost before anything else is
  * applied, so its end, which is not coming, waits on no deadline.
+ *
+ * An ask a launch whose mode asks holds for a member, and its runner's word
+ * of how one was settled, land beside the transcript in the same
+ * transaction (`runner-approvals.ts`).
  *
  * The route also keeps what
  * the newest model call read on the agent's row for its context ring, the
@@ -787,6 +792,8 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       });
       state = projected.state;
       writes.push(...projected.writes);
+      // An ask the runner holds lands under the turn that runs, and its settle on the ask, in this transaction (`runner-approvals.ts`).
+      yield* landApprovalEvent(conversationId, state.turn?.id, message, now);
       // A turn starting takes the servers mentioned to the agent since its last turn started
       // (`agent-runtime/servers.ts`), and keeps them for its calls at our own
       // MCP server, which hands them whatever the switches say (`integrations/connection-door.ts`).
