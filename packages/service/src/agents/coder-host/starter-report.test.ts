@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { it } from "@effect/vitest";
+import { it, test } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { archiveAgent, createAgent } from "@repo/database/models/agent-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
@@ -13,12 +13,13 @@ import { AGENT_PAYER, agentMessageReplyLine } from "@repo/features/agent-wire";
 import { RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_STATUS } from "@repo/wire";
+import type { StoredUIMessage } from "@repo/wire/ui-messages";
 import { Effect, Layer, Option } from "effect";
 import { connectAgentApiKeys } from "../../testing/agent-credentials.js";
 import { endedAt } from "../../testing/agent-turns.js";
 import { githubReaching } from "../../testing/github-app-fake.js";
 import { recordingSessions, sentTo } from "../../testing/recording-sessions.js";
-import { reportToStarter } from "./starter-report.js";
+import { lastSaid, reportToStarter } from "./starter-report.js";
 
 /** What every case runs over: the store, and sandboxes kept in memory. */
 const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
@@ -174,5 +175,40 @@ it.layer(SUITE)("a started agent's final message handed to its starter", (it) =>
 
       assert.deepEqual(agentSessions.sent, []);
     }),
+  );
+});
+
+test("a turn ended with end_turn hands its summary as its final words, and one whose end_turn was refused or never answered its last text", () => {
+  const said = "Pushed the fix; the checks run again.";
+  const summary = "- Fixed the failing check\n- Pushed to #214";
+  const ended = (state: "output-available" | "output-error"): StoredUIMessage =>
+    ({
+      id: "message-1",
+      role: "assistant" as const,
+      parts: [
+        { type: "text" as const, text: said },
+        {
+          type: "tool-end_turn" as const,
+          toolCallId: "call-1",
+          state,
+          input: { summary, followUps: ["Show pending invitations on the Members page"] },
+          ...(state === "output-available"
+            ? { output: { status: "accepted" } }
+            : { errorText: "Not taken." }),
+        },
+      ],
+    }) as unknown as StoredUIMessage;
+
+  assert.equal(lastSaid(ended("output-available")), summary);
+  assert.equal(lastSaid(ended("output-error")), said);
+  // A turn that ended before the call answered keeps it as available, with no answer that took it.
+  const unanswered = ended("output-available");
+  const [text, call] = unanswered.parts;
+  assert.equal(
+    lastSaid({
+      ...unanswered,
+      parts: [text, { ...call, output: undefined }],
+    } as unknown as StoredUIMessage),
+    said,
   );
 });

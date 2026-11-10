@@ -1147,6 +1147,8 @@ const AGENT_TOOL_VIEWS = {
       output: output === undefined ? undefined : jsonBlock(output),
     };
   },
+  [AGENT_TOOL.END_TURN]: ({ input, output }) =>
+    namedCall(CALL_KIND.END_TURN, input, output, undefined),
 } as const satisfies Record<AgentTool, ToolReader>;
 
 /**

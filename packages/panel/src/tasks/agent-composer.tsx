@@ -30,12 +30,7 @@ import { modEnterSends } from "../enter-sends.js";
 import { failureShown } from "../failure-report.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { PANEL_SPAN } from "../panel-spans.js";
-import {
-  AgentModeChip,
-  type AgentModeControl,
-  DENIES_WAITING,
-  modeOverflow,
-} from "./agent-approvals.js";
+import { type AgentModeControl, DENIES_WAITING } from "./agent-approvals.js";
 import { AgentContextRing, ContextRingIcon } from "./agent-context.js";
 import { contextHint } from "./agent-context-model.js";
 import { noteWhileOffline, paidByOf, planNameOf, providerOf } from "./agent-model.js";
@@ -66,9 +61,9 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * pinned over the card (`agent-published.tsx`, `agent-tab.tsx`), so the
  * foot holds only what the next message goes with; at the right,
  * in this order, the model chip naming what the agent runs on, which opens
- * the menu that changes it for the next step (`agent-model-chip.tsx`), a
- * Claude Code agent's permission mode chip, which opens the menu that
- * changes how its tool calls are answered from its next turn
+ * the menu that changes it for the next step (`agent-model-chip.tsx`), and,
+ * for a Claude Code agent, how its tool calls are answered from its next
+ * turn, the chip wearing the mode's glyph off Full access
  * (`agent-approvals.tsx`),
  * the ring that shows, once a step has ended, how full the agent's model's
  * context is and opens what fills it (`agent-context.tsx`), the
@@ -393,7 +388,7 @@ export function AgentComposer({
   queueing?: ComposerQueueing | undefined;
   /** What an Inbox thread's answer lays over the agent's box; none for a message to the agent. */
   answer?: ComposerAnswer | undefined;
-  /** The agent's permission mode and its chip's change; none for an agent that never asks, which draws no chip. */
+  /** The agent's permission mode and its change, offered in the model chip's menu; none for an agent that never asks. */
   mode?: AgentModeControl | undefined;
   /** How many of the agent's tool calls wait on an answer, which a message sent now denies. */
   approvalsWaiting?: number;
@@ -665,10 +660,8 @@ export function AgentComposer({
                 payerSubscriptionId={payerSubscriptionId}
                 owner={owner}
                 narrow={box.folds(FOLD_WIDTH.MODEL)}
+                permissions={mode}
               />
-            )}
-            {mode === undefined ? null : (
-              <AgentModeChip control={mode} narrow={box.folds(FOLD_WIDTH.MODEL)} />
             )}
             <AgentContextRing
               context={context}
@@ -694,7 +687,6 @@ export function AgentComposer({
                   ],
                 },
               ]),
-          ...modeOverflow(mode),
         ]}
         beforeSend={beforeSend?.(box.folds(FOLD_WIDTH.ACTIONS))}
         send={{

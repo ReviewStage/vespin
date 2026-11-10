@@ -435,6 +435,38 @@ function blocksOf(nodes: readonly RootContent[], reader: Reader): MarkdownBlock[
   return nodes.flatMap((node) => blockOf(node, reader));
 }
 
+/** A run's words as VoiceOver hears them, each chip by its kind and name. */
+function heardRun(run: MarkdownRun): string {
+  switch (run.kind) {
+    case MARKDOWN_RUN.WORDS:
+    case MARKDOWN_RUN.CODE:
+      return run.text;
+    case MARKDOWN_RUN.LINK:
+      return run.runs.map(heardRun).join("");
+    case MARKDOWN_RUN.CHIP:
+      return run.chip.heard;
+    case MARKDOWN_RUN.BREAK:
+      return "\n";
+  }
+}
+
+/** Whether a run is a chip or holds one. */
+function holdsChip(run: MarkdownRun): boolean {
+  if (run.kind === MARKDOWN_RUN.LINK) return run.runs.some(holdsChip);
+  return run.kind === MARKDOWN_RUN.CHIP;
+}
+
+/**
+ * A line's words as VoiceOver hears them where it holds a chip, each chip by
+ * its kind and name; nothing where it holds none, since its words are heard
+ * as drawn. Note that a chip stands in the line as a view, which iOS never
+ * hears inside a run of text, so a line read without this says
+ * "Pull request:" and stops.
+ */
+export function heardLine(runs: readonly MarkdownRun[]): string | undefined {
+  return runs.some(holdsChip) ? runs.map(heardRun).join("") : undefined;
+}
+
 /** Markdown as the blocks the app draws, read as the panel reads it; words nested too deep to parse safely are one block of plain text. */
 export function markdownBlocks(words: string, reading: MarkdownReading): readonly MarkdownBlock[] {
   if (markdownTooDeep(words)) return [{ kind: MARKDOWN_BLOCK.CODE, text: words }];
