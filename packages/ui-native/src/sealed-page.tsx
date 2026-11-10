@@ -16,6 +16,9 @@ import { TEXT_SIZE } from "./tokens/type.js";
 /** The address a page handed in as HTML stands at, the one place it may stand. */
 const HANDED_IN = "about:blank";
 
+/** The web view's whitelist: every address, so that each navigation reaches `staysSealed`. */
+const EVERY_ADDRESS = ["*"];
+
 /** The charts' inks a page reads, as the panel's palette names them in both themes. */
 const CHART_INKS = ["#2f9bd8", "#8b6cd9", "#2e9e6a", "#cd5394", "#868b94"] as const;
 
@@ -70,7 +73,10 @@ function themeOf(colors: BrandColors, dark: boolean): PageTheme {
  * Whether the web view may stand at an address: the page handed in alone.
  * Note that a link the reader presses out of the page opens in Safari
  * instead, as the panel opens a page's links outside its frame, and every
- * other navigation, a script's included, is refused.
+ * other navigation, a script's included, is refused. Every navigation is
+ * asked here, because react-native-webview opens an address its
+ * `originWhitelist` refuses with `Linking.openURL` without asking, which
+ * would let a page's script open any address or app with no press.
  */
 function staysSealed(request: WebViewNavigation): boolean {
   if (request.url === HANDED_IN) return true;
@@ -107,7 +113,7 @@ export function SealedPage({ html, title }: SealedPageProps) {
   return (
     <WebView
       source={{ html: document }}
-      originWhitelist={[HANDED_IN]}
+      originWhitelist={EVERY_ADDRESS}
       onShouldStartLoadWithRequest={staysSealed}
       javaScriptEnabled
       domStorageEnabled={false}
