@@ -29,8 +29,9 @@ function savedWords(updatedAt: number): string {
   return `saved ${new Date(updatedAt).toISOString()}`;
 }
 
-/** One repository's setup script, as `show --repo` prints it: none where no script is saved under that name in any casing. */
-function repositorySetupJson(setup: WorkspaceSandboxSetupAnswer, repository: string) {
+/** One repository's setup script, as `show --repo` prints it: none where no script is saved under that name in any casing, the name read as the service reads it, trimmed. */
+function repositorySetupJson(setup: WorkspaceSandboxSetupAnswer, named: string) {
+  const repository = named.trim();
   const lowered = repository.toLowerCase();
   const found = setup.setups.find((one) => one.repository.toLowerCase() === lowered);
   return found ?? { repository, script: null, updatedAt: null };

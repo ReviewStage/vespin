@@ -2153,6 +2153,7 @@ const MEMBER_DELETE_AUTOMATION_TOOL = memberMcpTool({
 
 /** Why a setup was not read or saved, in words the agent can act on. */
 const SANDBOX_SETUP_REFUSAL = {
+  NO_WORKSPACE: `Not run: the member is no longer in that workspace; ${MEMBER_MCP_TOOL.LIST_WORKSPACES} names theirs.`,
   NOT_PERMITTED:
     "Not saved: only an owner or an admin of the workspace saves its sandbox setup, and the " +
     "member is neither.",
@@ -2161,6 +2162,18 @@ const SANDBOX_SETUP_REFUSAL = {
     "be made again.",
 } as const;
 
+/** A read's or a save's refusal in the agent's words. */
+function sandboxSetupRefusalWords(refusal: HostedRefusal): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return SANDBOX_SETUP_REFUSAL.NO_WORKSPACE;
+    case HOSTED_API_ERROR.NOT_PERMITTED:
+      return SANDBOX_SETUP_REFUSAL.NOT_PERMITTED;
+    default:
+      return SANDBOX_SETUP_REFUSAL.UNAVAILABLE;
+  }
+}
+
 /** A setup read or saved as the member, as the agent reads it, or the refusal in its words. */
 const sandboxSetupAnswer = <R>(
   answered: Effect.Effect<WorkspaceSandboxSetupAnswer, HostedRefusal, R>,
@@ -2168,15 +2181,7 @@ const sandboxSetupAnswer = <R>(
 ) =>
   answered.pipe(
     Effect.map(accepted),
-    Effect.catch((refusal) =>
-      Effect.succeed(
-        agentToolRejected(
-          refusal.error === HOSTED_API_ERROR.NOT_PERMITTED
-            ? SANDBOX_SETUP_REFUSAL.NOT_PERMITTED
-            : SANDBOX_SETUP_REFUSAL.UNAVAILABLE,
-        ),
-      ),
-    ),
+    Effect.catch((refusal) => Effect.succeed(agentToolRejected(sandboxSetupRefusalWords(refusal)))),
   );
 
 /** The workspace whose setup a call reads or saves, by its slug, where the member has more than one. */
