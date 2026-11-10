@@ -11,13 +11,14 @@
   "types": "./src/protocol.ts",
   "scripts": {
     "build": "esbuild src/main.ts --bundle --platform=node --format=esm --target=node24 --outfile=dist/agent-runner.mjs --sourcemap --external:*.node --define:process.env.APP_RUNNER_VERSION='\"'$npm_package_version'\"' --banner:js=\"import { createRequire as createBundleRequire } from 'node:module'; const require = createBundleRequire(import.meta.url);\" && node scripts/profiler-binary.mjs",
+    "bump:agent-pins": "node scripts/bump-agent-pins.mjs",
     "generate:codex-protocol": "node scripts/generate-codex-protocol.mjs",
     "test:vitest": "vitest run",
     "typecheck": "tsc --project tsconfig.json",
     "upload:source-maps": "node scripts/upload-source-maps.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.3.304",
+    "@anthropic-ai/claude-agent-sdk": "0.3.319",
     "@effect/platform-node": "catalog:",
     "@sentry/node": "11.7.0",
     "@sentry/profiling-node": "11.7.0",

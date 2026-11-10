@@ -105,6 +105,8 @@ export const RUNTIME_REFUSAL = {
   DEVICE_REMOVED: "device_removed",
   /** The agent's device has not beaten lately, so nothing it is sent would be taken until it is back. */
   DEVICE_AWAY: "device_away",
+  /** The agent's mode asks before it acts, and its device runs a runner from before modes, which would run it with full access. */
+  MODES_UNSUPPORTED: "modes_unsupported",
 } as const;
 
 export type RuntimeRefusal = (typeof RUNTIME_REFUSAL)[keyof typeof RUNTIME_REFUSAL];

@@ -341,6 +341,7 @@ function deviceMachineOver(
         linesRead: false,
         transcriptsKept: kept,
         diskSessions: true,
+        permissionModes: device.value.capabilities.includes(DEVICE_CAPABILITY.PERMISSION_MODES),
       };
       return layout;
     });

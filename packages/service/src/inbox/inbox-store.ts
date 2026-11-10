@@ -635,7 +635,7 @@ function itemVisibleTo(userId: string): SQL {
       .from(task)
       .where(and(eq(task.id, inboxItem.taskId), taskReachableBy(userId))),
   );
-  return sql`(${itemReachableBy(userId)} and (${inboxItem.taskId} is null or ${taskReached}))`;
+  return sql`(${itemReachableBy(userId)} and ${taskReached})`;
 }
 
 /** The step a link names the agent's workspace by: its slug, or its id where it has none, as a description's picture names it. */
@@ -667,7 +667,7 @@ const lockAgent = SqlSchema.findOneOption({
 
 const PostWriteSchema = Schema.Struct({
   userId: Schema.String,
-  taskId: Schema.NullOr(Schema.String),
+  taskId: Schema.String,
   organizationId: Schema.String,
   agentId: Schema.String,
   key: Schema.String,
@@ -750,7 +750,7 @@ function insertMessage(
 
 const MessageFileWriteSchema = Schema.Struct({
   userId: Schema.String,
-  taskId: Schema.NullOr(Schema.String),
+  taskId: Schema.String,
   organizationId: Schema.String,
   itemId: Schema.String,
   name: Schema.String,
@@ -1805,7 +1805,7 @@ const findItemHome = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, itemId: Schema.String }),
   Result: Schema.Struct({
     agentId: Schema.String,
-    planId: Schema.NullOr(Schema.String),
+    planId: Schema.String,
     workspaceId: Schema.String,
   }),
   execute: ({ userId, itemId }) =>
@@ -1836,7 +1836,7 @@ const findItemScope = SqlSchema.findOne({
   Request: Schema.Struct({ itemId: Schema.String }),
   Result: Schema.Struct({
     userId: Schema.String,
-    taskId: Schema.NullOr(Schema.String),
+    taskId: Schema.String,
     organizationId: Schema.String,
   }),
   execute: ({ itemId }) =>
@@ -3593,7 +3593,7 @@ const findStartedThread = SqlSchema.findOneOption({
 const insertStartedItem = SqlSchema.findOne({
   Request: Schema.Struct({
     userId: Schema.String,
-    taskId: Schema.NullOr(Schema.String),
+    taskId: Schema.String,
     organizationId: Schema.String,
     agentId: Schema.String,
     key: Schema.String,

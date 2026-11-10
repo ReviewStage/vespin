@@ -123,6 +123,14 @@ export interface MachineLayout {
    * transcripts stand on its disk alone; a sandbox's such session is let go.
    */
   readonly diskSessions: boolean;
+  /**
+   * Whether the runner runs the agent in the mode its config names
+   * (`@repo/agent-runner`'s `PERMISSION_MODE`): a sandbox's, and a device's
+   * whose host registered that its runner does
+   * (`DEVICE_CAPABILITY.PERMISSION_MODES`); an older device's runs every
+   * agent with full access whatever mode it is handed.
+   */
+  readonly permissionModes: boolean;
 }
 
 /** What a later call reads of a launch: its first event number, and what it was started with, as a digest (`runner-sessions.ts`'s `launchFingerprint`). */
@@ -256,6 +264,8 @@ export class LaunchRefused extends Data.TaggedError("LaunchRefused")<{
   readonly deviceRemoved?: true | undefined;
   /** Whether the agent's device has not beaten lately, so nothing it is sent would be taken until it is back. */
   readonly deviceAway?: true | undefined;
+  /** Whether the agent's mode asks before it acts and its device's runner would run it with full access (`MachineLayout`'s `permissionModes`). */
+  readonly modesUnsupported?: true | undefined;
 }> {}
 
 /** What an open asks: the session the place is opened under, the agent whose repository it checks out, and the reads run beside it. */

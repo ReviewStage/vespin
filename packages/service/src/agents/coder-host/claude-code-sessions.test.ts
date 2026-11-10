@@ -71,6 +71,7 @@ import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { AGENT_FAILURE, AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import {
   DEVICE_AGENT_LINE_KIND,
+  DEVICE_CAPABILITY,
   deviceAgentLaunchSecretsSchema,
 } from "@repo/features/device-agent-wire";
 import { INSTALLED_SKILL_SCOPE, INSTALLED_SKILL_SOURCE } from "@repo/features/installed-skill-wire";
@@ -149,6 +150,7 @@ import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import {
   KEY_REFUSAL,
   PLAN_REFUSAL,
+  RUNTIME_REFUSAL,
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
@@ -1261,6 +1263,48 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         // Its fingerprint reads the key in its variable, as warm runners launched before were recorded: the first
         // 32 hex characters of the SHA-256 of {"env":[["ANTHROPIC_API_KEY",API_KEY]],"names":["linear"]}.
         assert.equal(launch.payload.fingerprint, "586cbee90aa20b9bb788adc7a378466c");
+
+        // A mode that asks is refused by name on a Mac whose runner reads no mode, rather than run with full access,
+        // and queues no launch; once the Mac says its runner reads one, the launch is handed it.
+        yield* updateAgentPermissionModeCommitted(userId, agent.id, AGENT_PERMISSION_MODE.ASK);
+        const asked = () =>
+          Effect.flatMap(
+            sessionsFor(userId, { next: 0 }).pipe(
+              Effect.provide(machines),
+              Effect.provide(services(onKey)),
+            ),
+            (sessions) =>
+              Effect.flatMap(writtenLine(agent, "Go on."), (line) => deliveredOpen(sessions, line)),
+          );
+        assert.deepEqual(yield* asked(), {
+          outcome: SESSION_SEND_OUTCOME.FAILED,
+          status: 422,
+          runtimeRefusal: RUNTIME_REFUSAL.MODES_UNSUPPORTED,
+        });
+        const launchesWaiting = (yield* deviceAgentLinesWaiting(userId, deviceId)).filter(
+          (line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH,
+        );
+        assert.deepEqual(launchesWaiting, []);
+        yield* registerDevice(userId, {
+          id: deviceId,
+          name: "Studio",
+          ...DEVICE_LAYOUT,
+          capabilities: [DEVICE_CAPABILITY.PERMISSION_MODES],
+        });
+        assert.equal((yield* asked()).outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const relaunch = (yield* deviceAgentLinesWaiting(userId, deviceId)).at(-1);
+        assert.ok(relaunch?.kind === DEVICE_AGENT_LINE_KIND.LAUNCH && relaunch.id !== launch.id);
+        const reclaimed = Option.getOrThrow(
+          yield* claimedDeviceAgentLine(userId, deviceId, relaunch.id).pipe(
+            Effect.provide(Layer.succeed(HostedEnvironment, NO_KEYS)),
+          ),
+        );
+        assert.ok("secrets" in reclaimed);
+        const [config] = Schema.decodeUnknownSync(deviceAgentLaunchSecretsSchema)(reclaimed.secrets)
+          .stdin.trimEnd()
+          .split("\n")
+          .map((line: string): ClaudeCodeConfig => JSON.parse(line));
+        assert.equal(config?.permissionMode, PERMISSION_MODE.ASK);
       }),
   );
 
