@@ -221,7 +221,7 @@ const listedShells = /* @__PURE__ */ Effect.fnUntraced(function* (sessionId: str
  * and the commits its changed files are read whole at (`readCommits`), read
  * from GitHub afresh on the token minted for its repository, with who its
  * subject says it writes as. Shared with the reads of a pull request by
- * its repository (`github/repository-pull-request-procedures.ts`).
+ * its repository (`github/repository-pull-request.ts`).
  */
 export const pullRequestChangesRead = (
   token: Redacted.Redacted,

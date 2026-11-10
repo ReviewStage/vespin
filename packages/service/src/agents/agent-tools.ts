@@ -71,7 +71,6 @@ import {
 } from "@repo/features/agent-wire";
 import { deviceAgentRegisterRequestSchema } from "@repo/features/device-agent-wire";
 import { githubRepositoryFullNameSchema } from "@repo/features/github-repositories-wire";
-import { MENTION_KIND } from "@repo/features/mention-link";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import { type ModelChoice, modelChoiceSchema } from "@repo/features/models-wire";
 import { PAGE_OWNER, type PageOwner } from "@repo/features/page-wire";
@@ -171,13 +170,7 @@ import {
   type ExperimentsOn,
   experimentOnIn,
 } from "./workspace-experiment-on.js";
-import {
-  workspaceNamingOf,
-  workspaceStepOf,
-  writtenMention,
-  writtenPageMention,
-  writtenTaskMention,
-} from "./written-mentions.js";
+import { workspaceNamingOf } from "./written-mentions.js";
 
 /**
  * agent-tools.ts -- the tools every agent reaches the workspace's coding agents by: list them, read one's progress, start one.
@@ -1015,7 +1008,7 @@ export const LIST_AGENTS_TOOL = {
     "sandbox is on if a turn " +
     "has ended, one line of what it last did, its task (id and name; null for " +
     "an agent on no task) and whether that is the task you work on, and whether the agent is " +
-    "archived, and its mention, the `[@title](link)` to name it by in your words. The agents " +
+    "archived. The agents " +
     "that matter to you come first: the agent that started you and the agents you started, " +
     "then those on your task; then the rest of the workspace, the newest started first, at most " +
     `${WORKSPACE_AGENTS_LIST_LIMIT} a page, with nextOffset where more stand, which offset ` +
@@ -1104,7 +1097,7 @@ function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
     "the repository's default branch, or the branch named, which must already be on GitHub. " +
     "It runs on the " +
     "model and effort named, or on the member's default with neither. Answers `accepted` with " +
-    "the agent's id, model, the model's name to say it by, effort, status, and mention once its session " +
+    "the agent's id, title, model, the model's name to say it by, effort, and status once its session " +
     "is open, or `rejected` and why " +
     "nothing was started; a rejected model or effort lists the choices. " +
     `${AGENT_TOOL.LIST_MODELS} lists them before you name one. With from, it starts from ` +
@@ -1112,7 +1105,7 @@ function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
     "that failed, ended, or ran out of context, which is handed over and stopped, or fork one " +
     "at a messageId to try another direction while it goes on. An agent already continued may " +
     "be continued again, and the answer then names the earlier continuations by their id and " +
-    "mention (earlierContinuations). A start from another agent " +
+    "title (earlierContinuations). A start from another agent " +
     "copies its work and summarizes its transcript, so it may take a minute to answer."
   );
 }
@@ -1206,7 +1199,7 @@ export const READ_PAGE_TOOL = {
     "Read a page an agent showed in your workspace, by its id: its title, the version read " +
     "(the newest unless you name one) and the newest there is, its task and whether that is " +
     "the task you work on, or, for a page an agent on no task showed on itself, that agent " +
-    "and whether it is you, its mention ready to write, and its HTML as it " +
+    "and whether it is you, and its HTML as it " +
     "stands, cut on a line at " +
     `${READ_PAGE_CHARS} characters with how many were left out. Read a page the developer ` +
     "pointed you at, or one another agent showed, before you build on it or revise it; to " +
@@ -1435,8 +1428,7 @@ export const LIST_TASKS_TOOL = {
     "assignee's mention link, null for no one), " +
     "the repository its agents work in (null for none yet), who started it, whether it is " +
     "the task you work on, the sectionId of the sidebar section the " +
-    "developer you work for keeps it in (null for none, under Tasks), and its mention, the " +
-    "`[@name](link)` to name it by in your words, the newest first and at most " +
+    "developer you work for keeps it in (null for none, under Tasks), the newest first and at most " +
     `${TASKS_LIST_LIMIT} a page, with ` +
     "nextOffset where more stand; and beside them every section that developer keeps in this " +
     "workspace's sidebar, each with its id and title. Narrow it by words of a task's name with " +
@@ -1508,8 +1500,6 @@ interface AgentReading {
   readonly repository: string | null;
   readonly branch: string | null;
   readonly activity: string | null;
-  /** The agent's mention, `[@title](link)`, as the caller writes it to name the agent in its words. */
-  readonly mention: string;
 }
 
 /** The agents' standings, read once for the lot: each one's newest turn. The agents were read through their workspace's gate, so their conversations are read by id. */
@@ -1558,7 +1548,6 @@ const readAgentReading = (
   },
   newest: StoredMessageRecord | undefined,
   offered: readonly OfferedModel[],
-  workspace: string,
 ): AgentReading => {
   const activity =
     newest === undefined
@@ -1581,7 +1570,6 @@ const readAgentReading = (
     repository: agent.repository,
     branch: agent.branch,
     activity: activity ?? null,
-    mention: agentMention(agent, workspace),
   };
 };
 
@@ -1710,15 +1698,6 @@ export function choiceRefusal(
   return `${lead}: ${refused}. The choices are: ${choices}.`;
 }
 
-/** The agent's mention under the workspace's step, by the agent whichever task it works on, named as its tab is. */
-function agentMention(agent: Agent, workspace: string): string {
-  return writtenMention(
-    { kind: MENTION_KIND.AGENT, agentId: agent.id },
-    agentName(agent),
-    workspace,
-  );
-}
-
 /** How a coding agent names itself to another: its title, its id to answer it by, and its repository where it has one. */
 function agentIntroduction(agent: Agent): string {
   const working = agent.repository === null ? "" : `, working in ${agent.repository}`;
@@ -1760,15 +1739,14 @@ function startedByNote(starter: Agent, note: string | undefined): string {
 const startedReading = (agent: Agent, offered: readonly OfferedModel[], ownTask: string | null) =>
   Effect.gen(function* () {
     const standing = yield* standingsOf([agent]);
-    const workspace = yield* workspaceStepOf(agent.userId, agent.organizationId);
     return {
       id: agent.id,
+      title: agentName(agent),
       model: agent.model,
       modelName: modelLabel(agent.model, offered),
       effort: agent.effort,
       status: standing(agent).status,
       onYourTask: agent.taskId !== null && agent.taskId === ownTask,
-      mention: agentMention(agent, workspace),
     };
   });
 
@@ -1847,7 +1825,6 @@ export function runListAgents(
       const standing = yield* standingsOf(agents);
       const newest = yield* newestJournalsOf(agents);
       const offered = yield* offeredModels;
-      const step = yield* workspaceStepOf(callerUserId(caller), workspace.value);
       const readings = agents.map((agent) =>
         readAgentReading(
           agent,
@@ -1855,7 +1832,6 @@ export function runListAgents(
           standing(agent),
           newest.get(agent.conversationId),
           offered,
-          step,
         ),
       );
       return {
@@ -2054,9 +2030,8 @@ export function runReadAgent(
     Effect.gen(function* () {
       const found = yield* workspaceAgentOf(call.caller, asked.success.agentId);
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
-      const { agent, task, workspaceId } = found.value;
+      const { agent, task } = found.value;
       const standing = yield* standingsOf([agent]);
-      const step = yield* workspaceStepOf(callerUserId(call.caller), workspaceId);
       const newest = yield* newestJournalsOf([agent]);
       const reading = readAgentReading(
         agent,
@@ -2064,7 +2039,6 @@ export function runReadAgent(
         standing(agent),
         newest.get(agent.conversationId),
         yield* offeredModels,
-        step,
       );
       const published = yield* publishedOf(callerUserId(call.caller), agent);
       const read = yield* transcriptPage(agent, page);
@@ -2081,10 +2055,10 @@ export function runReadAgent(
   );
 }
 
-/** An agent that already continued the one a start continues, as the start's answer names it: its id and its mention. */
+/** An agent that already continued the one a start continues, as the start's answer names it: its id and its title. */
 interface EarlierContinuation {
   readonly id: string;
-  readonly mention: string;
+  readonly title: string;
 }
 
 /** Where a start from another agent lands: the source's own place, its task or, with none, its workspace and repository, and, for a continue, the agents that already continued the source, oldest first. */
@@ -2095,7 +2069,7 @@ interface SourceLanding {
 
 /**
  * The agents that continued a source, oldest first, each by its id and its
- * mention, up to the one named `upTo`, which is left out with every agent
+ * title, up to the one named `upTo`, which is left out with every agent
  * after it; all of them where none is named. A fork is no continuation.
  */
 const earlierContinuationsOf = (
@@ -2108,16 +2082,10 @@ const earlierContinuationsOf = (
     const whole = continuations.filter((each) => each.messageId === undefined);
     const cut = whole.findIndex((each) => each.agentId === upTo);
     const earlier = cut < 0 ? whole : whole.slice(0, cut);
-    if (earlier.length === 0) return [];
-    const step = yield* workspaceStepOf(at.userId, at.workspaceId);
     return earlier.map(
       (each): EarlierContinuation => ({
         id: each.agentId,
-        mention: writtenMention(
-          { kind: MENTION_KIND.AGENT, agentId: each.agentId },
-          each.title ?? CONTINUATION_NAME,
-          step,
-        ),
+        title: each.title ?? CONTINUATION_NAME,
       }),
     );
   });
@@ -2518,7 +2486,7 @@ interface TaskUpdateAnswered {
   readonly blocksNamed: boolean;
 }
 
-/** A task's change as the model reads it: the task as it now stands, with its mention, its parent and its blocks where the call named them, and whether every change named already stood before the call. */
+/** A task's change as the model reads it: the task as it now stands, its parent and its blocks where the call named them, and whether every change named already stood before the call. */
 const taskUpdateAnswer = (
   userId: string,
   task: StoredTask["task"],
@@ -2526,7 +2494,7 @@ const taskUpdateAnswer = (
 ) =>
   Effect.gen(function* () {
     const { step, name } = yield* workspaceNamingOf(userId, task.workspaceId);
-    const blocks = blocksNamed ? yield* taskBlockReadingsNow(userId, task.id, step) : undefined;
+    const blocks = blocksNamed ? yield* taskBlockReadingsNow(userId, task.id) : undefined;
     const answer: WireRecord = {
       status: ACTION_RESULT_STATUS.ACCEPTED,
       task: {
@@ -2535,7 +2503,6 @@ const taskUpdateAnswer = (
         name: task.name,
         repository: task.repository,
         pinned: task.pinnedAt !== undefined,
-        mention: writtenTaskMention(task, task.name, step),
         ...(section === undefined
           ? undefined
           : { section: section === null ? null : { ...section } }),
@@ -2922,7 +2889,7 @@ export function runUpdateAgent(
     Effect.gen(function* () {
       const found = yield* workspaceAgentOf(caller, agentId);
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
-      const { task, workspaceId } = found.value;
+      const { task } = found.value;
       const choices = yield* Effect.result(accountModelChoices(userId));
       if (Result.isFailure(choices)) return agentToolRejected(UPDATE_AGENT_REFUSAL.UNAVAILABLE);
       const { offered } = choices.success;
@@ -2972,7 +2939,6 @@ export function runUpdateAgent(
       });
       if (Option.isNone(written)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
       agent = written.value.agent;
-      const step = yield* workspaceStepOf(userId, workspaceId);
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         agent: {
@@ -2985,7 +2951,6 @@ export function runUpdateAgent(
           disabledServers: [...agent.disabledServers],
           task: task.task === null ? null : { ...task.task },
           onYourTask: task.onYourTask,
-          mention: agentMention(agent, step),
           archived: agent.archivedAt !== null,
           ...(pinned === undefined ? undefined : { pinned }),
         },
@@ -3028,7 +2993,7 @@ function addedRepository(
     Effect.gen(function* () {
       const found = yield* workspaceAgentOf(caller, agentId);
       if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
-      const { agent, task, workspaceId } = found.value;
+      const { agent, task } = found.value;
       const calling = callerAgent(caller);
       const added = yield* Effect.result(
         addAgentRepository({ userId, agent: calling }, agent, asked, {
@@ -3042,7 +3007,6 @@ function addedRepository(
       }
       const { repository, path, checkout } = added.success;
       const now = checkout === ADDED_REPOSITORY_CHECKOUT.NOW;
-      const step = yield* workspaceStepOf(userId, workspaceId);
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         agent: {
@@ -3050,7 +3014,6 @@ function addedRepository(
           title: agent.title ?? agent.model,
           task: task.task === null ? null : { ...task.task },
           onYourTask: task.onYourTask,
-          mention: agentMention(agent, step),
         },
         added: { repository, path, checkout },
         ...(now && calling?.id === agent.id
@@ -3114,7 +3077,6 @@ export function runListTasks(
         startedBy: task.createdBy?.name ?? null,
         isYourTask: task.id === ownTask,
         sectionId: sectionOf.get(task.id) ?? null,
-        mention: writtenTaskMention(task, task.name, step),
       }));
       const next = offset + TASKS_LIST_LIMIT;
       return {
@@ -3270,7 +3232,6 @@ export function runReadPage(
       // A page of another workspace, even one the member is also in, is none of the caller's.
       const standing = yield* pageStandingOf(caller, owner);
       if (Option.isNone(standing)) return agentToolRejected(READ_PAGE_REFUSAL.NO_PAGE);
-      const mention = yield* writtenPageMention(userId, owner, page.id, page.title);
       const cut = pageCut(page.html);
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
@@ -3280,8 +3241,6 @@ export function runReadPage(
           version: page.version,
           newestVersion,
           ...standing.value,
-          // The page's mention, ready to write, wherever its owner's workspace reads for the member.
-          ...(Option.isNone(mention) ? undefined : { mention: mention.value }),
           html: cut.html,
           leftOutChars: cut.leftOutChars,
         },

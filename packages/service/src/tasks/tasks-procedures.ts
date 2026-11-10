@@ -17,7 +17,7 @@
  * a link naming it by its number in its workspace (`task-number-store.ts`). Its
  * `DELETE` stops every coding agent of the plan first, through the one Stop
  * (`packages/service/src/agents/coder-host/stop.ts`), and only then deletes
- * the plan.
+ * the plan, as every door deletes one (`task-delete.ts`).
  * Each row of the list carries what the plan's coding agents are doing and
  * what they published, in brief, where it has any
  * (`packages/service/src/agents/task-agents.ts`). A pin is a change like a
@@ -53,7 +53,7 @@
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
-import { listAgents, readAgentByKey } from "@repo/database/models/agent-store";
+import { readAgentByKey } from "@repo/database/models/agent-store";
 import { listRevisions, readRevision } from "@repo/database/models/description-revisions";
 import { devicesNamed } from "@repo/database/models/device-store";
 import { keepRunsOnPick } from "@repo/database/models/runs-on-pick";
@@ -69,7 +69,6 @@ import {
 } from "@repo/database/models/task-block-store";
 import { taskIdOfNumber } from "@repo/database/models/task-number-store";
 import {
-  deleteTaskCommitted,
   listTasks,
   readTask,
   readTaskDescription,
@@ -97,9 +96,8 @@ import {
 import { Effect, Option } from "effect";
 import { routedSessions } from "../agents/coder-host/runtime-sessions.js";
 import { type StartReach, startRequestedAgent } from "../agents/coder-host/start.js";
-import { everyStoppedForGood, summaryOf } from "../agents/coder-host/stop.js";
+import { summaryOf } from "../agents/coder-host/stop.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
-import { retiredBeforeDelete, retiringReach } from "../agents/retire-sessions.js";
 import type { SandboxDeleteReach } from "../agents/session-sandboxes.js";
 import type { TypedTurn } from "../agents/sessions/agent-sessions.js";
 import { listTasklessAgents, withTaskAgents } from "../agents/task-agents.js";
@@ -123,6 +121,7 @@ import {
 } from "./description-notes.js";
 import { taskChangeAsked, taskChangeSettled, taskChangeWritten } from "./task-change.js";
 import { createTaskAsked, type TaskCreateRelationRefused } from "./task-create-relation.js";
+import { deleteTaskStoppingAgents } from "./task-delete.js";
 import { moveTaskRelation, type TaskRelationRefused } from "./task-relation.js";
 
 export interface TasksProcedureSeams extends SandboxDeleteReach {
@@ -581,42 +580,11 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
       return txid === undefined ? { plan: opened.value } : { plan: opened.value, txid };
     }),
 
-    /**
-     * Every coding agent of the plan stopped for good first, as a Stop stops
-     * one, so none works on for a plan that is gone; then the
-     * plan's sessions and its agents' retired (`retire-sessions.ts`),
-     * with no transaction open; then the plan, under its lock, which reads
-     * again which agents stand. A harness that refuses a Stop, an agent with a turn still
-     * coming that no Stop can name yet, or an agent started while the others
-     * were stopped, leaves the plan standing and refused.
-     *
-     * The Stops and the retires reach the agents' sessions for the account
-     * the request resolved to (`coder-host/runtime-sessions.ts`), the
-     * retires a courtesy the delete does not wait on.
-     */
+    /** The plan deleted as every door deletes one (`task-delete.ts`): its agents stopped for good first. */
     delete: plans.delete.effect(function* ({ input, context }) {
-      const { userId } = context;
       const taskId = yield* pathUuid(input.id);
-      const retiring = yield* retiringReach(userId);
-      const agents = yield* hostedStoreOrUnavailable(
-        listAgents(userId, taskId, { includeArchived: true }),
-      );
-      yield* everyStoppedForGood(writer, userId, agents);
-      // The stopped agents' sessions are retired before the delete's transaction, so no lock waits on a harness;
-      // an agent started meanwhile is none of these, keeps its session, and refuses the delete below.
-      yield* hostedStoreOrUnavailable(
-        retiredBeforeDelete(retiring)(agents.map(({ conversationId }) => conversationId)),
-      );
-      const stopped = new Set(agents.map(({ id }) => id));
-      const deleted = yield* hostedStoreOrUnavailable(
-        deleteTaskCommitted(userId, taskId, { stoppedAgentIds: stopped }).pipe(
-          Effect.catchTag("TaskAgentUnstopped", () => Effect.succeed(undefined)),
-        ),
-      );
-      // An agent started while the others were stopped is one this delete has not stopped yet.
-      if (deleted === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
-      if (Option.isNone(deleted)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-      return { deleted: true as const, txid: deleted.value.txid };
+      const { txid } = yield* deleteTaskStoppingAgents(writer, context.userId, taskId);
+      return { deleted: true as const, txid };
     }),
 
     /**

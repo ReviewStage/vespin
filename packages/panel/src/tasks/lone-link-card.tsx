@@ -3,6 +3,7 @@ import { INBOX_BLOCK } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LINK_PLACE, readLink, taskNumberOf } from "@repo/features/link-grammar";
 import { LONE_LINK, type LoneLink, loneLinkOf } from "@repo/features/lone-link";
+import { holderTaskId } from "@repo/features/mention-holder";
 import {
   decodeMention,
   isBareLink,
@@ -18,7 +19,6 @@ import { pullRequestStateWord } from "./agent-model.js";
 import { LinesChanged, PUBLISHED_META_CLASS } from "./agent-published.js";
 import { InboxCodeCard, type InboxCodeDoors } from "./inbox-code-card.js";
 import { githubName, MentionChipCard } from "./mention-chip.js";
-import { holderTaskId } from "./mention-holder.js";
 import { PullRequestMark } from "./pull-request-mark.js";
 import { ShownNewestPage } from "./shown-page.js";
 import { useMentionDoors } from "./task-mentions.js";

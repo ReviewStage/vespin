@@ -1,8 +1,8 @@
 import { INTEGRATION_PROVIDER, integrationConnectionOf } from "@repo/features/integration-wire";
+import type { ToolCallView } from "@repo/features/tool-call-model";
 import { serverName } from "@repo/ui/agent-servers-model";
 import { createContext, type ReactNode, useCallback, useContext } from "react";
 import { useIntegrationStatuses } from "../integration-statuses.js";
-import type { ToolCallView } from "./tool-call-model.js";
 
 /**
  * connection-names.tsx -- the name a call of an MCP server's tool says it ran on, as the server's card names it.

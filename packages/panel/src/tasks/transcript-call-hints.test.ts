@@ -1,14 +1,14 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
+import { TARGET_HINT, TOOL_TARGET } from "@repo/features/tool-call-model";
 import { CALL_KIND } from "@repo/features/turn-rows";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
-import { TOOL_BLOCK, TOOL_STATE } from "../ai-elements/tool.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
-import { TARGET_HINT, TOOL_TARGET } from "./tool-call-model.js";
 import { TranscriptOpeningCall, TranscriptSubagent, TranscriptTool } from "./transcript-blocks.js";
 
 /**

@@ -24,26 +24,19 @@
  * resource.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
-import { INTEGRATION_INSTALLATION_STATUS } from "@repo/database/integration-vocabulary";
-import {
-  markIntegrationInstallationDeleted,
-  openIntegrationInstallIntent,
-  workspaceIntegrationInstallations,
-} from "@repo/database/models/integration-installation-store";
-import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
+import { openIntegrationInstallIntent } from "@repo/database/models/integration-installation-store";
 import { TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
-import { Effect, Option, Result } from "effect";
-import { answeredWorkspace, managedWorkspace } from "../../accounts/workspace-access.js";
+import { Effect } from "effect";
+import { managedWorkspace } from "../../accounts/workspace-access.js";
 import {
   HOSTED_REFUSAL,
-  type HostedRefusal,
   hostedStoreOrUnavailable,
   type UserIdResolver,
 } from "../../http/http-effect.js";
 import { accountMiddleware, hosted } from "../../orpc/base.js";
 import { SentryApp, type SentryAppSettings } from "./sentry-app-config.js";
 import { SENTRY_ORIGIN } from "./sentry-install-app.js";
+import { disconnectWorkspaceSentry, readWorkspaceSentry } from "./sentry-installations.js";
 
 /** The query the install address carries to Sentry, which Sentry hands back. */
 const INSTALL_STATE_QUERY = "state";
@@ -56,27 +49,6 @@ export interface SentryInstallProcedureSeams {
 const settingsOrUnavailable = Effect.flatMap(SentryApp, (app) =>
   app.settings.pipe(Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE)),
 );
-
-/** The workspace's Sentry as the wire carries it: its active installations, the first linked first. */
-const workspaceSentry = Effect.fn("web/workspaceSentry")(function* (
-  workspaceId: string,
-): Effect.fn.Return<WorkspaceSentry, HostedRefusal, DatabaseServices | SentryApp> {
-  const app = yield* SentryApp;
-  const configured = Result.isSuccess(yield* Effect.result(app.settings));
-  const rows = yield* hostedStoreOrUnavailable(workspaceIntegrationInstallations(workspaceId));
-  const installations = rows
-    .filter(
-      (row) =>
-        row.provider === TRIGGER_PROVIDER.SENTRY &&
-        row.status === INTEGRATION_INSTALLATION_STATUS.ACTIVE,
-    )
-    .map((row) =>
-      row.accountLabel === null
-        ? { installationId: row.externalId }
-        : { installationId: row.externalId, account: row.accountLabel },
-    );
-  return { configured, installations };
-});
 
 /** Sentry's external install address for the integration, carrying the intent's state. */
 function installUrl(settings: SentryAppSettings, state: string): string {
@@ -103,32 +75,15 @@ export function sentryInstallProcedures(seams: SentryInstallProcedureSeams) {
     }),
     /** The workspace's Sentry, to any member of it. */
     installations: resource.installations.effect(function* ({ input, context }) {
-      const workspace = yield* answeredWorkspace(context.userId, input.workspaceId);
-      return yield* workspaceSentry(workspace.id);
+      return yield* readWorkspaceSentry(context.userId, input.workspaceId);
     }),
-    /**
-     * One of the workspace's installations disconnected; one that is not the
-     * workspace's is not found, and the write itself names the workspace, so
-     * an installation another workspace linked since the read is left alone.
-     */
+    /** One of the workspace's installations disconnected (`disconnectWorkspaceSentry`). */
     disconnect: resource.disconnect.effect(function* ({ input, context }) {
-      const workspace = yield* managedWorkspace(context.userId, input.workspaceId);
-      const before = yield* workspaceSentry(workspace.id);
-      if (!before.installations.some((one) => one.installationId === input.installationId)) {
-        return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-      }
-      const marked = yield* hostedStoreOrUnavailable(
-        markIntegrationInstallationDeleted(
-          TRIGGER_PROVIDER.SENTRY,
-          input.installationId,
-          workspace.id,
-        ),
+      return yield* disconnectWorkspaceSentry(
+        context.userId,
+        input.workspaceId,
+        input.installationId,
       );
-      const sentry = yield* workspaceSentry(workspace.id);
-      return Option.match(marked, {
-        onNone: () => sentry,
-        onSome: (txid) => ({ ...sentry, txid }),
-      });
     }),
   };
 }

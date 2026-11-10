@@ -42,7 +42,7 @@
  * The other two (`GET` and `POST /api/pull-requests/chapters`) name the pull
  * request by its workspace, repository, and number in the query, for one no
  * agent opened, and reach it as its other reads by repository do
- * (`github/repository-pull-request-procedures.ts`): a workspace the account
+ * (`github/repository-pull-request.ts`): a workspace the account
  * is no member of is not found. The read confirms the repository in reach
  * on a minted token and answers as the agent's read does, asking GitHub for
  * nothing more and starting no model call. The Generate reads the pull
@@ -114,10 +114,7 @@ import {
   pullRequestCommitMessages,
   pullRequestFiles,
 } from "../github/pull-requests.js";
-import {
-  reachedByNumber,
-  reachedRepository,
-} from "../github/repository-pull-request-procedures.js";
+import { reachedByNumber, reachedRepository } from "../github/repository-pull-request.js";
 import { agentWorkspace } from "../github/workspace-repository.js";
 import {
   HOSTED_REFUSAL,

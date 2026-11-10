@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
-import { cardTitle, plainWords } from "@repo/features/plain-words";
-import { CALL_KIND, callLine, callPlace } from "@repo/features/turn-rows";
 import type { WireRecord } from "@repo/wire";
 import { test } from "vitest";
-import { TOOL_BLOCK } from "../ai-elements/tool.js";
+import { cardTitle, plainWords } from "./plain-words.js";
+import { TOOL_BLOCK } from "./tool-call-block.js";
 import {
   calledAgent,
   sentWords,
@@ -11,6 +10,7 @@ import {
   toolCallView,
   toolTarget,
 } from "./tool-call-model.js";
+import { CALL_KIND, callLine, callPlace } from "./turn-rows.js";
 
 const ESCAPE = String.fromCharCode(27);
 
@@ -955,6 +955,32 @@ test("a pause names how long it waits, and its answer how long it waited or that
     kind: TOOL_BLOCK.TEXT,
     text: "Stopped early: a message arrived.",
   });
+});
+
+test("a booked wakeup names how long until it fires, as the service held it once answered, and its cancel is drawn as one", () => {
+  const asking = toolCallView({
+    tool: "schedule_wakeup",
+    input: { delaySeconds: 5, prompt: "Read the checks on pull request #42." },
+    output: undefined,
+  });
+  const booked = toolCallView({
+    tool: "schedule_wakeup",
+    input: { delaySeconds: 5, prompt: "Read the checks on pull request #42." },
+    output: { status: "accepted", wakeup: { at: "2026-10-21T12:01:00.000Z", delaySeconds: 60 } },
+  });
+  const canceled = toolCallView({
+    tool: "schedule_wakeup",
+    input: { stop: true },
+    output: { status: "accepted", wakeup: null },
+  });
+  assert.deepEqual(
+    [asking, booked, canceled].map((view) => [view.kind, view.subject]),
+    [
+      [CALL_KIND.SCHEDULE_WAKEUP, "5 seconds"],
+      [CALL_KIND.SCHEDULE_WAKEUP, "1 minute"],
+      [CALL_KIND.CANCEL_WAKEUP, ""],
+    ],
+  );
 });
 
 test("a post from version 5 is a row naming its thread's title, or its key where it names none, over its message's first line and its ask's kind with what it offers, never its input as JSON", () => {

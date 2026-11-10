@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { AGENT_STATUS, type AgentStatus, type AgentSummary } from "@repo/features/agent-wire";
+import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { ACT_KIND } from "@repo/host/acts";
 import type { WireRecord } from "@repo/wire";
 import { act, createElement } from "react";
@@ -16,7 +17,6 @@ import { restOn } from "../testing/hint-rest.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
 import { NOTHING_HELD } from "./agent-ref.js";
 import { AgentSubagentTab } from "./agent-tab.js";
-import { TOOL_TARGET, type ToolTarget } from "./tool-call-model.js";
 
 /**
  * subagent-tab.test.ts -- a worker's tab folds its calls as its agent's

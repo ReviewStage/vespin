@@ -9,7 +9,8 @@
  */
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import { type AgentTranscriptKey, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import type { ListedAgent, TasklessAgent } from "@repo/features/agent-wire";
 import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/inbox-list-model";
 import { INBOX_ASK, type InboxMessage, recommendedLabels } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -27,7 +28,14 @@ import {
   workspaceExperimentChoicesFrom,
 } from "@repo/settings";
 import { type AppSettingsView, appSettingsView } from "@repo/settings/wire";
-import { type AppStateDelivery, type AppStateSnapshot, withAppStateDelivery } from "./app-state.js";
+import {
+  type AppHostRead,
+  type AppStateDelivery,
+  type AppStateSnapshot,
+  type AppTranscript,
+  OWN_TRANSCRIPT,
+  withAppStateDelivery,
+} from "./app-state.js";
 
 /**
  * The one rule a window adopts a delivery by. A delivery older than the one
@@ -501,4 +509,24 @@ export function selectWorkspaceExperiment(
   experiment: WorkspaceExperiment,
 ): (state: AppStateSnapshot) => boolean {
   return (state) => workspaceExperimentOnIn(state, workspaceId, experiment);
+}
+
+/** One agent as the task list follows it, on a task or on none. */
+export type FollowedAgent = ListedAgent | TasklessAgent;
+
+/** One agent as the task list follows it, by its id, as a `select`: on its task or on none; none where the list holds no such agent. */
+export function selectFollowedAgent(
+  agentId: string,
+): (state: AppStateSnapshot) => FollowedAgent | undefined {
+  return (state) =>
+    state.tasks.taskAgents?.find(({ id }) => id === agentId) ??
+    state.tasks.tasklessAgents?.find(({ id }) => id === agentId);
+}
+
+/** One transcript as the host holds it, the agent's own or its worker's by the call that started it, as a `select`; none where no window holds it. */
+export function selectTranscript(
+  transcript: AgentTranscriptKey,
+): (state: AppStateSnapshot) => AppHostRead<AppTranscript> | undefined {
+  return (state) =>
+    state[LIVE_READ.TRANSCRIPT][transcript.agentId]?.[transcript.callId ?? OWN_TRANSCRIPT];
 }
