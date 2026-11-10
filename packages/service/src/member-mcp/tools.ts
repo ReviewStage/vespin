@@ -3438,7 +3438,8 @@ const DISCONNECT_SLACK_BOT_TOOL = memberMcpTool({
     "member's Slack id it kept is forgotten, with its default repositories, though the bot " +
     "stays installed in the Slack team until its admins remove it there. Connecting it again " +
     "is done in the app. Only an owner or an admin of the workspace may; disconnecting one not " +
-    `connected changes nothing. ${WORKSPACE_WORDS} Answers \`accepted\` with the bot as it ` +
+    "connected changes nothing. Disconnect it only when the member asks for it. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the bot as it ` +
     `then stands, as ${MEMBER_MCP_TOOL.READ_SLACK_BOT} reads it, or \`rejected\` and why.`,
   input: ReadSlackBotInputSchema,
   annotations: DESTRUCTIVE,
