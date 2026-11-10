@@ -180,6 +180,7 @@ export * from "./components/task-row/task-row.js";
 export * from "./components/text/text.js";
 export * from "./components/text-button/text-button.js";
 export * from "./components/text-field/text-field.js";
+export * from "./components/text-link/outside-link.js";
 export * from "./components/text-link/text-link.js";
 export * from "./components/thumb-strip/thumb-strip.js";
 export * from "./components/time/time.js";
