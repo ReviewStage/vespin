@@ -35,6 +35,7 @@ const NORMAL = {
   "unclosed emphasis in a fence": `\`\`\`c\n${"int **argv;\n".repeat(100)}\`\`\`\n`,
   "a fence inside a list item": `- \`\`\`c\n${"  int **argv;\n".repeat(100)}  \`\`\`\n`,
   "a fenced list of globs": `\`\`\`\n${"src/**/*.ts\n".repeat(100)}\`\`\`\n`,
+  "a paragraph straight after a fenced list of globs": `\`\`\`\n${"src/**/*.ts\n".repeat(100)}\`\`\`\nthe next paragraph`,
   "a shorter fence inside a longer one": `\`\`\`\`\n\`\`\`\n${"int **argv;\n".repeat(100)}\`\`\`\`\n`,
   "a closer with trailing words": `\`\`\`\n\`\`\` js\n${"int **argv;\n".repeat(100)}\`\`\`\n`,
 } as const;

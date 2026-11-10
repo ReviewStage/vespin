@@ -134,6 +134,8 @@ export function markdownTooDeep(text: string): boolean {
   let fence = 0;
   let fenceLength = 0;
   let open = 0;
+  // Note that a fenced block's marks are tallied apart, so the words after it start from what stood open before it.
+  let fencedOpen = 0;
   let start = 0;
   while (start <= text.length) {
     let end = start;
@@ -148,6 +150,7 @@ export function markdownTooDeep(text: string): boolean {
     }
     if (at === end) {
       open = 0;
+      fencedOpen = 0;
     } else {
       const [words, depth] = containers(text, at, end, indent);
       if (depth > MARKDOWN_NESTING_LIMIT) return true;
@@ -162,11 +165,12 @@ export function markdownTooDeep(text: string): boolean {
           !lineHas(text, words + run, end, (c) => !isSpace(c))
         )
           fence = 0;
-        else open = emphasisAfter(text, words, end, open, FENCE_NESTING_LIMIT);
-        if (open > FENCE_NESTING_LIMIT) return true;
+        else fencedOpen = emphasisAfter(text, words, end, fencedOpen, FENCE_NESTING_LIMIT);
+        if (fencedOpen > FENCE_NESTING_LIMIT) return true;
       } else if (run >= 3 && !(code === 96 && lineHas(text, words + run, end, (c) => c === 96))) {
         fence = code;
         fenceLength = run;
+        fencedOpen = 0;
       } else {
         open = emphasisAfter(text, words, end, open, MARKDOWN_NESTING_LIMIT);
         if (open > MARKDOWN_NESTING_LIMIT) return true;
