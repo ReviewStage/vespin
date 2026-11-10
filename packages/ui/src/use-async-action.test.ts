@@ -8,7 +8,8 @@ import { type AsyncAction, rejectionWords, useAsyncAction } from "./use-async-ac
 
 /**
  * use-async-action.test.ts -- a second press in the frame of the first starts
- * nothing, and a refusal stands until the next press lets it go.
+ * nothing, a refusal stands until the next press lets it go, and an act that
+ * rejects ends refused rather than running.
  */
 
 declare global {
@@ -86,4 +87,22 @@ test("a refusal stands until the next press lets it go", async () => {
   assert.equal(action().running, true);
   await act(async () => again.answer(undefined));
   assert.equal(action().refusal, undefined);
+});
+
+test("an act that rejects ends refused, not left running", async () => {
+  const action = mount();
+  let reject: (why: Error) => void = () => undefined;
+  const rejecting = () =>
+    new Promise<undefined>((_, fail) => {
+      reject = fail;
+    });
+  let ran: Promise<boolean> | undefined;
+  act(() => {
+    ran = action().run(rejecting);
+  });
+  assert.equal(action().running, true);
+  await act(async () => reject(new Error("The service did not answer.")));
+  assert.equal(await ran, false);
+  assert.equal(action().running, false);
+  assert.equal(action().refusal, "The service did not answer.");
 });
