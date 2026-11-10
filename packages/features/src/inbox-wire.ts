@@ -2,6 +2,7 @@ import {
   isWireBoolean,
   isWireNumber,
   isWireString,
+  literalsReadingUnknown,
   THREAD_LINE_EVENT,
   type ThreadLineMetadata,
 } from "@repo/wire";
@@ -741,7 +742,7 @@ export const inboxWithdrawInputSchema = EffectSchema.Struct({
  * closers were kept on the ask.
  */
 const ASK_STANDING_FIELDS = {
-  status: EffectSchema.Literals(Object.values(INBOX_ASK_STATUS)),
+  status: literalsReadingUnknown(Object.values(INBOX_ASK_STATUS), INBOX_ASK_STATUS.REPLACED),
   withdrawnReason: EffectSchema.optionalKey(EffectSchema.String),
   withdrawnAt: EffectSchema.optionalKey(countedNumber),
   withdrawnBy: EffectSchema.optionalKey(EffectSchema.String),
@@ -773,7 +774,7 @@ export type InboxReadAsk = typeof inboxReadAskSchema.Type;
  */
 export const inboxAnswersSchema = EffectSchema.Struct({
   ask: wireUuidSchema,
-  reply: EffectSchema.Literals(Object.values(INBOX_REPLY)),
+  reply: literalsReadingUnknown(Object.values(INBOX_REPLY), INBOX_REPLY.ANSWERED),
   choices: inboxReplySchema.fields.choices,
   values: EffectSchema.optionalKey(inboxFormValuesSchema),
   steps: EffectSchema.optionalKey(
@@ -820,7 +821,7 @@ export type InboxMessageAuthor = (typeof INBOX_MESSAGE_AUTHOR)[keyof typeof INBO
  */
 export const inboxMessageSchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  author: EffectSchema.Literals(Object.values(INBOX_MESSAGE_AUTHOR)),
+  author: literalsReadingUnknown(Object.values(INBOX_MESSAGE_AUTHOR), INBOX_MESSAGE_AUTHOR.AGENT),
   /** The member who wrote it, on a member's message whose account still stands. */
   member: EffectSchema.optionalKey(memberRefSchema),
   /** The words in Markdown; empty where the files carry the message alone. */
@@ -861,7 +862,7 @@ export const inboxItemSchema = EffectSchema.Struct({
   title: EffectSchema.String,
   /** Whether the agent hears an answer to the item as a message, rather than reading it in its own time: true for every ask but a `do` posted before every answer was heard, and false for a notice. */
   needsReply: EffectSchema.Boolean,
-  status: EffectSchema.Literals(Object.values(INBOX_STATUS)),
+  status: literalsReadingUnknown(Object.values(INBOX_STATUS), INBOX_STATUS.CLOSED),
   /**
    * The member who started the agent that posted the item, whose question it
    * is, as the account's read names it (`account-inbox-wire.ts`); absent from

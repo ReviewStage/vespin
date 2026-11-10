@@ -1,11 +1,11 @@
-import { WireValueSchema } from "@repo/wire";
+import { literalsReadingUnknown, WireValueSchema } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import {
   AGENT_MACHINE,
-  AGENT_STATUS,
   agentPullRequestSchema,
   agentRunsOnRequestSchema,
   agentStartRequestFields,
+  agentStatusSchema,
   agentSummarySchema,
   CHECK_SUMMARY,
   extraRepositoryRefusalSchema,
@@ -169,6 +169,18 @@ export type TaskMode = (typeof TASK_MODE)[keyof typeof TASK_MODE];
 export const taskStatusSchema = EffectSchema.Literals(Object.values(TASK_STATUS));
 
 export const taskPrioritySchema = EffectSchema.Literals(Object.values(TASK_PRIORITY));
+
+/** Where a task stands as a reader decodes it: a status this build does not know reads as under way, since a newer service's status is one a task still moves through. */
+export const taskStatusReadSchema = literalsReadingUnknown(
+  Object.values(TASK_STATUS),
+  TASK_STATUS.IN_PROGRESS,
+);
+
+/** How much a task matters as a reader decodes it: a priority this build does not know reads as none. */
+export const taskPriorityReadSchema = literalsReadingUnknown(
+  Object.values(TASK_PRIORITY),
+  TASK_PRIORITY.NONE,
+);
 
 export const taskModeSchema = EffectSchema.Literals(Object.values(TASK_MODE));
 
@@ -716,7 +728,7 @@ const taskSummaryFields = {
    */
   origin: EffectSchema.optionalKey(taskOriginSchema),
   /** Where the task stands; absent from a service before tasks had one. */
-  status: EffectSchema.optionalKey(taskStatusSchema),
+  status: EffectSchema.optionalKey(taskStatusReadSchema),
   /**
    * Epoch milliseconds the task's status last moved to Done or Canceled;
    * absent while it stands in any other, and from a service before this was
@@ -724,7 +736,7 @@ const taskSummaryFields = {
    */
   completedAt: EffectSchema.optionalKey(countedNumber),
   /** How much the task matters; absent from a service before tasks had one. */
-  priority: EffectSchema.optionalKey(taskPrioritySchema),
+  priority: EffectSchema.optionalKey(taskPriorityReadSchema),
   /** The task's number in its workspace, which its key is drawn from with the workspace's prefix; absent from a service before tasks had one. */
   number: EffectSchema.optionalKey(taskNumberSchema),
   /**
@@ -775,7 +787,7 @@ const taskAgentLineSchema = EffectSchema.Struct({
   /** AI Gateway's catalog id, such as `anthropic/claude-opus-5.5`. */
   model: EffectSchema.String,
   effort: EffectSchema.String,
-  status: EffectSchema.Literals(Object.values(AGENT_STATUS)),
+  status: agentStatusSchema,
   /**
    * Epoch milliseconds: when its run began while it works, and when its
    * newest turn ended once it has; absent where neither is known.
