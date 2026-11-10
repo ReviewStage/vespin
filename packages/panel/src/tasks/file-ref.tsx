@@ -1,3 +1,4 @@
+import { fileName, fileRefText, lineRangeText } from "@repo/features/code-ref-words";
 import type { CodeRef } from "@repo/features/task-wire";
 import {
   HoverCard,
@@ -7,7 +8,7 @@ import {
   INLINE_REF_NAME,
   InlineRef,
 } from "@repo/ui";
-import { fileFolder, fileName, fileRefText, lineRangeText } from "./file-ref-model.js";
+import { fileFolder } from "./file-ref-model.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 import { useTaskMentions } from "./task-mentions.js";
 

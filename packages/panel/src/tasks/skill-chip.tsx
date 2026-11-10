@@ -1,9 +1,9 @@
+import { skillWord } from "@repo/features/skill-word";
 import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
 import {
   holdsSlashWord,
   type SkillOption,
   skillTokens,
-  skillWord,
   type TextRange,
 } from "@repo/ui/skill-mention";
 import {

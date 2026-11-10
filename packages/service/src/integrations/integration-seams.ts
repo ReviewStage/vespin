@@ -1,16 +1,6 @@
 import { resolveHostedUserId } from "../auth/bearer.js";
-import {
-  beginIntegrationSignIn,
-  completeIntegrationSignIn,
-  deleteIntegrationAccount,
-  endIntegrationSignIn,
-  fillIntegrationLabel,
-  readIntegrationConnections,
-  readIntegrationSignIn,
-  renameIntegrationConnection,
-} from "./integration-store.js";
+import { integrationAccountSeams } from "./integration-account-seams.js";
 import type { IntegrationsAppSeams } from "./integrations-app.js";
-import { mintIntegrationState, mintIntegrationSubject } from "./integrations-app.js";
 
 /**
  * integration-seams.ts -- the integrations group's seams over this deployment's real database and auth session.
@@ -22,18 +12,5 @@ import { mintIntegrationState, mintIntegrationSubject } from "./integrations-app
  * which the web runtime provides.
  */
 export function integrationsAppSeams(): IntegrationsAppSeams {
-  return {
-    resolveUserId: resolveHostedUserId,
-    readConnections: readIntegrationConnections,
-    readSignIn: readIntegrationSignIn,
-    beginSignIn: beginIntegrationSignIn,
-    completeSignIn: completeIntegrationSignIn,
-    endSignIn: endIntegrationSignIn,
-    deleteAccount: deleteIntegrationAccount,
-    fillLabel: fillIntegrationLabel,
-    renameConnection: renameIntegrationConnection,
-    mintState: mintIntegrationState,
-    mintSubject: mintIntegrationSubject,
-    now: () => Date.now(),
-  };
+  return { resolveUserId: resolveHostedUserId, ...integrationAccountSeams() };
 }

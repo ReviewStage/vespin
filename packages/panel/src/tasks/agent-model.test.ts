@@ -1,4 +1,12 @@
 import assert from "node:assert/strict";
+import {
+  AGENT_PART,
+  agentParts,
+  delegates,
+  messageWords,
+  placedMessages,
+  startedAgentOf,
+} from "@repo/features/agent-parts";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
 import {
   AGENT_FAILURE,
@@ -24,40 +32,34 @@ import {
 } from "@repo/features/provider-key-wire";
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
+import { TOOL_STATE } from "@repo/features/tool-call-block";
 import { MESSAGE_ROLE, TURN_STATUS, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { test } from "vitest";
-import { TOOL_STATE } from "../ai-elements/tool.js";
 import {
-  AGENT_PART,
   agentLines,
-  agentParts,
   agentWorkingSince,
   checkoutCommand,
   choiceLabel,
   choiceModelId,
   choiceOn,
   continueFailureNote,
-  delegates,
   dockedPullRequests,
   effortFor,
   messageFailureNote,
   messageFailureWords,
-  messageWords,
   modelLabel,
   noteWhileOffline,
   offeredModels,
   offersStop,
   openingLineOf,
   payerPlanName,
-  placedMessages,
   planPayerOf,
   pullRequestPillLabel,
   pullRequestStateWord,
   readModelChoice,
   SENT_LINE_STATE,
   type SentLine,
-  startedAgentOf,
   startFailureNote,
   type TabSends,
   tabTurnOf,

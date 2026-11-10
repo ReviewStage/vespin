@@ -265,7 +265,7 @@ test("a rewind names the teammates whose messages it drops and how many, and non
   assert.equal(own.editTakes.size, 0);
 });
 
-/** The body of the question a press on Revert to here raises, over `shared` as the reader `readerId` sees it. */
+/** The body of the question a press on Rewind conversation to here raises, over `shared` as the reader `readerId` sees it. */
 async function revertBody(
   readerId: string,
   shared: readonly AgentTranscriptMessage[] = SHARED,
@@ -297,12 +297,14 @@ async function revertBody(
       ),
     ),
   );
-  const revert = container.querySelector<HTMLButtonElement>('[aria-label="Revert to here"]');
+  const revert = container.querySelector<HTMLButtonElement>(
+    '[aria-label="Rewind conversation to here"]',
+  );
   await act(async () => revert?.click());
   return document.querySelector('[role="alertdialog"]')?.textContent ?? undefined;
 }
 
-test("Revert to here says whose messages it drops where a teammate's follow, and the plain words where only the reader's do", async () => {
+test("Rewind conversation to here says whose messages it drops where a teammate's follow, and the plain words where only the reader's do", async () => {
   const shared = await revertBody("user-1");
   assert.ok(
     shared?.includes(

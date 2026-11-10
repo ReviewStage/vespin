@@ -1,4 +1,5 @@
 import { CHECK_SUMMARY } from "@repo/features/agent-wire";
+import { fileName } from "@repo/features/code-ref-words";
 import {
   type KnownNames,
   THING_KIND,
@@ -19,14 +20,13 @@ import {
 } from "@repo/ui/icons";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { ACTOR_SIZE, ActorMark, automationActor } from "../actor-ref.js";
+import { ACTOR_SIZE, ActorGlyph, ActorMark, automationActor } from "../actor-ref.js";
 import { useAutomation } from "../automation-directory.js";
 import { TILE_SIZE, WorkspaceTile } from "../desktop/workspace-tile.js";
 import { usePerson } from "../member-directory.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { providerOf } from "./agent-model.js";
 import { WorkspaceDirectory } from "./chip-cards.js";
-import { fileName } from "./file-ref-model.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 import { InboxItemChipGlyph } from "./inbox-item-chip.js";
 import { IssueMark } from "./issue-mark.js";
@@ -125,7 +125,7 @@ function AgentThingMark({
   return harnessless ? (
     <KnownAgentMark agentId={agent.agentId} at={at} />
   ) : (
-    <ActorMark actor={tile} size={ACTOR_SIZE.INLINE} />
+    <ActorGlyph actor={tile} />
   );
 }
 
@@ -160,7 +160,7 @@ function PersonMark({
   );
 }
 
-/** An automation's clock tile, wearing how its newest run went where the window reads the automation, and at rest where it does not. */
+/** An automation's glyph, what fires it, wearing how its newest run went where the window reads the automation, and at rest where it does not. */
 function AutomationTile({
   automationId,
   name,
@@ -170,13 +170,12 @@ function AutomationTile({
 }): React.JSX.Element {
   const known = useAutomation(automationId);
   return (
-    <ActorMark
+    <ActorGlyph
       actor={
         known === undefined
           ? { kind: ACTOR_KIND.AUTOMATION, name, state: ACTOR_STATE.REST }
           : automationActor(known.automation)
       }
-      size={ACTOR_SIZE.INLINE}
     />
   );
 }

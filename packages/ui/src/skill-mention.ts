@@ -138,11 +138,6 @@ export function matchingSkills(
   return [...starts, ...holds, ...describes];
 }
 
-/** The word a skill is named by wherever it is drawn or written: `/name`, the words that load it. */
-export function skillWord(name: string): string {
-  return `${SLASH}${name}`;
-}
-
 /** Every chosen skill the message names, as `/name` words of the skills given, in order. */
 export function skillTokens(text: string, names: ReadonlySet<string>): readonly TextRange[] {
   const tokens: TextRange[] = [];
