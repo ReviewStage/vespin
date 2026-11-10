@@ -133,6 +133,17 @@ export function fileMarkers(text: string): readonly FileMarkerToken[] {
   return writtenMarkers(text).filter((marker) => !insideCode(text, marker.start));
 }
 
+/** The words with every marker outside code taken out: what a message says of its own, beside the files it names. */
+export function wordsWithoutMarkers(text: string): string {
+  let words = "";
+  let at = 0;
+  for (const marker of fileMarkers(text)) {
+    words += text.slice(at, marker.start);
+    at = marker.end;
+  }
+  return words + text.slice(at);
+}
+
 /** The next picture's name: one past the highest picture's number among the names, so a picture taken off frees no number a later one reuses beside its neighbor's marker. */
 export function nextPictureName(names: Iterable<string>): string {
   let highest = 0;
