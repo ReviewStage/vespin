@@ -498,7 +498,7 @@ export function InboxListScreen({ barAction }: InboxListScreenProps) {
 export function InboxThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { listed, readerId, feed } = useInboxThread(id);
-  const { refresh } = useInboxActs();
+  const { refresh, refreshTasks } = useInboxActs();
   return (
     <>
       <Stack.Screen options={{ title: "", headerBackTitle: INBOX_TITLE }} />
@@ -511,7 +511,11 @@ export function InboxThreadScreen() {
           <EmptyState
             title={INBOX_NOT_READ}
             symbol="exclamationmark.triangle"
-            action={{ label: RETRY, onPress: () => void refresh() }}
+            action={{
+              label: RETRY,
+              // The feed or the task list that holds the thread failed, so both are read again.
+              onPress: () => void Promise.all([refresh(), refreshTasks()]),
+            }}
           />
         ) : (
           <EmptyState title={THREAD_NOT_FOUND} symbol="tray" />

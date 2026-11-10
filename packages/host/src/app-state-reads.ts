@@ -192,6 +192,9 @@ export const selectSessionReplay = (state: AppStateSnapshot) => state.sessionRep
 export const selectPortForwarding = (state: AppStateSnapshot) => state.portForwarding;
 export const selectMirrors = (state: AppStateSnapshot) => state.mirrors;
 
+/** Where the task list's read stands: not yet asked, on its way, read, or refused. */
+export const selectTaskListStatus = (state: AppStateSnapshot) => state.tasks.listStatus;
+
 /** The account's workspaces, which tell their readers only as the list moves, not as the tasks beside it do. */
 export const selectWorkspaces = (state: AppStateSnapshot) => state.tasks.workspaces;
 
@@ -478,7 +481,7 @@ export function selectInboxFeed(state: AppStateSnapshot): InboxFeed {
 /**
  * Whether the account's feed holds a thread, whatever holds it: true for one
  * the feed read before the task list that holds it, which `inboxGroups`
- * cannot group yet.
+ * cannot group until that list is read (`selectTaskListStatus`).
  */
 export function inboxFeedHolds(state: AppStateSnapshot, itemId: string | undefined): boolean {
   const rows = state[LIVE_READ.INBOX_ITEMS].rows;
