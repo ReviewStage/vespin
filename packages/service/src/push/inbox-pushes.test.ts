@@ -12,6 +12,7 @@ import { PUSH_ENVIRONMENT } from "@repo/features/push-device-wire";
 import { TURN_STATUS, unparsedWire } from "@repo/wire";
 import { Effect, Option } from "effect";
 import { postToInbox } from "../agents/coder-host/inbox.js";
+import { TURN_FAILURE } from "../core.js";
 import { answerInboxAsk, taskInboxItems } from "../inbox/inbox-store.js";
 import { recordingApnsSender } from "../testing/apns-fake.js";
 import { pushFailedTurn, pushThreadSettled } from "./inbox-pushes.js";
@@ -204,7 +205,11 @@ it.layer(getTestDB())("a push to a member's phone", (it) => {
       ]);
 
       // A run its plan's usage limit stopped is told so, not that it failed.
-      yield* pushFailedTurn({ ...turn, status: TURN_STATUS.FAILED, failure: "plan_limit" });
+      yield* pushFailedTurn({
+        ...turn,
+        status: TURN_STATUS.FAILED,
+        failure: TURN_FAILURE.PLAN_LIMIT,
+      });
       assert.deepEqual(sender.sent.at(-1)?.payload.aps.alert, {
         title: "Opus 5.5",
         body: "Usage limit reached",
