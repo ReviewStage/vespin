@@ -35,7 +35,7 @@ below as that one. You and the workers talk by `message_agent`.
 | Check on a silent worker | `read_agent` with its agent id |
 | Stop a worker | `stop_agent` with its agent id |
 | Continue a dead or stalled worker | `start_agent` with `from: { agentId }` and a `note` repeating the PR url and its branch, "keep this PR and open no second one", your mention link, and "report to me" |
-| Close a PR's subtask | `update_task` with `status: done` once its PR merged, unless Vespin already marked it done, or `canceled` for a PR cut from the plan; then archive its worker |
+| Close a PR's subtask | `update_task` with `status: done` once its PR merged, unless Vespin already marked it done, or `canceled` for a PR cut from the plan, once its worker is stopped and its PR closed; then archive its worker |
 | Archive a worker | `update_agent` with `archived: true` and a short `reason`, once the agent is idle |
 | List the rollout's agents | `list_agents` with a subtask's `taskId` for its workers, and with `thisTask` (or the rollout task's `taskId`) for the helpers |
 | Point the user at a subtask, worker, or PR | The mentions `create_task` and `start_agent` answered, and the PR's URL |
@@ -311,6 +311,6 @@ unless another coding agent started you on it.
   The user never cleans up after a rollout.
 - Do not archive a worker while its PR is unmerged, unless a continuation
   has taken the PR over or the PR was closed because it was cut.
-- Stop a worker only when it goes the wrong way, is stuck, or will not hold
-  for a restack. Continue a dead or stopped worker; never start a fresh one
+- Stop a worker only when it goes the wrong way, is stuck, will not hold
+  for a restack, or its PR is cut. Continue a dead or stopped worker; never start a fresh one
   to replace it.
