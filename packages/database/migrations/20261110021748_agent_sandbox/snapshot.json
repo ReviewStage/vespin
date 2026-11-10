@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "6a1f45a9-5961-4db0-872f-c4dec18fabdf",
-  "prevIds": ["d13716ab-6fdf-4dce-bd3b-1264d8a72a97"],
+  "id": "2a1d7c06-3c8d-4b24-9586-6e4a2b8afb9e",
+  "prevIds": ["4f141dbf-6f1a-4b90-a43c-14f97865bf9d", "806b24a3-c355-4f7c-8926-bc498e837214"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -85,6 +85,12 @@
     {
       "isRlsEnabled": false,
       "name": "agent_sandbox",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "agent_wakeup",
       "entityType": "tables",
       "schema": "public"
     },
@@ -2426,6 +2432,84 @@
       "entityType": "columns",
       "schema": "public",
       "table": "agent_sandbox"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_wakeup"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "agent_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_wakeup"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "prompt",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_wakeup"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "due_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_wakeup"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "attempts",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_wakeup"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_wakeup"
     },
     {
       "type": "uuid",
@@ -13007,6 +13091,48 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "due_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "agent_wakeup_due",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "agent_wakeup"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "agent_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "agent_wakeup_agent",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "agent_wakeup"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "inbox_item_id",
           "isExpression": false,
           "asc": true,
@@ -16336,6 +16462,19 @@
     },
     {
       "nameExplicit": false,
+      "columns": ["agent_id"],
+      "schemaTo": "public",
+      "tableTo": "agent",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "agent_wakeup_agent_id_agent_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "agent_wakeup"
+    },
+    {
+      "nameExplicit": false,
       "columns": ["organization_id"],
       "schemaTo": "public",
       "tableTo": "organization",
@@ -18632,6 +18771,14 @@
       "name": "agent_sandbox_pkey",
       "schema": "public",
       "table": "agent_sandbox",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "agent_wakeup_pkey",
+      "schema": "public",
+      "table": "agent_wakeup",
       "entityType": "pks"
     },
     {
