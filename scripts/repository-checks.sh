@@ -45,7 +45,7 @@ fi
 # `/effect`, `/client`, `/act-port`, `/service-layer`, `/agent-notices` and
 # `/task-code`, which the web app runs the host in a tab through, `/acts`,
 # `/app-state`, `/bridge` and `/contract`, which the panel reads, and
-# `/app-state-reads`, `/fixture-stage`, `/fixture-inbox` and
+# `/app-state-reads`, `/fixture-stage`, `/fixture-inbox`, `/follow-stream` and
 # `/task-code-remote`, which the Expo app runs the host on Hermes through
 # beside them (`packages/host/AGENTS.md`). Their graphs name no `node:` module, no `ws`, no
 # `electron`, no `@repo/host/node` or `@repo/features/node`, and no `Buffer` or `process` global, and
@@ -89,6 +89,7 @@ node --input-type=module -e '
         "app-state-reads.ts",
         "fixture-stage.ts",
         "fixture-inbox.ts",
+        "follow-stream.ts",
         "task-code-remote.ts",
       ],
       forbidden: /^(node:|ws$|electron$|@effect\/platform-node|@repo\/host\/node|@repo\/features\/node)/,
