@@ -5,7 +5,7 @@ import { Database } from "@repo/database/core/query";
 import { listPushDevices } from "@repo/database/models/push-device-store";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB } from "@repo/database/testing";
-import { PUSH_ENVIRONMENT } from "@repo/features/push-device-wire";
+import { PUSH_ENVIRONMENT, PUSH_NOTIFY } from "@repo/features/push-device-wire";
 import { HTTP_METHOD, type WireBoundaryInput } from "@repo/wire";
 import { Clock, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/sql";
@@ -18,13 +18,17 @@ import { pushDevicesProcedures } from "./push-devices-procedures.js";
  * real dialect: a register lands the token under the bearer's account, in
  * lower case, and again under another account moves it there; an unregister
  * takes it out, and one of a token the account does not hold is done all the
- * same; and a token that is not Apple's hex is refused. Synthetic accounts,
+ * same; a phone's standing is read and its "Notify me" set by its own
+ * account alone, another's answered not found; and a token that is not
+ * Apple's hex is refused. Synthetic accounts,
  * bearers, and tokens throughout.
  */
 
 const ORIGIN = "https://app.test";
 const REGISTER_PATH = "/api/account/push-devices";
 const UNREGISTER_PATH = "/api/account/push-devices/unregister";
+const STATUS_PATH = "/api/account/push-devices/status";
+const NOTIFY_PATH = "/api/account/push-devices/notify";
 const BUNDLE_ID = "dev.vespin.ios";
 
 interface Answer {
@@ -108,6 +112,42 @@ it.layer(getTestDB())("the push devices route", (it) => {
         assert.deepEqual(yield* phonesOf(other), [phone.token.toLowerCase()], "another's stands");
         assert.deepEqual(yield* ask(post(UNREGISTER_PATH, other, leaving)), DONE);
         assert.deepEqual(yield* phonesOf(other), []);
+      }),
+  );
+
+  it.effect(
+    "a phone's standing is read and its Notify me set by its own account alone, another's answered not found",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, ask } = yield* openAccounts;
+        const phone = {
+          token: token(),
+          environment: PUSH_ENVIRONMENT.PRODUCTION,
+          bundleId: BUNDLE_ID,
+        };
+        assert.deepEqual(yield* ask(post(REGISTER_PATH, owner, phone)), DONE);
+        const key = { token: phone.token, environment: phone.environment };
+        const notFound: Answer = {
+          status: HOSTED_HTTP_STATUS.NOT_FOUND,
+          body: { error: HOSTED_API_ERROR.NOT_FOUND },
+        };
+        const standing = (notify: string) => ({
+          status: HOSTED_HTTP_STATUS.OK,
+          body: { notify, lastDeliveredAt: null, failingSince: null, failureReason: null },
+        });
+
+        assert.deepEqual(yield* ask(post(STATUS_PATH, other, key)), notFound);
+        assert.deepEqual(
+          yield* ask(post(NOTIFY_PATH, other, { ...key, notify: PUSH_NOTIFY.NEVER })),
+          notFound,
+        );
+        assert.deepEqual(yield* ask(post(STATUS_PATH, owner, key)), standing(PUSH_NOTIFY.AWAY));
+
+        assert.deepEqual(
+          yield* ask(post(NOTIFY_PATH, owner, { ...key, notify: PUSH_NOTIFY.ALWAYS })),
+          DONE,
+        );
+        assert.deepEqual(yield* ask(post(STATUS_PATH, owner, key)), standing(PUSH_NOTIFY.ALWAYS));
       }),
   );
 

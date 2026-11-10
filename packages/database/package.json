@@ -62,6 +62,8 @@
     "./models/github-token-store": "./src/models/github-token-store.js",
     "./models/pull-request-chapters-store": "./src/models/pull-request-chapters-store.js",
     "./models/push-device-store": "./src/models/push-device-store.js",
+    "./models/presence-store": "./src/models/presence-store.js",
+    "./models/held-push-store": "./src/models/held-push-store.js",
     "./models/quota": "./src/models/quota.js",
     "./models/recorded-session": "./src/models/recorded-session.js",
     "./models/repository-pin-store": "./src/models/repository-pin-store.js",

@@ -8,12 +8,21 @@
  * holds moves to this account, since the phone is now signed in here
  * (`../schemas/push-device.ts`). The delete by token alone is the sender's,
  * for a token Apple has said will never take another push, whichever account
- * holds it.
+ * holds it, as are the records of what became of a push, a delivery or a
+ * failure, by token alone. The phone's own "Notify me" and its standing are
+ * read and set by the account that holds it alone.
  */
 
-import { type PushEnvironment, pushEnvironmentSchema } from "@repo/features/push-device-wire";
-import { and, desc, eq } from "drizzle-orm";
-import { DateTime, Effect, Schema } from "effect";
+import {
+  PUSH_FAILURE_REASON_MAX_CHARS,
+  type PushDeviceStatusAnswer,
+  type PushEnvironment,
+  type PushNotify,
+  pushEnvironmentSchema,
+  pushNotifySchema,
+} from "@repo/features/push-device-wire";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { pushDevice } from "../schemas/push-device.js";
@@ -37,7 +46,7 @@ const TokenKeySchema = Schema.Struct({
   environment: pushEnvironmentSchema,
 });
 
-/** One phone as a push reads it: whose it is, where to address it, and when it last registered. */
+/** One phone as a push reads it: whose it is, where to address it, when it last registered, and when it takes an alert. */
 const PushDeviceSchema = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
@@ -46,6 +55,15 @@ const PushDeviceSchema = Schema.Struct({
   bundleId: Schema.String,
   createdAt: InstantColumnSchema,
   lastSeenAt: InstantColumnSchema,
+  notify: pushNotifySchema,
+});
+
+/** What became of the phone's pushes, as its row keeps it. */
+const PushDeviceStandingSchema = Schema.Struct({
+  notify: pushNotifySchema,
+  lastDeliveredAt: Schema.NullOr(InstantColumnSchema),
+  failingSince: Schema.NullOr(InstantColumnSchema),
+  failureReason: Schema.NullOr(Schema.String),
 });
 
 export type PushDevice = typeof PushDeviceSchema.Type;
@@ -58,6 +76,7 @@ const PUSH_DEVICE_COLUMNS = {
   bundleId: pushDevice.bundleId,
   createdAt: pushDevice.createdAt,
   lastSeenAt: pushDevice.lastSeenAt,
+  notify: pushDevice.notify,
 };
 
 const upsertDevice = SqlSchema.void({
@@ -123,6 +142,78 @@ const findDevices = SqlSchema.findAll({
     ),
 });
 
+const findOwnStanding = SqlSchema.findOneOption({
+  Request: Schema.Struct({ ...TokenKeySchema.fields, userId: Schema.String }),
+  Result: PushDeviceStandingSchema,
+  execute: ({ userId, token, environment }) =>
+    Database.use((db) =>
+      db
+        .select({
+          notify: pushDevice.notify,
+          lastDeliveredAt: pushDevice.lastDeliveredAt,
+          failingSince: pushDevice.failingSince,
+          failureReason: pushDevice.failureReason,
+        })
+        .from(pushDevice)
+        .where(
+          and(
+            eq(pushDevice.userId, userId),
+            eq(pushDevice.environment, environment),
+            eq(pushDevice.token, token),
+          ),
+        ),
+    ),
+});
+
+const updateOwnNotify = SqlSchema.findAll({
+  Request: Schema.Struct({
+    ...TokenKeySchema.fields,
+    userId: Schema.String,
+    notify: pushNotifySchema,
+  }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, token, environment, notify }) =>
+    Database.use((db) =>
+      db
+        .update(pushDevice)
+        .set({ notify })
+        .where(
+          and(
+            eq(pushDevice.userId, userId),
+            eq(pushDevice.environment, environment),
+            eq(pushDevice.token, token),
+          ),
+        )
+        .returning({ id: pushDevice.id }),
+    ),
+});
+
+const updateDelivered = SqlSchema.void({
+  Request: Schema.Struct({ ...TokenKeySchema.fields, now: Schema.Date }),
+  execute: ({ token, environment, now }) =>
+    Database.use((db) =>
+      db
+        .update(pushDevice)
+        .set({ lastDeliveredAt: now, failingSince: null, failureReason: null })
+        .where(and(eq(pushDevice.environment, environment), eq(pushDevice.token, token))),
+    ),
+});
+
+const updateFailed = SqlSchema.void({
+  Request: Schema.Struct({ ...TokenKeySchema.fields, now: Schema.Date, reason: Schema.String }),
+  execute: ({ token, environment, now, reason }) =>
+    Database.use((db) =>
+      db
+        .update(pushDevice)
+        // A failing run keeps the instant it began through every later failure.
+        .set({
+          failingSince: sql`coalesce(${pushDevice.failingSince}, ${now})`,
+          failureReason: reason,
+        })
+        .where(and(eq(pushDevice.environment, environment), eq(pushDevice.token, token))),
+    ),
+});
+
 /** The phone registered under the account, stamped as seen now; a token another account held moves to this one. */
 export function registerPushDevice(
   userId: string,
@@ -149,4 +240,41 @@ export function listPushDevices(userId: string): PushDeviceEffect<readonly PushD
 /** A token Apple has said is gone, deleted whichever account holds it, answering whether a row stood. */
 export function deletePushDeviceToken(key: PushDeviceToken): PushDeviceEffect<boolean> {
   return Effect.map(deleteDeviceByToken(key), (rows) => rows.length > 0);
+}
+
+/** The account's phone's standing, its "Notify me" and what became of its pushes; nothing where the account holds no such phone. */
+export function readPushDeviceStatus(
+  userId: string,
+  key: PushDeviceToken,
+): PushDeviceEffect<Option.Option<PushDeviceStatusAnswer>> {
+  return Effect.map(
+    findOwnStanding({ userId, ...key }),
+    Option.map((row) => ({
+      notify: row.notify,
+      lastDeliveredAt: row.lastDeliveredAt?.getTime() ?? null,
+      failingSince: row.failingSince?.getTime() ?? null,
+      failureReason: row.failureReason,
+    })),
+  );
+}
+
+/** The account's phone's "Notify me" set, answering whether the account held it; another account's phone is left standing. */
+export function setPushDeviceNotify(
+  userId: string,
+  key: PushDeviceToken,
+  notify: PushNotify,
+): PushDeviceEffect<boolean> {
+  return Effect.map(updateOwnNotify({ userId, ...key, notify }), (rows) => rows.length > 0);
+}
+
+/** A push to the token reached Apple now, ending any failing run, whichever account holds it. */
+export function recordPushDelivered(key: PushDeviceToken): PushDeviceEffect<void> {
+  return Effect.flatMap(DateTime.nowAsDate, (now) => updateDelivered({ ...key, now }));
+}
+
+/** A push to the token failed now, for the reason given, whichever account holds it; a run already failing keeps when it began. */
+export function recordPushFailed(key: PushDeviceToken, reason: string): PushDeviceEffect<void> {
+  return Effect.flatMap(DateTime.nowAsDate, (now) =>
+    updateFailed({ ...key, now, reason: reason.slice(0, PUSH_FAILURE_REASON_MAX_CHARS) }),
+  );
 }

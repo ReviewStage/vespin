@@ -1,6 +1,6 @@
 ---
 name: vespin
-description: Drive Vespin from a shell with the `vespin` command: create tasks, read and write their descriptions, start coding agents and wait on them, check out an agent's branch, share a cloud agent's port by preview link, and answer the inbox threads agents post. Load it when asked to work with Vespin tasks, their descriptions, agents, or inbox from a terminal, to script or pipe Vespin, or to wait on an agent and bring its branch local. Prefer Vespin's MCP server only when you have no shell.
+description: Drive Vespin from a shell with the `vespin` command: create tasks, read and write their descriptions, start coding agents and wait on them, check out an agent's branch, share a cloud agent's port by preview link, answer the inbox threads agents post, read and keep the workspace's shared memory, and make and run automations. Load it when asked to work with Vespin tasks, their descriptions, agents, inbox, memory, or automations from a terminal, to script or pipe Vespin, or to wait on an agent and bring its branch local. Prefer Vespin's MCP server only when you have no shell.
 ---
 
 # vespin
@@ -36,20 +36,32 @@ Other commands:
 | --- | --- |
 | `task list [--mine] [--status s]` · `task view <task>` · `task update <task> [--status] [--priority] [--assignee] [--name]` | Find, read, and change tasks; `--status done` marks one done |
 | `task update <task> [--parent <task\|none>] [--blocked-by <task>] [--blocks <task>] [--remove-blocked-by <task>] [--remove-blocks <task>] [--section <section\|none>]` | Put a task under a parent or back at the top; add or take away the tasks it waits on and that wait on it (each flag again for each task); keep it in one of your sidebar sections |
+| `workspace members` · `workspace slug <slug>` | The workspace's members (account id, role, name, email) and who left it; change its slug, the first step of its links, which only its owner may (links under the old slug still open it) |
 | `section list` · `section create <title> [--emoji e]` · `section delete <section>` | Your sidebar sections in the workspace, with the tasks in each; make one; delete one (its tasks go back under Tasks). A section is named by id or title |
+| `task cat <task> <path> [--commit sha]` · `task ls <task> [path] [-r]` | Read a file or list a folder of the task's repository as GitHub holds it, at the default branch's head or a commit (`cat`), never an agent's unpushed work in its sandbox |
 | `description show <task>` · `description edit <task> -F <file\|->` | Print the description as Markdown; replace it whole |
 | `agent start <task> [-F prompt] [--model m --effort e] [--branch b] [--cloud\|--on <device>] [--follow\|--wait]` | Start an agent; `vespin models` lists `--model` and `--effort` values |
 | `agent continue <id> [-F note] [--at <message-id>] [--model m --effort e] [--cloud\|--on <device>] [--follow\|--wait]` | Continue an agent as the app's Continue does: it is stopped, and a new agent on its task is handed its brief and transcript, then the note. The new agent runs as you, on your own Claude or ChatGPT plan, so a teammate's agent is handed over to you. `--at` forks at one of its assistant messages instead (ids from `agent logs --json`), and it goes on. It runs on the agent's model and where it runs unless you name them |
 | `agent list [<task>] [--offset n]` · `agent view <id>` | Agents, newest first, the workspace's 50 a page (`--offset` the `nextOffset` it printed); one agent's status |
 | `agent send <id> [--queue] -F <msg\|->` · `agent stop <id>` | Message an agent, or with `--queue` queue it behind the turn under way to go once it ends (your own agents only; a paused queue sends nothing until Resume in the app); stop its turn (what it pushed stays) |
+| `agent logs <id> [--worker <call-id>] [--call <call-id>]` | The whole transcript; `--worker` reads one of its workers' instead, by the `toolCallId` of the call that started it, and `--call` prints one call whole, its input and output (ids from `agent logs --json`) |
 | `agent diff <id> [--stat] [--number n]` | The diff of an agent's pull request as GitHub holds it, every file's patch; `--stat` one line a file, `-q` the paths; `--number` another pull request of its repository |
 | `agent pr <id> ready\|draft\|merge\|auto-merge [--method merge\|squash\|rebase] [--head sha] [--off] [--number n]` | Change the pull request on GitHub as you: mark it ready, turn it back into a draft, merge it now, or turn auto-merge on (`--off` turns it off). A merge is made against the head as it stands now unless `--head` pins the one you reviewed, by the first method the repository allows unless `--method` names one |
+| `pr chapters <pr\|agent> [--generate] [--number n]` | A pull request's chapters, the story of its diff in reading order, as its Pull request tab shows them. Name it by its GitHub link or `owner/name#n` (in the workspace `-w` names), or by an agent's id for its own pull request (`--number` another of its repository). `--generate` makes them for the head now: one model call on your own API key, which costs money and takes a minute or more, so read first and generate only where none stand or they are stale |
 | `agent ports <id>` | Ports a server listens on in a cloud agent's sandbox, and the one shared by link; none unless the sandbox is running |
 | `agent share <id> <port>` · `agent share <id>` · `agent share <id> --stop` | Share a port by public link (replacing any shared before), print the link shared now, or close it; `-q` prints the link alone |
 | `agent forward <id> [port…] [--local <port>]` | Serve a cloud agent's ports on `localhost` (the ones it listens on now, or those named) until Ctrl-C or its sandbox stops; a local port that will not listen is refused, so pick another with `--local` |
 | `inbox list [--unread]` · `inbox view <thread>` | Threads agents posted, and one thread with its open ask |
 | `inbox answer <thread> <option>` · `inbox answer <thread> -F <json\|->` · `inbox reply <thread> -F <msg\|->` · `inbox close <thread>` | Answer a decide's option, `done` for a to-do, or a form as JSON by field; write on the thread; close it |
+| `memory list` · `memory search [words…]` · `memory save <text…> [--replaces <id>]` · `memory forget <id>` | The workspace's shared memory: every memory, the few some words find, one kept as your words (or `-F <file\|->`; `--replaces` corrects one in place), one forgotten for good. Search and save are refused while the workspace has Memory off |
+| `automation list [--task <task>]` · `automation view <id>` | Automations you may read, and one with its prompt and newest runs |
+| `automation create <name> --prompt <file\|-> (--cron <expr> [--timezone tz] \| --github <event> [--label l] [--branch b] \| --sentry <event> \| --trigger <json>) [-R owner/name…] [--task <task>] [--model m --effort e] [--scope personal\|workspace]` | Make an automation that starts an agent on its prompt each time it fires; `--cron` is read in this machine's time zone unless `--timezone` names one. A webhook trigger is made only in the app, which shows its secret once |
+| `automation update <id> [--name] [--prompt] [--enable\|--disable] [trigger flags] [-R…] [--model m --effort e] [--scope]` · `automation run <id>` · `automation delete <id>` | Change one (what you leave out stands), run one now (`-q` prints the agent it started), delete one |
 | `agent shells <id>` · `agent shell <id> [<shell>] [--title t]` | An agent's Terminal tab shells; open a new one, or attach to one, in this terminal (Ctrl-] detaches). `shell` is interactive and refuses to run piped, so a coding agent hands it to the person |
+| `keys list` · `keys set <anthropic\|openai> [--plan]` · `keys remove <provider> [--plan] [--id id] [--yes]` · `keys for-agents <provider> on\|off [--id id]` | Your own provider keys and plans, which pay for your agents: which are set and how each stands (never a key); add an API key from stdin, checked with the provider first, or with `--plan` your Claude plan as `claude setup-token` printed it (a ChatGPT plan connects in the app alone); remove one (the first unless `--id`, which `list` prints); whether your plan pays for agents by default |
+| `github token show` · `github token set` · `github token remove [--yes]` | Your own classic GitHub token: the login it belongs to, its status, and expiry (never the token); save one from stdin, replacing the one set, which GitHub checks first; remove it |
+
+A key or token is read from stdin alone, never from an argument, and no command prints one back; Vespin's MCP server has no tool for either. Pipe one in only where the person handed it to you; otherwise ask them to run `keys set` or `github token set` themselves. `keys remove` and `github token remove` ask at a terminal; piped they need `--yes`, so remove only when the person asked.
 
 `description edit` replaces the whole description, so run `description show` first and edit that; piped, `show` prints JSON, so take its `body` (`jq -r .body`). Run `vespin <group> --help` for any flag not listed here.
 
@@ -133,4 +145,11 @@ vespin agent wait "$id" --timeout 600; case $? in
   5) vespin agent logs "$id" | tail -50 ;;
   6) vespin agent send "$id" -F - <<< "Status?" ;;
 esac
+```
+
+Read a pull request's chapters, generating them only where none stand yet:
+
+```sh
+state=$(vespin pr chapters acme/app#42 --json | jq -r .pullRequest.chapters.status)
+[ "$state" = none ] && vespin pr chapters acme/app#42 --generate   # slow; spends your API key
 ```

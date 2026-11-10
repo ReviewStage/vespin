@@ -5,7 +5,8 @@
  * `storedObjectSchema`): words, reasoning, step boundaries, and tool calls.
  * A terminal reads the words and a line per call, its tool's name and what it
  * acted on; the reasoning and the boundaries are left out, and a call's output
- * stays in the app, where it reads whole.
+ * is printed only where one call is asked for by its id, whole
+ * (`wholeCallLines`).
  *
  * A turn under way grows its message in place, so a reader following it
  * prints a message's parts as they settle, in order, and never the same part
@@ -117,4 +118,51 @@ export function transcriptPartLines(
     }
   }
   return { lines, printed: index };
+}
+
+/** Where a call stands in a transcript: the message it is a part of, and its index among that message's parts. */
+export interface TranscriptCallPlace {
+  readonly messageId: string;
+  readonly index: number;
+}
+
+/** The place of the call a transcript's part names by its id; none where no part does. */
+export function transcriptCallPlace(
+  messages: readonly AgentTranscriptMessage[],
+  callId: string,
+): TranscriptCallPlace | undefined {
+  for (const message of messages) {
+    const index = message.parts.findIndex(
+      (part) =>
+        typeof part === "object" && part !== null && stringField(part, "toolCallId") === callId,
+    );
+    if (index >= 0) return { messageId: message.id, index };
+  }
+  return undefined;
+}
+
+/** A call's input or result as words: a string as it is, anything else as its JSON, indented. */
+function callWords(value: unknown): string {
+  return typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? "");
+}
+
+/** One call read whole as a terminal prints it: its tool and where it stands, its input, and its output or its error, each whole. */
+export function wholeCallLines(stored: unknown): readonly string[] {
+  const part = typeof stored === "object" && stored !== null ? stored : {};
+  const printed = printedPart(part);
+  const tool = printed !== undefined && "tool" in printed ? printed.tool : "call";
+  const state = stringField(part, "state");
+  const error = stringField(part, "errorText");
+  const output: unknown = Reflect.get(part, "output");
+  return [
+    `${tool}${state === undefined ? "" : ` (${state})`}`,
+    "",
+    "Input:",
+    callWords(Reflect.get(part, "input")),
+    ...(state === TOOL_PART_STATE.OUTPUT_ERROR
+      ? ["", "Error:", error ?? ""]
+      : output === undefined
+        ? []
+        : ["", "Output:", callWords(output)]),
+  ];
 }

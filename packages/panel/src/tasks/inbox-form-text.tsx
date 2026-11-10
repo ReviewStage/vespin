@@ -1,22 +1,18 @@
 import { AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { INBOX_BOUNDS, type InboxField } from "@repo/features/inbox-wire";
-import { COMPOSER_LOOK, ComposerFrame, type FieldControl } from "@repo/ui";
+import type { FieldControl } from "@repo/ui";
 import { SERVER_HANDED } from "@repo/ui/agent-servers-model";
-import { useQuery } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
-import { useSideBundles } from "../bundle-loader.js";
-import { COMPOSER_INPUT, type ComposerEditorHandle } from "../description-editor/contract.js";
+import { useEffect } from "react";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { PANEL_SPAN } from "../panel-spans.js";
-import { ComposerField } from "./composer-field.js";
-import { useComposerPickers } from "./composer-pickers.js";
+import { MessageField, useMessageBox } from "./message-box.js";
 import type { SkillSource } from "./skill-picker.js";
 
 /**
  * inbox-form-text.tsx -- a text field of an Inbox form, written in the composer's own field, as the item's box is.
  *
- * The field is the composer's (`composer-field.tsx`), through the same
- * pickers the box takes (`composer-pickers.tsx`): an `@` opens what the
+ * The field is the message box's (`message-box.tsx`), alone in a frame
+ * sized as a text field: an `@` opens what the
  * words may mention, written in as its link and drawn as its chip, and a
  * `/` opens the repository's skills; it is drawn at a field's size under
  * the field's name rather than as a card. What it holds is the field's
@@ -61,26 +57,19 @@ export function InboxFormText({
   onChange,
   doors,
 }: FormTextProps & { doors: FormTextDoors }): React.JSX.Element {
-  const editor = useRef<ComposerEditorHandle | undefined>(undefined);
-  const room = useRef<HTMLDivElement>(null);
   const statuses = useIntegrationStatuses();
-  const bundle = useQuery(useSideBundles().descriptionEditor);
-  const module = bundle.data;
   const { agent } = doors;
-  // Note that a press on the field's name takes the caret into its words, as a label does for its input, since an editor is no labelable element.
   const { labelId } = control;
-  useEffect(() => {
-    const name = document.getElementById(labelId);
-    if (name === null) return;
-    const focus = () => editor.current?.focus();
-    name.addEventListener("click", focus);
-    return () => name.removeEventListener("click", focus);
-  }, [labelId]);
-  const pickers = useComposerPickers({
-    editor,
-    room,
+  const box = useMessageBox({
     draft: value,
+    setDraft: (typed) => onChange(typed === "" ? undefined : typed),
     placeholder: "",
+    label: field.label,
+    maxLength: INBOX_BOUNDS.MAX_FIELD_VALUE_CHARS,
+    onSubmit: doors.onEnter,
+    held: disabled,
+    takesFiles: false,
+    takesFocus: false,
     self: doors.self,
     skills: doors.skills,
     keywords: doors.keywords,
@@ -92,37 +81,27 @@ export function InboxFormText({
         handed: agent?.status === AGENT_STATUS.RUNNING ? SERVER_HANDED.STEERS : SERVER_HANDED.OPENS,
       },
     },
-    // Note that the field has no microphone, so no dictation of its own has anything to say.
-    onNote: () => undefined,
+    aria: {
+      "aria-labelledby": labelId,
+      "aria-describedby": control["aria-describedby"],
+      "aria-required": control["aria-required"] === true ? "true" : undefined,
+    },
+    keystrokeSpan: PANEL_SPAN.KEYSTROKE_INBOX_ANSWER,
   });
+  // Note that a press on the field's name takes the caret into its words, as a label does for its input, since an editor is no labelable element.
+  const { editor } = box;
+  useEffect(() => {
+    const name = document.getElementById(labelId);
+    if (name === null) return;
+    const focus = () => editor.current?.focus();
+    name.addEventListener("click", focus);
+    return () => name.removeEventListener("click", focus);
+  }, [labelId, editor]);
   return (
-    <ComposerFrame
-      look={COMPOSER_LOOK.INPUT}
+    <MessageField
+      box={box}
       className="inbox-field-composer"
       data-disabled={disabled ? "" : undefined}
-    >
-      <ComposerField
-        keystrokeSpan={PANEL_SPAN.KEYSTROKE_INBOX_ANSWER}
-        module={module}
-        editor={editor}
-        room={room}
-        draft={value}
-        setDraft={(typed) => onChange(typed === "" ? undefined : typed)}
-        placeholder=""
-        label={field.label}
-        input={disabled ? COMPOSER_INPUT.DISABLED : COMPOSER_INPUT.EDITABLE}
-        maxLength={INBOX_BOUNDS.MAX_FIELD_VALUE_CHARS}
-        takesFocus={false}
-        {...pickers.field}
-        aria={{
-          ...pickers.field.aria,
-          "aria-labelledby": labelId,
-          "aria-describedby": control["aria-describedby"],
-          "aria-required": control["aria-required"] === true ? "true" : undefined,
-        }}
-        onEnter={doors.onEnter}
-        onPasteFiles={() => false}
-      />
-    </ComposerFrame>
+    />
   );
 }

@@ -279,7 +279,7 @@ export function callEntry(part: StoredToolPart): string {
 }
 
 /** A call's input or result as words: a string as it is, anything else as its JSON. */
-function wordsOf(value: UnparsedWireValue): string {
+export function wordsOf(value: UnparsedWireValue): string {
   return isWireString(value) ? value : (JSON.stringify(value) ?? "");
 }
 
