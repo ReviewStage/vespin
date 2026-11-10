@@ -2,8 +2,6 @@
 
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
-  holderName,
-  INBOX_HOLDER,
   INBOX_MEDIA,
   INBOX_NOT_READ,
   INBOX_READ_MARK,
@@ -30,6 +28,7 @@ import { inboxWaitsOn } from "@repo/features/inbox-wire";
 import { iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { cardTitle } from "@repo/features/plain-words";
+import type { TaskSummary } from "@repo/features/task-wire";
 import {
   INBOX_FEED,
   type InboxFeed,
@@ -127,6 +126,15 @@ type InboxRowsProps = {
 };
 
 /**
+ * The task a thread stands on. Note that every thread stands on one, since
+ * every agent does, so a holder of another kind, which an older list model
+ * still declares but no service sends, names none and its thread is not drawn.
+ */
+function threadTask({ holder }: InboxListed): TaskSummary | undefined {
+  return "task" in holder ? holder.task : undefined;
+}
+
+/**
  * The Inbox's rows, each as the panel's row: the task's ring and name, the
  * thread's title, and the line of what it asks led by its glyph, with the
  * teammate it waits on before the time; a swipe from the leading edge marks
@@ -149,7 +157,10 @@ function InboxRows({
       onRefresh={onRefresh}
       title={look === LIST_LOOK.SIDEBAR ? INBOX_TITLE : undefined}
     >
-      {listed.map(({ holder, item }) => {
+      {listed.flatMap((each) => {
+        const task = threadTask(each);
+        if (task === undefined) return [];
+        const { item } = each;
         const unread = isUnread(item);
         const waitsOn = inboxWaitsOn(item);
         return (
@@ -157,10 +168,7 @@ function InboxRows({
             key={item.id}
             id={item.id}
             title={cardTitle(item.title)}
-            task={{
-              name: holderName(holder),
-              status: holder.kind === INBOX_HOLDER.TASK ? holder.task.status : undefined,
-            }}
+            task={{ name: task.name, status: task.status }}
             line={inboxLineKind(item)}
             summary={inboxPreview(item, (member) => inboxMemberName(member, readerId))}
             unread={unread}
@@ -256,25 +264,32 @@ function useAgentTitles(): ReadonlyMap<string, string> {
   return data;
 }
 
-/** A thread's page from its item: its path, its subject, and each message with its files as they are read. */
-function ThreadDetail({
-  listed,
-  readerId,
-  inStack = false,
-}: {
+/** What a thread's page is drawn from: its item as listed, who reads it, and whether a compact window pushed it. */
+interface ThreadDetailProps {
   readonly listed: InboxListed;
   readonly readerId: string | undefined;
   /** Whether it is a compact window's pushed screen, whose stack's bar names the path. */
   readonly inStack?: boolean;
-}) {
+}
+
+/** A thread's page from its item, drawn on the task it stands on; nothing for one that stands on none. */
+function ThreadDetail(props: ThreadDetailProps) {
+  const task = threadTask(props.listed);
+  return task === undefined ? null : <TaskThreadDetail {...props} task={task} />;
+}
+
+/** A thread's page on its task: its path, its subject, and each message with its files as they are read. */
+function TaskThreadDetail({
+  listed,
+  readerId,
+  inStack = false,
+  task,
+}: ThreadDetailProps & { readonly task: TaskSummary }) {
   const colors = useColors();
-  const { holder, item } = listed;
+  const { item } = listed;
   const openPlace = useOpenPlace();
   const titles = useAgentTitles();
-  const agentName =
-    titles.get(item.agentId) ??
-    (holder.kind === INBOX_HOLDER.AGENT ? holder.agent.agentTitle : null) ??
-    UNTITLED_AGENT;
+  const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
   const messages = useMemo(
     () => inboxThreadMessages(item, agentName, readerId),
     [item, agentName, readerId],
@@ -306,15 +321,11 @@ function ThreadDetail({
     [messages],
   );
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
-  const workspaceId =
-    holder.kind === INBOX_HOLDER.TASK ? holder.task.workspaceId : holder.agent.workspaceId;
+  const { workspaceId } = task;
   const workspace = workspaces.find(({ id }) => id === workspaceId);
   // A video the system's player cannot read opens with its thread on vespin.dev in Safari, which plays it.
   const openOnWeb = () => {
-    const place =
-      holder.kind === INBOX_HOLDER.TASK
-        ? { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id }
-        : { kind: LINK_DESTINATION.INBOX_ITEM, agentId: holder.agent.agentId, itemId: item.id };
+    const place = { kind: LINK_DESTINATION.INBOX_ITEM, planId: task.id, itemId: item.id } as const;
     const address = linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
     openURL(address).catch((error: unknown) => console.error("The thread did not open.", error));
   };
@@ -358,7 +369,7 @@ function ThreadDetail({
       onOpenElsewhere: openOnWeb,
     };
   };
-  const path = [holderName(holder), agentName];
+  const path = [task.name, agentName];
   return (
     <>
       {inStack ? (
@@ -371,12 +382,10 @@ function ThreadDetail({
       ) : null}
       <ThreadPage
         path={path}
-        status={holder.kind === INBOX_HOLDER.TASK ? holder.task.status : undefined}
+        status={task.status}
         title={cardTitle(item.title)}
         messages={drawn}
-        repository={
-          holder.kind === INBOX_HOLDER.TASK ? holder.task.repository : holder.agent.repository
-        }
+        repository={task.repository}
         onOpenPlace={openPlace}
         pictureSource={pictureSource}
         videoAt={videoAt}
