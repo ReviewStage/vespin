@@ -50,6 +50,10 @@ Other commands:
 | `inbox list [--unread]` · `inbox view <thread>` | Threads agents posted, and one thread with its open ask |
 | `inbox answer <thread> <option>` · `inbox answer <thread> -F <json\|->` · `inbox reply <thread> -F <msg\|->` · `inbox close <thread>` | Answer a decide's option, `done` for a to-do, or a form as JSON by field; write on the thread; close it |
 | `agent shells <id>` · `agent shell <id> [<shell>] [--title t]` | An agent's Terminal tab shells; open a new one, or attach to one, in this terminal (Ctrl-] detaches). `shell` is interactive and refuses to run piped, so a coding agent hands it to the person |
+| `repo list` · `repo add <owner/name>` · `repo remove <owner/name>` | The GitHub repositories you can choose for a task in the workspace, each marked `app` (the workspace's installation) or `token` (added on a member's own GitHub token), and those your token may add; add one on your token, or remove one added on a token (its adder or an owner or admin) |
+| `repo cat <owner/name> <path> [--commit sha]` · `repo ls <owner/name> [path] [-r]` · `repo skills <owner/name>` | Read a file or list a folder of a repository the workspace reaches, as GitHub holds it at the default branch's head (or a commit, for `cat`), with no task naming it; the skills an agent may load by name there, the repository's then your installed ones |
+| `repo issue <owner/name> <number>` | The title, state, and link of an issue or pull request by its number |
+| `github status` | Whether your GitHub account is connected to Vespin, and its login; connecting is done in Vespin's Settings. Your token is never printed |
 
 `description edit` replaces the whole description, so run `description show` first and edit that; piped, `show` prints JSON, so take its `body` (`jq -r .body`). Run `vespin <group> --help` for any flag not listed here.
 

@@ -51,6 +51,7 @@ import {
   readDescriptionCommentThread,
   startDescriptionCommentThread,
 } from "@repo/database/models/description-comments";
+import { githubConnection } from "@repo/database/models/github-connection-store";
 import { readPageById } from "@repo/database/models/task-pages";
 import { listTaskSections } from "@repo/database/models/task-section-store";
 import { readTask, readTaskWorkspace } from "@repo/database/models/task-store";
@@ -86,6 +87,7 @@ import {
   INBOX_STATUS,
   inboxAnswersSchema,
 } from "@repo/features/inbox-wire";
+import { commitShaSchema } from "@repo/features/link-grammar";
 import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-mcp-tool";
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
 import { agentName } from "@repo/features/model-label";
@@ -97,7 +99,15 @@ import {
   type PullRequestWriteAnswer,
   pullRequestActionRequestSchema,
 } from "@repo/features/pull-request-write-wire";
-import { TASK_STATUS } from "@repo/features/task-wire";
+import {
+  CODE_PATH_MAX_CHARS,
+  codeLineSchema,
+  TASK_FILE_BOUNDS,
+  TASK_FILE_REFUSAL,
+  TASK_STATUS,
+  TASK_TREE_BOUNDS,
+  type TaskFileRefusal,
+} from "@repo/features/task-wire";
 import { WORKSPACE_BOUNDS, workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { Sandbox } from "@repo/sandbox";
 import {
@@ -210,6 +220,17 @@ import {
 import { HostedEnvironment } from "../environment.js";
 import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import type { GitHubApp } from "../github/github-app.js";
+import type { PullRequestLinks } from "../github/pull-request-links.js";
+import {
+  listWorkspaceRepositories,
+  readPlaceFile,
+  readPlaceIssue,
+  readPlacePullRequest,
+  readPlaceSkills,
+  readPlaceTree,
+  setWorkspaceTokenRepository,
+  workspaceTokenRepositories,
+} from "../github/workspace-repositories.js";
 import { agentWorkspace } from "../github/workspace-repository.js";
 import type { HostedRefusal } from "../http/http-effect.js";
 import type { PageLinks } from "../pages/page-links.js";
@@ -232,7 +253,7 @@ import type { SentryApp } from "../triggers/sentry/sentry-app-config.js";
 import { AdmittedMember, type AdmittedMemberValues } from "./admission.js";
 import { answerAskAsMember, closeThreadAsMember, readMemberInbox, replyAsMember } from "./inbox.js";
 
-/** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against, an agent's sandbox its ports are read and shared in, the deployment's page links its shares answer, and the member the call acts for. */
+/** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against, the pull request links a link's read is kept in, an agent's sandbox its ports are read and shared in, the deployment's page links its shares answer, and the member the call acts for. */
 export type MemberMcpServices =
   | Sandbox
   | AgentSandbox
@@ -240,6 +261,7 @@ export type MemberMcpServices =
   | DatabaseServices
   | HttpClient.HttpClient
   | GitHubApp
+  | PullRequestLinks
   | ModelCatalog
   | HostedEnvironment
   | SentryApp
@@ -1197,6 +1219,315 @@ const SHARE_AGENT_PORT_TOOL = memberMcpTool({
   annotations: IDEMPOTENT_CHANGE,
   run: ({ agentId, port }) =>
     Effect.flatMap(memberPortsReach(agentId), (reach) => runSharePort(reach, { port })),
+});
+
+// The repositories a workspace reaches on GitHub and their files, through the operations the hosted `github` procedures run (`../github/workspace-repositories.ts`); the member's GitHub token is never read into an answer.
+
+/** Why a repository's file, folder, or skills are not read, in words the agent can act on. */
+const REPOSITORY_READ_REFUSAL_WORDS = {
+  [TASK_FILE_REFUSAL.SECRET]:
+    "Not read: the file may hold a secret, so its contents are never read.",
+  [TASK_FILE_REFUSAL.MISSING]: `Not read: nothing of that kind stands at that path; ${MEMBER_MCP_TOOL.LIST_REPOSITORY_FOLDER} lists what does.`,
+  [TASK_FILE_REFUSAL.NOT_TEXT]: "Not read: the file is too large, or not text.",
+  [TASK_FILE_REFUSAL.NO_REPOSITORY]: "Not read: no repository was named.",
+  [TASK_FILE_REFUSAL.NOT_REACHABLE]:
+    "Not read: neither the workspace's GitHub installation nor a repository added on the " +
+    `member's token reaches that repository; ${MEMBER_MCP_TOOL.LIST_REPOSITORIES} lists those that do.`,
+  [TASK_FILE_REFUSAL.UNAVAILABLE]: "Not read: GitHub did not answer just now; try again shortly.",
+} as const satisfies Record<TaskFileRefusal, string>;
+
+/** A refusal of the hosted operations, in the agent's words. */
+function repositoryRefusalWords(refusal: HostedRefusal): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return "Not run: the member is not in that workspace.";
+    case HOSTED_API_ERROR.NOT_PERMITTED:
+      return "Not changed: only the member who added the repository, or a workspace owner or admin, may remove it.";
+    case HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE:
+      return "Not added: the member's own GitHub token may not push to that repository, or saved none.";
+    case HOSTED_API_ERROR.GITHUB_UNANSWERED:
+      return "Not changed: GitHub could not be reached just now. The call may be made again.";
+    default:
+      return "Not run: GitHub or the store did not answer just now; try again shortly.";
+  }
+}
+
+/** A read's own refusal inside its answer (`TaskFileRefusal`), failed in the agent's words, naming the branch GitHub found nothing on. */
+function readOrRefused<A extends object>(
+  read: A | { readonly refusal: TaskFileRefusal; readonly branch?: string },
+): Effect.Effect<A, string> {
+  if (!("refusal" in read)) return Effect.succeed(read);
+  const words = REPOSITORY_READ_REFUSAL_WORDS[read.refusal];
+  return Effect.fail(read.branch === undefined ? words : `${words} (read on ${read.branch})`);
+}
+
+/** A repository operation run as the member, in the workspace its slug names or their only one, accepted with what it found or rejected in its refusal's words. */
+const asMemberInWorkspace = <A extends object, R>(
+  slug: string | undefined,
+  run: (userId: string, workspaceId: string) => Effect.Effect<A, HostedRefusal | string, R>,
+) =>
+  Effect.gen(function* () {
+    const member = yield* AdmittedMember;
+    const workspace = yield* listedWorkspace(member.userId, slug);
+    if (Result.isFailure(workspace)) return agentToolRejected(workspace.failure);
+    return yield* run(member.userId, workspace.success).pipe(
+      Effect.map(
+        (found): MemberMcpToolResult => ({
+          status: ACTION_RESULT_STATUS.ACCEPTED,
+          ...found,
+        }),
+      ),
+      Effect.catch((refusal) =>
+        Effect.succeed(
+          agentToolRejected(
+            typeof refusal === "string" ? refusal : repositoryRefusalWords(refusal),
+          ),
+        ),
+      ),
+    );
+  });
+
+/** A repository, by its full name. */
+const REPOSITORY_INPUT = describeWire(
+  githubRepositoryFullNameSchema,
+  `The repository, by its full name (owner/name), as ${MEMBER_MCP_TOOL.LIST_REPOSITORIES} lists it.`,
+);
+
+/** A read of the repositories names its workspace, as a list does. */
+const ListRepositoriesInputSchema = Schema.Struct({ workspace: WORKSPACE_INPUT });
+
+const LIST_REPOSITORIES_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_REPOSITORIES,
+  description:
+    "List the GitHub repositories the member can choose for a task in a workspace, as the " +
+    "repository chip lists them: whether a GitHub installation is connected to the workspace " +
+    `(installed), its installations, the link a person opens to install ${PRODUCT_NAME}'s GitHub App ` +
+    "(installationUrl), and the repositories, the most recently updated first, each with its " +
+    "full name, default branch, whether it is private, and how it is reached (access: app " +
+    "for the workspace's installation, token for one a member added on their own GitHub " +
+    "token that the member's token may push to); beside them, addable, those the member's own " +
+    `token may push to that neither lists, which ${MEMBER_MCP_TOOL.SET_TOKEN_REPOSITORY} adds; ` +
+    "and tokenRepositories, every repository members added on their tokens, each with who " +
+    "added it, when, and whether the member may remove it. The token itself is never " +
+    `answered. ${WORKSPACE_WORDS}`,
+  input: ListRepositoriesInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace }) =>
+    asMemberInWorkspace(workspace, (userId, workspaceId) =>
+      Effect.gen(function* () {
+        const listed = yield* listWorkspaceRepositories(userId, workspaceId);
+        const added = yield* workspaceTokenRepositories(userId, workspaceId);
+        return { ...listed, tokenRepositories: added.repositories };
+      }),
+    ),
+});
+
+/** An add or a removal names the workspace, the repository, and which. */
+const SetTokenRepositoryInputSchema = Schema.Struct({
+  workspace: WORKSPACE_INPUT,
+  repository: REPOSITORY_INPUT,
+  added: describeWire(
+    Schema.Boolean,
+    "true to add the repository on the member's own GitHub token, false to remove it.",
+  ),
+});
+
+const SET_TOKEN_REPOSITORY_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.SET_TOKEN_REPOSITORY,
+  description:
+    "Add a GitHub repository to a workspace on the member's own GitHub token, as Settings › " +
+    "Workspace's Add repository does, so its tasks and agents may work in it where the " +
+    "workspace's installation does not reach it; or remove one, which its adder or a " +
+    "workspace owner or admin may. An add is refused where the member's token may not push " +
+    "to the repository or they saved none; one the workspace's installation reaches is left " +
+    "as it stands, since the installation wins. A removal leaves the workspace's tasks as " +
+    "they stand. Answers `accepted` with the repositories added on members' tokens as they " +
+    `then stand, or \`rejected\` and why. ${WORKSPACE_WORDS}`,
+  input: SetTokenRepositoryInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ workspace, repository, added }) =>
+    asMemberInWorkspace(workspace, (userId, workspaceId) =>
+      setWorkspaceTokenRepository(userId, { workspaceId, repository, added }),
+    ),
+});
+
+/** A read of a file names the workspace, the repository, its path, at most the line to start at, and the commit. */
+const ReadRepositoryFileInputSchema = Schema.Struct({
+  workspace: WORKSPACE_INPUT,
+  repository: REPOSITORY_INPUT,
+  path: describeWire(
+    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(CODE_PATH_MAX_CHARS)),
+    "The file's path from the repository's root, such as src/index.ts.",
+  ),
+  firstLine: Schema.optionalKey(
+    describeWire(codeLineSchema, "The first line to read, from 1; 1 where left out."),
+  ),
+  commit: Schema.optionalKey(
+    describeWire(
+      commitShaSchema,
+      "The commit to read the file at, by its full SHA; the default branch's head where left out.",
+    ),
+  ),
+});
+
+const READ_REPOSITORY_FILE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.READ_REPOSITORY_FILE,
+  description:
+    "Read a file of a GitHub repository the workspace reaches, by its full name and the " +
+    "file's path, with no task naming it: read through the workspace's installation, or the " +
+    "member's own token for a repository added on it, at the default branch's head or the " +
+    "commit you name. Answers `accepted` with the file's path, the repository and the branch " +
+    "read, the commit read at where GitHub named one, the line the window starts at, how many " +
+    `lines the whole file has, and up to ${TASK_FILE_BOUNDS.WINDOW_LINES} of its lines, each ` +
+    `cut at ${TASK_FILE_BOUNDS.MAX_LINE_CHARS} characters; pass firstLine to read further. A ` +
+    "file that may hold a secret, is too large, or is not text is refused. Answers " +
+    `\`rejected\` and why otherwise. ${MEMBER_MCP_TOOL.LIST_REPOSITORY_FOLDER} lists a folder. ` +
+    WORKSPACE_WORDS,
+  input: ReadRepositoryFileInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace, repository, path, firstLine = 1, commit }) =>
+    asMemberInWorkspace(workspace, (userId, workspaceId) =>
+      Effect.flatMap(
+        readPlaceFile(
+          userId,
+          { workspaceId, repository },
+          {
+            path,
+            firstLine,
+            lastLine: firstLine + TASK_FILE_BOUNDS.WINDOW_LINES - 1,
+            ...(commit === undefined ? undefined : { ref: commit }),
+          },
+        ),
+        readOrRefused,
+      ),
+    ),
+});
+
+/** A listing names the workspace, the repository, at most the folder, and whether everything under it is listed. */
+const ListRepositoryFolderInputSchema = Schema.Struct({
+  workspace: WORKSPACE_INPUT,
+  repository: REPOSITORY_INPUT,
+  path: Schema.optionalKey(
+    describeWire(
+      Schema.String.check(Schema.isMaxLength(CODE_PATH_MAX_CHARS)),
+      "The folder's path from the repository's root, such as src; the root where left out.",
+    ),
+  ),
+  recursive: Schema.optionalKey(
+    describeWire(
+      Schema.Boolean,
+      "true to list everything under the folder, each entry by its path from the folder; " +
+        "false or left out for the folder's own entries.",
+    ),
+  ),
+});
+
+const LIST_REPOSITORY_FOLDER_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_REPOSITORY_FOLDER,
+  description:
+    "List a folder of a GitHub repository the workspace reaches, by its full name, with no " +
+    "task naming it, at the default branch's head. Answers `accepted` with the folder's path, " +
+    "the repository and the branch read, its entries in GitHub's order, each with its name " +
+    "and whether it is a file or a folder, and truncated true where there were more than " +
+    `${TASK_TREE_BOUNDS.MAX_ENTRIES} (or ${TASK_TREE_BOUNDS.MAX_RECURSIVE_ENTRIES} with ` +
+    `recursive), or \`rejected\` and why. ${MEMBER_MCP_TOOL.READ_REPOSITORY_FILE} reads a ` +
+    `file it lists. ${WORKSPACE_WORDS}`,
+  input: ListRepositoryFolderInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace, repository, path = "", recursive }) =>
+    asMemberInWorkspace(workspace, (userId, workspaceId) =>
+      Effect.flatMap(
+        readPlaceTree(
+          userId,
+          { workspaceId, repository },
+          { path, ...(recursive === true ? { recursive } : undefined) },
+        ),
+        readOrRefused,
+      ),
+    ),
+});
+
+/** A read of the skills names the workspace and at most the repository. */
+const ListRepositorySkillsInputSchema = Schema.Struct({
+  workspace: WORKSPACE_INPUT,
+  repository: Schema.optionalKey(
+    describeWire(
+      githubRepositoryFullNameSchema,
+      "The repository whose skills lead the list, by its full name (owner/name); the " +
+        "member's installed skills alone where left out.",
+    ),
+  ),
+});
+
+const LIST_REPOSITORY_SKILLS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_REPOSITORY_SKILLS,
+  description:
+    "List the skills a developer may choose by name for an agent in a workspace, as the " +
+    "composer's / list offers them: the repository's, where you name one, as its default " +
+    "branch holds them on GitHub, then the member's enabled installed skills, the " +
+    "workspace's and then their own, a name an earlier source holds left out. Answers " +
+    "`accepted` with the repository and the branch read (null where none is named), and the " +
+    "skills, each with its name, what it is for, where it comes from (repository, " +
+    "workspace, or personal), and for one of the repository's its SKILL.md's path, or " +
+    `\`rejected\` and why. ${WORKSPACE_WORDS}`,
+  input: ListRepositorySkillsInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace, repository }) =>
+    asMemberInWorkspace(workspace, (userId, workspaceId) =>
+      Effect.flatMap(readPlaceSkills(userId, workspaceId, repository ?? null, true), readOrRefused),
+    ),
+});
+
+/** A read of an issue or a pull request names the workspace, the repository, and the number. */
+const ReadGitHubIssueInputSchema = Schema.Struct({
+  workspace: WORKSPACE_INPUT,
+  repository: REPOSITORY_INPUT,
+  number: describeWire(
+    githubPullRequestNumberSchema,
+    "The issue's or pull request's number in the repository.",
+  ),
+});
+
+const READ_GITHUB_ISSUE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.READ_GITHUB_ISSUE,
+  description:
+    "Read the title, page, and state of an issue or a pull request of a GitHub repository the " +
+    "workspace reaches, by its full name and the number, as a link to it draws: GitHub numbers " +
+    "issues and pull requests of a repository in one series, so a number names one or the " +
+    "other. Answers `accepted` with pullRequest (its number, title, url, state, author, and " +
+    "what GitHub says of its size, branches, and labels) where the number is a pull request, " +
+    "issue (its number, title, url, state, and author) where it is an issue, and each null " +
+    "where it is not, or where the repository is not reached or does not grant issues; or " +
+    `\`rejected\` and why. ${WORKSPACE_WORDS}`,
+  input: ReadGitHubIssueInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace, repository, number }) =>
+    asMemberInWorkspace(workspace, (userId, workspaceId) =>
+      Effect.gen(function* () {
+        const place = { workspaceId, repository };
+        const pullRequest = yield* readPlacePullRequest(userId, place, number);
+        // Note that a pull request is read as an issue too by GitHub's issues API, so the issue is read only where no pull request answered.
+        const issue = pullRequest === null ? yield* readPlaceIssue(userId, place, number) : null;
+        return { pullRequest, issue };
+      }),
+    ),
+});
+
+const READ_GITHUB_CONNECTION_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.READ_GITHUB_CONNECTION,
+  description:
+    `Read whether the member you act for has connected their GitHub account to ${PRODUCT_NAME}, ` +
+    "which pull request changes on GitHub are made as, and their GitHub login where it is. " +
+    `Connecting needs a browser: a person connects it from ${PRODUCT_NAME}'s Settings. Never ` +
+    "answers a token.",
+  input: NoInputSchema,
+  annotations: READ_ONLY,
+  run: () =>
+    Effect.gen(function* () {
+      const member = yield* AdmittedMember;
+      const connection = yield* githubConnection(member.userId);
+      return { status: ACTION_RESULT_STATUS.ACCEPTED, ...connection };
+    }),
 });
 
 // The member's inbox (`inbox.ts`): the threads their agents ask them things on, read and worked as theirs.
@@ -2183,6 +2514,13 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_UPDATE_AGENT_TOOL,
   LIST_AGENT_PORTS_TOOL,
   SHARE_AGENT_PORT_TOOL,
+  LIST_REPOSITORIES_TOOL,
+  SET_TOKEN_REPOSITORY_TOOL,
+  READ_REPOSITORY_FILE_TOOL,
+  LIST_REPOSITORY_FOLDER_TOOL,
+  LIST_REPOSITORY_SKILLS_TOOL,
+  READ_GITHUB_ISSUE_TOOL,
+  READ_GITHUB_CONNECTION_TOOL,
   READ_INBOX_TOOL,
   ANSWER_ASK_TOOL,
   REPLY_TO_THREAD_TOOL,

@@ -54,6 +54,7 @@ import {
 } from "../auth/oauth-clients.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import type { GitHubApp } from "../github/github-app.js";
+import { pullRequestLinksLayer } from "../github/pull-request-links.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { memberMcpApp, memberMcpAuth } from "../member-mcp/app.js";
 import {
@@ -229,6 +230,7 @@ export function memberMcpStanding(options: MemberMcpStandingOptions = {}) {
       harness.layer,
       Layer.succeed(SentryApp, sentryAppService(undefined, [])),
       Layer.succeed(PageLinks, { sandbox: undefined }),
+      pullRequestLinksLayer,
     );
     yield* seedRows.pipe(Effect.provide(services));
     // The key set is fetched from the auth service over HTTP, as on a deployment: here the in-process handler, and nothing else answers.

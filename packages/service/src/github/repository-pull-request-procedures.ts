@@ -2,7 +2,7 @@
  * repository-pull-request-procedures.ts -- one pull request of a workspace's repository, read and changed by its repository and number rather than through an agent.
  *
  * Every procedure resolves the caller first, then whether the account is a
- * member of the workspace the query names (`github-procedures.ts`'s
+ * member of the workspace the query names (`workspace-repositories.ts`'s
  * `memberPlace`), and only then mints a token for the repository on the
  * workspace's installation, or the member's own token where none reaches
  * it, as a link to the pull request is read (`pull-request-links.ts`). The
@@ -51,12 +51,12 @@ import { HOSTED_REFUSAL, type UserIdResolver } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
 import { GitHubApp, type GitHubTokenAccess, markRefusedToken } from "./github-app.js";
 import { namedReviewOptions } from "./github-people.js";
-import { memberPlace } from "./github-procedures.js";
 import {
   type PullRequestReadFailure,
   pullRequestByNumber,
   pullRequestReviewOptions,
 } from "./pull-requests.js";
+import { memberPlace } from "./workspace-repositories.js";
 
 export interface RepositoryPullRequestProcedureSeams {
   resolveUserId: UserIdResolver;
