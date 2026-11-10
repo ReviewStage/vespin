@@ -114,15 +114,20 @@ function pictureTypeOf(bytes: Uint8Array): LinkPreviewPictureType | undefined {
   return SIGNATURES.find(([, opens]) => opens(bytes))?.[0];
 }
 
-/** Why a read answered nothing: the address was refused, or the page was not read. */
+/** How a read ended: the address answered, was refused, or was not read. */
 const READ_OUTCOME = {
+  ANSWERED: "answered",
   REFUSED: "refused",
   UNREAD: "unread",
 } as const;
 
 /** What one address answered: its final address and the hop's answer, or why not. */
 type Reached =
-  | { readonly outcome: "answered"; readonly url: URL; readonly answer: HopAnswer }
+  | {
+      readonly outcome: typeof READ_OUTCOME.ANSWERED;
+      readonly url: URL;
+      readonly answer: HopAnswer;
+    }
   | { readonly outcome: typeof READ_OUTCOME.REFUSED }
   | { readonly outcome: typeof READ_OUTCOME.UNREAD };
 
@@ -190,7 +195,7 @@ const reached = Effect.fnUntraced(function* (
       url = next;
       continue;
     }
-    return { outcome: "answered", url, answer };
+    return { outcome: READ_OUTCOME.ANSWERED, url, answer };
   }
   return UNREAD;
 });
@@ -216,7 +221,7 @@ function pictureAt(
   const read = Effect.map(
     reached(url, ACCEPT.PICTURE, maxBytes, reach),
     (reach): LinkPreviewPicture | undefined => {
-      if (reach.outcome !== "answered" || reach.answer.cut) return undefined;
+      if (reach.outcome !== READ_OUTCOME.ANSWERED || reach.answer.cut) return undefined;
       const { status, bytes } = reach.answer;
       if (status < 200 || status >= 300 || bytes.byteLength === 0) return undefined;
       const type = pictureTypeOf(bytes);

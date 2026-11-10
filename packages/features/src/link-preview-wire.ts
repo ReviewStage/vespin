@@ -3,8 +3,8 @@ import { Schema as EffectSchema } from "effect";
 /**
  * link-preview-wire.ts -- what the service says of a web page a plain link in the app's words names, for the card the link hangs: its title, its description, its site's name, and its favicon and picture where the page names them.
  *
- * `GET /api/link-previews?url=` is asked for a page as the member rests
- * the pointer on a link to it, and the service, never the member's own
+ * `POST /api/link-previews { url }` is asked for a page as the member
+ * rests the pointer on a link to it, and the service, never the member's own
  * machine, reads the page's `<head>` and answers what it says of itself:
  * its `<title>` or Open Graph title, its description, its site's name, and
  * its icon and Open Graph picture, each picture's bytes in base64 under
@@ -33,7 +33,7 @@ export const LINK_PREVIEW_BOUNDS = {
   MAX_IMAGE_BYTES: 600_000,
 } as const;
 
-/** The one query a preview is asked by. */
+/** The one field a preview is asked by, in the body. */
 export const LINK_PREVIEW_QUERY = {
   URL: "url",
 } as const;
@@ -58,7 +58,7 @@ export const LINK_PREVIEW_REFUSAL = {
   UNREAD: "unread",
 } as const;
 
-/** The address asked for, as the query carries it: a bounded string the service reads as a URL. */
+/** The address asked for, as the body carries it: a bounded string the service reads as a URL. */
 export const linkPreviewUrlSchema = EffectSchema.String.check(
   EffectSchema.isNonEmpty(),
   EffectSchema.isMaxLength(LINK_PREVIEW_BOUNDS.MAX_URL_CHARS),
@@ -85,7 +85,7 @@ const linkPreviewSchema = EffectSchema.Struct({
 
 export type LinkPreview = typeof linkPreviewSchema.Type;
 
-/** A page's preview (GET): what it says of itself, or why it has none. */
+/** A page's preview (POST): what it says of itself, or why it has none. */
 export const linkPreviewAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ preview: linkPreviewSchema }),
   EffectSchema.Struct({ refused: EffectSchema.Literals(Object.values(LINK_PREVIEW_REFUSAL)) }),

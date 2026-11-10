@@ -14,12 +14,10 @@
  * A host that resolves to one private address among public ones is refused
  * whole, since which one a connection takes is the resolver's choice. The
  * check is of the resolved addresses, not the name alone, because a name is
- * the attacker's to point anywhere.
- *
- * Note that the check runs before the connection and the connection resolves
- * the name again, so a resolver answering one address here and another a
- * moment later (DNS rebinding) is not caught by this module; the caller's
- * resolver should cache what it answered for at least the fetch's life.
+ * the attacker's to point anywhere; the connection is then made to the
+ * very addresses checked, never by resolving again (`link-preview-read.ts`,
+ * `node-link-reach.ts`), so a name that answers differently a moment later
+ * reaches nothing.
  */
 
 import { isIPv4, isIPv6 } from "node:net";

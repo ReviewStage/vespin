@@ -60,12 +60,13 @@ function subOf(host: string, site: string | undefined): string {
 /** The card a plain link to `href` hangs. */
 export function LinkPreviewCard({ href }: { href: string }): React.JSX.Element {
   const host = siteName(href) ?? href;
-  const { data } = useQuery(linkPreviewQuery(href));
+  const { data, isPending } = useQuery(linkPreviewQuery(href));
   const globe = <GLYPH.WEBSITE />;
-  if (data === undefined) {
+  if (isPending) {
     return <HoverCardSkeleton glyph={globe} name={host} sub notes={2} data-link-preview="" />;
   }
-  if (!("preview" in data)) {
+  // Note that an ask the port refused, as one that failed, says the host, as a page with no preview does.
+  if (data === undefined || !("preview" in data)) {
     return (
       <HoverCard data-link-preview="" data-link-preview-state="none">
         <HoverCardHead glyph={globe} name={host} />

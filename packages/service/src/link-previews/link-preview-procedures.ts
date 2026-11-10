@@ -10,14 +10,19 @@
  * (`node-link-reach.ts`), so a name cannot point the fetch elsewhere.
  * An answer is kept for a while per address, a few minutes where the page
  * answered and a moment where it did not, so a link many members hover
- * is read once, and the reads under way at once are bounded per instance.
+ * is read once, and the reads under way at once are bounded per instance,
+ * a read waiting its turn past the bound answered as unread rather than
+ * held. A member is braked per instance to so many asks a minute
+ * (`http/rate-brake.ts`), refused as quota exhausted past it, so one
+ * account cannot fill the instance's reads with addresses of its own.
  * Nothing of the address or the page is logged: an address may carry a
  * token, and the page is a third party's.
  */
 
 import { LINK_PREVIEW_REFUSAL, type LinkPreviewAnswer } from "@repo/features/link-preview-wire";
-import { Cache, Duration, Effect, type Exit, Semaphore } from "effect";
-import type { UserIdResolver } from "../http/http-effect.js";
+import { Cache, Duration, Effect, type Exit, Option, Semaphore } from "effect";
+import { HOSTED_REFUSAL, type UserIdResolver } from "../http/http-effect.js";
+import { makeRateBrake } from "../http/rate-brake.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
 import { webPageAddressOf } from "./link-address.js";
 import { type LinkPreviewReach, readLinkPreview } from "./link-preview-read.js";
@@ -38,6 +43,15 @@ const PREVIEWS_KEPT = {
   UNANSWERED: Duration.minutes(1),
   /** The most pages one instance reads at once. */
   CONCURRENT_READS: 8,
+  /** The longest an ask waits for its read, the wait for a turn included: inside the window's own deadline on the call, so a queue never answers after the window gave up. */
+  ASK_DEADLINE: Duration.seconds(9),
+} as const;
+
+/** How many previews one member may ask of an instance in a minute: a page of links hovered through, not a crawl. */
+const ASK_BRAKE = {
+  windowMs: Duration.toMillis(Duration.minutes(1)),
+  maxRequestsPerWindow: 60,
+  maxTrackedUsers: 10_000,
 } as const;
 
 /** The previews one instance keeps, by the page's address without its fragment. */
@@ -59,7 +73,14 @@ function previewKept(exit: Exit.Exit<LinkPreviewAnswer>): Duration.Duration {
 function instanceLinkPreviewCache(reach: LinkPreviewReach): Effect.Effect<LinkPreviewCache> {
   const reads = Semaphore.makeUnsafe(PREVIEWS_KEPT.CONCURRENT_READS);
   const made = Cache.makeWith(
-    (address: string) => reads.withPermits(1)(readLinkPreview(address, reach)),
+    (address: string): Effect.Effect<LinkPreviewAnswer> =>
+      Effect.map(
+        Effect.timeoutOption(
+          reads.withPermits(1)(readLinkPreview(address, reach)),
+          PREVIEWS_KEPT.ASK_DEADLINE,
+        ),
+        Option.getOrElse((): LinkPreviewAnswer => ({ refused: LINK_PREVIEW_REFUSAL.UNREAD })),
+      ),
     {
       capacity: PREVIEWS_KEPT.CAPACITY,
       timeToLive: previewKept,
@@ -74,9 +95,13 @@ function instanceLinkPreviewCache(reach: LinkPreviewReach): Effect.Effect<LinkPr
 /** The link previews resource: one page's preview, read for a signed-in account. */
 export function linkPreviewsProcedures(seams: LinkPreviewsProcedureSeams) {
   const previews = instanceLinkPreviewCache(seams.linkReach);
+  const brake = makeRateBrake(ASK_BRAKE);
   const signedIn = hosted.linkPreviews.use(accountMiddleware(seams.resolveUserId));
   return {
-    read: signedIn.read.effect(function* ({ input }) {
+    read: signedIn.read.effect(function* ({ input, context }) {
+      if (!(yield* brake.check(context.userId))) {
+        return yield* Effect.fail(HOSTED_REFUSAL.QUOTA_EXHAUSTED);
+      }
       const url = webPageAddressOf(input.url);
       if (url === undefined) return { refused: LINK_PREVIEW_REFUSAL.ADDRESS };
       // Note that the fragment never reaches the server, so two links to one page differing in it share one read.

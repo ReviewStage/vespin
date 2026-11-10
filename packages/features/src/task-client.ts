@@ -36,6 +36,7 @@ import type {
   GitHubRepositoryPullRequestAnswer,
 } from "./github-repositories-wire.js";
 import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
+import { HOSTED_CALL_FAILURE } from "./hosted-failure.js";
 import { HOSTED_DEADLINE, type HostedClient, hostedClient } from "./hosted-link.js";
 import { imageBodyOf } from "./image-body.js";
 import { WRITE_UNTAKEN, type WriteUntaken, writeUntakenOf } from "./keyed-write.js";
@@ -571,9 +572,13 @@ export class HostedTaskClient {
     );
   }
 
-  /** What a web page a plain link names says of itself, for the card the link hangs, read by the service (`link-preview-wire.ts`): its answer, or why it did not answer. */
+  /** What a web page a plain link names says of itself, for the card the link hangs, read by the service (`link-preview-wire.ts`): its answer, or unanswered, a braked ask among it, since the card says the host alone for any of these. */
   linkPreview(url: string): Effect.Effect<LinkPreviewView, never, HttpClient.HttpClient> {
-    return hostedCall(this.#hosted.linkPreviews.read, { [LINK_PREVIEW_QUERY.URL]: url });
+    return Effect.map(
+      hostedCall(this.#hosted.linkPreviews.read, { [LINK_PREVIEW_QUERY.URL]: url }),
+      (answer): LinkPreviewView =>
+        "failure" in answer ? { ...answer, failure: HOSTED_CALL_FAILURE.UNANSWERED } : answer,
+    );
   }
 
   /** One window of a file of a repository the workspace's installation reaches, as `readFile` reads a task's; nothing where the service did not answer, or where the window is not one the wire admits. */
