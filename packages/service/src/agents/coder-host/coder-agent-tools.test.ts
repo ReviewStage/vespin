@@ -2627,7 +2627,7 @@ test("update_agent's archive of a teammate's agent on its starter's device queue
   );
 });
 
-test("update_agent archives an agent still working by stopping its turn first, beside the other changes asked, and archives neither the caller itself, an agent of another workspace its starter is also in, nor a stranger's", async () => {
+test("update_agent refuses to archive an agent still working, stopping nothing and writing none of the other changes asked, and archives neither the caller itself, an agent of another workspace its starter is also in, nor a stranger's", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
   const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
@@ -2636,17 +2636,19 @@ test("update_agent archives an agent still working by stopping its turn first, b
     call(AGENT_TOOL.UPDATE_AGENT, { agentId, archived: true, ...input });
   const rejected = (reason: string) => ({ status: ACTION_RESULT_STATUS.REJECTED, reason });
 
-  const working = await archive(agents.teammates.id, { title: "Renamed" });
-  assert.equal(working.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(working));
   assert.deepEqual(
+    await archive(agents.teammates.id, { title: "Renamed" }),
+    rejected(UPDATE_AGENT_REFUSAL.STILL_WORKING),
+  );
+  assert.equal(
     agentSessions.sent.filter((sent) => sent.path.endsWith("/cancel")).length,
-    1,
-    "its turn was stopped before the archive",
+    0,
+    "its turn was left running",
   );
   const teammates = Option.getOrThrow(
     await database.run(readAgent(agents.teammates.userId, agents.teammates.id)),
   );
-  assert.deepEqual([teammates.title, teammates.archivedAt !== null], ["Renamed", true]);
+  assert.deepEqual([teammates.title, teammates.archivedAt], [null, null]);
   assert.deepEqual(await archive(agents.caller.id), rejected(UPDATE_AGENT_REFUSAL.SELF));
   assert.deepEqual(await archive(agents.otherWorkspaces.id), rejected(AGENT_TOOL_REFUSAL.NO_AGENT));
   assert.deepEqual(await archive(agents.strangers.id), rejected(AGENT_TOOL_REFUSAL.NO_AGENT));
