@@ -41,6 +41,7 @@ const DECLARED_TABLES = [
   "admin_favorite",
   "agent",
   "agent_approval",
+  "agent_boot",
   "agent_browser_tab",
   "agent_delegation",
   "agent_pin",
