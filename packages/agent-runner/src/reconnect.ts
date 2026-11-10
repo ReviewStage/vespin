@@ -116,6 +116,8 @@ export function probeTargetOf(
     if (proxy === undefined || proxy === "") continue;
     try {
       const url = new URL(proxy);
+      // Note that a value with no scheme, such as `proxy.corp:3128`, parses with its name as the scheme and no host, so it is left to the harness as a value that is no URL is.
+      if (url.hostname === "") continue;
       const port =
         url.port === "" ? (url.protocol === "https:" ? HTTPS_PORT : HTTP_PORT) : Number(url.port);
       return { host: url.hostname, port };

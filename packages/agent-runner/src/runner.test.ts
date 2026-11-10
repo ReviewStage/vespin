@@ -600,25 +600,30 @@ it.effect("ends the turn as before on a model call the API refused, probing noth
   }),
 );
 
-/** The probe's target where the CLI goes through a proxy: the proxy's own address. */
-it.effect("probes the proxy the CLI goes through rather than the host, where one is set", () =>
-  Effect.gen(function* () {
-    const service = fakeService();
-    const { write, run, probed } = yield* launch(
-      CONNECTION_LOST_TURN,
-      service,
-      { ...ENV, HTTPS_PROXY: "http://proxy.corp.test:3128" },
-      [],
-      true,
-      fakeProbe(),
-    );
-    yield* write(CONFIG);
-    yield* write(FIRST_MESSAGE);
-    yield* untilPosted(service, RUNNER_EVENT.CONNECTION_RESTORED);
-    assert.deepEqual(probed.targets, [{ host: "proxy.corp.test", port: 3128 }]);
-    yield* write(CARRY_ON_LINE);
-    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
-  }),
+/** The probe's target where the CLI goes through a proxy: the proxy's own address, or the host where the proxy value names no host. */
+it.effect.each([
+  { proxy: "http://proxy.corp.test:3128", target: { host: "proxy.corp.test", port: 3128 } },
+  { proxy: "proxy.corp.test:3128", target: { host: ANTHROPIC_HOST, port: 443 } },
+])(
+  "probes the proxy the CLI goes through rather than the host, where one is set as $proxy",
+  ({ proxy, target }) =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const { write, run, probed } = yield* launch(
+        CONNECTION_LOST_TURN,
+        service,
+        { ...ENV, HTTPS_PROXY: proxy },
+        [],
+        true,
+        fakeProbe(),
+      );
+      yield* write(CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* untilPosted(service, RUNNER_EVENT.CONNECTION_RESTORED);
+      assert.deepEqual(probed.targets, [target]);
+      yield* write(CARRY_ON_LINE);
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    }),
 );
 
 /** How many IDLE events the service has taken. */

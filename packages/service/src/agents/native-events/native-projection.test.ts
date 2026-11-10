@@ -98,8 +98,20 @@ test("a connection lost to the provider holds the turn open with a notice, count
   assert.equal(settled[0]?.restoredAt, 61_000);
   assert.deepEqual(
     restored.writes.filter((write) => write.kind === NATIVE_WRITE.CARRY_ON),
-    [{ kind: NATIVE_WRITE.CARRY_ON, turnId: "turn-1" }],
+    [{ kind: NATIVE_WRITE.CARRY_ON, turnId: "turn-1", lostSequence: noticed[0]?.sequence }],
   );
+  // A second loss of the same turn asks for a carry-on of its own, keyed apart from the first.
+  const lostAgain = projectMoments(
+    restored.state,
+    [
+      { kind: NATIVE_MOMENT.CONNECTION_LOST, host: "api.anthropic.com" },
+      { kind: NATIVE_MOMENT.CONNECTION_RESTORED, host: "api.anthropic.com", carryOn: true },
+    ],
+    { ...context, sequence: 3, now: 121_000 },
+  );
+  const second = lostAgain.writes.find((write) => write.kind === NATIVE_WRITE.CARRY_ON);
+  assert.ok(second !== undefined && second.kind === NATIVE_WRITE.CARRY_ON);
+  assert.notEqual(second.lostSequence, noticed[0]?.sequence);
   assert.equal(
     turnProgressed(0, restored.state),
     false,

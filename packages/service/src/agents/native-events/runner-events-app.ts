@@ -846,7 +846,9 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       failed: writes.filter((write): write is FailedTurn => write.kind === NATIVE_WRITE.FAILED),
       retried: writes.flatMap((write) => (write.kind === NATIVE_WRITE.RETRY ? [write] : [])),
       carriedOn: writes.flatMap((write) =>
-        write.kind === NATIVE_WRITE.CARRY_ON ? [write.turnId] : [],
+        write.kind === NATIVE_WRITE.CARRY_ON
+          ? [{ turnId: write.turnId, lostSequence: write.lostSequence }]
+          : [],
       ),
       keepsAlive,
     };
@@ -1016,10 +1018,16 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     );
   }
   // A turn whose runner waited for the model's provider goes on by a carry-on line, once the wait's end is written.
-  for (const turnId of applied.value.carriedOn) {
+  for (const { turnId, lostSequence } of applied.value.carriedOn) {
     yield* afterResponse(
       "a reconnected turn's carry-on",
-      carriedOn(routedSessions, agent.value, turnId, CARRY_ON_REASON.CONNECTION_LOST).pipe(
+      carriedOn(
+        routedSessions,
+        agent.value,
+        turnId,
+        CARRY_ON_REASON.CONNECTION_LOST,
+        lostSequence,
+      ).pipe(
         Effect.annotateLogs({
           agentId: agent.value.id,
           conversationId: target.conversationId,

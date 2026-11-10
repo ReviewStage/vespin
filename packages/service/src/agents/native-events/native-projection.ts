@@ -250,7 +250,12 @@ export type NativeWrite =
     }
   | { readonly kind: typeof NATIVE_WRITE.RETRY; readonly turnId: string; readonly replay?: true }
   | { readonly kind: typeof NATIVE_WRITE.WAIT; readonly turnId: string; readonly until: number }
-  | { readonly kind: typeof NATIVE_WRITE.CARRY_ON; readonly turnId: string }
+  | {
+      readonly kind: typeof NATIVE_WRITE.CARRY_ON;
+      readonly turnId: string;
+      /** The sequence of the event that told the loss, which keys this carry-on apart from the turn's others. */
+      readonly lostSequence: number;
+    }
   | {
       readonly kind: typeof NATIVE_WRITE.PLAN_STATUS;
       readonly status: PlanStatus;
@@ -930,7 +935,13 @@ class Fold {
           restoredAt: this.#context.now,
         });
         this.#setTurn(told);
-        if (moment.carryOn) this.writes.push({ kind: NATIVE_WRITE.CARRY_ON, turnId: turn.id });
+        if (moment.carryOn) {
+          this.writes.push({
+            kind: NATIVE_WRITE.CARRY_ON,
+            turnId: turn.id,
+            lostSequence: reconnecting,
+          });
+        }
         return;
       }
       case NATIVE_MOMENT.ENDED:
