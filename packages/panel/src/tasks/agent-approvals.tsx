@@ -519,7 +519,10 @@ const NO_ASKS: readonly AgentPendingApproval[] = [];
 /** What the row's body says of who asks and why: the subagent where one does, and the CLI's own words where it gave some. */
 function aboutOf(approval: AgentPendingApproval): string | undefined {
   const asker = approval.subagentId === undefined ? undefined : SUBAGENT_ASKS;
-  const words = [asker, approval.description].filter((each) => each !== undefined);
+  // Note that the CLI's words are left out where they are the call's own description, which the row's line says already.
+  const why =
+    approval.description === approval.input.description ? undefined : approval.description;
+  const words = [asker, why].filter((each) => each !== undefined);
   return words.length === 0 ? undefined : words.join(" ");
 }
 

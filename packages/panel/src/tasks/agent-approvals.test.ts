@@ -153,6 +153,8 @@ test("Allow on a held call's row sends the answer, and the row says it was allow
   const { container, answered } = await drawnTab(CLAUDE_AGENT);
   const call = container.querySelector(`[data-call-id="${CALL}"]`) ?? assert.fail("the call");
   assert.ok(call.textContent?.includes("Waiting for approval"));
+  // Note that the row stands open while it waits, so the command stands above its answers.
+  assert.equal(call.closest("details")?.open, true);
 
   const allow = buttonReading(container, "Allow") ?? assert.fail("Allow");
   await act(async () => allow.click());

@@ -1332,6 +1332,22 @@ export interface HeldCall {
 }
 
 /**
+ * Whether a held call's row stands open, and its toggle: open while the call
+ * waits, so what it would do stands above its answers without a press, and
+ * closed again as it is answered, as a finished row stands; a press opens
+ * and closes it between.
+ */
+function useHeldOpen(waiting: boolean): { open: boolean; onOpenChange: (open: boolean) => void } {
+  const [open, setOpen] = useState(waiting);
+  const [was, setWas] = useState(waiting);
+  if (was !== waiting) {
+    setWas(waiting);
+    setOpen(waiting);
+  }
+  return { open, onOpenChange: setOpen };
+}
+
+/**
  * One tool call: its row saying what it did, closed until clicked, and its
  * input and answer under it once opened, a command's as one terminal card
  * (`ToolTerminal`). A command is the closed row's
@@ -1340,7 +1356,8 @@ export interface HeldCall {
  * subject the input says whole, a read's path or a search's pattern
  * (`blockSays`); a description stays, since the body does not say it. A
  * call that made something names it by its chip, as a call about an agent
- * names the agent by its own; one that read, wrote, or edited files names
+ * names the agent by its own; a call the agent holds for an answer stands
+ * open while it waits (`useHeldOpen`); one that read, wrote, or edited files names
  * the first by its chip, and one that fetched a page names it by its
  * website chip (`calledChip`), which stays as the row opens.
  */
@@ -1373,8 +1390,9 @@ export function TranscriptTool({
         : { line: { ...callLine(kind, moreFiles(files), undefined), code: false }, chip: called };
   const command = isCommandKind(kind);
   const macOwner = useContext(MacOwnerContext);
+  const opened = useHeldOpen(held?.waiting === true);
   const row = (
-    <Tool {...props}>
+    <Tool {...props} {...(held === undefined ? undefined : opened)}>
       <ToolHeader
         state={state}
         icon={

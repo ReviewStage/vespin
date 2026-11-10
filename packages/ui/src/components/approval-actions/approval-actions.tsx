@@ -1,23 +1,22 @@
 import { useState } from "react";
 import type { ShownError } from "../../reported-failure.js";
-import { BUTTON_SIZE, BUTTON_VARIANT, Button } from "../button/button.js";
+import { BUTTON_VARIANT, Button } from "../button/button.js";
 import { ErrorLine } from "../error-line/error-line.js";
 import { GAP, Inline, Stack } from "../layout/layout.js";
-import { TEXT_FIELD_SIZE, TextField } from "../text-field/text-field.js";
+import { TextField } from "../text-field/text-field.js";
 
 /**
- * approval-actions.tsx -- the answers to a tool call an agent holds for a member: Allow, Always allow, and Deny, as compact presses in the line under the call's row.
+ * approval-actions.tsx -- the answers to a tool call an agent holds for a member: Allow, Always allow, and Deny, under the call's row.
  *
- * A held call is drawn as the call's own row, which already names what it
- * would do and says it waits; these are the presses that answer it, set in
- * under the row's words as a row's own presses are, at a row mark's height
- * in the caption's type (`BUTTON_SIZE.COMPACT`), a finger's target on a
- * coarse pointer as every button takes, wrapping onto a second line where
- * the column is narrow. Allow, in the accent, lets this call through;
- * Always allow lets every call like it through while the agent's runner
- * runs; Deny opens one small field in their place for the words that tell
- * the agent why, optional and held to the bound its owner names, with Deny
- * to send it and Cancel to close it again, Enter denying and Escape
+ * A held call is drawn as the call's own row, open while it waits so what
+ * it would do stands above these, and says it waits; these are the presses
+ * that answer it, the window's own buttons as an ask to run a command
+ * draws them (`CommandAsk`), wrapping onto a second line where the column
+ * is narrow. Allow, in the accent, lets this call through; Always allow,
+ * outlined, lets every call like it through while the agent's runner runs;
+ * Deny, quiet, opens one field in their place for the words that tell the
+ * agent why, optional and held to the bound its owner names, with Deny to
+ * send it and Cancel to close it again, Enter denying and Escape
  * canceling. They ask nothing of their place, so a dock over a composer
  * can draw them as well.
  *
@@ -70,7 +69,6 @@ function DenyNote({
     <Inline gap={GAP.CONTROL} grow>
       <Inline gap={GAP.CONTROL} grow>
         <TextField
-          size={TEXT_FIELD_SIZE.COMPACT}
           label={WORDS.NOTE_LABEL}
           placeholder={WORDS.NOTE_PLACEHOLDER}
           value={words}
@@ -85,19 +83,13 @@ function DenyNote({
       <Inline gap={GAP.CONTROL} wrap={false}>
         <Button
           variant={BUTTON_VARIANT.DANGER}
-          size={BUTTON_SIZE.COMPACT}
           busy={busy}
           busyLabel={WORDS.DENYING}
           onClick={deny}
         >
           {WORDS.DENY}
         </Button>
-        <Button
-          variant={BUTTON_VARIANT.QUIET}
-          size={BUTTON_SIZE.COMPACT}
-          disabled={busy}
-          onClick={onCancel}
-        >
+        <Button variant={BUTTON_VARIANT.QUIET} disabled={busy} onClick={onCancel}>
           {WORDS.CANCEL}
         </Button>
       </Inline>
@@ -135,7 +127,6 @@ export function ApprovalActions({
         <Inline gap={GAP.CONTROL}>
           <Button
             variant={BUTTON_VARIANT.PRIMARY}
-            size={BUTTON_SIZE.COMPACT}
             disabled={out && answering !== APPROVAL_ACTION.ALLOW}
             busy={answering === APPROVAL_ACTION.ALLOW}
             busyLabel={WORDS.ALLOWING}
@@ -145,7 +136,6 @@ export function ApprovalActions({
           </Button>
           <Button
             variant={BUTTON_VARIANT.OUTLINE}
-            size={BUTTON_SIZE.COMPACT}
             disabled={out && answering !== APPROVAL_ACTION.ALLOW_FOR_AGENT}
             busy={answering === APPROVAL_ACTION.ALLOW_FOR_AGENT}
             busyLabel={WORDS.ALLOWING}
@@ -153,12 +143,7 @@ export function ApprovalActions({
           >
             {WORDS.ALLOW_FOR_AGENT}
           </Button>
-          <Button
-            variant={BUTTON_VARIANT.QUIET}
-            size={BUTTON_SIZE.COMPACT}
-            disabled={out}
-            onClick={() => setDenying(true)}
-          >
+          <Button variant={BUTTON_VARIANT.QUIET} disabled={out} onClick={() => setDenying(true)}>
             {WORDS.DENY}
           </Button>
         </Inline>
