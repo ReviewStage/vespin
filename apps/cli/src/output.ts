@@ -130,27 +130,31 @@ const TRAILING_NEWLINE = /\r?\n$/u;
 const LINE_END_KEYS: ReadonlySet<string> = new Set(["return", "enter"]);
 
 /**
- * One line typed at the terminal key by key, none of it echoed: Backspace
- * takes back the last character and Enter ends the line. Note that we read
- * keys rather than `Terminal.readLine`, because the terminal reads stdin raw
- * with no line editing, so a line would carry each Backspace as a character.
+ * One line typed at the terminal key by key, asked with `prompt` on stderr
+ * and none of it echoed: Backspace takes back the last character and Enter
+ * ends the line. Note that we read keys rather than `Terminal.readLine`,
+ * because the terminal reads stdin raw with no line editing, so a line would
+ * carry each Backspace as a character; and that the prompt is printed only
+ * once the keys are read raw, so nothing typed the moment it shows is echoed.
  * Esc, Ctrl-C, or Ctrl-D ends the keys, which reads nothing.
  */
-const hiddenLine = Effect.scoped(
-  Effect.gen(function* () {
-    const terminal = yield* Terminal.Terminal;
-    const keys = yield* terminal.readInput;
-    const typed: string[] = [];
-    for (;;) {
-      const pressed = yield* Effect.option(Queue.take(keys));
-      if (Option.isNone(pressed)) return undefined;
-      const { input, key } = pressed.value;
-      if (LINE_END_KEYS.has(key.name)) return typed.join("");
-      if (key.name === "backspace") typed.pop();
-      else if (Option.isSome(input) && !key.ctrl && !key.meta) typed.push(input.value);
-    }
-  }),
-);
+const hiddenLine = (prompt: string) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const terminal = yield* Terminal.Terminal;
+      const keys = yield* terminal.readInput;
+      yield* note(prompt);
+      const typed: string[] = [];
+      for (;;) {
+        const pressed = yield* Effect.option(Queue.take(keys));
+        if (Option.isNone(pressed)) return undefined;
+        const { input, key } = pressed.value;
+        if (LINE_END_KEYS.has(key.name)) return typed.join("");
+        if (key.name === "backspace") typed.pop();
+        else if (Option.isSome(input) && !key.ctrl && !key.meta) typed.push(input.value);
+      }
+    }),
+  );
 
 /**
  * A secret the person hands the command, never an argument, which a shell
@@ -162,7 +166,7 @@ const hiddenLine = Effect.scoped(
  */
 export const readSecret = Effect.fnUntraced(function* (prompt: string) {
   const read = (yield* canPrompt)
-    ? yield* Effect.flatMap(note(prompt), () => hiddenLine)
+    ? yield* hiddenLine(prompt)
     : yield* Effect.orElseSucceed(stdinText, () => undefined).pipe(
         Effect.map((piped) => piped?.replace(TRAILING_NEWLINE, "")),
       );
