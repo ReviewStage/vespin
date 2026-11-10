@@ -126,15 +126,10 @@ export default function SettingsScreen() {
             </ListSection>
           )}
           <ListSection title="Notifications">
-            {notifications.standing === undefined ? null : (
-              <ValueRow
-                label="Notifications"
-                value={
-                  push.standing === undefined
-                    ? NOTIFICATION_WORDS[notifications.standing]
-                    : pushStandingText(push.standing)
-                }
-              />
+            {push.standing !== undefined ? (
+              <ValueRow label="Notifications" value={pushStandingText(push.standing)} />
+            ) : notifications.standing === undefined ? null : (
+              <ValueRow label="Notifications" value={NOTIFICATION_WORDS[notifications.standing]} />
             )}
             {notifications.standing === NOTIFICATION_STANDING.REFUSED ||
             notifications.standing === NOTIFICATION_STANDING.UNASKED ? (

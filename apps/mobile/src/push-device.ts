@@ -91,7 +91,8 @@ export function usePushDeviceKey(): PushDeviceKey | undefined {
   const { standing } = useNotificationPermission();
   const fixture = useFixtureRun();
   const [key, setKey] = useState<PushDeviceKey | undefined>(undefined);
-  const allowed = standing === NOTIFICATION_STANDING.ALLOWED;
+  // Note that a fixture run stands for a phone that allowed notifications, since a CI simulator never answers the permission's read.
+  const allowed = fixture || standing === NOTIFICATION_STANDING.ALLOWED;
   useEffect(() => {
     if (!allowed) return undefined;
     let live = true;
