@@ -219,3 +219,39 @@ tester.run("retired (more-button.json)", moreButton, {
     },
   ],
 });
+
+// A module of the repository confined by its path, which a relative import reaches, and a glyph imported straight from Lucide.
+const OWN_MODULE = path.join(REPOSITORY_ROOT, "packages/panel/src/kept/kept-row.tsx");
+const confined = retiredRuleFor(
+  parseRetiredFile(
+    "confined.json",
+    JSON.stringify({
+      instead: "Draw it through kept/.",
+      glyphs: [{ glyph: "Zap", allow: ["packages/panel/src/kept/"] }],
+      patterns: [{ import: "packages/panel/src/kept/marks", allow: ["packages/panel/src/kept/"] }],
+    }),
+  ),
+);
+
+tester.run("retired (a repository module, and Lucide's own glyphs)", confined, {
+  valid: [
+    {
+      code: 'import { Mark } from "./marks.js"; import { ZapIcon } from "lucide-react";',
+      filename: OWN_MODULE,
+    },
+    { code: 'import { Mark } from "../kept/marks-old.js";', filename: PANEL },
+    { code: 'import { BotIcon } from "lucide-react";', filename: PANEL },
+  ],
+  invalid: [
+    {
+      code: 'import { Mark } from "../kept/marks.js"; import * as kept from "../kept/marks";',
+      filename: PANEL,
+      errors: [{ messageId: "retired" }, { messageId: "retired" }],
+    },
+    {
+      code: 'import { BotIcon, ZapIcon } from "lucide-react";',
+      filename: PANEL,
+      errors: [{ messageId: "retired" }],
+    },
+  ],
+});

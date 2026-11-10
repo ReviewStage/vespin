@@ -1,5 +1,5 @@
 /**
- * inbox.ts -- the member's inbox as an outside agent acting for them works it: the threads of a workspace they may read, and an ask answered, a message written, or a thread closed, each as the member through the window's own doors.
+ * inbox.ts -- the member's inbox as an outside agent acting for them works it: the threads of a workspace they may read, and an ask answered, a message written, a thread closed or started, or their read state and reminders set, each as the member through the window's own doors.
  *
  * The threads are the member's own read of one workspace's inbox
  * (`workspaceInboxItems`), every item they may read whichever member's
@@ -12,12 +12,15 @@
  * then the notices still open, then the settled ones, each the latest
  * changed first.
  *
- * An answer, a message, and a close are the window's own
- * (`inbox/inbox-procedures.ts`'s `answerAsMember`, `messageAsMember`, and
- * `closeAsMember`), so each is written as the member's and handed to the
- * thread's agent through the one steer path, which wakes an idle agent as
- * a message typed in its tab does, and a hand-off that fails takes the
- * write back. Each is made under a key of its own, since an outside agent
+ * An answer, a message, a close, and a new thread are the window's own
+ * (`inbox/inbox-procedures.ts`'s `answerAsMember`, `messageAsMember`,
+ * `closeAsMember`, and `startAsMember`), so each is written as the
+ * member's and handed to the thread's agent through the one steer path,
+ * which wakes an idle agent as a message typed in its tab does, and a
+ * hand-off that fails takes the write back. The member's own read state,
+ * a thread marked read or unread, every thread marked read, and a
+ * reminder, is theirs alone and tells no agent (`markReadAsMember`,
+ * `markInboxRead`, and `remindAsMember`). Each is made under a key of its own, since an outside agent
  * names none, so a call made again is a second answer, which an ask no
  * longer open refuses, or a second message. A refusal is told in words the
  * outside agent can act on: an answer that does not fit its ask in the
@@ -32,19 +35,27 @@ import {
   type InboxAnswers,
   type InboxItem,
   type InboxMessage,
+  inboxStartTitle,
   inboxWaitsOn,
   openAskOf,
   threadNeedsReader,
 } from "@repo/features/inbox-wire";
 import { MEMBER_MCP_TOOL } from "@repo/features/member-mcp-tool";
-import { Effect } from "effect";
+import { Clock, Effect } from "effect";
 import { agentToolRejected, orStoreRefusal } from "../agents/agent-tools.js";
 import { settledMessages, threadLineOf } from "../agents/coder-host/inbox.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { ACTION_RESULT_STATUS, HOSTED_API_ERROR, type WireRecord } from "../core.js";
 import type { HostedRefusal } from "../http/http-effect.js";
-import { answerAsMember, closeAsMember, messageAsMember } from "../inbox/inbox-procedures.js";
-import { INBOX_ASK_ANSWER, workspaceInboxItems } from "../inbox/inbox-store.js";
+import {
+  answerAsMember,
+  closeAsMember,
+  markReadAsMember,
+  messageAsMember,
+  remindAsMember,
+  startAsMember,
+} from "../inbox/inbox-procedures.js";
+import { INBOX_ASK_ANSWER, markInboxRead, workspaceInboxItems } from "../inbox/inbox-store.js";
 
 /** The inbox tools by name, each the name a model calls it by. */
 export const MEMBER_INBOX_TOOL = {
@@ -52,6 +63,10 @@ export const MEMBER_INBOX_TOOL = {
   ANSWER: MEMBER_MCP_TOOL.ANSWER_ASK,
   REPLY: MEMBER_MCP_TOOL.REPLY_TO_THREAD,
   CLOSE: MEMBER_MCP_TOOL.CLOSE_THREAD,
+  MARK_READ: MEMBER_MCP_TOOL.MARK_THREAD_READ,
+  MARK_ALL_READ: MEMBER_MCP_TOOL.MARK_INBOX_READ,
+  REMIND: MEMBER_MCP_TOOL.REMIND_THREAD,
+  START: MEMBER_MCP_TOOL.START_THREAD,
 } as const;
 
 /** Why a call wrote nothing, in words the outside agent can act on. */
@@ -64,6 +79,9 @@ const MEMBER_INBOX_REFUSAL = {
     "Not done: the thread's agent runs on its starter's own GitHub token or plan, so only its starter's words reach it.",
   UNTOLD:
     "Not done: it could not be handed to the thread's agent just now, so nothing was kept; try again in a moment.",
+  NO_AGENT: `Not started: the member reaches no such agent, or it no longer stands to hear them; ${MEMBER_MCP_TOOL.LIST_AGENTS} names their agents.`,
+  UNMARKED: "Not done: it could not be written just now; try again in a moment.",
+  PAST: "Not set: that time is not after now; name a time to come, or null to end the reminder.",
 } as const;
 
 /** The writer a hand-off writes the member's line into the agent's conversation with, as the window's doors write it. */
@@ -120,8 +138,12 @@ function threadOf(item: InboxItem, userId: string): WireRecord {
     ...(asking === undefined ? undefined : { askId: asking.message.id }),
     ...(earlier > 0 ? { earlier } : undefined),
     thread: told.map((message) => threadLineOf(message, writerOf(message, userId))),
-    ...(item.answeredBy === undefined ? undefined : { answeredBy: item.answeredBy.name }),
-    ...(item.closedBy === undefined ? undefined : { closedBy: item.closedBy.name }),
+    ...(item.answeredBy === undefined
+      ? undefined
+      : { answeredBy: item.answeredBy.name, answeredByUserId: item.answeredBy.userId }),
+    ...(item.closedBy === undefined
+      ? undefined
+      : { closedBy: item.closedBy.name, closedByUserId: item.closedBy.userId }),
     ...(item.closedReason === undefined ? undefined : { closedReason: item.closedReason }),
   };
 }
@@ -141,6 +163,15 @@ function refusedAs(refusal: HostedRefusal): WireRecord {
     default:
       return agentToolRejected(MEMBER_INBOX_REFUSAL.UNTOLD);
   }
+}
+
+/** A read-state write's refusal in the outside agent's words: a thread the member does not reach, or one not written now. */
+function unmarkedAs(refusal: HostedRefusal): WireRecord {
+  return agentToolRejected(
+    refusal.error === HOSTED_API_ERROR.NOT_FOUND
+      ? MEMBER_INBOX_REFUSAL.NO_THREAD
+      : MEMBER_INBOX_REFUSAL.UNMARKED,
+  );
 }
 
 /** The member's threads of the workspace, by what waits on them first. */
@@ -206,5 +237,81 @@ export function closeThreadAsMember(
       taken ? accepted(item, userId) : agentToolRejected(MEMBER_INBOX_REFUSAL.MOVED),
     ),
     Effect.catch((refusal) => Effect.succeed(refusedAs(refusal))),
+  );
+}
+
+/** A new thread the member starts with an agent they may message, its first message handed to the agent; its subject, where they name none, stands for the message's first line until it is titled. */
+export function startThreadAsMember(
+  userId: string,
+  asked: { readonly agentId: string; readonly title?: string; readonly text: string },
+) {
+  const sent = {
+    agentId: asked.agentId,
+    title: inboxStartTitle(asked),
+    titled: asked.title !== undefined,
+    text: asked.text,
+    clientKey: randomUUID(),
+    attachments: [],
+  };
+  return startAsMember({}, WRITER, userId, sent).pipe(
+    Effect.map(({ item }) => accepted(item, userId)),
+    Effect.catch((refusal) =>
+      Effect.succeed(
+        refusal.error === HOSTED_API_ERROR.NOT_FOUND
+          ? agentToolRejected(MEMBER_INBOX_REFUSAL.NO_AGENT)
+          : refusedAs(refusal),
+      ),
+    ),
+  );
+}
+
+/** The member's own read of a thread written: read, or unread until they read it again; no agent hears of it. */
+export function markThreadReadAsMember(
+  userId: string,
+  asked: { readonly threadId: string; readonly read: boolean },
+) {
+  return markReadAsMember(userId, asked.threadId, !asked.read).pipe(
+    Effect.map(
+      ({ id, unread }): WireRecord => ({
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        threadId: id,
+        unread,
+      }),
+    ),
+    Effect.catch((refusal) => Effect.succeed(unmarkedAs(refusal))),
+  );
+}
+
+/** Every thread of the workspace marked read for the member, open or settled: how many were unread. */
+export function markInboxReadAsMember(userId: string, workspaceId: string) {
+  return orStoreRefusal(
+    Effect.map(
+      markInboxRead(userId, workspaceId),
+      ({ marked }): WireRecord => ({ status: ACTION_RESULT_STATUS.ACCEPTED, marked }),
+    ),
+  );
+}
+
+/** The member's reminder on a thread set for an instant, in epoch milliseconds, which keeps it out of their inbox until then, or ended where none is named. */
+export function remindThreadAsMember(
+  userId: string,
+  asked: { readonly threadId: string; readonly at: number | null },
+) {
+  const set = remindAsMember(userId, asked.threadId, asked.at).pipe(
+    Effect.map(
+      ({ id, unread }): WireRecord => ({
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        threadId: id,
+        remindAt: asked.at === null ? null : new Date(asked.at).toISOString(),
+        unread,
+      }),
+    ),
+    Effect.catch((refusal) => Effect.succeed(unmarkedAs(refusal))),
+  );
+  // Note that a time already past is refused, as the window's picker does, since it would end a reminder still pending.
+  return Effect.flatMap(Clock.currentTimeMillis, (now) =>
+    asked.at !== null && asked.at <= now
+      ? Effect.succeed(agentToolRejected(MEMBER_INBOX_REFUSAL.PAST))
+      : set,
   );
 }

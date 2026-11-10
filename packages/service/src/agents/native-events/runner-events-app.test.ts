@@ -1299,6 +1299,78 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
+    "a call to a tool the record does not hold is stored as an unknown tool's, refused, naming the tool it called, and the harness's own ToolSearch is left out",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const refused =
+          "<tool_use_error>Error: No such tool available: mcp__workspace__edit_plan</tool_use_error>";
+        const messagesOfTurn = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          {
+            type: "assistant",
+            message: {
+              id: "msg_1",
+              content: [
+                { type: "tool_use", id: "toolu_search", name: "ToolSearch", input: {} },
+                {
+                  type: "tool_use",
+                  id: "toolu_plan",
+                  name: "mcp__workspace__edit_plan",
+                  input: { notes: [] },
+                },
+              ],
+            },
+            ...top,
+          },
+          {
+            type: "user",
+            message: {
+              content: [
+                { type: "tool_result", tool_use_id: "toolu_search", content: "Loaded." },
+                {
+                  type: "tool_result",
+                  tool_use_id: "toolu_plan",
+                  content: refused,
+                  is_error: true,
+                },
+              ],
+            },
+            ...top,
+          },
+        ];
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        const events = messagesOfTurn.map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, events);
+        const { rows } = yield* transcriptOf(agent.target.conversationId);
+        const parts = rows.at(-1)?.parts ?? [];
+
+        assert.deepEqual(
+          parts.map((part) => [
+            part.type,
+            "state" in part ? part.state : undefined,
+            "input" in part ? part.input : undefined,
+            "errorText" in part ? part.errorText : undefined,
+          ]),
+          [
+            ["step-start", undefined, undefined, undefined],
+            [
+              "tool-unknown_tool",
+              "output-error",
+              { name: "edit_plan", input: { notes: [] } },
+              refused,
+            ],
+          ],
+        );
+      }),
+  );
+
+  it.effect(
     "the last event applied is kept on the conversation, for a relaunch to number after",
     () =>
       Effect.gen(function* () {

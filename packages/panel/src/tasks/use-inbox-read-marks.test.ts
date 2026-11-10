@@ -27,8 +27,9 @@ import { type InboxReadMarks, type MarkSaying, useInboxReadMarks } from "./use-i
 /**
  * use-inbox-read-marks.test.ts -- the Inbox's read marks say a refusal
  * once, unless the caller says it itself, Mark all as read names the
- * unread items it marks, which the host draws read, and ⌘Z puts back the
- * reminder a new one replaced. Synthetic plan and items.
+ * unread items it marks, which the host draws read, and acknowledges the
+ * reader's notices, and ⌘Z puts back the reminder a new one replaced.
+ * Synthetic plan and items.
  */
 
 const TASK: TaskSummary = {
@@ -66,8 +67,23 @@ function item(id: string, unread: boolean): InboxItem {
   };
 }
 
+/** The item given as a notice: its message asking nothing, and its agent not waiting to hear back. */
+function notice(asked: InboxItem): InboxItem {
+  const [opening] = asked.thread ?? [];
+  assert.ok(opening !== undefined, "the item opens with a message");
+  const { ask: _ask, ...said } = opening;
+  return { ...asked, needsReply: false, thread: [said] };
+}
+
 const X = "a1b2c3d4-0000-4000-8000-000000000001";
 const Y = "a1b2c3d4-0000-4000-8000-000000000002";
+const Z = "a1b2c3d4-0000-4000-8000-000000000003";
+const W = "a1b2c3d4-0000-4000-8000-000000000004";
+const V = "a1b2c3d4-0000-4000-8000-000000000005";
+const U = "a1b2c3d4-0000-4000-8000-000000000006";
+/** The revision the agent has since moved a notice on from, so the service takes no nod at it and answers the notice still open. */
+const MOVED_ON = 2;
+const READER = "user-reader";
 
 /** One write the hook sent, and how to answer it. */
 interface Sent {
@@ -103,10 +119,15 @@ function marks() {
       sending(`all:${workspaceId}:${itemIds.join(",")}`, { marked: 1 }),
     [ACT_KIND.AGENTS_INBOX_READ_STATE]: ({ itemId, unread }) =>
       sending(`${unread ? "unread" : "read"}:${itemId}`, { id: itemId, unread }),
+    [ACT_KIND.AGENTS_INBOX_ANSWER]: ({ itemId, revision, reply }) =>
+      sending(`${reply}:${itemId}@${revision}`, {
+        item: item(itemId, false),
+        taken: revision !== MOVED_ON,
+      }),
   });
   let control: InboxReadMarks | undefined;
   function Harness() {
-    control = useInboxReadMarks({ workspaceId: TASK.workspaceId });
+    control = useInboxReadMarks({ workspaceId: TASK.workspaceId, readerId: READER });
     return createElement(Fragment, null, createElement(ToastHost));
   }
   root = createRoot(document.createElement("div"));
@@ -154,6 +175,38 @@ test("a mark the service refused says so once, and Mark all as read names the un
   assert.deepEqual(hook.toasts(), ["Could not mark 1 item unread", "Could not mark 1 item read"]);
 });
 
+test("Mark all as read acknowledges the reader's notices, read or not or their reminder come due, leaving a question asking and a notice put away under a reminder still ahead, and says a refused nod as one and a notice changed since as still waiting", async () => {
+  const hook = marks();
+  const reminded = { ...notice(item(W, false)), remindAt: Date.UTC(2099, 0, 1) };
+  const due = { ...notice(item(V, false)), remindAt: Date.UTC(2000, 0, 1) };
+  const changed = { ...notice(item(U, false)), revision: MOVED_ON };
+  hook.markAll([
+    item(X, true),
+    notice(item(Y, false)),
+    notice(item(Z, true)),
+    reminded,
+    due,
+    changed,
+  ]);
+  await settle();
+  assert.deepEqual(hook.sent.map((each) => each.words).toSorted(), [
+    `acknowledged:${Y}@1`,
+    `acknowledged:${Z}@1`,
+    `acknowledged:${V}@1`,
+    `acknowledged:${U}@${MOVED_ON}`,
+    `all:${TASK.workspaceId}:${X},${Z}`,
+  ]);
+  const nodOnY = hook.sent.find((each) => each.words === `acknowledged:${Y}@1`);
+  await hook.sent.find((each) => each.words === `acknowledged:${Z}@1`)?.answer();
+  await nodOnY?.answer(true);
+  await hook.sent.find((each) => each.words === `acknowledged:${V}@1`)?.answer();
+  await hook.sent.find((each) => each.words === `acknowledged:${U}@${MOVED_ON}`)?.answer();
+  assert.deepEqual(hook.toasts(), [
+    "2 items acknowledged, 1 could not be",
+    "1 item changed before it was acknowledged",
+  ]);
+});
+
 test("a refused mark from a caller that says the refusal itself toasts nothing, and still answers not kept", async () => {
   const hook = marks();
   let answered: boolean | undefined;
@@ -196,7 +249,7 @@ test("⌘Z puts back the reminder a new one replaced, through the undo stack", a
   writeAppState(holding(EARLIER));
   let control: InboxReadMarks | undefined;
   function Harness() {
-    control = useInboxReadMarks({ workspaceId: TASK.workspaceId });
+    control = useInboxReadMarks({ workspaceId: TASK.workspaceId, readerId: READER });
     return createElement(Fragment, null, createElement(ToastHost));
   }
   root = createRoot(document.createElement("div"));

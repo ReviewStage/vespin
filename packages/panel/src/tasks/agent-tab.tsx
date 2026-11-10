@@ -34,6 +34,7 @@ import {
   agentMessageWords,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
+import { carryOnLineWords } from "@repo/features/carry-on-words";
 import { DEVICE_LAUNCH_UNSTARTED } from "@repo/features/device-agent-wire";
 import { FAILURE_REASON, type FailureReason, remedyLabel } from "@repo/features/failure-remedy";
 import { threadLineWords } from "@repo/features/inbox-wire";
@@ -117,6 +118,7 @@ import { useDisclosure } from "@repo/ui/use-disclosure";
 import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import {
   ACTION_RESULT_STATUS,
+  type CarryOnReason,
   type GitHubLineMetadata,
   MESSAGE_ROLE,
   type WireValue,
@@ -173,6 +175,7 @@ import {
   agentWorkingSince,
   CONTINUE_AGAIN_LABEL,
   CONTINUE_LABEL,
+  carryOnLineOf,
   commentLineOf,
   commentLineWords,
   continuedByIds,
@@ -1475,6 +1478,11 @@ function MessageSender({ actor }: { actor: Actor }): React.JSX.Element {
   );
 }
 
+/** A carry-on's head: where the turn before it was cut off and carried on by itself, in the words its reason reads (`carryOnLineWords`). */
+function CarryOnHead({ reason }: { reason: CarryOnReason }): React.JSX.Element {
+  return <SubjectLine lead={carryOnLineWords(reason)} fit={SUBJECT_FIT.OWN} />;
+}
+
 /** What a wakeup's line says the agent did, after its own chip. */
 const WAKEUP_LEAD = "woke up";
 
@@ -1685,8 +1693,15 @@ export function AgentMessage({
       ) : thread === undefined ? null : (
         <ThreadLineHead line={thread} words={words} received={received} fit={SUBJECT_FIT.OWN} />
       );
-    // A wakeup is the agent's own line, headed by what it did, as a thread's line is.
-    const subject = isWakeupLine(message) ? <WakeupHead delay={wakeupDelay} /> : threadHead;
+    // A wakeup is the agent's own line, headed by what it did, as a thread's line is; a carry-on is headed by what cut the turn before it off.
+    const carryOn = carryOnLineOf(message);
+    const subject = isWakeupLine(message) ? (
+      <WakeupHead delay={wakeupDelay} />
+    ) : carryOn !== undefined ? (
+      <CarryOnHead reason={carryOn.reason} />
+    ) : (
+      threadHead
+    );
     const content = (
       <MessageContent>
         <SentToAgent id={message.id} arrived={message.arrivedIn !== undefined}>

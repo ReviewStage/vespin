@@ -11,15 +11,15 @@ import {
   user,
 } from "../../schemas/auth.js";
 import { getTestDB } from "../../testing/index.js";
-import { listOAuthGrants, revokeOAuthClientTokens } from "../oauth-grants.js";
+import { listOAuthGrants, revokeOAuthClient } from "../oauth-grants.js";
 
 /**
  * A member's OAuth grants over a real dialect, as the provider leaves its
  * rows: a member lists only their own consents, less the clients left out,
  * each with its client's name and redirects and its newest refresh, and a
  * client named that skipped consent by the live token it holds for them,
- * until it is revoked, but never one not named; and a revoke deletes that member's tokens for that client
- * and nobody else's.
+ * until it is revoked, but never one not named; and a revoke deletes that member's tokens and Allow for
+ * that client and nobody else's.
  *
  * Synthetic accounts, clients, and tokens throughout.
  */
@@ -105,9 +105,14 @@ const held = (userId: string, clientId: string) =>
     const db = yield* Database;
     const refresh = yield* db.select().from(oauthRefreshToken);
     const access = yield* db.select().from(oauthAccessToken);
+    const consents = yield* db.select().from(oauthConsent);
     const theirs = (row: { userId: string | null; clientId: string }) =>
       row.userId === userId && row.clientId === clientId;
-    return { refresh: refresh.filter(theirs).length, access: access.filter(theirs).length };
+    return {
+      refresh: refresh.filter(theirs).length,
+      access: access.filter(theirs).length,
+      consents: consents.filter(theirs).length,
+    };
   });
 
 it.layer(getTestDB())("a member's OAuth grants", (it) => {
@@ -155,25 +160,30 @@ it.layer(getTestDB())("a member's OAuth grants", (it) => {
           codexGrant,
         ]);
 
-        yield* revokeOAuthClientTokens(other, claude);
+        yield* revokeOAuthClient(other, claude);
         yield* mint(other, claude, { rotatedAt: REFRESHED_AT });
         assert.deepEqual(yield* listOAuthGrants(other, listed), [codexGrant]);
       }),
   );
 
-  it.effect("a revoke deletes that member's tokens for that client and nobody else's", () =>
-    Effect.gen(function* () {
-      const { owner, other, claude, codex } = yield* openGrants;
-      yield* mint(owner, claude);
-      yield* mint(owner, claude, { rotatedAt: REFRESHED_AT });
-      yield* mint(owner, codex);
-      yield* mint(other, claude);
+  it.effect(
+    "a revoke deletes that member's tokens and Allow for that client and nobody else's",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, claude, codex } = yield* openGrants;
+        yield* allow(owner, claude);
+        yield* allow(owner, codex);
+        yield* allow(other, claude);
+        yield* mint(owner, claude);
+        yield* mint(owner, claude, { rotatedAt: REFRESHED_AT });
+        yield* mint(owner, codex);
+        yield* mint(other, claude);
 
-      yield* revokeOAuthClientTokens(owner, claude);
+        yield* revokeOAuthClient(owner, claude);
 
-      assert.deepEqual(yield* held(owner, claude), { refresh: 0, access: 0 });
-      assert.deepEqual(yield* held(owner, codex), { refresh: 1, access: 1 });
-      assert.deepEqual(yield* held(other, claude), { refresh: 1, access: 1 });
-    }),
+        assert.deepEqual(yield* held(owner, claude), { refresh: 0, access: 0, consents: 0 });
+        assert.deepEqual(yield* held(owner, codex), { refresh: 1, access: 1, consents: 1 });
+        assert.deepEqual(yield* held(other, claude), { refresh: 1, access: 1, consents: 1 });
+      }),
   );
 });

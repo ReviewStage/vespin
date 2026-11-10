@@ -1,7 +1,7 @@
 import { nativeTurnId, reasoningItemId } from "@repo/database/models/ids";
-import { CLAUDE_CODE_UNRECORDED_TOOL } from "@repo/features/agent-tools";
+import { CLAUDE_CODE_UNRECORDED_TOOL, UNKNOWN_TOOL } from "@repo/features/agent-tools";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
-import { type WireValue, WireValueSchema } from "@repo/wire";
+import { type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
 import { USAGE_LIMIT_AGENT, type UsageLimitMove } from "@repo/wire/ui-messages";
 import { Option, Schema } from "effect";
 import {
@@ -316,6 +316,17 @@ function withSettledCall(turn: Turn, callId: string): Turn {
   return { ...settled, running };
 }
 
+/** A call to a tool no transcript registers, as it is stored: under `UNKNOWN_TOOL`, the name it called and its input kept in its input. */
+function unknownCall(
+  called: string,
+  input: UnparsedWireValue,
+): { readonly name: string; readonly input: WireValue } {
+  return {
+    name: UNKNOWN_TOOL,
+    input: input === undefined ? { name: called } : { name: called, input },
+  };
+}
+
 /** Everything one event's moments do, gathered as they are folded. */
 class Fold {
   state: NativeProjection;
@@ -440,24 +451,27 @@ class Fold {
     this.#setTurn({ ...told, step: { ...step, reasoning: step.reasoning + 1 } });
   }
 
+  /**
+   * A call held and told the writer under the name it is stored under: its
+   * own where the record registers it, and `UNKNOWN_TOOL` otherwise, the name
+   * it called kept in its input, so a call the harness refused as no tool it
+   * has stands in the record as that refusal. A call of the harness's own
+   * unrecorded tools is left out, because every launch makes them and none is
+   * work a record could miss.
+   */
   #toolStarted(moment: Extract<NativeMoment, { kind: typeof NATIVE_MOMENT.TOOL_STARTED }>): void {
-    if (!this.#context.registered(moment.name)) {
-      // Note that a call of the harness's own unrecorded tools is left out without a word,
-      // because every launch makes them and none is work a record could miss.
-      if (!UNRECORDED_TOOLS.has(moment.name)) {
-        this.#context.report(`A call to ${moment.name} names no stored tool and is not recorded.`);
-      }
-      return;
-    }
+    if (UNRECORDED_TOOLS.has(moment.name)) return;
+    const { name, input }: { readonly name: string; readonly input: UnparsedWireValue } =
+      this.#context.registered(moment.name) ? moment : unknownCall(moment.name, moment.input);
     const turn = this.#step(undefined);
     if (turn.calls[moment.callId] !== undefined) return;
     const told = this.#tell(turn, {
       kind: RUN_EVENT.TOOL_CALL_STARTED,
       callId: moment.callId,
-      name: moment.name,
-      input: moment.input,
+      name,
+      input,
     });
-    const held = { ...told, calls: { ...told.calls, [moment.callId]: moment.name } };
+    const held = { ...told, calls: { ...told.calls, [moment.callId]: name } };
     // Note that a turn kept from before its open calls were recorded stays unknown, since a call it opened then is not in them.
     this.#setTurn(
       told.running === undefined
@@ -476,7 +490,10 @@ class Fold {
         callId: moment.callId,
         name,
         settlement: moment.settlement,
-        ...(moment.input !== undefined ? { input: moment.input } : undefined),
+        // Note that an unknown tool's call keeps the input it started with, which names the tool it called.
+        ...(moment.input !== undefined && name !== UNKNOWN_TOOL
+          ? { input: moment.input }
+          : undefined),
       }),
     );
   }

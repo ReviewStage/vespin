@@ -104,14 +104,19 @@ export function memberMcpAuth(client: MemberMcpResourceClient, baseURL: string):
   };
 }
 
-/** A `tools/call` as one JSON-RPC request, read only so far as to know which tool it names and whether its arguments name the retired `plan`. */
+/** A `tools/call` as one JSON-RPC request, read only so far as to know which tool it names and whether its arguments name the retired `plan` or `relation`. */
 const toolCallSchema = Schema.Struct({
   jsonrpc: Schema.Literal("2.0"),
   id: Schema.Union([Schema.String, Schema.Number]),
   method: Schema.Literal("tools/call"),
   params: Schema.Struct({
     name: Schema.String,
-    arguments: Schema.optionalKey(Schema.Struct({ plan: Schema.optionalKey(Schema.Unknown) })),
+    arguments: Schema.optionalKey(
+      Schema.Struct({
+        plan: Schema.optionalKey(Schema.Unknown),
+        relation: Schema.optionalKey(Schema.Unknown),
+      }),
+    ),
   }),
 });
 
@@ -122,21 +127,18 @@ function renamedWords(params: (typeof toolCallSchema.Type)["params"]): string | 
   if (renamed !== undefined) {
     return `\`${name}\` was renamed \`${renamed}\`, and nothing was done: call \`${renamed}\` with the same input.`;
   }
-  if (
-    name === MEMBER_MCP_TOOL.CREATE_TASK &&
-    params.arguments !== undefined &&
-    "plan" in params.arguments
-  ) {
-    return CREATE_TASK_REFUSAL.RENAMED_DESCRIPTION;
-  }
+  if (name !== MEMBER_MCP_TOOL.CREATE_TASK || params.arguments === undefined) return undefined;
+  if ("plan" in params.arguments) return CREATE_TASK_REFUSAL.RENAMED_DESCRIPTION;
+  if ("relation" in params.arguments) return CREATE_TASK_REFUSAL.RENAMED_RELATION;
   return undefined;
 }
 
 /**
  * The answer to a call a client makes by a name since renamed, a tool's or
- * `create_task`'s `plan`: the tool's own error naming what is called so now,
- * where the SDK would answer an unknown tool or drop the field and make the
- * task empty; nothing for any other request, which the SDK answers. Note
+ * `create_task`'s `plan` or `relation`: the tool's own error naming what is
+ * called so now, where the SDK would answer an unknown tool or drop the field
+ * and make the task empty or unrelated; nothing for any other request, which
+ * the SDK answers. Note
  * that a client keeps the tools it was listed before the rename, and that
  * the result names its kind, as 2026-07-28 asks of every result, which an
  * earlier revision's client strips.

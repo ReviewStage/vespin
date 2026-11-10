@@ -48,6 +48,7 @@ import {
 } from "@repo/features/description-comment-wire";
 import { NOTE_KIND } from "@repo/features/description-notes";
 import { INBOX_ANSWER_LEAD, INBOX_ASK, INBOX_REPLY, INBOX_STATUS } from "@repo/features/inbox-wire";
+import { INSTALLED_SKILL_SCOPE } from "@repo/features/installed-skill-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
@@ -173,6 +174,9 @@ const decodeInbox = Schema.decodeUnknownSync(
 /** A write's answer: the thread as it then stands. */
 const decodeWritten = Schema.decodeUnknownSync(
   Schema.Struct({ thread: Schema.Struct({ status: Schema.String }) }),
+);
+const decodeStarted = Schema.decodeUnknownSync(
+  Schema.Struct({ thread: Schema.Struct({ id: Schema.String, title: Schema.String }) }),
 );
 const decodeAgents = Schema.decodeUnknownSync(Schema.Struct({ agents: IdsSchema }));
 const decodeListed = Schema.decodeUnknownSync(
@@ -512,6 +516,13 @@ it.effect(
             MEMBER_MCP_TOOL.CLOSE_THREAD,
             { threadId: rows.strangerItem, revision: strangerAsk.revision },
           ],
+          [MEMBER_MCP_TOOL.MARK_THREAD_READ, { threadId: rows.strangerItem, read: false }],
+          [MEMBER_MCP_TOOL.MARK_INBOX_READ, { workspace: slugOf(rows.elsewhere) }],
+          [
+            MEMBER_MCP_TOOL.REMIND_THREAD,
+            { threadId: rows.strangerItem, at: "2030-01-07T09:00-08:00" },
+          ],
+          [MEMBER_MCP_TOOL.START_THREAD, { agentId: rows.strangerAgent, text: "Approve it." }],
           [
             MEMBER_MCP_TOOL.AGENT_PULL_REQUEST_ACTION,
             {
@@ -839,6 +850,13 @@ it.effect(
         yield* refused(MEMBER_MCP_TOOL.CREATE_TASK, { name: "Seat billing", plan: "## Problem" }),
         /named description, not plan/u,
       );
+      assert.match(
+        yield* refused(MEMBER_MCP_TOOL.CREATE_TASK, {
+          name: "Seat billing",
+          relation: { kind: "blocks", taskId },
+        }),
+        /takes no relation now/u,
+      );
       yield* call(MEMBER_MCP_TOOL.EDIT_DESCRIPTION, {
         taskId,
         notes: [{ kind: NOTE_KIND.ADD, section: "Problem", text: "Invoices lag too." }],
@@ -1010,7 +1028,7 @@ it.effect(
 );
 
 it.effect(
-  "an outside agent reads any pull request of the member's workspace by its repository and number, its files with the member's viewed marks, and marks one viewed on the member's own GitHub sign-in",
+  "an outside agent reads a pull request by its repository and number or by the agent that opened it, its files with the member's viewed marks, and marks them on the member's own GitHub sign-in",
   () =>
     Effect.gen(function* () {
       const calls: GraphqlCall[] = [];
@@ -1065,7 +1083,7 @@ it.effect(
       );
       const { auth, fetch, services } = yield* memberMcpStanding({ github: github.layer });
       const member = yield* Effect.promise(() => signUp(auth));
-      yield* Effect.gen(function* () {
+      const agents = yield* Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
         yield* signInWithGitHub(member.userId, {
           ...standingGithubRow(now),
@@ -1073,6 +1091,22 @@ it.effect(
         });
         const workspaceId = yield* openWorkspace(member.userId);
         yield* connectWorkspaceGitHub(workspaceId, installation);
+        const task = yield* createTask(member.userId, {
+          organizationId: workspaceId,
+          name: "Teammate invitations",
+        });
+        const published = yield* openTaskAgent(member.userId, workspaceId, task.id);
+        // One agent pushed the branch its pull request stands open from; the other has opened none yet.
+        yield* Database.use((db) =>
+          db
+            .update(agentTable)
+            .set({ repository: RELAY_FULL_NAME, branch: PUBLISHED.branch })
+            .where(eq(agentTable.id, published)),
+        );
+        return {
+          published,
+          unpublished: yield* openTaskAgent(member.userId, workspaceId, task.id),
+        };
       }).pipe(Effect.provide(services));
       const token = yield* Effect.promise(() =>
         mintedToken(auth, member.cookie, {
@@ -1093,22 +1127,40 @@ it.effect(
         paths: ["src/expire.ts"],
         viewed: true,
       });
+      const agentChanges = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, {
+        agentId: agents.published,
+        part: "changes",
+      });
+      const agentMarked = yield* call(MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED, {
+        agentId: agents.published,
+        paths: ["src/invite.ts"],
+        viewed: false,
+      });
+      const unopened = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, {
+        agentId: agents.unpublished,
+      });
       yield* Effect.promise(() => client.close());
 
-      assert.notEqual(changes.isError, true, changes.content[0].text);
-      assert.deepEqual(
-        JSON.parse(changes.content[0].text).files.map(
-          ({ path, viewed }: { path: string; viewed: string }) => [path, viewed],
-        ),
-        [
-          ["src/invite.ts", "viewed"],
-          ["src/expire.ts", "unviewed"],
-        ],
-      );
+      // The agent's own pull request is the same pull request, read through the agent.
+      for (const read of [changes, agentChanges]) {
+        assert.notEqual(read.isError, true, read.content[0].text);
+        assert.deepEqual(
+          JSON.parse(read.content[0].text).files.map(
+            ({ path, viewed }: { path: string; viewed: string }) => [path, viewed],
+          ),
+          [
+            ["src/invite.ts", "viewed"],
+            ["src/expire.ts", "unviewed"],
+          ],
+        );
+      }
+      assert.equal(unopened.isError, true);
+      assert.match(unopened.content[0].text, /opened no pull request yet/u);
       // A number the repository holds no pull request under is refused as the hosted read refuses it.
       assert.equal(missing.isError, true);
       assert.match(missing.content[0].text, /no pull request of that number/u);
       assert.notEqual(marked.isError, true, marked.content[0].text);
+      assert.notEqual(agentMarked.isError, true, agentMarked.content[0].text);
       assert.deepEqual(
         calls.flatMap((one) => {
           const mutation = mutationOf(one);
@@ -1118,6 +1170,11 @@ it.effect(
           [
             "markFileAsViewed",
             { id: PULL_REQUEST_NODE_ID, path: "src/expire.ts" },
+            `Bearer ${MEMBER_GITHUB_TOKEN}`,
+          ],
+          [
+            "unmarkFileAsViewed",
+            { id: PULL_REQUEST_NODE_ID, path: "src/invite.ts" },
             `Bearer ${MEMBER_GITHUB_TOKEN}`,
           ],
         ],
@@ -1188,6 +1245,67 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         );
         const handed = JSON.stringify(agentSessions.sent.at(-1)?.message.message);
         assert.ok(handed.includes(INBOX_ANSWER_LEAD) && handed.includes("30 days"), handed);
+      }),
+  );
+
+  it.effect(
+    "an outside agent starts a thread with the member's agent, which takes it up as the member's message, and marks it unread and sets its reminder for the member, refusing a time already past",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, task, ask, mcpFetch } = yield* openTask({ agentSessions });
+        const { agent, target } = yield* startedAgent(owner, task.id, ask);
+        const sessionId = agentSessions.opened[0]?.sessionId ?? "";
+        assert.equal(
+          yield* claimRuntimeSession(target, sessionId, yield* DateTime.nowAsDate),
+          true,
+        );
+        const before = agentSessions.sent.length;
+        const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+        const call = (name: string, args: Record<string, unknown>) =>
+          Effect.promise(async () => {
+            const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
+            assert.notEqual(answer.isError, true, `${name}: ${answer.content[0].text}`);
+            return JSON.parse(answer.content[0].text);
+          });
+
+        const started = decodeStarted(
+          yield* call(MEMBER_MCP_TOOL.START_THREAD, {
+            agentId: agent.id,
+            title: "Flaky checkout test",
+            text: "Can you look at the flaky checkout test?",
+          }),
+        );
+        const unread = yield* call(MEMBER_MCP_TOOL.MARK_THREAD_READ, {
+          threadId: started.thread.id,
+          read: false,
+        });
+        const reminded = yield* call(MEMBER_MCP_TOOL.REMIND_THREAD, {
+          threadId: started.thread.id,
+          at: "2030-01-07T09:00-08:00",
+        });
+        yield* TestClock.setTime(Date.parse("2026-11-10T00:00Z"));
+        const past = yield* Effect.promise(async () =>
+          decodeAnswer(
+            await client.callTool({
+              name: MEMBER_MCP_TOOL.REMIND_THREAD,
+              arguments: { threadId: started.thread.id, at: "2020-01-07T09:00-08:00" },
+            }),
+          ),
+        );
+        yield* Effect.promise(() => client.close());
+
+        assert.equal(started.thread.title, "Flaky checkout test");
+        assert.deepEqual(
+          agentSessions.sent.slice(before).map((each) => [each.authorization, each.sessionId]),
+          [[harnessFor(owner), sessionId]],
+        );
+        const handed = JSON.stringify(agentSessions.sent.at(-1)?.message.message);
+        assert.ok(handed.includes("flaky checkout test"), handed);
+        assert.equal(unread.unread, true);
+        assert.deepEqual([reminded.remindAt, reminded.unread], ["2030-01-07T17:00:00.000Z", true]);
+        // A time already past is refused, so the reminder set before it stands.
+        assert.equal(past.isError, true, past.content[0].text);
       }),
   );
 });
@@ -1517,6 +1635,39 @@ it.effect(
         returns[0]?.startsWith(`${ORIGIN}/api/account/integrations/connected?state=`),
         String(returns[0]),
       );
+    }),
+);
+
+it.effect(
+  "install_skill refuses a GitHub install without the commit its preview pinned, before reading the source",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch } = yield* standing;
+      const member = yield* Effect.promise(() => signUp(auth));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const answer = decodeAnswer(
+        yield* Effect.promise(() =>
+          client.callTool({
+            name: MEMBER_MCP_TOOL.INSTALL_SKILL,
+            arguments: {
+              source: "anthropics/skills",
+              scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+              skills: ["pdf"],
+            },
+          }),
+        ),
+      );
+      yield* Effect.promise(() => client.close());
+
+      assert.equal(answer.isError, true);
+      assert.match(answer.content[0].text, /call it first/u);
     }),
 );
 

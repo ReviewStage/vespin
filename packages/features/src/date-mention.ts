@@ -387,6 +387,14 @@ export function isDateRange(start: string, end: string): boolean {
   );
 }
 
+/** A time on a day as a date mention spells it, `2026-10-20T15:00-07:00`: one instant, never a day alone. */
+export const dateTimeSchema = Schema.String.check(
+  Schema.makeFilter(
+    (moment) => isTimed(moment) && isDateMoment(moment),
+    wireRefusal(SCHEMA_REFUSAL.MALFORMED),
+  ),
+);
+
 /**
  * The date the words typed after an `@` name, counted from `now` in the
  * reader's `zone`, a time spelled with the offset `zone` stands at then;

@@ -4,31 +4,6 @@ import { test } from "vitest";
 import { NATIVE_ENDING, NATIVE_MOMENT, PLAN_STATUS } from "./native-moments.js";
 import { heldProjection, NATIVE_WRITE, projectMoments } from "./native-projection.js";
 
-test("a call of a tool the record does not hold is reported, but the harness's own ToolSearch is left out without a word", () => {
-  const reports: string[] = [];
-  projectMoments(
-    heldProjection(null),
-    ["ToolSearch", "RemoteTrigger"].map((name, index) => ({
-      kind: NATIVE_MOMENT.TOOL_STARTED,
-      callId: `toolu_${index}`,
-      name,
-      input: {},
-    })),
-    {
-      conversationId: "c_projection",
-      sequence: 0,
-      now: 0,
-      attempt: 1,
-      queuedTurnId: undefined,
-      model: undefined,
-      ownKey: false,
-      registered: () => false,
-      report: (said) => reports.push(said),
-    },
-  );
-  assert.deepEqual(reports, ["A call to RemoteTrigger names no stored tool and is not recorded."]);
-});
-
 test("a warm launch that fails after its turn ended at its IDLE fails no turn of its own", () => {
   const context = {
     conversationId: "c_projection",
