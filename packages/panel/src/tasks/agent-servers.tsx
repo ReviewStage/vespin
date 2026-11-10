@@ -9,8 +9,10 @@ import {
 import {
   AccountWords,
   AnchoredPopover,
+  BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
+  type ButtonVariant,
   CHIP_LOOK,
   CHIP_WIDTH,
   Chip,
@@ -432,14 +434,21 @@ function ServersPopover({
     return working.act === mine ? { busy: true, busyLabel } : { disabled: true };
   };
 
-  /** A row's press-only button, which leaves the row's own press alone. */
+  /**
+   * A row's press-only button, which leaves the row's own press alone. Note
+   * that it is a row mark's height in the caption's type, and outlined where
+   * it is the row's act, so it stands at the row's end as its switch does
+   * rather than as words beside the server's.
+   */
   const rowButton = (
     label: string,
     onPress: () => void,
     waiting: ReturnType<typeof workingOn> = {},
+    variant: ButtonVariant = BUTTON_VARIANT.OUTLINE,
   ) => (
     <Button
-      variant={BUTTON_VARIANT.QUIET}
+      variant={variant}
+      size={BUTTON_SIZE.COMPACT}
       keepFocus
       {...waiting}
       onClick={(event) => {
@@ -469,6 +478,7 @@ function ServersPopover({
               SIGN_IN_ACTION.REOPEN,
               () => connect(row.connection),
               workingOn(row.connection, WORKING_ACT.CONNECT, "Reopening the sign-in"),
+              BUTTON_VARIANT.QUIET,
             )}
             {rowButton(
               SIGN_IN_ACTION.CANCEL,

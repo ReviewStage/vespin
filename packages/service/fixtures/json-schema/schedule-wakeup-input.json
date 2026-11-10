@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "properties": {
+    "delaySeconds": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Seconds from now to wake up, held to 60 through 3600. Required unless stop is true."
+    },
+    "prompt": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4000,
+      "description": "What to do once it fires, as the first line of your next turn, such as `Read the checks on pull request #<number>`. Required unless stop is true."
+    },
+    "stop": {
+      "type": "boolean",
+      "description": "true to cancel the wakeup you booked, such as once what you waited on reached you first; nothing else is read then."
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}

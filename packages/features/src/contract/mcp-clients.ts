@@ -1,17 +1,13 @@
 /**
- * mcp-clients.ts -- the outside MCP clients the account allowed (`mcp-client-wire.ts`), as procedures: read on the account's bearer, one revoked under the Mac's session.
+ * mcp-clients.ts -- the outside MCP clients the account allowed (`mcp-client-wire.ts`), as procedures: read and one revoked on the account's bearer.
  *
- * A revoke deletes the client's Allow through Better Auth's own consent
- * endpoint, which takes a session, so the service reads its caller from
- * the session the request carries rather than the bearer; the read is the
- * account's like every other. The client rides in the revoke's query, since
- * a `DELETE` carries no body.
+ * Both are the account's like every other. The client rides in the
+ * revoke's query, since a `DELETE` carries no body.
  *
  * Neither answers a refusal of its own: each refuses only as any procedure
- * may (`ANY_PROCEDURE_REFUSALS`), a bearer or session not taken, a client id
- * its schema refuses, and a store or auth service that could not answer,
- * the consent's delete among them, so each is built from `declaredProcedure`
- * as it stands.
+ * may (`ANY_PROCEDURE_REFUSALS`), a bearer not taken, a client id its
+ * schema refuses, and a store or auth service that could not answer, so
+ * each is built from `declaredProcedure` as it stands.
  *
  * The outputs are the wire schemas flipped, so oRPC's output check encodes
  * the handler's value into the bytes the wire carries (`packages/service/src/orpc/base.ts`).

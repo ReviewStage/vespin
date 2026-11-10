@@ -1,4 +1,8 @@
 import {
+  AGENT_PERMISSION_MODE,
+  type AgentPermissionMode,
+} from "@repo/features/agent-approval-wire";
+import {
   AGENT_KIND,
   AGENT_MACHINE,
   type AgentArchiver,
@@ -71,8 +75,9 @@ import { task } from "./task.js";
  * out of every list but the one that asks for archived agents, and null
  * while it stands; its conversation and pull request are kept either way.
  * `archived_by` is who archived it (`StoredArchive`), written with
- * `archived_at` and cleared with it; null for an archive from before the
- * column, and for one an automation's sweep made.
+ * `archived_at` and cleared with it, the app's with why where an automation
+ * run or a Slack agent finishing put it away; null for an archive from
+ * before the column, and for one such a finish made before it was recorded.
  * `disabled_servers` is the MCP servers, by connection name (one account
  * at an integration: `notion`, `notion-2`, the first account's name being
  * its provider's), the developer switched off for this agent from its
@@ -131,6 +136,12 @@ import { task } from "./task.js";
  * local agent is pinned to and every line and request for it goes to
  * (`./device-agent.ts`); null for an agent in a sandbox, and once its Mac's row
  * is gone, which leaves the agent with no Mac to run on.
+ *
+ * `permission_mode` is how the agent's tool calls are answered
+ * (`AGENT_PERMISSION_MODE`): all unasked, as every row from before the
+ * column reads, or asked of a member first, which only a Claude Code agent
+ * takes. Each launch reads it, so a change reaches the agent from its next
+ * turn; its asks are `agent_approval`'s rows.
  *
  * `idempotency_key` is the Start request's own key, unique per account, so a
  * network retry of one Start finds the agent it already made rather than
@@ -250,8 +261,10 @@ export const agentTable = pgTable(
   "agent",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    /** The task the agent works on; null for an agent an automation started with no task. */
-    taskId: uuid("task_id").references(() => task.id, { onDelete: "cascade" }),
+    /** The task the agent works on; every agent works on one, and leaves with it. */
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => task.id, { onDelete: "cascade" }),
     /** The workspace the agent belongs to, its task's or its automation's. */
     organizationId: text("organization_id")
       .notNull()
@@ -351,13 +364,18 @@ export const agentTable = pgTable(
     machine: text("machine").$type<AgentMachineKind>().notNull().default(AGENT_MACHINE.VERCEL),
     /** The Mac a local agent is pinned to; null for one in a sandbox. */
     deviceId: uuid("device_id").references(() => device.id, { onDelete: "set null" }),
+    /** How the agent's tool calls are answered (`AGENT_PERMISSION_MODE`); full access for every row from before the column. */
+    permissionMode: text("permission_mode")
+      .$type<AgentPermissionMode>()
+      .notNull()
+      .default(AGENT_PERMISSION_MODE.FULL_ACCESS),
     idempotencyKey: text("idempotency_key").notNull(),
     createdAt: createdAt(),
     /**
-     * The instant every member without a read mark of their own
-     * (`agent-read.ts`) has read the agent through, as a task's
-     * `read_through` is (`task.ts`): stamped on the agents that stood as
-     * read marks moved to the service, null on one started since.
+     * The instant every member had read the agent through when read marks
+     * moved to the service, as a task's `read_through` is (`task.ts`),
+     * null on one started since. Nothing reads it now that an agent is read
+     * through its task's mark alone.
      */
     readThrough: timestamptz("read_through"),
   },
@@ -369,13 +387,8 @@ export const agentTable = pgTable(
     // Every tool call of ours, runner event, and session route finds the agent its conversation is;
     // one agent per conversation, since an agent is started on a conversation of its own.
     uniqueIndex("agent_conversation").on(table.conversationId),
-    // A workspace's agents with no task are read newest first.
+    // A workspace's agents are read newest first.
     index("agent_org_created").on(table.organizationId, table.createdAt),
-    // The agents with no task, which the sidebar lists across the account's workspaces, are read
-    // by workspace newest first, apart from the task agents that outnumber them.
-    index("agent_org_taskless_created")
-      .on(table.organizationId, table.createdAt)
-      .where(sql`${table.taskId} is null`),
     // A run reads the agents it made, by the run's id; most agents belong to no run.
     index("agent_automation_run")
       .on(table.automationRunId)

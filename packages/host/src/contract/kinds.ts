@@ -95,6 +95,16 @@ export const ACCOUNT_ASK_ACT_KIND = {
    * Carries nothing.
    */
   ACCOUNT_ACTIVE: "account.active",
+  /**
+   * The phone the iOS app runs on, as it registers itself for pushes once
+   * iOS lets it notify, unregisters before a sign-out, and reads and sets
+   * its "Notify me" in Settings: its APNs token and gateway pass through to
+   * the service and are kept nowhere on the way.
+   */
+  PUSH_DEVICE_REGISTER: "pushDevice.register",
+  PUSH_DEVICE_UNREGISTER: "pushDevice.unregister",
+  PUSH_DEVICE_STATUS: "pushDevice.status",
+  PUSH_DEVICE_NOTIFY: "pushDevice.notify",
 } as const;
 
 /** The Automations pages' asks: the account's automations made, changed, deleted, and run now, and a workspace's automations, its runs, or one's runs held and read again. */
@@ -210,8 +220,6 @@ export const AGENT_ACT_KIND = {
   AGENTS_PORT_UNSHARE: "agents.portUnshare",
   AGENTS_ARCHIVE: "agents.archive",
   AGENTS_PIN: "agents.pin",
-  /** The reader's own read mark of an agent with no task moved, kept on the account (`read-mark.ts`). */
-  AGENTS_MARK_READ: "agents.markRead",
   AGENTS_DELETE: "agents.delete",
   /**
    * Which agent's tab the panel shows, or none: what an agent's end leaves no
@@ -284,8 +292,8 @@ export const AGENT_INBOX_ACT_KIND = {
   AGENTS_INBOX_ANSWER: "agents.inboxAnswer",
   /** One open item closed without an answer against the revision the panel drew, under the panel's own key. */
   AGENTS_INBOX_CLOSE: "agents.inboxClose",
-  /** A held close let go once its Undo can no longer be pressed, sent to the service, or taken back by its Undo. */
-  AGENTS_INBOX_CLOSE_RELEASE: "agents.inboxCloseRelease",
+  /** The reader's own nod or close taken back by the key it went under, as its Undo asks. */
+  AGENTS_INBOX_TAKE_BACK: "agents.inboxTakeBack",
   /** A message on one item's thread, open or settled, under the panel's own key; it never answers the item. */
   AGENTS_INBOX_MESSAGE: "agents.inboxMessage",
   /** A new thread with one agent, its subject and first message, under the panel's own key. */
@@ -388,7 +396,7 @@ export const INTEGRATION_ACT_KIND = {
   MCP_CLIENTS_FOLLOW: "mcpClients.follow",
   /** The held outside MCP clients read again at once, as Try again asks. */
   MCP_CLIENTS_RETRY: "mcpClients.retry",
-  /** One outside MCP client revoked under the Mac's session, answering the clients as they then stand, or that the revoke did not finish. */
+  /** One outside MCP client revoked, answering the clients as they then stand, or that the revoke did not finish. */
   MCP_CLIENTS_REVOKE: "mcpClients.revoke",
 } as const;
 
@@ -471,6 +479,8 @@ export const TASKS_ACT_KIND = {
   TASKS_FILE: "tasks.file",
   /** A File tab's tree listing one folder of the open task's repository, read from GitHub through the service; answered to the tree, never on the document. */
   TASKS_TREE: "tasks.tree",
+  /** What a web page a plain link names says of itself, for the card the link hangs: fetched as the card shows, and kept by the window alone. */
+  TASKS_LINK_PREVIEW: "tasks.linkPreview",
   /** The skills a developer may choose of a task's repository, read from GitHub through the service; answered to the asker, never on the document. */
   TASKS_SKILLS: "tasks.skills",
   /**
@@ -503,6 +513,8 @@ export const TASKS_ACT_KIND = {
   TASKS_RESTORE: "tasks.restore",
   /** A page tab's source of one version of one of the plan's pages, read from the service as its frame's is and colored by main as HTML; answered to the tab, never on the document. */
   TASKS_PAGE_SOURCE: "tasks.pageSource",
+  /** One version of one of the plan's pages, or an agent's on no task, its HTML whole, read from the service as its frame's is, for a client that draws the page itself, the iPhone's sealed page; answered to the client, never on the document. */
+  TASKS_PAGE_HTML: "tasks.pageHtml",
   /**
    * One plan's pages, or one agent's on no task, held followed while the
    * window holds the stream open for a surface that draws them, the open
@@ -759,6 +771,8 @@ export const WINDOW_SURFACE_ACT_KIND = {
   WINDOW_COPY_TEXT: "window.copyText",
   /** A picture put on the clipboard as a PNG, as a copy from Preview puts one. */
   WINDOW_COPY_IMAGE: "window.copyImage",
+  /** Words put on the clipboard as rich text, their HTML and their plain text together, as a copy from Mail puts them. */
+  WINDOW_COPY_RICH: "window.copyRich",
   WINDOW_SAVE_FILE: "window.saveFile",
   /**
    * A downscaled still of part of the asking panel, as ⌃Tab's card previews a
@@ -866,6 +880,10 @@ export const PORT_ACT_USE = {
   MEMORIES_FORGET: ACT_USE.WRITE,
   DICTATION_TRANSCRIBE: ACT_USE.FETCH,
   ACCOUNT_ACTIVE: ACT_USE.WRITE,
+  PUSH_DEVICE_REGISTER: ACT_USE.WRITE,
+  PUSH_DEVICE_UNREGISTER: ACT_USE.WRITE,
+  PUSH_DEVICE_STATUS: ACT_USE.FETCH,
+  PUSH_DEVICE_NOTIFY: ACT_USE.WRITE,
 
   AGENTS_MODELS_FOLLOW: ACT_USE.READ,
   AGENTS_MODELS_RETRY: ACT_USE.READ,
@@ -904,7 +922,6 @@ export const PORT_ACT_USE = {
   AGENTS_PORT_UNSHARE: ACT_USE.WRITE,
   AGENTS_ARCHIVE: ACT_USE.WRITE,
   AGENTS_PIN: ACT_USE.WRITE,
-  AGENTS_MARK_READ: ACT_USE.WRITE,
   AGENTS_DELETE: ACT_USE.WRITE,
   AGENTS_SHOWN: ACT_USE.WRITE,
   AGENTS_SEEN: ACT_USE.WRITE,
@@ -924,7 +941,7 @@ export const PORT_ACT_USE = {
   AGENTS_INBOX_ITEMS_RETRY: ACT_USE.READ,
   AGENTS_INBOX_ANSWER: ACT_USE.WRITE,
   AGENTS_INBOX_CLOSE: ACT_USE.WRITE,
-  AGENTS_INBOX_CLOSE_RELEASE: ACT_USE.WRITE,
+  AGENTS_INBOX_TAKE_BACK: ACT_USE.WRITE,
   AGENTS_INBOX_MESSAGE: ACT_USE.WRITE,
   AGENTS_INBOX_START: ACT_USE.WRITE,
   AGENTS_INBOX_READ_STATE: ACT_USE.WRITE,
@@ -1015,6 +1032,7 @@ export const PORT_ACT_USE = {
   TASKS_SET_STANDING: ACT_USE.WRITE,
   TASKS_FILE: ACT_USE.FETCH,
   TASKS_TREE: ACT_USE.FETCH,
+  TASKS_LINK_PREVIEW: ACT_USE.FETCH,
   TASKS_SKILLS: ACT_USE.FETCH,
   TASKS_LINK_STANDING_FOLLOW: ACT_USE.READ,
   TASKS_BROWSER_TAB_OPEN: ACT_USE.WRITE,
@@ -1025,6 +1043,7 @@ export const PORT_ACT_USE = {
   TASKS_REVISION: ACT_USE.FETCH,
   TASKS_RESTORE: ACT_USE.WRITE,
   TASKS_PAGE_SOURCE: ACT_USE.FETCH,
+  TASKS_PAGE_HTML: ACT_USE.FETCH,
   TASKS_PAGES_FOLLOW: ACT_USE.READ,
   TASKS_DOCUMENT_FOLLOW: ACT_USE.READ,
   TASKS_DOCUMENT_RETRY: ACT_USE.READ,
@@ -1058,6 +1077,7 @@ export const PORT_ACT_USE = {
   WINDOW_FOCUS_PANEL: ACT_USE.WRITE,
   WINDOW_COPY_TEXT: ACT_USE.WRITE,
   WINDOW_COPY_IMAGE: ACT_USE.WRITE,
+  WINDOW_COPY_RICH: ACT_USE.WRITE,
   WINDOW_SAVE_FILE: ACT_USE.WRITE,
   WINDOW_CAPTURE: ACT_USE.FETCH,
   WINDOW_UNSAVED_WORK: ACT_USE.WRITE,

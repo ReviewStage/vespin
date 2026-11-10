@@ -47,7 +47,6 @@ import {
   pullRequestOfBranch,
 } from "../../github/pull-requests.js";
 import { agentMember, agentWorkspace } from "../../github/workspace-repository.js";
-import { settleTaskIfFinished } from "../../tasks/task-finish.js";
 import { CODER } from "./bounds.js";
 
 /**
@@ -370,10 +369,7 @@ const recordRepository = (
       ...newest,
       ...linked.map((each) => each.read),
     ]);
-    yield* afterRecorded(userId, agent, firstMerged, [
-      found.ended,
-      ...linked.map((each) => each.ended),
-    ]);
+    yield* afterRecorded(agent, firstMerged, [found.ended, ...linked.map((each) => each.ended)]);
   });
 
 /**
@@ -401,9 +397,8 @@ export const agentPublished = /* @__PURE__ */ Effect.fn("web/agentPublished")(fu
   return found.answer;
 });
 
-/** What a write of pull requests leaves to do: each merge counted by the one write that first kept it, the task asked to settle where the read first saw one merged, and the agent's automation run asked to archive where the read first saw one merged or closed. */
+/** What a write of pull requests leaves to do: each merge counted by the one write that first kept it, and the agent's automation run asked to archive where the read first saw one merged or closed. */
 const afterRecorded = (
-  userId: string,
   agent: Agent,
   firstMerged: number,
   ended: readonly (PullRequestEnd | undefined)[],
@@ -420,12 +415,8 @@ const afterRecorded = (
         ),
       { discard: true },
     );
-    // A merge first seen may have finished the task's work; the task is asked once the row says merged.
-    // Note that the write that first keeps a merge says so too, since the finish reads its rows.
-    const merged = firstMerged > 0 || ended.includes(PULL_REQUEST_STATE.MERGED);
-    if (merged && agent.taskId !== null) yield* settleTaskIfFinished(userId, agent.taskId);
     // Note that a pull request ending wakes no agent, so no settle of its turn would archive its run.
-    const endedAny = merged || ended.some((each) => each !== undefined);
+    const endedAny = firstMerged > 0 || ended.some((each) => each !== undefined);
     if (endedAny && agent.automationRunId !== null) yield* reconsiderRunArchive(agent.id);
   });
 

@@ -6,12 +6,19 @@ import {
   type AgentStatus,
   type AgentSummary,
 } from "@repo/features/agent-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import {
+  agentGlyphState,
+  agentStateWords,
+  GLYPH_STATE,
+  type GlyphState,
+} from "@repo/features/glyph-state";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { type PageLine, type PagePlace, pagePlaceId } from "@repo/features/page-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { TERMINAL_ASK, TERMINAL_TARGET, terminalTarget } from "@repo/features/terminal-entry";
+import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -104,14 +111,9 @@ import { useMemberDirectory } from "../member-directory.js";
 import { LINK_ROUTED_PLACE } from "../places/link-places.js";
 import { ADDRESS, type Address } from "../places/pressed-address.js";
 import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
-import { GLYPH_STATE, type GlyphState, stateEndMark } from "../state-glyph.js";
+import { stateEndMark } from "../state-glyph.js";
 import { useSteadyDoors } from "../steady-door.js";
-import {
-  agentGlyphState,
-  agentName,
-  agentStateWords,
-  subagentActor,
-} from "../tasks/agent-model.js";
+import { agentName, subagentActor } from "../tasks/agent-model.js";
 import { AgentActorRef, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { AgentSubagentTab, type BriefTask, type TranscriptCards } from "../tasks/agent-tab.js";
 import {
@@ -163,7 +165,6 @@ import {
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND, type TerminalKind } from "../tasks/terminal-session.js";
 import { TerminalCount, TerminalTab } from "../tasks/terminal-tab.js";
-import { TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
 import {
   agentTranscript,
   readWholeTranscript,
@@ -1483,7 +1484,7 @@ function PanelTabs({
       : undefined;
   useAppCommand(APP_COMMAND.OPEN_ON_GITHUB, openOnGitHub, FOCUSED_OFFER);
   const pinOf = ({ tab, look }: DrawnTab): TabPin | undefined => {
-    // A task's page pins on the task; an agent's page pins where the sidebar draws the pin, as its page says; the Inbox's, nowhere.
+    // A task's page pins on the task; an agent's page on the agent's task, as its page says; the Inbox's, nowhere.
     const on: PinHolder | undefined =
       holder === SIDE_PANEL_HOLDER.TASK
         ? { task: taskId }
@@ -2820,7 +2821,7 @@ export function SidePanel({
       const { declared, link } = address.routed;
       const { place } = link;
       if (declared !== LINK_ROUTED_PLACE.AGENT && declared !== LINK_ROUTED_PLACE.MESSAGE) return;
-      if (place.kind !== LINK_PLACE.AGENT && place.kind !== LINK_PLACE.MESSAGE) return;
+      if (place.kind !== LINK_DESTINATION.AGENT && place.kind !== LINK_DESTINATION.MESSAGE) return;
       if (heldIds === undefined || heldIds.includes(place.agentId)) return;
       onCarry();
     },

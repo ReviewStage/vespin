@@ -1,5 +1,5 @@
 import { LIVE_SIGNED_OUT } from "@repo/features/live-wire";
-import type { EntityKind, EntityPool, FieldChange, HeldRows } from "@repo/sync";
+import type { EntityPool, FieldChange, HeldRows, RowKind } from "@repo/sync";
 import { Effect, type Schema } from "effect";
 import { drawnAtEdges, type HeldAnswers } from "./live-collection.js";
 import {
@@ -46,7 +46,7 @@ export interface LiveReadFollow<Part extends string, Row extends object, Answer,
   readonly part: Part;
   readonly pool: EntityPool;
   /** The kind the part's rows stand as in the pool, keyed by the key the part declares. */
-  readonly kind: EntityKind<Row, FieldChange<Row>>;
+  readonly kind: RowKind<Row, FieldChange<Row>>;
   /** Whether a refusal ends the follow for good, told unanswered; a signed-out one always ends it, unsaid. */
   readonly endsFollow: (failure: string) => boolean;
   /** What the slice holds of the rows as the pool draws them at `now`, beside what the first answer carried. */

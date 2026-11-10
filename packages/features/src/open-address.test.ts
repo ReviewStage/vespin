@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test, vi } from "vitest";
-import { LINK_PLACE } from "./link-grammar.js";
+import { LINK_DESTINATION } from "./link-grammar.js";
 import { openTargetOf } from "./open-address.js";
 
 /**
@@ -47,7 +47,7 @@ test("a comment's address opens its thread, the query it names it by carried to 
 
   const target = openTargetOf(`/acme/plan/${TASK_ID}`, "", `?comment=${thread}`);
 
-  assert.equal(target?.kind, LINK_PLACE.COMMENT);
+  assert.equal(target?.kind, LINK_DESTINATION.COMMENT);
   assert.equal(target?.appLink, `vespin://vespin.dev/acme/task/${TASK_ID}?comment=${thread}`);
 });
 
@@ -64,15 +64,15 @@ test("a picture's address opens the plan it is of, and nothing else of it", () =
 test("an agent's, an Inbox item's, or an automation's address opens it in the app, the page told its kind", () => {
   assert.deepEqual(openTargetOf(`/acme/plan/${TASK_ID}/agent/${AGENT_ID}/`, ""), {
     appLink: `vespin://vespin.dev/acme/task/${TASK_ID}/agent/${AGENT_ID}`,
-    kind: LINK_PLACE.AGENT,
+    kind: LINK_DESTINATION.AGENT,
   });
   assert.deepEqual(openTargetOf(`/acme/plan/${TASK_ID}/inbox/${AGENT_ID}`, ""), {
     appLink: `vespin://vespin.dev/acme/task/${TASK_ID}/inbox/${AGENT_ID}`,
-    kind: LINK_PLACE.INBOX_ITEM,
+    kind: LINK_DESTINATION.INBOX_ITEM,
   });
   assert.deepEqual(openTargetOf(`/acme/automation/${AGENT_ID}`, "#runs"), {
     appLink: `vespin://vespin.dev/acme/automation/${AGENT_ID}`,
-    kind: LINK_PLACE.AUTOMATION,
+    kind: LINK_DESTINATION.AUTOMATION,
   });
 });
 

@@ -1,4 +1,8 @@
 import {
+  type AgentPermissionMode,
+  agentPermissionModeSchema,
+} from "@repo/features/agent-approval-wire";
+import {
   AGENT_ARCHIVER,
   AGENT_AUTHOR,
   AGENT_BRIEF,
@@ -28,7 +32,6 @@ import {
   integrationConnectionOf,
 } from "@repo/features/integration-wire";
 import type { ModelChoice } from "@repo/features/models-wire";
-import { READ_MARK, type ReadMark } from "@repo/features/read-mark";
 import { type TaskStatus, taskStatusSchema } from "@repo/features/task-wire";
 import { TURN_STATUS, type WireValue, WireValueSchema } from "@repo/wire";
 import {
@@ -68,9 +71,8 @@ import {
 } from "../schemas/agent.js";
 import { agentPin } from "../schemas/agent-pin.js";
 import { agentPullRequest } from "../schemas/agent-pull-request.js";
-import { agentRead } from "../schemas/agent-read.js";
 import { agentRepository } from "../schemas/agent-repository.js";
-import { organization, user } from "../schemas/auth.js";
+import { user } from "../schemas/auth.js";
 import { automationRun } from "../schemas/automation.js";
 import { inboxItem } from "../schemas/inbox.js";
 import { conversations, messages, turns } from "../schemas/storage.js";
@@ -100,15 +102,13 @@ import {
   agentVisibleTo,
   reachableTask,
   taskReachableBy,
-  workspaceReachableBy,
 } from "./workspace-store.js";
 import type { ConversationTarget } from "./writer.js";
 
 /**
  * agent-store.ts -- the coding agents started on a workspace's tasks, each one conversation and one row linking it to its task.
  *
- * An agent belongs to its workspace, its task's or, for an agent an
- * automation started with no task, its own: every member reads, renames,
+ * An agent belongs to its task's workspace: every member reads, renames,
  * and re-chooses it, whichever of them started it. Every statement names the
  * account beside the task or the agent and gates on that account's
  * membership of that workspace (`workspace-store.ts`), so an agent of
@@ -173,15 +173,15 @@ export interface Agent {
   readonly id: string;
   /** The account that started the agent, whose conversation it runs in and whose provider key pays for it. */
   readonly userId: string;
-  /** The task the agent works on; null for an agent an automation started with no task. */
-  readonly taskId: string | null;
+  /** The task the agent works on. */
+  readonly taskId: string;
   /** The workspace the agent belongs to. */
   readonly organizationId: string;
   /** The automation whose run started the agent; null for one started by hand or once that automation is deleted. */
   readonly automationId: string | null;
   /** The run of an automation that started the agent, as it stood then, kept once that automation is deleted; null for one started by hand. */
   readonly automationOrigin: StoredAutomationOrigin | null;
-  /** The automation run the agent belongs to: the run that started it, or the run whose agent started it on no task; null for one no run owns, and once that run is deleted. */
+  /** The automation run the agent belongs to: the run that started it, or the run whose agent started it; null for one no run owns, and once that run is deleted. */
   readonly automationRunId: string | null;
   /** The agent of the same plan this one was started from, with its replay's counts; null for one started afresh. */
   readonly startedFrom: StoredStartedFrom | null;
@@ -222,6 +222,8 @@ export interface Agent {
   readonly machine?: AgentMachineKind;
   /** The Mac a local agent is pinned to; null for one in a sandbox, or once that Mac is gone. */
   readonly deviceId?: string | null;
+  /** How its tool calls are answered, which each launch reads; full access where unsaid. */
+  readonly permissionMode?: AgentPermissionMode;
 }
 
 /**
@@ -237,14 +239,6 @@ export interface AgentLine
   readonly automationName: string | null;
   /** What the agent was handed as its first message: the description, the developer's prompt, or nothing, for one started blank. */
   readonly brief: AgentBrief;
-}
-
-/** One agent with no plan as the sidebar lists it for its reader: the agent's line, when the reader pinned it, and where they dragged the pin; null where they hold no pin of it, or it stands by that instant. Beside it, the reader's read mark: the instant they read it through, and whether they marked it unread. */
-export interface TasklessAgentRow extends AgentLine {
-  readonly pinnedAt: Date | null;
-  readonly pinPosition: string | null;
-  readonly readThrough: Date;
-  readonly markedUnread: boolean;
 }
 
 /** What a Start answered: the agent, and whether this Start made it or a retry found it. */
@@ -283,23 +277,8 @@ export type AgentBriefText =
   | { readonly descriptionSnapshot: null; readonly prompt: string }
   | { readonly descriptionSnapshot: null; readonly prompt: null };
 
-/**
- * Where a Start puts the agent: on a task, whose workspace it joins and
- * whose text or the developer's prompt it is handed; or in a workspace with
- * no task, as an automation's run puts one, handed a prompt, since there is
- * no description to hand it.
- */
-export type AgentPlace =
-  | (AgentBriefText & {
-      readonly taskId: string;
-      readonly organizationId?: undefined;
-    })
-  | {
-      readonly taskId: null;
-      readonly organizationId: string;
-      readonly descriptionSnapshot: null;
-      readonly prompt: string;
-    };
+/** Where a Start puts the agent: on a task, whose workspace it joins and whose text or the developer's prompt it is handed. */
+export type AgentPlace = AgentBriefText & { readonly taskId: string };
 
 /** A Start: where it goes, the request's own key, what to run on, what the agent is handed, and the repository as it stands now. */
 export type NewAgent = AgentPlace & {
@@ -398,6 +377,7 @@ const AGENT_COLUMNS = {
   createdAt: agentTable.createdAt,
   machine: agentTable.machine,
   deviceId: agentTable.deviceId,
+  permissionMode: agentTable.permissionMode,
 };
 
 /**
@@ -441,6 +421,7 @@ const AGENT_LINE_COLUMNS = {
   createdAt: agentTable.createdAt,
   machine: agentTable.machine,
   deviceId: agentTable.deviceId,
+  permissionMode: agentTable.permissionMode,
 } as const;
 
 /** What an agent was handed as its first message, as `AGENT_LINE_COLUMNS` reads it from the row: its prompt, else the description, else nothing. */
@@ -518,7 +499,7 @@ const AuthorColumnSchema = Schema.Literals(Object.values(AGENT_AUTHOR));
 const AgentRowSchema = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
-  taskId: Schema.NullOr(Schema.String),
+  taskId: Schema.String,
   organizationId: Schema.String,
   automationId: Schema.NullOr(Schema.String),
   automationOrigin: AutomationOriginColumnSchema,
@@ -545,6 +526,7 @@ const AgentRowSchema = Schema.Struct({
   createdAt: InstantColumnSchema,
   machine: Schema.Literals(Object.values(AGENT_MACHINE)),
   deviceId: Schema.NullOr(Schema.String),
+  permissionMode: agentPermissionModeSchema,
 });
 
 const {
@@ -559,15 +541,6 @@ const AgentLineRowSchema = Schema.Struct({
   ...LINE_ROW_FIELDS,
   automationName: Schema.NullOr(Schema.String),
   brief: Schema.Literals(Object.values(AGENT_BRIEF)),
-});
-
-/** An agent's line with the reader's own pin beside it; null where they hold none. */
-const TasklessAgentRowSchema = Schema.Struct({
-  ...AgentLineRowSchema.fields,
-  pinnedAt: Schema.NullOr(InstantColumnSchema),
-  pinPosition: Schema.NullOr(Schema.String),
-  readThrough: InstantColumnSchema,
-  markedUnread: Schema.Boolean,
 });
 
 const IdRowSchema = Schema.Struct({ id: Schema.String });
@@ -589,31 +562,6 @@ const lockReachableTask = SqlSchema.findOneOption({
         .where(reachableTask(userId, taskId))
         .for("update"),
     ),
-});
-
-/** The workspace, locked, where the account is a member of it: the lock serializes two Starts in it under one key, as the task's own lock does for a task. */
-const lockReachableWorkspace = SqlSchema.findOneOption({
-  Request: Schema.Struct({ userId: Schema.String, organizationId: Schema.String }),
-  Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ userId, organizationId }) =>
-    Database.use((db) =>
-      db
-        .select({ id: organization.id })
-        .from(organization)
-        .where(
-          and(eq(organization.id, organizationId), workspaceReachableBy(userId, organization.id)),
-        )
-        .for("update"),
-    ),
-});
-
-/** The workspace a Start puts its agent in, locked: the task's, or the workspace named; nothing where the account reaches neither. */
-const lockedPlace = Effect.fnUntraced(function* (userId: string, place: AgentPlace) {
-  if (place.taskId === null) {
-    const reached = yield* lockReachableWorkspace({ userId, organizationId: place.organizationId });
-    return Option.map(reached, (workspace) => ({ organizationId: workspace.id }));
-  }
-  return yield* lockReachableTask({ userId, taskId: place.taskId });
 });
 
 const findAgentByKey = SqlSchema.findOneOption({
@@ -715,7 +663,7 @@ const insertAgent = SqlSchema.findOne({
   Request: Schema.Struct({
     userId: Schema.String,
     conversationId: Schema.String,
-    taskId: Schema.NullOr(Schema.String),
+    taskId: Schema.String,
     organizationId: Schema.String,
     automationId: Schema.NullOr(Schema.String),
     automationOrigin: AutomationOriginColumnSchema,
@@ -831,6 +779,23 @@ const updateAgentServersRow = SqlSchema.findOneOption({
       db
         .update(agentTable)
         .set({ disabledServers })
+        .where(reachableAgent(userId, agentId))
+        .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
+    ),
+});
+
+const updateAgentPermissionModeRow = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    permissionMode: agentPermissionModeSchema,
+  }),
+  Result: CommittedAgentRowSchema,
+  execute: ({ userId, agentId, permissionMode }) =>
+    Database.use((db) =>
+      db
+        .update(agentTable)
+        .set({ permissionMode })
         .where(reachableAgent(userId, agentId))
         .returning({ ...AGENT_COLUMNS, txid: CURRENT_TXID }),
     ),
@@ -1602,7 +1567,7 @@ function agentNamed(query: string): SQL | undefined {
 /** The agent a list is read around: the one asking, by its id, its task, and the agent that started it. */
 const AgentAroundSchema = Schema.Struct({
   agentId: Schema.String,
-  taskId: Schema.NullOr(Schema.String),
+  taskId: Schema.String,
   startedByAgentId: Schema.NullOr(Schema.String),
 });
 
@@ -1671,7 +1636,6 @@ function ofReachedWorkspace(request: typeof AgentsOfWorkspaceSchema.Type) {
         ? ofAnyAutomation()
         : sql`not ${ofAnyAutomation()}`,
     request.automationId === null ? undefined : ofAutomation(request.automationId),
-    // Note that an agent on no task stands on no status, so it never matches one.
     request.taskStatus === null
       ? undefined
       : exists(
@@ -1709,7 +1673,7 @@ function ownOfAgent(around: typeof AgentAroundSchema.Type): SQL {
 function workspaceListOrder(request: typeof AgentsOfWorkspaceSchema.Type): SQL[] {
   const { around } = request;
   if (around === null) return [desc(agentTable.createdAt), desc(agentTable.id)];
-  const onTask = around.taskId === null ? sql`false` : eq(agentTable.taskId, around.taskId);
+  const onTask = eq(agentTable.taskId, around.taskId);
   const nearness = sql`case when ${ownOfAgent(around)} then 0 when ${onTask} then 1 else 2 end`;
   return [nearness, desc(agentTable.createdAt), desc(agentTable.id)];
 }
@@ -1766,38 +1730,6 @@ const findAgentLinesOfWorkspace = SqlSchema.findAll({
         .orderBy(...workspaceListOrder(request))
         .offset(request.offset)
         .limit(request.limit),
-    ),
-});
-
-/** Every agent with no plan in the account's workspaces, newest started first, each with the account's own pin and read mark of it. */
-const findTasklessAgents = SqlSchema.findAll({
-  Request: Schema.Struct({ userId: Schema.String, includeArchived: Schema.Boolean }),
-  Result: TasklessAgentRowSchema,
-  execute: ({ userId, includeArchived }) =>
-    Database.use((db) =>
-      db
-        .select({
-          ...AGENT_LINE_COLUMNS,
-          pinnedAt: agentPin.pinnedAt,
-          pinPosition: agentPin.position,
-          // Note that with no mark of the reader's own, the agent reads through the instant marks moved to the service, or its start.
-          readThrough: sql<Date>`coalesce(${agentRead.readThrough}, ${agentTable.readThrough}, ${agentTable.createdAt})`,
-          markedUnread: sql<boolean>`coalesce(${agentRead.markedUnread}, false)`,
-        })
-        .from(agentTable)
-        .leftJoin(agentPin, and(eq(agentPin.agentId, agentTable.id), eq(agentPin.userId, userId)))
-        .leftJoin(
-          agentRead,
-          and(eq(agentRead.agentId, agentTable.id), eq(agentRead.userId, userId)),
-        )
-        .where(
-          and(
-            isNull(agentTable.taskId),
-            agentVisibleTo(userId),
-            includeArchived ? undefined : isNull(agentTable.archivedAt),
-          ),
-        )
-        .orderBy(desc(agentTable.createdAt), desc(agentTable.id)),
     ),
 });
 
@@ -2221,58 +2153,6 @@ const deleteAgentPin = SqlSchema.findOneOption({
     ),
 });
 
-/** The account's read mark of the agent read through now, a mark by hand taken back. */
-const markAgentRead = SqlSchema.findOneOption({
-  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String, now: Schema.Date }),
-  Result: TxidRowSchema,
-  execute: ({ userId, agentId, now }) =>
-    Database.use((db) =>
-      db
-        .insert(agentRead)
-        .values({ userId, agentId, readThrough: now })
-        .onConflictDoUpdate({
-          target: [agentRead.userId, agentRead.agentId],
-          set: { readThrough: now, markedUnread: false },
-        })
-        .returning({ txid: CURRENT_TXID }),
-    ),
-});
-
-/** The account's read mark of the agent read through now, a mark by hand left standing. */
-const markAgentSeen = SqlSchema.findOneOption({
-  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String, now: Schema.Date }),
-  Result: TxidRowSchema,
-  execute: ({ userId, agentId, now }) =>
-    Database.use((db) =>
-      db
-        .insert(agentRead)
-        .values({ userId, agentId, readThrough: now })
-        .onConflictDoUpdate({
-          target: [agentRead.userId, agentRead.agentId],
-          set: { readThrough: now },
-        })
-        .returning({ txid: CURRENT_TXID }),
-    ),
-});
-
-/** The account's read mark of the agent marked unread, the instant it was read through left standing; nothing where it stands marked already. */
-const markAgentUnread = SqlSchema.findOneOption({
-  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String }),
-  Result: TxidRowSchema,
-  execute: ({ userId, agentId }) =>
-    Database.use((db) =>
-      db
-        .insert(agentRead)
-        .values({ userId, agentId, markedUnread: true })
-        .onConflictDoUpdate({
-          target: [agentRead.userId, agentRead.agentId],
-          set: { markedUnread: true },
-          setWhere: sql`not ${agentRead.markedUnread}`,
-        })
-        .returning({ txid: CURRENT_TXID }),
-    ),
-});
-
 /**
  * The columns of an agent that a caller holding only its conversation most
  * often needs: who it is, who started it, its task, repository, title, and
@@ -2294,7 +2174,7 @@ const AgentHeaderRowSchema = Schema.Struct({
   id: Schema.String,
   userId: Schema.String,
   organizationId: Schema.String,
-  taskId: Schema.NullOr(Schema.String),
+  taskId: Schema.String,
   repository: Schema.NullOr(Schema.String),
   title: Schema.NullOr(Schema.String),
   archivedAt: Schema.NullOr(InstantColumnSchema),
@@ -2346,15 +2226,13 @@ const deleteConversationRow = SqlSchema.void({
 });
 
 /**
- * Starts an agent on a task of the account's workspace, or in a workspace
- * of the account's with no task: a `coding_agent` conversation of the
- * account's and the row that binds it to the task or the workspace, with
+ * Starts an agent on a task of the account's workspace: a `coding_agent`
+ * conversation of the account's and the row that binds it to the task, with
  * the description text or the prompt, the repository, the automation whose run
  * started it with that run, and the account's own agent whose `start_agent`
  * started it, as handed, always a coder. A Start whose key the account has
  * already used answers the agent that Start made, whatever else the retry
- * carries, and writes nothing. Nothing where the account reaches no such task or is no member of the
- * workspace.
+ * carries, and writes nothing. Nothing where the account reaches no such task.
  */
 export function createAgent(
   userId: string,
@@ -2363,7 +2241,7 @@ export function createAgent(
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
-        const reached = yield* lockedPlace(userId, started);
+        const reached = yield* lockReachableTask({ userId, taskId: started.taskId });
         if (Option.isNone(reached)) return Option.none();
         const existing = yield* findAgentByKey({
           userId,
@@ -2545,7 +2423,7 @@ interface WorkspaceAgentsAsked {
   readonly automation?: boolean;
   /** Only the agents the runs of this automation started, by its id. */
   readonly automationId?: string;
-  /** Only the agents on a task standing at this status; an agent on no task matches none. */
+  /** Only the agents on a task standing at this status. */
   readonly taskStatus?: TaskStatus;
   /** The one agent left out, the one asking. */
   readonly except?: string;
@@ -2617,19 +2495,6 @@ export function listWorkspaceAgentLines(
   options: WorkspaceAgentsAsked,
 ): AgentStoreEffect<readonly AgentLine[]> {
   return findAgentLinesOfWorkspace(workspaceRequest(userId, organizationId, options));
-}
-
-/**
- * Every agent with no plan in the account's workspaces, by any member,
- * newest started first, the archived ones only where `includeArchived` asks,
- * each as its line reads with the account's own pin of it: what the plan
- * list carries beside the plans, read by the same gate.
- */
-export function listTasklessAgentRows(
-  userId: string,
-  options: { readonly includeArchived?: boolean } = {},
-): AgentStoreEffect<readonly TasklessAgentRow[]> {
-  return findTasklessAgents({ userId, includeArchived: options.includeArchived ?? false });
 }
 
 /** The plan an agent stands on, as a list of agents names it: its name. */
@@ -3006,6 +2871,18 @@ export function updateAgentServersCommitted(
   );
 }
 
+/** The agent's permission mode changed, which its next launch reads, and the transaction its row was written in; nothing for an agent of a workspace the account is not in. */
+export function updateAgentPermissionModeCommitted(
+  userId: string,
+  agentId: string,
+  permissionMode: AgentPermissionMode,
+): AgentStoreEffect<Option.Option<AgentCommitted>> {
+  return Effect.map(
+    updateAgentPermissionModeRow({ userId, agentId, permissionMode }),
+    Option.map(({ txid, ...agent }) => ({ agent, txid })),
+  );
+}
+
 /**
  * The hand-over of a message mentioning MCP servers to the runtime, run with those
  * servers standing among the ones the agent's next turn takes whatever its
@@ -3318,32 +3195,6 @@ export function pinAgentCommitted(
   });
 }
 
-/**
- * The account's read mark of the agent set as asked (`READ_MARK`), and the
- * transaction it was written in; none where the account may not read the
- * agent, or where it works on a task, whose mark is the task's. Every other member's mark stands as it was.
- */
-export function markAgentReadCommitted(
-  userId: string,
-  agentId: string,
-  mark: ReadMark,
-): AgentStoreEffect<Option.Option<AgentCommitted>> {
-  return Effect.gen(function* () {
-    // Note that a read mark is gated as the member's read of the agent is, as a pin is, and kept only for an agent with no task, the one a list reads it on.
-    const found = yield* findVisibleAgent({ userId, agentId });
-    if (Option.isNone(found) || found.value.taskId !== null) return Option.none();
-    const now = yield* DateTime.nowAsDate;
-    const written =
-      mark === READ_MARK.READ
-        ? yield* markAgentRead({ userId, agentId, now })
-        : mark === READ_MARK.SEEN
-          ? yield* markAgentSeen({ userId, agentId, now })
-          : yield* markAgentUnread({ userId, agentId });
-    const txid = Option.getOrUndefined(written)?.txid;
-    return Option.some(txid === undefined ? { agent: found.value } : { agent: found.value, txid });
-  });
-}
-
 const SettledTurnAgentSchema = Schema.Struct({
   kind: Schema.Literals(Object.values(AGENT_KIND)),
   organizationId: Schema.String,
@@ -3383,16 +3234,17 @@ export function settledTurnAgent(
 }
 
 /**
- * Archives the agent as `archiveAgent` does, but only where it stands
- * unarchived, its conversation's lines have run no further than the
- * `seenSeq` its reader saw, so an agent a message woke since stands, and it
- * has no pull request open (`noOpenPullRequest`) and no inbox item open
- * (`noOpenInboxItem`); answers whether it was archived.
+ * Archives the agent as `archiveAgent` does, by who `archivedBy` names, but
+ * only where it stands unarchived, its conversation's lines have run no
+ * further than the `seenSeq` its reader saw, so an agent a message woke
+ * since stands, and it has no pull request open (`noOpenPullRequest`) and no
+ * inbox item open (`noOpenInboxItem`); answers whether it was archived.
  */
 export function archiveUnmovedAgent(
   userId: string,
   agentId: string,
   seenSeq: number,
+  archivedBy: StoredArchive,
 ): AgentStoreEffect<boolean> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
@@ -3403,7 +3255,7 @@ export function archiveUnmovedAgent(
           agentId,
           seenSeq,
           archivedAt,
-          archivedBy: null,
+          archivedBy,
         });
         yield* settleAgentInboxItems(
           rows.map(({ id }) => id),

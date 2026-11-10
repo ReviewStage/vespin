@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { INBOX_ASK_STATUS, INBOX_STATUS } from "@repo/features/inbox-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import { eq } from "drizzle-orm";
@@ -11,15 +10,9 @@ import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
 import { inboxItem } from "../../schemas/inbox.js";
 import { inboxMessage } from "../../schemas/inbox-message.js";
-import {
-  getTestDB,
-  openedPullRequest,
-  openInboxItem,
-  openTaskAgent,
-  openWorkspace,
-} from "../../testing/index.js";
+import { getTestDB, openInboxItem, openTaskAgent, openWorkspace } from "../../testing/index.js";
 import { archiveAgent, readAgent, unarchiveAgentFrom } from "../agent-store.js";
-import { beginTaskWork, createTask, finishTaskWork, updateTask } from "../task-store.js";
+import { beginTaskWork, createTask, updateTask } from "../task-store.js";
 
 /**
  * An inbox item settles on its own once its reason is gone: its task moved
@@ -170,29 +163,6 @@ it.layer(getTestDB())("an inbox item settling with its task", (it) => {
         yield* updateTask(dean, taskId, { status: TASK_STATUS.TODO });
         yield* assertOpen([later]);
       }),
-  );
-
-  it.effect("leaves a task's open notices open when Vespin finishes its work", () =>
-    Effect.gen(function* () {
-      const dean = yield* openAccount;
-      const workspace = yield* openWorkspace(dean);
-      const { id: taskId } = yield* createTask(dean, { organizationId: workspace });
-      const agentId = yield* openTaskAgent(dean, workspace, taskId);
-      yield* openedPullRequest(dean, agentId, {
-        number: 42,
-        title: "Teammate invitations",
-        url: "https://github.com/acme/api/pull/42",
-        state: PULL_REQUEST_STATE.MERGED,
-        checks: "passing",
-        additions: 10,
-        deletions: 2,
-        changedFiles: 1,
-      });
-      const notice = yield* openInboxItem(dean, workspace, taskId, agentId, false);
-
-      assert.equal(yield* finishTaskWork(dean, taskId, () => Effect.succeed(true)), true);
-      yield* assertOpen([notice]);
-    }),
   );
 });
 

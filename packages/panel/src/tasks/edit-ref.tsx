@@ -1,4 +1,5 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
+import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import {
   DESCRIPTION_ACTOR,
   type DescriptionLastEdit,
@@ -23,8 +24,7 @@ import {
 import { useMemo } from "react";
 import { ActorRef, AppCard, PersonCard } from "../actor-ref.js";
 import { useMemberDirectory } from "../member-directory.js";
-import { GLYPH_STATE, type GlyphState } from "../state-glyph.js";
-import { agentGlyphState, agentName, providerOf } from "./agent-model.js";
+import { agentName, providerOf } from "./agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import type { AgentsControl } from "./use-agents.js";
 

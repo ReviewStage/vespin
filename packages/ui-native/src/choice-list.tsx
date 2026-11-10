@@ -1,17 +1,23 @@
-// choice-list.tsx -- the options of a decide ask, one row each, the recommended one badged.
+// choice-list.tsx -- a decide ask's options as a compact bordered card: one radio row each, the recommended one tagged, a detail line under its label.
 
-import { Button, HStack, Image, Spacer, Text, VStack } from "@expo/ui/swift-ui";
+import { Button, Divider, HStack, Image, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import {
+  accessibilityLabel,
   background,
-  clipShape,
+  buttonStyle,
+  contentShape,
   font,
   foregroundStyle,
-  listRowBackground,
+  frame,
   padding,
+  shapes,
+  strokeBorder,
 } from "@expo/ui/swift-ui/modifiers";
-import { ListSection } from "./row-list.js";
-import { type BrandColors, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, SPACE } from "./tokens/space.js";
+import { RECOMMENDED } from "@repo/features/inbox-list-model";
+import { Fragment } from "react";
+import { useColors } from "./tokens/colors.js";
+import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
+import { TYPE_ROLE } from "./tokens/type.js";
 
 export type Choice = {
   /** The option's short label, which also names it. */
@@ -30,26 +36,37 @@ type ChoiceListProps = {
   readonly multiple?: boolean | undefined;
   /** Called with the labels picked once a row is pressed. */
   readonly onChange: (picked: readonly string[]) => void;
+  /** Words over the card, small and muted. */
   readonly title?: string | undefined;
 };
 
-const RECOMMENDED = "Recommended";
+/** How thick the card's and the tag's edges are drawn. */
+const HAIRLINE = 0.5;
 
-/** The mark leading an option: a ring or a square, filled once picked. */
+/** The share of the accent's ink the Recommended tag's edge stands at. */
+const TAG_EDGE_OPACITY = "73";
+
+/** The mark leading an option, 18 pt: a ring or a square, the ring filled with the accent at its heart once picked. */
 function pickMark(picked: boolean, multiple: boolean) {
   if (multiple) return picked ? "checkmark.square.fill" : "square";
-  return picked ? "checkmark.circle.fill" : "circle";
+  return picked ? "smallcircle.filled.circle.fill" : "circle";
 }
 
-function RecommendedBadge({ colors }: { readonly colors: BrandColors }) {
+/** The small bordered tag after the recommended option's label, in the accent's words, since a recommendation is for you. */
+function RecommendedTag() {
+  const colors = useColors();
   return (
     <Text
       modifiers={[
-        font({ textStyle: "caption", weight: "semibold" }),
-        foregroundStyle(colors.ON_ACCENT),
-        padding({ horizontal: 8, vertical: 3 }),
-        background(colors.ACCENT),
-        clipShape("capsule"),
+        font({ textStyle: TYPE_ROLE.TIME, weight: "semibold" }),
+        foregroundStyle(colors.ACCENT_TEXT),
+        padding({ horizontal: 5, vertical: 1 }),
+        strokeBorder({
+          content: `${colors.ACCENT}${TAG_EDGE_OPACITY}`,
+          shape: "roundedRectangle",
+          cornerRadius: RADIUS.TAG,
+          style: { lineWidth: 1 },
+        }),
       ]}
     >
       {RECOMMENDED}
@@ -67,45 +84,125 @@ function nextPicked(
   return picked.includes(label) ? picked.filter((each) => each !== label) : [...picked, label];
 }
 
-/** A decide ask's options as a section of rows, each pressed to pick it. */
+/** One option's row: its mark, its label in 15 pt with the tag, and its detail in 13 pt muted. */
+function ChoiceRow({
+  choice,
+  picked,
+  recommended,
+  multiple,
+  onPress,
+}: {
+  readonly choice: Choice;
+  readonly picked: boolean;
+  readonly recommended: boolean;
+  readonly multiple: boolean;
+  readonly onPress: () => void;
+}) {
+  const colors = useColors();
+  return (
+    <Button
+      onPress={onPress}
+      modifiers={[
+        buttonStyle("plain"),
+        accessibilityLabel(
+          [
+            choice.label,
+            recommended ? RECOMMENDED : undefined,
+            picked ? "picked" : undefined,
+            choice.detail,
+          ]
+            .filter((part) => part !== undefined)
+            .join(", "),
+        ),
+      ]}
+    >
+      <HStack
+        spacing={SPACE.ROW}
+        alignment="top"
+        modifiers={[
+          padding({ horizontal: SPACE.EDGE - 2, vertical: SPACE.ROW + 1 }),
+          contentShape(shapes.rectangle()),
+        ]}
+      >
+        <Image
+          systemName={pickMark(picked, multiple)}
+          size={MARK_SIZE.LEAD}
+          color={picked ? colors.ACCENT : colors.TEXT_MUTED}
+        />
+        <VStack alignment="leading" spacing={2}>
+          <HStack spacing={SPACE.TIGHT + 2}>
+            <Text
+              modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT)]}
+            >
+              {choice.label}
+            </Text>
+            {recommended ? <RecommendedTag /> : null}
+          </HStack>
+          {choice.detail === undefined ? null : (
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+              ]}
+            >
+              {choice.detail}
+            </Text>
+          )}
+        </VStack>
+        <Spacer />
+      </HStack>
+    </Button>
+  );
+}
+
+/**
+ * A decide ask's options as a compact card on the surface inside a hairline:
+ * a radio row each, pressed to pick it, the recommended one tagged, with a
+ * hairline between the rows. The picked mark is drawn in the accent, since
+ * an ask is for you.
+ */
 export function ChoiceList(props: ChoiceListProps) {
   const { choices, recommended = [], picked, multiple = false, onChange, title } = props;
   const colors = useColors();
   return (
-    <ListSection title={title}>
-      {choices.map((choice) => {
-        const isPicked = picked.includes(choice.label);
-        return (
-          <Button
-            key={choice.label}
-            onPress={() => onChange(nextPicked(picked, choice.label, multiple))}
-            modifiers={[listRowBackground("clear")]}
-          >
-            <HStack spacing={SPACE.ROW}>
-              <Image
-                systemName={pickMark(isPicked, multiple)}
-                size={MARK_SIZE.GLYPH + 5}
-                color={isPicked ? colors.ACCENT : colors.TEXT_MUTED}
-              />
-              <VStack alignment="leading" spacing={2}>
-                <Text modifiers={[foregroundStyle(colors.TEXT)]}>{choice.label}</Text>
-                {choice.detail === undefined ? null : (
-                  <Text
-                    modifiers={[
-                      font({ textStyle: "footnote" }),
-                      foregroundStyle(colors.TEXT_MUTED),
-                    ]}
-                  >
-                    {choice.detail}
-                  </Text>
-                )}
-              </VStack>
-              <Spacer />
-              {recommended.includes(choice.label) ? <RecommendedBadge colors={colors} /> : null}
-            </HStack>
-          </Button>
-        );
-      })}
-    </ListSection>
+    <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
+      {title === undefined ? null : (
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.GROUP_HEADER, weight: "medium" }),
+            foregroundStyle(colors.TEXT_MUTED),
+          ]}
+        >
+          {title}
+        </Text>
+      )}
+      <VStack
+        alignment="leading"
+        spacing={0}
+        modifiers={[
+          frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+          background(colors.SURFACE, shapes.roundedRectangle({ cornerRadius: RADIUS.CARD })),
+          strokeBorder({
+            content: colors.CHIP_EDGE,
+            shape: "roundedRectangle",
+            cornerRadius: RADIUS.CARD,
+            style: { lineWidth: HAIRLINE },
+          }),
+        ]}
+      >
+        {choices.map((choice, index) => (
+          <Fragment key={choice.label}>
+            {index === 0 ? null : <Divider />}
+            <ChoiceRow
+              choice={choice}
+              picked={picked.includes(choice.label)}
+              recommended={recommended.includes(choice.label)}
+              multiple={multiple}
+              onPress={() => onChange(nextPicked(picked, choice.label, multiple))}
+            />
+          </Fragment>
+        ))}
+      </VStack>
+    </VStack>
   );
 }

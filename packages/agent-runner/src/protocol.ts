@@ -5,7 +5,7 @@
  * service that launches the runner (P08) and the route that takes its events
  * (P09) import it without the SDK behind it. Every line on stdin is one JSON
  * object: the first is the config, each later one a message, a stop, a model
- * change, a retire, or a warm. A config that names `linesUrl` has the runner read
+ * change, a retire, a warm, or an approval. A config that names `linesUrl` has the runner read
  * the later lines from the service instead (`RUNNER_LINES`).
  *
  * The config says which harness the launch runs: Claude Code (P05), or Codex
@@ -99,10 +99,11 @@ export const RUNNER_PLACE = {
    * A machine its member runs our host on, a Linux box or a Mac, with
    * nobody signed in at it, where each launch runs straight on the box as
    * the host's own user, with full access to what that user reaches, beside
-   * the box's other processes. No harness runs a sandbox of its own or
-   * asks an approval there, as in the cloud's sandbox: Claude Code under
-   * `bypassPermissions`, and Codex in `danger-full-access` with approval
-   * `never`.
+   * the box's other processes. No harness runs a sandbox of its own there,
+   * as in the cloud's sandbox, and none asks an approval but where its
+   * agent's mode does (`PERMISSION_MODE`): Claude Code under
+   * `bypassPermissions` by default, and Codex in `danger-full-access` with
+   * approval `never`.
    */
   HOST: "host",
 } as const;
@@ -149,6 +150,48 @@ export const CLAUDE_CODE_TOOLS = {
 
 /** The read-only subagent a Claude Code launch defines, by the `subagent_type` the Agent tool takes. */
 export const CLAUDE_CODE_WORKER = "worker";
+
+/**
+ * How a Claude Code launch answers its agent's tool calls (its config's
+ * `permissionMode`): every call run unasked, as every launch ran before
+ * modes, under the CLI's `bypassPermissions` (`FULL_ACCESS`, the default);
+ * a file edit or a shell command asked of the member first, in the CLI's
+ * `default` mode (`ASK`); or each call left to the CLI's `auto` classifier,
+ * which asks the member where it cannot decide (`AUTO`). An ask reaches the
+ * service as an APPROVAL_REQUESTED event and is answered by an `approval`
+ * line. Codex reads no mode: it runs every call unasked, approval `never`,
+ * whatever its agent's mode.
+ */
+export const PERMISSION_MODE = {
+  FULL_ACCESS: "full_access",
+  ASK: "ask",
+  AUTO: "auto",
+} as const;
+export type PermissionMode = (typeof PERMISSION_MODE)[keyof typeof PERMISSION_MODE];
+const PermissionModeSchema = Schema.Literals(Object.values(PERMISSION_MODE));
+
+/**
+ * The built-in tools a launch whose mode asks runs unasked, by the names the
+ * CLI gives them: those that only read, the checkout or the web, load a
+ * skill's instructions or a deferred tool, or keep the agent's own to-do list
+ * and wakeups. Every MCP server the launch hands the CLI, ours and each
+ * integration's, runs unasked beside them by its `mcp__<server>` rule, so
+ * what asks is a file edit, a shell command, and a server the checkout adds.
+ */
+export const CLAUDE_CODE_UNASKED_TOOLS = [
+  "Read",
+  "Glob",
+  "Grep",
+  "WebFetch",
+  "WebSearch",
+  "Skill",
+  "ToolSearch",
+  "TaskCreate",
+  "TaskUpdate",
+  "TaskList",
+  "TaskGet",
+  "ScheduleWakeup",
+] as const;
 
 /** The harness a launch runs, spelled as `conversations.runtime` spells it. */
 export const RUNNER_HARNESS = {
@@ -209,6 +252,46 @@ export const INPUT_LINE = {
   MODEL: "model",
   RETIRE: "retire",
   WARM: "warm",
+  APPROVAL: "approval",
+} as const;
+
+/**
+ * The member's answers to a tool call's ask: allow the call; allow it and,
+ * for as long as the launch's CLI runs, every call its rule covers, as the
+ * CLI suggested it, kept in the session alone so nothing is written to the
+ * checkout (`ALLOW_FOR_AGENT`); or deny it.
+ */
+export const APPROVAL_DECISION = {
+  ALLOW: "allow",
+  ALLOW_FOR_AGENT: "allow_for_agent",
+  DENY: "deny",
+} as const;
+export type ApprovalDecision = (typeof APPROVAL_DECISION)[keyof typeof APPROVAL_DECISION];
+const ApprovalDecisionSchema = Schema.Literals(Object.values(APPROVAL_DECISION));
+
+/** What settled a tool call's ask, as APPROVAL_RESOLVED names it. */
+export const APPROVAL_BY = {
+  /** The member's answer, an `approval` line. */
+  MEMBER: "member",
+  /** A message the member sent while it waited, which denied it with the message's words. */
+  MESSAGE: "message",
+  /** The CLI withdrew it, as it does on a stop's interrupt: denied. */
+  ABORTED: "aborted",
+  /** The launch ended while it waited: denied. */
+  ENDED: "ended",
+} as const;
+export type ApprovalBy = (typeof APPROVAL_BY)[keyof typeof APPROVAL_BY];
+const ApprovalBySchema = Schema.Literals(Object.values(APPROVAL_BY));
+
+/**
+ * How much of a call's input its APPROVAL_REQUESTED event carries: each
+ * string cut to `TEXT_MAX` characters and each list to `ITEMS_MAX` items, an
+ * ellipsis ending a cut string, since a write's whole file can be its input,
+ * and the call stands whole in the transcript beside the ask.
+ */
+export const APPROVAL_INPUT = {
+  TEXT_MAX: 2_000,
+  ITEMS_MAX: 50,
 } as const;
 
 /**
@@ -480,6 +563,12 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   linesUrl: Schema.optionalKey(Schema.String),
   /** Our MCP server's streamable-HTTP endpoint. */
   mcpUrl: Schema.String,
+  /**
+   * Our MCP server's tools the worker subagent (`CLAUDE_CODE_WORKER`) may not
+   * call, by name: every one that does more than read. Absent in a config
+   * written before it, where the worker is denied the whole server.
+   */
+  workerDenied: Schema.optionalKey(Schema.Array(Schema.String)),
   /** Where the CLI's transcript is kept at the service (`RUNNER_TRANSCRIPTS`), handed to the SDK as its `sessionStore`; none where the CLI's own files are all it keeps. */
   transcriptsUrl: Schema.optionalKey(Schema.String),
   /** The integrations the agent is handed, one MCP server each; none in a config written before them. */
@@ -499,6 +588,8 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   trace: Schema.optionalKey(RunnerTraceSchema),
   /** How long a warm launch stays warm before it ends itself (`RUNNER_WARM`); `RUNNER_WARM.IDLE_CAP_MS` where absent. */
   warmForMs: Schema.optionalKey(Schema.Number),
+  /** How the launch answers its agent's tool calls (`PERMISSION_MODE`); full access where absent, as in a config written before modes. */
+  permissionMode: Schema.optionalKey(PermissionModeSchema),
 });
 export type ClaudeCodeConfig = typeof ClaudeCodeConfigSchema.Type;
 
@@ -508,6 +599,9 @@ export type ClaudeCodeConfig = typeof ClaudeCodeConfigSchema.Type;
  * from the launch's environment and must exist before the runner starts.
  * `threadId` is the thread to resume, where this launch continues one; a new
  * thread's id reaches the service in its `thread/started` notification.
+ * Note that it names no `permissionMode`, because Codex reads none: it runs
+ * every call unasked, approval `never`, whatever its agent's mode, and a
+ * mode the service writes anyway is let go as the line is read.
  */
 export const CodexConfigSchema = Schema.Struct({
   harness: Schema.Literal(RUNNER_HARNESS.CODEX),
@@ -652,12 +746,26 @@ const WarmLineSchema = Schema.Struct({
   type: Schema.Literal(INPUT_LINE.WARM),
 });
 
+/**
+ * The member's answer to a tool call's ask, naming the APPROVAL_REQUESTED
+ * event's `requestId`; `message` tells the agent why a call was denied, "The
+ * member denied this." where absent. A launch with no such ask waiting skips
+ * it, as one already settled has none.
+ */
+const ApprovalLineSchema = Schema.Struct({
+  type: Schema.Literal(INPUT_LINE.APPROVAL),
+  requestId: Schema.String,
+  decision: ApprovalDecisionSchema,
+  message: Schema.optionalKey(Schema.String),
+});
+
 export const InputLineSchema = Schema.Union([
   MessageLineSchema,
   StopLineSchema,
   ModelLineSchema,
   RetireLineSchema,
   WarmLineSchema,
+  ApprovalLineSchema,
 ]);
 export type InputLine = typeof InputLineSchema.Type;
 
@@ -670,18 +778,34 @@ export type InputLine = typeof InputLineSchema.Type;
  * it: the CLI never echoes a prompt back. WAITING follows a `result` the run
  * outlives, because the Stop hook before it reported background work or a
  * scheduled wakeup still to come: the agent is waiting, not done, and the
- * sandbox must stay up. IDLE follows a `result`, or Codex's
+ * sandbox must stay up. CONNECTION_LOST follows a model turn the harness gave
+ * up on because it could not reach its provider after its own retries: the
+ * launch stays up and probes the provider's host (`reconnect.ts`), and
+ * CONNECTION_RESTORED follows once the host answers, saying whether the
+ * service should send the agent a carry-on line, or nothing where a line the
+ * service sent meanwhile goes next instead; a launch whose host never
+ * answers within `RUNNER_RECONNECT.GIVE_UP_MS` ends `FAILED` with
+ * `connectionLostFailure`'s words. IDLE follows a `result`, or Codex's
  * `turn/completed`, that leaves nothing in flight or unanswered: the agent's
  * turn is over, as a `turn_ended` END says, but the launch stays warm
  * (`RUNNER_WARM`), so the service's next message is a line on its stdin rather than
  * a resumed sandbox and a relaunched CLI. END is the last event a launch
  * posts, with why it ended.
+ *
+ * APPROVAL_REQUESTED is posted as a launch whose mode asks
+ * (`PERMISSION_MODE`) holds a tool call for the member's answer, and
+ * APPROVAL_RESOLVED once the ask is settled, whatever settled it, so each
+ * ask a launch posts is resolved before its END.
  */
 export const RUNNER_EVENT = {
   ACCEPTED: "vespin_runner_accepted",
   WAITING: "vespin_runner_waiting",
+  CONNECTION_LOST: "vespin_runner_connection_lost",
+  CONNECTION_RESTORED: "vespin_runner_connection_restored",
   IDLE: "vespin_runner_idle",
   END: "vespin_runner_end",
+  APPROVAL_REQUESTED: "vespin_runner_approval_requested",
+  APPROVAL_RESOLVED: "vespin_runner_approval_resolved",
 } as const;
 
 /** Why a launch ended. */
@@ -752,6 +876,64 @@ export interface RunnerWaiting {
   readonly session_crons: readonly SessionCronSummary[];
 }
 
+/** The CONNECTION_LOST event: the provider's host the launch could not reach and now probes. */
+export interface RunnerConnectionLost {
+  readonly type: typeof RUNNER_EVENT.CONNECTION_LOST;
+  readonly host: string;
+}
+
+/**
+ * The CONNECTION_RESTORED event: the host answers again. `carryOn` asks the
+ * service to send the agent a carry-on line, since the model turn the loss
+ * cut off left its work where it stood; it is false where a line the service
+ * sent during the wait goes next instead.
+ */
+export interface RunnerConnectionRestored {
+  readonly type: typeof RUNNER_EVENT.CONNECTION_RESTORED;
+  readonly host: string;
+  readonly carryOn: boolean;
+}
+
+/**
+ * How a launch waits for its provider's host to answer again after the
+ * harness gave up reaching it: a TCP connect to the host on 443, through the
+ * `HTTPS_PROXY` when one is set, asked again after a wait that doubles from
+ * the first to the longest, for at most `GIVE_UP_MS` in all, each connect
+ * given `PROBE_TIMEOUT_MS` to answer. The bound guards two costs: a sandbox
+ * kept up for a provider that stays down, and the turn's progress lease on
+ * the service, which the sweep fails a silent turn at fifteen minutes past
+ * its last progress (`@repo/features/turn-deadline`'s `PROGRESS_MS`): a Mac
+ * cut off from the provider is cut off from the service too, so the runner's
+ * own end, with why, must come before the sweep's does.
+ */
+export const RUNNER_RECONNECT = {
+  FIRST_WAIT_MS: 5 * 1_000,
+  LONGEST_WAIT_MS: 60 * 1_000,
+  GIVE_UP_MS: 10 * 60 * 1_000,
+  PROBE_TIMEOUT_MS: 5 * 1_000,
+} as const;
+
+/**
+ * The words a launch ends `FAILED` with over its provider's connection, which
+ * the service reads as the agent's connection-lost failure
+ * (`coder-host/status.ts`), each after the host's name and the same in every
+ * such end: the host never answered within `RUNNER_RECONNECT.GIVE_UP_MS`, or
+ * it was lost again before the model answered anything since the last
+ * carry-on, where probing again would only loop.
+ */
+export const CONNECTION_LOST_DETAIL = {
+  GAVE_UP: " could not be reached, and did not answer again within the wait",
+  LOST_AGAIN: " could not be reached again before the model answered",
+} as const;
+
+/** What a launch ends with where its provider's connection failed it, by which way (`CONNECTION_LOST_DETAIL`). */
+export function connectionLostFailure(
+  host: string,
+  detail: (typeof CONNECTION_LOST_DETAIL)[keyof typeof CONNECTION_LOST_DETAIL],
+): string {
+  return `${host}${detail}`;
+}
+
 /**
  * How long a launch waits on the CLI's answer to one control request (a
  * model change, an interrupt). The input loop takes the service's lines one at a
@@ -776,6 +958,36 @@ export interface RunnerEndEvent {
   readonly reason: RunnerEnd;
   readonly detail?: string;
 }
+
+/**
+ * The APPROVAL_REQUESTED event: a tool call held for the member's answer, an
+ * `approval` line naming its `requestId`, the CLI's id for the ask.
+ * `toolUseId` is the call's `tool_use` block's id, so the ask stands on the
+ * call in the transcript; `agentId` the subagent's that made it, absent for
+ * the agent's own; `title` the CLI's sentence for the ask, or the tool's
+ * name where it gave none; `description` its subtitle, where it gave one;
+ * `input` the call's input, cut as `APPROVAL_INPUT` says.
+ */
+export const RunnerApprovalRequestedSchema = Schema.Struct({
+  type: Schema.Literal(RUNNER_EVENT.APPROVAL_REQUESTED),
+  requestId: Schema.String,
+  toolUseId: Schema.String,
+  agentId: Schema.optionalKey(Schema.String),
+  toolName: Schema.String,
+  title: Schema.String,
+  description: Schema.optionalKey(Schema.String),
+  input: Schema.Record(Schema.String, Schema.Unknown),
+});
+export type RunnerApprovalRequested = typeof RunnerApprovalRequestedSchema.Type;
+
+/** The APPROVAL_RESOLVED event: the ask by its `requestId` settled, with what was decided and what decided it. */
+export const RunnerApprovalResolvedSchema = Schema.Struct({
+  type: Schema.Literal(RUNNER_EVENT.APPROVAL_RESOLVED),
+  requestId: Schema.String,
+  decision: ApprovalDecisionSchema,
+  by: ApprovalBySchema,
+});
+export type RunnerApprovalResolved = typeof RunnerApprovalResolvedSchema.Type;
 
 /**
  * One notification `codex app-server` sent, as it wrote it (the pinned
@@ -839,8 +1051,12 @@ export type RunnerMessage =
   | CodexNotification
   | RunnerAccepted
   | RunnerWaiting
+  | RunnerConnectionLost
+  | RunnerConnectionRestored
   | RunnerIdle
-  | RunnerEndEvent;
+  | RunnerEndEvent
+  | RunnerApprovalRequested
+  | RunnerApprovalResolved;
 
 /** One event as posted: its number and its message. */
 export interface RunnerEvent {

@@ -421,7 +421,7 @@ export function automationDraft(
       target: AUTOMATION_TARGET.NEW_AGENT,
       agentId: null,
       choice: null,
-      archiveSuccessful: false,
+      archiveSuccessful: true,
       slackDelivery: false,
       disabledServers: [],
       guards: null,

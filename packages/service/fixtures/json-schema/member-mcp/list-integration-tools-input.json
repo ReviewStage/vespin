@@ -1,0 +1,13 @@
+{
+  "type": "object",
+  "properties": {
+    "connection": {
+      "type": "string",
+      "description": "The account, by the connection name list_integrations answered, such as notion, or notion-2 for a second Notion account."
+    }
+  },
+  "required": [
+    "connection"
+  ],
+  "additionalProperties": false
+}

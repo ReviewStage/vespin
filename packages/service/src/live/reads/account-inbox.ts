@@ -22,7 +22,6 @@ import {
   memberSync,
   taskSync,
 } from "@repo/database/sync/tables";
-import { ACCOUNT_INBOX_REPOSITORYLESS } from "@repo/features/account-inbox-wire";
 import { AUTOMATION_RUN_STATUS } from "@repo/features/automation-wire";
 import { ACCOUNT_INBOX_READ } from "@repo/features/inbox-live";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
@@ -83,9 +82,8 @@ function failedRunsStatement(userId: string) {
  * wakes no account's inbox, because a description's save rewrites its task every
  * few seconds and every member would read again for nothing: the rare
  * change the inbox shows of either, a task's assignee or an agent's title,
- * shows at the hold's end. An agent with no repository is carried only to a
- * reader that asks (`ACCOUNT_INBOX_REPOSITORYLESS`), since a build before it
- * fails its whole read on one null.
+ * shows at the hold's end. The query's `ACCOUNT_INBOX_REPOSITORYLESS`
+ * changes nothing, since it asked only for items of agents with no task.
  */
 export const accountInboxRead = bindLiveRead(ACCOUNT_INBOX_READ, {
   reads: [
@@ -100,8 +98,8 @@ export const accountInboxRead = bindLiveRead(ACCOUNT_INBOX_READ, {
     githubRepositoryReadSync,
   ],
   topics: ({ userId }) => [[TOPIC.ACCOUNT, userId]],
-  statements: ({ userId, repositoryless }) => ({
-    ...accountInboxLiveStatements(userId, repositoryless === ACCOUNT_INBOX_REPOSITORYLESS.INCLUDE),
+  statements: ({ userId }) => ({
+    ...accountInboxLiveStatements(userId),
     failedRuns: failedRunsStatement(userId),
   }),
 });

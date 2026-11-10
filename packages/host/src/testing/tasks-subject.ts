@@ -13,7 +13,6 @@ import {
   WORKSPACE_CALL_FAILURE,
   type WorkspaceCallResult,
 } from "@repo/features";
-import type { TasklessAgent } from "@repo/features/agent-wire";
 import { AGENT_BROWSER_TABS_READ, TASK_BROWSER_TABS_READ } from "@repo/features/browser-tabs-live";
 import { TASK_COMMENTS_READ } from "@repo/features/description-comment-live";
 import {
@@ -25,6 +24,7 @@ import {
 import type { DescriptionEditAnswer } from "@repo/features/description-edit";
 import type { GitHubConnection } from "@repo/features/github-connection-wire";
 import { WRITE_UNTAKEN, type WriteUntaken } from "@repo/features/keyed-write";
+import { LINK_PREVIEW_UNANSWERED } from "@repo/features/link-preview-view";
 import {
   LIVE_READ,
   LIVE_SIGNED_OUT,
@@ -158,8 +158,6 @@ export interface FakeService extends TasksClient, WorkspacesClient {
   commentLives: Record<string, PolledLive<CommentPart, typeof NOT_FOUND_LIVE>>;
   /** What the list says of each task's coding agents, by task id; a task with none says nothing. */
   agents: Record<string, TaskAgentsSummary>;
-  /** The agents with no plan the list carries beside the plans. */
-  tasklessAgents: TasklessAgent[];
   /** How many times the list's live read was first asked, its polls apart. */
   liveListReads: number;
   /** Whether a delete is refused, as a service that did not answer refuses it. */
@@ -600,7 +598,6 @@ export function fakeService(tasks: Task[]): FakeService {
         }),
       ),
     agents: {},
-    tasklessAgents: [],
     liveListReads: 0,
     deleteFails: false,
     deleteAnswered: Effect.void,
@@ -1080,6 +1077,7 @@ export function fakeService(tasks: Task[]): FakeService {
         service.reads.push(`skills:${taskId}`);
         return service.skills[taskId];
       }),
+    linkPreview: () => Effect.succeed(LINK_PREVIEW_UNANSWERED),
     readRepositoryFile: (place, window) =>
       Effect.sync(() => service.places[place.workspaceId]?.[place.repository]?.files[window.path]),
     readRepositoryTree: (place, folder) =>

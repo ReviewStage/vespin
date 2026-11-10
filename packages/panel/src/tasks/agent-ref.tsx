@@ -3,9 +3,9 @@ import {
   type AgentStatus,
   type AgentSummary,
   type ListedAgent,
-  type TasklessAgent,
 } from "@repo/features/agent-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { agentStateWords } from "@repo/features/glyph-state";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { agentMovedAt, agentStillWriting } from "@repo/features/task-agents-model";
 import {
@@ -20,14 +20,7 @@ import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { ACTOR_SIZE, ActorMark, ActorRef } from "../actor-ref.js";
 import type { HeldTranscripts } from "../desktop/strip-tabs.js";
-import {
-  agentActor,
-  agentName,
-  agentStateWords,
-  archivedByReading,
-  providerOf,
-  teammateRef,
-} from "./agent-model.js";
+import { agentActor, agentName, archivedByReading, teammateRef } from "./agent-model.js";
 import {
   AgentTabCard,
   type CardFoot,
@@ -84,9 +77,10 @@ export interface AgentSubject {
  * What an agent's card says, read from what its tab last held as the card
  * is hung (`heldLatest`): where it stands and when it last moved, its pair,
  * and its latest step; an archived agent's says it was archived, and when.
- * It wears the agent's tile, names the automation whose run started it, or
- * a teammate who did, as the reader `agents.me` tells them apart, and leads its corner with the pull
- * request the task holds for it. Its tab's card and every other place naming it say it, `chosen` telling
+ * It wears the agent's tile, names the agent that started it, the automation
+ * whose run did, or a teammate who did, as the reader `agents.me` tells
+ * them apart, says it was started from Slack where it was, and leads its
+ * corner with the pull request the task holds for it. Its tab's card and every other place naming it say it, `chosen` telling
  * whether its tab is the one shown, whose transcript follows the run. Note
  * that an agent with no turn finished in what its tab holds last moved
  * when its newest run began, the latest moment its summary knows.
@@ -120,7 +114,9 @@ export function agentCardReading(
           brief: agent.brief,
         }),
       startedBy: teammateRef(agent.startedBy, agents.me),
+      startedByAgentId: agent.startedByAgentId,
       automationId: agent.automationId,
+      automationName: agent.automationName,
       startedAt: agent.createdAt,
       tile: agentActor(agent, label),
       pullRequest: agents.pullRequests.get(agent.id),
@@ -128,6 +124,7 @@ export function agentCardReading(
         archivedAt === undefined || agent.archivedBy === undefined
           ? undefined
           : archivedByReading(agent.archivedBy, agents.me),
+      fromSlack: agent.source?.kind === AGENT_SOURCE.SLACK,
     };
   };
 }
@@ -151,8 +148,11 @@ export function lineSubject(
     choice: { model: line.model, effort: line.effort },
     transcript: undefined,
     startedBy: teammateRef(line.startedBy, readerId),
+    startedByAgentId: line.startedByAgentId,
     automationId: line.automationId,
+    automationName: line.automationName,
     tile: agentActor(line, name),
+    fromSlack: line.source?.kind === AGENT_SOURCE.SLACK,
   };
   return { name, tile: agentActor(line, name), read: () => reading };
 }
@@ -181,90 +181,6 @@ export function listedRowSubject(
     }),
   });
   return { name, tile: agentActor(agent, name), agent, read };
-}
-
-/**
- * An agent with no task as the sidebar's list carries it, as its row's card
- * says it: its tab's card (`agentCardReading`), but that it last moved when
- * the list says it did, the end of its newest run included, and that it
- * shows the pull request the list carries for it, as a task's row's card
- * shows its own, since no tab of it holds either; a read of what it
- * published that the control holds since stands before the list's.
- */
-export function tasklessRowSubject(
-  agent: TasklessAgent,
-  agents: Pick<AgentsControl, "models" | "me" | "pullRequests">,
-): AgentSubject {
-  const { automationId, pullRequest, ...rest } = agent;
-  const summary: AgentSummary = automationId === null ? rest : { ...rest, automationId };
-  const name = agentName(summary, agents.models);
-  const tile = agentActor(summary, name);
-  const base = agentCardReading(summary, name, NOTHING_HELD, false, agents);
-  const { archivedAt } = agent;
-  const writing = archivedAt === undefined && agentStillWriting(agent.status);
-  const read = (): CardReading => {
-    const reading = base();
-    return {
-      ...reading,
-      corner: cardCorner({
-        writing,
-        startedAt: agent.runStartedAt,
-        movedAt: archivedAt ?? agent.activityAt,
-        state: archivedAt === undefined ? agentStateWords(agent.status) : ARCHIVED_WORDS,
-      }),
-      // Note that a read of what it published since, held by the control, is newer than the list's.
-      pullRequest: reading.pullRequest ?? pullRequest,
-      repository: agent.repository ?? undefined,
-      fromSlack: agent.source?.kind === AGENT_SOURCE.SLACK,
-    };
-  };
-  return { name, tile, agent: summary, read };
-}
-
-/**
- * An agent with no task as the Inbox names it (`TasklessInboxAgent`): its
- * title, else the name of the automation
- * the reader may read that started it, else its model (`agentName`), its
- * harness's tile at rest, and that automation. Note that the line says
- * nothing of where the agent stands, so its card's corner says nothing
- * either.
- */
-export function tasklessSubject(
-  line: {
-    readonly agentTitle: string | null;
-    readonly agentModel: string;
-    readonly automationId: string | null;
-    readonly automationName: string | null;
-  },
-  models: readonly CatalogModel[] | undefined,
-): AgentSubject {
-  const name = agentName(
-    {
-      title: line.agentTitle,
-      model: line.agentModel,
-      automationName: line.automationId === null ? null : line.automationName,
-    },
-    models,
-  );
-  const tile: Actor = {
-    kind: ACTOR_KIND.AGENT,
-    name,
-    provider: providerOf(line.agentModel),
-    state: ACTOR_STATE.REST,
-  };
-  const reading: CardReading = {
-    corner: cardCorner({
-      writing: false,
-      startedAt: undefined,
-      movedAt: undefined,
-      state: undefined,
-    }),
-    choice: undefined,
-    transcript: undefined,
-    automationId: line.automationId ?? undefined,
-    tile,
-  };
-  return { name, tile, read: () => reading };
 }
 
 /** An agent as a line read beside its thread names it: its title, null where it has none; its model; the automation whose run started it, which an untitled one goes by; and where it stands, where the line says so. */
@@ -473,7 +389,7 @@ export function SendingAgent({
       ? undefined
       : () =>
           openPlace({
-            kind: LINK_PLACE.AGENT,
+            kind: LINK_DESTINATION.AGENT,
             ...(taskId === undefined ? undefined : { planId: taskId }),
             agentId,
           });

@@ -1,8 +1,10 @@
-// markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, links, mention chips, and pictures that open full screen.
+// markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, links, mention chips, and pictures that open full screen and zoom.
 
+import { Host, Image as SwiftUIImage } from "@expo/ui/swift-ui";
+import { accessibilityHidden, frame } from "@expo/ui/swift-ui/modifiers";
 import { readerZone } from "@repo/features/date-mention";
-import type { LinkPlace } from "@repo/features/link-grammar";
-import { THING_KIND, type ThingKind } from "@repo/features/thing-kind";
+import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
+import type { LinkDestination } from "@repo/features/link-grammar";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useMemo, useState } from "react";
 import {
@@ -17,6 +19,8 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { type Glyph, isLucideSymbol } from "./glyph.js";
 import {
   COLUMN_ALIGN,
   type ColumnAlign,
@@ -29,62 +33,76 @@ import {
   type MarkdownRun,
   markdownBlocks,
 } from "./markdown-model.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
+import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 import { SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, TEXT_SIZE } from "./tokens/type.js";
+import { MONOSPACE_FONT, PROSE_SIZE, TEXT_SIZE } from "./tokens/type.js";
+import { Video } from "./video.js";
 
 /** A place in the app a link names, as `@repo/features/link-grammar` reads it, and the address it was written as. */
 export interface MarkdownPlace {
   readonly workspace: string;
-  readonly place: LinkPlace;
+  readonly place: LinkDestination;
   readonly href: string;
 }
 
-/** The glyph each kind of thing leads its chip with, as the panel's `thing-mark.tsx` gives each kind its own. */
-const THING_SYMBOL: { readonly [K in ThingKind]: SfSymbol } = {
-  [THING_KIND.PLAN]: "checklist",
-  [THING_KIND.SECTION]: "number",
-  [THING_KIND.VERSION]: "clock.arrow.circlepath",
-  [THING_KIND.COMMENT]: "text.bubble",
-  [THING_KIND.PAGE]: "doc.richtext",
-  [THING_KIND.AGENT]: "sparkles",
-  [THING_KIND.WORKER]: "gearshape.2",
-  [THING_KIND.APP]: "app",
-  [THING_KIND.CHANGES]: "plusminus",
-  [THING_KIND.PULL_REQUEST]: "arrow.triangle.pull",
-  [THING_KIND.PULL_REQUEST_THREAD]: "text.bubble",
-  [THING_KIND.ISSUE]: "smallcircle.filled.circle",
-  [THING_KIND.LINK]: "link",
-  [THING_KIND.MESSAGE]: "message",
-  [THING_KIND.HOME]: "house",
-  [THING_KIND.BOARD]: "checklist",
-  [THING_KIND.INBOX]: "tray",
-  [THING_KIND.INBOX_ITEM]: "tray.full",
-  [THING_KIND.AUTOMATIONS]: "bolt",
-  [THING_KIND.AUTOMATION]: "bolt",
-  [THING_KIND.AUTOMATION_RUN]: "bolt.circle",
-  [THING_KIND.SETTINGS]: "gearshape",
-  [THING_KIND.PERSON]: "person.crop.circle",
-  [THING_KIND.ADMIN]: "person.badge.shield.checkmark",
-  [THING_KIND.FILE]: "doc",
-  [THING_KIND.FOLDER]: "folder",
-  [THING_KIND.SERVER]: "server.rack",
-  [THING_KIND.TOOL]: "wrench.and.screwdriver",
-  [THING_KIND.SKILL]: "wand.and.stars",
-  [THING_KIND.REPOSITORY]: "book.closed",
-  [THING_KIND.WORKSPACE]: "building.2",
-  [THING_KIND.DATE]: "calendar",
+/**
+ * The glyph each kind of entity leads its chip with, as the panel's
+ * `entity-mark.tsx` gives each kind its own: a pull request's is Lucide's
+ * own, as the panel's chip draws it before GitHub has said where the pull
+ * request stands, and the rest the SF Symbol closest to the panel's.
+ */
+const ENTITY_SYMBOL: { readonly [K in EntityKind]: Glyph } = {
+  [ENTITY_KIND.PLAN]: "checklist",
+  [ENTITY_KIND.SECTION]: "number",
+  [ENTITY_KIND.VERSION]: "clock.arrow.circlepath",
+  [ENTITY_KIND.COMMENT]: "text.bubble",
+  [ENTITY_KIND.PAGE]: "doc.richtext",
+  [ENTITY_KIND.AGENT]: "sparkles",
+  [ENTITY_KIND.WORKER]: "gearshape.2",
+  [ENTITY_KIND.APP]: "app",
+  [ENTITY_KIND.CHANGES]: "plusminus",
+  [ENTITY_KIND.PULL_REQUEST]: LUCIDE_SYMBOL.GIT_PULL_REQUEST,
+  [ENTITY_KIND.PULL_REQUEST_THREAD]: "text.bubble",
+  [ENTITY_KIND.ISSUE]: "smallcircle.filled.circle",
+  [ENTITY_KIND.LINK]: "link",
+  [ENTITY_KIND.MESSAGE]: "message",
+  [ENTITY_KIND.HOME]: "house",
+  [ENTITY_KIND.BOARD]: "checklist",
+  [ENTITY_KIND.INBOX]: "tray",
+  [ENTITY_KIND.INBOX_ITEM]: "tray.full",
+  [ENTITY_KIND.AUTOMATIONS]: "bolt",
+  [ENTITY_KIND.AUTOMATION]: "bolt",
+  [ENTITY_KIND.AUTOMATION_RUN]: "bolt.circle",
+  [ENTITY_KIND.SETTINGS]: "gearshape",
+  [ENTITY_KIND.PERSON]: "person.crop.circle",
+  [ENTITY_KIND.ADMIN]: "person.badge.shield.checkmark",
+  [ENTITY_KIND.FILE]: "doc",
+  [ENTITY_KIND.FOLDER]: "folder",
+  [ENTITY_KIND.SERVER]: "server.rack",
+  [ENTITY_KIND.TOOL]: "wrench.and.screwdriver",
+  [ENTITY_KIND.SKILL]: "wand.and.stars",
+  [ENTITY_KIND.REPOSITORY]: "book.closed",
+  [ENTITY_KIND.WORKSPACE]: "building.2",
+  [ENTITY_KIND.DATE]: "calendar",
 };
 
-/** Each heading level's size and weight, a step above the words as the panel draws a message's headings. */
+/**
+ * The font size a chip's custom symbol is set at, as a share of its square.
+ * Note that a symbol set at the square's own size overflows it, since its
+ * template stands at one and a half cap heights, so it is set smaller and
+ * centered in the square rather than hung from its baseline.
+ */
+const CHIP_SYMBOL_SCALE = 0.85;
+
+/** Each heading level's size and weight, a step above the 15 pt words as the denser scale reads, never past a page's own heading. */
 const HEADING_LOOK: { readonly [Level in 1 | 2 | 3 | 4 | 5 | 6]: TextStyle } = {
-  1: { fontSize: TEXT_SIZE.TITLE_2, fontWeight: "700" },
-  2: { fontSize: TEXT_SIZE.TITLE_3, fontWeight: "600" },
-  3: { fontSize: TEXT_SIZE.HEADLINE, fontWeight: "600" },
-  4: { fontSize: TEXT_SIZE.SUBHEADLINE, fontWeight: "600" },
-  5: { fontSize: TEXT_SIZE.SUBHEADLINE, fontWeight: "600" },
-  6: { fontSize: TEXT_SIZE.SUBHEADLINE, fontWeight: "600" },
+  1: { fontSize: TEXT_SIZE.TITLE_3, fontWeight: "600" },
+  2: { fontSize: TEXT_SIZE.HEADLINE, fontWeight: "600" },
+  3: { fontSize: PROSE_SIZE, fontWeight: "600" },
+  4: { fontSize: PROSE_SIZE, fontWeight: "600" },
+  5: { fontSize: PROSE_SIZE, fontWeight: "600" },
+  6: { fontSize: PROSE_SIZE, fontWeight: "600" },
 };
 
 const TEXT_ALIGN: { readonly [A in ColumnAlign]: TextStyle["textAlign"] } = {
@@ -101,9 +119,6 @@ const CHIP_DROP = 0.22;
 
 /** How wide a list's marker column stands, in body sizes. */
 const MARKER_WIDTH = 1.4;
-
-/** How far below the screen's top the full-screen picture's Done stands, clear of the status bar and the Dynamic Island. */
-const VIEWER_CLOSE_TOP = 60;
 
 const styles = StyleSheet.create({
   flow: { gap: SPACE.ROW },
@@ -125,13 +140,7 @@ const styles = StyleSheet.create({
   },
   picture: { width: "100%", borderRadius: 8 },
   viewer: { flex: 1, backgroundColor: "black", justifyContent: "center" },
-  viewerPicture: { width: "100%", height: "100%" },
-  viewerClose: {
-    position: "absolute",
-    top: VIEWER_CLOSE_TOP,
-    right: SPACE.PAGE,
-    padding: SPACE.ROW,
-  },
+  viewerClose: { position: "absolute", padding: SPACE.ROW },
 });
 
 /** What drawing a run needs beyond the run: the colors, the reader's text scale, and the doors a press opens. */
@@ -141,6 +150,10 @@ interface Drawing {
   /** The widest a chip may stand, the window's width, which a chip's name is cut to. */
   readonly lineWidth: number;
   readonly openPlace: (place: MarkdownPlace) => void;
+  /** The address a picture is drawn from, by the address its words name it by; none while it is on its way. */
+  readonly pictureSource: (written: string) => string | undefined;
+  /** The video a picture's address names, played in its place; none where the address names a picture. */
+  readonly videoAt: (written: string) => MarkdownVideo | undefined;
 }
 
 function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
@@ -155,6 +168,36 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   }
 }
 
+/**
+ * A chip's glyph in a `size`-point square in `color`: an SF Symbol through
+ * the system's symbol view, or one of Lucide's custom symbols through
+ * SwiftUI's own image in a host of that square. Note that React Native's
+ * image draws a symbol set blank, since it reads only image sets by name.
+ */
+function ChipGlyph({
+  glyph,
+  size,
+  color,
+}: {
+  readonly glyph: Glyph;
+  readonly size: number;
+  readonly color: string;
+}) {
+  if (!isLucideSymbol(glyph)) {
+    return <SymbolView name={glyph} size={size} tintColor={color} accessibilityElementsHidden />;
+  }
+  return (
+    <Host style={{ width: size, height: size }}>
+      <SwiftUIImage
+        assetName={glyph}
+        size={size * CHIP_SYMBOL_SCALE}
+        color={color}
+        modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}
+      />
+    </Host>
+  );
+}
+
 /** A mention as its chip, standing in the line of words: its kind's glyph and its name, pressed open where it goes anywhere. */
 function MentionChip({
   chip,
@@ -165,9 +208,9 @@ function MentionChip({
 }) {
   const { colors, fontScale } = drawing;
   const onPress = open(chip.target, drawing);
-  const size = TEXT_SIZE.SUBHEADLINE;
+  const size = TEXT_SIZE.FOOTNOTE;
   return (
-    <View style={{ transform: [{ translateY: TEXT_SIZE.BODY * CHIP_DROP * fontScale }] }}>
+    <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
       <Pressable
         onPress={onPress}
         disabled={onPress === undefined}
@@ -182,11 +225,10 @@ function MentionChip({
           },
         ]}
       >
-        <SymbolView
-          name={THING_SYMBOL[chip.thing]}
+        <ChipGlyph
+          glyph={ENTITY_SYMBOL[chip.entity]}
           size={size * fontScale}
-          tintColor={colors.TEXT_MUTED}
-          accessibilityElementsHidden
+          color={colors.TEXT_MUTED}
         />
         <Text
           numberOfLines={1}
@@ -227,7 +269,7 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
         <Text
           style={{
             fontFamily: MONOSPACE_FONT,
-            fontSize: TEXT_SIZE.SUBHEADLINE,
+            fontSize: TEXT_SIZE.FOOTNOTE,
             backgroundColor: colors.WELL,
           }}
         >
@@ -264,7 +306,7 @@ function Line({
   readonly style?: TextStyle | undefined;
 }) {
   return (
-    <Text style={[{ fontSize: TEXT_SIZE.BODY, color: drawing.colors.TEXT_BODY }, style]}>
+    <Text style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}>
       <Runs runs={runs} drawing={drawing} />
     </Text>
   );
@@ -281,7 +323,7 @@ function Marker({
   readonly drawing: Drawing;
 }) {
   const { colors, fontScale } = drawing;
-  const width = TEXT_SIZE.BODY * MARKER_WIDTH * fontScale;
+  const width = PROSE_SIZE * MARKER_WIDTH * fontScale;
   if (checked !== undefined) {
     return (
       <View
@@ -292,7 +334,7 @@ function Marker({
       >
         <SymbolView
           name={checked ? "checkmark.square.fill" : "square"}
-          size={TEXT_SIZE.BODY * fontScale}
+          size={PROSE_SIZE * fontScale}
           tintColor={checked ? colors.ACCENT : colors.TEXT_MUTED}
         />
       </View>
@@ -300,7 +342,7 @@ function Marker({
   }
   return (
     <Text
-      style={{ width, fontSize: TEXT_SIZE.BODY, color: colors.TEXT_MUTED, textAlign: "right" }}
+      style={{ width, fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "right" }}
       accessibilityElementsHidden
     >
       {number === undefined ? "•" : `${number}.`}
@@ -385,7 +427,7 @@ function TableView({
                   runs={cell}
                   drawing={drawing}
                   style={{
-                    fontSize: TEXT_SIZE.SUBHEADLINE,
+                    fontSize: TEXT_SIZE.FOOTNOTE,
                     textAlign: TEXT_ALIGN[block.align[columnAt] ?? COLUMN_ALIGN.START],
                     ...(rowAt === 0 ? { fontWeight: "600", color: colors.TEXT } : {}),
                   }}
@@ -407,7 +449,7 @@ function CodeView({ text, drawing }: { readonly text: string; readonly drawing: 
       <ScrollView horizontal showsHorizontalScrollIndicator={false}>
         <Text
           selectable
-          style={{ fontFamily: MONOSPACE_FONT, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT }}
+          style={{ fontFamily: MONOSPACE_FONT, fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT }}
         >
           {text}
         </Text>
@@ -416,19 +458,36 @@ function CodeView({ text, drawing }: { readonly text: string; readonly drawing: 
   );
 }
 
-/** A picture at the message's width, which a press opens full screen over everything, closed by Done. */
-function PictureView({
-  source,
-  alt,
-  drawing,
-}: {
-  readonly source: string;
+/** The most a full-screen picture zooms in to, as a pinch takes it. */
+const VIEWER_MAX_ZOOM = 4;
+
+type PictureProps = {
+  /** The address the picture is drawn from; none while its bytes are still on their way, which stands its well alone. */
+  readonly source: string | undefined;
+  /** What the picture shows, heard in its place. */
   readonly alt: string;
-  readonly drawing: Drawing;
-}) {
+};
+
+/**
+ * A picture at its message's width, which a press opens full screen over
+ * everything, where a pinch zooms it and Done closes it. Done stands at the
+ * leading top corner inside the safe area, as Quick Look's does, clear of
+ * what the system draws at the trailing corner: the clock of the folded
+ * iPhone Duo's outer display, beside its rail. Note that a picture
+ * still on its way stands as its well at the shape a picture most often
+ * is, so the words under it do not jump twice.
+ */
+export function Picture({ source, alt }: PictureProps) {
+  const colors = useColors();
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [aspect, setAspect] = useState<number | undefined>(undefined);
   const [full, setFull] = useState(false);
   const heard = alt === "" ? "Picture" : alt;
+  const well = [styles.picture, { aspectRatio: aspect ?? 16 / 9, backgroundColor: colors.WELL }];
+  if (source === undefined) {
+    return <View style={well} accessible accessibilityLabel={heard} />;
+  }
   return (
     <>
       <Pressable
@@ -441,13 +500,10 @@ function PictureView({
           source={{ uri: source }}
           resizeMode="contain"
           onLoad={(event) => {
-            const { width, height } = event.nativeEvent.source;
-            if (width > 0 && height > 0) setAspect(width / height);
+            const loaded = event.nativeEvent.source;
+            if (loaded.width > 0 && loaded.height > 0) setAspect(loaded.width / loaded.height);
           }}
-          style={[
-            styles.picture,
-            { aspectRatio: aspect ?? 16 / 9, backgroundColor: drawing.colors.WELL },
-          ]}
+          style={well}
         />
       </Pressable>
       <Modal
@@ -458,18 +514,27 @@ function PictureView({
         onRequestClose={() => setFull(false)}
       >
         <View style={styles.viewer} accessibilityViewIsModal>
-          <Image
-            source={{ uri: source }}
-            resizeMode="contain"
-            accessibilityLabel={heard}
-            style={styles.viewerPicture}
-          />
+          <ScrollView
+            maximumZoomScale={VIEWER_MAX_ZOOM}
+            minimumZoomScale={1}
+            bouncesZoom
+            centerContent
+            showsHorizontalScrollIndicator={false}
+            showsVerticalScrollIndicator={false}
+          >
+            <Image
+              source={{ uri: source }}
+              resizeMode="contain"
+              accessibilityLabel={heard}
+              style={{ width, height }}
+            />
+          </ScrollView>
           <Pressable
             onPress={() => setFull(false)}
             accessibilityRole="button"
             accessibilityLabel="Done"
             testID="markdown-picture-done"
-            style={styles.viewerClose}
+            style={[styles.viewerClose, { top: insets.top, left: insets.left + SPACE.ROW }]}
           >
             <Text style={{ fontSize: TEXT_SIZE.BODY, fontWeight: "600", color: "white" }}>
               Done
@@ -478,6 +543,23 @@ function PictureView({
         </View>
       </Modal>
     </>
+  );
+}
+
+/** A picture's block: the video its address names, played in its place, or the picture. */
+function PictureBlock({
+  source,
+  alt,
+  drawing,
+}: {
+  readonly source: string;
+  readonly alt: string;
+  readonly drawing: Drawing;
+}) {
+  const video = drawing.videoAt(source);
+  if (video === undefined) return <Picture source={drawing.pictureSource(source)} alt={alt} />;
+  return (
+    <Video source={video.source} label={video.label} onOpenElsewhere={video.onOpenElsewhere} />
   );
 }
 
@@ -518,7 +600,7 @@ function BlockView({
         <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.CHIP_EDGE }} />
       );
     case MARKDOWN_BLOCK.PICTURE:
-      return <PictureView source={block.source} alt={block.alt} drawing={drawing} />;
+      return <PictureBlock source={block.source} alt={block.alt} drawing={drawing} />;
   }
 }
 
@@ -541,7 +623,28 @@ type MarkdownProps = {
   readonly onOpenPlace: (place: MarkdownPlace) => void;
   /** Whether a person typed the words line by line, whose line breaks are kept; an agent's join as Markdown reads them. */
   readonly typed?: boolean | undefined;
+  /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way. Each is drawn from the address it names where none is given. */
+  readonly pictureSource?: ((written: string) => string | undefined) | undefined;
+  /** The video a picture's address names, such as a recording a thread carried, played in its place; every address names a picture where none is given. */
+  readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
 };
+
+/** A video the words name as a picture, played in its place: the file it plays from, none while it is on its way, its name, and where it opens where the player cannot read it. */
+export interface MarkdownVideo {
+  readonly source: string | undefined;
+  readonly label: string;
+  readonly onOpenElsewhere?: (() => void) | undefined;
+}
+
+/** Each picture drawn from the address its words name it by. */
+function namedSource(written: string): string {
+  return written;
+}
+
+/** No address naming a video. */
+function noVideo(): undefined {
+  return undefined;
+}
 
 /**
  * Words drawn as the Markdown they were written in, as the panel draws a
@@ -550,7 +653,14 @@ type MarkdownProps = {
  * scheme and at the reader's Dynamic Type size. It draws no scroller of its
  * own, so a screen stands it in its own.
  */
-export function Markdown({ words, repository = null, onOpenPlace, typed }: MarkdownProps) {
+export function Markdown({
+  words,
+  repository = null,
+  onOpenPlace,
+  typed,
+  pictureSource = namedSource,
+  videoAt = noVideo,
+}: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
   const blocks = useMemo(
@@ -562,6 +672,8 @@ export function Markdown({ words, repository = null, onOpenPlace, typed }: Markd
     fontScale,
     lineWidth: width - SPACE.PAGE * 2,
     openPlace: onOpenPlace,
+    pictureSource,
+    videoAt,
   };
   return (
     <View style={styles.flow}>

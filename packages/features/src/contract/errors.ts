@@ -15,6 +15,7 @@
 
 import type { ErrorMapItem } from "@orpc/contract";
 import { Schema as EffectSchema } from "effect";
+import { approvalSettledDataSchema } from "../agent-approval-wire.js";
 import {
   extraRepositoryRefusalSchema,
   localAgentRefusalSchema,
@@ -81,8 +82,8 @@ const extraRepositoryRefusedDataSchema = EffectSchema.Struct({
  * standing host holds (which the host reads as removed), an upstream's
  * status, a repository's reach, a plan's reset, a missing credential's
  * provider, a refused skill, a refused local agent or extra repository, the
- * daemon version the service takes, and when a held pairing's guesses are
- * taken again. The client reads a refusal's fields with these as they stand
+ * daemon version the service takes, when a held pairing's guesses are
+ * taken again, and how an ask an answer named stands. The client reads a refusal's fields with these as they stand
  * (`hosted-link.ts`); the map below declares each flipped.
  */
 export const HOSTED_REFUSAL_DATA = {
@@ -97,6 +98,7 @@ export const HOSTED_REFUSAL_DATA = {
   [HOSTED_API_ERROR.EXTRA_REPOSITORY_REFUSED]: extraRepositoryRefusedDataSchema,
   [HOSTED_API_ERROR.HOST_UPGRADE_NEEDED]: hostUpgradeNeededDataSchema,
   [HOSTED_API_ERROR.HOST_PAIRING_HELD]: hostPairingHeldDataSchema,
+  [HOSTED_API_ERROR.APPROVAL_SETTLED]: approvalSettledDataSchema,
 } as const satisfies Partial<
   Record<HostedApiError, EffectSchema.Struct<EffectSchema.Struct.Fields>>
 >;
@@ -187,4 +189,8 @@ export const HOSTED_ERRORS = {
   [HOSTED_API_ERROR.MEMORY_OFF]: {},
   [HOSTED_API_ERROR.MEMORY_CREDENTIAL]: {},
   [HOSTED_API_ERROR.MEMORY_FULL]: {},
+  [HOSTED_API_ERROR.APPROVAL_SETTLED]: declaredData(
+    HOSTED_REFUSAL_DATA[HOSTED_API_ERROR.APPROVAL_SETTLED],
+  ),
+  [HOSTED_API_ERROR.PERMISSION_MODE_REFUSED]: {},
 } as const satisfies Record<HostedApiError, ErrorMapItem>;

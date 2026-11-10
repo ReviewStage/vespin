@@ -15,7 +15,7 @@ import { wireValidatedTool } from "@repo/features/turn-run/tool-set";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { MESSAGE_CHANNEL, MESSAGE_ROLE, TURN_ORIGIN, UNKNOWN_ACTION_STATUS } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
-import { TOOL_PART_STATE } from "@repo/wire/ui-messages";
+import { CONNECTION_LOST_PART, TOOL_PART_STATE } from "@repo/wire/ui-messages";
 import { eq } from "drizzle-orm";
 import { Duration, Effect, Layer, Metric, Option, Ref, Result, Schema } from "effect";
 import { TestClock } from "effect/testing";
@@ -158,6 +158,64 @@ it.layer(getTestDB())("the store writer's retried steps", (it) => {
         );
         assert.ok(read.ok);
         assert.equal(read.value[0]?.message.parts.length, 2);
+      }),
+  );
+
+  it.effect(
+    "a lost connection's notice is kept once, and its restore says when the host answered, once",
+    () =>
+      Effect.gen(function* () {
+        const target = yield* openTarget;
+        const writer = yield* storeWriter({ tools: TOOLS });
+        const turnId = randomUUID();
+        yield* writer.enqueueTurn(target, {
+          turnId,
+          origin: TURN_ORIGIN.TYPED,
+          runtimeTurnId: "turn_0",
+        });
+        const turn = { conversationId: sessionKey(target.conversationId), turnId };
+        const lost = {
+          ...turn,
+          sequence: 1,
+          kind: RUN_EVENT.CONNECTION_LOST,
+          notice: { provider: "Anthropic", restoredAt: null },
+        } as const;
+        yield* writer.consume(target, lost);
+        yield* writer.consume(target, lost);
+        const partsNow = () =>
+          Effect.map(
+            readMessageByClientId(target.userId, target.conversationId, TOOLS, turnId),
+            (read) => (read.ok ? (read.value[0]?.message.parts ?? []) : []),
+          );
+        assert.deepEqual(yield* partsNow(), [
+          {
+            type: CONNECTION_LOST_PART,
+            id: "1",
+            data: { provider: "Anthropic", restoredAt: null },
+          },
+        ]);
+
+        const restored = {
+          ...turn,
+          sequence: 2,
+          kind: RUN_EVENT.CONNECTION_RESTORED,
+          lostSequence: 1,
+          restoredAt: 90_000,
+        } as const;
+        yield* writer.consume(target, restored);
+        const again = yield* writer.consume(target, {
+          ...restored,
+          sequence: 3,
+          restoredAt: 95_000,
+        });
+        assert.deepEqual(yield* partsNow(), [
+          {
+            type: CONNECTION_LOST_PART,
+            id: "1",
+            data: { provider: "Anthropic", restoredAt: 90_000 },
+          },
+        ]);
+        assert.deepEqual(again, Result.succeed(STORE_WRITE_EFFECT.REPEATED));
       }),
   );
 

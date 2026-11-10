@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentAgentAnswer } from "@repo/features/agent-view";
 import {
   AGENT_BRIEF,
@@ -27,6 +28,7 @@ import {
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
+import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
@@ -49,12 +51,10 @@ import {
   endLineOffersTryAgain,
   endLineParts,
   endLineReason,
-  messageFailureWords,
   startFailureNote,
 } from "./agent-model.js";
 import { AgentTab } from "./agent-tab.js";
 import { ForkProvider } from "./fork-action.js";
-import { TOOL_TARGET, type ToolTarget } from "./tool-call-model.js";
 import type { AgentContinuer } from "./use-agents.js";
 
 /**

@@ -1,7 +1,10 @@
-import type { ReactNode } from "react";
+import { type ReactNode, type Ref, useState } from "react";
 import { CheckIcon } from "../../icons/lucide-glyphs.js";
+import type { ShownError } from "../../reported-failure.js";
+import { SecretField } from "../secret-field/secret-field.js";
 import { TEXT_VARIANT, Text } from "../text/text.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
+import { WaitingLine } from "../waiting-line/waiting-line.js";
 
 /**
  * steps.tsx -- a short setup told as numbered steps that check off as each is done: run this, then paste what it printed.
@@ -16,6 +19,15 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * person who already holds what a step makes goes straight to the next. It
  * is a list rather than a control: what presses there are inside a step are
  * its caller's. It is drawn in the Tailwind theme's utilities.
+ *
+ * Two setups are drawn whole here, so every page that asks for one draws it
+ * alike. `OutsideSteps` is what a person does outside the app (run a
+ * command, open a page, enter a code) and, under the steps, the wait for the
+ * app to see it happen (`WaitingLine`): a host joining, an agent connecting,
+ * a sign-in landing. `PasteSteps` is a secret got elsewhere and pasted here,
+ * an API key's or a token's: getting it, which checks off once its command
+ * is copied or its page opened, then the field (`SecretField`), which a paste
+ * saves as it lands and Enter, the steps being a form, saves as typed.
  */
 
 /** Where a step stands: still to come, the one to do now, or done. */
@@ -26,6 +38,17 @@ export const STEP_STATE = {
 } as const;
 
 export type StepState = (typeof STEP_STATE)[keyof typeof STEP_STATE];
+
+/**
+ * A step's disc, the app's 16px of a glyph beside words (`ICON_SIZE.MEDIUM`,
+ * the inline spinner), its number in the caption's figures; and the slot it
+ * stands in, one label line tall, so the disc centers on the step's first
+ * line as the wait's ring does under the steps (`WaitingLine`).
+ */
+const DISC_SLOT = "flex h-lh flex-none items-center justify-center text-label";
+
+const DISC_BASE =
+  "inline-grid size-ui-16 place-items-center rounded-full text-caption leading-none tabular-nums [&_svg]:size-ui-12";
 
 /** What a step's disc is drawn in, for each state. */
 const DISC = {
@@ -59,11 +82,10 @@ export function Step({
 }): React.JSX.Element {
   return (
     <li className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-ui-12" data-state={state}>
-      <span
-        className={`inline-grid size-ui-20 flex-none place-items-center rounded-full text-caption tabular-nums [&_svg]:size-ui-12 ${DISC[state]}`}
-        aria-hidden="true"
-      >
-        {state === STEP_STATE.DONE ? <CheckIcon /> : number}
+      <span className={DISC_SLOT} aria-hidden="true">
+        <span className={`${DISC_BASE} ${DISC[state]}`}>
+          {state === STEP_STATE.DONE ? <CheckIcon /> : number}
+        </span>
       </span>
       <div className="flex min-w-0 flex-col gap-ui-8">
         {title === undefined ? null : (
@@ -75,5 +97,110 @@ export function Step({
         {children}
       </div>
     </li>
+  );
+}
+
+/**
+ * Steps a person carries out outside the app, and, while the app waits to
+ * see the last of them happen, what it waits on under them, a step's gap
+ * below the last, so it reads as the list's last line.
+ */
+export function OutsideSteps({
+  waiting,
+  children,
+}: {
+  /** What the app waits on, "Waiting for a host to join"; none where it waits on nothing. */
+  waiting?: string | undefined;
+  /** The steps, each a `Step`. */
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <div className="flex min-w-0 flex-col gap-field-gap">
+      <Steps>{children}</Steps>
+      {waiting === undefined ? null : <WaitingLine>{waiting}</WaitingLine>}
+    </div>
+  );
+}
+
+/** A pasted secret's first step: what to do to get it, and what it needs, told once it is done. */
+export interface PasteFirstStep {
+  readonly title: ReactNode;
+  readonly body: (done: () => void) => ReactNode;
+}
+
+/**
+ * A secret got elsewhere and pasted here: its first step, then the field,
+ * current once the first is done. The field's words and what it says are the
+ * caller's, which holds the paste and saves it.
+ */
+export function PasteSteps({
+  first,
+  fieldRef,
+  label,
+  placeholder,
+  saved = false,
+  busy = false,
+  busyWords,
+  error,
+  value,
+  onChange,
+  onSave,
+  onEscape,
+}: {
+  first: PasteFirstStep;
+  /** The way to the field, for a surface that hands it focus. */
+  fieldRef?: Ref<HTMLInputElement> | undefined;
+  /** What the field is called, which says what to paste. */
+  label: string;
+  placeholder: string;
+  /** Whether a secret is already held, which the empty field says in its place. */
+  saved?: boolean | undefined;
+  /** Whether a save is out, which stills the field. */
+  busy?: boolean | undefined;
+  /** What the field says while a save is out: "Checking the key". */
+  busyWords?: string | undefined;
+  /** Why the last save kept nothing, and the failure beneath. */
+  error?: ShownError | undefined;
+  value: string;
+  onChange: (value: string) => void;
+  /** Saves `value`: what a paste left in the field as it lands, or what was typed on Enter. */
+  onSave: (value: string) => void;
+  onEscape?: (() => void) | undefined;
+}): React.JSX.Element {
+  const [firstDone, setFirstDone] = useState(false);
+  return (
+    <form
+      className="m-0 flex min-w-0 flex-col"
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault();
+        onSave(value);
+      }}
+    >
+      <Steps>
+        <Step
+          number={1}
+          title={first.title}
+          state={firstDone ? STEP_STATE.DONE : STEP_STATE.CURRENT}
+        >
+          {first.body(() => setFirstDone(true))}
+        </Step>
+        <Step number={2} state={firstDone ? STEP_STATE.CURRENT : STEP_STATE.TO_DO}>
+          <SecretField
+            ref={fieldRef}
+            label={label}
+            description={busy ? busyWords : undefined}
+            error={error}
+            saved={saved}
+            placeholder={placeholder}
+            disabled={busy}
+            value={value}
+            onChange={onChange}
+            onPasted={onSave}
+            onEscape={onEscape}
+          />
+        </Step>
+      </Steps>
+    </form>
   );
 }

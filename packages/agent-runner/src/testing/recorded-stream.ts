@@ -10,7 +10,11 @@
  * `background_tasks` and `session_crons`).
  */
 
-import type { BackgroundTaskSummary, SessionCronSummary } from "@anthropic-ai/claude-agent-sdk";
+import type {
+  BackgroundTaskSummary,
+  PermissionUpdate,
+  SessionCronSummary,
+} from "@anthropic-ai/claude-agent-sdk";
 
 /** One JSON value, as a message crosses the CLI's stdout. */
 type Recorded =
@@ -134,14 +138,28 @@ export const WAKEUP: SessionCronSummary = {
 };
 
 /**
+ * A tool call the CLI asks its host about, as the SDK hands `canUseTool` one.
+ * Built from the SDK's `CanUseTool` options, since P00 ran with every call unasked.
+ */
+export interface PermissionAsk {
+  readonly toolName: string;
+  readonly input: Record<string, string>;
+  readonly toolUseID: string;
+  readonly requestId: string;
+  readonly title?: string;
+  readonly suggestions?: PermissionUpdate[];
+}
+
+/**
  * What the fake CLI does next: emit a message, a `result` naming the prompts
- * its turn took unless it names none, run the Stop hook, take the service's next
- * message into the turn, or hold until it is interrupted or the test
- * releases it.
+ * its turn took unless it names none, run the Stop hook, ask its host about a
+ * tool call, take the service's next message into the turn, or hold until it
+ * is interrupted or the test releases it.
  */
 export type Step =
   | { readonly emit: Recorded; readonly namesNoPrompt?: true }
   | { readonly stopHook: StopReport }
+  | { readonly askPermission: PermissionAsk }
   | { readonly awaitPrompt: true }
   | { readonly untilInterrupted: true }
   | { readonly untilReleased: true };
@@ -260,6 +278,56 @@ export const WARM_TURNS: readonly Step[] = [
   { emit: result("success") },
 ];
 
+/**
+ * The `result` the CLI puts out once its own retries of a model call it
+ * could not deliver run out, as the Agent SDK words it: a success by
+ * subtype, an error by flag, the connection error as its text, and no API
+ * status, since nothing answered.
+ */
+const CONNECTION_LOST_RESULT = {
+  ...result("success"),
+  is_error: true,
+  result: "API Error: Connection error.",
+} as const;
+
+/** The `result` of a model call the API refused for its credential: the same shape, with the API's status. */
+const CREDENTIAL_REFUSED_RESULT = {
+  ...result("success"),
+  is_error: true,
+  result: "API Error: 401 Invalid API key · Please run /login",
+  api_error_status: 401,
+} as const;
+
+/**
+ * A turn the CLI gave up on for want of the API, then the carry-on the
+ * service sends once the host answers, which the CLI runs as a turn that
+ * finishes with nothing pending.
+ */
+export const CONNECTION_LOST_TURN: readonly Step[] = [
+  { emit: INIT },
+  { emit: said("Working on it.") },
+  { emit: CONNECTION_LOST_RESULT },
+  { awaitPrompt: true },
+  { emit: said("Done.") },
+  { stopHook: NOTHING_IN_FLIGHT },
+  { emit: result("success") },
+];
+
+/** A turn the CLI gave up on for want of the API, and the carry-on's turn lost the same way before the model said anything. */
+export const CONNECTION_LOST_TWICE: readonly Step[] = [
+  { emit: INIT },
+  { emit: said("Working on it.") },
+  { emit: CONNECTION_LOST_RESULT },
+  { awaitPrompt: true },
+  { emit: CONNECTION_LOST_RESULT },
+];
+
+/** A turn the API refused for its credential, which no probe mends. */
+export const CREDENTIAL_REFUSED_TURN: readonly Step[] = [
+  { emit: INIT },
+  { emit: CREDENTIAL_REFUSED_RESULT },
+];
+
 /** A turn that schedules a wakeup and ends its model turn waiting on it alone, the CLI then held up until the launch ends. */
 export const WAKEUP_WAIT: readonly Step[] = [
   { emit: INIT },
@@ -274,4 +342,55 @@ export const WAKEUP_WAIT: readonly Step[] = [
   { stopHook: { background_tasks: [], session_crons: [WAKEUP] } },
   { emit: result("success") },
   { untilReleased: true },
+];
+
+/** A shell command an agent whose mode asks must have allowed: a write long past what its ask carries whole. */
+export const ASKED_COMMAND = `cat > notes.md <<'EOF'\n${"A line the agent wrote.\n".repeat(400)}EOF`;
+
+/** The CLI's ask for `ASKED_COMMAND`, with the rule it suggests for allowing the like of it. */
+export const BASH_ASK: PermissionAsk = {
+  toolName: "Bash",
+  input: { command: ASKED_COMMAND, description: "Write the notes" },
+  toolUseID: "toolu_Bash",
+  requestId: "can-use-tool-1",
+  title: "Claude wants to run cat > notes.md",
+  suggestions: [
+    {
+      type: "addRules",
+      rules: [{ toolName: "Bash", ruleContent: "cat:*" }],
+      behavior: "allow",
+      destination: "localSettings",
+    },
+  ],
+};
+
+/** A turn whose shell command the CLI asks its host about, going on once the host answers. */
+export const ASKED_TURN: readonly Step[] = [
+  { emit: INIT },
+  { emit: toolUse("Bash", BASH_ASK.input) },
+  { askPermission: BASH_ASK },
+  { emit: toolResult("toolu_Bash", "") },
+  { stopHook: NOTHING_IN_FLIGHT },
+  { emit: result("success") },
+];
+
+/** A turn whose ask a stop withdraws, as the CLI cancels its request on an interrupt. */
+export const ASKED_STOPPED_TURN: readonly Step[] = [
+  { emit: INIT },
+  { emit: toolUse("Bash", BASH_ASK.input) },
+  { askPermission: BASH_ASK },
+  { emit: result("error_during_execution") },
+];
+
+/** A turn whose ask a message the service sent meanwhile answers, then the turn that takes the message. */
+export const ASKED_THEN_MESSAGE: readonly Step[] = [
+  { emit: INIT },
+  { emit: toolUse("Bash", BASH_ASK.input) },
+  { askPermission: BASH_ASK },
+  { stopHook: NOTHING_IN_FLIGHT },
+  { emit: result("success") },
+  { awaitPrompt: true },
+  { emit: said("Done with the second.") },
+  { stopHook: NOTHING_IN_FLIGHT },
+  { emit: result("success") },
 ];

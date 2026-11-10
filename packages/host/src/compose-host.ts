@@ -169,7 +169,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     const workspaceClient = new HostedWorkspaceClient({
       serviceBaseUrl: kernel.hostedServiceBaseUrl,
       credential: account.credential,
-      sessionCredential: account.sessionCredential,
     });
     const agentClient = new HostedAgentClient({
       serviceBaseUrl: kernel.hostedServiceBaseUrl,
@@ -237,7 +236,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         mcpClients: new HostedMcpClientsClient({
           serviceBaseUrl: kernel.hostedServiceBaseUrl,
           credential: account.credential,
-          sessionCredential: account.sessionCredential,
         }),
         // Note that a refusal's reason is not reported, because it may carry the address.
         openExternal: (url) =>
@@ -291,17 +289,9 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         },
       }),
     );
-    /** An agent as the task list holds it now, on a plan or with none; none where it lists no such agent. */
-    const agentListed = (agentId: string) => {
-      const { taskAgents = [], tasklessAgents = [] } = tasks.snapshot();
-      const onTask = taskAgents.find((agent) => agent.id === agentId);
-      if (onTask !== undefined) return onTask;
-      const taskless = tasklessAgents.find((agent) => agent.id === agentId);
-      if (taskless === undefined) return undefined;
-      // Note that an agent no automation started names none, which a summary leaves out rather than nulls.
-      const { automationId, ...agent } = taskless;
-      return automationId === null ? agent : { ...agent, automationId };
-    };
+    /** An agent as the task list holds it now; none where it lists no such agent. */
+    const agentListed = (agentId: string) =>
+      (tasks.snapshot().taskAgents ?? []).find((agent) => agent.id === agentId);
     /** Waits until the task list says an agent's sandbox stands open, answering whether it waited: false at once where it already says so, or does not know. */
     const sandboxOpened = (agentId: string) =>
       Effect.scoped(
@@ -572,7 +562,6 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     yield* account.link({
       startCapabilities: openCapabilities,
       stopCapabilities: closeCapabilities,
-      settleHeld: agents.letGoHeldCloses,
     });
     const concerns = {
       [HOST_CONCERN.SETTINGS]: settings,
@@ -646,15 +635,13 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
      * one client is this process, so the step that closed it now only begins
      * the counted events' flush. No run of this Mac's own is under way to
      * cancel, settle, or count: every ask is the service's, so the drain
-     * cancels nothing and counts nothing unresolved. A close a window still
-     * holds for its Undo is let go as sent and waited for, since the window
-     * that would have let it go is quitting with the host.
+     * cancels nothing and counts nothing unresolved.
      */
     const drainSteps: GatewayShutdownSteps = yield* shutdownStepsFlushingEvents(
       {
         closeAdmissions: Effect.void,
         cancelActive: Effect.succeed([]),
-        awaitSettled: agents.flushHeldCloses,
+        awaitSettled: Effect.void,
         persistUnresolved: Effect.succeed(0),
       },
       settings.flushProductEvents,

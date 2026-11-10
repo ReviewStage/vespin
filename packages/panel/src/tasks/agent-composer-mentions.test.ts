@@ -18,7 +18,7 @@ import {
   type IntegrationProvider,
   type IntegrationStatus,
 } from "@repo/features/integration-wire";
-import { LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import {
   encodeMention,
@@ -142,11 +142,14 @@ const LINEAR_CONNECTED = Object.fromEntries(
 /** The workspace's task beside the plan, as the window lists it. */
 const BILLING = { id: "2b2b2b2b-0000-4000-8000-000000000000", name: "Billing" };
 
+/** A task of the workspace the window lists not, so its agents are named as on another task. */
+const UNLISTED_TASK = "7a7a7a7a-0000-4000-8000-000000000000";
+
 /** An agent of the workspace as its list answers it. */
 function workspaceAgent(
   id: string,
   title: string,
-  taskId: string | null,
+  taskId: string,
   archivedAt?: number,
 ): AgentSummary {
   return {
@@ -162,12 +165,16 @@ function workspaceAgent(
   };
 }
 
-/** The workspace's agents beside the plan's own: one on another task, one on none, and one archived. */
+/** The workspace's agents beside the plan's own: one on another listed task, one on a task the window lists not, and one archived. */
 const BILLING_AGENT = {
   ...workspaceAgent("3c3c3c3c-0000-4000-8000-000000000000", "Bill by seat", BILLING.id),
   createdAt: 2_000,
 };
-const SWEEPER = workspaceAgent("4d4d4d4d-0000-4000-8000-000000000000", "Sweep flaky tests", null);
+const SWEEPER = workspaceAgent(
+  "4d4d4d4d-0000-4000-8000-000000000000",
+  "Sweep flaky tests",
+  UNLISTED_TASK,
+);
 const OLD_AGENT = workspaceAgent(
   "5e5e5e5e-0000-4000-8000-000000000000",
   "Old invoices",
@@ -175,7 +182,7 @@ const OLD_AGENT = workspaceAgent(
   2_000,
 );
 /** An agent past the newest the workspace's list answers, which only a search finds. */
-const LEDGER = workspaceAgent("6f6f6f6f-0000-4000-8000-000000000000", "Old ledger", null);
+const LEDGER = workspaceAgent("6f6f6f6f-0000-4000-8000-000000000000", "Old ledger", UNLISTED_TASK);
 
 /** The newest agents the task list carries, archived ones left out. */
 const NEWEST_AGENTS: readonly AgentSummary[] = [BILLING_AGENT, SWEEPER];
@@ -194,7 +201,7 @@ let deliverTasks: (next: TasksView) => void = () => undefined;
 
 /**
  * The task list as the host lays it: the newest agents and the archived
- * one, each on its task or on none, in the workspace the plan stands in,
+ * one, each on its task, in the workspace the plan stands in,
  * or failed before it carried any.
  */
 function tasksView(): TasksView {
@@ -207,10 +214,7 @@ function tasksView(): TasksView {
   return {
     ...IDLE_TASKS_VIEW,
     listStatus: TASKS_READ.READY,
-    taskAgents: listed.filter((agent) => agent.planId !== null),
-    tasklessAgents: listed
-      .filter((agent) => agent.planId === null)
-      .map((agent) => ({ ...agent, automationId: null, activityAt: agent.createdAt })),
+    taskAgents: listed,
   };
 }
 
@@ -674,7 +678,10 @@ test("off a plan's page a sent message's mention is still its chip, which opens 
 
   assert.equal(container.textContent, "Follow section Rollout.");
   assert.deepEqual(opened, [
-    { workspace: "", place: { kind: LINK_PLACE.SECTION, planId: TASK_ID, anchor: "rollout" } },
+    {
+      workspace: "",
+      place: { kind: LINK_DESTINATION.SECTION, planId: TASK_ID, anchor: "rollout" },
+    },
   ]);
   assert.equal(carryingTarget(container), undefined);
 });
@@ -1009,10 +1016,10 @@ test("a sent message's mention of a page or an agent is drawn as the chip that o
 
   assert.deepEqual(chips.map(chipName), [PAGE.title, STORE_AGENT.name]);
   assert.deepEqual(opened, [
-    { workspace: "acme", place: { kind: LINK_PLACE.PAGE, planId: TASK_ID, pageId: PAGE.id } },
+    { workspace: "acme", place: { kind: LINK_DESTINATION.PAGE, planId: TASK_ID, pageId: PAGE.id } },
     {
       workspace: "acme",
-      place: { kind: LINK_PLACE.AGENT, agentId: STORE_AGENT.id },
+      place: { kind: LINK_DESTINATION.AGENT, agentId: STORE_AGENT.id },
     },
   ]);
   assert.equal(carryingTarget(container), undefined);
@@ -1076,7 +1083,7 @@ test("an @ narrowed to agents offers the workspace's agents after the task's own
   assert.deepEqual(agentsListed(container), [
     ["Wire the desktop", "This task"],
     ["Bill by seat", "Billing"],
-    ["Sweep flaky tests", "No task"],
+    ["Sweep flaky tests", "Another task"],
   ]);
 });
 
@@ -1113,7 +1120,7 @@ test("an @ whose task list failed to carry the workspace's agents says they coul
   assert.deepEqual(agentsListed(container), [
     ["Wire the desktop", "This task"],
     ["Bill by seat", "Billing"],
-    ["Sweep flaky tests", "No task"],
+    ["Sweep flaky tests", "Another task"],
   ]);
 });
 
@@ -1251,7 +1258,7 @@ it.effect(
       yield* rest;
 
       assert.ok(!bare.includes("Old ledger"), bare.join(", "));
-      assert.deepEqual(agentsListed(container), [["Old ledger", "No task"]]);
+      assert.deepEqual(agentsListed(container), [["Old ledger", "Another task"]]);
       assert.deepEqual(workspaceReads().at(-1), {
         workspaceId: "workspace-1",
         words: "ledger",
@@ -1574,25 +1581,52 @@ test("a bare End and Home take the highlight to the last row and the first, a mo
   assert.equal(composerEditor(container).querySelector("[data-mention-ref]"), null);
 });
 
-test("Enter on a kind's row narrows the list to it, and ⌫ on its empty words widens it again, deleting nothing", async () => {
+test.each([
+  ["⌫", "Backspace"],
+  ["←", "ArrowLeft"],
+  ["Escape", "Escape"],
+])(
+  "Enter on a kind's row narrows the list to it, and %s on its empty words widens it again, deleting nothing and closing nothing",
+  async (_, key) => {
+    const { container } = await wideBox();
+
+    typeInComposer(container, "See @");
+    await settle();
+    highlightRow(container, "Browse", "Files and folders");
+    pressInComposer(container, "Enter");
+    await settle();
+    const narrowed = groupsListed(container);
+    const narrowedCrumb = crumb(container);
+    // Note that whether the key bubbled is read off the document, since an event forgets it was stopped once its dispatch ends.
+    const behind: string[] = [];
+    const listen = (event: KeyboardEvent) => behind.push(event.key);
+    document.addEventListener("keydown", listen);
+    const pressed = pressInComposer(container, key);
+    document.removeEventListener("keydown", listen);
+    await settle();
+
+    assert.equal(narrowedCrumb, "Files and folders");
+    assert.deepEqual(narrowed, [["Files and folders", ["apps/", "README.md"]]]);
+    assert.equal(pressed.defaultPrevented, true);
+    // An Escape the list takes is kept from the surface behind it, as one that closes the list is, so a dialog around the box stays open.
+    assert.equal(behind.includes("Escape"), false);
+    assert.equal(composerEditor(container).textContent, "See @");
+    assert.equal(crumb(container), undefined);
+    assert.ok(kindsListed(container).length > 0, "the kinds' rows stand again");
+  },
+);
+
+test("a word naming a kind leads the @ list with that kind's row, which opens it", async () => {
   const { container } = await wideBox();
 
-  typeInComposer(container, "See @");
+  typeInComposer(container, "See @file");
   await settle();
-  highlightRow(container, "Browse", "Files and folders");
-  pressInComposer(container, "Enter");
-  await settle();
-  const narrowed = groupsListed(container);
-  const narrowedCrumb = crumb(container);
-  const backspace = pressInComposer(container, "Backspace");
+  const first = groupsListed(container)[0];
+  pressInComposer(container, "ArrowRight");
   await settle();
 
-  assert.equal(narrowedCrumb, "Files and folders");
-  assert.deepEqual(narrowed, [["Files and folders", ["apps/", "README.md"]]]);
-  assert.equal(backspace.defaultPrevented, true);
-  assert.equal(composerEditor(container).textContent, "See @");
-  assert.equal(crumb(container), undefined);
-  assert.ok(kindsListed(container).length > 0, "the kinds' rows stand again");
+  assert.deepEqual(first, ["Browse", ["Files and folders"]]);
+  assert.equal(crumb(container), "Files and folders");
 });
 
 test("pressing the crumb's back arrow widens the list again and keeps the caret in the composer", async () => {
@@ -1955,7 +1989,7 @@ test("a sent message's mention of a person is drawn as the chip wearing their ma
   assert.equal(chip.dataset.kind, MENTION_KIND.PERSON);
   assert.equal(chip.querySelector(".actor-mark")?.getAttribute("data-kind"), ACTOR_KIND.PERSON);
   assert.deepEqual(opened, [
-    { workspace: "acme", place: { kind: LINK_PLACE.PERSON, userId: DANA_ID } },
+    { workspace: "acme", place: { kind: LINK_DESTINATION.PERSON, userId: DANA_ID } },
   ]);
   assert.equal(carryingTarget(container), undefined);
 });

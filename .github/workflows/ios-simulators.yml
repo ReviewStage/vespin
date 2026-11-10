@@ -1,0 +1,66 @@
+name: iOS simulators
+
+# The iOS app built and driven on the simulators, which only a Mac can do,
+# run by hand on any branch (`gh workflow run ios-simulators.yml --ref
+# <branch>`) rather than on every pull request: a run takes about 100 minutes
+# on a runner billed at ten times a Linux one, and each push restarted it, so
+# it held every iOS pull request for hours. The app's agents on the
+# developer's Mac drive the flows there before they push; a cloud agent, which
+# has no Xcode, asks for a run on its branch to see its screens. The Linux
+# checks still bundle the app with Metro (`export:ios`) on every pull request,
+# and the TestFlight build (`release-ios.yml`) is the native build's gate.
+#
+# Expo generates the native project from `apps/mobile/app.config.ts`, Xcode
+# builds it for the simulator, and Maestro runs the flows under
+# `apps/mobile/maestro/` on an iPhone, the iPhone Duo as it boots, folded,
+# and an iPad for the regular-width layout the unfolded Duo shows, since no
+# supported command folds or unfolds the Duo simulator. Their screenshots
+# are the artifact, which `apps/mobile/AGENTS.md` says how to read. The
+# image is GitHub's Xcode 27 one, whose label names the Xcode major rather
+# than a macOS version, and which carries the iOS 27.1 runtime the Duo
+# simulator needs; the Xcode point release is pinned below.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  mobile:
+    name: iOS app on the simulators
+    runs-on: xcode-27
+    # Note that a green run takes about 100 minutes (a 20-minute build, then
+    # the flows), and a retried flow adds up to 15, so the cap leaves room
+    # above that until the simulators run in parallel.
+    timeout-minutes: 140
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: "27.2"
+      - uses: ./.github/actions/setup
+      - name: Install Maestro
+        run: |
+          curl -fsSL "https://get.maestro.mobile.dev" | bash
+          echo "$HOME/.maestro/bin" >> "$GITHUB_PATH"
+        env:
+          MAESTRO_VERSION: 2.12.1
+      - name: Generate the native project and build for the simulator
+        run: apps/mobile/scripts/simulator-build.sh "$RUNNER_TEMP/derived-data"
+      - name: Run the Maestro flows
+        run: |
+          apps/mobile/scripts/simulator-screenshots.sh \
+            "$RUNNER_TEMP/derived-data/Build/Products/Release-iphonesimulator/Vespin.app" \
+            "$RUNNER_TEMP/screenshots" \
+            "iPhone 18 Pro" "iPhone Duo" "iPad Pro 11-inch (M5)"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: ${{ always() }}
+        with:
+          name: mobile-screenshots
+          path: ${{ runner.temp }}/screenshots
+          if-no-files-found: error

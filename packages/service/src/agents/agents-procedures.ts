@@ -36,16 +36,13 @@
 
 import { randomUUID } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
-import { agentOwnerFactsOf } from "@repo/database/models/agent-owners";
 import {
   type Agent,
   type AgentCommitted,
   type AgentLine,
-  deleteAgent,
   hasRepository,
   listAgentLines,
   listWorkspaceAgentLines,
-  markAgentReadCommitted,
   nativeRouteOfReached,
   readVisibleAgentWorkspace,
 } from "@repo/database/models/agent-store";
@@ -53,6 +50,7 @@ import { devicesNamed } from "@repo/database/models/device-store";
 import { readTaskWorkspace } from "@repo/database/models/task-store";
 import { isWorkspaceMember, readAccountNames } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
+import { PERMISSION_MODE_APPLIES } from "@repo/features/agent-approval-wire";
 import { runtimeChoiceRefusal } from "@repo/features/agent-runtime-models";
 import {
   AGENT_ARCHIVER,
@@ -86,6 +84,12 @@ import {
 import { accountMiddleware, hosted, writeReceiptMiddleware } from "../orpc/base.js";
 import type { ModelChoiceRefused } from "../providers/model-catalog.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
+import {
+  deletedAgent,
+  resumedAgentSandbox,
+  rewoundAgentById,
+  warmedAgent,
+} from "./agent-lifecycle.js";
 import { controlsAgent, reachedAgentById } from "./agent-reach.js";
 import {
   askedPullRequest,
@@ -95,14 +99,15 @@ import {
 } from "./asked-pull-request.js";
 import { queueAtTouch } from "./coder-host/agent-queue.js";
 import { addAgentRepository } from "./coder-host/agent-repository-add.js";
+import { answeredApproval } from "./coder-host/approval-answer.js";
+import { harnessTakesMode } from "./coder-host/permission-mode.js";
 import {
   agentPullRequestReach,
   instancePublishedCache,
   type PublishedReach,
 } from "./coder-host/published.js";
 import { productionSummaryModel, type SummaryModelOf } from "./coder-host/replay-summary.js";
-import { rewoundAgent } from "./coder-host/rewind.js";
-import { routedSessions, runnerWarmed } from "./coder-host/runtime-sessions.js";
+import { routedSessions } from "./coder-host/runtime-sessions.js";
 import {
   acceptedAgentChoice,
   placeOfAgent,
@@ -113,21 +118,12 @@ import {
   agentPage,
   agentSummary,
   pageAccounts,
-  startedBlank,
   summaryAccounts,
   summaryDevices,
 } from "./coder-host/status.js";
-import {
-  continuedByOf,
-  standingsOf,
-  standsStopped,
-  stoppedAgent,
-  stoppedForGood,
-  summaryOf,
-} from "./coder-host/stop.js";
+import { continuedByOf, standingsOf, stoppedAgent, summaryOf } from "./coder-host/stop.js";
 import { startedFromBefore } from "./coder-host/takeover.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
-import { retiredBeforeDelete, retiringReach } from "./retire-sessions.js";
 import type { SandboxDeleteReach } from "./session-sandboxes.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
 import { AgentSandbox, SHELL_REFUSAL, type ShellRefusal } from "./terminal/agent-sandbox.js";
@@ -170,19 +166,10 @@ const listedSummaries = /* @__PURE__ */ Effect.fnUntraced(function* (
     agents.map((agent) => agent.id),
   );
   const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices(agents)));
-  const owners = yield* hostedStoreOrUnavailable(agentOwnerFactsOf(agents));
   const now = yield* Clock.currentTimeMillis;
   return {
     agents: agents.map((agent) =>
-      agentSummary(
-        agent,
-        standing(agent.conversationId),
-        now,
-        names,
-        owners,
-        continuedBy(agent.id),
-        macs,
-      ),
+      agentSummary(agent, standing(agent.conversationId), now, names, continuedBy(agent.id), macs),
     ),
   };
 });
@@ -222,24 +209,12 @@ const listedShells = /* @__PURE__ */ Effect.fnUntraced(function* (sessionId: str
   return yield* sandboxOrUpstream(sandbox.terminals(sessionId));
 });
 
-/** Whether the agent, read again under its conversation's lock, still stands as a Stop left it, as a task's archive reads each of its own. */
-function agentStandsStopped(agent: Agent) {
-  return standsStopped([
-    {
-      id: agent.id,
-      conversationId: agent.conversationId,
-      createdAt: agent.createdAt,
-      blank: startedBlank(agent),
-    },
-  ]);
-}
-
 /**
  * A pull request's changes: its files, who it names (`github-people.ts`),
  * and the commits its changed files are read whole at (`readCommits`), read
  * from GitHub afresh on the token minted for its repository, with who its
  * subject says it writes as. Shared with the reads of a pull request by
- * its repository (`github/repository-pull-request-procedures.ts`).
+ * its repository (`github/repository-pull-request.ts`).
  */
 export const pullRequestChangesRead = (
   token: Redacted.Redacted,
@@ -267,6 +242,29 @@ export const pullRequestChangesRead = (
       ...people,
       ...(subject.author === null ? undefined : { writtenAs: subject.author }),
     };
+  });
+
+/**
+ * The changes of the pull request asked about of an agent (`askedPullRequest`),
+ * read on a token minted for the agent's repository on its task's workspace
+ * installation (`pullRequestChangesRead`); none where it names no pull request
+ * yet. The `changes` procedure reads them, and so does the member MCP server's
+ * `read_pull_request`.
+ */
+export const agentChangesOf = (
+  userId: string,
+  agent: Agent,
+  pullRequest: AgentPullRequest | null,
+) =>
+  Effect.gen(function* () {
+    if (pullRequest === null || !hasRepository(agent)) return { pullRequest: null };
+    const changes = yield* githubReadRefusal(
+      Effect.gen(function* () {
+        const { token } = yield* agentPullRequestReach(userId, agent);
+        return yield* pullRequestChangesRead(token, agent, pullRequest);
+      }),
+    );
+    return { pullRequest: changes };
   });
 
 /** The agents resource: every procedure to a signed-in caller, a body read under its own cap. */
@@ -417,7 +415,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       );
       return startAnswer(started);
     }),
-    /** The agent as its own page, an agent with no task as much as one on a task. */
+    /** The agent as its own page. */
     read: signedIn.read.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
       // An open of the agent hands on, past its answer, the queue a hand-off cut off left claimed, once
@@ -431,7 +429,6 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       const names = yield* hostedStoreOrUnavailable(readAccountNames(pageAccounts(agent)));
       const continuedBy = yield* continuedByOf(userId, [agent.id]);
       const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices([agent])));
-      const owners = yield* hostedStoreOrUnavailable(agentOwnerFactsOf([agent]));
       const now = yield* Clock.currentTimeMillis;
       return {
         agent: agentPage(
@@ -439,7 +436,6 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
           standing(agent.conversationId),
           now,
           names,
-          owners,
           continuedBy(agent.id),
           macs,
         ),
@@ -451,7 +447,8 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
      * tab falls back to the model's name. `archived` archives the agent,
      * stopping a turn still running first as a Stop does, or brings it back.
      * `pinned` pins it for the asking member alone, or unpins it.
-     * `readMark` moves the asking member's own read mark of it.
+     * `readMark`, which a released desktop still sends, changes nothing,
+     * since an agent is read through its task's mark alone.
      * `disabledServers` replaces the list of MCP servers switched off for
      * it, which its next turn reads as it starts. `addRepository` adds a
      * repository beside the ones it works in, checked out and told to it
@@ -462,7 +459,9 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
      * account's default is untouched. An agent on a provider's own harness
      * takes only what its runtime runs (`agent-runtime-models.ts`), refused
      * as invalid otherwise, and a runner of it that runs is handed the change
-     * as a `model` line at once (`runnerChoiceApplied`).
+     * as a `model` line at once (`runnerChoiceApplied`). A permission mode,
+     * set only by a member who controls the agent and one that asks only on
+     * Claude Code, reaches it from its next turn, which the answer says.
      */
     change: signedIn.change.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.params.id);
@@ -491,18 +490,29 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
           yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { pinned, position })),
         );
       }
-      if ("readMark" in body) {
-        return yield* committedAgent(
-          userId,
-          yield* hostedStoreOrUnavailable(markAgentReadCommitted(userId, agent.id, body.readMark)),
-        );
-      }
+      if ("readMark" in body) return { agent: yield* summaryOf(userId, agent) };
       if ("disabledServers" in body) {
         const { disabledServers } = body;
         return yield* committedAgent(
           userId,
           yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { disabledServers })),
         );
+      }
+      if ("permissionMode" in body) {
+        const { permissionMode } = body;
+        // Only who steers the agent sets how its calls are asked, and only Claude Code asks.
+        if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+        const route = Option.getOrUndefined(
+          yield* hostedStoreOrUnavailable(nativeRouteOfReached(agent.conversationId)),
+        );
+        if (!harnessTakesMode(route?.runtime, permissionMode)) {
+          return yield* Effect.fail(HOSTED_REFUSAL.PERMISSION_MODE_REFUSED);
+        }
+        const changed = yield* committedAgent(
+          userId,
+          yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { permissionMode })),
+        );
+        return { ...changed, permissionModeApplies: PERMISSION_MODE_APPLIES.NEXT_TURN };
       }
       if ("addRepository" in body) {
         // The member adds it as `update_agent` does, and the agent hears it in its conversation.
@@ -523,30 +533,14 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       const changed = yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { choice }));
       return yield* committedAgent(userId, changed);
     }),
-    /**
-     * The agent deleted for good, by the steps a task's delete takes for
-     * each of its agents (`tasks-procedures.ts`): stopped for good first,
-     * then, under its conversation's lock, its session retired
-     * (`retire-sessions.ts`), the words said on its calls deleted, its row
-     * deleted, and its conversation stamped deleted for the purge. Any
-     * member who reaches the agent may delete it, as any member may delete
-     * a task. A harness that refuses the Stop, an agent with a turn still
-     * coming that no Stop can name yet, or one a message woke after the
-     * Stop, stands and is refused as not ready.
-     */
+    /** The agent deleted for good (`agent-lifecycle.ts`), stopped for good first, by any member who reaches it. */
     delete: signedIn.delete.effect(function* ({ input, context }) {
-      const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
-      const retiring = yield* retiringReach(userId);
-      yield* stoppedForGood(writer, userId, agent);
-      const deleted = yield* hostedStoreOrUnavailable(
-        deleteAgent(userId, agent.id, {
-          standsStopped: agentStandsStopped,
-          beforeDelete: retiredBeforeDelete(retiring),
-        }).pipe(Effect.catchTag("TaskAgentUnstopped", () => Effect.succeed(undefined))),
-      );
-      if (deleted === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
-      if (Option.isNone(deleted)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-      return { deleted: true as const, txid: deleted.value.txid };
+      return yield* deletedAgent(writer, context.userId, input.id);
+    }),
+    /** One ask the agent's runner holds answered by a member who controls it, written to the runner and settled (`approval-answer.ts`). */
+    answerApproval: signedIn.answerApproval.effect(function* ({ input, context }) {
+      const { userId, agent } = yield* reachedAgentById(context.userId, input.params.id);
+      return yield* answeredApproval(userId, agent, input.params.approval, input.body);
     }),
     /** The agent stopped: the harness's cancel of the turn under way, then the row's stamp; an agent with no turn running is answered as it stands. */
     stop: signedIn.stop.effect(function* ({ input, context }) {
@@ -554,21 +548,16 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       yield* stoppedAgent(writer, userId, agent);
       return { agent: yield* summaryOf(userId, agent) };
     }),
-    /**
-     * The agent on screen kept warm (`runnerWarmed`): answered at once, its runner launched past
-     * the answer where none runs. Kept for a member who may message it alone, whose message the
-     * warm runner would take; anyone else is answered the same, and nothing is kept.
-     */
+    /** The agent on screen kept warm (`agent-lifecycle.ts`): answered at once, its runner launched past the answer where none runs. */
     warm: signedIn.warm.effect(function* ({ input, context }) {
-      const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
-      if (controlsAgent(userId, agent)) yield* runnerWarmed(agent);
+      yield* warmedAgent(context.userId, input.id);
       return { warm: true as const };
     }),
-    /** The agent taken back to just before one of the developer's lines (`rewind.ts`), answered as it then stands. */
+    /** The agent taken back to just before one of the developer's lines (`agent-lifecycle.ts`), answered as it then stands. */
     rewind: signedIn.rewind.effect(function* ({ input, context }) {
-      const { userId, agent } = yield* reachedAgentById(context.userId, input.params.id);
-      yield* rewoundAgent(userId, agent, input.body.messageId);
-      return { agent: yield* summaryOf(userId, agent) };
+      return {
+        agent: yield* rewoundAgentById(context.userId, input.params.id, input.body.messageId),
+      };
     }),
     /**
      * The agent's changes: the files of the pull request its kept published
@@ -582,14 +571,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
       const number = yield* pullRequestNumberOf(input.number === undefined ? [] : [input.number]);
       const pullRequest = yield* askedPullRequest(yield* published, userId, agent, number);
-      if (pullRequest === null || !hasRepository(agent)) return { pullRequest: null };
-      const changes = yield* githubReadRefusal(
-        Effect.gen(function* () {
-          const { token } = yield* agentPullRequestReach(userId, agent);
-          return yield* pullRequestChangesRead(token, agent, pullRequest);
-        }),
-      );
-      return { pullRequest: changes };
+      return yield* agentChangesOf(userId, agent, pullRequest);
     }),
     /**
      * What the reviewer and label pickers offer, of the agent's repository
@@ -615,16 +597,9 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     workspaceTools: signedIn.workspaceTools.effect(function* ({ input, context }) {
       return yield* workspaceToolsOf(context.userId, input.id);
     }),
-    /** The agent's sandbox resumed from its snapshot, the developer's click and nothing else, answering where it stands after. */
+    /** The agent's sandbox resumed from its snapshot (`agent-lifecycle.ts`), the developer's click and nothing else, answering where it stands after. */
     sandboxResume: signedIn.sandboxResume.effect(function* ({ input, context }) {
-      const sessionId = yield* reachedSession(context.userId, input.id);
-      if (sessionId === undefined) return { sandbox: SANDBOX_STATE.STARTING };
-      return yield* inSandbox(
-        Effect.gen(function* () {
-          const sandbox = yield* AgentSandbox;
-          return { sandbox: yield* sandboxOrUpstream(sandbox.resume(sessionId)) };
-        }),
-      );
+      return { sandbox: yield* inSandbox(resumedAgentSandbox(context.userId, input.id)) };
     }),
     /** The agent's shells and where its sandbox stands. */
     terminals: signedIn.terminals.effect(function* ({ input, context }) {

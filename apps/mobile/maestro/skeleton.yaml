@@ -7,7 +7,8 @@ appId: dev.vespin.ios
 # The app is launched on the host's Inbox fixture (`src/host/launch-arguments.ts`),
 # so the Inbox lists the synthetic threads the panel's own fixture run lists
 # (`@repo/host/fixture-inbox`), read from the host's document, and no server
-# is reached; the Tasks tab still draws the placeholder rows.
+# is reached; the Tasks tab lists the fixture's tasks. `inbox.yaml` walks the
+# Inbox itself, and `tasks.yaml` the Tasks tab.
 - launchApp:
     clearState: true
     arguments:
@@ -15,23 +16,33 @@ appId: dev.vespin.ios
 - assertVisible: "Inbox"
 - takeScreenshot: inbox
 # A row's detail: pushed over the list in a compact window, and beside it in
-# a regular one. A plain thread, a notice, opens on its words.
+# a regular one. A thread with a decide ask opens on its question.
+# Note that it is the list's first row, opened as the app launches, because
+# on the folded iPhone Duo a tap on the first row right after the list is
+# scrolled back to its top, on the way back from a thread, opens nothing.
+- tapOn: "Who can withdraw an invite?"
+- assertVisible: ".*withdrawing one deletes it.*"
+- takeScreenshot: inbox-ask
+# Note that pressing "Inbox" goes back to the list on a compact window, by its
+# back button or, where that is a bare chevron as on the folded Duo, its tab,
+# and is a no-op beside the split view on a regular one. A plain thread, a
+# notice, opens on its words; it may stand below the fold of a short window,
+# so the list is scrolled to it, and settles before the tap, which a list
+# still gliding takes as a stop rather than a pick.
+- tapOn: "Inbox"
+- scrollUntilVisible:
+    element: "acceptInvite can add a member twice"
+    direction: DOWN
+- waitForAnimationToEnd
 - tapOn: "acceptInvite can add a member twice"
 - assertVisible: ".*adds them twice.*"
 - takeScreenshot: inbox-thread
-# Note that pressing the Inbox tab again pops its stack back to the list on a
-# compact window, and is a no-op beside the split view on a regular one. A
-# thread with a decide ask opens on its choices, the recommended one marked.
-- tapOn: "Inbox"
-- tapOn: "Who can withdraw an invite?"
-- assertVisible: "Recommended"
-- takeScreenshot: inbox-ask
 - tapOn: "Inbox"
 - tapOn: "Tasks"
 - assertVisible: "Tasks"
 - takeScreenshot: tasks
-- tapOn: "Brand the iOS app"
-- assertVisible: "Todo"
+- tapOn: "Teammate invitations"
+- assertVisible: "Created by .*"
 - takeScreenshot: task
 - tapOn: "Search"
 - assertVisible: "Find a task, a thread, or an agent."

@@ -23,6 +23,7 @@ import { hostsContract } from "./hosts.js";
 import { inboxContract } from "./inbox.js";
 import { installedSkillsContract } from "./installed-skills.js";
 import { integrationsContract } from "./integrations.js";
+import { linkPreviewsContract } from "./link-previews.js";
 import { liveContract } from "./live.js";
 import { macCommandsContract } from "./mac-commands.js";
 import { mcpClientsContract } from "./mcp-clients.js";
@@ -48,6 +49,7 @@ export { AGENT_START_STATUS } from "./agents.js";
 export { bodyCap, getBodyCap } from "./base.js";
 export { HOSTED_ERRORS } from "./errors.js";
 export { EVENTS_MAXIMUM_BODY_BYTES } from "./events.js";
+export { GITHUB_REPOSITORY_TREE_RECURSIVE } from "./github.js";
 export { integrationStatusesReadSchema } from "./integrations.js";
 export { TASK_FILE_QUERY_FLAG } from "./task-files.js";
 export { RETIRED_TASK_PATHS, TASK_START_STATUS } from "./tasks.js";
@@ -70,6 +72,7 @@ export const hostedContract = {
   inbox: inboxContract,
   installedSkills: installedSkillsContract,
   integrations: integrationsContract,
+  linkPreviews: linkPreviewsContract,
   live: liveContract,
   deviceAgents: deviceAgentsContract,
   macCommands: macCommandsContract,

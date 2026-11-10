@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { archiveAgent, createAgent, readAgent } from "@repo/database/models/agent-store";
+import { archiveAgent, createAgent } from "@repo/database/models/agent-store";
 import { recordRepositoryReads } from "@repo/database/models/github-repository-reads";
 import { readGitHubTokenRow } from "@repo/database/models/github-token-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { createTask } from "@repo/database/models/task-store";
+import { setRepositorySetup } from "@repo/database/models/workspace-sandbox-script-store";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace, startTask } from "@repo/database/testing";
 import { HOSTED_API_ERROR } from "@repo/features";
@@ -16,6 +17,7 @@ import {
   type SandboxState,
   type TerminalSummary,
 } from "@repo/features/terminal-wire";
+import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
 import { SandboxUnavailable, SnapshotGone } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { noNetwork } from "@repo/wire/testing";
@@ -29,7 +31,11 @@ import {
 import { hostedFetch } from "../orpc/handler.js";
 import type { WebServices } from "../runtime.js";
 import { openGithubUser, openTokenMember } from "../testing/github-app-fake.js";
-import { keepAwakeDetached, scriptedSessionSandboxes } from "../testing/session-sandboxes-fake.js";
+import {
+  keepAwakeDetached,
+  SESSION_SANDBOXES_ASK,
+  scriptedSessionSandboxes,
+} from "../testing/session-sandboxes-fake.js";
 import { agentPortsProcedures } from "./agent-ports-procedures.js";
 import { agentsProcedures } from "./agents-procedures.js";
 import { type SandboxDeleteReach, SessionSandboxes } from "./session-sandboxes.js";
@@ -136,6 +142,21 @@ const openAgentWith = (options: { readonly claimed: boolean }) =>
 
 const openAgent = openAgentWith({ claimed: true });
 
+/** The archive script the suite's workspace keeps for the agents' repository. */
+const ARCHIVE_SCRIPT_TEXT = "docker compose down --volumes";
+
+/** The workspace's archive script for the agents' repository saved. */
+const saveArchiveScript = (workspaceId: string) =>
+  Effect.flatMap(Clock.currentTimeMillis, (now) =>
+    setRepositorySetup(
+      workspaceId,
+      "acme/relay",
+      REPOSITORY_SCRIPT_KIND.ARCHIVE,
+      ARCHIVE_SCRIPT_TEXT,
+      new Date(now),
+    ),
+  );
+
 /**
  * An agent on its starter's own GitHub token, its session claimed, in a
  * workspace with a teammate whose own verified token reads its repository
@@ -192,6 +213,7 @@ const standing = (
   sandbox: Layer.Layer<AgentSandbox>,
   sessionSandboxes: Layer.Layer<SessionSandboxes> = Layer.succeed(SessionSandboxes, {
     deleteFor: () => Effect.die("the terminals routes delete no sandbox"),
+    archiveFor: () => Effect.die("the terminals routes archive no sandbox"),
   }),
   keepAwake: SandboxDeleteReach["keepAwake"] = keepAwakeDetached,
 ) =>
@@ -456,9 +478,10 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
     }),
   );
 
-  it.effect("archiving the agent deletes its sandbox", () =>
+  it.effect("archiving the agent runs its repository's archive script in its sandbox", () =>
     Effect.gen(function* () {
       const { userId, agent, sessionId } = yield* openAgent;
+      yield* saveArchiveScript(agent.organizationId);
       const sandboxes = yield* scriptedSessionSandboxes();
       const call = yield* standing(
         new Map([["Bearer owner", userId]]),
@@ -472,94 +495,11 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
       });
 
       assert.equal(archived.status, 200);
-      assert.equal(yield* Queue.take(sandboxes.deletes), sessionId);
-    }),
-  );
-
-  it.effect(
-    "an archive answers while the sandbox's delete is still on its way, and again when the delete fails",
-    () =>
-      Effect.gen(function* () {
-        const hung = yield* openAgent;
-        const failing = yield* openAgent;
-        const stalled = yield* scriptedSessionSandboxes(() => Effect.never);
-        const refused = yield* scriptedSessionSandboxes(() =>
-          Effect.fail(new SandboxUnavailable({})),
-        );
-        const bearers = new Map([
-          ["Bearer hung", hung.userId],
-          ["Bearer failing", failing.userId],
-        ]);
-        const scripted = scriptedSandbox(SANDBOX_STATE.RUNNING).layer;
-        const slow = yield* standing(bearers, scripted, stalled.layer);
-        const down = yield* standing(bearers, scripted, refused.layer);
-
-        const waiting = yield* slow(agentOf(hung.agent.id), "Bearer hung", {
-          method: "PATCH",
-          body: { archived: true },
-        });
-        const failed = yield* down(agentOf(failing.agent.id), "Bearer failing", {
-          method: "PATCH",
-          body: { archived: true },
-        });
-
-        assert.deepEqual([waiting.status, failed.status], [200, 200]);
-        assert.equal(yield* Queue.take(stalled.deletes), hung.sessionId);
-        assert.equal(yield* Queue.take(refused.deletes), failing.sessionId);
-        for (const { userId, agent } of [hung, failing]) {
-          const stored = yield* readAgent(userId, agent.id);
-          assert.notEqual(Option.getOrThrow(stored).archivedAt, null);
-        }
-      }),
-  );
-
-  it.effect("a delete that runs after the agent was unarchived leaves its sandbox standing", () =>
-    Effect.gen(function* () {
-      const { userId, agent } = yield* openAgent;
-      const sandboxes = yield* scriptedSessionSandboxes();
-      const held: Effect.Effect<void, never, never>[] = [];
-      const call = yield* standing(
-        new Map([["Bearer owner", userId]]),
-        scriptedSandbox(SANDBOX_STATE.RUNNING).layer,
-        // The delete is kept back, as a function slow to reach Vercel runs it, until the agent is back.
-        sandboxes.layer,
-        (work) => Effect.sync(() => void held.push(work as Effect.Effect<void, never, never>)),
-      );
-      const context = yield* Effect.context<Database | SqlClient.SqlClient>();
-
-      const archived = yield* call(agentOf(agent.id), "Bearer owner", {
-        method: "PATCH",
-        body: { archived: true },
+      assert.deepEqual(yield* Queue.take(sandboxes.asked), {
+        ask: SESSION_SANDBOXES_ASK.ARCHIVE,
+        sessionId,
+        script: ARCHIVE_SCRIPT_TEXT,
       });
-      const restored = yield* call(agentOf(agent.id), "Bearer owner", {
-        method: "PATCH",
-        body: { archived: false },
-      });
-      for (const work of held) yield* Effect.provideContext(work, context);
-
-      assert.deepEqual([archived.status, restored.status], [200, 200]);
-      assert.equal(held.length, 1);
-      assert.equal(yield* Queue.size(sandboxes.deletes), 0);
-    }),
-  );
-
-  it.effect("an agent that opened no sandbox is archived with nothing to delete", () =>
-    Effect.gen(function* () {
-      const { userId, agent } = yield* openAgentWith({ claimed: false });
-      const sandboxes = yield* scriptedSessionSandboxes();
-      const call = yield* standing(
-        new Map([["Bearer owner", userId]]),
-        scriptedSandbox(SANDBOX_STATE.RUNNING).layer,
-        sandboxes.layer,
-      );
-
-      const archived = yield* call(agentOf(agent.id), "Bearer owner", {
-        method: "PATCH",
-        body: { archived: true },
-      });
-
-      assert.equal(archived.status, 200);
-      assert.equal(yield* Queue.size(sandboxes.deletes), 0);
     }),
   );
 

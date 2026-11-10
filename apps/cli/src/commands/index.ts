@@ -12,15 +12,25 @@ import { ACCOUNT_COMMANDS } from "./account.js";
 import { agentCommand } from "./agent.js";
 import { apiCommand } from "./api.js";
 import { automationCommand } from "./automation.js";
+import { commentCommand } from "./comment.js";
 import { descriptionCommand } from "./description.js";
+import { envCommand } from "./env.js";
 import { githubCommand } from "./github.js";
 import { inboxCommand } from "./inbox.js";
+import { integrationsCommand } from "./integrations.js";
 import { keysCommand } from "./keys.js";
 import { mcpCommand } from "./mcp.js";
 import { memoryCommand } from "./memory.js";
 import { modelsCommand } from "./models.js";
+import { pageCommand } from "./page.js";
 import { prCommand } from "./pr.js";
+import { preferencesCommand } from "./preferences.js";
+import { repoCommand } from "./repo.js";
 import { sectionCommand } from "./section.js";
+import { sentryCommand } from "./sentry.js";
+import { setupCommand } from "./setup.js";
+import { skillsCommand } from "./skills.js";
+import { slackCommand } from "./slack.js";
 import { taskCommand } from "./task.js";
 import { updateCommand } from "./update.js";
 import { versionCommand } from "./version.js";
@@ -31,14 +41,24 @@ export const COMMANDS = [
   taskCommand,
   sectionCommand,
   descriptionCommand,
+  commentCommand,
+  pageCommand,
   agentCommand,
   prCommand,
   workspaceCommand,
+  envCommand,
   githubCommand,
+  repoCommand,
+  setupCommand,
+  slackCommand,
   inboxCommand,
   memoryCommand,
   automationCommand,
   modelsCommand,
+  skillsCommand,
+  integrationsCommand,
+  sentryCommand,
+  preferencesCommand,
   keysCommand,
   mcpCommand,
   apiCommand,

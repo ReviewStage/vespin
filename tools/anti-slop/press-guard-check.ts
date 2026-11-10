@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ARCHIVE_WRITE_GUARD_RULE, namesArchiveWrite } from "./shared/archive-write-guard.ts";
 import { ARROW_KEY_GUARD_RULE, NAMES_ARROW_KEY } from "./shared/arrow-key-guard.ts";
 import { BUSY_GUARD_RULE } from "./shared/busy-guard.ts";
 import { TYPESCRIPT_SOURCE } from "./shared/effect-edges.ts";
@@ -25,6 +26,7 @@ import {
 import { PRESS_LISTENER_GUARD_RULE } from "./shared/press-listener-guard.ts";
 import { namesRetired, RETIRED_GUARD_RULE } from "./shared/retired.ts";
 import { ROW_BEHAVIOR_GUARD_RULE } from "./shared/row-behavior-guard.ts";
+import { namesSandboxDelete, SANDBOX_DELETE_GUARD_RULE } from "./shared/sandbox-delete-guard.ts";
 import { SETTINGS_ROW_END_GUARD_RULE } from "./shared/settings-row-end-guard.ts";
 import { SHADCN_FOCUS_GUARD_RULE, SHADCN_SOURCE } from "./shared/shadcn-focus-guard.ts";
 import { callsSubjectBuilder, SHORTCUT_FLAG_GUARD_RULE } from "./shared/shortcut-flag-guard.ts";
@@ -47,7 +49,8 @@ import {
  * file holding one that would silence `skeleton-through-components`,
  * `settings-row-end`, `row-behavior-in-row`, whose list of row components
  * is the only way past it, on any TypeScript file holding one that would
- * silence `one-message-box`, whose list of builders is the only way past it, or `async-press-needs-busy`, whose baseline is the
+ * silence `one-message-box`, whose list of builders is the only way past it, or
+ * `sandbox-delete-in-one-place`, whose list of deleters is the only way past it, or `async-press-needs-busy`, whose baseline is the
  * only way past it, on a
  * JSX-capable file outside `@repo/ui` holding one that would silence
  * `no-open-page-from-button`, `no-raw-heading-outside-ui` or
@@ -67,7 +70,9 @@ import {
  * file's baseline is the only way past it, on a vendored shadcn component
  * holding one that would silence `no-shadcn-focus-ring`, on any TypeScript
  * file calling a menu-item builder that takes the menu's subject and holding
- * one that would silence `no-shortcut-flag`, which has no way past it, on any test file
+ * one that would silence `no-shortcut-flag`, which has no way past it, on any
+ * TypeScript file holding one that would silence `archive-through-agent-change`,
+ * whose allowed list is the only way past it, on any test file
  * holding one that would silence `no-internal-vi-mock`,
  * `no-focused-or-skipped-test` or `no-source-read-in-test`, which hold rules
  * root AGENTS.md's "Testing" says never bend, and on an `.oxlintrc.json` that
@@ -135,6 +140,17 @@ const GUARDS = [
       namesBoxPart(readFileSync(absolute, "utf8")),
     remedy:
       "Draw the box with useMessageBox and MessageBox (or MessageField) from message-box.tsx, adding the slot or option it lacks there, or name a box that differs on purpose in tools/anti-slop/message-box.json with its reason",
+  },
+  {
+    rule: SANDBOX_DELETE_GUARD_RULE,
+    sources: TYPESCRIPT_SOURCE,
+    // A file that reaches no sandbox and names no helper has nothing to silence; the guards' own tests spell fixtures.
+    watches: (absolute: string) =>
+      !path.relative(REPOSITORY_ROOT, absolute).startsWith("tools/anti-slop/") &&
+      existsSync(absolute) &&
+      namesSandboxDelete(readFileSync(absolute, "utf8")),
+    remedy:
+      "Delete the agent's sandbox through packages/service/src/agents/session-sandboxes.ts, or name a file that must delete one in tools/anti-slop/sandbox-deletes.json with its reason",
   },
   {
     rule: SKELETON_GUARD_RULE,
@@ -258,6 +274,17 @@ const GUARDS = [
       callsSubjectBuilder(readFileSync(absolute, "utf8")),
     remedy:
       "Pass the menu's subject (`shortcutSubject`), and say where its keys act from the place that offers them (`useShortcutTarget`)",
+  },
+  {
+    rule: ARCHIVE_WRITE_GUARD_RULE,
+    sources: TYPESCRIPT_SOURCE,
+    // A file that names no archive writer and writes no archive column has nothing to silence; the guards' own tests spell fixtures.
+    watches: (absolute: string) =>
+      !path.relative(REPOSITORY_ROOT, absolute).startsWith("tools/anti-slop/") &&
+      existsSync(absolute) &&
+      namesArchiveWrite(readFileSync(absolute, "utf8")),
+    remedy:
+      "Archive or bring back the agent through packages/service/src/agents/agent-change.ts, or name a file that must call the store itself in tools/anti-slop/archive-writes.json with its reason",
   },
   {
     rule: INTERNAL_MOCK_GUARD_RULE,

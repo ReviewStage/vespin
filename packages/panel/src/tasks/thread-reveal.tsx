@@ -13,7 +13,7 @@ import {
 import { focusSeek } from "../focus-seek.js";
 
 /**
- * thread-reveal.tsx -- one review thread of a pull request brought into view in its Pull request tab, by a link to it (`LINK_PLACE.PULL_REQUEST_THREAD`) or a press of View in Files changed or View in Conversation.
+ * thread-reveal.tsx -- one review thread of a pull request brought into view in its Pull request tab, by a link to it (`LINK_DESTINATION.PULL_REQUEST_THREAD`) or a press of View in Files changed or View in Conversation.
  *
  * A link opens the agent's Pull request tab on the view it names and leaves
  * the ask here (`ThreadRevealProvider`), counted so the same thread asked

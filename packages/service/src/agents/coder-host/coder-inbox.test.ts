@@ -162,11 +162,6 @@ const onlyItem = (agent: Pick<InboxAgent, "userId"> & { readonly taskId: string 
     return item;
   });
 
-/** The mention an agent writes a thread of its own as, by its id alone under its workspace, its link spelled out as the window reads one. */
-function mentionOf(agent: { readonly workspaceId: string }, title: string, itemId: string): string {
-  return `[@${title}](https://vespin.dev/workspace-${agent.workspaceId}/inbox/${itemId})`;
-}
-
 /** The message whose ask the thread holds open. */
 function openAsk(item: InboxItem) {
   const asking = item.thread?.find((message) => message.ask?.status === INBOX_ASK_STATUS.OPEN);
@@ -194,7 +189,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             {
               key: QUEUE.key,
               title: QUEUE.title,
-              mention: mentionOf(agent, QUEUE.title, first.id),
+              id: first.id,
               status: INBOX_STATUS.OPEN,
               thread: [
                 {
@@ -286,7 +281,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             {
               key: "pr-ready",
               title: "PR ready",
-              mention: mentionOf(agent, "PR ready", notice.id),
+              id: notice.id,
               status: INBOX_STATUS.OPEN,
               thread: [{ from: "you", text: "Opened." }],
             },
@@ -610,7 +605,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             {
               key: SETTINGS.key,
               title: SETTINGS.title,
-              mention: mentionOf(agent, SETTINGS.title, settings.id),
+              id: settings.id,
               status: INBOX_STATUS.CLOSED,
               thread: [
                 {
@@ -687,7 +682,12 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         assert.equal(open.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.deepEqual(open.inbox?.[0]?.thread, [
           { from: "you", text: QUEUE.body, ask: { ...QUEUE.ask, status: INBOX_ASK_STATUS.OPEN } },
-          { from: "Test User", text: "Is Redis free?", files: ["pricing.txt"] },
+          {
+            from: "Test User",
+            fromUserId: agent.userId,
+            text: "Is Redis free?",
+            files: ["pricing.txt"],
+          },
           { from: "you", text: "No: it needs a new service." },
         ]);
 
@@ -722,7 +722,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           {
             key: QUEUE.key,
             title: QUEUE.title,
-            mention: mentionOf(agent, QUEUE.title, asked.id),
+            id: asked.id,
             status: INBOX_STATUS.ANSWERED,
             earlier: 2,
             thread: [
@@ -733,12 +733,13 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
               },
               {
                 from: "Test User",
+                fromUserId: agent.userId,
                 text: "Go with the outbox.",
                 answers: { reply: INBOX_REPLY.CHOSE, choices: ["Postgres outbox"] },
               },
               { from: "you", text: "Thanks." },
               { from: "you", text: "Shipping it." },
-              { from: "Test User", text: "Great." },
+              { from: "Test User", fromUserId: agent.userId, text: "Great." },
             ],
           },
         ]);
@@ -776,7 +777,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "the agent reads back which member closed a thread without an answer, and its own withdrawal by its reason",
+    "the agent reads back which member closed a thread without an answer, by name and by the account their link names them by, and its own withdrawal by its reason",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -792,12 +793,19 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         assert.equal(read.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.deepEqual(
           read.inbox
-            ?.map((line) => [line.key, line.status, line.closedBy, line.thread[0]?.ask])
+            ?.map((line) => [
+              line.key,
+              line.status,
+              line.closedBy,
+              line.closedByUserId,
+              line.thread[0]?.ask,
+            ])
             .sort(),
           [
             [
               "own",
               INBOX_STATUS.CLOSED,
+              undefined,
               undefined,
               {
                 type: INBOX_ASK.DO,
@@ -809,6 +817,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
               SETTINGS.key,
               INBOX_STATUS.CLOSED,
               "Test User",
+              agent.userId,
               { type: INBOX_ASK.DO, status: INBOX_ASK_STATUS.WITHDRAWN },
             ],
           ].sort(),
@@ -852,7 +861,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             {
               key: "pr-merged",
               title: "PR merged",
-              mention: mentionOf(agent, "PR merged", merged.id),
+              id: merged.id,
               status: INBOX_STATUS.CLOSED,
               thread: [{ from: "you", text: "Merged." }],
               closedReason: "Merged by hand.",
@@ -860,7 +869,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
             {
               key: "pr-ready",
               title: "PR ready",
-              mention: mentionOf(agent, "PR ready", ready.id),
+              id: ready.id,
               status: INBOX_STATUS.ANSWERED,
               thread: [{ from: "you", text: "Opened." }],
             },

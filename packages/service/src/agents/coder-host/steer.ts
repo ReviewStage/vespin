@@ -121,7 +121,8 @@ import { agentStatusOf } from "./status.js";
  * message (`runtime-sessions.ts`). An archived agent takes
  * no message, and is refused as one that names nothing, since every list
  * leaves it out until it is brought back, which a member's words from Slack
- * or an inbox thread do first (`agentTakingMessage`); it is read again under the
+ * or an inbox thread, and another agent's message, do first
+ * (`agentTakingMessage`); it is read again under the
  * conversation's dispatch claim just before the send, which is taken under
  * the row lock its archive takes, so a send claimed after the archive is
  * refused, and an archive after the claim finds the line awaiting. A
@@ -365,8 +366,8 @@ const handedToHarness = (
  * nothing while it still takes one.
  */
 const refusalNow = /* @__PURE__ */ Effect.fnUntraced(function* (userId: string, agent: Agent) {
-  const tasks = agent.taskId === null ? undefined : yield* taskNamesOf(userId, [agent.taskId]);
-  if (agent.taskId !== null && tasks?.has(agent.taskId) !== true) return HOSTED_REFUSAL.NOT_FOUND;
+  const tasks = yield* taskNamesOf(userId, [agent.taskId]);
+  if (!tasks.has(agent.taskId)) return HOSTED_REFUSAL.NOT_FOUND;
   const now = yield* readAgent(userId, agent.id);
   return Option.isNone(now) || now.value.archivedAt !== null ? HOSTED_REFUSAL.NOT_FOUND : undefined;
 });
@@ -422,12 +423,8 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
           sentLineStands(agent.userId, agent.conversationId, sentLineId(line.clientKey)),
         ),
       ),
-      // The sender reaches the agent, as the routing read holds, and an agent on a task its task too, read as the sender.
-      task: Effect.result(
-        agent.taskId === null
-          ? Effect.succeed(undefined)
-          : hostedStoreOrUnavailable(readTaskDescription(userId, agent.taskId)),
-      ),
+      // The sender reaches the agent, as the routing read holds, and its task too, read as the sender.
+      task: Effect.result(hostedStoreOrUnavailable(readTaskDescription(userId, agent.taskId))),
       workspace: Effect.result(hostedStoreOrUnavailable(agentWorkspace(userId, agent))),
       sessionId: Effect.result(hostedStoreOrUnavailable(recordedRuntimeSession(target))),
       // Read before the harness is asked, so an ended session settles the turn it was running and never one begun since.
@@ -594,8 +591,8 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
  * conversation; nothing where it is gone. Note that it is read again after
  * and answered as it then stands, because one brought back by someone else
  * meanwhile takes the words too, and one archived again since takes none,
- * which the steer refuses. Only a member's words bring an agent back:
- * another agent's message, GitHub's, and an automation's are refused.
+ * which the steer refuses. Only a member's words and another agent's
+ * message bring an agent back: GitHub's and an automation's are refused.
  */
 export const agentTakingMessage = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
@@ -663,13 +660,19 @@ const lostLineMessage = (target: ConversationTarget, agent: Agent, line: LostLin
  * the runner that ended. Nothing it reads is the ended launch's, so it may
  * run long after that launch ended. An agent gone or on no harness, a session that never
  * claimed its record, a function that cannot reach the harness, and a turn
- * that took no line hand nothing on; answers whether the line went.
+ * that took no line hand nothing on; answers whether the line went. A turn
+ * whose launch could not resume the harness's session (`replayed`) goes on
+ * the same way in a fresh session, the lost one let go, handed the agent's
+ * steps so far.
  */
-export const turnRetried = /* @__PURE__ */ Effect.fn("web/turnRetried")(function* (turn: {
-  readonly userId: string;
-  readonly conversationId: string;
-  readonly turnId: string;
-}) {
+export const turnRetried = /* @__PURE__ */ Effect.fn("web/turnRetried")(function* (
+  turn: {
+    readonly userId: string;
+    readonly conversationId: string;
+    readonly turnId: string;
+  },
+  replayed = false,
+) {
   const target = { userId: turn.userId, conversationId: turn.conversationId };
   const agent = yield* readAgentOfConversation(turn.userId, turn.conversationId);
   if (Option.isNone(agent)) return false;
@@ -687,7 +690,7 @@ export const turnRetried = /* @__PURE__ */ Effect.fn("web/turnRetried")(function
   if (Option.isNone(line)) return false;
   const message = yield* lostLineMessage(target, agent.value, line.value);
   const sessions = yield* reached.value;
-  const sent = yield* sessions.retry(sessionId, message);
+  const sent = yield* sessions.retry(sessionId, message, replayed);
   if (sent.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) return false;
   // Note that a line queued for a runner that reads its lines is the relaunch's already, and sent again under its id is the same row.
   const waiting = yield* turnWaitingLines(target, turn.turnId);

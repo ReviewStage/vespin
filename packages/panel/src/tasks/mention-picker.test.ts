@@ -9,7 +9,7 @@ import {
   AUTOMATION_TRIGGER,
 } from "@repo/features/automation-wire";
 import { INBOX_STATUS, INBOX_WIRE_VERSION, type InboxItem } from "@repo/features/inbox-wire";
-import { LINK_PLACE, readLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, readLink } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { decodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
@@ -159,10 +159,10 @@ async function mountedOnDescription(chosen: MentionNode[]) {
   };
 }
 
-/** The rows the open list draws, by name and the detail beside it. */
+/** The rows the open list draws, by name, the detail beside it, and what stands at its end, as a task's key does. */
 const detailedRows = (page: HTMLElement) =>
   [...page.querySelectorAll('[role="option"]')].map((row) =>
-    [".ui-combobox-option-label", ".ui-combobox-option-detail"]
+    [".ui-combobox-option-label", ".ui-combobox-option-detail", ".ui-combobox-option-hint"]
       .map((part) => row.querySelector(part)?.textContent)
       .filter((words) => words !== undefined)
       .join(" · "),
@@ -271,7 +271,6 @@ test("on a plan, the workspace's Inbox threads are found by their title, the pla
             "plan-1": [thread("item-palette", "Keep the palette's margins?", 10)],
             "plan-acme": [thread("item-acme", "Keep Acme's links?", 50)],
           },
-          [INBOX_SCOPE_KIND.AGENT]: {},
         },
       },
     },
@@ -296,7 +295,7 @@ test("on a plan, the workspace's Inbox threads are found by their title, the pla
   assert.equal(picked.name, "Keep the meter's old alerts?");
   assert.deepEqual(readLink(picked.target), {
     workspace: "stage",
-    place: { kind: LINK_PLACE.INBOX_ITEM, itemId: "item-billing" },
+    place: { kind: LINK_DESTINATION.INBOX_ITEM, itemId: "item-billing" },
   });
 
   // The box draws the thread's link as the thread's chip, not as its words.
@@ -395,7 +394,7 @@ test("on a plan, the workspace's automations are found by their name, a pick wri
   assert.equal(picked.name, "Deploy notes");
   assert.deepEqual(readLink(picked.target), {
     workspace: "stage",
-    place: { kind: LINK_PLACE.AUTOMATION, automationId: "automation-notes" },
+    place: { kind: LINK_DESTINATION.AUTOMATION, automationId: "automation-notes" },
   });
 });
 

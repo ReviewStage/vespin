@@ -1,18 +1,7 @@
-import { listedIn } from "@repo/features/inbox-list-model";
-import type {
-  AppInboxTask,
-  AppInboxTaskHolding,
-  AppInboxTasklessItem,
-  AppInboxWaitingItem,
-} from "@repo/host/app-state";
+import type { AppInboxTask, AppInboxTaskHolding, AppInboxWaitingItem } from "@repo/host/app-state";
 import { useMinute } from "@repo/ui";
 import { useMemo } from "react";
-import { waitsOnReader } from "../tasks/inbox-model.js";
-import {
-  useInboxTaskHoldings,
-  useInboxTaskless,
-  useInboxWaitingTasks,
-} from "../tasks/use-inbox-slices.js";
+import { useInboxTaskHoldings, useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 
 /**
@@ -62,30 +51,24 @@ function toDoByTask(
 
 /**
  * Every thread waiting on the developer in the listed workspace's Inbox:
- * each standing task's open items main lists as theirs, and every open item
- * from an agent with no task of that workspace (`listedIn`) that waits on
- * them (`waitsOnReader`), a question or a notice alike, as Needs you lists
- * them, less those whose reminder the developer set for after `now`, which Needs you
- * leaves out until they come back. Note that a notice counts until it is opened, because opening it
- * settles it as Got it does; a teammate's thread and a settled one never
+ * each standing task's open items main lists as theirs, a question or a
+ * notice alike, as Needs you lists them, less those whose reminder the developer set for after `now`, which Needs you
+ * leaves out until they come back. Note that a notice counts until it is opened or marked read, because either
+ * settles it as Got it does (`settledOnRead`); a teammate's thread and a settled one never
  * count, and one the reader settles leaves main's read the moment it is
  * asked (`@repo/host`'s `account-inbox-follow.ts`).
  */
 function waitingThreads(
   tasks: TasksControl,
   inboxWaiting: readonly AppInboxTask[],
-  inboxTaskless: readonly AppInboxTasklessItem[],
   now: number,
 ): readonly AppInboxWaitingItem[] {
   // Note that only the standing tasks are counted, as To do lists them, so a task not listed yet counts nowhere.
   const standing = new Set(tasks.listed.tasks.map((task) => task.id));
-  const ofTasks = inboxWaiting
+  return inboxWaiting
     .filter((task) => standing.has(task.taskId))
-    .flatMap((task) => task.items);
-  const taskless = inboxTaskless.filter(
-    (each) => waitsOnReader(each, tasks.me) && listedIn(each, tasks.workspace?.id),
-  );
-  return [...ofTasks, ...taskless].filter((item) => dueBy(item, now));
+    .flatMap((task) => task.items)
+    .filter((item) => dueBy(item, now));
 }
 
 /** How many threads wait on the developer on each task, by task, as main counts them, less those reminded for later; a task where none waits is left out, and every one while signed out. */
@@ -106,6 +89,5 @@ export function useTasksWaiting(tasks: TasksControl): ReadonlyMap<string, number
 export function useInboxWaiting(tasks: TasksControl): number {
   const now = useMinute();
   const waiting = useInboxWaitingTasks();
-  const taskless = useInboxTaskless();
-  return tasks.signedIn ? waitingThreads(tasks, waiting, taskless, now).length : 0;
+  return tasks.signedIn ? waitingThreads(tasks, waiting, now).length : 0;
 }

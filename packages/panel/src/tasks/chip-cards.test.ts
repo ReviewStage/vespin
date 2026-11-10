@@ -198,20 +198,19 @@ const STATE: AppStateSnapshot = (() => {
     tasks: {
       ...IDLE_TASKS_VIEW,
       tasks: [TASK],
-      tasklessAgents: [
+      // The agent that showed a page on itself, as an older link names it, now on the plan.
+      taskAgents: [
         {
           id: SWEEP_AGENT,
-          planId: null,
+          planId: TASK_ID,
           turnId: null,
           title: "Sweep the flaky tests",
           model: "anthropic/claude-opus-5.5",
           effort: "high",
           status: AGENT_STATUS.COMPLETED,
           createdAt: AT,
-          automationId: null,
           workspaceId: ACME.id,
           repository: "acme/relay",
-          activityAt: AT,
         },
       ],
       workspaces: [ACME, BETA],
@@ -282,13 +281,12 @@ const ANSWERED: InboxItem = {
   ],
 };
 
-/** An item of the agent on no task, answered too. */
+/** An item the plan's agent posted, answered too, which an older link names under its agent rather than its plan. */
 const SWEEP_ITEM = "item_9a1f";
 
 const SWEPT: InboxItem = {
   ...ANSWERED,
   id: SWEEP_ITEM,
-  agentId: SWEEP_AGENT,
   key: "9a1f",
   title: "Quarantine the flaky test?",
 };
@@ -360,16 +358,13 @@ const PAGE: TaskMentionsValue = {
   },
 };
 
-/** The words drawn as a transcript draws them on a plan's page, the plan's own unless another is given, in a window holding `STATE`, whose feed holds the plan's items and the agent on no task's, which a chip's glyph and card read, unless another is given. */
+/** The words drawn as a transcript draws them on a plan's page, the plan's own unless another is given, in a window holding `STATE`, whose feed holds the plan's items, which a chip's glyph and card read, unless another is given. */
 async function drawn(
   text: string,
   page: TaskMentionsValue = PAGE,
   state: AppStateSnapshot = STATE,
   feed: AppHostRead<AppInboxItems> = {
-    rows: {
-      [INBOX_SCOPE_KIND.PLAN]: { [TASK_ID]: [WAITING, ANSWERED] },
-      [INBOX_SCOPE_KIND.AGENT]: { [SWEEP_AGENT]: [SWEPT] },
-    },
+    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK_ID]: [WAITING, ANSWERED, SWEPT] } },
   },
 ): Promise<HTMLElement> {
   fakeAppBridge({
@@ -645,12 +640,12 @@ test("a file's and a folder's chips hang their path, their repository, and where
   );
 });
 
-test("an Inbox item's chip hangs its Inbox row's own card, whether the item waits or was answered, on a task or on an agent with no task", async () => {
+test("an Inbox item's chip hangs its Inbox row's own card, whether the item waits or was answered, and whether its link names it under its task or, as an older link does, under its agent", async () => {
   const container = await drawn(
     [
       `[waiting](${HOME}/plan/${TASK_ID}/inbox/${ITEM_ID})`,
       `[answered](${HOME}/plan/${TASK_ID}/inbox/${ANSWERED_ITEM})`,
-      `[swept](${HOME}/agent/${SWEEP_AGENT}/inbox/${SWEEP_ITEM})`,
+      `[swept](${HOME}/agent/${WAITING.agentId}/inbox/${SWEEP_ITEM})`,
     ].join(" "),
   );
   const [waiting, answered, swept] = chipsOf(container);
@@ -674,7 +669,7 @@ test("an Inbox item's labeled chip is called by the item's title, whether it wai
     [
       `[@Inbox item](${HOME}/plan/${TASK_ID}/inbox/${ITEM_ID})`,
       `[@Inbox item](${HOME}/plan/${TASK_ID}/inbox/${ANSWERED_ITEM})`,
-      `[@Inbox item](${HOME}/agent/${SWEEP_AGENT}/inbox/${SWEEP_ITEM})`,
+      `[@Inbox item](${HOME}/agent/${WAITING.agentId}/inbox/${SWEEP_ITEM})`,
     ].join(" "),
   );
 

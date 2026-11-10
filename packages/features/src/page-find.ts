@@ -272,16 +272,31 @@ const PAGE_FIND_SCRIPT = `(() => {
 const DOCTYPE = /^<!doctype[^>]*>/i;
 
 /**
+ * Where a comment opened at `at` ends, as HTML's parser ends it: at its
+ * first `-->` or `--!>`, or at once for `<!-->` and `<!--->`; none for one
+ * never closed. Note that a comment is ended where the parser ends it, never
+ * at a later `-->`, because what stands between would be read as markup.
+ */
+function commentEnd(html: string, at: number): number | undefined {
+  const body = at + 4;
+  if (html.startsWith(">", body)) return body + 1;
+  if (html.startsWith("->", body)) return body + 2;
+  const plain = html.indexOf("-->", body);
+  const bang = html.indexOf("--!>", body);
+  if (bang >= 0 && (plain < 0 || bang < plain)) return bang + 4;
+  return plain < 0 ? undefined : plain + 3;
+}
+
+/**
  * Where the page's doctype ends, past the whitespace and comments HTML
  * lets stand ahead of it; 0 for a page with none there, which is in quirks
  * mode however it is served.
  */
-function doctypeEnd(html: string): number {
+export function doctypeEnd(html: string): number {
   let at = html.length - html.trimStart().length;
   while (html.startsWith("<!--", at)) {
-    const close = html.indexOf("-->", at + 4);
-    if (close < 0) return 0;
-    const next = close + 3;
+    const next = commentEnd(html, at);
+    if (next === undefined) return 0;
     at = next + (html.length - next - html.slice(next).trimStart().length);
   }
   const doctype = DOCTYPE.exec(html.slice(at))?.[0];

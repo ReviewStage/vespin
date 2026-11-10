@@ -8,8 +8,9 @@ import { readingWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { CLI_INSTALL_OUTCOME, type CliInstallAnswer } from "@repo/host/contract";
 import { HOST_CAPABILITY } from "@repo/settings";
-import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
+import { SETTINGS_SEARCH_ROW, searchAnchorProps } from "@repo/settings/settings-anchors";
 import {
+  ANNOUNCE,
   BUTTON_VARIANT,
   Button,
   CONFIRM_LOSS,
@@ -17,13 +18,22 @@ import {
   COPY_FIELD_WIDTH,
   ConfirmDialog,
   CopyField,
+  ErrorLine,
+  Inline,
+  OutsideSteps,
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
+  SettingsBlock,
   SettingsRow,
   SettingsRowStateLine,
   SettingsSection,
   type SettingsSectionSkeletonShape,
   SettingsSectionsSkeleton,
+  STEP_STATE,
+  Step,
+  TEXT_TONE,
+  TEXT_VARIANT,
+  Text,
   TIME_LOOK,
   Time,
   useConfirmDialog,
@@ -43,8 +53,12 @@ import { ReadFailed } from "./marks.js";
 /**
  * cli-page.tsx -- Settings › CLI, the page named for our command: the `vespin` command's install, to copy and, in the desktop app, run here as VS Code installs `code`, and its sign-in, with Sign out everywhere once it holds one.
  *
- * Install's row holds `npm i -g vespin` in `@repo/ui`'s `CopyField`, as the
- * MCP page's Connect step holds its command; a browser tab shows that alone.
+ * Until the command signs in, the page is one setup told as steps
+ * (`OutsideSteps`): install it, then sign in from a terminal, with the wait
+ * for its sign-in under them, as the MCP page's Connect an agent is told.
+ * Once it has, Install and Sign in stand as sections of their own. Install
+ * holds `npm i -g vespin` in `@repo/ui`'s `CopyField`; a browser tab shows
+ * that alone.
  * Where the client runs the install itself (`HOST_CAPABILITY.CLI_INSTALL`,
  * the desktop app once its build names a release), the row ends in Install,
  * which runs the service's install script in this Mac's account. Once it
@@ -66,6 +80,7 @@ import { ReadFailed } from "./marks.js";
  */
 
 const SECTION_TITLE = {
+  SET_UP: `Set up the ${PRODUCT_NAME.toLowerCase()} command`,
   INSTALL: "Install",
   SIGN_IN: "Sign in",
 } as const;
@@ -80,6 +95,7 @@ const PAGE_LINE = {
   NPM_COMMAND: "npm command",
   SIGN_IN_LABEL: "Sign in from your terminal",
   SIGN_IN_WORDS: "It opens your browser to sign in.",
+  WAITING: `Waiting for the ${PRODUCT_NAME.toLowerCase()} command to sign in`,
   LOGIN_COMMAND: "Sign-in command",
   SIGNED_IN: "Signed in",
   SIGN_OUT: "Sign out everywhere",
@@ -112,8 +128,18 @@ function InstalledLine({ version, onPath }: { version: string; onPath: boolean }
   );
 }
 
-/** Install: the npm install to copy, and, where the client runs it, Install and how it went. */
-function InstallSection({ installs }: { installs: boolean }): React.JSX.Element {
+/** The command's install where the client runs it: pressed, out, and how it last went. */
+interface CliInstall {
+  readonly busy: boolean;
+  readonly onPress: () => void;
+  readonly installed:
+    | Extract<CliInstallAnswer, { outcome: typeof CLI_INSTALL_OUTCOME.INSTALLED }>
+    | undefined;
+  readonly failed: string | undefined;
+}
+
+/** The install the client runs, its last answer held while a new one is out. */
+function useCliInstall(): CliInstall {
   const cliInstall = useMutation(actMutation(ACT_KIND.CLI_INSTALL));
   // Note that the last answer stays drawn while a new install is out, so it is held here rather than read off the mutation, which forgets it as one starts.
   const [answer, setAnswer] = useState<CliInstallAnswer | undefined>(undefined);
@@ -126,8 +152,59 @@ function InstallSection({ installs }: { installs: boolean }): React.JSX.Element 
           setAnswer({ outcome: CLI_INSTALL_OUTCOME.FAILED, reason: refused.message }),
       }),
   };
-  const installed = answer?.outcome === CLI_INSTALL_OUTCOME.INSTALLED ? answer : undefined;
-  const failed = answer?.outcome === CLI_INSTALL_OUTCOME.FAILED ? answer.reason : undefined;
+  return {
+    ...install,
+    installed: answer?.outcome === CLI_INSTALL_OUTCOME.INSTALLED ? answer : undefined,
+    failed: answer?.outcome === CLI_INSTALL_OUTCOME.FAILED ? answer.reason : undefined,
+  };
+}
+
+/** Install's own press, where the client runs it: Install, or Reinstall once it has. */
+function InstallPress({ install }: { install: CliInstall }): React.JSX.Element {
+  return (
+    <Button
+      variant={BUTTON_VARIANT.OUTLINE}
+      onClick={install.onPress}
+      busy={install.busy}
+      busyLabel={PAGE_LINE.INSTALLING}
+    >
+      {install.installed === undefined ? PAGE_LINE.INSTALL : PAGE_LINE.REINSTALL}
+    </Button>
+  );
+}
+
+/** The npm install, to copy. */
+function NpmInstallCommand(): React.JSX.Element {
+  return (
+    <CopyField
+      label={PAGE_LINE.NPM_COMMAND}
+      value={CLI_COMMAND.NPM_INSTALL}
+      what="command"
+      copy={copyThroughShell}
+      width={COPY_FIELD_WIDTH.FULL}
+      prompt={COPY_FIELD_PROMPT.SHELL}
+    />
+  );
+}
+
+/** `vespin login`, to copy. */
+function LoginCommand(): React.JSX.Element {
+  return (
+    <CopyField
+      label={PAGE_LINE.LOGIN_COMMAND}
+      value={CLI_COMMAND.LOGIN}
+      what="command"
+      copy={copyThroughShell}
+      width={COPY_FIELD_WIDTH.FULL}
+      prompt={COPY_FIELD_PROMPT.SHELL}
+    />
+  );
+}
+
+/** Install, once the command is signed in: the npm install to copy, and, where the client runs it, Install and how it went. */
+function InstallSection({ installs }: { installs: boolean }): React.JSX.Element {
+  const install = useCliInstall();
+  const { installed, failed } = install;
   return (
     <SettingsSection title={SECTION_TITLE.INSTALL} anchor={SETTINGS_SEARCH_ROW.CLI_INSTALL}>
       <SettingsRow
@@ -144,31 +221,58 @@ function InstallSection({ installs }: { installs: boolean }): React.JSX.Element 
           )
         }
         error={refusedShown(failed, FAILURE_SURFACE.CLI_INSTALL)}
-        {...(installs
-          ? {
-              children: () => (
-                <Button
-                  variant={BUTTON_VARIANT.OUTLINE}
-                  onClick={install.onPress}
-                  busy={install.busy}
-                  busyLabel={PAGE_LINE.INSTALLING}
-                >
-                  {installed === undefined ? PAGE_LINE.INSTALL : PAGE_LINE.REINSTALL}
-                </Button>
-              ),
-            }
-          : undefined)}
-        below={() => (
-          <CopyField
-            label={PAGE_LINE.NPM_COMMAND}
-            value={CLI_COMMAND.NPM_INSTALL}
-            what="command"
-            copy={copyThroughShell}
-            width={COPY_FIELD_WIDTH.FULL}
-            prompt={COPY_FIELD_PROMPT.SHELL}
-          />
-        )}
+        {...(installs ? { children: () => <InstallPress install={install} /> } : undefined)}
+        below={() => <NpmInstallCommand />}
       />
+    </SettingsSection>
+  );
+}
+
+/**
+ * The command not signed in: install it, then sign in from a terminal, as
+ * steps, and the wait for its sign-in under them. Install's step says how
+ * the client's own install went, and checks off once it lands.
+ */
+function SetUpSection({ installs }: { installs: boolean }): React.JSX.Element {
+  const install = useCliInstall();
+  const { installed, failed } = install;
+  return (
+    <SettingsSection title={SECTION_TITLE.SET_UP} anchor={SETTINGS_SEARCH_ROW.CLI_INSTALL}>
+      <SettingsBlock>
+        <OutsideSteps waiting={PAGE_LINE.WAITING}>
+          <Step
+            number={1}
+            title={PAGE_LINE.INSTALL_LABEL}
+            state={installed === undefined ? STEP_STATE.CURRENT : STEP_STATE.DONE}
+          >
+            <NpmInstallCommand />
+            {installed === undefined ? (
+              <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+                {installs ? PAGE_LINE.INSTALL_HERE : PAGE_LINE.INSTALL_NPM}
+              </Text>
+            ) : (
+              <InstalledLine version={installed.version} onPath={installed.onPath} />
+            )}
+            {installs ? (
+              <Inline>
+                <InstallPress install={install} />
+              </Inline>
+            ) : null}
+            <ErrorLine
+              level={ANNOUNCE.ALERT}
+              error={refusedShown(failed, FAILURE_SURFACE.CLI_INSTALL)}
+            />
+          </Step>
+          <Step number={2} title={PAGE_LINE.SIGN_IN_LABEL} state={STEP_STATE.CURRENT}>
+            <div {...searchAnchorProps(SETTINGS_SEARCH_ROW.CLI_SIGN_IN)}>
+              <LoginCommand />
+            </div>
+            <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+              {PAGE_LINE.SIGN_IN_WORDS}
+            </Text>
+          </Step>
+        </OutsideSteps>
+      </SettingsBlock>
     </SettingsSection>
   );
 }
@@ -268,26 +372,6 @@ function SignedInRow({
   );
 }
 
-/** The command not signed in: `vespin login` to copy. */
-function SignInRow(): React.JSX.Element {
-  return (
-    <SettingsRow
-      label={PAGE_LINE.SIGN_IN_LABEL}
-      description={PAGE_LINE.SIGN_IN_WORDS}
-      below={() => (
-        <CopyField
-          label={PAGE_LINE.LOGIN_COMMAND}
-          value={CLI_COMMAND.LOGIN}
-          what="command"
-          copy={copyThroughShell}
-          width={COPY_FIELD_WIDTH.FULL}
-          prompt={COPY_FIELD_PROMPT.SHELL}
-        />
-      )}
-    />
-  );
-}
-
 /** The command's grant among the clients the account allowed, where it holds one. */
 function cliGrant(clients: readonly McpClient[]): McpClient | undefined {
   return clients.find((client) => client.clientId === FIRST_PARTY_OAUTH_CLIENT_ID.CLI);
@@ -330,19 +414,16 @@ export function CliPage(): React.JSX.Element {
       ? undefined
       : listed;
   const email = account?.status === ACCOUNT_STATUS.SIGNED_IN ? account.email : undefined;
+  if (grant === undefined || email === undefined) return <SetUpSection installs={installs} />;
   return (
     <>
       <InstallSection installs={installs} />
       <SettingsSection title={SECTION_TITLE.SIGN_IN} anchor={SETTINGS_SEARCH_ROW.CLI_SIGN_IN}>
-        {grant === undefined || email === undefined ? (
-          <SignInRow />
-        ) : (
-          <SignedInRow
-            email={email}
-            grant={grant}
-            onSignedOut={() => setSignedOutAt(grant.allowedAt)}
-          />
-        )}
+        <SignedInRow
+          email={email}
+          grant={grant}
+          onSignedOut={() => setSignedOutAt(grant.allowedAt)}
+        />
       </SettingsSection>
     </>
   );

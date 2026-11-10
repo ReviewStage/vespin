@@ -1,3 +1,4 @@
+import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import {
   HOST_PAIRING_CALL_FAILURE,
   type HostPairingFailed,
@@ -32,7 +33,6 @@ import { createStore, useSelector } from "@tanstack/react-store";
 import { useCallback, useState } from "react";
 import { askAct } from "../act.js";
 import { actMutation } from "../act-mutations.js";
-import { DEVICE_PLATFORM_NAME } from "../device-platform.js";
 import { unreadShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { DeviceGlyph } from "../tasks/runs-on.js";

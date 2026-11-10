@@ -13,6 +13,7 @@ import {
   linkSlackInstallation,
   slackAgentThreadAt,
 } from "@repo/database/models/slack-installation-store";
+import { createTask } from "@repo/database/models/task-store";
 import { SettledTurnListener } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
@@ -114,10 +115,10 @@ const openDeliveringRun = () =>
         firedAt: new Date(T0 - 60_000),
       }),
     );
+    const { id: taskId } = yield* createTask(member, { organizationId, name: "Inbox digest" });
     const agent = Option.getOrThrow(
       yield* createAgent(member, {
-        taskId: null,
-        organizationId,
+        taskId,
         descriptionSnapshot: null,
         repository: null,
         prompt: "Digest my inbox.",

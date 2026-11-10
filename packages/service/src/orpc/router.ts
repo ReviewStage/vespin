@@ -87,6 +87,10 @@ import {
   type IntegrationsProcedureSeams,
   integrationsProcedures,
 } from "../integrations/integrations-procedures.js";
+import {
+  type LinkPreviewsProcedureSeams,
+  linkPreviewsProcedures,
+} from "../link-previews/link-preview-procedures.js";
 import { type LiveProcedureSeams, liveProcedures } from "../live/live-procedures.js";
 import {
   type McpClientsProcedureSeams,
@@ -141,6 +145,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   InboxProcedureSeams &
   InstalledSkillsProcedureSeams &
   IntegrationsProcedureSeams &
+  LinkPreviewsProcedureSeams &
   LiveProcedureSeams &
   DeviceAgentsProcedureSeams &
   MacCommandsProcedureSeams &
@@ -185,6 +190,7 @@ export function hostedRouter(seams: HostedRouterSeams) {
     inbox: inboxProcedures(seams),
     installedSkills: installedSkillsProcedures(seams),
     integrations: integrationsProcedures(seams),
+    linkPreviews: linkPreviewsProcedures(seams),
     live: liveProcedures(seams),
     deviceAgents: deviceAgentsProcedures(seams),
     macCommands: macCommandsProcedures(seams),

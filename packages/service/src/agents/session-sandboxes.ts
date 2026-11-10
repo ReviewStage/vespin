@@ -1,21 +1,42 @@
 /**
- * session-sandboxes.ts -- a session's sandboxes deleted when its agent is archived, or its workspace deleted with its base drives.
+ * session-sandboxes.ts -- an agent's sandbox deleted once it has gone unused for `SANDBOX_RELEASE.UNUSED_FOR`, and a deleted workspace's with its base drives.
  *
- * Whatever shows a session's sandbox in use touches it (`@repo/sandbox`'s
- * `touch`); what is here deletes it, and never resumes one stopped.
+ * Whatever shows a session's sandbox in use touches it (`sandbox-use.ts`,
+ * which records its last use in the `agent_sandbox` ledger); what is here
+ * deletes it, and never resumes one stopped.
  *
  * An agent's session has one persistent sandbox (`agent-sandbox-open.ts`),
  * tagged with the session's id, and a new agent's sandbox owns a drive its
- * checkout stands on (`base-drive.ts`). A retire's reset deletes the
- * sandboxes it finds as it discards them, a deleted task's, agent's, or
- * account's. An agent's archive deletes its sandboxes too, in the background
- * (`deletedInBackground`), through `Sandbox`'s one `delete`, which deletes
- * the drive a sandbox owns with it, for every agent, one from before drives
- * as well, so an unarchive opens a sandbox afresh, its checkout made from
- * its repository's base drive and its pushed branch, as a sandbox whose
- * snapshot lapsed is; a local agent's archive queues its device a discard
- * line there too (`device-discard.ts`). A deleted workspace's agents'
- * sandboxes are deleted the same way (`deletedWithWorkspace`), from the
+ * checkout stands on (`base-drive.ts`). An agent's sandbox is deleted, with
+ * the drive it owns, through `Sandbox`'s one `delete`, once its ledger row
+ * says it has gone `SANDBOX_RELEASE.UNUSED_FOR` unused with no turn open
+ * (`sandboxReleaseDue`), archived or not. The release is decided first and
+ * done later: the minute sweep (`releaseUnusedSandboxes`) reads the ledger
+ * alone, never the provider, marks each due row RELEASING, and publishes its
+ * release on `SANDBOX_RELEASE.TOPIC`, at most `SANDBOX_RELEASE.SWEEP_LIMIT`
+ * a sweep, and publishes again every row still RELEASING, whose message may
+ * have been lost; RELEASING rows are read apart from those newly due, so
+ * releases that keep failing never hold the new ones back. Its consumer
+ * (`consumeSandboxRelease`) reads the row again under the agent's runner
+ * lease, which a launch holds while it opens the sandbox, just before the
+ * delete, writes it LIVE where it was opened, touched, or given a turn
+ * since, and else deletes the sandbox, one already gone counting as
+ * deleted, and writes it RELEASED. A delivery that failed comes again. An agent brought back after its release opens a sandbox afresh,
+ * its checkout made from its repository's base drive and its pushed branch,
+ * as a sandbox whose snapshot lapsed is.
+ *
+ * Deleting is off unless the deployment's `SANDBOX_RELEASE.DELETES_ENVIRONMENT`
+ * says `SANDBOX_RELEASE.DELETES_ON`: off, the sweep logs what it would
+ * release and marks and publishes nothing, and a release already queued is
+ * written LIVE again without a delete, so the variable is a kill switch too.
+ * Every outcome is a log line of its own, so a stuck or runaway release
+ * shows.
+ *
+ * An agent's archive deletes nothing (`archivedInBackground`): where the
+ * workspace keeps an archive script for the agent's repository, its sandbox
+ * runs it (`archive-script.ts`), and a local agent's archive queues its
+ * device a discard line (`device-discard.ts`). A deleted workspace's agents'
+ * sandboxes are deleted at once (`deletedWithWorkspace`), from the
  * sessions its delete read while they stood, and so are its repositories'
  * base drives (`base-drive.ts`'s `deletedBaseDrive`), which no agent owns; a
  * local agent's device is told nothing there, since its discard line is
@@ -25,14 +46,45 @@
  * name, and what is logged of a failure is the sandbox's own words.
  */
 
+import type { DatabaseServices } from "@repo/database/core/query";
+import {
+  agentSandboxRelease,
+  markAgentSandboxReleasing,
+  releasableAgentSandboxes,
+  settleAgentSandboxRelease,
+} from "@repo/database/models/agent-sandboxes";
 import { type Agent, readAgent } from "@repo/database/models/agent-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
+import { hasOpenTurn } from "@repo/database/models/turn-state";
+import { AGENT_SANDBOX_STATE } from "@repo/database/schemas/agent-sandbox";
+import { causeKind, failureKind } from "@repo/runtime/effect";
 import { isSandboxError, Sandbox, type SandboxError, type SandboxService } from "@repo/sandbox";
-import { Context, Duration, Effect, Layer, Option } from "effect";
+import { send } from "@vercel/queue";
+import {
+  Clock,
+  Config,
+  ConfigProvider,
+  Context,
+  Duration,
+  Effect,
+  Layer,
+  Option,
+  Schema,
+} from "effect";
+import { AUTH_DEPLOYMENT_ENVIRONMENT, DEPLOYMENT_ENVIRONMENT } from "../auth/auth-deployment.js";
 import { afterResponse } from "../http/after-response.js";
+import { QUEUE_ACKNOWLEDGED, queueConsumer } from "../queues/queue-consumer.js";
 import { SESSION_TAG } from "./agent-sandbox-open.js";
+import {
+  ARCHIVE_SCRIPT,
+  type ArchiveScript,
+  archiveScriptOf,
+  archiveScriptRun,
+} from "./archive-script.js";
 import { deletedBaseDrive } from "./base-drive.js";
+import { holdingRunner, holdingRunnerIfFree } from "./coder-host/runner-lease.js";
 import { discardedOrLogged } from "./device-discard.js";
+import { SANDBOX_RELEASE } from "./sandbox-release-bounds.js";
 
 const ARCHIVE_DELETE = {
   /**
@@ -44,7 +96,17 @@ const ARCHIVE_DELETE = {
    * deleted before the drive, is the same few calls and runs under the same.
    */
   TIMEOUT: Duration.seconds(15),
-  /** How many agents of an archived task, or sandboxes and base drives of a deleted workspace, are deleted at once. */
+  /**
+   * The most the archived agents' archive scripts run, all at once, each in
+   * its own sandbox: a stopped sandbox's resume and the script's own bound
+   * (`ARCHIVE_SCRIPT`), with room for the calls around them; past it every
+   * script still running is left.
+   */
+  SCRIPT_TIMEOUT: Duration.sum(
+    Duration.sum(ARCHIVE_SCRIPT.RESUME_TIMEOUT, ARCHIVE_SCRIPT.RUN_TIMEOUT),
+    Duration.seconds(15),
+  ),
+  /** How many local agents of an archived task are let go of, or sandboxes and base drives of a deleted workspace deleted, at once. */
   CONCURRENCY: 5,
 } as const;
 
@@ -54,6 +116,15 @@ export interface SessionSandboxesService {
    * owns (`Sandbox`'s `delete`); answers how many were deleted.
    */
   readonly deleteFor: (sessionId: string) => Effect.Effect<number, SandboxError>;
+  /**
+   * Runs the archive script in the session's newest sandbox, resumed first
+   * where it stopped, within its bounds (`archive-script.ts`), logging how it
+   * ended; fails only where the sandbox refused a call.
+   */
+  readonly archiveFor: (
+    sessionId: string,
+    archive: ArchiveScript,
+  ) => Effect.Effect<void, SandboxError>;
 }
 
 export class SessionSandboxes extends Context.Service<SessionSandboxes, SessionSandboxesService>()(
@@ -69,6 +140,7 @@ function sessionSandboxesOver(api: SandboxService): SessionSandboxesService {
         for (const sandbox of sandboxes) yield* api.delete(sandbox.name);
         return sandboxes.length;
       }),
+    archiveFor: (sessionId, archive) => archiveScriptRun(api, sessionId, archive),
   };
 }
 
@@ -78,7 +150,7 @@ export const sessionSandboxesLayer: Layer.Layer<SessionSandboxes, never, Sandbox
   Effect.map(Sandbox, sessionSandboxesOver),
 );
 
-/** What an archive of an agent asks of the deployment beside it: the service that deletes its sandbox, over the runtime's `Sandbox` in production and a script's in a test, and what keeps the function awake for the delete. */
+/** What an archive of an agent, or a workspace's delete, asks of the deployment beside it: the service over its sandboxes, the runtime's `Sandbox` in production and a script's in a test, and what keeps the function awake for the work. */
 export interface SandboxDeleteReach {
   readonly sessionSandboxes: Layer.Layer<SessionSandboxes, never, Sandbox>;
   /**
@@ -90,10 +162,10 @@ export interface SandboxDeleteReach {
   readonly keepAwake: <R>(work: Effect.Effect<void, never, R>) => Effect.Effect<void, never, R>;
 }
 
-/** The reach of a caller handed none, such as an agent's tool: the runtime's sandboxes, the deletes kept past the answer where the runtime keeps work (`afterResponse`, the web's `waitUntil`), run in place where it keeps none. */
+/** The reach of a caller handed none, such as an agent's tool: the runtime's sandboxes, the work kept past the answer where the runtime keeps work (`afterResponse`, the web's `waitUntil`), run in place where it keeps none. */
 export const deploymentSandboxDeletes: SandboxDeleteReach = {
   sessionSandboxes: sessionSandboxesLayer,
-  keepAwake: (work) => afterResponse("an archived agent's sandbox delete", work),
+  keepAwake: (work) => afterResponse("an archived agent's sandbox work", work),
 };
 
 /** A failure as the log says it: a sandbox's own words, and the kind alone for any other, since a store failure's message may name a statement. */
@@ -105,33 +177,37 @@ function describeDeleteFailure(failure: {
 }
 
 /**
- * One archived agent's sandboxes deleted, if it is still archived. Note
- * that the archive is read again just before the delete, because an agent
- * unarchived and messaged since has resumed the sandbox this would delete,
- * and its turn must keep it; what is left of the race is the moment between
- * this read and the delete.
+ * One archived agent's repository's archive script run in its sandbox, where
+ * its workspace keeps one and the agent is still archived; one that failed,
+ * could not run, or ran past its bounds is logged. Note that the script runs
+ * holding the agent's runner lease, because a release backs off from a lease
+ * another call holds (`consumeSandboxRelease`), so a sandbox already unused
+ * long enough to be released is not deleted while its teardown runs.
  */
-const deletedWhileArchived = /* @__PURE__ */ Effect.fnUntraced(function* (
+const archiveScriptRanWhileArchived = /* @__PURE__ */ Effect.fnUntraced(function* (
   agent: Pick<Agent, "id" | "userId">,
   sessionId: string,
 ) {
   const current = yield* readAgent(agent.userId, agent.id);
   if (Option.isNone(current) || current.value.archivedAt === null) return;
-  yield* (yield* SessionSandboxes).deleteFor(sessionId);
+  const archive = yield* archiveScriptOf(current.value);
+  if (archive === undefined) return;
+  const sandboxes = yield* SessionSandboxes;
+  yield* holdingRunner(agent.id, sandboxes.archiveFor(sessionId, archive));
 });
 
 /**
- * The sandboxes of the agents just archived deleted, with the drives they
- * own, so an unarchive opens a sandbox afresh. Each agent's session is read
+ * What the agents just archived let go of, their sandboxes left standing for
+ * their release (`releaseUnusedSandboxes`). Each agent's session is read
  * here, one keyed read that fails to nothing worse than a log line, and the
- * deletes are handed to the reach to keep the function awake for, so this
- * returns without waiting on them and the archive never fails on it. A
- * delete that fails or runs past its bound is logged and left, its sandbox
- * stopping on its own once idle and its drive kept until a later delete of
- * the name. A local agent among them is let go of on its device beside the
- * deletes, its runner stopped and its folder removed (`device-discard.ts`).
+ * work is handed to the reach to keep the function awake for, so this
+ * returns without waiting on it and the archive never fails on it: the
+ * agents' archive scripts, all at once, each in its own sandbox, under the
+ * scripts' one deadline, a script past it left; and beside them a local
+ * agent among them let go of on its device, its runner stopped and its
+ * folder removed (`device-discard.ts`).
  */
-export const deletedInBackground = /* @__PURE__ */ Effect.fnUntraced(function* (
+export const archivedInBackground = /* @__PURE__ */ Effect.fnUntraced(function* (
   reach: SandboxDeleteReach,
   agents: ReadonlyArray<Pick<Agent, "id" | "userId" | "conversationId">>,
 ) {
@@ -140,35 +216,42 @@ export const deletedInBackground = /* @__PURE__ */ Effect.fnUntraced(function* (
       Effect.catch((failure) =>
         Effect.as(
           Effect.logWarning(
-            `an archived agent's sandbox was not found to delete: ${describeDeleteFailure(failure)}`,
+            `an archived agent's sandbox was not found to run its archive script: ${describeDeleteFailure(failure)}`,
           ),
           undefined,
         ),
       ),
     ),
   );
-  // An agent that never opened a sandbox has no session, and none to delete.
-  const deletes = agents.flatMap((agent, at) => {
+  // An agent that never opened a sandbox has no session, and no script to run.
+  const sessions = agents.flatMap((agent, at) => {
     const sessionId = read[at];
     return sessionId === undefined ? [] : [{ agent, sessionId }];
   });
-  const deleteOne = ({ agent, sessionId }: (typeof deletes)[number]) =>
-    deletedWhileArchived(agent, sessionId).pipe(
+  const scriptOne = ({ agent, sessionId }: (typeof sessions)[number]) =>
+    archiveScriptRanWhileArchived(agent, sessionId).pipe(
       Effect.provide(reach.sessionSandboxes),
-      Effect.timeout(ARCHIVE_DELETE.TIMEOUT),
       Effect.catch((failure) =>
         Effect.logWarning(
-          `an archived agent's sandbox was not deleted: ${describeDeleteFailure(failure)}`,
+          `an archived agent's archive script did not run: ${describeDeleteFailure(failure)}`,
         ),
       ),
     );
+  const scripts = Effect.forEach(sessions, scriptOne, {
+    concurrency: "unbounded",
+    discard: true,
+  }).pipe(
+    Effect.timeoutOption(ARCHIVE_DELETE.SCRIPT_TIMEOUT),
+    Effect.flatMap((finished) =>
+      Option.isSome(finished)
+        ? Effect.void
+        : Effect.logWarning("archived agents' archive scripts were left at the archive's deadline"),
+    ),
+  );
   yield* reach.keepAwake(
     Effect.all(
       [
-        Effect.forEach(deletes, deleteOne, {
-          concurrency: ARCHIVE_DELETE.CONCURRENCY,
-          discard: true,
-        }),
+        scripts,
         Effect.forEach(agents, discardedOrLogged, {
           concurrency: ARCHIVE_DELETE.CONCURRENCY,
           discard: true,
@@ -181,10 +264,10 @@ export const deletedInBackground = /* @__PURE__ */ Effect.fnUntraced(function* (
 
 /**
  * The sandboxes of a deleted workspace's agents deleted, with the drives
- * they own, as an archive's are, by the sessions the workspace's delete read
+ * they own, at once, by the sessions the workspace's delete read
  * while its agents stood, and the base drives of its repositories by the
- * names it read, each with the fill's sandbox under its name. Unlike
- * `deletedInBackground`, nothing is read again first, since the agents are
+ * names it read, each with the fill's sandbox under its name. Unlike a
+ * release, nothing is read again first, since the agents are
  * gone and none can resume its sandbox or fill a base drive. The deletes are
  * handed to the reach to keep the function awake for, so this returns
  * without waiting on them; one that fails or runs past its bound is logged
@@ -230,3 +313,259 @@ export const deletedWithWorkspace = /* @__PURE__ */ Effect.fnUntraced(function* 
     ),
   );
 });
+
+/** How a release ended, each said in a log line of its own. */
+export const SANDBOX_RELEASE_OUTCOME = {
+  /** Deleted, with the drive it owns, and written RELEASED. */
+  RELEASED: "released",
+  /** Opened, touched, or given a turn since it was found due, or a launch or an archive script under way holds its agent's runner, and written LIVE again. */
+  USED_SINCE: "used-since",
+  /** Deleting is off, and the row written LIVE again. */
+  DELETES_OFF: "deletes-off",
+  /** The row no longer stands RELEASING: reopened, already released, or gone with its agent. */
+  NOT_RELEASING: "not-releasing",
+} as const;
+
+type SandboxReleaseOutcome = (typeof SANDBOX_RELEASE_OUTCOME)[keyof typeof SANDBOX_RELEASE_OUTCOME];
+
+/** What one sweep found and did: the sandboxes it read due or still releasing, and the releases it published. */
+export interface SandboxReleaseSweep {
+  readonly due: number;
+  readonly published: number;
+}
+
+/** Where releases go and whether they delete: the queue's publish, and the deployment's switch. */
+interface SandboxReleasesShape {
+  /** Whether a release deletes; off, the sweep only logs and a queued release deletes nothing. */
+  readonly deleting: boolean;
+  /** The sandbox's release published, a failure said in the log, since the sweep publishes it again. */
+  readonly publish: (sandboxName: string) => Effect.Effect<void, never, DatabaseServices | Sandbox>;
+}
+
+/** A release's message: the sandbox it names. */
+const releaseMessageSchema = Schema.Struct({ sandboxName: Schema.String });
+
+/** The instant a sandbox last used at or before is due: `SANDBOX_RELEASE.UNUSED_FOR` before now. */
+function unusedSince(now: number): Date {
+  return new Date(now - Duration.toMillis(SANDBOX_RELEASE.UNUSED_FOR));
+}
+
+/** The one rule: a sandbox's release is due once it has gone `SANDBOX_RELEASE.UNUSED_FOR` unused and no turn of its agent is open. */
+function sandboxReleaseDue(usedAt: Date, now: number, turnOpen: boolean): boolean {
+  return !turnOpen && usedAt.getTime() <= unusedSince(now).getTime();
+}
+
+/**
+ * The release decided again under the agent's runner lease: the row read
+ * again, and the sandbox deleted only where it still stands RELEASING and
+ * its release is still due; else written LIVE again.
+ */
+const releasedHolding = (sandboxName: string) =>
+  Effect.gen(function* () {
+    const row = yield* agentSandboxRelease(sandboxName);
+    if (Option.isNone(row) || row.value.state !== AGENT_SANDBOX_STATE.RELEASING) {
+      return SANDBOX_RELEASE_OUTCOME.NOT_RELEASING;
+    }
+    const turnOpen = yield* hasOpenTurn(row.value.conversationId);
+    if (!sandboxReleaseDue(row.value.usedAt, yield* Clock.currentTimeMillis, turnOpen)) {
+      yield* settleAgentSandboxRelease(sandboxName, AGENT_SANDBOX_STATE.LIVE);
+      return SANDBOX_RELEASE_OUTCOME.USED_SINCE;
+    }
+    yield* (yield* Sandbox)
+      .delete(sandboxName)
+      .pipe(Effect.timeout(SANDBOX_RELEASE.DELETE_TIMEOUT));
+    yield* settleAgentSandboxRelease(sandboxName, AGENT_SANDBOX_STATE.RELEASED);
+    return SANDBOX_RELEASE_OUTCOME.RELEASED;
+  });
+
+/**
+ * One release consumed. With deleting off, the row is written LIVE again
+ * and nothing deleted. Else the release is decided again holding the agent's
+ * runner lease (`releasedHolding`), which a launch holds while it opens the
+ * sandbox, so no launch opens it between the last read and the delete; a
+ * lease another call holds means a launch or an archive script is under
+ * way, and the row is written LIVE again. A delete that fails fails the delivery, which comes
+ * again.
+ */
+export const consumeSandboxRelease = /* @__PURE__ */ Effect.fn("web/consumeSandboxRelease")(
+  function* (
+    sandboxName: string,
+  ): Effect.fn.Return<SandboxReleaseOutcome, unknown, DatabaseServices | Sandbox> {
+    const releases = yield* SandboxReleases;
+    const outcome: SandboxReleaseOutcome = yield* Effect.gen(function* () {
+      const row = yield* agentSandboxRelease(sandboxName);
+      if (Option.isNone(row) || row.value.state !== AGENT_SANDBOX_STATE.RELEASING) {
+        return SANDBOX_RELEASE_OUTCOME.NOT_RELEASING;
+      }
+      if (!releases.deleting) {
+        yield* settleAgentSandboxRelease(sandboxName, AGENT_SANDBOX_STATE.LIVE);
+        return SANDBOX_RELEASE_OUTCOME.DELETES_OFF;
+      }
+      const held = yield* holdingRunnerIfFree(row.value.agentId, releasedHolding(sandboxName));
+      if (Option.isSome(held)) return held.value;
+      yield* settleAgentSandboxRelease(sandboxName, AGENT_SANDBOX_STATE.LIVE);
+      return SANDBOX_RELEASE_OUTCOME.USED_SINCE;
+    });
+    yield* Effect.logInfo(`an unused sandbox's release ended: ${outcome}`);
+    return outcome;
+  },
+  (effect, sandboxName) =>
+    effect.pipe(
+      Effect.tapCause((cause) =>
+        Effect.logWarning(
+          `an unused sandbox's release failed and will come again: ${causeKind(cause)}`,
+        ),
+      ),
+      Effect.annotateLogs({ sandboxName }),
+    ),
+);
+
+/**
+ * The sweep: the sandboxes due and those still RELEASING read from the
+ * ledger alone, the oldest used first and at most `SANDBOX_RELEASE.SWEEP_LIMIT`
+ * of each;
+ * with deleting on, each due one marked RELEASING and each published,
+ * `SANDBOX_RELEASE.PUBLISH_CONCURRENCY` at a time so a slow queue holds the
+ * minute's other sweeps back by a few publishes' bounds at most, and
+ * with it off, what it would release said in one log line and nothing
+ * written or published.
+ */
+export const releaseUnusedSandboxes = /* @__PURE__ */ Effect.fn("web/releaseUnusedSandboxes")(
+  function* (
+    now: number,
+  ): Effect.fn.Return<SandboxReleaseSweep, unknown, DatabaseServices | Sandbox> {
+    const releases = yield* SandboxReleases;
+    const usedBy = unusedSince(now);
+    const rows = yield* releasableAgentSandboxes(usedBy, SANDBOX_RELEASE.SWEEP_LIMIT);
+    if (!releases.deleting) {
+      if (rows.length > 0) {
+        yield* Effect.logInfo(
+          `dry run: ${rows.length} unused sandboxes would be released: ${rows.map((row) => row.sandboxName).join(", ")}`,
+        );
+      }
+      return { due: rows.length, published: 0 };
+    }
+    const sent = yield* Effect.forEach(
+      rows,
+      ({ sandboxName, state }) =>
+        Effect.gen(function* () {
+          // Note that a row another sweep marked or an open took since the read is left to them.
+          if (
+            state === AGENT_SANDBOX_STATE.LIVE &&
+            !(yield* markAgentSandboxReleasing(sandboxName, usedBy))
+          ) {
+            return false;
+          }
+          yield* releases.publish(sandboxName);
+          return true;
+        }),
+      { concurrency: SANDBOX_RELEASE.PUBLISH_CONCURRENCY },
+    );
+    const published = sent.filter(Boolean).length;
+    if (rows.length > 0) {
+      yield* Effect.logInfo(
+        `${published} unused sandboxes' releases published of ${rows.length} read`,
+      );
+    }
+    return { due: rows.length, published };
+  },
+);
+
+/**
+ * On Vercel: the release sent to the topic under the sandbox's name, which
+ * Queues drops while an earlier one is kept (`SANDBOX_RELEASE.RETENTION`),
+ * waited on at most `SANDBOX_RELEASE.PUBLISH_WAIT`; a send that failed is
+ * said in the log, and the sweep publishes the row, still RELEASING, again.
+ */
+const vercelRelease = (sandboxName: string) =>
+  Effect.tryPromise(() =>
+    send(
+      SANDBOX_RELEASE.TOPIC,
+      { sandboxName },
+      {
+        idempotencyKey: sandboxName,
+        retentionSeconds: Math.ceil(Duration.toSeconds(SANDBOX_RELEASE.RETENTION)),
+      },
+    ),
+  ).pipe(
+    Effect.timeoutOption(SANDBOX_RELEASE.PUBLISH_WAIT),
+    Effect.flatMap((sent) =>
+      Option.isSome(sent)
+        ? Effect.void
+        : Effect.logWarning("an unused sandbox's release publish outlasted its bound"),
+    ),
+    Effect.catch((failure) =>
+      Effect.logWarning(`an unused sandbox's release was not published: ${failureKind(failure)}`),
+    ),
+    Effect.annotateLogs({ sandboxName }),
+  );
+
+/** Off Vercel: the release consumed in place, a failure logged, and the sweep publishing the row again next minute. */
+const inProcessRelease = (
+  sandboxName: string,
+): Effect.Effect<void, never, DatabaseServices | Sandbox> =>
+  Effect.asVoid(consumeSandboxRelease(sandboxName).pipe(Effect.ignore));
+
+/** The releases one runtime has: off and consumed in place by default, as a test or a local run without the switch has them. */
+export const SandboxReleases = Context.Reference<SandboxReleasesShape>(
+  "@repo/service/SandboxReleases",
+  { defaultValue: () => ({ deleting: false, publish: inProcessRelease }) },
+);
+
+/**
+ * The releases as the deployment's environment names them: deleting on only
+ * where `SANDBOX_RELEASE.DELETES_ENVIRONMENT` says `SANDBOX_RELEASE.DELETES_ON`,
+ * published to Vercel's queue on production and on a Preview and consumed in
+ * place anywhere else.
+ */
+export const sandboxReleasesFromEnvironment = Layer.effect(
+  SandboxReleases,
+  Effect.map(
+    Config.all({
+      deletes: Config.option(Config.String(SANDBOX_RELEASE.DELETES_ENVIRONMENT)),
+      deployment: Config.option(Config.String(AUTH_DEPLOYMENT_ENVIRONMENT.ENVIRONMENT)),
+    }),
+    ({ deletes, deployment }): SandboxReleasesShape => ({
+      deleting: Option.exists(deletes, (value) => value.trim() === SANDBOX_RELEASE.DELETES_ON),
+      publish: Option.exists(
+        deployment,
+        (named) =>
+          named === DEPLOYMENT_ENVIRONMENT.PRODUCTION || named === DEPLOYMENT_ENVIRONMENT.PREVIEW,
+      )
+        ? vercelRelease
+        : inProcessRelease,
+    }),
+  ).pipe(
+    Effect.provideServiceEffect(
+      ConfigProvider.ConfigProvider,
+      Effect.sync(() => ConfigProvider.fromEnv()),
+    ),
+  ),
+);
+
+/**
+ * The consumer's route handler over the services the function's runtime
+ * handed it: each delivery acknowledged once settled, one that does not
+ * decode dropped, and a failure left for the queue to deliver again after
+ * `SANDBOX_RELEASE.FAILED_AGAIN`.
+ */
+export function sandboxReleasesHandler(
+  services: Context.Context<DatabaseServices | Sandbox>,
+): (request: Request) => Promise<Response> {
+  return queueConsumer(
+    services,
+    (message) =>
+      Effect.gen(function* () {
+        const decoded = yield* Effect.option(
+          Schema.decodeUnknownEffect(releaseMessageSchema)(message),
+        );
+        if (Option.isNone(decoded)) {
+          yield* Effect.logError("a sandbox-releases message did not decode; it is dropped");
+          return QUEUE_ACKNOWLEDGED;
+        }
+        yield* consumeSandboxRelease(decoded.value.sandboxName);
+        return QUEUE_ACKNOWLEDGED;
+      }),
+    SANDBOX_RELEASE.FAILED_AGAIN,
+  );
+}

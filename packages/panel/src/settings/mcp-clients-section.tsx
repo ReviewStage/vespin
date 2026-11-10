@@ -16,8 +16,6 @@ import { readingWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
-  BUTTON_VARIANT,
-  ButtonLink,
   CHOICE_BAR_LOOK,
   CHOICE_BAR_SIZE,
   ChoiceBar,
@@ -27,9 +25,12 @@ import {
   ConfirmDialog,
   CopyField,
   MARK_PROVIDER,
+  OutsideLink,
+  OutsideSteps,
   ProviderMark,
   SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
+  SettingsBlock,
   SettingsLine,
   SettingsRow,
   SettingsRowMark,
@@ -37,6 +38,11 @@ import {
   SettingsSection,
   type SettingsSectionSkeletonShape,
   SettingsSectionsSkeleton,
+  STEP_STATE,
+  Step,
+  TEXT_TONE,
+  TEXT_VARIANT,
+  Text,
   TIME_LOOK,
   Time,
   useConfirmDialog,
@@ -52,7 +58,7 @@ import { copyThroughShell } from "../copy-feedback.js";
 import { confirmFailure, refusedShown } from "../failure-report.js";
 import { HarnessMark } from "../harness-marks.js";
 import { mcpClientsQuery, mcpClientsRetryMutation } from "../live-reads.js";
-import { linkPressOf, useOpenLink } from "../tasks/use-open-link.js";
+import { useOpenLink } from "../tasks/use-open-link.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
@@ -75,12 +81,14 @@ import { MenuRow } from "./menu-row.js";
  * without being asked.
  *
  * Connect an agent asks which agent first, and then shows only that agent's
- * one step, as its own docs say it adds a remote MCP server signed in with
- * OAuth: Claude Code, Codex, and VS Code by a command with its Copy, Cursor
- * by its install link, Claude and ChatGPT by the server's address pasted in
- * their own settings, and any other agent by the address alone. An agent
- * that arrives while the page shows, which is how a member comes back from
- * the browser, lights its row and is said to be connected under the step.
+ * two steps (`OutsideSteps`), as its own docs say it adds a remote MCP
+ * server signed in with OAuth: Claude Code, Codex, and VS Code by a command
+ * with its Copy, Cursor by its install link, Claude and ChatGPT by the
+ * server's address pasted in their own settings, and any other agent by the
+ * address alone; then what is done in the agent. Under them it waits for the
+ * agent to connect. An agent that arrives while the page shows, which is how
+ * a member comes back from the browser, lights its row and is said to be
+ * connected under the steps, in the wait's place.
  * While the account has none, Connect an agent stands first. The `vespin`
  * command, which the read lists too, is left out of Connected: its sign-in
  * is Settings › CLI's (`cli-page.tsx`).
@@ -133,63 +141,70 @@ interface ConnectStep {
   readonly name: string;
   /** Its brand's mark; any other agent has none. */
   readonly mark?: React.JSX.Element;
-  readonly label: string;
-  readonly words: string;
+  /** Its first step, which the command, the address, or the install link stands under. */
+  readonly first: string;
+  /** Its second step, done in the agent itself. */
+  readonly inAgent: string;
+  /** A line under the second step, where the agent asks for more. */
+  readonly note?: string;
   readonly command?: (serverUrl: string) => string;
   readonly address?: true;
   readonly install?: { readonly label: string; readonly url: (serverUrl: string) => string };
 }
 
-/** Each agent's one step. */
+/** Each agent's two steps: the command, the address, or the install link, then what is done in the agent. */
 const CONNECT_STEPS: Readonly<Record<ConnectAgent, ConnectStep>> = {
   [CONNECT_AGENT.CLAUDE_CODE]: {
     name: "Claude Code",
     mark: <HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />,
-    label: "Run this in a terminal",
-    words: `Then type /mcp in Claude Code, choose ${SERVER_NAME}, and sign in.`,
+    first: "Run this in a terminal",
+    inAgent: `Type /mcp in Claude Code, choose ${SERVER_NAME}, and sign in`,
     command: (serverUrl) => shellLine(MCP_ADD_COMMAND[MCP_COMMAND_AGENT.CLAUDE_CODE](serverUrl)),
   },
   [CONNECT_AGENT.CODEX]: {
     name: "Codex",
     mark: <HarnessMark provider={MODEL_PROVIDER.OPENAI} />,
-    label: "Run this in a terminal",
-    words: `It opens your browser to sign in. If it doesn't, run codex mcp login ${SERVER_NAME}.`,
+    first: "Run this in a terminal",
+    inAgent: "Sign in in the browser it opens",
+    note: `If it doesn't open, run codex mcp login ${SERVER_NAME}.`,
     command: (serverUrl) => shellLine(MCP_ADD_COMMAND[MCP_COMMAND_AGENT.CODEX](serverUrl)),
   },
   [CONNECT_AGENT.CURSOR]: {
     name: "Cursor",
     mark: <ProviderMark provider={MARK_PROVIDER.CURSOR} />,
-    label: `Add ${PRODUCT_NAME} to Cursor`,
-    words: `Then sign in to ${SERVER_NAME} from Cursor's MCP settings.`,
-    install: { label: "Add to Cursor", url: cursorInstallUrl },
+    first: `Add ${PRODUCT_NAME} to Cursor`,
+    inAgent: `Sign in to ${SERVER_NAME} from Cursor's MCP settings`,
+    install: { label: "Open in Cursor", url: cursorInstallUrl },
   },
   [CONNECT_AGENT.VS_CODE]: {
     name: "VS Code",
     mark: <ProviderMark provider={MARK_PROVIDER.VS_CODE} />,
-    label: "Run this in a terminal",
-    words: `Then start ${SERVER_NAME} from VS Code's MCP servers and sign in.`,
+    first: "Run this in a terminal",
+    inAgent: `Start ${SERVER_NAME} from VS Code's MCP servers and sign in`,
     command: (serverUrl) => shellLine(MCP_ADD_COMMAND[MCP_COMMAND_AGENT.VS_CODE](serverUrl)),
   },
   [CONNECT_AGENT.CLAUDE]: {
     name: "Claude",
     mark: <ProviderMark provider={MARK_PROVIDER.CLAUDE} />,
-    label: "Copy the server URL",
-    words:
-      "In Claude, open Customize › Connectors, choose Add custom connector, paste it, then connect. On a Team or Enterprise plan, an owner adds it in Organization settings › Connectors.",
+    first: "Copy the server URL",
+    inAgent:
+      "In Claude, open Customize › Connectors, choose Add custom connector, paste it, then connect",
+    note: "On a Team or Enterprise plan, an owner adds it in Organization settings › Connectors.",
     address: true,
   },
   [CONNECT_AGENT.CHATGPT]: {
     name: "ChatGPT",
     mark: <ProviderMark provider={MARK_PROVIDER.CHATGPT} />,
-    label: "Copy the server URL",
-    words:
-      "In ChatGPT, open Plugins, choose + › Add custom MCP server, paste it under Connection, then choose Create as a plugin.",
+    first: "Copy the server URL",
+    inAgent:
+      "In ChatGPT, open Plugins, choose + › Add custom MCP server, paste it under Connection, then choose Create as a plugin",
     address: true,
   },
   [CONNECT_AGENT.OTHER]: {
     name: "Other",
-    label: PAGE_LINE.SERVER,
-    words: "Add it to any agent that supports remote MCP servers. It signs in with OAuth.",
+    first: "Copy the server URL",
+    inAgent: "Add it to any agent that supports remote MCP servers",
+    note: "It signs in with OAuth.",
     address: true,
   },
 };
@@ -375,53 +390,60 @@ function shownClients(
   );
 }
 
-/** One agent's step: its words, and the command or address to copy, or the link that installs it. */
-function ConnectStepRow({
+/**
+ * One agent's two steps, and the wait for it to connect until it has: the
+ * command or address to copy, or the link that installs it, then what is
+ * done in the agent.
+ */
+function ConnectSteps({
   step,
   serverUrl,
+  waiting,
 }: {
   step: ConnectStep;
   serverUrl: string;
+  waiting: boolean;
 }): React.JSX.Element {
   const openLink = useOpenLink();
-  const install = step.install;
-  const installUrl = install?.url(serverUrl);
+  const installUrl = step.install?.url(serverUrl);
   const copied = step.command?.(serverUrl) ?? (step.address === true ? serverUrl : undefined);
   return (
-    <SettingsRow
-      label={step.label}
-      description={step.words}
-      {...(install === undefined || installUrl === undefined
-        ? undefined
-        : {
-            children: () => (
-              <ButtonLink
-                variant={BUTTON_VARIANT.OUTLINE}
-                href={installUrl}
-                onClick={linkPressOf(openLink, installUrl)}
-              >
-                {install.label}
-              </ButtonLink>
-            ),
-          })}
-      {...(copied === undefined
-        ? undefined
-        : {
-            below: () => (
-              <CopyField
-                label={step.command === undefined ? PAGE_LINE.SERVER : `${step.name} command`}
-                value={copied}
-                what={step.command === undefined ? "URL" : "command"}
-                copy={copyThroughShell}
-                width={COPY_FIELD_WIDTH.FULL}
-                prompt={
-                  step.command === undefined ? COPY_FIELD_PROMPT.NONE : COPY_FIELD_PROMPT.SHELL
-                }
-              />
-            ),
-          })}
-    />
+    <SettingsBlock>
+      <OutsideSteps waiting={waiting ? connectWaiting(step) : undefined}>
+        <Step number={1} title={step.first} state={STEP_STATE.CURRENT}>
+          {step.install === undefined || installUrl === undefined ? null : (
+            <OutsideLink href={installUrl} open={openLink}>
+              {step.install.label}
+            </OutsideLink>
+          )}
+          {copied === undefined ? null : (
+            <CopyField
+              label={step.command === undefined ? PAGE_LINE.SERVER : `${step.name} command`}
+              value={copied}
+              what={step.command === undefined ? "URL" : "command"}
+              copy={copyThroughShell}
+              width={COPY_FIELD_WIDTH.FULL}
+              prompt={step.command === undefined ? COPY_FIELD_PROMPT.NONE : COPY_FIELD_PROMPT.SHELL}
+            />
+          )}
+        </Step>
+        <Step number={2} title={step.inAgent} state={STEP_STATE.CURRENT}>
+          {step.note === undefined ? null : (
+            <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+              {step.note}
+            </Text>
+          )}
+        </Step>
+      </OutsideSteps>
+    </SettingsBlock>
   );
+}
+
+/** What Connect an agent waits on: the agent picked, or any agent where none is named. */
+function connectWaiting(step: ConnectStep): string {
+  return step === CONNECT_STEPS[CONNECT_AGENT.OTHER]
+    ? "Waiting for an agent to connect"
+    : `Waiting for ${step.name} to connect`;
 }
 
 /** Connect an agent: which agent, that agent's one step, and the agent that just connected, once one has. */
@@ -452,7 +474,11 @@ function ConnectSection({
           />
         )}
       />
-      <ConnectStepRow step={CONNECT_STEPS[agent]} serverUrl={serverUrl} />
+      <ConnectSteps
+        step={CONNECT_STEPS[agent]}
+        serverUrl={serverUrl}
+        waiting={arrived === undefined}
+      />
       {arrived === undefined ? null : (
         <SettingsLine>
           <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>

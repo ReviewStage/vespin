@@ -42,35 +42,27 @@
  */
 
 import type { AgentSummary } from "@repo/features/agent-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { agentName, automationRun } from "@repo/features/model-label";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND, commandForKey, type KeyedCommand } from "@repo/settings/shortcuts";
-import {
-  DIALOG_SIZE,
-  Dialog,
-  GearIcon,
-  makeWait,
-  TabCard,
-  TabCards,
-  VisuallyHidden,
-} from "@repo/ui";
-import { InboxIcon, ShieldUserIcon } from "@repo/ui/icons";
+import { DIALOG_SIZE, Dialog, makeWait, TabCard, TabCards, VisuallyHidden } from "@repo/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Effect } from "effect";
-import { HistoryIcon, HouseIcon, ListTodoIcon, ZapIcon } from "lucide-react";
+import { HistoryIcon } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { overlayHoldsKeyboard, useAppCommand, useOverlayHold } from "../app-commands.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { HOME_WORDS, INBOX_WORDS, VERSION_HISTORY_WORDS } from "../history-titles.js";
 import { MemberDirectory, usePerson } from "../member-directory.js";
 import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import type { TaskStep } from "../places/task-step.js";
 import type { RecentStep, RecentSteps } from "../places/window-history.js";
 import { type Place, type StepTitle, sameScreen } from "../places/window-steps.js";
-import { tasklessRowSubject } from "../tasks/agent-ref.js";
 import { stripTabLook } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, type KindLook, PlanGlyph, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import type { MainTab } from "../tasks/use-main-tabs.js";
@@ -115,12 +107,15 @@ const PLACE_LOOKS: ReadonlyMap<
   RoutedPlace,
   { readonly icon: React.JSX.Element; readonly word: string }
 > = new Map<RoutedPlace, { readonly icon: React.JSX.Element; readonly word: string }>([
-  [ROUTED_PLACE.HOME, { icon: <HouseIcon />, word: HOME_WORDS }],
-  [ROUTED_PLACE.INBOX, { icon: <InboxIcon />, word: INBOX_WORDS }],
-  [ROUTED_PLACE.BOARD, { icon: <ListTodoIcon />, word: "Tasks" }],
-  [ROUTED_PLACE.AUTOMATIONS, { icon: <ZapIcon />, word: "Automations" }],
-  [ROUTED_PLACE.SETTINGS, { icon: <GearIcon />, word: "Settings" }],
-  [ROUTED_PLACE.ADMIN, { icon: <ShieldUserIcon />, word: "Admin" }],
+  [ROUTED_PLACE.HOME, { icon: <EntityGlyph kind={ENTITY_KIND.HOME} />, word: HOME_WORDS }],
+  [ROUTED_PLACE.INBOX, { icon: <EntityGlyph kind={ENTITY_KIND.INBOX} />, word: INBOX_WORDS }],
+  [ROUTED_PLACE.BOARD, { icon: <EntityGlyph kind={ENTITY_KIND.BOARD} />, word: "Tasks" }],
+  [
+    ROUTED_PLACE.AUTOMATIONS,
+    { icon: <EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />, word: "Automations" },
+  ],
+  [ROUTED_PLACE.SETTINGS, { icon: <EntityGlyph kind={ENTITY_KIND.SETTINGS} />, word: "Settings" }],
+  [ROUTED_PLACE.ADMIN, { icon: <EntityGlyph kind={ENTITY_KIND.ADMIN} />, word: "Admin" }],
   [ROUTED_PLACE.VERSION_HISTORY, { icon: <HistoryIcon />, word: VERSION_HISTORY_WORDS }],
 ]);
 
@@ -206,13 +201,8 @@ function taskLook(step: TaskStep, title: StepTitle | undefined, tasks: TasksCont
 
 /** An agent's own page's card: the agent as its tab would wear it, read off every agent the window lists, its automation under it. */
 function agentLook(agentId: string, tasks: TasksControl): CardLook {
-  const { standing, archived } = tasks.listedAgents;
-  const taskless = [...standing, ...archived].find((each) => each.id === agentId);
-  // Note that an agent on a task, an automation's run's among them, has no row of its own in the sidebar, so it is read off every agent the list carries.
-  const live = tasks.liveAgents?.find((each) => each.id === agentId);
-  const agent = taskless === undefined ? live : tasklessRowSubject(taskless, tasks.agents).agent;
-  const workspaceId = (taskless ?? live)?.workspaceId;
-  if (agent === undefined || workspaceId === undefined) {
+  const agent = tasks.liveAgents?.find((each) => each.id === agentId);
+  if (agent === undefined) {
     return {
       ...tabLook({ kind: TAB_KIND.AGENT, name: undefined, agent: undefined }),
       labelReplayUnmasked: true,
@@ -221,7 +211,7 @@ function agentLook(agentId: string, tasks: TasksControl): CardLook {
   }
   return {
     ...tabLook({ kind: TAB_KIND.AGENT, name: agentName(agent, tasks.agents.models), agent }),
-    ...automationDetail(agent, workspaceId),
+    ...automationDetail(agent, agent.workspaceId),
     endMark: agentEndMark(agent, false),
   };
 }
@@ -244,7 +234,7 @@ function cardLook(step: RecentStep, tasks: TasksControl): CardLook {
   }
   const look = routed === undefined ? undefined : PLACE_LOOKS.get(routed);
   return {
-    icon: look?.icon ?? <HouseIcon />,
+    icon: look?.icon ?? <EntityGlyph kind={ENTITY_KIND.HOME} />,
     label: title?.label ?? look?.word ?? SCREEN_WORDS,
     labelReplayUnmasked: title?.label === undefined,
     detail: title?.detail,

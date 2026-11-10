@@ -12,44 +12,23 @@
  * task's id.
  */
 
-import { listRepositoryPins, setRepositoryPin } from "@repo/database/models/repository-pin-store";
-import { Effect, Option } from "effect";
-import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
-import {
-  HOSTED_REFUSAL,
-  hostedStoreOrUnavailable,
-  type UserIdResolver,
-} from "../http/http-effect.js";
+import type { UserIdResolver } from "../http/http-effect.js";
 import { accountMiddleware, hosted, writeReceiptMiddleware } from "../orpc/base.js";
+import { pinRepository, readRepositoryPins } from "./repository-pins.js";
 
 export interface RepositoryPinsProcedureSeams {
   resolveUserId: UserIdResolver;
 }
 
-/** The pins resource: the account's pins, and one pinned or unpinned. */
+/** The pins resource: the account's pins, and one pinned or unpinned (`repository-pins.ts`). */
 export function repositoryPinsProcedures(seams: RepositoryPinsProcedureSeams) {
   const pins = hosted.repositoryPins.use(accountMiddleware(seams.resolveUserId));
   return {
     list: pins.list.effect(function* ({ context }) {
-      return { pins: yield* hostedStoreOrUnavailable(listRepositoryPins(context.userId)) };
+      return yield* readRepositoryPins(context.userId);
     }),
     set: pins.set.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
-      const set = yield* hostedStoreOrUnavailable(
-        setRepositoryPin(context.userId, input.repository, input.pinned),
-      );
-      // A pin past the bound is a request the service will not keep, as a name past its bound is.
-      if (Option.isNone(set)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-      // Counted only where the write changed a row, which is the one that answers a transaction.
-      if (set.value.txid !== undefined) {
-        yield* recordServerEvent(
-          SERVER_EVENT.REPOSITORY_PIN,
-          { userId: context.userId },
-          {
-            pinned: input.pinned,
-          },
-        );
-      }
-      return set.value;
+      return yield* pinRepository(context.userId, input.repository, input.pinned);
     }),
   };
 }

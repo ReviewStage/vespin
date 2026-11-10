@@ -1,7 +1,8 @@
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import { commandKeyshortcuts, NAV_CURRENT, NavItem, Shortcut, STATUS_TONE } from "@repo/ui";
-import { InboxIcon } from "@repo/ui/icons";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { groupCount } from "./sidebar-fold.js";
 
 /**
@@ -37,7 +38,7 @@ export function SidebarInboxRow({
 }): React.JSX.Element {
   return (
     <NavItem
-      icon={<InboxIcon />}
+      icon={<EntityGlyph kind={ENTITY_KIND.INBOX} />}
       current={current ? NAV_CURRENT.PAGE : undefined}
       count={{
         ...groupCount(waiting, NEEDS_YOU.COUNT),

@@ -19,7 +19,7 @@ import { createAutomation } from "@repo/database/models/automation-store";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { writePage } from "@repo/database/models/task-pages";
-import { readTask } from "@repo/database/models/task-store";
+import { createTask, readTask } from "@repo/database/models/task-store";
 import { agentPin } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
 import { attachment } from "@repo/database/schemas/attachment";
@@ -69,10 +69,10 @@ import { INBOX_ASK, INBOX_CURSOR_START, inboxAnswerSchema } from "@repo/features
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
+import { READ_MARK } from "@repo/features/read-mark";
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import {
   heldTaskListAnswerSchema,
-  TASK_LIST_ARCHIVED,
   TASK_STATUS,
   taskDeleteAnswerSchema,
 } from "@repo/features/task-wire";
@@ -561,16 +561,9 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           },
         );
         yield* joinWorkspace(task.workspaceId, other);
-        // An agent with no task, so it holds a pin of its own.
-        yield* Database.use((db) =>
-          db
-            .update(agentTable)
-            .set({ taskId: null, organizationId: task.workspaceId })
-            .where(eq(agentTable.id, agent.id)),
-        );
         assert.ok(Option.isSome(yield* pinAgent(owner, agent.id, true)));
         const posted = yield* postInboxThread(
-          { userId: owner, taskId: null, agentId: agent.id },
+          { userId: owner, taskId: task.id, agentId: agent.id },
           {
             key: "which-queue",
             title: "Which queue?",
@@ -728,7 +721,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
   );
 
   it.effect(
-    "a member's Archive of a teammate's agent records the member on it, which its summary names, and an Unarchive clears it",
+    "a member's Archive of a teammate's agent records the member on it, which its summary names, an Unarchive clears it, and a released desktop's read mark of it changes nothing",
     () =>
       Effect.gen(function* () {
         const { other, task, agent, ask } = yield* messagedAgent(fakeAgentSessions(), {
@@ -748,6 +741,19 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         assert.equal(archived.archivedBy?.agent, undefined);
         const back = yield* changed(false);
         assert.deepEqual([back.archivedAt, back.archivedBy], [undefined, undefined]);
+        // A released desktop still moves its read mark of an agent, which is read through its task's alone, so it is answered the agent as it stands.
+        const marked = readAnswer(
+          agentAnswerSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* ask(
+            request(AGENT, other, {
+              method: "PATCH",
+              id: agent.id,
+              body: { readMark: READ_MARK.UNREAD },
+            }),
+          ),
+        );
+        assert.deepEqual(marked, { agent: back });
       }),
   );
 
@@ -1134,45 +1140,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
   );
 
   it.effect(
-    "an agent with no plan is messaged and read like any other, its summary naming no plan, by a member of its workspace",
-    () =>
-      Effect.gen(function* () {
-        const agentSessions = fakeAgentSessions();
-        const { owner, task, agent, sessionId, ask } = yield* messagedAgent(agentSessions, {
-          running: false,
-        });
-        // An automation's run leaves an agent so: in its workspace, on no task.
-        yield* Database.use((db) =>
-          db
-            .update(agentTable)
-            .set({ taskId: null, organizationId: task.workspaceId })
-            .where(eq(agentTable.id, agent.id)),
-        );
-
-        const sent = readAnswer(
-          agentMessageAnswerSchema,
-          HOSTED_HTTP_STATUS.ACCEPTED,
-          yield* ask(
-            messageAs(owner, agent.id, { text: "Rebase on main.", clientKey: randomUUID() }),
-          ),
-        );
-        const read = readAnswer(
-          agentMessagesAnswerSchema,
-          HOSTED_HTTP_STATUS.OK,
-          yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id })),
-        );
-
-        assert.deepEqual([sent.agent.id, sent.agent.planId], [agent.id, null]);
-        assert.deepEqual(userTexts(read), [SNAPSHOT, "Rebase on main."]);
-        assert.deepEqual(
-          agentSessions.sent.map((each) => each.sessionId),
-          [sessionId],
-        );
-      }),
-  );
-
-  it.effect(
-    "an agent reads as its own page by its id, its plan named, and with no plan once an automation's run left it so, with the branch its last turn ended on, for a member of its workspace and no one else",
+    "an agent reads as its own page by its id, its plan named, with the branch its last turn ended on, for a member of its workspace and no one else",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
@@ -1188,10 +1156,10 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         yield* Database.use((db) =>
           db
             .update(agentTable)
-            .set({ taskId: null, organizationId: task.workspaceId, branch: "luke/invite-links" })
+            .set({ branch: "luke/invite-links" })
             .where(eq(agentTable.id, agent.id)),
         );
-        const taskless = yield* page();
+        const ended = yield* page();
         const outside = yield* ask(request(AGENT, other, { id: agent.id }));
 
         assert.deepEqual(
@@ -1199,14 +1167,10 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
           [agent.id, task.id, task.workspaceId, RELAY_FULL_NAME],
         );
         assert.deepEqual(
-          [taskless.agent.planId, taskless.agent.automationId, taskless.agent.workspaceId],
-          [null, null, task.workspaceId],
-        );
-        assert.deepEqual(
-          [onTask.agent.branch, taskless.agent.branch],
+          [onTask.agent.branch, ended.agent.branch],
           [undefined, "luke/invite-links"],
         );
-        assert.equal(taskless.agent.status, AGENT_STATUS.COMPLETED);
+        assert.equal(ended.agent.status, AGENT_STATUS.COMPLETED);
         assert.deepEqual(
           outside,
           refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
@@ -1219,17 +1183,13 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
-        const { owner, task, agent, ask } = yield* messagedAgent(agentSessions, { running: false });
+        const { owner, agent, ask } = yield* messagedAgent(agentSessions, { running: false });
         const ranAs = (firing: AutomationFiring) =>
           Effect.gen(function* () {
             yield* Database.use((db) =>
               db
                 .update(agentTable)
-                .set({
-                  taskId: null,
-                  organizationId: task.workspaceId,
-                  automationOrigin: { name: "Code review", firing, prompt: "Review it." },
-                })
+                .set({ automationOrigin: { name: "Code review", firing, prompt: "Review it." } })
                 .where(eq(agentTable.id, agent.id)),
             );
             return readAnswer(
@@ -1264,177 +1224,15 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
   );
 
   it.effect(
-    "the plan list names the teammate who archived an agent with no plan, as its own page does",
-    () =>
-      Effect.gen(function* () {
-        const { owner, other, task, agent, ask } = yield* messagedAgent(fakeAgentSessions(), {
-          running: false,
-        });
-        yield* joinWorkspace(task.workspaceId, other);
-        yield* Database.use((db) =>
-          db
-            .update(agentTable)
-            .set({ taskId: null, organizationId: task.workspaceId })
-            .where(eq(agentTable.id, agent.id)),
-        );
-        yield* ask(
-          request(AGENT, other, { method: "PATCH", id: agent.id, body: { archived: true } }),
-        );
-
-        const listed = readAnswer(
-          heldTaskListAnswerSchema,
-          HOSTED_HTTP_STATUS.OK,
-          yield* ask(request(TASKS, owner, { archived: TASK_LIST_ARCHIVED.INCLUDE })),
-        );
-        const by = listed.planlessAgents?.find((each) => each.id === agent.id)?.archivedBy;
-        assert.equal(by?.by, AGENT_ARCHIVER.MEMBER);
-        assert.equal(by?.member?.userId, other);
-        assert.ok((by?.member?.name ?? "") !== "", JSON.stringify(by));
-      }),
-  );
-
-  it.effect(
-    "the plan list carries an agent with no plan beside the plans, as its own page reads it and when it last moved, for a member of its workspace, an archived one only where asked for, and for no one else",
+    "an agent's inbox reads by the agent for a member of its workspace, and as not found for anyone else",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
         const { owner, other, task, agent, ask } = yield* messagedAgent(agentSessions, {
           running: false,
         });
-        yield* Database.use((db) =>
-          db
-            .update(agentTable)
-            .set({ taskId: null, organizationId: task.workspaceId })
-            .where(eq(agentTable.id, agent.id)),
-        );
-        const listed = (bearer: string, archived?: string) =>
-          Effect.map(ask(request(TASKS, bearer, { archived })), (answered) =>
-            readAnswer(heldTaskListAnswerSchema, HOSTED_HTTP_STATUS.OK, answered),
-          );
-        const page = readAnswer(
-          agentPageAnswerSchema,
-          HOSTED_HTTP_STATUS.OK,
-          yield* ask(request(AGENT, owner, { id: agent.id })),
-        ).agent;
-
-        const standing = yield* listed(owner);
-        const outside = yield* listed(other);
-        yield* Database.use((db) =>
-          db.update(agentTable).set({ archivedAt: new Date() }).where(eq(agentTable.id, agent.id)),
-        );
-        const archived = yield* listed(owner);
-        const included = yield* listed(owner, TASK_LIST_ARCHIVED.INCLUDE);
-
-        const [only, ...rest] = standing.planlessAgents ?? [];
-        assert.ok(only !== undefined);
-        const { activityAt, readThrough, markedUnread, ...read } = only;
-        assert.deepEqual([read, rest], [page, []]);
-        assert.ok(activityAt >= page.createdAt);
-        // Note that an agent no one has marked reads through its start for the member listing it.
-        assert.deepEqual([readThrough, markedUnread], [page.createdAt, false]);
-        assert.equal(standing.plans.find((each) => each.id === task.id)?.agents, undefined);
-        assert.deepEqual(outside.planlessAgents, []);
-        assert.deepEqual(archived.planlessAgents, []);
-        assert.deepEqual(
-          included.planlessAgents?.map((each) => each.id),
-          [agent.id],
-        );
-      }),
-  );
-
-  it.effect(
-    "a member's PATCH pins an agent with no plan in their own plan list and unpins it again, and pins nothing for an account outside its workspace",
-    () =>
-      Effect.gen(function* () {
-        const agentSessions = fakeAgentSessions();
-        const { owner, other, task, agent, ask } = yield* messagedAgent(agentSessions, {
-          running: false,
-        });
-        yield* Database.use((db) =>
-          db
-            .update(agentTable)
-            .set({ taskId: null, organizationId: task.workspaceId })
-            .where(eq(agentTable.id, agent.id)),
-        );
-        const pin = (bearer: string, pinned: boolean) =>
-          ask(request(AGENT, bearer, { method: "PATCH", id: agent.id, body: { pinned } }));
-        const pinnedAt = (bearer: string) =>
-          Effect.map(
-            ask(request(TASKS, bearer)),
-            (answered) =>
-              readAnswer(
-                heldTaskListAnswerSchema,
-                HOSTED_HTTP_STATUS.OK,
-                answered,
-              ).planlessAgents?.find((each) => each.id === agent.id)?.pinnedAt,
-          );
-        const at = yield* Clock.currentTimeMillis;
-
-        const pinned = yield* pin(owner, true);
-        const refused = yield* pin(other, true);
-        const held = yield* pinnedAt(owner);
-        yield* pin(owner, false);
-        const unpinned = yield* pinnedAt(owner);
-
-        assert.equal(
-          readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.OK, pinned).agent.id,
-          agent.id,
-        );
-        assert.equal(refused.status, HOSTED_HTTP_STATUS.NOT_FOUND);
-        assert.equal(held, at);
-        assert.equal(unpinned, undefined);
-      }),
-  );
-
-  it.effect(
-    "a member's PATCH drags their pin of an agent with no plan to a position the list then carries, and one given with an unpin is refused",
-    () =>
-      Effect.gen(function* () {
-        const agentSessions = fakeAgentSessions();
-        const { owner, task, agent, ask } = yield* messagedAgent(agentSessions, { running: false });
-        yield* Database.use((db) =>
-          db
-            .update(agentTable)
-            .set({ taskId: null, organizationId: task.workspaceId })
-            .where(eq(agentTable.id, agent.id)),
-        );
-        const patch = (body: { pinned: boolean; position: string }) =>
-          ask(request(AGENT, owner, { method: "PATCH", id: agent.id, body }));
-        const listed = Effect.map(ask(request(TASKS, owner)), (answered) =>
-          readAnswer(
-            heldTaskListAnswerSchema,
-            HOSTED_HTTP_STATUS.OK,
-            answered,
-          ).planlessAgents?.find((each) => each.id === agent.id),
-        );
-
-        const placed = yield* patch({ pinned: true, position: "a1" });
-        const refused = yield* patch({ pinned: false, position: "a2" });
-        const held = yield* listed;
-
-        assert.equal(placed.status, HOSTED_HTTP_STATUS.OK);
-        assert.equal(refused.status, HOSTED_HTTP_STATUS.BAD_REQUEST);
-        assert.equal(held?.pinPosition, "a1");
-        assert.notEqual(held?.pinnedAt, undefined);
-      }),
-  );
-
-  it.effect(
-    "an agent's inbox reads by the agent for a member of its workspace, an agent with no plan among them, and as not found for anyone else",
-    () =>
-      Effect.gen(function* () {
-        const agentSessions = fakeAgentSessions();
-        const { owner, other, task, agent, ask } = yield* messagedAgent(agentSessions, {
-          running: false,
-        });
-        yield* Database.use((db) =>
-          db
-            .update(agentTable)
-            .set({ taskId: null, organizationId: task.workspaceId })
-            .where(eq(agentTable.id, agent.id)),
-        );
         const posted = yield* postInboxThread(
-          { userId: owner, taskId: null, agentId: agent.id },
+          { userId: owner, taskId: task.id, agentId: agent.id },
           {
             key: "which-queue",
             title: "Which queue?",
@@ -1824,7 +1622,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
   );
 
   it.effect(
-    "a message mentioning agents on another task and on none of the workspace hands each by its task with how to message it, and one of another workspace the sender is also in as not found",
+    "a message mentioning an agent on another task of the workspace hands it by its task with how to message it, and one of another workspace the sender is also in as not found",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
@@ -1833,24 +1631,21 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         });
         const billing = yield* startTask(owner, { name: "Billing", repository: RELAY_FULL_NAME });
         const onBilling = yield* startedAgentOf(owner, billing.id, ask);
-        const oneOff = yield* startedAgentOf(owner, task.id, ask);
         const foreign = yield* startedAgentOf(owner, task.id, ask);
-        // The sender is a member of a second workspace, which holds the foreign agent.
+        // The sender is a member of a second workspace, which holds the foreign agent on a task there.
         const elsewhere = yield* openWorkspace(other);
         yield* joinWorkspace(elsewhere, owner);
-        const moved = (agentId: string, organizationId: string) =>
-          Database.use((db) =>
-            db
-              .update(agentTable)
-              .set({ taskId: null, organizationId })
-              .where(eq(agentTable.id, agentId)),
-          );
-        yield* moved(oneOff.agent.id, task.workspaceId);
-        yield* moved(foreign.agent.id, elsewhere);
+        const elsewhereTask = yield* createTask(other, { organizationId: elsewhere });
+        yield* Database.use((db) =>
+          db
+            .update(agentTable)
+            .set({ taskId: elsewhereTask.id, organizationId: elsewhere })
+            .where(eq(agentTable.id, foreign.agent.id)),
+        );
         const place = { workspace: "acme", repository: task.repository };
         const mention = (agentId: string, name: string) =>
           mentionMarkdown({ kind: MENTION_KIND.AGENT, agentId }, name, place);
-        const words = `Line up with ${mention(onBilling.agent.id, "Billing agent")}, ${mention(oneOff.agent.id, "Sweeper")} and ${mention(foreign.agent.id, "Stranger")}.`;
+        const words = `Line up with ${mention(onBilling.agent.id, "Billing agent")} and ${mention(foreign.agent.id, "Stranger")}.`;
 
         yield* sent(words);
 
@@ -1865,11 +1660,7 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
             "u",
           ),
         );
-        assert.match(
-          part.text,
-          new RegExp(`on no task, "[^"]+" \\(id \`${oneOff.agent.id}\`\\)`, "u"),
-        );
-        assert.equal(part.text.match(/To message it, call `message_agent`/gu)?.length, 2);
+        assert.equal(part.text.match(/To message it, call `message_agent`/gu)?.length, 1);
         assert.match(part.text, /The agent "Stranger": not found in your workspace\./u);
         assert.ok(!part.text.includes(`id \`${foreign.agent.id}\``), part.text);
       }),

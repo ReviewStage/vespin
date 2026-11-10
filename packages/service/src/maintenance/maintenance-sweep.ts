@@ -2,6 +2,7 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { causeKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
 import { Cause, Clock, Data, Effect, type Redacted } from "effect";
+import type { SandboxReleaseSweep } from "../agents/session-sandboxes.js";
 import { GitHubBackground } from "../github/github-rate-gate.js";
 import {
   bearerMatchesSecret,
@@ -10,6 +11,7 @@ import {
   HOSTED_HTTP_STATUS,
   jsonResponse,
 } from "../http/http.js";
+import type { WakeupSweepOutcome } from "./wakeup-sweep.js";
 
 /**
  * The scheduled sweep: once a minute, Vercel's cron ends what no request
@@ -34,6 +36,10 @@ interface MaintenanceSweeps {
   resumeWaitedTurns: (now: number) => SweepRead<number>;
   /** Sends the alerts held while members were at their desk, for those who have since walked away, a sweep's worth, answering how many holds it took (`push/inbox-pushes.ts`'s `releaseHeldPushes`). */
   releaseHeldPushes: (now: number) => SweepRead<number>;
+  /** Queues the release of the cloud agents' sandboxes unused past their keep, and of those whose release stands unfinished, a sweep's worth, or only logs them where deleting is off (`agents/session-sandboxes.ts`'s `releaseUnusedSandboxes`). */
+  releaseSandboxes: (now: number) => SweepRead<SandboxReleaseSweep>;
+  /** Delivers the wakeups coding agents booked that are due, a sweep's worth, each as a line of the agent's own (`wakeup-sweep.ts`). */
+  deliverWakeups: (now: number) => SweepRead<WakeupSweepOutcome>;
 }
 
 /**
@@ -66,6 +72,10 @@ interface MaintenanceSweepAnswer {
   resumed: Swept<number>;
   /** Pushes held while members were at their desk, taken now that they walked away. */
   heldPushes: Swept<number>;
+  /** Cloud agents' sandboxes due for release, and the releases published. */
+  sandboxReleases: Swept<SandboxReleaseSweep>;
+  /** Coding agents' wakeups due, delivered and not. */
+  wakeups: Swept<WakeupSweepOutcome>;
 }
 
 /** What a sweep that failed answers in its place: the failure is logged, and the other sweeps run on. */
@@ -106,6 +116,8 @@ const sweepAll = /* @__PURE__ */ Effect.fn("web/sweepAll")(function* (
     keptUp: yield* isolated("keepSandboxesUp", sweeps.keepSandboxesUp(now)),
     resumed: yield* isolated("resumeWaitedTurns", sweeps.resumeWaitedTurns(now)),
     heldPushes: yield* isolated("releaseHeldPushes", sweeps.releaseHeldPushes(now)),
+    sandboxReleases: yield* isolated("releaseSandboxes", sweeps.releaseSandboxes(now)),
+    wakeups: yield* isolated("deliverWakeups", sweeps.deliverWakeups(now)),
   };
 });
 

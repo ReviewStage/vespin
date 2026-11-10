@@ -11,7 +11,11 @@
  */
 
 import { eventIterator, type } from "@orpc/contract";
-import { isAccountPlace, isLinkPlace, type ShownLink } from "@repo/features/link-grammar";
+import {
+  isAccountDestination,
+  isLinkDestination,
+  type ShownLink,
+} from "@repo/features/link-grammar";
 import { type AppCommand, isAppCommand } from "@repo/settings/shortcuts";
 import { isRecord, isWireString } from "@repo/wire";
 import { COMPLETION_SOUNDS, type CompletionSound } from "@repo/wire/app-settings";
@@ -55,8 +59,8 @@ export const PUSH_GUARD = {
   [PUSH.SHOW_LINK]: result<ShownLink>(
     (value) =>
       isRecord(value) &&
-      ((isWireString(value.workspace) && isLinkPlace(value.place)) ||
-        (value.workspace === undefined && isAccountPlace(value.place))),
+      ((isWireString(value.workspace) && isLinkDestination(value.place)) ||
+        (value.workspace === undefined && isAccountDestination(value.place))),
   ),
   /**
    * A sound to play once, as news the developer turned a sound on for is

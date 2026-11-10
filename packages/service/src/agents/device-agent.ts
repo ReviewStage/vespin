@@ -36,7 +36,7 @@ import {
   deviceAgentLaunchSecretsSchema,
 } from "@repo/features/device-agent-wire";
 import { Clock, Duration, Effect, Option, Redacted, Result, Schema } from "effect";
-import { TURN_STATUS } from "../core.js";
+import { TURN_FAILURE, TURN_STATUS } from "../core.js";
 import { HostedEnvironment } from "../environment.js";
 import { heldUntil } from "../http/held-read.js";
 import { launchStoppedDetail } from "./coder-host/status.js";
@@ -209,7 +209,8 @@ export function settledDeviceAgentLine(
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     const { conversationId } = agent.value;
     const turn = (yield* latestTurnsOf(userId, [conversationId])).get(conversationId);
-    // Note that a launch whose turn opened is a runner gone however it ended, and one that never took its turn, which stands queued, is worded by the step it stopped at.
+    // Note that a launch whose turn opened is a runner gone however it ended, failed as the sweep fails one (`runner_lost`), which is
+    // what a carry-on reads it by (`coder-host/carry-on.ts`); one that never took its turn, which stands queued, is worded by the step it stopped at.
     const unopened = !newest.value.stopped && turn?.status === TURN_STATUS.QUEUED;
     const detail = unopened ? launchStoppedDetail(newest.value.step, unstarted) : undefined;
     yield* settleRunnerLostTurns(
@@ -217,6 +218,8 @@ export function settledDeviceAgentLine(
       agent.value.conversationId,
       yield* Clock.currentTimeMillis,
       detail,
+      undefined,
+      unopened ? TURN_FAILURE.MODEL : TURN_FAILURE.RUNNER_LOST,
     );
     return true;
   });

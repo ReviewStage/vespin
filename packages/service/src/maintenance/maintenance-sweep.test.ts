@@ -31,6 +31,8 @@ interface Recorded {
   keptUp: number[];
   resumed: number[];
   heldPushes: number[];
+  sandboxReleases: number[];
+  wakeups: number[];
 }
 
 function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
@@ -41,6 +43,8 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
     keptUp: [],
     resumed: [],
     heldPushes: [],
+    sandboxReleases: [],
+    wakeups: [],
   };
   const options: MaintenanceSweepOptions = {
     request: sweepRequest(),
@@ -76,6 +80,16 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
         recorded.heldPushes.push(now);
         return 0;
       }),
+    releaseSandboxes: (now) =>
+      Effect.sync(() => {
+        recorded.sandboxReleases.push(now);
+        return { due: 0, published: 0 };
+      }),
+    deliverWakeups: (now) =>
+      Effect.sync(() => {
+        recorded.wakeups.push(now);
+        return { delivered: 0, failed: 0 };
+      }),
     ...overrides,
   };
   return { options, recorded };
@@ -104,6 +118,8 @@ it.effect("a deployment without CRON_SECRET answers unavailable and sweeps nothi
       keptUp: [],
       resumed: [],
       heldPushes: [],
+      sandboxReleases: [],
+      wakeups: [],
     });
   }),
 );
@@ -125,6 +141,8 @@ it.effect("a wrong or missing bearer is refused and sweeps nothing", () =>
       keptUp: [],
       resumed: [],
       heldPushes: [],
+      sandboxReleases: [],
+      wakeups: [],
     });
     assert.deepEqual(missing.recorded, {
       syncLog: [],
@@ -133,6 +151,8 @@ it.effect("a wrong or missing bearer is refused and sweeps nothing", () =>
       keptUp: [],
       resumed: [],
       heldPushes: [],
+      sandboxReleases: [],
+      wakeups: [],
     });
   }),
 );
@@ -155,6 +175,8 @@ it.effect(
         keptUp: [instant],
         resumed: [instant],
         heldPushes: [instant],
+        sandboxReleases: [instant],
+        wakeups: [instant],
       });
     }),
 );

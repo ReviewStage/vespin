@@ -94,7 +94,9 @@
  * approval `never` (https://learn.chatgpt.com/docs/sandboxing), set as the
  * thread starts and again as the `sandboxPolicy` of each `turn/start`, as
  * app-server documents, so a thread started under another mode runs under
- * this one from its next turn. The machine is the boundary: a host's box, to
+ * this one from its next turn. Note that a Claude Code agent's permission
+ * mode (`PERMISSION_MODE`) does not reach here: Codex asks the member
+ * nothing, whatever its agent's mode. The machine is the boundary: a host's box, to
  * which an agent there has full access, or the cloud's sandbox, whose
  * firewall holds every credential and leaves only placeholders inside. Its
  * commands still inherit no bearer or key (`shell_environment_policy`),
@@ -137,17 +139,20 @@ import {
   type RunnerSelf,
   runsOnHost,
 } from "./launch.js";
+import { codexMemoryWatch } from "./out-of-memory.js";
 import { CODEX_PIN, SANDBOX_TOOL_ENV } from "./pins.js";
 import {
   CODEX_EFFORT,
   CODEX_ERROR_INFO,
   CODEX_PLAN_BACKEND,
   CODEX_TOKEN_COMMAND,
+  CONNECTION_LOST_DETAIL,
   type CodexConfig,
   type CodexEffort,
   type CodexPlanBackend,
   type ContentBlock,
   codexErrorKind,
+  connectionLostFailure,
   INPUT_LINE,
   INSTALLED_SKILLS,
   InputLineSchema,
@@ -157,6 +162,14 @@ import {
   RUNNER_WARM,
   type RunnerEnd,
 } from "./protocol.js";
+import {
+  awaitProvider,
+  codexConnectionLost,
+  type ProbeTarget,
+  type ProviderProbe,
+  probeTargetOf,
+  providerTargetOf,
+} from "./reconnect.js";
 import { RUNNER_SPAN } from "./trace.js";
 import { transcriptStore } from "./transcripts.js";
 
@@ -259,6 +272,8 @@ const SIGNAL = {
   INPUT_CLOSED: "input_closed",
   MESSAGE_TAKEN: "message_taken",
   TURN_COMPLETED: "turn_completed",
+  /** The provider's host was probed after a turn failed to reach it: it answered, or never did within the bound (`reconnect.ts`). */
+  PROBED: "probed",
   EXITED: "exited",
   CUT_OFF: "cut_off",
 } as const;
@@ -272,7 +287,10 @@ type Signal =
       readonly turnId: string;
       readonly status: TurnStatus;
       readonly error: string | undefined;
+      /** Codex's own word for why the turn failed (`codexErrorInfo`), as it wrote it. */
+      readonly errorInfo: unknown;
     }
+  | { readonly kind: typeof SIGNAL.PROBED; readonly answered: boolean }
   | { readonly kind: typeof SIGNAL.EXITED; readonly stderrTail: string }
   | { readonly kind: typeof SIGNAL.CUT_OFF; readonly why: string };
 
@@ -535,6 +553,20 @@ function providerOverrides(auth: CodexAuth): (readonly [string, string])[] {
   ];
 }
 
+/**
+ * The host app-server sends its model calls to on this credential: Codex's
+ * ChatGPT backend for a device-code plan's token, OpenAI's API for every
+ * other, host-supplied tokens among them, which Codex's own OpenAI provider
+ * sends there.
+ */
+function providerOf(auth: CodexAuth): ProbeTarget {
+  return providerTargetOf(
+    auth.kind === CODEX_AUTH.TOKEN_COMMAND && auth.backend === CODEX_PLAN_BACKEND.CHATGPT
+      ? CHATGPT_BACKEND_PROVIDER.BASE_URL
+      : CHATGPT_PROVIDER.BASE_URL,
+  );
+}
+
 /** What every launch turns on beside its provider: the fast tier, the Ultrafast one on an API key, and the catalog the launch wrote. */
 function featureOverrides(auth: CodexAuth): (readonly [string, string])[] {
   return [
@@ -682,6 +714,16 @@ interface CodexLaunch {
   warm: boolean;
   /** The thread's rollout as the store mirrors it, where the config names the store. */
   readonly mirror: RolloutMirror | undefined;
+  /** The provider's host, as app-server reaches it, which a lost connection is probed for. */
+  readonly providerHost: string;
+  /** Where that host is probed: the proxy app-server goes through, or the host itself. */
+  readonly probeTarget: ProbeTarget;
+  /** Whether the launch waits for the provider's host to answer again; the service's messages wait with it (`waiting`). */
+  reconnecting: boolean;
+  /** How many items the thread had started when the last carry-on was asked for, so a connection lost before any more fails the launch rather than probing again. */
+  carriedOnAt: number | undefined;
+  /** How many items the thread has started but the service's own messages, which say nothing of the model. */
+  readonly heard: { count: number };
 }
 
 /**
@@ -706,6 +748,8 @@ interface ThreadSeen {
   readonly context: LaunchContext<CodexConfig>;
   readonly signals: Queue.Queue<Signal>;
   threadId: string | undefined;
+  /** How many items the thread has started but the service's own messages (`CodexLaunch`'s `heard`). */
+  readonly heard: { count: number };
 }
 
 /**
@@ -732,6 +776,7 @@ function listenerFor(
   seen: ThreadSeen,
   refresh: Effect.Effect<ChatgptAuthTokensRefreshResponse, CodexTokenFailed> | undefined,
 ): AppServerListener {
+  const annotate = codexMemoryWatch();
   return {
     onRequest: (method) =>
       method === METHOD.CHATGPT_AUTH_TOKENS_REFRESH && refresh !== undefined
@@ -741,7 +786,7 @@ function listenerFor(
         : undefined,
     onNotification: (notification) =>
       Effect.gen(function* () {
-        yield* seen.context.sink.emit(notification);
+        yield* seen.context.sink.emit(yield* Effect.promise(() => annotate(notification)));
         if (notification.method === METHOD.TURN_COMPLETED) {
           const { threadId, turn } = notification.params;
           if (threadId !== seen.threadId) return;
@@ -750,14 +795,19 @@ function listenerFor(
             turnId: turn.id,
             status: turn.status,
             error: turn.error?.message,
+            errorInfo: turn.error?.codexErrorInfo,
           });
           return;
         }
         if (notification.method !== METHOD.ITEM_STARTED) return;
         const { threadId, item } = notification.params;
-        if (threadId !== seen.threadId || item.type !== "userMessage" || item.clientId === null) {
+        if (threadId !== seen.threadId) return;
+        // Every item but a message of ours is the model's doing, so it counts as the model heard from.
+        if (item.type !== "userMessage") {
+          seen.heard.count += 1;
           return;
         }
+        if (item.clientId === null) return;
         yield* Queue.offer(seen.signals, { kind: SIGNAL.MESSAGE_TAKEN, clientId: item.clientId });
       }),
     onExit: (stderrTail) =>
@@ -782,7 +832,7 @@ class RolloutUnread extends Data.TaggedError("RolloutUnread") {}
  * the thread opens rather than as it starts.
  */
 const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
-  launch: Pick<CodexLaunch, "context" | "signals" | "model" | "auth">,
+  launch: Pick<CodexLaunch, "context" | "signals" | "model" | "auth" | "heard">,
   threadId: string | undefined,
   fork: boolean,
   /** Whether the thread's rollout stands on the sandbox's disk, written back where it had to be. */
@@ -803,6 +853,7 @@ const openAppServer = Effect.fn("agent-runner/openAppServer")(function* (
     context: launch.context,
     signals: launch.signals,
     threadId: fork ? undefined : threadId,
+    heard: launch.heard,
   };
   const server = yield* spawnAppServer(
     {
@@ -1016,6 +1067,11 @@ const takeLine = Effect.fn("agent-runner/codex/takeLine")(function* (
       // Note that our id for the line is the id Codex echoes, so a turn that takes it names it.
       const uuid = value.uuid ?? randomUUID();
       const outgoing: Outgoing = { clientId: uuid, input: userInput(value.content), lines: [uuid] };
+      // A message sent while the provider's host is probed waits for it, and starts the next turn once it answers.
+      if (launch.reconnecting) {
+        launch.waiting.push(outgoing);
+        return undefined;
+      }
       if (launch.turnId === undefined) {
         yield* startTurn(launch, [outgoing]);
         return undefined;
@@ -1102,6 +1158,10 @@ const takeTurnCompleted = Effect.fn("agent-runner/codex/takeTurnCompleted")(func
   launch.turnId = undefined;
   yield* mirrored(launch);
   if (launch.stopping) return ended(RUNNER_END.STOPPED);
+  // A turn app-server gave up on for want of its provider's host is carried on once the host answers, not ended.
+  if (signal.status === "failed" && codexConnectionLost(signal.errorInfo)) {
+    return yield* connectionLost(launch);
+  }
   if (signal.status === "failed")
     return ended(RUNNER_END.FAILED, signal.error ?? "the turn failed");
   if (signal.status === "interrupted") {
@@ -1132,6 +1192,68 @@ const takeTurnCompleted = Effect.fn("agent-runner/codex/takeTurnCompleted")(func
   return undefined;
 });
 
+/**
+ * App-server could not reach its provider: the launch posts CONNECTION_LOST
+ * and probes the provider's host, unless the connection was lost again before
+ * the thread started any item since the last carry-on, when the launch ends
+ * failed rather than loop (`reconnect.ts`).
+ */
+const connectionLost = Effect.fn("agent-runner/codex/connectionLost")(function* (
+  launch: CodexLaunch,
+) {
+  if (launch.carriedOnAt === launch.heard.count) {
+    yield* Effect.logWarning(
+      "agent-runner: the connection was lost again before the model answered",
+    );
+    return ended(
+      RUNNER_END.FAILED,
+      connectionLostFailure(launch.providerHost, CONNECTION_LOST_DETAIL.LOST_AGAIN),
+    );
+  }
+  yield* Effect.logWarning(`agent-runner: lost the connection to ${launch.providerHost}`);
+  launch.reconnecting = true;
+  yield* launch.context.sink.emit({
+    type: RUNNER_EVENT.CONNECTION_LOST,
+    host: launch.providerHost,
+  });
+  yield* awaitProvider(launch.probeTarget).pipe(
+    Effect.flatMap((answered) => Queue.offer(launch.signals, { kind: SIGNAL.PROBED, answered })),
+    Effect.forkScoped,
+  );
+  return undefined;
+});
+
+/**
+ * The probe settled: the host answered, so the messages that waited start
+ * the next turn, or, with none waiting, CONNECTION_RESTORED asks the service
+ * for a carry-on line; or the bound passed, and the launch ends failed with
+ * why.
+ */
+const connectionProbed = Effect.fn("agent-runner/codex/connectionProbed")(function* (
+  launch: CodexLaunch,
+  answered: boolean,
+) {
+  if (!launch.reconnecting) return undefined;
+  launch.reconnecting = false;
+  if (!answered) {
+    yield* Effect.logWarning(`agent-runner: ${launch.providerHost} did not answer within the wait`);
+    return ended(
+      RUNNER_END.FAILED,
+      connectionLostFailure(launch.providerHost, CONNECTION_LOST_DETAIL.GAVE_UP),
+    );
+  }
+  launch.carriedOnAt = launch.heard.count;
+  const waiting = launch.waiting;
+  launch.waiting = [];
+  if (waiting.length > 0) yield* startTurn(launch, waiting);
+  yield* launch.context.sink.emit({
+    type: RUNNER_EVENT.CONNECTION_RESTORED,
+    host: launch.providerHost,
+    carryOn: waiting.length === 0,
+  });
+  return undefined;
+});
+
 /** One signal, acted on; answers the launch's outcome where it ends the launch. */
 function takeSignal(
   launch: CodexLaunch,
@@ -1139,7 +1261,7 @@ function takeSignal(
 ): Effect.Effect<
   LaunchOutcome | undefined,
   AppServerError,
-  ChildProcessSpawner.ChildProcessSpawner
+  ChildProcessSpawner.ChildProcessSpawner | ProviderProbe | Scope.Scope
 > {
   switch (signal.kind) {
     case SIGNAL.LINE:
@@ -1154,6 +1276,8 @@ function takeSignal(
       return Effect.succeed(undefined);
     case SIGNAL.TURN_COMPLETED:
       return takeTurnCompleted(launch, signal);
+    case SIGNAL.PROBED:
+      return connectionProbed(launch, signal.answered);
     case SIGNAL.EXITED:
       return Effect.succeed(
         ended(RUNNER_END.FAILED, `app-server exited: ${signal.stderrTail.trim()}`.trim()),
@@ -1267,8 +1391,10 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     Effect.orElseSucceed(() => false),
     Effect.forkScoped,
   );
+  const heard = { count: 0 };
+  const provider = providerOf(auth);
   const opened = yield* openAppServer(
-    { context, signals, model: config.model, auth },
+    { context, signals, model: config.model, auth, heard },
     config.threadId,
     config.fork === true,
     Fiber.join(restoring),
@@ -1338,6 +1464,11 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     // Note that a warm launch is warm from its start, so one launched with no message waits for its first as one past an IDLE does.
     warm: config.warm === true,
     mirror,
+    providerHost: provider.host,
+    probeTarget: probeTargetOf(context.env, provider),
+    reconnecting: false,
+    carriedOnAt: undefined,
+    heard,
   };
 
   // The service's lines join the signals in a loop of their own, so a line is

@@ -8,6 +8,7 @@ import type { LocalAgentClis, LocalAgentPlatformSeam } from "../effect/seams.js"
 import { agentOnBox } from "../local-agent-box.js";
 import { localAgentClis } from "../local-agent-setup.js";
 import {
+  agentSnapshotScript,
   agentWorktreeScript,
   cloneFolder,
   repositoryReachedScript,
@@ -94,13 +95,15 @@ export function hostPlatform(options: HostPlatformOptions): LocalAgentPlatformSe
       ...(options.os.platform === DEVICE_PLATFORM.DARWIN ? [DEVICE_CAPABILITY.GITHUB_SIGN_IN] : []),
     ],
     deviceArch: options.arch,
-    worktreeScript: ({ home, repository, worktree, branch }) =>
+    worktreeScript: ({ home, repository, worktree, agentId, branch }) =>
       agentWorktreeScript({
         repository,
         clone: cloneFolder(worktreesRoot(home), repository),
         worktree,
+        agentId,
         branch,
       }),
+    snapshotScript: agentSnapshotScript,
     repositoryReachedScript: (repository) => repositoryReachedScript({ repository }),
   };
 }

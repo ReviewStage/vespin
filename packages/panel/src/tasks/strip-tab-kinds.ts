@@ -1,5 +1,7 @@
 import { PRODUCT_SURFACE, type ProductSurface } from "@repo/features/analytics";
-import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
+import { fileName } from "@repo/features/code-ref-words";
+import { GLYPH_STATE } from "@repo/features/glyph-state";
+import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import type { PagePlace } from "@repo/features/page-wire";
 import {
   type ChangesStripTab,
@@ -13,8 +15,6 @@ import {
   TAB_WORDS,
   tabKey,
 } from "@repo/ui/tab-strip-model";
-import { GLYPH_STATE } from "../state-glyph.js";
-import { fileName } from "./file-ref-model.js";
 import { type PlanStanding, TAB_KIND, type TabSubject } from "./tab-look.js";
 import { type FixedSidePanelTab, SIDE_PANEL_TAB, SIDE_PANEL_TABS } from "./task-tab-model.js";
 import { isOverviewTab, type MainTab } from "./use-main-tabs.js";
@@ -156,7 +156,7 @@ interface StripTabKindDeclaration<K extends StripTabKind> {
   readonly untitled: (tab: KindTab<K>) => string;
   readonly look: (tab: KindTab<K>, known: TabKnown) => TabSubject;
   readonly surface: (tab: KindTab<K>, taskId: string) => TabSurface;
-  readonly link: (tab: KindTab<K>, holder: PagePlace) => LinkPlace | undefined;
+  readonly link: (tab: KindTab<K>, holder: PagePlace) => LinkDestination | undefined;
   readonly drawsAgain: (tab: KindTab<K>, draws: TaskDraws) => boolean;
   readonly reopens: boolean;
   readonly endsSession: K extends ShellKind ? boolean : false;
@@ -289,7 +289,7 @@ const STRIP_TAB_KINDS = {
       const agent = tab.delegation?.agent ?? ("agentId" in holder ? holder.agentId : undefined);
       return agent === undefined
         ? undefined
-        : { kind: LINK_PLACE.WORKER, agentId: agent, callId: tab.subagent };
+        : { kind: LINK_DESTINATION.WORKER, agentId: agent, callId: tab.subagent };
     },
     drawsAgain: (tab, draws) => drawsSubagent(tab, { agents: draws.openAgents, subagents: [] }),
     reopens: true,
@@ -322,7 +322,9 @@ const STRIP_TAB_KINDS = {
     surface: surfaceOf(PRODUCT_SURFACE.PULL_REQUEST),
     // A Changes tab on another pull request of the agent's repository, by its number, is no place a link names.
     link: (tab) =>
-      tab.number === undefined ? { kind: LINK_PLACE.CHANGES, agentId: tab.changes } : undefined,
+      tab.number === undefined
+        ? { kind: LINK_DESTINATION.CHANGES, agentId: tab.changes }
+        : undefined,
     drawsAgain: (tab, draws) => drawsChanges(tab, { taskAgents: draws.taskAgents }),
     reopens: true,
     endsSession: false,
@@ -371,8 +373,8 @@ const STRIP_TAB_KINDS = {
     surface: surfaceOf(PRODUCT_SURFACE.PAGE),
     link: (tab, holder) =>
       "taskId" in holder
-        ? { kind: LINK_PLACE.PAGE, planId: holder.taskId, pageId: tab.page }
-        : { kind: LINK_PLACE.PAGE, agentId: holder.agentId, pageId: tab.page },
+        ? { kind: LINK_DESTINATION.PAGE, planId: holder.taskId, pageId: tab.page }
+        : { kind: LINK_DESTINATION.PAGE, agentId: holder.agentId, pageId: tab.page },
     // A task's pages not read yet pass over no tab, and once read, a page gone since is passed over.
     drawsAgain: (tab, draws) => draws.pages === undefined || draws.pages.includes(tab.page),
     reopens: true,
@@ -451,7 +453,7 @@ export function stripTabSurface(tab: AnyKindTab, taskId: string): TabSurface {
 }
 
 /** The place a tab of the side panel shows, on the task or the agent's page holding the panel; none where nothing links to it. */
-export function stripTabLink(tab: AnyKindTab, holder: PagePlace): LinkPlace | undefined {
+export function stripTabLink(tab: AnyKindTab, holder: PagePlace): LinkDestination | undefined {
   return declarationOf(tab).link(tab, holder);
 }
 

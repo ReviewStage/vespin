@@ -1,11 +1,18 @@
+import { messageFailureWords } from "@repo/features/agent-refusal-words";
 import {
   AGENT_CALL_FAILURE,
   type AgentCallFailure,
   type AgentInboxAnsweredView,
 } from "@repo/features/agent-view";
-import { INBOX_STATUS, type InboxItem, type InboxStatus } from "@repo/features/inbox-wire";
+import { RESOLVE } from "@repo/features/inbox-ask-words";
+import {
+  INBOX_STATUS,
+  INBOX_TAKE_BACK,
+  type InboxItem,
+  type InboxStatus,
+} from "@repo/features/inbox-wire";
 import { cardTitle } from "@repo/features/plain-words";
-import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { FAILURE_SURFACE, type FailureSurface } from "@repo/features/shown-failure";
 import { countWords, TERM } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActKind } from "@repo/host/contract";
@@ -17,24 +24,20 @@ import { type ActResult, type ActVariables, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 import type { ShortcutSubject } from "../shortcut-target.js";
-import { type HeldWrite, pressHeld } from "../undo-stack.js";
-import { messageFailureWords } from "./agent-model.js";
+import { pressTakeBack, type TakeBackUndoRefusal, type TakeBackWrite } from "../undo-stack.js";
 
 /**
  * inbox-close.tsx -- open Inbox items resolved without an answer, at once and with Undo, from every place that offers it: an item's menus, its question card, the list's head, a chosen row's menu, and E.
  *
  * Resolve is one act wherever it is pressed: it asks nothing, the items
  * read resolved at once in every read the window draws, and one toast
- * offers Undo for its hold (`packages/panel/AGENTS.md`'s Confirms), as ⌘Z does
- * (`undo-stack.ts`'s held entries). Its
- * agent must not hear of a resolve the reader takes back, so each close
- * goes to the host held (`AGENTS_INBOX_CLOSE`'s `held`): the host draws it
- * and keeps it from the service until the toast is gone, when it is let
- * go as sent, or until Undo, when it is let go as taken back and the item
- * stands again as it was (`AGENTS_INBOX_CLOSE_RELEASE`). A window leaving
- * while its toast stands lets its resolves go as sent, so a resolve the
- * reader left standing is never dropped; the host sends any it still holds
- * once it quits, or once a while passes with no word from its window.
+ * offers Undo (`packages/panel/AGENTS.md`'s Confirms), as ⌘Z does for as
+ * long as it keeps the entry, its toast gone or not (`undo-stack.ts`'s
+ * take-back entries). Each close goes to the service at once, and its Undo
+ * takes it back there by its key (`AGENTS_INBOX_TAKE_BACK`): the item open
+ * again, its question asking again. One whose agent was told, an agent waiting to hear
+ * back, cannot be taken back, and its Undo says so, as it does of an item
+ * changed since.
  *
  * Each close goes under a key of its own, at the revision the item was
  * pressed on, so an agent's change since is never resolved unseen: the
@@ -45,14 +48,6 @@ import { messageFailureWords } from "./agent-model.js";
 /** What a close the act channel refused hears, as the service not answering, with the error beneath. */
 const unreached = unreachedAs(AGENT_CALL_FAILURE.UNANSWERED);
 
-/**
- * What the act is called wherever it is offered. Note that it is not called
- * Close, because the bar of a side panel or a window standing it full screen
- * already holds a Close that only puts the panel away, and its mark is never
- * Close's ×.
- */
-export const RESOLVE = "Resolve";
-
 /** What a toast says of a close the service did not take, by what had become of the item: still open, the agent having changed it; answered; or resolved. */
 const NOT_TAKEN = {
   [INBOX_STATUS.OPEN]: "The agent changed this item before you resolved it.",
@@ -60,23 +55,23 @@ const NOT_TAKEN = {
   [INBOX_STATUS.CLOSED]: "This item was already resolved.",
 } as const satisfies Record<InboxStatus, string>;
 
-/** What a toast says of an Undo that came after its host had sent a resolve on, as one held past the host's bound is. */
-const TOO_LATE = "Too late to undo: the agent was already told.";
-
-/** What a toast says of an Undo that did not reach the host, which may still hold the resolve, and what its action that asks again is called. */
-const UNDO_UNREACHED = {
-  WORDS: "Could not undo resolving. The agent is told in a minute unless you try again.",
-  RETRY: "Try again",
+/** What a toast says of a resolve's Undo the service did not take, by why. */
+const RESOLVE_UNTAKEN = {
+  unreached: "Could not undo resolving.",
+  told: "Can't undo: the agent was already told.",
+  movedOn: "Can't undo: it changed since you resolved it.",
 } as const;
 
-/** How one held close answered being let go: still held, and let go now; sent on already; or not reached, so it may still be held. */
-const RELEASED = {
-  HELD: "held",
-  LATE: "late",
+/** What a toast's action that asks a take-back again is called. */
+const TRY_AGAIN = "Try again";
+
+/** How one take-back answered: taken back, refused as told to its agent or as moved on, or not reached, so it may be asked again. */
+const TOOK_BACK = {
+  ...INBOX_TAKE_BACK,
   UNREACHED: "unreached",
 } as const;
 
-type Released = (typeof RELEASED)[keyof typeof RELEASED];
+export type TookBack = (typeof TOOK_BACK)[keyof typeof TOOK_BACK];
 
 /** What the Undo toast says: the one item by its title, or how many. */
 function resolvedNote(items: readonly InboxItem[]): string {
@@ -105,16 +100,21 @@ function refusalWords(
 export type InboxResolver = (items: readonly InboxItem[]) => void;
 
 /** How an act of `Kind` is sent: the `mutateAsync` of its kind's mutation (`act-mutations.ts`). */
-type Send<Kind extends PortActKind> = (variables: ActVariables<Kind>) => Promise<ActResult<Kind>>;
+export type Send<Kind extends PortActKind> = (
+  variables: ActVariables<Kind>,
+) => Promise<ActResult<Kind>>;
 
-/** The mutations a resolve is sent on: the close, held, and the release that lets its hold go. */
+/** The mutation a settle is taken back on. */
+export type TakeBackDoor = Send<typeof ACT_KIND.AGENTS_INBOX_TAKE_BACK>;
+
+/** The mutations a resolve is sent on: the close, and the take-back its Undo asks. */
 interface ResolveDoors {
   readonly close: Send<typeof ACT_KIND.AGENTS_INBOX_CLOSE>;
-  readonly release: Send<typeof ACT_KIND.AGENTS_INBOX_CLOSE_RELEASE>;
+  readonly takeBack: TakeBackDoor;
 }
 
-/** One press's resolve: the open items it closes, and the key each close goes under, by the item's place. */
-interface Resolving {
+/** One press's settles, a resolve or a nod: the open items it settles, and the key each settle goes under, by the item's place. */
+export interface Settles {
   readonly items: readonly InboxItem[];
   readonly keys: readonly string[];
 }
@@ -122,28 +122,65 @@ interface Resolving {
 /** What one close answered: the item as the service answered it, or why the service was not reached. */
 type CloseAnswer = AgentInboxAnsweredView | { readonly failure: AgentCallFailure };
 
-/** How each of `keys`' holds answered being let go, as sent where `send`, else as taken back. */
-function released(
-  release: ResolveDoors["release"],
-  keys: readonly string[],
-  send: boolean,
-): Promise<readonly Released[]> {
+/** How each settle answered being taken back, by its item's place. */
+export function tookBack(
+  takeBack: TakeBackDoor,
+  { items, keys }: Settles,
+): Promise<readonly TookBack[]> {
   return Promise.all(
-    keys.map((clientKey) =>
-      release({ clientKey, send }).then(
-        (found): Released => (found.held ? RELEASED.HELD : RELEASED.LATE),
-        (): Released => RELEASED.UNREACHED,
+    items.map((item, at) =>
+      takeBack({ itemId: item.id, clientKey: keys[at] ?? "" }).then(
+        (answer): TookBack => ("failure" in answer ? TOOK_BACK.UNREACHED : answer.outcome),
+        (): TookBack => TOOK_BACK.UNREACHED,
       ),
     ),
   );
 }
 
+/** What a settle's Undo says where the service did not take it back, in its own words: not reached, told to its agent, or moved on. */
+export interface UntakenWords {
+  readonly unreached: string;
+  readonly told: string;
+  readonly movedOn: string;
+}
+
 /**
- * A resolve as the undo stack holds it (`undo-stack.ts`'s `HeldWrite`): each
- * close sent held, let go as sent once its toast is gone, and taken back by
- * letting it go unsent. Note that an Undo the host did not hear may still be
- * held there, so its toast asks again for those alone; one the host had sent
- * on already says so.
+ * What an Undo of settles says where it did not take each back: the Undo
+ * not reached, asked again for those alone; one whose agent was told; or one
+ * changed since. None where each was taken back.
+ */
+export function untakenSettles(
+  { items, keys }: Settles,
+  answers: readonly TookBack[],
+  words: UntakenWords,
+  surface: FailureSurface,
+): TakeBackUndoRefusal<Settles> | undefined {
+  const missed = (_: unknown, at: number) => answers[at] === TOOK_BACK.UNREACHED;
+  if (answers.some((answer) => answer === TOOK_BACK.UNREACHED)) {
+    return {
+      words: words.unreached,
+      failure: { surface, cause: words.unreached },
+      retry: {
+        label: TRY_AGAIN,
+        change: { items: items.filter(missed), keys: keys.filter(missed) },
+      },
+    };
+  }
+  const said = answers.includes(TOOK_BACK.TOLD)
+    ? words.told
+    : answers.includes(TOOK_BACK.MOVED_ON)
+      ? words.movedOn
+      : undefined;
+  return said === undefined
+    ? undefined
+    : { words: said, failure: { surface, cause: said, refused: true } };
+}
+
+/**
+ * A resolve as the undo stack holds it (`undo-stack.ts`'s `TakeBackWrite`):
+ * each close sent at once, and taken back by its key whenever its Undo asks.
+ * Note that a take-back that did not reach the service is asked again for
+ * those alone.
  */
 const RESOLVE_WRITE = {
   words: ({ items }) => resolvedNote(items),
@@ -157,12 +194,10 @@ const RESOLVE_WRITE = {
           itemId: item.id,
           revision: item.revision,
           clientKey: keys[at] ?? "",
-          held: true,
         }).catch(unreached),
       ),
     ),
-  letGo: ({ release }, { keys }) => void released(release, keys, true),
-  undo: ({ release }, { keys }) => released(release, keys, false),
+  undo: ({ takeBack }, settles) => tookBack(takeBack, settles),
   refused: ({ items }, answers) => {
     const refused = answers.flatMap((answer, at) => {
       const words = refusalWords(answer);
@@ -172,7 +207,7 @@ const RESOLVE_WRITE = {
     const [first] = refused;
     if (first === undefined) return undefined;
     return {
-      // Note that a close the service never answered may still be held, so only a refusal of every one is whole.
+      // Note that a close the service never answered may have landed, so only a refusal of every one is whole.
       whole: answers.every((answer) => !("failure" in answer) && !answer.taken),
       words:
         items.length === 1
@@ -185,30 +220,14 @@ const RESOLVE_WRITE = {
       },
     };
   },
-  unheld: ({ items, keys }, answers) => {
-    const missed = (_: unknown, at: number) => answers[at] === RELEASED.UNREACHED;
-    if (answers.some((answer) => answer === RELEASED.UNREACHED)) {
-      return {
-        words: UNDO_UNREACHED.WORDS,
-        failure: { surface: FAILURE_SURFACE.INBOX_CLOSE, cause: UNDO_UNREACHED.WORDS },
-        retry: {
-          label: UNDO_UNREACHED.RETRY,
-          change: { items: items.filter(missed), keys: keys.filter(missed) },
-        },
-      };
-    }
-    if (!answers.includes(RELEASED.LATE)) return undefined;
-    return {
-      words: TOO_LATE,
-      failure: { surface: FAILURE_SURFACE.INBOX_CLOSE, cause: TOO_LATE, refused: true },
-    };
-  },
-} satisfies HeldWrite<ResolveDoors, Resolving, readonly CloseAnswer[], readonly Released[]>;
+  unheld: (resolving, answers) =>
+    untakenSettles(resolving, answers, RESOLVE_UNTAKEN, FAILURE_SURFACE.INBOX_CLOSE),
+} satisfies TakeBackWrite<ResolveDoors, Settles, readonly CloseAnswer[], readonly TookBack[]>;
 
-/** The Inbox's resolves, each held by the host until its Undo toast is gone. */
+/** The Inbox's resolves, each taken back by the service whenever its Undo asks. */
 export function useInboxResolver(): InboxResolver {
   const { mutateAsync: close } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_CLOSE));
-  const { mutateAsync: release } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_CLOSE_RELEASE));
+  const { mutateAsync: takeBack } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_TAKE_BACK));
   const out = useRef(new Set<string>());
   return useCallback(
     (items: readonly InboxItem[]) => {
@@ -218,11 +237,11 @@ export function useInboxResolver(): InboxResolver {
       if (open.length === 0) return;
       for (const item of open) out.current.add(item.id);
       const resolving = { items: open, keys: open.map(() => crypto.randomUUID()) };
-      void pressHeld(RESOLVE_WRITE, { close, release }, resolving).then(() => {
+      void pressTakeBack(RESOLVE_WRITE, { close, takeBack }, resolving).then(() => {
         for (const item of open) out.current.delete(item.id);
       });
     },
-    [close, release],
+    [close, takeBack],
   );
 }
 

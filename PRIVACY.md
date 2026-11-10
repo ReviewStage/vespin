@@ -53,6 +53,18 @@ thinking text included, so the agent can resume it and an agent continued or
 forked from it goes on from it. Transcripts and descriptions are stored
 as written, not end-to-end encrypted, and our operators can read them.
 
+### Link previews
+
+When you rest the pointer on a plain web link in a conversation, a thread, or
+a description, Vespin shows a card of the page it opens: its title,
+description, site name, icon, and picture. To draw it, the Service fetches
+that page, and the icon and picture it names, from our servers over HTTPS
+only, so the site
+sees a request from Vespin and never from your Mac or browser, with no cookie
+or credential of yours. The Service refuses addresses inside a network and
+keeps what a page answered for a few minutes, keyed by the address alone and
+under no one's name; it does not record which links you hovered.
+
 ### Repository and GitHub data
 
 Through your workspace's GitHub App installation, we access repository
@@ -117,9 +129,12 @@ another machine you add, with full access to everything that machine's account
 can reach. Their work stays on that machine, though their transcripts are
 stored like any other, and, on a machine running host 0.11.0 or later, so is
 their harness's own session, its thinking text included, as a cloud agent's
-is. To tell your machines apart, each sends us a keyed hash
-of its hardware or machine id, never the id itself, and a Mac sends its model
-name.
+is. A teammate who can see such an agent may continue or fork it, unless it
+works on your own GitHub token: the new agent is handed that session where we
+keep it, or a replay of its transcript where we don't, and the branch the
+agent pushed. Nothing is read from your machine, and a continue only stops the
+agent there. To tell your machines apart, each sends us a keyed hash of its
+hardware or machine id, never the id itself, and a Mac sends its model name.
 
 When such an agent starts, we send that machine a copy of the Anthropic or
 OpenAI credential it runs on, sealed until the machine picks it up, when we

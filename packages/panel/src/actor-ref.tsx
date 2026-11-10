@@ -8,6 +8,7 @@ import {
   automationTriggerText,
 } from "@repo/features/automation-list-model";
 import type { AutomationRunSummary, AutomationSummary } from "@repo/features/automation-wire";
+import { GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import {
   AVATAR_SHAPE,
   AVATAR_SIZE,
@@ -56,7 +57,7 @@ import { useAutomation } from "./automation-directory.js";
 import { automationNextText, automationOwnerName } from "./desktop/automation-words.js";
 import { useCreator } from "./member-directory.js";
 import { useActorDoor, usePreloadedPerson } from "./person-door.js";
-import { GLYPH_STATE, type GlyphState, StateGlyph } from "./state-glyph.js";
+import { StateGlyph } from "./state-glyph.js";
 import { AgentHoverCard } from "./tasks/agent-ref.js";
 import { AgentMark } from "./tasks/tab-look.js";
 
@@ -504,6 +505,30 @@ export function ActorMark({
 }
 
 /**
+ * An actor as a chip's glyph: an agent's mark or an automation's alone,
+ * wearing where its work stands, at the size of every glyph beside it in the
+ * line; anyone else as their mark (`ActorMark`). Note that an agent and an
+ * automation stand bare here rather than on their square, because a bare
+ * square draws no ground of its own and only shrinks its glyph to its share,
+ * which reads in a chip as a glyph too small and set off from its name.
+ */
+export function ActorGlyph({ actor }: { actor: Actor }): React.JSX.Element {
+  switch (actor.kind) {
+    case ACTOR_KIND.AGENT:
+      return (
+        <StateGlyph
+          glyph={<AgentMark provider={actor.provider} />}
+          state={GLYPH_OF_STATE[actor.state]}
+        />
+      );
+    case ACTOR_KIND.AUTOMATION:
+      return automationGlyph(actor);
+    default:
+      return <ActorMark actor={actor} size={ACTOR_SIZE.INLINE} />;
+  }
+}
+
+/**
  * No one, where a place says who is on something and nobody is: the shared
  * dashed outline (`UnassignedAvatar`) at an actor's size, so it stands
  * level with the faces around it, named Unassigned on hover and to a screen
@@ -772,6 +797,29 @@ export function automationActor(automation: AutomationSummary): Actor {
     state: ACTOR_STATE_OF_RUN[automationRunStanding(automation.lastRun)],
     trigger: automation.trigger,
   };
+}
+
+/** What an automation is called beside its name once it is deleted. */
+const DELETED_AUTOMATION_WORDS = "(deleted)";
+
+/** What an automation is called where no name was kept, as an agent started before it was is. */
+const AUTOMATION_WORDS = "Automation";
+
+/**
+ * An automation the place cannot read, by the name it had when its run
+ * started an agent, at rest: "Morning triage (deleted)" once it is gone
+ * (`automationId` absent), its name alone where it stands but is a
+ * teammate's the reader cannot read, and "Automation" where no name was kept.
+ */
+export function namedAutomationActor(
+  automationId: string | undefined,
+  name: string | undefined,
+): Actor {
+  const words =
+    automationId === undefined && name !== undefined
+      ? `${name} ${DELETED_AUTOMATION_WORDS}`
+      : (name ?? AUTOMATION_WORDS);
+  return { kind: ACTOR_KIND.AUTOMATION, name: words, state: ACTOR_STATE.REST };
 }
 
 /** One run of an automation, as its row in a list of every automation's runs wears it: the glyph of what fired it, wearing where it stands, under its automation's name. */

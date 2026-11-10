@@ -177,3 +177,13 @@ test("a task box a reader cannot tick is the shared box, named by its item, tick
   await act(async () => first.click());
   assert.equal(first.getAttribute("aria-checked"), "true", "a press changes nothing");
 });
+
+test("words nested too deep to parse are drawn as plain text in every look, never parsed", () => {
+  const words = `${">".repeat(8000)} **hi**`;
+  for (const look of Object.values(MARKDOWN_LOOK)) {
+    const html = markup({ look, words });
+    assert.ok(html.includes(">&gt;&gt;"), look);
+    assert.ok(html.includes("**hi**"), look);
+    assert.ok(!html.includes("<blockquote"), look);
+  }
+});

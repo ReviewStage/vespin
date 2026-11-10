@@ -1,6 +1,10 @@
 import { Schema as EffectSchema, Option } from "effect";
 import type { AgentOrigin } from "./agent-wire.js";
-import { AUTOMATION_FIRING, automationFiringSchema } from "./automation-wire.js";
+import {
+  AUTOMATION_FIRING,
+  type AutomationFiring,
+  automationFiringSchema,
+} from "./automation-wire.js";
 import { refuses } from "./contract/base.js";
 import {
   LIVE_MODE,
@@ -61,24 +65,43 @@ type OriginLiveRow = LiveRowOf<typeof AGENT_ORIGIN_READ.parts.origin>;
 
 const readRows = EffectSchema.decodeUnknownOption(AGENT_ORIGIN_READ.rows.fields.origin);
 
-/** The run as its page reads it: the prompt alone, the issue or pull request a GitHub event named, a webhook's body, and the member who asked for a run now, where their account stands. */
+/**
+ * What a firing was about, as an agent's page names it beside the
+ * automation: the issue or pull request a GitHub event named, by its number,
+ * or the issue an integration's event is about (a Sentry issue), each by its
+ * title and address where the firing kept them; nothing for any other firing.
+ */
+export function originSubjectsOf(firing: AutomationFiring): Pick<AgentOrigin, "subject" | "issue"> {
+  if (firing.kind === AUTOMATION_FIRING.INTEGRATION) {
+    const { title, url } = firing.subject;
+    return {
+      issue: {
+        provider: firing.provider,
+        ...(title === undefined ? undefined : { title }),
+        ...(url === undefined ? undefined : { url }),
+      },
+    };
+  }
+  if (firing.kind !== AUTOMATION_FIRING.GITHUB || firing.number === undefined) return {};
+  return {
+    subject: {
+      number: firing.number,
+      ...(firing.title === undefined ? undefined : { title: firing.title }),
+      ...(firing.url === undefined ? undefined : { url: firing.url }),
+    },
+  };
+}
+
+/** The run as its page reads it: the prompt alone, what the firing was about, a webhook's body, and the member who asked for a run now, where their account stands. */
 function originOf({ origin, runnerName }: OriginLiveRow): AgentOrigin {
   const { firing } = origin;
-  const subject =
-    firing.kind === AUTOMATION_FIRING.GITHUB && firing.number !== undefined
-      ? {
-          number: firing.number,
-          ...(firing.title === undefined ? undefined : { title: firing.title }),
-          ...(firing.url === undefined ? undefined : { url: firing.url }),
-        }
-      : undefined;
   const runner =
     firing.kind === AUTOMATION_FIRING.MANUAL && firing.userId !== undefined
       ? firing.userId
       : undefined;
   return {
     prompt: origin.prompt,
-    ...(subject === undefined ? undefined : { subject }),
+    ...originSubjectsOf(firing),
     ...(origin.body === undefined ? undefined : { body: origin.body }),
     ...(runner === undefined || runnerName === null
       ? undefined

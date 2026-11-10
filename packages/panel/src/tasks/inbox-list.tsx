@@ -1,6 +1,6 @@
+import { inboxShownTicks } from "@repo/features/inbox-draft";
 import {
   EVERYONES,
-  holderName,
   INBOX_NOT_READ,
   INBOX_SCOPES,
   INBOX_SHOW,
@@ -156,13 +156,11 @@ import {
 import { INBOX_ITEM_KEYS, inboxItemSubject, useInboxItemActions } from "./inbox-item-actions.js";
 import {
   addressedWords,
-  HolderGlyph,
   InboxItemCard,
   InboxItemMarks,
   inboxLineGlyph,
   useInboxStanding,
 } from "./inbox-item-parts.js";
-import { inboxShownTicks } from "./inbox-model.js";
 import { type InboxReminder, useRemindMany } from "./inbox-remind.js";
 import { useInboxRowActs } from "./inbox-row-acts.js";
 import { type InboxListMark, type InboxSelection, useInboxSelection } from "./inbox-selection.js";
@@ -174,8 +172,8 @@ import { PlanGlyph } from "./tab-look.js";
  * The list is drawn from the sidebar's own pieces, on the Inbox's own ground, so it reads as the
  * sidebar does. An item is a row, as a
  * mail app lists a thread: the tile of the agent that posted it
- * (`actor-ref.tsx`), as the task's summary or main's read of an agent with
- * no task names the agent, its title, and how long ago it last changed,
+ * (`actor-ref.tsx`), as the task's summary names the agent, its title,
+ * and how long ago it last changed,
  * and before its time the face of the teammate whose agent asks it, as the
  * sidebar marks a teammate's task, the reader's own wearing none; under
  * them, muted, the last word in its thread, who said it first
@@ -529,12 +527,12 @@ export const InboxItemRow = memo(function InboxItemRow({
         }
         describedAs={heard}
         lead={{
-          icon: <HolderGlyph holder={holder} />,
+          icon: <PlanGlyph status={holder.task.status} />,
           // Note that a thread its agent addressed by name says so after its task, since its task's assignee may be someone else.
           label:
             addressedTo === undefined
-              ? holderName(holder)
-              : `${holderName(holder)} · ${addressedWords(addressee)}`,
+              ? holder.task.name
+              : `${holder.task.name} · ${addressedWords(addressee)}`,
         }}
         leadAt={LIST_ROW_LEAD.ABOVE}
         meta={
@@ -648,7 +646,7 @@ function ViewOptions({
   );
 }
 
-/** Mark all as read on the window's Inbox's head, pressable while anything is unread. */
+/** Mark all as read on the window's Inbox's head, pressable while anything is unread or a notice waits on the reader. */
 function MarkAllReadButton({ readAll }: { readAll: InboxReadAll }): React.JSX.Element {
   return (
     <Tooltip label={MARK_ALL_READ}>
@@ -662,7 +660,7 @@ function MarkAllReadButton({ readAll }: { readAll: InboxReadAll }): React.JSX.El
   );
 }
 
-/** Mark all as read, as a phone's ⋯ offers it, a phone having no right-click, pressable while anything is unread. */
+/** Mark all as read, as a phone's ⋯ offers it, a phone having no right-click, pressable while anything is unread or a notice waits on the reader. */
 function markAllAction(readAll: InboxReadAll): MenuAction {
   return {
     label: MARK_ALL_READ,
@@ -1358,7 +1356,7 @@ interface InboxSearchHead {
   readonly onQuery: (query: string) => void;
 }
 
-/** Mark all as read as a phone's ⋯ offers it: whether any item is unread, filtered out or not, and the mark. */
+/** Mark all as read as a phone's ⋯ offers it: whether any item is unread or a notice it acknowledges stands, filtered out or not, and the mark. */
 interface InboxReadAll {
   readonly unread: boolean;
   readonly onMarkAll: () => void;

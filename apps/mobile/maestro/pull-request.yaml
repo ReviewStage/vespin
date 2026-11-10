@@ -1,0 +1,95 @@
+# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, then merged from the bar; one whose checks failed; and one in the merge queue, taken out of it after the question, and opened on GitHub.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, whose invitations agent opened three
+# pull requests (`@repo/host/fixture-inbox`'s `FIXTURE_PULL_REQUEST`): #128
+# green and ready, #127 with a check failed, and #126 second in the merge
+# queue. A change is answered by the fixture as GitHub would take it and
+# moves the pull request on the document; nothing reaches a server.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+- assertVisible: "Add a way to resend an invite that expired."
+# The card offers Merge beside Review, which asks first.
+- scrollUntilVisible:
+    element: "Merge"
+    direction: UP
+    centerElement: true
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-card
+- tapOn: "Merge"
+- assertVisible: "Merge this pull request?"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-card-merge
+- tapOn: "Cancel"
+- waitForAnimationToEnd
+# The card opens the pull request's own screen: green, approved, ready.
+- tapOn: "#128 Invite a teammate by email.*"
+- extendedWaitUntil:
+    visible: "Ready to merge"
+    timeout: 30000
+- assertVisible: "grace"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-ready
+# Merging acts on the press, as the panel's merge control does.
+- tapOn: "Squash and merge"
+- extendedWaitUntil:
+    visible: "Merged"
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-merged
+# One whose checks failed: the failure first, a check still running, and
+# changes asked for, with no merge to press.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      pullRequest: 127
+- extendedWaitUntil:
+    visible: "Expire an invite after seven days.*"
+    timeout: 30000
+- assertVisible: "Changes requested"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-failing
+# One in the merge queue: Remove from queue asks first, with what leaving
+# costs the pull requests behind it, and once out it offers Merge when ready.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      pullRequest: 126
+- extendedWaitUntil:
+    visible: "Queued #2"
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-queued
+- tapOn: "Remove from queue"
+- assertVisible: "Remove from the merge queue?"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-dequeue
+- tapOn:
+    text: "Remove from queue"
+    below: "Remove from the merge queue?"
+- extendedWaitUntil:
+    visible: "Merge when ready"
+    timeout: 30000
+- assertNotVisible: "Queued #2"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-dequeued
+# Its diff and comments open on GitHub, from the bar's menu.
+- tapOn: "More"
+- assertVisible: "Open on GitHub"
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-menu
+- tapOn: "Open on GitHub"
+- extendedWaitUntil:
+    notVisible: "Send the invite email from the workspace.*"
+    timeout: 30000
+- takeScreenshot: pull-request-github

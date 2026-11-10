@@ -14,10 +14,6 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskSections, TaskSectionWrite } from "@repo/features/task-section-wire";
 import { NO_TASK_SECTIONS, SECTION_WRITE_FAILED_NOTE } from "@repo/features/task-sections-model";
 import type { RepositoryPin, TaskAgentPin } from "@repo/features/task-wire";
-import type { TasksView } from "@repo/features/tasks-view";
-import { ACT_KIND } from "@repo/host/acts";
-import type { AppStateSnapshot } from "@repo/host/app-state";
-import { STATUS_TONE } from "@repo/ui";
 import {
   AGENT_PIN_FAILED_NOTES,
   MARK_FAILED_NOTES,
@@ -26,7 +22,11 @@ import {
   REPOSITORY_PIN_FAILED_NOTES,
   TASK_MARK,
   type TaskMark,
-} from "@repo/ui/tasks-model";
+} from "@repo/features/tasks-model";
+import type { TasksView } from "@repo/features/tasks-view";
+import { ACT_KIND } from "@repo/host/acts";
+import type { AppStateSnapshot } from "@repo/host/app-state";
+import { STATUS_TONE } from "@repo/ui";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { askKept, firstRefusal, KEPT, type Kept, notKept } from "../act.js";

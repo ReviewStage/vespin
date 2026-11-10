@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { Schema } from "effect";
 
 import type { Baseline } from "./baseline.ts";
+import { isLucideModule } from "./lucide-guard.ts";
 import { scanCss } from "./style-guard.ts";
 
 /**
@@ -37,6 +38,9 @@ const PREFIX_MARK = "*";
 /** The icon door, by its package name and by the folder a relative import reaches. */
 const ICON_DOOR_MODULE = "@repo/ui/icons";
 const ICON_DOOR_DIRECTORY = "packages/ui/src/icons/";
+
+/** The extensions a relative import may spell its module with, which a retired import's repository path leaves off. */
+const SOURCE_EXTENSION = /\.(?:[cm]?js|jsx|tsx?)$/u;
 
 /** The registry of concepts the door exports, `GLYPH.BACK` among them. */
 export const GLYPH_REGISTRY = "GLYPH";
@@ -175,10 +179,34 @@ export function isIconDoor(specifier: string, file: string): boolean {
   return `${reached}/`.startsWith(ICON_DOOR_DIRECTORY);
 }
 
-/** Whether a module specifier is a retired import's module or one of its subpaths. */
-export function matchesModule(retirement: Retirement, specifier: string): boolean {
+/**
+ * Whether an import from `specifier` binds Lucide's glyphs by their names:
+ * the icon door's, or `lucide-react`'s own, which the lucide guard counts by
+ * the import statement alone, so a glyph added to an import it already
+ * holds is caught here.
+ */
+export function bindsGlyphs(specifier: string, file: string): boolean {
+  return isIconDoor(specifier, file) || isLucideModule(specifier);
+}
+
+/**
+ * Whether a module specifier, in the file at repository path `file`, is a
+ * retired import's module or one of its subpaths. A retired import names a
+ * package (`cmdk`) or a module of the repository by its path from the root,
+ * its extension left off (`packages/panel/src/tasks/tab-look`), which a
+ * relative import reaches as `./tab-look.js` does, or a relative specifier
+ * as written.
+ */
+export function matchesModule(retirement: Retirement, specifier: string, file: string): boolean {
   if (retirement.kind !== RETIRED_KIND.IMPORT) return false;
-  return specifier === retirement.name || specifier.startsWith(`${retirement.name}/`);
+  const names = (module: string) =>
+    module === retirement.name || module.startsWith(`${retirement.name}/`);
+  // Note that a relative specifier is matched as written too, because older entries name one so.
+  if (!specifier.startsWith(".")) return names(specifier);
+  const reached = path.posix
+    .join(path.posix.dirname(file), specifier)
+    .replace(SOURCE_EXTENSION, "");
+  return names(specifier) || names(reached);
 }
 
 /**
@@ -195,9 +223,31 @@ export function namesRetired(text: string, retirements: readonly Retirement[] = 
     if (retirement.kind === RETIRED_KIND.IMPORT && retirement.names.length > 0) {
       return retirement.names.some((imported) => text.includes(imported));
     }
-    const needle = retirement.kind === RETIRED_KIND.GLYPH ? bareGlyph(name) : name;
-    return text.includes(needle.replace(`${GLYPH_REGISTRY}.`, ""));
+    if (retirement.kind === RETIRED_KIND.GLYPH) return spellsGlyph(text, name);
+    return text.includes(name);
   });
+}
+
+/**
+ * Whether `text` spells a glyph: a registry concept as a member read off
+ * the registry or a name it was imported as, and a
+ * Lucide glyph as a whole identifier, its aliases alike. Note that a
+ * word holding the name (`Bottom` for `Bot`) or another table's member of
+ * the same key (`SHOT.TASK`) spells nothing, because short concepts such
+ * as `GLYPH.TASK` are spelled that way by files that draw no glyph at all.
+ */
+function spellsGlyph(text: string, name: string): boolean {
+  if (name.startsWith(`${GLYPH_REGISTRY}.`)) {
+    const key = name.slice(GLYPH_REGISTRY.length + 1);
+    // Note that the member is read off the registry itself or a name it was imported as, never off any receiver, so a file reading GLYPH.SETTINGS and SHOT.TASK spells no GLYPH.TASK.
+    const aliases = [
+      ...text.matchAll(new RegExp(`\\b${GLYPH_REGISTRY}\\s+as\\s+(\\w+)`, "gu")),
+    ].map((match) => match[1] ?? GLYPH_REGISTRY);
+    const receivers = [GLYPH_REGISTRY, ...aliases].join("|");
+    // Note that the read may be spaced or optional (`GLYPH .TASK`, `GLYPH?.TASK`), as the rule reads it off the syntax tree whatever its spelling.
+    return new RegExp(`\\b(?:${receivers})\\s*\\??\\.\\s*${key}\\b`, "u").test(text);
+  }
+  return new RegExp(`\\b(?:Lucide)?${bareGlyph(name)}(?:Icon)?\\b`, "u").test(text);
 }
 
 // ---------------------------------------------------------------- CSS

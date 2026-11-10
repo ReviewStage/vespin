@@ -10,6 +10,11 @@ import {
 } from "@repo/wire";
 import { readEither, verbatimJsonSchema, wireKeys } from "@repo/wire/effect";
 import { Schema as EffectSchema, Result, SchemaTransformation } from "effect";
+import {
+  agentPendingApprovalSchema,
+  agentPermissionModeSchema,
+  permissionModeAppliesSchema,
+} from "./agent-approval-wire.js";
 import { AGENT_QUEUE_BOUNDS, agentQueueSchema } from "./agent-queue-wire.js";
 import { DEVICE_LAUNCH_STEP, DEVICE_LAUNCH_UNSTARTED } from "./device-agent-wire.js";
 import { integrationConnectionNameSchema, integrationConnectionOf } from "./integration-wire.js";
@@ -23,6 +28,7 @@ import {
 import { readMarkSchema } from "./read-mark.js";
 import { countedNumber, memberRefSchema, wireUuidSchema } from "./service-wire.js";
 import { trimmedText } from "./text-schema.js";
+import { TRIGGER_PROVIDER } from "./trigger-catalog.js";
 
 /**
  * agent-wire.ts -- a task's coding agents, as the desktop starts, lists, reads, messages, and stops them.
@@ -475,6 +481,8 @@ export const AGENT_FAILURE = {
   PLAN_LIMIT: "plan_limit",
   /** The model refused the turn, as a provider's safeguards do, and no other model retried it; a continue on another model goes on. */
   REFUSAL: "refusal",
+  /** The harness lost its connection to the model's provider, and the provider's host never answered again within the runner's wait, or was lost again at once. */
+  CONNECTION_LOST: "connection_lost",
   OTHER: "other",
 } as const;
 
@@ -1038,12 +1046,11 @@ export type AgentPinRequest = typeof agentPinRequestSchema.Type;
 
 /**
  * Moving the asking member's own read mark of an agent with no task (PATCH),
- * as `read-mark.ts` says each mark moves it; every other member's stands.
- * The answer is the agent as it then stands.
+ * which a released desktop still sends. Every agent stands on a task, read
+ * through its task's mark alone, so the service changes nothing and answers
+ * the agent as it stands.
  */
 export const agentReadRequestSchema = EffectSchema.Struct({ readMark: readMarkSchema });
-
-export type AgentReadRequest = typeof agentReadRequestSchema.Type;
 
 /**
  * Switching the agent's MCP servers (PATCH): the whole list of those off,
@@ -1109,8 +1116,10 @@ export const AGENT_LIST_ARCHIVED = {
 
 /**
  * Who archived an agent: a member from the window, the app on a call for the
- * member on it, or another coding agent of the workspace for the member who
- * started that agent, through its `archive_agent` tool.
+ * member on it or on its own for the agent's starter (an automation run or a
+ * Slack agent that finished, with why), or another coding agent of the
+ * workspace for the member who started that agent, through its
+ * `archive_agent` tool.
  */
 export const AGENT_ARCHIVER = {
   MEMBER: "member",
@@ -1218,6 +1227,8 @@ export const agentSummarySchema = EffectSchema.Struct({
   title: EffectSchema.NullOr(EffectSchema.String),
   /** Where its runner runs, said only of a local agent on its starter's device; absent for one in a sandbox, and from a service older than it. */
   machine: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_MACHINE.DEVICE)),
+  /** The vCPUs its sandbox opens with (`@repo/features/sandbox-size`), each with its memory; absent for a local agent, and from a service older than it. */
+  sandboxVcpus: EffectSchema.optionalKey(countedNumber),
   /**
    * The Mac a local agent runs on, by its own name, and the epoch
    * milliseconds it last beat, which a reader holds against its own clock
@@ -1293,11 +1304,28 @@ export const agentSummarySchema = EffectSchema.Struct({
   /** The MCP servers switched off for the agent; absent where none is, and from a service before the switch. */
   disabledServers: EffectSchema.optionalKey(disabledServersSchema),
   /**
+   * How the agent's tool calls are answered (`AGENT_PERMISSION_MODE`), which
+   * a change moves from its next turn (`PERMISSION_MODE_APPLIES`); absent
+   * for full access, and from a service before modes, which ran every agent
+   * on it.
+   */
+  permissionMode: EffectSchema.optionalKey(agentPermissionModeSchema),
+  /**
+   * The tool calls the agent's runner holds for a member's answer, the oldest
+   * first, each with its input as the runner cut it, which a member who
+   * controls the agent answers; absent where none waits, from a read that
+   * does not name them (a change's or a Start's answer), which a reader
+   * reads as not known, and from a service before modes.
+   */
+  pendingApprovals: EffectSchema.optionalKey(EffectSchema.Array(agentPendingApprovalSchema)),
+  /**
    * The member who started the agent, whose provider key pays for it and
    * whose Mac its commands run on, whichever member messages it; absent once
    * their account is gone, and from a service before it.
    */
   startedBy: EffectSchema.optionalKey(memberRefSchema),
+  /** The coding agent whose `start_agent` started this one; absent for one a member or an automation started, and from a service before it. */
+  startedByAgentId: EffectSchema.optionalKey(wireUuidSchema),
   /** The automation whose run started the agent; absent for one started by hand, once that automation is deleted, and from a service before it. */
   automationId: EffectSchema.optionalKey(wireUuidSchema),
   /**
@@ -1367,6 +1395,8 @@ export const agentAnswerSchema = EffectSchema.Struct({
   txid: EffectSchema.optionalKey(agentTxidSchema),
   /** Where a repository a change added was checked out: in the place the agent runs now, or at its next turn; none for any other change. */
   addedCheckout: EffectSchema.optionalKey(addedRepositoryCheckoutSchema),
+  /** When a change of permission mode reaches the agent: from its next turn; none for any other change. */
+  permissionModeApplies: EffectSchema.optionalKey(permissionModeAppliesSchema),
 });
 
 /**
@@ -1405,15 +1435,24 @@ export const agentDeleteAnswerSchema = EffectSchema.Struct({
  * The run of an automation that started an agent, as its page opens on it:
  * the automation's prompt alone, without the lines we add of the firing,
  * then what fired it, each where the firing has one: the issue or pull
- * request a GitHub event names, a webhook call's body as its caller sent
- * it, cut as the agent was handed it, and the member who asked for a run
- * now, absent once their account is gone.
+ * request a GitHub event names, the issue an integration's event is about
+ * (a Sentry issue), a webhook call's body as its caller sent it, cut as the
+ * agent was handed it, and the member who asked for a run now, absent once
+ * their account is gone.
  */
 const agentOriginSchema = EffectSchema.Struct({
   prompt: EffectSchema.String,
   subject: EffectSchema.optionalKey(
     EffectSchema.Struct({
       number: countedNumber,
+      title: EffectSchema.optionalKey(EffectSchema.String),
+      url: EffectSchema.optionalKey(EffectSchema.String),
+    }),
+  ),
+  /** The issue an integration's event is about, by its provider, its title, and its address, each where the event gave it; absent from a service before it. */
+  issue: EffectSchema.optionalKey(
+    EffectSchema.Struct({
+      provider: EffectSchema.Literals(Object.values(TRIGGER_PROVIDER)),
       title: EffectSchema.optionalKey(EffectSchema.String),
       url: EffectSchema.optionalKey(EffectSchema.String),
     }),
@@ -1547,46 +1586,6 @@ export const listedAgentSchema = EffectSchema.Struct({
 });
 
 export type ListedAgent = typeof listedAgentSchema.Type;
-
-/**
- * One agent with no plan as the plan list carries it beside the plans, so
- * the sidebar lists it among them: the agent as the tabs draw it, its
- * automation's name among them, the automation, workspace, and repository
- * its own page names, and when it last moved, which orders it among the
- * plans by their last update, when the reader pinned it, where they did,
- * and the pull request it opened, where it opened one.
- * The run that started it is its page's alone, so a list of many carries no
- * prompt.
- */
-export const tasklessAgentSchema = EffectSchema.Struct({
-  ...agentSummarySchema.fields,
-  automationId: agentPageSchema.fields.automationId,
-  workspaceId: agentPageSchema.fields.workspaceId,
-  repository: agentPageSchema.fields.repository,
-  /** Epoch milliseconds the agent last moved: its start, or its newest run to end's end, whichever is later; a run's start is none. */
-  activityAt: countedNumber,
-  /** Epoch milliseconds the reader pinned the agent, a pin being each member's own; absent while they have not, and from a service before agents were pinned. */
-  pinnedAt: EffectSchema.optionalKey(countedNumber),
-  /** Where the reader's pin stands in the sidebar's Pinned section once they dragged it (`pin-order.ts`); absent while it stands by `pinnedAt`. */
-  pinPosition: EffectSchema.optionalKey(EffectSchema.String),
-  /** Epoch milliseconds the reader read the agent through (`read-mark.ts`), the service's instant; absent from a service before read marks were kept. */
-  readThrough: EffectSchema.optionalKey(countedNumber),
-  /** Whether the reader marked the agent unread and has not opened it since; absent from a service before read marks were kept. */
-  markedUnread: EffectSchema.optionalKey(EffectSchema.Boolean),
-  /** The pull request it opened, as GitHub last answered the service, which its row's card shows as a task's row's card shows its own; absent while it opened none, and from a service before it was sent. */
-  pullRequest: EffectSchema.optionalKey(
-    EffectSchema.Struct({
-      number: agentPullRequestSchema.fields.number,
-      title: agentPullRequestSchema.fields.title,
-      url: agentPullRequestSchema.fields.url,
-      state: agentPullRequestSchema.fields.state,
-      checks: agentPullRequestSchema.fields.checks,
-      queued: agentPullRequestSchema.fields.queued,
-    }),
-  ),
-});
-
-export type TasklessAgent = typeof tasklessAgentSchema.Type;
 
 /** What became of one file: made, changed in place, removed, or moved, with or without changes. */
 export const CHANGED_FILE_STATUS = {

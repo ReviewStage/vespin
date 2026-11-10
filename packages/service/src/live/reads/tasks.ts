@@ -7,22 +7,22 @@ import { agentVisibleTo, taskReachableBy } from "@repo/database/models/workspace
 import {
   agentPin,
   agentPullRequest,
-  agentRead,
   conversations,
   device,
   taskPin,
   taskRead,
 } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
+import { agentApproval } from "@repo/database/schemas/agent-approval";
 import { user } from "@repo/database/schemas/auth";
 import { automationRun } from "@repo/database/schemas/automation";
 import { task } from "@repo/database/schemas/task";
 import { taskBlock } from "@repo/database/schemas/task-block";
 import { TOPIC } from "@repo/database/sync/notification";
 import {
+  agentApprovalSync,
   agentPinSync,
   agentPullRequestSync,
-  agentReadSync,
   agentSync,
   automationRunSync,
   automationSync,
@@ -49,12 +49,11 @@ import { failureWordOf, lastSettledAtIn, latestTurnOf, sessionEndedOf } from "..
 import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-binding.js";
 
 /**
- * tasks.ts -- the plan list bound (`TASK_LIST_READ`): the plans the account reaches, and every agent of them and with no plan, with what the list reads each agent's status from, the tables they read, the topics that wake them, and what a reader past a sync id is answered.
+ * tasks.ts -- the plan list bound (`TASK_LIST_READ`): the plans the account reaches, and every agent of them, with what the list reads each agent's status from, the tables they read, the topics that wake them, and what a reader past a sync id is answered.
  *
  * Two statements, each the same rows and rule of who may read them as the
- * held read (`tasks-app.ts`'s collection, through `listTasks`,
- * `withTaskAgents`, and `listTasklessAgents`), with every archived plan
- * and agent among them, as the desktop asks for them: the plans with the
+ * held read (`tasks-app.ts`'s collection, through `listTasks` and
+ * `withTaskAgents`), with every archived agent among them, as the desktop asks for them: the plans with the
  * reader's own pin and read mark and the owner's name, and the agents with their newest
  * turn, when the newest line
  * of the developer's awaiting its turn was written and whether that turn's session ended, when the newest turn to end
@@ -70,7 +69,7 @@ import { bindLiveRead, liveRowsStatement, outerJoined } from "../live-read-bindi
  * A reader past a sync id is read the same statements narrowed to the rows
  * what moved could move (`taskListDeltaStatements`): a plan whose own row,
  * pin, read mark, or block moved, that a moved plan blocks, or that names a
- * moved member, and an agent whose own row, pin, or read mark moved, whose turn or
+ * moved member, and an agent whose own row or pin moved, whose turn or
  * conversation moved, whose plan moved, that names a moved member or Mac,
  * or that a moved run started. Each keeps its rule of who reads it,
  * so a key another workspace's write moved reads no row.
@@ -156,15 +155,17 @@ function issuesStatement() {
 }
 
 /**
- * Every agent of a plan the account reaches, and every agent with no plan
- * in its workspaces, archived ones among them, each with its newest turn by
+ * Every agent of a plan the account reaches, archived ones among them, each with its newest turn by
  * the order turns were queued, as `findLatestTurns` reads it, the harness
  * its conversation runs on, the Mac it runs on by its name, as
  * `devicesNamed` reads them, and whether its sandbox stands open: its
  * conversation records the session its sandbox is tagged with, which the
  * claim writes on the conversation's row, so a delta read takes the flip
  * from the log (`movedAgents`) and a pane waiting on the sandbox connects
- * as it lands. Note that the Mac's last beat is not read,
+ * as it lands. Note that its read mark is a constant, read through its
+ * start and never marked unread, since an agent is read through its task's
+ * mark alone and a released desktop reads one only for an agent on no task;
+ * and that the Mac's last beat is not read,
  * because a beat wakes nothing (`deviceSync`) and a window judges a Mac by
  * its own presence read.
  */
@@ -176,7 +177,8 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
       ordered: false,
       columns: {
         id: agentTable.id,
-        planId: agentTable.taskId,
+        // Note that the row still declares a plan that may be none, because a released desktop decodes it so; every agent stands on one.
+        planId: sql<string | null>`${agentTable.taskId}`,
         workspaceId: agentTable.organizationId,
         model: agentTable.model,
         effort: agentTable.effort,
@@ -188,6 +190,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         repository: agentTable.repository,
         starterId: agentTable.userId,
         starterName: outerJoined(starter.name),
+        startedByAgentId: agentTable.startedByAgentId,
         automationId: agentTable.automationId,
         automationName: sql<string | null>`${agentTable.automationOrigin} ->> 'name'`,
         runId: agentTable.automationRunId,
@@ -212,12 +215,15 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         turnFailure: sql<AgentFailure | null>`case when ${latest.id} is null then null else ${failureWordOf(latest)} end`,
         turnSessionEnded: sessionEndedOf(latest),
         sandboxOpen: sql<boolean>`${conversations.runtimeSessionId} is not null`,
-        markedUnread: sql<boolean>`coalesce(${agentRead.markedUnread}, false)`,
+        permissionMode: agentTable.permissionMode,
+        pendingApprovals: PENDING_APPROVALS_OF_AGENT,
+        // Note that a released desktop reads an agent's read mark only for one on no task, which no agent is, so it is never marked.
+        markedUnread: sql<boolean>`false`,
       },
       instants: {
         archivedAt: agentTable.archivedAt,
         pinnedAt: outerJoined(agentPin.pinnedAt),
-        readThrough: sql<Date>`coalesce(${agentRead.readThrough}, ${agentTable.readThrough}, ${agentTable.createdAt})`,
+        readThrough: agentTable.createdAt,
         createdAt: agentTable.createdAt,
         cancelRequestedAt: latest.cancelRequestedAt,
         queuedAt: outerJoined(latest.queuedAt),
@@ -236,10 +242,6 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         .select(selection)
         .from(agentTable)
         .leftJoin(agentPin, and(eq(agentPin.agentId, agentTable.id), eq(agentPin.userId, userId)))
-        .leftJoin(
-          agentRead,
-          and(eq(agentRead.agentId, agentTable.id), eq(agentRead.userId, userId)),
-        )
         .leftJoin(starter, eq(starter.id, agentTable.userId))
         .leftJoin(automationRun, eq(automationRun.id, agentTable.automationRunId))
         .leftJoin(archiver, eq(archiver.id, sql`${agentTable.archivedBy} ->> 'userId'`))
@@ -252,6 +254,17 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         ),
   );
 }
+
+/**
+ * The asks the agent's runner holds for a member's answer, the oldest first,
+ * each as its row keeps it in the wire's shape (`agent_approval.ask`), so
+ * the statement calls no function Realtime refuses. Note that the input is
+ * carried as its row keeps it, the agent's transcript content, to the
+ * members who see the agent alone.
+ */
+const PENDING_APPROVALS_OF_AGENT = sql<
+  AgentRow["pendingApprovals"]
+>`array(select ${agentApproval.ask} from ${agentApproval} where ${agentApproval.agentId} = ${agentTable.id} and ${agentApproval.settledAt} is null order by ${agentApproval.createdAt}, ${agentApproval.id})`;
 
 /** The plans what moved could move: their own rows, the reader's pins and read marks, a block either way, a plan a moved plan blocks, and a plan naming a moved member. */
 function movedPlans(moved: SyncMoved): SQL {
@@ -277,7 +290,7 @@ function movedPlans(moved: SyncMoved): SQL {
 }
 
 /**
- * The agents what moved could move: their own rows and the reader's pins and read marks,
+ * The agents what moved could move: their own rows and the reader's pins,
  * those whose turn or conversation moved, those of a moved plan, those
  * naming a moved member or Mac, and those a moved run started.
  */
@@ -289,8 +302,8 @@ function movedAgents(moved: SyncMoved): SQL {
       liveKeysIn(agentTable.id, [
         ...agents,
         ...moved.keys(agentPinSync, agentPin.agentId),
-        ...moved.keys(agentReadSync, agentRead.agentId),
         ...moved.keys(agentPullRequestSync, agentPullRequest.agentId),
+        ...moved.topics(agentApprovalSync, TOPIC.AGENT),
         ...moved.topics(turnsSync, TOPIC.AGENT),
       ]),
       liveKeysIn(agentTable.conversationId, [
@@ -308,7 +321,7 @@ function movedAgents(moved: SyncMoved): SQL {
 
 /**
  * The account's task list (`tasks`): the tasks it reaches and every agent
- * of them and with no task, each with the account's pin, the names it
+ * of them, each with the account's pin, the names it
  * shows, and what its status is read from, woken on the account's topic
  * and on each of its workspaces'. A task, a block between two tasks, an
  * agent, a member's name, a Mac's name, or a turn starting or settling
@@ -334,8 +347,8 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
     taskReadSync,
     agentSync,
     agentPinSync,
-    agentReadSync,
     agentPullRequestSync,
+    agentApprovalSync,
     automationSync,
     automationRunSync,
     userSync,

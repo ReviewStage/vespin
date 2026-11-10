@@ -6,9 +6,11 @@ import { join } from "node:path";
 import { it } from "@effect/vitest";
 import { RUNNER_UNIT } from "@repo/agent-runner/pins";
 import {
+  APPROVAL_DECISION,
   type ClaudeCodeConfig,
   INPUT_LINE,
   type InputLine,
+  PERMISSION_MODE,
   RUNNER_END,
   RUNNER_ENV,
   RUNNER_HARNESS,
@@ -32,6 +34,7 @@ import {
   recordAgentNativeSession,
   runnerLaunchOf,
   updateAgentChoice,
+  updateAgentPermissionModeCommitted,
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries } from "@repo/database/models/claude-session-entries";
 import { readNativeRewind, rewindConversation } from "@repo/database/models/conversation-rewind";
@@ -64,6 +67,7 @@ import { user } from "@repo/database/schemas/auth";
 import { messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { AGENT_FAILURE, AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import {
   DEVICE_AGENT_LINE_KIND,
@@ -77,6 +81,7 @@ import {
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
+import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { SANDBOX_IDLE, type Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
@@ -155,7 +160,7 @@ import { CODER } from "./bounds.js";
 import { claudeCodeSessions } from "./claude-code-sessions.js";
 import { reconcileAgent } from "./reconcile.js";
 import { RUNNER_ENDED, type RunnerSessionsOptions, runnerEnded } from "./runner-sessions.js";
-import { RUNNER_CHOICE, TURN_HANDOVER } from "./runtime-sessions.js";
+import { RUNNER_ANSWER, RUNNER_CHOICE, TURN_HANDOVER } from "./runtime-sessions.js";
 import { agentFailureOf } from "./status.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 import { TURN_DELIVERY } from "./turn-delivery-bounds.js";
@@ -867,6 +872,35 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           eventsUrl: `${EVENTS_URL}${FIRST_LAUNCH}`,
           linesUrl: `${LINES_URL}${FIRST_LAUNCH}`,
           mcpUrl: MCP_URL,
+          // Every tool of ours that does more than read, which the worker is denied; it keeps the reads.
+          workerDenied: [
+            "post_thread",
+            "withdraw_ask",
+            "open_pull_request",
+            "edit_description",
+            "show_image",
+            "show_page",
+            "start_agent",
+            "stop_agent",
+            "message_agent",
+            "update_agent",
+            "create_task",
+            "update_task",
+            "create_section",
+            "delete_section",
+            "create_automation",
+            "update_automation",
+            "delete_automation",
+            "run_automation",
+            "save_memory",
+            "reply_to_comment",
+            "update_comment",
+            "run_on_mac",
+            "browser",
+            "list_ports",
+            "share_port",
+            "schedule_wakeup",
+          ],
           transcriptsUrl: `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,
           integrations: [LINEAR_SERVER],
           allowedDomains: [],
@@ -1735,6 +1769,48 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.deepEqual((yield* launchLines(api.commands[0])).slice(2), [
           { type: INPUT_LINE.MODEL, model: "claude-opus-5-5", fast: true, effort: "low" },
         ]);
+      }),
+  );
+
+  it.effect(
+    "an agent whose mode asks has its launch handed the mode, and a member's answer reaches its running runner as an approval line, where a session with no runner takes nothing",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        yield* updateAgentPermissionModeCommitted(userId, agent.id, AGENT_PERMISSION_MODE.ASK);
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const line = {
+          type: INPUT_LINE.APPROVAL,
+          requestId: "request-1",
+          decision: APPROVAL_DECISION.DENY,
+          message: "Not on main.",
+        } as const;
+
+        const answered = yield* sessions.answer(opened.sessionId, agent.conversationId, line);
+        const elsewhere = yield* sessions.answer(
+          `${opened.sessionId.slice(0, -4)}0000`,
+          agent.conversationId,
+          line,
+        );
+
+        assert.deepEqual([answered, elsewhere], [RUNNER_ANSWER.WRITTEN, RUNNER_ANSWER.NOT_LIVE]);
+        assert.equal(api.commands.length, 1);
+        const [config, , written] = (yield* launchLines(api.commands[0])) as [
+          ClaudeCodeConfig,
+          InputLine,
+          InputLine,
+        ];
+        assert.equal(config.permissionMode, PERMISSION_MODE.ASK);
+        assert.deepEqual(written, line);
       }),
   );
 
@@ -3754,7 +3830,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.ok(Result.isSuccess(ring));
         const workspace = agent.organizationId;
         yield* setInstallScript(workspace, "apt-get install -y redis-tools", new Date(0));
-        yield* setRepositorySetup(workspace, RELAY_FULL_NAME, "pnpm install", new Date(0));
+        yield* setRepositorySetup(
+          workspace,
+          RELAY_FULL_NAME,
+          REPOSITORY_SCRIPT_KIND.SETUP,
+          "pnpm install",
+          new Date(0),
+        );
         yield* setWorkspaceVariable(
           workspace,
           "DATABASE_URL",

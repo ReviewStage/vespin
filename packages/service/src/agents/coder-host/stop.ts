@@ -1,5 +1,4 @@
 import type { DatabaseServices } from "@repo/database/core/query";
-import { agentOwnerFactsOf } from "@repo/database/models/agent-owners";
 import { pauseAgentQueue } from "@repo/database/models/agent-queue-store";
 import {
   type Agent,
@@ -11,6 +10,7 @@ import {
   openSandboxesOfReached,
   RUNNING_TURN_STATUSES,
 } from "@repo/database/models/agent-store";
+import { cancelAgentWakeup } from "@repo/database/models/agent-wakeups";
 import { devicesNamed } from "@repo/database/models/device-store";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import type { TaskStandingAgent } from "@repo/database/models/task-store";
@@ -105,13 +105,11 @@ export const summaryOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   const names = yield* hostedStoreOrUnavailable(readAccountNames(summaryAccounts(agent)));
   const continuedBy = yield* continuedByOf(userId, [agent.id]);
   const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices([agent])));
-  const owners = yield* hostedStoreOrUnavailable(agentOwnerFactsOf([agent]));
   return agentSummary(
     agent,
     standing(agent.conversationId),
     yield* Clock.currentTimeMillis,
     names,
-    owners,
     continuedBy(agent.id),
     macs,
   );
@@ -200,6 +198,9 @@ export const canceledTurn = /* @__PURE__ */ Effect.fnUntraced(function* (
   { key, by }: TurnStop = {},
 ): Effect.fn.Return<boolean, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
   const target = { userId: agent.userId, conversationId: agent.conversationId };
+  // A wakeup the agent booked ends with the Stop, as a stopped harness's own wakeups end with it, whether
+  // or not a turn stands to cancel: the agent may have booked it and ended its turn to wait.
+  yield* hostedStoreOrUnavailable(cancelAgentWakeup(agent.id));
   // Every Stop, the developer's, a Continue's, another agent's, or a rewind's, pauses what is queued behind the
   // turn, so nothing more goes until Resume. Note that it pauses before the cancel goes out, because the turn's
   // end may land before the harness answers it, and would hand on a queue not yet paused.
@@ -405,12 +406,6 @@ const settledStatus = (status: AgentStatus) =>
  */
 export const standsStopped = (agents: readonly TaskStandingAgent[]) =>
   Effect.map(standingTurns(agents), (read) => read.every(({ status }) => settledStatus(status)));
-
-/** Whether every agent finished well, as `standingTurns` reads each: completed, none starting, running, failed, or stopped. */
-export const standsFinishedWell = (agents: readonly TaskStandingAgent[]) =>
-  Effect.map(standingTurns(agents), (read) =>
-    read.every(({ status }) => status === AGENT_STATUS.COMPLETED),
-  );
 
 /**
  * The ids of the agents idle enough to archive, as `standingTurns` reads

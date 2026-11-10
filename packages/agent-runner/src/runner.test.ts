@@ -28,17 +28,23 @@ import { claudeCodeLive } from "./claude-code.js";
 import { EventsUndelivered } from "./events.js";
 import { RunnerFailed } from "./launch.js";
 import {
+  APPROVAL_BY,
+  APPROVAL_DECISION,
+  CONNECTION_LOST_DETAIL,
+  connectionLostFailure,
   EFFORT,
   IMAGE_MEDIA_TYPE,
   INPUT_LINE,
   INSTALLED_SKILLS,
   type InputLine,
+  PERMISSION_MODE,
   RUNNER_END,
   RUNNER_ENV,
   RUNNER_EVENT,
   RUNNER_HEARTBEAT,
   RUNNER_LINES,
   RUNNER_PLACE,
+  RUNNER_RECONNECT,
   RUNNER_UNANSWERED,
   type RunnerConfig,
   type RunnerEvent,
@@ -46,8 +52,17 @@ import {
 import { runAgent } from "./runner.js";
 import { fakeAppServer } from "./testing/fake-app-server.js";
 import { fakeClaudeCode } from "./testing/fake-claude-code.js";
+import { fakeProbe } from "./testing/fake-probe.js";
 import { ANSWER, type Answer, makeFakeService } from "./testing/fake-service.js";
 import {
+  ASKED_COMMAND,
+  ASKED_STOPPED_TURN,
+  ASKED_THEN_MESSAGE,
+  ASKED_TURN,
+  BASH_ASK,
+  CONNECTION_LOST_TURN,
+  CONNECTION_LOST_TWICE,
+  CREDENTIAL_REFUSED_TURN,
   FOLLOW_UP_TURNS,
   SHORT_TURN,
   STOPPED_COMMAND,
@@ -141,6 +156,7 @@ function launch(
   env: Record<string, string> = ENV,
   chain: readonly string[] | null = [],
   answering = true,
+  probe = fakeProbe(),
 ) {
   return Effect.gen(function* () {
     const cli = yield* fakeClaudeCode(steps, chain, answering);
@@ -149,7 +165,9 @@ function launch(
     const write = (line: RunnerConfig | InputLine) => writeText(JSON.stringify(line));
     const run = yield* runAgent({ lines: Stream.fromQueue(stdin), env }).pipe(
       Effect.scoped,
-      Effect.provide(Layer.mergeAll(cli.layer, service.layer, fakeAppServer([]).layer)),
+      Effect.provide(
+        Layer.mergeAll(cli.layer, service.layer, fakeAppServer([]).layer, probe.layer),
+      ),
       Effect.forkScoped,
     );
     return {
@@ -159,6 +177,7 @@ function launch(
       write,
       writeText,
       run,
+      probed: probe.record,
       closeStdin: Queue.end(stdin),
     };
   });
@@ -383,6 +402,241 @@ it.effect(
         detail: "the CLI never took up a message a result left",
       });
     }),
+);
+
+/** The API's host the connection-lost turns probe for, as the CLI reaches it with no base URL set. */
+const ANTHROPIC_HOST = "api.anthropic.com";
+
+/** The carry-on line the service sends once the host answers, as a message line. */
+const CARRY_ON_LINE: InputLine = {
+  type: INPUT_LINE.MESSAGE,
+  uuid: "6b1f5d0c-3a51-4c56-9d0e-2f1c4b7a8e11",
+  content: [{ type: "text", text: "Your previous turn was interrupted; carry on." }],
+};
+
+/** Waits, without moving the clock, until the service has taken an event of the type given. */
+function untilPosted(service: ReturnType<typeof fakeService>, type: string) {
+  return Effect.gen(function* () {
+    const posted = () =>
+      service.applied.some(({ message }) => "type" in message && message.type === type);
+    for (let step = 0; step < 5_000 && !posted(); step += 1) yield* Effect.yieldNow;
+    assert.ok(posted(), `the service took no ${type}`);
+  });
+}
+
+it.effect(
+  "keeps the launch up when the CLI loses the API, probes the host on a doubling wait, and asks for a carry-on once it answers",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const probe = fakeProbe(2);
+      const { cli, write, run, probed } = yield* launch(
+        CONNECTION_LOST_TURN,
+        service,
+        ENV,
+        [],
+        true,
+        probe,
+      );
+      yield* write(CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
+      assert.equal(run.pollUnsafe(), undefined, "the launch stays up");
+      assert.deepEqual(probed.targets[0], { host: ANTHROPIC_HOST, port: 443 });
+
+      // Refused at once and after the first wait; answered after the doubled one.
+      yield* TestClock.adjust(RUNNER_RECONNECT.FIRST_WAIT_MS);
+      assert.equal(probed.targets.length, 2);
+      yield* TestClock.adjust(RUNNER_RECONNECT.FIRST_WAIT_MS * 2 - 1);
+      assert.equal(probed.targets.length, 2);
+      yield* TestClock.adjust(1);
+      yield* untilPosted(service, RUNNER_EVENT.CONNECTION_RESTORED);
+      assert.equal(probed.targets.length, 3);
+
+      // The service's carry-on line runs as the CLI's next turn, which ends the launch as any turn does.
+      yield* write(CARRY_ON_LINE);
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      assert.deepEqual(kinds(service.applied), [
+        "system/init",
+        "assistant",
+        "result/success",
+        RUNNER_EVENT.CONNECTION_LOST,
+        RUNNER_EVENT.CONNECTION_RESTORED,
+        "assistant",
+        "result/success",
+        RUNNER_EVENT.END,
+      ]);
+      const restored = service.applied.find(
+        ({ message }) => "type" in message && message.type === RUNNER_EVENT.CONNECTION_RESTORED,
+      )?.message;
+      assert.deepEqual(restored, {
+        type: RUNNER_EVENT.CONNECTION_RESTORED,
+        host: ANTHROPIC_HOST,
+        carryOn: true,
+      });
+      assert.equal(cli.prompts.length, 2);
+      assert.equal(
+        cli.prompts[1]?.uuid,
+        CARRY_ON_LINE.type === INPUT_LINE.MESSAGE ? CARRY_ON_LINE.uuid : "",
+      );
+    }),
+);
+
+it.effect(
+  "hands a message sent while the host is probed to the CLI once it answers, in place of a carry-on",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const { cli, write, run } = yield* launch(
+        CONNECTION_LOST_TURN,
+        service,
+        ENV,
+        [],
+        true,
+        fakeProbe(1),
+      );
+      yield* write(CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
+      yield* write(CARRY_ON_LINE);
+      yield* Effect.yieldNow;
+      assert.equal(cli.prompts.length, 1, "the message waits for the host");
+
+      yield* TestClock.adjust(RUNNER_RECONNECT.FIRST_WAIT_MS);
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      const restored = service.applied.find(
+        ({ message }) => "type" in message && message.type === RUNNER_EVENT.CONNECTION_RESTORED,
+      )?.message;
+      assert.deepEqual(restored, {
+        type: RUNNER_EVENT.CONNECTION_RESTORED,
+        host: ANTHROPIC_HOST,
+        carryOn: false,
+      });
+      assert.equal(cli.prompts.length, 2);
+    }),
+);
+
+it.effect("ends the launch failed, saying why, once the host stays silent past the wait", () =>
+  Effect.gen(function* () {
+    const service = fakeService();
+    const { cli, write, run } = yield* launch(
+      CONNECTION_LOST_TURN,
+      service,
+      ENV,
+      [],
+      true,
+      fakeProbe(Number.POSITIVE_INFINITY),
+    );
+    yield* write(CONFIG);
+    yield* write(FIRST_MESSAGE);
+    yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
+    const lostAt = yield* Clock.currentTimeMillis;
+
+    const exit = yield* settled(run);
+    assert.deepEqual(exit, Exit.succeed(RUNNER_END.FAILED));
+    const gaveUpAfter = (yield* Clock.currentTimeMillis) - lostAt;
+    assert.ok(gaveUpAfter >= RUNNER_RECONNECT.GIVE_UP_MS, `gave up after ${gaveUpAfter}ms`);
+    assert.ok(
+      gaveUpAfter < RUNNER_RECONNECT.GIVE_UP_MS + RUNNER_RECONNECT.LONGEST_WAIT_MS * 2,
+      `gave up after ${gaveUpAfter}ms`,
+    );
+    assert.equal(cli.closed, true);
+    assert.deepEqual(service.applied.at(-1)?.message, {
+      type: RUNNER_EVENT.END,
+      reason: RUNNER_END.FAILED,
+      detail: connectionLostFailure(ANTHROPIC_HOST, CONNECTION_LOST_DETAIL.GAVE_UP),
+    });
+  }),
+);
+
+it.effect(
+  "ends the launch failed where the connection is lost again before the model answered, rather than probing again",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const { write, run, probed } = yield* launch(
+        CONNECTION_LOST_TWICE,
+        service,
+        ENV,
+        [],
+        true,
+        fakeProbe(),
+      );
+      yield* write(CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* untilPosted(service, RUNNER_EVENT.CONNECTION_RESTORED);
+      yield* write(CARRY_ON_LINE);
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.FAILED);
+      assert.equal(probed.targets.length, 1);
+      assert.deepEqual(service.applied.at(-1)?.message, {
+        type: RUNNER_EVENT.END,
+        reason: RUNNER_END.FAILED,
+        detail: connectionLostFailure(ANTHROPIC_HOST, CONNECTION_LOST_DETAIL.LOST_AGAIN),
+      });
+    }),
+);
+
+it.effect("ends a stopped launch at once while the host is probed", () =>
+  Effect.gen(function* () {
+    const service = fakeService();
+    const { write, run } = yield* launch(
+      CONNECTION_LOST_TURN,
+      service,
+      ENV,
+      [],
+      true,
+      fakeProbe(Number.POSITIVE_INFINITY),
+    );
+    yield* write(CONFIG);
+    yield* write(FIRST_MESSAGE);
+    yield* untilPosted(service, RUNNER_EVENT.CONNECTION_LOST);
+    yield* write({ type: INPUT_LINE.STOP });
+    assert.equal(yield* Fiber.join(run), RUNNER_END.STOPPED);
+  }),
+);
+
+it.effect("ends the turn as before on a model call the API refused, probing nothing", () =>
+  Effect.gen(function* () {
+    const service = fakeService();
+    const { write, run, probed } = yield* launch(CREDENTIAL_REFUSED_TURN, service);
+    yield* write(CONFIG);
+    yield* write(FIRST_MESSAGE);
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+    assert.equal(probed.targets.length, 0);
+    assert.deepEqual(kinds(service.applied), ["system/init", "result/success", RUNNER_EVENT.END]);
+  }),
+);
+
+/** The probe's target: the proxy the CLI goes through where one is set, the host where the proxy value names no host, and a gateway's own port where the base URL names one. */
+it.effect.each([
+  {
+    env: { HTTPS_PROXY: "http://proxy.corp.test:3128" },
+    target: { host: "proxy.corp.test", port: 3128 },
+  },
+  { env: { HTTPS_PROXY: "proxy.corp.test:3128" }, target: { host: ANTHROPIC_HOST, port: 443 } },
+  {
+    env: { ANTHROPIC_BASE_URL: "http://gateway.internal:8080/v1" },
+    target: { host: "gateway.internal", port: 8080 },
+  },
+])("probes where the CLI reaches the API, given $env", ({ env, target }) =>
+  Effect.gen(function* () {
+    const service = fakeService();
+    const { write, run, probed } = yield* launch(
+      CONNECTION_LOST_TURN,
+      service,
+      { ...ENV, ...env },
+      [],
+      true,
+      fakeProbe(),
+    );
+    yield* write(CONFIG);
+    yield* write(FIRST_MESSAGE);
+    yield* untilPosted(service, RUNNER_EVENT.CONNECTION_RESTORED);
+    assert.deepEqual(probed.targets, [target]);
+    yield* write(CARRY_ON_LINE);
+    assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+  }),
 );
 
 /** How many IDLE events the service has taken. */
@@ -707,6 +961,176 @@ it.effect("lets a heartbeat Vespin never answers go, and posts the next one an i
     assert.equal(hung, 1);
     assert.equal(afterStall, 1, "the heartbeat after the one Vespin held went out");
   }),
+);
+
+const ASK_CONFIG: RunnerConfig = { ...CONFIG, permissionMode: PERMISSION_MODE.ASK };
+
+/** The ask events the service took, in order. */
+function asks(events: readonly RunnerEvent[]) {
+  return events.flatMap(({ message }) =>
+    "type" in message &&
+    (message.type === RUNNER_EVENT.APPROVAL_REQUESTED ||
+      message.type === RUNNER_EVENT.APPROVAL_RESOLVED)
+      ? [message]
+      : [],
+  );
+}
+
+it.effect.each([
+  {
+    decision: APPROVAL_DECISION.ALLOW,
+    answer: { behavior: "allow", updatedInput: BASH_ASK.input },
+  },
+  {
+    decision: APPROVAL_DECISION.ALLOW_FOR_AGENT,
+    answer: {
+      behavior: "allow",
+      updatedInput: BASH_ASK.input,
+      updatedPermissions: [
+        {
+          type: "addRules",
+          rules: [{ toolName: "Bash", ruleContent: "cat:*" }],
+          behavior: "allow",
+          destination: "session",
+        },
+      ],
+    },
+  },
+  {
+    decision: APPROVAL_DECISION.DENY,
+    answer: { behavior: "deny", message: "The member denied this." },
+  },
+])(
+  "holds a shell command in a mode that asks until the member answers $decision, posting the ask and its answer",
+  ({ decision, answer }) =>
+    Effect.gen(function* () {
+      const service = fakeService([], BASH_ASK.requestId);
+      const { cli, write, run } = yield* launch(ASKED_TURN, service);
+      yield* write(ASK_CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* service.seen;
+      for (let step = 0; step < 50; step += 1) yield* Effect.yieldNow;
+      assert.deepEqual(cli.permissions, [], "the call waits on the member");
+      assert.equal(run.pollUnsafe(), undefined);
+
+      yield* write({ type: INPUT_LINE.APPROVAL, requestId: BASH_ASK.requestId, decision });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      assert.deepEqual(cli.permissions, [answer]);
+      const [requested, resolved, ...more] = asks(service.applied);
+      assert.deepEqual(more, []);
+      assert.deepEqual(resolved, {
+        type: RUNNER_EVENT.APPROVAL_RESOLVED,
+        requestId: BASH_ASK.requestId,
+        decision,
+        by: APPROVAL_BY.MEMBER,
+      });
+      assert.ok(requested?.type === RUNNER_EVENT.APPROVAL_REQUESTED);
+      const { input, ...ask } = requested;
+      assert.deepEqual(ask, {
+        type: RUNNER_EVENT.APPROVAL_REQUESTED,
+        requestId: BASH_ASK.requestId,
+        toolUseId: "toolu_Bash",
+        toolName: "Bash",
+        title: BASH_ASK.title,
+      });
+      // The ask carries the start of a long command, while the CLI is handed it whole.
+      const command = String(input.command);
+      assert.ok(command.length < ASKED_COMMAND.length / 2);
+      assert.ok(ASKED_COMMAND.startsWith(command.slice(0, -1)));
+      assert.equal(input.description, BASH_ASK.input.description);
+    }),
+);
+
+it.effect("denies a call waiting on the member when Vespin's stop withdraws its ask", () =>
+  Effect.gen(function* () {
+    const service = fakeService([], BASH_ASK.requestId);
+    const { cli, write, run } = yield* launch(ASKED_STOPPED_TURN, service);
+    yield* write(ASK_CONFIG);
+    yield* write(FIRST_MESSAGE);
+    yield* service.seen;
+    yield* write({ type: INPUT_LINE.STOP });
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.STOPPED);
+    assert.equal(cli.interrupts, 1);
+    assert.deepEqual(cli.permissions, [{ behavior: "deny", message: "The member denied this." }]);
+    assert.deepEqual(asks(service.applied)[1], {
+      type: RUNNER_EVENT.APPROVAL_RESOLVED,
+      requestId: BASH_ASK.requestId,
+      decision: APPROVAL_DECISION.DENY,
+      by: APPROVAL_BY.ABORTED,
+    });
+    assert.deepEqual(kinds(service.applied).slice(-4), [
+      RUNNER_EVENT.APPROVAL_REQUESTED,
+      RUNNER_EVENT.APPROVAL_RESOLVED,
+      "result/error_during_execution",
+      RUNNER_EVENT.END,
+    ]);
+  }),
+);
+
+it.effect(
+  "denies a call waiting on the member with the words of a message they send meanwhile, then hands the CLI the message",
+  () =>
+    Effect.gen(function* () {
+      const words = "Use the repository's own script instead.";
+      const service = fakeService([], BASH_ASK.requestId);
+      const { cli, write, run } = yield* launch(ASKED_THEN_MESSAGE, service);
+      yield* write(ASK_CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* service.seen;
+      yield* write({ type: INPUT_LINE.MESSAGE, content: [{ type: "text", text: words }] });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      assert.deepEqual(cli.permissions, [{ behavior: "deny", message: words }]);
+      assert.deepEqual(cli.prompts[1]?.message.content, [{ type: "text", text: words }]);
+      assert.equal(cli.prompts[1]?.priority, "next");
+      assert.deepEqual(asks(service.applied)[1], {
+        type: RUNNER_EVENT.APPROVAL_RESOLVED,
+        requestId: BASH_ASK.requestId,
+        decision: APPROVAL_DECISION.DENY,
+        by: APPROVAL_BY.MESSAGE,
+      });
+      // The ask is resolved before the message that denied it is taken.
+      const taken = service.applied.flatMap(({ message }) =>
+        "type" in message &&
+        (message.type === RUNNER_EVENT.ACCEPTED || message.type === RUNNER_EVENT.APPROVAL_RESOLVED)
+          ? [message.type]
+          : [],
+      );
+      assert.deepEqual(taken, [
+        RUNNER_EVENT.ACCEPTED,
+        RUNNER_EVENT.APPROVAL_RESOLVED,
+        RUNNER_EVENT.ACCEPTED,
+      ]);
+    }),
+);
+
+it.effect.each([
+  { mode: PERMISSION_MODE.FULL_ACCESS, cliMode: "bypassPermissions", asking: false },
+  { mode: PERMISSION_MODE.ASK, cliMode: "default", asking: true },
+  { mode: PERMISSION_MODE.AUTO, cliMode: "auto", asking: true },
+])(
+  "starts the CLI in $cliMode for $mode, asking the member only where the mode does, and never of a read or an MCP tool",
+  ({ mode, cliMode, asking }) =>
+    Effect.gen(function* () {
+      const { cli, write, run } = yield* launch(SHORT_TURN, fakeService());
+      yield* write({ ...CONFIG, permissionMode: mode });
+      yield* write(FIRST_MESSAGE);
+      yield* Fiber.join(run);
+
+      const options = cli.options;
+      assert.ok(options);
+      assert.equal(options.permissionMode, cliMode);
+      // Under full access nothing could call it.
+      assert.equal(options.canUseTool !== undefined, asking);
+      for (const unasked of ["Read", "WebFetch", "mcp__workspace", "mcp__linear"]) {
+        assert.equal(options.allowedTools?.includes(unasked), asking, unasked);
+      }
+      for (const asked of ["Bash", "Edit", "Write", "NotebookEdit"]) {
+        assert.ok(!options.allowedTools?.includes(asked), asked);
+      }
+    }),
 );
 
 it.effect("interrupts a turn a wakeup started when Vespin stops it", () =>
@@ -1093,6 +1517,20 @@ it.effect(
     }),
 );
 
+it.effect("denies the worker only the tools of ours the config names, and keeps it the rest", () =>
+  Effect.gen(function* () {
+    const service = fakeService();
+    const { cli, write, run } = yield* launch(SHORT_TURN, service);
+    yield* write({ ...CONFIG, workerDenied: ["post_thread"] });
+    yield* write(FIRST_MESSAGE);
+    yield* Fiber.join(run);
+
+    const denied = cli.options?.agents?.worker?.disallowedTools;
+    assert.ok(denied?.includes("mcp__workspace__post_thread"));
+    assert.ok(!denied?.includes("mcp__workspace"));
+  }),
+);
+
 /** What a launch hands the CLI that is not a function or a live server, less the place it ran in, which nothing may follow. */
 function launchedAs(options: Options | undefined) {
   assert.ok(options);
@@ -1296,7 +1734,9 @@ it.effect(
       const stdin = yield* Queue.unbounded<string, Cause.Done>();
       const run = yield* runAgent({ lines: Stream.fromQueue(stdin), env: ENV }).pipe(
         Effect.scoped,
-        Effect.provide(Layer.mergeAll(claudeCodeLive, service.layer, fakeAppServer([]).layer)),
+        Effect.provide(
+          Layer.mergeAll(claudeCodeLive, service.layer, fakeAppServer([]).layer, fakeProbe().layer),
+        ),
         Effect.forkScoped,
       );
       yield* Queue.offer(stdin, JSON.stringify({ ...CONFIG, executable, cwd: directory }));

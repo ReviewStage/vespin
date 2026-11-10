@@ -1,0 +1,112 @@
+# inbox.yaml -- the Inbox's list under its scope pills, the account's photo in its bar, its ⋯ menu, its search, a row's swipe and long press, and a thread with a picture opened full screen and a video in the system's player.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as `skeleton.yaml` is, so the list
+# holds the fixture's threads and no server is reached; the fixture answers
+# each mark and each thread's file read (`@repo/host/fixture-inbox`).
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+# The account's photo leads the bar, heard as Settings: the fixture's account
+# has no picture, so its letters stand in it.
+- assertVisible: "Settings"
+- waitForAnimationToEnd
+- takeScreenshot: inbox-list
+# The ⋯ menu: Mark all as read. A tap off the menu closes it.
+- tapOn: "More"
+- assertVisible: "Mark all as read"
+- takeScreenshot: inbox-more
+- tapOn:
+    point: "50%, 90%"
+- waitForAnimationToEnd
+# The scope pills over the list, Open chosen: All lists the settled threads
+# too.
+- tapOn: "All"
+- scrollUntilVisible:
+    element: "Which day the digest goes out"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: inbox-all
+- scrollUntilVisible:
+    element: "Recorded the invite flow"
+    direction: UP
+- waitForAnimationToEnd
+- tapOn: "Open.*"
+# A swipe from the leading edge reveals Mark as read or unread, which a full
+# swipe would press at once, so the flow swipes partway, where a compact
+# window stands a row; a long press offers the same in the row's menu.
+- swipe:
+    start: "8%, 79%"
+    end: "38%, 79%"
+    duration: 900
+- takeScreenshot: inbox-swipe
+- tapOn:
+    text: "Mark as .*"
+    optional: true
+- scrollUntilVisible:
+    element: "acceptInvite can add a member twice"
+    direction: DOWN
+- waitForAnimationToEnd
+- longPressOn: "acceptInvite can add a member twice"
+- assertVisible: "Mark as read"
+- takeScreenshot: inbox-menu
+- tapOn: "Mark as read"
+# Note that the row is scrolled to the middle rather than to the first point
+# it shows, because the folded Duo then stands it against the top edge, where a
+# tap a point or two higher no longer opens it.
+- scrollUntilVisible:
+    element: "Recorded the invite flow"
+    direction: UP
+    centerElement: true
+# A thread opens on its path small in the bar and its title as the page's
+# heading, then each message: the agent's tile, name and time over its words,
+# its picture drawn where the words name it, and its recording after the
+# message that sent it, played in place from its MP4 copy.
+- tapOn: "Recorded the invite flow"
+- assertVisible: ".*walked the invite flow.*"
+- waitForAnimationToEnd
+- takeScreenshot: inbox-thread
+- tapOn: "The invite page"
+- assertVisible:
+    id: "markdown-picture-done"
+- takeScreenshot: inbox-picture
+- tapOn:
+    id: "markdown-picture-done"
+- scrollUntilVisible:
+    element: "invite-flow.webm.*"
+    direction: DOWN
+- waitForAnimationToEnd
+# The recording is read as its MP4 copy, which iOS's player plays in place:
+# the flow waits for the player to hold the file, so a read that never lands
+# fails here rather than leaving an empty well in the screenshot.
+- extendedWaitUntil:
+    visible:
+      id: "video-player"
+    timeout: 15000
+- assertNotVisible: ".*can't play here.*"
+- takeScreenshot: inbox-video
+# Back on the list, the search, a round glass button in the bar, narrows it to
+# the threads whose words hold every word typed. It comes last, since its
+# keyboard stands over the rows.
+- tapOn: "Inbox"
+- waitForAnimationToEnd
+# A compact window's search is the bar's round button, named as the Search
+# tab is, so the first of the two is pressed; a split view's sidebar holds the
+# field itself.
+- runFlow:
+    when:
+      notVisible: "Search inbox"
+    commands:
+      - tapOn:
+          text: "Search"
+          index: 0
+- tapOn: "Search inbox"
+- inputText: "digest"
+- assertVisible: "Verify the digest's sender domain"
+- assertNotVisible: "Invite limits"
+- takeScreenshot: inbox-search

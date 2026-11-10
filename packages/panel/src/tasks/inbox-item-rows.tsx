@@ -56,7 +56,7 @@ export function InboxItemRows({
       },
     }),
   );
-  const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id });
+  const marks = useInboxReadMarks({ workspaceId: tasks.workspace?.id, readerId: tasks.me });
   const resolve = useInboxResolver();
   const acts = useInboxRowActs({
     doors: {

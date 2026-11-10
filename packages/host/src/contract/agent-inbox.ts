@@ -18,8 +18,7 @@
  *
  * Only a panel draws the Inbox, so every act is the panel's alone, and a
  * refusal or a defect of the host's is drawn as the coding-agent calls'
- * unanswered failure, or, for a
- * held close let go, as one no longer held. A task's or an agent's inbox
+ * unanswered failure. A task's or an agent's inbox
  * is a live follow, declared once (`live-follow.ts`), not a plain act.
  */
 
@@ -30,8 +29,6 @@ import {
   agentInboxAttachmentParamsSchema,
   agentInboxAttachmentViewSchema,
   agentInboxCloseParamsSchema,
-  agentInboxCloseReleasedViewSchema,
-  agentInboxCloseReleaseParamsSchema,
   agentInboxItemHomeParamsSchema,
   agentInboxItemHomeViewSchema,
   agentInboxMessagedViewSchema,
@@ -43,6 +40,8 @@ import {
   agentInboxRemindParamsSchema,
   agentInboxScopeSchema,
   agentInboxStartParamsSchema,
+  agentInboxTakeBackParamsSchema,
+  agentInboxTakenBackViewSchema,
   agentPictureParamsSchema,
 } from "@repo/features/agent-view";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -72,14 +71,13 @@ export const AGENT_INBOX_ACTS = declaredActs({
     door: ACT.ROW_WRITE,
     unanswered: UNANSWERED,
   }),
-  // Note that a release the host could not answer reads as a close no longer held.
-  AGENTS_INBOX_CLOSE_RELEASE: hostAct({
-    input: agentInboxCloseReleaseParamsSchema,
-    output: agentInboxCloseReleasedViewSchema,
-    refusal: "Could not undo resolving the inbox item on this system.",
+  AGENTS_INBOX_TAKE_BACK: hostAct({
+    input: agentInboxTakeBackParamsSchema,
+    output: EffectSchema.toType(agentInboxTakenBackViewSchema),
+    refusal: "Could not undo on this system.",
     panelOnly: true,
-    door: ACT.LOCAL_WRITE,
-    unanswered: { held: false },
+    door: ACT.ROW_WRITE,
+    unanswered: UNANSWERED,
   }),
   AGENTS_INBOX_MESSAGE: hostAct({
     input: agentInboxMessageParamsSchema,

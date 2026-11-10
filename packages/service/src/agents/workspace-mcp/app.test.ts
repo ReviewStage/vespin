@@ -12,6 +12,7 @@ import {
   keepDescriptionAttachment,
 } from "@repo/database/models/description-attachments";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import { createTask } from "@repo/database/models/task-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import { conversations, turns } from "@repo/database/schemas/storage";
@@ -278,15 +279,14 @@ const agentWithBearer = Effect.gen(function* () {
   };
 });
 
-/** A Codex agent on no task and in no repository, as an automation's run starts one, with a runner's bearer recorded for its conversation. */
-const agentOnNoTaskWithBearer = Effect.gen(function* () {
+/** A Codex agent on a task in no repository, with a runner's bearer recorded for its conversation. */
+const agentInNoRepositoryWithBearer = Effect.gen(function* () {
   const db = yield* Database;
   const userId = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` });
   const organizationId = yield* openWorkspace(userId);
   const started = yield* createAgent(userId, {
-    taskId: null,
-    organizationId,
+    taskId: (yield* createTask(userId, { organizationId })).id,
     descriptionSnapshot: null,
     prompt: "Chart the funnel",
     idempotencyKey: randomUUID(),
@@ -401,6 +401,7 @@ const AGENT_TOOLS = [
   "run_automation",
   "save_memory",
   "search_memory",
+  "schedule_wakeup",
 ] as const;
 
 /** The tools a native agent is served: every tool of our catalog that its harness has no equal of. */
@@ -643,7 +644,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
   );
 
   it.effect(
-    "tools/list names every Vespin tool the agent's harness has no equal of, each with its catalog entry's schema, and none the harness has",
+    "tools/list names every Vespin tool the agent's harness has no equal of, each with its catalog entry's schema, and none the harness has, its wakeup among them",
     () =>
       Effect.gen(function* () {
         const fetch = yield* standing;
@@ -656,7 +657,11 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         yield* Effect.promise(() => client.close());
 
         const names = listed.tools.map((tool) => tool.name);
-        assert.deepEqual([...names].sort(), [...SERVED_TOOLS].sort());
+        // A Claude Code agent waits with its CLI's own `ScheduleWakeup`, so ours is left off its list.
+        assert.deepEqual(
+          [...names].sort(),
+          SERVED_TOOLS.filter((name) => name !== "schedule_wakeup").sort(),
+        );
         for (const native of HARNESS_TOOLS) assert.ok(!names.includes(native), native);
         const standingOn = {
           agent: Option.none(),
@@ -690,9 +695,8 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
 
   it.effect.each([
     {
-      // An agent on no task is listed the description's tools all the same.
       why: "in no repository, the checkout's",
-      agent: agentOnNoTaskWithBearer,
+      agent: agentInNoRepositoryWithBearer,
       withheld: ["open_pull_request"],
     },
     {
@@ -707,7 +711,7 @@ it.layer(SUITE)("Vespin's MCP server", (it) => {
         );
         return agent;
       }),
-      withheld: ["browser", "run_on_mac", "list_ports", "share_port"],
+      withheld: ["browser", "run_on_mac", "list_ports", "share_port", "schedule_wakeup"],
     },
   ])(
     "tools/list leaves out what the catalog's gates offer no agent $why, and the memory and the description's tools where its starter has Memory and Task descriptions off",

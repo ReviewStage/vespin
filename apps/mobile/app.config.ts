@@ -1,7 +1,8 @@
 // app.config.ts -- the iOS app's whole native configuration: Expo generates `ios/` from it on every build, and none is committed.
 
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
+import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
 import { GITHUB_PATH, GOOGLE_MARK_LAYERS } from "@repo/brand/provider-marks";
 import type { ConfigContext, ExpoConfig } from "expo/config";
@@ -62,6 +63,18 @@ const IMAGE_SETS = [
     TEMPLATE: false,
   },
 ] as const;
+
+// The Notification Service Extension: its target, the Swift it builds from
+// (`notification-service/`, the app's one native code), and the bundle id it
+// is signed under, which automatic signing registers beside the app's.
+const NOTIFICATION_SERVICE = {
+  TARGET: "NotificationService",
+  SOURCE_DIRECTORY: "notification-service",
+  SOURCE: "NotificationService.swift",
+  INFO_PLIST: "Info.plist",
+  BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.NotificationService`,
+  SWIFT_VERSION: "5.0",
+};
 
 // The build number TestFlight orders uploads by: release-ios.yml names its
 // run in it, and a local build, which never uploads, is build 1.
@@ -163,11 +176,122 @@ const withMarketingIcon = (config: ExpoConfig): ExpoConfig =>
     },
   ]);
 
+// The extension's Info.plist: the service extension point and its class, and
+// the app's version and build, which App Store Connect refuses an extension
+// to differ from.
+const notificationServicePlist = (version: string, build: string) =>
+  `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyLists-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<key>CFBundleDisplayName</key>
+	<string>${NOTIFICATION_SERVICE.TARGET}</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+	<key>CFBundleShortVersionString</key>
+	<string>${version}</string>
+	<key>CFBundleVersion</key>
+	<string>${build}</string>
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.usernotifications.service</string>
+		<key>NSExtensionPrincipalClass</key>
+		<string>$(PRODUCT_MODULE_NAME).NotificationService</string>
+	</dict>
+</dict>
+</plist>
+`;
+
+// Note that Expo has no setting for an app extension, so the Notification
+// Service Extension's folder is written beside the app's, its Swift copied
+// from `notification-service/`, and its target added to the project Expo
+// generates, embedded in the app, built for the app's deployment target, and
+// signed as the app is. A project that holds the target already, as a
+// prebuild over an existing `ios/` does, is left as it stands.
+const withNotificationService = (config: ExpoConfig): ExpoConfig => {
+  const written = withDangerousMod(config, [
+    "ios",
+    (modConfig) => {
+      const { projectRoot, platformProjectRoot } = modConfig.modRequest;
+      const folder = join(platformProjectRoot, NOTIFICATION_SERVICE.TARGET);
+      mkdirSync(folder, { recursive: true });
+      copyFileSync(
+        join(projectRoot, NOTIFICATION_SERVICE.SOURCE_DIRECTORY, NOTIFICATION_SERVICE.SOURCE),
+        join(folder, NOTIFICATION_SERVICE.SOURCE),
+      );
+      writeFileSync(
+        join(folder, NOTIFICATION_SERVICE.INFO_PLIST),
+        notificationServicePlist(modConfig.version ?? "1.0", modConfig.ios?.buildNumber ?? "1"),
+      );
+      return modConfig;
+    },
+  ]);
+  return withXcodeProject(written, (modConfig) => {
+    const project = modConfig.modResults;
+    if (project.pbxTargetByName(NOTIFICATION_SERVICE.TARGET)) return modConfig;
+    const group = project.addPbxGroup(
+      [NOTIFICATION_SERVICE.SOURCE, NOTIFICATION_SERVICE.INFO_PLIST],
+      NOTIFICATION_SERVICE.TARGET,
+      NOTIFICATION_SERVICE.TARGET,
+    );
+    project.addToPbxGroup(group.uuid, project.getFirstProject().firstProject.mainGroup);
+    // Note that the xcode library's addTarget writes into these sections without making them, and a fresh Expo project has neither.
+    const objects = project.hash.project.objects;
+    objects.PBXTargetDependency ??= {};
+    objects.PBXContainerItemProxy ??= {};
+    const target = project.addTarget(
+      NOTIFICATION_SERVICE.TARGET,
+      "app_extension",
+      NOTIFICATION_SERVICE.TARGET,
+      NOTIFICATION_SERVICE.BUNDLE_IDENTIFIER,
+    );
+    project.addBuildPhase(
+      [NOTIFICATION_SERVICE.SOURCE],
+      "PBXSourcesBuildPhase",
+      "Sources",
+      target.uuid,
+    );
+    project.addBuildPhase([], "PBXResourcesBuildPhase", "Resources", target.uuid);
+    project.addBuildPhase([], "PBXFrameworksBuildPhase", "Frameworks", target.uuid);
+    for (const settings of Object.values(
+      project.pbxXCBuildConfigurationSection() as Record<string, unknown>,
+    )) {
+      const build = (settings as { buildSettings?: Record<string, string> }).buildSettings;
+      if (build?.PRODUCT_NAME !== `"${NOTIFICATION_SERVICE.TARGET}"`) continue;
+      Object.assign(build, {
+        CODE_SIGN_STYLE: "Automatic",
+        GENERATE_INFOPLIST_FILE: "NO",
+        INFOPLIST_FILE: `${NOTIFICATION_SERVICE.TARGET}/${NOTIFICATION_SERVICE.INFO_PLIST}`,
+        IPHONEOS_DEPLOYMENT_TARGET: modConfig.ios?.deploymentTarget ?? "26.0",
+        PRODUCT_BUNDLE_IDENTIFIER: NOTIFICATION_SERVICE.BUNDLE_IDENTIFIER,
+        SKIP_INSTALL: "YES",
+        SWIFT_VERSION: NOTIFICATION_SERVICE.SWIFT_VERSION,
+        TARGETED_DEVICE_FAMILY: '"1,2"',
+      });
+    }
+    return modConfig;
+  });
+};
+
 /** One appearance's SVG: a file of the brand's, or drawn here. */
 type ImageSource = { readonly FILE: string } | { readonly SVG: string };
 
 // Each of `IMAGE_SETS` as a vector image set of the asset catalog, its dark
-// appearance beside its light one where it has one.
+// appearance beside its light one where it has one, and each of Lucide's
+// glyphs `@repo/ui-native` draws (`LUCIDE_SYMBOL`) as a symbol set, a custom
+// SF Symbol from the brand's outlined template, so it sizes with Dynamic
+// Type, weighs with its text, and sits on its baseline as SF Symbols do.
 const withImageSets = (config: ExpoConfig): ExpoConfig =>
   withDangerousMod(config, [
     "ios",
@@ -200,6 +324,16 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
           },
         };
         writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
+      }
+      for (const { name, svg } of LUCIDE_SYMBOL_TEMPLATES) {
+        const symbolSet = join(catalog, `${name}.symbolset`);
+        mkdirSync(symbolSet, { recursive: true });
+        writeFileSync(join(symbolSet, `${name}.svg`), svg);
+        const contents = {
+          info: { author: "xcode", version: 1 },
+          symbols: [{ filename: `${name}.svg`, idiom: "universal" }],
+        };
+        writeFileSync(join(symbolSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
       }
       return modConfig;
     },
@@ -237,10 +371,25 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // asking on every build: the app's one cipher of its own (the host's
       // sealed files, `keychain-cipher.ts`) protects only its own data at
       // rest, and everything on the wire is the system's HTTPS.
-      infoPlist: { ITSAppUsesNonExemptEncryption: false },
+      // iOS wakes the app for a settled thread's background push, which
+      // clears its notification (`src/notification-task.ts`).
+      infoPlist: {
+        ITSAppUsesNonExemptEncryption: false,
+        UIBackgroundModes: ["remote-notification"],
+      },
     },
     plugins: [
       "expo-router",
+      // A message's photo is picked in the system's photo picker, which reads
+      // only what the person picks, so no camera or microphone is asked for.
+      [
+        "expo-image-picker",
+        {
+          photosPermission: "Vespin attaches the photos you pick to a message to an agent.",
+          cameraPermission: false,
+          microphonePermission: false,
+        },
+      ],
       [
         "expo-splash-screen",
         {
@@ -257,8 +406,8 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
   });
 
 // The images the screens draw and the flat app icon, written into the asset
-// catalog over the rest.
+// catalog over the rest, and the Notification Service Extension beside the app.
 const config = (context?: ConfigContext): ExpoConfig =>
-  withMarketingIcon(withImageSets(baseConfig(context)));
+  withNotificationService(withMarketingIcon(withImageSets(baseConfig(context))));
 
 export default config;

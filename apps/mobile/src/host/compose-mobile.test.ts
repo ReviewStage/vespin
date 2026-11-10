@@ -2,10 +2,9 @@ import { NodeFileSystem } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { AUTH_SESSION_END } from "@repo/credentials";
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { LIVE_READ } from "@repo/features/live-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
-import { inboxRowsOf } from "@repo/host/app-state-reads";
+import { selectInboxGroupsIn } from "@repo/host/app-state-reads";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { THEME } from "@repo/settings";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
@@ -84,8 +83,10 @@ it.effect(
         const state = yield* Effect.promise(() => bridge.requestAppState());
 
         expect(state.account.status).toBe(ACCOUNT_STATUS.SIGNED_IN);
-        const rows = inboxRowsOf(state.inbox, state[LIVE_READ.INBOX_ITEMS]);
-        expect(rows.map(({ title }) => title)).toContain(STAGED_THREAD);
+        const titles = selectInboxGroupsIn(undefined)(state).flatMap(({ items }) =>
+          items.map(({ title }) => title),
+        );
+        expect(titles).toContain(STAGED_THREAD);
       }),
     ),
 );

@@ -11,7 +11,6 @@ import {
   TASK_SECTION_WRITE,
   type TaskSectionWrite,
 } from "@repo/features/task-section-wire";
-import { isAgentEntry } from "@repo/features/task-section-writes";
 import {
   placeWrites,
   restoreWrites,
@@ -31,6 +30,7 @@ import {
   type TaskStanding,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { TASK_MARK } from "@repo/features/tasks-model";
 import {
   noneYetWords,
   REFRESH_FAILED_WORDS,
@@ -85,7 +85,6 @@ import {
 import { actorName, creatorActor, DELETED_ACCOUNT_ACTOR } from "@repo/ui/actor-model";
 import { GLYPH, ListTodoIcon, PinIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { TASK_MARK } from "@repo/ui/tasks-model";
 import {
   COMPLETED_WINDOW,
   LIST_COLUMN,
@@ -511,12 +510,10 @@ function leaveSection(tasks: ListTasks, taskId: string): TaskSectionWrite[] {
     : [];
 }
 
-/** A section's entries for the tasks its group draws, in its own order; its agents, which the List draws not, left out. */
+/** A section's entries for the tasks its group draws, in its own order. */
 function drawnEntries(tasks: ListTasks, group: TasksGroup, sectionId: string) {
   const drawn = new Set(group.tasks.map((task) => task.id));
-  return sectionOrder(tasks.taskSections, sectionId).flatMap((entry) =>
-    !isAgentEntry(entry) && drawn.has(entry.taskId) ? [entry] : [],
-  );
+  return sectionOrder(tasks.taskSections, sectionId).filter((entry) => drawn.has(entry.taskId));
 }
 
 /** What a group's drag does, each row heard by its task's id: its rows moved within it, where it keeps an order, and a row let go over another group's zone. */
@@ -555,8 +552,7 @@ function listDrops(
         const entries = drawnEntries(tasks, group, head.sectionId);
         const entry = entries.find((each) => each.taskId === taskId);
         if (entry === undefined) return;
-        const member = { agent: false, id: entry.taskId };
-        tasks.onWriteSections(placeWrites(entries, member, head.sectionId, to, Date.now()));
+        tasks.onWriteSections(placeWrites(entries, entry.taskId, head.sectionId, to, Date.now()));
       };
     }
     return undefined;
@@ -592,8 +588,7 @@ function listDrops(
         now.onMovePins(pinMoves(pinPositionsForInsert(others, again, at, pinPlaceOf)));
       }
       if (leaving.length === 0) return;
-      const member = { agent: false, id: task.id };
-      const writes = restoreWrites(before, now.taskSections, [member], null, Date.now());
+      const writes = restoreWrites(before, now.taskSections, [task.id], null, Date.now());
       if (writes.length > 0) now.onWriteSections(writes);
     };
     switch (onto.kind) {
@@ -614,8 +609,7 @@ function listDrops(
         );
         const entries = target === undefined ? [] : drawnEntries(tasks, target, onto.sectionId);
         leave();
-        const member = { agent: false, id: task.id };
-        tasks.onWriteSections(placeWrites(entries, member, onto.sectionId, at, Date.now()));
+        tasks.onWriteSections(placeWrites(entries, task.id, onto.sectionId, at, Date.now()));
         return;
       }
       case TASKS_GROUP.STATUS:

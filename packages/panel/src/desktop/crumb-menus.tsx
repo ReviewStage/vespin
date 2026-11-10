@@ -1,10 +1,10 @@
 import { AGENT_BOUNDS, type AgentSummary } from "@repo/features/agent-wire";
 import { TASK_BOUNDS, type TaskSummary } from "@repo/features/task-wire";
+import { RENAME_FAILED_NOTE } from "@repo/features/tasks-model";
 import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import { ANNOUNCE, type CrumbMenu, InlineEdit, moreLabel, useMenu } from "@repo/ui";
 import { confirmAsked } from "@repo/ui/confirm-state";
-import { RENAME_FAILED_NOTE } from "@repo/ui/tasks-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
 import { useMutation } from "@tanstack/react-query";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
@@ -20,7 +20,6 @@ import { useAnnounceShown } from "../use-announce-shown.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { ActionMenu } from "./action-menu.js";
 import { agentMenuGroups, useAgentActions } from "./agent-actions.js";
-import { useAgentOwnDoors } from "./desktop-agent-page.js";
 import { openedTaskOf, TASK_MENU_LABEL, taskRowTab, useTaskMenuItems } from "./task-actions.js";
 
 /**
@@ -52,13 +51,6 @@ export const THREAD_TASK_KEYS: readonly KeyedCommand[] = [
 export const THREAD_AGENT_COPY_KEYS: readonly KeyedCommand[] = [
   APP_COMMAND.COPY_CONTENT,
   APP_COMMAND.COPY_FULL_TRANSCRIPT,
-];
-
-/** The keys an Inbox thread no task holds hands its agent. */
-export const THREAD_AGENT_KEYS: readonly KeyedCommand[] = [
-  APP_COMMAND.COPY_CONTENT,
-  APP_COMMAND.COPY_FULL_TRANSCRIPT,
-  APP_COMMAND.DELETE,
 ];
 
 /** What the agent's menu is named, as its page's ⋯ names it. */
@@ -144,9 +136,8 @@ export function TaskCrumbMenu({
 
 /**
  * An agent's crumb's menu: the agent's one menu as its page's bar offers it
- * (`agentMenuGroups`), its own read mark, Pin, and Move to section among it
- * where its sidebar row holds them (`useAgentOwnDoors`), its Rename turning
- * the crumb into the agent's name field, and the questions its items ask.
+ * (`agentMenuGroups`), its Rename turning the crumb into the agent's name
+ * field, and the questions its items ask.
  * Note that no side panel stands beside the path, so it opens no terminal.
  */
 export function AgentCrumbMenu({
@@ -159,7 +150,7 @@ export function AgentCrumbMenu({
   tasks: TasksControl;
   agents: AgentsControl;
   agent: AgentSummary;
-  /** The window's keys the path hands the agent while it holds them (`THREAD_AGENT_KEYS`). */
+  /** The window's keys the path hands the agent while it holds them (`THREAD_AGENT_COPY_KEYS`). */
   keys: readonly KeyedCommand[];
   children: (held: CrumbHeld) => React.ReactNode;
 }): React.JSX.Element {
@@ -171,8 +162,7 @@ export function AgentCrumbMenu({
     shown,
     terminals: { onOpenTerminal: undefined },
   });
-  const own = useAgentOwnDoors(tasks, agent, shown);
-  const { onCopy, deletion } = actions.doors;
+  const { onCopy } = actions.doors;
   const copies = onCopy === undefined ? NO_CRUMB_KEYS : keys;
   useShortcutTarget(keys.length === 0 ? undefined : actions.subject, keys);
   useAppCommand(
@@ -189,20 +179,7 @@ export function AgentCrumbMenu({
       : undefined,
     FOCUSED_OFFER,
   );
-  useAppCommand(
-    APP_COMMAND.DELETE,
-    keys.includes(APP_COMMAND.DELETE) && deletion !== undefined && deletion.disabled !== true
-      ? deletion.onSelect
-      : undefined,
-    FOCUSED_OFFER,
-  );
-  const groups = agentMenuGroups({
-    ...actions.doors,
-    subject: actions.subject,
-    read: own.read,
-    agentPin: own.agentPin,
-    section: own.section,
-  });
+  const groups = agentMenuGroups({ ...actions.doors, subject: actions.subject });
   const { rename } = actions;
   const editing =
     rename?.editing === true ? (
@@ -226,7 +203,6 @@ export function AgentCrumbMenu({
         />
       )}
       {actions.dialog}
-      {own.dialog}
     </>
   );
 }

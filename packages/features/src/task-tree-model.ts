@@ -122,7 +122,7 @@ export function taskTree(input: TaskTreeInput): TaskTree {
     (task) => ({ position: task.pinPosition, at: task.pinnedAt ?? 0 }),
   ).map(taskRow);
   const free = listed.filter((task) => task.pinnedAt === undefined);
-  const sectioned = sectionedTasks(view.taskSections ?? NO_TASK_SECTIONS, workspaceId, free, []);
+  const sectioned = sectionedTasks(view.taskSections ?? NO_TASK_SECTIONS, workspaceId, free);
   const sections = sectioned.sections.map((drawn) =>
     sectionInView(drawn, DEFAULT_TASK_LIST_VIEW, readerId),
   );

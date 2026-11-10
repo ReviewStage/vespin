@@ -138,7 +138,7 @@ import {
   recordAgentRunnerToken,
   runnerLaunchOf,
 } from "@repo/database/models/agent-store";
-import { holdsSession } from "@repo/database/models/claude-session-entries";
+import { holdsSession, markSessionBroken } from "@repo/database/models/claude-session-entries";
 import {
   clearNativeRewindHanded,
   readNativeRewind,
@@ -166,8 +166,13 @@ import {
 } from "@repo/database/models/workspace-sandbox-script-store";
 import { type ConversationTarget, storeWriter } from "@repo/database/models/writer";
 import type { RunnerLineFile } from "@repo/database/schemas/runner-line";
+import {
+  AGENT_PERMISSION_MODE,
+  type AgentPermissionMode,
+} from "@repo/features/agent-approval-wire";
 import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
+import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
 import { causeKind, failureKind } from "@repo/runtime/effect";
 import {
   isSandboxError,
@@ -175,7 +180,6 @@ import {
   type SandboxError,
   type SandboxFile,
   SandboxUnavailable,
-  touchSandbox,
 } from "@repo/sandbox";
 import { TURN_STATUS, type WireValue } from "@repo/wire";
 import type { UserContent } from "ai";
@@ -225,6 +229,7 @@ import { deploymentLifecycle } from "../machine/agent-machines.js";
 import { extraCheckoutPaths } from "../repository-sandbox-contract.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import { LAUNCH_SWAP } from "../sandbox-firewall.js";
+import { touchAgentSandbox } from "../sandbox-use.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
   PLAN_REFUSAL,
@@ -243,11 +248,14 @@ import { CODER, CODER_REFUSAL } from "./bounds.js";
 import { agentFirewallSources, CheckoutRefused, type CheckoutServices } from "./checkout.js";
 import { contextWindowOf } from "./context.js";
 import { nativeSkillFiles } from "./native-skills.js";
+import { permissionModeOf } from "./permission-mode.js";
 import { restartReplayOf } from "./replay.js";
 import { fileBlocksBytes, REPLAY_FIT } from "./replay-summary.js";
 import { holdingRunner, holdingRunnerIfFree } from "./runner-lease.js";
 import {
+  type ApprovalLine,
   type NativeSessions,
+  RUNNER_ANSWER,
   RUNNER_CHECKOUT,
   RUNNER_CHOICE,
   TURN_HANDOVER,
@@ -572,7 +580,8 @@ function stopLine(launch: number): InputLine {
 
 /**
  * What a runner was launched with that it cannot take up while it runs: its
- * credential, and the integrations it was handed, as a digest. A warm
+ * credential, the integrations it was handed, and its permission mode
+ * where it asks, as a digest. A warm
  * runner whose fingerprint no longer matches is relaunched rather than
  * handed the next message (`sendHolding`). The digest is one-way and
  * truncated, so the record carries nothing of the credential. Note that a
@@ -587,6 +596,7 @@ function launchFingerprint(
   credential: HarnessLaunch,
   delivered: DeliveredCredentials,
   integrations: readonly IntegrationServer[],
+  mode: AgentPermissionMode,
 ): string {
   const declared = credential.credentials ?? [];
   const isHeld = (each: RunnerCredential) => delivered.swaps.has(each.slot);
@@ -604,8 +614,10 @@ function launchFingerprint(
   }));
   // Note that one slot is digested alone, under the key it was digested by, as the one a launch could hold before credentials were declared.
   const swapped = slots.length === 0 ? undefined : slots.length === 1 ? slots[0] : slots;
+  // Note that full access is digested as nothing, as every launch before modes was, so its runners stay warm across the change.
+  const asks = mode === AGENT_PERMISSION_MODE.FULL_ACCESS ? undefined : mode;
   return createHash("sha256")
-    .update(JSON.stringify({ env, names, held: swapped }))
+    .update(JSON.stringify({ env, names, held: swapped, mode: asks }))
     .digest("hex")
     .slice(0, FINGERPRINT_CHARS);
 }
@@ -667,7 +679,7 @@ function sandboxSetupOf(agent: Agent, machine: AgentMachineKind) {
     const [install, repository] = yield* Effect.all(
       [
         readInstallScript(agent.organizationId),
-        readRepositorySetup(agent.organizationId, agent.repository),
+        readRepositorySetup(agent.organizationId, agent.repository, REPOSITORY_SCRIPT_KIND.SETUP),
       ],
       { concurrency: "unbounded" },
     );
@@ -1070,7 +1082,12 @@ export const runnerSessions = <
           // Note that the workspace's variables go first, so ours win a name they share.
           env: { ...environment, ...credential.env, ...delivered.env },
           extraCheckouts,
-          fingerprint: launchFingerprint(credential, delivered, integrations),
+          fingerprint: launchFingerprint(
+            credential,
+            delivered,
+            integrations,
+            permissionModeOf(agent),
+          ),
         };
       }).pipe(Effect.withSpan("web/runnerLaunchPrepared"));
 
@@ -1345,7 +1362,7 @@ export const runnerSessions = <
         const { content } = sent.line;
         // Note that the replay is fitted beside what else the line carries, so the whole line fits the window.
         const replay = replayed
-          ? yield* restartReplay(agent, besideBytes(opened.text, content))
+          ? yield* restartReplay(agent, besideBytes(opened.text, content), sent.line.uuid)
           : undefined;
         const words = [replay, opened.text].filter((part) => part !== undefined);
         const ahead: readonly ContentBlock[] =
@@ -1366,15 +1383,20 @@ export const runnerSessions = <
      * The agent's own steps so far, as a session opened afresh on its
      * conversation is handed them (`restartReplayOf`), fitted to its model's
      * window less the instructions told where none was measured and the
-     * bytes the rest of its line comes to; nothing where its rows cannot be
-     * read, logged, so the session still opens on the turn's words.
+     * bytes the rest of its line comes to, and without the line being sent
+     * (`sending`); nothing where its rows cannot be read, logged, so the
+     * session still opens on the turn's words.
      */
-    const restartReplay = (agent: Agent, beside: number) =>
-      restartReplayOf(agent, {
-        windowTokens: contextWindowOf([], agent.model, agent.contextWindow),
-        instructionsTokens: REPLAY_FIT.INSTRUCTIONS_FALLBACK_TOKENS,
-        besideBytes: beside,
-      }).pipe(
+    const restartReplay = (agent: Agent, beside: number, sending: string) =>
+      restartReplayOf(
+        agent,
+        {
+          windowTokens: contextWindowOf([], agent.model, agent.contextWindow),
+          instructionsTokens: REPLAY_FIT.INSTRUCTIONS_FALLBACK_TOKENS,
+          besideBytes: beside,
+        },
+        sending,
+      ).pipe(
         Effect.tapError(logStoreFailure),
         Effect.orElseSucceed(() => undefined),
       );
@@ -1412,6 +1434,16 @@ export const runnerSessions = <
         return (
           opened.descriptionsOn !== standing.descriptionsOn || opened.memoryOn !== standing.memoryOn
         );
+      });
+
+    /** The agent's native session marked broken (`markSessionBroken`), so no launch resumes it from the store again (`holdsSession`). */
+    const lostSessionMarked = (agent: Agent) =>
+      Effect.gen(function* () {
+        const routing = yield* readAgentRouting(userId, agent.id);
+        const own = Option.getOrUndefined(
+          Option.flatMapNullishOr(routing, (read) => read.nativeSession),
+        );
+        if (own !== undefined) yield* markSessionBroken(userId, agent.conversationId, own);
       });
 
     /** The files a message names written into the running place, before its line names them. */
@@ -1619,7 +1651,9 @@ export const runnerSessions = <
      * preparation that failed fails the launch once the place runs, as an
      * open's does. In a place made anew in place of one whose disk was lost
      * (`created`), the member's installed skills went with that disk, so
-     * they are uploaded again, as a new place's are. Answers the place.
+     * they are uploaded again, as a new place's are. A launch whose
+     * harness's session was lost (`replayed`) resumes it by no path, the disk's
+     * included, and opens a fresh one handed the agent's steps. Answers the place.
      */
     const relaunched = <PE, PR>(
       agent: Agent,
@@ -1630,6 +1664,7 @@ export const runnerSessions = <
       layout: MachineLayout,
       sent: RunnerMessage | undefined,
       queuedFirst?: OpenedLine,
+      replayed = false,
     ) =>
       Effect.gen(function* () {
         const target = { userId, conversationId: agent.conversationId };
@@ -1651,7 +1686,9 @@ export const runnerSessions = <
                   layout,
                   sent,
                   credential,
-                  resumedSessionWhen(agent, layout, Deferred.await(created)),
+                  replayed
+                    ? Effect.succeed({ replay: true } satisfies ResumedSession)
+                    : resumedSessionWhen(agent, layout, Deferred.await(created)),
                   queuedFirst,
                 ),
               ),
@@ -1683,7 +1720,7 @@ export const runnerSessions = <
 
     /**
      * Whether the runner is warm, no turn of the agent's under way, and was
-     * launched with a credential or integrations that have changed since,
+     * launched with a credential, integrations, or a permission mode that have changed since,
      * which it cannot take up while it runs. A runner at work keeps going on
      * what it has, and one from before fingerprints were tagged is never
      * read as stale.
@@ -1698,7 +1735,12 @@ export const runnerSessions = <
         if (runner.fingerprint === undefined || turnRunning) return false;
         const credential = yield* harness.launch(agent, layout);
         const delivered = machine.deliverCredentials(agent, credential.credentials ?? []);
-        const now = launchFingerprint(credential, delivered, yield* options.integrations(agent));
+        const now = launchFingerprint(
+          credential,
+          delivered,
+          yield* options.integrations(agent),
+          permissionModeOf(agent),
+        );
         return now !== runner.fingerprint;
       });
 
@@ -1736,6 +1778,8 @@ export const runnerSessions = <
       handsOn: boolean,
       /** Whether a runner up is ended and launched again whatever it holds, as a retry on the next payer asks (`retry`). */
       relaunch = false,
+      /** Whether the harness's session is let go and the conversation replayed, as a retry of a turn whose launch could not resume it asks (`retry`). */
+      replayed = false,
     ) =>
       Effect.gen(function* () {
         // The agent is read beside the place, and its read answers only for a place found or opening.
@@ -1772,12 +1816,17 @@ export const runnerSessions = <
         const { conversationId } = agent;
         const turn = (yield* latestTurnsOfReached([conversationId])).get(conversationId);
         const turnRunning = turn?.status === TURN_STATUS.RUNNING;
-        // A session opened on experiments since changed is opened afresh, on the same place, its
-        // conversation replayed into it: its harness's session is let go before anything is
-        // handed, so every launch past here, the turn's delivery's among them, resumes none, and
-        // the first line, its replay ahead of it, is composed once.
-        const restart = yield* experimentsChanged(agent, turnRunning);
-        if (restart) yield* recordAgentNativeSession(userId, agent.id, null);
+        // A session the harness could not resume, or opened on experiments since changed, is opened
+        // afresh, on the same place, its conversation replayed into it: its harness's session is let
+        // go before anything is handed, so every launch past here, the turn's delivery's among them,
+        // resumes none, and the first line, its replay ahead of it, is composed once.
+        const restart = replayed || (yield* experimentsChanged(agent, turnRunning));
+        // Note that a session the harness could not resume is marked broken rather than forgotten,
+        // so the store never resumes it again, the launch below resumes it by no path
+        // (`relaunched`), and a Mac whose disk a later launch resumes it from again loses it once
+        // more and replays then.
+        if (replayed) yield* lostSessionMarked(agent);
+        else if (restart) yield* recordAgentNativeSession(userId, agent.id, null);
         const restartLine = restart
           ? yield* openedLine(agent, sessionId, sent, true, true)
           : undefined;
@@ -1843,6 +1892,7 @@ export const runnerSessions = <
               layout,
               sent,
               restartLine,
+              replayed,
             );
             yield* handed(SERVER_HANDOFF_PATH.RELAUNCHED);
             return accepted;
@@ -1927,6 +1977,7 @@ export const runnerSessions = <
           layout,
           sent,
           restartLine,
+          replayed,
         );
         yield* handed(wasUp ? SERVER_HANDOFF_PATH.RELAUNCHED : SERVER_HANDOFF_PATH.RESUMED);
         return accepted;
@@ -2058,6 +2109,24 @@ export const runnerSessions = <
         // Note that it goes the way the runner's messages go, so it never overtakes, nor is overtaken by, a message's own model line.
         yield* delivered(agent, live, model);
         return RUNNER_CHOICE.WRITTEN;
+      });
+
+    /**
+     * A member's answer to an ask, under the agent's runner lease, written to
+     * the runner that runs the way its messages go. Nothing where no runner
+     * runs, or one whose command is gone, since none holds the ask then.
+     */
+    const answerHolding = (sessionId: string, conversationId: string, line: ApprovalLine) =>
+      Effect.gen(function* () {
+        const found = yield* machine.findPlace(userId, sessionId);
+        if (Option.isNone(found)) return RUNNER_ANSWER.NOT_LIVE;
+        const agent = yield* agentOf(conversationId);
+        const live = found.value.runner;
+        if (found.value.agentId !== agent.id || live === undefined) return RUNNER_ANSWER.NOT_LIVE;
+        return yield* delivered(agent, live, [line]).pipe(
+          Effect.as(RUNNER_ANSWER.WRITTEN),
+          Effect.catchIf(sandboxGone, () => Effect.succeed(RUNNER_ANSWER.NOT_LIVE)),
+        );
       });
 
     /**
@@ -2198,7 +2267,7 @@ export const runnerSessions = <
         if (Option.isNone(found) || found.value.agentId !== agent.id) return;
         // An agent on screen is its sandbox in use: a running one is touched, a stopped one resumed by the launch below.
         if (found.value.machine === AGENT_MACHINE.VERCEL && found.value.running !== undefined) {
-          yield* touchSandbox(found.value.name);
+          yield* touchAgentSandbox(found.value.name);
         }
         const live = found.value.runner;
         if (live !== undefined) {
@@ -2425,12 +2494,13 @@ export const runnerSessions = <
       // A turn its plan's limit cut short goes on with its own line in a launch on the next payer:
       // the runner, wherever it runs and whatever it holds, ended and launched again here under the
       // lease, as a message to a Mac's is, its payer chosen afresh as every launch's is
-      // (`turnPayerOf`) and the harness's session resumed (`resumedSessionWhen`). Note that on a
-      // machine whose runner reads its lines, the line the ended launch took is put back untaken
-      // first, because the launch queues it again under the same id, and a line taken is never
-      // handed again (`requeueRunnerLine`). The line is resent, since the session it resumes
+      // (`turnPayerOf`) and the harness's session resumed (`resumedSessionWhen`); or, for a turn
+      // whose launch could not resume it (`replayed`), let go and the conversation replayed. Note
+      // that on a machine whose runner reads its lines, the line the ended launch took is put back
+      // untaken first, because the launch queues it again under the same id, and a line taken is
+      // never handed again (`requeueRunnerLine`). The line is resent, since the session it resumes
       // already holds it under its id.
-      retry: (sessionId, message) =>
+      retry: (sessionId, message, replayed = false) =>
         Effect.gen(function* () {
           const after = yield* Effect.serviceOption(AfterResponse);
           return yield* Effect.gen(function* () {
@@ -2444,7 +2514,7 @@ export const runnerSessions = <
                 layout.linesRead
                   ? requeueRunnerLine(userId, agent.id, sent.line.uuid)
                   : Effect.void,
-                sendHolding(sessionId, message, layout, sent, false, true),
+                sendHolding(sessionId, message, layout, sent, false, true, replayed),
               ),
               CODER.RUNNER_LEASE.SEND_WAIT,
             ).pipe(
@@ -2607,6 +2677,24 @@ export const runnerSessions = <
                 `A ${harness.name} checkout of an added repository failed: ${keptFailureWords(failureWords(failure))}`,
               ),
               RUNNER_CHECKOUT.FAILED,
+            ),
+          ),
+          Effect.annotateLogs(agentLogIds({ conversationId }, sessionId)),
+          Effect.provideContext(context),
+        ),
+
+      // A member's answer goes to the runner that holds the ask, as its messages go.
+      answer: (sessionId, conversationId, line) =>
+        Effect.gen(function* () {
+          const { id } = yield* agentOf(conversationId);
+          return yield* holdingRunner(id, answerHolding(sessionId, conversationId, line));
+        }).pipe(
+          Effect.catch((failure) =>
+            Effect.as(
+              Effect.logWarning(
+                `A ${harness.name} answer to an ask failed: ${keptFailureWords(failureWords(failure))}`,
+              ),
+              RUNNER_ANSWER.FAILED,
             ),
           ),
           Effect.annotateLogs(agentLogIds({ conversationId }, sessionId)),

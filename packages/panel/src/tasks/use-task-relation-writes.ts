@@ -15,6 +15,7 @@ import {
   type TaskBlockRequest,
   type TaskRelationChangeRequest,
 } from "@repo/features/task-wire";
+import { repositoryChangeFailureNote } from "@repo/features/tasks-model";
 import {
   IDLE_TASKS_VIEW,
   type ParentCallFailure,
@@ -30,7 +31,6 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { STATUS_TONE } from "@repo/ui";
-import { repositoryChangeFailureNote } from "@repo/ui/tasks-model";
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { type Unreached, unreachedAs } from "../act.js";

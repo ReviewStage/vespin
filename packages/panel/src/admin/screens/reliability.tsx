@@ -112,6 +112,7 @@ const AGENT_FAILURE_LABEL = {
   [AGENT_FAILURE.LINE_UNTAKEN]: "Never picked up",
   [AGENT_FAILURE.PLAN_LIMIT]: "Plan limit, never relaunched",
   [AGENT_FAILURE.REFUSAL]: "Model refused",
+  [AGENT_FAILURE.CONNECTION_LOST]: "Provider connection lost, never back",
   [AGENT_FAILURE.OTHER]: "Other",
 } as const satisfies Record<AgentFailure, string>;
 

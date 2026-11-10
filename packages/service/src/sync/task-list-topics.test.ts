@@ -75,13 +75,13 @@ const wakesTheTaskList = <A, E, R>(
 
 it.layer(getTestDB())("what moves an account's task list notifies", (it) => {
   it.effect(
-    "a task and an agent with no task pinned and unpinned each notify the account under the pin's own transaction",
+    "a task and its agent pinned and unpinned each notify the account under the pin's own transaction",
     () =>
       Effect.gen(function* () {
         const userId = yield* openAccount;
         const workspaceId = yield* openWorkspace(userId);
         const task = yield* createTask(userId, { organizationId: workspaceId, name: "Invites" });
-        const agentId = yield* openTaskAgent(userId, workspaceId, null);
+        const agentId = yield* openTaskAgent(userId, workspaceId, task.id);
         const account: readonly SyncTopic[] = [[TOPIC.ACCOUNT, userId]];
 
         const taskPinned = yield* wakesTheTaskList(

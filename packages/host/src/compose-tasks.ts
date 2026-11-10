@@ -16,6 +16,7 @@ import {
 import { TASK_COMMENTS_READ } from "@repo/features/description-comment-live";
 import { WRITE_UNTAKEN } from "@repo/features/keyed-write";
 import { issueAddressOf, pullRequestAddressOf } from "@repo/features/link-grammar";
+import { LINK_PREVIEW_UNANSWERED } from "@repo/features/link-preview-view";
 import type { AnyLiveRead, LiveReadAnswer, LiveReadAsked } from "@repo/features/live-read";
 import { type LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import {
@@ -362,6 +363,7 @@ export type TasksClient = Pick<
   | "readTree"
   | "readSkills"
   | "readRepositoryFile"
+  | "linkPreview"
   | "readRepositoryTree"
   | "readRepositorySkills"
   | "readRepositoryPullRequest"
@@ -1068,16 +1070,14 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
           view = pendingTasks.length === 0 ? rest : { ...rest, pendingTasks };
           write({
             tasks: list.plans,
-            tasklessAgents: list.planlessAgents ?? [],
             taskAgents,
             taskPullRequests,
             agentPullRequests,
             taskAgentPins,
           });
           documents.relisted();
-          const agents = [...taskAgents, ...(list.planlessAgents ?? [])];
           PubSub.publishUnsafe(listings, {
-            statuses: new Map(agents.map((agent) => [agent.id, agent.status])),
+            statuses: new Map(taskAgents.map((agent) => [agent.id, agent.status])),
             pullRequests: agentPullRequests,
           });
         },
@@ -2119,6 +2119,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     // The repository's skills are held for every window and read again behind
     // each answer (`heldSkills`), a plan's under the repository the list
     // names it on, so a plan moved to another repository reads that one's.
+    TASKS_LINK_PREVIEW: ({ url }) =>
+      gate() ? served(client.linkPreview(url)) : Effect.succeed(LINK_PREVIEW_UNANSWERED),
     TASKS_SKILLS: (asked) =>
       Effect.gen(function* () {
         if (!gate()) return { failure: TASK_CALL_FAILURE.UNANSWERED };
@@ -2180,6 +2182,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         (answer): TasksPageSourceAnswer =>
           "page" in answer ? { lines: pageSourceLines(answer.page.html) } : answer,
       ),
+    // The version is read as its frame reads it (`pageRead`), its HTML whole, so it reaches the client that asked alone.
+    TASKS_PAGE_HTML: pageRead,
     // A picture's bytes are answered to the window that asked and kept by
     // its id, which no other upload is given, so they never enter the view
     // every window is told.
