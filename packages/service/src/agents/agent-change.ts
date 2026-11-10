@@ -11,10 +11,10 @@
  * unarchived; bringing one back clears whichever archive stands.
  *
  * Every other archive writes through here too, each deciding which agents
- * it puts away and why: a task moved to Done archives its idle agents in
+ * it puts away and why: a task moved to Done or Canceled archives its idle agents in
  * the task's own transaction (`doneTaskArchive`), and they are let go of
  * once it commits (`archivedWithTaskLetGo`); a turn ending on a task a
- * member or an agent moved to Done archives its agent with it
+ * member or an agent moved to Done or Canceled archives its agent with it
  * (`archivedWithDoneTask`); and "Archive finished runs", which a Slack agent
  * is put away by too, archives an agent that finished well and stands as it
  * was read (`archivedUnmovedAgent`). The last two let an agent go on its
@@ -165,11 +165,11 @@ export const archivedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   return written;
 });
 
-/** How a task's move to Done archives its agents with it, as `archivedBy`: those a Stop reads idle, in the task's own transaction (`updateTaskCommitted`). */
+/** How a task's move to Done or Canceled archives its agents with it, as `archivedBy`: those a Stop reads idle, in the task's own transaction (`updateTaskCommitted`). */
 export const doneTaskArchive = (archivedBy: StoredArchive) =>
   ({ archivedBy, idle: idleStandingAgents }) satisfies TaskDoneArchive<DatabaseServices>;
 
-/** The agents a task's Done archived with it let go of once it commits, as an archive by hand lets one go: their sandboxes deleted and a local one discarded on its device. */
+/** The agents a task's Done or Canceled archived with it let go of once it commits, as an archive by hand lets one go: their sandboxes deleted and a local one discarded on its device. */
 export const archivedWithTaskLetGo = (
   reach: SandboxDeleteReach,
   archived: readonly TaskArchivedAgent[],
@@ -177,9 +177,9 @@ export const archivedWithTaskLetGo = (
 
 /**
  * The agent archived with its task where a member or an agent moved the
- * task to Done while it worked and it now reads idle, as whoever moved it
- * (`archiveAgentOfDoneTask`), then let go of on its device; what a turn's end
- * asks of an agent its task's Done left at work.
+ * task to Done or Canceled while it worked and it now reads idle, as whoever
+ * moved it (`archiveAgentOfDoneTask`), then let go of on its device; what a
+ * turn's end asks of an agent its task's Done or Canceled left at work.
  */
 export const archivedWithDoneTask = (userId: string, taskId: string, agentId: string) =>
   Effect.flatMap(archiveAgentOfDoneTask(userId, taskId, agentId, idleStandingAgents), (archived) =>
