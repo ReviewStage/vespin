@@ -171,6 +171,7 @@ import {
   runSharePort,
   SHARE_PORT_TOOL,
 } from "../port-tools.js";
+import { ADD_BUTTON_TOOL, runAddButton } from "../reply-buttons/add-button.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
   CREATE_SECTION_TOOL,
@@ -574,6 +575,7 @@ const CATALOG = [
   agentTool(LIST_AGENTS_TOOL, runListAgents, { ...LOADED, ...READS }),
   agentTool(CODER_READ_AGENT_TOOL, runReadAgent, READS),
   agentTool(MESSAGE_AGENT_TOOL, runMessageAgent, LOADED),
+  agentTool(ADD_BUTTON_TOOL, runAddButton, { gate: TOOL_GATE.REPLY_BUTTONS, alwaysLoad: true }),
   agentTool(UPDATE_AGENT_TOOL, runUpdateAgent),
   agentTool(LIST_MODELS_TOOL, runListModels, READS),
   // Tasks and sections.

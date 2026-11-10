@@ -1,0 +1,78 @@
+{
+  "type": "object",
+  "properties": {
+    "label": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 60,
+      "description": "The button's words, a short action in sentence case, such as Wire up the invite email: at most 60 characters, saying what pressing it sets off."
+    },
+    "start": {
+      "type": "object",
+      "properties": {
+        "prompt": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64000,
+          "description": "The brief the new agent is handed as its first message: everything it needs to start on its work, since it knows nothing else of yours."
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "description": "The new agent's title; leave it out to have it named."
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255,
+          "description": "The branch of the task's repository to clone its checkout at, which must be on GitHub when the button is pressed; leave it out for the default branch."
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The model to run on, by its catalog id, as list_models lists it; leave it out with the effort for the default of the member who presses it."
+        },
+        "effort": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "description": "The reasoning effort, as the model lists it; given with the model or not at all."
+        }
+      },
+      "required": [
+        "prompt"
+      ],
+      "additionalProperties": false,
+      "description": "Start a new agent on the task you work on, as the member who presses the button, where their agents on the task run."
+    },
+    "send": {
+      "type": "object",
+      "properties": {
+        "agentId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 36,
+          "description": "Another agent of your workspace, by the id list_agents answered."
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 15000,
+          "description": "The words sent to it, as the member who presses the button."
+        }
+      },
+      "required": [
+        "agentId",
+        "text"
+      ],
+      "additionalProperties": false,
+      "description": "Send words to an agent that is already running, as the member who presses the button."
+    }
+  },
+  "required": [
+    "label"
+  ],
+  "additionalProperties": false
+}

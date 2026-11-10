@@ -1,12 +1,12 @@
 import { Predicate } from "effect";
 
 /**
- * experiment-words.ts -- what of a tool's words and input would tell an agent of Task descriptions or Memory, for a test that holds them to telling nothing of one that is off.
+ * experiment-words.ts -- what of a tool's words and input would tell an agent of Task descriptions, Memory, or Reply buttons, for a test that holds them to telling nothing of one that is off.
  */
 
-/** Words that name Task descriptions or Memory to an agent: a task's description or its comments, or the workspace's memory. */
+/** Words that name Task descriptions, Memory, or Reply buttons to an agent: a task's description or its comments, the workspace's memory, or the tool that puts a button in a reply. */
 const EXPERIMENT_WORDS =
-  /\b(?:task's description|its description|the description|description's|descriptions?\b(?! of)|memor(?:y|ies))/iu;
+  /\b(?:task's description|its description|the description|description's|descriptions?\b(?! of)|memor(?:y|ies)|add_button)/iu;
 
 /** Words that say the same of something else: a pull request's own description, and the conversation an automation's runs share. */
 const ELSEWHERE_WORDS =

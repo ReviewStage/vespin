@@ -61,6 +61,8 @@ export const CALL_KIND = {
   READ_AGENT: "read-agent",
   MESSAGE_AGENT: "message-agent",
   START_AGENT: "start-agent",
+  /** A button put in the agent's reply (`add_button`), its row naming the button's label. */
+  ADD_BUTTON: "add-button",
   ARCHIVE_AGENT: "archive-agent",
   UNARCHIVE_AGENT: "unarchive-agent",
   /** A list of the models a coding agent may be started on (`list_models`). */
@@ -174,6 +176,7 @@ export const CALL_WORDS = {
   [CALL_KIND.READ_AGENT]: { verb: "Read the agent", code: false },
   [CALL_KIND.MESSAGE_AGENT]: { verb: "Messaged the agent", code: false },
   [CALL_KIND.START_AGENT]: { verb: "Started an agent", code: false },
+  [CALL_KIND.ADD_BUTTON]: { verb: "Added a button:", code: false },
   [CALL_KIND.ARCHIVE_AGENT]: { verb: "Archived the agent", code: false },
   [CALL_KIND.UNARCHIVE_AGENT]: { verb: "Unarchived the agent", code: false },
   [CALL_KIND.LIST_MODELS]: { verb: "Listed the models", code: false },

@@ -651,19 +651,19 @@ function megabytesOf(bytes: number): string {
 }
 
 /** A prompt or a note a start may name: bounded apart from a message, since a brief to a worker on a long description is quoted whole. */
-const START_PROMPT = Schema.Trim.check(
+export const START_PROMPT = Schema.Trim.check(
   Schema.isNonEmpty(),
   Schema.isMaxLength(AGENT_BOUNDS.MAX_START_WORDS_CHARS),
 );
 
 /** A title a start may name: bounded as a rename's is, and never empty, since an empty one names nothing. */
-const START_TITLE = Schema.Trim.check(
+export const START_TITLE = Schema.Trim.check(
   Schema.isNonEmpty(),
   Schema.isMaxLength(AGENT_BOUNDS.MAX_TITLE_CHARS),
 );
 
 /** A branch a start may name: one git ref's name as GitHub holds it, with no whitespace, which GitHub then confirms. */
-const START_BRANCH = startBranchSchema;
+export const START_BRANCH = startBranchSchema;
 
 /**
  * A start names a prompt at most, a note at most, a branch at most, and a

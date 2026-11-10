@@ -821,6 +821,22 @@ const CODER_SECTION_WORDS: SectionWords = {
 };
 
 /**
+ * What the agent is told of the buttons it may put in its reply
+ * (`../reply-buttons/add-button.ts`) where it is offered `add_button`, as
+ * where its starter turned Reply buttons on (`../tool-catalog/gates.ts`'s
+ * `REPLY_BUTTONS`), and nothing where not.
+ */
+function replyButtonWords(standing: AgentStanding): string {
+  return offers(standing, AGENT_TOOL.ADD_BUTTON)
+    ? `## Buttons in your reply
+
+Where your reply names work the developer may want next that runs apart from yours, such as a follow-up you found along the way, or words for an agent already running, put a button beside the line it is about with \`${AGENT_TOOL.ADD_BUTTON}\` rather than asking them to start it by hand: it starts a new agent on a brief you write, or sends your words to that agent, once a member presses it, as that member, and only once. Write the link it answers as \`[<label>](<link>)\` at the end of that line. A button is for work you leave to the developer's choice, never for what you will do yourself, and never for a decision, which goes in a thread.
+
+`
+    : "";
+}
+
+/**
  * What the agent is told of its workspace's memory (`../memory-tools.ts`)
  * where it is offered `save_memory`, as where its starter turned Memory on
  * (`../tool-catalog/gates.ts`'s `MEMORY`), and nothing where not, since it
@@ -945,7 +961,7 @@ ${tools.worker(place.worker)}${editing.updating}${place.status}
 
 The developer may keep their tasks in sections of the workspace's sidebar, their own and no teammate's. \`${AGENT_TOOL.LIST_TASKS}\` names each task's section and the sections the developer keeps; \`${AGENT_TOOL.CREATE_SECTION}\` makes a section, \`${AGENT_TOOL.UPDATE_TASK}\`'s sectionId moves a task into one or back under Tasks, and \`${AGENT_TOOL.DELETE_SECTION}\` deletes one, its tasks going back under Tasks and none of them deleted. ${sections.sorting} Say in your message what you changed.
 
-${memoryWords(standing)}${turnEndWords(standing)}## What your messages are
+${replyButtonWords(standing)}${memoryWords(standing)}${turnEndWords(standing)}## What your messages are
 
 ${sections.messages}
 

@@ -62,6 +62,8 @@ export const TurnHandedSchema = Schema.Struct({
       memoryOn: Schema.Boolean,
       /** Absent on a session opened before Done and follow-ups was kept, which read it as off. */
       turnEndOn: Schema.optionalKey(Schema.Boolean),
+      /** Absent for a session opened before Reply buttons was kept, which opened with it off. */
+      replyButtonsOn: Schema.optionalKey(Schema.Boolean),
     }),
   ),
 });
