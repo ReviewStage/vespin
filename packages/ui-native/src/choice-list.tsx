@@ -105,7 +105,12 @@ function ChoiceRow({
       modifiers={[
         buttonStyle("plain"),
         accessibilityLabel(
-          [choice.label, recommended ? RECOMMENDED : undefined, picked ? "picked" : undefined]
+          [
+            choice.label,
+            recommended ? RECOMMENDED : undefined,
+            picked ? "picked" : undefined,
+            choice.detail,
+          ]
             .filter((part) => part !== undefined)
             .join(", "),
         ),

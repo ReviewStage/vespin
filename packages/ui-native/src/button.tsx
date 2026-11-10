@@ -9,6 +9,7 @@ import {
   VStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityAddTraits,
   background,
   buttonStyle,
   controlSize,
@@ -148,13 +149,20 @@ type ChipProps = {
 /**
  * A small capsule a person picks among others, such as a scope or a model:
  * filled with the ink once chosen, as a selection reads without the accent,
- * and on the surface inside a hairline otherwise.
+ * and on the surface inside a hairline otherwise. VoiceOver hears the chosen
+ * one as selected, since its fill alone says so on screen.
  */
 export function Chip({ label, symbol, count, selected = false, onPress }: ChipProps) {
   const colors = useColors();
   const ink = selected ? colors.GROUND : colors.TEXT_BODY;
   return (
-    <SwiftUIButton onPress={onPress} modifiers={[buttonStyle("plain")]}>
+    <SwiftUIButton
+      onPress={onPress}
+      modifiers={[
+        buttonStyle("plain"),
+        ...(selected ? [accessibilityAddTraits(["isSelected"])] : []),
+      ]}
+    >
       <HStack spacing={SPACE.TIGHT + 2} modifiers={capsuleModifiers(colors, selected)}>
         {symbol === undefined ? null : (
           <Image systemName={symbol} size={MARK_SIZE.GLYPH - 2} color={ink} />
