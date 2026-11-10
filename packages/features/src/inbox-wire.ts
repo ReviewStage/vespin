@@ -1057,15 +1057,11 @@ export const INBOX_TAKE_BACK = {
   MOVED_ON: "moved-on",
 } as const;
 
-export type InboxTakeBack = (typeof INBOX_TAKE_BACK)[keyof typeof INBOX_TAKE_BACK];
-
 /** What a take-back comes back as: the item as it then stands, and what came of the take-back. */
 export const inboxTakenBackSchema = EffectSchema.Struct({
   item: inboxItemSchema,
   outcome: EffectSchema.Literals(Object.values(INBOX_TAKE_BACK)),
 });
-
-export type InboxTakenBack = typeof inboxTakenBackSchema.Type;
 
 /** How a member's close opens, in the message that tells the agent of it. */
 export const INBOX_CLOSE_LEAD = "Thread closed";
