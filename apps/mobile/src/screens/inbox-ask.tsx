@@ -85,20 +85,19 @@ export interface OptionMediaDoors {
   readonly openVideoElsewhere: () => void;
 }
 
-/** One piece of an option's media as the card draws it: a file from its bytes as read, named for its option, and a page or an address opened through `doors`. */
-function cardMedia(
-  option: InboxOption,
-  piece: InboxOptionMedia,
-  at: number,
-  doors: OptionMediaDoors,
-): ChoiceMedia {
+/** What a picture's and a recording's tile is called where its agent gave it no caption. */
+const PICTURE_WORD = "Picture";
+const RECORDING_WORD = "Recording";
+
+/** One piece of an option's media as the card draws it: a file from its bytes as read, under its caption, and a page or an address opened through `doors`. */
+function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedia {
   switch (piece.type) {
     case INBOX_OPTION_MEDIA.FILE: {
       const recording = piece.mediaType === INBOX_FILE_TYPE.WEBM;
       return {
         key: piece.attachmentId,
         kind: recording ? CHOICE_MEDIA.VIDEO : CHOICE_MEDIA.PICTURE,
-        title: `${option.label} · ${piece.caption ?? `${at + 1}`}`,
+        title: piece.caption ?? (recording ? RECORDING_WORD : PICTURE_WORD),
         source: doors.source(piece.attachmentId),
         onOpen: recording ? doors.openVideoElsewhere : undefined,
       };
@@ -122,7 +121,7 @@ function cardMedia(
 
 /** An option as the card draws it: its label, its detail, and its media. */
 function cardChoice(option: InboxOption, doors: OptionMediaDoors): Choice {
-  const media = knownOptionMedia(option).map((piece, at) => cardMedia(option, piece, at, doors));
+  const media = knownOptionMedia(option).map((piece) => cardMedia(piece, doors));
   return { label: option.label, detail: option.detail, media };
 }
 

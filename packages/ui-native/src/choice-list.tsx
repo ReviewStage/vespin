@@ -24,14 +24,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
 import { Fragment } from "react";
-import {
-  CHOICE_MEDIA,
-  type ChoiceMedia,
-  type ChoiceMediaKind,
-  ChoiceMediaStrip,
-  inStrip,
-} from "./choice-media.js";
-import type { SfSymbol } from "./sf-symbol.js";
+import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -66,14 +59,6 @@ type ChoiceListProps = {
   readonly title?: string | undefined;
   /** None of these, offered as a row after the options where their media asks a pick of them; none where it is not offered. */
   readonly none?: NoneChoice | undefined;
-};
-
-/** The word a page's or an address's row leads with, and its SF Symbol. */
-const LINE_LOOK: Partial<
-  Record<ChoiceMediaKind, { readonly word: string; readonly symbol: SfSymbol }>
-> = {
-  [CHOICE_MEDIA.PAGE]: { word: "Page", symbol: "doc.richtext" },
-  [CHOICE_MEDIA.LINK]: { word: "Link", symbol: "safari" },
 };
 
 /** How thick the card's and the tag's edges are drawn. */
@@ -191,51 +176,12 @@ function ChoiceRow({
   );
 }
 
-/** A page or an address an option carries, as a row under it: its glyph, and its kind and title in 13 pt muted, opening it on a press. */
-function MediaLine({ media }: { readonly media: ChoiceMedia }) {
-  const colors = useColors();
-  const look = LINE_LOOK[media.kind];
-  if (look === undefined) return null;
-  const words = `${look.word} · ${media.title}`;
-  return (
-    <Button
-      onPress={() => media.onOpen?.()}
-      modifiers={[buttonStyle("plain"), accessibilityLabel(words)]}
-    >
-      <HStack
-        spacing={SPACE.ROW}
-        modifiers={[
-          padding({ horizontal: SPACE.EDGE - 2, vertical: SPACE.TIGHT }),
-          contentShape(shapes.rectangle()),
-        ]}
-      >
-        <Image systemName={look.symbol} size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />
-        <Text
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
-        >
-          {words}
-        </Text>
-        <Spacer />
-      </HStack>
-    </Button>
-  );
-}
-
-/** What an option carries, under its row: its pictures and recordings in one strip, then a row each for its pages and addresses. */
+/** What an option carries, under its row: every piece as an equal tile, in React Native views SwiftUI hosts. */
 function ChoiceMediaBlock({ media }: { readonly media: readonly ChoiceMedia[] }) {
-  const strip = media.filter(inStrip);
-  const lines = media.filter((piece) => !inStrip(piece));
   return (
-    <VStack alignment="leading" spacing={0}>
-      {strip.length === 0 ? null : (
-        <RNHostView matchContents={{ vertical: true }}>
-          <ChoiceMediaStrip media={strip} />
-        </RNHostView>
-      )}
-      {lines.map((piece) => (
-        <MediaLine key={piece.key} media={piece} />
-      ))}
-    </VStack>
+    <RNHostView matchContents={{ vertical: true }}>
+      <ChoiceMediaTiles media={media} />
+    </RNHostView>
   );
 }
 
