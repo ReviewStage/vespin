@@ -1432,7 +1432,9 @@ export const runnerSessions = <
         if (Option.isNone(read)) return false;
         const standing = read.value;
         return (
-          opened.descriptionsOn !== standing.descriptionsOn || opened.memoryOn !== standing.memoryOn
+          opened.descriptionsOn !== standing.descriptionsOn ||
+          opened.memoryOn !== standing.memoryOn ||
+          (opened.turnEndOn ?? false) !== standing.turnEndOn
         );
       });
 

@@ -2220,16 +2220,6 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   .message-box-actions:has(.agent-context-button) .message-box-more {
     display: inline-flex;
   }
-
-  /* The permission mode chip goes into the ⋯ too, which offers the modes
-     in its place (`agent-approvals.tsx`). */
-  .message-box .agent-mode-button {
-    display: none;
-  }
-
-  .message-box-actions:has(.agent-mode-button) .message-box-more {
-    display: inline-flex;
-  }
 }
 
 /* The narrowest: the + goes into the ⋯ too, its menu's rows with it, and

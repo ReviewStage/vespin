@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "properties": {
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "description": "What you did this turn, as the developer will read it in place of your last message: 2 to 5 short Markdown bullets, each one line, with links where they help, and what you need from them if anything."
+    },
+    "followUps": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 120
+      },
+      "maxItems": 3,
+      "description": "Up to 3 next steps that really came up this turn, each worded as the message the developer would send you to start it, such as \"Show pending invitations on the Members page\", at most 120 characters. Leave it out when nothing came up; never invent work."
+    }
+  },
+  "required": [
+    "summary"
+  ],
+  "additionalProperties": false
+}
