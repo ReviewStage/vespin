@@ -18,6 +18,7 @@ export const MEMBER_MCP_TOOL = {
   CREATE_WORKSPACE: "create_workspace",
   LIST_WORKSPACE_MEMBERS: "list_workspace_members",
   SET_WORKSPACE_SLUG: "set_workspace_slug",
+  SET_WORKSPACE_PHOTO: "set_workspace_photo",
   LIST_TASKS: AGENT_TOOL.LIST_TASKS,
   READ_TASK: AGENT_TOOL.READ_TASK,
   FIND_TASK: "find_task",
@@ -42,6 +43,7 @@ export const MEMBER_MCP_TOOL = {
   DELETE_SECTION: AGENT_TOOL.DELETE_SECTION,
   START_AGENT: AGENT_TOOL.START_AGENT,
   MESSAGE_AGENT: AGENT_TOOL.MESSAGE_AGENT,
+  CHANGE_AGENT_QUEUE: "change_agent_queue",
   STOP_AGENT: AGENT_TOOL.STOP_AGENT,
   UPDATE_AGENT: AGENT_TOOL.UPDATE_AGENT,
   REWIND_AGENT: "rewind_agent",
@@ -101,6 +103,7 @@ export const MEMBER_MCP_TOOL = {
   RENAME_INTEGRATION: "rename_integration",
   DISCONNECT_INTEGRATION: "disconnect_integration",
   LIST_MCP_CLIENTS: "list_mcp_clients",
+  REVOKE_MCP_CLIENT: "revoke_mcp_client",
   LIST_SENTRY_INSTALLATIONS: "list_sentry_installations",
   DISCONNECT_SENTRY: "disconnect_sentry",
 } as const;

@@ -38,6 +38,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { SANDBOX_SIZE } from "@repo/features/sandbox-size";
 import {
   deletedFilledDrive,
   deletedIfStill,
@@ -50,7 +51,6 @@ import {
 } from "@repo/sandbox";
 import { Clock, Duration, Effect, type Redacted } from "effect";
 import type { GitHubTokenAccess } from "../github/github-app.js";
-import { CODER } from "./coder-host/bounds.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
 import {
   cloneRepository,
@@ -306,7 +306,7 @@ export const fillBaseDrive = Effect.fn("web/fillBaseDrive")(function* (
       drive: name,
       at: BASE_DRIVE.MOUNT,
       image,
-      vcpus: CODER.SANDBOX_VCPUS,
+      vcpus: SANDBOX_SIZE.VCPUS,
     },
     (running) =>
       Effect.gen(function* () {

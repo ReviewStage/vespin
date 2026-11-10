@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { it } from "@effect/vitest";
 import type { Client } from "@modelcontextprotocol/client";
 import { Database } from "@repo/database/core/query";
+import { queueAgentMessage } from "@repo/database/models/agent-queue-store";
 import { createAgent, readAgent } from "@repo/database/models/agent-store";
 import {
   createAutomation,
@@ -37,7 +38,7 @@ import {
   openTaskAgent,
   openWorkspace,
 } from "@repo/database/testing";
-import { AGENT_ARCHIVER, AGENT_PAYER } from "@repo/features/agent-wire";
+import { AGENT_ARCHIVER, AGENT_PAYER, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import {
   AUTOMATION_ACTION,
   AUTOMATION_DEFAULT_GUARDS,
@@ -198,6 +199,14 @@ const decodeStarted = Schema.decodeUnknownSync(
   Schema.Struct({ thread: Schema.Struct({ id: Schema.String, title: Schema.String }) }),
 );
 const decodeAgents = Schema.decodeUnknownSync(Schema.Struct({ agents: IdsSchema }));
+/** An agent's queue as read_agent and change_agent_queue answer it, each message by its id and words. */
+const decodeQueue = Schema.decodeUnknownSync(
+  Schema.Struct({
+    queue: Schema.Struct({
+      messages: Schema.Array(Schema.Struct({ id: Schema.String, text: Schema.String })),
+    }),
+  }),
+);
 /** A workspace `create_workspace` answers it made. */
 const decodeCreated = Schema.decodeUnknownSync(
   Schema.Struct({
@@ -463,6 +472,64 @@ it.effect.each(Object.values(REVISION))(
           },
         ],
       });
+    }),
+);
+
+it.effect(
+  "the member reads their agent's queue with read_agent and changes it with change_agent_queue, a reorder that leaves a message out refused",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch, services } = yield* standing;
+      const member = yield* Effect.promise(() => signUp(auth));
+      const rows = yield* Effect.gen(function* () {
+        const workspace = yield* openWorkspace(member.userId);
+        const task = yield* createTask(member.userId, {
+          organizationId: workspace,
+          name: "Seat billing",
+        });
+        const agentId = yield* openTaskAgent(member.userId, workspace, task.id);
+        // Note that the messages are planted in the store, since a queue change would hand the first to the idle agent.
+        const first = randomUUID();
+        const second = randomUUID();
+        yield* queueAgentMessage(member.userId, agentId, { id: first, text: "First" });
+        yield* queueAgentMessage(member.userId, agentId, { id: second, text: "Second" });
+        return { agentId, first, second };
+      }).pipe(Effect.provide(services));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const call = (name: string, args: Record<string, unknown>) =>
+        Effect.promise(async () => {
+          const answer = decodeAnswer(await client.callTool({ name, arguments: args }));
+          return { refused: answer.isError === true, text: answer.content[0].text };
+        });
+      const { agentId, first, second } = rows;
+
+      const read = yield* call(MEMBER_MCP_TOOL.READ_AGENT, { agentId });
+      const reordered = yield* call(MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE, {
+        agentId,
+        change: { change: QUEUE_CHANGE.REORDER, order: [second] },
+      });
+      const deleted = yield* call(MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE, {
+        agentId,
+        change: { change: QUEUE_CHANGE.DELETE, messageId: first },
+      });
+      yield* Effect.promise(() => client.close());
+
+      assert.deepEqual(decodeQueue(JSON.parse(read.text)).queue.messages, [
+        { id: first, text: "First" },
+        { id: second, text: "Second" },
+      ]);
+      assert.equal(deleted.refused, false, deleted.text);
+      assert.deepEqual(decodeQueue(JSON.parse(deleted.text)).queue.messages, [
+        { id: second, text: "Second" },
+      ]);
+      assert.equal(reordered.refused, true, reordered.text);
     }),
 );
 
@@ -757,6 +824,10 @@ it.effect(
           [MEMBER_MCP_TOOL.START_AGENT, { from: { agentId } }],
           [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello." }],
           [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello.", queue: true }],
+          [
+            MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE,
+            { agentId, change: { change: QUEUE_CHANGE.RESUME } },
+          ],
           [MEMBER_MCP_TOOL.STOP_AGENT, { agentId }],
           [MEMBER_MCP_TOOL.UPDATE_AGENT, { agentId, archived: true }],
           [MEMBER_MCP_TOOL.LIST_AGENT_PORTS, { agentId }],
@@ -1714,7 +1785,7 @@ it.effect(
 );
 
 it.effect(
-  "an admin acting through the server reads the workspace's members but is refused its slug, which the owner changes",
+  "an admin acting through the server reads the workspace's members and sets its photo but is refused its slug, which the owner changes",
   () =>
     Effect.gen(function* () {
       const { auth, fetch, services } = yield* standing;
@@ -1749,6 +1820,9 @@ it.effect(
       const changed = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG, {
         slug: "seats",
       });
+      const photo = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO, {
+        photo: "data:image/png;base64,iVBORw0KGgo=",
+      });
 
       assert.notEqual(members.isError, true, members.content[0].text);
       assert.deepEqual(
@@ -1767,6 +1841,8 @@ it.effect(
         slug: "seats",
         name: "Test Workspace",
       });
+      assert.notEqual(photo.isError, true, photo.content[0].text);
+      assert.equal(typeof JSON.parse(photo.content[0].text).workspace.photoVersion, "string");
     }),
 );
 

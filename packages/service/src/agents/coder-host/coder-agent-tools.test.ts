@@ -3089,6 +3089,24 @@ test("message_agent hands another agent of the workspace the words under the sen
   );
 });
 
+test("message_agent brings an archived agent back and hands it the words", async () => {
+  const { workspaceId, agents } = await openWorkspaces();
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  await database.run(archiveAgent(agents.teammates.userId, agents.teammates.id, true));
+
+  const sent = await directMessage(
+    hostOf(),
+    agents.caller,
+    agents.teammates,
+    agentSessions.services,
+  );
+
+  assert.equal(sent.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(sent));
+  assert.ok(sentWords(agentSessions.sent.at(-1)?.body).includes(NOTE));
+  const read = await database.run(readAgent(agents.teammates.userId, agents.teammates.id));
+  assert.equal(Option.getOrThrow(read).archivedAt, null);
+});
+
 test("a message to an agent whose session its harness no longer runs opens a fresh session over its conversation rather than being refused, and settles the turn the ended session was running as failed for its session's end, once", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId, [], undefined, "no_active_turn", true);

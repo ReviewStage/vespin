@@ -1340,8 +1340,9 @@ Beside them stand
 the agent tools (`src/agents/agent-tools.ts`): `list_agents`, every other agent on
 any task and by any member, each with its task, narrowed to one task or its
 own where asked, archived ones marked; `read_agent`, one agent of the
-workspace by its id, with what its branch published and a tail of its
-transcript, as many entries as asked, to a bound; `message_agent`, which
+workspace by its id, with what its branch published, the messages waiting
+in its queue by id, and a tail of its transcript, as many entries as asked,
+to a bound; `message_agent`, which
 sends another agent of the workspace, on any task, a message by its id that
 lands in its conversation under the caller's name, opening with the caller's
 mention and closing with how to answer it, which the service writes, seen in

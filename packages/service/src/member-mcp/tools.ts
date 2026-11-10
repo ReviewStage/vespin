@@ -112,6 +112,7 @@ import {
   integrationRenameRequestSchema,
 } from "@repo/features/integration-wire";
 import { commitShaSchema } from "@repo/features/link-grammar";
+import { MCP_ACCESS_TOKEN_MINUTES, mcpClientIdSchema } from "@repo/features/mcp-client-wire";
 import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-mcp-tool";
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
 import { agentName } from "@repo/features/model-label";
@@ -157,8 +158,11 @@ import {
 } from "@repo/features/workspace-sandbox-setup-wire";
 import {
   WORKSPACE_BOUNDS,
+  WORKSPACE_PHOTO_BOUNDS,
+  WORKSPACE_PHOTO_TYPE,
   workspaceCreateRequestSchema,
   workspaceOfSlug,
+  workspacePhotoSetRequestSchema,
 } from "@repo/features/workspace-wire";
 import type { Sandbox } from "@repo/sandbox";
 import {
@@ -174,7 +178,11 @@ import { writeOwnPreferences } from "../accounts/account-preferences.js";
 import { accountProcedureSeams } from "../accounts/account-seams.js";
 import { createdWorkspace, WorkspacePlugin } from "../accounts/workspace-create.js";
 import { forgetWorkspaceMemory, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
-import { workspaceMembersRead, workspaceSlugSet } from "../accounts/workspace-operations.js";
+import {
+  workspaceMembersRead,
+  workspacePhotoSet,
+  workspaceSlugSet,
+} from "../accounts/workspace-operations.js";
 import {
   BROWSER_TAKEOVER_HOLD_MS,
   handBackAgentBrowserTab,
@@ -204,6 +212,7 @@ import {
   LIST_AGENTS_TOOL,
   LIST_TASKS_TOOL,
   orStoreRefusal,
+  queueRecord,
   READ_PAGE_CHARS,
   READ_PAGE_REFUSAL,
   READ_PAGE_TOOL,
@@ -385,6 +394,7 @@ import {
   listMcpClientsAsMember,
   readSentryAsMember,
   renameIntegrationAsMember,
+  revokeMcpClientAsMember,
 } from "./integrations.js";
 import {
   MARK_FILES_VIEWED_FIELDS,
@@ -1782,7 +1792,7 @@ const MEMBER_MESSAGE_AGENT_TOOL = memberMcpTool({
     "why nothing was sent. With queue, it waits behind the agent's turn instead, and answers " +
     "`accepted` with `delivery` `queued` and how many messages stand `ahead` of it, or " +
     `\`handed-on\` where the agent stood idle and it goes at once, unconfirmed, since a refusal puts it back and pauses the queue; and \`paused\` with why where ` +
-    "the queue stands paused, which sends nothing until the member resumes it in the app. " +
+    `the queue stands paused, which sends nothing until ${MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE} resumes it. ` +
     FOLLOW_WORDS,
   input: MessageAgentInputSchema,
   annotations: ADDITIVE,
@@ -1791,6 +1801,142 @@ const MEMBER_MESSAGE_AGENT_TOOL = memberMcpTool({
       (userId) => agentWorkspace(userId, { id: asked.agentId }),
       MESSAGE_AGENT_REFUSAL.NO_AGENT,
       (call) => memberMessage(call, asked),
+    ),
+});
+
+/** A queued message, by the id `read_agent`'s queue lists it by. */
+const QUEUED_MESSAGE_ID_INPUT = describeWire(
+  wireUuidSchema,
+  `The queued message's id, as ${MEMBER_MCP_TOOL.READ_AGENT}'s queue lists it.`,
+);
+
+/** A queued message's new words, which replace its own and the files it carried. */
+const QUEUED_WORDS_INPUT = describeWire(
+  MessageAgentInputSchema.fields.text,
+  "Its new words, as the member's own: they replace its words, and it goes without the files " +
+    "it carried.",
+);
+
+/** A change to an agent's queue, by its kind, as the member's queue controls make it: every kind but a message added, which `message_agent`'s queue adds. */
+const MemberQueueChangeSchema = Schema.Union([
+  Schema.Struct({ change: Schema.Literal(QUEUE_CHANGE.RESUME) }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.HOLD),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+    held: describeWire(
+      Schema.Boolean,
+      "true to hold it, as the member's Edit does, so the queue sends what stands ahead of it " +
+        "and nothing from it on; false to let it go again.",
+    ),
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.EDIT),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+    text: QUEUED_WORDS_INPUT,
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.DELETE),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.REORDER),
+    order: describeWire(
+      Schema.Array(wireUuidSchema).check(Schema.isMaxLength(AGENT_QUEUE_BOUNDS.MAX_MESSAGES)),
+      "Every message the queue holds, by its id, each once, in the order they are to go.",
+    ),
+  }),
+  Schema.Struct({
+    change: Schema.Literal(QUEUE_CHANGE.STEER),
+    messageId: QUEUED_MESSAGE_ID_INPUT,
+    text: Schema.optionalKey(QUEUED_WORDS_INPUT),
+  }),
+]);
+
+/** A change to a queue names the agent and the change. */
+const ChangeAgentQueueInputSchema = Schema.Struct({
+  agentId: AgentIdInputSchema.fields.agentId,
+  change: describeWire(
+    MemberQueueChangeSchema,
+    "The change: resume the paused queue; hold a message or let it go; edit its words; " +
+      "delete it; reorder the queue; or steer a message into the turn under way now, with new " +
+      "words or as it stands.",
+  ),
+});
+
+type ChangeAgentQueueInput = typeof ChangeAgentQueueInputSchema.Type;
+
+/** Why a queue change changed nothing, in the member's tool's words. */
+const CHANGE_QUEUE_REFUSAL = {
+  NOT_STARTER: "Not changed: only the member who started that agent changes its queue.",
+  NO_MESSAGE:
+    "Not changed: that agent's queue holds no message of that id; it may have gone already. " +
+    `${MEMBER_MCP_TOOL.READ_AGENT} lists the queue.`,
+  BAD_ORDER:
+    "Not changed: name every message the queue holds, each once, in the order they are to go; " +
+    `${MEMBER_MCP_TOOL.READ_AGENT} lists them.`,
+  UNAVAILABLE: "Not changed: the service could not change the queue just now; try again.",
+} as const;
+
+/** The words for a refusal of a queue change. */
+function changeQueueRefusalWords(refusal: HostedRefusal): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_PERMITTED:
+      return CHANGE_QUEUE_REFUSAL.NOT_STARTER;
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return CHANGE_QUEUE_REFUSAL.NO_MESSAGE;
+    case HOSTED_API_ERROR.INVALID_REQUEST:
+      return CHANGE_QUEUE_REFUSAL.BAD_ORDER;
+    default:
+      return CHANGE_QUEUE_REFUSAL.UNAVAILABLE;
+  }
+}
+
+/**
+ * One change to an agent's queue as the member, through the change their
+ * queue controls make (`changeAgentQueue`): refused for an agent of no
+ * workspace of the call's or an archived one, as a message is, and
+ * answered with the queue as it then stands.
+ */
+const memberQueueChange = (call: AgentCall, { agentId, change }: ChangeAgentQueueInput) =>
+  orStoreRefusal(
+    Effect.gen(function* () {
+      const found = yield* workspaceAgentOf(call.caller, agentId);
+      if (Option.isNone(found)) return agentToolRejected(MESSAGE_AGENT_REFUSAL.NO_AGENT);
+      const { agent } = found.value;
+      if (agent.archivedAt !== null) return agentToolRejected(MESSAGE_AGENT_REFUSAL.ARCHIVED);
+      const changed = yield* Effect.result(
+        changeAgentQueue(callerUserId(call.caller), agent, change),
+      );
+      if (Result.isFailure(changed)) {
+        return agentToolRejected(changeQueueRefusalWords(changed.failure));
+      }
+      return {
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        queue: queueRecord(changed.success),
+        agent: { id: agent.id, title: agentName(agent), model: agent.model },
+      };
+    }),
+  );
+
+const CHANGE_AGENT_QUEUE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE,
+  description:
+    "Change the queue of a coding agent the member started, by its id, as their queue " +
+    `controls would: the messages ${MEMBER_MCP_TOOL.MESSAGE_AGENT}'s queue left waiting behind ` +
+    `its turn, which ${MEMBER_MCP_TOOL.READ_AGENT} lists by id. Resume a queue a Stop, a ` +
+    "failed turn, or a refused hand-off paused; hold a message, so the queue stops at it, or " +
+    "let it go; edit its words; delete it; reorder the queue; or steer a message into the turn " +
+    "under way now, which takes it out of the queue. Only the agent's starter changes its " +
+    "queue. Where the agent stands idle, the change hands the next message on at once, as a " +
+    "turn's end would. Answers `accepted` with the queue as it then stands, or `rejected` and " +
+    `why nothing changed. ${FOLLOW_WORDS}`,
+  input: ChangeAgentQueueInputSchema,
+  annotations: DESTRUCTIVE,
+  run: (asked) =>
+    writeAsMember(
+      (userId) => agentWorkspace(userId, { id: asked.agentId }),
+      MESSAGE_AGENT_REFUSAL.NO_AGENT,
+      (call) => memberQueueChange(call, asked),
     ),
 });
 
@@ -1880,11 +2026,12 @@ const MEMBER_UPDATE_AGENT_TOOL = memberMcpTool({
     ),
 });
 
-// A workspace's members and its slug, through the operations the hosted procedures run (`../accounts/workspace-operations.ts`), as the member.
+// A workspace's members, its slug, and its photo, through the operations the hosted procedures run (`../accounts/workspace-operations.ts`), as the member.
 
 /** Why a members read or a slug change was refused, in words the agent can act on. */
 const WORKSPACE_TOOL_REFUSAL = {
   NOT_OWNER: "Not changed: only the workspace's owner may change its slug.",
+  NOT_MANAGER: "Not changed: only the workspace's owner or an admin may set its photo.",
   SLUG_MALFORMED: `Not changed: a slug is lowercase letters and digits, with single hyphens between them, at most ${WORKSPACE_BOUNDS.MAX_SLUG_CHARS} characters.`,
   SLUG_RESERVED: `Not changed: that slug is reserved by ${PRODUCT_NAME}; choose another.`,
   SLUG_TAKEN: "Not changed: another workspace holds or held that slug; choose another.",
@@ -1907,10 +2054,18 @@ function workspaceRefusalWords(refusal: HostedRefusal): string {
   }
 }
 
+/** A photo write refused by its operation, in the agent's words: a refusal of who may names the owner and the admins. */
+function photoRefusalWords(refusal: HostedRefusal): string {
+  return refusal.error === HOSTED_API_ERROR.NOT_PERMITTED
+    ? WORKSPACE_TOOL_REFUSAL.NOT_MANAGER
+    : workspaceRefusalWords(refusal);
+}
+
 /** An operation on the workspace a slug names, or the member's only one, as the member; refused in the agent's words. */
 const workspaceAsMember = <A extends WireRecord, R>(
   slug: string | undefined,
   operation: (userId: string, workspaceId: string) => Effect.Effect<A, HostedRefusal, R>,
+  refusalWords: (refusal: HostedRefusal) => string = workspaceRefusalWords,
 ) =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
@@ -1920,7 +2075,7 @@ const workspaceAsMember = <A extends WireRecord, R>(
       Effect.map(
         (answered): WireRecord => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answered }),
       ),
-      Effect.catch((refusal) => Effect.succeed(agentToolRejected(workspaceRefusalWords(refusal)))),
+      Effect.catch((refusal) => Effect.succeed(agentToolRejected(refusalWords(refusal)))),
     );
   });
 
@@ -1984,6 +2139,49 @@ const SET_WORKSPACE_SLUG_TOOL = memberMcpTool({
       Effect.map(workspaceSlugSet(userId, workspaceId, slug), ({ workspace: changed }) => ({
         workspace: { id: changed.id, slug: changed.slug ?? slug, name: changed.name },
       })),
+    ),
+});
+
+/** A photo set names the workspace and the photo, as a `data:` URL the window would send, or null to remove it. */
+const SetWorkspacePhotoInputSchema = Schema.Struct({
+  workspace: Schema.optionalKey(
+    describeWire(
+      WORKSPACE_INPUT.schema,
+      `The workspace whose photo to set, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} ` +
+        "answered; leave it out where the member belongs to one workspace alone.",
+    ),
+  ),
+  photo: describeWire(
+    workspacePhotoSetRequestSchema.fields.photo,
+    `The photo as a base64 \`data:\` URL of a PNG, JPEG, or WebP image ` +
+      `(${Object.values(WORKSPACE_PHOTO_TYPE).join(", ")}), at most ${WORKSPACE_PHOTO_BOUNDS.MAX_BYTES} bytes decoded, such as a 256-pixel ` +
+      "square; null removes it, and the member's own first workspace then shows their sign-in picture.",
+  ),
+});
+
+const SET_WORKSPACE_PHOTO_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO,
+  description:
+    "Set or remove the photo of a workspace the member you act for belongs to, the picture " +
+    "beside its name in the sidebar and the workspace switcher, as its Settings › General page " +
+    "would. Only its owner or an admin may. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the workspace and its photo's new version, ` +
+    "null once removed, or `rejected` and why.",
+  input: SetWorkspacePhotoInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ workspace, photo }) =>
+    workspaceAsMember(
+      workspace,
+      (userId, workspaceId) =>
+        Effect.map(workspacePhotoSet(userId, workspaceId, photo), ({ workspace: changed }) => ({
+          workspace: {
+            id: changed.id,
+            slug: changed.slug ?? null,
+            name: changed.name,
+            photoVersion: changed.photoVersion ?? null,
+          },
+        })),
+      photoRefusalWords,
     ),
 });
 
@@ -4128,11 +4326,33 @@ const LIST_MCP_CLIENTS_TOOL = memberMcpTool({
     `List the outside MCP clients the member allowed to act for them on ${PRODUCT_NAME}'s MCP ` +
     "server, as Settings › MCP lists them, and the server's address: each client by its id " +
     "and name, where it signs in, when the member allowed it, and when it last renewed its " +
-    "access. The member revokes one in Settings › MCP. Answers `accepted` with them, never a " +
-    "token, or `rejected` and why.",
+    `access. ${MEMBER_MCP_TOOL.REVOKE_MCP_CLIENT} revokes one. Answers \`accepted\` with them, ` +
+    "never a token, or `rejected` and why.",
   input: NoInputSchema,
   annotations: READ_ONLY,
   run: listMcpClientsAsMember,
+});
+
+const RevokeMcpClientInputSchema = Schema.Struct({
+  clientId: describeWire(
+    mcpClientIdSchema,
+    `The client, by the id ${MEMBER_MCP_TOOL.LIST_MCP_CLIENTS} answered.`,
+  ),
+});
+
+const REVOKE_MCP_CLIENT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.REVOKE_MCP_CLIENT,
+  description:
+    "Revoke one outside MCP client the member allowed, by its id, as Revoke in Settings › MCP " +
+    "does: the member's own consent to it and the tokens it holds for them are deleted, and " +
+    "no other member's. It cannot renew its access, and its next sign-in asks the member " +
+    `again. Revoking the client making this call cuts that client off: its access ends within ` +
+    `${MCP_ACCESS_TOKEN_MINUTES} minutes and it must sign in again. A client the member never ` +
+    `allowed, or ${PRODUCT_NAME}'s own Mac or iPhone app, is left as it is. Answers \`accepted\` with ` +
+    "the clients as they then stand, never a token, or `rejected` and why.",
+  input: RevokeMcpClientInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ clientId }) => revokeMcpClientAsMember(clientId),
 });
 
 /** A Sentry call run as the member, in the workspace its slug names or their only one; refused, naming theirs, where that names none. */
@@ -4817,6 +5037,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   LIST_WORKSPACES_TOOL,
   LIST_WORKSPACE_MEMBERS_TOOL,
   SET_WORKSPACE_SLUG_TOOL,
+  SET_WORKSPACE_PHOTO_TOOL,
   MEMBER_LIST_TASKS_TOOL,
   MEMBER_READ_TASK_TOOL,
   MEMBER_FIND_TASK_TOOL,
@@ -4841,6 +5062,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_DELETE_SECTION_TOOL,
   MEMBER_START_AGENT_TOOL,
   MEMBER_MESSAGE_AGENT_TOOL,
+  CHANGE_AGENT_QUEUE_TOOL,
   MEMBER_STOP_AGENT_TOOL,
   MEMBER_UPDATE_AGENT_TOOL,
   REWIND_AGENT_TOOL,
@@ -4890,6 +5112,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   RENAME_INTEGRATION_TOOL,
   DISCONNECT_INTEGRATION_TOOL,
   LIST_MCP_CLIENTS_TOOL,
+  REVOKE_MCP_CLIENT_TOOL,
   LIST_SENTRY_INSTALLATIONS_TOOL,
   DISCONNECT_SENTRY_TOOL,
   READ_SANDBOX_SETUP_TOOL,

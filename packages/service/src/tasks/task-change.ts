@@ -23,13 +23,10 @@ import { TASK_STATUS, type TaskUpdateRequest } from "@repo/features/task-wire";
 import type { Sandbox } from "@repo/sandbox";
 import { Data, Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
-import {
-  everyStoppedForGood,
-  everyStopsForGood,
-  idleStandingAgents,
-} from "../agents/coder-host/stop.js";
+import { archivedWithTaskLetGo, doneTaskArchive } from "../agents/agent-change.js";
+import { everyStoppedForGood, everyStopsForGood } from "../agents/coder-host/stop.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
-import { deletedInBackground, type SandboxDeleteReach } from "../agents/session-sandboxes.js";
+import type { SandboxDeleteReach } from "../agents/session-sandboxes.js";
 import { recordServerEvent, SERVER_EVENT, SERVER_TASK_FINISHER } from "../events/server-events.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { workspaceRepository } from "../github/workspace-repository.js";
@@ -163,9 +160,9 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
- * The change confirmed, written (`updateTaskCommitted`), a move to Done
- * archiving the task's idle agents by `archivedBy`; none where the member
- * reaches the task no more. Its refusals under the row's lock are answered
+ * The change confirmed, written (`updateTaskCommitted`), a move to Done or
+ * Canceled archiving the task's idle agents by `archivedBy` (`doneTaskArchive`);
+ * none where the member reaches the task no more. Its refusals under the row's lock are answered
  * by name, as `taskChangeAsked` answers them.
  */
 export const taskChangeWritten = (
@@ -174,10 +171,7 @@ export const taskChangeWritten = (
   { changes, moveGuard }: TaskChangeConfirmed,
   archivedBy: StoredArchive,
 ) =>
-  updateTaskCommitted(userId, taskId, changes, moveGuard, {
-    archivedBy,
-    idle: idleStandingAgents,
-  }).pipe(
+  updateTaskCommitted(userId, taskId, changes, moveGuard, doneTaskArchive(archivedBy)).pipe(
     Effect.catch((failure) => {
       switch (failure._tag) {
         case "MoveRefused":
@@ -198,7 +192,7 @@ export const taskChangeSettled = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   { task, archived, statusMoved }: TaskChanged,
 ) {
-  if (archived.length > 0) yield* deletedInBackground(reach, archived);
+  yield* archivedWithTaskLetGo(reach, archived);
   if (statusMoved && (task.status === TASK_STATUS.DONE || task.status === TASK_STATUS.CANCELED)) {
     yield* recordServerEvent(
       SERVER_EVENT.TASK_FINISH,

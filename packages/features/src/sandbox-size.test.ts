@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { sandboxVcpus } from "./bounds.js";
+import { sandboxVcpus } from "./sandbox-size.js";
 
 test("a repository that asks for no size opens its agent's sandbox at two vCPUs", () => {
   assert.equal(sandboxVcpus("acme/app"), 2);

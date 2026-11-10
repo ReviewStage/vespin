@@ -20,7 +20,6 @@ import {
 } from "@repo/features/agent-view";
 import { AGENT_CURSOR_START, AGENT_STATUS, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
-import { READ_MARK } from "@repo/features/read-mark";
 import type { WireBoundaryInput } from "@repo/wire";
 import { Effect } from "effect";
 import { AGENT_ACT_KIND, AGENT_ACTS, type PortActKind } from "../contract/index.js";
@@ -89,7 +88,6 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_PORT_UNSHARE]: "Could not stop sharing this port.",
   [AGENT_ACT_KIND.AGENTS_ARCHIVE]: "Could not archive the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_PIN]: "Could not pin the agent on this system.",
-  [AGENT_ACT_KIND.AGENTS_MARK_READ]: "Could not mark the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_DELETE]: "Could not delete the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_SHOWN]: "Could not note which agent is shown on this system.",
   [AGENT_ACT_KIND.AGENTS_PAGE]: "Could not read the agent on this system.",
@@ -134,7 +132,6 @@ const PAYLOAD: { readonly [Name in keyof typeof AGENT_ACTS]: WireBoundaryInput }
   AGENTS_PORT_UNSHARE: { agentId: AGENT_ID },
   AGENTS_ARCHIVE: { agentId: AGENT_ID, archived: true },
   AGENTS_PIN: { agentId: AGENT_ID, pinned: true },
-  AGENTS_MARK_READ: { agentId: AGENT_ID, readMark: READ_MARK.READ },
   AGENTS_DELETE: { agentId: AGENT_ID },
   AGENTS_PAGE: { agentId: AGENT_ID },
   AGENTS_CHANGES: { agentId: AGENT_ID },
@@ -165,7 +162,6 @@ const NOTED_ACTS = [
   "AGENTS_REWIND",
   "AGENTS_ARCHIVE",
   "AGENTS_PIN",
-  "AGENTS_MARK_READ",
 ] as const satisfies readonly (keyof NotedActs)[];
 
 const ports: TestActPort<unknown>[] = [];

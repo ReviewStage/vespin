@@ -189,13 +189,13 @@ type TaskIdleGuard<R> = (
   agents: readonly TaskStandingAgent[],
 ) => Effect.Effect<ReadonlySet<string>, StoreFailure, R>;
 
-/** How a task moved to Done archives its idle agents with it: as whom, and how it reads them idle. */
+/** How a task moved to Done or Canceled archives its idle agents with it: as whom, and how it reads them idle. */
 export interface TaskDoneArchive<R> {
   readonly archivedBy: StoredArchive;
   readonly idle: TaskIdleGuard<R>;
 }
 
-/** One agent a task's Done archived with it: the member who started it, under whom its device lets it go, and its conversation, whose sandbox is stopped. */
+/** One agent a task's Done or Canceled archived with it: the member who started it, under whom its device lets it go, and its conversation, whose sandbox is stopped. */
 export type TaskArchivedAgent = typeof TaskArchivedAgentSchema.Type;
 
 /** One save a coding agent made, with the agent named as its row names it now. */
@@ -1608,7 +1608,7 @@ function columnChangesOf(
       : {
           status: changes.status,
           completedAt: completedAtOf(changes.status, now),
-          doneBy: changes.status === TASK_STATUS.DONE ? (doneBy ?? null) : null,
+          doneBy: SETTLED.includes(changes.status) ? (doneBy ?? null) : null,
         }),
     ...(changes.priority === undefined ? undefined : { priority: changes.priority }),
     ...(changes.assigneeId === undefined ? undefined : { assigneeId: changes.assigneeId }),
@@ -1789,8 +1789,8 @@ const clearArchives = SqlSchema.void({
  * The task's standing agents, or the one named among them, that the guard
  * reads idle under their conversations' locks, archived with the task at
  * `now` by the archiver given, marked `withTask` so the task's move off
- * Done brings them back; who they are. An agent that is the archiver itself
- * stands: one moving its own task to Done is still answering whoever asked,
+ * Done or Canceled brings them back; who they are. An agent that is the archiver itself
+ * stands: one moving its own task to Done or Canceled is still answering whoever asked,
  * and is never archived by that move, at once or as its turn ends. The caller
  * settles their open asks once the task's own are settled, so those read as
  * the task's.
@@ -1818,7 +1818,7 @@ const archivedIdleWithTask = Effect.fnUntraced(function* <R>(
 });
 
 /**
- * The agents the task's Done stamped at `completedAt` archived with it, and
+ * The agents the task's Done or Canceled stamped at `completedAt` archived with it, and
  * those archived with it as their turns ended since, brought back, each
  * opening again the items its archive settled (`inbox-settle.ts`); one
  * archived on its own stays archived.
@@ -1847,13 +1847,13 @@ const broughtBackWithTask = Effect.fnUntraced(function* (taskId: string, complet
  * to work again opens again the items that move settled (`inbox-settle.ts`).
  *
  * Where the caller hands `doneArchive`, a change that moves the task to Done
- * records the archiver given as who moved it there, and archives with it, at
- * its finish's stamp, every standing agent the guard reads idle, as that
- * archiver, the archiving agent itself left standing; one still at work
- * stands, and is archived as its turn ends while the task still stands Done
- * (`archiveAgentOfDoneTask`). A move to Done without one records no one, and
- * archives nothing then or later. Any change that moves the task off Done
- * brings back every agent that Done archived with it, and no other.
+ * or Canceled records the archiver given as who moved it there, and archives
+ * with it, at its finish's stamp, every standing agent the guard reads idle,
+ * as that archiver, the archiving agent itself left standing; one still at
+ * work stands, and is archived as its turn ends while the task still stands
+ * so (`archiveAgentOfDoneTask`). A move there without one records no one, and
+ * archives nothing then or later. Any change that moves the task off Done or
+ * Canceled brings back every agent that move archived with it, and no other.
  */
 export function updateTask<E = never, R = never, RA = never>(
   userId: string,
@@ -1875,8 +1875,8 @@ export function updateTask<E = never, R = never, RA = never>(
 /**
  * A task changed, as `updateTask` changes one, the transaction the change
  * committed in, read from the write that changed the row or the reader's pin,
- * none where the change wrote neither, and the agents its move to Done
- * archived, which the caller lets go of as an archive by hand does.
+ * none where the change wrote neither, and the agents its move to Done or
+ * Canceled archived, which the caller lets go of as an archive by hand does.
  */
 export function updateTaskCommitted<E = never, R = never, RA = never>(
   userId: string,
@@ -1963,21 +1963,24 @@ export function updateTaskCommitted<E = never, R = never, RA = never>(
               );
         const txid =
           written ?? Option.getOrUndefined(pinned)?.txid ?? Option.getOrUndefined(marked)?.txid;
-        // A task moved to Done archives its idle agents with it, and one moved off Done brings them back.
-        // Note that this runs before its agents and items move, so the write locks each agent's
-        // conversation before its row and agent rows before item rows, in the order an archive does.
-        const archived =
-          columns.status === TASK_STATUS.DONE && doneArchive !== undefined
-            ? yield* archivedIdleWithTask(taskId, undefined, doneArchive, now)
-            : [];
+        // A task moved to Done or Canceled archives its idle agents with it, and one moved off them brings
+        // them back, before a move between the two archives them again under its own stamp. Note that this
+        // runs before its agents and items move, so the write locks each agent's conversation before its
+        // row and agent rows before item rows, in the order an archive does.
         const finishedAt = locked.value.completedAt;
         if (
           columns.status !== undefined &&
-          locked.value.status === TASK_STATUS.DONE &&
+          SETTLED.includes(locked.value.status) &&
           finishedAt !== null
         ) {
           yield* broughtBackWithTask(taskId, finishedAt);
         }
+        const archived =
+          columns.status !== undefined &&
+          SETTLED.includes(columns.status) &&
+          doneArchive !== undefined
+            ? yield* archivedIdleWithTask(taskId, undefined, doneArchive, now)
+            : [];
         if (changes.organizationId !== undefined) {
           yield* followingAgentsAndInbox(taskId, row.organizationId);
           if (row.organizationId !== locked.value.organizationId) {
@@ -2317,14 +2320,14 @@ const lockDoneBy = SqlSchema.findOneOption({
 
 /**
  * Archives the agent with its task where a member or an agent moved the task
- * to Done and the guard reads the agent idle under its conversation's lock,
+ * to Done or Canceled and the guard reads the agent idle under its conversation's lock,
  * as that move archived the task's idle agents, at this moment and as whoever
  * moved it: what a turn's end asks of an agent still at work when its task
- * moved to Done. A Done made by our own finish archives nothing, and neither
+ * moved to Done or Canceled. A Done made by our own finish archives nothing, and neither
  * does one the agent made itself (`archivedIdleWithTask`). A turn's start
  * takes the task up again (`beginTaskWork`), which clears who moved it, so a
- * Done this reads was made while the agent's turn ran. The task is read under
- * its row's lock first, so a move off Done at once either lands before, and
+ * Done or Canceled this reads was made while the agent's turn ran. The task is read under
+ * its row's lock first, so a move off it at once either lands before, and
  * nothing is archived, or waits and brings the agent back. Answers the agent
  * where it was archived; none otherwise.
  */
@@ -2338,7 +2341,7 @@ export function archiveAgentOfDoneTask<R = never>(
     client.withTransaction(
       Effect.gen(function* () {
         const locked = yield* lockDoneBy({ userId, taskId });
-        if (Option.isNone(locked) || locked.value.status !== TASK_STATUS.DONE) return [];
+        if (Option.isNone(locked) || !SETTLED.includes(locked.value.status)) return [];
         const archivedBy = locked.value.doneBy;
         if (archivedBy === null) return [];
         const now = yield* DateTime.nowAsDate;
