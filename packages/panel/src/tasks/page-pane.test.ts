@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { MOTION_DELAY_MS } from "@repo/brand";
 import {
   DESCRIPTION_COMMENT_ACTION,
   DESCRIPTION_COMMENT_ACTOR,
@@ -919,7 +920,7 @@ test("a reply held in a review stands Pending as its thread's last comment, and 
   ]);
 });
 
-test("words replied to start a comment quoting them in its field, and two held on one element each say and tint the words they quote", async () => {
+test("words replied to start a comment quoting them in its field, and two held on one element each say and tint the words they quote, told as the pointer is over the element in the page", async () => {
   const control: DescriptionCommentsControl = {
     planId: TASK,
     threads: [],
@@ -987,6 +988,21 @@ test("words replied to start a comment quoting them in its field, and two held o
     ],
   });
   postFrom(frame().contentWindow, { type: PAGE_PICK_TYPE, marks: [{ path, box }] });
+  // The pointer over the element in the page tells its comments as the pointer over its pin does, each under the words it quotes.
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  try {
+    postFrom(frame().contentWindow, { type: PAGE_PICK_TYPE, over: path });
+    act(() => {
+      vi.advanceTimersByTime(MOTION_DELAY_MS.HINT);
+    });
+  } finally {
+    vi.useRealTimers();
+  }
+  const told = document.querySelector(".ui-hover-card")?.textContent ?? "";
+  assert.match(
+    told,
+    /Turn states on rows\.[\s\S]*Which rows\?[\s\S]*without opening anything[\s\S]*Even the Inbox\?/u,
+  );
   act(() => buttonLabeled(container, "2 comments in your review").click());
   const card = document.querySelector<HTMLElement>(
     ".ui-rect-float:not([data-leaving]) .page-comment-float",

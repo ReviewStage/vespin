@@ -192,9 +192,10 @@ type Heard = (typeof HEARD)[keyof typeof HEARD];
 /** What carries a context menu, whose long press is the menu's rather than a hint's (`useMenu`'s `contextMenu`). */
 const LONG_PRESS_MENU = "[data-long-press]";
 
-/** The way into a control's card: waited for as the pointer resting on it waits, a finger's at once. */
+/** The way into a control's card: waited for as the pointer resting on it waits, a finger's at once; and out of it, lingering as the pointer leaving it does. */
 interface CardDoor {
   readonly rest: (touched: boolean) => void;
+  readonly leave: () => void;
 }
 
 /**
@@ -385,6 +386,19 @@ export function useHintRest(): HintRest {
  */
 export function hintedControlOf(node: Node): HTMLElement | undefined {
   return standing.findLast((each) => each.holds(node))?.anchor;
+}
+
+/**
+ * The card `control` hangs, raised as the pointer resting on the control
+ * raises it (`over`), or left to linger and go as the pointer leaving it
+ * does, for a pointer this window cannot see that stands for the control:
+ * over an element in a frame the control is pinned to, say. A control
+ * hanging no card is left as it is.
+ */
+export function pointCard(control: HTMLElement, over: boolean): void {
+  const door = cardDoors.get(control);
+  if (over) door?.rest(false);
+  else door?.leave();
 }
 
 /** The chord as `aria-keyshortcuts` spells it, for a control that shows its shortcut without a tooltip. */
@@ -687,6 +701,11 @@ export function Tooltip({
     if (carded && latest() !== undefined) linger.leave(hide);
     else hide();
   }, [carded, latest, linger, hide]);
+  // Note that the door out of the card reads the latest `leave`, as its way in reads the latest `show`.
+  const leaveRef = useRef(leave);
+  useLayoutEffect(() => {
+    leaveRef.current = leave;
+  });
   // A selection dragged past the card's edge leaves it standing until the
   // press ends, and the pointer then off the card lets it linger.
   const onCard = (over: boolean) => {
@@ -726,6 +745,7 @@ export function Tooltip({
   const control = useRef<HTMLElement | null>(null);
   const doorTo = (element: HTMLElement): CardDoor => ({
     rest: (touched) => showRef.current(element, touched),
+    leave: () => leaveRef.current(),
   });
   const learn = useCallback(
     (element: HTMLElement | null) => {

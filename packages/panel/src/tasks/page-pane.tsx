@@ -314,13 +314,14 @@ interface FrameComments {
   readonly onPressed: () => void;
 }
 
-/** What the frame said for a page's comments: where each element marked stands, by its path, and the words selected in it. */
+/** What the frame said for a page's comments: where each element marked stands, by its path, the words selected in it, and the element marked the pointer is over. */
 interface FrameSaid {
   readonly marks: ReadonlyMap<string, FrameBox | null>;
   readonly selected: PagePicked | undefined;
+  readonly over: string | undefined;
 }
 
-const NOTHING_SAID: FrameSaid = { marks: new Map(), selected: undefined };
+const NOTHING_SAID: FrameSaid = { marks: new Map(), selected: undefined, over: undefined };
 
 function sameMarks(a: readonly PageMark[], b: readonly PageMark[]): boolean {
   return (
@@ -397,6 +398,10 @@ function useFrameComments(frame: RefObject<HTMLIFrameElement | null>, asks: Fram
       if ("selected" in message) {
         const selected = message.selected ?? undefined;
         return setSaid((was) => ({ ...was, selected }));
+      }
+      if ("over" in message) {
+        const over = message.over ?? undefined;
+        return setSaid((was) => ({ ...was, over }));
       }
       if ("pressed" in message) return latest.current.onPressed();
       if (!latest.current.picking) return;
@@ -1040,6 +1045,7 @@ export function PagePane({
                   room={room}
                   marks={framed.said.marks}
                   selected={framed.said.selected}
+                  over={framed.said.over}
                   picking={commenting.picking}
                   pending={commenting.pending}
                   open={commenting.open}

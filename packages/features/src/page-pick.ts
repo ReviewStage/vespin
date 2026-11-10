@@ -21,7 +21,9 @@ import { DESCRIPTION_COMMENT_BOUNDS } from "./description-comment-wire.js";
  * page, with where they stand and the element holding them, as a press or
  * a key lets them go, or a finger's rests, and that none are once they go;
  * and it says a press landed in the page that selected nothing, which
- * dismisses a card standing over it, as a press anywhere else does.
+ * dismisses a card standing over it, as a press anywhere else does; and
+ * which element marked the pointer is over, so the panel tells its
+ * comments as it does over the element's pin.
  * The outline is a stylesheet the document adopts over an attribute set on
  * the element, so the page's own tree is never rewritten.
  *
@@ -116,8 +118,10 @@ export type PagePicked = typeof pickedSchema.Type;
  * A message the frame posts to the panel: the element picked; that the pick
  * was let go, by Escape in the page; where each element marked stands, or
  * none where the page holds it no more; the words selected, in the shape
- * of an element picked whose quote they are, or none once they go; or that
- * a press landed in the page, selecting nothing.
+ * of an element picked whose quote they are, or none once they go; that
+ * a press landed in the page, selecting nothing; or the element marked that
+ * the pointer is over, the innermost where several hold it, or none as it
+ * leaves them.
  */
 export const pagePickAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ type: EffectSchema.Literal(PAGE_PICK_TYPE), picked: pickedSchema }),
@@ -138,6 +142,10 @@ export const pagePickAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({
     type: EffectSchema.Literal(PAGE_PICK_TYPE),
     pressed: EffectSchema.Literal(true),
+  }),
+  EffectSchema.Struct({
+    type: EffectSchema.Literal(PAGE_PICK_TYPE),
+    over: EffectSchema.NullOr(elementPathSchema),
   }),
 ]);
 
@@ -248,7 +256,7 @@ export const PAGE_PICK_SCRIPT = `(() => {
     }
   };
 
-  const told = { marks: [], said: "[]", selected: "", queued: false, settle: undefined };
+  const told = { marks: [], said: "[]", selected: "", queued: false, settle: undefined, over: null };
 
   // The words a thread quotes, found in its element's text as one string, as a range; none where they stand there no more.
   // Note that both are read with each run of whitespace as one space, because a selection's words are the page as drawn, its source's line breaks and indents run together, and a quote cut to its bound ends in an ellipsis the page never held.
@@ -306,10 +314,10 @@ export const PAGE_PICK_SCRIPT = `(() => {
       taken.setEnd(last, last.data.length);
       element = taken.commonAncestorContainer instanceof Element ? taken.commonAncestorContainer : taken.commonAncestorContainer.parentElement;
     }
-    // Note that words inside a run of bold or a link stand on the block they are read in, as an element picked with the pointer does, and never on one drawing no box of its own, which has nowhere to pin.
+    // Note that words inside a run of bold or a link stand on the box they are read in, as an element picked with the pointer does, and never on one drawing no box of its own, which has nowhere to pin; an inline block draws its own.
     const unboxed = (each) => {
       const display = getComputedStyle(each).display;
-      return display.startsWith("inline") || display === "contents";
+      return display === "inline" || display === "contents";
     };
     while (element !== null && element !== document.body && element.parentElement !== null && unboxed(element)) element = element.parentElement;
     return element;
@@ -370,8 +378,26 @@ export const PAGE_PICK_SCRIPT = `(() => {
     else told.settle = setTimeout(tellSelected, 300);
   });
 
+  // The element marked that the pointer is over, the innermost, said as it changes; none while picking, which outlines what it is over instead.
+  const tellOver = (element) => {
+    let over = null;
+    for (const { path } of pick.on || element === null ? [] : told.marks) {
+      const marked = find(path);
+      if (marked !== null && marked.contains(element) && (over === null || over.element.contains(marked))) over = { path, element: marked };
+    }
+    const path = over === null ? null : over.path;
+    if (path === told.over) return;
+    told.over = path;
+    post({ over: path });
+  };
+
   addEventListener("pointerover", (event) => {
     if (pick.on) mark("hovered", target(event));
+    tellOver(target(event));
+  }, true);
+  // Note that the pointer leaving the page for the window around it is over nothing marked.
+  addEventListener("pointerout", (event) => {
+    if (event.relatedTarget === null) tellOver(null);
   }, true);
 
   for (const name of PRESSES) {
