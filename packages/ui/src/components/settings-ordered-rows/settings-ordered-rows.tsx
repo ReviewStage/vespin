@@ -13,7 +13,8 @@ import { GLYPH } from "../../icons/glyph-registry.js";
  * press. A row's grip names nothing and is hidden from assistive
  * technology, since a drag is the pointer's alone: a row's own menu moves
  * it up or down from the keyboard. A run of one row draws no grip, since it
- * has nowhere to go.
+ * has nowhere to go; it keeps the grips' gutter where asked (`gutter`), so a
+ * page of several runs lines every card's marks up in one column.
  *
  * Each row slides aside on its own `transform` while another is dragged
  * past it, timed from the motion tokens (`settings-ordered-rows.css`), so
@@ -35,12 +36,15 @@ export function SettingsOrderedRows({
   label,
   rows,
   onPointerDown,
+  gutter = false,
 }: {
   /** What the run is, said to a reader as the list's name: "ChatGPT plans". */
   label: string;
   rows: readonly SettingsOrderedRow[];
   /** The drag's press, heard on the run so it measures the rows together; none where the run is not reordered. */
   onPointerDown?: PointerEventHandler<HTMLElement> | undefined;
+  /** Whether its card keeps the grips' gutter though the run draws none, so its marks line up with a run beside it that does. */
+  gutter?: boolean | undefined;
 }): React.JSX.Element {
   const movable = onPointerDown !== undefined && rows.length > 1;
   return (
@@ -48,6 +52,7 @@ export function SettingsOrderedRows({
       className="ui-settings-ordered-rows"
       aria-label={label}
       data-movable={movable}
+      data-gutter={movable || gutter}
       onPointerDown={movable ? onPointerDown : undefined}
     >
       {rows.map(({ key, row }) => (

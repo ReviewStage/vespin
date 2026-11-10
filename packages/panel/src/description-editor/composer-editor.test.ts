@@ -459,6 +459,27 @@ test("an @ word is reported to the mentions, and a pick writes the mention into 
   assert.deepEqual(box.drawn, ["session-store.ts luke://file/apps/web/session-store.ts"]);
 });
 
+test("a pick before closing punctuation leaves it standing, no space before it, and replaces a dot inside the name", () => {
+  const box = mountedWithMentions("");
+
+  typeInComposer(box.host, "Fix @ses.");
+  // The caret back before the period, inside the word: the paragraph opens at 1.
+  box.caretAt(1 + "Fix @ses".length);
+  box.handle.chooseMention({
+    name: "session-store.ts",
+    target: "luke://file/apps/web/session-store.ts",
+  });
+  assert.equal(box.drafts.at(-1), `Fix ${STORE_LINK}.`);
+
+  box.handle.replace("See @session-store.ts");
+  box.caretAt(1 + "See @ses".length);
+  box.handle.chooseMention({
+    name: "session-store.ts",
+    target: "luke://file/apps/web/session-store.ts",
+  });
+  assert.equal(box.drafts.at(-1), `See ${STORE_LINK} `);
+});
+
 test("words laid in with a mention's link hold it as its chip, and hand the same words back", () => {
   const box = mountedWithMentions("");
 

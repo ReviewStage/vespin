@@ -80,10 +80,17 @@ export const liveActivityTokenRequestSchema = EffectSchema.Struct({
 
 export type LiveActivityTokenRequest = typeof liveActivityTokenRequestSchema.Type;
 
-/** The phone's activity ended on the phone, its update token gone with it: the phone, by its device token and gateway. */
+/**
+ * The phone's activity ended on the phone, its update token gone with it:
+ * the phone, by its device token and gateway, and the update token of the
+ * activity that ended, so an end still in flight when a newer activity
+ * registers its token leaves the newer one standing; without it, whatever
+ * activity stands on the phone is forgotten.
+ */
 export const liveActivityEndedRequestSchema = EffectSchema.Struct({
   deviceToken: pushDeviceTokenSchema,
   environment: pushEnvironmentSchema,
+  activityToken: EffectSchema.optionalKey(pushDeviceTokenSchema),
 });
 
 export type LiveActivityEndedRequest = typeof liveActivityEndedRequestSchema.Type;

@@ -40,6 +40,7 @@ import {
   decodedLiveRows,
   followBackoffWhile,
   LIVE_STATE,
+  type LiveState,
   resealWait,
   type SealedRead,
   waitOrRegained,
@@ -145,16 +146,16 @@ interface Drawn {
 }
 
 /** What the statements last delivered: what a page beside the messages is read by, as one digest any change to it moves, and the newest messages drawn. */
-type LiveState =
-  | { readonly kind: typeof LIVE_STATE.WAITING }
-  | { readonly kind: typeof LIVE_STATE.STANDING; readonly digest: string; readonly drawn: Drawn }
-  | { readonly kind: typeof LIVE_STATE.BROKEN; readonly cause: FailureFacts };
+type TranscriptState = LiveState<
+  { readonly digest: string; readonly drawn: Drawn },
+  { readonly cause: FailureFacts }
+>;
 
 /** What a transcript's read is answered from. */
 type Standing =
   | {
       readonly kind: typeof LIVE_STATE.LIVE;
-      readonly state: SubscriptionRef.SubscriptionRef<LiveState>;
+      readonly state: SubscriptionRef.SubscriptionRef<TranscriptState>;
     }
   | { readonly kind: typeof LIVE_STATE.REFUSED };
 
@@ -309,7 +310,7 @@ export function transcriptFollows<Key = TranscriptKey>(
             : dependencies.seal(key, poll, userId, after, cursor);
         const first = yield* sealedOf(seal);
         if (Option.isNone(first)) return { kind: LIVE_STATE.REFUSED } as const;
-        const state = yield* SubscriptionRef.make<LiveState>({ kind: LIVE_STATE.WAITING });
+        const state = yield* SubscriptionRef.make<TranscriptState>({ kind: LIVE_STATE.WAITING });
         // A live read that stops for good, signed out or a row that does not decode, marks the state broken.
         yield* Effect.forkScoped(
           Stream.runForEach(
@@ -356,7 +357,7 @@ function toldPage(answer: TranscriptNowAnswer | AgentMessagesAnswerView): AgentT
 }
 
 /** Whether a state is another than the one a page was read at. */
-function movedFrom(was: LiveState): (state: LiveState) => boolean {
+function movedFrom(was: TranscriptState): (state: TranscriptState) => boolean {
   return (state) =>
     state.kind !== was.kind ||
     (state.kind === LIVE_STATE.STANDING &&
@@ -652,7 +653,7 @@ export function followTranscript<Key>(
         });
       heardPaged(window.messages, window.cursor);
       /** The rows' messages not yet told, beside what the last page said of the agent; the cursor moves past them where they follow on from it. */
-      const tellDrawn = (page: AgentTranscriptPage, state: LiveState) =>
+      const tellDrawn = (page: AgentTranscriptPage, state: TranscriptState) =>
         Effect.gen(function* () {
           if (state.kind !== LIVE_STATE.STANDING || "failure" in page) return;
           const fresh = heardDrawn(state.drawn);

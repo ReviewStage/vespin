@@ -21,6 +21,7 @@ import {
   listPendingApprovals,
   readApproval,
   recordApprovalAsked,
+  releaseApprovalClaim,
   settleApprovalByRunner,
 } from "../agent-approvals.js";
 import { createAgent } from "../agent-store.js";
@@ -197,6 +198,48 @@ it.layer(getTestDB())("a coding agent's asks", (it) => {
         const read = Option.getOrThrow(yield* readApproval(teammate, agent.id, pending.id));
         assert.equal(read.status, APPROVAL_STATUS.ALLOWED_FOR_AGENT);
         assert.equal(read.decidedByUserId, teammate);
+      }),
+  );
+
+  it.effect(
+    "a claim the runner confirmed stays settled when its delivery reports failure late",
+    () =>
+      Effect.gen(function* () {
+        const { agent, teammate, turnId } = yield* openRunningAgent;
+        yield* asked(agent.conversationId, turnId, "a");
+        const [pending] = yield* listPendingApprovals(teammate, agent.id);
+        assert.ok(pending !== undefined);
+        const at = new Date(yield* Clock.currentTimeMillis);
+        yield* answerApproval({
+          userId: teammate,
+          agentId: agent.id,
+          approvalId: pending.id,
+          status: APPROVAL_STATUS.ALLOWED,
+          at,
+        });
+        yield* settleApprovalByRunner({
+          conversationId: agent.conversationId,
+          requestId: "a",
+          status: APPROVAL_STATUS.ALLOWED,
+          settledBy: APPROVAL_SETTLED_BY.MEMBER,
+          at,
+        });
+
+        const released = yield* releaseApprovalClaim({
+          agentId: agent.id,
+          approvalId: pending.id,
+          userId: teammate,
+          to: APPROVAL_STATUS.PENDING,
+          at,
+        });
+
+        assert.ok(
+          Option.isNone(released),
+          "an answer the runner took is no longer the member's claim",
+        );
+        assert.deepEqual(yield* standingOf(agent.conversationId), [
+          ["a", APPROVAL_STATUS.ALLOWED, APPROVAL_SETTLED_BY.MEMBER],
+        ]);
       }),
   );
 

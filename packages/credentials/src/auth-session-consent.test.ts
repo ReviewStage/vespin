@@ -1,13 +1,17 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { Effect } from "effect";
+import { Deferred, Effect, Fiber } from "effect";
 import {
   AUTH_SESSION_END,
   AUTH_SESSION_REASON,
   type AuthSessionAnswer,
   authSessionConsent,
 } from "./auth-session-consent.js";
-import { LOOPBACK_CONSENT_CANCELED, type LoopbackAuthorization } from "./consent.js";
+import {
+  LOOPBACK_CONSENT_CANCELED,
+  type LoopbackAuthorization,
+  type LoopbackConsentOptions,
+} from "./consent.js";
 
 const REFUSED = "Example did not grant access.";
 
@@ -31,25 +35,36 @@ function trip(caught: (authorization: LoopbackAuthorization) => AuthSessionAnswe
       },
       dismiss: () => undefined,
     },
-  })<{ token: string }>({
+  })(
+    flow({
+      authorizationUrl: (input) => {
+        authorization = input;
+        return "https://example.test/authorize";
+      },
+      exchange: (input) =>
+        Effect.sync(() => {
+          exchanges.push(input);
+          return { token: "granted" };
+        }),
+    }),
+  );
+  return { outcome: Effect.scoped(consent.signInEffect()), exchanges };
+}
+
+/** A flow's options, with the authorization page and the exchange `overrides` gives. */
+function flow(
+  overrides: Pick<LoopbackConsentOptions<{ token: string }>, "authorizationUrl" | "exchange">,
+): LoopbackConsentOptions<{ token: string }> {
+  return {
     callbackPath: "/callback",
     pages: {
       granted: { badge: "Signed in", title: "Signed in", body: "Close this tab." },
       notGranted: { badge: "Not signed in", title: "Not signed in", body: "Try again." },
     },
     reasons: { refused: REFUSED, timedOut: "Timed out." },
-    authorizationUrl: (input) => {
-      authorization = input;
-      return "https://example.test/authorize";
-    },
-    exchange: (input) =>
-      Effect.sync(() => {
-        exchanges.push(input);
-        return { token: "granted" };
-      }),
     openExternal: () => undefined,
-  });
-  return { outcome: Effect.scoped(consent.signInEffect()), exchanges };
+    ...overrides,
+  };
 }
 
 const redirected = (url: string): AuthSessionAnswer => ({ end: AUTH_SESSION_END.REDIRECTED, url });
@@ -98,6 +113,57 @@ it.effect("exchanges the code the trip's own redirect carried, on the registered
     assert.deepEqual(
       exchanges.map(({ code, redirectUri }) => ({ code, redirectUri })),
       [{ code: "the-code", redirectUri: CALLBACK }],
+    );
+  }),
+);
+
+// Note that the regression this catches is a claim taken after the trip's digest yields, so two trips
+// started together both pass the one-at-a-time check and open two sheets that no cancel reaches.
+it.effect("shows one sheet for two trips started together, and a cancel closes it", () =>
+  Effect.gen(function* () {
+    const firstOpened = yield* Deferred.make<void>();
+    const secondOpened = yield* Deferred.make<void>();
+    const showing: (() => void)[] = [];
+    let opens = 0;
+    const open = authSessionConsent({
+      callbackUrl: CALLBACK,
+      session: {
+        open: () => {
+          const sheet = new Promise<AuthSessionAnswer>((resolve) => {
+            showing.push(() => resolve({ end: AUTH_SESSION_END.CLOSED }));
+          });
+          opens += 1;
+          Deferred.doneUnsafe(opens === 1 ? firstOpened : secondOpened, Effect.void);
+          return sheet;
+        },
+        dismiss: () => {
+          for (const close of showing.splice(0)) close();
+        },
+      },
+    });
+    const started = () =>
+      open(
+        flow({
+          authorizationUrl: () => "https://example.test/authorize",
+          exchange: () => Effect.succeed({ token: "granted" }),
+        }),
+      );
+    const first = started();
+    const second = started();
+    const firstFiber = yield* Effect.forkChild(Effect.scoped(first.signInEffect()));
+    const secondFiber = yield* Effect.forkChild(Effect.scoped(second.signInEffect()));
+    // Note that the second trip settles by opening a sheet or by ending, whichever it does.
+    yield* Effect.race(Deferred.await(secondOpened), Effect.asVoid(Fiber.await(secondFiber)));
+    yield* Deferred.await(firstOpened);
+    assert.equal(opens, 1);
+    first.cancel();
+    second.cancel();
+    const ends = yield* Effect.forEach([firstFiber, secondFiber], (fiber) =>
+      Effect.map(Fiber.join(fiber), (end) => "reason" in end && end.reason),
+    );
+    assert.deepEqual(
+      ends.toSorted(),
+      [AUTH_SESSION_REASON.ALREADY_WAITING, LOOPBACK_CONSENT_CANCELED].toSorted(),
     );
   }),
 );

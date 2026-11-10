@@ -24,7 +24,7 @@ import {
   recordAgentSandboxOpen,
   recordAgentSandboxUse,
 } from "@repo/database/models/agent-sandboxes";
-import { type Sandbox, touchSandbox } from "@repo/sandbox";
+import { Sandbox, type SandboxError, touchSandbox } from "@repo/sandbox";
 import { Clock, Duration, Effect } from "effect";
 
 const SANDBOX_USE = {
@@ -63,6 +63,15 @@ export const recordedSandboxOpen = (
 /** The sandbox's last use moved to now, where an open recorded it. */
 const recordedSandboxUse = (sandboxName: string): Effect.Effect<void, never, DatabaseServices> =>
   loggedIfFailed(Effect.flatMap(useNow(sandboxName), recordAgentSandboxUse));
+
+/** An agent's sandbox in use touched, and its use recorded once the sandbox confirms it; a touch it did not confirm fails, for a caller that tries it again (`touchedWhileUsed`). */
+export const touchedAgentSandbox = (
+  sandboxName: string,
+): Effect.Effect<void, SandboxError, Sandbox | DatabaseServices> =>
+  Effect.andThen(
+    Effect.flatMap(Sandbox, (sandbox) => sandbox.touch(sandboxName)),
+    recordedSandboxUse(sandboxName),
+  );
 
 /** An agent's sandbox in use touched, and its use recorded; a touch the sandbox did not confirm is logged by `touchSandbox`. */
 export const touchAgentSandbox = (

@@ -1146,8 +1146,13 @@ const portsCommand = Command.make("ports", { agent: agentArgument }, ({ agent: i
     const { shared } = listed.running
       ? yield* askService(hosted.agentPorts.shared, { id })
       : { shared: null };
+    const labels = new Map((listed.labels ?? []).map(({ port, label }) => [port, label]));
     const portLines = columns(
-      listed.ports.map((port) => [String(port), port === shared?.port ? shared.url : ""]),
+      listed.ports.map((port) => [
+        String(port),
+        labels.get(port) ?? "",
+        port === shared?.port ? shared.url : "",
+      ]),
     );
     yield* answer({
       json: { ...listed, shared },
@@ -1161,10 +1166,13 @@ const portsCommand = Command.make("ports", { agent: agentArgument }, ({ agent: i
   }),
 ).pipe(
   Command.withDescription(
-    "List the ports a server listens on in an agent's cloud sandbox, and the one shared by link",
+    "List the ports a server listens on in an agent's cloud sandbox, each with what serves it, and the one shared by link",
   ),
   Command.withExamples([
-    { command: "vespin agent ports <id>", description: "The ports, the shared one with its link" },
+    {
+      command: "vespin agent ports <id>",
+      description: "The ports and what serves each, the shared one with its link",
+    },
     { command: "vespin agent ports <id> -q", description: "The port numbers alone" },
   ]),
 );

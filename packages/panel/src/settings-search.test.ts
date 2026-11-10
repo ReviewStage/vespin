@@ -283,7 +283,7 @@ function labelsFound(query: string, input: SettingsSearchInput = FULL_INPUT): re
 }
 
 test("skills and rename each find the row the page draws", () => {
-  assert.ok(labelsFound("skills").includes("Add a skill"));
+  assert.ok(labelsFound("skills").includes("Add skill"));
   assert.deepEqual(labelsFound("rename"), ["Rename workspace"]);
 });
 
@@ -308,9 +308,9 @@ test("cli sign-in and set up the cli each find the CLI section's row", () => {
 
 test("renaming needs a workspace the reader manages that is not their own first", () => {
   assert.equal(
-    labelsFound("add a skill", { ...FULL_INPUT, workspace: undefined }).includes("Add a skill"),
+    labelsFound("add skill", { ...FULL_INPUT, workspace: undefined }).includes("Add skill"),
     false,
-    "the Skills page draws no Add a skill row while its workspace is unread or failed",
+    "the Skills page draws no Add skill while its workspace is unread or failed",
   );
   assert.deepEqual(labelsFound("rename", { ...FULL_INPUT, workspace: TEAM }), []);
   assert.deepEqual(
@@ -319,11 +319,12 @@ test("renaming needs a workspace the reader manages that is not their own first"
   );
 });
 
-test("model finds the default model under a label no other page's row wears", () => {
+test("model and default model both find the Model row, under a label no other page's row wears", () => {
   assert.deepEqual(
     labelsFound("model").filter((label) => label.toLowerCase().includes("model")),
-    ["Default model"],
+    ["Model"],
   );
+  assert.ok(labelsFound("default model").includes("Model"));
 });
 
 test("no two rows on different pages wear the same label", () => {

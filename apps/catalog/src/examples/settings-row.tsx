@@ -24,6 +24,7 @@ import {
   SettingsRow,
   SettingsRowActSlot,
   type SettingsRowControl,
+  SettingsRowControlHold,
   SettingsRowMark,
   SettingsRowStateLine,
   SettingsRowsFold,
@@ -221,7 +222,7 @@ function PressRows(): React.JSX.Element {
   );
 }
 
-/** What a row's line says about its subject, a mark led by its own box, and a value ending in a column. */
+/** What a row's line says about its subject, a mark led by its own box, a value ending in a column, and a line held a control tall for presses an edit will bring. */
 function StateRows(): React.JSX.Element {
   return (
     <SettingsSection>
@@ -265,6 +266,7 @@ function StateRows(): React.JSX.Element {
       >
         {() => <SettingsRowValue>Admin</SettingsRowValue>}
       </SettingsRow>
+      <SettingsRow label="Install script">{() => <SettingsRowControlHold />}</SettingsRow>
     </SettingsSection>
   );
 }

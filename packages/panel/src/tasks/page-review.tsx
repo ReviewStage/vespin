@@ -16,6 +16,7 @@ import {
 import { neverBusyAct } from "@repo/ui/confirm-state";
 import type { DescriptionCommentsControl } from "@repo/ui/description-comments";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { useAsyncAction } from "@repo/ui/use-async-action";
 import { useSelector } from "@tanstack/react-store";
 import { Schema } from "effect";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
@@ -280,8 +281,8 @@ export function usePageReview(
   const planId = control?.planId;
   const all = useSelector(reviewLines.store);
   const setAll = reviewLines.set;
-  const [sending, setSending] = useState(false);
-  const [failed, setFailed] = useState(false);
+  // Note that a refused send has no words of its own: the panel says the one line it always does.
+  const sends = useAsyncAction<true>(() => true);
   // How many edits stand open on each held comment, by its key: a held reply is drawn in its thread and in the panel, and each may edit it.
   const [edits, setEdits] = useState<ReadonlyMap<string, number>>(new Map());
   const markEditing = useCallback((clientKey: string, open: boolean) => {
@@ -299,7 +300,7 @@ export function usePageReview(
   );
   const send = async (summary: string): Promise<boolean> => {
     // Note that an edit standing open would land after the words it changes went, so it is saved or canceled first.
-    if (control === undefined || planId === undefined || sending || edits.size > 0) return false;
+    if (control === undefined || planId === undefined || edits.size > 0) return false;
     const words = summary.trim();
     // Note that the summary is held before it goes, so a send that stops part way keeps it, under its key, for the next.
     const last: HeldComment[] =
@@ -318,25 +319,21 @@ export function usePageReview(
           ];
     const comments = [...held, ...last];
     if (comments.length === 0) return false;
-    if (last.length > 0) setAll((now) => [...now, ...last]);
-    setSending(true);
-    setFailed(false);
-    // Note that a comment posted held is marked so, so a send that stops after it neither sends it again nor lets it change under the service's copy.
-    const sent = await sendReview(control, comments, (clientKey) =>
-      setAll((now) =>
-        now.map((comment) =>
-          comment.clientKey === clientKey ? { ...comment, landed: true } : comment,
+    return sends.run(async () => {
+      if (last.length > 0) setAll((now) => [...now, ...last]);
+      // Note that a comment posted held is marked so, so a send that stops after it neither sends it again nor lets it change under the service's copy.
+      const sent = await sendReview(control, comments, (clientKey) =>
+        setAll((now) =>
+          now.map((comment) =>
+            comment.clientKey === clientKey ? { ...comment, landed: true } : comment,
+          ),
         ),
-      ),
-    );
-    setSending(false);
-    if (!sent) {
-      setFailed(true);
-      return false;
-    }
-    const keys = new Set(comments.map((comment) => comment.clientKey));
-    setAll((now) => now.filter((comment) => !keys.has(comment.clientKey)));
-    return true;
+      );
+      if (!sent) return true;
+      const keys = new Set(comments.map((comment) => comment.clientKey));
+      setAll((now) => now.filter((comment) => !keys.has(comment.clientKey)));
+      return undefined;
+    });
   };
   const drop = (keep: (comment: HeldComment) => boolean) => setAll((now) => now.filter(keep));
   const remove = (clientKey: string) => {
@@ -348,8 +345,8 @@ export function usePageReview(
   return {
     held,
     landed: held.some((comment) => comment.landed === true),
-    sending,
-    failed,
+    sending: sends.running,
+    failed: sends.refusal === true,
     hold: (comment) => {
       if (planId !== undefined) setAll((now) => [...now, { ...comment, planId, pageId }]);
     },
@@ -363,7 +360,7 @@ export function usePageReview(
       ),
     remove,
     discard: () => {
-      setFailed(false);
+      sends.clear();
       drop((comment) => !heldOn(comment, planId, pageId));
     },
     send,
