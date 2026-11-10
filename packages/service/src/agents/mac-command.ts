@@ -169,7 +169,10 @@ export const RUN_ON_MAC_TOOL = {
     "you, in their login shell from their home " +
     "folder, and read what it printed. The developer's Mac may ask them first, and they may " +
     "decline, in which case the call answers `not-run`. It reaches whatever the developer's account on the Mac reaches: their local checkouts and " +
-    "uncommitted work, installed tools, running servers. Use it for what only the Mac has; " +
+    "uncommitted work, installed tools, running servers. Never walk the whole home folder, as " +
+    "`find ~`, `du ~`, or `grep -r ~` do, which makes macOS ask the developer for their Music, " +
+    "Photos, Desktop, and Documents; find a checkout in the folders they keep code in, such as " +
+    "`ls ~/code`, or with `mdfind`. Use it for what only the Mac has; " +
     "read the task's repository where you have it. Nothing reads stdin, so a command that asks " +
     `for input fails. It is killed after ${MAC_COMMAND_BOUNDS.DEFAULT_TIMEOUT_SECONDS} seconds ` +
     "unless `timeout_seconds` says otherwise. Answers the exit code, stdout, and stderr, each " +
