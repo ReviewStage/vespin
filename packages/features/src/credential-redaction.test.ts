@@ -42,6 +42,12 @@ it("a failure message keeps its words and loses every run shaped like a credenti
     redactCredentials(`config {'token': 'short'} and token='brief' refused`),
     `config {'[redacted]'} and [redacted]' refused`,
   );
+  // A Bearer assigned to a name is taken with its token, and a quoted value only ends at its own unescaped quote.
+  assert.equal(redactCredentials("token: Bearer abc.def refused"), "[redacted] refused");
+  assert.equal(
+    redactCredentials(`{'token': '"abc.def'} {"token": "ab\\"cd"}`),
+    `{'[redacted]'} {"[redacted]"}`,
+  );
   assert.equal(redactCredentials("Invalid API key provided"), "Invalid API key provided");
   assert.equal(
     redactCredentials(`{"accessToken": "fixture.value"} client_secret:fixture refused`),
