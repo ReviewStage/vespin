@@ -18,7 +18,8 @@ export function fakeSnapshotOf(cwd: string, lineId: string): CheckoutSnapshot {
 /** Snapshots answered as `fakeSnapshotOf` says, or none at all where `missing`, as a checkout that could not be recorded answers. */
 export function fakeCheckoutSnapshots(missing = false) {
   const layer = Layer.succeed(CheckoutSnapshots, {
-    take: (cwd, lineId) => Effect.succeed(missing ? undefined : fakeSnapshotOf(cwd, lineId)),
+    take: (cwd, _agentId, lineId) =>
+      Effect.succeed(missing ? undefined : fakeSnapshotOf(cwd, lineId)),
   });
   return { layer };
 }
