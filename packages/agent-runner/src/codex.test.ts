@@ -750,7 +750,21 @@ it.effect("sends a steer refused by a turn that cannot be steered as the next tu
     assert.deepEqual(received(process, "turn/start")[1]?.input, [
       { type: "text", text: "And the second line?", text_elements: [] },
     ]);
-    assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST, LINE.STEERED]);
+    // The next turn goes on with the agent's turn the service holds, so only the line that opened it
+    // carries the checkout: a record under the steer's would write over the turn's own.
+    assert.deepEqual(
+      service.applied.flatMap(({ message: posted }) =>
+        "type" in posted && posted.type === RUNNER_EVENT.ACCEPTED ? [posted] : [],
+      ),
+      [
+        {
+          type: RUNNER_EVENT.ACCEPTED,
+          uuid: LINE.FIRST,
+          snapshot: fakeSnapshotOf(CONFIG.cwd, LINE.FIRST),
+        },
+        { type: RUNNER_EVENT.ACCEPTED, uuid: LINE.STEERED },
+      ],
+    );
   }),
 );
 
