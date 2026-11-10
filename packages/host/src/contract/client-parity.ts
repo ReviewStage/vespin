@@ -5,8 +5,9 @@
  * act port, but each offers its member a different share of it: the desktop
  * all of it, the web all but what only an app on the Mac can carry, and the
  * iOS app what its screens have been built for: today its sign-in and
- * sign-out, and the Inbox's list, which the host reads from the account gate
- * opening with no act of the app's. Nothing else says which share, so this
+ * sign-out, and the Inbox: its list, which the host reads from the account
+ * gate opening with no act of the app's, its read marks, its retry, and its
+ * pictures. Nothing else says which share, so this
  * table is what keeps the gaps known: every kind in `PORT_ACT_KIND` has a
  * row, and a kind added without one, or a row whose act is gone, does not
  * build. A client offers an act where a member can do what the act does
@@ -84,7 +85,6 @@ const IOS = {
   DICTATION: byDesign("iOS uses the keyboard's own dictation"),
   DIFF: byDesign("iOS v1 opens the diff on GitHub"),
   FEEDBACK: notYet("iOS v1 sends no feedback or contact mail"),
-  INBOX_REVIEW: notYet("In review for iOS (#7911)"),
   LINKS: byDesign("iOS opens a link through the system itself (openURL)"),
   MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
   MENU_BAR: byDesign("iOS has no menu bar to dim"),
@@ -204,17 +204,17 @@ export const CLIENT_PARITY = {
 
   [PORT_ACT_KIND.AGENTS_INBOX_FOLLOW]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_INBOX_RETRY]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]: panel(IOS.INBOX_REVIEW),
+  [PORT_ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_ANSWER]: panel(IOS.WAVE_5),
   [PORT_ACT_KIND.AGENTS_INBOX_CLOSE]: panel(IOS.WAVE_5),
   [PORT_ACT_KIND.AGENTS_INBOX_RELEASE]: panel(IOS.WAVE_5),
   [PORT_ACT_KIND.AGENTS_INBOX_MESSAGE]: panel(IOS.WAVE_5),
   [PORT_ACT_KIND.AGENTS_INBOX_START]: panel(IOS.WAVE_5),
-  [PORT_ACT_KIND.AGENTS_INBOX_READ_STATE]: panel(IOS.INBOX_REVIEW),
+  [PORT_ACT_KIND.AGENTS_INBOX_READ_STATE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_REMIND]: panel(notYet("iOS v1 sets no reminders")),
   [PORT_ACT_KIND.AGENTS_INBOX_ITEM_HOME]: panel(notYet("iOS v1 opens no Inbox item by its link")),
-  [PORT_ACT_KIND.AGENTS_INBOX_READ_ALL]: panel(IOS.INBOX_REVIEW),
-  [PORT_ACT_KIND.AGENTS_INBOX_ATTACHMENT]: panel(IOS.INBOX_REVIEW),
+  [PORT_ACT_KIND.AGENTS_INBOX_READ_ALL]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_INBOX_ATTACHMENT]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PICTURE]: panel(IOS.TRANSCRIPT_REVIEW),
 
   [PORT_ACT_KIND.AUTOMATIONS_CREATE]: panel(IOS.AUTOMATIONS),
