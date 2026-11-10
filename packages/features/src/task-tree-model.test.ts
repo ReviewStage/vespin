@@ -77,6 +77,34 @@ test("the tree stands each open task once: pinned, sectioned, nested, then by re
   ]);
 });
 
+test("a child task put in a section stands there with its own child tasks, not under its parent", () => {
+  const tree = taskTree({
+    view: {
+      tasks: [
+        ...TASKS,
+        task("Invite copy review", TASK_STATUS.TODO, "ada/relay", 10, {
+          parentTaskId: "Invite copy",
+        }),
+      ],
+      taskSections: {
+        sections: [{ id: "section-launch", workspaceId: WORKSPACE, title: "Launch", createdAt: 1 }],
+        entries: [{ taskId: "Invite copy", sectionId: "section-launch", addedAt: 1 }],
+        agentEntries: [],
+      },
+    },
+    workspaceId: WORKSPACE,
+    readerId: READER,
+    noRepository: "No repository",
+    tasksHead: "My tasks",
+  });
+  expect(drawn(tree)).toEqual([
+    ["Pinned", "Digest"],
+    ["Launch", "Invite copy", "  Invite copy review"],
+    ["relay", "Invites", "Launch notes"],
+    ["ledger", "Usage alerts"],
+  ]);
+});
+
 test("a search finds the workspace's tasks whatever their status, by name or key", () => {
   const found = searchedTasks({
     tasks: TASKS,
