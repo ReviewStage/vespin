@@ -4,10 +4,10 @@
 // only hands it tokens: the push-to-start token, and the update token of
 // each activity iOS starts. It also says when an activity ends or is
 // dismissed. Each goes to JavaScript as an event (`src/live-activity/`),
-// and the latest are sent again when it starts listening, since iOS hands
-// them once. A Stop pressed on the activity (`StopAgentIntent`, in the
-// app's target) waits in the standard defaults; each is handed on while
-// JavaScript listens, and taken away once it answers. A fixture run starts
+// and the latest token is sent again when it starts listening for it, since
+// iOS hands each once. A Stop pressed on the activity (`StopAgentIntent`, in
+// the app's target) waits in the standard defaults; each is handed on while
+// JavaScript listens for Stops, and taken away once it answers. A fixture run starts
 // an activity of its own (`startFixture`), since no push reaches a
 // simulator, and ends it (`endAll`).
 
@@ -23,7 +23,8 @@ public final class LiveActivityModule: Module {
   private static let stopFreshness: Double = 2 * 60 * 1000
 
   // Note that the state below is read and written on the main actor alone.
-  private var listening = false
+  /// Which events JavaScript listens for, each started and stopped on its own.
+  private var listening: Set<String> = []
   private var startToken: String?
   private var activityTokens: [String: String] = [:]
   /// The Stop requests handed on and not yet answered, so none is handed on twice.
@@ -48,18 +49,35 @@ public final class LiveActivityModule: Module {
       if let stopObserver = self.stopObserver { NotificationCenter.default.removeObserver(stopObserver) }
     }
 
-    OnStartObserving {
+    OnStartObserving("onStartToken") {
       Task { @MainActor in
-        self.listening = true
+        self.listening.insert("onStartToken")
         if let token = self.startToken { self.sendEvent("onStartToken", ["token": token]) }
+      }
+    }
+
+    OnStartObserving("onActivityToken") {
+      Task { @MainActor in
+        self.listening.insert("onActivityToken")
         for (_, token) in self.activityTokens { self.sendEvent("onActivityToken", ["token": token]) }
+      }
+    }
+
+    OnStartObserving("onActivityEnded") {
+      Task { @MainActor in self.listening.insert("onActivityEnded") }
+    }
+
+    OnStartObserving("onStop") {
+      Task { @MainActor in
+        self.listening.insert("onStop")
         self.handOnStops()
       }
     }
 
-    OnStopObserving {
-      Task { @MainActor in self.listening = false }
-    }
+    OnStopObserving("onStartToken") { Task { @MainActor in self.listening.remove("onStartToken") } }
+    OnStopObserving("onActivityToken") { Task { @MainActor in self.listening.remove("onActivityToken") } }
+    OnStopObserving("onActivityEnded") { Task { @MainActor in self.listening.remove("onActivityEnded") } }
+    OnStopObserving("onStop") { Task { @MainActor in self.listening.remove("onStop") } }
 
     // A Stop request answered, whether or not the stop went, taken away so the intent returns.
     Function("answerStop") { (request: String) -> Void in
@@ -120,22 +138,22 @@ public final class LiveActivityModule: Module {
 
   @MainActor private func took(startToken token: String) {
     startToken = token
-    if listening { sendEvent("onStartToken", ["token": token]) }
+    if listening.contains("onStartToken") { sendEvent("onStartToken", ["token": token]) }
   }
 
   @MainActor private func took(activity id: String, token: String) {
     activityTokens[id] = token
-    if listening { sendEvent("onActivityToken", ["token": token]) }
+    if listening.contains("onActivityToken") { sendEvent("onActivityToken", ["token": token]) }
   }
 
   @MainActor private func ended(activity id: String) {
     activityTokens[id] = nil
-    if listening { sendEvent("onActivityEnded") }
+    if listening.contains("onActivityEnded") { sendEvent("onActivityEnded") }
   }
 
   /// Hands each fresh Stop request on while JavaScript listens, dropping any too old to act on.
   @MainActor private func handOnStops() {
-    guard listening else { return }
+    guard listening.contains("onStop") else { return }
     let defaults = UserDefaults.standard
     let now = Date().timeIntervalSince1970 * 1000
     let requests = (defaults.array(forKey: Self.stopsKey) ?? []).compactMap { $0 as? [String: Any] }

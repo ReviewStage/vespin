@@ -84,6 +84,9 @@ export type AccountAsksClient = Pick<
   | "unregisterPushDevice"
   | "pushDeviceStatus"
   | "setPushDeviceNotify"
+  | "registerLiveActivityStartToken"
+  | "registerLiveActivityToken"
+  | "endLiveActivity"
 >;
 
 export interface AccountAsksDependencies extends AccountGateDependencies {
@@ -396,6 +399,9 @@ function actsOf(
     PUSH_DEVICE_UNREGISTER: (device) => asked(client.unregisterPushDevice(device)),
     PUSH_DEVICE_STATUS: (device) => asked(client.pushDeviceStatus(device)),
     PUSH_DEVICE_NOTIFY: (choice) => asked(client.setPushDeviceNotify(choice)),
+    LIVE_ACTIVITY_START_TOKEN: (token) => asked(client.registerLiveActivityStartToken(token)),
+    LIVE_ACTIVITY_TOKEN: (token) => asked(client.registerLiveActivityToken(token)),
+    LIVE_ACTIVITY_ENDED: (phone) => asked(client.endLiveActivity(phone)),
     // A removal is drawn gone over the held hosts the moment it is asked.
     HOSTS_REMOVE: declaredWrite(
       pool,

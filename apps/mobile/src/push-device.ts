@@ -126,11 +126,11 @@ let lastRegister: Promise<void> = Promise.resolve();
 /**
  * The phone registered under the account signed in, once for its token
  * until a sign-out unregisters it: the register under way, or done, where
- * one was asked already. Note that a read of the phone's standing waits on
- * it, so a Settings screen opened as the permission is first granted reads
- * a phone the service holds.
+ * one was asked already. Note that a read of the phone's standing, and a
+ * Live Activity's token (`live-activity/`), wait on it, so the service holds
+ * the phone each names.
  */
-function registered(acts: ActPortClient, key: PushDeviceKey): Promise<void> {
+export function registeredPushDevice(acts: ActPortClient, key: PushDeviceKey): Promise<void> {
   const bundleId = Constants.expoConfig?.ios?.bundleIdentifier;
   if (bundleId === undefined) return Promise.resolve();
   if (registration?.token === key.token) return registration.done;
@@ -162,7 +162,7 @@ export function usePushRegistration(signedIn: boolean): void {
       return;
     }
     if (key === undefined) return;
-    registered(acts, key).catch(() => undefined);
+    registeredPushDevice(acts, key).catch(() => undefined);
   }, [acts, signedIn, key]);
 }
 
@@ -207,7 +207,7 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): {
   useEffect(() => {
     if (key === undefined) return undefined;
     let live = true;
-    registered(acts, key)
+    registeredPushDevice(acts, key)
       .then(() => acts[ACT_KIND.PUSH_DEVICE_STATUS](key))
       .then(
         (answer) => {
