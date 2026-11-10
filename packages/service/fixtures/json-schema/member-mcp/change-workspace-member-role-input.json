@@ -1,0 +1,29 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace the member is in, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "userId": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The member's account id, as list_workspace_members answered it."
+    },
+    "role": {
+      "type": "string",
+      "enum": [
+        "admin",
+        "member"
+      ],
+      "description": "The role they take: admin, who manages the workspace's members and settings beside the owner, or member."
+    }
+  },
+  "required": [
+    "userId",
+    "role"
+  ],
+  "additionalProperties": false
+}

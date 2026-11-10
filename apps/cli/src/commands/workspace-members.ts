@@ -223,6 +223,7 @@ export const workspaceRemoveCommand = Command.make(
       yield* confirmOrYes(
         `Remove ${member.name} <${member.email}> from ${workspace.name}? They lose it at once, and coming back takes a new invitation.`,
         yes,
+        "Nobody was removed.",
       );
       const { hosted } = yield* session;
       const { members } = yield* askService(
