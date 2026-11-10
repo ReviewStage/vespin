@@ -10,6 +10,7 @@ import { HOST_READ_GUARD_RULE, isWatchedSource } from "./shared/host-read-guard.
 import { KEPT_GUARD_RULE } from "./shared/kept-guard.ts";
 import { LIVE_REGION_GUARD_RULE } from "./shared/live-region-guard.ts";
 import { LUCIDE_GUARD_RULE } from "./shared/lucide-guard.ts";
+import { MESSAGE_BOX_GUARD_RULE, namesBoxPart } from "./shared/message-box-guard.ts";
 import { isOutsideUiNative, NATIVE_PRESS_GUARD_RULE } from "./shared/native-press-guard.ts";
 import { OPEN_PAGE_GUARD_RULE } from "./shared/open-page-guard.ts";
 import { namesEllipsisPlaceholder, PLACEHOLDER_GUARD_RULE } from "./shared/placeholder-guard.ts";
@@ -45,7 +46,8 @@ import {
  * `no-raw-press-outside-ui-native`, on any JSX-capable
  * file holding one that would silence `skeleton-through-components`,
  * `settings-row-end`, `row-behavior-in-row`, whose list of row components
- * is the only way past it, or `async-press-needs-busy`, whose baseline is the
+ * is the only way past it, on any TypeScript file holding one that would
+ * silence `one-message-box`, whose list of builders is the only way past it, or `async-press-needs-busy`, whose baseline is the
  * only way past it, on a
  * JSX-capable file outside `@repo/ui` holding one that would silence
  * `no-open-page-from-button`, `no-raw-heading-outside-ui` or
@@ -122,6 +124,17 @@ const GUARDS = [
     watches: () => true,
     remedy:
       "Build the menu, rename, selection, or muted or unread state inside the row component every list of its kind draws, or name a new row component in tools/anti-slop/row-behavior.json with its reason",
+  },
+  {
+    rule: MESSAGE_BOX_GUARD_RULE,
+    sources: TYPESCRIPT_SOURCE,
+    // A file that never names a part has nothing to silence; the guards' own tests spell fixtures.
+    watches: (absolute: string) =>
+      !path.relative(REPOSITORY_ROOT, absolute).startsWith("tools/anti-slop/") &&
+      existsSync(absolute) &&
+      namesBoxPart(readFileSync(absolute, "utf8")),
+    remedy:
+      "Draw the box with useMessageBox and MessageBox (or MessageField) from message-box.tsx, adding the slot or option it lacks there, or name a box that differs on purpose in tools/anti-slop/message-box.json with its reason",
   },
   {
     rule: SKELETON_GUARD_RULE,

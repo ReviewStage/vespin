@@ -1,0 +1,21 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace whose slug to change, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "slug": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The new slug: lowercase letters and digits, with single hyphens between them."
+    }
+  },
+  "required": [
+    "slug"
+  ],
+  "additionalProperties": false
+}

@@ -1,8 +1,8 @@
 /**
- * github.ts -- `vespin github status`: whether the signed-in member's GitHub account is connected to the service, and as whom.
+ * github.ts -- `vespin github`: the signed-in member's GitHub, `status` here and each other part a command group of its own file.
  *
- * It reads `github.connection`, which answers whether the account has a
- * GitHub link with a usable token and its login, never the token itself.
+ * `status` reads `github.connection`, which answers whether the account has
+ * a GitHub link with a usable token and its login, never the token itself.
  * Connecting needs a browser, so it is done from the app's Settings.
  */
 
@@ -11,6 +11,7 @@ import { Effect } from "effect";
 import { Command } from "effect/cli";
 import { answer } from "../output.js";
 import { askService, session } from "../session.js";
+import { githubTokenCommand } from "./github-token.js";
 
 const statusCommand = Command.make("status", {}, () =>
   Effect.gen(function* () {
@@ -35,11 +36,12 @@ const statusCommand = Command.make("status", {}, () =>
   ]),
 );
 
-/** The github group: status. */
+/** The github group: the connection, and the member's own token. */
 export const githubCommand = Command.make("github").pipe(
-  Command.withDescription("Your GitHub connection"),
-  Command.withSubcommands([statusCommand]),
+  Command.withDescription("Your GitHub: its connection and your own classic token"),
+  Command.withSubcommands([statusCommand, githubTokenCommand]),
   Command.withExamples([
     { command: "vespin github status", description: "Your GitHub connection" },
+    { command: "vespin github token show", description: "Whether your token is set" },
   ]),
 );

@@ -22,30 +22,18 @@ import {
 } from "@repo/features/task-wire";
 import { Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
+import { FILE_REFUSAL_WORDS, fileRefused } from "../file-refusal.js";
 import { answer, CommandFailed, columns, note } from "../output.js";
 import { askService, session } from "../session.js";
 import { resolveWorkspace } from "../workspace.js";
 
-/** Why the service read no file, listed no folder, or read no skills, as a person reads it. */
-const FILE_REFUSAL_WORDS = {
-  [TASK_FILE_REFUSAL.SECRET]: "The file may hold a secret, so its contents are never read.",
-  [TASK_FILE_REFUSAL.MISSING]: "Nothing of that kind stands at that path.",
-  [TASK_FILE_REFUSAL.NOT_TEXT]: "The file is too large, or not text.",
+/** Why the service read no file, listed no folder, or read no skills, as a person reads it of a repository named by its full name. */
+const REPOSITORY_REFUSAL_WORDS = {
+  ...FILE_REFUSAL_WORDS,
   [TASK_FILE_REFUSAL.NO_REPOSITORY]: "No repository was named.",
   [TASK_FILE_REFUSAL.NOT_REACHABLE]:
     "Neither the workspace's GitHub installation nor a repository added on your token reaches that repository; vespin repo list lists those that do.",
-  [TASK_FILE_REFUSAL.UNAVAILABLE]: "GitHub did not answer just now; try again shortly.",
 } as const satisfies Record<TaskFileRefusal, string>;
-
-/** A refused read as the command's failure, naming the branch GitHub found nothing on. */
-function fileRefused(refused: { readonly refusal: TaskFileRefusal; readonly branch?: string }) {
-  const words = FILE_REFUSAL_WORDS[refused.refusal];
-  return new CommandFailed({
-    exit:
-      refused.refusal === TASK_FILE_REFUSAL.UNAVAILABLE ? CLI_EXIT.UNAVAILABLE : CLI_EXIT.REFUSED,
-    message: refused.branch === undefined ? words : `${words} (read on ${refused.branch})`,
-  });
-}
 
 /** What an add or a removal is refused for, in words that say what to do. */
 const TOKEN_REPOSITORY_REFUSAL_WORDS = {
@@ -174,8 +162,12 @@ const catCommand = Command.make(
         raw: TASK_FILE_QUERY_FLAG,
         ...(Option.isSome(commit) ? { ref: commit.value } : undefined),
       });
-      if ("refusal" in read) return yield* fileRefused(read);
-      if (!("text" in read)) return yield* fileRefused({ refusal: TASK_FILE_REFUSAL.NOT_TEXT });
+      if ("refusal" in read) return yield* fileRefused(read, REPOSITORY_REFUSAL_WORDS);
+      if (!("text" in read))
+        return yield* fileRefused(
+          { refusal: TASK_FILE_REFUSAL.NOT_TEXT },
+          REPOSITORY_REFUSAL_WORDS,
+        );
       yield* answer({ json: read.text, lines: [read.text.text], ids: [read.text.path] });
     }),
 ).pipe(
@@ -220,7 +212,7 @@ const lsCommand = Command.make(
         ...(Option.isSome(path) && path.value !== "" ? { path: path.value } : undefined),
         ...(recursive ? { recursive: GITHUB_REPOSITORY_TREE_RECURSIVE } : undefined),
       });
-      if ("refusal" in listed) return yield* fileRefused(listed);
+      if ("refusal" in listed) return yield* fileRefused(listed, REPOSITORY_REFUSAL_WORDS);
       const { folder } = listed;
       const names = folder.entries.map((entry) =>
         entry.kind === TASK_TREE_ENTRY.FOLDER ? `${entry.name}/` : entry.name,
@@ -247,7 +239,7 @@ const skillsCommand = Command.make("skills", { repository: repositoryArgument },
       repository,
       installed: TASK_SKILLS_INSTALLED,
     });
-    if ("refusal" in read) return yield* fileRefused(read);
+    if ("refusal" in read) return yield* fileRefused(read, REPOSITORY_REFUSAL_WORDS);
     const { skills } = read;
     yield* answer({
       json: skills,

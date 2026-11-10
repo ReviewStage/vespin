@@ -1,7 +1,8 @@
 /**
  * account.ts -- the signed-in account's own reads and writes (`account-wire.ts`, `provider-key-wire.ts`), as procedures.
  *
- * Its deletion, its preferences snapshot, its access, its own provider
+ * Its deletion, its preferences snapshot, its access, a beat that it is
+ * active at a client (`presence-wire.ts`), its own provider
  * keys, its workspace's memories, and its ChatGPT credentials, each on the path
  * and method it has always answered on; a memory kept in the member's words
  * and a search of them, the member MCP server's `save_memory` and
@@ -46,6 +47,7 @@ import {
   memorySearchAnswerSchema,
   memorySearchQuerySchema,
 } from "../memory-wire.js";
+import { presenceDoneAnswerSchema } from "../presence-wire.js";
 import {
   chatGptDeviceLoginRequestSchema,
   chatGptDevicePollAnswerSchema,
@@ -89,6 +91,10 @@ export const accountContract = {
   access: declaredProcedure
     .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.ACCOUNT_ACCESS }))
     .output(EffectSchema.flip(accountAccessAnswerSchema)),
+  /** The member used a desktop or web client just now, which holds their phone's pushes (`presence-wire.ts`); no body. */
+  active: declaredProcedure
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.ACCOUNT_PRESENCE }))
+    .output(EffectSchema.flip(presenceDoneAnswerSchema)),
   providerKeys: declaredProcedure
     .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.ACCOUNT_PROVIDER_KEYS }))
     .output(EffectSchema.flip(providerKeysAnswerSchema)),

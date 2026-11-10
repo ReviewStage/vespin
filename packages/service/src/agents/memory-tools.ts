@@ -6,6 +6,7 @@ import { EXPERIMENT } from "@repo/settings";
 import { describeWire } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
 import {
+  readWorkspaceMemories,
   saveWorkspaceMemory,
   searchWorkspaceMemories,
   WORKSPACE_MEMORY,
@@ -202,6 +203,29 @@ export function runRecall(
               memories: answer.memories.map(memoryRecord),
               total: answer.total,
             },
+    ),
+  );
+}
+
+/** Every memory of the call's workspace, as Settings › Memory lists them (`readWorkspaceMemories`): each with who kept it and whether the member may forget it. */
+export function runListMemories(
+  call: MemoryCall,
+): Effect.Effect<WireRecord, never, DatabaseServices> {
+  return orUnavailable(
+    Effect.map(
+      readWorkspaceMemories(call.userId, call.workspaceId),
+      (answer): WireRecord =>
+        answer.kind === WORKSPACE_MEMORY.READ
+          ? {
+              status: ACTION_RESULT_STATUS.ACCEPTED,
+              memories: answer.memories.map((memory) => ({
+                ...memoryRecord(memory),
+                keptBy: memory.keptBy?.name ?? null,
+                forgettable: memory.forgettable,
+              })),
+              total: answer.memories.length,
+            }
+          : rejected(MEMORY_REFUSAL.UNAVAILABLE),
     ),
   );
 }

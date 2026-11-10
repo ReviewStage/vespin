@@ -1,4 +1,8 @@
-import type { PushEnvironment } from "@repo/features/push-device-wire";
+import {
+  PUSH_NOTIFY,
+  type PushEnvironment,
+  type PushNotify,
+} from "@repo/features/push-device-wire";
 import { index, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { createdAt, timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
@@ -16,6 +20,12 @@ import { user } from "./auth.js";
  * `environment` names, under `bundle_id` as its topic, and deletes the row
  * when Apple says the token will never take another push. The row belongs
  * to the account and leaves with it.
+ *
+ * `notify` is the phone's own "Notify me" (`PUSH_NOTIFY`), which the app's
+ * Settings sets and a register leaves alone. What became of its pushes is
+ * kept beside it, so a push that fails quietly shows on the phone: when one
+ * last reached Apple, and, while they fail, since when and Apple's latest
+ * reason; a push that reaches Apple ends the failing run.
  *
  * This table is apart from `device` (`./device.ts`), the Macs and Linux
  * hosts that run local agents, which hold no push token; an older `devices`
@@ -37,6 +47,14 @@ export const pushDevice = pgTable(
     createdAt: createdAt(),
     /** When the phone last registered. */
     lastSeenAt: timestamptz("last_seen_at").notNull(),
+    /** When the phone takes an alert (`PUSH_NOTIFY`): away holds one while the member is at their desk. */
+    notify: text("notify").$type<PushNotify>().notNull().default(PUSH_NOTIFY.AWAY),
+    /** When a push to the phone last reached Apple; null before the first. */
+    lastDeliveredAt: timestamptz("last_delivered_at"),
+    /** When the phone's pushes began failing, kept through every later failure; null while they reach Apple. */
+    failingSince: timestamptz("failing_since"),
+    /** Apple's reason for the latest failure, or ours where Apple gave none (`PUSH_FAILURE_REASON`); null while they reach Apple. */
+    failureReason: text("failure_reason"),
   },
   (table) => [
     // A token is one phone on one gateway, whichever account it is registered under.

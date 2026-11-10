@@ -1,5 +1,5 @@
 /**
- * task.ts -- `vespin task list`, `view`, `create`, and `update`: the workspace's tasks, one task with its agents, pull requests, and open asks, a new task, and a task changed.
+ * task.ts -- `vespin task list`, `view`, `create`, `update`, `cat`, and `ls`: the workspace's tasks, one task with its agents, pull requests, and open asks, a new task, a task changed, and its repository's files read.
  *
  * Each reads the workspace a command acts in (`../workspace.js`) and names a
  * task by its id, its number, or its key (`../tasks.js`). `create` takes its
@@ -7,10 +7,13 @@
  * with `--start` or `--prompt` starts an agent on the new task, the one-shot
  * every peer leads with: in the create's own request where there is no plan
  * to write first, else created, then planned through `plans.editDescription`, then
- * started, so the agent reads the plan it was given.
+ * started, so the agent reads the plan it was given. `cat` and `ls` read the
+ * task's repository as its File tab does, on GitHub at the default branch's
+ * head or a commit, never from an agent's sandbox.
  */
 
 import { CLI_EXIT } from "@repo/features/cli-exit";
+import { TASK_FILE_QUERY_FLAG } from "@repo/features/contract";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import { INBOX_STATUS, type InboxItem, openAskOf } from "@repo/features/inbox-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -18,8 +21,10 @@ import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
 import {
   TASK_BLOCK_CHANGE,
   TASK_BLOCK_RELATION,
+  TASK_FILE_REFUSAL,
   TASK_PRIORITY_ORDER,
   TASK_STATUS_ORDER,
+  TASK_TREE_ENTRY,
   type Task,
   type TaskPullRequestLine,
   type TaskSummary,
@@ -28,8 +33,9 @@ import { taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
+import { fileRefused } from "../file-refusal.js";
 import { originRepository } from "../git.js";
-import { answer, CommandFailed, columns, readInput } from "../output.js";
+import { answer, CommandFailed, columns, note, readInput } from "../output.js";
 import { askService, session } from "../session.js";
 import { resolveTaskId, signedInMemberId } from "../tasks.js";
 import { resolveWorkspace } from "../workspace.js";
@@ -524,9 +530,115 @@ function memberIdOf(taskId: string, named: string) {
 }
 
 /** The task group: list, view, create, and update. */
+/** A file or folder named by its task, as `cat` and `ls` take it. */
+const taskArgument = Argument.String("task").pipe(
+  Argument.withDescription("The task, by its id, its number, or its key such as ACME-42"),
+);
+
+const commitFlag = Flag.String("commit").pipe(
+  Flag.withDescription(
+    "Read at this commit, by its full SHA, rather than the default branch's head",
+  ),
+  Flag.optional,
+);
+
+const catCommand = Command.make(
+  "cat",
+  {
+    task: taskArgument,
+    path: Argument.String("path").pipe(
+      Argument.withDescription("The file's path from the repository's root"),
+    ),
+    commit: commitFlag,
+  },
+  ({ task, path, commit }) =>
+    Effect.gen(function* () {
+      const id = yield* resolveTaskId(task);
+      const { hosted } = yield* session;
+      // Note that a raw read carries the whole text, so its window stands for nothing.
+      const read = yield* askService(hosted.taskFiles.file, {
+        id,
+        path,
+        first: "1",
+        last: "1",
+        raw: TASK_FILE_QUERY_FLAG,
+        ...(Option.isSome(commit) ? { ref: commit.value } : undefined),
+      });
+      if ("refusal" in read) return yield* fileRefused(read);
+      if (!("text" in read)) return yield* fileRefused({ refusal: TASK_FILE_REFUSAL.NOT_TEXT });
+      yield* answer({ json: read.text, lines: [read.text.text], ids: [read.text.path] });
+    }),
+).pipe(
+  Command.withDescription(
+    "Print a file of a task's repository as GitHub holds it, at the default branch's head or a commit",
+  ),
+  Command.withExamples([
+    {
+      command: "vespin task cat ACME-42 README.md",
+      description: "The file as the default branch holds it",
+    },
+    {
+      command: "vespin task cat ACME-42 src/index.ts --commit <sha>",
+      description: "The file at a commit",
+    },
+  ]),
+);
+
+const lsCommand = Command.make(
+  "ls",
+  {
+    task: taskArgument,
+    path: Argument.String("path").pipe(
+      Argument.withDescription(
+        "The folder's path from the repository's root; the root where left out",
+      ),
+      Argument.optional,
+    ),
+    recursive: Flag.Boolean("recursive").pipe(
+      Flag.withAlias("r"),
+      Flag.withDefault(false),
+      Flag.withDescription("List everything under the folder, each by its path from it"),
+    ),
+  },
+  ({ task, path, recursive }) =>
+    Effect.gen(function* () {
+      const id = yield* resolveTaskId(task);
+      const { hosted } = yield* session;
+      const listed = yield* askService(hosted.taskFiles.tree, {
+        id,
+        ...(Option.isSome(path) && path.value !== "" ? { path: path.value } : undefined),
+        ...(recursive ? { recursive: TASK_FILE_QUERY_FLAG } : undefined),
+      });
+      if ("refusal" in listed) return yield* fileRefused(listed);
+      const { folder } = listed;
+      const names = folder.entries.map((entry) =>
+        entry.kind === TASK_TREE_ENTRY.FOLDER ? `${entry.name}/` : entry.name,
+      );
+      if (folder.truncated) yield* note("The folder holds more entries than one listing carries.");
+      yield* answer({ json: folder, lines: names, ids: names });
+    }),
+).pipe(
+  Command.withDescription(
+    "List a folder of a task's repository as GitHub holds it at the default branch's head",
+  ),
+  Command.withExamples([
+    { command: "vespin task ls ACME-42", description: "The repository's root" },
+    { command: "vespin task ls ACME-42 src -r", description: "Everything under src" },
+  ]),
+);
+
 export const taskCommand = Command.make("task").pipe(
-  Command.withDescription("List, view, create, and change tasks"),
-  Command.withSubcommands([listCommand, viewCommand, createCommand, updateCommand]),
+  Command.withDescription(
+    "List, view, create, and change tasks, and read their repository's files",
+  ),
+  Command.withSubcommands([
+    listCommand,
+    viewCommand,
+    createCommand,
+    updateCommand,
+    catCommand,
+    lsCommand,
+  ]),
   Command.withExamples([
     { command: "vespin task list --mine", description: "Your tasks" },
     { command: 'vespin task create "Fix X" --prompt -', description: "A task, and an agent on it" },

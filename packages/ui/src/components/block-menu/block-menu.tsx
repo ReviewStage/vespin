@@ -1,6 +1,5 @@
 import { type Noun, noMatchWords } from "@repo/features/words";
 import {
-  SHORTCUT_KEY,
   type ShortcutChord,
   WRITING_SHORTCUTS,
   type WritingAction,
@@ -9,18 +8,16 @@ import {
 import type { ReactNode, Ref } from "react";
 import { type ComboboxGroup, ComboboxList } from "../combobox/combobox.js";
 import { MENU_SURFACE_INSET, MenuSurface } from "../menu/menu-surface.js";
-import { type MenuKey, MenuKeys, menuKey } from "../menu-keys/menu-keys.js";
 import { Shortcut } from "../shortcut/shortcut.js";
 import { WritingGlyph } from "../writing-glyph/writing-glyph.js";
 
 /**
- * block-menu.tsx -- the list a `/` typed in a document opens: its blocks in groups, each its glyph, its name, and the Markdown that makes it, over the keys it hears.
+ * block-menu.tsx -- the list a `/` typed in a document opens: its blocks in groups, each its glyph, its name, and the Markdown that makes it.
  *
  * It is drawn as the `@` list is: the menu's surface, edge to edge, under
- * each group's heading the group's rows, the highlighted one washed, and at
- * its foot the keys it hears (`MenuKeys`). A row says at its end how else
- * the block is made, the Markdown typed for it, or, where none makes it,
- * its chord. The keys stay with the editor the `/` was typed in, which
+ * each group's heading the group's rows, the highlighted one washed. A row
+ * says at its end how else the block is made, the Markdown typed for it,
+ * or, where none makes it, its chord. The keys stay with the editor the `/` was typed in, which
  * steers the highlight (`active`) and names it to a reader by the row's id
  * (`comboboxOptionId`); the list takes only the pointer, which moves the
  * highlight as it passes and chooses a row it presses, the caret staying in
@@ -37,13 +34,6 @@ const BLOCK: Noun = { one: "block", many: "blocks" };
 
 /** What the menu says where nothing matches. */
 const BLOCK_MENU_EMPTY = noMatchWords(BLOCK);
-
-/** The keys the menu hears, said at its foot. */
-const BLOCK_MENU_KEYS: readonly MenuKey[] = [
-  menuKey("Move", SHORTCUT_KEY.UP, SHORTCUT_KEY.DOWN),
-  menuKey("Insert", SHORTCUT_KEY.ENTER, SHORTCUT_KEY.TAB),
-  menuKey("Close", SHORTCUT_KEY.ESCAPE),
-];
 
 /** The menu's groups, by the headings they stand under, in the order they are drawn. */
 export const BLOCK_MENU_GROUP = {
@@ -142,7 +132,6 @@ export function BlockMenu({
         }}
         empty={BLOCK_MENU_EMPTY}
       />
-      <MenuKeys keys={BLOCK_MENU_KEYS} />
     </MenuSurface>
   );
 }
