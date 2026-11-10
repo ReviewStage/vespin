@@ -90,10 +90,10 @@ const openAccount = (name: string) =>
     return id;
   });
 
-/** An agent of the account's, started `daysAgo`, its one turn ended as `turn` where it ran one. */
+/** An agent of the account's on the task, started `daysAgo`, its one turn ended as `turn` where it ran one. */
 const startAgent = (
   userId: string,
-  organizationId: string,
+  place: { readonly organizationId: string; readonly taskId: string },
   daysAgo: number,
   options: {
     turn?: { status: TurnStatus; failure?: string; failureDetail?: string; endedDaysAgo?: number };
@@ -111,7 +111,7 @@ const startAgent = (
       .insert(agentTable)
       .values({
         userId,
-        organizationId,
+        ...place,
         conversationId,
         model: "anthropic/claude-opus-5.5",
         effort: "high",
@@ -149,6 +149,9 @@ const startAgent = (
     return agent?.id ?? "";
   });
 
+/** The numbers the shared workspace's tasks take, one per account seeded. */
+let sharedTaskNumbers = 0;
+
 /** Every kind of row the page reads, written for `userId` in its own workspace. */
 const seedAccount = (userId: string, sharedWorkspace: string) =>
   Effect.gen(function* () {
@@ -163,22 +166,40 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
       createdAt: at(10),
       updatedAt: at(0.25),
     });
-    yield* db.insert(task).values([
-      {
-        userId,
-        organizationId: own,
-        name: "A task the page never names",
-        number: 1,
+    const [named] = yield* db
+      .insert(task)
+      .values([
+        {
+          userId,
+          organizationId: own,
+          name: "A task the page never names",
+          number: 1,
+          document: "",
+          createdAt: at(1),
+        },
+        { userId, organizationId: own, name: "Older", number: 2, document: "", createdAt: at(45) },
+      ])
+      .returning({ id: task.id });
+    const onOwn = { organizationId: own, taskId: named?.id ?? "" };
+    // The shared workspace's agent works on a task no account started, so it counts as none of this account's.
+    sharedTaskNumbers += 1;
+    const [ofShared] = yield* db
+      .insert(task)
+      .values({
+        userId: null,
+        organizationId: sharedWorkspace,
+        name: "Shared",
+        number: sharedTaskNumbers,
         document: "",
-        createdAt: at(1),
-      },
-      { userId, organizationId: own, name: "Older", number: 2, document: "", createdAt: at(45) },
-    ]);
-    const merged = yield* startAgent(userId, own, 1, {
+        createdAt: at(200),
+      })
+      .returning({ id: task.id });
+    const onShared = { organizationId: sharedWorkspace, taskId: ofShared?.id ?? "" };
+    const merged = yield* startAgent(userId, onOwn, 1, {
       turn: { status: TURN_STATUS.SETTLED },
       published: PULL_REQUEST_STATE.MERGED,
     });
-    const overflowed = yield* startAgent(userId, sharedWorkspace, 2, {
+    const overflowed = yield* startAgent(userId, onShared, 2, {
       turn: {
         status: TURN_STATUS.FAILED,
         failure: TURN_FAILURE.MODEL,
@@ -186,8 +207,8 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
       },
       published: PULL_REQUEST_STATE.DRAFT,
     });
-    const neverStarted = yield* startAgent(userId, own, 3, {});
-    const older = yield* startAgent(userId, own, 40, {
+    const neverStarted = yield* startAgent(userId, onOwn, 3, {});
+    const older = yield* startAgent(userId, onOwn, 40, {
       turn: { status: TURN_STATUS.SETTLED },
       published: PULL_REQUEST_STATE.CLOSED,
     });
@@ -263,7 +284,7 @@ const seedAccount = (userId: string, sharedWorkspace: string) =>
       settledAt: at(6),
     });
     // Started long before the window, its turn failed inside it.
-    const lateFailure = yield* startAgent(userId, own, 45, {
+    const lateFailure = yield* startAgent(userId, onOwn, 45, {
       turn: {
         status: TURN_STATUS.FAILED,
         failure: TURN_FAILURE.SESSION_ENDED,

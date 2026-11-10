@@ -206,6 +206,7 @@ const openAgent = (userId: string, organizationId: string, prompt: string | null
   Effect.gen(function* () {
     const db = yield* Database;
     const [id, conversationId] = [randomUUID(), randomUUID()];
+    const { id: taskId } = yield* createTask(userId, { organizationId, name: "Mac commands" });
     yield* db
       .insert(conversations)
       .values({ id: conversationId, userId, kind: CONVERSATION_KIND.AGENT });
@@ -213,6 +214,7 @@ const openAgent = (userId: string, organizationId: string, prompt: string | null
       id,
       organizationId,
       userId,
+      taskId,
       conversationId,
       prompt,
       model: "anthropic/claude-opus-5.5",

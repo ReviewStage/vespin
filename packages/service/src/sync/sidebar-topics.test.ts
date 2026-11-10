@@ -14,7 +14,6 @@ import {
   getTestDB,
   joinWorkspace,
   leaveWorkspace,
-  openTaskAgent,
   openWorkspace,
 } from "@repo/database/testing";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
@@ -68,13 +67,12 @@ const wakesTheSidebar = <A, E, R>(
 
 it.layer(getTestDB())("what moves an account's sidebar notifies", (it) => {
   it.effect(
-    "a section made, renamed, given a task and an agent, and deleted, and a repository pinned, each notify the account under the write's own transaction",
+    "a section made, renamed, given a task, and deleted, and a repository pinned, each notify the account under the write's own transaction",
     () =>
       Effect.gen(function* () {
         const userId = yield* openAccount;
         const workspaceId = yield* openWorkspace(userId);
         const task = yield* createTask(userId, { organizationId: workspaceId, name: "Invites" });
-        const agentId = yield* openTaskAgent(userId, workspaceId, null);
         const sectionId = randomUUID();
         const account: readonly SyncTopic[] = [[TOPIC.ACCOUNT, userId]];
 
@@ -103,11 +101,6 @@ it.layer(getTestDB())("what moves an account's sidebar notifies", (it) => {
         );
         yield* wakesTheSidebar(
           sectionWrite(userId, { kind: TASK_SECTION_WRITE.PLACE, taskId: task.id, sectionId }),
-          account,
-          userId,
-        );
-        yield* wakesTheSidebar(
-          sectionWrite(userId, { kind: TASK_SECTION_WRITE.PLACE_AGENT, agentId, sectionId }),
           account,
           userId,
         );

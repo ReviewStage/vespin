@@ -15,6 +15,7 @@ import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
 import { getTestDB, openWorkspace } from "../../testing/index.js";
 import { createAgent } from "../agent-store.js";
 import { listBaseDriveRepositories } from "../base-drive-repositories.js";
+import { createTask } from "../task-store.js";
 
 const openAccount = Effect.gen(function* () {
   const db = yield* Database;
@@ -32,9 +33,9 @@ const startedIn = (
   options: { readonly startBranch?: string; readonly githubAccess?: GitHubAccess } = {},
 ) =>
   Effect.gen(function* () {
+    const { id: taskId } = yield* createTask(userId, { organizationId, name: "Client bump" });
     const started = yield* createAgent(userId, {
-      taskId: null,
-      organizationId,
+      taskId,
       descriptionSnapshot: null,
       prompt: "Bump the client",
       idempotencyKey: randomUUID(),

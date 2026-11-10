@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { GITHUB_INSTALLATION_STATUS } from "@repo/database/github-installation-vocabulary";
 import { INTEGRATION_ROW_STATUS } from "@repo/database/integration-vocabulary";
+import { createTask } from "@repo/database/models/task-store";
 import { accountProviderKey } from "@repo/database/schemas/account-provider-key";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
@@ -107,9 +108,11 @@ const endTurn = (
 const openAgent = (userId: string, organizationId: string, createdAt: Date) =>
   Effect.gen(function* () {
     const conversationId = yield* openConversation(userId, CONVERSATION_KIND.AGENT);
+    const { id: taskId } = yield* createTask(userId, { organizationId, name: "Flaky tests" });
     yield* Database.use((db) =>
       db.insert(agentTable).values({
         organizationId,
+        taskId,
         userId,
         conversationId,
         model: "anthropic/claude-test",

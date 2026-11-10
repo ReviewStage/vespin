@@ -29,6 +29,7 @@ import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
   getTestDB,
   joinWorkspace,
+  openAgentOnOwnTask,
   openInboxItem,
   openTaskAgent,
   openWorkspace,
@@ -52,7 +53,12 @@ import { INSTALLED_SKILL_SCOPE } from "@repo/features/installed-skill-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
-import { DESCRIPTION_ACTOR, TASK_RELATION_KIND, TASK_STATUS } from "@repo/features/task-wire";
+import {
+  DESCRIPTION_ACTOR,
+  TASK_RELATION_KIND,
+  TASK_STATUS,
+  UNTITLED_TASK_NAME,
+} from "@repo/features/task-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { EXPERIMENT, WORKSPACE_EXPERIMENT_LIST } from "@repo/settings";
 import { settleJsonSchemaGolden } from "@repo/wire/testing";
@@ -61,6 +67,7 @@ import { Clock, DateTime, Effect, Option, Result, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { readWorkspaceMemories, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
+import { START_AGENT_REFUSAL } from "../agents/agent-tools.js";
 import { recordMemberDescriptionNotes } from "../agents/coder-host/description-edit.js";
 import { EXPERIMENT_OFF_REFUSAL } from "../agents/workspace-experiment-on.js";
 import { DESKTOP_OAUTH_CLIENT } from "../auth/oauth-clients.js";
@@ -808,7 +815,7 @@ it.effect(
       const agentId = yield* Effect.gen(function* () {
         const own = yield* openWorkspace(member.userId);
         yield* descriptionsIn(own, member.userId, true);
-        return yield* openTaskAgent(member.userId, own, null);
+        return yield* openAgentOnOwnTask(member.userId, own);
       }).pipe(Effect.provide(services));
       const token = yield* Effect.promise(() =>
         mintedToken(auth, member.cookie, {
@@ -1202,6 +1209,48 @@ it.effect(
       );
     }),
 );
+it.layer(getTestDB())("a member's start_agent on no task", (it) => {
+  it.effect(
+    "starts the agent on a task made for it, untitled for the agent's title to name, assigned to the member, in progress with a blank description, in the repository named, and refuses a branch with no repository",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { owner, mcpFetch } = yield* openTask({ agentSessions });
+        const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+        const call = (args: Record<string, unknown>) =>
+          Effect.promise(async () =>
+            decodeAnswer(
+              await client.callTool({ name: MEMBER_MCP_TOOL.START_AGENT, arguments: args }),
+            ),
+          );
+        const prompt = "Sweep the stale invitations.";
+        const started = yield* call({ prompt, repository: RELAY_FULL_NAME });
+        const bare = yield* call({ prompt, repository: null, branch: "release" });
+        yield* Effect.promise(() => client.close());
+
+        assert.notEqual(started.isError, true, started.content[0].text);
+        const agentId: unknown = JSON.parse(started.content[0].text).agent?.id;
+        assert.ok(typeof agentId === "string", started.content[0].text);
+        const agent = Option.getOrThrow(yield* readAgent(owner, agentId));
+        assert.ok(agent.prompt?.includes(prompt), "the prompt is handed to the agent");
+        const made = Option.getOrThrow(yield* readTask(owner, agent.taskId));
+        assert.deepEqual(
+          [
+            made.task.name,
+            made.task.assignee?.userId,
+            made.task.status,
+            made.task.repository,
+            made.text,
+          ],
+          [UNTITLED_TASK_NAME, owner, TASK_STATUS.IN_PROGRESS, RELAY_FULL_NAME, ""],
+        );
+        assert.ok(
+          bare.content[0].text.includes(START_AGENT_REFUSAL.BRANCH_NO_REPOSITORY),
+          bare.content[0].text,
+        );
+      }),
+  );
+});
 
 it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
   it.effect(
