@@ -1464,6 +1464,35 @@ it.effect(
     }),
 );
 
+it.effect(
+  "install_skill refuses a GitHub install without the commit its preview pinned, before reading the source",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch } = yield* standing;
+      const member = yield* Effect.promise(() => signUp(auth));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, member.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const answer = decodeAnswer(
+        yield* Effect.promise(() =>
+          client.callTool({
+            name: MEMBER_MCP_TOOL.INSTALL_SKILL,
+            arguments: { source: "anthropics/skills", scope: "personal", skills: ["pdf"] },
+          }),
+        ),
+      );
+      yield* Effect.promise(() => client.close());
+
+      assert.equal(answer.isError, true);
+      assert.match(answer.content[0].text, /call it first/u);
+    }),
+);
+
 it.effect("the metadata names the resource, the auth service, the scopes, and the header", () =>
   Effect.gen(function* () {
     const { fetch } = yield* standing;

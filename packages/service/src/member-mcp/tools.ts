@@ -278,6 +278,7 @@ import {
   readSkill,
   removeSkill,
 } from "../installed-skills/installed-skills.js";
+import { parseSkillPaste } from "../installed-skills/skill-paste.js";
 import type { PageLinks } from "../pages/page-links.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
 import {
@@ -3172,6 +3173,10 @@ const SKILL_TOOL_REFUSAL = {
     `${MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL} listed them; for a skill's text, give a name and ` +
     "a summary where its frontmatter declares none; and a workspace skill is never " +
     "installed in the member's personal workspace, where scope personal is the one there is.",
+  UNPINNED:
+    `Not run: a GitHub install takes the commit sha ${MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL} ` +
+    "answered, so what installs is what the member was shown; call it first, show the member " +
+    "what it lists, and pass its sha.",
   UNSUPPORTED:
     "Not run: that is neither a GitHub repository, a link to one of its folders, an `npx " +
     "skills add` line naming one, nor a skill's text; skills install from GitHub alone.",
@@ -3397,14 +3402,18 @@ const INSTALL_SKILL_TOOL = memberMcpTool({
   input: InstallSkillInputSchema,
   annotations: ADDITIVE,
   run: ({ workspace, source, ...asked }) =>
-    skillsInWorkspace(workspace, (userId, workspaceId) =>
-      skillAnswer(
-        Effect.map(installSkills(userId, { ...asked, text: source, workspaceId }), (installed) => ({
-          skills: installed.skills,
-        })),
-        ABOUT_WORKSPACE,
-      ),
-    ),
+    // Note that a GitHub install takes the commit its preview pinned, as Add skill's always does, so what installs is what the member was shown.
+    parseSkillPaste(source).kind === SKILL_PASTE_KIND.SOURCE && asked.sha === undefined
+      ? Effect.succeed(agentToolRejected(SKILL_TOOL_REFUSAL.UNPINNED))
+      : skillsInWorkspace(workspace, (userId, workspaceId) =>
+          skillAnswer(
+            Effect.map(
+              installSkills(userId, { ...asked, text: source, workspaceId }),
+              (installed) => ({ skills: installed.skills }),
+            ),
+            ABOUT_WORKSPACE,
+          ),
+        ),
 });
 
 const REMOVE_INSTALLED_SKILL_TOOL = memberMcpTool({
