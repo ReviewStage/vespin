@@ -433,7 +433,11 @@ export function NewTaskComposer({
     const nextTree = treeRelationOf(next);
     if (nextTree !== undefined) setChosen(nextTree.task.repository);
   };
+  // The workspace the card stands in now, whose draft a Put back pressed later writes to.
+  const workspaceNow = useRef(workspaceId);
+  workspaceNow.current = workspaceId;
   // A refused card opened again puts the words and files it was pressed with back ahead of what the box holds since.
+  // Note that the draft is found as the write lands, because the workspaces may be read after the card opened.
   useLayoutEffect(() => {
     if (refused === undefined || PUT_BACK.has(refused)) return;
     PUT_BACK.add(refused);
@@ -442,7 +446,7 @@ export function NewTaskComposer({
       went: { text: kept, attachments: press.ask.agent.attachments },
       most: AGENT_BOUNDS.MAX_MESSAGE_CHARS,
       update: (next) =>
-        draft.update((now) => {
+        writer.update(newTaskPlace(workspaceNow.current, purpose), (now) => {
           const joined = next(now);
           return joined === undefined ? now : { ...now, ...joined };
         }),
