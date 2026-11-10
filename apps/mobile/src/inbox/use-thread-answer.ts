@@ -19,12 +19,21 @@ import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-
 import { missingWords } from "@repo/features/inbox-ask-words";
 import {
   EMPTY_INBOX_DRAFT,
+  fieldValueOf,
   type InboxDraft,
   inboxMissing,
   inboxThreadSend,
 } from "@repo/features/inbox-draft";
-import { awaitsNod, type InboxListed } from "@repo/features/inbox-list-model";
-import { INBOX_STATUS, type InboxItem, type InboxStatus } from "@repo/features/inbox-wire";
+import { awaitsNod, type InboxListed, knownAsk } from "@repo/features/inbox-list-model";
+import {
+  INBOX_ASK,
+  INBOX_FIELD,
+  INBOX_STATUS,
+  type InboxItem,
+  type InboxMessage,
+  type InboxStatus,
+  openAskOf,
+} from "@repo/features/inbox-wire";
 import {
   INBOX_SENDING,
   type InboxReader,
@@ -36,7 +45,7 @@ import { selectAccount } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { NotificationFeedbackType, notificationAsync } from "expo-haptics";
-import { useCallback, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 
@@ -64,6 +73,21 @@ const NOT_RESOLVED = {
   [INBOX_STATUS.CLOSED]: "This item was already resolved.",
 } as const satisfies Record<InboxStatus, string>;
 
+/** The label of the open ask's first number field whose words read as no number, which the box holds the answer back for; none where every number reads. */
+function unreadableNumber(thread: readonly InboxMessage[], draft: InboxDraft): string | undefined {
+  const ask = openAskOf(thread)?.ask;
+  if (ask === undefined || !knownAsk(ask) || ask.type !== INBOX_ASK.ANSWER) return undefined;
+  return ask.fields?.find(
+    (field) =>
+      field.type === INBOX_FIELD.NUMBER && typeof fieldValueOf(draft, field.label) === "string",
+  )?.label;
+}
+
+/** What the box says of a number field whose words read as no number. */
+function unreadableWords(label: string): string {
+  return `Write a number in ${label}.`;
+}
+
 /** A send the act port answered with a refusal, carrying the words it says. */
 class SendRefused extends Error {}
 
@@ -86,6 +110,31 @@ function heldNow(): ReadonlyMap<string, ThreadHeld> {
 function hold(itemId: string, change: (was: ThreadHeld) => ThreadHeld): void {
   held = new Map(held).set(itemId, change(held.get(itemId) ?? NOTHING_HELD));
   for (const listener of listeners) listener();
+}
+
+/**
+ * The store with each close a read carries let go: one on a thread the read
+ * holds settled. Note that a close the host took may only be queued, and the
+ * host draws it over its own reads until it goes, and takes it back where
+ * its retry is refused, so the thread reads open again rather than stand
+ * closed by a send the app no longer has out.
+ */
+function letGoCarriedCloses(items: readonly InboxItem[]): void {
+  const carried = items.filter(
+    (item) =>
+      item.status !== INBOX_STATUS.OPEN &&
+      [...(held.get(item.id)?.sending.values() ?? [])].some(
+        (sending) => sending.kind === INBOX_SENDING.CLOSE,
+      ),
+  );
+  for (const item of carried) {
+    hold(item.id, (was) => ({
+      ...was,
+      sending: new Map(
+        [...was.sending].filter(([, sending]) => sending.kind !== INBOX_SENDING.CLOSE),
+      ),
+    }));
+  }
 }
 
 /** Buzzes the phone as the system does for an outcome: a send taken, a send refused, or one that lacks something. */
@@ -117,6 +166,7 @@ export function useSendsDrawn<Group extends { readonly items: readonly InboxItem
 ): readonly Group[] {
   const store = useSyncExternalStore(subscribe, heldNow);
   const reader = useReader();
+  useEffect(() => letGoCarriedCloses(groups.flatMap((group) => group.items)), [groups]);
   return useMemo(() => {
     if (store.size === 0) return groups;
     return groups.map((group) => {
@@ -174,6 +224,12 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
   };
   const send = (pressed?: InboxDraft) => {
     const sending = pressed ?? draft;
+    const unreadable = unreadableNumber(thread, sending);
+    if (unreadable !== undefined) {
+      hold(itemId, (was) => ({ ...was, note: unreadableWords(unreadable) }));
+      buzz(NotificationFeedbackType.Warning);
+      return;
+    }
     const sent = inboxThreadSend(thread, sending);
     if (sent === undefined) {
       const missing = inboxMissing(thread, sending);
@@ -252,7 +308,8 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
     draft,
     onDraft,
     note,
-    answerReady: inboxThreadSend(thread, draft) !== undefined,
+    answerReady:
+      unreadableNumber(thread, draft) === undefined && inboxThreadSend(thread, draft) !== undefined,
     send,
     resolve,
   };

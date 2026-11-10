@@ -74,8 +74,14 @@ appId: dev.vespin.ios
 - tapOn: "Email the sender when an invite is accepted.*"
 # The number comes last, since the decimal pad has no key that puts it away:
 # the composer rides above it, so Send is pressed with the pad still up.
+# Words that read as no number hold the answer back, rather than send it
+# without them.
 - tapOn:
     id: "answer-field-Invites a member may send a day"
+- inputText: "."
+- tapOn: "Send"
+- assertVisible: "Write a number in Invites a member may send a day."
+- eraseText: 1
 - inputText: "20"
 - waitForAnimationToEnd
 - takeScreenshot: answer-fields-filled

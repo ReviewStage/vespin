@@ -38,7 +38,14 @@ const FIELD_KIND = {
   [INBOX_FIELD.BOOLEAN]: ANSWER_FIELD.BOOLEAN,
 } as const satisfies Record<(typeof INBOX_FIELD)[keyof typeof INBOX_FIELD], AnswerFieldKind>;
 
-/** What a field typed as `kind` holds once its words are `typed`: words, a number where they read as one, or nothing where they are empty. */
+/**
+ * What a field typed as `kind` holds once its words are `typed`: words, a
+ * number where they read as one, or nothing where they are empty. Note that
+ * a number's comma is read as its decimal point, since the decimal pad types
+ * one in many regions, and words that read as no number are kept as typed,
+ * so the box holds the answer back (`use-thread-answer.ts`) rather than send
+ * it without them.
+ */
 function typedValue(
   kind: AnswerFieldKind,
   typed: string | boolean,
@@ -46,8 +53,8 @@ function typedValue(
   if (typeof typed === "boolean") return typed;
   if (typed.trim() === "") return undefined;
   if (kind !== ANSWER_FIELD.NUMBER) return typed;
-  const number = Number(typed.trim());
-  return Number.isFinite(number) ? number : undefined;
+  const number = Number(typed.trim().replace(",", "."));
+  return Number.isFinite(number) ? number : typed;
 }
 
 /** The thread's open ask, where it stands open and this build knows it; none otherwise. */
