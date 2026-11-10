@@ -244,7 +244,8 @@ function spellsGlyph(text: string, name: string): boolean {
       ...text.matchAll(new RegExp(`\\b${GLYPH_REGISTRY}\\s+as\\s+(\\w+)`, "gu")),
     ].map((match) => match[1] ?? GLYPH_REGISTRY);
     const receivers = [GLYPH_REGISTRY, ...aliases].join("|");
-    return new RegExp(`\\b(?:${receivers})\\.${key}\\b`, "u").test(text);
+    // Note that the read may be spaced or optional (`GLYPH .TASK`, `GLYPH?.TASK`), as the rule reads it off the syntax tree whatever its spelling.
+    return new RegExp(`\\b(?:${receivers})\\s*\\??\\.\\s*${key}\\b`, "u").test(text);
   }
   return new RegExp(`\\b(?:Lucide)?${bareGlyph(name)}(?:Icon)?\\b`, "u").test(text);
 }

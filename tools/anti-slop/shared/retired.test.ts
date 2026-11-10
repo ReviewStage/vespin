@@ -100,6 +100,12 @@ describe("the suppression check", () => {
     ).toBe(true);
     expect(namesRetired('import { PlusIcon } from "@repo/ui/icons";')).toBe(false);
     // A word holding a glyph's name, or another table's member of a concept's key, spells neither.
+    expect(namesRetired('import { GLYPH } from "@repo/ui/icons"; GLYPH .RETIRED_EXAMPLE;')).toBe(
+      true,
+    );
+    expect(namesRetired('import { GLYPH } from "@repo/ui/icons"; GLYPH?.RETIRED_EXAMPLE;')).toBe(
+      true,
+    );
     expect(namesRetired("const RetiredExamples = SHOT.RETIRED_EXAMPLE;")).toBe(false);
     expect(
       namesRetired(
