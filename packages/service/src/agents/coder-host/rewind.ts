@@ -1,5 +1,6 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { type Agent, readAgentRouting } from "@repo/database/models/agent-store";
+import { cancelAgentWakeup } from "@repo/database/models/agent-wakeups";
 import {
   REWIND_REFUSAL,
   readRewindable,
@@ -42,6 +43,8 @@ const stoppedForRewind = /* @__PURE__ */ Effect.fnUntraced(function* (
   agent: Agent,
 ): Effect.fn.Return<void, HostedRefusal, DatabaseServices> {
   const target = { userId: agent.userId, conversationId: agent.conversationId };
+  // A wakeup the agent booked belongs to the work the rewind drops.
+  yield* hostedStoreOrUnavailable(cancelAgentWakeup(agent.id));
   const sessionId = yield* hostedStoreOrUnavailable(recordedRuntimeSession(target));
   if (sessionId === undefined) return;
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(agent.userId, agent.id));

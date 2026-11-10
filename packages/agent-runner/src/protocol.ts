@@ -459,6 +459,12 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   effort: Schema.optionalKey(EffortSchema),
   /** Whether Claude Code's own fast mode is on, for an agent on a model's fast version. */
   fast: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Whether the CLI keeps the main conversation's prompt cache for an hour
+   * rather than five minutes (`CLAUDE_CODE_PROMPT_CACHE_TTL`), for an agent
+   * of the half the service runs it on; a runner from before this key ignores it.
+   */
+  promptCacheHour: Schema.optionalKey(Schema.Boolean),
   /** Our coder instructions, appended to Claude Code's own system prompt. */
   append: Schema.String,
   /** The CLI's session id to resume, where this launch continues one. */
@@ -584,12 +590,17 @@ const UuidSchema = Schema.String.check(
  * A message for the session, in the Messages API's own block shapes. `uuid`
  * is the service's id for the message, handed to the SDK as the prompt's own, so
  * the ACCEPTED event and the `result` that answers it name it; the runner
- * mints one where a line names none.
+ * mints one where a line names none. `resent` marks a message handed again
+ * to a session that already holds it, as a turn its plan's limit cut short
+ * is on the next payer: Claude Code drops a resumed session's prompt under
+ * a uuid the session holds, answering nothing, so the runner hands the SDK
+ * the prompt under a uuid of its own, and ACCEPTED still names the service's.
  */
 const MessageLineSchema = Schema.Struct({
   type: Schema.Literal(INPUT_LINE.MESSAGE),
   uuid: Schema.optionalKey(UuidSchema),
   content: Schema.Array(ContentBlockSchema),
+  resent: Schema.optionalKey(Schema.Boolean),
 });
 /**
  * Stop the running turn. `launch` names the launch the stop is for by its

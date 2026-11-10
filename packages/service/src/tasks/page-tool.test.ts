@@ -116,7 +116,7 @@ const refused = (reason: string) => ({ status: ACTION_RESULT_STATUS.REJECTED, re
 
 it.layer(getTestDB())("show_page", (it) => {
   it.effect(
-    "a file makes a page, named again it takes the next version, each kept as shown by who showed it, and the answer carries the mention the page is named by and never the HTML",
+    "a file makes a page, named again it takes the next version, each kept as shown by who showed it, and the answer carries the task it stands on, which its link is built from, and never the HTML",
     () =>
       Effect.gen(function* () {
         const { sandbox } = sandboxWith({
@@ -147,8 +147,7 @@ it.layer(getTestDB())("show_page", (it) => {
           page: {
             id: page.id,
             version: 1,
-            // The task is its workspace's first, which its link names by its number.
-            mention: `[@Invite funnel](https://vespin.dev/workspace-${task.workspaceId}/task/1/page/${page.id})`,
+            taskId: task.taskId,
           },
         });
         assert.deepEqual(second, { id: page.id, version: 2 });
@@ -254,7 +253,7 @@ it.layer(getTestDB())("show_page", (it) => {
           page: {
             id: page.id,
             version: 1,
-            mention: `[@Funnel](https://vespin.dev/workspace-${task.workspaceId}/agent/${agentId}/page/${page.id})`,
+            agentId,
           },
         });
         assert.deepEqual(again, { id: page.id, version: 2 });

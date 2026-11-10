@@ -28,6 +28,26 @@
     --ui-settings-row-drop-inset: var(--ui-settings-row-words-inset);
   }
 
+  /* A meter under a row's words (`SettingsRowMeter`): its gap above and its
+     thin bar, which hang below the words into room the row's line keeps
+     for them, so the mark and the end stay centered on the name and its
+     state as on a row with none, and the row's padding below the bar
+     matches its padding above the name. */
+  .ui-settings-row {
+    --ui-settings-row-meter-block: calc(var(--ui-space-8) + var(--ui-space-2));
+  }
+
+  .ui-settings-row-line:has(.ui-settings-row-meter) {
+    padding-block-end: var(--ui-settings-row-meter-block);
+  }
+
+  /* Note that it is kept shorter than a state line usually runs, so it
+     underlines the words rather than standing past them. */
+  .ui-settings-row-meter {
+    max-inline-size: calc(var(--ui-space-96) + var(--ui-space-32));
+    margin-block-end: calc(-1 * var(--ui-settings-row-meter-block));
+  }
+
   /* Note that the gaps, the subject's share of the line, and the title's
      wrap stay here rather than in utilities, because the rules below undo
      them, and a rule in this layer cannot undo a utility. The line holds the

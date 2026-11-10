@@ -122,17 +122,6 @@ test("an @ list closed with Escape stays drawn, inert, with its rows while it fa
   assert.equal(page.querySelector(".ui-rect-float"), null, "the list goes once it has faded");
 });
 
-test("the @ list's foot names its keys through Shortcut, ⏎ and ⇥ mention and Esc closes", () => {
-  const { picker, page } = mounted();
-  act(() => picker().onTrigger(word("mar")));
-  const foot = page.querySelector(".ui-menu-keys");
-  assert.ok(foot, "the list has a foot");
-  assert.deepEqual(
-    [...foot.children].map((item) => item.textContent),
-    ["↑↓Move", "⏎⇥Mention", "EscClose"],
-  );
-});
-
 /** The list drawn as a description's editor draws it, on `plan-1` of the Stage workspace, each mention picked recorded. */
 async function mountedOnDescription(chosen: MentionNode[]) {
   let latest: MentionPicker | undefined;

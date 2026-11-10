@@ -18,7 +18,9 @@
  * its environment, which may carry credentials. When a preview wakes the
  * sandbox, the relay is started from that record instead: it runs the
  * command again where nothing listens on the port, and answers 503 with
- * `STARTING_HEADER` until the server takes connections.
+ * `STARTING_HEADER` until the server takes connections. A server that stops
+ * while the sandbox runs is never started again: the relay answers
+ * `NOT_RUNNING_HEADER` for it instead.
  */
 
 import type { CommandAsk, DetachedCommandAsk } from "@repo/sandbox";
@@ -37,8 +39,11 @@ const RELAY_MODE = { RECORD: "record", RESTORE: "restore" } as const;
 
 type RelayMode = (typeof RELAY_MODE)[keyof typeof RELAY_MODE];
 
-/** The response header the relay answers with while the port's server is still starting. */
+/** The response header the relay answers with while a server it started again after a wake is still coming up. */
 export const STARTING_HEADER = "x-vespin-preview-starting";
+
+/** The response header the relay answers with where nothing listens on the shared port and it started nothing: the server stopped while the sandbox ran. */
+export const NOT_RUNNING_HEADER = "x-vespin-preview-not-running";
 
 /** The relay as Node runs it, its arguments the marker, the mode, the record's path, and, when recording, the port. */
 const RELAY_SOURCE = `"use strict";
@@ -101,7 +106,8 @@ const restore = (kept) => {
   });
 };
 let port = Number(asked);
-if (mode === "${RELAY_MODE.RECORD}") record(port);
+const restoring = mode !== "${RELAY_MODE.RECORD}";
+if (!restoring) record(port);
 else {
   const kept = JSON.parse(read(recordPath) || "{}");
   port = kept.port;
@@ -114,7 +120,9 @@ const server = http.createServer((req, res) => {
     (answer) => { res.writeHead(answer.statusCode, answer.rawHeaders); answer.pipe(res); },
   );
   upstream.on("error", (error) => {
-    if (!res.headersSent) res.writeHead(error.code === "ECONNREFUSED" ? 503 : 502, error.code === "ECONNREFUSED" ? { "${STARTING_HEADER}": "1" } : {});
+    // Note that only a server this relay started again is coming up; one that stopped under a running share is not.
+    const down = error.code === "ECONNREFUSED";
+    if (!res.headersSent) res.writeHead(down && restoring ? 503 : 502, down ? { [restoring ? "${STARTING_HEADER}" : "${NOT_RUNNING_HEADER}"]: "1" } : {});
     res.end();
   });
   req.pipe(upstream);

@@ -82,6 +82,7 @@ import {
   MoreButton,
   moreLabel,
   OneLine,
+  OutsideLink,
   PAGE_FRAME,
   PaneBar,
   SCROLL_FADE,
@@ -99,10 +100,8 @@ import {
   type StatusTone,
   TEXT_ELEMENT,
   TEXT_FONT,
-  TEXT_LINK_LOOK,
   TEXT_VARIANT,
   Text,
-  TextLink,
   TIME_LOOK,
   Time,
   Tooltip,
@@ -1517,14 +1516,9 @@ function PendingDraft({
 function OnGitHubLink({ href, children }: { href: string; children: string }): React.JSX.Element {
   const openLink = useOpenLink();
   return (
-    <TextLink
-      href={href}
-      look={TEXT_LINK_LOOK.UNDERLINED}
-      external
-      onClick={linkPressOf(openLink, href)}
-    >
+    <OutsideLink href={href} open={openLink}>
       {children}
-    </TextLink>
+    </OutsideLink>
   );
 }
 

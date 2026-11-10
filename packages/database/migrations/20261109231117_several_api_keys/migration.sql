@@ -1,0 +1,1 @@
+DROP INDEX "account_provider_key_api_key";

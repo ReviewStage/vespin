@@ -1,11 +1,12 @@
 import {
+  AGENT_FAILURE,
   AGENT_MACHINE,
   AGENT_STATUS,
+  type AgentFailure,
   type AgentStatus,
   type AgentSummary,
   type ListedAgent,
   PULL_REQUEST_STATE,
-  type TasklessAgent,
 } from "./agent-wire.js";
 import type { TaskAgentsSummary, TaskPullRequestLine, TaskPullRequests } from "./task-wire.js";
 
@@ -29,8 +30,7 @@ import type { TaskAgentsSummary, TaskPullRequestLine, TaskPullRequests } from ".
  *
  * Note that a thread waiting on the reader is no status here, because the
  * Tasks page's row and card say how many wait in a count of its own,
- * standing before this status (`@repo/panel`'s `WaitingCount`), and a
- * sidebar row's one mark puts it first (`@repo/ui`'s `RowEndMark`).
+ * standing before this status (`@repo/panel`'s `WaitingCount`).
  */
 
 /** Where a task's agents stand, most pressing first. */
@@ -89,7 +89,8 @@ function markedPullRequest<PullRequest extends Pick<TaskPullRequestLine, "state"
  * as it started where it ran none. Note that `latestStart` counts the
  * archived agents too, because archiving the agent that took over from a
  * failure must not bring the failure back. The held and live reads both
- * count `TaskAgentsSummary.failed` here, so the two agree.
+ * count `TaskAgentsSummary.failed` here, so the two agree. An agent its
+ * plan's usage limit stopped is no failure to count, since its user expects it.
  */
 export function standingFailures(
   agents: readonly {
@@ -97,12 +98,16 @@ export function standingFailures(
     readonly status: AgentStatus;
     /** When its last turn settled; none where it ran none. */
     readonly at: number | undefined;
+    /** Why its newest turn failed, where it did. */
+    readonly failure: AgentFailure | undefined;
   }[],
   latestStart: number,
 ): number {
   return agents.filter(
-    ({ createdAt, status, at }) =>
-      status === AGENT_STATUS.FAILED && (at ?? createdAt) >= latestStart,
+    ({ createdAt, status, at, failure }) =>
+      status === AGENT_STATUS.FAILED &&
+      failure !== AGENT_FAILURE.PLAN_LIMIT &&
+      (at ?? createdAt) >= latestStart,
   ).length;
 }
 
@@ -180,20 +185,6 @@ export function taskAgentsStatus(
   return pullRequest === undefined
     ? NO_STATUS
     : { kind: TASK_AGENTS_STATUS.PULL_REQUEST, pullRequest };
-}
-
-/**
- * The one status an agent with no task wears at its row's end: its failure,
- * else the pull request it opened. Note that it never says the agent works,
- * because its row's leading glyph gives way to the working mark instead.
- */
-export function tasklessAgentStatus(
-  agent: Pick<TasklessAgent, "status" | "pullRequest">,
-): TaskAgentsStatus {
-  if (agent.status === AGENT_STATUS.FAILED) return { kind: TASK_AGENTS_STATUS.FAILED };
-  return agent.pullRequest === undefined
-    ? NO_STATUS
-    : { kind: TASK_AGENTS_STATUS.PULL_REQUEST, pullRequest: agent.pullRequest };
 }
 
 /** The statuses an agent may still write under, which is when it can be stopped. */

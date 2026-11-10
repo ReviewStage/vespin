@@ -1,4 +1,6 @@
 import {
+  BUTTON_VARIANT,
+  Button,
   MARK_PROVIDER,
   MoreButton,
   PROGRESS_TONE,
@@ -8,6 +10,7 @@ import {
   SETTINGS_ROW_STATE,
   SettingsOrderedRows,
   SettingsRow,
+  SettingsRowMark,
   SettingsRowMeter,
   SettingsRowStateLine,
   SettingsSection,
@@ -17,10 +20,11 @@ import { CatalogSection } from "../section";
 
 /**
  * settings-ordered-rows.tsx -- a run of settings rows the reader orders, as
- * the account's Codex plans and its API key are tried top to bottom: each led
- * by its grip, a plan's usage under its name as a meter (`SettingsRowMeter`),
- * full in the attention ink at its limit; and a run of one, which draws no
- * grip.
+ * the account's Codex plans and its API key are tried top to bottom, under
+ * the card's header row: each led by its grip in the gutter the card keeps,
+ * so the header's mark and every row's stand in one column, a plan's usage
+ * under its name as a thin meter (`SettingsRowMeter`), full in the attention
+ * ink at its limit; and a run of one, which draws no grip.
  */
 
 interface Plan {
@@ -46,7 +50,7 @@ const PLANS: readonly Plan[] = [
     meter: { value: 42, tone: PROGRESS_TONE.WORKING },
   },
   { id: "side", name: "ana@sideproject.example", state: "Ready" },
-  { id: "key", name: "OpenAI", state: "API key · sk-proj-…a91F" },
+  { id: "key", name: "API key · sk-proj-…a91F", state: "Ready" },
 ];
 
 /** One plan's row, as Settings › Agents draws it. */
@@ -70,11 +74,28 @@ function PlanRow({ name, state, limited = false, meter }: Plan): React.JSX.Eleme
   );
 }
 
+/** The card's header row, as Settings › Agents opens a harness's card. */
+function HeaderRow(): React.JSX.Element {
+  return (
+    <SettingsRow
+      leading={
+        <SettingsRowMark>
+          <ProviderMark provider={MARK_PROVIDER.CHATGPT} size={PROVIDER_MARK_SIZE.ROW} />
+        </SettingsRowMark>
+      }
+      label="Codex"
+    >
+      {() => <Button variant={BUTTON_VARIANT.OUTLINE}>Add</Button>}
+    </SettingsRow>
+  );
+}
+
 function SettingsOrderedRowsExample(): React.JSX.Element {
   return (
     <>
       <CatalogSection id="settings-ordered-rows" title="Several rows, each dragged by its grip">
         <SettingsSection title="Codex">
+          <HeaderRow />
           <SettingsOrderedRows
             label="Codex"
             onPointerDown={() => undefined}
@@ -84,6 +105,7 @@ function SettingsOrderedRowsExample(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection id="settings-ordered-rows-one" title="One row, with nowhere to go">
         <SettingsSection title="Codex">
+          <HeaderRow />
           <SettingsOrderedRows
             label="Codex"
             onPointerDown={() => undefined}

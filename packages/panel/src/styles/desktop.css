@@ -397,10 +397,10 @@ body,
   margin-top: var(--ui-section-gap);
 }
 
-/* The scope switcher heads the groups its view filters, the sections and the
+/* The Tasks head heads the groups its view filters, the sections and the
    list, so the first of them stands a tight gap under it rather than a
    section's (sidebar-task-view.tsx). */
-.sidebar-scope-zone + .sidebar-group {
+.sidebar-tasks-head + .sidebar-group {
   margin-top: var(--ui-tight-gap);
 }
 
@@ -887,8 +887,8 @@ body,
    docked to-do list, and its composer, each keeping to the document's
    measure in the middle of the column, as they keep to it in a wide side
    panel, so the list's card and the composer's share both edges. The
-   Inbox's pane is laid out the same way, its thread at that measure, and
-   the draft reply docked under it too.
+   Inbox's pane is laid out the same way, its thread at that measure, the
+   box flowing at the thread's end, and what stands docked under it too.
    The thread's log is named by both its classes, so it keeps this inset
    over the one a side panel gives a transcript's log. */
 .desktop-agent,
@@ -906,7 +906,6 @@ body,
 .desktop-agent .draft-fork-dock,
 .desktop-agent .agent-composer,
 .desktop-inbox .conversation-log.inbox-board,
-.desktop-inbox > .inbox-draft-dock,
 .desktop-inbox > .agent-composer {
   padding-inline: max(var(--content-inset), var(--reading-room));
 }
@@ -1687,15 +1686,15 @@ body,
 
 /* The foot stands on one row however narrow the card: the Runs on chip and
    the model chip draw their marks alone at the box's own steps
-   (`agent-composer.tsx`'s `FOLD_WIDTH`), and between them the model chip's
+   (`message-box.tsx`'s `FOLD_WIDTH`), and between them the model chip's
    words give way, cut short, rather than the row wrapping. */
-.new-task-composer .agent-composer-actions {
+.new-task-composer .message-box-actions {
   margin-left: auto;
 }
 
 /* Where the Runs on chip draws its glyph alone, the foot's left, the "+"
    and that glyph, stands whole, so the model chip's words give way first. */
-/* off-scale: 520px, the card under which the Runs on chip draws its glyph alone (`agent-composer.tsx`'s `FOLD_WIDTH.PUBLISHED`) */
+/* off-scale: 520px, the card under which the Runs on chip draws its glyph alone (`message-box.tsx`'s `FOLD_WIDTH.TOOLS`) */
 @container composer (width < 520px) {
   .new-task-composer .ui-composer-foot-tools {
     flex-shrink: 0;
@@ -1722,7 +1721,7 @@ body,
    round Start at the row's end: the model chip's words are what give way, cut short. */
 /* off-scale: 400px, a card under which the box folds its own presses into its ⋯ (composer-foot.css) */
 @container composer (width < 400px) {
-  .new-task-composer .agent-composer-actions .agent-model-chip {
+  .new-task-composer .message-box-actions .agent-model-chip {
     flex-shrink: 1;
   }
 }

@@ -609,6 +609,7 @@
   --spacing-spinner-region: 22px; /* off-scale: a ring alone in a region */
   --spacing-spinner-region-inset: var(--ui-space-24);
   --spacing-progress-height: 3px; /* off-scale: a hairline bar */
+  --spacing-progress-thin-height: var(--ui-space-2);
   --container-progress: 160px; /* off-scale: a meter's length beside a line of words */
   --spacing-toast-gap: var(--ui-space-8);
   --spacing-toast-inset: var(--ui-space-12);

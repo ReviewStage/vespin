@@ -31,7 +31,10 @@
  * Left out, beside the harness's own shell, files, todos, waiting,
  * subagents, skills, and web reads: the retired runtime's `connection_search` and
  * `connection_execute`, since each integration the agent is handed is an
- * MCP server of its own beside ours (`../workspace-mcp/app.ts`).
+ * MCP server of its own beside ours (`../workspace-mcp/app.ts`). Waiting is
+ * the harness's own only where it has a wakeup: `schedule_wakeup` is served
+ * to the harness that has none (`gates.ts`'s `WAKEUP`), and the scheduled
+ * sweep delivers it (`../../maintenance/wakeup-sweep.ts`).
  *
  * Two things the retired runtime's tool files kept in the session's own state are kept
  * otherwise here, since the server keeps no session: a call's id, which the
@@ -145,6 +148,7 @@ import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
 import { OPEN_PULL_REQUEST_TOOL } from "../coder-host/pull-request.js";
 import { sessionsRouter } from "../coder-host/runtime-sessions.js";
 import { SHOW_IMAGE_TOOL } from "../coder-host/show-image.js";
+import { runScheduleWakeup, SCHEDULE_WAKEUP_TOOL } from "../coder-host/wakeup-tool.js";
 import { macCommandNotRun, RUN_ON_MAC_TOOL, runOnMacTool } from "../mac-command.js";
 import {
   runAgentRecall,
@@ -555,6 +559,8 @@ const CATALOG = [
   // The ports of the agent's sandbox, and the one it shares by link.
   portTool(LIST_PORTS_TOOL, runListPorts),
   portTool(SHARE_PORT_TOOL, runSharePort),
+  // A wakeup booked for later, on a harness with no wakeup of its own.
+  agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup, { gate: TOOL_GATE.WAKEUP }),
 ] as const;
 
 /** The name of a tool the catalog serves. */

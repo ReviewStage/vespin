@@ -14,7 +14,6 @@ import {
 import { isSecretFile } from "@repo/features/task-wire";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
-import { writtenPageMention } from "../agents/written-mentions.js";
 import {
   ACTION_RESULT_STATUS,
   type UnparsedWireValue,
@@ -33,9 +32,10 @@ import { logStoreFailure } from "../http/store-failure.js";
  * through the same door its own file tools reach the sandbox by, bounded and
  * never read whole past the bound. Naming a page shown before writes its next version, and naming
  * none makes a new page, so an agent revises a page rather than piling up
- * copies of it. The answer carries the page's id and version, and its
- * mention ready to write (`../agents/written-mentions.ts`), and never the
- * HTML, which the model wrote and need not read again.
+ * copies of it. The answer carries the page's id and version, and the id of
+ * the task or the agent it stands on, which its link is built from
+ * (`../agents/link-rule.ts`), and never the HTML, which the model wrote and
+ * need not read again.
  *
  * Note that the account and what the page stands on are the binding the
  * service built from the conversation, never an argument: the
@@ -143,8 +143,8 @@ export const CODER_SHOW_PAGE_TOOL = {
     `of a page set side by side, those pictures with \`${AGENT_TOOL.SHOW_IMAGE}\` and not the page. ` +
     "Call it again with the `page` it answered to " +
     "replace that page with a new version rather than making another. Answers `accepted` with the " +
-    "page's id, its version, and its mention, the `[@title](link)` to name it by in your words, " +
-    "or `rejected` and why nothing was shown.",
+    "page's id, its version, and the taskId or agentId it stands on, or `rejected` and why " +
+    "nothing was shown.",
   inputSchema: CODER_SHOW_PAGE_INPUT,
 } as const;
 
@@ -217,17 +217,10 @@ function htmlRefusal(html: string): string | undefined {
   return html.length > PAGE_BOUNDS.MAX_HTML_CHARS ? SHOW_PAGE_REFUSAL.TOO_LARGE : undefined;
 }
 
-/**
- * The page's mention as the agent writes it, its title as its name; none
- * where its task's workspace cannot be read just now, since the page was
- * shown all the same.
- */
-const pageMentionOf = (binding: PageToolBinding, pageId: string, title: string) =>
-  writtenPageMention(binding.userId, binding.owner, pageId, title).pipe(
-    Effect.tapError(logStoreFailure),
-    Effect.option,
-    Effect.map((mention) => Option.getOrUndefined(Option.flatten(mention))),
-  );
+/** What a page stands on, as its answer names it: its task's id, or the agent on no task that showed it. */
+function ownerOf(owner: PageOwner): { readonly taskId: string } | { readonly agentId: string } {
+  return owner.kind === PAGE_OWNER.TASK ? { taskId: owner.taskId } : { agentId: owner.agentId };
+}
 
 /** Why a write found nothing to write on: no such page of the owner where one was named, else no owner. */
 function missedRefusal(owner: PageOwner, named: boolean): string {
@@ -264,10 +257,9 @@ export function runShowPage(
       return showPageRejected(missedRefusal(binding.owner, page !== undefined));
     }
     const { id, version } = written.value.value;
-    const mention = yield* pageMentionOf(binding, id, title);
     return {
       status: ACTION_RESULT_STATUS.ACCEPTED,
-      page: { id, version, ...(mention === undefined ? undefined : { mention }) },
+      page: { id, version, ...ownerOf(binding.owner) },
     } satisfies WireRecord;
   });
 }
