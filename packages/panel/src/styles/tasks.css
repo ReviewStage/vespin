@@ -2912,6 +2912,14 @@ svg.lucide {
   padding: var(--ui-tight-gap) var(--ui-item-gap) var(--ui-item-gap) 0;
 }
 
+/* Its foot holds no more than the +, the microphone, Cancel, and Send,
+   which stand whole in a comment's narrowest card, so its box folds none of
+   them into its ⋯ as a narrower agent's box would: it answers no composer
+   width of its own, while keeping its inline-size containment. */
+.comment-field[data-variant="edit"] {
+  container-name: none;
+}
+
 /* One of an agent's log's rows (`agent-tab.tsx`, drawn only near the view
    by `ConversationRows`): a message with what stands with it, a call's
    divider, the lines said ahead of it, a replay's card, a step apart as the
