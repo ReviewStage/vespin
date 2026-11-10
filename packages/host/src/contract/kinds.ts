@@ -761,6 +761,8 @@ export const WINDOW_SURFACE_ACT_KIND = {
   WINDOW_COPY_TEXT: "window.copyText",
   /** A picture put on the clipboard as a PNG, as a copy from Preview puts one. */
   WINDOW_COPY_IMAGE: "window.copyImage",
+  /** Words put on the clipboard as rich text, their HTML and their plain text together, as a copy from Mail puts them. */
+  WINDOW_COPY_RICH: "window.copyRich",
   WINDOW_SAVE_FILE: "window.saveFile",
   /**
    * A downscaled still of part of the asking panel, as ⌃Tab's card previews a
@@ -1061,6 +1063,7 @@ export const PORT_ACT_USE = {
   WINDOW_FOCUS_PANEL: ACT_USE.WRITE,
   WINDOW_COPY_TEXT: ACT_USE.WRITE,
   WINDOW_COPY_IMAGE: ACT_USE.WRITE,
+  WINDOW_COPY_RICH: ACT_USE.WRITE,
   WINDOW_SAVE_FILE: ACT_USE.WRITE,
   WINDOW_CAPTURE: ACT_USE.FETCH,
   WINDOW_UNSAVED_WORK: ACT_USE.WRITE,

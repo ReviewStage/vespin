@@ -1906,7 +1906,7 @@ function TurnFold({
   );
 }
 
-/** One row of a turn: a block drawn by its tab, a run of calls, or a folded lead. */
+/** One row of a turn: a block drawn by its tab, or a run of calls. */
 function TurnRowView<B>({
   row,
   children,
@@ -1923,12 +1923,6 @@ function TurnRowView<B>({
           {row.blocks.map((block, index) => (
             <Fragment key={index}>{children(block)}</Fragment>
           ))}
-        </TurnFold>
-      );
-    case TURN_ROW.FOLDED:
-      return (
-        <TurnFold summary={row.summary} running={false}>
-          <TranscriptRows rows={row.rows}>{children}</TranscriptRows>
         </TurnFold>
       );
   }

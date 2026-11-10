@@ -28,6 +28,8 @@ import { claudeCodeLive } from "./claude-code.js";
 import { EventsUndelivered } from "./events.js";
 import { RunnerFailed } from "./launch.js";
 import {
+  APPROVAL_BY,
+  APPROVAL_DECISION,
   CONNECTION_LOST_DETAIL,
   connectionLostFailure,
   EFFORT,
@@ -35,6 +37,7 @@ import {
   INPUT_LINE,
   INSTALLED_SKILLS,
   type InputLine,
+  PERMISSION_MODE,
   RUNNER_END,
   RUNNER_ENV,
   RUNNER_EVENT,
@@ -52,6 +55,11 @@ import { fakeClaudeCode } from "./testing/fake-claude-code.js";
 import { fakeProbe } from "./testing/fake-probe.js";
 import { ANSWER, type Answer, makeFakeService } from "./testing/fake-service.js";
 import {
+  ASKED_COMMAND,
+  ASKED_STOPPED_TURN,
+  ASKED_THEN_MESSAGE,
+  ASKED_TURN,
+  BASH_ASK,
   CONNECTION_LOST_TURN,
   CONNECTION_LOST_TWICE,
   CREDENTIAL_REFUSED_TURN,
@@ -950,6 +958,176 @@ it.effect("lets a heartbeat Vespin never answers go, and posts the next one an i
   }),
 );
 
+const ASK_CONFIG: RunnerConfig = { ...CONFIG, permissionMode: PERMISSION_MODE.ASK };
+
+/** The ask events the service took, in order. */
+function asks(events: readonly RunnerEvent[]) {
+  return events.flatMap(({ message }) =>
+    "type" in message &&
+    (message.type === RUNNER_EVENT.APPROVAL_REQUESTED ||
+      message.type === RUNNER_EVENT.APPROVAL_RESOLVED)
+      ? [message]
+      : [],
+  );
+}
+
+it.effect.each([
+  {
+    decision: APPROVAL_DECISION.ALLOW,
+    answer: { behavior: "allow", updatedInput: BASH_ASK.input },
+  },
+  {
+    decision: APPROVAL_DECISION.ALLOW_FOR_AGENT,
+    answer: {
+      behavior: "allow",
+      updatedInput: BASH_ASK.input,
+      updatedPermissions: [
+        {
+          type: "addRules",
+          rules: [{ toolName: "Bash", ruleContent: "cat:*" }],
+          behavior: "allow",
+          destination: "session",
+        },
+      ],
+    },
+  },
+  {
+    decision: APPROVAL_DECISION.DENY,
+    answer: { behavior: "deny", message: "The member denied this." },
+  },
+])(
+  "holds a shell command in a mode that asks until the member answers $decision, posting the ask and its answer",
+  ({ decision, answer }) =>
+    Effect.gen(function* () {
+      const service = fakeService([], BASH_ASK.requestId);
+      const { cli, write, run } = yield* launch(ASKED_TURN, service);
+      yield* write(ASK_CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* service.seen;
+      for (let step = 0; step < 50; step += 1) yield* Effect.yieldNow;
+      assert.deepEqual(cli.permissions, [], "the call waits on the member");
+      assert.equal(run.pollUnsafe(), undefined);
+
+      yield* write({ type: INPUT_LINE.APPROVAL, requestId: BASH_ASK.requestId, decision });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      assert.deepEqual(cli.permissions, [answer]);
+      const [requested, resolved, ...more] = asks(service.applied);
+      assert.deepEqual(more, []);
+      assert.deepEqual(resolved, {
+        type: RUNNER_EVENT.APPROVAL_RESOLVED,
+        requestId: BASH_ASK.requestId,
+        decision,
+        by: APPROVAL_BY.MEMBER,
+      });
+      assert.ok(requested?.type === RUNNER_EVENT.APPROVAL_REQUESTED);
+      const { input, ...ask } = requested;
+      assert.deepEqual(ask, {
+        type: RUNNER_EVENT.APPROVAL_REQUESTED,
+        requestId: BASH_ASK.requestId,
+        toolUseId: "toolu_Bash",
+        toolName: "Bash",
+        title: BASH_ASK.title,
+      });
+      // The ask carries the start of a long command, while the CLI is handed it whole.
+      const command = String(input.command);
+      assert.ok(command.length < ASKED_COMMAND.length / 2);
+      assert.ok(ASKED_COMMAND.startsWith(command.slice(0, -1)));
+      assert.equal(input.description, BASH_ASK.input.description);
+    }),
+);
+
+it.effect("denies a call waiting on the member when Vespin's stop withdraws its ask", () =>
+  Effect.gen(function* () {
+    const service = fakeService([], BASH_ASK.requestId);
+    const { cli, write, run } = yield* launch(ASKED_STOPPED_TURN, service);
+    yield* write(ASK_CONFIG);
+    yield* write(FIRST_MESSAGE);
+    yield* service.seen;
+    yield* write({ type: INPUT_LINE.STOP });
+
+    assert.equal(yield* Fiber.join(run), RUNNER_END.STOPPED);
+    assert.equal(cli.interrupts, 1);
+    assert.deepEqual(cli.permissions, [{ behavior: "deny", message: "The member denied this." }]);
+    assert.deepEqual(asks(service.applied)[1], {
+      type: RUNNER_EVENT.APPROVAL_RESOLVED,
+      requestId: BASH_ASK.requestId,
+      decision: APPROVAL_DECISION.DENY,
+      by: APPROVAL_BY.ABORTED,
+    });
+    assert.deepEqual(kinds(service.applied).slice(-4), [
+      RUNNER_EVENT.APPROVAL_REQUESTED,
+      RUNNER_EVENT.APPROVAL_RESOLVED,
+      "result/error_during_execution",
+      RUNNER_EVENT.END,
+    ]);
+  }),
+);
+
+it.effect(
+  "denies a call waiting on the member with the words of a message they send meanwhile, then hands the CLI the message",
+  () =>
+    Effect.gen(function* () {
+      const words = "Use the repository's own script instead.";
+      const service = fakeService([], BASH_ASK.requestId);
+      const { cli, write, run } = yield* launch(ASKED_THEN_MESSAGE, service);
+      yield* write(ASK_CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* service.seen;
+      yield* write({ type: INPUT_LINE.MESSAGE, content: [{ type: "text", text: words }] });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      assert.deepEqual(cli.permissions, [{ behavior: "deny", message: words }]);
+      assert.deepEqual(cli.prompts[1]?.message.content, [{ type: "text", text: words }]);
+      assert.equal(cli.prompts[1]?.priority, "next");
+      assert.deepEqual(asks(service.applied)[1], {
+        type: RUNNER_EVENT.APPROVAL_RESOLVED,
+        requestId: BASH_ASK.requestId,
+        decision: APPROVAL_DECISION.DENY,
+        by: APPROVAL_BY.MESSAGE,
+      });
+      // The ask is resolved before the message that denied it is taken.
+      const taken = service.applied.flatMap(({ message }) =>
+        "type" in message &&
+        (message.type === RUNNER_EVENT.ACCEPTED || message.type === RUNNER_EVENT.APPROVAL_RESOLVED)
+          ? [message.type]
+          : [],
+      );
+      assert.deepEqual(taken, [
+        RUNNER_EVENT.ACCEPTED,
+        RUNNER_EVENT.APPROVAL_RESOLVED,
+        RUNNER_EVENT.ACCEPTED,
+      ]);
+    }),
+);
+
+it.effect.each([
+  { mode: PERMISSION_MODE.FULL_ACCESS, cliMode: "bypassPermissions", asking: false },
+  { mode: PERMISSION_MODE.ASK, cliMode: "default", asking: true },
+  { mode: PERMISSION_MODE.AUTO, cliMode: "auto", asking: true },
+])(
+  "starts the CLI in $cliMode for $mode, asking the member only where the mode does, and never of a read or an MCP tool",
+  ({ mode, cliMode, asking }) =>
+    Effect.gen(function* () {
+      const { cli, write, run } = yield* launch(SHORT_TURN, fakeService());
+      yield* write({ ...CONFIG, permissionMode: mode });
+      yield* write(FIRST_MESSAGE);
+      yield* Fiber.join(run);
+
+      const options = cli.options;
+      assert.ok(options);
+      assert.equal(options.permissionMode, cliMode);
+      // Under full access nothing could call it.
+      assert.equal(options.canUseTool !== undefined, asking);
+      for (const unasked of ["Read", "WebFetch", "mcp__workspace", "mcp__linear"]) {
+        assert.equal(options.allowedTools?.includes(unasked), asking, unasked);
+      }
+      for (const asked of ["Bash", "Edit", "Write", "NotebookEdit"]) {
+        assert.ok(!options.allowedTools?.includes(asked), asked);
+      }
+    }),
+);
+
 it.effect("interrupts a turn a wakeup started when Vespin stops it", () =>
   Effect.gen(function* () {
     const service = fakeService([], STOPPED_COMMAND);
@@ -1332,6 +1510,20 @@ it.effect(
         undefined,
       ]);
     }),
+);
+
+it.effect("denies the worker only the tools of ours the config names, and keeps it the rest", () =>
+  Effect.gen(function* () {
+    const service = fakeService();
+    const { cli, write, run } = yield* launch(SHORT_TURN, service);
+    yield* write({ ...CONFIG, workerDenied: ["post_thread"] });
+    yield* write(FIRST_MESSAGE);
+    yield* Fiber.join(run);
+
+    const denied = cli.options?.agents?.worker?.disallowedTools;
+    assert.ok(denied?.includes("mcp__workspace__post_thread"));
+    assert.ok(!denied?.includes("mcp__workspace"));
+  }),
 );
 
 /** What a launch hands the CLI that is not a function or a live server, less the place it ran in, which nothing may follow. */

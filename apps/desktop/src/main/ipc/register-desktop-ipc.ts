@@ -158,6 +158,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
       recordProductEvent,
       openExternal: config.openExternal,
       copyText: (words) => clipboard.writeText(words),
+      copyRich: ({ html, text }) => clipboard.write({ html, text }),
       copyImage: (png) => {
         const image = nativeImage.createFromBuffer(Buffer.from(png, "base64"));
         if (image.isEmpty()) return false;

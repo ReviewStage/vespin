@@ -305,8 +305,6 @@ const NO_WORKERS: ReadonlyMap<string, ToolState> = new Map();
 
 /** What a tab knows of a turn beyond its message, which its rows read. */
 interface AgentTurnPlace {
-  /** The call whose to-do list stays out of a finished turn's fold. */
-  readonly newestTodos?: string | undefined;
   /** Where each call's subagent stands as its own session says, which its row draws over the call's own state, since a call may settle the moment its worker is under way. */
   readonly workers?: ReadonlyMap<string, ToolState>;
   /** The developer's lines that reached the turn while it ran (`arrivedIn`), each drawn among its parts after the steps it arrived after. */
@@ -455,17 +453,15 @@ function afterStepOf(line: AgentTranscriptMessage): number {
  * across them. The turn moves while the agent may still write to it, which
  * is its last message; any other has ended. A worker's session folds as
  * its agent's does, since a run of calls reads the same whoever made it.
- * The agent's newest to-do list, named by the call that wrote it
- * (`newestTodos`), stays out of a finished turn's fold, so the list
- * standing is never folded away, and so does every set of pictures and
- * every page the agent showed, which is its answer as much as its words are. A line that
+ * The agent's words, its to-do lists, and every set of pictures, page, and
+ * recording it showed stand on rows of their own, never folded. A line that
  * reached the turn while it ran (`arrived`) stands among its parts where it
- * arrived, splitting the fold of a finished turn around it.
+ * arrived.
  */
 export function agentRows(
   message: AgentTranscriptMessage,
   moving: boolean,
-  { newestTodos, workers = NO_WORKERS, arrived = [] }: AgentTurnPlace = {},
+  { workers = NO_WORKERS, arrived = [] }: AgentTurnPlace = {},
 ): readonly TurnRow<AgentPart>[] {
   const parts = drawnParts(message, arrived);
   const reading: RowReading<AgentPart> = {
@@ -473,13 +469,8 @@ export function agentRows(
     running: (part) =>
       AGENT_READING.running(part) ||
       (part.kind === AGENT_PART.TOOL && workers.get(part.callId) === TOOL_STATE.INPUT_AVAILABLE),
-    kept: (part) =>
-      (part.kind === AGENT_PART.TOOL && part.callId === newestTodos) ||
-      isShownSet(part) ||
-      isShownPage(part) ||
-      keptRecording(part),
   };
-  return turnRows(parts, reading, { key: message.id, moving, done: !moving });
+  return turnRows(parts, reading, { moving });
 }
 
 /** One of a transcript's rows as the tab draws it, with the developer's lines that reached it while its turn ran. */

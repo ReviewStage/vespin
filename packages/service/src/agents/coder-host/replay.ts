@@ -71,7 +71,7 @@ import {
   replayTokens,
   withinWindow,
 } from "./replay-summary.js";
-import type { SnapshotOutcome } from "./snapshot.js";
+import { SNAPSHOT_MISS, type SnapshotOutcome } from "./snapshot.js";
 import { CODER_TOOL_SET, RETIRED_CODER_TOOL } from "./tool-set.js";
 import { CURSOR_START } from "./transcript.js";
 
@@ -215,6 +215,14 @@ const isAgentAttachmentType = Schema.is(Schema.Literals(Object.values(AGENT_ATTA
 /** What a source that left no branch, carried none, and could not be copied is taken up from. */
 const NO_BRANCH_WORDS =
   "It left no branch to build on, and its work could not be copied from its sandbox, so start from the repository's default branch.";
+
+/** The same for a source on a Mac, whose checkout a Start never reads, so its work stays there. */
+const NO_BRANCH_ON_MAC_WORDS =
+  "It left no branch to build on, and what it did stays on the Mac it ran on, so start from the repository's default branch.";
+
+/** What a branchless source on a Mac adds to the work it carried: what it did on top of that work stayed on the Mac. */
+const CARRIED_ON_MAC_WORDS =
+  "What it did on top of that work and did not push stays on the Mac it ran on, so it is not in that branch.";
 
 /** A text cut to the bound on one line, ending in an ellipsis where it was cut. */
 function cutLine(text: string, maximumChars: number): string {
@@ -719,12 +727,19 @@ function whereOf(
       `build on it, and open your pull request from it as usual.${own}`
     );
   }
+  const onMac = copy.miss === SNAPSHOT_MISS.ON_DEVICE;
   if (source.branch === null) {
-    return carried === undefined ? NO_BRANCH_WORDS : carriedWhere(carried);
+    if (carried === undefined) return onMac ? NO_BRANCH_ON_MAC_WORDS : NO_BRANCH_WORDS;
+    // Note that a Mac's checkout is never read for a Start, so what the source did on top of that work stays there.
+    return onMac ? `${carriedWhere(carried)} ${CARRIED_ON_MAC_WORDS}` : carriedWhere(carried);
   }
+  // Note that a Mac's checkout is never read for a Start, so what the source did not push stays on that Mac.
+  const unpushed = onMac
+    ? "what it had not pushed stays on the Mac it ran on"
+    : "what it had not pushed could not be copied from its sandbox";
   return (
     `Its branch is \`${source.branch}\`${pull}. ${capitalized(fetchWords(source.branch))} and continue there rather than ` +
-    "starting a new one; what it had not pushed could not be copied from its sandbox, so only what it pushed stands."
+    `starting a new one; ${unpushed}, so only what it pushed stands.`
   );
 }
 

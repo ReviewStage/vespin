@@ -1444,7 +1444,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
     );
 
     it.effect(
-      "a Start runs where the agent it is started from runs, and a teammate's continue from the owner's agent on the owner's device is refused, never sent to the cloud; a device away is refused by name",
+      "a Start runs where the agent it is started from runs, and a teammate's continue from the owner's agent on the owner's device naming no place takes it up in the cloud; a device away is refused by name",
       () =>
         Effect.gen(function* () {
           const { owner, workspaceId } = yield* openStarter(true);
@@ -1502,7 +1502,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             Option.some([AGENT_MACHINE.DEVICE, deviceId]),
           );
 
-          // A teammate's continue from the owner's agent on the device is refused by name too, as an agent on its starter's own Mac is theirs alone to start from, so it never reaches the cloud.
+          // A teammate's continue from the owner's agent on the device, naming no place, runs in the cloud, since a device runs its owner's agents alone.
           const theirContinue = {
             taskId: task.id,
             prompt: undefined,
@@ -1511,9 +1511,11 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             from: { agentId: owned.success.agent.id },
           };
           const theirContinued = yield* start(teammate, theirContinue);
-          assert.ok(Result.isFailure(theirContinued));
-          assert.deepEqual(theirContinued.failure, HOSTED_REFUSAL.NOT_PERMITTED);
-          assert.ok(Option.isNone(yield* readAgentByKey(teammate, theirContinue.idempotencyKey)));
+          assert.ok(Result.isSuccess(theirContinued), JSON.stringify(theirContinued));
+          assert.deepEqual(
+            yield* whereRuns(theirContinued.success, teammate),
+            Option.some([AGENT_MACHINE.VERCEL, null]),
+          );
 
           // A Start with no task runs in the cloud.
           const planless = yield* start(owner, startIn(workspaceId, "anthropic/claude-opus-5.5"));

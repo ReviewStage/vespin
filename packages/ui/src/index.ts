@@ -54,6 +54,7 @@ export * from "./components/detail-page/detail-page.js";
 export * from "./components/dialog/dialog.js";
 export * from "./components/dialog/dialog-actions.js";
 export * from "./components/disclosure/disclosure.js";
+export * from "./components/draft-card/draft-card.js";
 export * from "./components/drawer-swipe/drawer-scrim.js";
 export * from "./components/drawer-swipe/use-drawer-swipe.js";
 export * from "./components/drop-slot/drop-slot.js";
