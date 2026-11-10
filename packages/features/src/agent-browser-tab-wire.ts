@@ -14,7 +14,8 @@
  * `GET /api/agents/{id}/browser-tabs` lists one agent's tabs, and `GET
  * /api/plans/{id}/browser-tabs` a task's, every one of its agents' tabs
  * together; `POST` on either opens one. `POST
- * /api/plans/{id}/browser-tabs/{tab}/driver` takes one over or renews the
+ * /api/agents/{id}/browser-tabs/{tab}/driver`, or the same under the task,
+ * takes one over or renews the
  * caller's own takeover, and `DELETE` on that path hands it back, each
  * answering the tab as it then stands, so a takeover another member holds
  * answers their name as the driver rather than a refusal.

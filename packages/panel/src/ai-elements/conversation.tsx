@@ -35,7 +35,8 @@ import {
  * the log here draws its lines through `ConversationRows`, TanStack
  * Virtual's run (`@repo/ui/virtual-rows`), which keeps to the newest line
  * as the library's chat guide does: it opens at the end, a line appended
- * follows on to it while the reader stands near the end, a line growing at
+ * follows on to it while the reader stands near the end, as does a line put
+ * before a last line that stands still, a reply box's, a line growing at
  * the end keeps them there, and lines put before the first leave the
  * reader's place where it was. The context the children read is the
  * registry's: whether the log is at its bottom (`isAtEnd()`), and a way to
@@ -44,8 +45,8 @@ import {
  * As the guide's log does, the log's scroll box holds nothing after the
  * rows: a line that stands after the messages, as an agent's working line
  * does, is drawn inside the last of them, which grows as the guide's
- * streaming reply grows, and the log's room at its end is the virtualizer's
- * own (`paddingEnd`), read from the theme (`--conversation-log-end`, a
+ * streaming reply grows, or is the run's last row, as an Inbox thread's
+ * reply box is; and the log's room at its end is the virtualizer's own (`paddingEnd`), read from the theme (`--conversation-log-end`, a
  * length the stylesheet registers). The log goes to its end as the reader's
  * own line lands (`ownLast`), as the guide's example does on a send.
  *
@@ -244,9 +245,18 @@ export function ConversationRows({
   /** Draws the line at an index, which wears `place` where the lines are list items of the caller's own. */
   children: (index: number, place: VirtualRowPlace) => ReactNode;
 }): ReactNode {
-  const { list, log, hold, askOlder, atBottom } = useConversation();
+  const { list, log, hold, askOlder, isAtBottom, atBottom } = useConversation();
   const run = useRef<VirtualRowsHandle>(null);
   useLayoutEffect(() => hold(run), [hold]);
+  // Note that the run follows a line appended only where the last line is new, so a line put before a last line that stands still, as the reply box at an Inbox thread's end, is followed here while the reader stood at the end.
+  const drawn = useRef(keys);
+  useLayoutEffect(() => {
+    const was = drawn.current;
+    drawn.current = keys;
+    if (isAtBottom && keys.length > was.length && keys.at(-1) === was.at(-1)) {
+      run.current?.scrollToEnd();
+    }
+  }, [keys, isAtBottom]);
   // The log's room at its end, as the theme says it, in pixels: a registered length, so it reads as one.
   const [end, setEnd] = useState(0);
   useLayoutEffect(() => {

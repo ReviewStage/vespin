@@ -9,7 +9,10 @@
  * full strength under the pointer or the keyboard, so it reads by its line
  * and not its color alone; `heading` for one that is a heading's own words
  * (a release's version over its notes), in the text's own ink and lighting
- * to the accent under the pointer.
+ * to the accent under the pointer; `code` for an inline span of code that
+ * names what it opens (a file's path, a web address), whose code keeps its
+ * own look at rest and is underlined only under the pointer or the
+ * keyboard, so a reply's code does not read as a page of links.
  *
  * A link set in a type role (`variant`) wears that role's size, leading,
  * and weight, and its `font` the shared sans or mono face; one set in no
@@ -82,6 +85,10 @@ const LOOK_CLASS = {
   [TEXT_LINK_LOOK.HEADING]: {
     rest: "text-foreground no-underline",
     lit: "hover:text-accent-ink",
+  },
+  [TEXT_LINK_LOOK.CODE]: {
+    rest: "text-inherit no-underline decoration-1 underline-offset-[0.24em]",
+    lit: "hover:underline hover:decoration-current focus-visible:underline focus-visible:decoration-current",
   },
 } as const satisfies Record<TextLinkLook, { rest: string; lit: string }>;
 

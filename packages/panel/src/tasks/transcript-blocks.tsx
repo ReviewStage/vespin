@@ -60,10 +60,12 @@ import {
   Shimmer,
   Stack,
   TEXT_ELEMENT,
+  TEXT_LINK_LOOK,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
   Tooltip,
+  TextLink as UiTextLink,
   useDisclosurePreviewShown,
   useDisclosureState,
 } from "@repo/ui";
@@ -76,6 +78,8 @@ import {
   wholeRendering,
 } from "@repo/ui/github-html";
 import {
+  AlarmClockCheckIcon,
+  AlarmClockOffIcon,
   AppWindowIcon,
   ArchiveIcon,
   ArchiveRestoreIcon,
@@ -144,7 +148,7 @@ import {
   useState,
 } from "react";
 import remarkBreaks from "remark-breaks";
-import { ACTOR_SIZE, ActorLine, ActorMark, ActorRef } from "../actor-ref.js";
+import { ActorGlyph, ActorLine, ActorRef } from "../actor-ref.js";
 import { FoldBody } from "../ai-elements/fold.js";
 import { MessageResponse } from "../ai-elements/message.js";
 import {
@@ -177,6 +181,11 @@ import { GLYPH_STATE, StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
 import { useDescriptionPictureDrawer } from "./description-pictures.js";
 import { useInboxPictureDrawer } from "./inbox-pictures.js";
+import {
+  INLINE_CODE_TARGET,
+  type InlineCodeTarget,
+  inlineCodeTarget,
+} from "./inline-code-target.js";
 import { LoneLinkCard } from "./lone-link-card.js";
 import { linkChip, type MentionDoors } from "./mention-chip.js";
 import { ModelLabel } from "./model-label.js";
@@ -682,9 +691,85 @@ function PictureRowElement({ children }: MarkdownNodeProps & { children?: ReactN
   );
 }
 
+/*
+ * An inline span of code whose whole words are a file's path or a web
+ * address opens what it names (`inline-code-target.ts`), its code drawn as
+ * it is and a link only under the pointer: a file in its File tab, at the
+ * line it names, through the place's one door for a file, as a mention of
+ * the file opens it; a page as every link in the words opens one
+ * (`use-open-link.ts`).
+ */
+
+/** A file's address on GitHub, at its line, which its link carries for the reader's link menu; the press opens its File tab. */
+function fileAddress(repository: string, path: string, line: number | undefined): string {
+  const page = new URL(`https://github.com/${repository}/blob/HEAD/${path}`);
+  if (line !== undefined) page.hash = `L${line}`;
+  return page.href;
+}
+
+/**
+ * An inline span of code that opens a file of the checkout: its File tab,
+ * at the line it names, through the place's door for a file. Note that a
+ * file the checkout does not hold opens a File tab saying so, as a mention
+ * of a file gone does, rather than a toast or nothing, and that where the
+ * place opens no file the span is plain code.
+ */
+function InlineFileCode({
+  target,
+  children,
+}: {
+  target: Extract<InlineCodeTarget, { kind: typeof INLINE_CODE_TARGET.FILE }>;
+  children: ReactNode;
+}): ReactNode {
+  const { onOpenFile, place } = useMentionDoors();
+  const { repository } = place;
+  if (onOpenFile === undefined || repository === null) return children;
+  const { path, line } = target;
+  return (
+    <UiTextLink
+      href={fileAddress(repository, path, line)}
+      look={TEXT_LINK_LOOK.CODE}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onOpenFile(path, line === undefined ? undefined : { startLine: line, endLine: line });
+      }}
+    >
+      {children}
+    </UiTextLink>
+  );
+}
+
+/** An inline span of code that is a web address: a link to it, opened as every link in the words is. */
+function InlineWebCode({ href, children }: { href: string; children: ReactNode }): ReactNode {
+  const openLink = useOpenLink();
+  return (
+    <TextLink href={href} words={undefined} onOpen={openLink} look={TEXT_LINK_LOOK.CODE}>
+      {children}
+    </TextLink>
+  );
+}
+
+/** An inline span of code on its subtle fill, opening the file or the page its whole words name, where they name one. */
+function TranscriptInlineCode({
+  children,
+  node,
+}: ComponentProps<"code"> & MarkdownNodeProps): ReactNode {
+  const words = node === undefined ? "" : wordsOf(node);
+  const target = useMemo(() => inlineCodeTarget(words), [words]);
+  const code = <code className="transcript-inline-code">{children}</code>;
+  if (target === undefined) return code;
+  return target.kind === INLINE_CODE_TARGET.FILE ? (
+    <InlineFileCode target={target}>{code}</InlineFileCode>
+  ) : (
+    <InlineWebCode href={target.href}>{code}</InlineWebCode>
+  );
+}
+
 /**
  * How a transcript's markdown is drawn: at the panel's scale, its code and
- * tables as `transcript-markdown.tsx` draws them, its links as
+ * tables as `transcript-markdown.tsx` draws them, an inline span of code
+ * naming a file or a page as {@link TranscriptInlineCode}, its links as
  * {@link TranscriptLink}, and its pictures as links to where they point
  * ({@link PictureElement}), never as an image, because an image is a
  * request to wherever its address points the moment the tab opens, and
@@ -692,6 +777,7 @@ function PictureRowElement({ children }: MarkdownNodeProps & { children?: ReactN
  */
 const TRANSCRIPT_COMPONENTS: MarkdownComponents = {
   ...TRANSCRIPT_CODE_AND_TABLE_COMPONENTS,
+  inlineCode: TranscriptInlineCode,
   a: ({ href, children, node }) => (
     <TranscriptLink href={href} words={node === undefined ? "" : wordsOf(node)}>
       {children}
@@ -1070,6 +1156,8 @@ const CALL_ICON = {
   [CALL_KIND.SHOW_IMAGE]: ImageIcon,
   [CALL_KIND.OPEN_PULL_REQUEST]: () => <GLYPH.PULL_REQUEST />,
   [CALL_KIND.SLEEP]: TimerIcon,
+  [CALL_KIND.SCHEDULE_WAKEUP]: AlarmClockCheckIcon,
+  [CALL_KIND.CANCEL_WAKEUP]: AlarmClockOffIcon,
   [CALL_KIND.LIST_TASKS]: () => <GLYPH.TASK />,
   [CALL_KIND.REMEMBER]: () => <GLYPH.MEMORY />,
   [CALL_KIND.RECALL]: () => <GLYPH.MEMORY />,
@@ -1109,7 +1197,7 @@ function AgentCallChip({
     return (
       <InlineRef
         look={INLINE_REF_LOOK.PILL}
-        glyph={<ActorMark actor={agent} size={ACTOR_SIZE.INLINE} />}
+        glyph={<ActorGlyph actor={agent} />}
         label={actorName(agent)}
         hint={card === undefined ? false : undefined}
         card={card}
@@ -1126,7 +1214,7 @@ function AgentCallChip({
   return (
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
-      glyph={<ActorMark actor={agent} size={ACTOR_SIZE.INLINE} />}
+      glyph={<ActorGlyph actor={agent} />}
       label={actorName(agent)}
       onPress={press}
       hintLabel={opens.hint}

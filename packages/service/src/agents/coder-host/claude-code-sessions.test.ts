@@ -305,6 +305,20 @@ const savePlan = (userId: string) =>
 /** An account with one agent on a task with no repository, on its Claude plan. */
 const openAgent = Effect.tap(openAgentWithoutPlan, ({ userId }) => savePlan(userId));
 
+/**
+ * The agent just started, its id rewritten to begin with the hex digit
+ * given, which puts it in the half of agents whose launches keep the prompt
+ * cache for an hour (0 through 7) or in the other; no other row names its id yet.
+ */
+const agentIdFrom = (agent: Agent, digit: string) =>
+  Effect.gen(function* () {
+    const id = `${digit}${randomUUID().slice(1)}`;
+    yield* Effect.flatMap(Database, (db) =>
+      db.update(agentTable).set({ id }).where(eq(agentTable.id, agent.id)),
+    );
+    return { ...agent, id };
+  });
+
 /** The sessions for the account, the next event number read from the counter given. */
 function sessionsFor(userId: string, sequence: { next: number }) {
   const options: RunnerSessionsOptions = {
@@ -761,7 +775,10 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
         const api = runnerSandboxApi();
-        const { userId, agent } = yield* openAgent;
+        const started = yield* openAgent;
+        const { userId } = started;
+        // An agent of the hour-long cache's half, which its plan leaves on the CLI's own default.
+        const agent = yield* agentIdFrom(started.agent, "0");
         const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
           Effect.provide(services(api)),
         );
@@ -1233,7 +1250,8 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           payer: AGENT_PAYER.API_KEY,
         });
         assert.ok(Option.isSome(started));
-        const agent = started.value.agent;
+        // An agent of the hour-long cache's half, at its last digit.
+        const agent = yield* agentIdFrom(started.value.agent, "7");
         // The account keeps a plan too, refused, which has no room for a turn.
         yield* savePlan(userId);
         const now = yield* DateTime.nowAsDate;
@@ -1288,9 +1306,31 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           api.sandboxes,
         ]);
         assert.equal(visible.includes(API_KEY), false);
+        // The key pays for this agent's writes, so its half keeps the cache for an hour and the other keeps the CLI's five minutes.
+        const [config] = (yield* launchLines(command)) as [ClaudeCodeConfig];
+        assert.equal(config.promptCacheHour, true);
 
         const sent = yield* sessions.send(opened.sessionId, message(agent, "Also the emails."));
         assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const other = yield* createAgent(userId, {
+          taskId: task.id,
+          idempotencyKey: "start-other",
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          descriptionSnapshot: "# Teammate invitations\n",
+          prompt: null,
+          repository: null,
+          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+          payer: AGENT_PAYER.API_KEY,
+        });
+        assert.ok(Option.isSome(other));
+        const outside = yield* agentIdFrom(other.value.agent, "8");
+        const outsideOpened = yield* deliveredOpen(sessions, yield* writtenLine(outside, "Go."));
+        assert.equal(outsideOpened.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const [outsideConfig] = (yield* launchLines(api.commands[1] ?? assert.fail())) as [
+          ClaudeCodeConfig,
+        ];
+        assert.equal(outsideConfig.promptCacheHour, undefined);
 
         yield* removeProviderKey(
           userId,
@@ -1385,7 +1425,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           false,
         ]);
 
-        // A key saved now joins the bottom of the one order, and pays first once it is moved to its top, since a key always has room.
+        // A key saved now joins the bottom of the one order, and pays first, named by its id, once it is moved to its top, since a key has room.
         const keyOwner = { ...owner, kind: PROVIDER_KEY_KIND.API_KEY };
         const key = yield* saveProviderKey(
           userId,
@@ -1399,12 +1439,25 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         const bottom = yield* turnPayerOf(userId, agent.id, MODEL_PROVIDER.ANTHROPIC);
         yield* reorderSubscriptions(userId, owner.provider, [key]);
         const top = yield* turnPayerOf(userId, agent.id, MODEL_PROVIDER.ANTHROPIC);
+        // A key its provider refused at the top is passed over for the next with room.
+        yield* setPlanStatus(
+          userId,
+          keyOwner.provider,
+          keyOwner.kind,
+          PROVIDER_KEY_STATUS.INVALID,
+          undefined,
+          now,
+          now,
+          key,
+        );
+        const refused = yield* turnPayerOf(userId, agent.id, MODEL_PROVIDER.ANTHROPIC);
         assert.deepEqual(
-          [bottom.payer, bottom.subscriptionId === second, top],
+          [bottom.payer, bottom.subscriptionId === second, top, refused.payer],
           [
             AGENT_PAYER.CLAUDE_SUBSCRIPTION,
             false,
-            { payer: AGENT_PAYER.API_KEY, subscriptionId: undefined },
+            { payer: AGENT_PAYER.API_KEY, subscriptionId: key },
+            AGENT_PAYER.CLAUDE_SUBSCRIPTION,
           ],
         );
       }),

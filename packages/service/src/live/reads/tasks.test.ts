@@ -478,6 +478,12 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         yield* turnOf(retried, TURN_STATUS.FAILED, 15 * 60_000, { settled: true });
         const retry = yield* openAgent(owner, { taskId: shelved.id }, 10 * 60_000);
         yield* archiveAgent(owner, retry.id, true);
+        // An agent its plan's usage limit stopped since, which is no failure to count.
+        const limited = yield* openAgent(owner, { taskId: shelved.id }, 5 * 60_000);
+        yield* turnOf(limited, TURN_STATUS.FAILED, 4 * 60_000, {
+          settled: true,
+          failure: TURN_FAILURE.PLAN_LIMIT,
+        });
         yield* updateTask(owner, plan.id, { assigneeId: teammate });
         yield* updateTask(owner, shelved.id, { pinned: true });
         yield* updateTask(owner, shelved.id, { status: TASK_STATUS.DONE });

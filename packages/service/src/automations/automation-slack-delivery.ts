@@ -14,8 +14,10 @@
  */
 
 import type { SettledAgentTurn } from "@repo/database/models/writer";
+import { LIMIT_REACHED_WORDS } from "@repo/features/agent-failure-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TURN_STATUS } from "@repo/wire";
+import { TURN_FAILURE } from "../core.js";
 import type { SlackBlock, SlackMessageContent } from "../slack/slack-bot.js";
 import { slackClipped, slackEscaped, slackMarkdownBlock } from "../slack/slack-markdown.js";
 
@@ -27,6 +29,8 @@ function outcomeOf(
   turn: SettledAgentTurn,
   words: string | undefined,
 ): { readonly plain: string; readonly words?: string } {
+  // A run its plan's usage limit stopped is said so, not that it failed.
+  if (turn.failure === TURN_FAILURE.PLAN_LIMIT) return { plain: LIMIT_REACHED_WORDS };
   if (turn.status === TURN_STATUS.FAILED) {
     return { plain: turn.failure === null ? "Run failed." : `Run failed: ${turn.failure}.` };
   }

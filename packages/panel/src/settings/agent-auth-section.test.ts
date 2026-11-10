@@ -139,10 +139,12 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
       const { kind, subscriptionId } = request.payload;
       const { provider } = request.payload;
       if (kind !== PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN) {
+        if (subscriptionId !== undefined) return written(held);
         const key = {
           ...ANTHROPIC_KEY,
           provider,
-          id: `key-${provider}`,
+          id: `key-${provider}-${held.keys.length + 1}`,
+          hint: `sk-ant-…key${held.keys.length + 1}`,
           position: bottomOf(provider),
         };
         held = { ...held, keys: [...held.keys, key] };
@@ -171,18 +173,15 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
       const { kind, subscriptionId } = request.payload;
       held =
         kind === undefined || kind === PROVIDER_KEY_KIND.API_KEY
-          ? { ...held, keys: held.keys.filter((one) => one.provider !== request.payload.provider) }
+          ? { ...held, keys: held.keys.filter((one) => one.id !== subscriptionId) }
           : { ...held, subscriptions: subscriptions.filter((one) => one.id !== subscriptionId) };
       return written(held);
     }
     case ACT_KIND.SUBSCRIPTION_RENAME: {
       const { subscriptionId, label } = request.payload;
-      held = {
-        ...held,
-        subscriptions: subscriptions.map((one) =>
-          one.id === subscriptionId ? { ...one, ...(label === null ? {} : { label }) } : one,
-        ),
-      };
+      const named = <One extends { readonly id?: string }>(one: One) =>
+        one.id === subscriptionId ? { ...one, ...(label === null ? {} : { label }) } : one;
+      held = { ...held, keys: held.keys.map(named), subscriptions: subscriptions.map(named) };
       return written(held);
     }
     case ACT_KIND.SUBSCRIPTIONS_REORDER: {
@@ -318,7 +317,8 @@ const meterOf = (within: Element) =>
 
 const plain = (words: string) => ({ words, state: SETTINGS_ROW_STATE.PLAIN });
 const readyLine = plain("Ready");
-const keyLine = plain("API key · sk-ant-…wxyz");
+/** The name a key with none of its own is shown by. */
+const KEY_NAME = "API key · sk-ant-…wxyz";
 const needsHand = (words: string) => ({ words, state: SETTINGS_ROW_STATE.ATTENTION });
 
 const button = (within: Element | Document, words: string) =>
@@ -428,8 +428,8 @@ test("each card opens on its harness and its Add; each credential says how it st
     assert.deepEqual(lineOf(claudePlan()), plain("42% of the 5-hour limit used")),
   );
   assert.equal(meterOf(claudePlan()), "working");
-  assert.deepEqual(lineOf(credential(connected, "OpenAI")), keyLine);
-  assert.equal(meterOf(credential(connected, "OpenAI")), undefined, "a key draws no bar");
+  assert.deepEqual(lineOf(credential(connected, KEY_NAME)), readyLine);
+  assert.equal(meterOf(credential(connected, KEY_NAME)), undefined, "a key draws no bar");
   assert.doesNotMatch(connected.textContent ?? "", /In use/u);
   leave();
 
@@ -543,30 +543,54 @@ test("another Claude plan joins the bottom, numbered by when it was added, renam
   );
 });
 
-test("the API key stands in its plans' order, moved from its ⋯ as a plan is, and Add offers no second", async () => {
+test("API keys stand in their plans' order, Add offering another, which joins the bottom, and each is renamed in place and moved from its ⋯ as a plan is", async () => {
   held = { keys: [ANTHROPIC_KEY], subscriptions: [CLAUDE_PLAN] };
   const page = await mount();
   await vi.waitFor(() =>
-    assert.deepEqual(labels(page).slice(0, 3), ["Claude", "Claude plan", "Anthropic"]),
+    assert.deepEqual(labels(page).slice(0, 3), ["Claude", "Claude plan", KEY_NAME]),
   );
-  await press(credential(page, "Claude"), "Add to Claude");
-  assert.deepEqual(menuItems(), ["Claude plan"], "a provider holds one key");
-  await press(credential(page, "Claude"), "Add to Claude");
+  await add(page, "Claude", "API key");
+  await paste(labeled(credential(page, "Claude"), "Paste the key"), KEY);
+  await vi.waitFor(() =>
+    assert.deepEqual(labels(page).slice(0, 4), [
+      "Claude",
+      "Claude plan",
+      KEY_NAME,
+      "API key · sk-ant-…key2",
+    ]),
+  );
 
-  await choose(credential(page, "Anthropic"), "Anthropic API key", "Move up");
+  await choose(credential(page, KEY_NAME), KEY_NAME, "Rename");
+  const field = page.querySelector<HTMLInputElement>('input[aria-label="Key name"]');
+  assert.ok(field !== null, "the name opens in place");
+  type(field, "Team credits");
+  act(() => field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
+  await settle();
+  assert.deepEqual(sentOf(ACT_KIND.SUBSCRIPTION_RENAME), [
+    {
+      provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
+      kind: PROVIDER_KEY_KIND.API_KEY,
+      subscriptionId: "key-anthropic",
+      label: "Team credits",
+    },
+  ]);
+  await vi.waitFor(() => assert.ok(labels(page).includes("Team credits")));
+  assert.deepEqual(lineOf(credential(page, "Team credits")), plain(`API key · sk-ant-…wxyz`));
+
+  await choose(credential(page, "Team credits"), "Team credits", "Move up");
   assert.deepEqual(sentOf(ACT_KIND.SUBSCRIPTIONS_REORDER), [
     {
       provider: PROVIDER_KEY_PROVIDER.ANTHROPIC,
       kind: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
-      subscriptionIds: ["key-anthropic", "claude-1"],
+      subscriptionIds: ["key-anthropic", "claude-1", "key-anthropic-2"],
     },
   ]);
   await vi.waitFor(() =>
-    assert.deepEqual(labels(page).slice(0, 3), ["Claude", "Anthropic", "Claude plan"]),
+    assert.deepEqual(labels(page).slice(0, 3), ["Claude", "Team credits", "Claude plan"]),
   );
 });
 
-test("an API key added from Add opens a masked field under the header, sent once, joining the order, the field going and the focus on its ⋯; Remove asks first", async () => {
+test("an API key added from Add opens a masked field under the header, sent once, joining the order, the field going and the focus back on Add; Remove asks first and removes that key", async () => {
   const logged = [vi.spyOn(console, "log"), vi.spyOn(console, "error"), vi.spyOn(console, "warn")];
   const page = await mount();
   const header = () => credential(page, "Claude");
@@ -586,34 +610,33 @@ test("an API key added from Add opens a masked field under the header, sent once
   assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_SAVE), [
     { provider: PROVIDER_KEY_PROVIDER.ANTHROPIC, key: KEY },
   ]);
-  const row = () => credential(page, "Anthropic");
-  await vi.waitFor(() => assert.deepEqual(lineOf(row()), keyLine));
+  const name = "API key · sk-ant-…key1";
+  const row = () => credential(page, name);
+  await vi.waitFor(() => assert.deepEqual(lineOf(row()), readyLine));
   assert.equal(header().querySelector("form") === null, true, "the field goes");
-  await vi.waitFor(() =>
-    assert.ok(document.activeElement === button(row(), "Anthropic API key actions")),
-  );
+  await vi.waitFor(() => assert.ok(document.activeElement === button(header(), "Add to Claude")));
   assert.ok(!document.body.innerHTML.includes(KEY), "the key stands nowhere once kept");
   for (const spy of logged) {
     assert.ok(spy.mock.calls.every((call) => !JSON.stringify(call).includes(KEY)));
   }
 
-  await choose(row(), "Anthropic API key", "Remove key");
+  await choose(row(), name, "Remove key");
   assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_REMOVE), []);
   assert.match(question().textContent ?? "", /Remove your Anthropic API key\?/u);
   assert.equal(actLook("Remove key"), "danger");
   await press(question(), "Remove key");
   assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_REMOVE), [
-    { provider: PROVIDER_KEY_PROVIDER.ANTHROPIC },
+    { provider: PROVIDER_KEY_PROVIDER.ANTHROPIC, subscriptionId: "key-anthropic-1" },
   ]);
-  await vi.waitFor(() => assert.ok(!labels(page).includes("Anthropic")));
+  await vi.waitFor(() => assert.ok(!labels(page).includes(name)));
 });
 
 test("a saved key's row is drawn from the keys the host holds, the window asking for none of its own", async () => {
   held = { keys: [ANTHROPIC_KEY], subscriptions: [] };
   const page = await mount();
-  await vi.waitFor(() => assert.deepEqual(lineOf(credential(page, "Anthropic")), keyLine));
+  await vi.waitFor(() => assert.deepEqual(lineOf(credential(page, KEY_NAME)), readyLine));
   assert.equal(
-    showsInReplay(credential(page, "Anthropic")),
+    showsInReplay(credential(page, KEY_NAME)),
     false,
     "a saved key's row is masked in a screen recording",
   );
@@ -623,12 +646,12 @@ test("a saved key's row is drawn from the keys the host holds, the window asking
   );
 });
 
-test("Replace key opens its field showing Saved where the key would be, and Cancel puts it away, dropping the paste and handing the focus back", async () => {
+test("Replace key opens its field showing Saved where the key would be, sending the key it replaces, and Cancel puts it away, dropping the paste and handing the focus back", async () => {
   held = { keys: [ANTHROPIC_KEY], subscriptions: [] };
   const page = await mount();
-  const row = () => credential(page, "Anthropic");
+  const row = () => credential(page, KEY_NAME);
   await vi.waitFor(() => assert.ok(row()));
-  await choose(row(), "Anthropic API key", "Replace key");
+  await choose(row(), KEY_NAME, "Replace key");
   const field = labeled(row(), "Paste the key");
   assert.equal(field.placeholder, "Saved");
   assert.equal(field.value, "");
@@ -636,7 +659,15 @@ test("Replace key opens its field showing Saved where the key would be, and Canc
   await press(row(), "Cancel");
   assert.equal(row().querySelector("form") === null, true, "Cancel puts the field away");
   assert.ok(!document.body.innerHTML.includes(KEY), "and drops what was pasted");
-  assert.ok(document.activeElement === button(row(), "Anthropic API key actions"));
+  await vi.waitFor(() =>
+    assert.ok(document.activeElement === button(row(), `${KEY_NAME} actions`)),
+  );
+
+  await choose(row(), KEY_NAME, "Replace key");
+  await paste(labeled(row(), "Paste the key"), KEY);
+  assert.deepEqual(sentOf(ACT_KIND.PROVIDER_KEYS_SAVE), [
+    { provider: PROVIDER_KEY_PROVIDER.ANTHROPIC, key: KEY, subscriptionId: "key-anthropic" },
+  ]);
 });
 
 test("a Claude setup-token is saved by its kind, refused with why, and disconnected after asking", async () => {

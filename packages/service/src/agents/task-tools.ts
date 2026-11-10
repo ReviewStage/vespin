@@ -59,7 +59,7 @@ import {
   type ExperimentsOn,
   experimentOnIn,
 } from "./workspace-experiment-on.js";
-import { workspaceNamingOf, writtenTaskMention } from "./written-mentions.js";
+import { workspaceNamingOf } from "./written-mentions.js";
 
 /**
  * task-tools.ts -- the tools every agent reads and makes the workspace's tasks by: read one task's description and where it stands, and make one.
@@ -123,8 +123,8 @@ export function readTaskToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
       "Read one task of your workspace by its id, a teammate's included: its " +
       "key (such as ACME-42), name, where it stands (its status) and how much it matters (its " +
       "priority), repository, who started it, whether it is the task you " +
-      "work on, its mention, the brief the developer started it with (null for none), the tasks " +
-      "it is blocked by and the tasks it blocks (each with its id, name, status, and mention)" +
+      "work on, the brief the developer started it with (null for none), the tasks " +
+      "it is blocked by and the tasks it blocks (each with its id, name, and status)" +
       `${READ_TASK_DESCRIPTION_WORDS[on.descriptionsOn ? "on" : "off"]} Read one before you start an agent on it, or to learn what another task is about; ` +
       `${AGENT_TOOL.LIST_AGENTS} with its taskId names the agents on it.`,
     inputSchema: READ_TASK_INPUT,
@@ -166,7 +166,7 @@ export function runReadTask(
       const { step, name } = yield* workspaceNamingOf(userId, workspace.value);
       const description = cutOnLine(text, DESCRIPTION_TEXT_READ_CHARS);
       const descriptionsOn = yield* callerDescriptionsOn(call.caller);
-      const blocks = yield* taskBlockReadings(userId, task, step);
+      const blocks = yield* taskBlockReadings(userId, task);
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         task: {
@@ -176,7 +176,6 @@ export function runReadTask(
           repository: task.repository ?? null,
           startedBy: task.createdBy?.name ?? null,
           isYourTask: task.id === callerTask(call.caller),
-          mention: writtenTaskMention(task, task.name, step),
           brief: brief ?? null,
           ...blocks,
         },
@@ -355,8 +354,8 @@ function createTaskWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
     "its parent's repository, so leave repository out for one. Give it a " +
     "relation instead to make it blocked by, blocking, a sub-task of, or the parent of another " +
     "task of your workspace in the same call. Answers " +
-    "`accepted` with the task's id, key, name, status, priority, assignee, repository, and " +
-    "mention, or `rejected` and why."
+    "`accepted` with the task's id, key, name, status, priority, assignee, and repository, or " +
+    "`rejected` and why."
   );
 }
 
@@ -516,7 +515,6 @@ export function runCreateTask(
           ...taskStandingOf(made, naming),
           name: made.name,
           repository: made.repository ?? null,
-          mention: writtenTaskMention(made, made.name, naming.step),
         },
       };
     }),

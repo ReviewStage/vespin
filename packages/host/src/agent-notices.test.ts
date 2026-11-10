@@ -7,6 +7,7 @@ import type {
 } from "@repo/features/account-inbox-wire";
 import { AGENT_CALL_FAILURE, type AgentAccountInboxAnswerView } from "@repo/features/agent-view";
 import {
+  AGENT_FAILURE,
   AGENT_STATUS,
   type AgentStatus,
   type AgentSummary,
@@ -14,6 +15,7 @@ import {
 } from "@repo/features/agent-wire";
 import { AUTOMATION_RUN_REASON } from "@repo/features/automation-wire";
 import { SOUND_WHEN, type SoundWhen } from "@repo/settings";
+import { TURN_STATUS } from "@repo/wire";
 import { COMPLETION_SOUND, type CompletionSound } from "@repo/wire/app-settings";
 import { Duration, Effect, Layer, Queue, Stream } from "effect";
 import { TestClock } from "effect/testing";
@@ -1061,22 +1063,36 @@ it.effect("ends inside one burst chime once, and an end after it chimes again", 
   }),
 );
 
-it.effect(
-  "a turn of the account's own agent ending in the background posts a notification naming the agent, once the burst closes",
-  () =>
+it.effect.each([
+  { why: "failed", failure: AGENT_FAILURE.MODEL, body: "Your agent failed." },
+  // One its plan's usage limit stopped is told so, not that it failed.
+  {
+    why: "stopped at its usage limit",
+    failure: AGENT_FAILURE.PLAN_LIMIT,
+    body: "Usage limit reached",
+  },
+])(
+  "a turn of the account's own agent that $why in the background posts a notification naming the agent, once the burst closes",
+  ({ failure, body }) =>
     Effect.gen(function* () {
       const f = fixture();
       const notices = yield* f.notices;
       f.showNotifications(true);
       f.focus(false);
 
-      notices.observeAgents([ownAgent(AGENT_STATUS.RUNNING, { title: "Ship the chime" })]);
-      notices.observeAgents([ownAgent(AGENT_STATUS.FAILED, { title: "Ship the chime" })]);
+      const running = ownAgent(AGENT_STATUS.RUNNING, { title: "Ship the chime" });
+      notices.observeAgents([running]);
+      notices.observeAgents([
+        ownAgent(AGENT_STATUS.FAILED, {
+          title: "Ship the chime",
+          turn: { id: "turn-1", queuedAt: 1, status: TURN_STATUS.FAILED, failure },
+        }),
+      ]);
       yield* TestClock.adjust(Duration.seconds(2));
 
       assert.deepEqual(
-        f.posted.map(({ title, body }) => ({ title, body })),
-        [{ title: "Ship the chime", body: "Your agent failed." }],
+        f.posted.map((posted) => ({ title: posted.title, body: posted.body })),
+        [{ title: "Ship the chime", body }],
       );
     }),
 );
