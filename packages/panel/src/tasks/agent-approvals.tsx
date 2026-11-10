@@ -338,6 +338,8 @@ interface HeldAsk {
   readonly approval: AgentPendingApproval;
   readonly answering?: ApprovalCardAnswer | undefined;
   readonly settled?: ApprovalSettled | undefined;
+  /** Whether it was settled only by leaving the row's waiting asks, which its return to them takes back. */
+  readonly vanished?: boolean | undefined;
   readonly error?: ShownError | undefined;
 }
 
@@ -369,7 +371,14 @@ function vanishedLine(byMessage: boolean, running: boolean): ApprovalSettled {
     : { outcome: APPROVAL_OUTCOME.EXPIRED, words: SETTLED_WORDS.EXPIRED };
 }
 
-/** The asks held with the agent's row laid over them: each waiting one taken in, and each that stopped waiting with no answer of this window's settled. */
+/**
+ * The asks held with the agent's row laid over them: each waiting one taken
+ * in, and each that stopped waiting with no answer of this window's settled.
+ * Note that one settled only by leaving the waiting asks opens again as it
+ * comes back to them, its last failure kept, because a write that left it
+ * may still let it go, and an answer that did not reach the agent is the
+ * reader's to send again.
+ */
 function heldWith(
   held: ReadonlyMap<string, HeldAsk>,
   pending: readonly AgentPendingApproval[],
@@ -381,10 +390,11 @@ function heldWith(
   for (const approval of pending) {
     const was = next.get(approval.id);
     if (was === undefined) next.set(approval.id, { approval });
+    else if (was.vanished === true) next.set(approval.id, { approval, error: was.error });
   }
   for (const [id, ask] of next) {
     if (waiting.has(id) || ask.settled !== undefined || ask.answering !== undefined) continue;
-    next.set(id, { ...ask, settled: vanishedLine(denied.has(id), running) });
+    next.set(id, { ...ask, settled: vanishedLine(denied.has(id), running), vanished: true });
   }
   return next;
 }
