@@ -1,5 +1,5 @@
 /**
- * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `stop`, `wait`, `checkout`, `ports`, `share`, `forward` (`agent-forward.ts`), and `shell` and `shells` (`agent-shell.ts`): coding agents started, continued, read, followed, messaged, stopped, waited on, their work brought into the working folder, the ports their sandbox listens on shared by link and served on localhost, and its shells attached here.
+ * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `stop`, `rewind`, `delete`, and `wake` (`agent-lifecycle.ts`), `wait`, `checkout`, `ports`, `share`, `forward` (`agent-forward.ts`), and `shell` and `shells` (`agent-shell.ts`): coding agents started, continued, read, followed, messaged, stopped, rewound, deleted, woken, waited on, their work brought into the working folder, the ports their sandbox listens on shared by link and served on localhost, and its shells attached here.
  *
  * A turn is followed on the held transcript read (`messages.agent`): asked
  * past the cursor the last answer handed back, the service holds it while
@@ -42,6 +42,7 @@ import { askService, session } from "../session.js";
 import { resolveTaskId } from "../tasks.js";
 import { resolveWorkspace } from "../workspace.js";
 import { forwardCommand } from "./agent-forward.js";
+import { deleteCommand, rewindCommand, wakeCommand } from "./agent-lifecycle.js";
 import { shellCommand, shellsCommand } from "./agent-shell.js";
 
 /** How long after a held read answers the next is asked, so a read that answers at once never spins. */
@@ -901,7 +902,7 @@ const shareCommand = Command.make(
 /** The agent group: start, continue, and the rest through share, with forward and the shells from their own files. */
 export const agentCommand = Command.make("agent").pipe(
   Command.withDescription(
-    `Start, continue, follow, message, and stop ${PRODUCT_NAME}'s coding agents`,
+    `Start, continue, follow, message, stop, rewind, delete, and wake ${PRODUCT_NAME}'s coding agents`,
   ),
   Command.withSubcommands([
     startCommand,
@@ -911,6 +912,9 @@ export const agentCommand = Command.make("agent").pipe(
     logsCommand,
     sendCommand,
     stopCommand,
+    rewindCommand,
+    deleteCommand,
+    wakeCommand,
     forwardCommand,
     waitCommand,
     checkoutCommand,

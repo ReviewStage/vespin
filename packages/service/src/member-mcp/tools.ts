@@ -60,6 +60,7 @@ import { RETIRED_TOOL } from "@repo/features/agent-tools";
 import {
   AGENT_BOUNDS,
   AGENT_STATUS,
+  agentRewindRequestSchema,
   CHANGED_FILE_STATUS,
   CHECK_SUMMARY,
   disabledServersSchema,
@@ -98,6 +99,7 @@ import {
   pullRequestActionRequestSchema,
 } from "@repo/features/pull-request-write-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
+import { SANDBOX_STATE } from "@repo/features/terminal-wire";
 import { WORKSPACE_BOUNDS, workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { Sandbox } from "@repo/sandbox";
 import {
@@ -111,6 +113,12 @@ import { Effect, Option, Result, Schema } from "effect";
 import type { HttpClient } from "effect/http";
 import { forgetWorkspaceMemory, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
 import { READ_AGENT_CHANGES_INPUT, runReadAgentChanges } from "../agents/agent-changes-tool.js";
+import {
+  deletedAgent,
+  resumedAgentSandbox,
+  rewoundAgentById,
+  warmedAgent,
+} from "../agents/agent-lifecycle.js";
 import { agentPullRequestAction } from "../agents/agent-pull-request-procedures.js";
 import {
   ADDED_REPOSITORY_INPUT,
@@ -1148,6 +1156,151 @@ const MEMBER_UPDATE_AGENT_TOOL = memberMcpTool({
     ),
 });
 
+/*
+ * An agent rewound, deleted, and woken, through the one operation each that
+ * the hosted `agents` procedures run (`../agents/agent-lifecycle.ts`), as
+ * the admitted member: each reaches the agent as the member's own window
+ * does, and refuses what it refuses.
+ */
+
+/** What a lifecycle call does, as its refusal says it was not done. */
+const LIFECYCLE_VERB = { REWOUND: "rewound", DELETED: "deleted", WOKEN: "woken" } as const;
+
+type LifecycleVerb = (typeof LIFECYCLE_VERB)[keyof typeof LIFECYCLE_VERB];
+
+/** Why an agent was not rewound, deleted, or woken, in words for one acting for the member. */
+const AGENT_LIFECYCLE_REFUSAL = {
+  NO_AGENT: AGENT_TOOL_REFUSAL.NO_AGENT,
+  NO_LINE:
+    "Not rewound: that agent is none the member can see, is archived, or holds no line of " +
+    `that lineId; ${MEMBER_MCP_TOOL.READ_AGENT} names each line's lineId.`,
+  INSIDE_TURN:
+    "Not rewound: that line was sent while a turn was working, so the agent cannot be taken " +
+    "back to just before it; name a line that opened a turn.",
+  STARTER_ONLY: (verb: string) =>
+    `Not ${verb}: only the member who started that agent may do that, since it runs on their ` +
+    "own GitHub token, subscription, or Mac.",
+  NOT_STOPPED:
+    "Not deleted: the agent could not be stopped first, or a message woke it again. Stop it " +
+    `with ${MEMBER_MCP_TOOL.STOP_AGENT}, or try again in a moment.`,
+  RETIRED: "Not woken: that agent is archived, and an archived agent's sandbox is not woken.",
+  SNAPSHOT_GONE: "Not woken: the sandbox's snapshot is gone, so nothing can resume it.",
+  UNAVAILABLE: (verb: string) =>
+    `Not ${verb}: the service could not do it just now. The call may be made again.`,
+} as const;
+
+/** A refusal of the lifecycle operations in the words above, by what was asked. */
+function lifecycleRefusalWords(refusal: HostedRefusal, verb: LifecycleVerb) {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return verb === LIFECYCLE_VERB.REWOUND
+        ? AGENT_LIFECYCLE_REFUSAL.NO_LINE
+        : AGENT_LIFECYCLE_REFUSAL.NO_AGENT;
+    case HOSTED_API_ERROR.INVALID_REQUEST:
+      return AGENT_LIFECYCLE_REFUSAL.INSIDE_TURN;
+    case HOSTED_API_ERROR.NOT_PERMITTED:
+      return AGENT_LIFECYCLE_REFUSAL.STARTER_ONLY(verb);
+    case HOSTED_API_ERROR.AGENT_NOT_READY:
+      return AGENT_LIFECYCLE_REFUSAL.NOT_STOPPED;
+    case HOSTED_API_ERROR.AGENT_RETIRED:
+      return AGENT_LIFECYCLE_REFUSAL.RETIRED;
+    case HOSTED_API_ERROR.SANDBOX_SNAPSHOT_GONE:
+      return AGENT_LIFECYCLE_REFUSAL.SNAPSHOT_GONE;
+    default:
+      return AGENT_LIFECYCLE_REFUSAL.UNAVAILABLE(verb);
+  }
+}
+
+/** One lifecycle operation run as the admitted member, its refusal answered in the words above. */
+const lifecycleAsMember = <R>(
+  verb: LifecycleVerb,
+  run: (userId: string) => Effect.Effect<WireRecord, HostedRefusal, R>,
+) =>
+  Effect.gen(function* () {
+    const member = yield* AdmittedMember;
+    return yield* run(member.userId).pipe(
+      Effect.catch((refusal) =>
+        Effect.succeed(agentToolRejected(lifecycleRefusalWords(refusal, verb))),
+      ),
+    );
+  });
+
+/** A rewind names the agent and the line it is taken back to just before. */
+const RewindAgentInputSchema = Schema.Struct({
+  agentId: AgentIdInputSchema.fields.agentId,
+  lineId: describeWire(
+    agentRewindRequestSchema.fields.messageId,
+    `The line to take the agent back to just before, by the lineId ${MEMBER_MCP_TOOL.READ_AGENT} ` +
+      "names on a line sent to the agent.",
+  ),
+});
+
+const REWIND_AGENT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.REWIND_AGENT,
+  description:
+    "Rewind a coding agent the member can see, by its id, as the member's own Rewind would: " +
+    "it is taken back to just before one of the lines sent to it, as though that line and " +
+    "everything after it were never said, and whatever it is doing stops first. Its checkout " +
+    "and branch are left as they stand: only the conversation goes back. Name the line by the " +
+    `lineId ${MEMBER_MCP_TOOL.READ_AGENT} names on it; a line sent while a turn was working is ` +
+    "refused. Only the member who started an agent rewinds one on their own GitHub token, " +
+    "subscription, or Mac. Answers `accepted` with the agent's status now, or `rejected` and " +
+    `why. ${MEMBER_MCP_TOOL.MESSAGE_AGENT} then starts it again from there.`,
+  input: RewindAgentInputSchema,
+  annotations: { readOnlyHint: false, destructiveHint: true },
+  run: ({ agentId, lineId }) =>
+    lifecycleAsMember(LIFECYCLE_VERB.REWOUND, (userId) =>
+      Effect.map(rewoundAgentById(userId, agentId, lineId), (agent) => ({
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        agent: { id: agent.id, title: agent.title ?? agent.model, status: agent.status },
+      })),
+    ),
+});
+
+const DELETE_AGENT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.DELETE_AGENT,
+  description:
+    "Delete a coding agent the member can see, by its id, for good, as the member's own " +
+    "Delete agent would: one still working is stopped first, then its transcript is deleted " +
+    "and its session ended, and nothing brings it back. Its branch and pull request on " +
+    "GitHub stay. Any member who can see an agent may delete it, as in the app. Delete only an " +
+    "agent the member asked you to; to put one away and keep it, archive it with " +
+    `${MEMBER_MCP_TOOL.UPDATE_AGENT} instead. Answers \`accepted\` once it is deleted, or ` +
+    "`rejected` and why, such as a stop that did not take.",
+  input: AgentIdInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ agentId }) =>
+    lifecycleAsMember(LIFECYCLE_VERB.DELETED, (userId) =>
+      Effect.as(deletedAgent(MEMBER_WRITER, userId, agentId), {
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        deleted: true,
+      }),
+    ),
+});
+
+const WAKE_AGENT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.WAKE_AGENT,
+  description:
+    "Wake the cloud sandbox of a coding agent the member can see, by its id, as the member's " +
+    "own Resume would: a stopped sandbox is resumed from its snapshot with its files, and the " +
+    "agent's runner is started where none runs, so its next message, shell, or shared port " +
+    "answers at once. A sandbox already running is left as it is, and one never opened stays " +
+    "starting until the agent's first command. Only the member who started an agent wakes one " +
+    "on their own GitHub token or Mac, and an archived agent is not woken. Answers " +
+    "`accepted` with where the sandbox stands now (" +
+    `${Object.values(SANDBOX_STATE).join(", ")}), or \`rejected\` and why.`,
+  input: AgentIdInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ agentId }) =>
+    lifecycleAsMember(LIFECYCLE_VERB.WOKEN, (userId) =>
+      Effect.gen(function* () {
+        const sandbox = yield* resumedAgentSandbox(userId, agentId);
+        yield* warmedAgent(userId, agentId);
+        return { status: ACTION_RESULT_STATUS.ACCEPTED, sandbox };
+      }),
+    ),
+});
+
 // An agent's cloud sandbox's ports, through the agents' own `list_ports` and `share_port` (`../agents/port-tools.ts`), reached as the member by the Terminal tab's rule.
 
 /** The agent whose sandbox a call reaches, as the admitted member. */
@@ -2181,6 +2334,9 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_MESSAGE_AGENT_TOOL,
   MEMBER_STOP_AGENT_TOOL,
   MEMBER_UPDATE_AGENT_TOOL,
+  REWIND_AGENT_TOOL,
+  DELETE_AGENT_TOOL,
+  WAKE_AGENT_TOOL,
   LIST_AGENT_PORTS_TOOL,
   SHARE_AGENT_PORT_TOOL,
   READ_INBOX_TOOL,

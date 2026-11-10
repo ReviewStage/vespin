@@ -100,6 +100,29 @@ export const readLine = Effect.fnUntraced(function* (prompt: string) {
   return piped.split("\n")[0];
 });
 
+/** The answers a person gives to go ahead, in any case. */
+const CONFIRMED = new Set(["y", "yes"]);
+
+/**
+ * A go-ahead for a step that cannot be taken back: at once with `--yes`;
+ * else asked of the person, `<question> [y/N]` on stderr, where stdin is a
+ * terminal, and refused, nothing done, unless they answer y or yes; and
+ * with no terminal and no `--yes`, refused as a usage error naming the flag,
+ * since a script never goes ahead by default.
+ */
+export const confirmOrYes = Effect.fnUntraced(function* (question: string, yes: boolean) {
+  if (yes) return;
+  if (!(yield* canPrompt)) {
+    return yield* new CommandFailed({
+      exit: CLI_EXIT.USAGE,
+      message: "Nothing was deleted: pass --yes to go ahead without a terminal to ask.",
+    });
+  }
+  const answered = yield* readLine(`${question} [y/N]`);
+  if (CONFIRMED.has((answered ?? "").trim().toLowerCase())) return;
+  return yield* new CommandFailed({ exit: CLI_EXIT.REFUSED, message: "Nothing was deleted." });
+});
+
 /** The text a `-F <file|->` names: the file's, or stdin's for `-`, or why it could not be read. */
 export const readInput = Effect.fnUntraced(function* (source: string) {
   if (source === STDIN_SOURCE) {

@@ -1871,10 +1871,11 @@ interface PageAsked {
   readonly entries: number;
 }
 
-/** One entry of a page: its place, the journal it stands in, which a fork names, none for a line sent to the agent, and its words, cut to the bound. */
+/** One entry of a page: its place, the journal it stands in, which a fork names, none for a line sent to the agent, the line sent to the agent, which a rewind names, none for the agent's own, and its words, cut to the bound. */
 interface PageEntry {
   readonly place: TranscriptPlace;
   readonly messageId: string | undefined;
+  readonly lineId: string | undefined;
   readonly text: string;
 }
 
@@ -1905,6 +1906,8 @@ function pageEntriesOf(
     place: { seq: record.seq, entry },
     // Note that only the agent's own journal is named, because a fork is cut at one and refuses a line.
     messageId: record.message.role === MESSAGE_ROLE.ASSISTANT ? record.id : undefined,
+    // Note that a line sent to the agent is named apart, because a rewind is cut before one and a fork refuses it.
+    lineId: record.message.role === MESSAGE_ROLE.USER ? record.id : undefined,
     text: cutText(text, AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS),
   }));
   return way === PAGE_WAY.BACK ? entries.reverse() : entries;
@@ -2001,9 +2004,11 @@ function pageAnswer(asked: PageAsked, page: PageRead): WireRecord {
   const older = (back ? page.more : asked.place !== undefined) ? first?.place : undefined;
   const newer = (back ? asked.place !== undefined : page.more) ? last?.place : undefined;
   return {
-    transcript: entries.map(({ messageId, text }) =>
-      messageId === undefined ? { text } : { messageId, text },
-    ),
+    transcript: entries.map(({ messageId, lineId, text }) => ({
+      ...(messageId === undefined ? undefined : { messageId }),
+      ...(lineId === undefined ? undefined : { lineId }),
+      text,
+    })),
     ...(older === undefined ? undefined : { older: { ...older } }),
     ...(newer === undefined ? undefined : { newer: { ...newer } }),
   };
