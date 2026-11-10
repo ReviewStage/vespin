@@ -126,9 +126,9 @@ import {
 import {
   awaitProvider,
   claudeCodeConnectionLost,
-  hostOf,
   type ProbeTarget,
   probeTargetOf,
+  providerTargetOf,
 } from "./reconnect.js";
 import { type LaunchTrace, launchTrace, RUNNER_SPAN } from "./trace.js";
 import { transcriptStore } from "./transcripts.js";
@@ -897,7 +897,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     return { end: RUNNER_END.FAILED, failure: started.failure } satisfies LaunchOutcome;
   }
   const session = started.success.query(Stream.toAsyncIterable(Stream.fromQueue(prompts)));
-  const providerHost = hostOf(context.env[ANTHROPIC_BASE_URL] ?? ANTHROPIC_API_HOST);
+  const provider = providerTargetOf(context.env[ANTHROPIC_BASE_URL] ?? ANTHROPIC_API_HOST);
   const launch: Launch = {
     session,
     prompts,
@@ -917,8 +917,8 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     ended: yield* Deferred.make<RunnerEnd>(),
     failure: yield* Ref.make(""),
     firstSequence: config.firstSequence,
-    providerHost,
-    probeTarget: probeTargetOf(context.env, providerHost),
+    providerHost: provider.host,
+    probeTarget: probeTargetOf(context.env, provider),
     reconnecting: yield* Ref.make<Reconnecting | undefined>(undefined),
     carriedOnAt: yield* Ref.make<number | undefined>(undefined),
   };

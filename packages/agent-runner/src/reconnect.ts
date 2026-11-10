@@ -93,23 +93,35 @@ const HTTP_PORT = 80;
 /** The proxy variables the harnesses and Node's fetch read, in the order the first set one wins. */
 const PROXY_VARIABLES = ["HTTPS_PROXY", "https_proxy", "ALL_PROXY", "all_proxy"] as const;
 
-/** The host of a base URL, or the name as given where it is no URL. */
-export function hostOf(urlOrHost: string): string {
-  try {
-    return new URL(urlOrHost).hostname;
-  } catch {
-    return urlOrHost;
-  }
+/** The port a URL is reached on: the one it names, else its scheme's. */
+function portOf(url: URL): number {
+  if (url.port !== "") return Number(url.port);
+  return url.protocol === "http:" ? HTTP_PORT : HTTPS_PORT;
 }
 
 /**
- * Where to probe for `host`: the proxy's own address where the environment
- * names one, since the harness reaches the host only through it, else the
- * host on 443.
+ * Where the provider is reached: the host and port of its base URL, a
+ * gateway's own port among them, or the name as given on 443 where it is no
+ * URL or names no host.
+ */
+export function providerTargetOf(urlOrHost: string): ProbeTarget {
+  try {
+    const url = new URL(urlOrHost);
+    if (url.hostname !== "") return { host: url.hostname, port: portOf(url) };
+  } catch {
+    // Not a URL: a bare host name.
+  }
+  return { host: urlOrHost, port: HTTPS_PORT };
+}
+
+/**
+ * Where to probe for the provider: the proxy's own address where the
+ * environment names one, since the harness reaches the provider only
+ * through it, else the provider itself.
  */
 export function probeTargetOf(
   env: Readonly<Record<string, string | undefined>>,
-  host: string,
+  provider: ProbeTarget,
 ): ProbeTarget {
   for (const name of PROXY_VARIABLES) {
     const proxy = env[name];
@@ -118,14 +130,12 @@ export function probeTargetOf(
       const url = new URL(proxy);
       // Note that a value with no scheme, such as `proxy.corp:3128`, parses with its name as the scheme and no host, so it is left to the harness as a value that is no URL is.
       if (url.hostname === "") continue;
-      const port =
-        url.port === "" ? (url.protocol === "https:" ? HTTPS_PORT : HTTP_PORT) : Number(url.port);
-      return { host: url.hostname, port };
+      return { host: url.hostname, port: portOf(url) };
     } catch {
-      // A proxy that is no URL is left to the harness; the host is probed directly.
+      // A proxy that is no URL is left to the harness; the provider is probed directly.
     }
   }
-  return { host, port: HTTPS_PORT };
+  return provider;
 }
 
 /** A probe the target did not answer. */

@@ -164,10 +164,10 @@ import {
 import {
   awaitProvider,
   codexConnectionLost,
-  hostOf,
   type ProbeTarget,
   type ProviderProbe,
   probeTargetOf,
+  providerTargetOf,
 } from "./reconnect.js";
 import { RUNNER_SPAN } from "./trace.js";
 import { transcriptStore } from "./transcripts.js";
@@ -558,8 +558,8 @@ function providerOverrides(auth: CodexAuth): (readonly [string, string])[] {
  * other, host-supplied tokens among them, which Codex's own OpenAI provider
  * sends there.
  */
-function providerHostOf(auth: CodexAuth): string {
-  return hostOf(
+function providerOf(auth: CodexAuth): ProbeTarget {
+  return providerTargetOf(
     auth.kind === CODEX_AUTH.TOKEN_COMMAND && auth.backend === CODEX_PLAN_BACKEND.CHATGPT
       ? CHATGPT_BACKEND_PROVIDER.BASE_URL
       : CHATGPT_PROVIDER.BASE_URL,
@@ -1390,7 +1390,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     Effect.forkScoped,
   );
   const heard = { count: 0 };
-  const providerHost = providerHostOf(auth);
+  const provider = providerOf(auth);
   const opened = yield* openAppServer(
     { context, signals, model: config.model, auth, heard },
     config.threadId,
@@ -1462,8 +1462,8 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     // Note that a warm launch is warm from its start, so one launched with no message waits for its first as one past an IDLE does.
     warm: config.warm === true,
     mirror,
-    providerHost,
-    probeTarget: probeTargetOf(context.env, providerHost),
+    providerHost: provider.host,
+    probeTarget: probeTargetOf(context.env, provider),
     reconnecting: false,
     carriedOnAt: undefined,
     heard,
