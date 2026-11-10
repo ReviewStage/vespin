@@ -1182,13 +1182,12 @@ function groupsFor(
 
 /** A kind's glyph, as its rows wear theirs. */
 function KindGlyph({ kind }: { kind: MentionKind }): React.JSX.Element {
-  const { from } = kind.narrow;
+  const { narrow } = kind;
+  if (narrow.from === MENTION_FROM.SERVER) return <ProviderMark provider={narrow.provider} />;
   // Note that the description and the people are no one entity's kind, so they keep glyphs of their own.
-  if (from === MENTION_FROM.DESCRIPTION) return <DocumentIcon />;
-  if (from === MENTION_FROM.PEOPLE) return <UsersIcon aria-hidden="true" />;
-  if (kind.narrow.from === MENTION_FROM.SERVER)
-    return <ProviderMark provider={kind.narrow.provider} />;
-  return <EntityGlyph kind={KIND_ENTITY[from]} />;
+  if (narrow.from === MENTION_FROM.DESCRIPTION) return <DocumentIcon />;
+  if (narrow.from === MENTION_FROM.PEOPLE) return <UsersIcon aria-hidden="true" />;
+  return <EntityGlyph kind={KIND_ENTITY[narrow.from]} />;
 }
 
 /** A row's glyph, as its chip wears it. */

@@ -9,6 +9,7 @@ import {
   INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
 import { AGENT_BOUNDS, AGENT_STATUS } from "@repo/features/agent-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
   INBOX_ASK,
@@ -36,13 +37,13 @@ import { EXPERIMENT } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
-import { DocumentIcon } from "@repo/ui";
 import { Effect } from "effect";
 import { act, createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { beforeAll, beforeEach, onTestFinished, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
 import { runAppCommand } from "../app-commands.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import {
   type AnyAct,
@@ -214,7 +215,7 @@ test("a teammate's open item leads with its title alone, and its box still takes
   );
 });
 
-test("the pane's crumbs lead with their tabs' glyphs, the plan's document and the agent's mark, and open the item's plan and its agent's own tab on the task, leaving the Inbox, with no other way out in its bar", async () => {
+test("the pane's crumbs lead with their tabs' glyphs, the plan's task glyph and the agent's mark, and open the item's plan and its agent's own tab on the task, leaving the Inbox, with no other way out in its bar", async () => {
   const { page, asked } = mount([], { chosen: ON_THRESHOLD });
   await settle();
   const crumbs = [
@@ -227,8 +228,8 @@ test("the pane's crumbs lead with their tabs' glyphs, the plan's document and th
   const [task, agent] = crumbs;
   assert.equal(
     task?.querySelector('[aria-hidden="true"]')?.innerHTML,
-    renderToStaticMarkup(createElement(DocumentIcon)),
-    "the plan's crumb wears its tab's document glyph",
+    renderToStaticMarkup(createElement(EntityGlyph, { kind: ENTITY_KIND.PLAN })),
+    "the plan's crumb wears a task's glyph while its status is not read, never the description's document",
   );
   assert.ok(
     agent?.querySelector('[aria-hidden="true"] .state-glyph'),
