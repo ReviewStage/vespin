@@ -128,7 +128,7 @@ test("a change is made over what storage holds now, and one that answers what it
   expect(window.localStorage.getItem(KEPT.SORT.name)).toBeNull();
 });
 
-test("where storage refuses a write, a change, and a read outside React, go on from the choice drawn, not the older one it holds", () => {
+test("where storage refuses a write, a change, a read outside React, and a surface drawn anew go on from the choice drawn, not the older one it holds", () => {
   window.localStorage.setItem(KEPT.SORT.name, JSON.stringify(SORT.LATEST));
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
@@ -140,6 +140,9 @@ test("where storage refuses a write, a change, and a read outside React, go on f
   act(() => doors?.change(flip));
   expect(shown()).toBe(`${SORT.OLDEST} ${SORT.OLDEST}`);
   expect(keptNow(KEPT.SORT, SORT.LATEST)).toBe(SORT.OLDEST);
+  act(() => root?.render(null));
+  act(() => root?.render(createElement(TwoLists)));
+  expect(shown()).toBe(`${SORT.OLDEST} ${SORT.OLDEST}`);
   act(() => doors?.change(flip));
   expect(shown()).toBe(`${SORT.LATEST} ${SORT.LATEST}`);
   act(() => doors?.change(flip));

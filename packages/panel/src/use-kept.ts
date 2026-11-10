@@ -55,7 +55,8 @@ const HOLDERS = new Map<string, Set<(kept: unknown) => void>>();
  * longer reads, or storage refuses the read; the door that chooses another
  * and keeps it; and the door that changes the choice over what is kept now.
  * Note that it is read once, as the surface is first drawn, so a surface
- * drawn again after it went opens at the choice it last kept; that a choice
+ * drawn again after it went opens at the choice it last kept, or the one
+ * drawn where storage refused it (`keptNow`); that a choice
  * made through any surface holding the same key is drawn at once in every
  * other; that the doors are the same doors across draws, so a row handed
  * one draws again only when the choice does; and that `change` hands its
@@ -67,7 +68,7 @@ export function useKept<A>(
   key: KeptKey<A>,
   initial: A,
 ): readonly [A, (next: A) => void, (change: (kept: A) => A) => void] {
-  const [value, setValue] = useState<A>(() => readKept(key.name, key.schema, initial));
+  const [value, setValue] = useState<A>(() => keptNow(key, initial));
   // What this surface draws, for the doors, which outlive a draw.
   const drawn = useRef(value);
   useEffect(() => {
