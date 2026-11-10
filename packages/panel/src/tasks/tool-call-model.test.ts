@@ -957,11 +957,16 @@ test("a pause names how long it waits, and its answer how long it waited or that
   });
 });
 
-test("a booked wakeup names how long until it fires, and its cancel is drawn as one", () => {
+test("a booked wakeup names how long until it fires, as the service held it once answered, and its cancel is drawn as one", () => {
+  const asking = toolCallView({
+    tool: "schedule_wakeup",
+    input: { delaySeconds: 5, prompt: "Read the checks on pull request #42." },
+    output: undefined,
+  });
   const booked = toolCallView({
     tool: "schedule_wakeup",
-    input: { delaySeconds: 600, prompt: "Read the checks on pull request #42." },
-    output: { status: "accepted", wakeup: { at: "2026-10-21T12:10:00.000Z", delaySeconds: 600 } },
+    input: { delaySeconds: 5, prompt: "Read the checks on pull request #42." },
+    output: { status: "accepted", wakeup: { at: "2026-10-21T12:01:00.000Z", delaySeconds: 60 } },
   });
   const canceled = toolCallView({
     tool: "schedule_wakeup",
@@ -969,9 +974,10 @@ test("a booked wakeup names how long until it fires, and its cancel is drawn as 
     output: { status: "accepted", wakeup: null },
   });
   assert.deepEqual(
-    [booked, canceled].map((view) => [view.kind, view.subject]),
+    [asking, booked, canceled].map((view) => [view.kind, view.subject]),
     [
-      [CALL_KIND.SCHEDULE_WAKEUP, "10 minutes"],
+      [CALL_KIND.SCHEDULE_WAKEUP, "5 seconds"],
+      [CALL_KIND.SCHEDULE_WAKEUP, "1 minute"],
       [CALL_KIND.CANCEL_WAKEUP, ""],
     ],
   );

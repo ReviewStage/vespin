@@ -1989,16 +1989,31 @@ const WAKEUP_TOOLS: ReadonlySet<string> = new Set([
   AGENT_TOOL.SCHEDULE_WAKEUP,
 ]);
 
-/** How long the last wakeup a turn set waited, in milliseconds, read off its `ScheduleWakeup` or `schedule_wakeup` call; none where the turn set none, or last canceled one. */
+/** Whether a wakeup call booked one: not a cancel, and not a call of ours the service refused, which left the booking before it standing. */
+function booksWakeup(part: AgentPart): boolean {
+  if (part.kind !== AGENT_PART.TOOL || !WAKEUP_TOOLS.has(part.tool)) return false;
+  if (isRecord(part.input) && part.input.stop === true) return false;
+  return !(isRecord(part.output) && part.output.status === ACTION_RESULT_STATUS.REJECTED);
+}
+
+/**
+ * How long the last wakeup a turn booked waited, in milliseconds: the delay
+ * the service held it to, as its answer names it, or else the delay the
+ * call asked for; none where the turn booked none.
+ */
 export function wakeupDelayOf(turn: AgentTranscriptMessage | undefined): number | undefined {
   if (turn === undefined) return undefined;
-  const call = agentParts(turn).findLast(
-    (part) => part.kind === AGENT_PART.TOOL && WAKEUP_TOOLS.has(part.tool),
-  );
-  const input = call?.kind === AGENT_PART.TOOL ? call.input : undefined;
-  return isRecord(input) && isWireNumber(input.delaySeconds)
-    ? input.delaySeconds * SECOND_MS
-    : undefined;
+  const call = agentParts(turn).findLast(booksWakeup);
+  if (call?.kind !== AGENT_PART.TOOL) return undefined;
+  const booked = isRecord(call.output) ? call.output.wakeup : undefined;
+  const held =
+    isRecord(booked) && isWireNumber(booked.delaySeconds) ? booked.delaySeconds : undefined;
+  const asked =
+    isRecord(call.input) && isWireNumber(call.input.delaySeconds)
+      ? call.input.delaySeconds
+      : undefined;
+  const seconds = held ?? asked;
+  return seconds === undefined ? undefined : seconds * SECOND_MS;
 }
 
 /** What a member did on a thread that a line steered into the agent carries, and the item it is on; nothing for any other line. */

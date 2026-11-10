@@ -90,10 +90,20 @@ export const SCHEDULE_WAKEUP_TOOL = {
   inputSchema: SCHEDULE_WAKEUP_INPUT,
 } as const;
 
+/** What a call may ask: a booking, or a cancel. */
+const WAKEUP_ASK = {
+  BOOK: "book",
+  STOP: "stop",
+} as const;
+
 /** What a call asks: a booking of a delay and a prompt, or a cancel. */
 type WakeupAsk =
-  | { readonly kind: "book"; readonly delaySeconds: number; readonly prompt: string }
-  | { readonly kind: "stop" };
+  | {
+      readonly kind: typeof WAKEUP_ASK.BOOK;
+      readonly delaySeconds: number;
+      readonly prompt: string;
+    }
+  | { readonly kind: typeof WAKEUP_ASK.STOP };
 
 /** The call's input read, each refusal naming the one thing wrong. */
 function readAsk(input: UnparsedWireValue): Result.Result<WakeupAsk, string> {
@@ -107,10 +117,10 @@ function readAsk(input: UnparsedWireValue): Result.Result<WakeupAsk, string> {
     );
   }
   const { delaySeconds, prompt, stop } = read.success;
-  if (stop === true) return Result.succeed({ kind: "stop" });
+  if (stop === true) return Result.succeed({ kind: WAKEUP_ASK.STOP });
   if (delaySeconds === undefined) return Result.fail(WAKEUP_REFUSAL.NO_DELAY);
   if (prompt === undefined) return Result.fail(WAKEUP_REFUSAL.NO_PROMPT);
-  return Result.succeed({ kind: "book", delaySeconds, prompt });
+  return Result.succeed({ kind: WAKEUP_ASK.BOOK, delaySeconds, prompt });
 }
 
 /** The delay as it is held: inside the bounds, whatever was asked. */
@@ -143,7 +153,7 @@ export function runScheduleWakeup(
   if (agent === undefined) return Effect.succeed(agentToolRejected(WAKEUP_REFUSAL.NOT_AGENT));
   const ask = asked.success;
   return orStoreRefusal(
-    ask.kind === "stop"
+    ask.kind === WAKEUP_ASK.STOP
       ? Effect.as(cancelAgentWakeup(agent.id), {
           status: ACTION_RESULT_STATUS.ACCEPTED,
           wakeup: null,

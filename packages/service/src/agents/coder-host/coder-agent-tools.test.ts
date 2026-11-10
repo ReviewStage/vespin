@@ -198,6 +198,7 @@ import { NATIVE_SESSION_PREFIX } from "./native-runtime.js";
 import type { SummaryModelOf } from "./replay-summary.js";
 import { NativeAgentSessions, RUNNER_CHECKOUT, type RunnerCheckout } from "./runtime-sessions.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
+import { SCHEDULE_WAKEUP_TOOL } from "./wakeup-tool.js";
 
 /**
  * A coding agent's tools about the other agents of its workspace, through
@@ -1396,6 +1397,14 @@ test("start_agent shows the model the recorded input, images among it, and one t
 
 test("message_agent shows the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "message-agent-input", MESSAGE_AGENT_TOOL.inputSchema);
+});
+
+test("schedule_wakeup shows the model the recorded input", async () => {
+  await settleJsonSchemaGolden(
+    GOLDEN_ROOT,
+    "schedule-wakeup-input",
+    SCHEDULE_WAKEUP_TOOL.inputSchema,
+  );
 });
 
 test("message_agent refuses a malformed id, empty words, and words over the bound each in its own words, the last naming the length to cut", async () => {

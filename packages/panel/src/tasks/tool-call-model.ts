@@ -1112,13 +1112,17 @@ const AGENT_TOOL_VIEWS = {
       output: output === undefined ? undefined : sleepOutput(output),
     };
   },
-  // Note that a wakeup's row says the delay booked, as the agent asked it, rather than the one the service held it to, which its answer names.
+  // Note that a wakeup's row says the delay the service held the booking to, as its answer names it, and the one asked for while the call has no answer yet.
   [AGENT_TOOL.SCHEDULE_WAKEUP]: ({ input, output }) => {
     if (isRecord(input) && input.stop === true) {
       return namedCall(CALL_KIND.CANCEL_WAKEUP, input, output, undefined);
     }
-    const seconds =
+    const booked = isRecord(output) ? output.wakeup : undefined;
+    const held =
+      isRecord(booked) && isWireNumber(booked.delaySeconds) ? booked.delaySeconds : undefined;
+    const asked =
       isRecord(input) && isWireNumber(input.delaySeconds) ? input.delaySeconds : undefined;
+    const seconds = held ?? asked;
     return {
       kind: CALL_KIND.SCHEDULE_WAKEUP,
       subject: seconds === undefined ? "" : spanText(seconds),

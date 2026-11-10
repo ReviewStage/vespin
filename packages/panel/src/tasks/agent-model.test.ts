@@ -24,7 +24,7 @@ import {
 } from "@repo/features/provider-key-wire";
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
-import { MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
+import { MESSAGE_ROLE, TURN_STATUS, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { test } from "vitest";
 import { TOOL_STATE } from "../ai-elements/tool.js";
@@ -146,30 +146,60 @@ test("a stored message's parts are read for drawing: text, reasoning, a tool cal
   ]);
 });
 
-test("the wakeup a turn set is read off Claude Code's own call or ours alike, by the delay it booked, and none off a cancel", () => {
-  const turnWith = (tool: string, input: Record<string, number | string | boolean>) => ({
+test("the wakeup a turn booked is read off Claude Code's own call or ours alike, by the delay held or asked, past a cancel or a refused call", () => {
+  type Call = { input: Record<string, number | string | boolean>; output?: WireValue };
+  const turnWith = (tool: string, ...calls: Call[]) => ({
     id: "t",
     role: "assistant" as const,
     parts: [
       { type: "text", text: "Pushed; waiting on the checks." },
-      {
+      ...calls.map((call, index) => ({
         type: `tool-${tool}`,
-        toolCallId: "call_1",
+        toolCallId: `call_${index}`,
         state: "output-available",
-        input,
-        output: "ok",
-      },
+        input: call.input,
+        output: call.output ?? "ok",
+      })),
     ],
   });
   assert.equal(
-    wakeupDelayOf(turnWith("ScheduleWakeup", { delaySeconds: 270, prompt: "Check CI" })),
+    wakeupDelayOf(turnWith("ScheduleWakeup", { input: { delaySeconds: 270, prompt: "Check CI" } })),
     270_000,
   );
+  // The service held the booking to a minute, which its answer names, so the head says a minute and not the second asked.
   assert.equal(
-    wakeupDelayOf(turnWith("schedule_wakeup", { delaySeconds: 600, prompt: "Check CI" })),
+    wakeupDelayOf(
+      turnWith("schedule_wakeup", {
+        input: { delaySeconds: 1, prompt: "Check CI" },
+        output: {
+          status: "accepted",
+          wakeup: { at: "2026-10-21T12:01:00.000Z", delaySeconds: 60 },
+        },
+      }),
+    ),
+    60_000,
+  );
+  // A refused call left the booking before it standing, and a cancel books none.
+  assert.equal(
+    wakeupDelayOf(
+      turnWith(
+        "schedule_wakeup",
+        {
+          input: { delaySeconds: 600, prompt: "Check CI" },
+          output: {
+            status: "accepted",
+            wakeup: { at: "2026-10-21T12:10:00.000Z", delaySeconds: 600 },
+          },
+        },
+        {
+          input: { delaySeconds: 3_600 },
+          output: { status: "rejected", reason: "Not booked: pass a prompt." },
+        },
+      ),
+    ),
     600_000,
   );
-  assert.equal(wakeupDelayOf(turnWith("schedule_wakeup", { stop: true })), undefined);
+  assert.equal(wakeupDelayOf(turnWith("schedule_wakeup", { input: { stop: true } })), undefined);
   assert.equal(wakeupDelayOf(undefined), undefined);
 });
 
