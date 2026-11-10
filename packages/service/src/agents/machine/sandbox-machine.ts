@@ -23,7 +23,8 @@
  * to delete with it; nothing here names one. The `agent` user is made in a
  * sandbox created from the image. Every write the checkout makes is the group's
  * (`../repository-shell.ts`'s `GROUP_WRITES`), so the `agent` user writes
- * it too. A create on an image not yet ready (`ImageNotReady`) is asked again
+ * it too, and the dependencies a base drive's fill installed are handed to
+ * that user at its launch (`launchRunner`'s readying). A create on an image not yet ready (`ImageNotReady`) is asked again
  * once the registry has had time to prepare the image. The
  * commit identity is left to the launch (`finishCheckout`), which sets it,
  * and the write token again, beside its own steps. Nothing is deleted where the setup or the
@@ -257,6 +258,36 @@ const LINK_TOOLS_DIRECTORY = `if [ -d ${SANDBOX_TOOLS_DIRECTORY_BEFORE_RENAME} ]
  */
 const JOIN_DOCKER_GROUP = `if getent group docker > /dev/null && ! id -nG ${AGENT_USER} | grep -qw docker; then usermod -aG docker ${AGENT_USER}; fi`;
 
+/** Where pnpm keeps its store for a checkout on the workspace's drive, as the base drive's fill installs: the drive's root, the first folder up from the checkout it may write on that drive. */
+const DRIVE_PNPM_STORE = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/.pnpm-store`;
+
+/**
+ * The workspace's drive's root opened to the store's group on each launch,
+ * root's, where pnpm's store stands at it, so `agent`, in the default user's
+ * group, may write there, and its pnpm picks that store as the fill's did.
+ * Note that this is because pnpm keeps its store at the topmost folder of
+ * the checkout's drive its user may write, and a fork of a base drive mounts
+ * with a root only root writes, so `agent`'s pnpm chose a store under the
+ * checkout and, finding the one its `node_modules` names elsewhere, asked to
+ * purge it.
+ */
+const OPEN_DRIVE_STORE = `if [ -d ${DRIVE_PNPM_STORE} ]; then chgrp --reference=${DRIVE_PNPM_STORE} ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}; chmod g+w ${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}; fi`;
+
+/**
+ * The dependencies another user installed in the agent's checkout handed to
+ * `agent` on each launch, root's: the base drive's fill's
+ * (`../base-drive.ts`), or a setup script's, both the default user's. Note
+ * that this is because an install chmods what it installed on every run
+ * (pnpm a package's bins, a `prepare` script the hooks it copies), which
+ * only a file's owner may, so `agent`'s own install failed on them. The
+ * checkout's files but its `.git` and pnpm's store on the drive, whose files
+ * `node_modules` links, are made `agent`'s, their group and its writes left
+ * as they stand, so the default user still writes them. It is asked only
+ * where the checkout's `node_modules` is not `agent`'s, so a launch after
+ * the one that handed it walks nothing.
+ */
+const HAND_INSTALL_TO_AGENT = `if [ -d ${CODER.CHECKOUT_PATH}/node_modules ] && [ "$(stat -c %U ${CODER.CHECKOUT_PATH}/node_modules)" != ${AGENT_USER} ]; then find ${CODER.CHECKOUT_PATH} -mindepth 1 -maxdepth 1 ! -name .git -exec chown -R ${AGENT_USER} {} +; if [ -d ${DRIVE_PNPM_STORE} ]; then chown -R ${AGENT_USER} ${DRIVE_PNPM_STORE}; fi; fi`;
+
 /**
  * A checkout marked safe for git in the sandbox and its repository shared
  * with `agent`'s group, as the launch marks each: the agent's own and every
@@ -314,6 +345,9 @@ const CREDENTIAL_UNREAD = "the agent's repository credential could not be read";
  * each checkout marked safe for git and shared with `agent`'s group, the
  * agent's own and those of the repositories it works in beside it at the
  * paths given (`extraCheckoutPaths`), none for an agent in one repository,
+ * the drive's pnpm store opened to `agent` (`OPEN_DRIVE_STORE`) and what
+ * another user installed in its checkout handed to it
+ * (`HAND_INSTALL_TO_AGENT`), so its own install runs there,
  * and the folder an agent saves what the service reads back in made
  * `agent`'s and readable by the default user the service reads as
  * (`SHARED_FILES_DIRECTORY`). Note that the checkout's git config is written
@@ -330,6 +364,8 @@ function readyScript(extraCheckouts: readonly string[]): string {
     `rm -rf ${RUNNER_UPLOAD}`,
     `if [ -d ${NATIVE_SKILLS_PATH.UPLOAD} ]; then rm -rf ${NATIVE_SKILLS_PATH.INSTALLED} && mkdir -p $(dirname ${NATIVE_SKILLS_PATH.INSTALLED}) && mv ${NATIVE_SKILLS_PATH.UPLOAD} ${NATIVE_SKILLS_PATH.INSTALLED} && chown -R root:root ${NATIVE_SKILLS_PATH.INSTALLED} && chmod -R u=rwX,go=rX ${NATIVE_SKILLS_PATH.INSTALLED}; fi`,
     ...[CODER.CHECKOUT_PATH, ...extraCheckouts].flatMap(sharedCheckout),
+    OPEN_DRIVE_STORE,
+    HAND_INSTALL_TO_AGENT,
     `install -d -o ${AGENT_USER} -g ${AGENT_USER} -m 0755 ${SHARED_FILES_DIRECTORY}`,
   ].join("\n");
 }
