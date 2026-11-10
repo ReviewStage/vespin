@@ -54,6 +54,21 @@ export const HOSTED_SERVICE_PATH = {
   /** The phone unregistered (POST), by its token and gateway in the body; one the account does not hold is passed over. */
   ACCOUNT_PUSH_DEVICES_UNREGISTER: "/api/account/push-devices/unregister",
   /**
+   * The phone's own standing (POST), by its token and gateway in the body:
+   * its "Notify me" and how its pushes have fared; one the account does not
+   * hold is answered not found.
+   */
+  ACCOUNT_PUSH_DEVICES_STATUS: "/api/account/push-devices/status",
+  /** The phone's "Notify me" set (POST), by its token and gateway in the body; one the account does not hold is answered not found. */
+  ACCOUNT_PUSH_DEVICES_NOTIFY: "/api/account/push-devices/notify",
+  /**
+   * The member used a desktop or web client just now (POST), with an empty
+   * body: the service stamps when the account was last active, which holds
+   * its phone's pushes while it stands inside `PRESENCE.WINDOW_MS`.
+   * `presence-wire.ts` declares it.
+   */
+  ACCOUNT_PRESENCE: "/api/account/presence",
+  /**
    * The outside MCP clients the account allowed: read them (GET), or revoke
    * one by its client id in the query (DELETE). `mcp-client-wire.ts`
    * declares both.

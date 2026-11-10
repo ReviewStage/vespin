@@ -3,16 +3,11 @@ import { readingWords } from "@repo/features/words";
 import { CHIP_LOOK, Chip, ChipName, ComposerFoot, Skeleton, SkeletonRegion } from "@repo/ui";
 import { Message, MessageContent } from "../ai-elements/message.js";
 import { PromptInputCard } from "../ai-elements/prompt-input.js";
-import {
-  BUTTON,
-  ComposerActions,
-  ComposerAttach,
-  ComposerCard,
-  PLACEHOLDER,
-} from "./agent-composer.js";
+import { BUTTON, ComposerCard, PLACEHOLDER } from "./agent-composer.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
-import { AttachFilesButton } from "./attach-files-button.js";
+import { ATTACH_FILES, AttachFilesButton } from "./attach-files-button.js";
 import { ComposerFieldRoom, ComposerPlaceholder, UnloadedComposerField } from "./composer-field.js";
+import { ComposerActions, ComposerAttach } from "./message-box.js";
 import { ModelLabel } from "./model-label.js";
 
 /**
@@ -118,7 +113,7 @@ export function ComposerSkeleton({
         <ComposerFoot
           tools={
             <ComposerAttach>
-              <AttachFilesButton label={BUTTON.ATTACH} disabled onFiles={takeNoFiles} />
+              <AttachFilesButton label={ATTACH_FILES} disabled onFiles={takeNoFiles} />
             </ComposerAttach>
           }
           actions={

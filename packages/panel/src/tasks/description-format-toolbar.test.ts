@@ -22,7 +22,12 @@ import { useAppCommand, useAppKeymap } from "../app-commands.js";
 import type { AnyAct, FakeActAnswer } from "../testing/app-bridge.js";
 import { FAKE_ANSWER } from "../testing/app-bridge.js";
 import { readExperiments } from "../testing/app-state.js";
-import { editorBundleLanded, installEditorLayout } from "../testing/composer.js";
+import {
+  editorBundleLanded,
+  installEditorLayout,
+  pressInComposer,
+  writeInComposer,
+} from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { DescriptionBody } from "./description-body.js";
@@ -416,18 +421,11 @@ test("Comment on the toolbar starts a thread on the words selected", async () =>
 
   act(() => press(container, "Comment").click());
   const field =
-    container.querySelector<HTMLTextAreaElement>(`.comment-card[data-thread="pending"] textarea`) ??
+    container.querySelector<HTMLElement>(`.comment-card[data-thread="pending"] .composer-editor`) ??
     assert.fail("the thread is being started");
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set?.call(
-      field,
-      "Only admins?",
-    );
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await act(async () => {
-    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  });
+  writeInComposer(field, "Only admins?");
+  pressInComposer(field, "Enter");
+  await act(async () => undefined);
 
   assert.deepEqual(
     started.map((start) => [

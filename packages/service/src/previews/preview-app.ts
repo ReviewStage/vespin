@@ -28,7 +28,7 @@ import {
   type AgentSandboxService,
   PREVIEW_STANDING,
 } from "../agents/terminal/agent-sandbox.js";
-import { STARTING_HEADER } from "../agents/terminal/preview-relay.js";
+import { NOT_RUNNING_HEADER, STARTING_HEADER } from "../agents/terminal/preview-relay.js";
 import { reachedAgentSession, sandboxOrUpstream } from "../agents/terminal/sandbox-reach.js";
 import { afterResponse } from "../http/after-response.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
@@ -82,7 +82,10 @@ const DROPPED_RESPONSE_HEADERS: ReadonlySet<string> = new Set([
 const NEVER_KEPT = { "Vercel-CDN-Cache-Control": "no-store" } as const;
 
 const NOT_SIGNED_IN = "Sign in to view this preview.";
-const NOT_SHARED = "This preview isn't shared right now. Ask whoever shared it to share it again.";
+const NO_PREVIEW = "No preview running here.";
+
+/** The page a visit sees where nothing is shared from the agent now, or its server stopped while the sandbox ran. */
+const NO_PREVIEW_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>No preview running here</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px/1.5 system-ui,sans-serif;color:#444;text-align:center}h1{font-size:17px;color:#111;margin:0 0 6px}</style></head><body><main><h1>No preview running here</h1><p>Nothing is running at this link right now.</p></main></body></html>`;
 const WAKING = "Waking up the preview. This page reloads when it's ready.";
 
 /** How often the waking page asks whether the preview is ready. */
@@ -212,10 +215,12 @@ function signInFirst(sandbox: PageSandbox, agentId: string, request: Request, as
   });
 }
 
-/** What a visit is answered where nothing is shared from the agent now. */
-function notShared() {
-  return HttpServerResponse.text(NOT_SHARED, {
+/** What a visit is answered where nothing is shared from the agent now, or its server stopped: a page for a page load, bare text for anything else. */
+function noPreview(request: Request) {
+  const page = request.headers.get("sec-fetch-mode") === "navigate";
+  return HttpServerResponse.text(page ? NO_PREVIEW_PAGE : NO_PREVIEW, {
     status: HOSTED_HTTP_STATUS.NOT_FOUND,
+    ...(page ? { contentType: "text/html; charset=utf-8" } : {}),
     headers: NEVER_KEPT,
   });
 }
@@ -250,8 +255,10 @@ const serverAnswers = (upstream: string) =>
   Effect.tryPromise(() => fetch(upstream, { redirect: "manual" })).pipe(
     Effect.map((answered) => {
       void answered.body?.cancel();
+      // A server that stopped under a running share answers too, so the page reloads to say so.
       return (
-        !answered.headers.has(STARTING_HEADER) && answered.status < HOSTED_HTTP_STATUS.BAD_GATEWAY
+        answered.headers.has(NOT_RUNNING_HEADER) ||
+        (!answered.headers.has(STARTING_HEADER) && answered.status < HOSTED_HTTP_STATUS.BAD_GATEWAY)
       );
     }),
     Effect.orElseSucceed(() => false),
@@ -285,6 +292,7 @@ const passedOn = (request: Request, upstream: string, origin: string, asked: str
     );
     // The relay answers so while the port's server it started again is still coming up.
     if (answered.headers.has(STARTING_HEADER)) return wakingPage(request);
+    if (answered.headers.has(NOT_RUNNING_HEADER)) return noPreview(request);
     const back = new Headers();
     for (const [name, value] of answered.headers) {
       if (name === "set-cookie" || DROPPED_RESPONSE_HEADERS.has(name)) continue;
@@ -325,7 +333,7 @@ const proxyEndpoint = (seams: PreviewProxySeams, touched: Map<string, number>) =
       return signInFirst(sandbox, agentId, request, asked);
     }
     const { sessionId } = yield* reachedAgentSession(member.userId, agentId);
-    if (sessionId === undefined) return notShared();
+    if (sessionId === undefined) return noPreview(request);
     const onSandbox = <A>(call: (agent: AgentSandboxService) => Effect.Effect<A, SandboxError>) =>
       Effect.provide(
         Effect.gen(function* () {
@@ -336,7 +344,8 @@ const proxyEndpoint = (seams: PreviewProxySeams, touched: Map<string, number>) =
     const status = asked.split("?")[0] === PREVIEW_LINK.STATUS_PATH;
     const preview = yield* onSandbox((agent) => agent.preview(sessionId));
     // Note that a share gone while the page waited reloads it too, so it shows why.
-    if (preview.kind === PREVIEW_STANDING.NONE) return status ? statusAnswer(true) : notShared();
+    if (preview.kind === PREVIEW_STANDING.NONE)
+      return status ? statusAnswer(true) : noPreview(request);
     if (preview.kind === PREVIEW_STANDING.WAKING) {
       // Note that the visit answers at once and the resume runs after it, so the waking page asks again until the sandbox is up.
       if (preview.state === SANDBOX_STATE.STOPPED) {

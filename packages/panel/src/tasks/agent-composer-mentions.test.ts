@@ -1493,13 +1493,6 @@ function crumb(container: HTMLElement): string | undefined {
   return container.querySelector(".mention-menu-crumb-title")?.textContent ?? undefined;
 }
 
-/** The keys the list's foot names. */
-function footKeys(container: HTMLElement): string[] {
-  return [...container.querySelectorAll(".mention-menu .ui-menu-keys > *")].map(
-    (key) => key.textContent ?? "",
-  );
-}
-
 /** The "Browse" rows, each by its name and its detail. */
 function kindsListed(container: HTMLElement): [string, string][] {
   return [...container.querySelectorAll('.mention-menu [aria-label="Browse"] [role="option"]')].map(
@@ -1529,7 +1522,6 @@ test("a bare @ browses a row for each kind the place offers, saying nothing besi
   typeInComposer(container, "See @");
   await settle();
   const kinds = kindsListed(container);
-  const wideKeys = footKeys(container);
   highlightRow(container, "Browse", "Pages");
   pressInComposer(container, "ArrowRight");
   await settle();
@@ -1543,10 +1535,8 @@ test("a bare @ browses a row for each kind the place offers, saying nothing besi
     ["Dates", ""],
     ["MCP servers", ""],
   ]);
-  assert.deepEqual(wideKeys, ["↑↓Move", "⏎⇥Mention", "→Open", "EscClose"]);
   assert.equal(crumb(container), "Pages");
   assert.deepEqual(groupsListed(container), [["Pages", ["Invites by week"]]]);
-  assert.deepEqual(footKeys(container), ["↑↓Move", "⏎⇥Mention", "⌫All kinds", "EscClose"]);
 });
 
 /** The highlighted row, by its group and its name. */
@@ -1695,13 +1685,11 @@ test("→ on a folder walks into it, its first row the folder and the rest what 
   pressInComposer(container, "ArrowRight");
   await listSettled();
   const inWeb = [crumb(container), listed(container).slice(0, 3), listedCount(container)];
-  const keys = footKeys(container);
   pressInComposer(container, "Backspace");
   await listSettled();
 
   assert.deepEqual(inApps, ["apps", ["apps/", "web/"]]);
   assert.deepEqual(inWeb, ["apps/web", ["web/", "invite-01.ts", "invite-02.ts"], 50]);
-  assert.deepEqual(keys, ["↑↓Move", "⏎⇥Mention", "→Open", "⌫Up", "EscClose"]);
   assert.deepEqual([crumb(container), listed(container)], ["apps", ["apps/", "web/"]]);
   assert.equal(composerEditor(container).textContent, "See @files:");
 });
