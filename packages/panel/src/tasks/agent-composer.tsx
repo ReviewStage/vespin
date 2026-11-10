@@ -847,6 +847,7 @@ export function AgentComposer({
     setCut(false);
     refocus.current = card.current?.contains(document.activeElement) === true;
     go();
+    files.settle();
     setSends((count) => count + 1);
   };
   /** The box's message sent now: into the turn under way, or opening one. */

@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import type { AgentAgentAnswer } from "@repo/features/agent-view";
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE, type ShownFailureReport } from "@repo/features/shown-failure";
+import { closeHistory } from "@tiptap/pm/history";
 import { Effect } from "effect";
 import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -19,6 +20,7 @@ import {
   installEditorLayout,
   pressInComposer,
   QUIET_COMPOSER,
+  typeInComposer,
 } from "./testing/composer.js";
 import { testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
@@ -181,6 +183,32 @@ test("one Backspace taking a picture's chip out of the words takes the picture o
 
   act(() => pressInComposer(container, "Backspace"));
   await settle();
+
+  assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
+});
+
+test("undo bringing a deleted picture's chip back brings its picture back, though the words were emptied in between", async () => {
+  const container = await mounted("agent");
+  await drop(container, [png("one.png")]);
+  const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
+
+  // Note that each step closes its own entry in the history, as a pause between them would.
+  const pause = () => act(() => editor.view.dispatch(closeHistory(editor.state.tr)));
+  pause();
+  act(() => pressInComposer(container, "Backspace"));
+  pause();
+  typeInComposer(container, "a");
+  act(() => {
+    const { from } = editor.state.selection;
+    editor.view.dispatch(editor.state.tr.delete(from - 1, from));
+  });
+  await settle();
+  assert.deepEqual(held(container).pictures, []);
+
+  for (let undo = 0; undo < 4 && held(container).pictures.length === 0; undo += 1) {
+    act(() => editor.commands.undo());
+    await settle();
+  }
 
   assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
 });

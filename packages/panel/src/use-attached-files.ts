@@ -4,7 +4,7 @@ import {
   type AgentAttachment,
   base64Bytes,
 } from "@repo/features/agent-wire";
-import { isPictureName, nextPictureName, pictureMarkers } from "@repo/features/picture-marker";
+import { isPictureName, nextPictureName, writtenMarkers } from "@repo/features/picture-marker";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { useRef, useState } from "react";
 import { reportShownFailure } from "./failure-report.js";
@@ -44,7 +44,8 @@ import { type FileDrop, useFileDrop } from "./use-file-drop.js";
  * and has its marker put in as a chip where the caret stood as the files
  * were handed, once they are read. A picture whose marker was in the words
  * goes with it: deleting its chip takes the picture off, and undo bringing
- * the chip back brings the picture back (`follow`), until the box empties.
+ * the chip back brings the picture back (`follow`), until the message goes
+ * (`settle`).
  * A picture the words could not take, the box's editor not loaded or its
  * bound reached, stays attached beside the words, as every file is.
  */
@@ -238,6 +239,8 @@ export interface AttachedFiles {
   readonly drop: FileDrop;
   /** The box's words as they now stand, which take off a picture whose marker they no longer hold and bring back one whose marker came back. */
   readonly follow: (words: string) => void;
+  /** The box's message gone: the pictures taken off with their chips, which undo can no longer bring back, are let go, and the next picture is "Picture 1" again. */
+  readonly settle: () => void;
 }
 
 /** The files a box holds, read as they are handed to it on the terms `options` sets. */
@@ -341,16 +344,16 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
       holderNow().update(() => next);
     },
     drop,
+    settle: () => {
+      placed.current.clear();
+      stashed.current.clear();
+      minted.current.clear();
+    },
     follow: (words) => {
       if (latest.current.pictures === undefined) return;
       const held = heldNow();
-      if (words === "" && held.length === 0) {
-        placed.current.clear();
-        stashed.current.clear();
-        minted.current.clear();
-        return;
-      }
-      const marked = new Set(pictureMarkers(words).map((marker) => marker.name));
+      // Note that a marker in code still holds its picture, which the box then draws beside its words.
+      const marked = new Set(writtenMarkers(words).map((marker) => marker.name));
       const gone = held.filter(
         (file) => isPictureFile(file) && placed.current.has(file.name) && !marked.has(file.name),
       );

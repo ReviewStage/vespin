@@ -2,7 +2,6 @@ import { pictureMarker, pictureMarkers } from "@repo/features/picture-marker";
 import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
 import {
   holdsSlashWord,
-  insideCode,
   type SkillOption,
   skillTokens,
   skillWord,
@@ -225,15 +224,12 @@ export function SentWords({
 }): ReactNode {
   const skills = useKnownSkills(holdsSlashWord(text));
   const pictures = useContext(WordPicturesContext);
-  // Note that a marker in code is the code's, as a `/name` there is.
   const chips = [
     ...(skills === undefined ? [] : skillTokens(text, new Set(skills.keys()))).map((token) =>
       skillChip(text, token),
     ),
     ...pictureMarkers(text)
-      .filter(
-        (marker) => pictures?.names.has(marker.name) === true && !insideCode(text, marker.start),
-      )
+      .filter((marker) => pictures?.names.has(marker.name) === true)
       .map((marker) => pictureChip(marker.start, marker.end, marker.name)),
   ].sort((first, second) => first.start - second.start);
   if (chips.length === 0) {

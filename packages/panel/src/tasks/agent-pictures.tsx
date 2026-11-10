@@ -21,7 +21,6 @@ import {
   pictureStateOf,
   usePicture,
 } from "@repo/ui/picture-read";
-import { insideCode } from "@repo/ui/skill-mention";
 import { useQueries } from "@tanstack/react-query";
 import { Schema } from "effect";
 import { createContext, type ReactNode, useCallback, useContext, useMemo, useState } from "react";
@@ -599,14 +598,7 @@ export function MessagePictures({
   children: ReactNode;
 }): ReactNode {
   const chips = useKeptChips(messageFileChips(message));
-  // Note that a marker in code is the code's, as the words draw it (`SentWords`), so its picture stays among the line's files.
-  const named = [
-    ...new Set(
-      pictureMarkers(words)
-        .filter((marker) => !insideCode(words, marker.start))
-        .map((marker) => marker.name),
-    ),
-  ];
+  const named = [...new Set(pictureMarkers(words).map((marker) => marker.name))];
   const placed = named.flatMap((name) => {
     const chip = chips.find(
       (each) => each.name === name && isPictureName(name) && each.mediaType.startsWith("image/"),

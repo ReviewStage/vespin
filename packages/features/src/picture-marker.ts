@@ -1,3 +1,5 @@
+import { insideCode } from "./mention-link.js";
+
 /**
  * picture-marker.ts -- a picture written into a message's words where it stands: its name, "Picture 1", and its marker, `[Picture 1]`, which names the attached image of that name.
  *
@@ -58,13 +60,24 @@ export function pictureMarker(name: string): string {
   return `[${name}]`;
 }
 
-/** Every marker in the words, in order. */
-export function pictureMarkers(text: string): readonly PictureMarkerToken[] {
+/** Every marker written in the words, in order, code's among them: what the words hold of each picture, which undo may bring back. */
+export function writtenMarkers(text: string): readonly PictureMarkerToken[] {
   return [...text.matchAll(PICTURE_MARKER)].map((match) => ({
     start: match.index,
     end: match.index + match[0].length,
     name: match[1] ?? "",
   }));
+}
+
+/**
+ * Every marker in the words outside code, in order: the markers that name
+ * their pictures, which the box and the transcript draw as chips and a
+ * model is handed the picture after. Note that a marker in code is the
+ * code's words, as a mention's link or a `/name` there is, so its picture
+ * stands among the message's files as if no marker named it.
+ */
+export function pictureMarkers(text: string): readonly PictureMarkerToken[] {
+  return writtenMarkers(text).filter((marker) => !insideCode(text, marker.start));
 }
 
 /** The next picture's name: one past the highest picture's number among the names, so a picture taken off frees no number a later one reuses beside its neighbor's marker. */

@@ -82,6 +82,12 @@ test.each([
     order: ["[Picture 1]", "Picture 1", " then [Picture 1] and [Picture 3]"],
   },
   {
+    case: "a marker in code left in the code, its picture handed as if no marker named it",
+    words: "Rename `[Picture 1]` here.",
+    files: ["Picture 1"],
+    order: ["Rename `[Picture 1]` here.", "Picture 1"],
+  },
+  {
     case: "words naming none of the pictures handed as they always were",
     words: "Match these.",
     files: ["Picture 1", "spec.pdf"],
