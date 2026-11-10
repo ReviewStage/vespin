@@ -423,7 +423,7 @@ test(
 );
 
 test(
-  "a folder made before worktrees, whose own repository a snapshot would be removed with, is not saved",
+  "a folder made before worktrees, whose own repository a snapshot would be removed with, saves none and is let go as before",
   async (t) => {
     const { scratch, shell } = await fixture(t);
     const own = path.join(scratch, "agents", "agent", "repository");
@@ -438,7 +438,8 @@ test(
       agentSnapshotScript({ worktree: own, agentId: "agent" }),
     );
 
-    assert.notEqual(saved.code, 0);
+    assert.equal(saved.code, 0, saved.printed);
+    assert.equal(git(own, ["for-each-ref", "refs/vespin/archive/"]), "");
   },
   GIT_DEADLINE,
 );

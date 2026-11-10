@@ -263,10 +263,11 @@ export function agentWorktreeScript(input: {
  * worktree's head under the agent's ref in the shared clone
  * (`archiveRef`), which its next launch on this box rebuilds the worktree
  * from (`agentWorktreeScript`). A worktree whose files are its head's saves
- * nothing, as does a folder holding no repository. A folder made before
- * worktrees holds a repository of its own, which the folder's removal would
- * take the snapshot away with, so it fails. It exits 0 only where nothing is
- * left unsaved, so a discard keeps the folder otherwise.
+ * nothing, as does a folder holding no repository, and a folder made before
+ * worktrees, whose repository of its own the folder's removal would take a
+ * snapshot away with, so it is discarded as it was before snapshots. It
+ * exits 0 only where nothing is left unsaved that it could save, so a
+ * discard keeps the folder otherwise.
  */
 export function agentSnapshotScript(input: {
   readonly worktree: string;
@@ -279,7 +280,7 @@ export function agentSnapshotScript(input: {
     `worktree=${shellQuoted(input.worktree)}`,
     `archive=${shellQuoted(archiveRef(input.agentId))}`,
     '[ -e "$worktree/.git" ] || exit 0',
-    '[ -d "$worktree/.git" ] && exit 1',
+    '[ -d "$worktree/.git" ] && exit 0',
     'cd "$worktree" || exit 1',
     'head="$(git rev-parse --verify --quiet "HEAD^{commit}")" || exit 1',
     'own_index="$(git rev-parse --path-format=absolute --git-path index)" || exit 1',
