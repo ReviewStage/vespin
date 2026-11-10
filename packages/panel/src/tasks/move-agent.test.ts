@@ -177,6 +177,17 @@ test("an agent still writing is stopped before it moves, each place saying so, a
     { agentId: AGENT, runsOn: { machine: AGENT_MACHINE.DEVICE, deviceId: STUDIO } },
   ]);
 
+  // A second place picked while the Stop is still out moves nothing more.
+  continued = [];
+  const twice =
+    moveTo(await menuOf(working, controlOf(working))) ?? assert.fail("Move to is offered");
+  twice.items[0]?.onSelect();
+  twice.items[0]?.onSelect();
+  await act(async () => {
+    for (let tick = 0; tick < 4; tick += 1) await Promise.resolve();
+  });
+  assert.equal(continued.filter((each) => each.runsOn !== undefined).length, 1);
+
   continued = [];
   const refused = controlOf(working, { onStop: () => Promise.resolve(false) });
   const held = moveTo(await menuOf(working, refused)) ?? assert.fail("Move to is offered");

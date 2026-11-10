@@ -56,6 +56,15 @@ const NO_DEVICES: readonly MacOffer[] = [];
 /** The cloud, as a move names it. */
 const TO_THE_CLOUD: AgentRunsOnRequest = { machine: AGENT_MACHINE.VERCEL };
 
+/**
+ * The agents a move is out for in this window, from its Stop to its
+ * continue's answer. Note that a second pick meanwhile is dropped, because
+ * each place's continue takes its own key, so two picks would start two
+ * agents; it is the window's alone, since every surface offering a move
+ * shares it.
+ */
+const MOVING = new Set<string>();
+
 /** The agent a move is offered on, as Move to reads it. */
 type MovedAgent = Pick<AgentSummary, "id" | "status" | "archivedAt" | "machine" | "mac">;
 
@@ -83,7 +92,7 @@ function placeDetail(agent: MovedAgent): string | undefined {
   return pushedOnly ? MOVE_WORDS.STOPS_FIRST_PUSHED_ONLY : MOVE_WORDS.STOPS_FIRST;
 }
 
-/** The agent continued at a place, stopped first where it still writes, and left as it was where the Stop did not take, which says why in its toast. */
+/** The agent continued at a place, stopped first where it still writes, and left as it was where the Stop did not take, which says why in its toast, or where a move of it is already out (`MOVING`). */
 function movedBy(
   agent: MovedAgent,
   {
@@ -93,8 +102,14 @@ function movedBy(
 ): (runsOn: AgentRunsOnRequest) => Promise<void> {
   const writing = agentStillWriting(agent.status);
   return async (runsOn) => {
-    if (writing && !(await onStop(agent.id))) return;
-    await continueAgent(agent.id, undefined, [], runsOn);
+    if (MOVING.has(agent.id)) return;
+    MOVING.add(agent.id);
+    try {
+      if (writing && !(await onStop(agent.id))) return;
+      await continueAgent(agent.id, undefined, [], runsOn);
+    } finally {
+      MOVING.delete(agent.id);
+    }
   };
 }
 
