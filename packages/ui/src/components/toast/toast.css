@@ -11,9 +11,8 @@
    stands in it and how it arrives, moves, and leaves, which read Base UI's
    custom properties (`--toast-index`, `--toast-offset-y`,
    `--toast-swipe-movement-x`) and states (`data-starting-style`,
-   `data-ending-style`, `data-swipe-direction`, `data-limited`); its turn,
-   which is keyframes; and what takes the pointer, which reads `:has()` and
-   the screen's hover. */
+   `data-ending-style`, `data-swipe-direction`, `data-limited`); and what
+   takes the pointer, which reads the screen's hover. */
 
 @layer components {
   /* The stack's corner, a step in from the window's, above the on-screen
@@ -101,34 +100,10 @@
     visibility: hidden;
   }
 
-  /* As its tone turns, the glyph it led with fades out under the one it now
-     leads with, which grows in on the spring, in the one cell they share. */
-  .ui-toast-glyph > [data-turn="was"] {
-    animation: ui-toast-glyph-out var(--ui-duration-quick) var(--ui-motion-exit) forwards;
-  }
-
-  .ui-toast[data-turned="true"] .ui-toast-glyph > [data-turn="now"] {
-    animation:
-      ui-toast-fade var(--ui-duration-quick) var(--ui-motion-exit),
-      ui-toast-glyph-in var(--ui-duration-fast) var(--ui-spring-fast);
-  }
-
-  /* Its words, turned with its tone, fade in anew in the place they held. */
-  .ui-toast[data-turned="true"] .ui-toast-text {
-    animation: ui-toast-fade var(--ui-duration-quick) var(--ui-motion-exit);
-  }
-
   /* A toast with an action is pointed at, so it takes the pointer that one
      with none lets pass through to whatever is under it. */
   .ui-toast[data-action="true"]:not([data-limited]) {
     pointer-events: auto;
-  }
-
-  /* A modal's question is answered before anything behind it changes, so
-     while one stands an action toast lets the pointer through to the dimmed
-     window, as the modal's own Tab already keeps focus off it. */
-  body:has(.ui-dialog-backdrop) .ui-toast[data-action="true"] {
-    pointer-events: none;
   }
 
   /* A toast with an action shows its × as a disc over its top-left corner
@@ -168,13 +143,6 @@
     }
   }
 
-  /* Note that the × must let the pointer through under a modal too, because
-     one already under the pointer as the modal opens keeps its card hovered
-     by taking the pointer itself, past the card's own `none` above. */
-  body:has(.ui-dialog-backdrop) .ui-toast[data-action="true"] .ui-toast-dismiss {
-    pointer-events: none;
-  }
-
   /* A close takes a finger's press up and down alone on a coarse pointer,
      never sideways, because beside it stand the words it would close, and a
      tap meant for a toast's words that lands near its end must not close
@@ -183,25 +151,6 @@
   @media (pointer: coarse) {
     .ui-toast-dismiss .ui-button::before {
       width: 100%;
-    }
-  }
-
-  @keyframes ui-toast-fade {
-    from {
-      opacity: 0;
-    }
-  }
-
-  @keyframes ui-toast-glyph-out {
-    to {
-      opacity: 0;
-      transform: scale(0.6);
-    }
-  }
-
-  @keyframes ui-toast-glyph-in {
-    from {
-      transform: scale(0.6);
     }
   }
 }

@@ -63,7 +63,7 @@ import {
 } from "../markdown-message.js";
 import { useCreator } from "../member-directory.js";
 import { useSteadyDoor } from "../steady-door.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { useWorkspaceExperiment, useWorkspaceExperimentOnSince } from "../workspace-experiments.js";
 import {
   CommentsToggle,
@@ -1272,7 +1272,6 @@ export const DescriptionBody = memo(function DescriptionBody({
         replayUnmasked: true,
         words: DESCRIPTION_NOT_SAVED,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: {
           surface: FAILURE_SURFACE.DESCRIPTION_SAVE,
           cause,

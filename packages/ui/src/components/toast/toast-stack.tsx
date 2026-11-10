@@ -1,6 +1,7 @@
 import { Toast as BaseToast, type ToastManager, type ToastObject } from "@base-ui/react/toast";
+import { Duration } from "effect";
 import type { ReactNode } from "react";
-import { ANNOUNCE, Announcer, useAnnounce } from "../announcer/announcer.js";
+import { TOAST_HOLD } from "./toast.js";
 
 /**
  * toast-stack.tsx -- the toasts standing, in the window's bottom-right corner, as Base UI's toast viewport keeps them over one manager.
@@ -11,24 +12,23 @@ import { ANNOUNCE, Announcer, useAnnounce } from "../announcer/announcer.js";
  * the host hands it, each a `Toast`. Base UI holds the rest: each toast's
  * hold and its pause while the pointer is over the stack or focus is in it,
  * how many stand at once (`limit`), the ones past it kept aside until there
- * is room, and each toast's place. The viewport is a landmark over whatever
- * docks at the window's foot, taking no pointer itself, so only a toast with
- * something to press stands in the way of what is under it.
+ * is room, each toast's place, and its words said aloud through the
+ * viewport's live regions, one the host adds with `priority: "high"` said
+ * urgently from its `title` and `description`. The viewport is a landmark
+ * over whatever docks at the window's foot, taking no pointer itself, so only
+ * a toast with something to press stands in the way of what is under it.
  *
- * What each toast says reaches assistive tech through the window's one pair
- * of live regions, the `Announcer` the stack mounts beside it, rather than
- * the viewport's own, which is kept quiet: what was done or is asked
- * politely, and what was refused as an alert, each said once the words the
- * host hands it change. Note that the window's regions are the ones a modal
- * dialog leaves a reader hearing, and that one voice keeps a toast from
- * being read twice.
- *
- * It is portaled to the body with its `Announcer`, or to `container` where
- * the host stands it somewhere of its own, as a catalog frames it.
+ * It is portaled to the body, or to `container` where the host stands it
+ * somewhere of its own, as a catalog frames it.
  */
 
 /** How many toasts stand at once; the ones past it wait aside, drawn but hidden, until there is room. */
 const TOAST_LIMIT = 3;
+
+/** The kinds of toast Base UI tells apart: one saying work is under way, which holds no timer until it is updated into what came of it. */
+export const TOAST_TYPE = {
+  WORKING: "loading",
+} as const;
 
 /** The toasts the stack's manager keeps, each carrying the host's own `Data`. */
 export type StandingToast<Data extends object> = ToastObject<Data>;
@@ -51,12 +51,10 @@ function Standing<Data extends object>({
   return toasts.map(draw);
 }
 
-/** The stack, named as a landmark, its manager's toasts each drawn by `children`, and the window's `Announcer`, told what the newest toasts say. */
+/** The stack, named as a landmark, its manager's toasts each drawn by `children`. */
 export function ToastStack<Data extends object>({
   manager,
   label,
-  polite,
-  alert,
   container,
   children,
 }: {
@@ -64,28 +62,24 @@ export function ToastStack<Data extends object>({
   manager: ToastStackManager<Data>;
   /** What the stack is called, as a landmark among the window's regions. */
   label: string;
-  /** What the polite region says: what was done or is asked, or nothing. */
-  polite: string;
-  /** What the alert region says: what was refused, or nothing. */
-  alert: string;
   /** Where the stack is portaled, where not to the body. */
   container?: HTMLElement | null | undefined;
   /** Draws one toast the manager keeps, as a `Toast`. */
   children: (toast: StandingToast<Data>) => ReactNode;
 }): React.JSX.Element {
-  useAnnounce(ANNOUNCE.POLITE, polite);
-  useAnnounce(ANNOUNCE.ALERT, alert);
   return (
-    <BaseToast.Provider toastManager={manager} limit={TOAST_LIMIT}>
+    <BaseToast.Provider
+      toastManager={manager}
+      limit={TOAST_LIMIT}
+      timeout={Duration.toMillis(TOAST_HOLD)}
+    >
       <BaseToast.Portal container={container}>
         <BaseToast.Viewport
           className="ui-toast-stack pointer-events-none fixed z-toast"
           aria-label={label}
-          aria-live="off"
         >
           <Standing draw={children} />
         </BaseToast.Viewport>
-        <Announcer />
       </BaseToast.Portal>
     </BaseToast.Provider>
   );

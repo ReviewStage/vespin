@@ -29,7 +29,7 @@ import { appPlatform } from "../app-platform.js";
 import { LINK_COPY, useCopyToast } from "../copy-feedback.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "../desktop/action-menu.js";
 import { QUERY_ROOT } from "../query-keys.js";
-import { showToast, TOAST_HOLD, useToast } from "../toast.js";
+import { showToast, useToast } from "../toast.js";
 import { appStateQuery, selectCapability, selectPortForwarding } from "../use-app-state.js";
 
 /**
@@ -237,7 +237,6 @@ function shareFailed(kind: PortActKind, agentId: string, cause: unknown, words: 
   showToast({
     words,
     tone: STATUS_TONE.DANGER,
-    hold: TOAST_HOLD.FAILED,
     failure: { surface: FAILURE_SURFACE.ACT, act: kind, cause, about: failureAboutOf({ agentId }) },
   });
 }

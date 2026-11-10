@@ -55,8 +55,6 @@ function stack(): (shown: Shown, id?: string) => void {
       createElement(ToastStack<Shown>, {
         manager,
         label: "Notifications",
-        polite: "",
-        alert: "",
         container,
         children: draw,
       }),

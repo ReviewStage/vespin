@@ -61,21 +61,16 @@ import {
   type MarkProvider,
   STATUS_TONE,
   type StandingToast,
-  TOAST_HOLD,
+  TOAST_TYPE,
   Toast,
   ToastActions,
   type ToastCopy,
   ToastStack,
   type ToastTone,
 } from "@repo/ui";
-import { createStore, useSelector } from "@tanstack/react-store";
-import { Duration } from "effect";
 import { useEffect, useRef } from "react";
 import { appPlatform } from "./app-platform.js";
 import { failureOfConnection, reportShownFailure, type ShownFailure } from "./failure-report.js";
-
-/** How long a toast stands, by what it reports: `@repo/ui`'s, which a copy button's check reads too. */
-export { TOAST_HOLD };
 
 /** What a failure toast's copy button copies, as "Copy details" names it. */
 const DETAILS_WHAT = "details";
@@ -99,14 +94,14 @@ type ToastSaying =
   | { readonly tone: typeof STATUS_TONE.DANGER; readonly failure: ShownFailure };
 
 /**
- * A toast to show: its words, an optional second line under them, and its
- * tone, and either how long it stands before it leaves or the action it
- * carries, with its own hold, the action's where it names none, or, where
- * it `persists`, none at all, standing until it is dismissed: kept for an
- * action that is the one way back to something the developer would
- * otherwise lose, or, with no action, for what stands only as long as
- * whoever showed it says so, which withdraws it by its `subject`. Its `subject` is what it
- * is about, by which whoever showed it may withdraw it once it is stale.
+ * A toast to show: its words, an optional second line under them, its tone,
+ * and the action it carries, if any. It stands for the one hold every toast
+ * stands for (`@repo/ui`'s `TOAST_HOLD`), or, where it `persists`, until it is dismissed:
+ * kept for an action that is the one way back to something the developer
+ * would otherwise lose, or, with no action, for what stands only as long as
+ * whoever showed it says so, which withdraws it by its `subject`. Its
+ * `subject` is what it is about, by which whoever showed it may withdraw it
+ * once it is stale, and which a later toast about it takes the place of.
  * One of `STATUS_TONE.WORKING` has no hold and no action: it stands until the
  * work it says is under way settles it (`useWorkingToast`). One of
  * `STATUS_TONE.DANGER` carries the failure it says (`ToastSaying`).
@@ -121,7 +116,7 @@ export type ToastNotice = {
   readonly subject?: string;
   /** Whether its words and detail are the app's own, which a screen recording shows as they read; one that quotes a name, a person's words, or a refusal's words leaves this off. */
   readonly replayUnmasked?: boolean | undefined;
-  /** What the developer sending it away, by its × or Escape, tells whoever showed it, so a question they set aside can be asked again. */
+  /** What the developer sending away one that persists, by its ×, Escape, a swipe, or its action, tells whoever showed it, so a question they set aside can be asked again. */
   readonly onDismiss?: () => void;
   /**
    * What it tells whoever showed it once it is gone, however it went: its
@@ -133,18 +128,11 @@ export type ToastNotice = {
   readonly onGone?: () => void;
 } & ToastSaying &
   (
-    | { readonly hold: Duration.Duration; readonly action?: never; readonly persists?: never }
-    | { readonly action: ToastAction; readonly hold?: Duration.Duration; readonly persists?: never }
-    | { readonly action: ToastAction; readonly persists: true; readonly hold?: never }
-    | {
-        readonly subject: string;
-        readonly persists: true;
-        readonly action?: never;
-        readonly hold?: never;
-      }
+    | { readonly action?: ToastAction; readonly persists?: never }
+    | { readonly action: ToastAction; readonly persists: true }
+    | { readonly subject: string; readonly persists: true; readonly action?: never }
     | {
         readonly tone: typeof STATUS_TONE.WORKING;
-        readonly hold?: never;
         readonly action?: never;
         readonly persists?: never;
       }
@@ -164,19 +152,6 @@ interface Kept {
   readonly leaving: boolean;
 }
 
-/** What Base UI calls a toast with no hold of its own, whose hold starts once it settles: one saying work is under way. */
-const WORKING_TYPE = "loading";
-
-/** The tones said in the polite region: all but a refusal, which is an alert. */
-const POLITE_TONES: ReadonlySet<ToastTone> = new Set([
-  STATUS_TONE.COMPLETE,
-  STATUS_TONE.ATTENTION,
-  STATUS_TONE.WORKING,
-]);
-
-/** The tone said in the alert region: a refusal. */
-const ALERT_TONES: ReadonlySet<ToastTone> = new Set([STATUS_TONE.DANGER]);
-
 /** What the dismiss button is called, for whoever cannot see its ×. */
 const DISMISS_LABEL = "Dismiss";
 
@@ -186,46 +161,48 @@ const STACK_LABEL = "Notifications";
 /** The window's toasts, as Base UI keeps them: whoever shows one adds it here, from inside React or out. */
 const toastManager = createToastManager<ToastData>();
 
-/** The toasts the host keeps, by id, which a withdrawal, a settling, and `useToastStanding` read. */
-const keptStore = createStore<ReadonlyMap<string, Kept>>(new Map());
+/**
+ * The toasts the host keeps, by id, which a settling, a replacement, and
+ * the stack's first draw read: Base UI tells each toast's close and exit, but
+ * not what stands, outside the stack.
+ */
+const kept = new Map<string, Kept>();
 
-/** The toasts the host itself is closing, withdrawn or dismissed by their ×, whose close is told to no one as a dismissal. */
+/** The toasts the host itself is closing, withdrawn or forgotten, whose close is told to no one as a dismissal. */
 const closingByHost = new Set<string>();
 
-/** The hold a notice stands for, in milliseconds: its own, the Undo hold where it carries an action and names none, or none (`0`) where it persists or says work is under way. */
-function timeoutOf(notice: ToastNotice): number {
-  if (notice.persists === true || notice.tone === STATUS_TONE.WORKING) return 0;
-  return Duration.toMillis(notice.hold ?? TOAST_HOLD.UNDO);
-}
-
-/** Keeps `kept` for the toast `id`, or forgets it. */
-function keep(id: string, kept: Kept | undefined): void {
-  keptStore.setState((was) => {
-    const next = new Map(was);
-    if (kept === undefined) next.delete(id);
-    else next.set(id, kept);
-    return next;
-  });
+/** Whether a notice stands until it is dismissed or settled: one that persists, or one saying work is under way. */
+function standsOn(notice: ToastNotice): boolean {
+  return notice.persists === true || notice.tone === STATUS_TONE.WORKING;
 }
 
 /** Marks the toast `id` on its way out, and tells whoever showed one that persists that the developer sent it away, where the host did not close it itself. */
 function closed(id: string, notice: KeptNotice): void {
   const byHost = closingByHost.delete(id);
-  if (keptStore.state.get(id)?.notice === notice) keep(id, { notice, leaving: true });
-  if (!byHost && timeoutOf(notice) === 0) notice.onDismiss?.();
+  if (kept.get(id)?.notice === notice) kept.set(id, { notice, leaving: true });
+  if (!byHost && notice.persists === true) notice.onDismiss?.();
 }
 
-/** Forgets the toast `id` once its exit is done, and tells whoever showed it that it is gone. */
+/** Forgets the toast `id` once its exit is done, and tells whoever showed it that it is gone, unless it was already told, as one forgotten is. */
 function removed(id: string, notice: KeptNotice): void {
-  if (keptStore.state.get(id)?.notice === notice) keep(id, undefined);
+  if (kept.get(id)?.notice !== notice) return;
+  kept.delete(id);
   notice.onGone?.();
 }
 
-/** What Base UI is handed for a notice: its hold, whether it waits on work, the notice, and what its close and exit tell the host. */
+/**
+ * What Base UI is handed for a notice: its words, which a refusal's alert
+ * says aloud, how loudly it is said, no hold where it stands until
+ * dismissed or settled, whether it waits on work, the notice, and what its
+ * close and exit tell the host.
+ */
 function toastOptions(id: string, notice: KeptNotice) {
   return {
-    timeout: timeoutOf(notice),
-    type: notice.tone === STATUS_TONE.WORKING ? WORKING_TYPE : undefined,
+    title: notice.words,
+    description: notice.detail,
+    priority: notice.tone === STATUS_TONE.DANGER ? ("high" as const) : ("low" as const),
+    timeout: standsOn(notice) ? 0 : undefined,
+    type: notice.tone === STATUS_TONE.WORKING ? TOAST_TYPE.WORKING : undefined,
     data: { notice },
     onClose: () => closed(id, notice),
     onRemove: () => removed(id, notice),
@@ -238,15 +215,15 @@ function toastOptions(id: string, notice: KeptNotice) {
  * and never ends it.
  */
 function replace(id: string, notice: KeptNotice): void {
-  const was = keptStore.state.get(id);
-  keep(id, { notice, leaving: false });
+  const was = kept.get(id);
+  kept.set(id, { notice, leaving: false });
   if (was !== undefined && was.notice !== notice) was.notice.onGone?.();
 }
 
 /** Closes the toast `id` as the host's own act, which no one is told is a dismissal. */
 function closeByHost(id: string): void {
-  const kept = keptStore.state.get(id);
-  if (kept === undefined || kept.leaving) return;
+  const standing = kept.get(id);
+  if (standing === undefined || standing.leaving) return;
   closingByHost.add(id);
   toastManager.close(id);
 }
@@ -267,14 +244,18 @@ function reportSaid(notice: ToastNotice): KeptNotice | undefined {
 
 /**
  * Sends every toast standing or waiting away and forgets each one kept, so
- * none is shown again when a stack next stands. Note that the manager tells
- * each close at once, so none is told as a dismissal.
+ * none is shown again when a stack next stands, telling whoever showed each
+ * that it is gone. Note that the manager tells each close at once, so none
+ * is told as a dismissal, and that a stack no longer standing hears nothing,
+ * so each is told it is gone here rather than at its exit.
  */
 export function forgetToasts(): void {
-  for (const id of keptStore.state.keys()) closingByHost.add(id);
+  const forgotten = [...kept.values()];
+  for (const id of kept.keys()) closingByHost.add(id);
   toastManager.close();
   closingByHost.clear();
-  keptStore.setState(() => new Map());
+  kept.clear();
+  for (const { notice } of forgotten) notice.onGone?.();
 }
 
 /**
@@ -292,9 +273,10 @@ export function useToastsOwner(account: string | undefined): void {
 }
 
 /**
- * Shows a toast from outside React: for a press whose answer lands after its
- * handler returned (`act.ts`'s `pressAct`). One about a `subject` already
- * standing takes that one's place in the stack rather than stacking beside it.
+ * Shows a toast, the one door every toast is shown by, from inside React or
+ * out: it reports the failure one says, then hands it to Base UI. One about
+ * a `subject` already standing takes that one's place in the stack rather
+ * than stacking beside it.
  */
 export function showToast(notice: ToastNotice): void {
   const said = reportSaid(notice);
@@ -322,9 +304,9 @@ export function useWorkingToast(): (words: string) => (notice: ToastNotice) => v
 
 /**
  * The working toast about `subject` turned into `notice`, in place and for
- * that one's whole hold; where it no longer stands, as when it was sent
- * away, `notice` arrives anew. A failure the connection already says takes
- * the working toast away instead.
+ * the hold; where it no longer stands, as when it was sent away, `notice`
+ * arrives anew. A failure the connection already says takes the working
+ * toast away instead.
  */
 function settleWork(subject: string, notice: ToastNotice): void {
   const said = reportSaid(notice);
@@ -332,7 +314,7 @@ function settleWork(subject: string, notice: ToastNotice): void {
     closeByHost(subject);
     return;
   }
-  const standing = keptStore.state.get(subject);
+  const standing = kept.get(subject);
   if (standing === undefined || standing.leaving) {
     showToast(said);
     return;
@@ -348,53 +330,14 @@ function showWorkingToast(words: string): (notice: ToastNotice) => void {
   return (notice: ToastNotice) => settleWork(subject, { ...notice, subject });
 }
 
-/** Withdraws every toast standing or waiting whose notice `about` picks. */
-function withdrawWhere(about: (notice: ToastNotice) => boolean): void {
-  for (const [id, kept] of keptStore.state) if (about(kept.notice)) closeByHost(id);
-}
-
-/** Withdraws every toast standing or waiting about `subject`, now stale; the same function on every render. */
+/** Withdraws the toast about `subject`, now stale; the same function on every render. */
 export function useWithdrawToast(): (subject: string) => void {
   return withdrawToast;
 }
 
-/** Withdraws every toast standing or waiting about `subject` (`useWithdrawToast`), from outside React as `showToast` shows one. */
+/** Withdraws the toast about `subject` (`useWithdrawToast`), from outside React as `showToast` shows one. */
 export function withdrawToast(subject: string): void {
-  withdrawWhere((notice) => notice.subject === subject);
-}
-
-/** Withdraws every toast standing or waiting whose action runs `onPress`, once pressing it would do nothing: an Undo whose entry has left the undo stack (`undo-stack.ts`). */
-export function withdrawToastActing(onPress: () => void): void {
-  withdrawWhere((notice) => notice.action?.onPress === onPress);
-}
-
-/** Whether a toast about `subject` stands in sight, not on its way out; the same answer while the stack holds it. */
-export function useToastStanding(subject: string): boolean {
-  return useSelector(keptStore, (kept) =>
-    [...kept.values()].some((toast) => !toast.leaving && toast.notice.subject === subject),
-  );
-}
-
-/** Sends the toast `id` away by the developer's hand, its × or its action, telling whoever showed it once. */
-function dismiss(id: string, notice: KeptNotice): void {
-  const kept = keptStore.state.get(id);
-  // Note that a toast on its way out still draws its controls, so only the first dismissal is told.
-  if (kept === undefined || kept.leaving) return;
-  closeByHost(id);
-  notice.onDismiss?.();
-}
-
-/** What a toast says aloud: its words, then its second line. */
-function spoken(notice: ToastNotice): string {
-  return notice.detail === undefined ? notice.words : `${notice.words}. ${notice.detail}`;
-}
-
-/** What the newest toast of one of `tones` still standing says aloud, or nothing. */
-function newestSaying(kept: ReadonlyMap<string, Kept>, tones: ReadonlySet<ToastTone>): string {
-  const newest = [...kept.values()].findLast(
-    (toast) => !toast.leaving && tones.has(toast.notice.tone),
-  );
-  return newest === undefined ? "" : spoken(newest.notice);
+  closeByHost(subject);
 }
 
 /** One toast the manager keeps: the ui card, its notice's words, and its action, copy, and ×. */
@@ -424,7 +367,7 @@ function ToastCard({ toast }: { toast: StandingToast<ToastData> }): React.JSX.El
               : { label: action.label, href: action.href, onPress: action.onPress })}
             copy={copy}
             dismissLabel={DISMISS_LABEL}
-            onDismiss={() => dismiss(toast.id, notice)}
+            onDismiss={() => toastManager.close(toast.id)}
             replayUnmasked={action?.replayUnmasked}
           />
         )
@@ -434,24 +377,21 @@ function ToastCard({ toast }: { toast: StandingToast<ToastData> }): React.JSX.El
 }
 
 /**
- * The toasts standing, in the window's bottom-right corner, and the regions
- * that say them, which the panel's other live words are said through too.
- * Mounted once, by the window's root, showing what was asked for before it
- * stood. Note that the toasts it kept go with it, so a window
- * that mounts it again never draws a stale one.
+ * The toasts standing, in the window's bottom-right corner. Mounted once,
+ * by the window's root, showing what was asked for before it stood. Note
+ * that the toasts it kept go with it, so a window that mounts it again
+ * never draws a stale one.
  */
 export function ToastHost(): React.JSX.Element {
-  const polite = useSelector(keptStore, (kept) => newestSaying(kept, POLITE_TONES));
-  const alert = useSelector(keptStore, (kept) => newestSaying(kept, ALERT_TONES));
   useEffect(() => {
     // Note that the manager reaches the stack only once it stands, which is after its children's effects, so a toast a sibling showed as the window first drew is shown again here.
-    for (const [id, kept] of keptStore.state) {
-      if (!kept.leaving) toastManager.add({ id, ...toastOptions(id, kept.notice) });
+    for (const [id, standing] of kept) {
+      if (!standing.leaving) toastManager.add({ id, ...toastOptions(id, standing.notice) });
     }
     return forgetToasts;
   }, []);
   return (
-    <ToastStack manager={toastManager} label={STACK_LABEL} polite={polite} alert={alert}>
+    <ToastStack manager={toastManager} label={STACK_LABEL}>
       {(toast) => <ToastCard key={toast.id} toast={toast} />}
     </ToastStack>
   );

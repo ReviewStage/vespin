@@ -29,7 +29,6 @@ import {
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
-  TOAST_HOLD,
   Tooltip,
   useMenu,
 } from "@repo/ui";
@@ -228,7 +227,6 @@ export function useAgentPermissionMode(input: {
       words: `${MODE_WORDS[mode].label}. ${MODE_APPLIES}`,
       tone: STATUS_TONE.COMPLETE,
       glyph: MODE_GLYPH[mode],
-      hold: TOAST_HOLD.DONE,
     });
     latest.current.write(agent.id, mode).then((answer) => {
       if (write !== writes.current || !("failure" in answer)) return;

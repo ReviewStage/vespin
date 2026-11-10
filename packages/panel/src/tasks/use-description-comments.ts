@@ -27,7 +27,7 @@ import {
   descriptionCommentsQuery,
   descriptionCommentsRetryMutation,
 } from "../live-reads.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 
 /**
  * use-description-comments.ts -- a description's comment threads, or one of its task's pages', as one control: held by the host while the surface shows them, and each write on its way back.
@@ -130,7 +130,6 @@ export function useDescriptionComments(
         replayUnmasked: true,
         words,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: {
           surface,
           cause: "refused" in answer ? FAILURE_CONDITION.REFUSED : FAILURE_CONDITION.NOT_KEPT,

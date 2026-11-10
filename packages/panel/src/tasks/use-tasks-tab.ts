@@ -104,7 +104,7 @@ import { type LinkStep, type TaskAt, taskAtOf, taskOfAt } from "../places/task-s
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
 import type { TaskRoute } from "../task-route.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { useVersionHistoryRoute } from "../version-history-route.js";
 import {
@@ -1829,7 +1829,6 @@ export function useTasksTab(input: {
             replayUnmasked: true,
             words: MOVE_REFUSED_NOTE,
             tone: STATUS_TONE.DANGER,
-            hold: TOAST_HOLD.FAILED,
             failure: {
               surface: FAILURE_SURFACE.TASK_MOVE,
               cause: answer,

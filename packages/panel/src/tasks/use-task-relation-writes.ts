@@ -35,7 +35,7 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tansta
 import { useCallback } from "react";
 import { type Unreached, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { heldTask, pressWrite, type TaskRows, taskRow, type UndoWrite } from "../undo-stack.js";
 import {
   appStateIn,
@@ -253,7 +253,6 @@ export function useTaskRelationWrites(): TaskRelationWrites {
         replayUnmasked: true,
         words,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface, cause: answer, about: { taskId } },
       });
     });

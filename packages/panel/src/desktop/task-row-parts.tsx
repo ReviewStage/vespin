@@ -33,7 +33,7 @@ import { NO_ASSIGNEE, useAssigneeRows } from "../tasks/task-standing.js";
 import { useStandingWrites } from "../tasks/use-standing-writes.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { ActionMenu } from "./action-menu.js";
 
 /**
@@ -108,7 +108,6 @@ export function useStandingDoor(
         words: UNCHANGED_LINE,
         replayUnmasked: true,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: {
           surface: FAILURE_SURFACE.TASK_STANDING,
           cause: kept.cause,

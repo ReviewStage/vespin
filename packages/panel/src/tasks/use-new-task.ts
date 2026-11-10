@@ -36,7 +36,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 import { sendMutation } from "../act-mutations.js";
 import { useSteadyDoor } from "../steady-door.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import {
   appStateQuery,
   selectAppSettingsView,
@@ -454,7 +454,6 @@ export function useNewTask(doors: NewTaskDoors): NewTask {
         toast({
           words: note.text,
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: { surface: FAILURE_SURFACE.TASK_START, cause: note.cause },
         });
       }

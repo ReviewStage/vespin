@@ -10,7 +10,7 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { STATUS_TONE } from "@repo/ui";
 import { useEffect, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { useRepositoryRemedy } from "./repository-remedy.js";
 import { TerminalPicker } from "./terminal-picker.js";
 import { TERMINAL_KIND } from "./terminal-session.js";
@@ -103,7 +103,6 @@ export function TerminalCommands({
           ? {
               words: failure.text,
               tone: STATUS_TONE.DANGER,
-              hold: TOAST_HOLD.FAILED,
               failure: shown,
             }
           : {

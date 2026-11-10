@@ -129,7 +129,7 @@ import {
   useTaskRelationWrites,
 } from "../tasks/use-task-relation-writes.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
@@ -617,7 +617,6 @@ function TaskRepositoryPanel({
       toast({
         words: note,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: {
           surface: FAILURE_SURFACE.REPOSITORY_PIN,
           cause: FAILURE_CONDITION.REFUSED,

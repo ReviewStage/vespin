@@ -20,6 +20,7 @@ import {
   type MarkProvider,
   STATUS_TONE,
   type StandingToast,
+  TOAST_TYPE,
   Toast,
   ToastActions,
   type ToastCopy,
@@ -109,7 +110,7 @@ function CatalogStack({
   return (
     <div className="catalog-toast-stage" ref={setFrame}>
       {frame === null ? null : (
-        <ToastStack manager={manager} label={label} polite="" alert="" container={frame}>
+        <ToastStack manager={manager} label={label} container={frame}>
           {(toast) => <CatalogToast key={toast.id} toast={toast} manager={manager} />}
         </ToastStack>
       )}
@@ -117,11 +118,14 @@ function CatalogStack({
   );
 }
 
-/** How a catalog toast stands: until it is dismissed, and one saying work is under way with no hold until it settles. */
+/** How a catalog toast stands: until it is dismissed, its words said aloud, a refusal urgently, and one saying work is under way with no hold until it settles. */
 function standing(notice: CatalogNotice) {
   return {
+    title: notice.words,
+    description: notice.detail,
+    priority: notice.tone === STATUS_TONE.DANGER ? ("high" as const) : ("low" as const),
     timeout: 0,
-    type: notice.tone === STATUS_TONE.WORKING ? "loading" : undefined,
+    type: notice.tone === STATUS_TONE.WORKING ? TOAST_TYPE.WORKING : undefined,
     data: notice,
   };
 }

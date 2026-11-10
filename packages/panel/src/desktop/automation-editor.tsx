@@ -192,7 +192,7 @@ import { CHIP_PLACE, RepositoryChip, type RepositoryChooser } from "../tasks/rep
 import { mentionableAgent } from "../tasks/task-mentions.js";
 import { useKnownNames } from "../tasks/use-known-names.js";
 import { useListedAgent } from "../tasks/use-workspace-agents.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { ActionMenu, type MenuAction } from "./action-menu.js";
 import { OWNER_MARK_SIZE, OwnerMark } from "./automation-owner.js";
 import { AutomationPrompt } from "./automation-prompt.js";
@@ -417,7 +417,6 @@ export function AutomationSwitch({
           words: reason,
           replayUnmasked: true,
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: {
             surface: FAILURE_SURFACE.AUTOMATION_TOGGLE,
             cause: answer,

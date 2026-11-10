@@ -65,7 +65,6 @@ import {
   Stack,
   TEXT_FIELD_AUTO_COMPLETE,
   TextField,
-  TOAST_HOLD,
   useConfirmDialog,
   useFilePicker,
   useMenu,
@@ -589,7 +588,6 @@ function MemberLeave({
         toast({
           words: LEAVE_WORDS.LEFT(workspace.name),
           tone: STATUS_TONE.COMPLETE,
-          hold: TOAST_HOLD.DONE,
         });
         onLeft();
       }),
@@ -822,7 +820,6 @@ function WorkspaceDelete({
         toast({
           words: DELETE_WORDS.DELETED(workspace.name),
           tone: STATUS_TONE.COMPLETE,
-          hold: TOAST_HOLD.DONE,
         });
         onDeleted();
       }),

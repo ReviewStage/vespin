@@ -30,7 +30,7 @@ import { appPlatform } from "../app-platform.js";
 import { useConfirmAct } from "../confirm-act.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 import { confirmFailure } from "../failure-report.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 
 import { CHIP_PLACE, RepositoryChip, type RepositoryChooser } from "./repository-chip.js";
 import { type AgentsControl, agentAddRepositoryMutation } from "./use-agents.js";
@@ -185,7 +185,6 @@ export function useAddRepository(
     toast({
       words: addedWords(picked, answer.addedCheckout),
       tone: STATUS_TONE.COMPLETE,
-      hold: TOAST_HOLD.DONE,
     });
   };
   const addAct = useConfirmAct(adding, {

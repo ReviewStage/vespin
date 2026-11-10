@@ -9,7 +9,7 @@ import {
   sendShownFailure,
 } from "@repo/features/shown-failure";
 import { IDLE_TASKS_VIEW, type TasksPinParams, type TasksView } from "@repo/features/tasks-view";
-import { STATUS_TONE } from "@repo/ui";
+import { STATUS_TONE, TOAST_HOLD } from "@repo/ui";
 import { Duration, Effect } from "effect";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -19,14 +19,7 @@ import { copyingInto, fakeAppPlatform } from "./testing/app-platform.js";
 import { handState } from "./testing/app-state.js";
 import { readAppState, testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js";
 import { STANDING_TOAST, standingToastWords } from "./testing/toast.js";
-import {
-  TOAST_HOLD,
-  ToastHost,
-  type ToastNotice,
-  useToast,
-  useToastsOwner,
-  useWorkingToast,
-} from "./toast.js";
+import { ToastHost, type ToastNotice, useToast, useToastsOwner, useWorkingToast } from "./toast.js";
 import { forgetUndo, type PressedRows, pressRows, ROW_WRITE, undoLast } from "./undo-stack.js";
 import { appStateIn } from "./use-app-state.js";
 
@@ -76,7 +69,6 @@ function unheardStop(): ToastNotice {
   return {
     words: "The agent could not be stopped.",
     tone: STATUS_TONE.DANGER,
-    hold: TOAST_HOLD.FAILED,
     failure: {
       surface: FAILURE_SURFACE.AGENT_STOP,
       cause: new Error("No answer came back.", { cause: unreached }),
@@ -90,7 +82,6 @@ function refusedStart(): ToastNotice {
   return {
     words: "Messages are limited to 20,000 characters.",
     tone: STATUS_TONE.DANGER,
-    hold: TOAST_HOLD.FAILED,
     failure: {
       surface: FAILURE_SURFACE.AGENT_START,
       cause: { status: "rejected", reason: "Messages are limited to 20,000 characters." },
@@ -222,11 +213,10 @@ test("two pieces of work under way stand apart, each settles its own card in pla
     second?.({
       words: "Couldn't save",
       tone: STATUS_TONE.DANGER,
-      hold: TOAST_HOLD.FAILED,
       failure: { surface: FAILURE_SURFACE.DESCRIPTION_SAVE, cause: FAILURE_CONDITION.NOT_KEPT },
     }),
   );
-  act(() => first?.({ words: "Saved", tone: STATUS_TONE.COMPLETE, hold: TOAST_HOLD.DONE }));
+  act(() => first?.({ words: "Saved", tone: STATUS_TONE.COMPLETE }));
 
   assert.deepEqual(standing(), ["Saved", "Couldn't save"]);
   assert.deepEqual([...document.querySelectorAll(".ui-toast")], working, "the same two cards");
@@ -340,7 +330,6 @@ test("a failure toast for a hosted call that never answered reports what the hos
     show?.({
       words: "No answer came back.",
       tone: STATUS_TONE.DANGER,
-      hold: TOAST_HOLD.FAILED,
       failure: {
         surface: FAILURE_SURFACE.AGENT_START,
         cause: {
@@ -502,10 +491,10 @@ test("an Undo toast whose entry was pushed off the undo list leaves rather than 
   assert.deepEqual(standing(), []);
 });
 
-test("an Undo toast nobody points at stands for the Undo hold, then leaves without taking the act back", () => {
+test("an Undo toast nobody points at stands for the hold, then leaves without taking the act back", () => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
   mount();
-  const hold = Duration.toMillis(TOAST_HOLD.UNDO);
+  const hold = Duration.toMillis(TOAST_HOLD);
   const sent: TasksPinParams[] = [];
   act(() => show?.(pinPressed(sent).keep("Task pinned") ?? assert.fail("the pin's toast")));
 

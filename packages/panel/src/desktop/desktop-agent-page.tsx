@@ -85,7 +85,7 @@ import {
 } from "../tasks/use-open-link.js";
 import type { PinHolder, SidePanelTab } from "../tasks/use-side-panel.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { ActionMenu } from "./action-menu.js";
 import {
   AGENT_KEYS,
@@ -441,7 +441,6 @@ function DesktopAgentPage({
         toast({
           words: result.reason,
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: { surface: FAILURE_SURFACE.AGENT_ARCHIVE, cause: result, about: { agentId } },
         });
       }

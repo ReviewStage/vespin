@@ -20,7 +20,7 @@ import type { TasksView } from "@repo/features/tasks-view";
 import { STATUS_TONE } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { askKept, firstRefusal, type Kept, notKept } from "../act.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { heldTask, pressRows, ROW_WRITE, type TaskRows } from "../undo-stack.js";
 import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useTaskRowDoors } from "./task-row-doors.js";
@@ -131,7 +131,6 @@ export function useStandingWrites(drawn: () => TasksView): StandingWrites {
           replayUnmasked: true,
           words: settleFailedNote(status, refused),
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: { surface: FAILURE_SURFACE.TASK_SETTLE, cause },
         });
         return;

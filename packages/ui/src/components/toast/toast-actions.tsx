@@ -1,3 +1,4 @@
+import { Toast as BaseToast } from "@base-ui/react/toast";
 import { CloseIcon } from "../../icons/lucide-glyphs.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, ButtonLink, IconButton } from "../button/button.js";
@@ -12,7 +13,9 @@ import { Tooltip } from "../tooltip/hint.js";
  * with no hover), so it takes no room in the row: the action stands at the
  * card's end and the words never reflow as it comes.
  *
- * Pressing the action dismisses the toast first, then runs what it does. An
+ * The × is Base UI's close (`Toast.Close`), drawn as the window's icon
+ * button. Pressing the action closes the toast first (`onDismiss`), then
+ * runs what it does, so whoever showed it hears it go before the press. An
  * action that opens a page is given its `href` and drawn as a link in the
  * same outline look, so a right-click and a reader's link list find it;
  * its press stops the browser's follow, since `onPress` is the window's own
@@ -42,7 +45,7 @@ type ToastActionProps =
     }
   | { label?: never; href?: never; onPress?: never };
 
-/** A toast's copy, action, and dismiss: what it copies, the action's label and press, the dismiss's label, and what dismissing does. */
+/** A toast's copy, action, and dismiss: what it copies, the action's label and press, the dismiss's label, and what closes the toast before its action runs. */
 export function ToastActions({
   label,
   href,
@@ -56,6 +59,7 @@ export function ToastActions({
   copy?: ToastCopy | undefined;
   /** What the × is called, for whoever cannot see it. */
   dismissLabel: string;
+  /** Closes the toast, which its action does before it presses. */
   onDismiss: () => void;
   /** Whether the action's label is the app's own words ("Undo", "Open"), which a screen recording shows as they read. */
   replayUnmasked?: boolean | undefined;
@@ -89,14 +93,18 @@ export function ToastActions({
         <CopyButton text={copy.text} what={copy.what} copy={copy.copy} />
       )}
       <span className="ui-toast-dismiss absolute -top-toast-gap -left-toast-gap flex rounded-full border border-border-strong bg-background shadow-toast-dismiss">
-        <Tooltip label={dismissLabel}>
-          <IconButton
-            icon={<CloseIcon />}
-            label={dismissLabel}
-            size={BUTTON_SIZE.COMPACT}
-            onClick={onDismiss}
-          />
-        </Tooltip>
+        <BaseToast.Close
+          render={(close) => (
+            <Tooltip label={dismissLabel}>
+              <IconButton
+                icon={<CloseIcon />}
+                label={dismissLabel}
+                size={BUTTON_SIZE.COMPACT}
+                onClick={close.onClick}
+              />
+            </Tooltip>
+          )}
+        />
       </span>
     </>
   );

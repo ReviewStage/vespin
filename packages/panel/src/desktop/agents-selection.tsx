@@ -19,7 +19,7 @@ import { useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { teammateStarter } from "../tasks/agent-model.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { type ChosenRows, useChosen, useChosenOf } from "./tasks-selection.js";
 import { useRefusalHeard } from "./use-refusal-heard.js";
 
@@ -140,7 +140,6 @@ export function useAgentsSelection(
       toast({
         words: refusal.reason,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface: FAILURE_SURFACE.AGENT_ARCHIVE, cause: refusal },
       });
     });

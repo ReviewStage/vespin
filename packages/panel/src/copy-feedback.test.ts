@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { TOAST_HOLD } from "@repo/ui";
 import { Duration } from "effect";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -9,7 +10,7 @@ import { useCopyToast } from "./copy-feedback.js";
 import { copyingInto, fakeAppPlatform } from "./testing/app-platform.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
 import { standingToastWords } from "./testing/toast.js";
-import { TOAST_HOLD, ToastHost } from "./toast.js";
+import { ToastHost } from "./toast.js";
 
 /**
  * copy-feedback.test.ts -- a copy made from a menu answered in the window's
@@ -65,10 +66,10 @@ async function copyFromMenu(words: string, label: string): Promise<void> {
   await act(async () => copy?.(words, label));
 }
 
-test("a menu's copy the clipboard took stands for a confirmation's hold, then leaves", async () => {
+test("a menu's copy the clipboard took stands for the hold, then leaves", async () => {
   fakeAppPlatform(copyingInto([]));
   mount();
-  const hold = Duration.toMillis(TOAST_HOLD.DONE);
+  const hold = Duration.toMillis(TOAST_HOLD);
 
   await copyFromMenu("https://vespin.dev/acme/plan/1", "Link copied");
   pass(hold - 1);
@@ -76,19 +77,5 @@ test("a menu's copy the clipboard took stands for a confirmation's hold, then le
   pass(1);
 
   assert.deepEqual(justBefore, ["Link copied"]);
-  assert.deepEqual(standing(), []);
-});
-
-test("a menu's copy the clipboard refused stands for a failure's hold, longer than one it took", async () => {
-  fakeAppPlatform({ copyText: () => Promise.reject(new Error("clipboard refused")) });
-  mount();
-  const hold = Duration.toMillis(TOAST_HOLD.FAILED);
-
-  await copyFromMenu("https://vespin.dev/acme/plan/1", "Link copied");
-  pass(hold - 1);
-  const justBefore = standing();
-  pass(1);
-
-  assert.deepEqual(justBefore, ["Could not copy to the clipboard. Try again."]);
   assert.deepEqual(standing(), []);
 });
