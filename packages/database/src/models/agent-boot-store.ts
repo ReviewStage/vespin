@@ -267,11 +267,11 @@ export function beginAgentBoot(
   );
 }
 
-/** The workspace's setup scripts begun in the agent's sandbox (STARTING -> RUNNING_SCRIPTS), under `attempt`. */
+/** The workspace's setup scripts begun in the agent's sandbox (STARTING -> RUNNING_SCRIPTS), under `attempt` where one is named; nothing for an agent whose first launch is over. */
 export function agentBootScriptsStarted(
   agentId: string,
-  attempt: number,
   at: Date,
+  attempt?: number,
 ): AgentBootEffect<void> {
   return Effect.asVoid(
     underAgentQueueLock(
@@ -280,6 +280,27 @@ export function agentBootScriptsStarted(
       () => false,
     ),
   );
+}
+
+const updateSetupExit = SqlSchema.void({
+  Request: Schema.Struct({ agentId: Schema.String, setupExit: Schema.Number }),
+  execute: ({ agentId, setupExit }) =>
+    Database.use((db) =>
+      db
+        .update(agentBootTable)
+        .set({ setupExit })
+        .where(
+          and(
+            eq(agentBootTable.agentId, agentId),
+            eq(agentBootTable.phase, BOOT_PHASE.RUNNING_SCRIPTS),
+          ),
+        ),
+    ),
+});
+
+/** The setup scripts' exit code kept where they ran for the agent's first launch, its phase left as it stands until its runner is up; nothing for one whose first launch is over. */
+export function agentBootScriptsEnded(agentId: string, setupExit: number): AgentBootEffect<void> {
+  return updateSetupExit({ agentId, setupExit });
 }
 
 /**

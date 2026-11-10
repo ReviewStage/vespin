@@ -160,6 +160,12 @@ function recording(sessionPrefix: string) {
         return answers.handover;
       }),
     warm: () => Effect.void,
+    boot: () =>
+      Effect.succeed({
+        outcome: SESSION_SEND_OUTCOME.ACCEPTED,
+        sessionId: `${sessionPrefix}${randomUUID()}`,
+        up: Effect.succeed(undefined),
+      } as const),
     retry: (sessionId, message) =>
       Effect.sync(() => {
         calls.push(`retry:${sessionId}`);

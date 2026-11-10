@@ -33,8 +33,8 @@ import {
   SESSION_SEND_OUTCOME,
 } from "../agents/sessions/agent-sessions.js";
 
-/** A script's sessions, and where it scripts one, how a member's answer to an ask reaches the runner; not live unless scripted. */
-export type ScriptedSessions = AgentSessions & Partial<Pick<NativeSessions, "answer">>;
+/** A script's sessions, and where it scripts one, how a member's answer to an ask reaches the runner, not live unless scripted, and how a first launch's machine boots, up at once unless scripted. */
+export type ScriptedSessions = AgentSessions & Partial<Pick<NativeSessions, "answer" | "boot">>;
 
 /** Who the script writes down a harness's call as made for: the agent's starter. */
 export function harnessFor(account: string): string {
@@ -58,6 +58,14 @@ export function scriptedHarness(
           halt: () => Effect.succeed(true),
           deliverTurn: () => Effect.succeed(TURN_HANDOVER.HANDED),
           warm: () => Effect.void,
+          boot:
+            script(account).boot ??
+            (() =>
+              Effect.succeed({
+                outcome: SESSION_SEND_OUTCOME.ACCEPTED,
+                sessionId: `${NATIVE_SESSION_PREFIX.claude_code}${randomUUID()}`,
+                up: Effect.succeed(undefined),
+              } as const)),
         }),
       ),
   };
