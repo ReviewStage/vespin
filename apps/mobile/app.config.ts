@@ -83,11 +83,15 @@ type AppExtension = {
   readonly COLORS?: Readonly<Record<string, keyof typeof BRAND_PALETTE.LIGHT>>;
 };
 
-const EXTENSION_INFO_PLIST = "Info.plist";
 const EXTENSION_ASSET_CATALOG = "Assets.xcassets";
 const EXTENSION_SWIFT_VERSION = "5.0";
 // What an asset catalog's own Contents.json says, as Xcode writes it.
 const ASSET_CATALOG_INFO = { info: { author: "xcode", version: 1 } };
+
+// Note that each extension's Info.plist is named for its target, because the
+// xcode library's addPbxGroup reuses a file reference of the same path, so a
+// second extension's `Info.plist` would join the first's reference.
+const extensionPlistName = (extension: AppExtension) => `${extension.TARGET}-Info.plist`;
 
 // The Notification Service Extension, which sets a decide push's buttons.
 const NOTIFICATION_SERVICE: AppExtension = {
@@ -283,7 +287,7 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
       for (const { FROM, NAME } of extension.SOURCES)
         copyFileSync(join(projectRoot, FROM, NAME), join(folder, NAME));
       writeFileSync(
-        join(folder, EXTENSION_INFO_PLIST),
+        join(folder, extensionPlistName(extension)),
         extensionPlist(extension, modConfig.version ?? "1.0", modConfig.ios?.buildNumber ?? "1"),
       );
       if (colors.length > 0) {
@@ -308,7 +312,7 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
     const sources = extension.SOURCES.map(({ NAME }) => NAME);
     const resources = colors.length > 0 ? [EXTENSION_ASSET_CATALOG] : [];
     const group = project.addPbxGroup(
-      [...sources, ...resources, EXTENSION_INFO_PLIST],
+      [...sources, ...resources, extensionPlistName(extension)],
       extension.TARGET,
       extension.TARGET,
     );
@@ -334,7 +338,7 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
       Object.assign(build, {
         CODE_SIGN_STYLE: "Automatic",
         GENERATE_INFOPLIST_FILE: "NO",
-        INFOPLIST_FILE: `${extension.TARGET}/${EXTENSION_INFO_PLIST}`,
+        INFOPLIST_FILE: `${extension.TARGET}/${extensionPlistName(extension)}`,
         IPHONEOS_DEPLOYMENT_TARGET: modConfig.ios?.deploymentTarget ?? "26.0",
         PRODUCT_BUNDLE_IDENTIFIER: extension.BUNDLE_IDENTIFIER,
         SKIP_INSTALL: "YES",
