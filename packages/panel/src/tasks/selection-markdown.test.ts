@@ -9,8 +9,8 @@ import { selectedMarkdown, WrittenAs } from "./selection-markdown.js";
 /**
  * selection-markdown.test.ts -- words selected are written back as the
  * Markdown they were drawn from: a code card's lines, each drawn as a box
- * of its own, stay lines, and a chip picked inside its name keeps the marks
- * around it. Synthetic words.
+ * of its own, stay lines, blank lines included, even in a quote; and a chip
+ * picked inside its name keeps the marks around it. Synthetic words.
  */
 
 const roots: Root[] = [];
@@ -40,6 +40,18 @@ test("a code card's lines, each drawn as a box of its own, are quoted as lines",
   document.body.append(pre);
 
   assert.equal(selectedMarkdown(whole(pre)), "```\nconst a = 1;\n\nconst b = 2;\n```");
+});
+
+test("a fenced block inside a quote keeps every blank line of its code", () => {
+  const quote = document.createElement("blockquote");
+  const pre = document.createElement("pre");
+  const code = document.createElement("code");
+  code.textContent = "first\n\n\nlast";
+  pre.append(code);
+  quote.append(pre);
+  document.body.append(quote);
+
+  assert.equal(selectedMarkdown(whole(quote)), "> ```\n> first\n>\n>\n> last\n> ```");
 });
 
 test("words picked inside a chip's name under a bold run quote the chip's link in bold", () => {

@@ -1,4 +1,5 @@
 import { linkTarget } from "@repo/features/link-grammar";
+import { keptBlankLines } from "@repo/ui/reply-quote";
 import { type ReactNode, useCallback } from "react";
 
 /**
@@ -106,9 +107,9 @@ function block(words: string): string {
   return inner === "" ? "" : `${BLOCK_GAP}${inner}${BLOCK_GAP}`;
 }
 
-/** Words as one block's lines, the blank lines inside them taken out, as a list item or a quote holds them. */
+/** Words as one block's lines, the blank lines inside them taken out, as a list item or a quote holds them, but a fenced block's, which are its code. */
 function lines(words: string): string {
-  return words.replace(/\n[^\S\n]*(?:\n[^\S\n]*)+/gu, NEWLINE).trim();
+  return keptBlankLines(words, 0).trim();
 }
 
 /** Whether an element's words are left out: words no selection takes, and words drawn for a screen reader alone. */
@@ -248,7 +249,7 @@ function insideCode(node: Node): boolean {
  */
 export function selectedMarkdown(range: Range): string {
   const common = range.commonAncestorContainer;
-  const words = written(common, range, insideCode(common)).replace(/\n{3,}/gu, BLOCK_GAP);
+  const words = keptBlankLines(written(common, range, insideCode(common)), 1);
   // Note that the walk up starts over the common node, which wrote its own marks already.
   return (
     common.parentElement === null ? words : insideAncestors(words, common.parentElement)
