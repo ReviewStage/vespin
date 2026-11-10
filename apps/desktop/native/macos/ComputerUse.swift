@@ -25,6 +25,12 @@ import UniformTypeIdentifiers
 ///   `perform_secondary_action`: act on the app by an element's number or by
 ///   a point in the first screenshot's pixels.
 ///
+/// The agent's own cursor, a small arrow of its own color drawn over the
+/// app in a window that takes no clicks, glides to each point an action
+/// lands on just before it lands, and fades once the agent rests, so the
+/// developer sees where it works without losing their own cursor. It stands
+/// in no screenshot, since a read captures the app's window alone.
+///
 /// Note that input is never posted to the system's event stream: an element
 /// is pressed through Accessibility, and a point is clicked by an event posted
 /// to the app's own process aimed at its window, so the developer keeps the
@@ -498,6 +504,98 @@ private func getAppState(_ request: [String: Any]) async throws -> [String: Any]
     ]
 }
 
+// MARK: - The agent's cursor
+
+/// How long the cursor takes to glide to a point, and how long it rests there before the action lands.
+private let CURSOR_GLIDE_SECONDS = 0.25
+/// How long the cursor stands after the agent's last action before it fades.
+private let CURSOR_REST_SECONDS = 2.5
+/// The cursor's box, and where in it the arrow's tip stands.
+private let CURSOR_BOX = CGSize(width: 36, height: 36)
+private let CURSOR_TIP = CGPoint(x: 8, y: 6)
+
+/// The arrow the agent's cursor draws: the system's shape, in a color of its own, ringed so it reads on any window.
+private final class AgentCursorView: NSView {
+    override func draw(_ dirtyRect: NSRect) {
+        let tip = CGPoint(x: CURSOR_TIP.x, y: bounds.height - CURSOR_TIP.y)
+        let halo = NSBezierPath(ovalIn: NSRect(x: tip.x - 6, y: tip.y - 26, width: 26, height: 26))
+        NSColor.systemPurple.withAlphaComponent(0.18).setFill()
+        halo.fill()
+        let arrow = NSBezierPath()
+        arrow.move(to: tip)
+        arrow.line(to: CGPoint(x: tip.x, y: tip.y - 20))
+        arrow.line(to: CGPoint(x: tip.x + 5, y: tip.y - 15))
+        arrow.line(to: CGPoint(x: tip.x + 9, y: tip.y - 23))
+        arrow.line(to: CGPoint(x: tip.x + 12, y: tip.y - 21.5))
+        arrow.line(to: CGPoint(x: tip.x + 8, y: tip.y - 14))
+        arrow.line(to: CGPoint(x: tip.x + 14, y: tip.y - 14))
+        arrow.close()
+        NSColor.systemPurple.setFill()
+        arrow.fill()
+        NSColor.white.setStroke()
+        arrow.lineWidth = 1.5
+        arrow.stroke()
+    }
+}
+
+/// The window the agent's cursor stands in: borderless, clear, over every app, taking no clicks, on every space.
+@MainActor
+private final class AgentCursor {
+    private var panel: NSPanel?
+    private var fade: Task<Void, Never>?
+
+    private func made() -> NSPanel {
+        if let panel { return panel }
+        let made = NSPanel(
+            contentRect: NSRect(origin: .zero, size: CURSOR_BOX), styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered, defer: false)
+        made.isOpaque = false
+        made.backgroundColor = .clear
+        made.hasShadow = false
+        made.ignoresMouseEvents = true
+        made.level = .statusBar
+        made.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        made.contentView = AgentCursorView(frame: NSRect(origin: .zero, size: CURSOR_BOX))
+        panel = made
+        return made
+    }
+
+    /// The cursor glided to a point on the screen, in the window server's coordinates, its top left the main display's.
+    func glide(to point: CGPoint) {
+        let panel = made()
+        let height = NSScreen.screens.first?.frame.height ?? 0
+        let origin = CGPoint(x: point.x - CURSOR_TIP.x, y: height - point.y - CURSOR_BOX.height + CURSOR_TIP.y)
+        fade?.cancel()
+        if !panel.isVisible || panel.alphaValue < 1 {
+            panel.setFrameOrigin(origin)
+            panel.alphaValue = 1
+            panel.orderFrontRegardless()
+        } else {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = CURSOR_GLIDE_SECONDS
+                panel.animator().setFrameOrigin(origin)
+            }
+        }
+        fade = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(CURSOR_REST_SECONDS * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            // Note that the completion is named, because inside a task the bare form is the one that awaits.
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = CURSOR_GLIDE_SECONDS
+                panel.animator().alphaValue = 0
+            }, completionHandler: nil)
+        }
+    }
+}
+
+@MainActor private let agentCursor = AgentCursor()
+
+/// The agent's cursor glided to `point`, and a moment let pass so it has arrived as the action lands.
+private func cursorTo(_ point: CGPoint) async {
+    await MainActor.run { agentCursor.glide(to: point) }
+    try? await Task.sleep(nanoseconds: UInt64(CURSOR_GLIDE_SECONDS * 1_000_000_000))
+}
+
 // MARK: - Input
 
 private let BUTTON = (left: "left", right: "right", middle: "middle")
@@ -577,6 +675,7 @@ private func click(_ request: [String: Any]) async throws -> [String: Any] {
     let count = min(max(integer(request, "click_count") ?? 1, 1), MAX_CLICKS)
     if let index = integer(request, "element_index") {
         let element = try current.element(index)
+        if let center = try? current.center(index) { await cursorTo(center) }
         // Note that a plain press goes through Accessibility, which needs no point and no focus, before an event is aimed at the element's center.
         if button == BUTTON.left, count == 1,
            AXUIElementPerformAction(element, kAXPressAction as CFString) == .success {
@@ -588,7 +687,9 @@ private func click(_ request: [String: Any]) async throws -> [String: Any] {
     guard let x = number(request, "x"), let y = number(request, "y") else {
         throw HelperError(kind: ERROR_KIND.badRequest, message: "Give an element_index, or x and y.")
     }
-    clickPoint(current.point(x: x, y: y), session: current, button: button, count: count)
+    let point = current.point(x: x, y: y)
+    await cursorTo(point)
+    clickPoint(point, session: current, button: button, count: count)
     return ["done": "clicked"]
 }
 
@@ -675,6 +776,7 @@ private func scroll(_ request: [String: Any]) async throws -> [String: Any] {
     let lines = Int32(max(1, (pages.isFinite ? pages : 1) * Double(LINES_PER_PAGE)))
     let vertical: Int32 = direction == DIRECTION.up ? lines : direction == DIRECTION.down ? -lines : 0
     let horizontal: Int32 = direction == DIRECTION.left ? lines : direction == DIRECTION.right ? -lines : 0
+    await cursorTo(point)
     let event = CGEvent(
         scrollWheelEvent2Source: source, units: .line, wheelCount: 2, wheel1: vertical, wheel2: horizontal,
         wheel3: 0)
@@ -694,11 +796,13 @@ private func drag(_ request: [String: Any]) async throws -> [String: Any] {
     let from = current.point(x: fromX, y: fromY)
     let to = current.point(x: toX, y: toY)
     let types = mouseTypes(BUTTON.left)
+    await cursorTo(from)
     post(mouseEvent(types.down, at: from, session: current, clicks: 1), to: current)
     let steps = 12
     for step in 1...steps {
         let along = Double(step) / Double(steps)
         let point = CGPoint(x: from.x + (to.x - from.x) * along, y: from.y + (to.y - from.y) * along)
+        await MainActor.run { agentCursor.glide(to: point) }
         post(mouseEvent(types.drag, at: point, session: current, clicks: 1), to: current)
         try await Task.sleep(nanoseconds: 10_000_000)
     }
@@ -770,14 +874,23 @@ private func handle(_ line: String) async -> [String: Any] {
 
 @main
 struct ComputerUse {
-    static func main() async {
-        // Note that the shared application opens the window server connection that launching an app and capturing a window need; it never shows in the Dock.
-        _ = NSApplication.shared
-        NSApp.setActivationPolicy(.prohibited)
-        // Note that requests are answered one at a time, in order, because an action reads the state the read before it left.
-        while let line = readLine(strippingNewline: true) {
-            if line.trimmingCharacters(in: .whitespaces).isEmpty { continue }
-            write(await handle(line))
+    static func main() {
+        // Note that the shared application opens the window server connection that launching an app, capturing a window, and drawing the agent's cursor need; as an accessory it stands in neither the Dock nor the app switcher.
+        let app = NSApplication.shared
+        app.setActivationPolicy(.accessory)
+        // Note that requests are read on a thread of their own and answered one at a time, in order, because an action reads the state the read before it left, while the main thread runs the cursor's window; stdin closing, as the app quits, ends the helper.
+        Thread.detachNewThread {
+            while let line = readLine(strippingNewline: true) {
+                if line.trimmingCharacters(in: .whitespaces).isEmpty { continue }
+                let answered = DispatchSemaphore(value: 0)
+                Task {
+                    write(await handle(line))
+                    answered.signal()
+                }
+                answered.wait()
+            }
+            exit(0)
         }
+        app.run()
     }
 }
