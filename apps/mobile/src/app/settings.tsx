@@ -41,6 +41,8 @@ import {
   usePushDeviceStanding,
 } from "../push-device.js";
 
+export { ScreenBoundary as ErrorBoundary } from "../screen-boundary.js";
+
 /** What Notifications reads once the phone lets the app notify, until the service says how its pushes fare. */
 const NOTIFICATIONS_ON = "On";
 

@@ -2,6 +2,8 @@
 
 import { TasksListScreen } from "../../../screens/task-screens.js";
 
+export { ScreenBoundary as ErrorBoundary } from "../../../screen-boundary.js";
+
 export default function TasksScreen() {
   return <TasksListScreen />;
 }

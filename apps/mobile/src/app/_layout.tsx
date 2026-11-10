@@ -13,6 +13,8 @@ import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
 
+export { ScreenFailure as ErrorBoundary } from "@repo/ui-native";
+
 /**
  * The screens, each behind the account's standing: the tabs, Settings, and
  * the sheets that start a task or an agent while an account is signed in, and the sign-in screen otherwise, so a

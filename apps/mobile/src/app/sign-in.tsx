@@ -9,6 +9,8 @@ import { AuthPage, PROVIDER_MARK_ASSET, ProviderButton, Screen } from "@repo/ui-
 import { useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 
+export { ScreenBoundary as ErrorBoundary } from "../screen-boundary.js";
+
 /** The ways in, in the web's order, each with the provider's mark as the web's buttons carry it. */
 const WAYS_IN = [
   { provider: ACCOUNT_PROVIDER.GOOGLE, mark: PROVIDER_MARK_ASSET.GOOGLE },
