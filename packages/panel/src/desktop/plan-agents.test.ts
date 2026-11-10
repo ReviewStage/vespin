@@ -226,7 +226,7 @@ test("the group starts folded unless the page says otherwise, its head counting 
   assert.equal(host.querySelector('[aria-label="Agents"]'), null);
 });
 
-test("New agent stands on the group's head, a task with no agent draws no group, and on a phone the task's Inbox follows only while something waits there", () => {
+test("New agent stands on the group's head, a task with no agent draws the group with New agent as its row, and on a phone the task's Inbox follows only while something waits there", () => {
   const press = (host: HTMLElement, words: string) => {
     const found = [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
       button.textContent?.includes(words),
@@ -235,7 +235,9 @@ test("New agent stands on the group's head, a task with no agent draws no group,
     act(() => found.click());
   };
   const none = mount([], { newAgent: true, phone: true });
-  assert.equal(none.host.textContent, "", "no group and no Inbox row while nothing waits");
+  assert.ok(!none.host.textContent?.includes("need"), "no Inbox row while nothing waits");
+  press(none.host, "New agent");
+  assert.deepEqual(none.opened.phone, ["new agent"], "the group's one row starts one");
   act(() => root?.unmount());
   document.body.innerHTML = "";
 
