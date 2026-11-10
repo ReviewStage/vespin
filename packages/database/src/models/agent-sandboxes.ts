@@ -16,9 +16,16 @@
  * agent's conversation, and settles it LIVE, where it was
  * used since, or RELEASED, once deleted, each only where the row still
  * stands RELEASING, so an open between them wins.
+ *
+ * A launch records its boot here too (`@repo/service`'s
+ * `machine/sandbox-machine.ts`): `booting_since` set as it opens the
+ * sandbox, LIVE again where it stood released, and cleared once its runner
+ * is handed its first lines, which is a use, or once the open failed; a
+ * discard, which deletes the sandbox, marks it RELEASED. The task list reads
+ * the row of the agent's current session (`sandboxNamedFor`).
  */
 
-import { and, asc, eq, lt, lte, ne, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, lt, lte, ne, type SQL, type SQLWrapper, sql } from "drizzle-orm";
 import { Effect, type Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -169,6 +176,92 @@ const settleReleasing = SqlSchema.void({
         ),
     ),
 });
+
+const upsertBooting = SqlSchema.void({
+  Request: Schema.Struct({ sandboxName: Schema.String, agentId: Schema.String, at: Schema.Date }),
+  execute: ({ sandboxName, agentId, at }) =>
+    Database.use((db) =>
+      db
+        .insert(agentSandboxTable)
+        .values({
+          sandboxName,
+          agentId,
+          usedAt: at,
+          state: AGENT_SANDBOX_STATE.LIVE,
+          bootingSince: at,
+        })
+        // Note that its last use stays, so a resume that fails reads off rather than running.
+        .onConflictDoUpdate({
+          target: agentSandboxTable.sandboxName,
+          set: { agentId, state: AGENT_SANDBOX_STATE.LIVE, bootingSince: at },
+        }),
+    ),
+});
+
+const clearBooting = SqlSchema.void({
+  Request: Schema.Struct({ sandboxName: Schema.String, usedAt: Schema.NullOr(Schema.Date) }),
+  execute: ({ sandboxName, usedAt }) =>
+    Database.use((db) =>
+      db
+        .update(agentSandboxTable)
+        .set(usedAt === null ? { bootingSince: null } : { bootingSince: null, usedAt })
+        .where(
+          and(
+            eq(agentSandboxTable.sandboxName, sandboxName),
+            isNotNull(agentSandboxTable.bootingSince),
+          ),
+        ),
+    ),
+});
+
+const markReleased = SqlSchema.void({
+  Request: Schema.Struct({ sandboxName: Schema.String }),
+  execute: ({ sandboxName }) =>
+    Database.use((db) =>
+      db
+        .update(agentSandboxTable)
+        .set({ state: AGENT_SANDBOX_STATE.RELEASED, bootingSince: null })
+        .where(eq(agentSandboxTable.sandboxName, sandboxName)),
+    ),
+});
+
+/**
+ * The name of the sandbox opened for the session the expression gives, as
+ * `@repo/service`'s `agentSandboxName` names it: the prefix and the first
+ * 32 hex digits of the SHA-256 of the session's id, cast to its bytes
+ * rather than converted, since a live read may call only immutable
+ * functions; a minted id holds no backslash, so the cast's escapes never
+ * apply; null for no session.
+ */
+export function sandboxNamedFor(session: SQLWrapper): SQL<string | null> {
+  return sql<
+    string | null
+  >`'agent-sandbox-' || left(encode(sha256(${session}::bytea), 'hex'), 32)`;
+}
+
+/** A boot of the agent's sandbox begun at `at`: its row LIVE, booting since then. */
+export function recordAgentSandboxBooting(
+  agentId: string,
+  sandboxName: string,
+  at: Date,
+): SandboxUseEffect<void> {
+  return upsertBooting({ sandboxName, agentId, at });
+}
+
+/** The sandbox's boot done, its runner handed its first lines at `at`, which is a use of it; nothing where no boot was under way. */
+export function recordAgentSandboxBooted(sandboxName: string, at: Date): SandboxUseEffect<void> {
+  return clearBooting({ sandboxName, usedAt: at });
+}
+
+/** The sandbox's boot ended without its runner: its open or launch failed; nothing where no boot was under way. */
+export function recordAgentSandboxBootFailed(sandboxName: string): SandboxUseEffect<void> {
+  return clearBooting({ sandboxName, usedAt: null });
+}
+
+/** The sandbox deleted by its session's discard, its row RELEASED. */
+export function recordAgentSandboxDiscarded(sandboxName: string): SandboxUseEffect<void> {
+  return markReleased({ sandboxName });
+}
 
 /** The agent's sandbox recorded LIVE and used at `at`, where its row was written before the cutoff or stood RELEASED. */
 export function recordAgentSandboxOpen(

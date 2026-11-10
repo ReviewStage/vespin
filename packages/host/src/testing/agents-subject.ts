@@ -5,6 +5,7 @@ import assert from "node:assert/strict";
 import { CALL_FAULT } from "@repo/features";
 import type { AccountInboxEntry } from "@repo/features/account-inbox-wire";
 import { ACCOUNT_PREFERENCES_READ } from "@repo/features/account-preferences-live";
+import { APPROVAL_STATUS_OF_ANSWER } from "@repo/features/agent-approval-wire";
 import { AGENT_ORIGIN_READ } from "@repo/features/agent-origin-live";
 import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
 import {
@@ -551,6 +552,16 @@ function fakeService() {
       Effect.map(changeGate, () => {
         asked.push(`servers:${agentId}:${request.disabledServers.join(",")}`);
         return { agent: { ...AGENT, disabledServers: request.disabledServers } };
+      }),
+    choosePermissionMode: (agentId, request) =>
+      Effect.map(changeGate, () => {
+        asked.push(`permissionMode:${agentId}:${request.permissionMode}`);
+        return { agent: { ...AGENT, permissionMode: request.permissionMode } };
+      }),
+    answerApproval: (agentId, approvalId, request) =>
+      Effect.map(changeGate, () => {
+        asked.push(`answerApproval:${agentId}:${approvalId}:${request.answer}`);
+        return { approval: { id: approvalId, status: APPROVAL_STATUS_OF_ANSWER[request.answer] } };
       }),
     addRepository: (agentId, request) =>
       Effect.map(changeGate, () => {

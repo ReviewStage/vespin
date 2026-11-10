@@ -46,7 +46,8 @@ import { taskCardOf } from "./task-card.js";
  * glyph and the name its tab wears in the side panel's strip are the ones its
  * row in that strip's "+" menu wears, the Plan tab is the task's own name and
  * status, the task's own tab hangs the task's card, and a page's tab hangs a
- * card previewing the page.
+ * card previewing the page and keeps the page drawn while another tab is
+ * shown.
  */
 
 const TASK: Task = {
@@ -128,12 +129,33 @@ async function settle(): Promise<void> {
  * The task open on its working agent's tab, or the tab given, a draft's beside
  * it, and the side panel open with the done agent's Changes tab, the working agent's Terminal tab, and a page's tab.
  */
-async function mount(
-  shown: { body?: string; tab?: SidePanelTab; listed?: TaskSummary; main?: MainTab } = {},
-): Promise<HTMLElement> {
+async function mount(shown: Shown = {}): Promise<HTMLElement> {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
+  act(() => root.render(taskDrawn(shown)));
+  await settle();
+  return container;
+}
+
+/** The task as `mount` draws it, drawn again in the root it last mounted, as `shown` now says. */
+async function redraw(shown: Shown): Promise<void> {
+  const root = roots.at(-1);
+  assert.ok(root, "a task is mounted");
+  act(() => root.render(taskDrawn(shown)));
+  await settle();
+}
+
+/** What the mounted task shows, where it shows other than its first. */
+interface Shown {
+  body?: string;
+  tab?: SidePanelTab;
+  listed?: TaskSummary;
+  main?: MainTab;
+}
+
+/** The task's window as `mount` describes it. */
+function taskDrawn(shown: Shown) {
   const base = tasksControl();
   const tasks = tasksControl({
     page: TASKS_PAGE.DOCUMENT,
@@ -186,22 +208,16 @@ async function mount(
       return task === undefined ? undefined : taskCardOf(tasks, task, now);
     },
   };
-  act(() =>
-    root.render(
-      windowRouter().provide(
-        withExperiments(
-          experimentsOn(EXPERIMENT.DESCRIPTIONS),
-          createElement(
-            ChipCards,
-            { value: chipCards },
-            createElement(DesktopTasks, { looks: NO_LOOKS, tasks }),
-          ),
-        ),
+  return windowRouter().provide(
+    withExperiments(
+      experimentsOn(EXPERIMENT.DESCRIPTIONS),
+      createElement(
+        ChipCards,
+        { value: chipCards },
+        createElement(DesktopTasks, { looks: NO_LOOKS, tasks }),
       ),
     ),
   );
-  await settle();
-  return container;
 }
 
 /** A tab or a menu row as a reader sees it: its glyph's markup and its name. */
@@ -352,4 +368,29 @@ test("a page's tab hangs the page's card: its title and version over its newest 
   assert.equal(frame.tabIndex, -1);
   assert.equal(frame.getAttribute("aria-hidden"), "true");
   assert.ok(frame.closest(".ph-no-capture"), "the preview is left out of the recording");
+});
+
+test("a page's tab keeps its page drawn while another tab is shown, so a return finds the page as it was left rather than loaded afresh", async () => {
+  fakeAppPlatform({ pageFrameUrl });
+  const container = await mount({ tab: pageTab(FUNNEL.id) });
+  const pageFrame = () =>
+    container.querySelector(`.side-panel-content iframe[title="${FUNNEL.title}"]`);
+  const frame = pageFrame();
+  assert.ok(frame, "the page is drawn in its tab");
+  await redraw({ tab: changesTab(DONE.id) });
+  await redraw({ tab: pageTab(FUNNEL.id) });
+  assert.ok(pageFrame() === frame, "the page stands in the frame it was left in");
+  // The page's tab offers what its page hands its menu, as it did before it was hidden.
+  const tab = [...container.querySelectorAll<HTMLElement>('.side-panel-tabs [role="tab"]')].find(
+    (each) => each.querySelector(".ui-tab-label")?.textContent === FUNNEL.title,
+  );
+  assert.ok(tab, "the strip has the page's tab");
+  act(() => {
+    tab.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, cancelable: true }));
+  });
+  const items = [...document.querySelectorAll('[role="menuitem"]')].map((each) => each.textContent);
+  assert.ok(
+    items.includes("Reload page"),
+    `the tab's menu offers Reload page: ${items.join(", ")}`,
+  );
 });

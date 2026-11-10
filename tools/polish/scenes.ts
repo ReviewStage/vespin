@@ -413,7 +413,7 @@ export const SCENES: readonly Scene[] = [
   {
     id: "settings-hosts",
     place: PLACE.SETTINGS,
-    title: "Hosts",
+    title: "Machines",
     profile: "settings-hosts",
   },
   {

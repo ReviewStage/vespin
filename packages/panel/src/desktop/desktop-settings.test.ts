@@ -46,10 +46,10 @@ const _accepted = () => Promise.resolve({ status: ACTION_RESULT_STATUS.ACCEPTED 
 
 /** The sidebar's groups and their rows, in the order the approved layout lists them, where no workspace is listed to head the first and no experiment is on. */
 const PAGE_GROUPS = [
-  { heading: "Workspace", rows: ["Workspace", "Environment", "Cloud setup"] },
+  { heading: "Workspace", rows: ["Workspace", "Cloud environment"] },
   {
     heading: "Account",
-    rows: ["Account", "Agents", "Integrations", "Vespin MCP", "Vespin CLI", "Experimental"],
+    rows: ["Account", "Agents", "Integrations", "Vespin MCP & CLI", "Experimental"],
   },
   {
     heading: "This Mac",
@@ -322,12 +322,12 @@ test("the sidebar's first group is headed by the listed workspace's name, over i
     pageGroups(page).map((group) => group.heading),
     ["Acme", "Account", "This Mac"],
   );
-  assert.deepEqual(pageGroups(page)[0]?.rows, ["Workspace", "Environment", "Cloud setup"]);
+  assert.deepEqual(pageGroups(page)[0]?.rows, ["Workspace", "Cloud environment"]);
 });
 
 test("the sidebar lists Memory under Workspace and its search finds it only while the workspace Settings shows has the Memory experiment on", async () => {
   const off = mount(createElement(SettingsHarness, { workspace: listing(PERSONAL) }));
-  assert.deepEqual(pageGroups(off)[0]?.rows, ["Workspace", "Environment", "Cloud setup"]);
+  assert.deepEqual(pageGroups(off)[0]?.rows, ["Workspace", "Cloud environment"]);
   // While off, the search finds only the experiment's own switch, where Memory is turned on.
   assert.deepEqual(foundUnder(off, "Memory"), ["Experimental"]);
 
@@ -337,35 +337,34 @@ test("the sidebar lists Memory under Workspace and its search finds it only whil
   };
   const on = mount(createElement(SettingsHarness, { workspace: listing(remembering) }));
   await vi.waitFor(() =>
-    expect(pageGroups(on)[0]?.rows).toEqual(["Workspace", "Environment", "Cloud setup", "Memory"]),
+    expect(pageGroups(on)[0]?.rows).toEqual(["Workspace", "Cloud environment", "Memory"]),
   );
   assert.equal(shownTitle(on), "Account");
   openPage(on, "Memory");
   assert.equal(shownTitle(on), "Memory");
 });
 
-test("the sidebar lists Hosts under Account after Agents, and its search finds it, only while the account has Bring your own host on", async () => {
+test("the sidebar lists Machines under Account after Agents, and its search finds it, only while the account has Bring your own machine on", async () => {
   const off = mount(createElement(SettingsHarness));
   assert.deepEqual(pageGroups(off)[1]?.rows, PAGE_GROUPS[1]?.rows);
-  assert.deepEqual(foundUnder(off, "Add hosts"), []);
+  assert.deepEqual(foundUnder(off, "Add a machine"), []);
 
   const experiments = experimentsOn(EXPERIMENT.BRING_YOUR_OWN_HOST);
   handState(experiments);
   const on = mount(createElement(SettingsHarness, { stored: settingsView({ experiments }) }));
-  await vi.waitFor(() => expect(pageGroups(on)[1]?.rows).toContain("Hosts"));
+  await vi.waitFor(() => expect(pageGroups(on)[1]?.rows).toContain("Machines"));
 
   assert.deepEqual(pageGroups(on)[1]?.rows, [
     "Account",
     "Agents",
-    "Hosts",
+    "Machines",
     "Integrations",
-    "Vespin MCP",
-    "Vespin CLI",
+    "Vespin MCP & CLI",
     "Experimental",
   ]);
-  openPage(on, "Hosts");
-  assert.equal(shownTitle(on), "Hosts");
-  assert.deepEqual(foundUnder(on, "Add hosts"), ["Hosts"]);
+  openPage(on, "Machines");
+  assert.equal(shownTitle(on), "Machines");
+  assert.deepEqual(foundUnder(on, "Add a machine"), ["Machines"]);
 });
 
 test("the Workspace page is titled with the workspace the sidebar lists, and follows the sidebar when it lists another", () => {

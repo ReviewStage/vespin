@@ -366,6 +366,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     claimRequest: INTERNAL,
     answerRequest: INTERNAL,
   },
+  liveActivities: { startToken: INTERNAL, activityToken: INTERNAL, ended: INTERNAL },
   macCommands: { waiting: INTERNAL, settle: INTERNAL, claim: INTERNAL, listening: INTERNAL },
   pullRequests: { reviewOptions: SCREEN_ONLY },
   pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },

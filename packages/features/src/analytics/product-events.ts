@@ -162,6 +162,7 @@ export const PRODUCT_SETTINGS_VIEW = {
   HOSTS: "hosts",
   INTEGRATIONS: "integrations",
   MCP: "mcp",
+  /** No page since Settings › CLI was folded into the MCP page; an older build still counts a visit to it. */
   CLI: "cli",
   SKILLS: "skills",
   API_KEYS: "api_keys",
@@ -169,6 +170,7 @@ export const PRODUCT_SETTINGS_VIEW = {
   PLAN_TEMPLATE: "plan_template",
   WORKSPACE: "workspace",
   ENVIRONMENT: "environment",
+  /** No page since Settings › Cloud setup was folded into the Environment page; an older build still counts a visit to it. */
   CLOUD_SETUP: "cloud_setup",
   ACCOUNT: "account",
   NOTIFICATIONS: "notifications",

@@ -91,7 +91,7 @@ import { MenuRow } from "./menu-row.js";
  * connected under the steps, in the wait's place.
  * While the account has none, Connect an agent stands first. The `vespin`
  * command, which the read lists too, is left out of Connected: its sign-in
- * is Settings › CLI's (`cli-page.tsx`).
+ * stands in the command's own sections under these (`cli-sections.tsx`).
  *
  * Each agent is led by its brand's mark, in the picker and on its row, an
  * allowed agent's found by the name it registered under; Other stands in
@@ -102,8 +102,8 @@ import { MenuRow } from "./menu-row.js";
  */
 
 const SECTION_TITLE = {
-  CLIENTS: "Connected",
-  CONNECT: "Connect an app",
+  CLIENTS: "Apps connected over MCP",
+  CONNECT: "Connect an app over MCP",
 } as const;
 
 /** The name each agent knows the server by in a command that adds it. */
@@ -376,7 +376,7 @@ function ClientRow({
   );
 }
 
-/** The agents the account allowed, and those revoked while the page shows, in the order they were allowed, newest first; never the `vespin` command, which Settings › CLI signs out. */
+/** The agents the account allowed, and those revoked while the page shows, in the order they were allowed, newest first; never the `vespin` command, whose own Sign in section signs it out. */
 function shownClients(
   listed: readonly McpClient[],
   revoked: ReadonlyMap<string, McpClient>,

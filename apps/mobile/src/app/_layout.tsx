@@ -5,6 +5,8 @@ import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
+import { hide as hideSplash } from "expo-splash-screen";
+import { useEffect } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
@@ -47,7 +49,16 @@ function GuardedScreens() {
   );
 }
 
+/**
+ * The root, with the splash taken down once it first draws. Note that
+ * expo-router takes the splash down once a launch, a frame after its
+ * navigation is ready, and that one try can be lost (its frame canceled, or
+ * the native splash not standing yet), which leaves the splash over every
+ * screen for the whole launch while the app answers under it. So the root
+ * takes it down as well; a hide with no splash standing does nothing.
+ */
 export default function RootLayout() {
+  useEffect(() => hideSplash(), []);
   return (
     <HostProvider>
       <GuardedScreens />

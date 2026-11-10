@@ -230,6 +230,7 @@
     "./relay-socket": "./src/relay-socket.js",
     "./node": "./src/node/index.js",
     "./agent-browser-tab-wire": "./src/agent-browser-tab-wire.js",
+    "./agent-sandbox-wire": "./src/agent-sandbox-wire.js",
     "./browser-agent-actions": "./src/browser-agent-actions.js",
     "./browser-agent-cdp": "./src/browser-agent-cdp.js",
     "./browser-cdp": "./src/browser-cdp.js",

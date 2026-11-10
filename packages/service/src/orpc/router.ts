@@ -97,6 +97,10 @@ import {
   mcpClientsProcedures,
 } from "../member-mcp/clients-procedures.js";
 import {
+  type LiveActivitiesProcedureSeams,
+  liveActivitiesProcedures,
+} from "../push/live-activities-procedures.js";
+import {
   type PushDevicesProcedureSeams,
   pushDevicesProcedures,
 } from "../push/push-devices-procedures.js";
@@ -155,6 +159,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   DescriptionCommentsProcedureSeams &
   PullRequestChaptersProcedureSeams &
   PushDevicesProcedureSeams &
+  LiveActivitiesProcedureSeams &
   RepositoryPinsProcedureSeams &
   RepositoryPullRequestProcedureSeams &
   SupportAccessProcedureSeams &
@@ -192,6 +197,7 @@ export function hostedRouter(seams: HostedRouterSeams) {
     integrations: integrationsProcedures(seams),
     linkPreviews: linkPreviewsProcedures(seams),
     live: liveProcedures(seams),
+    liveActivities: liveActivitiesProcedures(seams),
     deviceAgents: deviceAgentsProcedures(seams),
     macCommands: macCommandsProcedures(seams),
     mcpClients: mcpClientsProcedures(seams),

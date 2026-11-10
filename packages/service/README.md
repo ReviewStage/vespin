@@ -1678,6 +1678,17 @@ whether or not the account still holds the token. The rows are
 `SqlClient`, in the `push_device` table, which is apart from `device`, the Macs
 and Linux hosts that run local agents.
 
+The `liveActivities` resource (`live-activities-procedures.ts`, on the paths
+`@repo/features/contract`'s `live-activities.ts` declares) registers the
+tokens of the one Live Activity a phone shows for its member's running
+agents: the push-to-start token, and the update token of the activity that
+stands, each beside the phone's device token and gateway, which the account
+must already hold or the register answers not found. The app says the
+activity ended on the phone, which forgets its update token. The rows are
+`packages/database/src/models/live-activity-store.ts`'s, in the
+`live_activity` table, one per `push_device` row and leaving with it; a phone
+that moves to another account leaves its activity behind.
+
 `ApnsSender` is the one door to a phone: a notification names the phone, its
 push type (`alert`, `background`, or `liveactivity`), the JSON Apple delivers,
 composed whole by the caller, and the routing Apple reads off the headers

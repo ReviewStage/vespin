@@ -144,10 +144,11 @@ export const MENU_ITEM_MARK = {
 
 export type MenuItemMark = (typeof MENU_ITEM_MARK)[keyof typeof MENU_ITEM_MARK];
 
-/** Where an item's detail stands: a second line under its label, or beside it on the one line, as a picker's row says a person's email. */
+/** Where an item's detail stands: a second line under its label, beside it on the one line, as a picker's row says a person's email, or under it on as many lines as its words take, as a mode's hint says what the mode does. */
 export const MENU_DETAIL = {
   UNDER: "under",
   BESIDE: "beside",
+  WRAPPED: "wrapped",
 } as const;
 
 export type MenuDetailPlace = (typeof MENU_DETAIL)[keyof typeof MENU_DETAIL];
@@ -737,12 +738,18 @@ function ItemBody({
         >
           <ItemWords masked={action.replayMasked}>{action.label}</ItemWords>
         </OneLine>
-        <OneLine
-          className={cn("ui-menu-item-detail", beside && "min-w-0 flex-[0_1000_auto]")}
-          words={action.detail}
-        >
-          <ItemWords masked={action.replayMasked}>{action.detail}</ItemWords>
-        </OneLine>
+        {action.detailPlace === MENU_DETAIL.WRAPPED ? (
+          <span className="ui-menu-item-detail whitespace-normal">
+            <ItemWords masked={action.replayMasked}>{action.detail}</ItemWords>
+          </span>
+        ) : (
+          <OneLine
+            className={cn("ui-menu-item-detail", beside && "min-w-0 flex-[0_1000_auto]")}
+            words={action.detail}
+          >
+            <ItemWords masked={action.replayMasked}>{action.detail}</ItemWords>
+          </OneLine>
+        )}
       </span>
       <ItemEnd action={action} />
     </>

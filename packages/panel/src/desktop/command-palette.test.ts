@@ -354,12 +354,10 @@ function press(listed: string): void {
 const SETTINGS_PAGES = [
   "Account",
   "Workspace",
-  "Environment",
-  "Cloud setup",
+  "Cloud environment",
   "Agents",
   "Integrations",
-  "Vespin MCP",
-  "Vespin CLI",
+  "Vespin MCP & CLI",
   "Appearance",
   "This Mac",
   "Experimental",
@@ -374,19 +372,13 @@ test("the Settings filter lists every Settings page by its name, ahead of the se
   assert.deepEqual(rows().slice(0, SETTINGS_PAGES.length), SETTINGS_PAGES);
 });
 
-test("the Settings filter lists Memory after Environment only while the listed workspace has the Memory experiment on", async () => {
+test("the Settings filter lists Memory after Cloud environment only while the listed workspace has the Memory experiment on", async () => {
   const acme = { id: "workspace-acme", name: "Acme", role: WORKSPACE_ROLE.OWNER, github: null };
   handState(experimentsOn(EXPERIMENT.MEMORY));
   await paletteUnderState(tasksControl({ workspaces: [acme], workspace: acme }));
   chooseFilter("Settings");
 
-  assert.deepEqual(rows().slice(0, 5), [
-    "Account",
-    "Workspace",
-    "Environment",
-    "Cloud setup",
-    "Memory",
-  ]);
+  assert.deepEqual(rows().slice(0, 4), ["Account", "Workspace", "Cloud environment", "Memory"]);
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 

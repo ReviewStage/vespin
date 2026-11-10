@@ -371,13 +371,6 @@ export const agentTable = pgTable(
       .default(AGENT_PERMISSION_MODE.FULL_ACCESS),
     idempotencyKey: text("idempotency_key").notNull(),
     createdAt: createdAt(),
-    /**
-     * The instant every member had read the agent through when read marks
-     * moved to the service, as a task's `read_through` is (`task.ts`),
-     * null on one started since. Nothing reads it now that an agent is read
-     * through its task's mark alone.
-     */
-    readThrough: timestamptz("read_through"),
   },
   (table) => [
     // One agent per Start: a retry carrying the same key finds this row.

@@ -21,10 +21,11 @@ import {
   pushEnvironmentSchema,
   pushNotifySchema,
 } from "@repo/features/push-device-wire";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
+import { liveActivity } from "../schemas/live-activity.js";
 import { pushDevice } from "../schemas/push-device.js";
 import { InstantColumnSchema } from "./columns.js";
 
@@ -96,6 +97,28 @@ const upsertDevice = SqlSchema.void({
           // The phone is signed in to this account now, whichever held the token before.
           set: { userId, bundleId, lastSeenAt: now },
         }),
+    ),
+});
+
+const deleteMovedLiveActivity = SqlSchema.void({
+  Request: Schema.Struct({ ...TokenKeySchema.fields, userId: Schema.String }),
+  execute: ({ userId, token, environment }) =>
+    Database.use((db) =>
+      db.delete(liveActivity).where(
+        inArray(
+          liveActivity.pushDeviceId,
+          db
+            .select({ id: pushDevice.id })
+            .from(pushDevice)
+            .where(
+              and(
+                eq(pushDevice.environment, environment),
+                eq(pushDevice.token, token),
+                ne(pushDevice.userId, userId),
+              ),
+            ),
+        ),
+      ),
     ),
 });
 
@@ -214,14 +237,20 @@ const updateFailed = SqlSchema.void({
     ),
 });
 
-/** The phone registered under the account, stamped as seen now; a token another account held moves to this one. */
+/**
+ * The phone registered under the account, stamped as seen now; a token
+ * another account held moves to this one, leaving behind the Live Activity
+ * it kept for that account (`./live-activity-store.ts`).
+ */
 export function registerPushDevice(
   userId: string,
   registration: PushDeviceRegistration,
 ): PushDeviceEffect<void> {
-  return Effect.flatMap(DateTime.nowAsDate, (now) =>
-    upsertDevice({ userId, ...registration, now }),
-  );
+  return Effect.gen(function* () {
+    const { token, environment } = registration;
+    yield* deleteMovedLiveActivity({ userId, token, environment });
+    yield* upsertDevice({ userId, ...registration, now: yield* DateTime.nowAsDate });
+  });
 }
 
 /** The account's phone unregistered, answering whether the account held it; another account's token is left standing. */

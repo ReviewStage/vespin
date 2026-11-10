@@ -21,6 +21,7 @@ import {
   type AgentInboxRemindParams,
   type AgentInboxTakeBackParams,
   type AgentInboxTakenBackView,
+  type AgentPermissionModeParams,
   type AgentPinParams,
   type AgentRenameParams,
   type AgentServersParams,
@@ -231,6 +232,8 @@ export type AgentClient = Pick<
   | "choose"
   | "rename"
   | "switchServers"
+  | "choosePermissionMode"
+  | "answerApproval"
   | "addRepository"
   | "changeQueue"
   | "archive"
@@ -708,6 +711,11 @@ function composed(
     (request) => () => ({ disabledServers: request.disabledServers }),
     ({ agentId, ...request }) => asked(client.switchServers(agentId, request)),
   );
+  /** A change of permission mode, drawn on the agent's row at once, which the agent takes from its next turn. */
+  const moded = agentWrite<AgentPermissionModeParams>(
+    (request) => () => ({ permissionMode: request.permissionMode }),
+    ({ agentId, ...request }) => asked(client.choosePermissionMode(agentId, request)),
+  );
   /**
    * An archive, drawn on the agent's row at once, stamped now by the member,
    * a dialog's that asked first among them. Note that an agent archived
@@ -1028,6 +1036,10 @@ function composed(
     AGENTS_CHOOSE: declaredWrite(dependencies.pool, chosen),
     AGENTS_RENAME: declaredWrite(dependencies.pool, renamed),
     AGENTS_SERVERS: declaredWrite(dependencies.pool, switched),
+    AGENTS_PERMISSION_MODE: declaredWrite(dependencies.pool, moded),
+    // Note that an answer draws nothing on the agent's row, whose ask the service takes off as it settles, so it is asked and answered alone.
+    AGENTS_ANSWER_APPROVAL: ({ agentId, approvalId, ...request }) =>
+      asked(client.answerApproval(agentId, approvalId, request)),
     AGENTS_QUEUE: declaredWrite(dependencies.pool, queued, {
       read: (read) =>
         Effect.sync((): QueueWrite => ({ ...read, queuedBy: dependencies.accountId() ?? "" })),

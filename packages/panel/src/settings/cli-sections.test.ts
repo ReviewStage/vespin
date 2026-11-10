@@ -13,10 +13,10 @@ import { fakeActPort } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { DESKTOP_CAPABILITIES, handState, signedInAs, stateWith } from "../testing/app-state.js";
 import { withQueryClient, writeHandedAppState } from "../testing/copy-feedback.js";
-import { CliPage } from "./cli-page.js";
+import { CliSections } from "./cli-sections.js";
 
 /**
- * cli-page.test.ts -- Settings › CLI: the desktop's Install says why it failed or the version it installed, a browser tab offers the npm install alone, and Sign out everywhere signs the command out. Synthetic ids and addresses.
+ * cli-sections.test.ts -- Settings › our MCP & CLI's command sections: the desktop's Install says why it failed or the version it installed, a browser tab offers the npm install alone, and Sign out everywhere signs the command out. Synthetic ids and addresses.
  */
 
 declare global {
@@ -73,7 +73,7 @@ async function drawPage(
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(withQueryClient(createElement(CliPage))));
+  act(() => root.render(withQueryClient(createElement(CliSections))));
   await settle();
 }
 

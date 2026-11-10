@@ -1563,7 +1563,6 @@ function SlackNotificationsRow({ workspaceId }: { workspaceId: string }): React.
       label="Slack notifications"
       labelReplayUnmasked
       checked={on}
-      changed={!on}
       write={rowWrite(mutation, {
         ask: (notifications: boolean) => ({ workspaceId, notifications }),
         refused: answeredAll,

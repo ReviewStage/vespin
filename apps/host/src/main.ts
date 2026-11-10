@@ -210,7 +210,7 @@ const follow = (runtime: HostRuntime) =>
     const device = yield* readHostDevice(stateRoot);
     if (Option.isNone(device)) {
       reportToStderr(
-        `${PRODUCT_NAME} host: this box is not connected. Run ${HOST_COMMAND} connect, or the install command from Settings › Hosts › Add hosts (${DEFAULT_INSTALL_COMMAND}), and approve the code it shows in ${PRODUCT_NAME}.`,
+        `${PRODUCT_NAME} host: this box is not connected. Run ${HOST_COMMAND} connect, or the install command from Settings › Machines › Add a machine (${DEFAULT_INSTALL_COMMAND}), and approve the code it shows in ${PRODUCT_NAME}.`,
       );
       yield* hostDeviceWhen(stateRoot, Option.isSome);
       return undefined;
@@ -355,7 +355,7 @@ const uninstallApart = (service: HostService | undefined) => {
 const removeItself = (service: HostService | undefined) =>
   Effect.gen(function* () {
     reportToStderr(
-      `${PRODUCT_NAME} host: removed in Settings › Hosts, so it removes itself from this account: its service, its agents' folders, its state and its releases.`,
+      `${PRODUCT_NAME} host: removed in Settings › Machines, so it removes itself from this account: its service, its agents' folders, its state and its releases.`,
     );
     if (!(yield* uninstallApart(service))) {
       reportToStderr(

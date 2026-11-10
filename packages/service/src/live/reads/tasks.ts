@@ -1,5 +1,6 @@
 import { liveKeysIn } from "@repo/database/core/live-statement";
 import { queryBuilder } from "@repo/database/core/query";
+import { sandboxNamedFor } from "@repo/database/models/agent-sandboxes";
 import { PULL_REQUEST_OF_AGENT_BRANCH } from "@repo/database/models/agent-store";
 import { taskMadeByRun } from "@repo/database/models/run-tasks";
 import { taskBlockedFor } from "@repo/database/models/task-block-store";
@@ -14,6 +15,7 @@ import {
 } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
 import { agentApproval } from "@repo/database/schemas/agent-approval";
+import { AGENT_SANDBOX_STATE, agentSandboxTable } from "@repo/database/schemas/agent-sandbox";
 import { user } from "@repo/database/schemas/auth";
 import { automationRun } from "@repo/database/schemas/automation";
 import { task } from "@repo/database/schemas/task";
@@ -23,6 +25,7 @@ import {
   agentApprovalSync,
   agentPinSync,
   agentPullRequestSync,
+  agentSandboxSync,
   agentSync,
   automationRunSync,
   automationSync,
@@ -39,10 +42,13 @@ import {
   turnsSync,
   userSync,
 } from "@repo/database/sync/tables";
+import { SANDBOX_STATE, type SandboxState } from "@repo/features/agent-sandbox-wire";
 import { AGENT_BRIEF, type AgentFailure } from "@repo/features/agent-wire";
 import { NO_TASK_OWNER, TASK_LIST_READ } from "@repo/features/task-list-live";
+import { SANDBOX_IDLE } from "@repo/sandbox";
 import { and, eq, isNotNull, or, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
+import { Duration } from "effect";
 import type { SyncMoved } from "../../sync/live-query.js";
 import { readerAndWorkspaceTopics } from "../../sync/reader-topics.js";
 import { failureWordOf, lastSettledAtIn, latestTurnOf, sessionEndedOf } from "../agent-standing.js";
@@ -162,7 +168,8 @@ function issuesStatement() {
  * conversation records the session its sandbox is tagged with, which the
  * claim writes on the conversation's row, so a delta read takes the flip
  * from the log (`movedAgents`) and a pane waiting on the sandbox connects
- * as it lands. Note that its read mark is a constant, read through its
+ * as it lands, and where that sandbox stands (`SANDBOX_STATE_OF_AGENT`),
+ * from its row in `agent_sandbox`, on its agent's topic. Note that its read mark is a constant, read through its
  * start and never marked unread, since an agent is read through its task's
  * mark alone and a released desktop reads one only for an agent on no task;
  * and that the Mac's last beat is not read,
@@ -217,6 +224,8 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         sandboxOpen: sql<boolean>`${conversations.runtimeSessionId} is not null`,
         permissionMode: agentTable.permissionMode,
         pendingApprovals: PENDING_APPROVALS_OF_AGENT,
+        sandboxState: SANDBOX_STATE_OF_AGENT,
+        sandboxRunsUntil: SANDBOX_RUNS_UNTIL_OF_AGENT,
         // Note that a released desktop reads an agent's read mark only for one on no task, which no agent is, so it is never marked.
         markedUnread: sql<boolean>`false`,
       },
@@ -235,6 +244,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         // now that the turn the line awaits says it, until the next desktop release is the oldest in use.
         awaitingLineAt: sql<Date | null>`null::timestamptz`,
         lastSettledAt: lastSettledAtIn(agentTable.conversationId),
+        sandboxStateAt: SANDBOX_STATE_AT_OF_AGENT,
       },
     },
     (selection) =>
@@ -246,6 +256,13 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         .leftJoin(automationRun, eq(automationRun.id, agentTable.automationRunId))
         .leftJoin(archiver, eq(archiver.id, sql`${agentTable.archivedBy} ->> 'userId'`))
         .leftJoin(conversations, eq(conversations.id, agentTable.conversationId))
+        .leftJoin(
+          agentSandboxTable,
+          and(
+            eq(agentSandboxTable.sandboxName, sandboxNamedFor(conversations.runtimeSessionId)),
+            eq(agentSandboxTable.agentId, agentTable.id),
+          ),
+        )
         .leftJoin(device, eq(device.id, agentTable.deviceId))
         .leftJoinLateral(latest, sql`true`)
         .where(
@@ -254,6 +271,28 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         ),
   );
 }
+
+/**
+ * Where the agent's current sandbox stands as its row in `agent_sandbox`
+ * last recorded it (`@repo/features/agent-sandbox-wire`): none where no
+ * row stands, off where it was released or is being, booting while a boot
+ * is under way, and otherwise running until `SANDBOX_IDLE` after its last
+ * recorded use, which a reader reads against its own clock. The last use is
+ * written at most once a minute, so the stop it gives is never later than
+ * the sandbox's own, and at most that much earlier.
+ */
+const SANDBOX_STATE_OF_AGENT = sql<SandboxState | null>`case
+  when ${agentSandboxTable.sandboxName} is null then null
+  when ${agentSandboxTable.state} <> ${AGENT_SANDBOX_STATE.LIVE} then ${SANDBOX_STATE.OFF}
+  when ${agentSandboxTable.bootingSince} is not null then ${SANDBOX_STATE.BOOTING}
+  else ${SANDBOX_STATE.RUNNING} end`;
+
+const SANDBOX_STATE_AT_OF_AGENT = sql<Date | null>`coalesce(${agentSandboxTable.bootingSince}, ${agentSandboxTable.usedAt})`;
+
+// Note that the stop is summed as epoch milliseconds, as an instant is read, since adding an interval to a timestamp is not immutable.
+const SANDBOX_RUNS_UNTIL_OF_AGENT = sql<number | null>`case
+  when ${agentSandboxTable.state} = ${AGENT_SANDBOX_STATE.LIVE} and ${agentSandboxTable.bootingSince} is null
+  then floor(extract(epoch from (${agentSandboxTable.usedAt} at time zone 'UTC')) * 1000)::float8 + ${Duration.toMillis(SANDBOX_IDLE)} end`;
 
 /**
  * The asks the agent's runner holds for a member's answer, the oldest first,
@@ -304,6 +343,7 @@ function movedAgents(moved: SyncMoved): SQL {
         ...moved.keys(agentPinSync, agentPin.agentId),
         ...moved.keys(agentPullRequestSync, agentPullRequest.agentId),
         ...moved.topics(agentApprovalSync, TOPIC.AGENT),
+        ...moved.topics(agentSandboxSync, TOPIC.AGENT),
         ...moved.topics(turnsSync, TOPIC.AGENT),
       ]),
       liveKeysIn(agentTable.conversationId, [
@@ -349,6 +389,7 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
     agentPinSync,
     agentPullRequestSync,
     agentApprovalSync,
+    agentSandboxSync,
     automationSync,
     automationRunSync,
     userSync,

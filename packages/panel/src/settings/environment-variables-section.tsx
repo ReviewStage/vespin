@@ -48,17 +48,15 @@ import { confirmFailure } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
-import { shownWorkspace } from "./settings-rows.js";
-import type { WorkspaceSettingsControl } from "./workspace-page.js";
 
 /**
- * environment-page.tsx -- Settings › Environment: the variables the workspace hands its members' cloud agents, added, replaced, and deleted by its owners and admins.
+ * environment-variables-section.tsx -- Settings › Cloud environment's Variables: the variables the workspace hands its members' cloud agents, added, replaced, and deleted by its owners and admins.
  *
- * The page reads the variables' names as Skills reads its skills, one row
+ * The section reads the variables' names as Skills reads its skills, one row
  * each, and never a value, which the service hands back to no one. An
  * owner or admin adds one from the first section, and replaces or deletes
  * one from its row's ⋯, a delete asking first; a member sees the names
- * alone. Each write answers the names as they then stand, which the page
+ * alone. Each write answers the names as they then stand, which the section
  * draws at once. A value is typed into a `SecretField`, kept out of the
  * screen recording as GitHub's token is.
  */
@@ -67,7 +65,7 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
 const NO_CAPTURE = "ph-no-capture";
 
 /** A variable's row while the names are read. */
-const VARIABLE_ROW_SKELETON: SettingsRowSkeletonShape = {
+export const VARIABLE_ROW_SKELETON: SettingsRowSkeletonShape = {
   described: false,
   controls: [],
   end: [SETTINGS_SKELETON_CONTROL.MORE],
@@ -250,8 +248,12 @@ function VariableRow({
   );
 }
 
-/** The page over one workspace: its variables, under Add variable for an owner or admin. */
-function ShownEnvironment({ workspace }: { workspace: Workspace }): React.JSX.Element {
+/** Variables over one workspace, Add variable on its heading for an owner or admin. */
+export function EnvironmentVariablesSection({
+  workspace,
+}: {
+  workspace: Workspace;
+}): React.JSX.Element {
   const manages = managesWorkspace(workspace);
   const environment = useQuery(environmentQuery(workspace.id));
   const add = useVariableDialog(workspace.id);
@@ -295,30 +297,4 @@ function ShownEnvironment({ workspace }: { workspace: Workspace }): React.JSX.El
       {manages ? add.dialog : null}
     </>
   );
-}
-
-/** Settings › Environment over the workspace the sidebar lists, or why there is none to show; signed in, as Settings draws it. */
-export function EnvironmentPage({
-  control,
-}: {
-  /** The account's workspaces, drawn while it is signed in. */
-  control: WorkspaceSettingsControl | undefined;
-}): React.JSX.Element | null {
-  if (control === undefined) return null;
-  const workspace = shownWorkspace(control);
-  if (workspace === undefined) {
-    return control.listFailed ? (
-      <SettingsSection>
-        <ReadFailed
-          line="Your workspaces could not be read."
-          surface={FAILURE_SURFACE.WORKSPACES_READ}
-          onRetry={control.onRetryList}
-        />
-      </SettingsSection>
-    ) : (
-      <SettingsRowsSkeleton label={readingWords("the variables")} rows={[VARIABLE_ROW_SKELETON]} />
-    );
-  }
-  // Keyed to the workspace, so another one listed reads its own variables and asks nothing left over.
-  return <ShownEnvironment key={workspace.id} workspace={workspace} />;
 }

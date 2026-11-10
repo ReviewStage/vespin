@@ -120,7 +120,7 @@ test("a code no pairing has, or one held after too many such codes, says so and 
 
     const text = document.body.textContent ?? "";
     assert.ok(text.includes(says), text);
-    assert.ok(text.includes("Run the command on the host again for a new code."), text);
+    assert.ok(text.includes("Run the command on the machine again for a new code."), text);
     assert.ok(
       ![...document.querySelectorAll("button")].some((each) => each.textContent === "Connect"),
       "nothing offers to approve it",

@@ -220,11 +220,9 @@ const rowOf = (page: HTMLElement, label: string) =>
     row.textContent?.startsWith(label),
   ) ?? assert.fail(`no ${label} row`);
 
-/** What stands beside a row's name: its Saved tick and its Modified word. */
+/** What stands beside a row's name: its Saved tick. */
 const marksIn = (row: HTMLElement) =>
-  [...row.querySelectorAll(".ui-saved-tick, .ui-settings-changed-mark")].map(
-    (each) => each.textContent ?? "",
-  );
+  [...row.querySelectorAll(".ui-saved-tick")].map((each) => each.textContent ?? "");
 
 /** What a row says under itself about its last write. */
 const errorsIn = (row: HTMLElement) =>
@@ -353,7 +351,7 @@ test("a refused Effort or Context says so under its own row until that row's nex
   assert.equal(fastSwitch(page).getAttribute("aria-checked"), "false");
 });
 
-test("the model, Effort and Context rows each tick Saved once their write lands, Modified while they differ from a new account's default, and a refusal ticks nothing", async () => {
+test("the model, Effort and Context rows each tick Saved once their write lands, and a refusal ticks nothing", async () => {
   models = [OPUS, OPUS_FAST, SONNET];
   const page = await mount();
   const marks = () => [
@@ -372,13 +370,11 @@ test("the model, Effort and Context rows each tick Saved once their write lands,
   act(() => segment(segmentedGroup(page, "Effort"), "Low").click());
   await settle();
   // Note that each row ticks once the default the host lays after its write reaches the preferences' query.
-  await vi.waitFor(() => assert.deepEqual(marks(), [[], ["Modified", "Saved"], []]));
+  await vi.waitFor(() => assert.deepEqual(marks(), [[], ["Saved"], []]));
 
   act(() => segment(segmentedGroup(page, "Context"), "200K").click());
   await settle();
-  await vi.waitFor(() =>
-    assert.deepEqual(marks(), [[], ["Modified", "Saved"], ["Modified", "Saved"]]),
-  );
+  await vi.waitFor(() => assert.deepEqual(marks(), [[], ["Saved"], ["Saved"]]));
 
   act(() => motion.finish());
   act(() =>
@@ -394,27 +390,8 @@ test("the model, Effort and Context rows each tick Saved once their write lands,
   );
   act(() => option?.click());
   await settle();
-  await vi.waitFor(() =>
-    assert.deepEqual(marksIn(rowOf(page, "Default model")), ["Modified", "Saved"]),
-  );
+  await vi.waitFor(() => assert.deepEqual(marksIn(rowOf(page, "Default model")), ["Saved"]));
   assert.deepEqual(written().at(-1), { model: SONNET.id, effort: "low" });
-});
-
-test("on an OpenAI key alone, the GPT-6.1 Sol default the account never chose reads as no change", async () => {
-  const sol: CatalogModel = {
-    id: "openai/gpt-6.1-sol",
-    name: "GPT-6.1 Sol",
-    provider: MODEL_PROVIDER.OPENAI,
-    efforts: ["low", "high"],
-  };
-  models = [{ ...OPUS, credentialMissing: true }, sol];
-  stored = { model: sol.id, effort: "high" };
-  const page = await mount();
-
-  assert.deepEqual(
-    [marksIn(rowOf(page, "Default model")), marksIn(rowOf(page, "Effort"))],
-    [[], []],
-  );
 });
 
 /** The Fast row's words under its name, which describe its switch. */

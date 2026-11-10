@@ -114,8 +114,6 @@ test("Profile asks where Vespin links open, the browser until chosen, and a choi
   const choice =
     page.querySelector<HTMLButtonElement>('button[aria-label="Open Vespin links in: Browser"]') ??
     assert.fail("the row is drawn, naming the browser");
-  // Note that the browser is the default, so a row that never chose wears no mark of a change.
-  assert.equal(page.textContent?.includes("Modified"), false);
 
   act(() => choice.click());
   const app =

@@ -205,6 +205,10 @@ export const AGENT_ACT_KIND = {
   AGENTS_CHOOSE: "agents.choose",
   AGENTS_RENAME: "agents.rename",
   AGENTS_SERVERS: "agents.servers",
+  /** One agent's permission mode changed, which reaches it from its next turn (`agent-approval-wire.ts`). */
+  AGENTS_PERMISSION_MODE: "agents.permissionMode",
+  /** One tool call an agent holds answered: allowed, allowed for the agent, or denied with words (`agent-approval-wire.ts`). */
+  AGENTS_ANSWER_APPROVAL: "agents.answerApproval",
   /** A repository added to one agent beside the ones it works in (`agent-repository-add.ts`). */
   AGENTS_ADD_REPOSITORY: "agents.addRepository",
   AGENTS_QUEUE: "agents.queue",
@@ -738,11 +742,11 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_TOKEN_REPOSITORIES_FOLLOW: "workspace.tokenRepositoriesFollow",
   WORKSPACE_TOKEN_REPOSITORIES_RETRY: "workspace.tokenRepositoriesRetry",
   WORKSPACE_TOKEN_REPOSITORY_SET: "workspace.tokenRepositorySet",
-  /** A workspace's environment variables by name, read once as Settings › Environment opens and again after each write; no answer carries a value. */
+  /** A workspace's environment variables by name, read once as Settings › Cloud environment opens and again after each write; no answer carries a value. */
   WORKSPACE_ENVIRONMENT_LIST: "workspace.environmentList",
   WORKSPACE_ENVIRONMENT_PUT: "workspace.environmentPut",
   WORKSPACE_ENVIRONMENT_DELETE: "workspace.environmentDelete",
-  /** A workspace's cloud sandbox setup, its install script and each repository's setup script, read once as Settings › Cloud setup opens; a save answers the setup as it then stands. */
+  /** A workspace's cloud sandbox setup, its install script and each repository's setup script, read once as Settings › Cloud environment opens; a save answers the setup as it then stands. */
   WORKSPACE_SANDBOX_SETUP_READ: "workspace.sandboxSetupRead",
   WORKSPACE_INSTALL_SCRIPT_PUT: "workspace.installScriptPut",
   WORKSPACE_REPOSITORY_SETUP_PUT: "workspace.repositorySetupPut",
@@ -911,6 +915,8 @@ export const PORT_ACT_USE = {
   AGENTS_CHOOSE: ACT_USE.WRITE,
   AGENTS_RENAME: ACT_USE.WRITE,
   AGENTS_SERVERS: ACT_USE.WRITE,
+  AGENTS_PERMISSION_MODE: ACT_USE.WRITE,
+  AGENTS_ANSWER_APPROVAL: ACT_USE.WRITE,
   AGENTS_ADD_REPOSITORY: ACT_USE.WRITE,
   AGENTS_QUEUE: ACT_USE.WRITE,
   AGENTS_STOP: ACT_USE.WRITE,

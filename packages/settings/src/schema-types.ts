@@ -22,18 +22,14 @@ export const SETTINGS_PAGE = {
   HOSTS: "hosts",
   /** The services the account connects for its agents, each the account's on the service rather than a stored setting. */
   INTEGRATIONS: "integrations",
-  /** The outside agents the account lets into its MCP server and how to connect one, each the account's on the service rather than a stored setting. */
+  /** The outside agents the account lets into its MCP server and how to connect one, and the `vespin` command's install and sign-in, each the account's on the service rather than a stored setting. */
   MCP: "mcp",
-  /** The `vespin` command: how to install it, and its sign-in, each the account's on the service rather than a stored setting. */
-  CLI: "cli",
   /** The skills the account installs into the app for its agents, its own and its workspace's, each the service's rather than a stored setting. */
   SKILLS: "skills",
   /** A workspace the account is in: its name and the account's role, its members, and its GitHub repositories, each the service's rather than a stored setting. */
   WORKSPACE: "workspace",
-  /** The environment variables the workspace hands every member's cloud agents, the service's rather than a stored setting, their values never shown. */
+  /** What the workspace's cloud agents start with: the environment variables it hands them, their values never shown, its install script, and each repository's setup and archive scripts, the service's rather than a stored setting. */
   ENVIRONMENT: "environment",
-  /** How the workspace's cloud agent sandboxes are set up, its install script and each repository's setup script, the service's rather than a stored setting. */
-  CLOUD_SETUP: "cloud-setup",
   /** What this Mac lets agents do on it, the stored switch for running commands here, and whether the app opens as it starts. */
   THIS_MAC: "this-mac",
   /** The features the account can turn on before they are finished, each the account's on the service rather than a stored setting. */

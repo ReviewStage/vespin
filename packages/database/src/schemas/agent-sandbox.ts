@@ -13,8 +13,11 @@ import { agentTable } from "./agent.js";
  * An open writes the row LIVE and a touch moves `used_at` on, at most once a
  * minute each (`../models/agent-sandboxes.ts`, `@repo/service`'s
  * `agents/sandbox-use.ts`); the release is `@repo/service`'s
- * `agents/session-sandboxes.ts`.
- * The row goes with its agent. It holds ids, a name, and an instant alone.
+ * `agents/session-sandboxes.ts`. `booting_since` is when a boot of the
+ * sandbox began, set as the launch opens it and cleared once its runner is
+ * handed its first lines or the open failed, so the task list reads the
+ * sandbox booting, running, or off (`@repo/service`'s `live/reads/tasks.ts`).
+ * The row goes with its agent. It holds ids, a name, and instants alone.
  */
 
 /** Whether a sandbox the row names stands. */
@@ -37,6 +40,8 @@ export const agentSandboxTable = pgTable(
     /** When the sandbox was last opened or touched, to the minute. */
     usedAt: timestamptz("used_at").notNull(),
     state: text("state").$type<AgentSandboxState>().notNull().default(AGENT_SANDBOX_STATE.LIVE),
+    /** When the boot under way began; null where none is. */
+    bootingSince: timestamptz("booting_since"),
   },
   (table) => [
     // An agent's delete cascades to its rows, found by the agent alone.

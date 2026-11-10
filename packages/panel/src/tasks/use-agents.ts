@@ -82,6 +82,7 @@ import {
   selectExperiment,
   selectPullRequestPublished,
 } from "../use-app-state.js";
+import type { ApprovalAnswerWriter, PermissionModeWriter } from "./agent-approvals.js";
 import {
   ARCHIVE_NOT_READY,
   archivedManyWords,
@@ -507,6 +508,10 @@ export interface AgentsControl {
   onChoose: ChoiceWriter;
   /** Switches one agent's MCP servers for its next turn on, drawn at once by the host; a refusal is said in a toast. */
   onSwitchServers: ServersWriter;
+  /** Changes one agent's permission mode from its next turn, drawn at once by the host. */
+  onPermissionMode: PermissionModeWriter;
+  /** Answers one tool call an agent holds: allow, allow for the agent, or deny with words. */
+  onAnswerApproval: ApprovalAnswerWriter;
   /** The add of a repository beside the ones an agent works in, which the service checks out and tells it of (`add-repository.tsx`), as the dialog asking holds its own mutation over it: answering the agent, or why not, for that dialog to say. None where a surface offers no add. */
   addRepository?: AgentAddRepositoryMutation | undefined;
   /** Opens Settings on its Integrations page, where an MCP server is connected. */
@@ -901,6 +906,12 @@ export function useAgents(input: {
   );
   const { mutateAsync: sendChoice } = useMutation(actMutation(ACT_KIND.AGENTS_CHOOSE));
   const { mutateAsync: sendServers } = useMutation(actMutation(ACT_KIND.AGENTS_SERVERS));
+  const { mutateAsync: sendPermissionMode } = useMutation(
+    actMutation(ACT_KIND.AGENTS_PERMISSION_MODE),
+  );
+  const { mutateAsync: sendApprovalAnswer } = useMutation(
+    actMutation(ACT_KIND.AGENTS_ANSWER_APPROVAL),
+  );
   const { mutateAsync: sendArchive } = useMutation(actMutation(ROW_WRITE.AGENT_ARCHIVE.kind));
   const { mutateAsync: sendChapters } = useMutation(actMutation(ACT_KIND.CHAPTERS_GENERATE));
   const { mutateAsync: sendInboxAnswer } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_ANSWER));
@@ -1549,6 +1560,19 @@ export function useAgents(input: {
     [sendChoice],
   );
 
+  // A change of mode is drawn by the host the moment it is asked, and taken back should the service refuse it.
+  const onPermissionMode = useCallback<PermissionModeWriter>(
+    (agentId, permissionMode) =>
+      sendPermissionMode({ agentId, permissionMode }).catch(agentUnreached),
+    [sendPermissionMode],
+  );
+
+  const onAnswerApproval = useCallback<ApprovalAnswerWriter>(
+    (agentId, approvalId, request) =>
+      sendApprovalAnswer({ agentId, approvalId, ...request }).catch(agentUnreached),
+    [sendApprovalAnswer],
+  );
+
   // Note that the host sends each agent's switches one after another, in the
   // order asked, because a switch writes the whole list and two writes in
   // flight may land in either order. Only the newest switch's refusal is
@@ -1821,6 +1845,8 @@ export function useAgents(input: {
     onRetry,
     onChoose,
     onSwitchServers,
+    onPermissionMode,
+    onAnswerApproval,
     addRepository,
     onOpenIntegrations: () => latest.current.onOpenIntegrations(),
     me: input.me,

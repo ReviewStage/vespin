@@ -190,8 +190,12 @@ test("an experiment is found by its name, what it brings, and what other apps ca
   for (const query of ["how your team works", "later tasks"]) {
     assert.deepEqual(experimentalFound(query, true), ["Memory"], query);
   }
-  assert.deepEqual(experimentalFound("hosts", true), ["Bring your own host"], "the page it holds");
-  const experiments = ["Task descriptions", "Bring your own host", "Skills", "Memory"];
+  assert.deepEqual(
+    experimentalFound("machines", true),
+    ["Bring your own machine"],
+    "the page it holds",
+  );
+  const experiments = ["Task descriptions", "Bring your own machine", "Skills", "Memory"];
   for (const query of ["beta", "labs"]) {
     assert.deepEqual(experimentalFound(query, true), experiments, query);
   }
@@ -281,13 +285,18 @@ test("skills and rename each find the row the page draws", () => {
   assert.deepEqual(labelsFound("rename"), ["Rename workspace"]);
 });
 
-test("mcp finds the Vespin MCP page's two groups and none of the integrations", () => {
+test("mcp finds the Vespin MCP & CLI page's groups and none of the integrations", () => {
   const groups = searchSettings(settingsSearchCorpus(FULL_INPUT), "mcp")?.groups ?? [];
   assert.deepEqual(
     groups.map((group) => group.page),
     [SETTINGS_VIEW.MCP],
   );
-  assert.deepEqual(labelsFound("mcp"), ["Connected apps", "Connect an app"]);
+  assert.deepEqual(labelsFound("mcp"), [
+    "Apps connected over MCP",
+    "Connect an app over MCP",
+    "Install the vespin command",
+    "Sign in from your terminal",
+  ]);
 });
 
 test("renaming needs a workspace the reader manages that is not their own first", () => {
@@ -368,19 +377,21 @@ test("letters typed in order do not find a row: thm no longer finds Theme", () =
 });
 
 test("a page is found by its own name and leads its rows, the best page first, each page then the rows under it", () => {
-  const found = searchSettings(settingsSearchCorpus(FULL_INPUT), "hosts");
+  const found = searchSettings(settingsSearchCorpus(FULL_INPUT), "machines");
   const stops = found === undefined ? [] : settingsSearchStops(found);
 
-  assert.deepEqual(found?.groups[0]?.marks, [{ start: 0, end: 5 }]);
+  assert.deepEqual(found?.groups[0]?.marks, [{ start: 0, end: 8 }]);
   assert.deepEqual(
     stops.slice(0, 2).map((stop) => [stop.page, stop.entry?.label]),
     [
       [SETTINGS_VIEW.HOSTS, undefined],
-      [SETTINGS_VIEW.HOSTS, "Add hosts"],
+      [SETTINGS_VIEW.HOSTS, "Add a machine"],
     ],
   );
   assert.ok(
     stops.some((stop) => stop.page === SETTINGS_VIEW.EXPERIMENTAL && stop.entry === undefined),
     "a page found only through a row it holds still leads that row",
   );
+  // Note that the page's old name still finds its row, for readers who learned it as Hosts.
+  assert.ok(labelsFound("hosts").includes("Add a machine"));
 });

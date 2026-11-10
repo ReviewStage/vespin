@@ -3,7 +3,7 @@
  *
  * An agent's archive lets it go (`session-sandboxes.ts`'s
  * `archivedInBackground`), and where its workspace keeps an archive script
- * for the agent's repository (Settings › Cloud setup), the sandbox runs it,
+ * for the agent's repository (Settings › Cloud environment), the sandbox runs it,
  * as the agent's own user from its checkout, with the workspace's
  * variables, typically to stop services, upload logs, or let go of what the
  * agent made outside it, such as a preview database. A sandbox only stopped,
@@ -50,7 +50,7 @@ import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
 export const ARCHIVE_SCRIPT = {
   /** How long a stopped sandbox's resume is waited on before the script is skipped: a resume from its snapshot takes about eleven seconds (`SANDBOX_IDLE`). */
   RESUME_TIMEOUT: Duration.minutes(1),
-  /** How long the script runs before it is ended, as Settings › Cloud setup says: long enough to stop services and upload logs, short enough that the delete still lands. */
+  /** How long the script runs before it is ended, as Settings › Cloud environment says: long enough to stop services and upload logs, short enough that the delete still lands. */
   RUN_TIMEOUT: Duration.seconds(90),
   /** How often a script still running is asked again for its exit, where the provider ended a wait before it did. */
   EXIT_POLL: Duration.seconds(1),

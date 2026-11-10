@@ -22,6 +22,7 @@ import { trappedTab } from "../../trapped-tab.js";
 import { ANNOUNCE, announce, type Retire } from "../announcer/announcer.js";
 import { IconButton } from "../button/button.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
+import { closesCard } from "./close-chord.js";
 import {
   DIALOG_ANSWERS,
   DIALOG_FOOT,
@@ -55,7 +56,9 @@ import { useHeldFocus } from "./held-focus.js";
  * and a press that begins and ends on the dimmed window, and keeps a dialog
  * opened over another the one Escape reaches. Whether it stands is its
  * owner's (`open`), so what Base UI hears as a dismissal is handed to the
- * dialog's own `dismiss`, which decides whether the card goes; Tab's own
+ * dialog's own `dismiss`, which decides whether the card goes, as is ⌘W,
+ * which the card claims so the menu bar's Close tab never closes the window
+ * behind it (`close-chord.ts`); Tab's own
  * move among the card's controls, and handing focus back to what opened the
  * card, stay the dialog's. Its portal stands its card a render after the
  * dialog mounts, so what the card holds is read from inside it (the voice
@@ -703,6 +706,11 @@ export function Dialog({
     event.stopPropagation();
     // A key an input method is composing with is the method's, not the dialog's.
     if (isComposingKey(event)) return;
+    if (closesCard(event)) {
+      event.preventDefault();
+      dismiss();
+      return;
+    }
     if (event.key === "Tab") {
       trappedTab(event);
       return;

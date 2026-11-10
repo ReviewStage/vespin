@@ -28,6 +28,8 @@ import { pushDeviceTokenSchema, pushEnvironmentSchema } from "./push-device-wire
 export const LIVE_ACTIVITY_ATTRIBUTES_TYPE = "AgentsActivityAttributes";
 
 export const LIVE_ACTIVITY_BOUNDS = {
+  /** The most characters of an agent's id: a UUID, with room to spare. */
+  MAX_ID_CHARS: 64,
   /** The most running agents the content state lists. */
   MAX_AGENTS: 3,
   /** The most characters of an agent's title the content state carries; Apple caps a Live Activity's payload at 4 KB. */
@@ -39,12 +41,16 @@ export const LIVE_ACTIVITY_BOUNDS = {
 /** One running agent as the activity lists it. */
 export const liveActivityAgentSchema = EffectSchema.Struct({
   /** The agent's id, which a tap on its row opens. */
-  id: EffectSchema.NonEmptyString,
-  title: EffectSchema.String,
+  id: EffectSchema.NonEmptyString.check(
+    EffectSchema.isMaxLength(LIVE_ACTIVITY_BOUNDS.MAX_ID_CHARS),
+  ),
+  title: EffectSchema.String.check(EffectSchema.isMaxLength(LIVE_ACTIVITY_BOUNDS.MAX_TITLE_CHARS)),
   /** The agent's current step line on one line, such as "Editing session-store.ts"; null before its first step. */
-  step: EffectSchema.NullOr(EffectSchema.String),
+  step: EffectSchema.NullOr(
+    EffectSchema.String.check(EffectSchema.isMaxLength(LIVE_ACTIVITY_BOUNDS.MAX_STEP_CHARS)),
+  ),
   /** When its running turn started, in epoch milliseconds, from which the widget counts the time elapsed. */
-  startedAt: EffectSchema.Number,
+  startedAt: EffectSchema.Number.check(EffectSchema.isGreaterThanOrEqualTo(0)),
 });
 
 export type LiveActivityAgent = typeof liveActivityAgentSchema.Type;
@@ -56,9 +62,11 @@ export type LiveActivityAgent = typeof liveActivityAgentSchema.Type;
  * lists none; the widget says it is done on its own.
  */
 export const liveActivityContentStateSchema = EffectSchema.Struct({
-  running: EffectSchema.Int,
-  waiting: EffectSchema.Int,
-  agents: EffectSchema.Array(liveActivityAgentSchema),
+  running: EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(0)),
+  waiting: EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(0)),
+  agents: EffectSchema.Array(liveActivityAgentSchema).check(
+    EffectSchema.isMaxLength(LIVE_ACTIVITY_BOUNDS.MAX_AGENTS),
+  ),
 });
 
 export type LiveActivityContentState = typeof liveActivityContentStateSchema.Type;

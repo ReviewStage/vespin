@@ -10,6 +10,7 @@ import {
   POPOVER_WIDTH,
   type PopoverAlign,
   type PopoverWidth,
+  SavedTick,
   SearchableMenu,
   SettingsRow,
   type SettingsRowDensity,
@@ -20,7 +21,7 @@ import type { ShownError } from "@repo/ui/reported-failure";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useEffect, useId, useRef, useState } from "react";
-import { replayMaskedError, SettingMarks } from "./marks.js";
+import { replayMaskedError } from "./marks.js";
 
 /**
  * picker-row.tsx -- the one control a settings row picks a value with: a chip naming the value, and the app's own menu under it.
@@ -219,7 +220,6 @@ export function Picker({
  */
 export function PickerRow({
   detail,
-  changed,
   saves = 0,
   error,
   density,
@@ -232,8 +232,6 @@ export function PickerRow({
   labelReplayUnmasked?: boolean | undefined;
   /** The why under the row's name: words, and where a row needs one, a link among them. */
   detail?: React.ReactNode;
-  /** Whether the stored value differs from the default, which earns the mark. */
-  changed?: boolean | undefined;
   /** How many of the row's writes have landed, which its Saved tick confirms each of. */
   saves?: number | undefined;
   /** What the last write was refused with, or nothing while none was. */
@@ -250,7 +248,7 @@ export function PickerRow({
       density={density}
       indent={indent}
       label={<ReplayWords unmasked={labelReplayUnmasked}>{picker.label}</ReplayWords>}
-      adornment={<SettingMarks changed={changed} saves={saves} />}
+      adornment={<SavedTick saves={saves} />}
       description={detail}
       error={replayMaskedError(error)}
     >

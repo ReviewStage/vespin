@@ -252,6 +252,39 @@ function PeopleMenu(): React.JSX.Element {
   );
 }
 
+/** A choice of mode: each item's hint wraps under its label rather than fading where the menu cuts it, the chosen one checked. */
+function ModeMenu(): React.JSX.Element {
+  const menu = useMenu(true);
+  const [mode, setMode] = useState("ask");
+  const choice = (value: string, label: string, detail: string) => ({
+    key: value,
+    label,
+    detail,
+    detailPlace: MENU_DETAIL.WRAPPED,
+    checked: mode === value,
+    onSelect: () => setMode(value),
+  });
+  return (
+    <>
+      <Button {...menu.trigger(dropBelowStart)}>Permission mode</Button>
+      {menu.drawn && (
+        <Menu
+          label="Permission mode"
+          menu={menu.drawn}
+          groups={[
+            [
+              choice("full", "Full access", "Runs commands and edits without asking"),
+              choice("ask", "Ask before edits", "Asks before it edits a file or runs a command"),
+              choice("auto", "Auto", "Claude decides; asks when unsure"),
+            ],
+          ]}
+          onClose={menu.close}
+        />
+      )}
+    </>
+  );
+}
+
 /**
  * A row's menu: its ⋯, a right-click or a touch held on it, and the menu key
  * open the one menu of the task's acts.
@@ -353,6 +386,7 @@ function MenuExample(): React.JSX.Element {
           <ViewMenu />
           <AccountMenu />
           <PeopleMenu />
+          <ModeMenu />
         </Inline>
       </CatalogSection>
       <CatalogSection id="menu-panel" title="A panel as a submenu">

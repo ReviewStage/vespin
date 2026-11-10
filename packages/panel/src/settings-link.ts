@@ -1,9 +1,13 @@
 import type { Workspace } from "@repo/features/workspace-wire";
-import { SETTINGS_VIEW, type SettingsLink, type SettingsView } from "@repo/settings/settings-views";
+import {
+  SETTINGS_VIEW,
+  type SettingsLink,
+  type SettingsView,
+  settingsViewNamed,
+} from "@repo/settings/settings-views";
 import { useNavigate, useRouter } from "@tanstack/react-router";
 import { useRef } from "react";
 import { ROUTED_PLACE, useWindowPlace } from "./places/routed-places.js";
-import { settingsViewOfPage } from "./route-gates.js";
 
 /**
  * settings-link.ts -- Settings as the router stands it: the page, whether its list stands, the workspace its address names, and the navigation a Settings link makes.
@@ -69,8 +73,7 @@ export function useSettingsRoute(input: {
   if (!standing) lastPage.current = undefined;
   else if (page !== undefined) lastPage.current = page;
   const shownPage = page ?? lastPage.current;
-  const view =
-    (shownPage === undefined ? undefined : settingsViewOfPage(shownPage)) ?? SETTINGS_VIEW.ACCOUNT;
+  const view = settingsViewNamed(shownPage) ?? SETTINGS_VIEW.ACCOUNT;
   const listAddress = !standing
     ? undefined
     : slug === undefined

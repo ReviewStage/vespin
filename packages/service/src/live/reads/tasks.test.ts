@@ -5,6 +5,10 @@ import type { LiveStatement } from "@repo/database/core/live-statement";
 import { Database } from "@repo/database/core/query";
 import { expireTurnApprovals, recordApprovalAsked } from "@repo/database/models/agent-approvals";
 import {
+  recordAgentSandboxBooted,
+  recordAgentSandboxBooting,
+} from "@repo/database/models/agent-sandboxes";
+import {
   archiveAgent,
   createAgent,
   listAgents,
@@ -41,6 +45,7 @@ import {
   startTask,
 } from "@repo/database/testing";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
+import { SANDBOX_STATE } from "@repo/features/agent-sandbox-wire";
 import { STARTING_GRACE_MILLIS } from "@repo/features/agent-status";
 import {
   AGENT_FAILURE,
@@ -67,6 +72,7 @@ import {
   TASK_STATUS,
   type TaskSummary,
 } from "@repo/features/task-wire";
+import { SANDBOX_IDLE } from "@repo/sandbox";
 import {
   MESSAGE_AUTHOR,
   MESSAGE_CHANNEL,
@@ -76,8 +82,9 @@ import {
   type TurnStatus,
 } from "@repo/wire";
 import { eq } from "drizzle-orm";
-import { Clock, Effect, Option, Schema } from "effect";
+import { Clock, Duration, Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
+import { agentSandboxName } from "../../agents/agent-sandbox-open.js";
 import { agentSummary, summaryAccounts, summaryDevices } from "../../agents/coder-host/status.js";
 import { continuedByOf, standingsOf } from "../../agents/coder-host/stop.js";
 import { withTaskAgents } from "../../agents/task-agents.js";
@@ -687,19 +694,18 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
   );
 
   it.effect(
-    "an agent's sandbox reads open once its conversation claims a session, as the held read reads it",
+    "an agent's sandbox reads open once its conversation claims a session, as the held read reads it, and running once booted",
     () =>
       Effect.gen(function* () {
         const owner = yield* openUser;
         const plan = yield* startTask(owner, { name: "Teammate invitations" });
         const agent = yield* openAgent(owner, { taskId: plan.id }, 60_000);
-        const sandboxOf = Effect.map(
-          liveRowsOf(owner),
-          (rows) =>
-            agentsOfTask(taskAgentsOfLiveRows(rows, NOW), plan.id).find(
-              (each) => each.id === agent.id,
-            )?.sandboxOpen,
+        const listed = Effect.map(liveRowsOf(owner), (rows) =>
+          agentsOfTask(taskAgentsOfLiveRows(rows, NOW), plan.id).find(
+            (each) => each.id === agent.id,
+          ),
         );
+        const sandboxOf = Effect.map(listed, (each) => each?.sandboxOpen);
 
         const starting = yield* liveListOf(owner, NOW);
         assert.deepEqual(starting, yield* heldListOf(owner, NOW));
@@ -714,6 +720,17 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         const opened = yield* liveListOf(owner, NOW);
         assert.deepEqual(opened, yield* heldListOf(owner, NOW));
         assert.equal(yield* sandboxOf, true);
+        assert.equal((yield* listed)?.sandbox, undefined);
+
+        // Its sandbox, booted a minute on, runs SANDBOX_IDLE past that unless touched.
+        const name = agentSandboxName("session-1");
+        yield* recordAgentSandboxBooting(agent.id, name, new Date(NOW));
+        yield* recordAgentSandboxBooted(name, new Date(NOW + 60_000));
+        assert.deepEqual((yield* listed)?.sandbox, {
+          state: SANDBOX_STATE.RUNNING,
+          stateAt: NOW + 60_000,
+          runsUntil: NOW + 60_000 + Duration.toMillis(SANDBOX_IDLE),
+        });
       }),
   );
 

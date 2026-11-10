@@ -51,11 +51,9 @@ import { useRepositoryMenu } from "../tasks/repository-chip.js";
 import { useRepositoriesIn } from "../tasks/task-repository-menus.js";
 import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
-import { shownWorkspace } from "./settings-rows.js";
-import type { WorkspaceSettingsControl } from "./workspace-page.js";
 
 /**
- * cloud-setup-page.tsx -- Settings › Cloud setup: how the workspace's cloud agent sandboxes are set up and archived, its install script and each repository's setup and archive scripts, saved by its owners and admins.
+ * cloud-setup-sections.tsx -- Settings › Cloud environment's scripts: how the workspace's cloud agent sandboxes are set up and archived, its install script and each repository's setup and archive scripts, saved by its owners and admins.
  *
  * As Conductor Cloud's Cloud computer settings keep them. The install script
  * runs once per build of each of the workspace's repositories' base
@@ -70,7 +68,7 @@ import type { WorkspaceSettingsControl } from "./workspace-page.js";
  * yet, adds a setup or archive script from a repository picked in the menu a
  * task's repository is picked in, and removes one from its ⋯, a removal
  * asking first. Each save answers the setup as it then stands, which the
- * page draws at once.
+ * sections draw at once.
  */
 
 /** A script's row while the setup is read. */
@@ -492,20 +490,20 @@ function RepositoryScriptsSection({
   );
 }
 
-/** The page over one workspace: its install script, then each repository's setup script, then each one's archive script. */
-function ShownCloudSetup({ workspace }: { workspace: Workspace }): React.JSX.Element {
+/** The scripts over one workspace: its install script, then each repository's setup script, then each one's archive script. */
+export function CloudSetupSections({ workspace }: { workspace: Workspace }): React.JSX.Element {
   const manages = managesWorkspace(workspace);
   const pictures = useRepositoryPictures();
   const setup = useQuery(setupQuery(workspace.id));
   const answer = setup.data;
   const read = setup.isError ? (
     <ReadFailed
-      line="The cloud setup could not be read."
+      line="The scripts could not be read."
       surface={FAILURE_SURFACE.WORKSPACE_SANDBOX_SETUP_READ}
       onRetry={() => void setup.refetch()}
     />
   ) : answer === undefined ? (
-    <SettingsRowsSkeleton label={readingWords("the cloud setup")} rows={[SCRIPT_ROW_SKELETON]} />
+    <SettingsRowsSkeleton label={readingWords("the scripts")} rows={[SCRIPT_ROW_SKELETON]} />
   ) : undefined;
   return (
     <>
@@ -545,30 +543,4 @@ function ShownCloudSetup({ workspace }: { workspace: Workspace }): React.JSX.Ele
       />
     </>
   );
-}
-
-/** Settings › Cloud setup over the workspace the sidebar lists, or why there is none to show; signed in, as Settings draws it. */
-export function CloudSetupPage({
-  control,
-}: {
-  /** The account's workspaces, drawn while it is signed in. */
-  control: WorkspaceSettingsControl | undefined;
-}): React.JSX.Element | null {
-  if (control === undefined) return null;
-  const workspace = shownWorkspace(control);
-  if (workspace === undefined) {
-    return control.listFailed ? (
-      <SettingsSection>
-        <ReadFailed
-          line="Your workspaces could not be read."
-          surface={FAILURE_SURFACE.WORKSPACES_READ}
-          onRetry={control.onRetryList}
-        />
-      </SettingsSection>
-    ) : (
-      <SettingsRowsSkeleton label={readingWords("the cloud setup")} rows={[SCRIPT_ROW_SKELETON]} />
-    );
-  }
-  // Keyed to the workspace, so another one listed reads its own setup and asks nothing left over.
-  return <ShownCloudSetup key={workspace.id} workspace={workspace} />;
 }
