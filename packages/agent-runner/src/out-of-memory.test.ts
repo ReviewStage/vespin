@@ -105,11 +105,10 @@ describe("claudeCodeMemoryWatch", () => {
       return;
     }
     expect(shown).toBe(`${answer}\n${line}`);
-    expect(context).toMatchObject({
-      hookEventName: "PostToolUseFailure",
-      additionalContext: expect.stringMatching(
-        new RegExp(`^${line.replace(/[()]/g, "\\$&")}\\. .*less parallelism`),
-      ),
-    });
+    expect(context?.hookEventName).toBe("PostToolUseFailure");
+    const told =
+      context !== undefined && "additionalContext" in context ? context.additionalContext : "";
+    expect(told?.startsWith(`${line}. `)).toBe(true);
+    expect(told).toContain("less parallelism");
   });
 });
