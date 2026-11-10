@@ -233,7 +233,7 @@ export function initialAppState(
     audio: { microphoneStatus: MICROPHONE_STATUS.NOT_DETERMINED },
     tasks: IDLE_TASKS_VIEW,
     agents: { unseen: [] },
-    inbox: { waiting: [], tasks: [], taskless: [], automations: [], agents: [], failedRuns: [] },
+    inbox: { waiting: [], tasks: [], failedRuns: [] },
     [LIVE_READ.ACCOUNT_PREFERENCES]: NO_KEYS_HELD,
     [LIVE_READ.AGENT_ORIGINS]: NO_AGENT_ORIGINS,
     [LIVE_READ.INBOX_ITEMS]: UNREAD,

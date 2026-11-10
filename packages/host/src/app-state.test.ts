@@ -150,7 +150,7 @@ describe("a delivery that crosses the wire", () => {
   const feed = (plans: AppInboxItems["plan"]): AppStateSnapshot => ({
     ...document,
     [LIVE_READ.INBOX_ITEMS]: {
-      rows: { [INBOX_SCOPE_KIND.PLAN]: plans, [INBOX_SCOPE_KIND.AGENT]: {} },
+      rows: { [INBOX_SCOPE_KIND.PLAN]: plans },
     },
   });
   const held = (plans: AppHolderInboxes["plan"]): AppStateSnapshot => ({

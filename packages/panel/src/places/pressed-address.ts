@@ -172,8 +172,8 @@ export type Thing =
   | {
       readonly kind: typeof THING.INBOX_ITEM;
       readonly itemId: string;
-      /** The task that holds it; none for an item of an agent on no task. */
-      readonly taskId: string | undefined;
+      /** The task that holds it. */
+      readonly taskId: string;
       /** The agent that posted it, where the link names it under its agent. */
       readonly agentId: string | undefined;
     };

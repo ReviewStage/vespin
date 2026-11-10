@@ -240,10 +240,9 @@ const NO_LINK_ADDRESS = PANEL_PATH;
  */
 const PAST_BLOCKER = { ignoreBlocker: true } as const;
 
-/** The task an Inbox item stands on, or for an agent with no task its agent, whose side panel stands beside it. */
+/** The task an Inbox item stands on, whose side panel stands beside it; none for one named by its id alone. */
 function choiceHolder(choice: InboxChoice): string | undefined {
-  if ("taskId" in choice) return choice.taskId;
-  return "agentId" in choice ? choice.agentId : undefined;
+  return "taskId" in choice ? choice.taskId : undefined;
 }
 
 /** The window's history as its buttons and keys use it. */

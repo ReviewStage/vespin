@@ -987,7 +987,7 @@ export function inboxAppState(
     account: ACCOUNT,
     inbox: stagedInbox(state.inbox),
     [LIVE_READ.INBOX_ITEMS]: {
-      rows: { [INBOX_SCOPE_KIND.PLAN]: fed, [INBOX_SCOPE_KIND.AGENT]: {} },
+      rows: { [INBOX_SCOPE_KIND.PLAN]: fed },
     },
     [LIVE_READ.DESCRIPTION_DOCUMENT]: stagedDocuments(state),
     [LIVE_READ.PAGES]: stagedPages(state),

@@ -144,7 +144,7 @@ async function mount(onOpen: (link: ReadLink) => void): Promise<HTMLElement> {
   );
   // The account's feed holds the task's items, which its Inbox tab draws from.
   handInboxItems({
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: ITEMS }, [INBOX_SCOPE_KIND.AGENT]: {} },
+    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: ITEMS } },
   });
   pushedTranscripts(() => [
     { messages: [POSTED], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },

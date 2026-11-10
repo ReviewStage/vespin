@@ -38,8 +38,8 @@ import {
  * it does. A read refused as signed out ends the follow, which is read again
  * after `LIVE_RESTART`. Only the answer built from the rows leaves.
  *
- * The rows of its open items, those of agents with no task, and the tasks
- * holding them stand in collections of their own, each answer taken as its
+ * The rows of its open items and the tasks holding them stand in
+ * collections of their own, each answer taken as its
  * poll answers: brief entries and per-task counts, another shape than the
  * items the sync engine's pool holds. So the read stands beside the pool
  * (`inbox-collections.ts`'s `INBOX_ITEM`), drawing every inbox write
@@ -108,14 +108,11 @@ function answersOf(rows: AccountInboxLiveRows): Stream.Stream<AccountInboxAnswer
   );
 }
 
-/** An open item as the read lists it, a task's or an agent's with no task. */
-type Entry = AccountInboxLiveRows["items"][number] | AccountInboxLiveRows["planless"][number];
+/** An open item as the read lists it. */
+type Entry = AccountInboxLiveRows["items"][number];
 
 /** What a change leaves of an open item: gone where it settles it, its reminder where it sets or cancels one, its read mark where it flips it, and none where it leaves it alone, as an item changed since the service answered it. */
-function entryChanged<Row extends Entry>(
-  change: InboxChange,
-  entry: Row,
-): Row | "gone" | undefined {
+function entryChanged(change: InboxChange, entry: Entry): Entry | "gone" | undefined {
   if (!changedIds(change).includes(entry.id)) return undefined;
   if (change.kind === INBOX_CHANGE.REMINDED) {
     const { until } = change;
@@ -135,12 +132,12 @@ function entryChanged<Row extends Entry>(
 }
 
 /** Whether a task's open item, a question or an update alike, waits on the reader, as its task's count counts it. */
-function counted(entry: AccountInboxLiveRows["items"][number], readerId: string): boolean {
+function counted(entry: Entry, readerId: string): boolean {
   return (entry.waitsOn ?? entry.startedBy ?? readerId) === readerId;
 }
 
-/** The parts of the read a write changes. */
-type Changeable = Pick<AccountInboxLiveRows, "items" | "planless" | "plans">;
+/** The parts of the read a write changes. Note that `planless`, which the read still carries for a released desktop, holds nothing a write could change. */
+type Changeable = Pick<AccountInboxLiveRows, "items" | "plans">;
 
 /**
  * The rows a change leaves of the read: each open item it settles gone and
@@ -154,26 +151,23 @@ function rowsChanged(
 ): Changeable | undefined {
   const answered = new Map<string, number>();
   let moved = false;
-  const kept = <Row extends Entry>(each: readonly Row[]) =>
-    each.flatMap((entry) => {
-      const changed = entryChanged(change, entry);
-      if (changed === undefined) return [entry];
-      moved = true;
-      if (changed !== "gone") return [changed];
-      if ("planId" in entry && counted(entry, readerId)) {
-        answered.set(entry.planId, (answered.get(entry.planId) ?? 0) + 1);
-      }
-      return [];
-    });
-  const items = kept(rows.items);
-  const planless = kept(rows.planless);
+  const items = rows.items.flatMap((entry) => {
+    const changed = entryChanged(change, entry);
+    if (changed === undefined) return [entry];
+    moved = true;
+    if (changed !== "gone") return [changed];
+    if (counted(entry, readerId)) {
+      answered.set(entry.planId, (answered.get(entry.planId) ?? 0) + 1);
+    }
+    return [];
+  });
   const plans = rows.plans.map((plan) => {
     const fewer = answered.get(plan.planId) ?? 0;
     return fewer === 0 || plan.toDo === undefined
       ? plan
       : { ...plan, toDo: Math.max(0, plan.toDo - fewer) };
   });
-  return moved ? { items, planless, plans } : undefined;
+  return moved ? { items, plans } : undefined;
 }
 
 /** The map a composer holds for as long as it stands. */
@@ -188,7 +182,6 @@ export function accountInboxes(
         if ("failure" in first) return { kind: LIVE_STATE.BROKEN } as const;
         const inbox = yield* SubscriptionRef.make<LiveState>({ kind: LIVE_STATE.WAITING });
         const items = yield* answeredCollection({ getKey: (row: Entry) => row.id });
-        const planless = yield* answeredCollection({ getKey: (row: Entry) => row.id });
         const plans = yield* answeredCollection({
           getKey: (row: AccountInboxLiveRows["plans"][number]) => row.planId,
         });
@@ -198,7 +191,6 @@ export function accountInboxes(
         /** Takes rows as the read's own, every part's. */
         const taken = (rows: AccountInboxLiveRows) => {
           items.answer(rows.items);
-          planless.answer(rows.planless);
           plans.answer(rows.plans);
           answered = rows;
         };
@@ -207,7 +199,6 @@ export function accountInboxes(
           const held: Changeable = {
             // SAFETY: each collection holds only the rows of its own part, which the read answered.
             items: rowsOf(items.collection) as AccountInboxLiveRows["items"],
-            planless: rowsOf(planless.collection) as AccountInboxLiveRows["planless"],
             plans: rowsOf(plans.collection),
           };
           return writes
@@ -219,11 +210,8 @@ export function accountInboxes(
         const drawn = Effect.suspend(() =>
           answered === undefined ? Effect.void : Queue.offer(standing, { ...answered, ...shown() }),
         );
-        /** Whether the read lists the item `id` names, open, as one of a task's or of an agent's with no task. */
-        const lists = (id: string) =>
-          answered !== undefined &&
-          (answered.items.some((entry) => entry.id === id) ||
-            answered.planless.some((entry) => entry.id === id));
+        /** Whether the read lists the item `id` names, open. */
+        const lists = (id: string) => answered?.items.some((entry) => entry.id === id) === true;
         const writes: HeldRows<InboxItem, InboxChange> = yield* dependencies.pool.stand(
           INBOX_ITEM,
           {
