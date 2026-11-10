@@ -2,6 +2,7 @@
 
 import {
   HStack,
+  Image,
   RNHostView,
   ScrollView,
   Spacer,
@@ -17,12 +18,15 @@ import {
   lineLimit,
   monospacedDigit,
   padding,
+  scrollDismissesKeyboard,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceText } from "@repo/features/time-format";
+import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { Markdown, type MarkdownPlace, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, TaskStatusMark } from "./marks.js";
+import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -75,6 +79,8 @@ export type ThreadMessage = {
   /** Whether a member typed it line by line, whose line breaks are kept. */
   readonly typed: boolean;
   readonly media: readonly ThreadMedia[];
+  /** What the answer it carries says it was, "Chose Both", and whether it went ahead, a check in the done tone, or held back, a turn back in the muted ink. */
+  readonly stamp?: { readonly words: string; readonly ahead: boolean } | undefined;
 };
 
 type ThreadPageProps = {
@@ -95,21 +101,46 @@ type ThreadPageProps = {
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
   /** What the times count from; now where none is given. */
   readonly now?: number | undefined;
+  /** How a settled thread ended, in one word under its heading, as the panel's card says it: "Answered", "Resolved", "Withdrawn"; none while it stands open. */
+  readonly standing?: string | undefined;
+  /** The open ask's card, such as its options, steps, or fields, under the messages. */
+  readonly ask?: ReactNode | undefined;
+  /** The thread's ⋯ menu, such as Resolve, in a split view's detail bar; a compact window's stack holds it in its own bar. */
+  readonly menu?: BarMenu | undefined;
+  /** What stands at the page's foot under its scroll, such as a split view's composer (`ComposerFoot`). */
+  readonly foot?: ReactNode | undefined;
+  /** The room left under the last message, so it scrolls clear of a bar docked over the page's foot (`DOCK_ROOM`). */
+  readonly footRoom?: number | undefined;
 };
 
-/** A thread's heading under its bar: its title in 20 pt semibold. */
-function ThreadHead({ title }: Pick<ThreadPageProps, "title">) {
+/** A thread's heading under its bar: its title in 20 pt semibold, and how it ended under it, 13 pt muted, once it is settled. */
+function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standing">) {
   const colors = useColors();
   return (
-    <Text
-      modifiers={[
-        font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
-        foregroundStyle(colors.TEXT),
-        padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT }),
-      ]}
+    <VStack
+      alignment="leading"
+      spacing={SPACE.TIGHT}
+      modifiers={[padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT })]}
     >
-      {title}
-    </Text>
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
+          foregroundStyle(colors.TEXT),
+        ]}
+      >
+        {title}
+      </Text>
+      {standing === undefined ? null : (
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
+            foregroundStyle(colors.TEXT_MUTED),
+          ]}
+        >
+          {standing}
+        </Text>
+      )}
+    </VStack>
   );
 }
 
@@ -145,6 +176,32 @@ function MediaView({ media }: { readonly media: ThreadMedia }) {
   );
 }
 
+/** A sent answer's stamp under its writer's name, where its words start: its mark and its words, 13 pt. */
+function AnswerStamp({ stamp }: { readonly stamp: NonNullable<ThreadMessage["stamp"]> }) {
+  const colors = useColors();
+  return (
+    <HStack
+      spacing={SPACE.TIGHT + 2}
+      modifiers={[padding({ leading: WORDS_INSET, trailing: SPACE.EDGE })]}
+    >
+      <Image
+        systemName={stamp.ahead ? "checkmark" : "arrow.uturn.backward"}
+        size={MARK_SIZE.GLYPH - 2}
+        color={stamp.ahead ? colors.COMPLETE : colors.TEXT_MUTED}
+      />
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
+          foregroundStyle(colors.TEXT),
+        ]}
+      >
+        {stamp.words}
+      </Text>
+      <Spacer />
+    </HStack>
+  );
+}
+
 /** One message, flat on the page: the writer's face or tile, name in 13 pt semibold and time, and under them its words and files. */
 function MessageView({
   message,
@@ -153,7 +210,10 @@ function MessageView({
   pictureSource,
   videoAt,
   now,
-}: Omit<ThreadPageProps, "path" | "status" | "title" | "messages"> & {
+}: Omit<
+  ThreadPageProps,
+  "path" | "status" | "title" | "messages" | "ask" | "footRoom" | "menu" | "foot"
+> & {
   readonly message: ThreadMessage;
 }) {
   const colors = useColors();
@@ -186,6 +246,7 @@ function MessageView({
         </Text>
         <Spacer />
       </HStack>
+      {message.stamp === undefined ? null : <AnswerStamp stamp={message.stamp} />}
       <RNHostView matchContents={{ vertical: true }}>
         <View style={styles.words}>
           {message.words.trim() === "" ? null : (
@@ -215,30 +276,55 @@ function MessageView({
  * panel's Markdown. The path stands in the bar: a compact window's stack
  * names it as the screen's title, and a split view's detail column draws it
  * here. A message that lands while it is open is drawn at its foot, as the
- * thread's document moves.
+ * thread's document moves, and the open ask's card stands under the last.
  */
-export function ThreadPage({ path, status, title, messages, ...drawing }: ThreadPageProps) {
+export function ThreadPage(props: ThreadPageProps) {
+  const {
+    path,
+    status,
+    title,
+    messages,
+    ask,
+    footRoom = 0,
+    menu,
+    foot,
+    standing,
+    ...drawing
+  } = props;
   return (
     <Toolbar>
-      <ScrollView>
-        <VStack
-          alignment="leading"
-          spacing={SPACE.EDGE}
-          modifiers={[
-            frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-            padding({ bottom: SPACE.PAGE }),
-          ]}
-        >
-          <ThreadHead title={title} />
-          {messages.map((message) => (
-            <MessageView key={message.id} message={message} {...drawing} />
-          ))}
-        </VStack>
-      </ScrollView>
+      <VStack spacing={0}>
+        <ScrollView modifiers={[scrollDismissesKeyboard("interactively")]}>
+          <VStack
+            alignment="leading"
+            spacing={SPACE.EDGE}
+            modifiers={[
+              frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+              padding({ bottom: SPACE.PAGE + footRoom }),
+            ]}
+          >
+            <ThreadHead title={title} standing={standing} />
+            {messages.map((message) => (
+              <MessageView key={message.id} message={message} {...drawing} />
+            ))}
+            {ask === undefined ? null : (
+              <VStack alignment="leading" modifiers={[padding({ horizontal: SPACE.EDGE })]}>
+                {ask}
+              </VStack>
+            )}
+          </VStack>
+        </ScrollView>
+        {foot}
+      </VStack>
       <Toolbar.Content>
         <ToolbarItem placement="principal">
           <PathTitle path={path} status={status} />
         </ToolbarItem>
+        {menu === undefined ? null : (
+          <ToolbarItem placement="topBarTrailing">
+            <BarMenuButton menu={menu} />
+          </ToolbarItem>
+        )}
       </Toolbar.Content>
     </Toolbar>
   );

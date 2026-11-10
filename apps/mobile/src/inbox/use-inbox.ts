@@ -5,7 +5,8 @@
  * model's (`@repo/features/inbox-list-model`), which the panel's Inbox reads
  * too, over the holders the host's document groups
  * (`@repo/host/app-state-reads`' `selectInboxGroupsIn`); this only reads them
- * into the app's Query client and sends the panel's acts on the host's port.
+ * into the app's Query client and sends the panel's acts on the host's port,
+ * each thread drawn with the reader's sends still out (`use-thread-answer.ts`).
  */
 
 import {
@@ -44,6 +45,7 @@ import { Settings } from "react-native";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { useSendsDrawn } from "./use-thread-answer.js";
 
 /** The defaults key the Inbox's scope is kept under, as the panel keeps its window's. */
 const INBOX_SCOPE_KEY = "inboxScope";
@@ -63,7 +65,7 @@ function useInboxGroups(): ReturnType<ReturnType<typeof selectInboxGroupsIn>> {
     ...appStateQuery,
     select: selectInboxGroupsIn(chosen?.id),
   });
-  return groups;
+  return useSendsDrawn(groups);
 }
 
 /** The scope kept, or Open, the panel's own first scope, where none was ever chosen. */
@@ -160,10 +162,11 @@ export function useInboxThread(id: string | undefined): {
   readonly readerId: string | undefined;
   readonly feed: InboxFeed;
 } {
-  const { data: groups = NO_GROUPS } = useQuery({
+  const { data: read = NO_GROUPS } = useQuery({
     ...appStateQuery,
     select: selectInboxGroupsIn(undefined),
   });
+  const groups = useSendsDrawn(read);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const { data: answered = INBOX_FEED.READING } = useQuery({
     ...appStateQuery,

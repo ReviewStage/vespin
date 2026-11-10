@@ -45,6 +45,7 @@ import {
   type InboxItem,
   type InboxMessage,
 } from "@repo/features/inbox-wire";
+import { closedNow, INBOX_SENDING, inboxSendingDrawn } from "@repo/features/inbox-writes";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
@@ -199,6 +200,13 @@ const RECORDED = {
   PICTURE: "92f3b536-7eaf-4bc8-a3e0-1a2b3c4d5e6f",
   VIDEO: "a3f4c647-8fb0-4cd9-b4f1-2b3c4d5e6f70",
 } as const;
+
+/**
+ * The thread whose answer the fixture refuses, as a send no answer came back
+ * for: the migration's approval, so a flow sees an answer drawn at once and
+ * taken back.
+ */
+const REFUSED_ITEM = fixtureId(2);
 
 /** Where the recorded thread's words draw its still from: the still's address on the thread, as an agent's post names a picture it attached. */
 const RECORDED_PICTURE_ADDRESS = inboxAttachmentAddress(
@@ -999,6 +1007,11 @@ export function inboxAppState(
 
 /* ----- The act door ----- */
 
+/** One staged item by its id, in whichever task's inbox holds it. */
+function stagedItem(itemId: string): InboxItem | undefined {
+  return [...INBOXES.values()].flat().find((each) => each.id === itemId);
+}
+
 /** One kind's staged answer: its result. */
 type StagedAnswer<Kind extends PortActKind> = (
   payload: PortActPayload<Kind>,
@@ -1035,6 +1048,19 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
   [ACT_KIND.AGENTS_PICTURE]: ({ pictureId }) => fixtureAgentPicture(pictureId),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
+  // Note that a reply and a resolve are taken as the service takes them, answered with the item as it then stands, though nothing here moves, so the window draws its own send; the migration's approval is refused.
+  [ACT_KIND.AGENTS_INBOX_MESSAGE]: ({ itemId, clientKey, text, answers }) => {
+    const held = stagedItem(itemId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    if (itemId === REFUSED_ITEM) return { failure: AGENT_CALL_FAILURE.UNANSWERED };
+    const sent = { kind: INBOX_SENDING.REPLY, key: clientKey, text, answers, at: Date.now() };
+    return { item: inboxSendingDrawn(held, [sent], ADA) };
+  },
+  [ACT_KIND.AGENTS_INBOX_CLOSE]: ({ itemId }) => {
+    const held = stagedItem(itemId);
+    if (held === undefined) return { failure: AGENT_CALL_FAILURE.NOT_FOUND };
+    return { item: closedNow(held, ADA, Date.now()), taken: true };
+  },
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,
   }),

@@ -1,5 +1,15 @@
 // index.ts -- @repo/ui-native: the iOS app's components over @expo/ui's SwiftUI, its Markdown in React Native views, and the brand's tokens they draw with.
 
+export {
+  ANSWER_FIELD,
+  type AnswerField,
+  type AnswerFieldKind,
+  AnswerFields,
+  type AskAct,
+  AskActs,
+  AskNote,
+  StepList,
+} from "./ask-card.js";
 export { AuthPage } from "./auth-page.js";
 export { BRAND_MARK_ASSET, BrandMark } from "./brand-mark.js";
 export {
@@ -15,9 +25,9 @@ export {
   StatusChip,
 } from "./button.js";
 export { type Choice, ChoiceList } from "./choice-list.js";
-export { Composer } from "./composer.js";
+export { Composer, ComposerFoot } from "./composer.js";
 export { EmptyState } from "./empty-state.js";
-export { GlassBar } from "./glass-bar.js";
+export { DOCK_ROOM, GlassBar, GlassDock } from "./glass-bar.js";
 export { type Glyph, isLucideSymbol, type LucideSymbol } from "./glyph.js";
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 export {

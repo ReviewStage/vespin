@@ -2,6 +2,7 @@
 
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
+  ANSWER_TONE,
   holderName,
   INBOX_HOLDER,
   INBOX_MEDIA,
@@ -18,6 +19,7 @@ import {
   inboxLineKind,
   inboxMemberName,
   inboxPreview,
+  inboxSettledStanding,
   inboxThreadMessages,
   isDone,
   isUnread,
@@ -26,7 +28,7 @@ import {
   RETRY,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
-import { inboxWaitsOn } from "@repo/features/inbox-wire";
+import { INBOX_STATUS, inboxWaitsOn } from "@repo/features/inbox-wire";
 import { iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { cardTitle } from "@repo/features/plain-words";
@@ -40,7 +42,9 @@ import {
   BAR_TITLE,
   type BarAction,
   type BarMenu,
+  DOCK_ROOM,
   EmptyState,
+  GlassDock,
   LIST_LOOK,
   type ListLook,
   ListRow,
@@ -71,8 +75,10 @@ import {
   useReadOnOpen,
   useThreadMedia,
 } from "../inbox/use-inbox.js";
+import { useThreadAnswer } from "../inbox/use-thread-answer.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
+import { OpenAskCard, ThreadComposer, threadMenu } from "./inbox-ask.js";
 
 /** The Inbox's name, at its head and on its back button. */
 const INBOX_TITLE = "Inbox";
@@ -256,7 +262,14 @@ function useAgentTitles(): ReadonlyMap<string, string> {
   return data;
 }
 
-/** A thread's page from its item: its path, its subject, and each message with its files as they are read. */
+/**
+ * A thread's page from its item: its path, its subject, each message with
+ * its files as they are read, the open ask's card under them, and the box
+ * at its foot that answers or replies, with Resolve in its ⋯ menu. A compact
+ * window's pushed screen docks the box over the screen's foot, above the
+ * keyboard, and holds the menu in the stack's bar; a split view's detail
+ * stands both in its own column.
+ */
 function ThreadDetail({
   listed,
   readerId,
@@ -320,8 +333,14 @@ function ThreadDetail({
   };
   const sources = useThreadMedia(item.id, media);
   useReadOnOpen(listed);
+  const answer = useThreadAnswer(listed);
+  const menu = threadMenu(item, answer);
   const drawn: readonly ThreadMessage[] = messages.map((message) => ({
     ...message,
+    stamp:
+      message.stamp === undefined
+        ? undefined
+        : { words: message.stamp.words, ahead: message.stamp.tone === ANSWER_TONE.AHEAD },
     media: message.media.map((each) =>
       each.kind === INBOX_MEDIA.VIDEO
         ? {
@@ -359,28 +378,52 @@ function ThreadDetail({
     };
   };
   const path = [holderName(holder), agentName];
+  const page = (
+    <ThreadPage
+      path={path}
+      status={holder.kind === INBOX_HOLDER.TASK ? holder.task.status : undefined}
+      title={cardTitle(item.title)}
+      messages={drawn}
+      repository={
+        holder.kind === INBOX_HOLDER.TASK ? holder.task.repository : holder.agent.repository
+      }
+      onOpenPlace={openPlace}
+      pictureSource={pictureSource}
+      videoAt={videoAt}
+      standing={item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(item)}
+      ask={<OpenAskCard item={item} answer={answer} />}
+      {...(inStack
+        ? { footRoom: DOCK_ROOM }
+        : { menu, foot: <ThreadComposer item={item} answer={answer} inColumn /> })}
+    />
+  );
+  if (!inStack) return page;
   return (
     <>
-      {inStack ? (
-        <Stack.Screen
-          options={{
-            title: path.join(PATH_PART),
-            headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
-          }}
-        />
-      ) : null}
-      <ThreadPage
-        path={path}
-        status={holder.kind === INBOX_HOLDER.TASK ? holder.task.status : undefined}
-        title={cardTitle(item.title)}
-        messages={drawn}
-        repository={
-          holder.kind === INBOX_HOLDER.TASK ? holder.task.repository : holder.agent.repository
-        }
-        onOpenPlace={openPlace}
-        pictureSource={pictureSource}
-        videoAt={videoAt}
+      <Stack.Screen
+        options={{
+          title: path.join(PATH_PART),
+          headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
+        }}
       />
+      {menu === undefined ? null : (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Menu icon={menu.symbol} accessibilityLabel={menu.label}>
+            {menu.actions.map((action) => (
+              <Stack.Toolbar.MenuAction
+                key={action.label}
+                icon={action.symbol}
+                onPress={action.onPress}
+              >
+                {action.label}
+              </Stack.Toolbar.MenuAction>
+            ))}
+          </Stack.Toolbar.Menu>
+        </Stack.Toolbar>
+      )}
+      <GlassDock bar={<ThreadComposer item={item} answer={answer} />}>
+        <Screen>{page}</Screen>
+      </GlassDock>
     </>
   );
 }
@@ -530,25 +573,27 @@ export function InboxThreadScreen() {
       <Stack.Screen
         options={{ headerBackTitle: INBOX_TITLE, ...(listed === undefined ? { title: "" } : {}) }}
       />
-      <Screen>
-        {listed !== undefined ? (
-          <ThreadDetail listed={listed} readerId={readerId} inStack />
-        ) : feed === INBOX_FEED.READING ? (
-          <EmptyState title={READING_INBOX} symbol="tray" />
-        ) : feed === INBOX_FEED.FAILED ? (
-          <EmptyState
-            title={INBOX_NOT_READ}
-            symbol="exclamationmark.triangle"
-            action={{
-              label: RETRY,
-              // The feed or the task list that holds the thread failed, so both are read again.
-              onPress: () => void Promise.all([refresh(), refreshTasks()]),
-            }}
-          />
-        ) : (
-          <EmptyState title={THREAD_NOT_FOUND} symbol="tray" />
-        )}
-      </Screen>
+      {listed !== undefined ? (
+        <ThreadDetail listed={listed} readerId={readerId} inStack />
+      ) : (
+        <Screen>
+          {feed === INBOX_FEED.READING ? (
+            <EmptyState title={READING_INBOX} symbol="tray" />
+          ) : feed === INBOX_FEED.FAILED ? (
+            <EmptyState
+              title={INBOX_NOT_READ}
+              symbol="exclamationmark.triangle"
+              action={{
+                label: RETRY,
+                // The feed or the task list that holds the thread failed, so both are read again.
+                onPress: () => void Promise.all([refresh(), refreshTasks()]),
+              }}
+            />
+          ) : (
+            <EmptyState title={THREAD_NOT_FOUND} symbol="tray" />
+          )}
+        </Screen>
+      )}
     </>
   );
 }

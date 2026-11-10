@@ -6,16 +6,17 @@
  * all of it, the web all but what only an app on the Mac can carry, and the
  * iOS app what its screens have been built for: today its sign-in and
  * sign-out, and the Inbox: its list, which the host reads from the account
- * gate opening with no act of the app's, its read marks, its retry, and its
- * pictures. Nothing else says which share, so this
- * table is what keeps the gaps known: every kind in `PORT_ACT_KIND` has a
- * row, and a kind added without one, or a row whose act is gone, does not
- * build. A client offers an act where a member can do what the act does
- * there, though the client may reach it another way; a client that does not
- * names why. `NOT_YET` is the backlog, a row a client's next screen
- * replaces; `BY_DESIGN` is a gap the platform makes, such as a shell on the
- * Mac from a phone, which no screen would close. `client-parity.test.ts`
- * holds the iOS column to the platform kinds the iOS host refuses.
+ * gate opening with no act of the app's, its read marks, its retry, its
+ * pictures, and a thread's answer, reply, and resolve. Nothing else says
+ * which share, so this table is what keeps the gaps known: every kind in
+ * `PORT_ACT_KIND` has a row, and a kind added without one, or a row whose
+ * act is gone, does not build. A client offers an act where a member can do
+ * what the act does there, though the client may reach it another way; a
+ * client that does not names why. `NOT_YET` is the backlog, a row a client's
+ * next screen replaces; `BY_DESIGN` is a gap the platform makes, such as a
+ * shell on the Mac from a phone, which no screen would close.
+ * `client-parity.test.ts` holds the iOS column to the platform kinds the iOS
+ * host refuses.
  */
 
 import { PORT_ACT_KIND, type PortActKind } from "./kinds.js";
@@ -205,10 +206,14 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_INBOX_FOLLOW]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_INBOX_RETRY]: panel(IOS.AGENTS),
   [PORT_ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_INBOX_ANSWER]: panel(IOS.WAVE_5),
-  [PORT_ACT_KIND.AGENTS_INBOX_CLOSE]: panel(IOS.WAVE_5),
-  [PORT_ACT_KIND.AGENTS_INBOX_TAKE_BACK]: panel(IOS.WAVE_5),
-  [PORT_ACT_KIND.AGENTS_INBOX_MESSAGE]: panel(IOS.WAVE_5),
+  [PORT_ACT_KIND.AGENTS_INBOX_ANSWER]: panel(
+    notYet("iOS settles a notice by a reply; its Got it is not built"),
+  ),
+  [PORT_ACT_KIND.AGENTS_INBOX_CLOSE]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_INBOX_TAKE_BACK]: panel(
+    notYet("iOS resolves at once; its Undo of a resolve is not built"),
+  ),
+  [PORT_ACT_KIND.AGENTS_INBOX_MESSAGE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_START]: panel(IOS.WAVE_5),
   [PORT_ACT_KIND.AGENTS_INBOX_READ_STATE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_INBOX_REMIND]: panel(notYet("iOS v1 sets no reminders")),

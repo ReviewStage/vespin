@@ -1,27 +1,40 @@
-// composer.tsx -- the rounded glass field at a thread's or a transcript's foot: a + on the left, the field, and a send or mic button on the right.
+// composer.tsx -- the rounded glass field at a thread's or a transcript's foot: a + on the left, the field, and a send or mic button on the right, in a React Native bar or a SwiftUI column's foot.
 
-import { Button, Image, TextField, useNativeState } from "@expo/ui/swift-ui";
+import { Button, HStack, Image, TextField, useNativeState } from "@expo/ui/swift-ui";
 import {
+  accessibilityIdentifier,
   accessibilityLabel,
   background,
   buttonStyle,
   disabled,
   font,
   frame,
+  glassEffect,
+  lineLimit,
+  padding,
   shapes,
 } from "@expo/ui/swift-ui/modifiers";
-import { useState } from "react";
-import { GlassBar } from "./glass-bar.js";
+import { useEffect, useRef, useState } from "react";
+import { BAR_RADIUS, GlassBar } from "./glass-bar.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE } from "./tokens/space.js";
+import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The send button's round, in points. */
 const SEND_SIZE = 32;
 
+/** The most lines the field grows to before it scrolls its words. */
+const FIELD_LINES = 6;
+
 type ComposerProps = {
-  /** What the field says before anything is typed: "Reply…", "Message agent…". */
+  /** What the field says before anything is typed: "Reply", "Add a note". */
   readonly placeholder: string;
+  /** The words in the field, where its holder keeps them, such as a thread's draft that outlives its screen; the field keeps its own where none are given. */
+  readonly words?: string | undefined;
+  /** Called with the words as they are typed. */
+  readonly onWords?: ((words: string) => void) | undefined;
+  /** Whether Send stands lit with no words typed, as it does once an ask's answer is picked. */
+  readonly sendable?: boolean | undefined;
   /** Called with the words typed once Send is pressed; Send stands disabled where none is given. */
   readonly onSend?: ((words: string) => void) | undefined;
   /** Opens what the + adds, such as a picture; the + is not drawn where none is given. */
@@ -70,27 +83,37 @@ function SendButton({
   );
 }
 
-/**
- * A composer in the system's Liquid Glass at the screen's foot, above the tab
- * bar: the + for what a message carries, the field, which grows with its
- * words, and Send filled with the ink, or the mic while the field is empty
- * where dictation is offered. It is drawn here alone; the screens wire
- * sending as they take it up.
- */
-export function Composer({ placeholder, onSend, onAdd, onDictate }: ComposerProps) {
+/** The composer's pieces in a row's order: the +, the field, and Send or the mic, which a bar of glass holds. */
+function ComposerPieces(props: ComposerProps) {
+  const { placeholder, words: held, onWords, sendable = false, onSend, onAdd, onDictate } = props;
   const colors = useColors();
-  const text = useNativeState("");
-  const [words, setWords] = useState("");
+  const text = useNativeState(held ?? "");
+  const [typed, setTyped] = useState(held ?? "");
+  const words = held ?? typed;
+  // Note that the field is handed the holder's words only where they moved apart from what was typed, as a send empties them or a refusal hands them back.
+  const shown = useRef(words);
+  useEffect(() => {
+    if (held === undefined || held === shown.current) return;
+    shown.current = held;
+    text.set(held);
+  }, [held, text]);
+  const type = (next: string) => {
+    shown.current = next;
+    setTyped(next);
+    onWords?.(next);
+  };
+  const empty = words.trim() === "" && !sendable;
   const send =
     onSend === undefined
       ? undefined
       : () => {
           onSend(words.trim());
+          if (held !== undefined) return;
           text.set("");
-          setWords("");
+          setTyped("");
         };
   return (
-    <GlassBar>
+    <>
       {onAdd === undefined ? null : (
         <Button onPress={onAdd} modifiers={[buttonStyle("plain"), accessibilityLabel("Add")]}>
           <Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
@@ -100,10 +123,55 @@ export function Composer({ placeholder, onSend, onAdd, onDictate }: ComposerProp
         text={text}
         placeholder={placeholder}
         axis="vertical"
-        onTextChange={setWords}
-        modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE })]}
+        onTextChange={type}
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.ROW_TITLE }),
+          lineLimit(FIELD_LINES),
+          accessibilityIdentifier("composer-field"),
+        ]}
       />
-      <SendButton empty={words.trim() === ""} onSend={send} onDictate={onDictate} />
+      <SendButton empty={empty} onSend={send} onDictate={onDictate} />
+    </>
+  );
+}
+
+/**
+ * A composer in the system's Liquid Glass at the screen's foot, above the tab
+ * bar: the + for what a message carries, the field, which grows with its
+ * words, and Send filled with the ink, or the mic while the field is empty
+ * where dictation is offered. Where its holder keeps the words, the field
+ * follows them, so words a refused send hands back stand in it again; else
+ * it empties on Send. It stands in a React Native bar (`GlassBar`), docked
+ * over a compact window's screen (`GlassDock`).
+ */
+export function Composer(props: ComposerProps) {
+  return (
+    <GlassBar>
+      <ComposerPieces {...props} />
     </GlassBar>
+  );
+}
+
+/**
+ * The same composer at the foot of a SwiftUI column, such as a split view's
+ * detail, where no React Native bar can stand: its pieces in a row of the
+ * system's own glass, rounded as the bar is.
+ */
+export function ComposerFoot(props: ComposerProps) {
+  return (
+    <HStack
+      spacing={SPACE.ROW}
+      modifiers={[
+        padding({ leading: SPACE.ROW + 4, trailing: SPACE.TIGHT * 2, vertical: SPACE.TIGHT * 2 }),
+        glassEffect({
+          glass: { variant: "regular", interactive: true },
+          shape: "roundedRectangle",
+          cornerRadius: BAR_RADIUS,
+        }),
+        padding({ horizontal: SPACE.ROW + 2, bottom: SPACE.ROW }),
+      ]}
+    >
+      <ComposerPieces {...props} />
+    </HStack>
   );
 }

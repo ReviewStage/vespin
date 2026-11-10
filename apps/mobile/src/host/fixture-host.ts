@@ -59,7 +59,8 @@ export function stageFixture(state: Pick<AppStateStore, "snapshot" | "update">):
 
 /**
  * The act port a fixture run's screens act through: each act the profile
- * answers, such as a mark or a thread's file read (`inboxActAnswer`),
+ * answers, such as a mark, a thread's file read, or a reply or a resolve on
+ * a thread, one of them refused (`inboxActAnswer`),
  * answered by the fixture, as the panel's fixture run answers it on the
  * window's side, and every other act sent to the host. Note that a mark is
  * echoed and moves no dot, as on the panel's.

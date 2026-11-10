@@ -10,12 +10,18 @@ builds a control of its own.
   for: `Screen`, `RowList` and `ListSection`, `ListRow` and `TaskRow`, `SplitView`
   (its sidebar's bar holding an act, a `BarMenu` such as the ⋯ menu, and a
   search), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
-  `ScopePills`, `FieldChip` and `StatusChip`, `ChoiceList` (the ask card),
+  `ScopePills`, `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
+  for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
+  answer's fields, and `AskNote` for what a send that did not go said),
   `PullRequestCard`, `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, and the marks (`UnreadDot`, `TaskStatusMark`, `Avatar`, `AgentTile`,
   and `BrandMark`, the Keel mark the app's asset catalog holds). `GlassBar`
-  is a bar of Liquid Glass through `expo-glass-effect`, and `Composer` the
-  rounded field a thread or a transcript ends with, in one.
+  is a bar of Liquid Glass through `expo-glass-effect`, `GlassDock` the
+  screen that pins one over its foot above the keyboard, and `Composer` the
+  rounded field a thread or a transcript ends with, in one, or
+  `ComposerFoot`, the same field at a SwiftUI column's foot in the system's
+  own glass, where no React Native bar can stand, such as a split view's
+  detail.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
   screen and zooms, and its `Video` in the system's player through
@@ -98,7 +104,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   and `StatusChip` read a task's status, priority and assignee. Each stands
   on `SURFACE` inside a hairline.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, radio
-  rows, a "Recommended" tag and a detail line) and the pull request
+  rows, a "Recommended" tag and a detail line; `StepList`, a toggle per step,
+  with Mark done and Couldn't do it under it; `AnswerFields`, a row per
+  field: a text or number field under its label, a select's menu picker, a
+  boolean's toggle, the rows a SwiftUI `Form` holds, drawn in a card because
+  a `Form` scrolls on its own inside the thread's scroll) and the pull request
   (`PullRequestCard`: its state's glyph, its title, its lines in green and
   red, and its acts as pills), each on `SURFACE` inside a hairline.
 - **The tab bar** is `NativeTabs`: icons alone in a compact window, through

@@ -1276,6 +1276,8 @@ export interface InboxThreadMessage {
   readonly media: readonly InboxMessageMedia[];
   /** The item's own files its words draw where they name them, a picture or a video it carried, by the attachment each is read by. */
   readonly drawn: readonly InboxDrawnMedia[];
+  /** What the answer it carries says it was, in the past, as the panel's stamp says it: "Chose Both", "Done 3/3"; none on a message that answers nothing. */
+  readonly stamp?: AnswerStamp | undefined;
 }
 
 /** One of the item's own files a message's words draw in place, and how: a picture, or a video it carried, played where the words name it. */
@@ -1326,6 +1328,9 @@ export function inboxThreadMessages(
         ? []
         : [{ kind, attachmentId: file.attachmentId, name: file.name, mediaType: file.mediaType }];
     });
+    const { answers } = message;
+    const asked =
+      answers === undefined ? undefined : item.thread?.find(({ id }) => id === answers.ask);
     return {
       id: message.id,
       writer: { name: agent ? agentName : inboxMemberName(message.member, readerId), agent },
@@ -1334,6 +1339,7 @@ export function inboxThreadMessages(
       typed: !agent,
       media,
       drawn,
+      ...(answers === undefined ? undefined : { stamp: sentStamp(answers, asked?.ask) }),
     };
   });
 }

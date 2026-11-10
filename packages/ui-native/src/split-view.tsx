@@ -63,7 +63,7 @@ type SplitViewProps = {
 };
 
 /** A bar's menu as SwiftUI's: each choice a toggle the system checks, then a rule, then each act. */
-function MenuItem({ menu }: { readonly menu: BarMenu }) {
+export function BarMenuButton({ menu }: { readonly menu: BarMenu }) {
   return (
     <Menu label={menu.label} systemImage={menu.symbol}>
       {menu.choices.map((choice) => (
@@ -105,7 +105,7 @@ function SidebarColumn({
         <Toolbar.Content>
           {sidebarMenu === undefined ? null : (
             <ToolbarItem placement="topBarTrailing">
-              <MenuItem menu={sidebarMenu} />
+              <BarMenuButton menu={sidebarMenu} />
             </ToolbarItem>
           )}
           {sidebarAction === undefined ? null : (
