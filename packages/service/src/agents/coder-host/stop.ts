@@ -377,11 +377,14 @@ export const everyStopsForGood = /* @__PURE__ */ Effect.fnUntraced(function* (
  * every one first, so a refusal cancels nobody's work.
  */
 const stopsForGood = /* @__PURE__ */ Effect.fnUntraced(function* (agent: Agent) {
-  const { turn } = (yield* standingsOf([agent.conversationId]))(agent.conversationId);
+  const { turn, boot } = (yield* standingsOf([agent.conversationId], [agent]))(
+    agent.conversationId,
+  );
   const status = agentStatusOf(turn, {
     createdAt: agent.createdAt,
     now: yield* Clock.currentTimeMillis,
     blank: startedBlank(agent),
+    boot,
   });
   if (status === AGENT_STATUS.STARTING) return false;
   return status !== AGENT_STATUS.RUNNING || stoppable(turn);
@@ -400,10 +403,16 @@ const standingTurns = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   const conversationIds = agents.map(({ conversationId }) => conversationId);
   const turns = yield* latestTurnsOfReached(conversationIds);
+  const boots = yield* agentBootsOf(agents.map(({ id }) => id));
   const now = yield* Clock.currentTimeMillis;
   return agents.map((agent) => {
     const turn = turns.get(agent.conversationId);
-    const status = agentStatusOf(turn, { createdAt: agent.createdAt, now, blank: agent.blank });
+    const status = agentStatusOf(turn, {
+      createdAt: agent.createdAt,
+      now,
+      blank: agent.blank,
+      boot: boots.get(agent.id)?.phase,
+    });
     return { agent, turn, status };
   });
 });
