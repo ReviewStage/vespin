@@ -54,6 +54,14 @@ test("a fenced block inside a quote keeps every blank line of its code", () => {
   assert.equal(selectedMarkdown(whole(quote)), "> ```\n> first\n>\n>\n> last\n> ```");
 });
 
+test("words are quoted as the message box writes them: plain words as they read, a mark's words with its delimiters escaped", () => {
+  const words = document.createElement("p");
+  words.innerHTML = "a&lt;b in snake_case, <strong>2*3</strong>";
+  document.body.append(words);
+
+  assert.equal(selectedMarkdown(whole(words)), "a<b in snake_case, **2\\*3**");
+});
+
 test("words picked inside a chip's name under a bold run quote the chip's link in bold", () => {
   const host = document.createElement("p");
   document.body.append(host);

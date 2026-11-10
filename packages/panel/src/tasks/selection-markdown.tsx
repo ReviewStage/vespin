@@ -60,8 +60,22 @@ const HEADING_TAGS: ReadonlySet<string> = new Set(["H1", "H2", "H3", "H4", "H5",
 /** The class of words drawn for a screen reader alone (`@repo/ui`'s `ui-visually-hidden`). */
 const HEARD_ONLY_CLASS = "ui-visually-hidden";
 
-/** The characters a run of text escapes, which Markdown would otherwise read as a mark, a link, or HTML. */
-const MARKDOWN_SPECIAL = /[\\`*_[\]~<]/gu;
+/**
+ * The characters words wearing a mark escape, as the message box writes them
+ * (`@repo/features/composer-markdown`), so none closes the mark early or opens
+ * another. Note that words wearing none are written as they read, never
+ * escaped, as the box writes them, so a quote laid in reads as words typed.
+ */
+const MARK_SPECIAL = /[\\*~[\]]/gu;
+
+/** The marks the words under an element wear, by its tag: a mark's own delimiters, and a link. */
+const MARK_SELECTOR = "strong, b, em, i, del, s, a";
+
+/** What the words being written stand inside: code, written as it is, or a mark, whose delimiters are escaped. */
+interface Inside {
+  readonly code: boolean;
+  readonly marked: boolean;
+}
 
 /** Only links that go to the web or to a mail are written as links. */
 const SAFE_LINK = /^(?:https?:\/\/|mailto:)/iu;
@@ -135,14 +149,14 @@ function linedCode(element: Element, words: string): string {
 }
 
 /** The children of `parent` inside `range`, written. */
-function childrenWritten(parent: Node, range: Range, code: boolean): string {
+function childrenWritten(parent: Node, range: Range, inside: Inside): string {
   let words = "";
-  for (const child of parent.childNodes) words += written(child, range, code);
+  for (const child of parent.childNodes) words += written(child, range, inside);
   return words;
 }
 
 /** A list inside `range`, each item a line under its marker, its own lines kept under the marker's width. */
-function listWritten(list: Element, range: Range, code: boolean): string {
+function listWritten(list: Element, range: Range, inside: Inside): string {
   const ordered = list.tagName === "OL";
   let number = Number(list.getAttribute("start") ?? "1") || 1;
   const items: string[] = [];
@@ -151,7 +165,7 @@ function listWritten(list: Element, range: Range, code: boolean): string {
     const marker = ordered ? `${number}. ` : "- ";
     number += 1;
     if (!range.intersectsNode(item)) continue;
-    const words = lines(childrenWritten(item, range, code));
+    const words = lines(childrenWritten(item, range, inside));
     if (words !== "")
       items.push(`${marker}${words.replaceAll(NEWLINE, `\n${" ".repeat(marker.length)}`)}`);
   }
@@ -166,20 +180,22 @@ function linkWritten(element: Element, words: string): string {
 }
 
 /** An element inside `range` written as Markdown, its marks around its words. */
-function elementWritten(element: Element, range: Range, code: boolean): string {
+function elementWritten(element: Element, range: Range, inside: Inside): string {
   const source = WRITTEN.get(element);
   if (source !== undefined) return source;
   if (leftOut(element)) return "";
   const tag = element.tagName;
+  const coded = { ...inside, code: true };
   if (tag === "BR") return NEWLINE;
-  if (tag === "PRE") return fencedBlock(childrenWritten(element, range, true));
-  if (tag === "UL" || tag === "OL") return listWritten(element, range, code);
-  if (tag === "CODE")
-    return code
-      ? childrenWritten(element, range, true)
-      : codeSpan(childrenWritten(element, range, true));
-  const words = childrenWritten(element, range, code);
-  if (code) return linedCode(element, words);
+  if (tag === "PRE") return fencedBlock(childrenWritten(element, range, coded));
+  if (tag === "UL" || tag === "OL") return listWritten(element, range, inside);
+  if (tag === "CODE") {
+    const code = childrenWritten(element, range, coded);
+    return inside.code ? code : codeSpan(code);
+  }
+  const marked = inside.marked || element.matches(MARK_SELECTOR);
+  const words = childrenWritten(element, range, { ...inside, marked });
+  if (inside.code) return linedCode(element, words);
   const delimiter = MARK_DELIMITER[tag];
   if (delimiter !== undefined) return wrapped(words, delimiter);
   if (tag === "A") return linkWritten(element, words);
@@ -198,13 +214,13 @@ function elementWritten(element: Element, range: Range, code: boolean): string {
 }
 
 /** A node inside `range` written as Markdown; nothing for one outside it. */
-function written(node: Node, range: Range, code: boolean): string {
+function written(node: Node, range: Range, inside: Inside): string {
   if (!range.intersectsNode(node)) return "";
   if (node instanceof Text) {
     const words = clipped(node, range);
-    return code ? words : words.replace(MARKDOWN_SPECIAL, "\\$&");
+    return inside.marked && !inside.code ? words.replace(MARK_SPECIAL, "\\$&") : words;
   }
-  return node instanceof Element ? elementWritten(node, range, code) : "";
+  return node instanceof Element ? elementWritten(node, range, inside) : "";
 }
 
 /**
@@ -236,10 +252,13 @@ function insideAncestors(words: string, from: Element): string {
   return kept;
 }
 
-/** Whether `node` stands inside code, whose words are written as they are. */
-function insideCode(node: Node): boolean {
+/** What `node` stands inside: code, whose words are written as they are, or a mark, whose delimiters its words escape. */
+function insideOf(node: Node): Inside {
   const element = node instanceof Element ? node : node.parentElement;
-  return (element?.closest("code, pre") ?? null) !== null;
+  return {
+    code: (element?.closest("code, pre") ?? null) !== null,
+    marked: (element?.closest(MARK_SELECTOR) ?? null) !== null,
+  };
 }
 
 /**
@@ -249,7 +268,7 @@ function insideCode(node: Node): boolean {
  */
 export function selectedMarkdown(range: Range): string {
   const common = range.commonAncestorContainer;
-  const words = keptBlankLines(written(common, range, insideCode(common)), 1);
+  const words = keptBlankLines(written(common, range, insideOf(common)), 1);
   // Note that the walk up starts over the common node, which wrote its own marks already.
   return (
     common.parentElement === null ? words : insideAncestors(words, common.parentElement)
