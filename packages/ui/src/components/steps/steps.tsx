@@ -39,6 +39,17 @@ export const STEP_STATE = {
 
 export type StepState = (typeof STEP_STATE)[keyof typeof STEP_STATE];
 
+/**
+ * A step's disc, the app's 16px of a glyph beside words (`ICON_SIZE.MEDIUM`,
+ * the inline spinner), its number in the caption's figures; and the slot it
+ * stands in, one label line tall, so the disc centers on the step's first
+ * line as the wait's ring does under the steps (`WaitingLine`).
+ */
+const DISC_SLOT = "flex h-lh flex-none items-center justify-center text-label";
+
+const DISC_BASE =
+  "inline-grid size-ui-16 place-items-center rounded-full text-caption leading-none tabular-nums [&_svg]:size-ui-12";
+
 /** What a step's disc is drawn in, for each state. */
 const DISC = {
   [STEP_STATE.TO_DO]: "border border-border-strong text-muted-foreground",
@@ -71,11 +82,10 @@ export function Step({
 }): React.JSX.Element {
   return (
     <li className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-ui-12" data-state={state}>
-      <span
-        className={`inline-grid size-ui-20 flex-none place-items-center rounded-full text-caption tabular-nums [&_svg]:size-ui-12 ${DISC[state]}`}
-        aria-hidden="true"
-      >
-        {state === STEP_STATE.DONE ? <CheckIcon /> : number}
+      <span className={DISC_SLOT} aria-hidden="true">
+        <span className={`${DISC_BASE} ${DISC[state]}`}>
+          {state === STEP_STATE.DONE ? <CheckIcon /> : number}
+        </span>
       </span>
       <div className="flex min-w-0 flex-col gap-ui-8">
         {title === undefined ? null : (
@@ -92,7 +102,8 @@ export function Step({
 
 /**
  * Steps a person carries out outside the app, and, while the app waits to
- * see the last of them happen, what it waits on under them.
+ * see the last of them happen, what it waits on under them, a step's gap
+ * below the last, so it reads as the list's last line.
  */
 export function OutsideSteps({
   waiting,
@@ -104,7 +115,7 @@ export function OutsideSteps({
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <div className="flex min-w-0 flex-col gap-ui-8">
+    <div className="flex min-w-0 flex-col gap-field-gap">
       <Steps>{children}</Steps>
       {waiting === undefined ? null : <WaitingLine>{waiting}</WaitingLine>}
     </div>
