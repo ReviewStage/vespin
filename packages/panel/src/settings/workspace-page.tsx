@@ -1733,7 +1733,7 @@ function useSlugDialog(workspace: Workspace): SlugAsk {
       }
     >
       <FormField
-        label="URL"
+        label="URL path"
         description={
           <>
             {LINK_HOME.HOST}/<ReplayMask>{slug}</ReplayMask>

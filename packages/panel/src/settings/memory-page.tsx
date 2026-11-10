@@ -461,20 +461,23 @@ function KeptByLine({
   if (drawn.length === 0) return null;
   return (
     <Inline gap={GAP.TIGHT} ref={line} moves>
-      {drawn.map(({ key, value: keeper, leaving }) => (
-        <Chip
-          key={key}
-          look={CHIP_LOOK.FILTER}
-          motionKey={key}
-          removeLabel="Remove filter"
-          onRemove={() => {
-            if (!leaving) onKept(toggled(kept, keeper.key));
-          }}
-        >
-          {keeper.face}
-          <ChipName>{`${KEPT_BY} ${keeper.label === PEOPLE_FILTER_WORDS.ME ? "me" : keeper.label}`}</ChipName>
-        </Chip>
-      ))}
+      {drawn.map(({ key, value: keeper, leaving }) => {
+        const name = `${KEPT_BY} ${keeper.label === PEOPLE_FILTER_WORDS.ME ? "me" : keeper.label}`;
+        return (
+          <Chip
+            key={key}
+            look={CHIP_LOOK.FILTER}
+            motionKey={key}
+            removeLabel={`Remove filter: ${name}`}
+            onRemove={() => {
+              if (!leaving) onKept(toggled(kept, keeper.key));
+            }}
+          >
+            {keeper.face}
+            <ChipName>{name}</ChipName>
+          </Chip>
+        );
+      })}
       {kept.size === 0 ? null : (
         <Button variant={BUTTON_VARIANT.QUIET} onClick={() => onKept(new Set())}>
           Clear

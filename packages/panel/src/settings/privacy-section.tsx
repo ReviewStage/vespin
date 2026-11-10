@@ -49,7 +49,11 @@ function SupportAccessRow(): React.JSX.Element {
   return (
     <SettingsRow
       label="Support access"
-      description={granted ? `Granted until ${formatInstant(until)}` : SUPPORT_ACCESS_MEANING}
+      description={
+        granted
+          ? `The ${PRODUCT_NAME} team can sign in as you until ${formatInstant(until)}.`
+          : SUPPORT_ACCESS_MEANING
+      }
     >
       {() =>
         granted ? (
