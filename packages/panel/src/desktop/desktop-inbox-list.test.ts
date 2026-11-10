@@ -63,7 +63,6 @@ import {
   pagerOf,
   pressKey,
   pushAgain,
-  QUARANTINE,
   READER,
   RETRY,
   type ReadOutcome,
@@ -76,7 +75,6 @@ import {
   SHARED_MEMBERS,
   SHARED_WORKSPACE,
   SHOW_KEY,
-  SWEEP_AGENT,
   settle,
   showScope,
   standKeymap,
@@ -88,7 +86,6 @@ import {
   titleOf,
   viewItem,
   WHOSE_KEY,
-  waitingTaskless,
   world,
 } from "../testing/desktop-inbox.js";
 import { restOn } from "../testing/hint-rest.js";
@@ -181,7 +178,7 @@ function rowUnread(page: HTMLElement, title: string): boolean {
 }
 
 test("⌘-clicking two open items chooses both across their tasks, opening neither, and the bar's Resolve resolves each at once at the revision drawn under one toast, lets the selection go, and reaches the service at once", async () => {
-  const { page } = mount([], { toasts: true });
+  const { page } = mount({ toasts: true });
   await settle();
   const sent = takenCloses();
   const threshold = "Alert at 80%?";
@@ -206,7 +203,7 @@ test("⌘-clicking two open items chooses both across their tasks, opening neith
 });
 
 test("⌘Z takes a resolve back at the service whenever it is pressed, its toast or not, by each close's key: the items stand open again", async () => {
-  const { page } = mount([], { toasts: true });
+  const { page } = mount({ toasts: true });
   await settle();
   const sent = takenCloses();
   const threshold = "Alert at 80%?";
@@ -229,7 +226,7 @@ test("⌘Z takes a resolve back at the service whenever it is pressed, its toast
 });
 
 test("an Undo the service does not hear says so, and its Try again takes the resolve back", async () => {
-  const { page } = mount([], { toasts: true });
+  const { page } = mount({ toasts: true });
   await settle();
   const sent = takenCloses();
   // The first Undo's take-back fails on its way to the host, as a dropped act port does.
@@ -262,7 +259,7 @@ test("an Undo the service does not hear says so, and its Try again takes the res
 });
 
 test("the bar's Mark as unread marks every item chosen at once under one toast, whose Undo marks each read again as it stood", async () => {
-  const { page } = mount([], { toasts: true });
+  const { page } = mount({ toasts: true });
   await settle();
   const expiry = "Expire after 7 days?";
   const retry = "How is a failed email retried?";
@@ -288,7 +285,7 @@ test("the bar's Mark as unread marks every item chosen at once under one toast, 
 });
 
 test("the bar's marks say in one toast how many the service refused", async () => {
-  const { page } = mount([], { toasts: true });
+  const { page } = mount({ toasts: true });
   await settle();
   world.readMarkRefused = true;
   commandClick(page, "Expire after 7 days?");
@@ -299,7 +296,7 @@ test("the bar's marks say in one toast how many the service refused", async () =
 });
 
 test("a right-click on a row chosen among several offers the selection's acts under how many, one mark turned to read while any is unread, which marks only those", async () => {
-  const { page } = mount([], { toasts: true });
+  const { page } = mount({ toasts: true });
   await settle();
   const expiry = "Expire after 7 days?";
   const retry = "How is a failed email retried?";
@@ -401,7 +398,7 @@ test("a plain click still opens its item, leaving what is chosen as it stands", 
 });
 
 test("a plan main says changed is read again, so an item answered on another Mac lists as settled, gray where it stood while the pointer is over the list and sorted anew once it leaves; Open then lists only what is still open, and the choice outlives a relaunch", async () => {
-  let { page } = mount([], { chosen: ON_THRESHOLD });
+  let { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const list = page.querySelector('nav[aria-label^="Inbox items"]');
   assert.ok(list !== null);
@@ -435,7 +432,7 @@ test("a plan main says changed is read again, so an item answered on another Mac
 
   act(() => world.root?.unmount());
   world.root = undefined;
-  ({ page } = mount([], { chosen: ON_THRESHOLD }));
+  ({ page } = mount({ chosen: ON_THRESHOLD }));
   await settle();
   assert.deepEqual(scopes(page), ["Inbox", "Questions", "[Open]", "All"]);
   await vi.waitFor(() => assert.deepEqual(listed(page), ["▸ *Alert at 80%?"]));
@@ -493,7 +490,7 @@ test("the sidebar's Inbox counts the questions and the update waiting on you, ne
     { taskId: BILLING.id, items: [waitingOf(THRESHOLD)] },
     { taskId: INVITES.id, items: [waitingOf(EXPIRY), { ...waitingOf(NOTE), asking: false }] },
   ];
-  const { page } = mount([], { holding, waiting, withSidebar: true });
+  const { page } = mount({ holding, waiting, withSidebar: true });
   await settle();
   assert.equal(toDoRows(page), 4, "the two questions, the update, and the settled thread unread");
   assert.equal(sidebarInboxCount(page), 3, "the sidebar counts what waits on you");
@@ -501,7 +498,7 @@ test("the sidebar's Inbox counts the questions and the update waiting on you, ne
 
 test("the sidebar's Inbox counts the open items alone, as before, where main carries no To do count from an older service", async () => {
   world.inboxes.set(BILLING.id, [THRESHOLD, { ...RETRY, updatedAt: 6_000, unread: true }]);
-  const { page } = mount([], { withSidebar: true });
+  const { page } = mount({ withSidebar: true });
   await settle();
   assert.equal(
     sidebarInboxCount(page),
@@ -512,7 +509,7 @@ test("the sidebar's Inbox counts the open items alone, as before, where main car
 
 test("a fresh profile opens the Inbox on Open addressed to Me, its head naming the Inbox alone, a settled item left out until All is chosen, the head naming the Inbox still", async () => {
   window.localStorage.clear();
-  const { page } = mount([], { chosen: ON_EXPIRY });
+  const { page } = mount({ chosen: ON_EXPIRY });
   await settle();
   assert.deepEqual(scopes(page), ["Inbox", "Questions", "[Open]", "All"]);
   assert.deepEqual(listed(page), ["▸ *Expire after 7 days?", "*Alert at 80%?"]);
@@ -529,35 +526,18 @@ test("a fresh profile opens the Inbox on Open addressed to Me, its head naming t
   ]);
 });
 
-test("a task done or canceled keeps its items listed and counted as any other's, each row wearing its task's status, its card's task chip wearing it too, and a row of an agent with no task wearing none; no scope offers an archive", async () => {
+test("a task done or canceled keeps its items listed and counted as any other's, each row wearing its task's status, its card's task chip wearing it too; no scope offers an archive", async () => {
   window.localStorage.clear();
-  world.agentInboxes = new Map([[SWEEP_AGENT, [QUARANTINE]]]);
-  const { page } = mount(
-    [
-      {
-        id: QUARANTINE.id,
-        agentId: SWEEP_AGENT,
-        title: QUARANTINE.title,
-        postedAt: QUARANTINE.postedAt,
-        updatedAt: QUARANTINE.updatedAt,
-        agentTitle: "Sweep the flaky tests",
-        agentModel: "anthropic/claude-opus-5.5",
-        automationId: null,
-        automationName: null,
-        repository: "acme/relay",
-      },
+  const { page } = mount({
+    standing: [
+      { ...BILLING, status: TASK_STATUS.DONE },
+      { ...INVITES, status: TASK_STATUS.CANCELED },
     ],
-    {
-      standing: [
-        { ...BILLING, status: TASK_STATUS.DONE },
-        { ...INVITES, status: TASK_STATUS.CANCELED },
-      ],
-    },
-  );
+  });
   await settle();
   assert.deepEqual(scopes(page), ["Inbox", "Questions", "[Open]", "All"]);
   const rows = listed(page);
-  for (const row of ["Alert at 80%?", "Expire after 7 days?", "Quarantine the flaky test?"]) {
+  for (const row of ["Alert at 80%?", "Expire after 7 days?"]) {
     assert.ok(
       rows.some((each) => each.replace(/^(▸ )?\*?/u, "") === row),
       `Open lists ${row}: ${rows.join(" | ")}`,
@@ -565,7 +545,6 @@ test("a task done or canceled keeps its items listed and counted as any other's,
   }
   assert.equal(rowStatus(page, "Alert at 80%?"), "Done");
   assert.equal(rowStatus(page, "Expire after 7 days?"), "Canceled");
-  assert.equal(rowStatus(page, "Quarantine the flaky test?"), undefined);
 
   restOn(rowNamed(page, "Alert at 80%?"));
   const card = document.querySelector(".ui-tooltip-card [data-inbox-item-card]");
@@ -698,7 +677,7 @@ test("an Inbox with nothing in it stands its empty state in the pane beside the 
 test("on a phone, an Inbox with nothing chosen shows its list and says nothing needs you, under no panel, though the panel stands open as a first launch leaves it", async () => {
   world.inboxes = new Map();
   world.listedAgents = [];
-  const { page } = mount([], { room: SHELL_ROOM.NARROW });
+  const { page } = mount({ room: SHELL_ROOM.NARROW });
   assert.equal(page.querySelector(".side-panel"), null, "no panel is drawn over the Inbox");
   assert.equal(page.querySelector(".page-find[hidden]"), null, "the Inbox page is not hidden");
   await settle();
@@ -714,7 +693,7 @@ test("while the account's feed is first read, the list stands placeholder rows i
   ]);
   world.startRead = (taskId) => reads.get(taskId)?.promise;
   world.feedUnread = true;
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const list = page.querySelector<HTMLElement>(".inbox-tasks");
   assert.ok(list, "the list is drawn");
@@ -742,7 +721,7 @@ test("while the account's feed is first read, the list stands placeholder rows i
 });
 
 test("an Inbox opened before the account's task list is read stands placeholder rows, and neither the list nor the pane says nothing needs you, whatever its width; once the list lands, its items stand", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD, listUnread: true });
+  const { page } = mount({ chosen: ON_THRESHOLD, listUnread: true });
   await settle();
   const list = page.querySelector<HTMLElement>(".inbox-tasks");
   assert.ok(list, "the list is drawn");
@@ -788,7 +767,7 @@ test("with only settled items, read, Needs you lists no row, the item read still
   window.localStorage.removeItem(WHOSE_KEY);
   world.inboxes.set(INVITES.id, [answeredBy(EXPIRY, READER, "Retry once", "", 4_000)]);
   world.inboxes.set(BILLING.id, [RETRY]);
-  const { page } = mount([], { chosen: { taskId: BILLING.id, itemId: RETRY.id } });
+  const { page } = mount({ chosen: { taskId: BILLING.id, itemId: RETRY.id } });
   await settle();
   assert.deepEqual(listed(page), ["▸ How is a failed email retried?", "Expire after 7 days?"]);
 
@@ -841,7 +820,7 @@ test("one column wide, an answered item that Needs you draws no row for shows no
 
 test("on Needs you, a focused row whose item is answered on another Mac leaves the keyboard on View options rather than nowhere", async () => {
   window.localStorage.removeItem(WHOSE_KEY);
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   showScope(page, "Open");
   rowNamed(page, "Expire after 7 days?").focus();
@@ -864,7 +843,7 @@ test("on Needs you, a focused row whose item is answered on another Mac leaves t
 
 test("on a phone, a focused row whose item is answered elsewhere leaves the keyboard on the head's ⋯, which holds View options there", async () => {
   window.localStorage.removeItem(WHOSE_KEY);
-  const { page } = mount([], { chosen: ON_THRESHOLD, room: SHELL_ROOM.NARROW });
+  const { page } = mount({ chosen: ON_THRESHOLD, room: SHELL_ROOM.NARROW });
   await settle();
   // Open is chosen as a phone chooses it: the ⋯'s View options opens the list's own menu where the ⋯ stood.
   const more = () =>
@@ -927,7 +906,7 @@ async function answerExpiryElsewhere(): Promise<void> {
 test("on Needs you, an item answered on another Mac slides out from where its row stood, out of reach while it goes, and leaves the list once its exit has played", async () => {
   window.localStorage.removeItem(WHOSE_KEY);
   const played = playListMotions();
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   showScope(page, "Open");
   await answerExpiryElsewhere();
@@ -1043,7 +1022,7 @@ test("an item's row reads as its task line and time, then its title, over the la
 
 test("the reader's own open item says to a reader before its time that it needs them, its card showing it; a teammate's open item wears their face there with no ring, saying to a reader that it waits on them, a settled one wears neither, and none is drawn in the unread weight", async () => {
   world.inboxes.set(BILLING.id, [{ ...THRESHOLD, startedBy: TEAMMATE }, RETRY]);
-  const { page } = mount([], { chosen: ON_EXPIRY });
+  const { page } = mount({ chosen: ON_EXPIRY });
   await settle();
   const ends = (title: string) => {
     const row = rowNamed(page, title);
@@ -1186,7 +1165,7 @@ test("an unread item wears the blue dot in its row's gutter, its title in the un
 test("a row's menu and U each mark an item read or unread: Mark as unread on a read item, Mark as read on an unread one, U the chosen item, and only the chosen item's menu names U, and H on the Remind me every item offers, after Copy link", async () => {
   world.listedWorkspace = ACME;
   const keys = standKeymap();
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const retry = "How is a failed email retried?";
   // Note that U acts only on the chosen item, so another row's menu does not name it.
@@ -1233,7 +1212,7 @@ test("a row's menu and U each mark an item read or unread: Mark as unread on a r
 
 test("an item marked unread while it is shown stays unread until it is opened again, as a mail app keeps it", async () => {
   const keys = standKeymap();
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   pressKey("u");
   await settle();
@@ -1268,7 +1247,7 @@ test("the view's menu offers Show and Addressed to alone, and ⌘K's Mark all as
   // Note that the unread answered item is a teammate's, so the item standing chosen is the one that needs you, and nothing is read before the mark.
   world.inboxes.set(BILLING.id, [THRESHOLD, { ...RETRY, unread: true, startedBy: TEAMMATE }]);
   world.inboxes.set(INVITES.id, [{ ...EXPIRY, unread: true }]);
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const options = page.querySelector<HTMLButtonElement>('button[aria-label="View options"]');
   assert.ok(options, "the head offers the view's menu");
@@ -1290,7 +1269,7 @@ test("the view's menu offers Show and Addressed to alone, and ⌘K's Mark all as
   assert.equal(appCommandOffered(APP_COMMAND.MARK_INBOX_READ), false);
 });
 
-test("Mark all as read sends one write and asks no task or agent again, since each followed inbox is pushed its items' read state as it moves", async () => {
+test("Mark all as read sends one write and asks no task again, since each followed inbox is pushed its items' read state as it moves", async () => {
   world.listedWorkspace = ACME;
   const taskReads: string[] = [];
   world.startRead = (taskId) => {
@@ -1298,11 +1277,9 @@ test("Mark all as read sends one write and asks no task or agent again, since ea
     return undefined;
   };
   world.inboxes.set(BILLING.id, [THRESHOLD, { ...RETRY, unread: true }]);
-  world.agentInboxes = new Map([[SWEEP_AGENT, [{ ...QUARANTINE, unread: true }]]]);
-  mount([waitingTaskless(QUARANTINE)]);
+  mount();
   await settle();
   const tasksBefore = taskReads.length;
-  const agentsBefore = world.agentReads.length;
   const followsBefore = world.main.asked.length;
   const marksBefore = world.readMarks.length;
   act(() => {
@@ -1312,7 +1289,6 @@ test("Mark all as read sends one write and asks no task or agent again, since ea
   assert.deepEqual(world.readMarks.slice(marksBefore), ["all:workspace-acme"]);
   assert.deepEqual(world.main.asked.slice(followsBefore), [], "nothing is followed again");
   assert.deepEqual(taskReads.slice(tasksBefore), []);
-  assert.deepEqual(world.agentReads.slice(agentsBefore), []);
 });
 
 /** The chip over the list saying whose items it holds, as a reader meets it: its words and its ×'s name; none where none stands. */
@@ -1419,7 +1395,7 @@ test("the Addressed to chip scales in as a teammate is chosen and out as its × 
 test("Addressed to offers Me though the window does not know the reader's id, and a Me chosen stays checked", async () => {
   world.listedWorkspace = SHARED_WORKSPACE;
   world.members = SHARED_MEMBERS;
-  const { page } = mount([], { readerKnown: false });
+  const { page } = mount({ readerKnown: false });
   await settle();
   chooseView(page, "Addressed to", "Me");
   const options = page.querySelector<HTMLButtonElement>('button[aria-label="View options"]');
@@ -1464,7 +1440,7 @@ test("Me chosen in Addressed to with nothing of the reader's in the scope shown 
 
 test("an item marked read as it opened stays read once another plan's item is chosen, though the list's read of its plan, which a mark never moves, still holds it unread", async () => {
   world.inboxes.set(BILLING.id, [{ ...THRESHOLD, unread: true }, RETRY]);
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   await vi.waitFor(() => assert.deepEqual(world.readMarks, [`read:${THRESHOLD.id}`]));
   await vi.waitFor(() => assert.equal(unreadOf(page, "Alert at 80%?"), false));
@@ -1492,7 +1468,7 @@ test("an item marked read as it opened stays read once another plan's item is ch
 
 test("a mark another window makes later on the same item stands once the plan's push holds it, over the window's own earlier mark", async () => {
   world.inboxes.set(BILLING.id, [{ ...THRESHOLD, unread: true }, RETRY]);
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   await vi.waitFor(() => assert.deepEqual(world.readMarks, [`read:${THRESHOLD.id}`]));
   assert.equal(unreadOf(page, "Alert at 80%?"), false);
@@ -1613,7 +1589,7 @@ function paneTitle(page: HTMLElement): string | null | undefined {
 }
 
 test("the Inbox's head is one row in the list, its search beside its buttons and the title bar's row over it empty; the search narrows the list to the items saying every word typed, the item open leaving the list but not the pane, gives its place to a selection and comes back with its words, and Escape empties it", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const row = page.querySelector<HTMLElement>(".inbox-head-row") ?? assert.fail("the row stands");
   const buttons = () =>

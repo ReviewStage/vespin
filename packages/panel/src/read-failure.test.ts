@@ -219,7 +219,7 @@ test("the Inbox's list says its feed could not be read as the sidebar does, and 
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]: () => {
-      deliver({ rows: { [INBOX_SCOPE_KIND.PLAN]: {}, [INBOX_SCOPE_KIND.AGENT]: {} } });
+      deliver({ rows: { [INBOX_SCOPE_KIND.PLAN]: {} } });
       return Promise.resolve(undefined);
     },
   });

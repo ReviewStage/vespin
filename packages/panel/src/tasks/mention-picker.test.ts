@@ -271,7 +271,6 @@ test("on a plan, the workspace's Inbox threads are found by their title, the pla
             "plan-1": [thread("item-palette", "Keep the palette's margins?", 10)],
             "plan-acme": [thread("item-acme", "Keep Acme's links?", 50)],
           },
-          [INBOX_SCOPE_KIND.AGENT]: {},
         },
       },
     },

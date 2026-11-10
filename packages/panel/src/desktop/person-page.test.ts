@@ -53,7 +53,6 @@ import { longPress, underAFinger } from "../testing/finger.js";
 import { restOn } from "../testing/hint-rest.js";
 import { playListMotions } from "../testing/pane-motion.js";
 import {
-  agentHoldingsOf,
   agentsControl,
   handInbox,
   listedAgent,
@@ -248,10 +247,6 @@ const RETRY_429 = item(1, "Retry 429s too?", BACKOFF.id, 8 * MINUTE);
 const ROLLOUT = item(2, "Ship the limiter at 10%?", LIMITER.id, 20 * MINUTE);
 const INBOXES = new Map<string, readonly InboxItem[]>([[RETRIES.id, [RETRY_429, ROLLOUT]]]);
 
-/** An agent an automation started with no task, and the question it waits on in Acme. */
-const SWEEP_AGENT = "5e6f7081-92a3-4b4c-8d5e-6f708192a3b4";
-const SWEEP_ITEM: InboxItem = { ...item(9, "Quarantine the flaky test?", SWEEP_AGENT, MINUTE) };
-
 /** Main's read of the inbox: the two questions waiting on `RETRIES`. */
 const HOLDING: Partial<AppInboxSlice> = {
   waiting: [{ taskId: RETRIES.id, items: [waitingOf(RETRY_429), waitingOf(ROLLOUT)] }],
@@ -327,7 +322,7 @@ interface Opened {
 }
 
 /** `userId`'s page over the fixture workspace, read by Dean, opened knowing `name`, every door it opens recorded. */
-/** The account's feed as the host holds it: each task's items and the sweep agent's, unless the test holds or refuses it. */
+/** The account's feed as the host holds it: each task's items, unless the test holds or refuses it. */
 function feedNow(): AppHostRead<AppInboxItems> {
   if (inboxHeld) return UNREAD;
   if (inboxRefused) return { failed: true };
@@ -336,7 +331,6 @@ function feedNow(): AppHostRead<AppInboxItems> {
       [INBOX_SCOPE_KIND.PLAN]: Object.fromEntries(
         [...INBOXES].filter(([, items]) => items.length > 0),
       ),
-      [INBOX_SCOPE_KIND.AGENT]: { [SWEEP_AGENT]: [SWEEP_ITEM] },
     },
   };
 }
@@ -632,29 +626,6 @@ test("someone who left whom only the place that opened the page names keeps that
   await settle();
 
   await vi.waitFor(() => assert.deepEqual(head(page), ["Lee Park", "Former member"]));
-});
-
-test("the reader's own page lists no question of an agent with no task, whose starter nobody names", async () => {
-  const taskless = [
-    {
-      id: SWEEP_ITEM.id,
-      agentId: SWEEP_AGENT,
-      title: SWEEP_ITEM.title,
-      postedAt: SWEEP_ITEM.postedAt,
-      updatedAt: SWEEP_ITEM.updatedAt,
-      agentTitle: "Flake sweep",
-      agentModel: "anthropic/claude-opus-5.5",
-      automationId: null,
-      automationName: null,
-      repository: "acme/relay",
-      workspaceId: ACME.id,
-    },
-  ];
-  inboxRead = { ...HOLDING, taskless, agents: agentHoldingsOf(taskless) };
-  const { page } = mountWith({});
-  await settle();
-
-  assert.deepEqual(sections(page)["Needs you"], ["Ship the limiter at 10%?"]);
 });
 
 /** The sidebar's views as this Mac keeps them, by workspace. */

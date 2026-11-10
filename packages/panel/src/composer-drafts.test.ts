@@ -791,7 +791,7 @@ const DRAFT_KEY = "draft-invites";
 
 /** The account's feed holding each plan's items as given, which the window's inboxes draw first. */
 function feedOf(plans: Record<string, readonly InboxItem[]>): AppHostRead<AppInboxItems> {
-  return { rows: { [INBOX_SCOPE_KIND.PLAN]: plans, [INBOX_SCOPE_KIND.AGENT]: {} } };
+  return { rows: { [INBOX_SCOPE_KIND.PLAN]: plans } };
 }
 
 /**
@@ -952,35 +952,40 @@ function approval(revision: number): InboxItem {
   };
 }
 
-/** One item of an agent's with no plan, open and asking for an approval, at `revision`. */
-function tasklessItem(agentId: string, id: string, revision: number): InboxItem {
-  return { ...approval(revision), id, agentId };
+/** A task of the window's, and the agent its items are posted by. */
+type HeldTask = typeof INVITES;
+
+/** One item of the task's agent's, open and asking for an approval, at `revision`. */
+function itemOn(held: HeldTask, id: string, revision: number): InboxItem {
+  return { ...approval(revision), id, agentId: held.agent.id };
 }
 
-/** An agent's own inbox with no task, followed as the Inbox page follows it, pushed as `items`. */
-async function tasklessInbox(agentId: string, items: readonly InboxItem[]) {
+/** The task's inbox as `useTaskInbox` holds it for the task, its agent among its own. */
+function useTaskInboxOf(held: HeldTask): TaskInboxControl {
+  return useTaskInbox({
+    taskId: held.plan.id,
+    shown: true,
+    waiting: true,
+    readerId: undefined,
+    agents: {
+      heldIds: [held.agent.id],
+      answerInbox: () => new Promise(() => undefined),
+      messageInbox: () => new Promise(() => undefined),
+      readInboxImage: () => new Promise(() => undefined),
+      onRetryList: () => undefined,
+    },
+  });
+}
+
+/** A task's own inbox, followed as the Inbox page follows it, pushed as `items`. */
+async function taskInbox(held: HeldTask, items: readonly InboxItem[]) {
   // Another window opening takes the focus from those before it.
   leaveWindow();
-  handInboxItems({
-    rows: { [INBOX_SCOPE_KIND.PLAN]: {}, [INBOX_SCOPE_KIND.AGENT]: { [agentId]: items } },
-  });
+  handInboxItems(feedOf({ [held.plan.id]: items }));
   let control: TaskInboxControl | undefined;
   function Probe(): null {
     useDraftsOwner(undefined);
-    control = useTaskInbox({
-      taskId: agentId,
-      kind: INBOX_SCOPE_KIND.AGENT,
-      shown: true,
-      waiting: true,
-      readerId: undefined,
-      agents: {
-        heldIds: [agentId],
-        answerInbox: () => new Promise(() => undefined),
-        messageInbox: () => new Promise(() => undefined),
-        readInboxImage: () => new Promise(() => undefined),
-        onRetryList: () => undefined,
-      },
-    });
+    control = useTaskInboxOf(held);
     return null;
   }
   const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -990,10 +995,10 @@ async function tasklessInbox(agentId: string, items: readonly InboxItem[]) {
   return control ?? assert.fail("the inbox is held");
 }
 
-test("an agent with no plan carries its own outdated answers' words to the item as it now stands, and never touches another agent's", async () => {
-  const mine = tasklessItem(INVITES.agent.id, "b1b2c3d4-0000-4000-8000-000000000001", 1);
-  const theirs = tasklessItem(BILLING.agent.id, "b1b2c3d4-0000-4000-8000-000000000002", 1);
-  const first = await tasklessInbox(INVITES.agent.id, [mine]);
+test("a task's inbox carries its own outdated answers' words to the item as it now stands, and never touches another task's", async () => {
+  const mine = itemOn(INVITES, "b1b2c3d4-0000-4000-8000-000000000001", 1);
+  const theirs = itemOn(BILLING, "b1b2c3d4-0000-4000-8000-000000000002", 1);
+  const first = await taskInbox(INVITES, [mine]);
   act(() =>
     first.onDraft(mine, {
       choices: ["Approve"],
@@ -1002,19 +1007,19 @@ test("an agent with no plan carries its own outdated answers' words to the item 
       attachments: [],
     }),
   );
-  const other = await tasklessInbox(BILLING.agent.id, [theirs]);
+  const other = await taskInbox(BILLING, [theirs]);
   act(() => other.onDraft(theirs, { choices: [], values: [], note: "Weekly", attachments: [] }));
 
   const reposted = { ...mine, revision: 2 };
-  const reread = await tasklessInbox(INVITES.agent.id, [reposted]);
+  const reread = await taskInbox(INVITES, [reposted]);
   assert.equal(reread.draftOf(reposted).note, "Only teammates", "the words outlast the post");
   assert.deepEqual(reread.draftOf(reposted).choices, [], "the outdated ask's pick is let go");
-  const kept = await tasklessInbox(BILLING.agent.id, [theirs]);
+  const kept = await taskInbox(BILLING, [theirs]);
   assert.equal(kept.draftOf(theirs).note, "Weekly");
 });
 
 test("a pick kept by a build that stored its revision in the place still stands on the item at that revision", async () => {
-  const mine = tasklessItem(INVITES.agent.id, "b1b2c3d4-0000-4000-8000-000000000001", 1);
+  const mine = itemOn(INVITES, "b1b2c3d4-0000-4000-8000-000000000001", 1);
   window.localStorage.setItem(
     "app.composerDrafts",
     JSON.stringify([
@@ -1022,7 +1027,7 @@ test("a pick kept by a build that stored its revision in the place still stands 
         accountId: null,
         place: {
           kind: "inbox",
-          planId: null,
+          planId: INVITES.plan.id,
           agentId: INVITES.agent.id,
           itemId: mine.id,
           revision: 1,
@@ -1032,59 +1037,39 @@ test("a pick kept by a build that stored its revision in the place still stands 
       },
     ]),
   );
-  const read = await tasklessInbox(INVITES.agent.id, [mine]);
+  const read = await taskInbox(INVITES, [mine]);
   assert.deepEqual(read.draftOf(mine).choices, ["Approve"]);
   assert.equal(read.draftOf(mine).note, "Only teammates");
 });
 
 test("a reader still holding an item's older revision leaves the answer carried to its newer one", async () => {
-  const mine = tasklessItem(INVITES.agent.id, "b1b2c3d4-0000-4000-8000-000000000001", 1);
+  const mine = itemOn(INVITES, "b1b2c3d4-0000-4000-8000-000000000001", 1);
   const reposted = { ...mine, revision: 2 };
-  const ahead = await tasklessInbox(INVITES.agent.id, [reposted]);
+  const ahead = await taskInbox(INVITES, [reposted]);
   act(() =>
     ahead.onDraft(reposted, { choices: [], values: [], note: "Check guests", attachments: [] }),
   );
 
-  await tasklessInbox(INVITES.agent.id, [mine]);
-  const caughtUp = await tasklessInbox(INVITES.agent.id, [reposted]);
+  await taskInbox(INVITES, [mine]);
+  const caughtUp = await taskInbox(INVITES, [reposted]);
   assert.equal(caughtUp.draftOf(reposted).note, "Check guests");
 });
 
-test("a draft on an item the account's feed leaves out stands while the feed draws first, and goes only once the agent's own read answers without the item", async () => {
-  const mine = tasklessItem(INVITES.agent.id, "b1b2c3d4-0000-4000-8000-000000000001", 1);
-  const older = tasklessItem(INVITES.agent.id, "b1b2c3d4-0000-4000-8000-000000000004", 1);
-  const first = await tasklessInbox(INVITES.agent.id, [mine, older]);
+test("a draft on an item the account's feed leaves out stands while the feed draws first, and goes only once the task's own read answers without the item", async () => {
+  const mine = itemOn(INVITES, "b1b2c3d4-0000-4000-8000-000000000001", 1);
+  const older = itemOn(INVITES, "b1b2c3d4-0000-4000-8000-000000000004", 1);
+  const first = await taskInbox(INVITES, [mine, older]);
   act(() =>
     first.onDraft(older, { choices: [], values: [], note: "Reply later", attachments: [] }),
   );
 
-  // The feed holds only the newer item, as it leaves out one settled past its bound; the agent's own read is still out.
+  // The feed holds only the newer item, as it leaves out one settled past its bound; the task's own read is still out.
   leaveWindow();
-  const reads = handHostReads({
-    items: {
-      rows: {
-        [INBOX_SCOPE_KIND.PLAN]: {},
-        [INBOX_SCOPE_KIND.AGENT]: { [INVITES.agent.id]: [mine] },
-      },
-    },
-  });
+  const reads = handHostReads({ items: feedOf({ [INVITES.plan.id]: [mine] }) });
   let control: TaskInboxControl | undefined;
   function Probe(): null {
     useDraftsOwner(undefined);
-    control = useTaskInbox({
-      taskId: INVITES.agent.id,
-      kind: INBOX_SCOPE_KIND.AGENT,
-      shown: true,
-      waiting: true,
-      readerId: undefined,
-      agents: {
-        heldIds: [INVITES.agent.id],
-        answerInbox: () => new Promise(() => undefined),
-        messageInbox: () => new Promise(() => undefined),
-        readInboxImage: () => new Promise(() => undefined),
-        onRetryList: () => undefined,
-      },
-    });
+    control = useTaskInboxOf(INVITES);
     return null;
   }
   const root = createRoot(document.body.appendChild(document.createElement("div")));
@@ -1096,24 +1081,24 @@ test("a draft on an item the account's feed leaves out stands while the feed dra
 
   await act(async () =>
     reads.deliverHolders({
-      [INBOX_SCOPE_KIND.PLAN]: {},
-      [INBOX_SCOPE_KIND.AGENT]: { [INVITES.agent.id]: { rows: [mine] } },
+      [INBOX_SCOPE_KIND.PLAN]: { [INVITES.plan.id]: { rows: [mine] } },
+      [INBOX_SCOPE_KIND.AGENT]: {},
     }),
   );
   await vi.waitFor(() =>
-    assert.equal(control?.draftOf(older).note, "", "the agent's own read says the item is gone"),
+    assert.equal(control?.draftOf(older).note, "", "the task's own read says the item is gone"),
   );
 });
 
 test("another item landing in the inbox leaves the answer being written on one as it was", async () => {
-  const mine = tasklessItem(INVITES.agent.id, "b1b2c3d4-0000-4000-8000-000000000001", 1);
-  const first = await tasklessInbox(INVITES.agent.id, [mine]);
+  const mine = itemOn(INVITES, "b1b2c3d4-0000-4000-8000-000000000001", 1);
+  const first = await taskInbox(INVITES, [mine]);
   act(() =>
     first.onDraft(mine, { choices: [], values: [], note: "Only teammates", attachments: [] }),
   );
 
-  const landed = tasklessItem(INVITES.agent.id, "b1b2c3d4-0000-4000-8000-000000000003", 1);
-  const reread = await tasklessInbox(INVITES.agent.id, [landed, mine]);
+  const landed = itemOn(INVITES, "b1b2c3d4-0000-4000-8000-000000000003", 1);
+  const reread = await taskInbox(INVITES, [landed, mine]);
   assert.equal(reread.draftOf(mine).note, "Only teammates");
   assert.equal(reread.draftOf(landed).note, "");
 });

@@ -6,21 +6,12 @@ import {
   type AgentInboxStartParams,
   INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
-import {
-  AUTOMATION_ACTION,
-  AUTOMATION_DEFAULT_GUARDS,
-  AUTOMATION_SCOPE,
-  AUTOMATION_TRIGGER,
-  type AutomationSummary,
-} from "@repo/features/automation-wire";
 import { INBOX_MESSAGE_AUTHOR, INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { pageFrameUrl } from "@repo/features/page-frame";
 import { PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
-import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppInboxTasklessItem } from "@repo/host/app-state";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { Effect } from "effect";
 import { act } from "react";
@@ -36,19 +27,16 @@ import {
   fakeActs,
   fakeActsAnswer,
 } from "../testing/app-bridge.js";
-import { handState, stateWith } from "../testing/app-state.js";
 import { composerEditor, editorBundleLanded, typeInComposer } from "../testing/composer.js";
 import {
   ACME,
   AGENT,
   arrowNamed,
   BILLING,
-  BUMP,
   backToList,
   chooseView,
   columnsShown,
   EXPIRY,
-  hoveredCard,
   INVITES,
   item,
   itemPane,
@@ -61,25 +49,18 @@ import {
   pagerOf,
   pressKey,
   pushAgain,
-  QUARANTINE,
   READER,
   RETRY,
   ROW_TITLE,
   readTitle,
   rowNamed,
-  STRAY_AGENT,
-  SWEEP_AGENT,
   saying,
   settle,
   showScope,
-  skillReads,
   standKeymap,
   TEAMMATE,
   THRESHOLD,
-  waitingTaskless,
   wayBack,
-  wearsAgentTile,
-  wordsOf,
   world,
 } from "../testing/desktop-inbox.js";
 import { restOn } from "../testing/hint-rest.js";
@@ -93,7 +74,7 @@ beforeAll(() => Effect.runPromise(editorBundleLanded));
 beforeAll(() => Effect.runPromise(markdownHtmlParserLanded));
 
 test("the Inbox left and come back to draws the rows the window holds at once, before anything is pushed again", async () => {
-  const { page } = mount([], { drawnWhileOpen: true });
+  const { page } = mount({ drawnWhileOpen: true });
   await settle();
   const rows = listed(page);
   assert.ok(
@@ -193,7 +174,7 @@ test("an Inbox whose account feed refused before it ever answered reads it again
 });
 
 test("an item a link names before the account's task list is read says no Not found, and shows once the list lands", async () => {
-  const { page } = mount([], { listUnread: true });
+  const { page } = mount({ listUnread: true });
   await settle();
   act(() => world.chooseFromOutside({ taskId: INVITES.id, itemId: EXPIRY.id, opened: true }));
   await settle();
@@ -211,7 +192,7 @@ test("an item a link names before the account's task list is read says no Not fo
 });
 
 test("an Inbox too narrow for the list and the item side by side shows the chosen item alone, the whole Inbox wide, under a way back that Back's chord and Escape take as well, the keyboard landing on the item's row; a row pressed opens its item again, and from the list Escape does not leave the Inbox", async () => {
-  const { page, asked } = mount([], { chosen: ON_THRESHOLD });
+  const { page, asked } = mount({ chosen: ON_THRESHOLD });
   await settle();
   layOut(page, 800);
   assert.deepEqual(columnsShown(page), ["item"]);
@@ -247,7 +228,7 @@ test("an Inbox too narrow for the list and the item side by side shows the chose
 });
 
 test("the Inbox joins only once narrowed past the band, keeping the item it shows, and splits again only once widened past it; split again with nothing chosen, narrowed it lands on its list", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   layOut(page, 900);
   assert.deepEqual(columnsShown(page), ["list", "item"]);
@@ -273,7 +254,7 @@ test("the Inbox joins only once narrowed past the band, keeping the item it show
 });
 
 test("one column wide, the item's bar says where it stands in the list, and its arrows, K, and J step up and down the list in its order, a settled item among them, stopping at its ends with the arrows still in the tab order", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const keys = standKeymap();
   layOut(page, 800);
@@ -315,7 +296,7 @@ test("with nothing chosen, J chooses the list's first row, as the empty pane bes
 });
 
 test("a chosen item whose plan leaves the account's list, deleted on another Mac, leaves the pane beside the list empty rather than choosing another", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   assert.deepEqual(
     listed(page).filter((row) => row.startsWith("▸")),
@@ -334,73 +315,29 @@ test("a chosen item whose plan leaves the account's list, deleted on another Mac
   );
 });
 
-test("an item of an agent with no plan is listed, and opens on its agent's own read under the crumb of the automation that started it", async () => {
-  world.agentInboxes = new Map([[SWEEP_AGENT, [QUARANTINE]]]);
-  const { page, asked } = mount([
-    {
-      id: QUARANTINE.id,
-      agentId: SWEEP_AGENT,
-      title: QUARANTINE.title,
-      postedAt: QUARANTINE.postedAt,
-      updatedAt: QUARANTINE.updatedAt,
-      agentTitle: "Sweep the flaky tests",
-      agentModel: "anthropic/claude-opus-5.5",
-      automationId: "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04",
-      automationName: "Nightly flake sweep",
-      repository: "acme/relay",
-    },
-  ]);
-  await settle();
-
-  const rows = listed(page);
-  assert.ok(rows.includes("*Quarantine the flaky test?"), rows.join(" | "));
-
-  act(() => rowNamed(page, "Quarantine the flaky test?").click());
-  await settle();
-
-  const crumbs = page.querySelector(".inbox-crumbs")?.textContent ?? "";
-  assert.match(crumbs, /Nightly flake sweep/u);
-  assert.equal(page.querySelector("[data-inbox-title]")?.textContent, "Quarantine the flaky test?");
-  assert.deepEqual(asked.shownTasks, [], "the automation's crumb opens no plan");
-});
-
-test("a link alone on its line to a page an agent with no plan showed stands as the page's row, hanging the card a plan's page hangs, its title, version and the agent that showed it, read as it is first hung; one of an agent the reader cannot reach says it can't be read", async () => {
+test("a link alone on its line to a page an agent showed on itself, as an older link names it, stands as the page's row, hanging the card a plan's page hangs, its title, version and the agent that showed it, read as it is first hung; one of an agent the reader cannot reach says it can't be read", async () => {
   const ledger: PageLine = {
     id: "4a5b6c7d-8e9f-4a0b-8c1d-2e3f4a5b6c7d",
     title: "Flake ledger",
     version: 3,
     at: 1_000,
-    shownBy: { kind: PAGE_SHOWER.AGENT, agentId: SWEEP_AGENT },
+    shownBy: { kind: PAGE_SHOWER.AGENT, agentId: AGENT.id },
   };
-  world.agentPages = new Map([[SWEEP_AGENT, [ledger]]]);
+  const unreachable = "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d";
+  world.agentPages = new Map([[AGENT.id, [ledger]]]);
   const shown = linkOf(
-    { kind: LINK_DESTINATION.PAGE, agentId: SWEEP_AGENT, pageId: ledger.id },
+    { kind: LINK_DESTINATION.PAGE, agentId: AGENT.id, pageId: ledger.id },
     "acme",
   );
   const hidden = linkOf(
-    { kind: LINK_DESTINATION.PAGE, agentId: STRAY_AGENT, pageId: ledger.id },
+    { kind: LINK_DESTINATION.PAGE, agentId: unreachable, pageId: ledger.id },
     "acme",
   );
   const words = [shown, `[@Their ledger](${hidden})`].join("\n\n");
-  world.agentInboxes = new Map([[SWEEP_AGENT, [saying(QUARANTINE, words)]]]);
-  const waiting: AppInboxTasklessItem = {
-    id: QUARANTINE.id,
-    agentId: SWEEP_AGENT,
-    title: QUARANTINE.title,
-    postedAt: QUARANTINE.postedAt,
-    updatedAt: QUARANTINE.updatedAt,
-    agentTitle: "Sweep the flaky tests",
-    agentModel: "anthropic/claude-opus-5.5",
-    automationId: null,
-    automationName: null,
-    repository: "acme/relay",
-  };
-  // Main's document names the agent by what waits on it, as the window's names are read.
-  const held = stateWith({}, {});
-  handState({}, { inbox: { ...held.inbox, taskless: [waiting] } });
-  const { page } = mount([waiting]);
+  world.inboxes.set(BILLING.id, [saying(THRESHOLD, words), RETRY]);
+  const { page } = mount();
   await settle();
-  act(() => rowNamed(page, "Quarantine the flaky test?").click());
+  act(() => rowNamed(page, THRESHOLD.title).click());
   await settle();
 
   const rows = [...page.querySelectorAll('[data-inbox-message-text] [data-lone-link="page"]')];
@@ -417,11 +354,11 @@ test("a link alone on its line to a page an agent with no plan showed stands as 
       card.querySelector(".ui-hover-card-sub")?.textContent,
       card.querySelector(".ui-hover-card-row")?.textContent,
     ],
-    ["Version 3", "Shown by Sweep the flaky tests"],
+    ["Version 3", `Shown by ${AGENT.title}`],
   );
   assert.equal(
     card.querySelector(".ui-page-thumb-frame")?.getAttribute("src"),
-    pageFrameUrl({ agentId: SWEEP_AGENT, pageId: ledger.id, version: 3 }),
+    pageFrameUrl({ agentId: AGENT.id, pageId: ledger.id, version: 3 }),
   );
   act(() => {
     mine.dispatchEvent(new MouseEvent("pointerout", { bubbles: true }));
@@ -439,231 +376,19 @@ test("a link alone on its line to a page an agent with no plan showed stands as 
   );
 });
 
-/** The automation that started the agent with no task, as its workspace's list reads it. */
-const SWEEP: AutomationSummary = {
-  id: "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04",
-  planId: null,
-  planName: null,
-  workspaceId: "workspace-acme",
-  name: "Nightly flake sweep",
-  enabled: true,
-  pausedReason: null,
-  trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: "0 3 * * *", timezone: "UTC" },
-  action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Sweep the flaky tests." },
-  guards: AUTOMATION_DEFAULT_GUARDS,
-  nextRunAt: null,
-  lastRun: null,
-  createdAt: 1,
-  scope: AUTOMATION_SCOPE.WORKSPACE,
-};
-
-const TASKLESS_AGENT = "8b9c0d1e-2f3a-4b4c-8d5e-6f7a8b9c0d1e";
-const DOMAIN: InboxItem = {
-  ...item("a1b2c3d4-0000-4000-8000-00000000000d", "Name a domain?", 1_200),
-  agentId: TASKLESS_AGENT,
-};
-
-/** An item of an agent of the reader's with no task, as main lists it: no automation, and no repository. */
-function tasklessItem(asked: InboxItem): AppInboxTasklessItem {
-  return {
-    id: asked.id,
-    agentId: asked.agentId,
-    title: asked.title,
-    postedAt: asked.postedAt,
-    updatedAt: asked.updatedAt,
-    agentTitle: "Domain setup",
-    agentModel: "anthropic/claude-opus-5.5",
-    automationId: null,
-    automationName: null,
-    repository: null,
-  };
-}
-
-test("an agent's row hangs a card naming the agent and the automation that started it; its crumb wears the automation's clock tile and hangs its card, opening its page; the agents no automation names stand under no actor", async () => {
-  handState({});
-  world.listedWorkspace = {
-    id: "workspace-acme",
-    name: "Acme",
-    role: WORKSPACE_ROLE.OWNER,
-    github: null,
-  };
-  world.automations = [SWEEP];
-  world.agentInboxes = new Map([
-    [SWEEP_AGENT, [QUARANTINE]],
-    [STRAY_AGENT, [BUMP]],
-    [TASKLESS_AGENT, [DOMAIN]],
-  ]);
-  const { page, windowPath } = mount([
-    { ...waitingTaskless(QUARANTINE), agentTitle: "Sweep the flaky tests" },
-    { ...waitingTaskless(BUMP), automationId: null, automationName: null },
-    tasklessItem(DOMAIN),
-  ]);
-  await settle();
-
-  const mark = rowNamed(page, "Quarantine the flaky test?");
-  assert.equal(
-    wearsAgentTile(mark),
-    false,
-    "the planless agent's row wears no tile, its card naming the agent",
-  );
-  assert.match(
-    hoveredCard(mark, "[data-inbox-item-card]") ?? "",
-    /^Quarantine the flaky test\?.*Nightly flake sweep.*Sweep the flaky tests$/su,
-  );
-
-  act(() => rowNamed(page, "Quarantine the flaky test?").click());
-  await settle();
-  const crumb = page.querySelector<HTMLButtonElement>('nav[aria-label="Path"] button');
-  assert.ok(crumb, "the automation's crumb is drawn");
-  assert.ok(
-    crumb.querySelector('.actor-mark[data-kind="automation"]'),
-    "the automation's crumb wears its clock tile, as its group does",
-  );
-  assert.match(hoveredCard(crumb, '[data-actor-card="automation"]') ?? "", /Nightly flake sweep/u);
-  assert.equal(
-    document.querySelector('.ui-tooltip-card [data-actor-card="automation"] button')?.textContent,
-    undefined,
-    "the crumb's card offers nothing to press, since the crumb opens the automation",
-  );
-  act(() => crumb.click());
-  // Note that the listed workspace has no slug, so its address names it by its id.
-  assert.equal(windowPath(), `/workspace-acme/automation/${SWEEP.id}`);
-
-  act(() => world.setInboxOpen(true));
-  act(() => rowNamed(page, "Bump the Node image?").click());
-  await settle();
-  // Note that no automation stands behind its crumb, so the crumb is words, opening nothing.
-  const stray = page.querySelector<HTMLElement>('nav[aria-label="Path"] li');
-  assert.equal(stray?.textContent, "Other agents");
-  assert.equal(stray?.querySelector("button"), null);
-  assert.ok(
-    stray?.querySelector(".lucide-clock") === null,
-    "the crumb of the agents no automation names wears no automation's clock",
-  );
-  assert.ok(
-    stray?.querySelector(".lucide-zap"),
-    "it wears the automation glyph, as its group does",
-  );
-});
-
-test("an item's card names the automation that holds it by a chip that hangs the automation's card, read as it is hung where the Inbox has read no automations", async () => {
-  handState(
-    {},
-    {
-      tasks: {
-        ...IDLE_TASKS_VIEW,
-        workspaces: [
-          { id: "workspace-acme", name: "Acme", role: WORKSPACE_ROLE.OWNER, github: null },
-        ],
-      },
-    },
-  );
-  world.automations = [SWEEP];
-  world.agentInboxes = new Map([[SWEEP_AGENT, [QUARANTINE]]]);
-  const { page } = mount([{ ...waitingTaskless(QUARANTINE), workspaceId: "workspace-acme" }]);
-  await settle();
-
-  restOn(rowNamed(page, "Quarantine the flaky test?"));
-  const chip =
-    document.querySelector<HTMLElement>(
-      '.ui-tooltip-card [data-inbox-item-card] [data-holder-ref][data-kind="agent"]',
-    ) ?? assert.fail("the card names the automation by its chip");
-  restOn(chip);
-  await settle();
-
-  assert.match(
-    wordsOf(document.querySelector('.ui-tooltip-card [data-actor-card="automation"]')) ?? "",
-    /Nightly flake sweep/u,
-  );
-});
-
-test("an item from a service that names no workspace for it still names its automation by a chip hanging the card the Inbox's own directory holds", async () => {
-  handState({});
-  world.listedWorkspace = {
-    id: "workspace-acme",
-    name: "Acme",
-    role: WORKSPACE_ROLE.OWNER,
-    github: null,
-  };
-  world.automations = [SWEEP];
-  world.agentInboxes = new Map([[SWEEP_AGENT, [QUARANTINE]]]);
-  const { page } = mount([waitingTaskless(QUARANTINE)]);
-  await settle();
-
-  restOn(rowNamed(page, "Quarantine the flaky test?"));
-  restOn(
-    document.querySelector<HTMLElement>(
-      '.ui-tooltip-card [data-inbox-item-card] [data-holder-ref][data-kind="agent"]',
-    ) ?? assert.fail("the card names the automation by its chip"),
-  );
-
-  assert.match(
-    wordsOf(document.querySelector('.ui-tooltip-card [data-actor-card="automation"]')) ?? "",
-    /Nightly flake sweep/u,
-  );
-});
-
-/** Another agent with no task the same automation started, whose two questions wait. */
-const SECOND_AGENT = "6f708192-a3b4-4c5d-8e6f-708192a3b4c5";
-const SECOND_ASK: InboxItem = {
-  ...item("a1b2c3d4-0000-4000-8000-00000000000a", "Skip the slow suite?", 2_000),
-  agentId: SECOND_AGENT,
-};
-const THIRD_ASK: InboxItem = {
-  ...item("a1b2c3d4-0000-4000-8000-00000000000b", "Retry the flaky job?", 2_500),
-  agentId: SECOND_AGENT,
-};
-
-test("an agent with no plan whose waiting items move, one answered on another Mac, is read again, the answered item no longer needing you", async () => {
-  world.agentInboxes = new Map([
-    [SWEEP_AGENT, [QUARANTINE]],
-    [SECOND_AGENT, [SECOND_ASK, THIRD_ASK]],
-  ]);
-  const { page } = mount([QUARANTINE, SECOND_ASK, THIRD_ASK].map(waitingTaskless));
-  await settle();
-  assert.ok(listed(page).includes("*Skip the slow suite?"));
-
-  world.agentInboxes.set(SECOND_AGENT, [
-    { ...SECOND_ASK, status: INBOX_STATUS.ANSWERED },
-    THIRD_ASK,
-  ]);
-  act(() => world.setTaskless([QUARANTINE, THIRD_ASK].map(waitingTaskless)));
-  await settle();
-
-  await vi.waitFor(() =>
-    assert.ok(listed(page).includes("Skip the slow suite?"), listed(page).join(" | ")),
-  );
-});
-
-test("an agent with no plan whose items are all settled stays listed, as main lists it holding them", async () => {
-  const settled = { ...SECOND_ASK, status: INBOX_STATUS.ANSWERED };
-  world.agentInboxes = new Map([[SECOND_AGENT, [settled]]]);
-  const { id: _id, title: _title, postedAt: _postedAt, ...agent } = waitingTaskless(settled);
-  const { page } = mount([], { agents: [{ ...agent, items: 1, toDo: 0 }] });
-  await settle();
-
-  const rows = listed(page);
-  assert.ok(rows.includes("Skip the slow suite?"), rows.join(" | "));
-});
-
 test("an item chosen by a notification's click, in an Inbox showing its list alone, is shown itself, and Back stands on the list again, the notification's ask taken once", async () => {
-  world.agentInboxes = new Map([[SECOND_AGENT, [SECOND_ASK, THIRD_ASK]]]);
-  const { page } = mount([QUARANTINE, SECOND_ASK, THIRD_ASK].map(waitingTaskless), {
-    chosen: ON_THRESHOLD,
-  });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   layOut(page, 700);
   await settle();
   act(() => backToList(page).click());
   assert.equal(page.querySelector(".inbox-view")?.getAttribute("data-columns"), "list");
 
-  act(() =>
-    world.chooseFromOutside({ agentId: SECOND_AGENT, itemId: SECOND_ASK.id, opened: true }),
-  );
+  act(() => world.chooseFromOutside({ taskId: INVITES.id, itemId: EXPIRY.id, opened: true }));
   await settle();
 
   assert.equal(page.querySelector(".inbox-view")?.getAttribute("data-columns"), "item");
-  assert.equal(page.querySelector("[data-inbox-title]")?.textContent, "Skip the slow suite?");
+  assert.equal(page.querySelector("[data-inbox-title]")?.textContent, EXPIRY.title);
 
   act(() => backToList(page).click());
   await settle();
@@ -672,15 +397,6 @@ test("an item chosen by a notification's click, in an Inbox showing its list alo
     "list",
     "Back stands on the list, the notification's ask taken once",
   );
-});
-
-test("an untitled agent an automation started goes by its automation's name in the Inbox, as on its own page", async () => {
-  world.agentInboxes = new Map([[SWEEP_AGENT, [QUARANTINE]]]);
-  const { page } = mount([waitingTaskless(QUARANTINE)]);
-  await settle();
-
-  const row = rowNamed(page, "Quarantine the flaky test?");
-  assert.match(hoveredCard(row, "[data-inbox-item-card]") ?? "", /Nightly flake sweep$/u);
 });
 
 test("an item's row offers Copy link on a right-click, copying the item's link by its id alone, whichever agent posted it and task holds it", async () => {
@@ -726,26 +442,6 @@ test("an item a link names that no read holds, of a task the reader cannot read,
   assert.equal(page.querySelector('.inbox-tasks [aria-current="page"]'), null);
 });
 
-test("a link to a settled item of an agent with no plan, none of whose items waits any more, lists the agent by its own read and shows the item", async () => {
-  const settled = { ...BUMP, status: INBOX_STATUS.ANSWERED };
-  world.agentInboxes = new Map([[STRAY_AGENT, [settled]]]);
-  world.tasklessAgents = new Map([
-    [STRAY_AGENT, { ...AGENT, id: STRAY_AGENT, planId: null, title: "Bump" }],
-  ]);
-  const { page } = mount();
-  await settle();
-  act(() => world.chooseFromOutside({ agentId: STRAY_AGENT, itemId: BUMP.id, opened: true }));
-  await settle();
-
-  await vi.waitFor(() =>
-    assert.equal(
-      page.querySelector('.inbox-tasks [aria-current="page"] .ui-list-row-title')?.textContent,
-      "Bump the Node image?",
-    ),
-  );
-  assert.doesNotMatch(page.textContent ?? "", /Not found/u);
-});
-
 test("an item a link names is not found though another task's read failed, and in a narrow Inbox the notice stands alone, not the list, with a way back to it", async () => {
   world.startRead = (taskId) =>
     taskId === BILLING.id
@@ -782,58 +478,16 @@ test("an item a link names is not found though another task's read failed, and i
   );
 });
 
-test("a link naming a task's item by its agent lists the item once, under its task", async () => {
-  // Note that the agent's own read holds its task's items, as the service reads an agent's items whatever task it works on.
-  world.agentInboxes = new Map([[AGENT.id, [THRESHOLD, RETRY]]]);
-  const { page } = mount();
-  await settle();
-  const rows = listed(page);
-  act(() => world.chooseFromOutside({ agentId: AGENT.id, itemId: THRESHOLD.id, opened: true }));
-  await settle();
-
-  assert.deepEqual(
-    listed(page).map((row) => row.replace("▸ ", "")),
-    rows,
-  );
-  layOut(page, 600);
-  assert.equal(pagerOf(page), "3 of 3", "each item stepped through once");
-});
-
-test("an item a link names under an agent that is not there, deleted or another's, is not found once its page's read says so, and no other item is chosen", async () => {
+test("an item a link names by its id alone that the service finds on no task, deleted or another's, is not found, and no other item is chosen", async () => {
   const { page } = mount();
   await settle();
   act(() =>
-    world.chooseFromOutside({
-      agentId: "0f0e0d0c-0000-4000-8000-0000000a9e47",
-      itemId: "0f0e0d0c-0000-4000-8000-00000000beef",
-      opened: true,
-    }),
+    world.chooseFromOutside({ itemId: "0f0e0d0c-0000-4000-8000-00000000beef", opened: true }),
   );
   await settle();
 
   assert.match(page.querySelector(".inbox-view-items")?.textContent ?? "", /Not found/u);
   assert.equal(page.querySelector('.inbox-tasks [aria-current="page"]'), null);
-});
-
-test("an item a link names under an agent with no task that its own read does not hold is not found, though the account's task list is not read yet", async () => {
-  world.agentInboxes = new Map([[STRAY_AGENT, []]]);
-  world.tasklessAgents = new Map([
-    [STRAY_AGENT, { ...AGENT, id: STRAY_AGENT, planId: null, title: "Bump" }],
-  ]);
-  const { page } = mount([], { listUnread: true });
-  await settle();
-  act(() =>
-    world.chooseFromOutside({
-      agentId: STRAY_AGENT,
-      itemId: "0f0e0d0c-0000-4000-8000-00000000beef",
-      opened: true,
-    }),
-  );
-  await settle();
-
-  await vi.waitFor(() =>
-    assert.match(page.querySelector(".inbox-view-items")?.textContent ?? "", /Not found/u),
-  );
 });
 
 test("an item a link names under a task with no agent and nothing in its Inbox is not found, and no other task's item is chosen", async () => {
@@ -932,91 +586,34 @@ test("an item a link names under a task whose own read fails is kept asked for, 
   assert.equal(page.querySelector('.inbox-tasks [aria-current="page"]'), null);
 });
 
-test("a link to an agent's item newer than the agent's last read waits for the read of it, saying no Not found, and then shows it", async () => {
-  world.agentInboxes = new Map([[SECOND_AGENT, [SECOND_ASK]]]);
-  world.tasklessAgents = new Map([[SECOND_AGENT, { ...AGENT, id: SECOND_AGENT, planId: null }]]);
-  const { page } = mount([SECOND_ASK].map(waitingTaskless));
-  await settle();
-  const held: (() => void)[] = [];
-  world.holdAgentRead = (respond) => {
-    held.push(respond);
+test("an item the feed holds opens whole, with no failure under its thread, though its task's own read fails", async () => {
+  const taskReads: string[] = [];
+  world.startRead = (taskId) => {
+    taskReads.push(taskId);
+    return taskId === BILLING.id
+      ? Promise.resolve({
+          status: FAKE_ANSWER.DONE,
+          value: { failure: AGENT_CALL_FAILURE.UNANSWERED },
+        })
+      : undefined;
   };
-  world.agentInboxes = new Map([[SECOND_AGENT, [SECOND_ASK, THIRD_ASK]]]);
-  act(() => world.setTaskless([SECOND_ASK, THIRD_ASK].map(waitingTaskless)));
-  act(() => world.chooseFromOutside({ agentId: SECOND_AGENT, itemId: THIRD_ASK.id, opened: true }));
+  const { page } = mount();
   await settle();
-  const waiting = page.querySelector(".inbox-view-items")?.textContent ?? "";
-  world.holdAgentRead = undefined;
-  for (const respond of held) respond();
+  act(() => world.chooseFromOutside({ taskId: BILLING.id, itemId: THRESHOLD.id, opened: true }));
   await settle();
 
-  assert.doesNotMatch(waiting, /Not found/u);
-  assert.equal(
-    page.querySelector('.inbox-tasks [aria-current="page"] .ui-list-row-title')?.textContent,
-    "Retry the flaky job?",
-  );
-});
-
-test("an item a link names under an agent nothing waits on any more, read before, is not found by that read though the agent's own read fails", async () => {
-  world.agentInboxes = new Map([[SECOND_AGENT, [SECOND_ASK]]]);
-  world.tasklessAgents = new Map([[SECOND_AGENT, { ...AGENT, id: SECOND_AGENT, planId: null }]]);
-  const { page } = mount([SECOND_ASK].map(waitingTaskless));
-  await settle();
-  world.agentReadFails = true;
-  act(() => world.setTaskless([]));
-  act(() =>
-    world.chooseFromOutside({
-      agentId: SECOND_AGENT,
-      itemId: "0f0e0d0c-0000-4000-8000-00000000beef",
-      opened: true,
-    }),
-  );
-  await settle();
-
-  await vi.waitFor(() =>
-    assert.match(page.querySelector(".inbox-view-items")?.textContent ?? "", /Not found/u),
-  );
-});
-
-test("an item the feed holds opens whole, with no failure under its thread, though its agent's own read fails", async () => {
-  world.agentInboxes = new Map([[SWEEP_AGENT, [QUARANTINE]]]);
-  world.agentReadFails = true;
-  const { page } = mount([waitingTaskless(QUARANTINE)]);
-  await settle();
-  act(() => world.chooseFromOutside({ agentId: SWEEP_AGENT, itemId: QUARANTINE.id, opened: true }));
-  await settle();
-
-  await vi.waitFor(() => assert.equal(itemPane(page).getAttribute("aria-label"), QUARANTINE.title));
+  await vi.waitFor(() => assert.equal(itemPane(page).getAttribute("aria-label"), THRESHOLD.title));
   assert.equal(
     itemPane(page).querySelector("[data-inbox-message-text]")?.textContent,
     "A failed email is retried as the agent sets it up.",
     "the thread is drawn from the feed",
   );
-  assert.ok(world.agentReads.includes(SWEEP_AGENT), "the agent's own read was asked, and failed");
+  assert.ok(taskReads.includes(BILLING.id), "the task's own read was asked, and failed");
   assert.equal(itemPane(page).querySelector('[role="alert"]')?.textContent, undefined);
 });
 
-test("a teammate's open item of an agent with no plan is listed, wearing the teammate's face; Needs you leaves it out", async () => {
-  world.agentInboxes = new Map([[SWEEP_AGENT, [{ ...QUARANTINE, startedBy: TEAMMATE }]]]);
-  const { page } = mount([{ ...waitingTaskless(QUARANTINE), startedBy: TEAMMATE.userId }]);
-  await settle();
-  const rows = listed(page);
-  assert.ok(rows.includes("Quarantine the flaky test?"), rows.join(" | "));
-  const meta = rowNamed(page, "Quarantine the flaky test?").querySelector(".ui-list-row-meta");
-  assert.equal(meta?.querySelector<HTMLElement>(".actor-mark")?.dataset.kind, "person");
-  assert.equal(meta?.querySelector(".ui-visually-hidden")?.textContent, "Waiting on Charles Pan");
-
-  showScope(page, "Open");
-  chooseView(page, "Addressed to", "Me");
-  assert.equal(
-    listed(page).includes("Quarantine the flaky test?"),
-    false,
-    listed(page).join(" | "),
-  );
-});
-
 test("on a phone the Inbox's list is headed by one ⋯, its title centered before it, the ⋯ opening View options' own menu and offering Mark all as read, and the search standing under the head", async () => {
-  const { page } = mount([], { room: SHELL_ROOM.NARROW });
+  const { page } = mount({ room: SHELL_ROOM.NARROW });
   await settle();
   const head = page.querySelector<HTMLElement>(".inbox-head");
   assert.ok(head, "the phone's head stands");
@@ -1096,7 +693,7 @@ function heldStarts(): AgentInboxStartParams[] {
 }
 
 test("on a phone an item is headed by its way back's glyph, its task centered, which opens it as its crumb does, and one ⋯ that says where it stands and holds the pager, what the crumbs opened, the panel, and the item's own actions", async () => {
-  const { page, asked } = mount([], { room: SHELL_ROOM.NARROW });
+  const { page, asked } = mount({ room: SHELL_ROOM.NARROW });
   await settle();
   layOut(page, 390);
   act(() => rowNamed(page, "Expire after 7 days?").click());
@@ -1169,7 +766,7 @@ test("on a phone the panel open over an item heads itself: the way back to the i
       shut += 1;
     },
   };
-  const { page } = mount([], { room: SHELL_ROOM.NARROW, panel });
+  const { page } = mount({ room: SHELL_ROOM.NARROW, panel });
   await settle();
   layOut(page, 390);
   act(() => rowNamed(page, "Expire after 7 days?").click());
@@ -1248,7 +845,7 @@ test("ticking the box's checkbox under an open question sets its options aside a
   world.listedWorkspace = ACME;
   world.inboxes = new Map([[BILLING.id, [THRESHOLD]]]);
   const starts = heldStarts();
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
 
   const box = () =>
@@ -1294,7 +891,7 @@ test("words written in the box while its new thread starts stay in it once the t
     act: (request: AnyAct): Promise<FakeActAnswer> =>
       request.kind === ACT_KIND.AGENTS_INBOX_START ? answer.promise : previous(request),
   });
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
 
   const pane = itemPane(page);
@@ -1332,7 +929,7 @@ test("a new thread refused comes back into the box ahead of the words written wh
     act: (request: AnyAct): Promise<FakeActAnswer> =>
       request.kind === ACT_KIND.AGENTS_INBOX_START ? answer.promise : previous(request),
   });
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
 
   const pane = itemPane(page);
@@ -1359,19 +956,24 @@ test("a new thread refused comes back into the box ahead of the words written wh
   );
 });
 
-test("an item opened whose agent's inbox could not be read says so in the pane, and Retry reads it there", async () => {
+test("an item opened whose task's inbox could not be read says so in the pane, and Retry reads it there", async () => {
   world.listedWorkspace = ACME;
-  // Note that no holding names the billing task, nor the feed its agent, so its item is opened by its agent, whose own read fails.
-  world.tasklessAgents = new Map([[AGENT.id, AGENT]]);
-  world.agentInboxes = new Map([[AGENT.id, [THRESHOLD]]]);
-  world.feedLeavesOut = new Set([AGENT.id]);
-  world.agentReadFails = true;
-  const { page } = mount([], { holding: [] });
+  // Note that the feed leaves the billing task out, as it does one whose items all settled past its bound, so its item is opened on its own read, which fails.
+  world.feedLeavesOut = new Set([BILLING.id]);
+  let fails = true;
+  world.startRead = (taskId) =>
+    taskId === BILLING.id && fails
+      ? Promise.resolve({
+          status: FAKE_ANSWER.DONE,
+          value: { failure: AGENT_CALL_FAILURE.UNANSWERED },
+        })
+      : undefined;
+  const { page } = mount();
   await settle();
-  act(() => world.chooseFromOutside({ agentId: AGENT.id, itemId: THRESHOLD.id, opened: true }));
+  act(() => world.chooseFromOutside({ taskId: BILLING.id, itemId: THRESHOLD.id, opened: true }));
   await vi.waitFor(() => assert.match(page.textContent ?? "", /This item could not be read\./u));
 
-  world.agentReadFails = false;
+  fails = false;
   act(() => buttonSaying("Retry").click());
   await settle();
   await vi.waitFor(() =>
@@ -1381,46 +983,4 @@ test("an item opened whose agent's inbox could not be read says so in the pane, 
       "the item is read again",
     ),
   );
-});
-
-test("an item of an agent with no task reads the lines its code names through the agent's workspace and repository, and a file its words name opens beside the Inbox rather than on GitHub", async () => {
-  const commit = "0123456789abcdef0123456789abcdef01234567";
-  const words = [
-    `https://github.com/acme/relay/blob/${commit}/src/flaky.test.ts#L3-L5`,
-    "The retry is in [@flaky.test.ts](https://github.com/acme/relay/blob/HEAD/src/flaky.test.ts).",
-  ].join("\n\n");
-  world.agentInboxes = new Map([[SWEEP_AGENT, [saying(QUARANTINE, words)]]]);
-  const openedOnGitHub = skillReads();
-  const previewed: string[] = [];
-  const panel: SidePanelControl = {
-    ...tasksControl().sidePanel,
-    onOpenFile: (ref, at) => previewed.push(`${JSON.stringify(ref)} ${at}`),
-  };
-  const { page } = mount([{ ...waitingTaskless(QUARANTINE), workspaceId: "workspace-acme" }], {
-    panel,
-  });
-  await settle();
-  act(() => rowNamed(page, "Quarantine the flaky test?").click());
-  await settle();
-
-  assert.deepEqual(
-    world.fileReads.map(({ firstLine: _first, lastLine: _last, ...place }) => place),
-    [
-      {
-        path: "src/flaky.test.ts",
-        workspaceId: "workspace-acme",
-        repository: "acme/relay",
-        ref: commit,
-      },
-    ],
-    "the code reads its lines by the agent's workspace and repository, naming no task",
-  );
-
-  const chip = [
-    ...page.querySelectorAll<HTMLElement>("[data-inbox-message-text] [data-mention-ref]"),
-  ].find((each) => each.querySelector(".ui-inline-ref-label")?.textContent === "flaky.test.ts");
-  assert.ok(chip, "the file is its chip");
-  act(() => chip.click());
-  assert.deepEqual(previewed, [`${JSON.stringify({ path: "src/flaky.test.ts" })} undefined`]);
-  assert.deepEqual(openedOnGitHub, [], "nothing opened on GitHub");
 });

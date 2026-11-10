@@ -7,7 +7,6 @@ import {
   type AgentInboxAttachmentView,
   type AgentInboxMessagedView,
   type AgentInboxMessageParams,
-  type AgentInboxScope,
   type AgentInboxStartParams,
   INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
@@ -296,22 +295,15 @@ function fresh(taskId: string | undefined, read: readonly InboxItem[] | undefine
 const UNANSWERED = { failure: AGENT_CALL_FAILURE.UNANSWERED } as const;
 
 /**
- * The holder's items as the account's feed holds them: a plan's whole, an
- * agent's with no plan its own, and an agent's on a plan its own among
- * that plan's; none where the feed has not answered, or holds nothing of
- * the holder, whose own read may still hold a settled item past the feed's
- * bound.
+ * The plan's items as the account's feed holds them, whole; none where the
+ * feed has not answered, or holds nothing of the plan, whose own read may
+ * still hold a settled item past the feed's bound.
  */
 function fedItemsOf(
   fed: AppInboxItems | undefined,
-  kind: AgentInboxScope["kind"],
-  id: string | undefined,
-  planId: string | null | undefined,
+  taskId: string | undefined,
 ): readonly InboxItem[] | undefined {
-  if (fed === undefined || id === undefined) return undefined;
-  if (kind === INBOX_SCOPE_KIND.PLAN) return fed[INBOX_SCOPE_KIND.PLAN][id];
-  if (planId == null) return fed[INBOX_SCOPE_KIND.AGENT][id];
-  return fed[INBOX_SCOPE_KIND.PLAN][planId]?.filter((item) => item.agentId === id);
+  return fed === undefined || taskId === undefined ? undefined : fed[INBOX_SCOPE_KIND.PLAN][taskId];
 }
 
 /** An Inbox's pictures as its cards read them: by the item, as the scope the window keeps them under, and the attachment. */
@@ -402,28 +394,6 @@ function holdsNothing(draft: Draft): boolean {
   );
 }
 
-/**
- * Where a held read's cards keep their drafts, kept apart from the hook so
- * another tab's or page's reading of the inbox shares them: under the plan,
- * or under none where the inbox is an agent's with no plan; and what of
- * them the read covers, a plan's or, for an agent with no plan, that
- * agent's alone.
- */
-function draftScope(
-  taskId: string | undefined,
-  kind: AgentInboxScope["kind"],
-  draftTask: string | null | undefined,
-) {
-  const ownTask = kind === INBOX_SCOPE_KIND.PLAN ? taskId : undefined;
-  return {
-    ownTask,
-    // Note that one agent's inbox keeps them under its plan where it has one, as its task's Inbox does.
-    draftsOn: ownTask ?? draftTask ?? null,
-    // Note that an agent with no plan is the planId its inbox is read by.
-    readAgent: kind === INBOX_SCOPE_KIND.AGENT ? taskId : undefined,
-  };
-}
-
 /** The doors of a held read's cards' drafts (`useInboxCardDrafts`). */
 type InboxCardDrafts = Pick<
   TaskInboxControl,
@@ -454,12 +424,8 @@ export function useTaskInbox(input: Parameters<typeof useHeldTaskInbox>[0]): Tas
  * box (`useInboxCardDrafts`).
  */
 export function useHeldTaskInbox(input: {
-  /** The task whose inbox is held, or, with `kind` an agent's, the agent with no task whose inbox is. */
+  /** The task whose inbox is held, under which its cards keep their drafts. */
   taskId: string | undefined;
-  /** Whose inbox `taskId` names: a task's, unless it is one agent's with no task. */
-  kind?: AgentInboxScope["kind"] | undefined;
-  /** The task an agent's inbox keeps its cards' drafts under, where the agent works on one, so its task's own Inbox reads the same drafts, and under which the feed holds the agent's items; none for a task's inbox, which keeps them under its own. */
-  draftTask?: string | null | undefined;
   /** Whether the window shows the tasks. */
   shown: boolean;
   /** Whether this Inbox is the one on screen, which says what lands in it (`inbox-arrivals.ts`); none where it is not. */
@@ -479,35 +445,22 @@ export function useHeldTaskInbox(input: {
   };
 }): HeldTaskInboxControl {
   const { taskId, shown, waiting, readerId, agents } = input;
-  const kind = input.kind ?? INBOX_SCOPE_KIND.PLAN;
 
   // A task with no agent, standing or archived, has no Inbox tab and nothing
   // to read, unless an item waits on it, which an agent this window has not
   // listed, one started on another Mac, posted.
   const readable = (agents.heldIds?.length ?? 0) > 0 || waiting;
   const active = shown && taskId !== undefined && readable;
-  const holderKey = active ? { kind, id: taskId } : undefined;
+  const holderKey = active ? { kind: INBOX_SCOPE_KIND.PLAN, id: taskId } : undefined;
   const holder = useQuery(holderInboxQuery(holderKey));
   const { mutate: retryHolder } = useMutation(holderInboxRetryMutation());
   // Note that Try again moves with the holder alone, as the read's own did, since a render builds its key anew.
   const holderId = holderKey?.id;
   const onRetry = useCallback(() => {
-    if (holderId !== undefined) retryHolder({ kind, id: holderId });
-  }, [retryHolder, kind, holderId]);
+    if (holderId !== undefined) retryHolder({ kind: INBOX_SCOPE_KIND.PLAN, id: holderId });
+  }, [retryHolder, holderId]);
   const feed = useQuery(inboxItemsQuery());
-  // Note that an agent on a plan draws its own items among the plan's, which keep their identity while the plan's list stands.
-  const planItems =
-    kind === INBOX_SCOPE_KIND.AGENT && input.draftTask != null
-      ? feed.data?.[INBOX_SCOPE_KIND.PLAN][input.draftTask]
-      : undefined;
-  const fedRows = feed.data;
-  const fed = useMemo(
-    () =>
-      planItems === undefined
-        ? fedItemsOf(fedRows, kind, taskId, input.draftTask)
-        : planItems.filter((item) => item.agentId === taskId),
-    [fedRows, planItems, kind, taskId, input.draftTask],
-  );
+  const fed = fedItemsOf(feed.data, taskId);
   // The holder's own read stands in for the feed's once it answered, since it holds what the feed leaves out.
   const pushed = holder.data ?? fed;
   const read = holder.isSuccess;
@@ -531,7 +484,8 @@ export function useHeldTaskInbox(input: {
   >(new Map());
   const [notes, setNotes] = useState<ReadonlyMap<string, InboxNote>>(new Map());
   const [unheard, setUnheard] = useState<ReadonlyMap<string, UnheardReply>>(new Map());
-  const draftsOn = draftScope(taskId, kind, input.draftTask).draftsOn;
+  // Note that the cards keep their drafts under the task, so another tab's or page's reading of its inbox shares them.
+  const draftsOn = taskId ?? null;
   const writer = useDraftWriter();
   const attempts = useRef(new Map<string, Attempt>());
   // The items whose nod is out, as `sending` holds them but at once, so a second press before
@@ -812,11 +766,9 @@ export function useHeldTaskInbox(input: {
   };
 }
 
-/** Whose read a held read's cards' drafts are kept under. */
+/** Whose read a held read's cards' drafts are kept under: the task's. */
 interface DraftScopeOf {
   readonly taskId: string | undefined;
-  readonly kind?: AgentInboxScope["kind"] | undefined;
-  readonly draftTask?: string | null | undefined;
 }
 
 /**
@@ -835,11 +787,7 @@ export function useInboxDraftsLetGo(
   control: Pick<HeldTaskInboxControl, "board" | "drawn" | "whole">,
   scope: DraftScopeOf,
 ): void {
-  const { ownTask, draftsOn, readAgent } = draftScope(
-    scope.taskId,
-    scope.kind ?? INBOX_SCOPE_KIND.PLAN,
-    scope.draftTask,
-  );
+  const { taskId } = scope;
   const standings = useInboxDraftStandings();
   const { drop, update } = useDraftWriter();
   const { board, drawn, whole } = control;
@@ -847,11 +795,8 @@ export function useInboxDraftsLetGo(
   // Note that the agent posting on the item again, or a teammate settling it, lets only the picks go,
   // which stand on the ask as it was, while the words and files being written stay as they are.
   useEffect(() => {
-    if (!drawn || (ownTask === undefined && readAgent === undefined)) return;
-    const covered = standings.filter(
-      ({ place }) =>
-        place.planId === draftsOn && (ownTask !== undefined || place.agentId === readAgent),
-    );
+    if (!drawn || taskId === undefined) return;
+    const covered = standings.filter(({ place }) => place.planId === taskId);
     const gone =
       whole === undefined
         ? []
@@ -864,7 +809,7 @@ export function useInboxDraftsLetGo(
     });
     for (const kept of lapsed) update(kept.place, withoutPicks);
     if (gone.length > 0) drop((place) => gone.some((kept) => Equal.equals(kept.place, place)));
-  }, [drawn, items, whole, ownTask, readAgent, draftsOn, standings, drop, update]);
+  }, [drawn, items, whole, taskId, standings, drop, update]);
 }
 
 /**
@@ -876,11 +821,7 @@ export function useInboxCardDrafts(
   control: Pick<HeldTaskInboxControl, "board">,
   scope: DraftScopeOf,
 ): InboxCardDrafts {
-  const { draftsOn } = draftScope(
-    scope.taskId,
-    scope.kind ?? INBOX_SCOPE_KIND.PLAN,
-    scope.draftTask,
-  );
+  const draftsOn = scope.taskId ?? null;
   const drafts = useInboxDrafts(draftsOn);
   const writer = useDraftWriter();
   const { board } = control;

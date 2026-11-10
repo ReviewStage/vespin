@@ -64,7 +64,7 @@
 import { automationTriggerText } from "@repo/features/automation-list-model";
 import type { AutomationSummary } from "@repo/features/automation-wire";
 import { fileName } from "@repo/features/code-ref-words";
-import { holderName, type InboxListed, inboxItemWords } from "@repo/features/inbox-list-model";
+import { type InboxListed, inboxItemWords } from "@repo/features/inbox-list-model";
 import { formatCount } from "@repo/features/number-format";
 import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -1148,15 +1148,15 @@ function snippetOf(
   return undefined;
 }
 
-/** What an Inbox item's search reads: its title and its holder's name, and else everything it says (`inboxItemWords`). */
+/** What an Inbox item's search reads: its title and its task's name, and else everything it says (`inboxItemWords`). */
 function inboxWords({ holder, item }: InboxListed): RowWords {
   const title = cardTitle(item.title);
-  return { label: title, terms: [title, holderName(holder)], keywords: inboxItemWords(item) };
+  return { label: title, terms: [title, holder.task.name], keywords: inboxItemWords(item) };
 }
 
 /**
- * An Inbox item's row, by its agent's tile and title, beside its task's or
- * automation's name and, where its thread rather than those found it, the
+ * An Inbox item's row, by its agent's tile and title, beside its task's
+ * name and, where its thread rather than those found it, the
  * words that did, the marks its Inbox row wears at its end and its card hung
  * beside it (`inbox-item-parts.tsx`), drawn only once the filter lists it.
  */
@@ -1173,7 +1173,7 @@ function inboxRow(
 ): UndrawnRow {
   const { holder, item } = listed;
   return undrawnRow(words, () => {
-    const name = holderName(holder);
+    const name = holder.task.name;
     const snippet = snippetOf(words.keywords ?? [], [item.title, words.label, name], seams.tokens);
     return {
       replayMasked: true,
