@@ -13,8 +13,13 @@
 
 import { MAC_PROCESS_KIND, type MacProcess, type MacProcessKind } from "./contract/index.js";
 
-/** One line of `ps -axo pid=,ppid=,pcpu=,rss=,comm=`, its columns in that order and the command last, since a command's path may hold spaces. */
-const PROCESS_LINE = /^\s*(\d+)\s+(\d+)\s+([\d.]+)\s+(\d+)\s+(.+?)\s*$/u;
+/**
+ * The four figures that lead a line of `ps -axo pid=,ppid=,pcpu=,rss=,comm=`;
+ * the command is the rest of the line, since its path may hold spaces. Note
+ * that the command is cut off by its length rather than matched, because a
+ * pattern running to the line's end backtracks over a long run of spaces.
+ */
+const PROCESS_FIGURES = /^\s*(\d+)\s+(\d+)\s+([\d.]+)\s+(\d+)\s/u;
 
 /** `ps` counts resident memory in kibibytes. */
 const KIBIBYTE = 1024;
@@ -41,15 +46,17 @@ export interface ElectronProcessName {
 export function readProcessTable(text: string): ProcessTableRow[] {
   const rows: ProcessTableRow[] = [];
   for (const line of text.split("\n")) {
-    const read = PROCESS_LINE.exec(line);
+    const read = PROCESS_FIGURES.exec(line);
     if (read === null) continue;
-    const [, pid, parent, cpu, memory, command] = read;
+    const [figures, pid, parent, cpu, memory] = read;
+    const command = line.slice(figures.length).trim();
+    if (command === "") continue;
     rows.push({
       pid: Number(pid),
       parent: Number(parent),
       cpu: Number(cpu),
       memory: Number(memory) * KIBIBYTE,
-      command: command ?? "",
+      command,
     });
   }
   return rows;
