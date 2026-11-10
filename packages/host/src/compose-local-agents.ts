@@ -12,6 +12,7 @@ import {
   type CheckoutIdentity,
   checkoutIdentityEnv,
 } from "@repo/features/checkout-identity";
+import { CHECKOUT_RESTORE_SCRIPT, checkoutRestoreEnv } from "@repo/features/checkout-restore";
 import {
   DEVICE_AGENT_LINE_KIND,
   DEVICE_GITHUB_ACCESS,
@@ -28,6 +29,7 @@ import {
   deviceAgentFilesPayloadSchema,
   deviceAgentLaunchPayloadSchema,
   deviceAgentLayout,
+  deviceAgentRestorePayloadSchema,
   deviceAgentStdinPayloadSchema,
   deviceAgentsFolder,
 } from "@repo/features/device-agent-wire";
@@ -267,6 +269,7 @@ const decodeStdin = Schema.decodeUnknownOption(deviceAgentStdinPayloadSchema);
 /** The stdin line that ends a runner where it is warm, and that one at work skips (`INPUT_LINE.RETIRE`). */
 const RETIRE_LINE = `${JSON.stringify({ type: INPUT_LINE.RETIRE } satisfies InputLine)}\n`;
 const decodeFiles = Schema.decodeUnknownOption(deviceAgentFilesPayloadSchema);
+const decodeRestore = Schema.decodeUnknownOption(deviceAgentRestorePayloadSchema);
 
 /** The service's side of local agents, as this concern asks it. */
 type LocalAgentClient = Pick<
@@ -1060,9 +1063,52 @@ export function composeLocalAgents(
           );
 
         /**
+         * The agent's worktree put back to the snapshot a restore line
+         * names, by the one restore script both machines run
+         * (`@repo/features/checkout-restore`), run as the agent in the
+         * worktree with the snapshot in its variables, after the service
+         * ended the runner. Answers the script's exit code, which the
+         * service reads the outcome from (the snapshot missing among them),
+         * and 1 where it could not run or the line's payload could not be
+         * read. Nothing it prints is kept.
+         */
+        const restored = (agentId: string, payload: unknown) =>
+          Effect.gen(function* () {
+            const snapshot = decodeRestore(payload);
+            if (Option.isNone(snapshot)) return 1;
+            const layout = deviceAgentLayout(folder, agentId);
+            const run = agentOnBox(
+              {
+                folder: layout.folder,
+                command: "/bin/bash",
+                args: ["-c", CHECKOUT_RESTORE_SCRIPT],
+                env: { ...shellVariables, ...checkoutRestoreEnv(snapshot.value) },
+              },
+              platform.clis.paths.gh,
+            );
+            return yield* Effect.scoped(
+              Effect.flatMap(
+                ChildProcess.make(run.command, [...run.args], {
+                  cwd: layout.checkoutPath,
+                  env: run.env,
+                  extendEnv: false,
+                  stdin: "ignore",
+                  stdout: "ignore",
+                  stderr: "ignore",
+                  forceKillAfter: KILL_GRACE,
+                }),
+                (handle) => handle.exitCode,
+              ),
+            ).pipe(
+              Effect.map((code) => Number(code)),
+              Effect.orElseSucceed(() => 1),
+            );
+          });
+
+        /**
          * One line of the agent's, delivered: a runner started, written to,
-         * or stopped, files written, or the agent let go of; every line but a
-         * launch settled at once. A kind this follower does not know, one a
+         * or stopped, files written, the worktree put back, or the agent let
+         * go of; every line but a launch and a restore settled at once. A kind this follower does not know, one a
          * newer service added, is settled without being acted on, so it never
          * holds back the agent's later lines.
          */
@@ -1105,6 +1151,9 @@ export function composeLocalAgents(
               case DEVICE_AGENT_LINE_KIND.DISCARD:
                 yield* discarded(agentId);
                 break;
+              // A restore is settled with its exit, which the service reads the outcome from.
+              case DEVICE_AGENT_LINE_KIND.RESTORE:
+                return yield* settle(line.id, yield* restored(agentId, line.payload));
             }
             yield* settle(line.id);
           });

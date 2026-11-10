@@ -327,14 +327,14 @@ test("Rewind conversation to here says whose messages it drops where a teammate'
 });
 
 /** Rewind conversation to here pressed on `reply-1` over `shared`, with the files offered back where the point allows: the dialog's words, its checkbox, and what the revert was handed. */
-async function revertOffered(shared: readonly AgentTranscriptMessage[], restores: boolean) {
+async function revertOffered(shared: readonly AgentTranscriptMessage[]) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
   const nothing = () => undefined;
   const reverted: [string, boolean][] = [];
-  const points = rewindPoints(shared, false, "user-1", new Set(), restores);
+  const points = rewindPoints(shared, false, "user-1");
   await act(async () =>
     root.render(
       withQueryClient(
@@ -375,21 +375,28 @@ async function revertOffered(shared: readonly AgentTranscriptMessage[], restores
 }
 
 test("Rewind conversation to here offers the files back only where the next line's turn recorded them, off until ticked, and hands the choice to the revert", async () => {
-  const recorded = [
+  const unrecorded = [
     lineFrom("a", "Dean", "user-1"),
     message("reply-1", MESSAGE_ROLE.ASSISTANT),
-    { ...lineFrom("b", "Dean", "user-1"), filesRestorable: true as const },
+    lineFrom("b", "Dean", "user-1"),
     message("reply-2", MESSAGE_ROLE.ASSISTANT),
   ];
+  const recorded = unrecorded.map((each) =>
+    each.id === "b" ? { ...each, filesRestorable: true as const } : each,
+  );
 
-  const plain = await revertOffered(recorded, false);
-  assert.equal(plain.checkbox(), undefined, "a Mac's agent is offered no files back");
+  const plain = await revertOffered(unrecorded);
+  assert.equal(
+    plain.checkbox(),
+    undefined,
+    "a point whose turn recorded nothing offers no files back",
+  );
   await plain.confirm();
   assert.deepEqual(plain.reverted, [["b", false]]);
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 
-  const offered = await revertOffered(recorded, true);
+  const offered = await revertOffered(recorded);
   const checkbox = offered.checkbox();
   assert.ok(checkbox, "the files are offered back");
   assert.equal(checkbox.getAttribute("aria-checked"), "false");

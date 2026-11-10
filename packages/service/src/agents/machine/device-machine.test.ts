@@ -35,8 +35,11 @@ import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { DEVICE_LAYOUT, expectTopicsFire, getTestDB } from "@repo/database/testing";
 import { AGENT_FAILURE } from "@repo/features/agent-wire";
+import { CHECKOUT_RESTORE_EXIT } from "@repo/features/checkout-restore";
 import {
+  DEVICE_AGENT_LINE_KIND,
   DEVICE_AGENT_REQUEST_KIND,
+  DEVICE_CAPABILITY,
   DEVICE_LAUNCH_STEP,
   DEVICE_LAUNCH_UNSTARTED,
   type DeviceLaunchStep,
@@ -80,7 +83,7 @@ import {
   deviceAgentRequestsFor,
   settledDeviceAgentLine,
 } from "../device-agent.js";
-import { LaunchRefused } from "./agent-machine.js";
+import { LaunchRefused, RESTORE_OUTCOME } from "./agent-machine.js";
 import { deviceMachine } from "./device-machine.js";
 
 const RING = `1:${Buffer.alloc(32, 7).toString("base64")}`;
@@ -144,6 +147,14 @@ const untilAsked = (userId: string, deviceId: string) =>
       yield* Effect.yieldNow;
     const [request] = yield* deviceAgentRequestsWaiting(userId, deviceId);
     return Option.getOrThrow(Option.fromNullishOr(request));
+  });
+
+/** The first line waiting for the agent's Mac, once one does. */
+const untilQueued = (userId: string, deviceId: string) =>
+  Effect.gen(function* () {
+    while ((yield* deviceAgentLinesWaiting(userId, deviceId)).length === 0) yield* Effect.yieldNow;
+    const [line] = yield* deviceAgentLinesWaiting(userId, deviceId);
+    return Option.getOrThrow(Option.fromNullishOr(line));
   });
 
 /** GitHub unreached, and sandboxes kept in memory, which a Mac's agent never reaches. */
@@ -293,6 +304,49 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           assert.ok(refused instanceof LaunchRefused);
           assert.equal(refused.reason, "host predates its own github sign-in");
           assert.deepEqual(yield* deviceAgentLinesWaiting(opened.userId, opened.deviceId), []);
+        }),
+    );
+
+    it.effect(
+      "a restore queues a restore line with the snapshot for the agent's Mac and answers as the Mac settles it, and a Mac whose host takes no such line restores nothing, queuing none",
+      () =>
+        Effect.gen(function* () {
+          const { userId, deviceId, session } = yield* openLocalAgent();
+          const machine = yield* deviceMachine;
+          const snapshot = {
+            commit: "0123456789abcdef0123456789abcdef01234567",
+            head: "89abcdef0123456789abcdef0123456789abcdef",
+            branch: "feat/invitations",
+          };
+
+          assert.equal(
+            yield* machine.restoreCheckout(session, snapshot),
+            RESTORE_OUTCOME.UNSUPPORTED,
+          );
+          assert.deepEqual(yield* deviceAgentLinesWaiting(userId, deviceId), []);
+
+          // The Mac's host registers that it takes the line, as a newer release does.
+          yield* registerDevice(userId, {
+            id: deviceId,
+            name: "Studio",
+            ...DEVICE_LAYOUT,
+            capabilities: [DEVICE_CAPABILITY.RESTORE_CHECKOUT],
+          });
+          const restoring = yield* Effect.forkChild(machine.restoreCheckout(session, snapshot));
+          const line = yield* untilQueued(userId, deviceId);
+          assert.equal(line.kind, DEVICE_AGENT_LINE_KIND.RESTORE);
+          assert.deepEqual(line.payload, snapshot);
+          yield* claimedDeviceAgentLine(userId, deviceId, line.id);
+          yield* settleDeviceAgentLine(userId, deviceId, line.id, CHECKOUT_RESTORE_EXIT.MISSING);
+          yield* TestClock.adjust("1 second");
+          assert.equal(yield* Fiber.join(restoring), RESTORE_OUTCOME.MISSING);
+
+          const again = yield* Effect.forkChild(machine.restoreCheckout(session, snapshot));
+          const second = yield* untilQueued(userId, deviceId);
+          yield* claimedDeviceAgentLine(userId, deviceId, second.id);
+          yield* settleDeviceAgentLine(userId, deviceId, second.id, 0);
+          yield* TestClock.adjust("1 second");
+          assert.equal(yield* Fiber.join(again), RESTORE_OUTCOME.RESTORED);
         }),
     );
 

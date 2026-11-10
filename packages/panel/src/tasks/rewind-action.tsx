@@ -121,7 +121,7 @@ interface RewindDoors {
   readonly revertTakes: ReadonlyMap<string, string>;
   /** What the send of a line written again drops of other members' messages, by the line's id, said as `revertTakes` does; none where it drops none of theirs. */
   readonly editTakes: ReadonlyMap<string, string>;
-  /** The lines a rewind to just before can put the agent's files back at, by their ids: those whose turn the runner recorded the checkout before, on a machine the service restores. */
+  /** The lines a rewind to just before can put the agent's files back at, by their ids: those whose turn the runner recorded the checkout before. */
   readonly restorable: ReadonlySet<string>;
 }
 
@@ -184,15 +184,13 @@ function takesWords(takes: Takes): string | undefined {
  * find no line. Where a rewind drops messages another member than the reader
  * (`readerId`) wrote, the points say whose and how many, for the confirm to
  * name. A line that opened a turn whose checkout its runner recorded
- * (`filesRestorable`) is one the files can go back at, where the agent runs
- * where the service restores them (`restores`), a cloud sandbox.
+ * (`filesRestorable`) is one the files can go back at.
  */
 export function rewindPoints(
   messages: readonly AgentTranscriptMessage[],
   pending: boolean,
   readerId: string | undefined,
   going: ReadonlySet<string> = new Set(),
-  restores = false,
 ): {
   readonly editable: ReadonlySet<string>;
   readonly revertsAt: ReadonlyMap<string, string>;
@@ -236,7 +234,7 @@ export function rewindPoints(
       tally(takes, message.sentBy);
     }
     if (!opens) continue;
-    if (restores && answered && message.filesRestorable === true) restorable.add(message.id);
+    if (answered && message.filesRestorable === true) restorable.add(message.id);
     const from = takesWords(takes);
     if (from !== undefined) takenFrom.set(message.id, from);
     next = answered ? message.id : undefined;

@@ -69,6 +69,8 @@ export const DEVICE_AGENT_LINE_KIND = {
   FILES: "files",
   /** Let the agent go: its runner stopped, and its folder, its worktree and everything it wrote there, removed from the device. */
   DISCARD: "discard",
+  /** Put the agent's worktree back to a snapshot its runner took before a turn (`@repo/features/checkout-restore`), settled with the restore's exit code. */
+  RESTORE: "restore",
 } as const;
 
 export type DeviceAgentLineKind =
@@ -149,6 +151,8 @@ export const DEVICE_CAPABILITY = {
    * such agent is started on, or launched to, a device without it.
    */
   GITHUB_SIGN_IN: "github-sign-in",
+  /** It takes a restore line (`DEVICE_AGENT_LINE_KIND.RESTORE`), its bundled runner recording the snapshot such a line puts the worktree back to; a follower from before it settles the line without acting on it. */
+  RESTORE_CHECKOUT: "restore-checkout",
 } as const;
 
 export type DeviceCapability = (typeof DEVICE_CAPABILITY)[keyof typeof DEVICE_CAPABILITY];
@@ -402,6 +406,13 @@ const deviceAgentFileSchema = EffectSchema.Struct({
 /** A files line's payload. */
 export const deviceAgentFilesPayloadSchema = EffectSchema.Struct({
   files: EffectSchema.Array(deviceAgentFileSchema),
+});
+
+/** A restore line's payload: the snapshot the worktree goes back to, as the turn's row keeps it (`@repo/features/checkout-restore`'s `CheckoutRestoreSnapshot`). */
+export const deviceAgentRestorePayloadSchema = EffectSchema.Struct({
+  commit: EffectSchema.String,
+  head: EffectSchema.NullOr(EffectSchema.String),
+  branch: EffectSchema.NullOr(EffectSchema.String),
 });
 
 /**

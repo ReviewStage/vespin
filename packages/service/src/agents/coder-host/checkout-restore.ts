@@ -32,10 +32,12 @@ import {
   SANDBOX_STATUS,
   Sandbox,
   type SandboxRunning,
+  type SandboxService,
   UP_STATUSES,
 } from "@repo/sandbox";
 import { Duration, Effect, Option } from "effect";
 import { agentSandboxName, agentSandboxOf } from "../agent-sandbox-open.js";
+import { RESTORE_OUTCOME, type RestoreOutcome } from "../machine/agent-machine.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 
 export const CHECKOUT_RESTORE = {
@@ -45,19 +47,8 @@ export const CHECKOUT_RESTORE = {
   STDERR_TAIL: 600,
 } as const;
 
-/** What a restore came to: the checkout put back, the snapshot not in the checkout any more, or a failure. */
-export const RESTORE_OUTCOME = {
-  RESTORED: "restored",
-  MISSING: "missing",
-  FAILED: "failed",
-} as const;
-
-export type RestoreOutcome = (typeof RESTORE_OUTCOME)[keyof typeof RESTORE_OUTCOME];
-
 /** What a restore is asked: whose sandbox, by its session, and the snapshot to put the checkout back to. */
 export interface RestoreAsk {
-  /** The account whose agent it is, under which its sandbox is kept. */
-  readonly userId: string;
   /** The session the agent's sandbox is tagged with. */
   readonly sessionId: string;
   readonly snapshot: TurnCheckoutSnapshot;
@@ -79,16 +70,17 @@ function stderrTail(stderr: string): string {
 }
 
 /** The restore in the agent's sandbox, woken where it stopped. */
-const restoreIn = (ask: RestoreAsk) =>
+const restoreIn = (sandboxes: SandboxService, ask: RestoreAsk) =>
   Effect.gen(function* () {
-    const sandboxes = yield* Sandbox;
     const sandbox = yield* agentSandboxOf(sandboxes, ask.sessionId);
     if (sandbox === undefined) return RESTORE_OUTCOME.MISSING;
     // MIGRATION: a legacy sandbox (`agentSandboxOf`) is never woken in place; one not up holds no snapshot a restore reaches.
     if (!UP_STATUSES.has(sandbox.status) && sandbox.name !== agentSandboxName(ask.sessionId)) {
       return RESTORE_OUTCOME.MISSING;
     }
-    const running = runningOf(sandbox) ?? (yield* resumedRunning(sandbox.name));
+    const running =
+      runningOf(sandbox) ??
+      (yield* resumedRunning(sandbox.name).pipe(Effect.provideService(Sandbox, sandboxes)));
     const ran = yield* sandboxes.run(running, {
       command: "sh",
       args: ["-c", CHECKOUT_RESTORE_SCRIPT],
@@ -109,9 +101,10 @@ const restoreIn = (ask: RestoreAsk) =>
  * never the caller's own.
  */
 export const restoreCheckout = /* @__PURE__ */ Effect.fn("web/restoreCheckout")(function* (
+  sandboxes: SandboxService,
   ask: RestoreAsk,
-): Effect.fn.Return<RestoreOutcome, never, Sandbox> {
-  const outcome = yield* restoreIn(ask).pipe(
+): Effect.fn.Return<RestoreOutcome, never> {
+  const outcome = yield* restoreIn(sandboxes, ask).pipe(
     Effect.timeoutOption(CHECKOUT_RESTORE.TIMEOUT),
     Effect.catch((failure) =>
       Effect.as(

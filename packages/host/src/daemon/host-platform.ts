@@ -92,6 +92,7 @@ export function hostPlatform(options: HostPlatformOptions): LocalAgentPlatformSe
     // Note that a host lets go of an archived agent's folder (`discard`), and a Mac alone runs an agent on its starter's own token on its own GitHub sign-in, the machine its member signs in at themselves.
     deviceCapabilities: [
       DEVICE_CAPABILITY.DISCARD,
+      DEVICE_CAPABILITY.RESTORE_CHECKOUT,
       ...(options.os.platform === DEVICE_PLATFORM.DARWIN ? [DEVICE_CAPABILITY.GITHUB_SIGN_IN] : []),
     ],
     deviceArch: options.arch,
