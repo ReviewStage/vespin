@@ -3,6 +3,46 @@ import { RUN_EVENT, TURN_FAILURE } from "@repo/features/turn-run";
 import { test } from "vitest";
 import { NATIVE_ENDING, NATIVE_MOMENT, PLAN_STATUS } from "./native-moments.js";
 import { heldProjection, NATIVE_WRITE, projectMoments } from "./native-projection.js";
+import { toolAnswerSettlement } from "./runner-moments.js";
+
+test("an unknown tool's call settled with a new input, as Codex settles one, keeps the input that names the tool it called", () => {
+  const result = projectMoments(
+    heldProjection(null),
+    [
+      { kind: NATIVE_MOMENT.TOOL_STARTED, callId: "call_plan", name: "edit_plan", input: {} },
+      {
+        kind: NATIVE_MOMENT.TOOL_SETTLED,
+        callId: "call_plan",
+        settlement: toolAnswerSettlement({ workspaceTool: true, text: "Unknown tool" }, true),
+        input: { notes: [] },
+      },
+    ],
+    {
+      conversationId: "c_projection",
+      sequence: 0,
+      now: 0,
+      attempt: 1,
+      queuedTurnId: undefined,
+      model: undefined,
+      ownKey: false,
+      registered: () => false,
+      report: () => undefined,
+    },
+  );
+  assert.deepEqual(
+    result.writes.flatMap((write) =>
+      write.kind === NATIVE_WRITE.EVENT &&
+      (write.event.kind === RUN_EVENT.TOOL_CALL_STARTED ||
+        write.event.kind === RUN_EVENT.TOOL_CALL_SETTLED)
+        ? [[write.event.kind, write.event.name, write.event.input]]
+        : [],
+    ),
+    [
+      [RUN_EVENT.TOOL_CALL_STARTED, "unknown_tool", { name: "edit_plan", input: {} }],
+      [RUN_EVENT.TOOL_CALL_SETTLED, "unknown_tool", undefined],
+    ],
+  );
+});
 
 test("a warm launch that fails after its turn ended at its IDLE fails no turn of its own", () => {
   const context = {
