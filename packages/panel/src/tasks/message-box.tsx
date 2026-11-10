@@ -125,8 +125,10 @@ const NO_ROWS: readonly MenuEntry[] = [];
 const NO_OFFERS: readonly OverflowOffer[] = [];
 
 /**
- * The card widths below which a press draws its mark alone: the owner's
- * tools after the + first (New task's Runs on chip), then the owner's
+ * The card widths below which a press draws its mark alone: an agent's Run
+ * button first, whose words are an action's own and so the longest a foot
+ * holds (`run-actions-button.tsx`), then the owner's
+ * tools after the + (New task's Runs on chip), then the owner's
  * presses that carry words (New task's Plan toggle, at the step the ⋯
  * stands), then the owner's chip (an agent's model). Note that they are
  * steps of the same order as the stylesheet's `composer` queries (tasks.css's,
@@ -134,6 +136,7 @@ const NO_OFFERS: readonly OverflowOffer[] = [];
  * leaves is counted on the steps before it.
  */
 export const FOLD_WIDTH = {
+  RUN: 720,
   TOOLS: 520,
   ACTIONS: 400,
   MODEL: 300,

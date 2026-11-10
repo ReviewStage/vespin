@@ -200,17 +200,20 @@ export function RunActionsButton({
   });
   return (
     <>
-      <SplitButton
-        icon={firstRuns ? <GLYPH.STOP /> : <PlayIcon />}
-        label={firstRuns ? WORDS.STOP(first.label) : WORDS.RUN(first.label)}
-        hintLabel={firstRuns ? WORDS.STOP(first.label) : WORDS.RUN(first.label)}
-        busy={busy}
-        busyLabel={WORDS.STARTING}
-        onClick={() => press(first)}
-        menu={{ label: WORDS.MENU, ...menu.trigger(riseAbove) }}
-      >
-        {narrow ? null : first.label}
-      </SplitButton>
+      {/* Note that a narrow card folds the button to its glyph through the split button's own fold, its words kept for a reader, so it gives way before the foot's other presses (`FOLD_WIDTH.RUN`). */}
+      <span className={narrow ? "run-actions-folded" : "run-actions"}>
+        <SplitButton
+          icon={firstRuns ? <GLYPH.STOP /> : <PlayIcon />}
+          label={firstRuns ? WORDS.STOP(first.label) : WORDS.RUN(first.label)}
+          hintLabel={firstRuns ? WORDS.STOP(first.label) : WORDS.RUN(first.label)}
+          busy={busy}
+          busyLabel={WORDS.STARTING}
+          onClick={() => press(first)}
+          menu={{ label: WORDS.MENU, ...menu.trigger(riseAbove) }}
+        >
+          {first.label}
+        </SplitButton>
+      </span>
       {menu.drawn && (
         <ActionMenu label={WORDS.MENU} menu={menu.drawn} groups={[items]} onClose={menu.close} />
       )}

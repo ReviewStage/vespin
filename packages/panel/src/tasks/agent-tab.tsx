@@ -2841,7 +2841,7 @@ function AgentTabView({
   composerActions,
 }: {
   agent: AgentSummary;
-  /** What stands first among the composer's right-hand presses, before the model chip: the Run button where the workspace has Run actions on (`run-actions-button.tsx`). */
+  /** What stands first among the composer's right-hand presses, before the model chip: the Run button where the workspace has Run actions on (`run-actions-button.tsx`), handed whether the card is too narrow for its words. */
   composerActions?: ((narrow: boolean) => React.ReactNode) | undefined;
   /** Whether the log waits to draw for what stands around it, while it says it is loading. */
   holding?: boolean;
@@ -3244,7 +3244,7 @@ function AgentTabView({
                 <ForwardChip agent={agent} />
               </>
             )}
-            actions={composerActions}
+            run={composerActions}
             onStop={onStop}
             // Note that a started agent's conversation always opens on its description or
             // task, so the box takes a follow up even before the transcript is read.
