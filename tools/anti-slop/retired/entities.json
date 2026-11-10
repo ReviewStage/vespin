@@ -286,7 +286,6 @@
         "packages/panel/src/tasks/agent-tab.tsx": 1,
         "packages/panel/src/tasks/inbox-item-parts.tsx": 1,
         "packages/panel/src/tasks/inbox-list.tsx": 1,
-        "packages/panel/src/tasks/mention-picker.tsx": 2,
         "packages/panel/src/tasks/terminal-tab.tsx": 1,
         "packages/panel/src/tasks/transcript-blocks.tsx": 1
       }

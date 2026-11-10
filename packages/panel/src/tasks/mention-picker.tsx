@@ -75,7 +75,7 @@ import {
   useComboboxField,
   useMinute,
 } from "@repo/ui";
-import { type Actor, APP_ACTOR } from "@repo/ui/actor-model";
+import type { Actor } from "@repo/ui/actor-model";
 import type { NamedServer } from "@repo/ui/agent-servers-model";
 import { hitRangesIn, LOOSE_FROM, type SearchSubject, searchHit } from "@repo/ui/search-score";
 import type { SkillOption } from "@repo/ui/skill-mention";
@@ -102,6 +102,7 @@ import {
 import { useAutomations } from "../desktop/use-automations.js";
 import { entityCard } from "../entities/entity-card.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
+import { entityMark } from "../entities/entity-mark.js";
 import { unreadShown } from "../failure-report.js";
 import { type IntegrationToolsReads, useIntegrationTools } from "../integration-tools.js";
 import { inboxItemsQuery, inboxItemsRetryMutation } from "../live-reads.js";
@@ -120,14 +121,12 @@ import {
   useDatePicker,
 } from "./date-picker.js";
 import { fileFolder } from "./file-ref-model.js";
-import { FileTypeIcon } from "./file-type-icon.js";
 import { InboxItemChipCard } from "./inbox-item-chip.js";
 import { inboxItemGlyph } from "./inbox-item-parts.js";
 import { PageCard } from "./page-card.js";
 import { PullRequestMark } from "./pull-request-mark.js";
 import { skillOption } from "./skill-ref.js";
-import { AgentMark, PlanGlyph } from "./tab-look.js";
-import { useTaskStatus } from "./use-known-names.js";
+import { useKnownNames } from "./use-known-names.js";
 
 /**
  * mention-picker.tsx -- the list an `@` opens: the workspace's agents, tasks, and people, the description and its sections, and the repository's files and folders, grouped by kind, narrowed as the word is typed, the pick written as its mention.
@@ -1190,10 +1189,36 @@ function KindGlyph({ kind }: { kind: MentionKind }): React.JSX.Element {
   return <EntityGlyph kind={KIND_ENTITY[narrow.from]} />;
 }
 
-/** A row's glyph, as its chip wears it. */
-function RowGlyph({ row }: { row: MentionRow }): React.JSX.Element {
-  const planned = "mention" in row && row.mention.kind === MENTION_KIND.TASK;
-  const taskStatus = useTaskStatus(planned ? row.mention.taskId : undefined);
+/**
+ * A mention row's mark: its entity's (`../entities/entity-mark.tsx`), drawn
+ * as the chip a pick writes draws it, so the row and the chip it becomes
+ * can never wear two marks.
+ */
+function MentionRowMark({
+  mention,
+  name,
+  workspace,
+}: {
+  mention: Mention;
+  name: string;
+  workspace: string;
+}): React.JSX.Element {
+  const known = useKnownNames();
+  return (
+    <>
+      {entityMark(entityOfMention(mention), {
+        name,
+        known,
+        workspace,
+        tiles: undefined,
+        standing: undefined,
+      })}
+    </>
+  );
+}
+
+/** A row's glyph: a mention's its entity's mark, a pull request's its mark for where it stands, and a kind's, a skill's, a thread's, or an automation's its own. */
+function RowGlyph({ row, workspace }: { row: MentionRow; workspace: string }): React.JSX.Element {
   if ("skill" in row) return <EntityGlyph kind={ENTITY_KIND.SKILL} />;
   if ("from" in row) return <KindGlyph kind={row.from} />;
   if ("picksDate" in row) return <EntityGlyph kind={ENTITY_KIND.DATE} />;
@@ -1202,36 +1227,9 @@ function RowGlyph({ row }: { row: MentionRow }): React.JSX.Element {
     return <ActorMark actor={automationActor(row.automation)} size={ACTOR_SIZE.INLINE} />;
   }
   if (row.pullRequest !== undefined) return <PullRequestMark pullRequest={row.pullRequest} />;
-  const { mention } = row;
-  switch (mention.kind) {
-    case MENTION_KIND.FILE:
-      return <FileTypeIcon name={fileName(mention.path)} />;
-    case MENTION_KIND.FOLDER:
-      return <EntityGlyph kind={ENTITY_KIND.FOLDER} />;
-    case MENTION_KIND.SECTION:
-      return <EntityGlyph kind={ENTITY_KIND.SECTION} />;
-    case MENTION_KIND.TASK:
-      return <PlanGlyph status={taskStatus} />;
-    case MENTION_KIND.SERVER:
-    case MENTION_KIND.TOOL:
-      return <ProviderMark provider={mention.provider} />;
-    case MENTION_KIND.LINK:
-      return <ProviderMark provider={"site" in mention ? mention.site : mention.provider} />;
-    case MENTION_KIND.PAGE:
-      return <EntityGlyph kind={ENTITY_KIND.PAGE} />;
-    case MENTION_KIND.AGENT:
-      return <AgentMark provider={undefined} />;
-    case MENTION_KIND.PERSON:
-      return row.actor === undefined ? (
-        <EntityGlyph kind={ENTITY_KIND.PERSON} />
-      ) : (
-        <ActorMark actor={row.actor} size={ACTOR_SIZE.INLINE} />
-      );
-    case MENTION_KIND.APP:
-      return <ActorMark actor={APP_ACTOR} size={ACTOR_SIZE.INLINE} />;
-    case MENTION_KIND.DATE:
-      return <EntityGlyph kind={ENTITY_KIND.DATE} />;
-  }
+  return (
+    <MentionRowMark mention={row.mention} name={row.written ?? row.name} workspace={workspace} />
+  );
 }
 
 /** A row's key, stable while it stands: its skill's name, its kind's narrowing, or its mention. */
@@ -1246,6 +1244,9 @@ function rowKey(row: MentionRow): string {
 
 /** The card a row hangs where it hangs none of its own: the card the chip a pick writes hangs; none for a row that writes no mention. */
 type RowCardOf = (row: MentionRow) => React.ReactNode;
+
+/** The glyph a row leads with where it brings none of its own (`RowGlyph`), drawn under the workspace the list writes in. */
+type RowGlyphOf = (row: MentionRow) => React.ReactNode;
 
 /** A row's name and detail, each marked where the words found it, as ⌘K marks its rows. */
 function markedWords(
@@ -1290,6 +1291,7 @@ function comboboxGroups(
   query: string,
   at: number,
   rowCard: RowCardOf,
+  rowGlyph: RowGlyphOf,
 ): ComboboxGroup[] {
   const highlighted = groups.flatMap((group) => group.rows)[at];
   return groups.map((group) => ({
@@ -1299,7 +1301,7 @@ function comboboxGroups(
       ...(isShowMore(row) ? showMoreWordsOf(row) : markedWords(row, query)),
       words: row.name,
       // A group's foot keeps the glyph's room empty, so its words stand in line with the rows above.
-      icon: isShowMore(row) ? null : (row.look?.icon ?? <RowGlyph row={row} />),
+      icon: isShowMore(row) ? null : (row.look?.icon ?? rowGlyph(row)),
       hint: row === highlighted && opens(row) && !("from" in row) ? WALK_INTO_HINT : row.look?.end,
       card: row.look?.card ?? row.card ?? rowCard(row),
       opens: "from" in row,
@@ -1379,6 +1381,7 @@ function MentionMenu({
   reading,
   failures,
   rowCard,
+  rowGlyph,
   onHover,
   onChoose,
 }: {
@@ -1393,6 +1396,7 @@ function MentionMenu({
   /** The reads that failed, which the list says could not be read, with Retry, in place of "no match". */
   failures: readonly MentionReadFailure[];
   rowCard: RowCardOf;
+  rowGlyph: RowGlyphOf;
   onHover: (index: number) => void;
   onChoose: (row: MentionRow) => void;
 }): React.JSX.Element {
@@ -1406,7 +1410,7 @@ function MentionMenu({
         key={crumb === undefined ? WIDE_LIST : JSON.stringify([crumb.kind.narrow, crumb.folder])}
         id={id}
         label={MENU_LABEL}
-        groups={comboboxGroups(groups, query, at, rowCard)}
+        groups={comboboxGroups(groups, query, at, rowCard, rowGlyph)}
         active={at}
         onActiveChange={onHover}
         onChoose={(index) => {
@@ -2066,12 +2070,13 @@ export function useMentionPicker({
     return field.onKeyDown(event);
   };
 
+  const rowGlyph: RowGlyphOf = (row) => <RowGlyph row={row} workspace={place.workspace} />;
   // Note that a row's card is the chip's, made as the row is drawn, because the repository's paths are thousands and only the few listed hang one.
   const rowCard: RowCardOf = (row) => {
     if (!("mention" in row)) return undefined;
     return entityCard(entityOfMention(row.mention), {
       own: undefined,
-      glyph: <RowGlyph row={row} />,
+      glyph: rowGlyph(row),
       name: row.written ?? row.name,
       workspace: place.workspace,
       wordsWorkspaceId: tasksWorkspaceId,
@@ -2094,6 +2099,7 @@ export function useMentionPicker({
       reading={reading}
       failures={failures}
       rowCard={rowCard}
+      rowGlyph={rowGlyph}
       onHover={(index) => setHighlight({ start: trigger.start, query: trigger.query, at: index })}
       onChoose={choose}
     />
