@@ -123,6 +123,31 @@ export const confirmOrYes = Effect.fnUntraced(function* (question: string, yes: 
   return yield* new CommandFailed({ exit: CLI_EXIT.REFUSED, message: "Nothing was deleted." });
 });
 
+/** One line ending, as `echo` or a Windows editor leaves it at the end of piped stdin. */
+const TRAILING_NEWLINE = /\r?\n$/u;
+
+/**
+ * A secret the person hands the command, never an argument, which a shell
+ * keeps in its history: one line typed at a terminal, asked with `prompt` on
+ * stderr and never echoed, since the terminal reads stdin raw with no output
+ * of its own; or all of piped stdin, one trailing line ending dropped, so a
+ * value of several lines arrives whole. Nothing read, or nothing but an
+ * empty value, is a usage failure, whose words never carry what was read.
+ */
+export const readSecret = Effect.fnUntraced(function* (prompt: string) {
+  const read = (yield* canPrompt)
+    ? yield* Effect.flatMap(note(prompt), () =>
+        Effect.option(Effect.flatMap(Terminal.Terminal, (terminal) => terminal.readLine)),
+      ).pipe(Effect.map(Option.getOrUndefined))
+    : yield* Effect.orElseSucceed(stdinText, () => undefined).pipe(
+        Effect.map((piped) => piped?.replace(TRAILING_NEWLINE, "")),
+      );
+  if (read === undefined || read === "") {
+    return yield* new CommandFailed({ exit: CLI_EXIT.USAGE, message: "No value was read." });
+  }
+  return read;
+});
+
 /** The text a `-F <file|->` names: the file's, or stdin's for `-`, or why it could not be read. */
 export const readInput = Effect.fnUntraced(function* (source: string) {
   if (source === STDIN_SOURCE) {
