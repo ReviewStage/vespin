@@ -2154,7 +2154,9 @@ const MEMBER_DELETE_AUTOMATION_TOOL = memberMcpTool({
 
 /** Why a create made nothing, in words for one acting for the member. */
 const CREATE_WORKSPACE_REFUSAL = {
-  UNMADE: "Not created: the workspace could not be made just now; try again in a moment.",
+  UNMADE:
+    "Not confirmed: the workspace could not be made, or was made and could not be read back; " +
+    `check ${MEMBER_MCP_TOOL.LIST_WORKSPACES} before trying again.`,
 } as const;
 
 /** A create names the workspace, held as the window holds a name. */
@@ -2174,7 +2176,7 @@ const CREATE_WORKSPACE_TOOL = memberMcpTool({
     "id, slug, name, and the member's role in it, which every other tool names it by; or " +
     "`rejected` and why.",
   input: CreateWorkspaceInputSchema,
-  annotations: { readOnlyHint: false, destructiveHint: false },
+  annotations: ADDITIVE,
   run: ({ name }) =>
     Effect.gen(function* () {
       const member = yield* AdmittedMember;
@@ -2189,7 +2191,13 @@ const CREATE_WORKSPACE_TOOL = memberMcpTool({
             role: workspace.role,
           },
         })),
-        Effect.catch(() => Effect.succeed(agentToolRejected(CREATE_WORKSPACE_REFUSAL.UNMADE))),
+        // Note that the refusal is logged by its slug alone, because the plugin's own words may quote the name.
+        Effect.catch((refusal) =>
+          Effect.as(
+            Effect.logWarning(`Workspace not created: ${refusal.error}`),
+            agentToolRejected(CREATE_WORKSPACE_REFUSAL.UNMADE),
+          ),
+        ),
       );
     }),
 });
