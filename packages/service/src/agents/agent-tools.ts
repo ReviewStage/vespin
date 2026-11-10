@@ -38,6 +38,7 @@ import {
 import { isWorkspaceMember } from "@repo/database/models/workspace-store";
 import type { ConversationTarget, StoreWriter } from "@repo/database/models/writer";
 import type { StoredArchive } from "@repo/database/schemas/agent";
+import type { AgentQueue } from "@repo/features/agent-queue-wire";
 import { START_NOTE_HEADING } from "@repo/features/agent-replay";
 import {
   harnessNameOf,
@@ -119,6 +120,7 @@ import { createTaskAsked } from "../tasks/task-create-relation.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
 import { agentStarterName, startsFromAgent } from "./agent-reach.js";
 import { calledId } from "./called-id.js";
+import { queueOnPage } from "./coder-host/agent-queue.js";
 import { addAgentRepository, addedRepositoryLine } from "./coder-host/agent-repository-add.js";
 import {
   forwardedImageRefusalWords,
@@ -280,6 +282,8 @@ export const AGENT_TOOL_BOUNDS = {
   PAGE_ROWS: 20,
   /** The most characters an agent's latest activity carries in the list. */
   ACTIVITY_CHARS: 160,
+  /** The most characters a queued message's words carry in `read_agent`'s queue. */
+  QUEUED_CHARS: 160,
 } as const;
 
 /** Why a call ran nothing, or sent nothing, in words the model can act on. */
@@ -1858,10 +1862,11 @@ export interface PageAsked {
   readonly entries: number;
 }
 
-/** One entry of a page: its place, the journal it stands in, which a fork names, none for a line sent to the agent, its words, cut to the bound, and the id of the call it says, where it is one. */
+/** One entry of a page: its place, the journal it stands in, which a fork names, none for a line sent to the agent, the line sent to the agent, which a rewind names, none for the agent's own, its words, cut to the bound, and the id of the call it says, where it is one. */
 export interface PageEntry {
   readonly place: TranscriptPlace;
   readonly messageId: string | undefined;
+  readonly lineId: string | undefined;
   readonly text: string;
   readonly callId: string | undefined;
 }
@@ -1893,6 +1898,8 @@ function pageEntriesOf(
     place: { seq: record.seq, entry },
     // Note that only the agent's own journal is named, because a fork is cut at one and refuses a line.
     messageId: record.message.role === MESSAGE_ROLE.ASSISTANT ? record.id : undefined,
+    // Note that a line sent to the agent is named apart, because a rewind is cut before one and a fork refuses it.
+    lineId: record.message.role === MESSAGE_ROLE.USER ? record.id : undefined,
     text: cutText(text, AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS),
     callId,
   }));
@@ -2005,11 +2012,34 @@ export function pageAnswer(
 }
 
 /** An entry as `read_agent` says it: its words, and the journal it stands in where it is the agent's own. */
-function readAgentEntry({ messageId, text }: PageEntry): WireRecord {
-  return messageId === undefined ? { text } : { messageId, text };
+function readAgentEntry({ messageId, lineId, text }: PageEntry): WireRecord {
+  return {
+    ...(messageId === undefined ? undefined : { messageId }),
+    ...(lineId === undefined ? undefined : { lineId }),
+    text,
+  };
 }
 
-/** One call of `read_agent`: the agent as the list reads it, and the page of its transcript asked, its newest where none is named. */
+/**
+ * An agent's queue as `read_agent` and the member MCP's `change_agent_queue`
+ * say it: each message waiting behind its turn, in the order they go, by its
+ * id, its words cut short, how many files go with it, and whether a member
+ * holds it to edit, which stops the hand-off at it; and why the queue
+ * stands paused, which sends nothing until it is resumed.
+ */
+export function queueRecord(queue: AgentQueue): WireRecord {
+  return {
+    messages: queue.messages.map((message) => ({
+      id: message.id,
+      text: cutText(message.text, AGENT_TOOL_BOUNDS.QUEUED_CHARS),
+      ...(message.files === undefined ? undefined : { files: message.files.length }),
+      ...(message.editing ? { held: true } : undefined),
+    })),
+    ...(queue.paused === undefined ? undefined : { paused: { ...queue.paused } }),
+  };
+}
+
+/** One call of `read_agent`: the agent as the list reads it, its queue where messages wait in it, and the page of its transcript asked, its newest where none is named. */
 export function runReadAgent(
   call: AgentReadCall,
   input: UnparsedWireValue,
@@ -2036,12 +2066,14 @@ export function runReadAgent(
       const published = yield* publishedOf(callerUserId(call.caller), agent);
       const read = yield* transcriptPage(agent, page);
       if (read === undefined) return agentToolRejected(AGENT_TOOL_REFUSAL.UNREADABLE_TRANSCRIPT);
+      const queue = yield* queueOnPage(agent.id);
       return {
         status: ACTION_RESULT_STATUS.ACCEPTED,
         agent: readingRecord(reading),
         ...(published === undefined
           ? undefined
           : { published: { branch: published.branch, pullRequest: published.pullRequest } }),
+        ...(queue.messages.length === 0 ? undefined : { queue: queueRecord(queue) }),
         ...pageAnswer(page, read, readAgentEntry),
       };
     }),

@@ -17,6 +17,7 @@ import { getTestDB } from "../../testing/index.js";
 import { createAgent } from "../agent-store.js";
 import { createAutomation, recordAutomationRun } from "../automation-store.js";
 import { readRunAgents } from "../run-agents.js";
+import { createTask } from "../task-store.js";
 
 /**
  * The agents an automation's run made, over a real dialect: every agent
@@ -81,11 +82,11 @@ it.layer(getTestDB())("a run's agents", (it) => {
             }),
             (recorded) => Option.getOrThrow(recorded).id,
           );
+        const { id: taskId } = yield* createTask(owner, { organizationId, name: "Triage" });
         const agentOf = (title: string, automationRunId: string) =>
           Effect.map(
             createAgent(owner, {
-              taskId: null,
-              organizationId,
+              taskId,
               descriptionSnapshot: null,
               prompt: "Triage the new issues.",
               automationId: made.id,

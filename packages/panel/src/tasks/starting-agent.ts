@@ -26,13 +26,9 @@ export interface StartingAgent {
   readonly onOpen: (() => void) | undefined;
 }
 
-/** The agent the task list carries by its id, with the task it works on, null for none; none where the list carries no such agent. */
+/** The agent the task list carries by its id, with the task it works on; none where the list carries no such agent. */
 function listedAgent(state: AppStateSnapshot, agentId: string) {
-  const { tasks } = state;
-  return (
-    tasks?.taskAgents?.find((agent) => agent.id === agentId) ??
-    tasks?.tasklessAgents?.find((agent) => agent.id === agentId)
-  );
+  return state.tasks?.taskAgents?.find((agent) => agent.id === agentId);
 }
 
 /** The agent `agentId` names, as the task list carries it; none for no id, and for one the list does not carry. */

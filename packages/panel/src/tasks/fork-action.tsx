@@ -145,11 +145,9 @@ export function agentForkDoors(input: {
     if (each.messageId === undefined || listed.some((one) => one.id === each.agentId)) continue;
     forks.set(each.messageId, [...(forks.get(each.messageId) ?? []), each.agentId]);
   }
-  // An agent with no task opens on its own page, listed or not; on a task, a listed one opens its
-  // tab, an archived one's among them.
-  const opens = (agentId: string) => listedIds.has(agentId) || agent.planId === null;
-  // Note that an agent with no task is forked and continued as a task's is, its draft on its own page,
-  // and that an archived one, on its page or in its task's tab, opens no draft.
+  // A listed agent opens its tab, an archived one's among them.
+  const opens = (agentId: string) => listedIds.has(agentId);
+  // Note that an archived agent, on its page or in its task's tab, opens no draft.
   const drafts = control.onUnarchive === undefined && agent.archivedAt === undefined;
   const forkable = onFork !== undefined && drafts;
   const open =
@@ -251,7 +249,7 @@ export function ForkChip({
   const openPlace = useOpenPlace();
   const taskId = source?.planId ?? null;
   const { agentId, messageId } = fork;
-  // A source with no task, or none the list holds, is opened on its own page.
+  // A source the list does not hold is opened on its own page.
   const task = taskId === null ? undefined : { planId: taskId };
   const open =
     openPlace === undefined

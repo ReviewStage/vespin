@@ -1287,9 +1287,6 @@ test("a Vespin link naming a task by its number opens the task the service finds
 /** The workspace the listing names, by its id, as its address step is written where it has no slug. */
 const LISTED_STEP = TASK.workspaceId;
 
-/** An agent on no task, whose own page a link to one of its pages opens. */
-const TASKLESS_AGENT_ID = "5e2d8c1b-7a4f-4b3e-9c6d-2f1a0b9e8d7c";
-
 /** A link as the window is handed it, by its address, in any spelling a link or a mention was written in. */
 function linkAt(href: string): ReadLink {
   const address = addressOf(href, undefined);
@@ -1380,32 +1377,23 @@ test.each([
 );
 
 test.each([
-  ["a page's link", `${LINK_ORIGIN}/${LISTED_STEP}/task/${TASK.id}/page/page-1`, undefined],
+  ["a page's link", `${LINK_ORIGIN}/${LISTED_STEP}/task/${TASK.id}/page/page-1`],
   [
     "a page's link written under /plan/",
     `${LINK_ORIGIN}/${LISTED_STEP}/plan/${TASK.id}/page/page-1`,
-    undefined,
   ],
+  ["a page's link by the task's key", `${LINK_ORIGIN}/${LISTED_STEP}/task/VSP-7/page/page-1`],
   [
-    "a page's link by the task's key",
-    `${LINK_ORIGIN}/${LISTED_STEP}/task/VSP-7/page/page-1`,
-    undefined,
+    "an older link to a page an agent showed on itself, by the agent, which now stands on its task",
+    `${LINK_ORIGIN}/${LISTED_STEP}/agent/${AGENT_ID}/page/page-1`,
   ],
-  [
-    "a page of an agent on no task",
-    `${LINK_ORIGIN}/${LISTED_STEP}/agent/${TASKLESS_AGENT_ID}/page/page-1`,
-    TASKLESS_AGENT_ID,
-  ],
-])(
-  "%s opens the side panel on the page, matched on the route tree",
-  async (_spelling, href, agent) => {
-    const opened = await openedBy(href, true);
-    assert.deepEqual(
-      { panel: opened.panel, agent: opened.agent },
-      { panel: { open: true, tab: pageTab("page-1") }, agent },
-    );
-  },
-);
+])("%s opens the side panel on the page, matched on the route tree", async (_spelling, href) => {
+  const opened = await openedBy(href, true);
+  assert.deepEqual(
+    { panel: opened.panel, agent: opened.agent },
+    { panel: { open: true, tab: pageTab("page-1") }, agent: undefined },
+  );
+});
 
 test("a link to another task's section opens that task and asks its page to show the section, each ask its own", async () => {
   const tab = mount(
@@ -1449,29 +1437,6 @@ test("a link to a comment thread asks its task's page for the thread, each ask i
   assert.equal(tab.control().commentReveal?.ask, 3, "an ask after one let go is still its own");
 });
 
-test("a link to a page an agent on no task showed opens that agent's page, its panel on the page's tab, the agent's own pages held for it", async () => {
-  const page = { id: "page-1", title: "Flaky funnel", version: 1, at: 1 };
-  fakeActs({
-    act: () => Promise.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Not in this test." }),
-  });
-  // Note that a panel's pages are held through the window's act port and laid on the document, as the host lays them.
-  const asked = holdPages(handHostReads({}).deliverPages, () => ({ rows: [page] }));
-  const tab = mount({ shown: true, tasks: withAgents([RUNNING_AGENT]) }, {});
-  await settle();
-
-  act(() =>
-    tab.control().onOpenLink(linkAt(`${LINK_ORIGIN}/acme/agent/${AGENT_ID}/page/${page.id}`)),
-  );
-  await settle();
-
-  assert.equal(tab.control().agentView.agentId, AGENT_ID);
-  // Note that the open task's pages stay held beneath the agent's page.
-  assert.deepEqual(asked, [{ taskId: TASK.id }, { agentId: AGENT_ID }]);
-  // Note that the agent's pages stand once they reach their query.
-  await vi.waitFor(() => assert.deepEqual(tab.control().agentView.pages, [page]));
-  assert.deepEqual(panelOf(tab), { open: true, tab: pageTab(page.id) });
-});
-
 test("in a narrow room a link to another task's page goes straight to the page's address, and no other address stands as the task opens", async () => {
   holdPageOne();
   const tab = mount(
@@ -1508,9 +1473,8 @@ test("a page loaded at a section's own address lands on its route, which opens t
   assert.equal(tab.entries(), entries, "the step takes the loaded entry in place");
 });
 
-test("a Vespin link keyed by the agent alone opens on the agent's task where it has one, else on the agent's page", async () => {
+test("a Vespin link keyed by the agent alone opens on the agent's task, and on the agent's page where the agent cannot be read", async () => {
   const ELSEWHERE = "5e3b6f1d-2a10-4c7a-9a55-7b0f5f3e2c1d";
-  const TASKLESS = "2b7c9e4d-1f3a-4b6e-8d2c-9a1e5f7b3c40";
   const UNREAD = "6d4e2c1b-9a8f-4e7d-b6c5-3a2f1e0d9c8b";
   const SLOW = "1a9b8c7d-6e5f-4a3b-9c2d-1e0f9a8b7c6d";
   const LISTED = "3f2e1d0c-9b8a-4f7e-8d6c-5b4a39281706";
@@ -1519,7 +1483,7 @@ test("a Vespin link keyed by the agent alone opens on the agent's task where it 
     agent: {
       ...RUNNING_AGENT,
       id: String(agentId),
-      planId: agentId === ELSEWHERE ? OTHER_TASK_ID : null,
+      planId: OTHER_TASK_ID,
       automationId: null,
       workspaceId: "acme",
       repository: null,
@@ -1567,11 +1531,6 @@ test("a Vespin link keyed by the agent alone opens on the agent's task where it 
     changesTab(UNREAD),
     "and opens no tab of a panel it may not hold",
   );
-
-  open(`/agent/${TASKLESS}/changes`);
-  await settle();
-  assert.equal(tab.control().agentView.agentId, TASKLESS, "an agent on no task opens on its page");
-  assert.deepEqual(panelOf(tab), { open: true, tab: changesTab(TASKLESS) });
 
   open(`/agent/${ELSEWHERE}`);
   await settle();
@@ -3849,7 +3808,7 @@ test("a Plan tab an earlier version pinned to the sidebar becomes the task's own
   await act(async () => undefined);
   assert.deepEqual(asked(refused), [{ taskId: TASK.id, pinned: true }]);
   assert.deepEqual(
-    refused.control().sidePanel.pins.map((pin) => ("task" in pin ? pin.task : pin.agent)),
+    refused.control().sidePanel.pins.map((pin) => pin.task),
     [TASK.id],
     "the refused task's tab stays pinned, the pinned task's goes",
   );

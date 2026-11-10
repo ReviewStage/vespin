@@ -5,7 +5,12 @@ import { Clock, Effect } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
-import { getTestDB, openInboxItem, openTaskAgent, openWorkspace } from "../../testing/index.js";
+import {
+  getTestDB,
+  openAgentOnOwnTask,
+  openInboxItem,
+  openWorkspace,
+} from "../../testing/index.js";
 import { holdFailedTurnPush, holdThreadPush, takeAbsentHolds } from "../held-push-store.js";
 import { stampPresence } from "../presence-store.js";
 
@@ -31,10 +36,10 @@ it.layer(getTestDB())("the held push store", (it) => {
         const away = yield* openAccount;
         const present = yield* openAccount;
         const workspace = yield* openWorkspace(away);
-        const agentId = yield* openTaskAgent(away, workspace, null);
+        const agentId = yield* openAgentOnOwnTask(away, workspace);
         const itemId = yield* openInboxItem(away, workspace, null, agentId, true);
         const otherWorkspace = yield* openWorkspace(present);
-        const otherAgent = yield* openTaskAgent(present, otherWorkspace, null);
+        const otherAgent = yield* openAgentOnOwnTask(present, otherWorkspace);
         const otherItem = yield* openInboxItem(present, otherWorkspace, null, otherAgent, true);
 
         yield* stampPresence(away);

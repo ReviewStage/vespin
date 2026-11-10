@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace whose environment variables to act on, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "name": {
+      "type": "string",
+      "maxLength": 256,
+      "description": "The variable's name: a letter or underscore, then letters, digits, and underscores, such as DATABASE_URL."
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "additionalProperties": false
+}

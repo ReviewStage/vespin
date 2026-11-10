@@ -922,13 +922,9 @@ function agentKept(asked: Promise<AgentAgentAnswer>): Promise<Kept> {
   return asked.then((answer) => ("agent" in answer ? KEPT : notKept(answer)), notKept);
 }
 
-/** An agent's pin as the tasks drawn show it: on its own row for one with no plan, else among its plan's pins; none where they show no such agent. */
+/** An agent's pin as the tasks drawn show it, among its plan's pins; none where they show no such agent. */
 function agentPin(tasks: TasksView, agentId: string): PinFields | undefined {
-  const { tasklessAgents = [], taskAgents = [], taskAgentPins = [] } = tasks;
-  const taskless = tasklessAgents.find((agent) => agent.id === agentId);
-  if (taskless !== undefined) {
-    return { pinned: taskless.pinnedAt !== undefined, position: taskless.pinPosition ?? null };
-  }
+  const { taskAgents = [], taskAgentPins = [] } = tasks;
   if (!taskAgents.some((agent) => agent.id === agentId)) return undefined;
   const pin = taskAgentPins.find((each) => each.agentId === agentId);
   return { pinned: pin !== undefined, position: pin?.pinPosition ?? null };

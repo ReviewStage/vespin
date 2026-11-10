@@ -45,7 +45,9 @@ import {
   TextField,
 } from "@repo/ui";
 import { isComposingKey } from "@repo/ui/composing-key";
+import { draftKindOf } from "@repo/ui/draft-text";
 import { CheckIcon, Undo2Icon } from "@repo/ui/icons";
+import { Fragment } from "react";
 import { copyThroughShell } from "../copy-feedback.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { type FormTextDoors, type FormTextProps, InboxFormText } from "./inbox-form-text.js";
@@ -63,6 +65,7 @@ import {
 import { ANSWER_STATUS_TONE } from "./inbox-stamp.js";
 import { REPLY_SCOPE } from "./reply-to-selection.js";
 import { SentWords } from "./skill-chip.js";
+import { DraftFence } from "./transcript-markdown.js";
 import { useOpenLink } from "./use-open-link.js";
 
 /**
@@ -561,8 +564,9 @@ const STEP_CODE_TITLE = "code";
  * bold, code, and links among it, a list in it run into the line (`inline`),
  * and a link pressed opening its page without ticking the box (`TextLink`).
  * Each fence standing in the step draws under the words as the window's one
- * code card, its lines kept and its Copy taking them whole, outside the
- * box's press (`stepParts`); a step of a fence alone is named by its place.
+ * code card, its lines kept and its Copy taking them whole, or as a draft to
+ * be sent elsewhere where it is fenced ```slack, ```email, or ```draft
+ * (`DraftFence`), outside the box's press (`stepParts`); a step of a fence alone is named by its place.
  */
 function StepBox({
   step,
@@ -586,12 +590,17 @@ function StepBox({
       <Stack gap={GAP.CONTROL}>
         {fences.map((fence, place) => (
           // A step's fences have no key of their own, and are never reordered.
-          <CodeCard
-            key={place}
-            title={fence.lang ?? STEP_CODE_TITLE}
-            code={fence.code}
-            copy={copyThroughShell}
-          />
+          <Fragment key={place}>
+            {draftKindOf(fence.lang ?? "") === undefined ? (
+              <CodeCard
+                title={fence.lang ?? STEP_CODE_TITLE}
+                code={fence.code}
+                copy={copyThroughShell}
+              />
+            ) : (
+              <DraftFence language={fence.lang} code={fence.code} />
+            )}
+          </Fragment>
         ))}
       </Stack>
     );

@@ -132,20 +132,32 @@ const PROMPT_CACHE_TTL = {
 /** The name our MCP server is registered under, so its tools reach the model as `mcp__workspace__<tool>` (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
 const MCP_SERVER = "workspace";
 
+/** Claude Code's built-ins the worker goes without: those that write a file or start another worker. */
+const WORKER_DENIED_BUILT_INS = ["Edit", "Write", "NotebookEdit", "Agent"] as const;
+
 /**
  * The worker the agent hands a scoped job to (`CLAUDE_CODE_WORKER`): its
  * own model's, without the tools that write a file, start another worker,
  * or act through the service, and told to read only, which Bash and the
- * integration servers it keeps could still contradict.
+ * integration servers it keeps could still contradict. It keeps our
+ * server's reads, such as a task or another agent's transcript, and is
+ * denied the rest by name (`workerDenied`); a config that names none
+ * denies it the whole server.
  */
-const WORKER: AgentDefinition = {
-  description:
-    "A read-only worker for one scoped job, such as a broad search, a comparison of approaches, or an investigation: it reads the checkout and the web and answers, and never edits, commits, or pushes.",
-  prompt:
-    "You are a read-only worker for an agent. Do the one job you were handed and answer with what it asks for. You are read-only in the checkout: never write, edit, move, or delete a file, never commit or push; run only commands that read, and use the connected services only to read from them.",
-  model: "inherit",
-  disallowedTools: ["Edit", "Write", "NotebookEdit", "Agent", `mcp__${MCP_SERVER}`],
-};
+function workerOf(config: ClaudeCodeConfig): AgentDefinition {
+  const ours =
+    config.workerDenied === undefined
+      ? [`mcp__${MCP_SERVER}`]
+      : config.workerDenied.map((tool) => `mcp__${MCP_SERVER}__${tool}`);
+  return {
+    description:
+      "A read-only worker for one scoped job, such as a broad search, a comparison of approaches, or an investigation: it reads the checkout and the web and answers, and never edits, commits, or pushes.",
+    prompt:
+      "You are a read-only worker for an agent. Do the one job you were handed and answer with what it asks for. You are read-only in the checkout: never write, edit, move, or delete a file, never commit or push; run only commands that read, and use the connected services only to read from them.",
+    model: "inherit",
+    disallowedTools: [...WORKER_DENIED_BUILT_INS, ...ours],
+  };
+}
 
 const CLAUDE_EFFORTS: ReadonlySet<string> = new Set(Object.values(EFFORT));
 
@@ -285,7 +297,7 @@ function queryOptions(
     ...permissionsOf(mode, servers, approvals),
     includePartialMessages: true,
     disallowedTools: [...CLAUDE_CODE_TOOLS.DENIED],
-    agents: { [CLAUDE_CODE_WORKER]: WORKER },
+    agents: { [CLAUDE_CODE_WORKER]: workerOf(config) },
     // The CLI's environment is the runner's own and the image's tools'
     // (`SANDBOX_TOOL_ENV`), less the bearer, which only the runner uses; Node
     // leaves an undefined one unset. Every command the agent runs inherits it,

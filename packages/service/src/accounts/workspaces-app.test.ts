@@ -18,7 +18,7 @@ import { githubInstallation } from "@repo/database/schemas/github-installation";
 import { conversations } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { joinWorkspace, openTaskAgent } from "@repo/database/testing";
+import { joinWorkspace, openAgentOnOwnTask } from "@repo/database/testing";
 import { GITHUB_INSTALL_STATUS, HOSTED_SERVICE_PATH } from "@repo/features";
 import {
   AUTOMATION_ACTION,
@@ -1426,61 +1426,57 @@ it.effect(
     }),
 );
 
-it.effect(
-  "a members read names who left having only answered an Inbox item of an agent with no task",
-  () =>
-    Effect.gen(function* () {
-      const plugin = yield* openWorkspacePlugin;
-      const { api, seams, database } = plugin;
-      yield* Effect.gen(function* () {
-        const ada = yield* openGithubAccount("Ada Lovelace");
-        const lin = yield* openGithubAccount("Lin Chen");
-        const acme = yield* openTeam(api, ada, [{ userId: lin, role: "member" }]);
-        const started = yield* createAgent(ada, {
-          taskId: null,
-          organizationId: acme,
-          idempotencyKey: randomUUID(),
-          model: "anthropic/claude-opus-5.5",
-          effort: "high",
-          repository: "acme/relay",
-          descriptionSnapshot: null,
-          prompt: "Sweep the flaky tests.",
-          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-        });
-        const agent = { userId: ada, taskId: null, agentId: Option.getOrThrow(started).agent.id };
-        const posted = yield* postInboxThread(agent, {
-          key: "branch-protection",
-          title: "Require a review on main",
-          body: "Turn on a required review for main in the repository's settings.",
-          ask: { type: INBOX_ASK.DO, steps: [] },
-          needsReply: false,
-        });
-        assert.ok(Result.isSuccess(posted));
-        const ask = posted.success.thread?.find(
-          (message) => message.ask?.status === INBOX_ASK_STATUS.OPEN,
-        );
-        assert.ok(ask !== undefined);
-        const done = yield* answerInboxAsk(lin, posted.success.id, {
-          answers: { ask: ask.id, reply: INBOX_REPLY.DONE },
-          text: "",
-          clientKey: randomUUID(),
-        });
-        assert.equal(Option.getOrThrow(done).outcome, INBOX_ASK_ANSWER.TAKEN);
-        yield* leaving(plugin, lin, acme);
+it.effect("a members read names who left having only answered an agent's Inbox item", () =>
+  Effect.gen(function* () {
+    const plugin = yield* openWorkspacePlugin;
+    const { api, seams, database } = plugin;
+    yield* Effect.gen(function* () {
+      const ada = yield* openGithubAccount("Ada Lovelace");
+      const lin = yield* openGithubAccount("Lin Chen");
+      const acme = yield* openTeam(api, ada, [{ userId: lin, role: "member" }]);
+      const task = yield* createTask(ada, { organizationId: acme, name: "Branch protection" });
+      const started = yield* createAgent(ada, {
+        taskId: task.id,
+        idempotencyKey: randomUUID(),
+        model: "anthropic/claude-opus-5.5",
+        effort: "high",
+        repository: "acme/relay",
+        descriptionSnapshot: null,
+        prompt: "Sweep the flaky tests.",
+        runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+      });
+      const agent = { userId: ada, taskId: task.id, agentId: Option.getOrThrow(started).agent.id };
+      const posted = yield* postInboxThread(agent, {
+        key: "branch-protection",
+        title: "Require a review on main",
+        body: "Turn on a required review for main in the repository's settings.",
+        ask: { type: INBOX_ASK.DO, steps: [] },
+        needsReply: false,
+      });
+      assert.ok(Result.isSuccess(posted));
+      const ask = posted.success.thread?.find(
+        (message) => message.ask?.status === INBOX_ASK_STATUS.OPEN,
+      );
+      assert.ok(ask !== undefined);
+      const done = yield* answerInboxAsk(lin, posted.success.id, {
+        answers: { ask: ask.id, reply: INBOX_REPLY.DONE },
+        text: "",
+        clientKey: randomUUID(),
+      });
+      assert.equal(Option.getOrThrow(done).outcome, INBOX_ASK_ANSWER.TAKEN);
+      yield* leaving(plugin, lin, acme);
 
-        const answered = yield* readMembers(seams, ada, membersAt(acme));
+      const answered = yield* readMembers(seams, ada, membersAt(acme));
 
-        assert.deepEqual(answered, {
-          status: HOSTED_HTTP_STATUS.OK,
-          body: {
-            members: [
-              { userId: ada, name: "Ada Lovelace", email: `${ada}@app.test`, role: "owner" },
-            ],
-            former: [{ userId: lin, name: "Lin Chen" }],
-          },
-        });
-      }).pipe(Effect.provide(database));
-    }),
+      assert.deepEqual(answered, {
+        status: HOSTED_HTTP_STATUS.OK,
+        body: {
+          members: [{ userId: ada, name: "Ada Lovelace", email: `${ada}@app.test`, role: "owner" }],
+          former: [{ userId: lin, name: "Lin Chen" }],
+        },
+      });
+    }).pipe(Effect.provide(database));
+  }),
 );
 
 it.effect(
@@ -1638,7 +1634,7 @@ it.effect(
         const joined = yield* openTeam(plugin.api, ada, [{ userId: grace, role: "member" }]);
         const solo = yield* openTeam(plugin.api, grace, []);
         const working = yield* openTeam(plugin.api, alan, []);
-        yield* openTaskAgent(alan, working, null);
+        yield* openAgentOnOwnTask(alan, working);
 
         const ofJoined = yield* deletingIfAlone(plugin, ada, joined);
         const ofWorking = yield* deletingIfAlone(plugin, alan, working);
@@ -1667,7 +1663,7 @@ it.effect(
         const ada = yield* openGithubAccount("Ada Lovelace");
         const grace = yield* openGithubAccount("Grace Hopper");
         const acme = yield* openTeam(plugin.api, ada, [{ userId: grace, role: "member" }]);
-        const agentId = yield* openTaskAgent(grace, acme, null);
+        const agentId = yield* openAgentOnOwnTask(grace, acme);
         const [agent] = yield* Database.use((db) =>
           db
             .select({ conversationId: agentTable.conversationId })

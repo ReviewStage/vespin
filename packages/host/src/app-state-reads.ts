@@ -10,7 +10,7 @@
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { type AgentTranscriptKey, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
-import type { ListedAgent, TasklessAgent } from "@repo/features/agent-wire";
+import type { ListedAgent } from "@repo/features/agent-wire";
 import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/inbox-list-model";
 import { INBOX_ASK, type InboxMessage, recommendedLabels } from "@repo/features/inbox-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
@@ -443,12 +443,12 @@ export function selectInboxReader(state: AppStateSnapshot): string | undefined {
   return state.account.status === ACCOUNT_STATUS.SIGNED_IN ? state.account.id : undefined;
 }
 
-/** Every agent's title the task list holds, by the agent's id, as a `select`: the agents on its tasks and those with none, an agent with no title yet left out. Made anew only as the list moves. */
+/** Every agent's title the task list holds, by the agent's id, as a `select`: the agents on its tasks, an agent with no title yet left out. Made anew only as the list moves. */
 export const selectAgentTitles = memoizedSelect(
   (state: AppStateSnapshot) => [state.tasks],
   (tasks): ReadonlyMap<string, string> =>
     new Map(
-      [...(tasks.taskAgents ?? []), ...(tasks.tasklessAgents ?? [])].flatMap(({ id, title }) =>
+      (tasks.taskAgents ?? []).flatMap(({ id, title }) =>
         title === null ? [] : [[id, title] as const],
       ),
     ),
@@ -511,16 +511,14 @@ export function selectWorkspaceExperiment(
   return (state) => workspaceExperimentOnIn(state, workspaceId, experiment);
 }
 
-/** One agent as the task list follows it, on a task or on none. */
-export type FollowedAgent = ListedAgent | TasklessAgent;
+/** One agent as the task list follows it. */
+export type FollowedAgent = ListedAgent;
 
-/** One agent as the task list follows it, by its id, as a `select`: on its task or on none; none where the list holds no such agent. */
+/** One agent as the task list follows it, by its id, as a `select`; none where the list holds no such agent. */
 export function selectFollowedAgent(
   agentId: string,
 ): (state: AppStateSnapshot) => FollowedAgent | undefined {
-  return (state) =>
-    state.tasks.taskAgents?.find(({ id }) => id === agentId) ??
-    state.tasks.tasklessAgents?.find(({ id }) => id === agentId);
+  return (state) => state.tasks.taskAgents?.find(({ id }) => id === agentId);
 }
 
 /** One transcript as the host holds it, the agent's own or its worker's by the call that started it, as a `select`; none where no window holds it. */
