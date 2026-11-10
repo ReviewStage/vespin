@@ -134,17 +134,18 @@ export function markdownTooDeep(text: string): boolean {
     } else {
       const [words, depth] = containers(text, at, end, indent);
       if (depth > MARKDOWN_NESTING_LIMIT) return true;
-      const code = text.charCodeAt(at);
-      const run =
-        (code === 96 || code === 126) && indent < TAB_COLUMNS ? runLength(text, at, end, code) : 0;
+      // Note that a fence inside a quote or a list item opens after its markers, as it does for the parser.
+      const code = text.charCodeAt(words);
+      const fenced = (code === 96 || code === 126) && (words !== at || indent < TAB_COLUMNS);
+      const run = fenced ? runLength(text, words, end, code) : 0;
       if (fence !== 0) {
         if (
           code === fence &&
           run >= fenceLength &&
-          !lineHas(text, at + run, end, (c) => !isSpace(c))
+          !lineHas(text, words + run, end, (c) => !isSpace(c))
         )
           fence = 0;
-      } else if (run >= 3 && !(code === 96 && lineHas(text, at + run, end, (c) => c === 96))) {
+      } else if (run >= 3 && !(code === 96 && lineHas(text, words + run, end, (c) => c === 96))) {
         fence = code;
         fenceLength = run;
       } else {
