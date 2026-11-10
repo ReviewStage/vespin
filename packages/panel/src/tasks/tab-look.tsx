@@ -4,6 +4,7 @@ import {
   type AgentPullRequest,
   type AgentStatus,
 } from "@repo/features/agent-wire";
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
@@ -12,6 +13,7 @@ import { GLYPH } from "@repo/ui/icons";
 import { pullRequestLabelOf, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION } from "@repo/ui/tasks-model";
 import { AppWindowIcon, BotIcon, GitPullRequestIcon, GlobeIcon, InboxIcon } from "lucide-react";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { HarnessMark } from "../harness-marks.js";
 import { StateGlyph, stateEndMark } from "../state-glyph.js";
 import { providerOf } from "./agent-model.js";
@@ -132,11 +134,17 @@ export interface KindLook {
 
 /**
  * A task's glyph wherever a task is named: its status's mark
- * (`TaskStatusMark`), or the document where its status is not known, as a
- * task the window does not list.
+ * (`TaskStatusMark`), or its kind's glyph where its status is not known,
+ * as a task the window does not list. Note that it is never the
+ * description's document, which a task named before its list is read
+ * wore everywhere.
  */
 export function PlanGlyph({ status }: { status: TaskStatus | undefined }) {
-  return status === undefined ? <DocumentIcon /> : <TaskStatusMark status={status} />;
+  return status === undefined ? (
+    <EntityGlyph kind={ENTITY_KIND.PLAN} />
+  ) : (
+    <TaskStatusMark status={status} />
+  );
 }
 
 /**

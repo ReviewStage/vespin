@@ -29,8 +29,7 @@
         "packages/panel/src/desktop/automation-agent-run.tsx": 2,
         "packages/panel/src/desktop/automation-runs-panel.tsx": 1,
         "packages/panel/src/desktop/command-palette.tsx": 1,
-        "packages/panel/src/tasks/inbox-item-parts.tsx": 1,
-        "packages/panel/src/tasks/mention-picker.tsx": 1
+        "packages/panel/src/tasks/inbox-item-parts.tsx": 1
       }
     },
     {
@@ -43,7 +42,6 @@
       ],
       "baseline": {
         "packages/panel/src/command-items.tsx": 1,
-        "packages/panel/src/tasks/mention-picker.tsx": 1,
         "packages/panel/src/tasks/transcript-blocks.tsx": 1
       }
     },
@@ -58,7 +56,6 @@
       "baseline": {
         "packages/panel/src/tasks/inbox-item-chip.tsx": 1,
         "packages/panel/src/tasks/inbox-item-parts.tsx": 1,
-        "packages/panel/src/tasks/mention-picker.tsx": 1,
         "packages/panel/src/tasks/tab-look.tsx": 1
       }
     },
@@ -108,7 +105,6 @@
         "packages/ui/src/marks/"
       ],
       "baseline": {
-        "packages/panel/src/tasks/mention-picker.tsx": 1,
         "packages/panel/src/tasks/transcript-blocks.tsx": 2
       }
     },
@@ -176,9 +172,7 @@
       "baseline": {
         "packages/panel/src/desktop/automation-editor.tsx": 1,
         "packages/panel/src/desktop/automations-page.tsx": 1,
-        "packages/panel/src/desktop/desktop-sidebar.tsx": 1,
         "packages/panel/src/desktop/section-icon-picker.tsx": 1,
-        "packages/panel/src/desktop/tab-switcher.tsx": 1,
         "packages/panel/src/tasks/agent-tab.tsx": 1,
         "packages/panel/src/tasks/inbox-pane.tsx": 1,
         "packages/ui/src/components/landing/landing-desktop.tsx": 1,
@@ -194,9 +188,7 @@
         "packages/ui/src/marks/"
       ],
       "baseline": {
-        "packages/panel/src/desktop/desktop-sidebar.tsx": 1,
         "packages/panel/src/desktop/mobile-bar.tsx": 1,
-        "packages/panel/src/desktop/tab-switcher.tsx": 1,
         "packages/panel/src/desktop/tasks-list.tsx": 1,
         "packages/ui/src/components/landing/landing-desktop.tsx": 1,
         "packages/ui/src/components/landing/landing-scenes.tsx": 1
@@ -224,7 +216,6 @@
       ],
       "baseline": {
         "packages/panel/src/tasks/lone-link-card.tsx": 1,
-        "packages/panel/src/tasks/mention-picker.tsx": 1,
         "packages/panel/src/tasks/page-card.tsx": 1,
         "packages/panel/src/tasks/tab-look.tsx": 1,
         "packages/panel/src/tasks/transcript-blocks.tsx": 1
@@ -239,7 +230,6 @@
         "packages/ui/src/marks/"
       ],
       "baseline": {
-        "packages/panel/src/tasks/mention-picker.tsx": 1,
         "packages/panel/src/tasks/skill-ref.tsx": 1,
         "packages/panel/src/tasks/transcript-blocks.tsx": 1
       }
@@ -253,7 +243,6 @@
         "packages/ui/src/marks/"
       ],
       "baseline": {
-        "packages/panel/src/tasks/mention-picker.tsx": 1,
         "packages/panel/src/tasks/pull-request-writes.tsx": 1,
         "packages/panel/src/tasks/tab-look.tsx": 1
       }

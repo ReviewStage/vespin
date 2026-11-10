@@ -12,7 +12,7 @@ import {
   suggestedDates,
 } from "@repo/features/date-mention";
 import { descriptionSections } from "@repo/features/description-document";
-import { entityOfMention } from "@repo/features/entity-kind";
+import { ENTITY_KIND, type EntityKind, entityOfMention } from "@repo/features/entity-kind";
 import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
@@ -72,13 +72,11 @@ import {
   TEXT_VARIANT,
   Text,
   Time,
-  UserIcon,
   useComboboxField,
   useMinute,
 } from "@repo/ui";
 import { type Actor, APP_ACTOR } from "@repo/ui/actor-model";
 import type { NamedServer } from "@repo/ui/agent-servers-model";
-import { GLYPH } from "@repo/ui/icons";
 import { hitRangesIn, LOOSE_FROM, type SearchSubject, searchHit } from "@repo/ui/search-score";
 import type { SkillOption } from "@repo/ui/skill-mention";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
@@ -91,15 +89,7 @@ import {
 } from "@tanstack/react-query";
 import { useCreateStore, useSelector } from "@tanstack/react-store";
 import { Duration, Effect } from "effect";
-import {
-  AppWindowIcon,
-  BookOpenIcon,
-  CalendarIcon,
-  FolderIcon,
-  GitPullRequestIcon,
-  HashIcon,
-  UsersIcon,
-} from "lucide-react";
+import { UsersIcon } from "lucide-react";
 import { type RefObject, useEffect, useId, useMemo, useState } from "react";
 import { askAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark, AutomationCard, actorCard, automationActor } from "../actor-ref.js";
@@ -111,6 +101,7 @@ import {
 } from "../description-editor/contract.js";
 import { useAutomations } from "../desktop/use-automations.js";
 import { entityCard } from "../entities/entity-card.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
 import { type IntegrationToolsReads, useIntegrationTools } from "../integration-tools.js";
 import { inboxItemsQuery, inboxItemsRetryMutation } from "../live-reads.js";
@@ -290,6 +281,26 @@ const MENTION_FROM = {
 } as const;
 
 type MentionFrom = (typeof MENTION_FROM)[keyof typeof MENTION_FROM];
+
+/** The entity each kind of the list lists, whose glyph its row and its crumb wear (`../entities/entity-glyph.tsx`). */
+const KIND_ENTITY = {
+  [MENTION_FROM.FILES]: ENTITY_KIND.REPOSITORY,
+  [MENTION_FROM.TASKS]: ENTITY_KIND.PLAN,
+  [MENTION_FROM.PAGES]: ENTITY_KIND.PAGE,
+  [MENTION_FROM.AGENTS]: ENTITY_KIND.AGENT,
+  [MENTION_FROM.THREADS]: ENTITY_KIND.INBOX_ITEM,
+  [MENTION_FROM.AUTOMATIONS]: ENTITY_KIND.AUTOMATION,
+  [MENTION_FROM.PULL_REQUESTS]: ENTITY_KIND.PULL_REQUEST,
+  [MENTION_FROM.SKILLS]: ENTITY_KIND.SKILL,
+  [MENTION_FROM.DATES]: ENTITY_KIND.DATE,
+  [MENTION_FROM.SERVERS]: ENTITY_KIND.SERVER,
+} as const satisfies Record<
+  Exclude<
+    MentionFrom,
+    typeof MENTION_FROM.DESCRIPTION | typeof MENTION_FROM.PEOPLE | typeof MENTION_FROM.SERVER
+  >,
+  EntityKind
+>;
 
 /** Words that narrow the list as a kind's own word does: `plan`, the description's word before it was renamed. */
 const MENTION_FROM_ALIAS: ReadonlyMap<string, MentionFrom> = new Map([
@@ -1171,43 +1182,22 @@ function groupsFor(
 
 /** A kind's glyph, as its rows wear theirs. */
 function KindGlyph({ kind }: { kind: MentionKind }): React.JSX.Element {
-  switch (kind.narrow.from) {
-    case MENTION_FROM.FILES:
-      return <FolderIcon aria-hidden="true" />;
-    case MENTION_FROM.DESCRIPTION:
-      return <DocumentIcon />;
-    case MENTION_FROM.TASKS:
-      return <GLYPH.TASK />;
-    case MENTION_FROM.PAGES:
-      return <AppWindowIcon aria-hidden="true" />;
-    case MENTION_FROM.AGENTS:
-      return <AgentMark provider={undefined} />;
-    case MENTION_FROM.PEOPLE:
-      return <UsersIcon aria-hidden="true" />;
-    case MENTION_FROM.THREADS:
-      return <GLYPH.THREAD />;
-    case MENTION_FROM.AUTOMATIONS:
-      return <GLYPH.AUTOMATION />;
-    case MENTION_FROM.PULL_REQUESTS:
-      return <GitPullRequestIcon aria-hidden="true" />;
-    case MENTION_FROM.SKILLS:
-      return <BookOpenIcon aria-hidden="true" />;
-    case MENTION_FROM.DATES:
-      return <CalendarIcon aria-hidden="true" />;
-    case MENTION_FROM.SERVERS:
-      return <GLYPH.MCP_SERVER />;
-    case MENTION_FROM.SERVER:
-      return <ProviderMark provider={kind.narrow.provider} />;
-  }
+  const { from } = kind.narrow;
+  // Note that the description and the people are no one entity's kind, so they keep glyphs of their own.
+  if (from === MENTION_FROM.DESCRIPTION) return <DocumentIcon />;
+  if (from === MENTION_FROM.PEOPLE) return <UsersIcon aria-hidden="true" />;
+  if (kind.narrow.from === MENTION_FROM.SERVER)
+    return <ProviderMark provider={kind.narrow.provider} />;
+  return <EntityGlyph kind={KIND_ENTITY[from]} />;
 }
 
 /** A row's glyph, as its chip wears it. */
 function RowGlyph({ row }: { row: MentionRow }): React.JSX.Element {
   const planned = "mention" in row && row.mention.kind === MENTION_KIND.TASK;
   const taskStatus = useTaskStatus(planned ? row.mention.taskId : undefined);
-  if ("skill" in row) return <BookOpenIcon aria-hidden="true" />;
+  if ("skill" in row) return <EntityGlyph kind={ENTITY_KIND.SKILL} />;
   if ("from" in row) return <KindGlyph kind={row.from} />;
-  if ("picksDate" in row) return <CalendarIcon aria-hidden="true" />;
+  if ("picksDate" in row) return <EntityGlyph kind={ENTITY_KIND.DATE} />;
   if ("thread" in row) return inboxItemGlyph(row.item);
   if ("automation" in row) {
     return <ActorMark actor={automationActor(row.automation)} size={ACTOR_SIZE.INLINE} />;
@@ -1218,9 +1208,9 @@ function RowGlyph({ row }: { row: MentionRow }): React.JSX.Element {
     case MENTION_KIND.FILE:
       return <FileTypeIcon name={fileName(mention.path)} />;
     case MENTION_KIND.FOLDER:
-      return <FolderIcon aria-hidden="true" />;
+      return <EntityGlyph kind={ENTITY_KIND.FOLDER} />;
     case MENTION_KIND.SECTION:
-      return <HashIcon aria-hidden="true" />;
+      return <EntityGlyph kind={ENTITY_KIND.SECTION} />;
     case MENTION_KIND.TASK:
       return <PlanGlyph status={taskStatus} />;
     case MENTION_KIND.SERVER:
@@ -1229,19 +1219,19 @@ function RowGlyph({ row }: { row: MentionRow }): React.JSX.Element {
     case MENTION_KIND.LINK:
       return <ProviderMark provider={"site" in mention ? mention.site : mention.provider} />;
     case MENTION_KIND.PAGE:
-      return <AppWindowIcon aria-hidden="true" />;
+      return <EntityGlyph kind={ENTITY_KIND.PAGE} />;
     case MENTION_KIND.AGENT:
       return <AgentMark provider={undefined} />;
     case MENTION_KIND.PERSON:
       return row.actor === undefined ? (
-        <UserIcon />
+        <EntityGlyph kind={ENTITY_KIND.PERSON} />
       ) : (
         <ActorMark actor={row.actor} size={ACTOR_SIZE.INLINE} />
       );
     case MENTION_KIND.APP:
       return <ActorMark actor={APP_ACTOR} size={ACTOR_SIZE.INLINE} />;
     case MENTION_KIND.DATE:
-      return <CalendarIcon aria-hidden="true" />;
+      return <EntityGlyph kind={ENTITY_KIND.DATE} />;
   }
 }
 
@@ -1341,7 +1331,11 @@ function MentionCrumb({ crumb }: { crumb: Crumb }): React.JSX.Element {
         />
       )}
       <MenuGlyph>
-        {folder === undefined ? <KindGlyph kind={kind} /> : <FolderIcon aria-hidden="true" />}
+        {folder === undefined ? (
+          <KindGlyph kind={kind} />
+        ) : (
+          <EntityGlyph kind={ENTITY_KIND.FOLDER} />
+        )}
       </MenuGlyph>
       <Text
         as={TEXT_ELEMENT.SPAN}

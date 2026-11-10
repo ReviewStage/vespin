@@ -10,14 +10,6 @@ import {
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
 import { ProviderMark } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor, APP_ACTOR } from "@repo/ui/actor-model";
-import {
-  CalendarIcon,
-  GLYPH,
-  HashIcon,
-  HouseIcon,
-  MessageSquareIcon,
-  ShieldUserIcon,
-} from "@repo/ui/icons";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { ACTOR_SIZE, ActorGlyph, ActorMark, automationActor } from "../actor-ref.js";
@@ -36,6 +28,7 @@ import { AgentGlyph, AgentMark, PlanGlyph } from "../tasks/tab-look.js";
 import { useAgentStatus, useTaskStatus } from "../tasks/use-known-names.js";
 import type { LinkStanding } from "../tasks/use-link-standing.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
+import { EntityGlyph } from "./entity-glyph.js";
 
 /**
  * entity-mark.tsx -- the mark a chip leads with for each kind of entity it names, one entry per kind (`@repo/features/entity-kind`).
@@ -200,49 +193,53 @@ const SERVER_MARK: EntityMark<EntityOf<typeof ENTITY_KIND.SERVER | typeof ENTITY
 /** The mark each kind leads with, as its row leads with it wherever the window lists the entity. */
 const ENTITY_MARK: EntityMarks = {
   [ENTITY_KIND.PLAN]: (plan) => <PlanMark taskId={plan.taskId} />,
-  [ENTITY_KIND.SECTION]: () => <HashIcon aria-hidden="true" />,
+  [ENTITY_KIND.SECTION]: () => <EntityGlyph kind={ENTITY_KIND.SECTION} />,
   [ENTITY_KIND.VERSION]: (version) => <PlanMark taskId={version.planId} />,
-  [ENTITY_KIND.COMMENT]: () => <GLYPH.COMMENT />,
-  [ENTITY_KIND.PAGE]: () => <GLYPH.PAGE />,
+  [ENTITY_KIND.COMMENT]: () => <EntityGlyph kind={ENTITY_KIND.COMMENT} />,
+  [ENTITY_KIND.PAGE]: () => <EntityGlyph kind={ENTITY_KIND.PAGE} />,
   [ENTITY_KIND.AGENT]: (agent, at) => <AgentEntityMark agent={agent} at={at} />,
-  [ENTITY_KIND.WORKER]: () => <GLYPH.AGENT />,
+  [ENTITY_KIND.WORKER]: () => <EntityGlyph kind={ENTITY_KIND.WORKER} />,
   [ENTITY_KIND.APP]: () => <ActorMark actor={APP_ACTOR} size={ACTOR_SIZE.INLINE} />,
-  [ENTITY_KIND.CHANGES]: () => <GLYPH.PULL_REQUEST_CHANGES />,
+  [ENTITY_KIND.CHANGES]: () => <EntityGlyph kind={ENTITY_KIND.CHANGES} />,
   // A pull request its provider answered for wears its mark for where it stands, as everywhere the window draws one.
   [ENTITY_KIND.PULL_REQUEST]: (_pullRequest, { standing }) =>
     standing?.pullRequest === undefined ? (
-      <GLYPH.PULL_REQUEST />
+      <EntityGlyph kind={ENTITY_KIND.PULL_REQUEST} />
     ) : (
       <PullRequestMark pullRequest={{ ...standing.pullRequest, checks: CHECK_SUMMARY.NONE }} />
     ),
-  [ENTITY_KIND.PULL_REQUEST_THREAD]: () => <GLYPH.COMMENT />,
+  [ENTITY_KIND.PULL_REQUEST_THREAD]: () => <EntityGlyph kind={ENTITY_KIND.PULL_REQUEST_THREAD} />,
   [ENTITY_KIND.ISSUE]: (_issue, { standing }) =>
-    standing?.issue === undefined ? <GLYPH.ISSUE /> : <IssueMark issue={standing.issue} />,
+    standing?.issue === undefined ? (
+      <EntityGlyph kind={ENTITY_KIND.ISSUE} />
+    ) : (
+      <IssueMark issue={standing.issue} />
+    ),
   [ENTITY_KIND.LINK]: (link) => (
     <ProviderMark provider={"site" in link ? link.site : link.provider} />
   ),
-  [ENTITY_KIND.MESSAGE]: () => <MessageSquareIcon aria-hidden="true" />,
-  [ENTITY_KIND.HOME]: () => <HouseIcon aria-hidden="true" />,
-  [ENTITY_KIND.BOARD]: () => <GLYPH.TASK />,
-  [ENTITY_KIND.INBOX]: () => <GLYPH.INBOX />,
+  [ENTITY_KIND.MESSAGE]: () => <EntityGlyph kind={ENTITY_KIND.MESSAGE} />,
+  [ENTITY_KIND.HOME]: () => <EntityGlyph kind={ENTITY_KIND.HOME} />,
+  [ENTITY_KIND.BOARD]: () => <EntityGlyph kind={ENTITY_KIND.BOARD} />,
+  [ENTITY_KIND.INBOX]: () => <EntityGlyph kind={ENTITY_KIND.INBOX} />,
   [ENTITY_KIND.INBOX_ITEM]: (item) => <InboxItemChipGlyph place={item} />,
-  [ENTITY_KIND.AUTOMATIONS]: () => <GLYPH.AUTOMATION />,
+  [ENTITY_KIND.AUTOMATIONS]: () => <EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />,
   [ENTITY_KIND.AUTOMATION]: AUTOMATION_MARK,
   [ENTITY_KIND.AUTOMATION_RUN]: AUTOMATION_MARK,
-  [ENTITY_KIND.SETTINGS]: () => <GLYPH.SETTINGS />,
+  [ENTITY_KIND.SETTINGS]: () => <EntityGlyph kind={ENTITY_KIND.SETTINGS} />,
   [ENTITY_KIND.PERSON]: (person, at) => (
     <PersonMark userId={person.userId} name={at.name} workspace={at.workspace} />
   ),
-  [ENTITY_KIND.ADMIN]: () => <ShieldUserIcon aria-hidden="true" />,
+  [ENTITY_KIND.ADMIN]: () => <EntityGlyph kind={ENTITY_KIND.ADMIN} />,
   [ENTITY_KIND.FILE]: (file) => <FileTypeIcon name={fileName(file.path)} />,
-  [ENTITY_KIND.FOLDER]: () => <GLYPH.FOLDER />,
+  [ENTITY_KIND.FOLDER]: () => <EntityGlyph kind={ENTITY_KIND.FOLDER} />,
   [ENTITY_KIND.SERVER]: SERVER_MARK,
   [ENTITY_KIND.TOOL]: SERVER_MARK,
   [ENTITY_KIND.SKILL]: () => <SkillMark />,
   // Note that a repository's row leads with its owner's picture only where the place may draw pictures, which no chip is told yet, so it wears its kind's glyph.
-  [ENTITY_KIND.REPOSITORY]: () => <GLYPH.REPOSITORY />,
+  [ENTITY_KIND.REPOSITORY]: () => <EntityGlyph kind={ENTITY_KIND.REPOSITORY} />,
   [ENTITY_KIND.WORKSPACE]: (workspace) => <WorkspaceMark slug={workspace.workspace} />,
-  [ENTITY_KIND.DATE]: () => <CalendarIcon aria-hidden="true" />,
+  [ENTITY_KIND.DATE]: () => <EntityGlyph kind={ENTITY_KIND.DATE} />,
 };
 
 /** An entity's mark drawn through its kind's own entry. */
