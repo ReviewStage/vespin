@@ -14,6 +14,7 @@ import type { Actor } from "@repo/ui/actor-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useRef, useState } from "react";
 import { HarnessMark } from "../harness-marks.js";
+import { type AgentModeControl, MODE_GLYPH, MODE_WORDS, modeShown } from "./agent-approvals.js";
 import { choiceLabel, paidByOf, providerOf } from "./agent-model.js";
 import { payerLastLine, usePayerPlan } from "./agent-payer.js";
 import { ModelLabel } from "./model-label.js";
@@ -51,7 +52,11 @@ import type { AgentModelControl } from "./use-agent-model.js";
  * Who pays is read once, the page's payer before the settled turns', and
  * the plan the agent's harness runs on only where neither names one
  * (`paidByOf`), so a Codex agent says its plan before its first turn
- * settles. The reader's own plan is named where their keys hold the one the
+ * settles. A Claude Code agent's chip hands its menu the agent's permission
+ * mode too, its last pinned row (`agent-approvals.tsx`), and off Full
+ * access wears the mode's glyph before the model's name, in the harness
+ * mark's place where the composer is narrow, its label naming the mode
+ * after the model. The reader's own plan is named where their keys hold the one the
  * page named ("Your Codex plan (ana@work.com)", masked in a screen
  * recording), a new agent's the first of the reader's plans with room left.
  */
@@ -69,6 +74,7 @@ export function AgentModelChip({
   width,
   narrow = false,
   startsNew = false,
+  permissions,
 }: {
   model: AgentModelControl;
   /** The catalog as the host holds it for the account; nothing before it is first read. */
@@ -93,6 +99,8 @@ export function AgentModelChip({
   narrow?: boolean;
   /** Whether the choice is what a new agent would start on, on the reader's own credentials, as an automation's is, so one nothing of theirs pays for says it cannot run; never a running agent's, whose starter pays. */
   startsNew?: boolean;
+  /** The agent's permission mode and its change, offered in the menu; none for an agent whose harness takes no mode. */
+  permissions?: AgentModeControl | undefined;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const drawn = useDisclosure(open);
@@ -107,7 +115,10 @@ export function AgentModelChip({
   };
 
   const provider = providerOf(model.choice.model);
-  const label = choiceLabel(model.choice, models ?? []).trim();
+  const shown = modeShown(permissions);
+  const ModeGlyph = shown === undefined ? undefined : MODE_GLYPH[shown];
+  const modelWords = choiceLabel(model.choice, models ?? []).trim();
+  const label = shown === undefined ? modelWords : `${modelWords} · ${MODE_WORDS[shown].label}`;
   // Note that who pays decides Fast on Codex, which runs a fast version on an OpenAI API key alone.
   const paidBy = payer ?? usage?.payer;
   const paying = paidByOf(payer, usage, model.runtime);
@@ -121,7 +132,7 @@ export function AgentModelChip({
           ref={trigger}
           look={look}
           width={width}
-          iconOnly={narrow && provider !== undefined}
+          iconOnly={narrow && (provider !== undefined || ModeGlyph !== undefined)}
           chevron
           aria-label={label}
           aria-haspopup="dialog"
@@ -129,7 +140,11 @@ export function AgentModelChip({
           aria-controls={open ? menuId : undefined}
           onClick={() => setOpen(!open)}
         >
-          {narrow && provider !== undefined ? <HarnessMark provider={provider} /> : null}
+          {ModeGlyph !== undefined ? (
+            <ModeGlyph />
+          ) : narrow && provider !== undefined ? (
+            <HarnessMark provider={provider} />
+          ) : null}
           <ChipName>
             <ModelLabel choice={model.choice} models={models ?? []} />
           </ChipName>
@@ -147,6 +162,7 @@ export function AgentModelChip({
           chosen={settledChoice(offered, model.choice)}
           startsNew={startsNew}
           offersFast={runtimeModelRule(model.runtime, paidBy).fast}
+          permissions={permissions}
           onChoose={model.choose}
           lastLine={payerLastLine(paying, provider, usage, owner, plan)}
           onClose={close}

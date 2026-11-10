@@ -168,6 +168,8 @@ export interface MenuRow {
   terms?: readonly string[];
   /** Muted words after the label: the effort a model runs at, an owner, "(Fast)", where an agent stands. */
   detail?: React.ReactNode;
+  /** Whether the detail stands under the label, wrapping, as a permission mode's hint does, rather than after it. */
+  detailUnder?: boolean | undefined;
   /** The heading the row stands under, with the rows beside it that share it, and which a search matches; none stands under no heading. */
   section?: string | undefined;
   /** The shortcut that does what picking the row does, printed muted at the row's end. */
@@ -198,6 +200,8 @@ interface Section<Row extends MenuRow> {
 interface Submenu {
   /** What the rows are, for assistive technology. */
   label: string;
+  /** A heading drawn over the rows, which names them to a reader too: the question a permission mode answers. */
+  heading?: string | undefined;
   rows: readonly MenuRow[];
   /** The id of the row chosen now, drawn checked. */
   value: string | undefined;
@@ -492,6 +496,7 @@ function optionGroups(
         : { lead: row.faces, leadWidth: COMBOBOX_LEAD.FACES }),
       detail: rowWords(row, unmasked, row.detail),
       detailWords: typeof row.detail === "string" ? row.detail : undefined,
+      detailUnder: row.detailUnder,
       hint: rowWords(row, unmasked, rowHint(row)),
       replayMasked: row.replayMasked,
       disabled: row.disabled !== undefined,
@@ -526,6 +531,7 @@ function submenuOptions(open: Submenu, unmasked: boolean): ComboboxOption[] {
     icon: row.icon,
     detail: rowWords(row, unmasked, row.detail),
     detailWords: typeof row.detail === "string" ? row.detail : undefined,
+    detailUnder: row.detailUnder,
     hint: rowWords(row, unmasked, rowHint(row)),
     replayMasked: row.replayMasked,
     card: row.card,
@@ -1037,7 +1043,13 @@ export function SearchableMenu(
         ref={sheet ? list : undefined}
         id={submenuId}
         label={shown.label}
-        groups={[{ options: submenuOptions(shown, unmasked) }]}
+        groups={[
+          {
+            label: shown.heading,
+            replayUnmasked: unmasked,
+            options: submenuOptions(shown, unmasked),
+          },
+        ]}
         active={subAt}
         onActiveChange={(moved) => setSubmenu({ moved })}
         onChoose={(_index, option) => pickIn(shown, option.id)}

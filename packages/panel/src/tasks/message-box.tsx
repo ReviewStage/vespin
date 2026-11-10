@@ -150,7 +150,6 @@ export const OVERFLOW_PRESS = {
   ATTACH: "message-box-attach",
   CONTEXT: "agent-context-button",
   DICTATE: "dictate-button",
-  MODE: "agent-mode-button",
 } as const;
 
 type OverflowPress = (typeof OVERFLOW_PRESS)[keyof typeof OVERFLOW_PRESS];
