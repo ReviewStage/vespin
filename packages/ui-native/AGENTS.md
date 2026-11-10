@@ -13,7 +13,7 @@ builds a control of its own.
   `ScopePills`, `FieldChip` and `StatusChip`, `ChoiceList` (the ask card),
   `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
   for its checks and reviewers, `WriteNoteRow`), `ConfirmAsk` (the system's
-  confirmation dialog an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
+  alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, and the marks (`UnreadDot`, `TaskStatusMark`, `Avatar`, `AgentTile`,
   and `BrandMark`, the Keel mark the app's asset catalog holds). `GlassBar`
   is a bar of Liquid Glass through `expo-glass-effect`, and `Composer` the
