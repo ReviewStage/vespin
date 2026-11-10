@@ -14,7 +14,7 @@ import { sandboxStandingAt, sandboxStandingEdge } from "./sandbox-standing.js";
  * sandbox-place.tsx -- where a cloud agent's sandbox stands, as its Cloud chip draws it: off, booting, or running.
  *
  * The chip's cloud glyph wears a dot in the state's tone, neutral while off,
- * working while it boots, and complete while it runs, and the chip's
+ * starting while it boots, and complete while it runs, and the chip's
  * popover says the state in words beside the same dot. The record is read
  * against the window's clock (`sandbox-standing.ts`), and the chip draws
  * again only at the one moment that reading changes on its own, a running
@@ -31,7 +31,7 @@ export const SANDBOX_STATE_WORDS = {
 /** The tone the state's dot is drawn in. */
 const STATE_TONE = {
   [SANDBOX_STATE.OFF]: STATUS_TONE.NEUTRAL,
-  [SANDBOX_STATE.BOOTING]: STATUS_TONE.WORKING,
+  [SANDBOX_STATE.BOOTING]: STATUS_TONE.STARTING,
   [SANDBOX_STATE.RUNNING]: STATUS_TONE.COMPLETE,
 } as const satisfies Record<SandboxState, StatusTone>;
 

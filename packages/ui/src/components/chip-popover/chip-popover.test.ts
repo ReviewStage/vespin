@@ -50,7 +50,6 @@ function opened(picked?: string[]): void {
         label: "Runs on",
         glyph: null,
         words: "Cloud",
-        hint: "Runs on: Cloud",
         title: "Cloud sandbox",
         facts: [{ label: "CPU", icon: null, value: "4 vCPUs" }],
         menu:

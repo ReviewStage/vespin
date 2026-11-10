@@ -21,7 +21,7 @@ import { CatalogSection } from "../section";
 
 const STATES = [
   { id: "off", words: "Off", tone: STATUS_TONE.NEUTRAL },
-  { id: "booting", words: "Booting", tone: STATUS_TONE.WORKING },
+  { id: "booting", words: "Booting", tone: STATUS_TONE.STARTING },
   { id: "running", words: "Running", tone: STATUS_TONE.COMPLETE },
 ] as const satisfies readonly { id: string; words: string; tone: StatusTone }[];
 
@@ -65,7 +65,6 @@ function WithMoveTo(): React.JSX.Element {
       label="Runs on"
       glyph={cloudGlyph("Running", STATUS_TONE.COMPLETE)}
       words="Cloud"
-      hint="Runs on: Cloud · Running"
       said="Running"
       title="Cloud sandbox"
       facts={sandboxFacts("Running", STATUS_TONE.COMPLETE)}
@@ -91,7 +90,6 @@ function ChipPopovers(): React.JSX.Element {
               label="Runs on"
               glyph={cloudGlyph(state.words, state.tone)}
               words="Cloud"
-              hint={`Runs on: Cloud · ${state.words}`}
               said={state.words}
               title="Cloud sandbox"
               facts={sandboxFacts(state.words, state.tone)}

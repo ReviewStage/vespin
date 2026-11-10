@@ -10,14 +10,13 @@ import { CHIP_LOOK, CHIP_WIDTH, Chip, ChipName } from "../chip/chip.js";
 import { Fact, Facts } from "../facts/facts.js";
 import { PopoverPanel } from "../popover-panel/popover-panel.js";
 import { type MenuRow, SearchableMenu } from "../searchable-menu/searchable-menu.js";
-import { Tooltip } from "../tooltip/hint.js";
 
 /**
  * chip-popover.tsx -- a toolbar chip whose press hangs a popover of what it names: a title, its facts as label-value rows, and where it offers one, a menu section to pick from.
  *
  * The chip draws its glyph and its words, or its glyph alone where its place
- * is too narrow, and a rest on it hangs its one-line hint. A press opens the
- * popover from the chip's leading edge and a second press, Escape, or focus
+ * is too narrow, and says no more on a rest. A press opens the popover
+ * from the chip's leading edge and a second press, Escape, or focus
  * leaving puts it away, focus back on the chip. The popover is headed by
  * its title, and under it each fact stands as a muted label led by its
  * glyph, its value at the line's end (`Facts`), as a cloud sandbox's
@@ -74,7 +73,6 @@ export function ChipPopover({
   label,
   glyph,
   words,
-  hint,
   said,
   iconOnly = false,
   title,
@@ -85,11 +83,9 @@ export function ChipPopover({
   label: string;
   glyph: ReactNode;
   words: string;
-  /** What a rest on the closed chip says. */
-  hint: string;
   /** What a reader hears after the chip's words, which its glyph says to the eye: a sandbox's state; none where it says nothing more. */
   said?: string | undefined;
-  /** Whether the chip draws its glyph alone, its words kept for a reader and its hint. */
+  /** Whether the chip draws its glyph alone, its words kept for a reader. */
   iconOnly?: boolean | undefined;
   title: string;
   facts: readonly ChipPopoverFact[];
@@ -117,22 +113,20 @@ export function ChipPopover({
       className="ui-chip-popover relative inline-flex min-w-0 flex-initial items-center"
       ref={box}
     >
-      <Tooltip label={open ? undefined : hint}>
-        <Chip
-          ref={chip}
-          look={CHIP_LOOK.TOOLBAR}
-          width={CHIP_WIDTH.AUTO}
-          iconOnly={iconOnly}
-          aria-label={said === undefined ? `${label}: ${words}` : `${label}: ${words}, ${said}`}
-          aria-haspopup="dialog"
-          aria-expanded={open}
-          aria-controls={open ? popoverId : undefined}
-          onClick={() => setOpen(!open)}
-        >
-          {glyph}
-          <ChipName>{words}</ChipName>
-        </Chip>
-      </Tooltip>
+      <Chip
+        ref={chip}
+        look={CHIP_LOOK.TOOLBAR}
+        width={CHIP_WIDTH.AUTO}
+        iconOnly={iconOnly}
+        aria-label={said === undefined ? `${label}: ${words}` : `${label}: ${words}, ${said}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-controls={open ? popoverId : undefined}
+        onClick={() => setOpen(!open)}
+      >
+        {glyph}
+        <ChipName>{words}</ChipName>
+      </Chip>
       {menu === undefined ? (
         <AnchoredPopover open={open} align={POPOVER_ALIGN.START}>
           <PopoverPanel

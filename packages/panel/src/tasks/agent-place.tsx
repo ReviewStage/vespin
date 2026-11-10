@@ -73,7 +73,7 @@ import {
  * speak for, so its label is its name alone. Nothing is drawn for an agent
  * on a device the service no longer names, since it is neither in the cloud
  * nor anywhere that can be named. In a box too narrow for its words, the
- * chip draws its glyph alone in a square and keeps the words for a reader and its hint.
+ * chip draws its glyph alone in a square and keeps the words for a reader.
  */
 
 /** What a reader hears before the name, which the glyph says to the eye. */
@@ -124,10 +124,10 @@ function cloudFacts(
 
 /**
  * A cloud agent's chip: the cloud glyph wearing its sandbox's dot, neutral
- * while off, working while it boots, and complete while it runs
- * (`sandbox-place.tsx`), beside "Cloud" alone, the state said in its hint
- * and to a reader. A press opens its popover (`@repo/ui`'s `ChipPopover`),
- * headed "Cloud sandbox": the sandbox's Status, CPU, and Memory, and where a
+ * while off, starting while it boots, and complete while it runs
+ * (`sandbox-place.tsx`), beside "Cloud" alone, the state said to a reader
+ * and in the popover, never in a hint on the chip. A press opens its
+ * popover (`@repo/ui`'s `ChipPopover`), headed "Cloud sandbox": the sandbox's Status, CPU, and Memory, and where a
  * move is offered, the places to move the agent to under "Move to", as the
  * move control lists them (`useMoveMenu`).
  */
@@ -151,7 +151,6 @@ function CloudChip({
       label={RUNS_ON_WORDS.LABEL}
       glyph={<SandboxStateGlyph state={state} />}
       words={RUNS_ON_WORDS.CLOUD}
-      hint={`${RUNS_ON}${RUNS_ON_WORDS.CLOUD} · ${stateWords}`}
       said={stateWords}
       iconOnly={narrow}
       title={CLOUD_WORDS.TITLE}
