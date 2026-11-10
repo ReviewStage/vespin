@@ -1,0 +1,44 @@
+{
+  "type": "object",
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "description": "The task whose relation to move, by the id list_tasks answered."
+    },
+    "otherTaskId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "description": "The other task of the relation, in the same workspace, by the id list_tasks answered."
+    },
+    "from": {
+      "type": "string",
+      "enum": [
+        "blocked-by",
+        "blocks",
+        "sub-task",
+        "parent"
+      ],
+      "description": "How the other task stands to the task now: blocked-by (the other blocks it), blocks (it blocks the other), sub-task (the other is its child), or parent (the other is its parent)."
+    },
+    "to": {
+      "type": "string",
+      "enum": [
+        "blocked-by",
+        "blocks",
+        "sub-task",
+        "parent"
+      ],
+      "description": "How the other task stands to the task once moved, in the same words as from, and another kind than from."
+    }
+  },
+  "required": [
+    "taskId",
+    "otherTaskId",
+    "from",
+    "to"
+  ],
+  "additionalProperties": false
+}

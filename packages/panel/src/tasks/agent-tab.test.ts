@@ -396,17 +396,21 @@ test("a run of calls folds under a line that says it is open", () => {
   assert.equal(group?.getAttribute("aria-expanded"), "true", "the group says it is open");
 });
 
-test("a finished turn's lead folds under a line that opens as it is pressed", () => {
+test("a finished turn's run of calls folds under a line that opens as it is pressed, and its words stand outside it", () => {
   const { container } = drawn(
     assistant([
       toolPart("read_file", { filePath: "src/new.ts" }, { content: "export {}" }),
-      { type: "text", text: "Read it." },
       toolPart("run_on_mac", { command: "git status" }, { output: "clean" }),
+      { type: "text", text: "Read it." },
       { type: "text", text: "All clean." },
     ]),
   );
   const fold = container.querySelector<HTMLElement>("[data-turn-fold] > summary");
-  assert.equal(fold?.textContent, "2 tool calls, 1 message");
+  assert.equal(fold?.textContent, "2 tool calls");
+  assert.ok(
+    !container.querySelector("[data-turn-fold]")?.textContent?.includes("Read it."),
+    "the words stand outside the fold",
+  );
   assert.equal(fold?.getAttribute("aria-expanded"), "false", "the fold stands closed");
   act(() => fold?.click());
   assert.equal(fold?.getAttribute("aria-expanded"), "true", "the pressed fold says it is open");
@@ -693,27 +697,25 @@ test("a message or a start another agent was sent shows its words whole under it
   assert.equal(sentNothing.container.querySelector("details"), null, "nothing was sent to show");
 });
 
-/** Main's document holding one agent on no task, running on Codex, as the plan list carries it. */
+/** Main's document holding one agent on another task, running on Codex, as the plan list carries it. */
 function stateHoldingCodexAgent(agentId: string): AppStateSnapshot {
   const snapshot = signedInAs({ id: "user-sam", email: "sam@example.com", name: "Sam Okafor" });
   return {
     ...snapshot,
     tasks: {
       ...IDLE_TASKS_VIEW,
-      tasklessAgents: [
+      taskAgents: [
         {
           id: agentId,
-          planId: null,
+          planId: "task-audit",
           turnId: null,
           title: "Retry audit",
           model: "openai/gpt-6.1-sol",
           effort: "high",
           status: AGENT_STATUS.COMPLETED,
           createdAt: 1_000,
-          automationId: null,
           workspaceId: "workspace-acme",
           repository: "acme/relay",
-          activityAt: 1_000,
         },
       ],
     },

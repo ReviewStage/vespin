@@ -147,7 +147,7 @@ async function landed(container: HTMLElement): Promise<void> {
   );
 }
 
-test("a set the agent showed stays out of the finished turn's fold, each picture read once and drawn at its own shape", async () => {
+test("a set the agent showed in a finished turn is drawn, each picture read once and drawn at its own shape", async () => {
   const pictures = [picture(1200, 720), picture(390, 700)];
   const { container, read } = await drawn(
     finished([
@@ -164,7 +164,7 @@ test("a set the agent showed stays out of the finished turn's fold, each picture
   );
 
   const tiles = [...container.querySelectorAll<HTMLElement>(SHOWN_TILES)];
-  assert.equal(tiles.length, 2, "the set is drawn though the work before it folded");
+  assert.equal(tiles.length, 2, "the set is drawn");
   assert.deepEqual(
     tiles.map((tile) => tile.style.getPropertyValue("--ui-picture-ratio")),
     [String(1200 / 720), String(390 / 700)],
@@ -176,11 +176,6 @@ test("a set the agent showed stays out of the finished turn's fold, each picture
   assert.deepEqual(
     read,
     pictures.map((each) => each.id),
-  );
-  assert.match(
-    container.textContent ?? "",
-    /1 tool call/u,
-    "the fold counts the command, not the set",
   );
 });
 

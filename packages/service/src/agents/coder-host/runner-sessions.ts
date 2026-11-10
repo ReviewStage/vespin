@@ -168,6 +168,7 @@ import { type ConversationTarget, storeWriter } from "@repo/database/models/writ
 import type { RunnerLineFile } from "@repo/database/schemas/runner-line";
 import { AGENT_MACHINE, type AgentMachineKind } from "@repo/features/agent-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
+import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
 import { causeKind, failureKind } from "@repo/runtime/effect";
 import {
   isSandboxError,
@@ -667,7 +668,7 @@ function sandboxSetupOf(agent: Agent, machine: AgentMachineKind) {
     const [install, repository] = yield* Effect.all(
       [
         readInstallScript(agent.organizationId),
-        readRepositorySetup(agent.organizationId, agent.repository),
+        readRepositorySetup(agent.organizationId, agent.repository, REPOSITORY_SCRIPT_KIND.SETUP),
       ],
       { concurrency: "unbounded" },
     );

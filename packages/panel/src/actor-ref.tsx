@@ -799,6 +799,29 @@ export function automationActor(automation: AutomationSummary): Actor {
   };
 }
 
+/** What an automation is called beside its name once it is deleted. */
+const DELETED_AUTOMATION_WORDS = "(deleted)";
+
+/** What an automation is called where no name was kept, as an agent started before it was is. */
+const AUTOMATION_WORDS = "Automation";
+
+/**
+ * An automation the place cannot read, by the name it had when its run
+ * started an agent, at rest: "Morning triage (deleted)" once it is gone
+ * (`automationId` absent), its name alone where it stands but is a
+ * teammate's the reader cannot read, and "Automation" where no name was kept.
+ */
+export function namedAutomationActor(
+  automationId: string | undefined,
+  name: string | undefined,
+): Actor {
+  const words =
+    automationId === undefined && name !== undefined
+      ? `${name} ${DELETED_AUTOMATION_WORDS}`
+      : (name ?? AUTOMATION_WORDS);
+  return { kind: ACTOR_KIND.AUTOMATION, name: words, state: ACTOR_STATE.REST };
+}
+
 /** One run of an automation, as its row in a list of every automation's runs wears it: the glyph of what fired it, wearing where it stands, under its automation's name. */
 export function automationRunActor(run: AutomationRunSummary, name: string): Actor {
   return {

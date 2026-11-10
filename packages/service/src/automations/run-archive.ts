@@ -21,11 +21,7 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
-import {
-  archiveUnmovedAgent,
-  latestTurnsOfReached,
-  readAgentOfConversation,
-} from "@repo/database/models/agent-store";
+import { latestTurnsOfReached, readAgentOfConversation } from "@repo/database/models/agent-store";
 import {
   type ArchivableRunAgent,
   runArchivableAgentsOf,
@@ -35,6 +31,7 @@ import type { SettledAgentTurn } from "@repo/database/models/writer";
 import { AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { causeKind } from "@repo/runtime/effect";
 import { Clock, Effect, Option } from "effect";
+import { archivedUnmovedAgent } from "../agents/agent-change.js";
 import { agentStatusOf } from "../agents/coder-host/status.js";
 import { discardedOrLogged } from "../agents/device-discard.js";
 
@@ -81,17 +78,18 @@ function archiveAsRead<A extends FinishedAgentRead>(
     Effect.gen(function* () {
       const status = statuses.get(agent.agentId) ?? AGENT_STATUS.RUNNING;
       const finishedWell = agent.archivedAt === null && status === AGENT_STATUS.COMPLETED;
+      const read = { id: agent.agentId, userId: agent.userId };
       // Note that the archive takes only while the agent's lines stand where they were read, so
-      // one woken since, or whose starter left, stands and is read again later.
-      const archived =
-        finishedWell &&
-        (yield* archiveUnmovedAgent(agent.userId, agent.agentId, agent.conversationSeq));
-      // A local agent archived is let go of on its device, as an archive by hand lets it go.
+      // one woken since, or whose starter left, stands and is read again later; one archived is let go of on its device.
+      const written = finishedWell
+        ? yield* archivedUnmovedAgent(read, agent.conversationSeq)
+        : { archived: false, discarded: true };
+      // A local agent archived before is let go of on its device as well, as an archive by hand lets it go.
       const discarded =
-        archived || agent.archivedAt !== null
-          ? yield* discardedOrLogged({ id: agent.agentId, userId: agent.userId })
-          : true;
-      return { agent, status, archived, discarded } satisfies FinishedAgentArchive<A>;
+        !written.archived && agent.archivedAt !== null
+          ? yield* discardedOrLogged(read)
+          : written.discarded;
+      return { agent, status, ...written, discarded } satisfies FinishedAgentArchive<A>;
     }),
   );
 }
@@ -100,7 +98,7 @@ function archiveAsRead<A extends FinishedAgentRead>(
  * The agents archived under "Archive finished runs"' rule, each answered in
  * order: one standing unarchived that finished well, read as its tab reads
  * it, is archived only while its lines stand where they were read and it
- * holds no pull request or inbox item open (`archiveUnmovedAgent`), and a
+ * holds no pull request or inbox item open (`archivedUnmovedAgent`), and a
  * local one archived, now or before, is let go of on its device. Note that
  * the rule is shared, because an agent started from Slack is archived by it
  * too once a turn of its settles (`../slack/slack-agent-starts.ts`).

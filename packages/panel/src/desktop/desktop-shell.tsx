@@ -68,7 +68,7 @@ import { SignInGate } from "../sign-in-gate.js";
 import { ChipCards, type TaskFocus } from "../tasks/chip-cards.js";
 import { MentionedAgents } from "../tasks/mentioned-place.js";
 import { NewTaskDialog } from "../tasks/new-task-dialog.js";
-import { useAgentLook, useTaskLooks } from "../tasks/use-task-looks.js";
+import { useTaskLooks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import {
   appStateQuery,
@@ -870,15 +870,6 @@ export function DesktopShell({
     shownTask === undefined
       ? undefined
       : (tasks.tasks.find((row) => row.id === shownTask.id) ?? shownTask),
-  );
-  // An agent with no plan is looked at as its page is on screen, as the plan is.
-  const { agentId: pageAgentId } = tasks.agentView;
-  useAgentLook(
-    tab === PANEL_TAB.TASKS && pageAgentId !== undefined
-      ? [...tasks.listedAgents.standing, ...tasks.listedAgents.archived].find(
-          (agent) => agent.id === pageAgentId,
-        )
-      : undefined,
   );
   const mentionedAgents = useMemo(
     () => ({ models: tasks.agents.models, me: tasks.me }),

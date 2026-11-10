@@ -20,8 +20,8 @@ import { taskRead } from "../task-read.js";
 import { taskSectionEntry } from "../task-section.js";
 
 /**
- * The migration that gives every agent with no task a task of its own:
- * over a database from before it, each such agent lands
+ * The migrations that give every agent with no task a task of its own and
+ * then require one: over a database from before them, each such agent lands
  * on a new task of its workspace, numbered after the workspace's last, named
  * from its title, assigned to its starter, Done unless it is still at work,
  * with its starter's pin, read mark, section, inbox thread, the pages it
@@ -30,8 +30,15 @@ import { taskSectionEntry } from "../task-section.js";
  */
 
 const BACKFILL = "20261110012454_agent_task_backfill";
+const REQUIRED = "20261110012643_agent_task_required";
 
-/** An agent with no task, written as a deployment from before the migration wrote one; its id. */
+/** The second migration undone, so the database stands as one from before both. */
+const UNDO = [
+  `ALTER TABLE "agent" ALTER COLUMN "task_id" DROP NOT NULL`,
+  `CREATE INDEX "agent_org_taskless_created" ON "agent" ("organization_id","created_at") WHERE "agent"."task_id" is null`,
+];
+
+/** An agent with no task, written as a deployment from before the migrations wrote one; its id. */
 const tasklessAgent = (
   userId: string,
   organizationId: string,
@@ -66,6 +73,8 @@ it.layer(getTestDB())("agent_task_backfill over a database from before it", (it)
           organizationId,
           name: "Teammate invitations",
         });
+
+        for (const statement of UNDO) yield* sql.unsafe(statement);
 
         // Started out of order, so the numbers follow the order they were started in, not the order they were written.
         const working = yield* tasklessAgent(
@@ -102,6 +111,8 @@ it.layer(getTestDB())("agent_task_backfill over a database from before it", (it)
         const backfill = yield* migrationStatements(BACKFILL);
         for (const statement of backfill) yield* sql.unsafe(statement);
         for (const statement of backfill) yield* sql.unsafe(statement);
+        // The column is required again once every agent stands on a task, which fails where the backfill left one on none.
+        for (const statement of yield* migrationStatements(REQUIRED)) yield* sql.unsafe(statement);
 
         const agents = yield* db
           .select({ id: agentTable.id, taskId: agentTable.taskId })

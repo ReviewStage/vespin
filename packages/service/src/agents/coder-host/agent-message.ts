@@ -33,7 +33,7 @@ import {
 } from "../agent-tools.js";
 import { workspaceAgent } from "../workspace-agents.js";
 import { workspaceStepOf, writtenMention } from "../written-mentions.js";
-import { agentLineSender, steerAgent } from "./steer.js";
+import { agentLineSender, agentTakingMessage, steerAgent } from "./steer.js";
 
 /**
  * agent-message.ts -- `message_agent`: one coding agent's message to another of its workspace, shown in the two agents' transcripts alone.
@@ -49,9 +49,10 @@ import { agentLineSender, steerAgent } from "./steer.js";
  * both written here rather than by the model, so the receiving agent reads
  * them as a colleague's word, never the developer's or the app's. The message
  * stands in the two transcripts and nowhere else. It reaches any agent of the sender's
- * workspace, on any task, held to what a steer into it is held to; an
- * archived agent, one whose starter has left the workspace, or the sender
- * itself takes none.
+ * workspace, on any task, held to what a steer into it is held to, an
+ * archived one brought back first as a member's words bring it back
+ * (`agentTakingMessage`); one whose starter has left the workspace, or the
+ * sender itself, takes none.
  */
 
 /**
@@ -164,7 +165,7 @@ export const MESSAGE_AGENT_TOOL = {
     "conversation under your name, opening with your mention link and closing with how to answer you, and " +
     "only the two of you see it: a running agent reads it at its next step, and an idle one starts a turn on it. " +
     "Answers `accepted` once that agent's session has taken it, without waiting for it to act or reply, or " +
-    "`rejected` and why nothing was sent; an archived agent takes nothing.",
+    "`rejected` and why nothing was sent; an archived agent is brought back and takes it.",
   inputSchema: MESSAGE_AGENT_INPUT,
 } as const;
 
@@ -203,12 +204,16 @@ export function runMessageAgent(
       if (Option.isNone(workspace)) return agentToolRejected(MESSAGE_AGENT_REFUSAL.NO_AGENT);
       const found = yield* workspaceAgent(userId, workspace.value, agentId, sender.id);
       if (Option.isNone(found)) return agentToolRejected(MESSAGE_AGENT_REFUSAL.NO_AGENT);
-      const target = found.value;
-      if (target.archivedAt !== null) return agentToolRejected(MESSAGE_AGENT_REFUSAL.ARCHIVED);
       // An agent runs as its starter, so one whose starter left the workspace hears nothing of it.
-      if (!(yield* isWorkspaceMember(target.userId, workspace.value))) {
+      if (!(yield* isWorkspaceMember(found.value.userId, workspace.value))) {
         return agentToolRejected(MESSAGE_AGENT_REFUSAL.STARTER_LEFT);
       }
+      // An archived agent is brought back first, as a member's words bring it back; one archived again meanwhile the steer refuses.
+      const taking = yield* agentTakingMessage(userId, agentId, (reader, id) =>
+        workspaceAgent(reader, workspace.value, id, sender.id),
+      );
+      if (Option.isNone(taking)) return agentToolRejected(MESSAGE_AGENT_REFUSAL.NO_AGENT);
+      const target = taking.value;
       // The line is minted for the receiving agent's starter, whose principal its turn runs under.
       const agentSessions = call.agentSessionsAs(target.userId);
       const step = yield* workspaceStepOf(userId, workspace.value);

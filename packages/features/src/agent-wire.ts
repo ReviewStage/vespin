@@ -23,6 +23,7 @@ import {
 import { readMarkSchema } from "./read-mark.js";
 import { countedNumber, memberRefSchema, wireUuidSchema } from "./service-wire.js";
 import { trimmedText } from "./text-schema.js";
+import { TRIGGER_PROVIDER } from "./trigger-catalog.js";
 
 /**
  * agent-wire.ts -- a task's coding agents, as the desktop starts, lists, reads, messages, and stops them.
@@ -1043,8 +1044,6 @@ export type AgentPinRequest = typeof agentPinRequestSchema.Type;
  */
 export const agentReadRequestSchema = EffectSchema.Struct({ readMark: readMarkSchema });
 
-export type AgentReadRequest = typeof agentReadRequestSchema.Type;
-
 /**
  * Switching the agent's MCP servers (PATCH): the whole list of those off,
  * which replaces the list standing, so two quick changes land as the later
@@ -1298,6 +1297,8 @@ export const agentSummarySchema = EffectSchema.Struct({
    * their account is gone, and from a service before it.
    */
   startedBy: EffectSchema.optionalKey(memberRefSchema),
+  /** The coding agent whose `start_agent` started this one; absent for one a member or an automation started, and from a service before it. */
+  startedByAgentId: EffectSchema.optionalKey(wireUuidSchema),
   /** The automation whose run started the agent; absent for one started by hand, once that automation is deleted, and from a service before it. */
   automationId: EffectSchema.optionalKey(wireUuidSchema),
   /**
@@ -1405,15 +1406,24 @@ export const agentDeleteAnswerSchema = EffectSchema.Struct({
  * The run of an automation that started an agent, as its page opens on it:
  * the automation's prompt alone, without the lines we add of the firing,
  * then what fired it, each where the firing has one: the issue or pull
- * request a GitHub event names, a webhook call's body as its caller sent
- * it, cut as the agent was handed it, and the member who asked for a run
- * now, absent once their account is gone.
+ * request a GitHub event names, the issue an integration's event is about
+ * (a Sentry issue), a webhook call's body as its caller sent it, cut as the
+ * agent was handed it, and the member who asked for a run now, absent once
+ * their account is gone.
  */
 const agentOriginSchema = EffectSchema.Struct({
   prompt: EffectSchema.String,
   subject: EffectSchema.optionalKey(
     EffectSchema.Struct({
       number: countedNumber,
+      title: EffectSchema.optionalKey(EffectSchema.String),
+      url: EffectSchema.optionalKey(EffectSchema.String),
+    }),
+  ),
+  /** The issue an integration's event is about, by its provider, its title, and its address, each where the event gave it; absent from a service before it. */
+  issue: EffectSchema.optionalKey(
+    EffectSchema.Struct({
+      provider: EffectSchema.Literals(Object.values(TRIGGER_PROVIDER)),
       title: EffectSchema.optionalKey(EffectSchema.String),
       url: EffectSchema.optionalKey(EffectSchema.String),
     }),

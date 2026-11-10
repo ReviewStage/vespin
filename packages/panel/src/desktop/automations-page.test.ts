@@ -1,12 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import {
-  AGENT_BOUNDS,
-  type AgentSummary,
-  type ListedAgent,
-  type TasklessAgent,
-} from "@repo/features/agent-wire";
+import { AGENT_BOUNDS, type AgentSummary, type ListedAgent } from "@repo/features/agent-wire";
 import {
   AUTOMATION_CALL_FAILURE,
   AUTOMATION_FOLLOW,
@@ -169,26 +164,22 @@ const CI_DIGEST = {
   turnId: null,
 } as const;
 
-/** An agent on no task in the workspace, working in the automations' repository, as the task list carries it. */
-function onLedger(agent: AgentSummary): TasklessAgent {
-  return {
-    ...agent,
-    automationId: null,
-    workspaceId: WORKSPACE.id,
-    repository: "acme/ledger",
-    activityAt: agent.createdAt,
-  };
+/** A task of the workspace's the window does not list, which the workspace's agents work on. */
+const LEDGER_TASK = "9d2b7b5a-4e3f-4e9c-9c77-7a5d8b3f4c32";
+
+/** An agent on a task in the workspace, working in the automations' repository, as the task list carries it. */
+function onLedger(agent: AgentSummary): ListedAgent {
+  return { ...agent, planId: LEDGER_TASK, workspaceId: WORKSPACE.id, repository: "acme/ledger" };
 }
 
-/** The task list as the host lays it: failed before it carried any agent where the test says so, else carrying the test's agents on no task. */
+/** The task list as the host lays it: failed before it carried any agent where the test says so, else carrying the test's agents. */
 function tasksView(): TasksView {
   const listed: TasksView = agentListRefused
     ? { ...IDLE_TASKS_VIEW, listStatus: TASKS_READ.FAILED }
     : {
         ...IDLE_TASKS_VIEW,
         listStatus: TASKS_READ.READY,
-        taskAgents: [],
-        tasklessAgents: workspaceAgents,
+        taskAgents: workspaceAgents,
       };
   return workspacesRefused ? { ...listed, workspacesStatus: TASKS_READ.FAILED } : listed;
 }
@@ -233,7 +224,7 @@ let deletes: string[] = [];
 /** Every search of a workspace's agents, as the act carried it. */
 let agentsAsked: unknown[] = [];
 /** Every agent on no task the task list carries, as the host lays it. */
-let workspaceAgents: readonly TasklessAgent[] = [];
+let workspaceAgents: readonly ListedAgent[] = [];
 /** The agents a search for `words` finds, as the service answers it. */
 let agentsFound: (words: string) => readonly AgentSummary[] = () => [];
 /** The service's runs of every automation, newest first, as a read of one's runs answers them. */
@@ -2414,8 +2405,8 @@ test("the Agent picker draws each agent as every agent menu does: its glyph, its
   act(() => picker(page, "Agent").click());
   assert.deepEqual(agentRows(), [
     { glyph: false, name: "Started by its first run", detail: null, ends: [] },
-    { glyph: true, name: "Nightly sweep", detail: "No task", ends: ["Failed"] },
-    { glyph: true, name: "CI digest", detail: "No task", ends: [] },
+    { glyph: true, name: "Nightly sweep", detail: "Another task", ends: ["Failed"] },
+    { glyph: true, name: "CI digest", detail: "Another task", ends: [] },
   ]);
 
   const row = [...document.querySelectorAll<HTMLElement>("[role=option]")][2];

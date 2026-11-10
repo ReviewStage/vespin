@@ -372,7 +372,7 @@ export const AGENT_PIN_FAILED_NOTES = {
 /** What the toast says when the service refused a pin's new place, which is put back. */
 export const PIN_MOVE_FAILED_NOTE = "The pin could not be moved. Try again.";
 
-/** One pin dragged to a new place in the sidebar's Pinned section: a plan's or an agent's with no plan, and the position it takes (`@repo/features/pin-order`). */
+/** One pin dragged to a new place in the sidebar's Pinned section: a plan's or an agent's, and the position it takes (`@repo/features/pin-order`). */
 export interface PinMove {
   readonly agent: boolean;
   readonly id: string;

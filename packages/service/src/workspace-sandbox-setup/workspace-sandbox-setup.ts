@@ -1,5 +1,5 @@
 /**
- * workspace-sandbox-setup.ts -- a workspace's cloud sandbox setup, as every door reads and saves it: read it as a member, and save its install script or a repository's setup script as an owner or admin.
+ * workspace-sandbox-setup.ts -- a workspace's cloud sandbox setup, as every door reads and saves it: read it as a member, and save its install script or a repository's setup or archive script as an owner or admin.
  *
  * The hosted procedures (`workspace-sandbox-setup-procedures.ts`) and the
  * member MCP tools (`read_sandbox_setup`, `edit_sandbox_setup`) go through
@@ -19,7 +19,11 @@ import {
   setInstallScript,
   setRepositorySetup,
 } from "@repo/database/models/workspace-sandbox-script-store";
-import type { WorkspaceSandboxSetupAnswer } from "@repo/features/workspace-sandbox-setup-wire";
+import {
+  REPOSITORY_SCRIPT_KIND,
+  type RepositoryScriptKind,
+  type WorkspaceSandboxSetupAnswer,
+} from "@repo/features/workspace-sandbox-setup-wire";
 import { DateTime, Effect, Option } from "effect";
 import { answeredWorkspace, managedWorkspace } from "../accounts/workspace-access.js";
 import { type HostedRefusal, hostedStoreOrUnavailable } from "../http/http-effect.js";
@@ -33,19 +37,24 @@ function removes(script: string): boolean {
 const setupAnswer = Effect.fn("web/workspaceSandboxSetupAnswer")(function* (
   workspaceId: string,
 ): Effect.fn.Return<WorkspaceSandboxSetupAnswer, HostedRefusal, DatabaseServices> {
-  const [install, setups] = yield* hostedStoreOrUnavailable(
+  const [install, scripts] = yield* hostedStoreOrUnavailable(
     Effect.all([readInstallScript(workspaceId), listRepositorySetups(workspaceId)]),
   );
+  const ofKind = (kind: RepositoryScriptKind) =>
+    scripts
+      .filter((row) => row.kind === kind)
+      .map((row) => ({
+        repository: row.repository,
+        script: row.script,
+        updatedAt: row.updatedAt.getTime(),
+      }));
   return {
     install: Option.match(install, {
       onNone: () => null,
       onSome: (row) => ({ script: row.script, updatedAt: row.updatedAt.getTime() }),
     }),
-    setups: setups.map((row) => ({
-      repository: row.repository,
-      script: row.script,
-      updatedAt: row.updatedAt.getTime(),
-    })),
+    setups: ofKind(REPOSITORY_SCRIPT_KIND.SETUP),
+    archives: ofKind(REPOSITORY_SCRIPT_KIND.ARCHIVE),
   };
 });
 
@@ -74,19 +83,20 @@ export const saveInstallScript = Effect.fn("web/saveInstallScript")(function* (
   return yield* setupAnswer(workspace.id);
 });
 
-/** A repository's setup script in a workspace the account manages saved, replacing the one under any casing of its name, or removed where it is empty; the setup as it then stands. */
+/** A repository's setup or archive script in a workspace the account manages saved, replacing the one of that kind under any casing of its name, or removed where it is empty; the setup as it then stands. */
 export const saveRepositorySetup = Effect.fn("web/saveRepositorySetup")(function* (
   userId: string,
   workspaceId: string,
   repository: string,
   script: string,
+  kind: RepositoryScriptKind,
 ): Effect.fn.Return<WorkspaceSandboxSetupAnswer, HostedRefusal, DatabaseServices> {
   const workspace = yield* managedWorkspace(userId, workspaceId);
   const now = yield* DateTime.nowAsDate;
   yield* hostedStoreOrUnavailable(
     removes(script)
-      ? Effect.asVoid(removeRepositorySetup(workspace.id, repository))
-      : setRepositorySetup(workspace.id, repository, script, now),
+      ? Effect.asVoid(removeRepositorySetup(workspace.id, repository, kind))
+      : setRepositorySetup(workspace.id, repository, kind, script, now),
   );
   return yield* setupAnswer(workspace.id);
 });

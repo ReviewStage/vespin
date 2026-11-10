@@ -12,7 +12,6 @@ import {
   agentMessagesAnswerSchema,
   agentPinRequestSchema,
   agentQueueChangeSchema,
-  agentReadRequestSchema,
   agentRenameRequestSchema,
   agentServersRequestSchema,
   agentStartRequestFields,
@@ -728,14 +727,6 @@ export const agentPinParamsSchema = EffectSchema.Struct({
 
 export type AgentPinParams = typeof agentPinParamsSchema.Type;
 
-/** The reader's own read mark of one agent moved (`read-mark.ts`), as the window asks it: the agent and how. */
-export const agentMarkReadParamsSchema = EffectSchema.Struct({
-  agentId: EffectSchema.NonEmptyString,
-  ...agentReadRequestSchema.fields,
-});
-
-export type AgentMarkReadParams = typeof agentMarkReadParamsSchema.Type;
-
 /** One agent, as the window names it to stop or to delete. */
 export const agentStopParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
@@ -902,10 +893,16 @@ const agentInboxAnswerViewSchema = EffectSchema.Union([inboxAnswerSchema, failed
 
 export type AgentInboxAnswerView = typeof agentInboxAnswerViewSchema.Type;
 
-/** A nod on one notice of the inbox, Got it, as the window asks it: the item, and the acknowledgment the service takes, its key the window's own. */
+/**
+ * A nod on one notice of the inbox, Got it, as the window asks it: the
+ * item, and the acknowledgment the service takes, its key the window's own;
+ * and, where it is `held`, that the window offers Undo for it, held and let
+ * go as a close is (`agentInboxCloseParamsSchema`).
+ */
 export const agentInboxAnswerParamsSchema = EffectSchema.Struct({
   itemId: EffectSchema.NonEmptyString,
   ...inboxAcknowledgeRequestSchema.fields,
+  held: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 export type AgentInboxAnswerParams = typeof agentInboxAnswerParamsSchema.Type;
@@ -922,7 +919,7 @@ export type AgentInboxAnsweredView = typeof agentInboxAnsweredViewSchema.Type;
  * and the close request the service takes, its key the window's own; and,
  * where it is `held`, that the window offers Undo for it, so the host draws
  * it at once and sends it only once the window lets it go
- * (`agentInboxCloseReleaseParamsSchema`). It is heard as an answer is
+ * (`agentInboxReleaseParamsSchema`). It is heard as an answer is
  * (`agentInboxAnsweredViewSchema`).
  */
 export const agentInboxCloseParamsSchema = EffectSchema.Struct({
@@ -933,14 +930,14 @@ export const agentInboxCloseParamsSchema = EffectSchema.Struct({
 
 export type AgentInboxCloseParams = typeof agentInboxCloseParamsSchema.Type;
 
-/** A held close let go by the window that asked it, by the close's key: sent to the service, or, where `send` is false, taken back as its Undo asks. */
-export const agentInboxCloseReleaseParamsSchema = EffectSchema.Struct({
+/** A held close or nod let go by the window that asked it, by its key: sent to the service, or, where `send` is false, taken back as its Undo asks. */
+export const agentInboxReleaseParamsSchema = EffectSchema.Struct({
   clientKey: EffectSchema.NonEmptyString,
   send: EffectSchema.Boolean,
 });
 
-/** What letting a held close go found: whether it was still held, which an Undo that came too late hears as false. */
-export const agentInboxCloseReleasedViewSchema = EffectSchema.Struct({
+/** What letting a held close or nod go found: whether it was still held, which an Undo that came too late hears as false. */
+export const agentInboxReleasedViewSchema = EffectSchema.Struct({
   held: EffectSchema.Boolean,
 });
 

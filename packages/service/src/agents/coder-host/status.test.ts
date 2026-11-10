@@ -58,7 +58,7 @@ test("a local agent's summary names its Mac and when it last beat; an agent in a
   const line: AgentLine = {
     id: "agent-1",
     userId: "user-1",
-    taskId: null,
+    taskId: "task-1",
     organizationId: "workspace-1",
     automationId: null,
     automationName: null,

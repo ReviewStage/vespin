@@ -123,8 +123,10 @@ import { forgetOwnedAgent, keepOwnedAgent, ownedAgents } from "./local-agent-sta
  * the launch never waits on it. A
  * message or retune line is written to the running runner's stdin; a files
  * line writes its files under the agent's folder; a stop line ends the
- * runner; a discard line ends it and removes the agent's folder with
- * everything in it, whatever it holds; a line of a kind it does not know is
+ * runner; a discard line ends it, saves the work in its worktree as a
+ * snapshot in the shared clone, and removes the agent's folder with
+ * everything in it, whatever it holds, keeping the folder where the
+ * snapshot could not be saved; a line of a kind it does not know is
  * settled untouched. A launch whose repository
  * could not be made is settled as not started, and the runner never
  * starts. A launch or files line keeps the agent as one whose folder this
@@ -147,7 +149,8 @@ import { forgetOwnedAgent, keepOwnedAgent, ownedAgents } from "./local-agent-sta
  * hand. A launch that finds none of the agent's work in its folder, as an
  * agent brought back after its discard does, and would continue a
  * harness's session, starts the agent afresh with none, from a repository
- * made anew, and tells it so (`LAUNCH_NOTE.CLEARED`). For an
+ * made anew, rebuilt from its snapshot where its discard saved one on this
+ * box, and tells it so (`LAUNCH_NOTE.CLEARED`). For an
  * agent working in a repository, the device asks the service for an
  * installation token before the repository is made, and again once the
  * last is `GITHUB_TOKEN_REFRESH` old by the wall clock, read every minute,
@@ -573,6 +576,7 @@ export function composeLocalAgents(
          * folder for an agent with no repository.
          */
         const madeWorktree = (
+          agentId: string,
           layout: DeviceAgentLayout,
           repository: string | null,
           branch: string | null,
@@ -590,6 +594,7 @@ export function composeLocalAgents(
               home: folder,
               repository,
               worktree: layout.checkoutPath,
+              agentId,
               branch,
             });
             // Note that the script's own steps are cut off sooner where a transfer stalls; this bound is for the one that moves, or hangs, in a way they do not catch, and it holds the agent's delivery and the repository's clone for as long as it runs.
@@ -816,6 +821,7 @@ export function composeLocalAgents(
             }
             // Note that the repository of an agent on the box's own sign-in is made in the host's own environment, which is the box user's.
             const made = yield* madeWorktree(
+              agentId,
               layout,
               repository,
               payload.value.startBranch,
@@ -976,18 +982,53 @@ export function composeLocalAgents(
           });
 
         /**
-         * The agent let go of: its runner stopped and its exit settled, and
-         * its folder removed with everything in it, whatever it holds, its
-         * worktree and what its runner and commands wrote there, and its
-         * worktree's entry pruned from the shared clone, which stays
-         * (`folderRemoved`); then the agent is no longer this machine's. A
-         * step that fails is reported, and the agent stays this machine's,
-         * so an uninstall still finds what is left of its folder.
+         * Whether the agent's work in its worktree was saved as a snapshot in
+         * the shared clone, or needed none (`snapshotScript`), run in the
+         * host's own environment within `WORKTREE_DEADLINE`.
+         */
+        const snapshotSaved = (agentId: string, layout: DeviceAgentLayout) =>
+          Effect.scoped(
+            Effect.flatMap(
+              ChildProcess.make(
+                "/bin/bash",
+                ["-c", platform.snapshotScript({ worktree: layout.checkoutPath, agentId })],
+                {
+                  cwd: folder,
+                  stdin: "ignore",
+                  stdout: "ignore",
+                  stderr: "ignore",
+                  forceKillAfter: KILL_GRACE,
+                },
+              ),
+              (handle) => handle.exitCode,
+            ),
+          ).pipe(
+            Effect.timeoutOption(WORKTREE_DEADLINE),
+            Effect.map((finished) => Option.isSome(finished) && Number(finished.value) === 0),
+            Effect.orElseSucceed(() => false),
+          );
+
+        /**
+         * The agent let go of: its runner stopped and its exit settled, its
+         * work saved as a snapshot its next launch on this box rebuilds from
+         * (`snapshotSaved`), and its folder removed with everything in it,
+         * whatever it holds, its worktree and what its runner and commands
+         * wrote there, and its worktree's entry pruned from the shared clone,
+         * which stays (`folderRemoved`); then the agent is no longer this
+         * machine's. A snapshot that could not be saved keeps the folder,
+         * reported, rather than lose the agent's unsaved work. A step that
+         * fails is reported, and the agent stays this machine's, so an
+         * uninstall still finds what is left of its folder.
          */
         const discarded = (agentId: string) =>
           Effect.gen(function* () {
             yield* stopped(agentId);
-            yield* folderRemoved(deviceAgentLayout(folder, agentId));
+            const layout = deviceAgentLayout(folder, agentId);
+            if (!(yield* snapshotSaved(agentId, layout))) {
+              report(`a local agent's work could not be saved, so its folder was kept: ${agentId}`);
+              return;
+            }
+            yield* folderRemoved(layout);
             yield* forgetOwnedAgent(kernel.stateRoot, agentId);
           }).pipe(
             Effect.catch(() =>

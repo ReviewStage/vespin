@@ -11,12 +11,12 @@ import { test } from "vitest";
 import { standingFor } from "../../testing/agent-standing.js";
 import { agentCoderInstructions, CODER_HARNESS } from "./instructions.js";
 
-/** An agent on a repository, handed what the test names, started by hand on no task. */
+/** An agent on a task and a repository, handed what the test names, started by hand. */
 function agentHanded(handed: Pick<Agent, "descriptionSnapshot" | "prompt">): Agent {
   return {
     id: "agent-1",
     userId: "user-1",
-    taskId: null,
+    taskId: "task-1",
     organizationId: "workspace-1",
     automationId: null,
     automationOrigin: null,

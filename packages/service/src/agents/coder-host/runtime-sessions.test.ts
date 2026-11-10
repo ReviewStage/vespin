@@ -1172,14 +1172,12 @@ const startOn = (taskId: string, model: string, key = randomUUID()) => ({
   choice: { model, effort: "high" },
 });
 
-const startIn = (workspaceId: string, model: string, key = randomUUID()) => ({
-  taskId: null,
-  organizationId: workspaceId,
-  repository: `${RELAY.owner}/${RELAY.name}`,
-  prompt: "Fix the flaky test.",
-  idempotencyKey: key,
-  choice: { model, effort: "high" },
-});
+/** A Start, as `startOn`, on a task the owner makes in the workspace on the repository. */
+const startIn = (owner: string, workspaceId: string, model: string) =>
+  Effect.map(
+    createTask(owner, { organizationId: workspaceId, repository: `${RELAY.owner}/${RELAY.name}` }),
+    (made) => startOn(made.id, model),
+  );
 
 it.layer(Layer.merge(getTestDB(), REACHED))(
   "a Start decides the runtime and its first payer",
@@ -1227,7 +1225,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               environment(),
               ...(each.native ? [native] : []),
             );
-            const ask = startIn(workspaceId, each.model);
+            const ask = yield* startIn(owner, workspaceId, each.model);
             const started = yield* Effect.result(
               startAgent(routedSessions(owner), owner, ask).pipe(Effect.provide(layers)),
             );
@@ -1444,7 +1442,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
     );
 
     it.effect(
-      "a Start runs where the agent it is started from runs, and a teammate's continue from the owner's agent on the owner's device is refused, never sent to the cloud; a device away is refused by name",
+      "a Start runs where the agent it is started from runs, and a teammate's continue from the owner's agent on the owner's device naming no place takes it up in the cloud; a device away is refused by name",
       () =>
         Effect.gen(function* () {
           const { owner, workspaceId } = yield* openStarter(true);
@@ -1502,7 +1500,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             Option.some([AGENT_MACHINE.DEVICE, deviceId]),
           );
 
-          // A teammate's continue from the owner's agent on the device is refused by name too, as an agent on its starter's own Mac is theirs alone to start from, so it never reaches the cloud.
+          // A teammate's continue from the owner's agent on the device, naming no place, runs in the cloud, since a device runs its owner's agents alone.
           const theirContinue = {
             taskId: task.id,
             prompt: undefined,
@@ -1511,15 +1509,9 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             from: { agentId: owned.success.agent.id },
           };
           const theirContinued = yield* start(teammate, theirContinue);
-          assert.ok(Result.isFailure(theirContinued));
-          assert.deepEqual(theirContinued.failure, HOSTED_REFUSAL.NOT_PERMITTED);
-          assert.ok(Option.isNone(yield* readAgentByKey(teammate, theirContinue.idempotencyKey)));
-
-          // A Start with no task runs in the cloud.
-          const planless = yield* start(owner, startIn(workspaceId, "anthropic/claude-opus-5.5"));
-          assert.ok(Result.isSuccess(planless));
+          assert.ok(Result.isSuccess(theirContinued), JSON.stringify(theirContinued));
           assert.deepEqual(
-            yield* whereRuns(planless.success, owner),
+            yield* whereRuns(theirContinued.success, teammate),
             Option.some([AGENT_MACHINE.VERCEL, null]),
           );
 
@@ -1760,7 +1752,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
             const started = yield* startAgent(
               routedSessions(owner),
               owner,
-              startIn(workspaceId, each.model),
+              yield* startIn(owner, workspaceId, each.model),
             ).pipe(Effect.provide(layers(native)));
 
             const [handed] = [...claudeCode.messages, ...codex.messages];
@@ -1775,7 +1767,11 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           const automated = yield* openStarter(true);
           const byAutomation = runtimes();
           const run = yield* startAgent(routedSessions(automated.owner), automated.owner, {
-            ...startIn(automated.workspaceId, "anthropic/claude-opus-5.5"),
+            ...(yield* startIn(
+              automated.owner,
+              automated.workspaceId,
+              "anthropic/claude-opus-5.5",
+            )),
             automationOrigin: {
               name: "Nightly checks",
               firing: { kind: AUTOMATION_FIRING.SCHEDULE, dueAt: 0 },
@@ -1806,10 +1802,10 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           const starting = yield* startAgent(
             routedSessions(byAgent.owner),
             byAgent.owner,
-            startIn(byAgent.workspaceId, "anthropic/claude-opus-5.5"),
+            yield* startIn(byAgent.owner, byAgent.workspaceId, "anthropic/claude-opus-5.5"),
           ).pipe(Effect.provide(layers(agentRuns.native)));
           yield* startAgent(routedSessions(byAgent.owner), byAgent.owner, {
-            ...startIn(byAgent.workspaceId, "anthropic/claude-opus-5.5"),
+            ...(yield* startIn(byAgent.owner, byAgent.workspaceId, "anthropic/claude-opus-5.5")),
             startedBy: starting.agent,
           }).pipe(Effect.provide(layers(agentRuns.native)));
           const opened = [];
@@ -1836,7 +1832,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           yield* startAgent(
             routedSessions(keyed.owner),
             keyed.owner,
-            startIn(keyed.workspaceId, "anthropic/claude-opus-5.5"),
+            yield* startIn(keyed.owner, keyed.workspaceId, "anthropic/claude-opus-5.5"),
           ).pipe(Effect.provide(layers(onRetired.native)));
           assert.equal(onRetired.agentSessions.messages[0]?.lineId, undefined);
         }),
@@ -1848,17 +1844,18 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
         Effect.gen(function* () {
           const layers = (native: ReturnType<typeof runtimes>["native"]) =>
             Layer.mergeAll(githubReaching(INSTALLATIONS).layer, CATALOG, environment(), native);
-          const callIn = (workspaceId: string) => ({
-            ...startIn(workspaceId, "anthropic/claude-opus-5.5"),
-            call: true,
-          });
+          const callIn = (owner: string, workspaceId: string) =>
+            Effect.map(startIn(owner, workspaceId, "anthropic/claude-opus-5.5"), (ask) => ({
+              ...ask,
+              call: true,
+            }));
 
           const planned = yield* openStarter(true);
           const onPlan = runtimes();
           const started = yield* startAgent(
             routedSessions(planned.owner),
             planned.owner,
-            callIn(planned.workspaceId),
+            yield* callIn(planned.owner, planned.workspaceId),
           ).pipe(Effect.provide(layers(onPlan.native)));
           const routing = Option.getOrThrow(
             yield* readAgentRouting(planned.owner, started.agent.id),
@@ -1876,7 +1873,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           const onRetired = yield* startAgent(
             routedSessions(keyed.owner),
             keyed.owner,
-            callIn(keyed.workspaceId),
+            yield* callIn(keyed.owner, keyed.workspaceId),
           ).pipe(Effect.provide(layers(onKey.native)));
           const retiredRouting = Option.getOrThrow(
             yield* readAgentRouting(keyed.owner, onRetired.agent.id),
@@ -1890,9 +1887,11 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           const none = yield* openStarter(false);
           const refusedOn = runtimes();
           const refused = yield* Effect.result(
-            startAgent(routedSessions(none.owner), none.owner, callIn(none.workspaceId)).pipe(
-              Effect.provide(layers(refusedOn.native)),
-            ),
+            startAgent(
+              routedSessions(none.owner),
+              none.owner,
+              yield* callIn(none.owner, none.workspaceId),
+            ).pipe(Effect.provide(layers(refusedOn.native))),
           );
           assertCredentialMissing(refused, MODEL_PROVIDER.ANTHROPIC, "no credential");
         }),
@@ -2005,7 +2004,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               environment(),
               ...(each.native ? [native] : []),
             );
-            const ask = startIn(workspaceId, each.model);
+            const ask = yield* startIn(owner, workspaceId, each.model);
             const started = yield* Effect.result(
               startAgent(routedSessions(owner), owner, ask).pipe(Effect.provide(layers)),
             );
@@ -2050,7 +2049,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
           codex.answers.open = SESSION_SEND_OUTCOME.FAILED;
           codex.answers.status = 403;
           codex.answers.planRefusal = PLAN_REFUSAL.SIGNED_OUT;
-          const ask = startIn(workspaceId, "openai/gpt-5.5");
+          const ask = yield* startIn(owner, workspaceId, "openai/gpt-5.5");
 
           const refused = yield* Effect.result(
             startAgent(routedSessions(owner), owner, ask).pipe(
@@ -2118,9 +2117,11 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               native,
             );
             const result = yield* Effect.result(
-              startAgent(routedSessions(owner), owner, startIn(workspaceId, each.model)).pipe(
-                Effect.provide(layers),
-              ),
+              startAgent(
+                routedSessions(owner),
+                owner,
+                yield* startIn(owner, workspaceId, each.model),
+              ).pipe(Effect.provide(layers)),
             );
             if (each.recorded === "refused") {
               assertCredentialMissing(result, providerOfCase(each.model), each.name);
@@ -2187,9 +2188,11 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               native,
             );
             const result = yield* Effect.result(
-              startAgent(routedSessions(owner), owner, startIn(workspaceId, each.model)).pipe(
-                Effect.provide(layers),
-              ),
+              startAgent(
+                routedSessions(owner),
+                owner,
+                yield* startIn(owner, workspaceId, each.model),
+              ).pipe(Effect.provide(layers)),
             );
             if (each.recorded === "refused") {
               assertCredentialMissing(result, providerOfCase(each.model), each.name);
@@ -2234,7 +2237,7 @@ it.layer(Layer.merge(getTestDB(), REACHED))(
               startAgent(
                 routedSessions(owner),
                 owner,
-                startIn(workspaceId, "openai/gpt-5.5-fast"),
+                yield* startIn(owner, workspaceId, "openai/gpt-5.5-fast"),
               ).pipe(Effect.provide(layers)),
             );
 

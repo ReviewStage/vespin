@@ -20,7 +20,6 @@ import { useAnnounceShown } from "../use-announce-shown.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { ActionMenu } from "./action-menu.js";
 import { agentMenuGroups, useAgentActions } from "./agent-actions.js";
-import { useAgentOwnDoors } from "./desktop-agent-page.js";
 import { openedTaskOf, TASK_MENU_LABEL, taskRowTab, useTaskMenuItems } from "./task-actions.js";
 
 /**
@@ -144,9 +143,8 @@ export function TaskCrumbMenu({
 
 /**
  * An agent's crumb's menu: the agent's one menu as its page's bar offers it
- * (`agentMenuGroups`), its own read mark, Pin, and Move to section among it
- * where its sidebar row holds them (`useAgentOwnDoors`), its Rename turning
- * the crumb into the agent's name field, and the questions its items ask.
+ * (`agentMenuGroups`), its Rename turning the crumb into the agent's name
+ * field, and the questions its items ask.
  * Note that no side panel stands beside the path, so it opens no terminal.
  */
 export function AgentCrumbMenu({
@@ -171,7 +169,6 @@ export function AgentCrumbMenu({
     shown,
     terminals: { onOpenTerminal: undefined },
   });
-  const own = useAgentOwnDoors(tasks, agent, shown);
   const { onCopy, deletion } = actions.doors;
   const copies = onCopy === undefined ? NO_CRUMB_KEYS : keys;
   useShortcutTarget(keys.length === 0 ? undefined : actions.subject, keys);
@@ -196,13 +193,7 @@ export function AgentCrumbMenu({
       : undefined,
     FOCUSED_OFFER,
   );
-  const groups = agentMenuGroups({
-    ...actions.doors,
-    subject: actions.subject,
-    read: own.read,
-    agentPin: own.agentPin,
-    section: own.section,
-  });
+  const groups = agentMenuGroups({ ...actions.doors, subject: actions.subject });
   const { rename } = actions;
   const editing =
     rename?.editing === true ? (
@@ -226,7 +217,6 @@ export function AgentCrumbMenu({
         />
       )}
       {actions.dialog}
-      {own.dialog}
     </>
   );
 }
