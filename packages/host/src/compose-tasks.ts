@@ -2180,6 +2180,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         (answer): TasksPageSourceAnswer =>
           "page" in answer ? { lines: pageSourceLines(answer.page.html) } : answer,
       ),
+    // The version is read as its frame reads it (`pageRead`), its HTML whole, so it reaches the client that asked alone.
+    TASKS_PAGE_HTML: pageRead,
     // A picture's bytes are answered to the window that asked and kept by
     // its id, which no other upload is given, so they never enter the view
     // every window is told.
