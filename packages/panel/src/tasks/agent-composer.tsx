@@ -310,7 +310,6 @@ export function AgentComposer({
   maxLength = AGENT_BOUNDS.MAX_MESSAGE_CHARS,
   tools,
   actions,
-  run,
   beforeSend,
   sendable = true,
   onKey,
@@ -376,8 +375,6 @@ export function AgentComposer({
   tools?: ((narrow: boolean) => ReactNode) | undefined;
   /** What stands first among the foot's right-hand presses, before the model chip, handed whether the card is too narrow for their words. */
   actions?: ((narrow: boolean) => ReactNode) | undefined;
-  /** An agent's Run button, standing before `actions`, handed whether the card is too narrow for its words, at the foot's first fold (`FOLD_WIDTH.RUN`), so it gives way before every other press. */
-  run?: ((narrow: boolean) => ReactNode) | undefined;
   /** What stands just before the round button, handed whether the card is too narrow for its words, as `actions` is. */
   beforeSend?: ((narrow: boolean) => ReactNode) | undefined;
   /** Whether the round button may send at all, beside the words: New task's is held while Agent mode has no repository. */
@@ -656,7 +653,6 @@ export function AgentComposer({
         tools={tools?.(box.folds(FOLD_WIDTH.TOOLS))}
         actions={
           <>
-            {run?.(box.folds(FOLD_WIDTH.RUN))}
             {actions?.(box.folds(FOLD_WIDTH.ACTIONS))}
             {model === undefined ? null : (
               <AgentModelChip

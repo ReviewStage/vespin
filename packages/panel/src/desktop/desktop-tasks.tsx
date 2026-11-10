@@ -1440,6 +1440,7 @@ function DescriptionDocument({
                             onOpenTerminal={terminalDoors.onOpenTerminal}
                             onOpenLocal={terminalDoors.onOpenLocal}
                             onOpenBrowser={phone ? openBrowser : undefined}
+                            onShowShell={terminalDoors.onShowShell}
                             onShown={phone ? setShownAgentTab : undefined}
                             onOpenAgent={openAgentColumn}
                             waiting={waitingOf}
@@ -1481,7 +1482,6 @@ function DescriptionDocument({
                                 views={views}
                                 onOpenDelegation={openDelegationDoor}
                                 onOpenPullRequest={openPullRequestDoor}
-                                onShowShell={terminalDoors.onShowShell}
                                 onOpenTarget={openTargetDoor}
                                 cards={cards}
                                 onFork={forkDoor}

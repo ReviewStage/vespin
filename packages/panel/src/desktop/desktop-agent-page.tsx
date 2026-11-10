@@ -9,6 +9,7 @@ import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import type { TerminalSummary } from "@repo/features/terminal-wire";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -62,6 +63,7 @@ import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { useChangesPeople } from "../tasks/changes-people.js";
 import type { OpenFileLines } from "../tasks/mention-chip.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
+import { RunActionsButton, runSubmenu, useRunActions } from "../tasks/run-actions-button.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { TAB_KIND } from "../tasks/tab-look.js";
 import { COLUMN, pressTab, TAB_PRESS, type TabPressed } from "../tasks/tab-press.js";
@@ -212,13 +214,17 @@ function pagePinOn(agent: AgentSummary | undefined): PinHolder | undefined {
 /**
  * The page's bar: its title and its ⋯, which offer the agent's one menu as
  * its tab in a task's column does (`agent-actions.tsx`'s
- * `agentMenuGroups`): its title turned into its name's field by Rename.
+ * `agentMenuGroups`): its title turned into its name's field by Rename. It
+ * ends in the agent's Run button where its repository has run actions, as
+ * a task's tab row does, which a phone's ⋯ offers as Run › instead
+ * (`run-actions-button.tsx`).
  */
 function AgentPageBar({
   agent,
   agents,
   shown,
   terminals,
+  onShowShell,
   onClose,
   phone,
   trail,
@@ -232,13 +238,22 @@ function AgentPageBar({
   /** What stands before the ⋯: the arrows through its automation's runs, an automation's agent's alone. */
   steps: React.ReactNode;
   terminals: Pick<AgentTerminalDoors, "onOpenTerminal" | "onOpenLocal">;
+  /** Shows a shell the service started for the agent, a run action's, in the side panel's Terminal tab; none where the platform runs no terminals. */
+  onShowShell: ((terminal: TerminalSummary) => void) | undefined;
   /** Leaves the page, as Escape does, once the agent is deleted. */
   onClose: () => void;
   /** A phone's head (`phone-head.tsx`): its way back, and the panel its ⋯ opens; none elsewhere. */
   phone?: AgentPagePhone | undefined;
 }): React.JSX.Element {
   const label = agentName(agent, agents.models);
-  const actions = useAgentActions(agent, agents, { label, shown, terminals, onDeleted: onClose });
+  const run = useRunActions(agent.archivedAt === undefined ? agent : undefined, shown, onShowShell);
+  const actions = useAgentActions(agent, agents, {
+    label,
+    shown,
+    terminals,
+    run: phone === undefined ? undefined : runSubmenu(run),
+    onDeleted: onClose,
+  });
   // The page's agent's ⌥⌘C, ⇧⌥⌘C, and ⌘⌫, as its ⋯'s items run them.
   const { onCopy, deletion } = actions.doors;
   const copies = shown ? onCopy : undefined;
@@ -331,7 +346,12 @@ function AgentPageBar({
         titleEdit={titleEdit}
         trail={trail}
         titleMenu={{ contextMenu: menu.contextMenu(), keyMenu: menu.keyMenu }}
-        actions={steps}
+        actions={
+          <>
+            {steps}
+            {run === undefined ? null : <RunActionsButton offer={run} agentName={label} />}
+          </>
+        }
       />
       {dialogs}
     </>
@@ -743,6 +763,11 @@ function DesktopAgentPage({
         agents={control}
         shown={tasks.shown}
         terminals={terminalDoors}
+        onShowShell={
+          terminalDoors.onShowShell === undefined
+            ? undefined
+            : (terminal) => terminalDoors.onShowShell?.(agent.id, terminal)
+        }
         onClose={tasks.agentView.onClose}
         phone={phoneHead}
         trail={automationTrail(agent, workspaceId, onOpenAutomations) ?? slackTrail(agent)}
@@ -843,7 +868,6 @@ function DesktopAgentPage({
                             views={views}
                             onOpenDelegation={openDelegation}
                             onOpenPullRequest={openPullRequest}
-                            onShowShell={terminalDoors.onShowShell}
                             onOpenTarget={openTarget}
                             cards={cards}
                             onFork={draftDoors.onFork}

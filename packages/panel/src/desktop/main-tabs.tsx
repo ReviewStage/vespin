@@ -53,6 +53,7 @@ import { DraftAgentTab } from "../tasks/draft-agent-tab.js";
 import { useFailedAgents } from "../tasks/failed-lines.js";
 import { agentForkDoors, ForkProvider } from "../tasks/fork-action.js";
 import type { AgentFork } from "../tasks/fork-model.js";
+import { RunActionsButton, runSubmenu, useRunActions } from "../tasks/run-actions-button.js";
 import { stripTabTitle, UNREAD_TAB_NAMES } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import type { MAIN_TAB } from "../tasks/task-tab-model.js";
@@ -61,7 +62,7 @@ import { TRANSCRIPT_COPY } from "../tasks/transcript-copy.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTab, MainTabsControl } from "../tasks/use-main-tabs.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
-import { ActionMenu, type MenuAction } from "./action-menu.js";
+import { ActionMenu, type MenuAction, type MenuSubmenu } from "./action-menu.js";
 import { type AgentTerminalDoors, type ShownShell, useAgentActions } from "./agent-actions.js";
 import { AgentHistory } from "./agent-history.js";
 import type { TaskCards } from "./side-panel.js";
@@ -207,6 +208,7 @@ export function AgentMenuTab({
   terminals,
   onOpenBrowser,
   onShown,
+  run,
 }: {
   agent: AgentSummary;
   agents: AgentsControl;
@@ -220,12 +222,15 @@ export function AgentMenuTab({
   onOpenBrowser?: ((agentId: string) => void) | undefined;
   /** Hears the tab while it is the one shown, for a phone's header (`DoorsTab`). */
   onShown: ((shown: ShownTab | undefined) => void) | undefined;
+  /** Run ›, the agent's run actions, in a phone's ⋯, which has no room for the row's Run button; none elsewhere. */
+  run?: MenuSubmenu | undefined;
 }): React.JSX.Element {
   const actions = useAgentActions(agent, agents, {
     label: look.label,
     shown,
     terminals,
     onOpenBrowser,
+    run,
     onDeleted: doors.onClose,
   });
   // The chosen agent's ⌥⌘C, ⇧⌥⌘C, and ⌘⌫ while the column has the keys, over the open task's description and its delete.
@@ -574,7 +579,9 @@ export function TaskTopbar({
 /**
  * The column's bar: the agents' tabs and the draft's, then the "+", which
  * stands apart from the strip so it is never dragged nor dropped before,
- * then the chosen agent's ⋯ and `actions`. The task's details stand in place
+ * then, at the row's end, the chosen agent's Run button, where its repository
+ * has run actions (`run-actions-button.tsx`), which a phone offers in the
+ * chosen tab's ⋯ instead. The task's details stand in place
  * of the bar and the side panel alike, so no tab ever stands with none
  * chosen. ⌘W closes the chosen tab while the column holds the window's
  * focus (`keys`).
@@ -591,6 +598,7 @@ export function MainTabBars({
   onOpenTerminal,
   onOpenLocal,
   onOpenBrowser,
+  onShowShell,
   onShown,
   onOpenAgent,
   waiting,
@@ -617,6 +625,8 @@ export function MainTabBars({
   onOpenLocal?: ((agentId: string) => void) | undefined;
   /** Opens a new tab of an agent's cloud browser in the side panel, by the agent; a phone's alone, whose ⋯ offers it beside Show terminal. */
   onOpenBrowser?: ((agentId: string) => void) | undefined;
+  /** Shows a shell the service started for an agent, a run action's, in the side panel's Terminal tab, by the agent; none where the platform runs no terminals. */
+  onShowShell?: ((agentId: string, terminal: ShownShell) => void) | undefined;
   /** Hears the tab the column shows, for a phone's header, whose ⋯ offers what the tab's right-click would (`task-pane-switcher.tsx`); none wider than a phone. */
   onShown?: ((shown: ShownTab | undefined) => void) | undefined;
   /** Opens an agent from History: a closed one's tab in the column, an archived one's own page. */
@@ -647,6 +657,16 @@ export function MainTabBars({
     };
   };
   const chosen = strip.find((entry) => entry.look.selected);
+  // The chosen agent's run actions: the row's Run button, or a phone's Run › in its ⋯, which has no room for the button.
+  const runAgent = chosen?.agent?.archivedAt === undefined ? chosen?.agent : undefined;
+  const run = useRunActions(
+    runAgent,
+    shown,
+    runAgent === undefined || onShowShell === undefined
+      ? undefined
+      : (terminal) => onShowShell(runAgent.id, terminal),
+  );
+  const phone = onShown !== undefined;
   const tabSubject = (entry: DrawnTab) => shortcutSubject(SHORTCUT_SUBJECT.TAB, tabKey(entry.tab));
   // The chosen tab is what the strip's keys act on, so its menu prints them.
   useShortcutTarget(chosen === undefined ? undefined : tabSubject(chosen), CHOSEN_TAB_KEYS);
@@ -712,6 +732,7 @@ export function MainTabBars({
                   terminals={{ onOpenTerminal, onOpenLocal }}
                   onOpenBrowser={onOpenBrowser}
                   onShown={onShown}
+                  run={phone && entry.look.selected ? runSubmenu(run) : undefined}
                 />
               ),
             )}
@@ -735,13 +756,18 @@ export function MainTabBars({
         </MainTabsRow>
       }
       actions={
-        <AgentHistory
-          main={main}
-          agents={agents}
-          held={views.held}
-          shown={shown}
-          onOpenAgent={onOpenAgent}
-        />
+        <>
+          {phone || run === undefined || chosen === undefined ? null : (
+            <RunActionsButton offer={run} agentName={chosen.look.label} />
+          )}
+          <AgentHistory
+            main={main}
+            agents={agents}
+            held={views.held}
+            shown={shown}
+            onOpenAgent={onOpenAgent}
+          />
+        </>
       }
     />
   );
@@ -776,7 +802,6 @@ export function MainTabContent({
   views,
   onOpenDelegation,
   onOpenPullRequest,
-  onShowShell,
   onOpenTarget,
   cards,
   onFork,
@@ -791,8 +816,6 @@ export function MainTabContent({
   onOpenDelegation: (agentId: string, callId: string, task: string, status: AgentStatus) => void;
   /** Opens the agent's pull request in the side panel, by the agent, or another it opened by its number; none where no side panel stands to show it. */
   onOpenPullRequest?: ((agentId: string, number?: number) => void) | undefined;
-  /** Shows a shell the service started for the agent, as a run action's, in the side panel's Terminal tab; none where no side panel runs terminals. */
-  onShowShell?: ((agentId: string, terminal: ShownShell) => void) | undefined;
   /** Opens what a call in the agent's transcript is about in the tab that draws it. */
   onOpenTarget: (target: ToolTarget) => void;
   /** The cards the transcript's rows that open a tab hang, as those tabs hang them. */
@@ -856,11 +879,6 @@ export function MainTabContent({
               onOpenPullRequest === undefined
                 ? undefined
                 : (number?: number) => onOpenPullRequest(agentId, number)
-            }
-            onShowShell={
-              onShowShell === undefined
-                ? undefined
-                : (terminal: ShownShell) => onShowShell(agentId, terminal)
             }
             onOpenTarget={onOpenTarget}
             cards={cards.agent(agentId)}

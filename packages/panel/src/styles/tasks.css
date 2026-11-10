@@ -2927,16 +2927,3 @@ svg.lucide {
 .agent-log-row-continued {
   padding-block-start: var(--ui-control-gap);
 }
-
-/* An agent's Run button (`run-actions-button.tsx`): it stands in the foot's
-   row as its split button would, and on a card under the foot's first fold
-   (`FOLD_WIDTH.RUN`) draws its glyph alone through the split button's own
-   fold, so it gives way before every other press. */
-.run-actions,
-.run-actions-folded {
-  display: contents;
-}
-
-.run-actions-folded {
-  --ui-fold: folded;
-}

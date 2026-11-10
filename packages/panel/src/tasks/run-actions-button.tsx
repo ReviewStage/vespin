@@ -5,33 +5,46 @@ import type { RunAction } from "@repo/features/workspace-sandbox-setup-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { EXPERIMENT, HOST_CAPABILITY } from "@repo/settings";
+import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import { PlayIcon, riseAbove, SplitButton, STATUS_TONE, useMenu } from "@repo/ui";
+import { PlayIcon, SplitButton, STATUS_TONE, useMenu } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { askAct } from "../act.js";
 import { useAppCommand } from "../app-commands.js";
-import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
+import { ActionMenu, type MenuAction, type MenuSubmenu } from "../desktop/action-menu.js";
+import { useOpenSettings } from "../open-settings.js";
 import { QUERY_ROOT } from "../query-keys.js";
-import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
+import {
+  SHORTCUT_SUBJECT,
+  type ShortcutSubject,
+  shortcutSubject,
+  useShortcutTarget,
+} from "../shortcut-target.js";
 import { showToast, TOAST_HOLD } from "../toast.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { listedAgentIn } from "./use-workspace-agents.js";
 
 /**
- * run-actions-button.tsx -- the Run button in a cloud agent's message box: its repository's run actions, kept in Settings › Cloud environment, each run in a Terminal tab of the agent's sandbox when pressed.
+ * run-actions-button.tsx -- a cloud agent's run actions: its repository's commands, kept in Settings › Cloud environment, each run in a Terminal tab of the agent's sandbox when pressed.
  *
- * Drawn only where the agent's workspace has the Run actions experiment on,
- * the agent runs in the cloud, and its repository has run actions. The
- * main part runs the list's first action, or stops it while it runs, as
- * ⌥⌘R does on the agent shown in the desktop app; the chevron drops every action, each a run
- * or, while it runs, a stop. A press is the only thing that runs one: a
- * stopped sandbox is resumed by the press, as opening its Terminal tab
- * resumes it, and the action's shell is then shown in the side panel's
- * Terminal tab. Which actions run is read off the agent's shells, each
- * marked with the action it was started for, while the button is shown.
+ * Offered only where the agent's workspace has the Run actions experiment
+ * on, the agent runs in the cloud, and its repository has run actions
+ * (`useRunActions`). Three places offer them, each from that one reading:
+ * the Run button at the end of the agents' tab row, beside the panel's
+ * own buttons and over the side panel its Terminal tab opens in
+ * (`RunActionsButton`); ⌘K, whose open task lists each as Run or Stop
+ * (`runPaletteRows`); and a phone's ⋯, which has no room for the button
+ * (`runSubmenu`). The button's main part runs the list's first action, or
+ * stops it while it runs, as ⌥⌘R does in the desktop app; its chevron
+ * drops every action, each a run or, while it runs, a stop, and the way to
+ * edit them. A press is the only thing that runs one: a stopped sandbox is
+ * resumed by the press, as opening its Terminal tab resumes it, and the
+ * action's shell is then shown in the side panel's Terminal tab. Which
+ * actions run is read off the agent's shells, each marked with the action
+ * it was started for, while the agent is shown.
  */
 
 /** How often the shown button reads which of its actions run, as the Terminal tab's own list goes. */
@@ -40,8 +53,12 @@ const SHELLS_EVERY_MS = 5_000;
 /** What the button says, in the app's own words. */
 const WORDS = {
   MENU: "Run actions",
+  SUBMENU: "Run",
+  EDIT: "Edit run actions…",
+  RUNNING: "Running",
   RUN: (label: string) => `Run ${label}`,
   STOP: (label: string) => `Stop ${label}`,
+  IN: (words: string, agent: string) => `${words} in ${agent}`,
   STARTING: "Starting",
   NOT_RUN: "That action did not run.",
   NOT_STOPPED: "That action did not stop.",
@@ -129,27 +146,45 @@ async function stopAction(queries: QueryClient, agentId: string, action: RunActi
   else pressFailed(ACT_KIND.AGENTS_RUN_ACTION_STOP, agentId, answer, WORDS.NOT_STOPPED);
 }
 
-/** The Run button, where the agent's workspace, place, and repository offer any action; nothing otherwise. */
-export function RunActionsButton({
-  agent,
-  shown,
-  narrow,
-  onShowShell,
-}: {
-  agent: AgentSummary;
-  /** Whether the agent's tab is on screen, which offers ⌥⌘R and reads its shells. */
-  shown: boolean;
-  /** Whether the composer is too narrow for the button's words, which folds them. */
-  narrow: boolean;
-  /** Shows an action's shell in the side panel's Terminal tab; none where no side panel runs terminals. */
-  onShowShell: ((terminal: TerminalSummary) => void) | undefined;
-}): React.JSX.Element | null {
+/** One of the agent's run actions as a place offers it: the action, whether it runs now, and the press that runs or stops it. */
+interface OfferedAction {
+  readonly action: RunAction;
+  readonly runs: boolean;
+  readonly onPress: () => void;
+}
+
+/** An agent's run actions as every place that offers them reads them (`useRunActions`). */
+export interface RunOffer {
+  readonly agentId: string;
+  /** The actions in the list's order, the first the one the button's main part and ⌥⌘R press. */
+  readonly actions: readonly [OfferedAction, ...OfferedAction[]];
+  /** Whether a press is still under way, which holds the button and ⌥⌘R. */
+  readonly busy: boolean;
+  /** Whether ⌥⌘R answers here: the desktop app, with the agent on screen. */
+  readonly keyed: boolean;
+  /** What the keys act on: the agent. */
+  readonly subject: ShortcutSubject;
+  /** Opens Settings › Cloud environment on the agent's workspace, where the actions are kept. */
+  readonly onEdit: () => void;
+}
+
+/**
+ * The agent's run actions, each with whether it runs and its press, where
+ * the agent's workspace, place, and repository offer any; none otherwise,
+ * and none while no agent is given. Its shells are read while it is shown.
+ */
+export function useRunActions(
+  agent: Pick<AgentSummary, "id" | "machine"> | undefined,
+  shown: boolean,
+  onShowShell: ((terminal: TerminalSummary) => void) | undefined,
+): RunOffer | undefined {
   const queries = useQueryClient();
-  const menu = useMenu(true);
   const [busy, setBusy] = useState(false);
-  const place = useRunPlace(agent.id);
+  const openSettings = useOpenSettings();
+  const agentId = agent?.id ?? "";
+  const place = useRunPlace(agentId);
   const on = useWorkspaceExperiment(place?.workspaceId, EXPERIMENT.RUN_ACTIONS);
-  const cloud = agent.machine !== AGENT_MACHINE.DEVICE;
+  const cloud = agent !== undefined && agent.machine !== AGENT_MACHINE.DEVICE;
   const repository = place?.repository ?? null;
   const asks = on && cloud && repository !== null && place !== undefined;
   const setup = useQuery(sandboxSetupQuery(place?.workspaceId ?? "", asks)).data;
@@ -158,7 +193,12 @@ export function RunActionsButton({
       (each) => each.repository.toLowerCase() === (repository ?? "").toLowerCase(),
     )?.actions ?? [];
   const offered = asks && actions.length > 0;
-  const shells = useQuery(shellsQuery(agent.id, shown, offered)).data;
+  const shells = useQuery(shellsQuery(agentId, shown, offered)).data;
+  // ⌥⌘R is the desktop's alone (`APP_SHORTCUTS`), so it is offered, and printed, only where the keymap answers it.
+  const desktop =
+    useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.DESKTOP_APP) }).data ===
+    true;
+  if (!offered || place === undefined) return undefined;
   const listed = shells !== undefined && "terminals" in shells ? shells : undefined;
   const running = new Set(
     (listed?.terminals ?? []).flatMap((shell) =>
@@ -166,56 +206,119 @@ export function RunActionsButton({
     ),
   );
   const stopped = listed !== undefined && listed.sandbox !== "running";
-  const subject = shortcutSubject(SHORTCUT_SUBJECT.AGENT, agent.id);
-  // ⌥⌘R is the desktop's alone (`APP_SHORTCUTS`), so the button offers it, and its menu prints it, only where the keymap answers it.
-  const keyed =
-    useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.DESKTOP_APP) }).data ===
-    true;
-  const press = (action: RunAction) => {
-    setBusy(true);
-    const pressed = running.has(action.id)
-      ? stopAction(queries, agent.id, action)
-      : runAction(queries, agent.id, action, stopped, onShowShell);
-    void pressed.finally(() => setBusy(false));
-  };
-  const first = actions[0];
-  const keysAct = keyed && shown && offered;
-  useShortcutTarget(keysAct ? subject : undefined, RUN_KEYS);
-  useAppCommand(
-    APP_COMMAND.RUN_ACTION,
-    keysAct && first !== undefined && !busy ? () => press(first) : undefined,
-  );
-  if (!offered || first === undefined) return null;
-  const firstRuns = running.has(first.id);
-  const items: MenuAction[] = actions.map((action, index) => {
+  const offer = (action: RunAction): OfferedAction => {
     const runs = running.has(action.id);
-    const item: MenuAction = {
-      label: runs ? WORDS.STOP(action.label) : action.label,
-      detail: action.command,
-      icon: runs ? <GLYPH.STOP /> : <PlayIcon />,
-      replayMasked: true,
-      onSelect: () => press(action),
+    const onPress = () => {
+      setBusy(true);
+      const pressed = runs
+        ? stopAction(queries, agentId, action)
+        : runAction(queries, agentId, action, stopped, onShowShell);
+      void pressed.finally(() => setBusy(false));
     };
-    return index === 0 ? { ...item, command: APP_COMMAND.RUN_ACTION, subject } : item;
+    return { action, runs, onPress };
+  };
+  const [first, ...rest] = actions;
+  if (first === undefined) return undefined;
+  return {
+    agentId,
+    actions: [offer(first), ...rest.map(offer)],
+    busy,
+    keyed: desktop && shown,
+    subject: shortcutSubject(SHORTCUT_SUBJECT.AGENT, agentId),
+    onEdit: () => openSettings({ page: SETTINGS_VIEW.ENVIRONMENT, workspaceId: place.workspaceId }),
+  };
+}
+
+/** An action's words: its name, or Stop and its name while it runs. */
+function actionLabel({ action, runs }: OfferedAction): string {
+  return runs ? WORDS.STOP(action.label) : action.label;
+}
+
+/** The actions as a menu lists them, the first printing ⌥⌘R where it acts on the agent, then the way to edit them. */
+function runItems(offer: RunOffer): MenuAction[][] {
+  const items = offer.actions.map((offered, index): MenuAction => {
+    const item: MenuAction = {
+      label: actionLabel(offered),
+      detail: offered.action.command,
+      icon: offered.runs ? <GLYPH.STOP /> : <PlayIcon />,
+      replayMasked: true,
+      onSelect: offered.onPress,
+    };
+    return index === 0
+      ? { ...item, command: APP_COMMAND.RUN_ACTION, subject: offer.subject }
+      : item;
   });
+  return [items, [{ label: WORDS.EDIT, icon: <GLYPH.SETTINGS />, onSelect: offer.onEdit }]];
+}
+
+/** Run ›, the actions as a phone's ⋯ lists them, where no button stands. */
+export function runSubmenu(offer: RunOffer | undefined): MenuSubmenu | undefined {
+  if (offer === undefined) return undefined;
+  return { label: WORDS.SUBMENU, icon: <PlayIcon />, items: runItems(offer).flat() };
+}
+
+/** One action as ⌘K lists it: Run or Stop and its name, its command or that it runs, and ⌥⌘R on the first where the key acts. */
+export interface RunPaletteRow {
+  readonly id: string;
+  readonly label: string;
+  readonly detail: string;
+  readonly icon: React.JSX.Element;
+  readonly keyed: boolean;
+  readonly onPress: () => void;
+}
+
+/** The actions as ⌘K lists them, each worded as the act it is. */
+export function runPaletteRows(offer: RunOffer | undefined): readonly RunPaletteRow[] {
+  if (offer === undefined) return [];
+  return offer.actions.map((offered, index) => ({
+    id: offered.action.id,
+    label: offered.runs ? WORDS.STOP(offered.action.label) : WORDS.RUN(offered.action.label),
+    detail: offered.runs ? WORDS.RUNNING : offered.action.command,
+    icon: offered.runs ? <GLYPH.STOP /> : <PlayIcon />,
+    keyed: index === 0 && offer.keyed,
+    onPress: offered.onPress,
+  }));
+}
+
+/**
+ * The Run button: its main part runs the first action, or stops it while
+ * it runs, and its chevron drops every action; it answers ⌥⌘R on the agent
+ * shown in the desktop app. Its words name the agent it acts on.
+ */
+export function RunActionsButton({
+  offer,
+  agentName,
+}: {
+  offer: RunOffer;
+  /** The agent the button acts on, as its tab names it, which its hint and menu say. */
+  agentName: string;
+}): React.JSX.Element {
+  const menu = useMenu(true);
+  const [first] = offer.actions;
+  useShortcutTarget(offer.keyed ? offer.subject : undefined, RUN_KEYS);
+  useAppCommand(APP_COMMAND.RUN_ACTION, offer.keyed && !offer.busy ? first.onPress : undefined);
+  const said = first.runs ? WORDS.STOP(first.action.label) : WORDS.RUN(first.action.label);
   return (
     <>
-      {/* Note that a narrow card folds the button to its glyph through the split button's own fold, its words kept for a reader, so it gives way before the foot's other presses (`FOLD_WIDTH.RUN`). */}
-      <span className={narrow ? "run-actions-folded" : "run-actions"}>
-        <SplitButton
-          icon={firstRuns ? <GLYPH.STOP /> : <PlayIcon />}
-          label={firstRuns ? WORDS.STOP(first.label) : WORDS.RUN(first.label)}
-          hintLabel={firstRuns ? WORDS.STOP(first.label) : WORDS.RUN(first.label)}
-          busy={busy}
-          busyLabel={WORDS.STARTING}
-          onClick={() => press(first)}
-          menu={{ label: WORDS.MENU, ...menu.trigger(riseAbove) }}
-        >
-          {first.label}
-        </SplitButton>
-      </span>
+      <SplitButton
+        icon={first.runs ? <GLYPH.STOP /> : <PlayIcon />}
+        label={WORDS.IN(said, agentName)}
+        hintLabel={WORDS.IN(said, agentName)}
+        busy={offer.busy}
+        busyLabel={WORDS.STARTING}
+        onClick={first.onPress}
+        menu={{ label: WORDS.MENU, ...menu.trigger() }}
+      >
+        {actionLabel(first)}
+      </SplitButton>
       {menu.drawn && (
-        <ActionMenu label={WORDS.MENU} menu={menu.drawn} groups={[items]} onClose={menu.close} />
+        <ActionMenu
+          label={WORDS.MENU}
+          heading={WORDS.IN(WORDS.SUBMENU, agentName)}
+          menu={menu.drawn}
+          groups={runItems(offer)}
+          onClose={menu.close}
+        />
       )}
     </>
   );
