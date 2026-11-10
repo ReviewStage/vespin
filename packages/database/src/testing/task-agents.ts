@@ -11,6 +11,7 @@ import { eq } from "drizzle-orm";
 import { Clock, Effect } from "effect";
 import { SqlClient } from "effect/sql";
 import { Database } from "../core/query.js";
+import { createTask } from "../models/task-store.js";
 import { agentTable } from "../schemas/agent.js";
 import { inboxItem } from "../schemas/inbox.js";
 import { conversations } from "../schemas/storage.js";
@@ -23,12 +24,11 @@ import { CONVERSATION_KIND } from "../storage-vocabulary.js";
  * or an item of that agent's waiting on the developer, writes the rows here
  * rather than starting a session: an agent of the member's, with its own
  * conversation, and an item open under a fresh key, holding its message's
- * ask open, or open as a notice whose message asks nothing. An agent with
- * no task is written the same way.
+ * ask open, or open as a notice whose message asks nothing.
  */
 
-/** An agent of the member's on the task, or on none, with its own conversation; its id. */
-export const openTaskAgent = (userId: string, organizationId: string, taskId: string | null) =>
+/** An agent of the member's on the task, with its own conversation; its id. */
+export const openTaskAgent = (userId: string, organizationId: string, taskId: string) =>
   Effect.gen(function* () {
     const db = yield* Database;
     const id = randomUUID();
@@ -48,6 +48,13 @@ export const openTaskAgent = (userId: string, organizationId: string, taskId: st
       idempotencyKey: randomUUID(),
     });
     return id;
+  });
+
+/** An agent of the member's on a task of its own in the workspace, with its own conversation; its id. */
+export const openAgentOnOwnTask = (userId: string, organizationId: string) =>
+  Effect.gen(function* () {
+    const { id: taskId } = yield* createTask(userId, { organizationId, name: "Flaky tests" });
+    return yield* openTaskAgent(userId, organizationId, taskId);
   });
 
 /** An inbox item of the task's agent, open and holding its message's ask open, or open as a notice, its message asking nothing, where `asking` is false; its id. */

@@ -5,7 +5,7 @@ import {
 } from "@repo/features/agent-view";
 import { INBOX_STATUS, type InboxItem, type InboxStatus } from "@repo/features/inbox-wire";
 import { cardTitle } from "@repo/features/plain-words";
-import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { FAILURE_SURFACE, type FailureSurface } from "@repo/features/shown-failure";
 import { countWords, TERM } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { PortActKind } from "@repo/host/contract";
@@ -17,7 +17,7 @@ import { type ActResult, type ActVariables, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import type { MenuAction } from "../desktop/action-menu.js";
 import type { ShortcutSubject } from "../shortcut-target.js";
-import { type HeldWrite, pressHeld } from "../undo-stack.js";
+import { type HeldUndoRefusal, type HeldWrite, pressHeld } from "../undo-stack.js";
 import { messageFailureWords } from "./agent-model.js";
 
 /**
@@ -31,7 +31,7 @@ import { messageFailureWords } from "./agent-model.js";
  * goes to the host held (`AGENTS_INBOX_CLOSE`'s `held`): the host draws it
  * and keeps it from the service until the toast is gone, when it is let
  * go as sent, or until Undo, when it is let go as taken back and the item
- * stands again as it was (`AGENTS_INBOX_CLOSE_RELEASE`). A window leaving
+ * stands again as it was (`AGENTS_INBOX_RELEASE`). A window leaving
  * while its toast stands lets its resolves go as sent, so a resolve the
  * reader left standing is never dropped; the host sends any it still holds
  * once it quits, or once a while passes with no word from its window.
@@ -69,14 +69,14 @@ const UNDO_UNREACHED = {
   RETRY: "Try again",
 } as const;
 
-/** How one held close answered being let go: still held, and let go now; sent on already; or not reached, so it may still be held. */
+/** How one held settle answered being let go: still held, and let go now; sent on already; or not reached, so it may still be held. */
 const RELEASED = {
   HELD: "held",
   LATE: "late",
   UNREACHED: "unreached",
 } as const;
 
-type Released = (typeof RELEASED)[keyof typeof RELEASED];
+export type Released = (typeof RELEASED)[keyof typeof RELEASED];
 
 /** What the Undo toast says: the one item by its title, or how many. */
 function resolvedNote(items: readonly InboxItem[]): string {
@@ -105,16 +105,21 @@ function refusalWords(
 export type InboxResolver = (items: readonly InboxItem[]) => void;
 
 /** How an act of `Kind` is sent: the `mutateAsync` of its kind's mutation (`act-mutations.ts`). */
-type Send<Kind extends PortActKind> = (variables: ActVariables<Kind>) => Promise<ActResult<Kind>>;
+export type Send<Kind extends PortActKind> = (
+  variables: ActVariables<Kind>,
+) => Promise<ActResult<Kind>>;
+
+/** The mutation a held settle's hold is let go on. */
+export type ReleaseDoor = Send<typeof ACT_KIND.AGENTS_INBOX_RELEASE>;
 
 /** The mutations a resolve is sent on: the close, held, and the release that lets its hold go. */
 interface ResolveDoors {
   readonly close: Send<typeof ACT_KIND.AGENTS_INBOX_CLOSE>;
-  readonly release: Send<typeof ACT_KIND.AGENTS_INBOX_CLOSE_RELEASE>;
+  readonly release: ReleaseDoor;
 }
 
-/** One press's resolve: the open items it closes, and the key each close goes under, by the item's place. */
-interface Resolving {
+/** One press's held settles, a resolve or a nod: the open items it settles, and the key each settle goes under, by the item's place. */
+export interface HeldSettles {
   readonly items: readonly InboxItem[];
   readonly keys: readonly string[];
 }
@@ -123,8 +128,8 @@ interface Resolving {
 type CloseAnswer = AgentInboxAnsweredView | { readonly failure: AgentCallFailure };
 
 /** How each of `keys`' holds answered being let go, as sent where `send`, else as taken back. */
-function released(
-  release: ResolveDoors["release"],
+export function released(
+  release: ReleaseDoor,
   keys: readonly string[],
   send: boolean,
 ): Promise<readonly Released[]> {
@@ -136,6 +141,38 @@ function released(
       ),
     ),
   );
+}
+
+/** What a held settle's Undo says where it did not take it back, in its own words: not reached, so it may still be held; or too late, sent on already. */
+export interface UnheldWords {
+  readonly unreached: string;
+  readonly late: string;
+}
+
+/**
+ * What an Undo of held settles says where it did not take each back: the
+ * Undo not reached, which may still be held, asked again for those alone;
+ * or one the host had sent on already. None where each was taken back.
+ */
+export function unheldSettles(
+  { items, keys }: HeldSettles,
+  answers: readonly Released[],
+  words: UnheldWords,
+  surface: FailureSurface,
+): HeldUndoRefusal<HeldSettles> | undefined {
+  const missed = (_: unknown, at: number) => answers[at] === RELEASED.UNREACHED;
+  if (answers.some((answer) => answer === RELEASED.UNREACHED)) {
+    return {
+      words: words.unreached,
+      failure: { surface, cause: words.unreached },
+      retry: {
+        label: UNDO_UNREACHED.RETRY,
+        change: { items: items.filter(missed), keys: keys.filter(missed) },
+      },
+    };
+  }
+  if (!answers.includes(RELEASED.LATE)) return undefined;
+  return { words: words.late, failure: { surface, cause: words.late, refused: true } };
 }
 
 /**
@@ -185,30 +222,19 @@ const RESOLVE_WRITE = {
       },
     };
   },
-  unheld: ({ items, keys }, answers) => {
-    const missed = (_: unknown, at: number) => answers[at] === RELEASED.UNREACHED;
-    if (answers.some((answer) => answer === RELEASED.UNREACHED)) {
-      return {
-        words: UNDO_UNREACHED.WORDS,
-        failure: { surface: FAILURE_SURFACE.INBOX_CLOSE, cause: UNDO_UNREACHED.WORDS },
-        retry: {
-          label: UNDO_UNREACHED.RETRY,
-          change: { items: items.filter(missed), keys: keys.filter(missed) },
-        },
-      };
-    }
-    if (!answers.includes(RELEASED.LATE)) return undefined;
-    return {
-      words: TOO_LATE,
-      failure: { surface: FAILURE_SURFACE.INBOX_CLOSE, cause: TOO_LATE, refused: true },
-    };
-  },
-} satisfies HeldWrite<ResolveDoors, Resolving, readonly CloseAnswer[], readonly Released[]>;
+  unheld: (resolving, answers) =>
+    unheldSettles(
+      resolving,
+      answers,
+      { unreached: UNDO_UNREACHED.WORDS, late: TOO_LATE },
+      FAILURE_SURFACE.INBOX_CLOSE,
+    ),
+} satisfies HeldWrite<ResolveDoors, HeldSettles, readonly CloseAnswer[], readonly Released[]>;
 
 /** The Inbox's resolves, each held by the host until its Undo toast is gone. */
 export function useInboxResolver(): InboxResolver {
   const { mutateAsync: close } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_CLOSE));
-  const { mutateAsync: release } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_CLOSE_RELEASE));
+  const { mutateAsync: release } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_RELEASE));
   const out = useRef(new Set<string>());
   return useCallback(
     (items: readonly InboxItem[]) => {

@@ -1,17 +1,20 @@
 import type { CodeLines } from "@repo/features/tasks-view";
-import { CODE_CARD_TITLE, CODE_ROW, CodeCard, type CodeRow } from "@repo/ui";
+import { CODE_CARD_TITLE, CODE_ROW, CodeCard, type CodeRow, DraftCard } from "@repo/ui";
+import { draftKindOf } from "@repo/ui/draft-text";
 import { SUGGESTED_CHANGE_LANGUAGE } from "@repo/ui/github-html";
 import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
 import { useQuery } from "@tanstack/react-query";
 import { type ComponentProps, createContext, type ReactNode, useContext, useMemo } from "react";
 import { colorable, coloringQueryOptions } from "../code-coloring.js";
 import { codeLanguage, codeTitle } from "../code-language.js";
-import { copyThroughShell } from "../copy-feedback.js";
+import { copyRichThroughShell, copyThroughShell } from "../copy-feedback.js";
 import { DescriptionDiagram } from "../description-diagram.js";
+import { TextLink } from "../text-link.js";
 import { FileTypeIcon } from "./file-type-icon.js";
+import { useOpenLink } from "./use-open-link.js";
 
 /**
- * transcript-markdown.tsx -- code and tables as every rendered text draws them: a fenced block in the window's one code card, a note's as a transcript's, a table bare, and an inline span on a subtle fill.
+ * transcript-markdown.tsx -- code and tables as every rendered text draws them: a fenced block in the window's one code card, a draft to be sent elsewhere as it will look when sent, a note's as a transcript's, a table bare, and an inline span on a subtle fill.
  *
  * Streamdown, the markdown renderer behind AI Elements' Response, draws a
  * fenced block and a table with components of its own: a bordered card on
@@ -170,13 +173,8 @@ function addedText(rows: readonly Row[]): string {
  * alone, which is the suggestion. A diff's rows are tinted the same way
  * (`rowsOf`).
  */
-export function TranscriptCodeBlock({
-  className,
-  node,
-}: ComponentProps<"code"> & MarkdownNodeProps): ReactNode {
+function CodeFence({ language, code }: { language: string; code: string }): ReactNode {
   const openTail = useContext(OpenFenceTail);
-  const language = LANGUAGE_CLASS.exec(className ?? "")?.[1] ?? "";
-  const code = blockText(node).replace(/\n$/u, "");
   // Note that the block still open is the one the words end on, so its last line ends them.
   const whole = openTail === undefined || !openTail.endsWith(code.split("\n").at(-1) ?? "");
   const suggesting = language === SUGGESTION.LANGUAGE || language === SUGGESTED_CHANGE_LANGUAGE;
@@ -198,6 +196,58 @@ export function TranscriptCodeBlock({
       copy={copyThroughShell}
     />
   );
+}
+
+/** A link in a draft's words, opening as a transcript's link does (`use-open-link.ts`). */
+function draftLink(url: string, children: ReactNode): ReactNode {
+  return <DraftLink url={url}>{children}</DraftLink>;
+}
+
+function DraftLink({ url, children }: { url: string; children: ReactNode }): ReactNode {
+  const openLink = useOpenLink();
+  return (
+    <TextLink href={url} words={undefined} onOpen={openLink}>
+      {children}
+    </TextLink>
+  );
+}
+
+/**
+ * Words an agent wrote to be sent elsewhere, fenced ```slack, ```email, or
+ * ```draft, in a `DraftCard` as they will look when sent
+ * (`@repo/ui/draft-text`), its Copy putting them on the clipboard as rich
+ * text; none for any other fence, which its place draws as code. A
+ * transcript's block and an Inbox to-do's step draw a draft alike.
+ */
+export function DraftFence({
+  language,
+  code,
+}: {
+  language: string | undefined;
+  code: string;
+}): ReactNode {
+  const draft = draftKindOf(language ?? "");
+  if (draft === undefined) return null;
+  return (
+    <DraftCard
+      kind={draft}
+      text={code}
+      link={draftLink}
+      copy={copyRichThroughShell}
+      copyText={copyThroughShell}
+    />
+  );
+}
+
+/** A fenced block as the transcript draws it: a draft as it will look when sent (`DraftFence`), and any other block in a `CodeCard` (`CodeFence`). */
+export function TranscriptCodeBlock({
+  className,
+  node,
+}: ComponentProps<"code"> & MarkdownNodeProps): ReactNode {
+  const language = LANGUAGE_CLASS.exec(className ?? "")?.[1] ?? "";
+  const code = blockText(node).replace(/\n$/u, "");
+  if (draftKindOf(language) === undefined) return <CodeFence language={language} code={code} />;
+  return <DraftFence language={language} code={code} />;
 }
 
 /**

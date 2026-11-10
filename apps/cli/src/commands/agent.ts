@@ -1,5 +1,5 @@
 /**
- * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `stop`, `update`, `wait`, `checkout`, `diff` and `pr` (`agent-pull-request.ts`), `ports`, `share`, `tabs`, `forward` (`agent-forward.ts`), and `shell` and `shells` (`agent-shell.ts`): coding agents started, continued, read, followed, messaged, stopped, changed, waited on, their work brought into the working folder, their pull request read and changed, the ports their sandbox listens on shared by link and served on localhost, the tabs of their cloud browser listed, opened, taken over, and handed back, and its shells attached here.
+ * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `stop`, `update`, `rewind`, `delete`, and `wake` (`agent-lifecycle.ts`), `wait`, `checkout`, `diff` and `pr` (`agent-pull-request.ts`), `ports`, `share`, `tabs`, `forward` (`agent-forward.ts`), and `shell` and `shells` (`agent-shell.ts`): coding agents started, continued, read, followed, messaged, stopped, changed, rewound, deleted, woken, waited on, their work brought into the working folder, their pull request read and changed, the ports their sandbox listens on shared by link and served on localhost, the tabs of their cloud browser listed, opened, taken over, and handed back, and its shells attached here.
  *
  * A turn is followed on the held transcript read (`messages.agent`): asked
  * past the cursor the last answer handed back, the service holds it while
@@ -51,6 +51,7 @@ import { askService, session } from "../session.js";
 import { resolveTaskId } from "../tasks.js";
 import { resolveWorkspace } from "../workspace.js";
 import { forwardCommand } from "./agent-forward.js";
+import { deleteCommand, rewindCommand, wakeCommand } from "./agent-lifecycle.js";
 import { diffCommand, prCommand } from "./agent-pull-request.js";
 import { shellCommand, shellsCommand } from "./agent-shell.js";
 
@@ -1358,7 +1359,7 @@ const updateCommand = Command.make(
 /** The agent group: start, continue, and the rest through tabs, with diff, pr, forward, and the shells from their own files. */
 export const agentCommand = Command.make("agent").pipe(
   Command.withDescription(
-    `Start, continue, follow, message, change, and stop ${PRODUCT_NAME}'s coding agents`,
+    `Start, continue, follow, message, change, stop, rewind, delete, and wake ${PRODUCT_NAME}'s coding agents`,
   ),
   Command.withSubcommands([
     startCommand,
@@ -1369,6 +1370,9 @@ export const agentCommand = Command.make("agent").pipe(
     sendCommand,
     stopCommand,
     updateCommand,
+    rewindCommand,
+    deleteCommand,
+    wakeCommand,
     forwardCommand,
     waitCommand,
     checkoutCommand,

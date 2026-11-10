@@ -41,7 +41,7 @@ import {
 import { type Actor, actorName, personActor } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
 import { useMutation } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { type ReactNode, useId } from "react";
 import { settingMutation } from "../act-mutations.js";
 import { ActorLine, ActorRef } from "../actor-ref.js";
 import { presenceStanding, useDevicePresence } from "../device-presence.js";
@@ -255,14 +255,17 @@ const SET_UP_WORDS = { LABEL: "Set up a Mac", DETAIL: "Settings › Hosts" } as 
  * where the agent runs on a device, and, where the member has no device, a
  * row opening Settings › Hosts to add one. Picking another place moves the
  * agent there; picking its own does nothing. Its card stands as the static
- * chip's does while the menu is shut.
+ * chip's does while the menu is shut, and what the static chip says to a
+ * reader after its words describes the picker. Note that an offline device
+ * keeps no attention tone here, since a picker takes none; its words still
+ * say it is offline.
  */
 function PlaceMenuChip({
   here,
   glyph,
   words,
-  said,
   card,
+  said,
   move,
   narrow,
 }: {
@@ -270,12 +273,12 @@ function PlaceMenuChip({
   here: string | undefined;
   glyph: ReactNode;
   words: string;
-  /** What a reader hears after the words, as the static chip says it; none where it says nothing more. */
-  said: string | undefined;
   card: ReactNode;
+  said: string | undefined;
   move: PlaceMove;
   narrow: boolean;
 }): React.JSX.Element {
+  const saidId = useId();
   const listed = here === undefined && move.pushedOnly ? [] : move.devices;
   const book = useDevicePresence(listed.length > 0);
   const thisMac = useThisMac();
@@ -296,26 +299,30 @@ function PlaceMenuChip({
           },
         ];
   return (
-    <Picker
-      label={RUNS_ON_WORDS.LABEL}
-      value={here}
-      valueLabel={words}
-      valueIcon={glyph}
-      iconOnly={narrow}
-      rows={[...places, ...setUp]}
-      noMatch={RUNS_ON_WORDS.NO_MATCH}
-      hint={`${RUNS_ON}${words}${said ?? ""}`}
-      card={card}
-      align={POPOVER_ALIGN.START}
-      width={CHIP_WIDTH.AUTO}
-      look={CHIP_LOOK.TOOLBAR}
-      chevron
-      menuWidth={POPOVER_WIDTH.REGULAR}
-      onPick={(id) => {
-        if (id === SET_UP_ROW) return openSettings({ page: SETTINGS_VIEW.HOSTS });
-        if (id !== here) move.moveTo(rowRequest(id));
-      }}
-    />
+    <>
+      {said === undefined ? null : <VisuallyHidden id={saidId}>{said}</VisuallyHidden>}
+      <Picker
+        label={RUNS_ON_WORDS.LABEL}
+        describedBy={said === undefined ? undefined : saidId}
+        value={here}
+        valueLabel={words}
+        valueIcon={glyph}
+        iconOnly={narrow}
+        rows={[...places, ...setUp]}
+        noMatch={RUNS_ON_WORDS.NO_MATCH}
+        hint={`${RUNS_ON}${words}`}
+        card={card}
+        align={POPOVER_ALIGN.START}
+        width={CHIP_WIDTH.AUTO}
+        look={CHIP_LOOK.TOOLBAR}
+        chevron
+        menuWidth={POPOVER_WIDTH.REGULAR}
+        onPick={(id) => {
+          if (id === SET_UP_ROW) return openSettings({ page: SETTINGS_VIEW.HOSTS });
+          if (id !== here) move.moveTo(rowRequest(id));
+        }}
+      />
+    </>
   );
 }
 
@@ -358,8 +365,8 @@ function PlaceChip({
         here={here}
         glyph={glyph}
         words={words}
-        said={said}
         card={card}
+        said={said}
         move={move}
         narrow={narrow}
       />

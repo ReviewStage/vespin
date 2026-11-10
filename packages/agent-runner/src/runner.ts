@@ -4,7 +4,8 @@
  * Two loops run side by side. The input loop reads the service's lines, from stdin
  * or, where the config names the read, from the service (`lines.ts`), and acts on
  * each at once: a message joins the prompt stream, a stop calls
- * `interrupt()`, a model change calls `setModel()` or `applyFlagSettings()`.
+ * `interrupt()`, a model change calls `setModel()` or `applyFlagSettings()`,
+ * an approval answers the tool call it names (`approvals.ts`).
  * It never waits on the session's output, so a stop reaches the CLI even
  * while a long foreground command holds the turn (P00 found exactly this).
  * The output loop posts every SDK message, in order, and decides when the
@@ -59,6 +60,14 @@ import {
   Semaphore,
   Stream,
 } from "effect";
+import {
+  type Approvals,
+  canUseToolOf,
+  denyForMessage,
+  denyWaiting,
+  makeApprovals,
+  settleAsk,
+} from "./approvals.js";
 import { ClaudeCode, type ClaudeCodeSession, type ClaudeCodeShape } from "./claude-code.js";
 import { runCodex } from "./codex.js";
 import { type EventSink, makeEventSink } from "./events.js";
@@ -75,7 +84,9 @@ import { openMcpRelay } from "./mcp-relay.js";
 import { type ClaudeCodeMemoryWatch, claudeCodeMemoryWatch } from "./out-of-memory.js";
 import { SANDBOX_TOOL_ENV } from "./pins.js";
 import {
+  APPROVAL_BY,
   CLAUDE_CODE_TOOLS,
+  CLAUDE_CODE_UNASKED_TOOLS,
   CLAUDE_CODE_WORKER,
   type ClaudeCodeConfig,
   EFFORT,
@@ -84,6 +95,8 @@ import {
   INSTALLED_SKILLS,
   type InputLine,
   InputLineSchema,
+  PERMISSION_MODE,
+  type PermissionMode,
   RUNNER_CONFIG,
   RUNNER_CONTROL,
   RUNNER_END,
@@ -120,20 +133,32 @@ const PROMPT_CACHE_TTL = {
 /** The name our MCP server is registered under, so its tools reach the model as `mcp__workspace__<tool>` (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
 const MCP_SERVER = "workspace";
 
+/** Claude Code's built-ins the worker goes without: those that write a file or start another worker. */
+const WORKER_DENIED_BUILT_INS = ["Edit", "Write", "NotebookEdit", "Agent"] as const;
+
 /**
  * The worker the agent hands a scoped job to (`CLAUDE_CODE_WORKER`): its
  * own model's, without the tools that write a file, start another worker,
  * or act through the service, and told to read only, which Bash and the
- * integration servers it keeps could still contradict.
+ * integration servers it keeps could still contradict. It keeps our
+ * server's reads, such as a task or another agent's transcript, and is
+ * denied the rest by name (`workerDenied`); a config that names none
+ * denies it the whole server.
  */
-const WORKER: AgentDefinition = {
-  description:
-    "A read-only worker for one scoped job, such as a broad search, a comparison of approaches, or an investigation: it reads the checkout and the web and answers, and never edits, commits, or pushes.",
-  prompt:
-    "You are a read-only worker for an agent. Do the one job you were handed and answer with what it asks for. You are read-only in the checkout: never write, edit, move, or delete a file, never commit or push; run only commands that read, and use the connected services only to read from them.",
-  model: "inherit",
-  disallowedTools: ["Edit", "Write", "NotebookEdit", "Agent", `mcp__${MCP_SERVER}`],
-};
+function workerOf(config: ClaudeCodeConfig): AgentDefinition {
+  const ours =
+    config.workerDenied === undefined
+      ? [`mcp__${MCP_SERVER}`]
+      : config.workerDenied.map((tool) => `mcp__${MCP_SERVER}__${tool}`);
+  return {
+    description:
+      "A read-only worker for one scoped job, such as a broad search, a comparison of approaches, or an investigation: it reads the checkout and the web and answers, and never edits, commits, or pushes.",
+    prompt:
+      "You are a read-only worker for an agent. Do the one job you were handed and answer with what it asks for. You are read-only in the checkout: never write, edit, move, or delete a file, never commit or push; run only commands that read, and use the connected services only to read from them.",
+    model: "inherit",
+    disallowedTools: [...WORKER_DENIED_BUILT_INS, ...ours],
+  };
+}
 
 const CLAUDE_EFFORTS: ReadonlySet<string> = new Set(Object.values(EFFORT));
 
@@ -207,6 +232,43 @@ const resumePointOf = Effect.fn("agent-runner/resumePointOf")(function* (
   return at === undefined ? ({ resume } satisfies ResumePoint) : { resume, at };
 });
 
+/** The options that say how the CLI answers its tool calls. */
+type Permissions = Pick<
+  Options,
+  "permissionMode" | "allowDangerouslySkipPermissions" | "allowedTools" | "canUseTool"
+>;
+
+/**
+ * How the CLI answers its tool calls in the launch's mode. Under full access
+ * every call runs, as every launch ran before modes, and no callback is
+ * handed, since `bypassPermissions` would never call it. A mode that asks
+ * runs the reads and every MCP server the launch hands the CLI unasked
+ * (`CLAUDE_CODE_UNASKED_TOOLS`), and asks the member the rest through
+ * `canUseTool`, which `auto` calls only where its classifier cannot decide.
+ */
+function permissionsOf(
+  mode: PermissionMode,
+  servers: Readonly<Record<string, McpSdkServerConfigWithInstance>>,
+  approvals: Approvals,
+): Permissions {
+  if (mode === PERMISSION_MODE.FULL_ACCESS) {
+    return {
+      permissionMode: "bypassPermissions",
+      allowDangerouslySkipPermissions: true,
+      allowedTools: [...CLAUDE_CODE_TOOLS.ADDED],
+    };
+  }
+  return {
+    permissionMode: mode === PERMISSION_MODE.AUTO ? "auto" : "default",
+    allowedTools: [
+      ...CLAUDE_CODE_TOOLS.ADDED,
+      ...CLAUDE_CODE_UNASKED_TOOLS,
+      ...Object.keys(servers).map((server) => `mcp__${server}`),
+    ],
+    canUseTool: canUseToolOf(approvals),
+  };
+}
+
 /**
  * The documented options a launch runs `query()` with (the plan's P05), the
  * same wherever the runner runs: no command sandbox of the CLI's own, since
@@ -225,19 +287,19 @@ function queryOptions(
   memoryWatch: ClaudeCodeMemoryWatch,
   from: ResumePoint,
   store: SessionStore | undefined,
+  approvals: Approvals,
 ): Options {
+  const mode = config.permissionMode ?? PERMISSION_MODE.FULL_ACCESS;
   const options: Options = {
     cwd: config.cwd,
     pathToClaudeCodeExecutable: config.executable,
     model: config.model,
     systemPrompt: { type: "preset", preset: "claude_code", append: config.append },
     settingSources: ["project"],
-    permissionMode: "bypassPermissions",
-    allowDangerouslySkipPermissions: true,
+    ...permissionsOf(mode, servers, approvals),
     includePartialMessages: true,
-    allowedTools: [...CLAUDE_CODE_TOOLS.ADDED],
     disallowedTools: [...CLAUDE_CODE_TOOLS.DENIED],
-    agents: { [CLAUDE_CODE_WORKER]: WORKER },
+    agents: { [CLAUDE_CODE_WORKER]: workerOf(config) },
     // The CLI's environment is the runner's own and the image's tools'
     // (`SANDBOX_TOOL_ENV`), less the bearer, which only the runner uses; Node
     // leaves an undefined one unset. Every command the agent runs inherits it,
@@ -308,6 +370,8 @@ interface Launch {
   readonly annotate: (message: SDKMessage) => SDKMessage;
   readonly prompts: Queue.Queue<SDKUserMessage, Cause.Done>;
   readonly sink: EventSink;
+  /** The tool calls held for the member's answer, in a launch whose mode asks. */
+  readonly approvals: Approvals;
   readonly trace: LaunchTrace;
   readonly inFlight: MutableRef.MutableRef<InFlight | undefined>;
   /** Whether the CLI is in a turn: from a message the service sent, or from the CLI's own output, a wakeup's turn included. */
@@ -370,6 +434,8 @@ const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, t
       return yield* launch.admission.withPermit(
         Effect.gen(function* () {
           yield* launch.trace.taken;
+          // A message sent while a call waits on the member's answer denies the call with its words.
+          yield* denyForMessage(launch.approvals, content);
           const running = yield* Ref.getAndSet(launch.turnRunning, true);
           yield* Ref.set(launch.warm, false);
           yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(prompt));
@@ -422,6 +488,14 @@ const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, t
       };
       if (Object.keys(settings).length > 0) {
         yield* control("applyFlagSettings", () => launch.session.applyFlagSettings(settings));
+      }
+      return;
+    }
+    case INPUT_LINE.APPROVAL: {
+      const { requestId, decision, message } = value;
+      const by = APPROVAL_BY.MEMBER;
+      if (!(yield* settleAsk(launch.approvals, requestId, decision, by, message))) {
+        yield* Effect.logWarning("agent-runner: skipped an approval for no waiting call");
       }
       return;
     }
@@ -670,10 +744,20 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     return { end: RUNNER_END.FAILED, failure: resumed.failure } satisfies LaunchOutcome;
   }
   const from = resumed.success;
+  const approvals = yield* makeApprovals(sink);
   // The CLI is spawned and initialized before the service's lines are taken, which wait in
   // their queue meanwhile, so its first message goes to a CLI ready for it.
   const memoryWatch = claudeCodeMemoryWatch();
-  const options = queryOptions(config, context.env, servers, onStop, memoryWatch, from, store);
+  const options = queryOptions(
+    config,
+    context.env,
+    servers,
+    onStop,
+    memoryWatch,
+    from,
+    store,
+    approvals,
+  );
   const started = yield* trace
     .step(
       RUNNER_SPAN.CLI,
@@ -693,6 +777,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     annotate: memoryWatch.annotate,
     prompts,
     sink,
+    approvals,
     trace,
     inFlight,
     turnRunning: yield* Ref.make(false),
@@ -743,9 +828,11 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   // answers its return only once the read under way does, which a quiet CLI
   // (a wait on a wakeup, a warm launch) answers only when it next writes:
   // waiting on it first held an ended launch, deaf to every line, for up to
-  // the hour its wakeup was set for.
+  // the hour its wakeup was set for. A call still waiting on the member is denied before the CLI
+  // is closed, so its ask is resolved ahead of the launch's last event.
   const end = yield* Deferred.await(launch.ended);
   yield* Fiber.interruptAll(reading);
+  yield* denyWaiting(approvals, APPROVAL_BY.ENDED);
   session.close();
   yield* Fiber.interrupt(posting);
   const failure = yield* Ref.get(launch.failure);

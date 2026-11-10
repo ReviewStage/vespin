@@ -2,6 +2,8 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords } from "@repo/features/words";
 import { managesWorkspace } from "@repo/features/workspace-role";
 import {
+  REPOSITORY_SCRIPT_KIND,
+  type RepositoryScriptKind,
   WORKSPACE_SANDBOX_SETUP_BOUNDS,
   type WorkspaceSandboxSetupAnswer,
 } from "@repo/features/workspace-sandbox-setup-wire";
@@ -53,20 +55,22 @@ import { shownWorkspace } from "./settings-rows.js";
 import type { WorkspaceSettingsControl } from "./workspace-page.js";
 
 /**
- * cloud-setup-page.tsx -- Settings › Cloud setup: how the workspace's cloud agent sandboxes are set up, its install script and each repository's setup script, saved by its owners and admins.
+ * cloud-setup-page.tsx -- Settings › Cloud setup: how the workspace's cloud agent sandboxes are set up and archived, its install script and each repository's setup and archive scripts, saved by its owners and admins.
  *
  * As Conductor Cloud's Cloud computer settings keep them. The install script
  * runs once per build of each of the workspace's repositories' base
  * snapshots, with `sudo`, so what it installs is in every new sandbox; a
  * repository's setup script runs once in each new agent sandbox of it, after
- * its checkout, with the workspace's environment variables. Every member reads
- * both, each script drawn under its row in Bash's colors; an owner or admin
- * edits each in place, as a file is edited, Discard and Save standing at its
- * row's end once it differs from what is saved, types the install script
- * into its empty row where none is saved yet, adds a setup script from a
- * repository picked in the menu a task's repository is picked in, and
- * removes one from its ⋯, a removal asking first. Each save answers the
- * setup as it then stands, which the page draws at once.
+ * its checkout, and its archive script once in each as its agent is archived,
+ * just before the sandbox is deleted, both with the workspace's environment
+ * variables. Every member reads them all, each script drawn under its row in
+ * Bash's colors; an owner or admin edits each in place, as a file is edited,
+ * Discard and Save standing at its row's end once it differs from what is
+ * saved, types the install script into its empty row where none is saved
+ * yet, adds a setup or archive script from a repository picked in the menu a
+ * task's repository is picked in, and removes one from its ⋯, a removal
+ * asking first. Each save answers the setup as it then stands, which the
+ * page draws at once.
  */
 
 /** A script's row while the setup is read. */
@@ -79,8 +83,28 @@ const SCRIPT_ROW_SKELETON: SettingsRowSkeletonShape = {
 /** What a script's editor offers while it is empty, by which script it is. */
 const PLACEHOLDER = {
   INSTALL: "sudo apt-get install -y postgresql-client",
-  SETUP: "pnpm install\ndocker compose pull",
+  [REPOSITORY_SCRIPT_KIND.SETUP]: "pnpm install\ndocker compose pull",
+  [REPOSITORY_SCRIPT_KIND.ARCHIVE]: "docker compose down --volumes",
 } as const;
+
+/** What a section of a repository's scripts says, by which script it holds. */
+const REPOSITORY_SECTION = {
+  [REPOSITORY_SCRIPT_KIND.SETUP]: {
+    title: "Setup scripts",
+    caption:
+      "Run once in each new agent sandbox of their repository, after its checkout, with the workspace's environment variables.",
+    empty: "No setup scripts yet.",
+  },
+  [REPOSITORY_SCRIPT_KIND.ARCHIVE]: {
+    title: "Archive scripts",
+    caption:
+      "Run in an agent's sandbox of their repository as the agent is archived, just before the sandbox is deleted, with the workspace's environment variables. Stopped after 90 seconds; a failure never holds up the archive.",
+    empty: "No archive scripts yet.",
+  },
+} as const satisfies Record<
+  RepositoryScriptKind,
+  { readonly title: string; readonly caption: string; readonly empty: string }
+>;
 
 /** How many lines an empty script's editor stands, so its placeholder and the first lines typed have room. */
 const EMPTY_SCRIPT_LINES = 3;
@@ -115,8 +139,10 @@ function saveRefusal(error: Error | null): ShownError | undefined {
   );
 }
 
-/** Which script a save names: the workspace's install script, or a repository's setup script. */
-type ScriptTarget = { readonly repository?: undefined } | { readonly repository: string };
+/** Which script a save names: the workspace's install script, or a repository's setup or archive script. */
+type ScriptTarget =
+  | { readonly repository?: undefined }
+  | { readonly repository: string; readonly kind: RepositoryScriptKind };
 
 /** The workspace's sandbox setup, read as the page opens and on Try again. */
 function setupQuery(workspaceId: string) {
@@ -149,6 +175,7 @@ function useSaveScript(workspaceId: string) {
             workspaceId,
             repository: target.repository,
             script,
+            kind: target.kind,
           }),
     onSuccess: (answer) => drawAnswer(queries, workspaceId, answer),
   });
@@ -159,7 +186,7 @@ function ScriptEditor({
   label,
   value,
   onChange,
-  install,
+  placeholder,
   editable,
   busy,
   autoFocus,
@@ -167,8 +194,8 @@ function ScriptEditor({
   label: string;
   value: string;
   onChange: (script: string) => void;
-  /** Whether it is the install script, which its placeholder suggests. */
-  install: boolean;
+  /** What it offers while empty, by which script it is (`PLACEHOLDER`). */
+  placeholder: string;
   /** Whether the reader may change it: an owner or admin. */
   editable: boolean;
   /** Whether a save of it is out, which holds it still. */
@@ -184,7 +211,7 @@ function ScriptEditor({
         value={value}
         onChange={onChange}
         lines={lines}
-        placeholder={install ? PLACEHOLDER.INSTALL : PLACEHOLDER.SETUP}
+        placeholder={placeholder}
         rows={value === "" ? EMPTY_SCRIPT_LINES : 1}
         readOnly={!editable || busy}
         autoFocus={autoFocus}
@@ -239,7 +266,7 @@ function EditActions({
 function ScriptRow({
   workspaceId,
   name,
-  repository,
+  target,
   script,
   manages,
   pictures,
@@ -247,7 +274,7 @@ function ScriptRow({
 }: {
   workspaceId: string;
   name: string;
-  repository?: string;
+  target: ScriptTarget;
   /** The script as saved; empty for an install script or a setup script not yet saved. */
   script: string;
   manages: boolean;
@@ -258,7 +285,7 @@ function ScriptRow({
 }): React.JSX.Element {
   const [edited, setEdited] = useState<string | undefined>(undefined);
   const saving = useSaveScript(workspaceId);
-  const target: ScriptTarget = repository === undefined ? {} : { repository };
+  const { repository } = target;
   // An edit the saved script now agrees with, its own save's or another's, is let go.
   if (edited !== undefined && edited === script && !saving.isPending) setEdited(undefined);
   const shown = edited ?? script;
@@ -320,7 +347,9 @@ function ScriptRow({
               label={name}
               value={shown}
               onChange={setEdited}
-              install={repository === undefined}
+              placeholder={
+                target.repository === undefined ? PLACEHOLDER.INSTALL : PLACEHOLDER[target.kind]
+              }
               editable={manages}
               busy={saving.isPending}
               autoFocus={added !== undefined}
@@ -333,7 +362,10 @@ function ScriptRow({
           open
           confirm={removal}
           question={{
-            title: `Remove ${name}?`,
+            title:
+              target.repository === undefined
+                ? `Remove ${name}?`
+                : `Remove ${name}'s ${target.kind} script?`,
             verb: "Remove",
             running: "Removing",
             loss: CONFIRM_LOSS.AFFECTS_OTHERS,
@@ -347,7 +379,7 @@ function ScriptRow({
 }
 
 /**
- * The Setup scripts section's Add script, which drops the repository menu a
+ * A repository scripts section's Add script, which drops the repository menu a
  * task's repository is picked in (`useRepositoryMenu`): the repositories the
  * workspace's GitHub reaches, less those `taken`. A pick adds that
  * repository's row, and the press stands for the next one.
@@ -358,7 +390,7 @@ function AddSetupButton({
   onPick,
 }: {
   workspaceId: string;
-  /** The repositories with a setup script saved or being added, which the menu leaves out. */
+  /** The repositories with a script of the section's kind saved or being added, which the menu leaves out. */
   taken: readonly string[];
   onPick: (repository: string) => void;
 }): React.JSX.Element {
@@ -389,12 +421,83 @@ function AddSetupButton({
   );
 }
 
-/** The page over one workspace: its install script, then each repository's setup script. */
+/**
+ * One section of the repositories' scripts of a kind: a row for each saved,
+ * and for each repository an owner or admin added and has not yet saved,
+ * under its Add script.
+ */
+function RepositoryScriptsSection({
+  workspaceId,
+  kind,
+  saved,
+  read,
+  manages,
+  pictures,
+}: {
+  workspaceId: string;
+  kind: RepositoryScriptKind;
+  /** The repositories' saved scripts of the kind, in the order of their names. */
+  saved: WorkspaceSandboxSetupAnswer["setups"];
+  /** What stands in the rows' place while the setup is read, or why it could not be; nothing once it is. */
+  read: React.JSX.Element | undefined;
+  manages: boolean;
+  pictures: boolean;
+}): React.JSX.Element {
+  const [added, setAdded] = useState<readonly string[]>([]);
+  const words = REPOSITORY_SECTION[kind];
+  // A repository added and since saved is the saved list's now, so it is let go of here.
+  const unsaved = added.filter(
+    (repository) => !saved.some((each) => sameRepository(each.repository, repository)),
+  );
+  if (unsaved.length !== added.length) setAdded(unsaved);
+  // Note that the saved and the added stand in one list keyed by repository, so a row just saved goes on as the same row, its caret where it was.
+  const rows = [
+    ...saved,
+    ...(manages ? unsaved.map((repository) => ({ repository, script: "", added: true })) : []),
+  ];
+  const taken = rows.map((each) => each.repository);
+  const add = (repository: string) =>
+    setAdded((now) =>
+      now.some((each) => sameRepository(each, repository)) ? now : [...now, repository],
+    );
+  const letGo = (repository: string) =>
+    setAdded((now) => now.filter((each) => !sameRepository(each, repository)));
+  return (
+    <SettingsSection
+      title={words.title}
+      caption={words.caption}
+      action={
+        manages ? (
+          <AddSetupButton workspaceId={workspaceId} taken={taken} onPick={add} />
+        ) : undefined
+      }
+    >
+      {read ?? (
+        <>
+          {rows.length === 0 ? <SettingsLine>{words.empty}</SettingsLine> : null}
+          {rows.map((each) => (
+            <ScriptRow
+              key={each.repository.toLowerCase()}
+              workspaceId={workspaceId}
+              name={each.repository}
+              target={{ repository: each.repository, kind }}
+              script={each.script}
+              manages={manages}
+              pictures={pictures}
+              added={"added" in each ? { onCancel: () => letGo(each.repository) } : undefined}
+            />
+          ))}
+        </>
+      )}
+    </SettingsSection>
+  );
+}
+
+/** The page over one workspace: its install script, then each repository's setup script, then each one's archive script. */
 function ShownCloudSetup({ workspace }: { workspace: Workspace }): React.JSX.Element {
   const manages = managesWorkspace(workspace);
   const pictures = useRepositoryPictures();
   const setup = useQuery(setupQuery(workspace.id));
-  const [added, setAdded] = useState<readonly string[]>([]);
   const answer = setup.data;
   const read = setup.isError ? (
     <ReadFailed
@@ -405,24 +508,6 @@ function ShownCloudSetup({ workspace }: { workspace: Workspace }): React.JSX.Ele
   ) : answer === undefined ? (
     <SettingsRowsSkeleton label={readingWords("the cloud setup")} rows={[SCRIPT_ROW_SKELETON]} />
   ) : undefined;
-  const setups = answer?.setups ?? [];
-  // A repository added and since saved is the saved list's now, so it is let go of here.
-  const unsaved = added.filter(
-    (repository) => !setups.some((each) => sameRepository(each.repository, repository)),
-  );
-  if (unsaved.length !== added.length) setAdded(unsaved);
-  // Note that the saved and the added stand in one list keyed by repository, so a row just saved goes on as the same row, its caret where it was.
-  const rows = [
-    ...setups,
-    ...(manages ? unsaved.map((repository) => ({ repository, script: "", added: true })) : []),
-  ];
-  const taken = rows.map((each) => each.repository);
-  const add = (repository: string) =>
-    setAdded((now) =>
-      now.some((each) => sameRepository(each, repository)) ? now : [...now, repository],
-    );
-  const letGo = (repository: string) =>
-    setAdded((now) => now.filter((each) => !sameRepository(each, repository)));
   return (
     <>
       <SettingsSection
@@ -436,39 +521,29 @@ function ShownCloudSetup({ workspace }: { workspace: Workspace }): React.JSX.Ele
             <ScriptRow
               workspaceId={workspace.id}
               name="Install script"
+              target={{}}
               script={answer?.install?.script ?? ""}
               manages={manages}
               pictures={pictures}
             />
           ))}
       </SettingsSection>
-      <SettingsSection
-        title="Setup scripts"
-        caption="Run once in each new agent sandbox of their repository, after its checkout, with the workspace's environment variables."
-        action={
-          manages ? (
-            <AddSetupButton workspaceId={workspace.id} taken={taken} onPick={add} />
-          ) : undefined
-        }
-      >
-        {read ?? (
-          <>
-            {rows.length === 0 ? <SettingsLine>No setup scripts yet.</SettingsLine> : null}
-            {rows.map((each) => (
-              <ScriptRow
-                key={each.repository.toLowerCase()}
-                workspaceId={workspace.id}
-                name={each.repository}
-                repository={each.repository}
-                script={each.script}
-                manages={manages}
-                pictures={pictures}
-                added={"added" in each ? { onCancel: () => letGo(each.repository) } : undefined}
-              />
-            ))}
-          </>
-        )}
-      </SettingsSection>
+      <RepositoryScriptsSection
+        workspaceId={workspace.id}
+        kind={REPOSITORY_SCRIPT_KIND.SETUP}
+        saved={answer?.setups ?? []}
+        read={read}
+        manages={manages}
+        pictures={pictures}
+      />
+      <RepositoryScriptsSection
+        workspaceId={workspace.id}
+        kind={REPOSITORY_SCRIPT_KIND.ARCHIVE}
+        saved={answer?.archives ?? []}
+        read={read}
+        manages={manages}
+        pictures={pictures}
+      />
     </>
   );
 }

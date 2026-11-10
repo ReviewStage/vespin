@@ -8,19 +8,18 @@ import { listPages, writePage } from "@repo/database/models/task-pages";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, startTask } from "@repo/database/testing";
-import { PAGE_OWNER, PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
+import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { pagesOfLiveRows, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
-import { agentPagesRead, taskPagesRead } from "./pages.js";
+import { taskPagesRead } from "./pages.js";
 
 /**
  * A task's pages as Realtime would deliver them, over the real migrations on
  * PGlite: the statement run as Realtime runs it, its rows decoded and ordered
  * as the desktop does, beside `listPages`, the held read the Inbox read them
  * with. The two agree as pages are shown, as a page's next version lands,
- * and for an account that does not reach the task; and so for the pages a
- * coding agent on no task showed on itself, which hold none of a task's.
+ * and for an account that does not reach the task.
  *
  * Synthetic accounts, pages, and words throughout.
  */
@@ -37,18 +36,13 @@ const openUser = Effect.gen(function* () {
 const runLive = (statement: LiveStatement) =>
   Effect.flatMap(SqlClient.SqlClient, (sql) => sql.unsafe(statement.sql, [...statement.params]));
 
-/** A coding agent of the account's, on the task named or, in the workspace, on none. */
-const openAgent = (userId: string, place: { taskId: string } | { organizationId: string }) =>
+/** A coding agent of the account's, on the task named. */
+const openAgent = (userId: string, place: { taskId: string }) =>
   Effect.map(
     createAgent(userId, {
-      ...("taskId" in place
-        ? { taskId: place.taskId, descriptionSnapshot: null, prompt: null }
-        : {
-            taskId: null,
-            organizationId: place.organizationId,
-            descriptionSnapshot: null,
-            prompt: "Go",
-          }),
+      taskId: place.taskId,
+      descriptionSnapshot: null,
+      prompt: null,
       idempotencyKey: randomUUID(),
       model: "anthropic/claude-opus-5.5",
       effort: "high",
@@ -70,10 +64,6 @@ const liveRowsOf = (statement: LiveStatement) =>
 /** The task's pages as Realtime would deliver them to `reader`, as the desktop orders them. */
 const livePagesOf = (reader: string, taskId: string) =>
   liveRowsOf(Option.getOrThrow(taskPagesRead.statements({ userId: reader, id: taskId })).pages);
-
-/** The agent's own pages as Realtime would deliver them to `reader`. */
-const liveAgentPagesOf = (reader: string, agentId: string) =>
-  liveRowsOf(Option.getOrThrow(agentPagesRead.statements({ userId: reader, id: agentId })).pages);
 
 it.layer(getTestDB())("a task's pages followed live", (it) => {
   it.effect(
@@ -124,42 +114,6 @@ it.layer(getTestDB())("a task's pages followed live", (it) => {
           "Invite funnel, revised",
         );
         assert.deepEqual(yield* livePagesOf(stranger, task.id), []);
-      }),
-  );
-
-  it.effect(
-    "an agent's own pages answer what listPages answers, hold none of a task's, and answer nothing to a stranger",
-    () =>
-      Effect.gen(function* () {
-        const owner = yield* openUser;
-        const stranger = yield* openUser;
-        const task = yield* startTask(owner, { name: "Teammate invitations" });
-        const agentId = yield* openAgent(owner, { organizationId: task.workspaceId });
-        const owned = { kind: PAGE_OWNER.AGENT, agentId } as const;
-        const shower = { kind: PAGE_SHOWER.AGENT, agentId } as const;
-        const chart = Option.getOrThrow(
-          yield* writePage(owner, owned, { title: "Chart", html: "<p>1</p>" }, shower),
-        );
-        yield* writePage(
-          owner,
-          owned,
-          { pageId: chart.id, title: "Chart, revised", html: "<p>2</p>" },
-          shower,
-        );
-        yield* writePage(
-          owner,
-          taskPageOwner(task.id),
-          { title: "The task's", html: "<p>t</p>" },
-          { kind: PAGE_SHOWER.APP },
-        );
-
-        const held = yield* listPages(owner, owned);
-        assert.deepEqual(yield* liveAgentPagesOf(owner, agentId), held);
-        assert.deepEqual(
-          held.map(({ id, title, version }) => ({ id, title, version })),
-          [{ id: chart.id, title: "Chart, revised", version: 2 }],
-        );
-        assert.deepEqual(yield* liveAgentPagesOf(stranger, agentId), []);
       }),
   );
 });

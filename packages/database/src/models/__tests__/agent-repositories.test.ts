@@ -23,6 +23,7 @@ import {
   readAgentRepositories,
 } from "../agent-repositories.js";
 import { createAgent, type NewAgentRepository } from "../agent-store.js";
+import { createTask } from "../task-store.js";
 
 const openAccount = Effect.gen(function* () {
   const db = yield* Database;
@@ -31,17 +32,17 @@ const openAccount = Effect.gen(function* () {
   return id;
 });
 
-/** An agent of the account's in its workspace with no task, in the repository named and the extras beside it; its id. */
+/** An agent of the account's on a task of its workspace, in the repository named and the extras beside it; its id. */
 const startedIn = (
   userId: string,
   organizationId: string,
   repository: string | null,
   extraRepositories?: readonly NewAgentRepository[],
 ) =>
-  Effect.map(
-    createAgent(userId, {
-      taskId: null,
-      organizationId,
+  Effect.gen(function* () {
+    const { id: taskId } = yield* createTask(userId, { organizationId, name: "Client bump" });
+    const started = yield* createAgent(userId, {
+      taskId,
       descriptionSnapshot: null,
       prompt: "Bump the client in both",
       idempotencyKey: randomUUID(),
@@ -52,9 +53,9 @@ const startedIn = (
       githubAccess: GITHUB_ACCESS.APP,
       runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
       ...(extraRepositories === undefined ? undefined : { extraRepositories }),
-    }),
-    (started) => Option.getOrThrow(started).agent.id,
-  );
+    });
+    return Option.getOrThrow(started).agent.id;
+  });
 
 /** The rows the agent's extras stand in, as the table holds them. */
 const extraRows = (agentId: string) =>

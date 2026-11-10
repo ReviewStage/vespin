@@ -343,11 +343,15 @@ it.layer(getTestDB())("the conversation's dispatch claim", (it) => {
         const db = yield* Database;
         const workspace = yield* openWorkspace(target.userId);
         const agentId = randomUUID();
+        const { id: taskId } = yield* createTask(target.userId, {
+          organizationId: workspace,
+          name: "Hand-over",
+        });
         yield* db.insert(agentTable).values({
           id: agentId,
           organizationId: workspace,
           userId: target.userId,
-          taskId: null,
+          taskId,
           conversationId: target.conversationId,
           model: "anthropic/claude-opus-5.5",
           effort: "high",
