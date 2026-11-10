@@ -16,8 +16,10 @@
  * the sandbox.
  */
 
+import { BRAND_PALETTE, MARK_ART } from "@repo/brand";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { PREVIEW_SIGN_IN } from "@repo/features/preview-sign-in";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
 import type { Sandbox, SandboxError } from "@repo/sandbox";
 import { HTTP_METHOD } from "@repo/wire";
@@ -82,21 +84,45 @@ const DROPPED_RESPONSE_HEADERS: ReadonlySet<string> = new Set([
 const NEVER_KEPT = { "Vercel-CDN-Cache-Control": "no-store" } as const;
 
 const NOT_SIGNED_IN = "Sign in to view this preview.";
-const NO_PREVIEW = "No preview running here.";
-
-/** The page a visit sees where nothing is shared from the agent now, or its server stopped while the sandbox ran. */
-const NO_PREVIEW_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>No preview running here</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px/1.5 system-ui,sans-serif;color:#444;text-align:center}h1{font-size:17px;color:#111;margin:0 0 6px}</style></head><body><main><h1>No preview running here</h1><p>Nothing is running at this link right now.</p></main></body></html>`;
+const NO_PREVIEW = "Nothing running here.";
 const WAKING = "Waking up the preview. This page reloads when it's ready.";
 
 /** How often the waking page asks whether the preview is ready. */
 const WAKING_POLL_SECONDS = 2;
+
+/** How a preview host's own pages are drawn: in the brand's colors, light or dark as the browser asks. */
+const PAGE_STYLE = `:root{color-scheme:light dark}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:0 24px;font:15px/1.5 system-ui,sans-serif;background:${BRAND_PALETTE.LIGHT.GROUND};color:${BRAND_PALETTE.LIGHT.TEXT_MUTED};text-align:center}svg{color:${BRAND_PALETTE.LIGHT.ACCENT}}h1{font-size:17px;color:${BRAND_PALETTE.LIGHT.TEXT};margin:16px 0 6px}@media (prefers-color-scheme:dark){body{background:${BRAND_PALETTE.DARK.GROUND};color:${BRAND_PALETTE.DARK.TEXT_MUTED}}svg{color:${BRAND_PALETTE.DARK.ACCENT}}h1{color:${BRAND_PALETTE.DARK.TEXT}}}`;
+
+/** The product's mark, which heads a preview host's own pages so a visitor knows whose page it is. */
+const PAGE_MARK = `<svg viewBox="${MARK_ART.VIEW_BOX}" width="40" height="40" role="img" aria-label="${PRODUCT_NAME}"><path d="${MARK_ART.PATH}" fill="currentColor"/></svg>`;
+
+/** A preview host's own page: the mark, a heading and a line under it, with what its head and its end add. */
+function previewPage(page: {
+  readonly title: string;
+  readonly line: string;
+  readonly head?: string;
+  readonly end?: string;
+}): string {
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">${page.head ?? ""}<title>${page.title}</title><style>${PAGE_STYLE}</style></head><body><main>${PAGE_MARK}<h1>${page.title}</h1><p>${page.line}</p></main>${page.end ?? ""}</body></html>`;
+}
+
+/** The page a visit sees where nothing is shared from the agent now, its server stopped while the sandbox ran, or the preview is refused, as for an archived agent. */
+const NO_PREVIEW_PAGE = previewPage({
+  title: "Nothing running here",
+  line: "The dev server may have been stopped, or the agent may have been archived.",
+});
 
 /**
  * The page a visit sees while the agent's sandbox or its server comes up: it
  * asks the preview's status path in the background and reloads once, when
  * the preview answers. Without script it reloads itself instead.
  */
-const WAKING_PAGE = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><noscript><meta http-equiv="refresh" content="5"></noscript><title>Waking up the preview</title><style>body{margin:0;min-height:100vh;display:grid;place-items:center;font:15px/1.5 system-ui,sans-serif;color:#444;text-align:center}h1{font-size:17px;color:#111;margin:0 0 6px}</style></head><body><main><h1>Waking up the preview</h1><p>This page reloads when it's ready.</p></main><script>(function poll(){fetch("${PREVIEW_LINK.STATUS_PATH}",{cache:"no-store",credentials:"same-origin"}).then(function(r){return r.ok?r.json():{ready:false}}).catch(function(){return {ready:false}}).then(function(s){if(s.ready)location.reload();else setTimeout(poll,${WAKING_POLL_SECONDS * 1000})})})()</script></body></html>`;
+const WAKING_PAGE = previewPage({
+  title: "Waking up the preview",
+  line: "This page reloads when it's ready.",
+  head: '<noscript><meta http-equiv="refresh" content="5"></noscript>',
+  end: `<script>(function poll(){fetch("${PREVIEW_LINK.STATUS_PATH}",{cache:"no-store",credentials:"same-origin"}).then(function(r){return r.ok?r.json():{ready:false}}).catch(function(){return {ready:false}}).then(function(s){if(s.ready)location.reload();else setTimeout(poll,${WAKING_POLL_SECONDS * 1000})})})()</script>`,
+});
 
 /** The page sandbox, or not found on a deployment that has none. */
 const pageSandbox = Effect.gen(function* () {
@@ -215,7 +241,7 @@ function signInFirst(sandbox: PageSandbox, agentId: string, request: Request, as
   });
 }
 
-/** What a visit is answered where nothing is shared from the agent now, or its server stopped: a page for a page load, bare text for anything else. */
+/** What a visit is answered where nothing is shared from the agent now, its server stopped, or the preview is refused: a page for a page load, bare text for anything else. */
 function noPreview(request: Request) {
   const page = request.headers.get("sec-fetch-mode") === "navigate";
   return HttpServerResponse.text(page ? NO_PREVIEW_PAGE : NO_PREVIEW, {
@@ -224,6 +250,18 @@ function noPreview(request: Request) {
     headers: NEVER_KEPT,
   });
 }
+
+/** A refusal a page load meets drawn as the no-preview page, never the API's JSON; anything else keeps the refusal. */
+const refusedAsPage = <R>(
+  endpoint: Effect.Effect<HttpServerResponse.HttpServerResponse, HostedRefusal, R>,
+) =>
+  Effect.catch(endpoint, (refusal) =>
+    Effect.flatMap(webRequest, (request) =>
+      request.headers.get("sec-fetch-mode") === "navigate"
+        ? Effect.succeed(noPreview(request))
+        : Effect.fail(refusal),
+    ),
+  );
 
 /** What a visit is answered while the sandbox or its server comes up: a page that reloads itself for a page load, a bare 503 for anything else. */
 function wakingPage(request: Request) {
@@ -364,5 +402,5 @@ const proxyEndpoint = (seams: PreviewProxySeams) =>
 export function previewProxyApp(
   seams: PreviewProxySeams,
 ): WebRoutes<DatabaseServices | PageLinks | Sandbox> {
-  return HttpRouter.add(ANY_METHOD, ANY_PATH, hostedRefusing(proxyEndpoint(seams)));
+  return HttpRouter.add(ANY_METHOD, ANY_PATH, hostedRefusing(refusedAsPage(proxyEndpoint(seams))));
 }
