@@ -7,11 +7,12 @@
  * iOS app what its screens have been built for: today its sign-in and
  * sign-out; the Inbox: its list, which the host reads from the account
  * gate opening with no act of the app's, its read marks, its retry, its
- * pictures, and a thread's answer, reply, and resolve; and the Tasks tab:
- * its tree, read from the same list, a task's status set, and a task's
- * description and pages followed. Nothing else says which share, so this
- * table is what keeps the gaps known: every kind in `PORT_ACT_KIND` has a
- * row, and a kind added without one, or a row whose act is gone, does not
+ * pictures, and a thread's answer, reply, and resolve; the Tasks tab: its
+ * tree, read from the same list, a task's status set, and a task's
+ * description and pages followed; and the phone's own push registration,
+ * which no other client has a place for. Nothing else says which share, so
+ * this table is what keeps the gaps known: every kind in `PORT_ACT_KIND` has
+ * a row, and a kind added without one, or a row whose act is gone, does not
  * build. A client offers an act where a member can do what the act does
  * there, though the client may reach it another way; a client that does not
  * names why. `NOT_YET` is the backlog, a row a client's next screen
@@ -101,6 +102,12 @@ const IOS = {
   WAVE_5: notYet("Answering, replying, and messaging and starting agents are iOS wave 5"),
 } as const;
 
+/** A phone's own push registration, which a desktop or a browser tab has no APNs token for. */
+const PHONE_PUSH = byDesign("Only a phone takes pushes; a desktop or web client has no APNs token");
+
+/** Offered by the iOS app alone, the desktop and the web having no place for it. */
+const PHONE_ONLY: ClientParityRow = { desktop: PHONE_PUSH, web: PHONE_PUSH, ios: YES };
+
 /** The panel draws a page in a frame of the service's, so it never reads the page's HTML itself. */
 const PANEL_PAGE_FRAME = byDesign("The panel frames a page through the service (pageFrameUrl)");
 
@@ -147,6 +154,10 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MEMORIES_FORGET]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.DICTATION_TRANSCRIBE]: panel(IOS.DICTATION),
   [PORT_ACT_KIND.ACCOUNT_ACTIVE]: panel(IOS.PRESENCE),
+  [PORT_ACT_KIND.PUSH_DEVICE_REGISTER]: PHONE_ONLY,
+  [PORT_ACT_KIND.PUSH_DEVICE_UNREGISTER]: PHONE_ONLY,
+  [PORT_ACT_KIND.PUSH_DEVICE_STATUS]: PHONE_ONLY,
+  [PORT_ACT_KIND.PUSH_DEVICE_NOTIFY]: PHONE_ONLY,
 
   [PORT_ACT_KIND.AGENTS_MODELS_FOLLOW]: panel(IOS.COMPOSER),
   [PORT_ACT_KIND.AGENTS_MODELS_RETRY]: panel(IOS.COMPOSER),

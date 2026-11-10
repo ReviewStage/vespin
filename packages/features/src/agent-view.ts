@@ -29,6 +29,7 @@ import { hostsContract } from "./contract/hosts.js";
 import { inboxContract } from "./contract/inbox.js";
 import { messagesContract } from "./contract/messages.js";
 import { modelsContract } from "./contract/models.js";
+import { pushDevicesContract } from "./contract/push-devices.js";
 import { CONVERSATION_MEDIA_TYPE } from "./conversation-picture-wire.js";
 import { dictationRequestSchema } from "./dictation-wire.js";
 import { failureFactsSchema } from "./failure-facts.js";
@@ -60,6 +61,11 @@ import {
   subscriptionOrderRequestSchema,
 } from "./provider-key-wire.js";
 import { pullRequestActionRequestSchema } from "./pull-request-write-wire.js";
+import {
+  pushDeviceNotifyRequestSchema,
+  pushDeviceRegisterRequestSchema,
+  pushDeviceUnregisterRequestSchema,
+} from "./push-device-wire.js";
 import { repositoryUnreachedSchema } from "./repository-reach-wire.js";
 import { countedNumber, HOSTED_API_ERROR, wireUuidSchema } from "./service-wire.js";
 import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
@@ -102,6 +108,7 @@ export const AGENT_RENAMES = {
 const AGENT_ACCOUNT_CALLS = {
   models: modelsContract,
   dictation: dictationContract,
+  pushDevices: pushDevicesContract,
   githubToken: githubTokenContract,
   account: {
     writePreferences: accountContract.writePreferences,
@@ -872,6 +879,36 @@ export type DictationTranscribeParams = typeof dictationTranscribeParamsSchema.T
 export const dictationTranscribeAnswerViewSchema = answerView(dictationContract.transcribe);
 
 export type DictationTranscribeAnswerView = typeof dictationTranscribeAnswerViewSchema.Type;
+
+/** The phone the app runs on, as it registers itself for pushes: its APNs token, its build's gateway, and its app. */
+export const pushDeviceRegisterParamsSchema = pushDeviceRegisterRequestSchema;
+
+export type PushDeviceRegisterParams = typeof pushDeviceRegisterParamsSchema.Type;
+
+/** The phone named by its token and gateway, as its unregister and its standing's read name it. */
+export const pushDeviceKeyParamsSchema = pushDeviceUnregisterRequestSchema;
+
+export type PushDeviceKeyParams = typeof pushDeviceKeyParamsSchema.Type;
+
+/** The phone's "Notify me" set, by its token and gateway. */
+export const pushDeviceNotifyParamsSchema = pushDeviceNotifyRequestSchema;
+
+export type PushDeviceNotifyParams = typeof pushDeviceNotifyParamsSchema.Type;
+
+/** A register or an unregister as the app hears it: done, or why not. */
+export const pushDeviceDoneAnswerViewSchema = answerView(pushDevicesContract.register);
+
+export type PushDeviceDoneAnswerView = typeof pushDeviceDoneAnswerViewSchema.Type;
+
+/** The phone's standing as its Settings reads it: its "Notify me" and how its pushes fared, or why not, a phone the service does not hold among it. */
+export const pushDeviceStatusAnswerViewSchema = answerView(pushDevicesContract.status);
+
+export type PushDeviceStatusAnswerView = typeof pushDeviceStatusAnswerViewSchema.Type;
+
+/** A "Notify me" set as the app hears it: done, or why not, a phone the service does not hold among it. */
+export const pushDeviceNotifyAnswerViewSchema = answerView(pushDevicesContract.notify);
+
+export type PushDeviceNotifyAnswerView = typeof pushDeviceNotifyAnswerViewSchema.Type;
 
 /** Whose inbox is followed: a plan's, or one agent's. */
 export const INBOX_SCOPE_KIND = {

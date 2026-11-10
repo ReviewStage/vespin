@@ -95,6 +95,16 @@ export const ACCOUNT_ASK_ACT_KIND = {
    * Carries nothing.
    */
   ACCOUNT_ACTIVE: "account.active",
+  /**
+   * The phone the iOS app runs on, as it registers itself for pushes once
+   * iOS lets it notify, unregisters before a sign-out, and reads and sets
+   * its "Notify me" in Settings: its APNs token and gateway pass through to
+   * the service and are kept nowhere on the way.
+   */
+  PUSH_DEVICE_REGISTER: "pushDevice.register",
+  PUSH_DEVICE_UNREGISTER: "pushDevice.unregister",
+  PUSH_DEVICE_STATUS: "pushDevice.status",
+  PUSH_DEVICE_NOTIFY: "pushDevice.notify",
 } as const;
 
 /** The Automations pages' asks: the account's automations made, changed, deleted, and run now, and a workspace's automations, its runs, or one's runs held and read again. */
@@ -868,6 +878,10 @@ export const PORT_ACT_USE = {
   MEMORIES_FORGET: ACT_USE.WRITE,
   DICTATION_TRANSCRIBE: ACT_USE.FETCH,
   ACCOUNT_ACTIVE: ACT_USE.WRITE,
+  PUSH_DEVICE_REGISTER: ACT_USE.WRITE,
+  PUSH_DEVICE_UNREGISTER: ACT_USE.WRITE,
+  PUSH_DEVICE_STATUS: ACT_USE.FETCH,
+  PUSH_DEVICE_NOTIFY: ACT_USE.WRITE,
 
   AGENTS_MODELS_FOLLOW: ACT_USE.READ,
   AGENTS_MODELS_RETRY: ACT_USE.READ,
