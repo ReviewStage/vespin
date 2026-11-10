@@ -34,6 +34,7 @@ import {
 import {
   AGENT_AUTHOR,
   AGENT_BRIEF,
+  AGENT_RUNTIME,
   AGENT_SENDER,
   AGENT_STATUS,
   type AgentChangedFile,
@@ -95,6 +96,7 @@ import { FIXTURE_IDS, FIXTURE_PAGE } from "@repo/host/fixture-stage";
 import { agentTab, changesTab, fileTab, pageTab, terminalTab } from "@repo/ui/tab-strip-model";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { longRunHold, longRunPicture, longRunTranscript } from "./agent-long-run-fixture.js";
+import { fixturePermissionMode } from "./permission-mode-prototype.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW, type PullRequestView } from "./task-tab-model.js";
 import type { MainTab } from "./use-main-tabs.js";
 import type { SidePanelState, StagedSidePanel } from "./use-side-panel.js";
@@ -278,6 +280,7 @@ const DELETIONS = CHANGED_FILES.reduce((sum, file) => sum + file.deletions, 0);
 
 /** The agent as the task's list and its tab hold it. */
 function agentSummary(taskId: string, running = false): AgentSummary {
+  const permissionMode = fixturePermissionMode();
   return {
     id: FIXTURE_AGENT_ID,
     planId: taskId,
@@ -290,6 +293,9 @@ function agentSummary(taskId: string, running = false): AgentSummary {
     runStartedAt: STARTED_AT,
     brief: AGENT_BRIEF.PROMPT,
     sandboxVcpus: 2,
+    // Note that the permission mode prototype stands the agent on Claude Code, whose composer draws the mode, on the mode the address names.
+    runtime: AGENT_RUNTIME.CLAUDE_CODE,
+    ...(permissionMode === undefined ? undefined : { permissionMode }),
   };
 }
 

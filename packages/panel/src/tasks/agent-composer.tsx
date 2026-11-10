@@ -1,3 +1,4 @@
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import {
   AGENT_BOUNDS,
   AGENT_STATUS,
@@ -33,8 +34,10 @@ import { PANEL_SPAN } from "../panel-spans.js";
 import {
   AgentModeChip,
   type AgentModeControl,
+  AgentModeIconChip,
   DENIES_WAITING,
   modeOverflow,
+  modeSubmenu,
 } from "./agent-approvals.js";
 import { AgentContextRing, ContextRingIcon } from "./agent-context.js";
 import { contextHint } from "./agent-context-model.js";
@@ -44,6 +47,7 @@ import { PayerValue, usePayerPlanName } from "./agent-payer.js";
 import { type AgentServersControl, serversMenuPanel } from "./agent-servers.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide } from "./mention-picker.js";
 import { FOLD_WIDTH, MessageBox, OVERFLOW_PRESS, useMessageBox } from "./message-box.js";
+import { PERMISSION_UI, permissionUi } from "./permission-mode-prototype.js";
 import { useRepositoryRemedy } from "./repository-remedy.js";
 import type { SkillSource } from "./skill-picker.js";
 import { useMentionBox } from "./task-mentions.js";
@@ -634,9 +638,21 @@ export function AgentComposer({
           ? { label: BUTTON.STEER, icon: <GLYPH.STEER /> }
           : undefined;
 
+  // The permission mode prototype (`permission-mode-prototype.ts`) chooses where the mode stands: v1's labeled chip, the model chip's menu (a), an icon beside the + off Full access with the modes in the + menu (b), or an icon beside the + always (c).
+  const modeUi = mode === undefined ? PERMISSION_UI.CURRENT : permissionUi();
+  const modeIcon =
+    mode === undefined ||
+    !(
+      modeUi === PERMISSION_UI.ICON ||
+      (modeUi === PERMISSION_UI.WHEN_SET && mode.mode !== AGENT_PERMISSION_MODE.FULL_ACCESS)
+    ) ? null : (
+      <AgentModeIconChip control={mode} colored={modeUi === PERMISSION_UI.ICON} />
+    );
+
   // What the + offers beside files, its menu's rows after Attachment: the servers' popover, where the box hands servers, then its owner's.
   const plusRows: readonly MenuEntry[] = [
     ...(servers === undefined ? [] : [serversMenuPanel(servers, statuses)]),
+    ...(mode !== undefined && modeUi === PERMISSION_UI.WHEN_SET ? [modeSubmenu(mode)] : []),
     ...plus,
   ];
 
@@ -655,7 +671,12 @@ export function AgentComposer({
           ) : undefined)
         }
         plus={plusRows}
-        tools={tools?.(box.folds(FOLD_WIDTH.TOOLS))}
+        tools={
+          <>
+            {modeIcon}
+            {tools?.(box.folds(FOLD_WIDTH.TOOLS))}
+          </>
+        }
         actions={
           <>
             {actions?.(box.folds(FOLD_WIDTH.ACTIONS))}
@@ -670,9 +691,10 @@ export function AgentComposer({
                 payerSubscriptionId={payerSubscriptionId}
                 owner={owner}
                 narrow={box.folds(FOLD_WIDTH.MODEL)}
+                permissions={modeUi === PERMISSION_UI.MODEL_MENU ? mode : undefined}
               />
             )}
-            {mode === undefined ? null : (
+            {mode === undefined || modeUi !== PERMISSION_UI.CURRENT ? null : (
               <AgentModeChip control={mode} narrow={box.folds(FOLD_WIDTH.MODEL)} />
             )}
             <AgentContextRing
@@ -699,7 +721,7 @@ export function AgentComposer({
                   ],
                 },
               ]),
-          ...modeOverflow(mode),
+          ...modeOverflow(modeUi === PERMISSION_UI.CURRENT ? mode : undefined),
         ]}
         beforeSend={beforeSend?.(box.folds(FOLD_WIDTH.ACTIONS))}
         send={{

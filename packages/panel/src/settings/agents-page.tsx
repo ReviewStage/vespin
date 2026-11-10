@@ -39,6 +39,13 @@ import { HarnessMark } from "../harness-marks.js";
 import { modelsRetryMutation } from "../live-reads.js";
 import { OPEN_SETTINGS_LABEL } from "../open-settings.js";
 import {
+  MODE_GLYPH,
+  MODE_QUESTION,
+  MODE_WORDS,
+  MODES,
+  modeMenuRows,
+} from "../tasks/agent-approvals.js";
+import {
   choiceModelId,
   choiceOn,
   contextWindowsOf,
@@ -60,6 +67,7 @@ import {
   windowLabel,
   windowOf,
 } from "../tasks/agent-model.js";
+import { DEFAULT_NEW_AGENT_MODE, mocksSettingsRow } from "../tasks/permission-mode-prototype.js";
 import { useRepositoryRemedy } from "../tasks/repository-remedy.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { AgentAuthSection } from "./agent-auth-section.js";
@@ -133,6 +141,40 @@ const DEFAULT_SKELETON: readonly SettingsRowSkeletonShape[] = [
   { described: true, controls: [SETTINGS_SKELETON_CONTROL.SWITCH] },
   { described: false, controls: [SETTINGS_SKELETON_CONTROL.CHOICE] },
 ];
+
+/** What the mocked default permissions row says (`permission-mode-prototype.ts`). */
+const PERMISSIONS_ROW = {
+  LABEL: "Default permissions",
+  DETAIL: "The mode a new Claude Code agent starts in. Change a running agent's from its composer.",
+  NONE_MATCH: "No modes match",
+} as const;
+
+/**
+ * The prototype's default permissions row: the mode a new agent starts in,
+ * Full access until changed, held in the page alone, since the mockup
+ * stores nothing.
+ */
+function DefaultPermissionsRow(): React.JSX.Element {
+  const [mode, setMode] = useState(DEFAULT_NEW_AGENT_MODE);
+  const Glyph = MODE_GLYPH[mode];
+  return (
+    <PickerRow
+      replayUnmasked
+      label={PERMISSIONS_ROW.LABEL}
+      labelReplayUnmasked
+      detail={PERMISSIONS_ROW.DETAIL}
+      value={mode}
+      valueLabel={MODE_WORDS[mode].label}
+      valueIcon={<Glyph />}
+      rows={modeMenuRows().map((row) => ({ ...row, section: MODE_QUESTION }))}
+      noMatch={PERMISSIONS_ROW.NONE_MATCH}
+      onPick={(id) => {
+        const picked = MODES.find((each) => each === id);
+        if (picked !== undefined) setMode(picked);
+      }}
+    />
+  );
+}
 
 /** The link under a resting Fast row that asks Anthropic for fast mode. */
 const FAST_ACCESS_WORD = "Request access";
@@ -374,6 +416,7 @@ function DefaultRows({
           )}
         </SettingsRow>
       )}
+      {mocksSettingsRow() ? <DefaultPermissionsRow /> : null}
     </>
   );
 }

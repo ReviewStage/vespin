@@ -54,6 +54,16 @@ export const COMBOBOX_ITEM_LABEL =
 export const COMBOBOX_ITEM_DETAIL =
   "block min-w-0 flex-[0_1000_auto] overflow-hidden pl-ui-12 text-caption leading-[inherit] text-muted-foreground";
 
+/** An item whose detail stands under its name: as tall as its two lines, its glyph level with the name. */
+export const COMBOBOX_ITEM_TALL = "h-auto min-h-menu-row items-start py-ui-6 whitespace-normal";
+
+/** An item's name with its detail under it, the two as one column. */
+export const COMBOBOX_ITEM_LABEL_STACKED = "flex flex-col gap-ui-2";
+
+/** An item's detail on its own line under its name, wrapping. */
+export const COMBOBOX_ITEM_DETAIL_UNDER =
+  "block text-caption font-sans text-muted-foreground whitespace-normal";
+
 /** An item's hint at its end, at a menu's distance from what stands before it, as a chord is; never dimmed, for the same reason as the detail. */
 export const COMBOBOX_ITEM_HINT =
   "inline-flex flex-none items-center gap-ui-4 pl-ui-16 text-caption leading-[inherit] text-muted-foreground";

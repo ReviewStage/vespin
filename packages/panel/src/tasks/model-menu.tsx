@@ -24,6 +24,16 @@ import { unreadShown } from "../failure-report.js";
 import { HarnessMark } from "../harness-marks.js";
 import { OPEN_SETTINGS_LABEL } from "../open-settings.js";
 import {
+  type AgentModeControl,
+  MODE_APPLIES,
+  MODE_GLYPH,
+  MODE_GROUP,
+  MODE_QUESTION,
+  MODE_WORDS,
+  MODES,
+  modeMenuRows,
+} from "./agent-approvals.js";
+import {
   CONTEXT_WORD,
   type ConnectFailure,
   choiceModelId,
@@ -101,6 +111,7 @@ const FOOT_ROW = {
   FAST: "fast",
   SPEED: "speed",
   CONNECT: "connect",
+  PERMISSIONS: "permissions",
 } as const;
 
 /**
@@ -176,6 +187,8 @@ export function ModelMenu(props: {
   lastLine?: MenuLastLine | undefined;
   /** Whether the choice is what a new agent would start on, on the reader's own credentials, so one nothing of theirs pays for says it cannot run: an automation's. */
   startsNew?: boolean | undefined;
+  /** The agent's permission mode, pinned as a row of its own where the prototype puts the modes in this menu (`permission-mode-prototype.ts`). */
+  permissions?: AgentModeControl | undefined;
   /** The menu is on its way out (`SearchableMenu`'s). */
   leaving?: boolean | undefined;
   /** Hands the menu's element to the hold its owner draws it through its exit with. */
@@ -286,6 +299,34 @@ export function ModelMenu(props: {
     ];
   };
 
+  /** The Permissions row, naming the agent's mode and opening the three beside it, each with its hint. */
+  const permissionsRow = (): FootRow[] => {
+    const control = props.permissions;
+    if (control === undefined) return [];
+    const Glyph = MODE_GLYPH[control.mode];
+    return [
+      {
+        id: FOOT_ROW.PERMISSIONS,
+        label: MODE_GROUP,
+        icon: <Glyph />,
+        detail: MODE_WORDS[control.mode].label,
+        submenu: {
+          label: MODE_GROUP,
+          heading: MODE_QUESTION,
+          rows: modeMenuRows(),
+          value: control.mode,
+          note: MODE_APPLIES,
+          onPick: (picked) => {
+            const mode = MODES.find((each) => each === picked);
+            if (mode === undefined) return;
+            onClose();
+            control.choose(mode);
+          },
+        },
+      },
+    ];
+  };
+
   const unrunnable =
     props.startsNew === true && models !== undefined && chosen !== undefined
       ? unrunnableChoice(models, chosen)
@@ -331,6 +372,7 @@ export function ModelMenu(props: {
           },
           ...contextRow(chosen, models),
           ...speedRow(read, chosen),
+          ...permissionsRow(),
         ];
 
   return (

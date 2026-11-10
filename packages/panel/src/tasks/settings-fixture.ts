@@ -95,6 +95,7 @@ import {
 } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
+import { mocksSettingsRow } from "./permission-mode-prototype.js";
 
 /** When the fixture stands, from which every instant here is counted: a fixed one, never the clock. */
 const NOW = Date.parse("2026-10-24T09:00:00Z");
@@ -170,6 +171,8 @@ const SIGNED_IN_PROFILES: ReadonlySet<string> = new Set<string>([
   RUN_PROFILE.AUTOMATIONS,
   RUN_PROFILE.AUTOMATIONS_EDITOR,
   RUN_PROFILE.AUTOMATIONS_RUNS,
+  // Note that the permission mode prototype signs the agent's profile in, so the model chip's menu lists the catalog its Permissions row stands under.
+  ...(mocksSettingsRow() ? [RUN_PROFILE.AGENT_PULL_REQUEST] : []),
 ]);
 
 /* ----- Settings › Workspace ----- */

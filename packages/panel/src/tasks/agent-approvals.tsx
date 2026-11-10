@@ -24,6 +24,8 @@ import {
   ChipName,
   FullAccessIcon,
   MENU_DETAIL,
+  type MenuRow,
+  riseAbove,
   riseAboveEnd,
   STATUS_TONE,
   TEXT_TONE,
@@ -44,7 +46,7 @@ import {
   useState,
 } from "react";
 import type { AgentActAnswer, Unreached } from "../act.js";
-import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
+import { ActionMenu, type MenuAction, type MenuSubmenu } from "../desktop/action-menu.js";
 import { failureShown } from "../failure-report.js";
 import { showToast } from "../toast.js";
 import { OVERFLOW_PRESS, type OverflowOffer } from "./message-box.js";
@@ -111,30 +113,30 @@ export type ApprovalAnswerWriter = (
 ) => Promise<ApprovalActAnswer>;
 
 /** What the chip and its menu call the mode, and what each does. */
-const MODE_WORDS = {
+export const MODE_WORDS = {
   [AGENT_PERMISSION_MODE.FULL_ACCESS]: {
     label: "Full access",
-    hint: "Runs commands and edits without asking",
+    hint: "Runs anything without asking, internet included",
   },
   [AGENT_PERMISSION_MODE.ASK]: {
     label: "Ask before edits",
-    hint: "Asks before it edits a file or runs a command",
+    hint: "Asks before edits and commands",
   },
   [AGENT_PERMISSION_MODE.AUTO]: {
     label: "Auto",
-    hint: "Claude decides; asks when unsure",
+    hint: "Asks only for actions it judges risky",
   },
 } as const satisfies Record<AgentPermissionMode, { label: string; hint: string }>;
 
-/** The shield each mode wears. */
-const MODE_GLYPH = {
+/** The glyph each mode wears: a warning shield, a hand, a checked shield. */
+export const MODE_GLYPH = {
   [AGENT_PERMISSION_MODE.FULL_ACCESS]: FullAccessIcon,
   [AGENT_PERMISSION_MODE.ASK]: AskFirstIcon,
   [AGENT_PERMISSION_MODE.AUTO]: AutoApproveIcon,
 } as const satisfies Record<AgentPermissionMode, () => React.JSX.Element>;
 
 /** The modes in the order the menu offers them. */
-const MODES = [
+export const MODES = [
   AGENT_PERMISSION_MODE.FULL_ACCESS,
   AGENT_PERMISSION_MODE.ASK,
   AGENT_PERMISSION_MODE.AUTO,
@@ -142,6 +144,12 @@ const MODES = [
 
 /** The chip's name for a reader, and its menu's. */
 const MODE_THING = "Permission mode";
+
+/** What the modes are called where they are offered together beside other things: the model menu's row, the + menu's. */
+export const MODE_GROUP = "Permissions";
+
+/** The question the modes answer, heading every menu of them. */
+export const MODE_QUESTION = "How should actions be approved?";
 
 /** When a change reaches the agent, said under the menu and on the change's toast. */
 export const MODE_APPLIES = "Takes effect from the next turn.";
@@ -296,6 +304,87 @@ export function AgentModeChip({
           replayUnmasked
           label={MODE_THING}
           menu={menu.drawn}
+          heading={<ModeQuestion />}
+          groups={[modeRows(control)]}
+          footer={
+            <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+              {MODE_APPLIES}
+            </Text>
+          }
+          onClose={menu.close}
+        />
+      )}
+    </span>
+  );
+}
+
+/** The question heading a menu of the modes, muted as a menu's heading is. */
+function ModeQuestion(): React.JSX.Element {
+  return (
+    <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+      {MODE_QUESTION}
+    </Text>
+  );
+}
+
+/** The + menu's entry that opens the modes beside it, wearing the agent's mode's glyph. */
+export function modeSubmenu(control: AgentModeControl): MenuSubmenu {
+  const Glyph = MODE_GLYPH[control.mode];
+  return { label: MODE_GROUP, icon: <Glyph />, items: modeRows(control) };
+}
+
+/** The modes as a searchable menu's submenu offers them, each with its hint under its name. */
+export function modeMenuRows(): readonly MenuRow[] {
+  return MODES.map((mode) => {
+    const Glyph = MODE_GLYPH[mode];
+    return {
+      id: mode,
+      label: MODE_WORDS[mode].label,
+      icon: <Glyph />,
+      detail: MODE_WORDS[mode].hint,
+      detailUnder: true,
+    };
+  });
+}
+
+/**
+ * The mode as an icon alone beside the composer's +, and the menu that
+ * changes it: the prototype's chip (`permission-mode-prototype.ts`), drawn
+ * in the warning ink on Full access where `colored` asks.
+ */
+export function AgentModeIconChip({
+  control,
+  colored,
+}: {
+  control: AgentModeControl;
+  /** Whether Full access wears the warning ink, as Codex's chip does. */
+  colored: boolean;
+}): React.JSX.Element {
+  const menu = useMenu(true);
+  const trigger = menu.trigger(riseAbove);
+  const Glyph = MODE_GLYPH[control.mode];
+  const label = `${MODE_THING}: ${MODE_WORDS[control.mode].label}`;
+  const warns = colored && control.mode === AGENT_PERMISSION_MODE.FULL_ACCESS;
+  return (
+    <span className="agent-mode-icon flex">
+      <Tooltip label={label}>
+        <Chip
+          look={CHIP_LOOK.TOOLBAR}
+          iconOnly
+          tone={warns ? STATUS_TONE.ATTENTION : undefined}
+          aria-label={label}
+          {...trigger}
+        >
+          <Glyph />
+          <ChipName>{MODE_WORDS[control.mode].label}</ChipName>
+        </Chip>
+      </Tooltip>
+      {menu.drawn === undefined ? null : (
+        <ActionMenu
+          replayUnmasked
+          label={MODE_THING}
+          menu={menu.drawn}
+          heading={<ModeQuestion />}
           groups={[modeRows(control)]}
           footer={
             <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>

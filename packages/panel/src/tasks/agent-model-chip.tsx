@@ -1,3 +1,4 @@
+import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { runtimeModelRule, runtimeModels } from "@repo/features/agent-runtime-models";
 import type { AgentPayer, AgentUsage } from "@repo/features/agent-wire";
 import type { CatalogModel } from "@repo/features/models-wire";
@@ -14,6 +15,7 @@ import type { Actor } from "@repo/ui/actor-model";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useRef, useState } from "react";
 import { HarnessMark } from "../harness-marks.js";
+import { type AgentModeControl, MODE_GLYPH, MODE_WORDS } from "./agent-approvals.js";
 import { choiceLabel, paidByOf, providerOf } from "./agent-model.js";
 import { payerLastLine, usePayerPlanName } from "./agent-payer.js";
 import { ModelLabel } from "./model-label.js";
@@ -69,6 +71,7 @@ export function AgentModelChip({
   width,
   narrow = false,
   startsNew = false,
+  permissions,
 }: {
   model: AgentModelControl;
   /** The catalog as the host holds it for the account; nothing before it is first read. */
@@ -93,6 +96,8 @@ export function AgentModelChip({
   narrow?: boolean;
   /** Whether the choice is what a new agent would start on, on the reader's own credentials, as an automation's is, so one nothing of theirs pays for says it cannot run; never a running agent's, whose starter pays. */
   startsNew?: boolean;
+  /** The agent's permission mode, which the prototype offers in this chip's menu and names on the chip off Full access (`permission-mode-prototype.ts`). */
+  permissions?: AgentModeControl | undefined;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const drawn = useDisclosure(open);
@@ -107,7 +112,15 @@ export function AgentModelChip({
   };
 
   const provider = providerOf(model.choice.model);
-  const label = choiceLabel(model.choice, models ?? []).trim();
+  // Note that the mode is named on the chip only off its default, so a chip on Full access reads as it always has.
+  const offDefault =
+    permissions !== undefined && permissions.mode !== AGENT_PERMISSION_MODE.FULL_ACCESS
+      ? permissions
+      : undefined;
+  const ModeGlyph = offDefault === undefined ? undefined : MODE_GLYPH[offDefault.mode];
+  const modelWords = choiceLabel(model.choice, models ?? []).trim();
+  const label =
+    offDefault === undefined ? modelWords : `${modelWords} · ${MODE_WORDS[offDefault.mode].label}`;
   // Note that who pays decides Fast on Codex, which runs a fast version on an OpenAI API key alone.
   const paidBy = payer ?? usage?.payer;
   const paying = paidByOf(payer, usage, model.runtime);
@@ -129,7 +142,11 @@ export function AgentModelChip({
           aria-controls={open ? menuId : undefined}
           onClick={() => setOpen(!open)}
         >
-          {narrow && provider !== undefined ? <HarnessMark provider={provider} /> : null}
+          {ModeGlyph !== undefined ? (
+            <ModeGlyph />
+          ) : narrow && provider !== undefined ? (
+            <HarnessMark provider={provider} />
+          ) : null}
           <ChipName>
             <ModelLabel choice={model.choice} models={models ?? []} />
           </ChipName>
@@ -147,6 +164,7 @@ export function AgentModelChip({
           chosen={settledChoice(offered, model.choice)}
           startsNew={startsNew}
           offersFast={runtimeModelRule(model.runtime, paidBy).fast}
+          permissions={permissions}
           onChoose={model.choose}
           lastLine={payerLastLine(paying, provider, usage, owner, planName)}
           onClose={close}
