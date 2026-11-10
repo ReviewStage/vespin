@@ -4,6 +4,7 @@ import { posix } from "node:path";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { createAgent } from "@repo/database/models/agent-store";
+import { writePage } from "@repo/database/models/task-pages";
 import { user } from "@repo/database/schemas/auth";
 import { inboxItem } from "@repo/database/schemas/inbox";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
@@ -18,11 +19,13 @@ import {
   INBOX_FILE_TYPE,
   INBOX_IMAGE_TYPE,
   INBOX_MESSAGE_AUTHOR,
+  INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_STATUS,
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
+import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { paddedTo, webmBytes } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
@@ -432,6 +435,90 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
           recommended: "SMS",
           status: INBOX_ASK_STATUS.OPEN,
         });
+      }),
+  );
+
+  it.effect(
+    "an option's media is kept with the message, its files after the body's pictures and named by the ask, its page at the version shown, and a page of another task is refused",
+    () =>
+      Effect.gen(function* () {
+        const agent = yield* openAgent;
+        const shown = { kind: PAGE_SHOWER.AGENT, agentId: agent.agentId } as const;
+        const page = yield* writePage(
+          agent.userId,
+          taskPageOwner(agent.taskId),
+          { title: "Done card directions", html: "<p>Directions</p>" },
+          shown,
+        ).pipe(Effect.map(Option.getOrThrow));
+        const sandbox = sandboxWith({ "shots/body.png": PNG, "shots/card.png": PNG });
+        const options = [
+          {
+            label: "A card",
+            media: [
+              { path: "shots/card.png", caption: "The card on a desktop" },
+              { page: page.id },
+              { url: "https://preview.example.com/card", label: "Preview" },
+            ],
+          },
+          { label: "No card" },
+        ];
+        const ask = { type: INBOX_ASK.DECIDE, options };
+        const body = "How should a turn end? ![Today](shots/body.png)";
+
+        const posted = yield* post(agent, { ...QUEUE, body, ask }, sandbox);
+
+        assert.equal(posted.status, ACTION_RESULT_STATUS.ACCEPTED);
+        const item = yield* onlyItem(agent);
+        const asking = openAsk(item);
+        const [, card] = asking.files ?? [];
+        assert.deepEqual(
+          (asking.files ?? []).map((file) => file.name),
+          ["body.png", "card.png"],
+        );
+        assert.deepEqual(openAsk(item).ask, {
+          type: INBOX_ASK.DECIDE,
+          options: [
+            {
+              label: "A card",
+              media: [
+                {
+                  type: INBOX_OPTION_MEDIA.FILE,
+                  attachmentId: card?.attachmentId,
+                  mediaType: INBOX_IMAGE_TYPE.PNG,
+                  caption: "The card on a desktop",
+                },
+                {
+                  type: INBOX_OPTION_MEDIA.PAGE,
+                  pageId: page.id,
+                  version: 1,
+                  title: "Done card directions",
+                  place: { taskId: agent.taskId },
+                },
+                {
+                  type: INBOX_OPTION_MEDIA.LINK,
+                  url: "https://preview.example.com/card",
+                  label: "Preview",
+                },
+              ],
+            },
+            { label: "No card" },
+          ],
+          status: INBOX_ASK_STATUS.OPEN,
+        });
+
+        const other = yield* startTask(agent.userId, { name: "Another task" });
+        const elsewhere = yield* writePage(
+          agent.userId,
+          taskPageOwner(other.id),
+          { title: "Elsewhere", html: "<p>Elsewhere</p>" },
+          shown,
+        ).pipe(Effect.map(Option.getOrThrow));
+        const away = [{ label: "A card", media: [{ page: elsewhere.id }] }, { label: "No card" }];
+        const refused = yield* post(agent, {
+          ...QUEUE,
+          ask: { type: INBOX_ASK.DECIDE, options: away },
+        });
+        assert.equal(refusalOf(refused), INBOX_REFUSAL.NO_PAGE);
       }),
   );
 

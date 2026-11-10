@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
 import { posix } from "node:path";
 import type { DatabaseServices } from "@repo/database/core/query";
+import { readPageById } from "@repo/database/models/task-pages";
 import { inboxSandboxPicturePaths } from "@repo/features/inbox-attachment-link";
 import {
   INBOX_ASK,
@@ -8,6 +10,7 @@ import {
   INBOX_CLOSE_LEAD,
   INBOX_FIELD,
   INBOX_MESSAGE_AUTHOR,
+  INBOX_OPTION_MEDIA,
   INBOX_STATUS,
   INBOX_TOOL,
   type InboxAnswers,
@@ -15,15 +18,19 @@ import {
   type InboxField,
   type InboxItem,
   type InboxMessage,
+  type InboxOptionMedia,
+  type InboxPostOptionMedia,
   type InboxReadAsk,
   type InboxThreadPostInput,
   inboxReadInputSchema,
   inboxThreadPostInputSchema,
   inboxWithdrawInputSchema,
   keptInboxAsk,
+  NONE_OF_THESE,
   recommendedLabels,
 } from "@repo/features/inbox-wire";
 import { decodeMention, MENTION_KIND, mentionLinksIn } from "@repo/features/mention-link";
+import { PAGE_OWNER, type PageOwner, type PagePlace } from "@repo/features/page-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { readEither } from "@repo/wire/effect";
 import { Effect, Option, Result } from "effect";
@@ -37,6 +44,7 @@ import {
   type InboxAgent,
   type InboxBodyPicture,
   type InboxPostRefusal,
+  type PostPicture,
   postInboxThread,
 } from "../../inbox/inbox-store.js";
 import { pushThreadPost, pushThreadSettled } from "../../push/inbox-pushes.js";
@@ -108,6 +116,11 @@ const POST_THREAD_WORDS =
   "A picture the message is about is drawn in it, never pointed at in a transcript, yours or another agent's, which the thread's reader does not see. " +
   "ask is what the message asks of them, which ends it: " +
   `decide (two to ${INBOX_BOUNDS.MAX_OPTIONS} options, each a short label and an optional detail; name the label you recommend; multiple lets them pick several, and recommended then takes a list of the labels you recommend; ` +
+  `where they pick between designs or variants, give each option its own media, at most ${INBOX_BOUNDS.MAX_OPTION_MEDIA}, which they look at on its card: ` +
+  "a file in your sandbox as {path, caption}, a picture or a recording as a body's picture is, a page you showed with show_page as {page} by the id it answered, " +
+  `or an https address to open, such as a preview, as {url, label}; at most ${INBOX_BOUNDS.MAX_ASK_MEDIA} across the options, the message's own pictures counted; ` +
+  "an option's extra screens go in its own media, never an option of their own; " +
+  `options with media also offer "${NONE_OF_THESE}", which you never offer yourself, and an answer of none reaches you as "Chose ${NONE_OF_THESE.toLowerCase()}."; ` +
   "for a go-ahead on one step you propose, two short options such as Approve and Request changes), " +
   "do (a to-do: something only they can do by hand, such as changing a GitHub setting, adding a secret, or testing by hand what you could not test yourself; " +
   `its steps, at most ${INBOX_BOUNDS.MAX_POSTED_STEPS}, say exactly what to do, a command to run in a fenced block in its step, after the words saying where to run it, which they copy whole, and they tick each before they mark it done, or say they couldn't), ` +
@@ -218,6 +231,10 @@ export const INBOX_REFUSAL = {
     "Not posted: you have no thread under that key, and the first post under a key names its title.",
   TOO_MANY_PICTURES: `Not posted: a message draws at most ${INBOX_BOUNDS.MAX_MESSAGE_PICTURES} pictures from your sandbox.`,
   NO_OPTIONS: "Not posted: a decide's options each stand under a label of their own.",
+  NONE_OFFERED: `Not posted: an option carrying media may not be labeled "${NONE_OF_THESE}", which the reader is offered beside your options already.`,
+  TOO_MUCH_MEDIA: `Not posted: a decide's options carry at most ${INBOX_BOUNDS.MAX_ASK_MEDIA} pieces of media between them, and a message keeps at most ${INBOX_BOUNDS.MAX_ASK_MEDIA} files, its own pictures and its options' together.`,
+  NO_PAGE:
+    "Not posted: an option names a page you did not show on this task; name a page by the id show_page answered.",
   UNKNOWN_RECOMMENDATION: "Not posted: recommended names a label no option has.",
   SEVERAL_RECOMMENDED:
     "Not posted: recommended names each label once, and several only where multiple lets them pick several.",
@@ -250,6 +267,15 @@ const PICTURE_REFUSALS: SandboxImageRefusals = {
     "Not posted: a picture names a file that is not a PNG, JPEG, or WebP image, or a WebM video that states its size:",
   TOO_LARGE: `Not posted: a picture names a file larger than ${MAX_PICTURE_MB} MB, or a video larger than ${MAX_VIDEO_MB} MB; render it smaller, or record a shorter flow:`,
   UNREADABLE: "Not posted: a picture's file could not be read from your sandbox:",
+};
+
+/** Why an option's file was not read from the sandbox, in a post's own words; each is followed by the path. */
+const OPTION_FILE_REFUSALS: SandboxImageRefusals = {
+  NO_FILE: "Not posted: an option's media names no file in your sandbox:",
+  NOT_IMAGE:
+    "Not posted: an option's media names a file that is not a PNG, JPEG, or WebP image, or a WebM video that states its size:",
+  TOO_LARGE: `Not posted: an option's media names a file larger than ${MAX_PICTURE_MB} MB, or a video larger than ${MAX_VIDEO_MB} MB; render it smaller, or record a shorter flow:`,
+  UNREADABLE: "Not posted: an option's media file could not be read from your sandbox:",
 };
 
 /** Who wrote a message, as the agent reads it: itself, or the member by name, or a former member whose account is gone. */
@@ -411,6 +437,9 @@ function askRefusal(ask: InboxAskInput | undefined): string | undefined {
     case INBOX_ASK.DECIDE: {
       const labels = ask.options.map((option) => option.label);
       if (!distinct(labels)) return INBOX_REFUSAL.NO_OPTIONS;
+      const media = ask.options.flatMap((option) => option.media ?? []);
+      if (media.length > 0 && labels.includes(NONE_OF_THESE)) return INBOX_REFUSAL.NONE_OFFERED;
+      if (media.length > INBOX_BOUNDS.MAX_ASK_MEDIA) return INBOX_REFUSAL.TOO_MUCH_MEDIA;
       const recommended = recommendedLabels(ask);
       if (!recommended.every((label) => labels.includes(label))) {
         return INBOX_REFUSAL.UNKNOWN_RECOMMENDATION;
@@ -467,6 +496,124 @@ function bodyPictures(
   });
 }
 
+/** What a post's options carry as the store keeps them: each option's media by its place, and the files among them, under the ids those name. */
+interface KeptOptionMedia {
+  readonly media: readonly (readonly InboxOptionMedia[] | undefined)[];
+  readonly files: readonly PostPicture[];
+}
+
+/**
+ * One piece of an option's media as the store keeps it, or the refusal of
+ * it: a file read from the sandbox as a body's picture is, under an id
+ * minted for it; a page the agent showed on its task, at the version it
+ * stands at now; or the address as posted.
+ */
+function keptOptionMedia(
+  agent: InboxAgent,
+  posted: InboxPostOptionMedia,
+  sandbox: InboxSandboxDoor,
+): Effect.Effect<
+  Result.Result<{ readonly media: InboxOptionMedia; readonly file?: PostPicture }, string>,
+  never,
+  DatabaseServices
+> {
+  if ("url" in posted) {
+    const label = posted.label === undefined ? {} : { label: posted.label };
+    return Effect.succeed(
+      Result.succeed({ media: { type: INBOX_OPTION_MEDIA.LINK, url: posted.url, ...label } }),
+    );
+  }
+  if ("page" in posted) return keptOptionPage(agent, posted.page);
+  const { path } = posted;
+  return Effect.map(
+    readSandboxMedia(sandbox, CODER.CHECKOUT_PATH, path, OPTION_FILE_REFUSALS),
+    Result.map((read) => {
+      const file = { ...read, id: randomUUID(), name: posix.basename(path) || path };
+      const caption = posted.caption === undefined ? {} : { caption: posted.caption };
+      const media = {
+        type: INBOX_OPTION_MEDIA.FILE,
+        attachmentId: file.id,
+        mediaType: file.contentType,
+        ...caption,
+      };
+      return { media, file };
+    }),
+  );
+}
+
+/** Where a page stands as a reader names it, where it is the agent's own: on its task, or on the agent itself; nothing for any other. */
+function ownPagePlace(agent: InboxAgent, owner: PageOwner): PagePlace | undefined {
+  if (owner.kind === PAGE_OWNER.TASK) {
+    return owner.taskId === agent.taskId ? { taskId: owner.taskId } : undefined;
+  }
+  return owner.agentId === agent.agentId ? { agentId: owner.agentId } : undefined;
+}
+
+/** A page an option names as the store keeps it: one shown on the agent's task, at its newest version; refused where the agent's account reaches none there. */
+function keptOptionPage(
+  agent: InboxAgent,
+  pageId: string,
+): Effect.Effect<
+  Result.Result<{ readonly media: InboxOptionMedia }, string>,
+  never,
+  DatabaseServices
+> {
+  return readPageById(agent.userId, pageId, undefined).pipe(
+    Effect.map((found) => {
+      if (Option.isNone(found)) return Result.fail(INBOX_REFUSAL.NO_PAGE);
+      const { owner, page } = found.value;
+      const place = ownPagePlace(agent, owner);
+      if (place === undefined) return Result.fail(INBOX_REFUSAL.NO_PAGE);
+      return Result.succeed({
+        media: {
+          type: INBOX_OPTION_MEDIA.PAGE,
+          pageId: page.id,
+          version: page.version,
+          title: page.title,
+          place,
+        },
+      });
+    }),
+    Effect.catch(() => Effect.succeed(Result.fail(INBOX_REFUSAL.UNAVAILABLE))),
+  );
+}
+
+/**
+ * What a post's options carry, read and kept, or the first refusal among
+ * them: every piece in order, option by option, the first refused ending
+ * the reading, as a body's pictures are read. A post whose ask is no
+ * `decide`, or whose options carry nothing, keeps none.
+ */
+function optionMedia(
+  agent: InboxAgent,
+  ask: InboxAskInput | undefined,
+  bodyPictures: number,
+  sandbox: InboxSandboxDoor,
+): Effect.Effect<Result.Result<KeptOptionMedia, string>, never, DatabaseServices> {
+  if (ask?.type !== INBOX_ASK.DECIDE)
+    return Effect.succeed(Result.succeed({ media: [], files: [] }));
+  const posted = ask.options.map((option) => option.media ?? []);
+  const files = posted.flat().filter((media) => "path" in media).length;
+  if (bodyPictures + files > INBOX_BOUNDS.MAX_ASK_MEDIA) {
+    return Effect.succeed(Result.fail(INBOX_REFUSAL.TOO_MUCH_MEDIA));
+  }
+  return Effect.gen(function* () {
+    const media: (readonly InboxOptionMedia[] | undefined)[] = [];
+    const kept: PostPicture[] = [];
+    for (const pieces of posted) {
+      const own: InboxOptionMedia[] = [];
+      for (const piece of pieces) {
+        const read = yield* keptOptionMedia(agent, piece, sandbox);
+        if (Result.isFailure(read)) return Result.fail(read.failure);
+        own.push(read.success.media);
+        if (read.success.file !== undefined) kept.push(read.success.file);
+      }
+      media.push(own.length === 0 ? undefined : own);
+    }
+    return Result.succeed({ media, files: kept });
+  });
+}
+
 /** Whom a post waits on, as the store takes it: the member's account, absent where the post names none. */
 interface ThreadPlace {
   readonly addresseeId?: string;
@@ -479,10 +626,10 @@ interface ThreadPlace {
  * turn has ended reads nothing kept for it until something wakes it, and
  * goes on telling the developer it waits on what they already answered.
  */
-function threadPost(post: InboxThreadPostInput, place: ThreadPlace) {
+function threadPost(post: InboxThreadPostInput, place: ThreadPlace, options: KeptOptionMedia) {
   const { ask, to: _to, ...written } = post;
   if (ask === undefined) return { ...written, ...place };
-  return { ...written, ...place, ask: keptInboxAsk(ask), needsReply: true };
+  return { ...written, ...place, ask: keptInboxAsk(ask, options.media), needsReply: true };
 }
 
 /** The member a post's `to` names by their mention link written whole, or its address alone, by account; nothing where it names no person, such as an agent or a task. */
@@ -525,9 +672,11 @@ export function postToInbox(
   return Effect.gen(function* () {
     const pictures = yield* bodyPictures(post.body, sandbox);
     if (Result.isFailure(pictures)) return inboxRejected(pictures.failure);
-    const thread = threadPost(post, place.success);
+    const options = yield* optionMedia(agent, post.ask, pictures.success.length, sandbox);
+    if (Result.isFailure(options)) return inboxRejected(options.failure);
+    const thread = threadPost(post, place.success, options.success);
     const wasOpen = yield* threadStandsOpen(agent, thread.key);
-    const posted = yield* postInboxThread(agent, thread, pictures.success);
+    const posted = yield* postInboxThread(agent, thread, pictures.success, options.success.files);
     if (Result.isFailure(posted)) return inboxRejected(storeRefusal(posted.failure));
     const { organizationId } = agent;
     yield* afterResponse(
