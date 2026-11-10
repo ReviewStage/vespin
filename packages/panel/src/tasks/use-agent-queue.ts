@@ -21,7 +21,7 @@ import { sendMutation } from "../act-mutations.js";
 import { keepPictureRead, pictureNow, pictureQuery } from "../picture-query.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import type { AgentPictureDoor } from "./agent-pictures.js";
-import { type BoxHeld, putBackRefused } from "./refused-send.js";
+import { putBackRefused } from "./refused-send.js";
 import type { HeldComposer } from "./use-agent-composer.js";
 
 /**
@@ -259,7 +259,7 @@ export interface QueueEditing {
 export function useQueueEditing(
   composer: Pick<
     HeldComposer,
-    "draft" | "setDraft" | "attachments" | "setAttachments" | "sendsSettled"
+    "draft" | "setDraft" | "attachments" | "setAttachments" | "sendsSettled" | "updateHeld"
   >,
   queue: Pick<AgentQueueControl, "change" | "listed">,
   files: AgentPictureDoor,
@@ -279,9 +279,6 @@ export function useQueueEditing(
   useEffect(() => {
     if (left) setStashed(undefined);
   }, [left]);
-  // The box's words and files as they stand now, which an answer that lands later reads rather than those of the draw that asked.
-  const box = useRef<BoxHeld>({ text: composer.draft, attachments: composer.attachments });
-  box.current = { text: composer.draft, attachments: composer.attachments };
   // The words a refused queue gave back, and the id they went under, which queueing them again reuses.
   const refused = useRef<{ readonly text: string; readonly id: string } | undefined>(undefined);
   // The message whose files are still being read into the box, by id, which no Save or Steer sends meanwhile.
@@ -331,13 +328,12 @@ export function useQueueEditing(
         putBackRefused({
           went: { text, attachments },
           most: AGENT_BOUNDS.MAX_MESSAGE_CHARS,
-          update: (next) => {
-            const joined = next(box.current);
-            if (joined === undefined) return;
-            refused.current = { text, id };
-            composer.setDraft(joined.text);
-            composer.setAttachments(() => joined.attachments);
-          },
+          update: (next) =>
+            composer.updateHeld((now) => {
+              const joined = next(now);
+              if (joined !== undefined) refused.current = { text, id };
+              return joined;
+            }),
         });
       });
     },

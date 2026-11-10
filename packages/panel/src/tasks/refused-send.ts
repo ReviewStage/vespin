@@ -29,13 +29,21 @@ export interface BoxHeld {
   readonly attachments: readonly AgentAttachment[];
 }
 
+/**
+ * Moves a box's words and files on from what its draft holds as the change
+ * lands, leaving them as they stand where `next` answers none. Note that it
+ * reads the draft where it is kept, never a render's copy of it, because a
+ * send answered after its box was let go of, or a Put back pressed later,
+ * must not write over words written since in a box drawn afresh.
+ */
+export type HeldUpdate = (next: (now: BoxHeld) => BoxHeld | undefined) => void;
+
 /** A send refused after the box let go of it: what went, the box's word bound, and how the box is changed. */
 export interface RefusedSend {
   readonly went: BoxHeld;
   /** The most characters the box's words may spell. */
   readonly most: number;
-  /** Changes the box by what `next` answers for what it holds now, leaving it as it stands where `next` answers none. */
-  readonly update: (next: (now: BoxHeld) => BoxHeld | undefined) => void;
+  readonly update: HeldUpdate;
 }
 
 /** Whether files fit one message: no more than its count, and their bytes together no more than its bound. */

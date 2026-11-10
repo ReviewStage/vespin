@@ -224,9 +224,6 @@ function AnswerCard({
   const attempt = useRef<{ readonly key: string; readonly words: string } | undefined>(undefined);
   const starts = newThread !== undefined && asNew;
   const asks = controls !== undefined && !starts;
-  // The draft as it stands now, which a start landing later reads rather than the one it was sent from.
-  const standing = useRef(draft);
-  standing.current = draft;
   // Note that only a nod and a thread start hold the box; a reply leaves it at once and the next may follow.
   const sending = control.sending.has(item.id) || starting;
   const acknowledgeHeld = useInboxAcknowledger();
@@ -318,12 +315,7 @@ function AnswerCard({
       putBackRefused({
         went: { text: sent.note, attachments: sent.attachments },
         most: INBOX_BOUNDS.MAX_MESSAGE_CHARS,
-        update: (next) => {
-          const now = standing.current;
-          const joined = next({ text: now.note, attachments: now.attachments });
-          if (joined === undefined) return;
-          control.onDraft(item, { ...now, note: joined.text, attachments: joined.attachments });
-        },
+        update: (next) => control.onHeld(item, next),
       });
     });
   };

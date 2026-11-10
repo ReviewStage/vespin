@@ -46,7 +46,7 @@ import {
   inboxBoard,
   inboxThreadSend,
 } from "./inbox-model.js";
-import { joinedAhead } from "./refused-send.js";
+import { type HeldUpdate, joinedAhead } from "./refused-send.js";
 
 /**
  * use-task-inbox.ts -- the open task's inbox as one control: its items, drawn from the account's feed at once and from the holder's own read as the host holds it, and the answers on their way back.
@@ -214,6 +214,8 @@ export interface TaskInboxControl {
     item: InboxItem,
     next: (was: readonly AgentAttachment[]) => readonly AgentAttachment[],
   ) => void;
+  /** Moves the words and files on the item's card on together from what they are as the write lands, as a refused send put back does (`refused-send.ts`). */
+  readonly onHeld: (item: InboxItem, next: Parameters<HeldUpdate>[0]) => void;
   /** Nods to a notice, settling it at the revision drawn, after every message of the item's on its way; nothing where a nod is out. Got it pressed hands its nod to `held` once its turn comes, which holds it behind an Undo (`inbox-acknowledge.tsx`); an opening sends it as it is (`useNodOnOpen`). */
   readonly onAcknowledge: (item: InboxItem, held?: InboxAcknowledger) => void;
   /** Sends the box's words and files as a message on the item's thread, open or settled, with the answer attached to the thread's open ask where one is, after every message of the item's on its way; nothing where it holds nothing the service takes or a nod is out. `taken` is called once the service took it, never where it refused it. */
@@ -429,7 +431,10 @@ function draftScope(
 }
 
 /** The doors of a held read's cards' drafts (`useInboxCardDrafts`). */
-type InboxCardDrafts = Pick<TaskInboxControl, "draftOf" | "drafted" | "onDraft" | "onAttachments">;
+type InboxCardDrafts = Pick<
+  TaskInboxControl,
+  "draftOf" | "drafted" | "onDraft" | "onAttachments" | "onHeld"
+>;
 
 /**
  * A held read without its cards' drafts, which the window's Inbox reads in
@@ -931,5 +936,14 @@ export function useInboxCardDrafts(
     [writer, draftsOn],
   );
 
-  return { draftOf, drafted, onDraft, onAttachments };
+  const onHeld = useCallback(
+    (item: InboxItem, next: Parameters<HeldUpdate>[0]) =>
+      writer.update(draftPlace(item, draftsOn), (was) => {
+        const moved = next(was);
+        return moved === undefined ? was : { ...was, ...moved };
+      }),
+    [writer, draftsOn],
+  );
+
+  return { draftOf, drafted, onDraft, onAttachments, onHeld };
 }
