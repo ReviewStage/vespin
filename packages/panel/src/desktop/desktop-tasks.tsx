@@ -2,7 +2,6 @@ import type { AgentStatus } from "@repo/features/agent-wire";
 import { NO_ITEMS, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LINK_PLACE } from "@repo/features/link-grammar";
-import type { MentionLines } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type {
@@ -76,6 +75,7 @@ import {
 import { CommentFocusScope } from "../tasks/description-comments.js";
 import { useDescriptionEdit, useDescriptionRetry } from "../tasks/description-doors.js";
 import { keyedItem } from "../tasks/inbox-model.js";
+import type { OpenFileLines } from "../tasks/mention-chip.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { TAB_KIND } from "../tasks/tab-look.js";
@@ -568,7 +568,7 @@ function DescriptionDocument({
   const onPressTab = (pressed: TabPressed) =>
     pressTab({ sidePanel, mainTabs, onKeys: setFocus }, pressed);
   // A file a mention names opens in its tab, its lines at the commit the mention pins them to.
-  const openMentionedFile = (path: string, lines: MentionLines | undefined) =>
+  const openMentionedFile = (path: string, lines: OpenFileLines | undefined) =>
     onPressTab(
       lines === undefined
         ? { kind: TAB_PRESS.FILE, ref: { path } }

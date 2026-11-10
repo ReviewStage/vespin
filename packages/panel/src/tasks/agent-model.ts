@@ -1,6 +1,7 @@
 import {
   agentFailureWords,
   hostLostWords,
+  LIMIT_REACHED_WORDS,
   launchStoppedWords,
   mendedByNewAgent,
 } from "@repo/features/agent-failure-words";
@@ -132,7 +133,9 @@ import {
 } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import {
+  USAGE_LIMIT_AGENT,
   USAGE_LIMIT_PART,
+  UsageLimitAnswerSchema,
   type UsageLimitNotice,
   UsageLimitNoticeSchema,
 } from "@repo/wire/ui-messages";
@@ -531,6 +534,19 @@ export function endLineParts(
   }
 }
 
+/** The harness a usage limit's notice names, by the provider of the agent's model: Codex for OpenAI's, Claude for any other. */
+export function usageLimitAgentOf(provider: ModelProvider | undefined): UsageLimitNotice["agent"] {
+  return provider === MODEL_PROVIDER.OPENAI ? USAGE_LIMIT_AGENT.CODEX : USAGE_LIMIT_AGENT.CLAUDE;
+}
+
+/** Whether a refusal a note keeps is the plan's usage limit's (`AGENT_PLAN_LIMIT_REACHED`). */
+export function refusedAtLimit(refusal: unknown): boolean {
+  return (
+    Predicate.hasProperty(refusal, "failure") &&
+    refusal.failure === AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED
+  );
+}
+
 /** What mends a failed turn from its end line: the API keys' page for a key refused; nothing else there is the developer's to mend. */
 export function endLineReason(failure: AgentFailure | undefined, starter?: string): FailureReason {
   // A teammate's key is theirs to mend, so the reader is offered no Settings of their own.
@@ -588,9 +604,6 @@ export const UNHEARD_OFFLINE = {
   BESIDE_RETRY: "You're offline.",
   ALONE: "You're offline. Try again once you're back online.",
 } as const;
-
-/** What a plan's reached limit says where no reset is known; with one, `limitResetsWords`. */
-const LIMIT_REACHED_WORDS = "Usage limit reached";
 
 /** What the refusals a Start and a message meet alike say, worded once. */
 const SHARED_FAILURE_NOTE = {
@@ -2292,6 +2305,14 @@ export function nativeSubagent(
   part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
 ): boolean {
   return part.tool === CLAUDE_CODE_TOOL.AGENT;
+}
+
+/** The usage limit's notice a worker's call answered with where the plan's limit ended it, which its row draws in its answer's place; none for any other answer. */
+export function callUsageLimit(
+  part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
+): UsageLimitNotice | undefined {
+  const answer = Schema.decodeUnknownOption(UsageLimitAnswerSchema)(part.output);
+  return Option.isSome(answer) ? answer.value.usageLimit : undefined;
 }
 
 /** Whether a part is a delegation to a worker (`delegates`). */

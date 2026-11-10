@@ -180,17 +180,14 @@ function listed(container: HTMLElement): [string, string[]][] {
   ]);
 }
 
-test("an @ typed in the description offers the description's sections and, as the word is typed, the repository's files, grouped by kind", async () => {
+test("an @ typed in the description browses its kinds and, as the word is typed, finds the description's sections and the repository's files, grouped by kind", async () => {
   const task = await opened();
 
   await task.typeAtEnd(" See @");
   const empty = listed(task.container);
   await task.typeAtEnd("roll");
 
-  assert.deepEqual(empty, [
-    ["Description", ["Goal", "Rollout", "Teammate invitations"]],
-    ["Mention from", ["Description", "Files and folders", "Dates"]],
-  ]);
+  assert.deepEqual(empty, [["Browse", ["Description", "Files and folders", "Dates"]]]);
   assert.deepEqual(listed(task.container), [
     ["Description", ["Rollout"]],
     ["Files and folders", ["rollout-store.ts"]],
@@ -290,7 +287,7 @@ test("a heading just renamed is offered by its new words, before the editor hand
   );
 });
 
-test("on the plan's page an @ typed in the description offers its pages and its agents too", async () => {
+test("on the plan's page an @ typed in the description suggests its agents and then its pages, above its kinds", async () => {
   const page: TaskMentionsValue = {
     holder: { taskId: TASK.id },
     taskName: TASK.name,
@@ -322,10 +319,10 @@ test("on the plan's page an @ typed in the description offers its pages and its 
 
   await description.typeAtEnd(" @");
 
-  assert.deepEqual(
-    listed(description.container).map(([group]) => group),
-    ["Agents", "Description", "Pages", "Mention from"],
-  );
+  assert.deepEqual(listed(description.container), [
+    ["Suggested", ["Wire the desktop", "Invites by week"]],
+    ["Browse", ["Agents", "Description", "Pages", "Files and folders", "Dates"]],
+  ]);
 });
 
 test("on the plan's page an @ typed in the description offers the workspace's other agents after its own, each labeled by its task", async () => {
@@ -356,7 +353,7 @@ test("on the plan's page an @ typed in the description offers the workspace's ot
   };
   const description = await opened(page);
 
-  await description.typeAtEnd(" @");
+  await description.typeAtEnd(" @agents:");
 
   assert.deepEqual(
     listed(description.container).find(([group]) => group === "Agents"),
@@ -429,8 +426,8 @@ test("a plan with no repository offers no files and folders to narrow to", async
   await description.typeAtEnd(" See @");
 
   assert.deepEqual(
-    listed(description.container).find(([group]) => group === "Mention from"),
-    ["Mention from", ["Description", "Dates"]],
+    listed(description.container).find(([group]) => group === "Browse"),
+    ["Browse", ["Description", "Dates"]],
   );
 });
 
