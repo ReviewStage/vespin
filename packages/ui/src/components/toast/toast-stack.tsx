@@ -30,7 +30,9 @@ const STILL = 0.5;
  * raises that one's rise as the stack grows upward.
  */
 function riseOf(list: HTMLElement, toast: HTMLElement): number {
-  return list.offsetTop + list.offsetHeight - toast.offsetTop;
+  // Note that a toast's offset is the list's own where the list is positioned, and their shared parent's where it is not.
+  const top = toast.offsetParent === list ? toast.offsetTop : toast.offsetTop - list.offsetTop;
+  return list.offsetHeight - top;
 }
 
 /**
