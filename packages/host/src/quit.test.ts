@@ -36,7 +36,7 @@ interface Asked {
  * every question asked kept for the test to answer and every quit asked
  * again counted.
  */
-function composedQuit() {
+function composedQuit(holdFirst?: () => boolean) {
   const panel = Symbol("panel");
   const unsavedWork = unsavedWorkHolders<symbol>(() => false);
   const atStake = () => ({ unsavedWork: unsavedWork.holding() });
@@ -49,6 +49,7 @@ function composedQuit() {
       }),
   });
   const quit = desktopQuit();
+  if (holdFirst) quit.holdWhile(holdFirst);
   let quitAgain = 0;
   quit.holdWhile(
     confirmingHold({
@@ -106,12 +107,13 @@ it("a quit with unsaved description words asks first, with Cancel what Return an
 });
 
 it("a yes lets through only the quit it asked for again: held elsewhere, the next quit asks again", async () => {
-  const { quit, asked, quitsAgain, tell } = composedQuit();
-  let heldElsewhere = true;
-  quit.holdWhile(() => heldElsewhere);
+  // Note that the other hold comes first and starts holding only while the question stands.
+  let heldElsewhere = false;
+  const { quit, asked, quitsAgain, tell } = composedQuit(() => heldElsewhere);
   tell(true);
 
   assert.equal(quit.held(), true);
+  heldElsewhere = true;
   asked[0]?.answer(true);
   await settled();
   assert.equal(quitsAgain(), 1);

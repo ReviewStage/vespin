@@ -46,7 +46,9 @@ export interface DesktopQuit {
   /**
    * Whether a quit asked for now is held back rather than torn down. Only a
    * standing launch is held, so a teardown already under way, and the
-   * updater's own quit behind it, are never asked twice.
+   * updater's own quit behind it, are never asked twice. Every hold is
+   * asked, even once one holds, because a hold may owe the quit it is
+   * passed something, as a confirming hold's yes is spent on it.
    */
   readonly held: () => boolean;
   /**
@@ -81,7 +83,12 @@ export function desktopQuit(): DesktopQuit {
     holdWhile: (hold) => {
       holds.push(hold);
     },
-    held: () => stage === QUIT_STAGE.STANDING && holds.some((hold) => hold()),
+    held: () => {
+      if (stage !== QUIT_STAGE.STANDING) return false;
+      let held = false;
+      for (const hold of holds) if (hold()) held = true;
+      return held;
+    },
     closesThrough: (next) => {
       close = next;
     },
