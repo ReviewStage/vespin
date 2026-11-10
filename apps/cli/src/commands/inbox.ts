@@ -14,10 +14,7 @@
  */
 
 import { randomUUID } from "node:crypto";
-import {
-  ACCOUNT_INBOX_REPOSITORYLESS,
-  type AccountInboxAnswer,
-} from "@repo/features/account-inbox-wire";
+import type { AccountInboxAnswer } from "@repo/features/account-inbox-wire";
 import { CLI_EXIT } from "@repo/features/cli-exit";
 import { CLI_DO_ANSWER, cliInboxAnswer } from "@repo/features/cli-inbox-answer";
 import {
@@ -51,8 +48,8 @@ interface ListedThread {
   readonly asking: boolean;
   readonly agentId: string;
   readonly agent: string;
-  readonly taskId: string | null;
-  readonly task: string | null;
+  readonly taskId: string;
+  readonly task: string;
   readonly updatedAt: number;
 }
 
@@ -60,39 +57,26 @@ interface ListedThread {
 function threadsOf(
   read: AccountInboxAnswer,
   tasks: ReadonlyMap<string, string>,
-  workspaceId: string,
 ): readonly ListedThread[] {
-  const ofTasks = read.items.flatMap((entry) => {
-    const task = tasks.get(entry.planId);
-    if (task === undefined) return [];
-    return [
-      {
-        id: entry.id,
-        title: entry.title,
-        unread: entry.unread === true,
-        asking: entry.asking !== false,
-        agentId: entry.agentId,
-        agent: entry.agentTitle ?? entry.agentModel,
-        taskId: entry.planId,
-        task,
-        updatedAt: entry.updatedAt,
-      },
-    ];
-  });
-  const taskless = (read.planless ?? [])
-    .filter((entry) => entry.workspaceId === workspaceId)
-    .map((entry) => ({
-      id: entry.id,
-      title: entry.title,
-      unread: entry.unread === true,
-      asking: entry.asking !== false,
-      agentId: entry.agentId,
-      agent: entry.agentTitle ?? entry.agentModel,
-      taskId: null,
-      task: null,
-      updatedAt: entry.updatedAt,
-    }));
-  return [...ofTasks, ...taskless].sort((one, other) => other.updatedAt - one.updatedAt);
+  return read.items
+    .flatMap((entry) => {
+      const task = tasks.get(entry.planId);
+      if (task === undefined) return [];
+      return [
+        {
+          id: entry.id,
+          title: entry.title,
+          unread: entry.unread === true,
+          asking: entry.asking !== false,
+          agentId: entry.agentId,
+          agent: entry.agentTitle ?? entry.agentModel,
+          taskId: entry.planId,
+          task,
+          updatedAt: entry.updatedAt,
+        },
+      ];
+    })
+    .sort((one, other) => other.updatedAt - one.updatedAt);
 }
 
 /** One thread whole, as its agent's threads carry it, or a refusal where the member may read no such thread. */
@@ -207,18 +191,14 @@ const listCommand = Command.make(
     Effect.gen(function* () {
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
-      const read = yield* askService(hosted.inbox.account, {
-        [ACCOUNT_INBOX_REPOSITORYLESS.QUERY]: ACCOUNT_INBOX_REPOSITORYLESS.INCLUDE,
-      });
+      const read = yield* askService(hosted.inbox.account, {});
       const { plans } = yield* askService(hosted.plans.list, {});
       const tasks = new Map(
         plans
           .filter((plan) => plan.workspaceId === workspace.id)
           .map((plan) => [plan.id, plan.name]),
       );
-      const threads = threadsOf(read, tasks, workspace.id).filter(
-        (thread) => !unread || thread.unread,
-      );
+      const threads = threadsOf(read, tasks).filter((thread) => !unread || thread.unread);
       yield* answer({
         json: { workspace: { id: workspace.id, slug: workspace.slug }, threads },
         lines:
@@ -226,7 +206,7 @@ const listCommand = Command.make(
             ? ["No open threads."]
             : threads.map(
                 (thread) =>
-                  `${thread.unread ? "●" : " "} ${thread.id}  ${thread.title}  (${thread.task ?? thread.agent})${thread.asking ? "  asks" : ""}`,
+                  `${thread.unread ? "●" : " "} ${thread.id}  ${thread.title}  (${thread.task})${thread.asking ? "  asks" : ""}`,
               ),
         ids: threads.map(({ id }) => id),
       });

@@ -6,7 +6,6 @@ import {
   type InboxDoAsk,
   inboxLineAsk,
   knownAsk,
-  type TasklessInboxAgent,
   waitsOnReaderNow,
 } from "@repo/features/inbox-list-model";
 import {
@@ -38,7 +37,7 @@ import {
 import { markdownTree } from "@repo/features/markdown-tree";
 import type { TaskFileRequest } from "@repo/features/task-wire";
 import type { TasksFileAnswer } from "@repo/features/tasks-view";
-import type { AppInboxTasklessItem, AppInboxWaitingItem } from "@repo/host/app-state";
+import type { AppInboxWaitingItem } from "@repo/host/app-state";
 import { isWireString } from "@repo/wire";
 import { UNHEARD_OFFLINE } from "./agent-model.js";
 import type { SnippetLines } from "./code-snippet-model.js";
@@ -640,47 +639,6 @@ export function inboxShownTicks(
 /** What a line of threads none of which waits on the developer says: "1 thread", "4 threads". */
 export function threadsWords(count: number): string {
   return count === 1 ? "1 thread" : `${count} threads`;
-}
-
-/**
- * An agent with no task as the Inbox names it, from its own row where main
- * lists none of its items, a link naming one whose items are all settled:
- * its title, as main's read names it; the automation that started it, by
- * the name its run kept; and its repository and workspace where they are known.
- */
-export function inboxAgentOf(agent: {
-  readonly id: string;
-  readonly title: string | null;
-  readonly model: string;
-  readonly automationId?: string | null | undefined;
-  readonly automationName?: string | undefined;
-  readonly repository?: string | null | undefined;
-  readonly workspaceId?: string | undefined;
-}): TasklessInboxAgent {
-  return {
-    agentId: agent.id,
-    agentTitle: agent.title,
-    agentModel: agent.model,
-    automationId: agent.automationId ?? null,
-    automationName: agent.automationName ?? null,
-    repository: agent.repository ?? null,
-    ...(agent.workspaceId === undefined ? undefined : { workspaceId: agent.workspaceId }),
-  };
-}
-
-/**
- * Whether an open item of an agent with no task, as main lists it, waits on
- * the reader: addressed to them, or else its agent started by them, or by
- * nobody the service names, or listed before the reader's own id is known,
- * as `readersItem` reads an item. Main lists every member's, as the Inbox
- * lists them, and counts only these.
- */
-export function waitsOnReader(
-  entry: Pick<AppInboxTasklessItem, "startedBy" | "waitsOn">,
-  readerId: string | undefined,
-): boolean {
-  const waitsOn = entry.waitsOn ?? entry.startedBy;
-  return waitsOn === undefined || readerId === undefined || waitsOn === readerId;
 }
 
 /**

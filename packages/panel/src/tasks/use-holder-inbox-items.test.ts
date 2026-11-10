@@ -44,11 +44,7 @@ async function settle(): Promise<void> {
   });
 }
 
-const holding = (taskId: string): InboxHolding => ({
-  kind: INBOX_SCOPE_KIND.PLAN,
-  id: taskId,
-  updatedAt: 1,
-});
+const holding = (taskId: string): InboxHolding => ({ id: taskId, updatedAt: 1 });
 
 const ITEM: InboxItem = {
   id: "3e4f5a6b-7c8d-4e9f-8a0b-1c2d3e4f5a6b",
@@ -76,9 +72,9 @@ const ITEM: InboxItem = {
   updatedAt: 1,
 };
 
-/** The account's feed holding the plans given, and no agent with no task. */
+/** The account's feed holding the plans given. */
 function fed(plans: Readonly<Record<string, readonly InboxItem[]>>) {
-  return { rows: { [INBOX_SCOPE_KIND.PLAN]: plans, [INBOX_SCOPE_KIND.AGENT]: {} } };
+  return { rows: { [INBOX_SCOPE_KIND.PLAN]: plans } };
 }
 
 function mount(holdings: readonly InboxHolding[]) {
@@ -104,8 +100,8 @@ test("each listed plan is pending until the account's feed first answers, then h
   await vi.waitFor(() => assert.equal(control()?.pending, false));
 
   assert.equal(before, true);
-  assert.deepEqual(control()?.items[INBOX_SCOPE_KIND.PLAN].get("acme-plan"), [ITEM]);
-  assert.deepEqual(control()?.items[INBOX_SCOPE_KIND.PLAN].get("personal-plan"), []);
+  assert.deepEqual(control()?.items.get("acme-plan"), [ITEM]);
+  assert.deepEqual(control()?.items.get("personal-plan"), []);
 });
 
 test("a plan main says changed later than the feed holds it is pending until the feed catches up, its items standing meanwhile", async () => {
@@ -114,12 +110,12 @@ test("a plan main says changed later than the feed holds it is pending until the
   await vi.waitFor(() => assert.equal(control()?.pending, false));
   const answered = control()?.pending;
   list([{ ...holding("acme-plan"), updatedAt: 2 }]);
-  const behind = [control()?.pending, control()?.items[INBOX_SCOPE_KIND.PLAN].get("acme-plan")];
+  const behind = [control()?.pending, control()?.items.get("acme-plan")];
   deliver(fed({ "acme-plan": [{ ...ITEM, updatedAt: 2 }] }));
   await vi.waitFor(() => assert.equal(control()?.pending, false));
 
   assert.deepEqual([answered, ...behind], [false, true, [ITEM]]);
-  assert.deepEqual(control()?.current[INBOX_SCOPE_KIND.PLAN], new Set(["acme-plan"]));
+  assert.deepEqual(control()?.current, new Set(["acme-plan"]));
 });
 
 test("a feed refused before it ever answered says so only while a plan is listed, and Try again asks the host to read it again", async () => {

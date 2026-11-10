@@ -58,10 +58,12 @@ interface RemindFields {
 function inboxItemIn(rows: InboxRows, itemId: string): InboxItem | undefined {
   const fed = rows?.[LIVE_READ.INBOX_ITEMS].rows;
   const held = rows?.[LIVE_READ.HOLDER_INBOX];
-  const lists = Object.values(INBOX_SCOPE_KIND).flatMap((kind) => [
-    ...Object.values(fed?.[kind] ?? {}),
-    ...Object.values(held?.[kind] ?? {}).map((read) => read.rows ?? []),
-  ]);
+  const lists = [
+    ...Object.values(fed?.[INBOX_SCOPE_KIND.PLAN] ?? {}),
+    ...Object.values(INBOX_SCOPE_KIND).flatMap((kind) =>
+      Object.values(held?.[kind] ?? {}).map((read) => read.rows ?? []),
+    ),
+  ];
   for (const items of lists) {
     const item = items.find((each) => each.id === itemId);
     if (item !== undefined) return item;

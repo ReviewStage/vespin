@@ -1741,9 +1741,9 @@ function deliverItems(
   });
 }
 
-/** The account's items as the window is told them, by plan, none of an agent with no task. */
+/** The account's items as the window is told them, by plan. */
 function byPlan(plans: Readonly<Record<string, readonly InboxItem[]>>) {
-  return { rows: { [INBOX_SCOPE_KIND.PLAN]: plans, [INBOX_SCOPE_KIND.AGENT]: {} } };
+  return { rows: { [INBOX_SCOPE_KIND.PLAN]: plans } };
 }
 
 it.effect(

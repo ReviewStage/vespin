@@ -125,7 +125,7 @@ async function mount(
     DOMRect.fromRect({ width: 1200, height: 800 }),
   );
   handInboxItems({
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: items }, [INBOX_SCOPE_KIND.AGENT]: {} },
+    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: items } },
   });
   pushedTranscripts(() => [
     { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },

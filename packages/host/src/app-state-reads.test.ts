@@ -74,16 +74,10 @@ describe("inboxRowsOf", () => {
           },
         ],
         tasks: [],
-        taskless: [],
-        automations: [],
-        agents: [],
         failedRuns: [],
       },
       {
-        rows: {
-          [INBOX_SCOPE_KIND.PLAN]: { [TASK]: [decide, notice] },
-          [INBOX_SCOPE_KIND.AGENT]: {},
-        },
+        rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK]: [decide, notice] } },
       },
     );
     expect(rows).toEqual([

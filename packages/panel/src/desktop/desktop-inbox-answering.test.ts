@@ -153,7 +153,7 @@ function optionHeads(page: HTMLElement): (string | null)[] {
 
 test("an open item's ⋯ menu in the pane's bar offers Resolve, naming E, beside Mark as read or unread, Remind me, and Copy link, which settles it at once at the revision drawn, the thread saying who resolved it, and reaches the service once its Undo is gone; a settled item's menu offers the same less Resolve", async () => {
   world.listedWorkspace = ACME;
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const sent = takenCloses();
   const ellipsis = () =>
@@ -188,7 +188,7 @@ test("an open item's ⋯ menu in the pane's bar offers Resolve, naming E, beside
 });
 
 test("an open question's card offers its × named Resolve, which resolves the item at once, asking nothing and sending no reply beside it, and Send only ever sends an answer", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const closes = takenCloses();
   const sent = heldMessages(writtenOn(THRESHOLD, "c1b2c3d4-0000-4000-8000-000000000093"));
@@ -234,7 +234,7 @@ test("an open item's row offers Resolve among its triage acts, at once; a settle
 });
 
 test("an item gone from under its open box, as a teammate's delete takes it, lets go of its draft", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   typeInComposer(itemPane(page), "Use 90% instead");
   await settle();
@@ -269,7 +269,7 @@ test("an answer box whose editor bundle could not be loaded says so beside Retry
       return Promise.reject(new Error("The chunk could not be loaded."));
     },
   });
-  const { page } = mount([], { chosen: ON_THRESHOLD, bundles });
+  const { page } = mount({ chosen: ON_THRESHOLD, bundles });
   await settle();
   const note = page.querySelector(".ui-composer-foot-note");
   assert.equal(note?.textContent, "The message box could not be loaded.Retry");
@@ -281,7 +281,7 @@ test("an answer box whose editor bundle could not be loaded says so beside Retry
 });
 
 test("a waiting choice wears a Recommended badge at the head of the option its agent recommends and of no other, and a choice recommending nothing wears none", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   assert.deepEqual(optionHeads(page), [
     "Retry 3 times over an hourRecommended1Backs off 5, 15, then 40 minutes.",
@@ -295,14 +295,14 @@ test("a waiting choice wears a Recommended badge at the head of the option its a
     options: [{ label: "Retry 3 times over an hour" }, { label: "Retry once" }],
   };
   world.inboxes.set(BILLING.id, [asking(THRESHOLD, ask), RETRY]);
-  const again = mount([], { chosen: ON_THRESHOLD });
+  const again = mount({ chosen: ON_THRESHOLD });
   await settle();
   assert.deepEqual(optionHeads(again.page), ["Retry 3 times over an hour1", "Retry once2"]);
 });
 
 test("a waiting choice of one is a radio list, each option led by its radio and numbered at its right: a number key picks its option from the list's row and takes the keyboard there, Space picks the focused one, a number typed in the box picks nothing, and K still steps the list", async () => {
   const keys = standKeymap();
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const pane = itemPane(page);
   assert.deepEqual(
@@ -343,7 +343,7 @@ test("a waiting choice of one is a radio list, each option led by its radio and 
 });
 
 test("Enter on a focused option sends the reply carrying the pick and never presses the option; with nothing picked, Send stands held, and Enter sends nothing and says an option is missing", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const sent = heldMessages(repliedOn(THRESHOLD, "c1b2c3d4-0000-4000-8000-000000000090"));
   const pane = itemPane(page);
@@ -385,7 +385,7 @@ test("a waiting choice of several is a checkbox list whose box counts nothing on
     options: [{ label: "Email" }, { label: "Slack" }, { label: "Pager" }],
   });
   world.inboxes.set(BILLING.id, [several, RETRY]);
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const sent = heldMessages(repliedOn(several, "c1b2c3d4-0000-4000-8000-000000000091"));
   const pane = itemPane(page);
@@ -701,7 +701,7 @@ const THRESHOLD_ANSWERED: InboxItem = {
 };
 
 test("an answer leaves Needs you the moment it is sent, its row staying where it stood", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const { sent } = gatedAnswers();
 
@@ -726,7 +726,7 @@ function placesOf(page: HTMLElement): string[] {
 test("on To do, answering the chosen item draws its row gray where it stood, and choosing another row clears it", async () => {
   window.localStorage.setItem(SHOW_KEY, JSON.stringify("to-do"));
   window.localStorage.removeItem(WHOSE_KEY);
-  const { page } = mount([], { chosen: ON_EXPIRY });
+  const { page } = mount({ chosen: ON_EXPIRY });
   await settle();
   const { answer } = gatedAnswers();
   assert.deepEqual(listed(page), ["▸ *Expire after 7 days?", "*Alert at 80%?"]);
@@ -763,7 +763,7 @@ test("on To do, answering the chosen item draws its row gray where it stood, and
 test("on To do, the chosen row stands once the Inbox is come back to, gray, though its item was answered while it was hidden", async () => {
   window.localStorage.setItem(SHOW_KEY, JSON.stringify("to-do"));
   window.localStorage.removeItem(WHOSE_KEY);
-  const { page } = mount([], { chosen: ON_EXPIRY });
+  const { page } = mount({ chosen: ON_EXPIRY });
   await settle();
   assert.deepEqual(listed(page), ["▸ *Expire after 7 days?", "*Alert at 80%?"]);
 
@@ -836,7 +836,7 @@ test("an answer moves no row while the list is shown, and the list sorts anew on
 });
 
 test("an answer the service refuses brings its item back as it was, needing you, with its box's words and why it did not go", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const { answer } = gatedAnswers();
   answerWithNote(page, "Use 90%");
@@ -855,7 +855,7 @@ test("an answer the service refuses brings its item back as it was, needing you,
 });
 
 test("an answer no reply came back for is taken as sent once its thread holds a message under its key: its box empties and says nothing", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const { answer, sent } = gatedAnswers();
   answerWithNote(page, "Use 90%");
@@ -923,7 +923,7 @@ test("a nod on a notice the agent posted over first is not taken: the notice sta
 });
 
 test("an item its agent posts again after it was answered needs you again once a read holds the newer revision, though the list's older read still stands for it elsewhere", async () => {
-  const { page } = mount([], { chosen: ON_THRESHOLD });
+  const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const { answer } = gatedAnswers();
   answerWithNote(page, "Use 90%");

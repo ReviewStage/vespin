@@ -19,7 +19,6 @@ import {
   agentActor,
   agentName,
   archivedByReading,
-  providerOf,
   teammateRef,
 } from "./agent-model.js";
 import {
@@ -175,52 +174,6 @@ export function listedRowSubject(
     }),
   });
   return { name, tile: agentActor(agent, name), agent, read };
-}
-
-/**
- * An agent with no task as the Inbox names it (`TasklessInboxAgent`): its
- * title, else the name of the automation
- * the reader may read that started it, else its model (`agentName`), its
- * harness's tile at rest, and that automation. Note that the line says
- * nothing of where the agent stands, so its card's corner says nothing
- * either.
- */
-export function tasklessSubject(
-  line: {
-    readonly agentTitle: string | null;
-    readonly agentModel: string;
-    readonly automationId: string | null;
-    readonly automationName: string | null;
-  },
-  models: readonly CatalogModel[] | undefined,
-): AgentSubject {
-  const name = agentName(
-    {
-      title: line.agentTitle,
-      model: line.agentModel,
-      automationName: line.automationId === null ? null : line.automationName,
-    },
-    models,
-  );
-  const tile: Actor = {
-    kind: ACTOR_KIND.AGENT,
-    name,
-    provider: providerOf(line.agentModel),
-    state: ACTOR_STATE.REST,
-  };
-  const reading: CardReading = {
-    corner: cardCorner({
-      writing: false,
-      startedAt: undefined,
-      movedAt: undefined,
-      state: undefined,
-    }),
-    choice: undefined,
-    transcript: undefined,
-    automationId: line.automationId ?? undefined,
-    tile,
-  };
-  return { name, tile, read: () => reading };
 }
 
 /** An agent as a line read beside its thread names it: its title, null where it has none; its model; the automation whose run started it, which an untitled one goes by; and where it stands, where the line says so. */

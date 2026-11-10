@@ -1,10 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import type {
-  AccountFailedRun,
-  AccountInboxEntry,
-  AccountTasklessEntry,
-} from "@repo/features/account-inbox-wire";
+import type { AccountFailedRun, AccountInboxEntry } from "@repo/features/account-inbox-wire";
 import { AGENT_CALL_FAILURE, type AgentAccountInboxAnswerView } from "@repo/features/agent-view";
 import {
   AGENT_FAILURE,
@@ -82,8 +78,6 @@ function fixture() {
   let inboxFollows = 0;
   const waiting: (readonly AppInboxTask[])[] = [];
   const holding: (readonly AppInboxTaskHolding[])[] = [];
-  const taskless: AppInboxSlice["taskless"][] = [];
-  const agents: AppInboxSlice["agents"][] = [];
   const failedRuns: AppInboxSlice["failedRuns"][] = [];
   let inboxAnswers: Queue.Queue<AgentAccountInboxAnswerView> | undefined;
   let accounts: Queue.Queue<string | undefined> | undefined;
@@ -122,8 +116,6 @@ function fixture() {
       onInboxChanged: (next) => {
         waiting.push(next.waiting);
         holding.push(next.tasks);
-        taskless.push(next.taskless);
-        agents.push(next.agents);
         failedRuns.push(next.failedRuns);
       },
       sound: () => ({ when: soundWhen, sound: COMPLETION_SOUND.MARIMBA }),
@@ -166,8 +158,6 @@ function fixture() {
     inboxFollows: () => inboxFollows,
     waiting,
     holding,
-    taskless,
-    agents,
     badges,
     failedRuns,
     /** The signed-in account's id as its identity now holds it: none for one stored without it. */
@@ -332,6 +322,7 @@ const READ_AT = 1_800_000_000_000;
 const ITEM_A = "5e2d7c3a-1b4f-4e6a-8c9d-0f1e2d3c4b5a";
 const ITEM_B = "6f3e8d4b-2c5a-4f7b-9d0e-1a2b3c4d5e6f";
 const ITEM_C = "7a4f9e5c-3d6b-4a8c-8e1f-2b3c4d5e6f7a";
+const ITEM_D = "8b5a0f6d-4e7c-4b9d-9f2a-3c4d5e6f7a8b";
 
 const DAY = Duration.toMillis(Duration.days(1));
 it.effect(
@@ -469,134 +460,6 @@ it.effect("a teammate's agent is dotted as its turn ends, as the account's own i
     assert.deepEqual(f.unseen.at(-1), [AGENT_ID]);
   }),
 );
-/** An item of an agent with no task waiting on the developer, as the account's inbox read carries it. */
-/** An agent with no task a teammate started. */
-const TEAMMATES_AGENT = "a1b2c3d4-0000-4000-8000-0000000000aa";
-
-function tasklessItem(id: string, patch: Partial<AccountTasklessEntry> = {}): AccountTasklessEntry {
-  return {
-    id,
-    agentId: AGENT_ID,
-    agentTitle: "Sweep the flaky tests",
-    agentModel: MODEL,
-    automationId: "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04",
-    automationName: "Nightly flake sweep",
-    repository: "acme/relay",
-    title: "Quarantine the flaky test?",
-    revision: 1,
-    postedAt: READ_AT,
-    updatedAt: READ_AT,
-    ...patch,
-  };
-}
-it.effect(
-  "an item of an agent with no plan waits beside the plans' with its workspace and counts on the badge",
-  () =>
-    Effect.gen(function* () {
-      const f = fixture();
-      yield* f.notices;
-      f.focus(false);
-      f.answerInbox({ items: [waitingItem(ITEM_A)], cursor: "1", readAt: READ_AT });
-      yield* settled;
-
-      f.answerInbox({
-        items: [waitingItem(ITEM_A)],
-        planless: [
-          tasklessItem(ITEM_B, { updatedAt: READ_AT + 1, workspaceId: "workspace-acme" }),
-          // A teammate's agent's question, which waits on the teammate.
-          tasklessItem(ITEM_C, {
-            agentId: TEAMMATES_AGENT,
-            startedBy: "user-sam",
-            workspaceId: "workspace-acme",
-          }),
-        ],
-        automations: [
-          {
-            automationId: "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04",
-            items: 2,
-            updatedAt: READ_AT + 1,
-          },
-        ],
-        cursor: "2",
-        readAt: READ_AT + 2,
-      });
-      yield* settled;
-
-      assert.equal(
-        f.badges.at(-1),
-        2,
-        "the badge counts a plan's item and an agent's with no plan alike",
-      );
-      assert.deepEqual(
-        f.taskless.at(-1)?.map((item) => item.workspaceId),
-        ["workspace-acme", "workspace-acme"],
-        "the window is told whose workspace's list each item stands in",
-      );
-      assert.deepEqual(
-        f.agents.at(-1)?.map((held) => [held.agentId, held.items, held.toDo, held.updatedAt]),
-        [
-          [AGENT_ID, 1, 1, READ_AT + 1],
-          [TEAMMATES_AGENT, 1, 0, READ_AT],
-        ],
-        "a service before the agents holding items leaves the window to list each agent its open items name, counting only the questions that wait on the reader",
-      );
-    }),
-);
-
-it.effect(
-  "an automation renamed with nothing waiting moving is written as the item's new name, its cursor the same",
-  () =>
-    Effect.gen(function* () {
-      const f = fixture();
-      yield* f.notices;
-      const answer = (automationName: string) => ({
-        items: [],
-        planless: [tasklessItem(ITEM_A, { automationName })],
-        automations: [],
-        cursor: "4",
-        readAt: READ_AT,
-      });
-      f.answerInbox(answer("Nightly flake sweep"));
-      yield* settled;
-
-      f.answerInbox(answer("Flake sweep, nightly"));
-      yield* settled;
-
-      assert.deepEqual(
-        f.taskless.at(-1)?.map((item) => item.automationName),
-        ["Flake sweep, nightly"],
-      );
-    }),
-);
-
-it.effect(
-  "a workspace first named for an item, its cursor the same, as a service newly naming it answers, is written to the window",
-  () =>
-    Effect.gen(function* () {
-      const f = fixture();
-      yield* f.notices;
-      const answer = (workspaceId: string | undefined) => ({
-        items: [],
-        planless: [
-          workspaceId === undefined ? tasklessItem(ITEM_A) : tasklessItem(ITEM_A, { workspaceId }),
-        ],
-        automations: [],
-        cursor: "5",
-        readAt: READ_AT,
-      });
-      f.answerInbox(answer(undefined));
-      yield* settled;
-
-      f.answerInbox(answer("workspace-acme"));
-      yield* settled;
-
-      assert.deepEqual(
-        f.taskless.at(-1)?.map((item) => item.workspaceId),
-        ["workspace-acme"],
-      );
-    }),
-);
-
 it.effect(
   "only the items of agents the account started wait on it: a teammate's agent's questions are neither counted nor badged, while its plan is still listed",
   () =>
@@ -737,55 +600,6 @@ it.effect(
     }),
 );
 
-it.effect(
-  "a question from a teammate's agent with no plan is neither counted nor badged for the account, while its own is",
-  () =>
-    Effect.gen(function* () {
-      const f = fixture();
-      yield* f.notices;
-      f.focus(false);
-      f.answerInbox({ items: [], planless: [], cursor: "1", readAt: READ_AT });
-      yield* settled;
-      f.answerInbox({
-        items: [],
-        planless: [
-          tasklessItem(ITEM_A, { startedBy: ACCOUNT_ID, updatedAt: READ_AT + 1 }),
-          tasklessItem(ITEM_B, { startedBy: "user-charles", updatedAt: READ_AT + 1 }),
-        ],
-        cursor: "2",
-        readAt: READ_AT + 1,
-      });
-      yield* settled;
-
-      assert.equal(f.badges.at(-1), 1);
-    }),
-);
-
-it.effect(
-  "a question from a teammate's agent with no plan is written for the window's Inbox with who started it, as every member's Inbox lists it, though it is not badged",
-  () =>
-    Effect.gen(function* () {
-      const f = fixture();
-      yield* f.notices;
-      f.focus(false);
-      f.answerInbox({ items: [], planless: [], cursor: "1", readAt: READ_AT });
-      yield* settled;
-      f.answerInbox({
-        items: [],
-        planless: [tasklessItem(ITEM_B, { startedBy: "user-charles", updatedAt: READ_AT + 1 })],
-        cursor: "2",
-        readAt: READ_AT + 1,
-      });
-      yield* settled;
-
-      assert.deepEqual(
-        f.taskless.at(-1)?.map((item) => [item.id, item.startedBy]),
-        [[ITEM_B, "user-charles"]],
-      );
-      assert.equal(f.badges.at(-1), 0);
-    }),
-);
-
 const RUN_ID = "4b5c6d7e-8f90-4a1b-8c2d-3e4f5a6b7c8d";
 const AUTOMATION_ID = "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04";
 
@@ -877,7 +691,7 @@ it.effect(
       yield* f.notices;
       const teammate = "user-charles";
       const question = waitingItem(ITEM_A, { waitsOn: ACCOUNT_ID, asking: true });
-      const snoozed = tasklessItem(ITEM_C, {
+      const snoozed = waitingItem(ITEM_D, {
         startedBy: teammate,
         waitsOn: ACCOUNT_ID,
         asking: true,
@@ -885,11 +699,7 @@ it.effect(
       });
       const answer = (cursor: string, items: readonly AccountInboxEntry[]) =>
         f.answerInbox({
-          items: [...items, waitingItem(ITEM_C, { waitsOn: teammate, asking: true })],
-          planless: [
-            snoozed,
-            tasklessItem(ITEM_B, { startedBy: ACCOUNT_ID, waitsOn: teammate, asking: true }),
-          ],
+          items: [...items, snoozed, waitingItem(ITEM_C, { waitsOn: teammate, asking: true })],
           cursor,
           readAt: READ_AT,
         });

@@ -40,7 +40,7 @@ import { ACCOUNT_INBOX_ITEMS, LIVE_READ, LIVE_USER_QUERY } from "./live-wire.js"
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { countedNumber, HOSTED_API_ERROR } from "./service-wire.js";
 
-/** An item of an agent with no plan as its row delivers it: the workspace as the column holds it, null for none. */
+/** An item of an agent with no plan as its row delivers it: the workspace as the column holds it, null for none. Carried empty for a released desktop, which reads it; this build reads none. */
 const tasklessLiveRowSchema = EffectSchema.Struct({
   ...accountTasklessEntrySchema.fields,
   workspaceId: EffectSchema.NullOr(EffectSchema.String),
@@ -65,9 +65,11 @@ function latestOrder<Key extends string>(key: Key) {
  * declares it, by the account (`inbox`): one part per part of the account
  * inbox's answer (`account-inbox-wire.ts`), the items of agents with no
  * repository among them only where the reader asks
- * (`ACCOUNT_INBOX_REPOSITORYLESS`). A released desktop (v0.22.0) keeps
- * every part but `agents`, whose decode strips it, so it sends the digest
- * over those (`olderParts`). The service answers `unavailable` where its
+ * (`ACCOUNT_INBOX_REPOSITORYLESS`). Every agent works on a task, so
+ * `planless`, `automations`, and `agents` hold nothing; they stay declared
+ * for a released desktop (v0.22.0), which reads them, and keeps every part
+ * but `agents`, whose decode strips it, so it sends the digest over those
+ * (`olderParts`). This build reads none of the three. The service answers `unavailable` where its
  * deployment's Realtime is misconfigured, which the desktop answers by
  * asking again.
  */
@@ -173,7 +175,6 @@ function liveCursorOf(answer: Omit<AccountInboxAnswer, "cursor" | "readAt">): st
   return digest(
     JSON.stringify([
       answer.items.map(itemStamp),
-      (answer.planless ?? []).map(itemStamp),
       (answer.failedRuns ?? []).map((run) => [run.id, run.failedAt]),
     ]),
   );
@@ -539,6 +540,3 @@ export type AccountInboxItemsLiveAnswer = LiveReadAnswer<typeof INBOX_ITEMS_READ
 
 /** Each part's rows of the account's inbox items, decoded. */
 export type AccountInboxItemsLiveRows = typeof INBOX_ITEMS_READ.rows.Type;
-
-/** Where one item stands as its stamp row carries it. */
-export type InboxItemStamp = AccountInboxItemsLiveRows["stamps"][number];
