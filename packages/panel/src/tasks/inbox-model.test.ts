@@ -1,6 +1,20 @@
 import assert from "node:assert/strict";
 import { INBOX_MISSING } from "@repo/features/inbox-ask-words";
 import {
+  doDecision,
+  EMPTY_INBOX_DRAFT,
+  type InboxDraft,
+  inboxMissing,
+  inboxReply,
+  inboxThreadSend,
+  shownTicks,
+  stepParts,
+  withChoice,
+  withDoPress,
+  withStep,
+  withValue,
+} from "@repo/features/inbox-draft";
+import {
   ANSWER_TONE,
   acknowledgedOnOpen,
   agentGroups,
@@ -61,20 +75,8 @@ import {
   codeNotice,
   codeReadOf,
   codeWindow,
-  doDecision,
-  EMPTY_INBOX_DRAFT,
-  type InboxDraft,
   inboxBoard,
-  inboxMissing,
-  inboxReply,
-  inboxThreadSend,
-  shownTicks,
-  stepParts,
   waitsOnReader,
-  withChoice,
-  withDoPress,
-  withStep,
-  withValue,
 } from "./inbox-model.js";
 
 const AGENT = "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21";

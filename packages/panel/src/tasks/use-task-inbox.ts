@@ -12,6 +12,7 @@ import {
   INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
 import type { AgentAttachment } from "@repo/features/agent-wire";
+import { EMPTY_INBOX_DRAFT, type InboxDraft, inboxThreadSend } from "@repo/features/inbox-draft";
 import { awaitsNod } from "@repo/features/inbox-list-model";
 import { INBOX_REPLY, INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import type { AppInboxItems } from "@repo/host/app-state";
@@ -38,14 +39,7 @@ import { useSendQueue } from "../send-queue.js";
 import { messageFailureWords } from "./agent-model.js";
 import type { InboxAcknowledger } from "./inbox-acknowledge.js";
 import { useInboxArrivals } from "./inbox-arrivals.js";
-import {
-  EMPTY_INBOX_DRAFT,
-  type InboxBoardView,
-  type InboxDraft,
-  type InboxNote,
-  inboxBoard,
-  inboxThreadSend,
-} from "./inbox-model.js";
+import { type InboxBoardView, type InboxNote, inboxBoard } from "./inbox-model.js";
 
 /**
  * use-task-inbox.ts -- the open task's inbox as one control: its items, drawn from the account's feed at once and from the holder's own read as the host holds it, and the answers on their way back.

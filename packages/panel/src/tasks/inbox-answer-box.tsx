@@ -1,5 +1,6 @@
 import { AGENT_STATUS, type AgentAttachment, type AgentSummary } from "@repo/features/agent-wire";
-import { type InboxMissing, missingWords } from "@repo/features/inbox-ask-words";
+import { INBOX_BOX_WORDS, type InboxMissing, missingWords } from "@repo/features/inbox-ask-words";
+import { type InboxDraft, inboxMissing, inboxThreadSend } from "@repo/features/inbox-draft";
 import { acknowledgedOnOpen, awaitsNod } from "@repo/features/inbox-list-model";
 import { INBOX_BOUNDS, type InboxItem, type InboxMessage } from "@repo/features/inbox-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -12,7 +13,7 @@ import { TOAST_HOLD, useToast } from "../toast.js";
 import { AgentComposer } from "./agent-composer.js";
 import { useInboxAcknowledger } from "./inbox-acknowledge.js";
 import { focusMissing } from "./inbox-ask-controls.js";
-import { type InboxDraft, inboxMissing, inboxNoteReading, inboxThreadSend } from "./inbox-model.js";
+import { inboxNoteReading } from "./inbox-model.js";
 import { ReplyToSelection } from "./reply-to-selection.js";
 import type { SkillSource } from "./skill-picker.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
@@ -95,15 +96,6 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
 function emptyBox(draft: InboxDraft): boolean {
   return draft.note.trim() === "" && draft.attachments.length === 0;
 }
-
-/** What the note line asks for under an open question's controls, which are the answer, the note going beside it. */
-const NOTE_PLACEHOLDER = "Add a note";
-
-/** What the box asks for where no controls stand over its line: an ask of words alone, a notice, or a settled item, whose words are the reply. */
-const REPLY_PLACEHOLDER = "Reply";
-
-/** What the box's round Send is called, which is its tooltip too. */
-const SEND = "Send";
 
 /** What Send reads, in words, while the box starts a new thread. */
 const START_THREAD = "Start thread";
@@ -245,7 +237,11 @@ function AnswerCard({
     setWanting(true);
     focusMissing(box.current, lacks);
   };
-  const placeholder = starts ? NEW_THREAD_PLACEHOLDER : asks ? NOTE_PLACEHOLDER : REPLY_PLACEHOLDER;
+  const placeholder = starts
+    ? NEW_THREAD_PLACEHOLDER
+    : asks
+      ? INBOX_BOX_WORDS.NOTE_PLACEHOLDER
+      : INBOX_BOX_WORDS.REPLY_PLACEHOLDER;
   // The item's agent's model and servers, which the box's chips change as the agent's own box does.
   const model = useAgentModel({ agent, choose: agents.onChoose });
   const servers = useAgentServers({
@@ -372,7 +368,7 @@ function AnswerCard({
         wording={{
           placeholder,
           label: placeholder,
-          send: nod ? GOT_IT : starts ? START_THREAD : SEND,
+          send: nod ? GOT_IT : starts ? START_THREAD : INBOX_BOX_WORDS.SEND,
         }}
         maxLength={INBOX_BOUNDS.MAX_MESSAGE_CHARS}
         takesFocus={false}
