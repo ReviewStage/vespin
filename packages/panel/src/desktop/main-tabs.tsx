@@ -7,6 +7,7 @@ import {
 } from "@repo/features/agent-wire";
 import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
 import { TASK_BOUNDS, type TaskSummary } from "@repo/features/task-wire";
+import type { ToolTarget } from "@repo/features/tool-call-model";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   DraftMark,
@@ -40,8 +41,9 @@ import { absurd } from "effect";
 import { memo, useEffect, useRef } from "react";
 import { FOCUSED_OFFER, useAppCommand } from "../app-commands.js";
 import { useDraftedAgents } from "../composer-drafts.js";
-import { useCopyLinkItem } from "../copy-link-item.js";
+import { useLinkItems } from "../copy-link-item.js";
 import { leftMark } from "../draft-mark.js";
+import { SHORTCUT_SUBJECT, shortcutSubject, useShortcutTarget } from "../shortcut-target.js";
 import { agentName } from "../tasks/agent-model.js";
 import { agentCardReading } from "../tasks/agent-ref.js";
 import { AgentTab, StartingAgentTab } from "../tasks/agent-tab.js";
@@ -55,7 +57,6 @@ import { stripTabTitle, UNREAD_TAB_NAMES } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import type { MAIN_TAB } from "../tasks/task-tab-model.js";
 import type { AgentThreads } from "../tasks/threads-dock.js";
-import type { ToolTarget } from "../tasks/tool-call-model.js";
 import { TRANSCRIPT_COPY } from "../tasks/transcript-copy.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTab, MainTabsControl } from "../tasks/use-main-tabs.js";
@@ -66,6 +67,7 @@ import { AgentHistory } from "./agent-history.js";
 import type { TaskCards } from "./side-panel.js";
 import {
   type AddEntry,
+  CHOSEN_TAB_KEYS,
   type DocumentMenu,
   DoorsTab,
   type ShownTab,
@@ -635,7 +637,7 @@ export function MainTabBars({
     (entry) => entry.tab,
   );
   useStripLooks(LOOK_STRIP.COLUMN, task.id, strip);
-  const copyLink = useCopyLinkItem();
+  const linkItemsOf = useLinkItems();
   // Close others closes every tab but `entry` that closes, then shows it; none where no other tab closes.
   const closeOthersOf = (entry: DrawnTab): (() => void) | undefined => {
     const others = strip.flatMap((other) =>
@@ -648,6 +650,9 @@ export function MainTabBars({
     };
   };
   const chosen = strip.find((entry) => entry.look.selected);
+  const tabSubject = (entry: DrawnTab) => shortcutSubject(SHORTCUT_SUBJECT.TAB, tabKey(entry.tab));
+  // The chosen tab is what the strip's keys act on, so its menu prints them.
+  useShortcutTarget(chosen === undefined ? undefined : tabSubject(chosen), CHOSEN_TAB_KEYS);
   useAppCommand(APP_COMMAND.CLOSE_TAB, keys ? chosen?.close : undefined);
   useAppCommand(
     APP_COMMAND.CLOSE_OTHER_TABS,
@@ -665,11 +670,12 @@ export function MainTabBars({
     const { agent } = entry;
     return {
       chosen: entry.look.selected,
+      subject: tabSubject(entry),
       onClose: entry.close,
       onCloseOthers: closeOthersOf(entry),
       // Note that an archived agent offers no pin, as its sidebar row does none, since no pin of it is drawn until it comes back.
       pin: agent === undefined || agent.archivedAt !== undefined ? undefined : pinDoor(agent.id),
-      copyLink: linked === undefined ? undefined : copyLink(linked),
+      links: linked === undefined ? undefined : linkItemsOf(linked),
     };
   };
   return (

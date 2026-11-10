@@ -397,10 +397,10 @@ body,
   margin-top: var(--ui-section-gap);
 }
 
-/* The scope switcher heads the groups its view filters, the sections and the
+/* The Tasks head heads the groups its view filters, the sections and the
    list, so the first of them stands a tight gap under it rather than a
    section's (sidebar-task-view.tsx). */
-.sidebar-scope-zone + .sidebar-group {
+.sidebar-tasks-head + .sidebar-group {
   margin-top: var(--ui-tight-gap);
 }
 
@@ -1262,6 +1262,32 @@ body,
   );
 }
 
+/* The prompt is the composer's own field (`automation-prompt.tsx`) in a
+   text field's frame: it stands the rows its placeholder held
+   (`--automation-prompt-rows`) at a text area's insets, and grows a line at
+   a time to the composer's cap. */
+.automation-prompt .agent-composer-field {
+  --agent-composer-field-block: calc(2 * var(--ui-space-6));
+  --agent-composer-field-lines: calc(
+    24 *
+    var(--ui-type-body-leading) +
+    var(--agent-composer-field-block)
+  );
+}
+
+.automation-prompt .agent-composer-input {
+  min-height: calc(
+    var(--automation-prompt-rows) *
+    var(--ui-type-body-leading) +
+    var(--agent-composer-field-block)
+  );
+  padding: var(--ui-space-6) var(--ui-control-inset);
+}
+
+.automation-prompt .agent-composer-placeholder {
+  padding: var(--ui-space-6) var(--ui-control-inset) 0;
+}
+
 /* The runs standing alone beside a folded sidebar stand under the title
    bar's row, so its buttons stand over the row rather than over their way
    back. */
@@ -1660,15 +1686,15 @@ body,
 
 /* The foot stands on one row however narrow the card: the Runs on chip and
    the model chip draw their marks alone at the box's own steps
-   (`agent-composer.tsx`'s `FOLD_WIDTH`), and between them the model chip's
+   (`message-box.tsx`'s `FOLD_WIDTH`), and between them the model chip's
    words give way, cut short, rather than the row wrapping. */
-.new-task-composer .agent-composer-actions {
+.new-task-composer .message-box-actions {
   margin-left: auto;
 }
 
 /* Where the Runs on chip draws its glyph alone, the foot's left, the "+"
    and that glyph, stands whole, so the model chip's words give way first. */
-/* off-scale: 520px, the card under which the Runs on chip draws its glyph alone (`agent-composer.tsx`'s `FOLD_WIDTH.PUBLISHED`) */
+/* off-scale: 520px, the card under which the Runs on chip draws its glyph alone (`message-box.tsx`'s `FOLD_WIDTH.TOOLS`) */
 @container composer (width < 520px) {
   .new-task-composer .ui-composer-foot-tools {
     flex-shrink: 0;
@@ -1695,7 +1721,7 @@ body,
    round Start at the row's end: the model chip's words are what give way, cut short. */
 /* off-scale: 400px, a card under which the box folds its own presses into its ⋯ (composer-foot.css) */
 @container composer (width < 400px) {
-  .new-task-composer .agent-composer-actions .agent-model-chip {
+  .new-task-composer .message-box-actions .agent-model-chip {
     flex-shrink: 1;
   }
 }

@@ -1,6 +1,7 @@
 import type { AccountSnapshot } from "@repo/credentials/snapshot";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import type { Workspace } from "@repo/features/workspace-wire";
+import { workspaceExperimentChoices } from "@repo/host/app-state-reads";
 import {
   EXPERIMENT,
   type Experiment,
@@ -18,7 +19,6 @@ import {
 } from "@repo/settings/settings-views";
 import type { AppSettingsView } from "@repo/settings/wire";
 import type { SettingsSearchInput } from "../settings-search.js";
-import { workspaceExperimentChoices } from "../workspace-experiments.js";
 import type { WorkspaceSettingsControl } from "./workspace-page.js";
 
 /**

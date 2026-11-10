@@ -31,7 +31,7 @@ export type SandboxDoorRunner<R = HttpClient.HttpClient> = <A, E>(
   effect: Effect.Effect<A, E, R>,
 ) => Promise<A>;
 
-/** The doors to the admitted agent's sandbox: one to read a file through. */
+/** The doors to the admitted agent's sandbox: one to read a file through, which also makes a recording's MP4 there. */
 export interface AgentSandboxDoors {
   readonly files: InboxSandboxDoor;
 }
@@ -72,6 +72,8 @@ export function agentSandboxDoors<R>(
             );
             return bytes === undefined ? null : streamOf(bytes);
           },
+          phoneVideo: async ({ path }: { readonly path: string }) =>
+            (await ask((each) => each.phoneVideo(sessionId, path))) ?? null,
         }),
     };
   };

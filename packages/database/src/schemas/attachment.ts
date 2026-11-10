@@ -6,6 +6,12 @@ import {
 } from "@repo/features/conversation-picture-wire";
 import { INBOX_BOUNDS } from "@repo/features/inbox-wire";
 import { PICTURE_BOUNDS } from "@repo/features/picture-wire";
+import {
+  MP4_TYPE,
+  PHONE_VIDEO_BOUNDS,
+  PLAYABLE_VIDEO_TYPE,
+  type PlayableVideoType,
+} from "@repo/features/video-signature";
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
@@ -89,7 +95,9 @@ export const ownedByTaskAlone = (table: {
  * keeps no blob store, and each owner holds its bytes to its own bound, a
  * check on the column. The media type is what the service sniffed a
  * picture's bytes to be, or the type a file traveled as, which the bytes
- * are served under.
+ * are served under. A WebM recording may carry an H.264 MP4 of itself
+ * beside its bytes (`mp4_bytes`), which a player that plays no WebM is
+ * served instead, so the copy is read, shown, and deleted with its row.
  */
 export const attachment = pgTable(
   "attachment",
@@ -135,6 +143,8 @@ export const attachment = pgTable(
     /** How many bytes it is, read off the row without the bytes. */
     byteCount: integer("byte_count").notNull(),
     bytes: bytea("bytes").notNull(),
+    /** An H.264 MP4 of a WebM recording, made in the agent's sandbox beside it for a player that plays no WebM, iOS's; null for every other row, and for a recording kept before it or one its sandbox could not encode. Held to the WebM's own bound, and counted in no owner's bound, which count the WebM alone. */
+    mp4Bytes: bytea("mp4_bytes"),
     createdAt: timestamptz("created_at").notNull(),
   },
   (table) => [
@@ -168,6 +178,11 @@ export const attachment = pgTable(
       "attachment_description_comment_file",
       sql`${table.descriptionCommentId} is null or (${table.taskId} is not null and ${table.organizationId} is not null and ${table.name} is not null and ${table.position} is not null and octet_length(${table.bytes}) <= ${bound(AGENT_BOUNDS.MAX_PDF_BYTES)})`,
     ),
+    // Only a WebM recording carries an MP4 copy, held to the bound a function may answer whole, as the WebM is.
+    check(
+      "attachment_mp4_copy",
+      sql`${table.mp4Bytes} is null or (${isWebm(table)} and octet_length(${table.mp4Bytes}) <= ${bound(PHONE_VIDEO_BOUNDS.MAX_BYTES)})`,
+    ),
     // A conversation's picture carries its hash and its size in pixels.
     check(
       "attachment_conversation_picture",
@@ -180,3 +195,22 @@ export const attachment = pgTable(
     ),
   ],
 );
+
+/**
+ * The columns a read serves a row by, for a reader that plays the video
+ * given: a recording's MP4 copy under its own type where the reader plays
+ * MP4 and the row keeps one, and the row's own bytes and type otherwise.
+ * Note that the choice is made in the statement, so a read loads one copy
+ * of the recording's bytes, never both.
+ */
+export function servedColumns(playable: PlayableVideoType) {
+  if (playable === PLAYABLE_VIDEO_TYPE.WEBM) {
+    return { contentType: attachment.contentType, bytes: attachment.bytes };
+  }
+  return {
+    contentType: sql<string>`case when ${attachment.mp4Bytes} is null then ${attachment.contentType} else ${literal(MP4_TYPE)} end`,
+    bytes: sql<Uint8Array>`coalesce(${attachment.mp4Bytes}, ${attachment.bytes})`.mapWith(
+      attachment.bytes,
+    ),
+  };
+}

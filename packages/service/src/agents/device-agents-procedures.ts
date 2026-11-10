@@ -107,6 +107,9 @@ import {
   pairingHostMiddleware,
   pollSecretMiddleware,
 } from "../orpc/base.js";
+import { queueAtTouch } from "./coder-host/agent-queue.js";
+import { hostWriteCarriedOn } from "./coder-host/carry-on.js";
+import { routedSessions } from "./coder-host/runtime-sessions.js";
 import {
   claimedDeviceAgentLine,
   deviceAgentDeviceOf,
@@ -191,6 +194,16 @@ const enrollingMachine = ({ name, platform, arch }: OwnDeviceEnrollRequest) => {
 /** Kept, or not found where the account holds no such row. */
 const keptOrNotFound = (kept: boolean) =>
   kept ? Effect.succeed(DONE) : Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+/** A Mac's register or beat, with its agents' cut-off turns carried on after the answer where it was away past its lease (`coder-host/carry-on.ts`). */
+const hostWrite = <A, E, R>(userId: string, deviceId: string, write: Effect.Effect<A, E, R>) =>
+  hostWriteCarriedOn(
+    routedSessions,
+    userId,
+    deviceId,
+    (agent) => queueAtTouch(routedSessions, agent),
+    write,
+  );
 
 /**
  * The release a beat names, where one is published and the request's
@@ -292,8 +305,9 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
       yield* ownDevice(context, input.deviceId);
       const { userId } = context;
       const { deviceId, ...device } = input;
+      // Note that a host that restarts registers before its first beat, so the register carries its agents on as the beat does.
       const registered = yield* hostedStoreOrUnavailable(
-        registerHost(userId, { id: deviceId, ...device }),
+        hostWrite(userId, deviceId, registerHost(userId, { id: deviceId, ...device })),
       );
       if (Option.isNone(registered)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       yield* settleLostHostTurns(registered.value);
@@ -302,9 +316,10 @@ export function deviceAgentsProcedures(seams: DeviceAgentsProcedureSeams) {
     beat: deviceAgents.beat.effect(function* ({ context, input }) {
       yield* followed(context, input.deviceId);
       const { deviceId, update, updateFailure } = input;
+      const { userId } = context;
       yield* keptOrNotFound(
         yield* hostedStoreOrUnavailable(
-          beatDevice(context.userId, deviceId, { update, updateFailure }),
+          hostWrite(userId, deviceId, beatDevice(userId, deviceId, { update, updateFailure })),
         ),
       );
       // Note that the launches are read after the beat is written, so a claim the device finished before it sent the beat is among them.

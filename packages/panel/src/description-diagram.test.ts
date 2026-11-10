@@ -21,6 +21,7 @@ import { MarkdownMessage } from "./markdown-message.js";
 import { SHELL_ROOM } from "./shell-room.js";
 import { ShellRoomContext } from "./stage-room.js";
 import { DescriptionBody } from "./tasks/description-body.js";
+import { TranscriptWords } from "./tasks/transcript-blocks.js";
 import { HISTORY_READ } from "./tasks/use-description-history.js";
 import { VersionView } from "./tasks/version-view.js";
 import { fakeAppBridge } from "./testing/app-bridge.js";
@@ -447,4 +448,20 @@ test("in a wide room the keyboard's press on a diagram, named for what it does, 
   act(() => enlarge.click());
 
   assert.ok(viewer(), "the diagram opens over the window");
+});
+
+test("a Mermaid fence in a reply draws as its diagram once its closing fence arrives, and an invalid one stays code", async () => {
+  const code = "sequenceDiagram\n  Admin->>Service: Invite";
+  const words = (text: string, streaming: boolean) =>
+    createElement(TranscriptWords, { text, streaming });
+
+  const streaming = await drawn(words(`Here:\n\n\`\`\`mermaid\n${code}`, true));
+  assert.deepEqual(pictures(streaming), []);
+
+  const whole = await drawn(words(`Here:\n\n${mermaidFence(code)}\n\nDone.`, true));
+  assert.deepEqual(pictures(whole), [pictureOf(code, DIAGRAM_APPEARANCE.LIGHT)]);
+
+  const refused = await drawn(words(mermaidFence(UNPARSED), false));
+  assert.deepEqual(pictures(refused), []);
+  assert.ok(refused.textContent?.includes("A -->"));
 });

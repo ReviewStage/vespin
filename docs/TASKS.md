@@ -392,8 +392,9 @@ subagent's tab stays in the side panel.
   the system's notification center, so it waits on the developer's switch.
   The web app asks the browser's leave as the switch is turned on, never on
   load, and says under the switch where the browser or macOS refuses.
-- **Privacy.** Every word is the agent's, the developer's, or the description's, so
-  the tab carries `ph-no-capture`.
+- **Privacy.** Every word is the agent's, the developer's, or the description's,
+  which the recording masks; its pictures, videos, and code are left out of it
+  (`ph-no-capture`).
 
 ### Settings › Agents
 
@@ -565,8 +566,9 @@ The service lays each save over what others wrote meanwhile
   alone, never on disk.
 - **Undo.** Inside the editor, the editor's own undo. A saved edit is undone
   from the description's history.
-- **Recording.** The editor and the title stand under `ph-no-capture`, and
-  their words are document text, which the recording masks in any case.
+- **Recording.** The editor's text and the title stand under `ph-no-capture`,
+  and their words are document text, which the recording masks in any case;
+  the toolbar and the menus over the text record masked.
 
 ### History
 

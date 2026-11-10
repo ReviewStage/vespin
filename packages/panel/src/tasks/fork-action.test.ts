@@ -8,6 +8,7 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
+import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -18,7 +19,6 @@ import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
 import { AGENT_LEAD, AgentMessage, AgentTab } from "./agent-tab.js";
 import { agentForkDoors, ForkProvider } from "./fork-action.js";
 import type { AgentFork } from "./fork-model.js";
-import { TOOL_TARGET, type ToolTarget } from "./tool-call-model.js";
 
 /**
  * fork-action.test.ts -- Fork to new agent stands on an agent's own
@@ -146,14 +146,6 @@ test("a settled turn of no words, its calls alone or failed before it said anyth
   assert.deepEqual(view.forks, [{ agentId: SOURCE, messageId: TURN, opening: "" }]);
 });
 
-test("an agent on no task offers Fork to new agent as a task's agent does, its press forking at that message", () => {
-  const view = drawn({ agent: summary(SOURCE, { planId: null }) });
-  assert.ok(view.fork, "the action is drawn");
-  act(() => view.fork?.click());
-  assert.equal(view.forks[0]?.agentId, SOURCE);
-  assert.equal(view.forks[0]?.messageId, TURN);
-});
-
 test("no fork is offered on the developer's message, a task archived, a place that opens no draft, or a tab that hands none, as a worker's", () => {
   const developers: AgentTranscriptMessage = {
     id: "line-1",
@@ -205,21 +197,6 @@ test("under a message, Forked to names the agents of the task forked at it in th
     { kind: TOOL_TARGET.AGENT, agent: "fork-a" },
     { kind: TOOL_TARGET.AGENT, agent: "fork-b" },
   ]);
-});
-
-test("an agent with no task names under a message the agents its own summary says were forked at it, by their titles, each opening its page, since its page lists that agent alone", () => {
-  const continuedBy = [
-    { agentId: "fork-a", title: "Try the queue", forked: true, messageId: TURN },
-    { agentId: "continued", title: "Carry on", forked: false },
-  ];
-  const view = drawn({ agent: summary(SOURCE, { planId: null, continuedBy }) });
-
-  const line = view.container.querySelector("[data-forked-to]");
-  assert.equal(line?.textContent, "Forked toTry the queue", "a continue names no message");
-  const chip = line?.querySelector<HTMLElement>("[data-actor-ref]");
-  assert.equal(chip?.tagName, "BUTTON", "the fork opens though the page does not list it");
-  act(() => chip?.click());
-  assert.deepEqual(view.opened, [{ kind: TOOL_TARGET.AGENT, agent: "fork-a" }]);
 });
 
 test("a message no agent was forked at names none", () => {

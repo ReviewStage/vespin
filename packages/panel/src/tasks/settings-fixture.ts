@@ -58,7 +58,11 @@ import { PROVIDER_KEY_KIND, PROVIDER_KEY_STATUS } from "@repo/features/provider-
 import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import type { TasksView } from "@repo/features/tasks-view";
 import type { WorkspaceVariable } from "@repo/features/workspace-environment-wire";
-import type { WorkspaceSandboxSetupAnswer } from "@repo/features/workspace-sandbox-setup-wire";
+import {
+  REPOSITORY_SCRIPT_KIND,
+  type RepositoryScriptKind,
+  type WorkspaceSandboxSetupAnswer,
+} from "@repo/features/workspace-sandbox-setup-wire";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
@@ -638,7 +642,7 @@ function variablesAnswer(variables: readonly WorkspaceVariable[]) {
 
 /* ----- Settings › Cloud setup ----- */
 
-/** Acme's sandbox setup, as a save leaves it: an install script, and setup scripts for two of its repositories. */
+/** Acme's sandbox setup, as a save leaves it: an install script, setup scripts for two of its repositories, and an archive script for one. */
 let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
   install: {
     script: [
@@ -656,10 +660,21 @@ let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
       updatedAt: NOW - 2 * HOUR,
     },
   ],
+  archives: [
+    {
+      repository: "acme/relay",
+      script: "docker compose down --volumes\n./scripts/drop-preview-database.sh",
+      updatedAt: NOW - HOUR,
+    },
+  ],
 };
 
 /** The setup a save leaves, an empty script removing it, its repositories in name order as the service answers them. */
-function sandboxSetupAnswer(repository: string | undefined, script: string) {
+function sandboxSetupAnswer(
+  repository: string | undefined,
+  script: string,
+  kind: RepositoryScriptKind = REPOSITORY_SCRIPT_KIND.SETUP,
+) {
   const removes = script.trim() === "";
   if (repository === undefined) {
     acmeSandboxSetup = {
@@ -668,13 +683,14 @@ function sandboxSetupAnswer(repository: string | undefined, script: string) {
     };
     return acmeSandboxSetup;
   }
-  const others = acmeSandboxSetup.setups.filter(
+  const list = kind === REPOSITORY_SCRIPT_KIND.ARCHIVE ? "archives" : "setups";
+  const others = acmeSandboxSetup[list].filter(
     (each) => each.repository.toLowerCase() !== repository.toLowerCase(),
   );
-  const setups = removes ? others : [...others, { repository, script, updatedAt: NOW }];
+  const scripts = removes ? others : [...others, { repository, script, updatedAt: NOW }];
   acmeSandboxSetup = {
     ...acmeSandboxSetup,
-    setups: setups.sort((one, other) =>
+    [list]: scripts.sort((one, other) =>
       one.repository.toLowerCase().localeCompare(other.repository.toLowerCase()),
     ),
   };
@@ -730,8 +746,8 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
     variablesAnswer(acmeVariables.filter((variable) => variable.name !== name)),
   [ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: () => acmeSandboxSetup,
   [ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: ({ script }) => sandboxSetupAnswer(undefined, script),
-  [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script }) =>
-    sandboxSetupAnswer(repository, script),
+  [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script, kind }) =>
+    sandboxSetupAnswer(repository, script, kind),
   [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId: id }) =>
     skillContent(id) ?? { failure: INSTALLED_SKILL_CALL_FAILURE.NOT_FOUND },
   // The command-line tool installed on this Mac, as Settings' MCP page's Install asks, without running the install script: a fixture run reaches no network and installs nothing.
@@ -801,6 +817,8 @@ const STAGED_KEYS: AppProviderKeys = {
           status: PROVIDER_KEY_STATUS.VERIFIED,
           statusAt: NOW - HOUR,
           forAgents: true,
+          id: "subscription-claude",
+          position: 0,
         },
         {
           provider: MODEL_PROVIDER.OPENAI,
@@ -810,6 +828,9 @@ const STAGED_KEYS: AppProviderKeys = {
           status: PROVIDER_KEY_STATUS.INVALID,
           statusAt: NOW - 3 * DAY,
           forAgents: true,
+          id: "subscription-chatgpt",
+          position: 0,
+          email: "dev@example.com",
         },
       ],
     },

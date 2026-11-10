@@ -15,20 +15,20 @@
  * panel builds from a person's words are emptied before a recording leaves
  * (`withoutWithheldSheets`). What leaves is layout, pointer
  * positions, the app's own labels, headings, buttons, and menu words, and
- * asterisks of the right length for every other word. The surfaces that hold the
- * most of a person's words also block their whole subtree with the library's
- * fixed `ph-no-capture` class as a second line, each named where it is
- * drawn: the feedback dialog, whose screenshots are
- * pictures of the person's screen, a task's title and the editor its document
- * is edited in, whose masked value would still record the rhythm of the
- * typing, and its transcript, Work, Code, File, and page tabs,
- * version history, Inbox, and coding agents' tabs and their Terminal tabs,
- * Browser tabs with the still of a page they draw and a cloud Browser
- * tab's live view, and ⌃Tab's previews, each a still of a tab, among others. A Terminal tab and a cloud
- * Browser tab's live view are the surfaces that draw
- * their words on a canvas, which the text masking cannot reach, so their
- * block is their only line, and canvas recording is held off by name rather
- * than by the library's default.
+ * asterisks of the right length for every other word. A surface is otherwise
+ * recorded whole, its masked words in their places. What the masking cannot
+ * reach is blocked with the library's fixed `ph-no-capture` class, on the
+ * element that draws it and nothing round it, each named where it is drawn:
+ * a picture or a video, which no masking of words reaches, such as the
+ * feedback dialog's screenshots, a picture set, ⌃Tab's previews, and a
+ * page's thumbnail; a frame of a page's own HTML; a diagram; the lines of
+ * code and of a diff, whose colors draw the code's shape; a field a person
+ * types into, a task's title and the editor its document is edited in among
+ * them, whose masked value would still record the rhythm of the typing; a
+ * secret's field; and a Terminal tab's screen and a cloud Browser tab's live
+ * view. Those last two draw their words on a canvas, which the text masking
+ * cannot reach, so their block is their only line, and canvas recording is
+ * held off by name rather than by the library's default.
  *
  * `PRIVACY.md` says, in a policy's plain terms, that a recording shows how
  * the window is used and masks what a person types and anything sensitive

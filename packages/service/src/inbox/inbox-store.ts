@@ -18,7 +18,7 @@ import {
   workspaceReachableBy,
 } from "@repo/database/models/workspace-store";
 import { agentTable } from "@repo/database/schemas/agent";
-import { attachment } from "@repo/database/schemas/attachment";
+import { attachment, servedColumns } from "@repo/database/schemas/attachment";
 import { member, organization, user } from "@repo/database/schemas/auth";
 import { automation } from "@repo/database/schemas/automation";
 import { inboxItem } from "@repo/database/schemas/inbox";
@@ -74,6 +74,12 @@ import {
 } from "@repo/features/inbox-wire";
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import { insideCode } from "@repo/features/mention-link";
+import {
+  MP4_TYPE,
+  PLAYABLE_VIDEO_TYPE,
+  type PlayableVideoType,
+  playableVideoTypeSchema,
+} from "@repo/features/video-signature";
 import {
   and,
   count,
@@ -184,10 +190,6 @@ export interface InboxAgent {
 
 /** Why a post was not written. */
 export const INBOX_POST_REFUSAL = {
-  /** The agent holds as many open asks as it may; it closes one first. */
-  TOO_MANY_OPEN: "too-many-open",
-  /** The agent holds as many notices the developer has yet to acknowledge as it may. */
-  TOO_MANY_NOTICES: "too-many-notices",
   /** The agent is no longer the account's. */
   NO_AGENT: "no-agent",
   /** The post names no title and opens a thread under a key with no item, which needs one. */
@@ -222,6 +224,8 @@ export interface StoredInboxItem {
 export interface InboxImage {
   readonly contentType: ConversationMediaType;
   readonly bytes: Uint8Array;
+  /** A recording's MP4 copy, made in the agent's sandbox beside it for a phone; none for a still, or where the sandbox made none. */
+  readonly mp4Bytes?: Uint8Array | undefined;
 }
 
 /** A picture as the agent's message on a thread carries it: its file's own name, the type its bytes were sniffed to be, and the bytes. */
@@ -663,47 +667,6 @@ const lockAgent = SqlSchema.findOneOption({
     ),
 });
 
-/** How many asks the agent holds open under a key other than the one given; a notice holds none. */
-const countOpenBesides = SqlSchema.findOne({
-  Request: Schema.Struct({ ...AgentKeySchema.fields, key: Schema.String }),
-  Result: Schema.Struct({ open: Schema.Number }),
-  execute: ({ userId, agentId, key }) =>
-    Database.use((db) =>
-      db
-        .select({ open: sql<number>`count(*)::int` })
-        .from(inboxItem)
-        .where(
-          and(
-            eq(inboxItem.userId, userId),
-            eq(inboxItem.agentId, agentId),
-            ASKING,
-            ne(inboxItem.key, key),
-          ),
-        ),
-    ),
-});
-
-/** How many notices the agent holds open, waiting on the developer's nod, under a key other than the one given. */
-const countNoticesBesides = SqlSchema.findOne({
-  Request: Schema.Struct({ ...AgentKeySchema.fields, key: Schema.String }),
-  Result: Schema.Struct({ open: Schema.Number }),
-  execute: ({ userId, agentId, key }) =>
-    Database.use((db) =>
-      db
-        .select({ open: sql<number>`count(*)::int` })
-        .from(inboxItem)
-        .where(
-          and(
-            eq(inboxItem.userId, userId),
-            eq(inboxItem.agentId, agentId),
-            eq(inboxItem.status, INBOX_STATUS.OPEN),
-            NOTICE,
-            ne(inboxItem.key, key),
-          ),
-        ),
-    ),
-});
-
 const PostWriteSchema = Schema.Struct({
   userId: Schema.String,
   taskId: Schema.NullOr(Schema.String),
@@ -796,6 +759,7 @@ const MessageFileWriteSchema = Schema.Struct({
   position: Schema.Number,
   contentType: inboxFileTypeSchema,
   bytes: Schema.Uint8Array,
+  mp4Bytes: Schema.optional(Schema.Uint8Array),
   now: Schema.Date,
   messageId: Schema.String,
   /** The id the file is kept under, where the message's words name it; minted by the database where none is given. */
@@ -807,8 +771,9 @@ const insertMessageFiles = SqlSchema.void({
   execute: (files) =>
     Database.use((db) =>
       db.insert(attachment).values(
-        files.map(({ now, itemId, messageId, ...file }) => ({
+        files.map(({ now, itemId, messageId, mp4Bytes, ...file }) => ({
           ...file,
+          mp4Bytes: mp4Bytes ?? null,
           inboxItemId: itemId,
           inboxMessageId: messageId,
           kind: INBOX_ATTACHMENT_KIND.MESSAGE,
@@ -979,28 +944,48 @@ function deleteMessage(target: {
   return Effect.andThen(deleteMessageRow(target), rereadLastWriter({ itemId: target.itemId }));
 }
 
-/** The attachment, a block's picture or an answer's file, where it is the item's and the account reaches the item's task: its type and its bytes. */
-const findAttachment = SqlSchema.findOneOption({
-  Request: Schema.Struct({
-    userId: Schema.String,
-    itemId: Schema.String,
-    attachmentId: Schema.String,
-  }),
-  Result: Schema.Struct({ contentType: inboxFileTypeSchema, bytes: Schema.Uint8Array }),
-  execute: ({ userId, itemId, attachmentId }) =>
-    Database.use((db) =>
-      db
-        .select({ contentType: attachment.contentType, bytes: attachment.bytes })
-        .from(attachment)
-        .innerJoin(inboxItem, eq(inboxItem.id, attachment.inboxItemId))
-        .where(
-          and(
-            eq(attachment.inboxItemId, itemId),
-            eq(attachment.id, attachmentId),
-            itemVisibleTo(userId),
-          ),
+/** Which attachment of which item an account reads. */
+const AttachmentAskSchema = Schema.Struct({
+  userId: Schema.String,
+  itemId: Schema.String,
+  attachmentId: Schema.String,
+});
+
+/** The attachment, a block's picture or an answer's file, where it is the item's and the account reaches the item's task, served as the reader plays a video. */
+function attachmentQuery(
+  { userId, itemId, attachmentId }: typeof AttachmentAskSchema.Type,
+  playable: PlayableVideoType,
+) {
+  return Database.use((db) =>
+    db
+      .select(servedColumns(playable))
+      .from(attachment)
+      .innerJoin(inboxItem, eq(inboxItem.id, attachment.inboxItemId))
+      .where(
+        and(
+          eq(attachment.inboxItemId, itemId),
+          eq(attachment.id, attachmentId),
+          itemVisibleTo(userId),
         ),
-    ),
+      ),
+  );
+}
+
+/** The attachment as it was kept: its type and its bytes. */
+const findAttachment = SqlSchema.findOneOption({
+  Request: AttachmentAskSchema,
+  Result: Schema.Struct({ contentType: inboxFileTypeSchema, bytes: Schema.Uint8Array }),
+  execute: (ask) => attachmentQuery(ask, PLAYABLE_VIDEO_TYPE.WEBM),
+});
+
+/** The attachment as a reader that plays the video given is served it. */
+const findServedAttachment = SqlSchema.findOneOption({
+  Request: Schema.Struct({ ...AttachmentAskSchema.fields, playable: playableVideoTypeSchema }),
+  Result: Schema.Struct({
+    contentType: Schema.Union([inboxFileTypeSchema, Schema.Literal(MP4_TYPE)]),
+    bytes: Schema.Uint8Array,
+  }),
+  execute: ({ playable, ...ask }) => attachmentQuery(ask, playable),
 });
 
 /**
@@ -2535,44 +2520,12 @@ function keepPost(
         position,
         contentType: picture.contentType,
         bytes: picture.bytes,
+        mp4Bytes: picture.mp4Bytes,
         now,
       })),
     );
     return yield* itemAsWritten(agent.userId, itemId);
   });
-}
-
-/** The agent's open asks besides the key's against the bound: whether one more may stand open. */
-function roomToAsk(agent: InboxAgent, key: string): InboxStoreEffect<boolean> {
-  return countOpenBesides({ ...agent, key }).pipe(
-    // A count that returned no row is the database breaking its own contract, not an outcome.
-    Effect.catchTag("NoSuchElementError", Effect.die),
-    Effect.map(({ open }) => open < INBOX_BOUNDS.MAX_OPEN_PER_AGENT),
-  );
-}
-
-/** The agent's open notices besides the key's against the same bound: whether one more may wait on the developer's nod. */
-function roomToNotify(agent: InboxAgent, key: string): InboxStoreEffect<boolean> {
-  return countNoticesBesides({ ...agent, key }).pipe(
-    // A count that returned no row is the database breaking its own contract, not an outcome.
-    Effect.catchTag("NoSuchElementError", Effect.die),
-    Effect.map(({ open }) => open < INBOX_BOUNDS.MAX_OPEN_PER_AGENT),
-  );
-}
-
-/** Whether the post finds room under its bound: an ask among the open asks, a notice among the open notices. */
-function roomToPost(
-  agent: InboxAgent,
-  key: string,
-  ask: InboxAsk | undefined,
-): InboxStoreEffect<Result.Result<void, InboxPostRefusal>> {
-  return ask === undefined
-    ? Effect.map(roomToNotify(agent, key), (room) =>
-        room ? Result.void : Result.fail(INBOX_POST_REFUSAL.TOO_MANY_NOTICES),
-      )
-    : Effect.map(roomToAsk(agent, key), (room) =>
-        room ? Result.void : Result.fail(INBOX_POST_REFUSAL.TOO_MANY_OPEN),
-      );
 }
 
 /** A post as the tool from version 5 writes one: the item's key, its title where the post names one, the agent's words in Markdown, the ask they end with, if any, and whether the agent is to hear the answer. */
@@ -2703,8 +2656,6 @@ export function postInboxThread(
         }
         const title = post.title ?? Option.getOrUndefined(standing)?.title;
         if (title === undefined) return Result.fail(INBOX_POST_REFUSAL.NO_TITLE);
-        const room = yield* roomToPost(agent, post.key, post.ask);
-        if (Result.isFailure(room)) return Result.fail(room.failure);
         const now = yield* DateTime.nowAsDate;
         const { kept, idOf } = yield* Effect.sync(() => picturesByPath(pictures));
         const view = { title, needsReply: post.needsReply ?? true };
@@ -2731,6 +2682,16 @@ export function readInboxAttachment(
   attachmentId: string,
 ): InboxStoreEffect<Option.Option<InboxFile>> {
   return findAttachment({ userId, itemId, attachmentId });
+}
+
+/** The attachment as `readInboxAttachment` reads it, served to a reader that plays the video given: a recording's MP4 copy where it plays MP4 and one is kept, and its WebM otherwise. */
+export function readServedInboxAttachment(
+  userId: string,
+  itemId: string,
+  attachmentId: string,
+  playable: PlayableVideoType,
+): InboxStoreEffect<Option.Option<{ readonly contentType: string; readonly bytes: Uint8Array }>> {
+  return findServedAttachment({ userId, itemId, attachmentId, playable });
 }
 
 /**

@@ -1,11 +1,10 @@
-// collection-screens.tsx -- a tab's placeholder list and detail: the Stack's two screens in a compact window, one split view in a regular one.
+// collection-screens.tsx -- the Tasks tab's placeholder list and detail: the Stack's two screens in a compact window, one split view in a regular one.
 
 import {
-  ChoiceList,
+  type BarAction,
   EmptyState,
   LIST_LOOK,
   type ListLook,
-  ListRow,
   MarkdownPage,
   PageHeader,
   ROW_ACTION_TONE,
@@ -18,7 +17,6 @@ import {
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
-  COLLECTION_ROUTE,
   PLACEHOLDER_REPOSITORY,
   type PlaceholderCollection,
   type PlaceholderItem,
@@ -59,7 +57,7 @@ function CollectionList({ collection, look, selected, onSelect }: CollectionList
             onPress: () => setDone((previous) => new Set([...previous, item.id])),
           },
         ];
-        return collection.route === COLLECTION_ROUTE.TASKS && item.status !== undefined ? (
+        return (
           <TaskRow
             key={item.id}
             id={item.id}
@@ -67,20 +65,6 @@ function CollectionList({ collection, look, selected, onSelect }: CollectionList
             status={item.status}
             unread={item.unread}
             pullRequest={item.pullRequest}
-            at={item.at}
-            trailingActions={acts}
-          />
-        ) : (
-          <ListRow
-            key={item.id}
-            id={item.id}
-            title={item.title}
-            task={item.task}
-            line={item.line}
-            summary={item.summary}
-            unread={item.unread}
-            done={item.done}
-            face={item.face}
             at={item.at}
             trailingActions={acts}
           />
@@ -95,7 +79,6 @@ function CollectionList({ collection, look, selected, onSelect }: CollectionList
 function openNothing() {}
 
 function ItemDetail({ item }: { readonly item: PlaceholderItem }) {
-  const [picked, setPicked] = useState<readonly string[]>([]);
   if (item.words !== undefined) {
     return (
       <MarkdownPage
@@ -108,20 +91,7 @@ function ItemDetail({ item }: { readonly item: PlaceholderItem }) {
       />
     );
   }
-  if (item.ask === undefined) {
-    return <PageHeader title={item.title} summary={item.summary} status={item.status} />;
-  }
-  return (
-    <RowList look={LIST_LOOK.PLAIN}>
-      <ChoiceList
-        title={item.ask.question}
-        choices={item.ask.choices}
-        recommended={item.ask.recommended}
-        picked={picked}
-        onChange={setPicked}
-      />
-    </RowList>
-  );
+  return <PageHeader title={item.title} summary={item.summary} status={item.status} />;
 }
 
 function EmptyDetail({ collection }: { readonly collection: PlaceholderCollection }) {
@@ -130,11 +100,22 @@ function EmptyDetail({ collection }: { readonly collection: PlaceholderCollectio
 
 // A compact window: the list under the Stack's large title, each row pushing
 // its detail as the Stack's next screen.
-function CollectionStackList({ collection }: { readonly collection: PlaceholderCollection }) {
+function CollectionStackList({ collection, barAction }: CollectionScreenProps) {
   const router = useRouter();
   return (
     <>
       <Stack.Screen options={{ title: collection.title, headerLargeTitle: true }} />
+      {barAction === undefined ? null : (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon={barAction.symbol}
+            accessibilityLabel={barAction.label}
+            onPress={barAction.onPress}
+          >
+            {barAction.label}
+          </Stack.Toolbar.Button>
+        </Stack.Toolbar>
+      )}
       <Screen>
         <CollectionList
           collection={collection}
@@ -150,7 +131,7 @@ function CollectionStackList({ collection }: { readonly collection: PlaceholderC
 // as the split view's sidebar and the selected row's detail beside it. The
 // Stack's header steps aside, since the split view draws each column's
 // navigation bar itself.
-function CollectionSplitScreen({ collection }: { readonly collection: PlaceholderCollection }) {
+function CollectionSplitScreen({ collection, barAction }: CollectionScreenProps) {
   const [selected, setSelected] = useState<string | undefined>(undefined);
   const item = collection.items.find((candidate) => candidate.id === selected);
   return (
@@ -167,19 +148,26 @@ function CollectionSplitScreen({ collection }: { readonly collection: Placeholde
             />
           }
           detail={item ? <ItemDetail item={item} /> : <EmptyDetail collection={collection} />}
+          sidebarAction={barAction}
         />
       </Screen>
     </>
   );
 }
 
+type CollectionScreenProps = {
+  readonly collection: PlaceholderCollection;
+  /** The act the list's bar holds: the header's in a compact window, the sidebar's in a regular one. */
+  readonly barAction?: BarAction | undefined;
+};
+
 /** A tab's root screen: the collection's list, laid out by the window's size class. */
-export function CollectionListScreen({ collection }: { collection: PlaceholderCollection }) {
+export function CollectionListScreen({ collection, barAction }: CollectionScreenProps) {
   const sizeClass = useWindowSizeClass();
   return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
-    <CollectionSplitScreen collection={collection} />
+    <CollectionSplitScreen collection={collection} barAction={barAction} />
   ) : (
-    <CollectionStackList collection={collection} />
+    <CollectionStackList collection={collection} barAction={barAction} />
   );
 }
 

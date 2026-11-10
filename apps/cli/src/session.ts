@@ -12,7 +12,12 @@
 
 import { AccountClient } from "@repo/credentials";
 import { type CliAccountStore, storedAccountCredential } from "@repo/credentials/cli";
-import { type CallCredential, fixedBearer, HOSTED_API_ERROR } from "@repo/features";
+import {
+  type CallCredential,
+  fixedBearer,
+  HOSTED_API_ERROR,
+  type HostedApiError,
+} from "@repo/features";
 import { CLI_EXIT, cliExitOfHostedFailure } from "@repo/features/cli-exit";
 import {
   askHosted,
@@ -141,15 +146,22 @@ function failureWords(failed: HostedFailure): string {
   return `Could not reach ${PRODUCT_NAME}.`;
 }
 
-/** One hosted procedure asked, under the deadline its answer may take, its failure ended as the exit code and words it stands for. */
+/**
+ * One hosted procedure asked, under the deadline its answer may take, its
+ * failure ended as the exit code and words it stands for; a refusal the
+ * command names words for is said in those, such as what to do about it.
+ */
 export function askService<Input, Output>(
   procedure: HostedProcedure<Input, Output>,
   input: Input,
   deadline: HostedDeadline = HOSTED_DEADLINE.USUAL,
+  refusalWords: Readonly<Partial<Record<HostedApiError, string>>> = {},
 ) {
-  return Effect.mapError(
-    askHosted(procedure, input, deadline),
-    (failed) =>
-      new CommandFailed({ exit: cliExitOfHostedFailure(failed), message: failureWords(failed) }),
-  );
+  return Effect.mapError(askHosted(procedure, input, deadline), (failed) => {
+    const named = failed._tag === "HostedRefused" ? refusalWords[failed.refusal] : undefined;
+    return new CommandFailed({
+      exit: cliExitOfHostedFailure(failed),
+      message: named ?? failureWords(failed),
+    });
+  });
 }

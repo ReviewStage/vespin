@@ -68,6 +68,15 @@ function TextLinks(): React.JSX.Element {
           </Text>
         </div>
       </CatalogSection>
+      <CatalogSection id="text-links-code" title="Code that opens what it names">
+        <Text tone={TEXT_TONE.MUTED}>
+          The change is in{" "}
+          <TextLink href="#text-links-code" look={TEXT_LINK_LOOK.CODE}>
+            <code>packages/ui/src/foo.ts:12</code>
+          </TextLink>
+          .
+        </Text>
+      </CatalogSection>
       <CatalogSection id="text-links-heading" title="A heading's own words">
         <TextLink
           href="#text-links-heading"

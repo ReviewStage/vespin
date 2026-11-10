@@ -1,3 +1,4 @@
+import { signedInAccountId } from "@repo/credentials/snapshot";
 import { runtimeModelRule, runtimeModels } from "@repo/features/agent-runtime-models";
 import { AGENT_PAYER, type AgentPayer, type AgentUsage } from "@repo/features/agent-wire";
 import type { CatalogModel, ModelProvider } from "@repo/features/models-wire";
@@ -8,15 +9,23 @@ import {
   ChipName,
   type ChipWidth,
   type MenuLastLine,
+  OutsideLink,
   POPOVER_ALIGN,
-  TEXT_LINK_LOOK,
-  TextLink,
   Tooltip,
 } from "@repo/ui";
 import { useDisclosure } from "@repo/ui/use-disclosure";
+import { useQuery } from "@tanstack/react-query";
 import { useId, useRef, useState } from "react";
 import { HarnessMark } from "../harness-marks.js";
-import { agentPayerLine, choiceLabel, planPayerOf, providerOf } from "./agent-model.js";
+import { providerKeysQuery } from "../live-reads.js";
+import { appStateQuery, selectAccount } from "../use-app-state.js";
+import {
+  agentPayerLine,
+  choiceLabel,
+  payerPlanName,
+  planPayerOf,
+  providerOf,
+} from "./agent-model.js";
 import { ModelLabel } from "./model-label.js";
 import { ModelMenu, settledChoice } from "./model-menu.js";
 import type { AgentModelControl } from "./use-agent-model.js";
@@ -51,7 +60,10 @@ import { useOpenLink } from "./use-open-link.js";
  * `list_models` and `update_agent` read too (`agent-runtime-models.ts`): on
  * Claude Code, Claude models alone, with no Fast switch and no Context row.
  * An agent its starter's ChatGPT plan pays for says "Using ChatGPT plan" on
- * that line, with Manage usage at its end, as OpenAI's UI guidelines ask
+ * that line, or names the plan where the reader's own keys hold the one
+ * its page named ("Using ChatGPT · ana@work.com", masked in a screen
+ * recording), a new agent the first of the reader's plans with room left,
+ * with Manage usage at its end, as OpenAI's UI guidelines ask
  * (developers.openai.com/siwc/ui-ux-guidelines), opening ChatGPT's usage
  * settings. Who pays is read once, the page's payer before the settled
  * turns', and the plan the agent's harness runs on only where neither
@@ -68,17 +80,9 @@ const MANAGE_USAGE = "Manage usage";
 function ManageUsageLink(): React.JSX.Element {
   const openLink = useOpenLink();
   return (
-    <TextLink
-      href={CHATGPT_USAGE_URL}
-      look={TEXT_LINK_LOOK.UNDERLINED}
-      external
-      onClick={(event) => {
-        event.preventDefault();
-        openLink(CHATGPT_USAGE_URL);
-      }}
-    >
+    <OutsideLink href={CHATGPT_USAGE_URL} open={openLink}>
       {MANAGE_USAGE}
-    </TextLink>
+    </OutsideLink>
   );
 }
 
@@ -87,12 +91,15 @@ function payerLastLine(
   payer: AgentPayer | undefined,
   provider: ModelProvider | undefined,
   usage: AgentUsage | undefined,
+  planName: string | undefined,
 ): MenuLastLine | undefined {
-  const words = agentPayerLine(payer, provider, usage?.costUsd);
+  const words = agentPayerLine(payer, provider, usage?.costUsd, planName);
   if (words === undefined) return undefined;
+  // Note that a line naming a plan is masked in a screen recording, because its name may be the account's email.
+  const masked = planName !== undefined;
   return payer === AGENT_PAYER.CHATGPT_SUBSCRIPTION
-    ? { words, end: <ManageUsageLink /> }
-    : { words };
+    ? { words, masked, end: <ManageUsageLink /> }
+    : { words, masked };
 }
 
 export function AgentModelChip({
@@ -102,6 +109,7 @@ export function AgentModelChip({
   readModels,
   usage,
   payer,
+  payerSubscriptionId,
   look = CHIP_LOOK.TOOLBAR,
   width,
   narrow = false,
@@ -118,6 +126,8 @@ export function AgentModelChip({
   usage: AgentUsage | undefined;
   /** Who pays for the agent, as its transcript's last page said, before a turn settled too; nothing where it said none. */
   payer?: AgentPayer | undefined;
+  /** The starter's subscription a plan payer runs the agent on, as its transcript's last page said; nothing where it named none. */
+  payerSubscriptionId?: string | undefined;
   /** The chip's look: the agent box's toolbar chip, or a form row's field (`@repo/ui`'s `Chip`). */
   look?: ChipLook;
   /** How wide the chip stands; its words' own width where none is named. */
@@ -146,6 +156,15 @@ export function AgentModelChip({
   // Note that the harness's plan says who pays only where neither the page nor the turns name a payer.
   const paying = paidBy ?? planPayerOf(model.runtime);
   const offered = models === undefined ? undefined : runtimeModels(models, model.runtime, paidBy);
+  // Note that a plan is named from the reader's own keys, so a teammate's agent names none of its starter's.
+  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const keys = useQuery(providerKeysQuery(accountId)).data;
+  const planName = payerPlanName(
+    paying,
+    keys?.subscriptions,
+    payerSubscriptionId,
+    paidBy === undefined,
+  );
 
   return (
     <div className="agent-model-chip relative flex min-w-0" ref={root}>
@@ -181,7 +200,7 @@ export function AgentModelChip({
           startsNew={startsNew}
           offersFast={runtimeModelRule(model.runtime, paidBy).fast}
           onChoose={model.choose}
-          lastLine={payerLastLine(paying, provider, usage)}
+          lastLine={payerLastLine(paying, provider, usage, planName)}
           onClose={close}
           onLeave={(left) => {
             if (!(left instanceof Node && root.current?.contains(left))) setOpen(false);

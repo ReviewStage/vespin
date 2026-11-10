@@ -148,9 +148,13 @@ const deleteExpired = SqlSchema.void({
 /**
  * That a message line's developer row still awaits a turn that is open: the
  * turn its send queued or joined, which no failure, end, or Stop has closed
- * (`turn-state.ts`). So a launch is handed a message an earlier launch never
+ * (`turn-state.ts`), or, for a line put back untaken (`requeueRunnerLine`),
+ * the turn that took it, which a limit cut short and a launch on the next
+ * payer goes on with. So a launch is handed a message an earlier launch never
  * took only while its turn still waits on it, and never one whose turn
- * failed, which the developer was told of and resends themselves.
+ * failed, which the developer was told of and resends themselves. Note that
+ * a line is stamped taken in the batch that gives its row its turn, so a row
+ * with a turn and its line untaken is only ever one put back.
  */
 function awaitsOpenTurn() {
   return exists(
@@ -158,13 +162,12 @@ function awaitsOpenTurn() {
       .select({ id: messages.id })
       .from(messages)
       .innerJoin(agentTable, eq(agentTable.conversationId, messages.conversationId))
-      .innerJoin(turns, eq(turns.id, messages.awaitsTurnId))
+      .innerJoin(turns, eq(turns.id, sql`coalesce(${messages.turnId}, ${messages.awaitsTurnId})`))
       .where(
         and(
           eq(agentTable.id, runnerLine.agentId),
           // Note that a line's id is the uuid its message's client id spells as text.
           sql`${messages.clientId} = ${runnerLine.lineId}::text`,
-          isNull(messages.turnId),
           inArray(turns.status, [TURN_STATUS.QUEUED, TURN_STATUS.RUNNING]),
         ),
       ),
@@ -283,6 +286,28 @@ const writeAccepted = SqlSchema.findAll({
           ),
         )
         .returning({ handed: runnerLine.handed }),
+    ),
+});
+
+const writeRequeued = SqlSchema.void({
+  Request: Schema.Struct({ userId: Schema.String, agentId: Schema.String, lineId: Schema.String }),
+  execute: ({ userId, agentId, lineId }) =>
+    Database.use((db) =>
+      db
+        .update(runnerLine)
+        // The line is resent to a session that already holds it (`MessageLineSchema`'s `resent`).
+        .set({
+          acceptedAt: null,
+          launch: ANY_LAUNCH,
+          text: sql`(${runnerLine.text}::jsonb || '{"resent":true}'::jsonb)::text`,
+        })
+        .where(
+          and(
+            eq(runnerLine.userId, userId),
+            eq(runnerLine.agentId, agentId),
+            eq(runnerLine.lineId, lineId),
+          ),
+        ),
     ),
 });
 
@@ -444,6 +469,24 @@ export function acceptRunnerLine(
       Option.fromNullishOr(rows[0]?.handed),
     ),
   );
+}
+
+/**
+ * The account's agent's message line under its id put back as no launch's
+ * and untaken, and marked resent, as a turn its plan's limit cut short is
+ * handed on to a launch on the next payer (`retry`), whose session already
+ * holds it: the line it queues again under the same id
+ * then takes the row over for that launch (`insertLine`), which a line taken
+ * would otherwise keep from it. Nothing where no such line stands, or the id
+ * is none a line could carry.
+ */
+export function requeueRunnerLine(
+  userId: string,
+  agentId: string,
+  lineId: string,
+): RunnerLineEffect<void> {
+  if (!LINE_ID.test(lineId)) return Effect.void;
+  return writeRequeued({ userId, agentId, lineId });
 }
 
 /**

@@ -9,40 +9,14 @@ import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
  *
  * A coding agent is one native harness's session over a `coding_agent`
  * conversation, run by the runner we launch on its machine
- * (`runner-sessions.ts`). What differs is named here: how large its sandbox
- * is, how often the repository credential at its firewall is renewed, where
+ * (`runner-sessions.ts`). What differs is named here (how large its sandbox
+ * is, `@repo/features/sandbox-size`, aside): how often the repository credential at its firewall is renewed, where
  * its checkout stands, how a transcript read waits, how full its context
  * grows before its harness compacts it, and how much a worker it delegates to
  * may spend. How long an idle sandbox lives is `@repo/sandbox`'s
  * (`SANDBOX_IDLE`).
  */
 export const CODER = {
-  /**
-   * The sandbox's vCPUs, each with 2 GB of memory, where its repository asks
-   * for no more (`SANDBOX_VCPUS_BY_REPOSITORY`); also the size a repository
-   * snapshot is built at, since Vercel opens a
-   * snapshot at whatever size the create asks. Two, because provisioned
-   * memory and active CPU are most of the sandboxes' bill and both scale
-   * with vCPUs, so a repository whose own checks need more asks for it
-   * rather than every sandbox paying for it.
-   */
-  SANDBOX_VCPUS: 2,
-  /**
-   * The repositories whose agents' sandboxes open larger than
-   * `SANDBOX_VCPUS`, by `owner/name` lowercased, as `sandboxVcpus` reads
-   * them; a repository asks for more by a row here. This repository's own is four,
-   * because its typecheck needs about 5 GB of real memory. Measured on a
-   * fresh checkout: `pnpm typecheck` takes 83 seconds at four vCPUs and peaks
-   * near 5.2 GB, and at two vCPUs (4 GB) it is killed out of memory at a
-   * workspace concurrency of 4 or 2; at 1 it passes in 194 seconds with 216
-   * MiB free, before the agent's own runner is counted. The service's tests
-   * take 1,527 seconds there against 415. Note that oxlint is not the limit:
-   * with JS plugins it reserves about 6 GiB per thread, which the kernel's
-   * default overcommit refuses at 4 GB, but it uses under one, and
-   * `vm.overcommit_memory=1`, set on every boot, since a resumed sandbox
-   * boots with the default, lets it lint there in 36 seconds.
-   */
-  SANDBOX_VCPUS_BY_REPOSITORY: new Map([["reviewstage/vespin", 4]]) as ReadonlyMap<string, number>,
   /** An installation token is good for an hour from its mint; the one at the firewall is renewed this long after, inside that hour, as a host renews its agents' (`@repo/features/host-wire`). */
   GITHUB_TOKEN_REFRESH,
   /** The context window the session is told where the catalog names none for the model. */
@@ -146,7 +120,7 @@ export const CODER = {
    * warm runners while it waits (`@repo/host`'s `compose-local-agents.ts`).
    *
    * A sandbox's runner has no window of its own: it is launched warm and
-   * lives until its sandbox stops, five idle minutes after its last touch
+   * lives until its sandbox stops, three idle minutes after its last touch
    * (`@repo/sandbox`'s `SANDBOX_IDLE`), bounded only by the runner's own cap
    * (`RUNNER_WARM.IDLE_CAP_MS`).
    */
@@ -218,12 +192,6 @@ export const CODER_REFUSAL = {
 } as const;
 
 export type CoderRefusal = (typeof CODER_REFUSAL)[keyof typeof CODER_REFUSAL];
-
-/** The vCPUs an agent's sandbox opens with: what its repository asks for, or `SANDBOX_VCPUS` for one that asks for nothing and for an agent with no repository. */
-export function sandboxVcpus(repository: string | null): number {
-  if (repository === null) return CODER.SANDBOX_VCPUS;
-  return CODER.SANDBOX_VCPUS_BY_REPOSITORY.get(repository.toLowerCase()) ?? CODER.SANDBOX_VCPUS;
-}
 
 /** Whether a branch is one an agent works on, under today's prefix or the one before it. */
 export function isAgentBranch(branch: string): boolean {

@@ -46,8 +46,7 @@ import type { TaskStoreEffect } from "./task-store.js";
  * agent that continues it where that one ended (`moveSlackAgentThread`). The
  * thread kept, moved, or written in latest is the agent's current one
  * (`touchSlackAgentThread`), and each of the agent's settled turns is claimed
- * there once (`claimSlackThreadTurn`); the task an agent started from Slack
- * stands on is the one its message made (`isSlackTask`).
+ * there once (`claimSlackThreadTurn`).
  * An owner or admin names the repository Slack starts default to, for the
  * workspace and for each channel (`slackStartRepositories`); a channel's is
  * forgotten when the bot leaves it.
@@ -472,25 +471,6 @@ const claimThreadTurn = SqlSchema.findOneOption({
     ),
 });
 
-const findSlackMadeTask = SqlSchema.findOneOption({
-  Request: Schema.Struct({ taskId: Schema.String }),
-  Result: Schema.Struct({ agentId: Schema.String }),
-  execute: ({ taskId }) =>
-    Database.use((db) =>
-      db
-        .select({ agentId: slackAgentThread.agentId })
-        .from(slackAgentThread)
-        .innerJoin(agentTable, eq(agentTable.id, slackAgentThread.agentId))
-        .where(
-          and(
-            eq(agentTable.taskId, taskId),
-            eq(slackAgentThread.origin, SLACK_THREAD_ORIGIN.START),
-          ),
-        )
-        .limit(1),
-    ),
-});
-
 const findSlackStart = SqlSchema.findOneOption({
   Request: Schema.Struct({ agentId: Schema.String }),
   Result: Schema.Struct({ threadTs: Schema.String }),
@@ -797,17 +777,6 @@ export function claimSlackThreadTurn(
   turnId: string,
 ): TaskStoreEffect<Option.Option<SlackThread>> {
   return claimThreadTurn({ agentId, turnId });
-}
-
-/**
- * Whether the task is one a Slack message made for the agent it started,
- * which is an agent a started thread is kept for standing on it; a Slack
- * start makes its agent's task, and its continue lands on that same task,
- * so no other task holds such an agent. A run's result thread makes no task
- * Slack's, whatever agent its run went to.
- */
-export function isSlackTask(taskId: string): TaskStoreEffect<boolean> {
-  return Effect.map(findSlackMadeTask({ taskId }), Option.isSome);
 }
 
 /** Whether the agent was started from a Slack message, or continues one that was: a started thread is kept for it. */

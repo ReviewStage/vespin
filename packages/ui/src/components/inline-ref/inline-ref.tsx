@@ -42,7 +42,10 @@ import { INLINE_REF_FIT, type InlineRefFit, useInlineRefFit } from "./inline-ref
  * handed to the token or to every token under a surface at once
  * (`InlineRefFitScope`), since the same chip stands in an agent's words and
  * in a one-line row of them. In running words it wraps across lines as they do, its fill and corners
- * carried onto each line it stands on, and is read whole: no cap and no
+ * carried onto each line it stands on, breaking only inside its name, so
+ * its glyph keeps to the name's first word and its standing to its last, and
+ * a one-word name with them never parts, nor a short name kept whole (a date,
+ * a pull request's key), and it is read whole: no cap and no
  * ellipsis, since a name cut short in a sentence says less than the
  * sentence does. In a slot one line tall, a row's, a byline's, or a head's,
  * it keeps to one line and its name gives way before anything else, fading
@@ -88,6 +91,15 @@ export const INLINE_REF_NAME = {
   NAME: "name",
   /** A path, in the code face and cut at its start, so its last part stays in sight. */
   PATH: "path",
+  /**
+   * A short name kept whole with its glyph and its standing, never wrapped: a
+   * date, a pull request's key. Note that in running words it stands as a
+   * token one line tall does, one box that moves to the next line whole and
+   * is never wider than its column, its name fading where a column too narrow
+   * for it cuts it, because a name that never breaks would otherwise run past
+   * the column's edge.
+   */
+  WHOLE: "whole",
 } as const;
 
 export type InlineRefName = (typeof INLINE_REF_NAME)[keyof typeof INLINE_REF_NAME];
@@ -124,7 +136,7 @@ interface InlineRefFace {
   kind?: string | undefined;
   /** The name it goes by. */
   label: string;
-  /** What the name is: a name, or a path cut at its start. */
+  /** What the name is: a name, a path cut at its start, or a short name kept whole. */
   name?: InlineRefName;
   /** Whether the name is drawn nowhere and said to a screen reader alone, for a line too short to hold it. */
   labelHidden?: boolean;
@@ -150,10 +162,13 @@ const ROOT = "ui-inline-ref p-0 border-0 text-left [font:inherit] no-underline";
 /**
  * How a token takes its line: wrapping as words do, each line's piece drawn
  * as if it were the whole, so a fill and its corners stand on every line; or
- * one row that never outgrows its column.
+ * one row that never outgrows its column. Note that a token that wraps does
+ * not wrap between its own parts, only inside its name (`labelClass`),
+ * because a browser may always break beside a glyph's box, which would leave
+ * the glyph alone at a line's end and `#42 Open` on the next.
  */
 const FIT_ROOT = {
-  [INLINE_REF_FIT.FLOW]: "inline whitespace-normal wrap-break-word box-decoration-clone",
+  [INLINE_REF_FIT.FLOW]: "inline whitespace-nowrap wrap-break-word box-decoration-clone",
   [INLINE_REF_FIT.LINE]:
     "inline-flex min-w-0 max-w-full items-center align-baseline whitespace-nowrap",
 } as const satisfies Record<InlineRefFit, string>;
@@ -209,26 +224,50 @@ function rootClass({
 
 /**
  * A token's glyph, centered in a box the line's size; a pill's in the muted
- * ink. Note that a pill's box is a line of words tall and at least as wide,
- * and a mark drawn at its own size (an agent's 16px tile, a pull request's
- * 12px mark) stands centered on it, spilling evenly above and below rather
- * than hanging from its corner, and widens it, so its name keeps its gap.
+ * ink. An icon is drawn a line of words tall, and so is a glyph seated in a
+ * slot of its own (`--ui-glyph-size`), a working agent's say, so every bare
+ * glyph in a line stands one size. Note that a pill's box is a line of
+ * words tall and at least as wide, and a mark drawn at its own size (a
+ * person's 16px face, a pull request's 12px mark) stands centered on it,
+ * spilling evenly above and below rather than hanging from its corner, and
+ * widens it, so its name keeps its gap.
  * Where the token wraps, the glyph's box is a line of words tall in every
  * look and sits a little under the baseline, as an icon set in words does,
- * so its middle meets the middle of the letters beside it.
+ * so its middle meets the middle of the letters beside it. Note that the
+ * box's baseline is its own bottom edge, held there by an empty item that
+ * stands its height (`after:`), because a flex box otherwise takes its
+ * first item's: an icon's is its bottom edge, but a face's or a tile's is
+ * the letter or glyph inside it, which dropped a person's, a workspace's,
+ * and an automation's mark below every icon's and stretched the line.
  */
 function glyphClass(look: InlineRefLook, fit: InlineRefFit): string {
   const parts = [
-    "ui-inline-ref-glyph inline-flex flex-none items-center justify-center empty:hidden [&>svg]:size-[1em]",
+    "ui-inline-ref-glyph inline-flex flex-none items-center justify-center empty:hidden [--ui-glyph-size:1em] [&>svg]:size-[1em]",
   ];
   const pill = look === INLINE_REF_LOOK.PILL;
   if (fit === INLINE_REF_FIT.FLOW || pill) parts.push("h-[1em]");
-  if (fit === INLINE_REF_FIT.FLOW) parts.push(`align-[-0.125em] ${LOOK_GAP[look].glyph}`);
+  if (fit === INLINE_REF_FIT.FLOW) {
+    parts.push(`align-[-0.125em] after:h-[1em] after:self-baseline ${LOOK_GAP[look].glyph}`);
+  }
   if (pill) parts.push("min-w-[1em] text-muted-foreground");
   return parts.join(" ");
 }
 
-/** A token's name, alone on the words' baseline where it is one line: struck through where gone, a link's name underlined under the pointer, a wash's at least a mark tall, and a path broken anywhere where it wraps, since it holds no spaces to break at. */
+/** How a wrapping token's name breaks, by what it is. */
+const FLOW_NAME_WRAP = {
+  [INLINE_REF_NAME.NAME]: "whitespace-normal wrap-break-word",
+  [INLINE_REF_NAME.PATH]: "whitespace-normal wrap-anywhere",
+} as const satisfies Record<Exclude<InlineRefName, typeof INLINE_REF_NAME.WHOLE>, string>;
+
+/**
+ * A token's name, alone on the words' baseline where it is one line: struck
+ * through where gone, a link's name underlined under the pointer, a wash's at
+ * least a mark tall, and where it wraps, the one part of the token that
+ * breaks, unless it is kept whole. Note that a name breaks a word only where
+ * the word cannot fit a line (`wrap-break-word`), never to make its column
+ * narrower, because a table cell shrinks to one letter of a name that may
+ * break anywhere; a path, which holds no spaces, breaks anywhere.
+ */
 function labelClass({
   look,
   fit,
@@ -244,7 +283,7 @@ function labelClass({
 }): string {
   const parts = ["ui-inline-ref-label"];
   if (fit === INLINE_REF_FIT.LINE) parts.push("self-baseline");
-  else if (name === INLINE_REF_NAME.PATH) parts.push("wrap-anywhere");
+  else if (name !== INLINE_REF_NAME.WHOLE) parts.push(FLOW_NAME_WRAP[name]);
   if (gone) parts.push("line-through");
   if (look === INLINE_REF_LOOK.LINK && pressable) {
     parts.push("group-hover/inline-ref:underline group-hover/inline-ref:underline-offset-2");
@@ -262,6 +301,9 @@ function stateClass(look: InlineRefLook, fit: InlineRefFit): string {
     ? `${state} border-l border-border-strong pl-ui-4 font-caption`
     : state;
 }
+
+/** U+200E, which sets what follows it left to right without isolating it. */
+const LEFT_TO_RIGHT_MARK = "\u200E";
 
 /** What a screen reader hears after a gone subject's name, which its strike-through says to the eye alone. */
 const GONE_HEARD = " (gone)";
@@ -347,12 +389,15 @@ function InlineRefRoot({
     carded: boolean;
   }): React.JSX.Element {
   const linkAddress = useLinkAddress(linkHref);
-  const fit = useInlineRefFit(ownFit);
+  const scoped = useInlineRefFit(ownFit);
+  const fit = name === INLINE_REF_NAME.WHOLE ? INLINE_REF_FIT.LINE : scoped;
   const keys = useButtonKeys(rest.onBlur);
   const pressable = onPress !== undefined;
   const leaving = pressable && leaves && linkHref !== undefined;
   const stated = !(state === undefined || state === null || labelHidden);
   const labelClassName = labelClass({ look, fit, name, gone, pressable });
+  // Note that a path that wraps keeps its own order in words of either direction by isolating its whole token rather than its name, because a browser breaks wherever the direction's level changes, which would part the name from its glyph.
+  const isolated = name === INLINE_REF_NAME.PATH && fit === INLINE_REF_FIT.FLOW;
   const face = (
     <>
       {kind === undefined ? null : <span className="ui-visually-hidden">{`${kind} `}</span>}
@@ -363,7 +408,7 @@ function InlineRefRoot({
       )}
       {labelHidden ? (
         <span className="ui-visually-hidden">{label}</span>
-      ) : fit === INLINE_REF_FIT.LINE && name === INLINE_REF_NAME.NAME ? (
+      ) : fit === INLINE_REF_FIT.LINE && name !== INLINE_REF_NAME.PATH ? (
         <ClippedLine
           className={labelClassName}
           as={ONE_LINE_ELEMENT.SPAN}
@@ -380,11 +425,21 @@ function InlineRefRoot({
           truncate={fit === INLINE_REF_FIT.LINE ? TEXT_TRUNCATE.START : false}
           className={labelClassName}
         >
-          {/* Note that a path is isolated, so the ellipsis at its start never reorders it. */}
-          {name === INLINE_REF_NAME.PATH ? <bdi>{label}</bdi> : label}
+          {/* Note that a path cut at its start is isolated, so the ellipsis never reorders it; one that wraps is isolated with its whole token instead (`own`). */}
+          {name === INLINE_REF_NAME.PATH && fit === INLINE_REF_FIT.LINE ? (
+            <bdi>{label}</bdi>
+          ) : (
+            label
+          )}
         </Text>
       )}
-      {!stated ? null : <span className={stateClass(look, fit)}>{state}</span>}
+      {/* Note that an isolated path's standing opens on a left-to-right mark, so its lines stay after a path ending in right-to-left words rather than joining them, as a mark that changes no level adds no break. */}
+      {!stated ? null : (
+        <span className={stateClass(look, fit)}>
+          {isolated ? LEFT_TO_RIGHT_MARK : null}
+          {state}
+        </span>
+      )}
       {heard === undefined ? null : <span className="ui-visually-hidden">{heard}</span>}
       {gone ? <span className="ui-visually-hidden">{GONE_HEARD}</span> : null}
     </>
@@ -393,6 +448,7 @@ function InlineRefRoot({
     ...rest,
     className: `${rootClass({ look, fit, gone, pressable, leaving })}${pressable ? " group/inline-ref" : ""}`,
     "data-look": look,
+    ...(isolated ? { dir: "ltr" } : {}),
   };
   const goneProps = gone ? { "data-gone": "true" } : {};
   if (onPress === undefined) {

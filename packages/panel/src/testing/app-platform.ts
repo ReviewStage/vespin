@@ -48,8 +48,8 @@ export function copyingInto(copied: string[]): Pick<AppPlatform, "copyText"> {
   };
 }
 
-/** Installs a platform answering only the calls given, in place of whatever the window held. */
-export function fakeAppPlatform(calls: Partial<AppPlatform>): void {
+/** Installs a platform answering only the calls given, in place of whatever the window held, and answers what takes it out again. */
+export function fakeAppPlatform(calls: Partial<AppPlatform>): () => void {
   // SAFETY: a test's window makes only the calls its test answers, and any other is undefined and throws where it is made.
-  installAppPlatform(calls as AppPlatform);
+  return installAppPlatform(calls as AppPlatform);
 }

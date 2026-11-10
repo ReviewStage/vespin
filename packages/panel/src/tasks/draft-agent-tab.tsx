@@ -80,9 +80,8 @@ import { WorkingLine } from "./working-time.js";
  * shows the default this tab read and its Retry names none.
  */
 
-/** A draft has nothing to stop and has published nothing, so its box's Stop and doors answer nothing. */
+/** A draft has nothing to stop, so its box's Stop answers nothing. */
 const NOTHING_TO_STOP = () => Promise.resolve(false);
-const NO_DOORS = { openGitHub: () => undefined, copy: () => undefined };
 
 /** The devices Runs on offers before a read lists any: none, so it offers Cloud alone. */
 const NO_DEVICES: readonly MacOffer[] = [];
@@ -242,14 +241,12 @@ export function DraftAgentTab({
           models={control.models}
           modelsFailed={control.modelsFailed}
           readModels={control.readModels}
-          published={undefined}
           usage={undefined}
           servers={{
             disabled: draft.disabledServers,
             onSwitch: (next) => control.onDraftChange({ disabledServers: next }),
             onOpenSettings: control.onOpenIntegrations,
           }}
-          doors={NO_DOORS}
           onStop={NOTHING_TO_STOP}
           followsUp={false}
           keywords={control.keywords}

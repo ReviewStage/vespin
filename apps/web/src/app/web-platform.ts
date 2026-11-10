@@ -1,5 +1,5 @@
 /**
- * web-platform.ts -- what a browser tab answers for the panel: its own clipboard, a download, a new tab for a web address, the host's event count, the masked session recording, a cloud Browser tab's socket from the page, an agent's page through the service's frame of it, the Mac app on a Mac, and nothing for the Mac's menus or bundles.
+ * web-platform.ts -- what a browser tab answers for the panel: its own clipboard, a download, a new tab for a web address or one of the app's own links, the host's event count, the masked session recording, a cloud Browser tab's socket from the page, an agent's page through the service's frame of it, the Mac app on a Mac, and nothing for the Mac's menus or bundles.
  *
  * The web client's shell beside the host in the tab (`web-host.ts`), which
  * hands it where a surface event is counted. An agent's page is framed
@@ -63,6 +63,22 @@ export function copyPng(png: Promise<string>): Promise<void> {
   return navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
 }
 
+/** Puts words on the browser's clipboard as rich text, their HTML beside their plain text. */
+export function copyRichText({
+  html,
+  text,
+}: {
+  readonly html: string;
+  readonly text: string;
+}): Promise<void> {
+  return navigator.clipboard.write([
+    new ClipboardItem({
+      "text/html": new Blob([html], { type: "text/html" }),
+      "text/plain": new Blob([text], { type: "text/plain" }),
+    }),
+  ]);
+}
+
 /**
  * Opens a page in a tab of its own, which reaches nothing of this one, where
  * its address is an http or https one, as the desktop's `web.open` takes it.
@@ -88,6 +104,18 @@ function openLink(url: string): void {
     return;
   }
   openTab(url);
+}
+
+/**
+ * Opens one of the app's own links in a tab of its own on this tab's origin,
+ * which serves the panel at every link's path (`load-link.ts`), so a preview
+ * or a local server opens itself rather than the link's home.
+ */
+function openAppLinkInTab(link: string): void {
+  const here = new URL(link);
+  here.protocol = location.protocol;
+  here.host = location.host;
+  openTab(here.href);
 }
 
 /** Opens a GitHub page in a tab of its own, where its address is GitHub's, as the desktop's `github.open` takes it; any other opens nothing. */
@@ -165,6 +193,7 @@ export function webPlatform(
     commandKey,
     copyText: (words) => navigator.clipboard.writeText(words),
     copyImage: copyPng,
+    copyRich: copyRichText,
     saveFile: downloadText,
     focusPanel: () => window.focus(),
     pageFrameUrl: (page) => new URL(hostedPageFramePath(page), location.origin).href,
@@ -173,6 +202,7 @@ export function webPlatform(
     recordSurfaceEvent: shell.recordSurfaceEvent,
     openGitHub: openGitHubTab,
     openWeb: openLink,
+    openInTab: openAppLinkInTab,
     // The dashboard is served on the tab's own origin, so the Admin row links to it there.
     adminDashboard: () => ({ href: new URL(ADMIN_PAGE_PATH, location.origin).href }),
     applySessionReplay: lazySessionReplay(),

@@ -1087,7 +1087,7 @@ export function takenCloses(): { itemId: string; revision: number }[] {
   fakeActs({
     ...bridge,
     act: (request: AnyAct): Promise<FakeActAnswer> => {
-      if (request.kind === ACT_KIND.AGENTS_INBOX_CLOSE_RELEASE) {
+      if (request.kind === ACT_KIND.AGENTS_INBOX_RELEASE) {
         const { clientKey, send } = request.payload;
         const release = held.get(clientKey);
         held.delete(clientKey);
@@ -1168,17 +1168,18 @@ export function sendHeld(pane: HTMLElement): boolean {
 }
 
 /**
- * What the open item's box says outside its controls, its files, and its
- * note line, its presses' words among it: nothing but a notice's Got it, or
- * what an unfinished answer lacks once a send of it was refused, since the
- * box carries no helper text, its Send held until it holds something to send.
+ * What the open item's box says outside its controls, its files, its note
+ * line, and the agent's own presses (its model chip, which names the model),
+ * Send's words among it: nothing but a notice's Got it, or what an
+ * unfinished answer lacks once a send of it was refused, since the box
+ * carries no helper text, its Send held until it holds something to send.
  */
 export function footWords(pane: HTMLElement): string {
   const box = pane.querySelector("form.inbox-answer") ?? assert.fail("the box");
   const copy = box.cloneNode(true);
   assert.ok(copy instanceof Element);
   for (const part of copy.querySelectorAll(
-    ":scope > :is([data-inbox-draft-ask], .agent-composer-field), .attached-files, .ui-composer-foot-note",
+    ":scope > :is([data-inbox-draft-ask], .agent-composer-field), .attached-files, .ui-composer-foot-note, .message-box-actions",
   )) {
     part.remove();
   }

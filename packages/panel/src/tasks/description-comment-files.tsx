@@ -1,4 +1,3 @@
-import type { AgentAttachment } from "@repo/features/agent-wire";
 import type { FileChip } from "@repo/features/attachment-model";
 import type { DescriptionCommentFile } from "@repo/features/description-comment-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -6,7 +5,7 @@ import { PICTURE_STATE } from "@repo/ui/picture-read";
 import { useQueries } from "@tanstack/react-query";
 import { sendAct } from "../act.js";
 import { pictureQuery } from "../picture-query.js";
-import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
+import { AttachedFileChips } from "./attached-file-chips.js";
 
 /**
  * description-comment-files.tsx -- the files a description's comment carries, drawn over its words.
@@ -23,8 +22,9 @@ import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
  * A comment's field takes files by its + (`attach-files-button.tsx`), a
  * paste of pictures, or a drop, as every message box does
  * (`../use-attached-files.ts`), held to the bounds a message to an agent is.
- * Its edit draws the files it keeps as the comment draws them, then the
- * files added, each with its × to take it off (`EditedCommentFiles`).
+ * Its edit draws the files it keeps as the comment draws them, each with
+ * its × to take it off (`KeptCommentFiles`), before the files added, which
+ * its box draws.
  */
 
 /** How a plan's comment's file is read: as the plan's attachment, which its pictures read too. */
@@ -64,18 +64,16 @@ export function CommentFiles({
   );
 }
 
-/** The files a comment's edit holds over its words: the comment's own it keeps, then those added, each taken off by its place among them all. */
-export function EditedCommentFiles({
+/** The files a comment's edit keeps of those the comment carries, each read as the comment's are, with its × to take it off by its place among them. */
+export function KeptCommentFiles({
   planId,
-  kept,
-  added,
+  files,
   onRemove,
 }: {
   planId: string;
-  kept: readonly DescriptionCommentFile[];
-  added: readonly AgentAttachment[];
+  files: readonly DescriptionCommentFile[];
   onRemove: (index: number) => void;
 }): React.ReactNode {
-  const chips = [...useCommentFileChips(planId, kept), ...attachmentChips(added)];
+  const chips = useCommentFileChips(planId, files);
   return <AttachedFileChips files={chips} onRemove={onRemove} />;
 }

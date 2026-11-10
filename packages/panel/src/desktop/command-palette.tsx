@@ -61,12 +61,26 @@
  * each row's words instead.
  */
 
-import type { TasklessAgent } from "@repo/features/agent-wire";
 import { automationTriggerText } from "@repo/features/automation-list-model";
 import type { AutomationSummary } from "@repo/features/automation-wire";
+import { fileName } from "@repo/features/code-ref-words";
+import { holderName, type InboxListed, inboxItemWords } from "@repo/features/inbox-list-model";
 import { formatCount } from "@repo/features/number-format";
+import { cardTitle } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import {
+  type MatchRange,
+  matchesTokens,
+  matchRanges,
+  searchTokens,
+} from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import {
+  orderTaskRows,
+  repositoryLabel,
+  type TaskRow,
+  taskRow,
+} from "@repo/features/task-list-model";
 import {
   TASK_CREATE_RELATION_KIND,
   TASK_RELATION_KIND,
@@ -133,17 +147,8 @@ import {
   type SearchSubject,
   searchHit,
 } from "@repo/ui/search-score";
-import { type MatchRange, matchesTokens, matchRanges, searchTokens } from "@repo/ui/search-tokens";
 import { ReplayMask, ReplayUnmask, ReplayWords } from "@repo/ui/session-replay-marks";
 import { fileTab, inTaskOrder } from "@repo/ui/tab-strip-model";
-import {
-  agentRow,
-  orderTaskRows,
-  repositoryLabel,
-  TASK_ROW,
-  type TaskRow,
-  taskRow,
-} from "@repo/ui/task-list-model";
 import { DOCUMENT_REGION, SETTLED_STATUS, settleOffered, TASK_MARK } from "@repo/ui/tasks-model";
 import { type UseQueryResult, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -190,23 +195,21 @@ import {
   type SettingsSearchInput,
   settingsSearchEntries,
 } from "../settings-search.js";
+import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
 import { agentName } from "../tasks/agent-model.js";
-import { AgentCard, agentSubject, NOTHING_HELD, tasklessRowSubject } from "../tasks/agent-ref.js";
+import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { useChangesPeopleOf } from "../tasks/changes-people.js";
 import { FileCard, fileLook } from "../tasks/file-ref.js";
-import { fileName } from "../tasks/file-ref-model.js";
 import { refusalLine } from "../tasks/file-tab-model.js";
 import { InboxItemCard, InboxItemEnd, ItemMark } from "../tasks/inbox-item-parts.js";
-import { holderName, type InboxListed, inboxItemWords } from "../tasks/inbox-model.js";
 import { refusedAnswer, taskTreeQueryOptions } from "../tasks/repository-reads.js";
 import { agentEndMark, openPlanStanding, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import { markReadItem, type OpenTaskRename, useTaskRenameOffer } from "../tasks/task-menu-items.js";
 import { TaskKey } from "../tasks/task-standing.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND } from "../tasks/terminal-session.js";
-import { cardTitle } from "../tasks/tool-call-model.js";
-import { type AgentsControl, type HeldPeople, readAgentById } from "../tasks/use-agents.js";
+import type { AgentsControl, HeldPeople } from "../tasks/use-agents.js";
 import { choiceOf } from "../tasks/use-inbox-listing.js";
 import { type InboxSearch, useInboxSearch } from "../tasks/use-inbox-search.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
@@ -224,9 +227,8 @@ import { useOpenTerminalTab } from "../tasks/use-terminal-session.js";
 import { useWindowAccount } from "../tasks/window-account.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useExperimentsIn, useWorkspaceExperiment } from "../workspace-experiments.js";
-import { useAgentArchive, useAgentUnarchive } from "./agent-archive.js";
+import { actingCommand } from "./action-menu.js";
 import { agentEntries } from "./agent-entries.js";
-import { type AgentReadMarks, useAgentReadMarks } from "./agent-read-marks.js";
 import { READING_AUTOMATIONS } from "./automation-words.js";
 import { inboxEntries } from "./main-tabs.js";
 import { ADD_SECTION, offeredPanelKinds, panelOffers, SIDE_PANEL_HOLDER } from "./side-panel.js";
@@ -284,9 +286,6 @@ const KIND_ROWS = {
 
 /** The first row's id: rows are known by their place in the list, from one. */
 const FIRST_ROW = "1";
-
-/** No Archive asked of ⌘K yet, of any agent. */
-const NO_ARCHIVE_ASKS = { agentId: "", asked: 0 };
 
 /** Nothing to move: a terminal opened from ⌘K stands in the side panel, as one opened from the panel's "+" does. */
 const noFocusMove = (): void => undefined;
@@ -809,20 +808,15 @@ function taskRows(
   tasks: TasksControl,
   members: readonly WorkspaceMember[] | undefined,
   open: (taskId: string) => void,
-  openAgent: (agentId: string) => void,
   showAgent: TasksControl["onShowAgent"],
   originOf: (task: TaskSummary) => Actor | undefined,
 ): readonly UndrawnRow[] {
   const listedId = tasks.workspace?.id;
   const carded = { ...tasks, onShowAgent: showAgent };
   // Note that a repository's name is weighed against each repository listed once, not against each task, since many tasks share one.
-  const repositories = [
-    ...new Set([
-      ...tasks.tasks.map((task) => task.repository),
-      ...tasks.listedAgents.standing.map((agent) => agent.repository),
-      ...tasks.listedAgents.archived.map((agent) => agent.repository),
-    ]),
-  ].map((repository) => ({ repository }));
+  const repositories = [...new Set(tasks.tasks.map((task) => task.repository))].map(
+    (repository) => ({ repository }),
+  );
   // Note that only the listed workspace's members are read, so another workspace's assignee stands by the wire's name, never as having left.
   const listedMembers = (task: TaskSummary) =>
     task.workspaceId === listedId ? members : undefined;
@@ -889,56 +883,19 @@ function taskRows(
       };
     });
   };
-  const agentOf = (agent: TasklessAgent, archived: boolean): UndrawnRow => {
-    const name = agentName(agent, tasks.agents.models);
-    const words: RowWords = {
-      label: name,
-      terms: [name, agent.repository, agent.automationName ?? null].filter((term) => term !== null),
-    };
-    return undrawnRow(words, () => {
-      // Note that an agent's repository is named as a task's row names its own, by its name alone unless another listed shares it.
-      const repository =
-        agent.repository === null ? null : repositoryLabel(agent.repository, repositories);
-      const said = [repository, archived ? ARCHIVED_WORD : null].filter((word) => word !== null);
-      return {
-        replayMasked: true,
-        icon: tabLook({ kind: TAB_KIND.AGENT, name, agent }).icon,
-        detail: said.length === 0 ? undefined : said.join(" · "),
-        endMark: agentEndMark(agent, archived),
-        card: (
-          <AgentCard
-            subject={tasklessRowSubject(agent, tasks.agents)}
-            models={tasks.agents.models}
-          />
-        ),
-        onChoose: () => openAgent(agent.id),
-      };
-    });
-  };
-  const rowOf = (row: TaskRow, archived: boolean): UndrawnRow =>
-    row.kind === TASK_ROW.TASK ? taskOf(row.task) : agentOf(row.agent, archived);
   const listed = (task: TaskSummary) => listedId === undefined || task.workspaceId === listedId;
   // The pinned stand first, as the sidebar's; the rest by their last
   // activity, as the sidebar, Home's Recent, and the row's time read it.
   const pinnedFirst = (rows: readonly TaskRow[]) => [
-    ...rows.filter((row) => taskRowPinnedAt(row) !== undefined),
-    ...orderTaskRows(rows.filter((row) => taskRowPinnedAt(row) === undefined)),
+    ...rows.filter((row) => row.task.pinnedAt !== undefined),
+    ...orderTaskRows(rows.filter((row) => row.task.pinnedAt === undefined)),
   ];
-  const { standing: agents, archived: archivedAgents } = tasks.listedAgents;
-  const here = [...tasks.tasks.filter(listed).map(taskRow), ...agents.map(agentRow)];
+  const here = tasks.tasks.filter(listed).map(taskRow);
   const elsewhere = tasks.tasks.filter((task) => !listed(task)).map(taskRow);
-  // The listed workspace's archived agents, by their last activity.
-  const archived = orderTaskRows(archivedAgents.map(agentRow));
   return [
-    ...pinnedFirst(here).map((row) => rowOf(row, false)),
-    ...pinnedFirst(elsewhere).map((row) => rowOf(row, false)),
-    ...archived.map((row) => rowOf(row, true)),
+    ...pinnedFirst(here).map((row) => taskOf(row.task)),
+    ...pinnedFirst(elsewhere).map((row) => taskOf(row.task)),
   ];
-}
-
-/** When the reader pinned a row's task or agent; undefined while they have not. */
-function taskRowPinnedAt(row: TaskRow): number | undefined {
-  return row.kind === TASK_ROW.TASK ? row.task.pinnedAt : row.agent.pinnedAt;
 }
 
 /** What the "+" rules read that only a hook can: the door a new shell is asked through where the platform runs terminals. */
@@ -1099,11 +1056,9 @@ function archivedAgentRows(
       ),
       terms: [look.label, ...(taskName === undefined ? [] : [taskName])],
       onChoose: () =>
-        show(() =>
-          agent.planId === null
-            ? tasks.agentView.onOpen(agent.id)
-            : tasks.onShowAgent(agent.planId, agent.id),
-        ),
+        show(() => {
+          if (agent.planId !== null) tasks.onShowAgent(agent.planId, agent.id);
+        }),
     };
   });
 }
@@ -1433,8 +1388,8 @@ function panelTabRows(
  * so, as the plan's menus offer it; none while no plan is looked at. Note
  * that a plan Settings or the Inbox covers is offered nothing, because the
  * row does not name the plan, and going back to it opens it, which takes
- * the mark back before it is ever seen. It wears U, which marks the plan
- * open while no sidebar row has the keyboard, as ⌘K's own field has it.
+ * the mark back before it is ever seen. It wears U where U marks the plan
+ * open, as it does while no sidebar row has the keyboard, as ⌘K's own field has it.
  */
 function readMarkRows(
   tasks: TasksControl,
@@ -1446,43 +1401,13 @@ function readMarkRows(
   if (task.id !== reads.watched) return [];
   const item = markReadItem(
     { unread: reads.markedUnread(task.id), onMark: (unread) => reads.mark(task, unread) },
-    true,
+    shortcutSubject(SHORTCUT_SUBJECT.TASK, task.id),
   );
   return [
     {
       icon: item.icon,
       label: item.label,
-      command: item.command,
-      terms: [item.label],
-      onChoose: () => choose(item.onSelect),
-    },
-  ];
-}
-
-/**
- * Mark as unread for the agent whose page stands, or Mark as read once it is
- * unread, as its sidebar row's menu offers it, through the plans' marks;
- * none while no agent's page stands. Note that the open page is unread only
- * by a mark by hand, since its unseen dot goes as the page is shown.
- */
-function agentReadMarkRows(
-  tasks: TasksControl,
-  reads: AgentReadMarks,
-  choose: (run: () => void) => void,
-): readonly PaletteRow[] {
-  const { agentId } = tasks.agentView;
-  const { standing, archived } = tasks.listedAgents;
-  const agent = [...standing, ...archived].find((each) => each.id === agentId);
-  if (agent === undefined) return [];
-  const item = markReadItem(
-    { unread: reads.markedUnread(agent.id), onMark: (unread) => reads.mark(agent, unread) },
-    true,
-  );
-  return [
-    {
-      icon: item.icon,
-      label: item.label,
-      command: item.command,
+      command: actingCommand(item),
       terms: [item.label],
       onChoose: () => choose(item.onSelect),
     },
@@ -1513,34 +1438,6 @@ function taskPinRows(
       command: item.command,
       terms: [label],
       onChoose: () => choose(() => pins.onMarkTask(task.id, mark)),
-    },
-  ];
-}
-
-/**
- * Pin agent, or Unpin agent once it is pinned, for the agent whose page
- * stands, as its sidebar row's menu offers it: the reader's own pin. None
- * while no agent's page stands, nor for an archived agent, which offers no
- * pin.
- */
-function agentPinRows(
-  tasks: TasksControl,
-  pins: Pick<PinWrites, "onPinAgent">,
-  choose: (run: () => void) => void,
-): readonly PaletteRow[] {
-  const { agentId } = tasks.agentView;
-  const agent = tasks.listedAgents.standing.find((each) => each.id === agentId);
-  if (agent === undefined) return [];
-  const pinned = agent.pinnedAt !== undefined;
-  const item = pinned ? PANEL_COMMAND.UNPIN_AGENT : PANEL_COMMAND.PIN_AGENT;
-  const label = commandWords(item, COMMAND_PLACE.PALETTE);
-  return [
-    {
-      icon: item.icon,
-      label,
-      command: item.command,
-      terms: [label],
-      onChoose: () => choose(() => pins.onPinAgent(agent.id, !pinned)),
     },
   ];
 }
@@ -1610,101 +1507,27 @@ function taskCommandRows(
 /**
  * U and P on what is open, while no sidebar row has the keyboard, whose
  * own answer over these (`useFocusedRowKeys`): the plan on screen, marked
- * read or unread and pinned as its menus do, or the agent whose page
- * stands, the pin only while it is not archived. Note that the Inbox's U
- * is its chosen item's (`use-inbox-read-marks.ts`), so nothing here stands
- * while the Inbox does.
+ * read or unread and pinned as its menus do. Note that the Inbox's U is its
+ * chosen item's (`use-inbox-read-marks.ts`), so nothing here stands while
+ * the Inbox does.
  */
 function useOpenThingKeys(
   tasks: TasksControl,
-  pins: Pick<PinWrites, "onMarkTask" | "onPinAgent">,
+  pins: Pick<PinWrites, "onMarkTask">,
   inboxStanding: InboxStanding,
   reads: ReadMarks,
-  agentReads: AgentReadMarks,
 ): void {
   const inbox = inboxStanding.open;
   const task = inbox || reads.watched === undefined ? undefined : taskOf(tasks, reads.watched);
-  const agent = inbox ? undefined : openAgentOf(tasks);
-  const standing =
-    agent === undefined
-      ? undefined
-      : tasks.listedAgents.standing.find((each) => each.id === agent.id);
   const toggleRead =
-    task !== undefined
-      ? () => reads.mark(task, !reads.markedUnread(task.id))
-      : agent !== undefined
-        ? () => agentReads.mark(agent, !agentReads.markedUnread(agent.id))
-        : undefined;
+    task === undefined ? undefined : () => reads.mark(task, !reads.markedUnread(task.id));
   const togglePin =
-    task !== undefined
-      ? () =>
-          pins.onMarkTask(task.id, task.pinnedAt === undefined ? TASK_MARK.PIN : TASK_MARK.UNPIN)
-      : standing !== undefined
-        ? () => pins.onPinAgent(standing.id, standing.pinnedAt === undefined)
-        : undefined;
+    task === undefined
+      ? undefined
+      : () =>
+          pins.onMarkTask(task.id, task.pinnedAt === undefined ? TASK_MARK.PIN : TASK_MARK.UNPIN);
   useAppCommand(APP_COMMAND.TOGGLE_READ, toggleRead);
   useAppCommand(APP_COMMAND.PIN, togglePin);
-}
-
-/** The agent on no task whose page stands, archived or not; none while no agent's page stands. */
-function openAgentOf(tasks: TasksControl): TasklessAgent | undefined {
-  const { agentId } = tasks.agentView;
-  const { standing, archived } = tasks.listedAgents;
-  return [...standing, ...archived].find((each) => each.id === agentId);
-}
-
-/**
- * Archive agent for the agent whose page stands, or Unarchive agent once it
- * is archived, as its ⋯ offers them; none while no agent's page stands. A
- * choice asks `OpenAgentArchive`, which runs the menu's own item.
- */
-function agentArchiveRows(
-  agent: TasklessAgent | undefined,
-  ask: (agentId: string) => void,
-  choose: (run: () => void) => void,
-): readonly PaletteRow[] {
-  if (agent === undefined) return [];
-  const item =
-    agent.archivedAt === undefined ? PANEL_COMMAND.ARCHIVE_AGENT : PANEL_COMMAND.UNARCHIVE_AGENT;
-  const label = commandWords(item, COMMAND_PLACE.PALETTE);
-  return [{ icon: item.icon, label, terms: [label], onChoose: () => choose(() => ask(agent.id)) }];
-}
-
-/**
- * The open agent's Archive or Unarchive, run as its ⋯ runs them
- * (`agent-archive.tsx`) each time ⌘K asks, and the question Archive asks
- * through while a teammate's agent works, drawn while the window stands.
- * Note that it is keyed by the agent, so an ask for one is never run on
- * another.
- */
-function OpenAgentArchive({
-  agent,
-  agents,
-  shown,
-  asked,
-}: {
-  agent: TasklessAgent;
-  agents: AgentsControl;
-  shown: boolean;
-  /** How many times ⌘K asked for this agent, each new one run once. */
-  asked: number;
-}): React.JSX.Element {
-  const queryClient = useQueryClient();
-  // Note that the agent is read again by its own id before a teammate's is archived, as its sidebar row reads it.
-  const control = {
-    ...agents,
-    readAgent: (agentId: string) => readAgentById(queryClient, agentId),
-  };
-  const archive = useAgentArchive(agent, control, shown);
-  const unarchive = useAgentUnarchive(agent.id, control);
-  const action = agent.archivedAt === undefined ? archive.action : unarchive;
-  const answered = useRef(asked);
-  useEffect(() => {
-    if (asked === answered.current) return;
-    answered.current = asked;
-    action.onSelect();
-  });
-  return archive.dialog;
 }
 
 /** Every Settings page this platform offers, in the sidebar's order, under its own glyph and name. */
@@ -2181,7 +2004,6 @@ export function CommandPalette({
             members,
             // Note that a task jumped to goes back to work on it, as a sidebar row does (`onResume`).
             (id) => onTasks(() => tasks.onResume(id)),
-            (id) => onTasks(() => tasks.agentView.onOpen(id)),
             (taskId, agentId) => onTasks(() => tasks.onShowAgent(taskId, agentId)),
             originOf,
           )
@@ -2196,17 +2018,9 @@ export function CommandPalette({
   );
   const renameOffer = useTaskRenameOffer();
   const relationWrites = useTaskRelationWrites();
-  const agentReads = useAgentReadMarks();
   const pins = usePinWrites(tasks.drawnTasks);
   const standing = useStandingWrites(tasks.drawnTasks);
-  useOpenThingKeys(tasks, pins, inboxStanding, reads, agentReads);
-  // The open agent's Archive, asked of `OpenAgentArchive` by the agent it was chosen for.
-  const openAgent = openAgentOf(tasks);
-  const [archiveAsks, setArchiveAsks] = useState<{ agentId: string; asked: number }>(
-    NO_ARCHIVE_ASKS,
-  );
-  const askArchive = (agentId: string) =>
-    setArchiveAsks((was) => ({ agentId, asked: was.agentId === agentId ? was.asked + 1 : 1 }));
+  useOpenThingKeys(tasks, pins, inboxStanding, reads);
   const limit = filter === PALETTE_FILTER.ALL ? KIND_ROWS.ALL : KIND_ROWS.FILTERED;
   // The task's terminals and Browser tabs are offered as the panel's "+" offers them, through its own doors.
   const openTerminal = useOpenTerminal(tasks.sidePanel, noFocusMove);
@@ -2325,9 +2139,7 @@ export function CommandPalette({
         ...copyLinkRows(links.linksAt(fromPanel), (held) => choose(() => links.copy(held))),
         ...actionRows(openThingCommands(inboxStanding), runCommand, experiments),
         ...readMarkRows(tasks, reads, choose),
-        ...agentReadMarkRows(tasks, agentReads, choose),
         ...taskPinRows(tasks, pins, reads, choose),
-        ...agentPinRows(tasks, pins, choose),
         ...taskCommandRows(
           tasks,
           relationWrites,
@@ -2337,7 +2149,6 @@ export function CommandPalette({
           choose,
           historyOffered,
         ),
-        ...agentArchiveRows(openAgent, askArchive, choose),
         ...panelTabRows(tasks, inboxStanding, onTasks),
         ...actionRows(OPEN_THING_SHOW_COMMANDS, runCommand, experiments),
         ...actionRows(OPEN_THING_LAST_COMMANDS, runCommand, experiments),
@@ -2442,31 +2253,20 @@ export function CommandPalette({
   const band = useMemo(() => <PaletteFilters filter={filter} onFilter={setFilter} />, [filter]);
 
   return (
-    <>
-      <PaletteDialog
-        open={open}
-        opening={openings}
-        onOpenChange={setOpen}
-        placeholder={filterPlaceholder(filter)}
-        groups={stood.current}
-        filter={filter}
-        query={query}
-        onQueryChange={setQuery}
-        // Note that a listing cut short is said where nothing matches too, since what was sought may lie past the cut.
-        empty={cut ? `${NOTHING_MATCHES}. ${TRUNCATED_LINE}` : NOTHING_MATCHES}
-        band={band}
-        onKeyDown={keyDown}
-        inputRef={keystrokes}
-      />
-      {openAgent === undefined ? null : (
-        <OpenAgentArchive
-          key={openAgent.id}
-          agent={openAgent}
-          agents={tasks.agents}
-          shown={tasks.shown}
-          asked={archiveAsks.agentId === openAgent.id ? archiveAsks.asked : 0}
-        />
-      )}
-    </>
+    <PaletteDialog
+      open={open}
+      opening={openings}
+      onOpenChange={setOpen}
+      placeholder={filterPlaceholder(filter)}
+      groups={stood.current}
+      filter={filter}
+      query={query}
+      onQueryChange={setQuery}
+      // Note that a listing cut short is said where nothing matches too, since what was sought may lie past the cut.
+      empty={cut ? `${NOTHING_MATCHES}. ${TRUNCATED_LINE}` : NOTHING_MATCHES}
+      band={band}
+      onKeyDown={keyDown}
+      inputRef={keystrokes}
+    />
   );
 }

@@ -45,9 +45,6 @@ import { pullRequestChangesRead } from "./agents-procedures.js";
 import { githubReadRefusal } from "./asked-pull-request.js";
 import { agentPublished, agentPullRequestReach } from "./coder-host/published.js";
 
-/** The name the tool is offered under. */
-export const READ_AGENT_CHANGES = "read_agent_changes";
-
 /** The most characters of one file's patch a read answers, about ten thousand tokens: the rest is counted, never sent. */
 const PATCH_READ_CHARS = 40_000;
 

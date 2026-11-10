@@ -1,11 +1,11 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
+import type { KnownNames } from "@repo/features/entity-kind";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { PAGE_OWNER, type PageLine } from "@repo/features/page-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
-import type { KnownNames } from "@repo/features/thing-kind";
 import { taskKey } from "@repo/features/workspace-key";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { useQuery } from "@tanstack/react-query";
@@ -20,8 +20,8 @@ import { useMentionedPlace } from "./mentioned-place.js";
  *
  * Read from main's document, which every window holds: every task's title,
  * the agents each task's row names, as their tabs name them
- * (`agentName`, so an untitled agent goes by its model), and the models they run on, the agents with no task the list
- * carries, theirs, and the automations that started them, the active task's
+ * (`agentName`, so an untitled agent goes by its model), the models they
+ * run on, and the automations that started them, the active task's
  * pages as the window holds them (`LIVE_READ.PAGES`), each task's key, the
  * Inbox items waiting, and the agents an automation started with no task;
  * from the directories standing around
@@ -86,15 +86,11 @@ function heldNamesOf(
   const tasks = new Map(planning?.tasks.map((task) => [task.id, task.name]));
   const agents = new Map<string, string>();
   const agentModels = new Map<string, string>();
+  const automations = new Map<string, string>();
   for (const agent of planning?.taskAgents ?? []) {
     agents.set(agent.id, agentName(agent));
     agentModels.set(agent.id, agent.model);
-  }
-  const automations = new Map<string, string>();
-  for (const agent of planning?.tasklessAgents ?? []) {
-    agents.set(agent.id, agentName(agent));
-    agentModels.set(agent.id, agent.model);
-    if (agent.automationId !== null && agent.automationName !== undefined) {
+    if (agent.automationId !== undefined && agent.automationName !== undefined) {
       automations.set(agent.automationId, agent.automationName);
     }
   }
@@ -148,14 +144,11 @@ const selectHeldStatuses = memoizedSelect(
     ),
 );
 
-/** Each listed agent's status, a task's and those on no task, by its id, built as the task statuses are. */
+/** Each listed agent's status by its id, built as the task statuses are. */
 const selectHeldAgentStatuses = memoizedSelect(
   (state) => [state.tasks],
   (planning): ReadonlyMap<string, AgentStatus> =>
-    new Map([
-      ...(planning.taskAgents ?? []).map((agent) => [agent.id, agent.status] as const),
-      ...(planning.tasklessAgents ?? []).map((agent) => [agent.id, agent.status] as const),
-    ]),
+    new Map((planning.taskAgents ?? []).map((agent) => [agent.id, agent.status] as const)),
 );
 
 /** No keys: what a window listing no numbered task holds, one object for every reader. */

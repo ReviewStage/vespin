@@ -16,7 +16,7 @@
  * here: it reaches the panel alone (root `AGENTS.md`'s cloud browser line).
  *
  * Takeover goes over this same socket, on the tabs contract's store and
- * terms (`agent-browser-tabs-procedures.ts`): a member who controls the
+ * terms (`agent-browser-tabs.ts`): a member who controls the
  * agent takes the tab for `BROWSER_TAKEOVER_HOLD_MS`, and their input moves
  * the takeover on, written at most every `RENEW_EVERY`, so the takeover
  * always stands well past their last input. A takeover is the member's
@@ -94,7 +94,7 @@ import {
   type Scope,
   Stream,
 } from "effect";
-import { BROWSER_TAKEOVER_HOLD_MS } from "../agents/agent-browser-tabs-procedures.js";
+import { BROWSER_TAKEOVER_HOLD_MS } from "../agents/agent-browser-tabs.js";
 import { controlsAgent } from "../agents/agent-reach.js";
 import { BROWSER_UNREACHABLE, type BrowserUnreachable } from "../agents/browser/agent-browser.js";
 import { EXCESS_KEYS, type UnparsedWireValue } from "../core.js";

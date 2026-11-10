@@ -23,6 +23,7 @@ import {
 import { readMarkSchema } from "./read-mark.js";
 import { countedNumber, memberRefSchema, wireUuidSchema } from "./service-wire.js";
 import { trimmedText } from "./text-schema.js";
+import { TRIGGER_PROVIDER } from "./trigger-catalog.js";
 
 /**
  * agent-wire.ts -- a task's coding agents, as the desktop starts, lists, reads, messages, and stops them.
@@ -471,6 +472,10 @@ export const AGENT_FAILURE = {
   NO_PROGRESS: "no_progress",
   /** No runner took the turn before its pickup deadline. */
   LINE_UNTAKEN: "line_untaken",
+  /** The plan's usage limit cut the turn short, and its launch on the next payer, or past the reset, never took it up. */
+  PLAN_LIMIT: "plan_limit",
+  /** The model refused the turn, as a provider's safeguards do, and no other model retried it; a continue on another model goes on. */
+  REFUSAL: "refusal",
   OTHER: "other",
 } as const;
 
@@ -539,8 +544,10 @@ export function turnStatusOfWord(word: string): TurnStatus {
  * A coding agent's newest turn as its row records it, the one record of a
  * turn's state (`@repo/database`'s `turn-state.ts`): its id and when it was
  * queued, which order it against another turn, its status word as a reader
- * takes it (`turnStatusOfWord`), whether a Stop was asked of it, and why it
- * failed where it did, in the wire's word.
+ * takes it (`turnStatusOfWord`), whether a Stop was asked of it, why it
+ * failed where it did, in the wire's word, and, for a turn held open while
+ * its starter's every subscription is at a usage limit and no API key pays,
+ * when the soonest of those limits resets, which it waits for to run again.
  */
 const agentTurnSchema = EffectSchema.Struct({
   id: wireUuidSchema,
@@ -548,6 +555,7 @@ const agentTurnSchema = EffectSchema.Struct({
   status: wordReadingUnknown(Object.values(TURN_STATUS), turnStatusOfWord),
   stopAsked: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   failure: EffectSchema.optionalKey(agentFailureSchema),
+  waitsUntil: EffectSchema.optionalKey(countedNumber),
 });
 
 export type AgentTurn = typeof agentTurnSchema.Type;
@@ -1036,8 +1044,6 @@ export type AgentPinRequest = typeof agentPinRequestSchema.Type;
  */
 export const agentReadRequestSchema = EffectSchema.Struct({ readMark: readMarkSchema });
 
-export type AgentReadRequest = typeof agentReadRequestSchema.Type;
-
 /**
  * Switching the agent's MCP servers (PATCH): the whole list of those off,
  * which replaces the list standing, so two quick changes land as the later
@@ -1102,8 +1108,10 @@ export const AGENT_LIST_ARCHIVED = {
 
 /**
  * Who archived an agent: a member from the window, the app on a call for the
- * member on it, or another coding agent of the workspace for the member who
- * started that agent, through its `archive_agent` tool.
+ * member on it or on its own for the agent's starter (an automation run or a
+ * Slack agent that finished, with why), or another coding agent of the
+ * workspace for the member who started that agent, through its
+ * `archive_agent` tool.
  */
 export const AGENT_ARCHIVER = {
   MEMBER: "member",
@@ -1211,6 +1219,8 @@ export const agentSummarySchema = EffectSchema.Struct({
   title: EffectSchema.NullOr(EffectSchema.String),
   /** Where its runner runs, said only of a local agent on its starter's device; absent for one in a sandbox, and from a service older than it. */
   machine: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_MACHINE.DEVICE)),
+  /** The vCPUs its sandbox opens with (`@repo/features/sandbox-size`), each with its memory; absent for a local agent, and from a service older than it. */
+  sandboxVcpus: EffectSchema.optionalKey(countedNumber),
   /**
    * The Mac a local agent runs on, by its own name, and the epoch
    * milliseconds it last beat, which a reader holds against its own clock
@@ -1291,6 +1301,8 @@ export const agentSummarySchema = EffectSchema.Struct({
    * their account is gone, and from a service before it.
    */
   startedBy: EffectSchema.optionalKey(memberRefSchema),
+  /** The coding agent whose `start_agent` started this one; absent for one a member or an automation started, and from a service before it. */
+  startedByAgentId: EffectSchema.optionalKey(wireUuidSchema),
   /** The automation whose run started the agent; absent for one started by hand, once that automation is deleted, and from a service before it. */
   automationId: EffectSchema.optionalKey(wireUuidSchema),
   /**
@@ -1379,7 +1391,7 @@ export const agentMessageAnswerSchema = EffectSchema.Struct({
  * is on screen, at once and then every minute while it stays there. The
  * service answers at once and keeps a cloud agent's sandbox and runner
  * warm past it, launching the runner with no message where none runs, so
- * a message goes straight into the running session; it lets them go five
+ * a message goes straight into the running session; it lets them go three
  * minutes after the later of the agent's last turn's end and the last such
  * call. A Mac's agent, an archived one, and one the caller may not message
  * are answered the same and kept warm by nothing.
@@ -1398,15 +1410,24 @@ export const agentDeleteAnswerSchema = EffectSchema.Struct({
  * The run of an automation that started an agent, as its page opens on it:
  * the automation's prompt alone, without the lines we add of the firing,
  * then what fired it, each where the firing has one: the issue or pull
- * request a GitHub event names, a webhook call's body as its caller sent
- * it, cut as the agent was handed it, and the member who asked for a run
- * now, absent once their account is gone.
+ * request a GitHub event names, the issue an integration's event is about
+ * (a Sentry issue), a webhook call's body as its caller sent it, cut as the
+ * agent was handed it, and the member who asked for a run now, absent once
+ * their account is gone.
  */
 const agentOriginSchema = EffectSchema.Struct({
   prompt: EffectSchema.String,
   subject: EffectSchema.optionalKey(
     EffectSchema.Struct({
       number: countedNumber,
+      title: EffectSchema.optionalKey(EffectSchema.String),
+      url: EffectSchema.optionalKey(EffectSchema.String),
+    }),
+  ),
+  /** The issue an integration's event is about, by its provider, its title, and its address, each where the event gave it; absent from a service before it. */
+  issue: EffectSchema.optionalKey(
+    EffectSchema.Struct({
+      provider: EffectSchema.Literals(Object.values(TRIGGER_PROVIDER)),
       title: EffectSchema.optionalKey(EffectSchema.String),
       url: EffectSchema.optionalKey(EffectSchema.String),
     }),
@@ -2766,6 +2787,13 @@ export const agentMessagesAnswerSchema = EffectSchema.Struct({
    * before payers were recorded, and from a service older than it.
    */
   payer: EffectSchema.optionalKey(agentPayerSchema),
+  /**
+   * The starter's subscription a plan payer runs the agent on, by its id,
+   * which the starter's own Settings names it by, so the chip says which
+   * plan pays. Absent where no launch recorded one, for any other payer,
+   * on a worker's page, and from a service older than it.
+   */
+  payerSubscriptionId: EffectSchema.optionalKey(EffectSchema.String),
   context: EffectSchema.optionalKey(agentContextSchema),
   /**
    * The journal revision the agent's transcript was last rewound at, on

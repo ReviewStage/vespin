@@ -29,6 +29,9 @@ interface Recorded {
   turns: number[];
   republished: number[];
   keptUp: number[];
+  resumed: number[];
+  heldPushes: number[];
+  wakeups: number[];
 }
 
 function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
@@ -37,6 +40,9 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
     turns: [],
     republished: [],
     keptUp: [],
+    resumed: [],
+    heldPushes: [],
+    wakeups: [],
   };
   const options: MaintenanceSweepOptions = {
     request: sweepRequest(),
@@ -61,6 +67,21 @@ function sweepOptions(overrides: Partial<MaintenanceSweepOptions> = {}) {
       Effect.sync(() => {
         recorded.keptUp.push(now);
         return 0;
+      }),
+    resumeWaitedTurns: (now) =>
+      Effect.sync(() => {
+        recorded.resumed.push(now);
+        return 0;
+      }),
+    releaseHeldPushes: (now) =>
+      Effect.sync(() => {
+        recorded.heldPushes.push(now);
+        return 0;
+      }),
+    deliverWakeups: (now) =>
+      Effect.sync(() => {
+        recorded.wakeups.push(now);
+        return { delivered: 0, failed: 0 };
       }),
     ...overrides,
   };
@@ -88,6 +109,9 @@ it.effect("a deployment without CRON_SECRET answers unavailable and sweeps nothi
       turns: [],
       republished: [],
       keptUp: [],
+      resumed: [],
+      heldPushes: [],
+      wakeups: [],
     });
   }),
 );
@@ -107,12 +131,18 @@ it.effect("a wrong or missing bearer is refused and sweeps nothing", () =>
       turns: [],
       republished: [],
       keptUp: [],
+      resumed: [],
+      heldPushes: [],
+      wakeups: [],
     });
     assert.deepEqual(missing.recorded, {
       syncLog: [],
       turns: [],
       republished: [],
       keptUp: [],
+      resumed: [],
+      heldPushes: [],
+      wakeups: [],
     });
   }),
 );
@@ -133,6 +163,9 @@ it.effect(
         turns: [instant],
         republished: [instant],
         keptUp: [instant],
+        resumed: [instant],
+        heldPushes: [instant],
+        wakeups: [instant],
       });
     }),
 );

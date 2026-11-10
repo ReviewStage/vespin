@@ -10,19 +10,25 @@ import {
   discardAgent,
   readAgent,
   recordAgentCompaction,
+  recordAgentNativeSession,
   recordAgentStep,
   renameAgent,
   takeAgentMentionedServers,
   updateAgentBranch,
 } from "@repo/database/models/agent-store";
+import {
+  appendSessionEntries,
+  loadSessionEntries,
+} from "@repo/database/models/claude-session-entries";
+import { registerDevice } from "@repo/database/models/device-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
-import { saveDescriptionText } from "@repo/database/models/task-store";
+import { createTask, saveDescriptionText } from "@repo/database/models/task-store";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
-import { messages } from "@repo/database/schemas/storage";
+import { conversations, messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, openedPullRequest, startTask } from "@repo/database/testing";
+import { DEVICE_LAYOUT, getTestDB, openedPullRequest, startTask } from "@repo/database/testing";
 import { HOSTED_API_ERROR } from "@repo/features";
 import {
   firstMessageParts,
@@ -37,6 +43,7 @@ import {
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
+  AGENT_MACHINE,
   AGENT_STATUS,
   agentAnswerSchema,
   agentListAnswerSchema,
@@ -48,7 +55,7 @@ import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import { keptPictureIdOf } from "@repo/features/conversation-picture-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
-import type { WireBoundaryInput } from "@repo/wire";
+import { TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
 import { temporaryDirectory } from "@repo/wire/testing";
 import { MockLanguageModelV4 } from "ai/test";
 import { eq } from "drizzle-orm";
@@ -81,7 +88,6 @@ import {
   request,
   SIZED_PNG,
   SMALL_WINDOW,
-  SNAPSHOT,
   SOL,
   startAs,
   TASK_AGENTS,
@@ -250,6 +256,166 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           [fromOf.has(source.id), fromOf.get(source.id), fromOf.get(started.id)],
           [true, undefined, { agentId: source.id, steps: 5, totalSteps: 5 }],
         );
+      }),
+  );
+
+  /** The source's CLI session recorded as its harness's own, the store holding it from its first entry; answers the session. */
+  const heldSession = (stored: Agent) =>
+    Effect.gen(function* () {
+      const session = randomUUID();
+      yield* recordAgentNativeSession(stored.userId, stored.id, session);
+      yield* appendSessionEntries(
+        stored.userId,
+        stored.conversationId,
+        { projectKey: "-workspace-repository", sessionId: session },
+        [{ type: "user", uuid: randomUUID(), parentUuid: null }],
+      );
+      return session;
+    });
+
+  it.effect(
+    "a continue of a source whose CLI session the store holds carries that session, cut before a rewind the source never relaunched after",
+    () =>
+      Effect.gen(function* () {
+        const { owner, task, ask, source, stored } = yield* sourceAgent;
+        const session = yield* heldSession(stored);
+        // A rewind leaves the line its harness's session is still to be cut before for the next launch.
+        yield* Database.use((db) =>
+          db
+            .update(conversations)
+            .set({ nativeRewind: "dropped-line" })
+            .where(eq(conversations.id, stored.conversationId)),
+        );
+
+        const started = readAnswer(
+          agentAnswerSchema,
+          HOSTED_HTTP_STATUS.CREATED,
+          yield* ask(
+            startAs(owner, task.id, { idempotencyKey: randomUUID(), from: { agentId: source.id } }),
+          ),
+        ).agent;
+
+        const continued = Option.getOrThrow(yield* readAgent(owner, started.id));
+        assert.deepEqual(
+          [continued.startedFrom?.session, continued.startedFrom?.cutBefore],
+          [session, "dropped-line"],
+        );
+      }),
+  );
+
+  it.effect(
+    "a continue of an agent on a Mac into the cloud carries its CLI session re-keyed to the sandbox's checkout, Codex's rows as they were, and tells it where the Mac's checkout stood",
+    () =>
+      Effect.gen(function* () {
+        const { owner, task, ask, agentSessions, source, stored } = yield* sourceAgent;
+        const deviceId = randomUUID();
+        yield* registerDevice(owner, { id: deviceId, name: "Studio", ...DEVICE_LAYOUT });
+        yield* Database.use((db) =>
+          db
+            .update(agentTable)
+            .set({ machine: AGENT_MACHINE.DEVICE, deviceId })
+            .where(eq(agentTable.id, source.id)),
+        );
+        const macCheckout = `/Users/fixture/.vespin/agents/${source.id}/repository`;
+        const session = randomUUID();
+        yield* recordAgentNativeSession(owner, source.id, session);
+        const opening = { type: "user", uuid: randomUUID(), parentUuid: null };
+        yield* appendSessionEntries(
+          owner,
+          stored.conversationId,
+          {
+            projectKey: `-Users-fixture--vespin-agents-${source.id}-repository`,
+            sessionId: session,
+          },
+          [opening],
+        );
+        const rollout = { type: "session_meta" };
+        const rolloutKey = {
+          projectKey: "codex",
+          sessionId: "thread",
+          subpath: "sessions/rollout.jsonl",
+        };
+        yield* appendSessionEntries(owner, stored.conversationId, rolloutKey, [rollout]);
+
+        const started = readAnswer(
+          agentAnswerSchema,
+          HOSTED_HTTP_STATUS.CREATED,
+          yield* ask(
+            startAs(owner, task.id, {
+              idempotencyKey: randomUUID(),
+              from: { agentId: source.id },
+              runsOn: { machine: AGENT_MACHINE.VERCEL },
+            }),
+          ),
+        ).agent;
+
+        const continued = Option.getOrThrow(yield* readAgent(owner, started.id));
+        assert.equal(continued.startedFrom?.session, session);
+        assert.deepEqual(
+          yield* loadSessionEntries(owner, continued.conversationId, {
+            projectKey: "-workspace-repository",
+            sessionId: session,
+          }),
+          Option.some([opening]),
+        );
+        assert.deepEqual(
+          yield* loadSessionEntries(owner, continued.conversationId, rolloutKey),
+          Option.some([rollout]),
+        );
+        assert.ok(openedParts(agentSessions).parts.replay?.preamble.includes(`\`${macCheckout}\``));
+      }),
+  );
+
+  it.effect(
+    "a fork at a message carries its source's CLI session, cut before the line that opened the next turn, in place of a replay",
+    () =>
+      Effect.gen(function* () {
+        const { owner, task, ask, agentSessions, source, stored, firstTurn, laterLine } =
+          yield* sourceAgent;
+        const session = yield* heldSession(stored);
+        // The later line opened a turn of its own, so the session holds it.
+        const turnId = randomUUID();
+        const [line] = yield* Database.use((db) =>
+          db
+            .insert(turns)
+            .values({
+              id: turnId,
+              userId: owner,
+              conversationId: stored.conversationId,
+              origin: TURN_ORIGIN.TYPED,
+              status: TURN_STATUS.SETTLED,
+            })
+            .returning({ id: turns.id }),
+        ).pipe(
+          Effect.andThen(() =>
+            Database.use((db) =>
+              db
+                .update(messages)
+                .set({ turnId })
+                .where(eq(messages.id, laterLine))
+                .returning({ clientId: messages.clientId }),
+            ),
+          ),
+        );
+
+        const started = readAnswer(
+          agentAnswerSchema,
+          HOSTED_HTTP_STATUS.CREATED,
+          yield* ask(
+            startAs(owner, task.id, {
+              idempotencyKey: randomUUID(),
+              from: { agentId: source.id, messageId: firstTurn },
+            }),
+          ),
+        ).agent;
+        const { parts } = openedParts(agentSessions);
+
+        const forked = Option.getOrThrow(yield* readAgent(owner, started.id));
+        assert.deepEqual(
+          [forked.startedFrom?.session, forked.startedFrom?.cutBefore],
+          [session, line?.clientId],
+        );
+        assert.deepEqual(parts.replay?.steps, []);
       }),
   );
 
@@ -554,50 +720,6 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             .where(eq(agentTable.id, started.id)),
         );
         assert.equal(row[0]?.startedFrom?.sandbox, agentSandboxName(SOURCE_SANDBOX.SESSION));
-      }),
-  );
-
-  it.effect(
-    "a continue of a source on no task, keyed by that source, copies its checkout to a branch of its own as a task's continue does, checked against the repository the source's own place clones",
-    (t) =>
-      Effect.gen(function* () {
-        const { owner, task, ask, agentSessions, source, checkout } = yield* copyScenario(t);
-        // An automation's run leaves an agent so: in its workspace, on no task, handed a prompt.
-        yield* Database.use((db) =>
-          db
-            .update(agentTable)
-            .set({
-              taskId: null,
-              organizationId: task.workspaceId,
-              descriptionSnapshot: null,
-              prompt: SNAPSHOT,
-            })
-            .where(eq(agentTable.id, source.id)),
-        );
-
-        const started = readAnswer(
-          agentAnswerSchema,
-          HOSTED_HTTP_STATUS.CREATED,
-          yield* ask(
-            request(AGENT_STARTS, owner, {
-              method: "POST",
-              id: source.id,
-              body: { idempotencyKey: randomUUID(), from: { agentId: source.id } },
-            }),
-          ),
-        ).agent;
-        const preamble = openedParts(agentSessions).parts.replay?.preamble ?? "";
-
-        assert.equal(started.planId, null);
-        const branch = started.from?.branch ?? "";
-        assert.match(branch, /^luke\/teammate-invitations-continued-[0-9a-f]{8}$/u);
-        assert.ok(
-          preamble.includes(
-            `with what it had not committed or pushed recorded as one snapshot commit on top, is copied to the branch \`${branch}\`, made for you`,
-          ),
-        );
-        const fresh = fetchedAsHanded(checkout, preamble);
-        assert.equal(readFileSync(join(fresh, "invites.ts"), "utf8"), "export const ttl = 7;\n");
       }),
   );
 
@@ -982,14 +1104,18 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   );
 
   it.effect(
-    "a Start keyed by an agent on no task continues it in its workspace on its repository and forks it at one of its messages there, a retry answering the agent it made, even once the source is gone; a body naming another source, an account outside the workspace, and a task's Start naming it start nothing; a source in no repository is continued in none; and one keyed by an agent on a task starts on that task",
+    "a Start keyed by an agent handed a prompt continues it on its task on the task's repository and forks it at one of its messages there, a retry answering the agent it made, even once the source is gone; a body naming another source, an account outside the workspace, and another task's Start naming it start nothing; a source on a task in no repository is continued in none; and one keyed by an agent handed the description starts on that task",
     () =>
       Effect.gen(function* () {
         const { owner, other, task, ask, agentSessions } = yield* openTask();
         const BRIEF = "Sweep the flaky tests.";
-        const made = yield* createAgent(owner, {
-          taskId: null,
+        const sweep = yield* createTask(owner, {
           organizationId: task.workspaceId,
+          name: "Flaky tests",
+          repository: RELAY_FULL_NAME,
+        });
+        const made = yield* createAgent(owner, {
+          taskId: sweep.id,
           descriptionSnapshot: null,
           prompt: BRIEF,
           idempotencyKey: randomUUID(),
@@ -1020,7 +1146,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         const stored = Option.getOrThrow(yield* readAgent(owner, continued.id));
         assert.deepEqual(
           [stored.taskId, stored.organizationId, stored.repository, stored.descriptionSnapshot],
-          [null, task.workspaceId, RELAY_FULL_NAME, null],
+          [sweep.id, task.workspaceId, RELAY_FULL_NAME, null],
         );
         assert.equal(openedParts(agentSessions).parts.brief, BRIEF);
         assert.deepEqual(replayed(), [
@@ -1064,7 +1190,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             from: { agentId: source.id, messageId: firstTurn },
           }),
         ).agent;
-        assert.equal(forked.planId, null);
+        assert.equal(forked.planId, sweep.id);
         assert.deepEqual(replayed(), ["Said: Fixed the shared temp dir."]);
 
         const before = agentSessions.opened.length;
@@ -1087,14 +1213,14 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             startAs(owner, task.id, { idempotencyKey: randomUUID(), from: { agentId: source.id } }),
           ),
           refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
-          "a task's Start refuses a source on no task rather than starting afresh",
+          "a task's Start refuses a source on another task rather than starting afresh",
         );
         assert.equal(agentSessions.opened.length, before);
 
-        // A source on no task and in no repository is continued in its workspace, in none.
+        // A source on a task in no repository is continued on that task, in none.
+        const bareTask = yield* createTask(owner, { organizationId: task.workspaceId });
         const bare = yield* createAgent(owner, {
-          taskId: null,
-          organizationId: task.workspaceId,
+          taskId: bareTask.id,
           descriptionSnapshot: null,
           prompt: "Talk the release through.",
           idempotencyKey: randomUUID(),
@@ -1115,7 +1241,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         const bareStored = Option.getOrThrow(yield* readAgent(owner, fromBare.id));
         assert.deepEqual(
           [bareStored.taskId, bareStored.organizationId, bareStored.repository],
-          [null, task.workspaceId, null],
+          [bareTask.id, task.workspaceId, null],
         );
 
         // The same path from an agent on a task starts on that task, as the task's own Start would.

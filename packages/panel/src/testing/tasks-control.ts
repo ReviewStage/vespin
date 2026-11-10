@@ -32,6 +32,7 @@ import {
   agentArchiveMutation,
   agentDeleteMutation,
   agentRenameMutation,
+  agentsArchiveMutation,
   MODELS_READ,
 } from "../tasks/use-agents.js";
 import { HISTORY_READ } from "../tasks/use-description-history.js";
@@ -321,6 +322,14 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
     archiveAgent: agentArchiveMutation(({ agentId, archived, asked }) =>
       onArchive(agentId, archived, asked === undefined ? {} : { asked }),
     ),
+    // And a selection's archive is each agent's, as the test answers it.
+    archiveAgents: agentsArchiveMutation(({ agentIds, archived, asked }) =>
+      Promise.all(
+        agentIds.map((agentId) =>
+          onArchive(agentId, archived, asked === undefined ? {} : { asked }),
+        ),
+      ),
+    ),
     deleteAgent: agentDeleteMutation(() =>
       Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED, cause: undefined }),
     ),
@@ -487,7 +496,6 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     listed: {
       tasks: overrides.tasks ?? [],
     },
-    listedAgents: { standing: [], archived: [] },
     workspaces: [],
     workspace: undefined,
     onChooseWorkspace: ignore,

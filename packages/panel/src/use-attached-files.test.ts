@@ -2,10 +2,11 @@
 
 import assert from "node:assert/strict";
 import type { AgentAgentAnswer } from "@repo/features/agent-view";
-import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { AGENT_ATTACHMENT_TYPE, AGENT_BOUNDS } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE, type ShownFailureReport } from "@repo/features/shown-failure";
+import { closeHistory } from "@tiptap/pm/history";
 import { Effect } from "effect";
-import { act, createElement, type ReactNode } from "react";
+import { act, createElement, type ReactNode, useEffect, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test } from "vitest";
 import { installShownFailureReporter } from "./failure-report.js";
@@ -17,15 +18,18 @@ import {
   composerEditor,
   editorBundleLanded,
   installEditorLayout,
+  pressInComposer,
   QUIET_COMPOSER,
+  typeInComposer,
 } from "./testing/composer.js";
 import { testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
 
 /**
  * The agent's box takes files: a picture dropped on the card or pasted into
- * the field is held as its chip, and pictures past the bytes a message
- * carries together are left out, the box saying why in its note while the
+ * the field is held as "Picture 1", its chip written into the words where
+ * the caret stood, and goes with its chip when one Backspace takes it out;
+ * pictures past the bytes a message carries together are left out, the box saying why in its note while the
  * ones that fit still come; the note goes once the box's message goes,
  * whichever way it goes, queued behind a running turn as sent.
  */
@@ -69,6 +73,55 @@ function QueueingBox(): ReactNode {
       onCancel: ignore,
     },
   });
+}
+
+/** The agent's box editing a queued message, whose Save the queue refuses, so its words stay standing. */
+function RefusedEditBox(): ReactNode {
+  const composer = useAgentComposer({
+    agentId: "agent-1",
+    taskId: "plan-1",
+    messages: [],
+    send: () => new Promise<AgentAgentAnswer>(ignore),
+  });
+  return createElement(AgentComposer, {
+    ...QUIET_COMPOSER,
+    composer,
+    skills: undefined,
+    queueing: {
+      working: true,
+      enterQueues: true,
+      onQueue: ignore,
+      editing: true,
+      onSave: ignore,
+      onSteer: ignore,
+      onCancel: ignore,
+    },
+  });
+}
+
+/** The agent's box opening on a draft kept with a picture its words name, as a draft kept from before, or a message opened for editing. */
+function KeptDraftBox(): ReactNode {
+  const composer = useAgentComposer({
+    agentId: "agent-1",
+    taskId: "plan-1",
+    messages: [],
+    send: () => new Promise<AgentAgentAnswer>(ignore),
+  });
+  const [kept, setKept] = useState(false);
+  // Note that the draft is kept once, before the box first draws, since the control's doors are new on every render.
+  const seeded = useRef(false);
+  useEffect(() => {
+    if (seeded.current) return;
+    seeded.current = true;
+    composer.setDraft("Like [Picture 1]");
+    composer.setAttachments(() => [
+      { name: "Picture 1", mediaType: AGENT_ATTACHMENT_TYPE.PNG, data: "iVBORw0KGgo=" },
+    ]);
+    setKept(true);
+  });
+  return kept
+    ? createElement(AgentComposer, { ...QUIET_COMPOSER, composer, skills: undefined })
+    : null;
 }
 
 /** The boxes that take files, each drawn alone. */
@@ -143,31 +196,102 @@ async function paste(container: HTMLElement, files: readonly File[]): Promise<bo
   return !event.defaultPrevented;
 }
 
-/** What the box shows of its files: its chips by name, and its note. */
+/** What the box shows of its files: its chips beside the words by name, the pictures its words hold by what their chips open, and its note. */
 function held(container: HTMLElement) {
   return {
     chips: [...container.querySelectorAll('[aria-label="Attached files"] > li')].map(
       attachmentChipName,
     ),
+    pictures: [
+      ...composerEditor(container).querySelectorAll('[data-chip="pictureChip"] [aria-label]'),
+    ].map((chip) => chip.getAttribute("aria-label")),
     note: container.querySelector('.ui-composer-foot-note [role="alert"]')?.textContent ?? null,
   };
 }
 
-test("a picture dropped on the agent's box is held as its chip, and says nothing", async () => {
+test("a picture dropped on the agent's box is held as its chip in the words, and says nothing", async () => {
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
     await drop(container, [png("dropped.png")]);
-    assert.deepEqual(held(container), { chips: ["dropped.png"], note: null }, box);
+    assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null }, box);
   }
 });
 
-test("a picture pasted into the agent's box is held as its chip, the paste writing no words", async () => {
+test("a picture pasted into the agent's box is held as its chip in the words, the paste writing no words of its own", async () => {
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
     assert.equal(await paste(container, [png("pasted.png")]), false, `${box} takes the paste`);
-    assert.deepEqual(held(container), { chips: ["pasted.png"], note: null }, box);
-    assert.equal(composerEditor(container).textContent, "", `${box} writes no words`);
+    assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null }, box);
   }
+});
+
+test("one Backspace taking a picture's chip out of the words takes the picture off the message", async () => {
+  const container = await mounted("agent");
+  await drop(container, [png("one.png"), png("two.png")]);
+  assert.deepEqual(held(container).pictures, ["Open Picture 1", "Open Picture 2"]);
+
+  act(() => pressInComposer(container, "Backspace"));
+  await settle();
+
+  assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
+});
+
+test("undo bringing a deleted picture's chip back brings its picture back, though the words were emptied in between", async () => {
+  const container = await mounted("agent");
+  await drop(container, [png("one.png")]);
+  const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
+
+  // Note that each step closes its own entry in the history, as a pause between them would.
+  const pause = () => act(() => editor.view.dispatch(closeHistory(editor.state.tr)));
+  pause();
+  act(() => pressInComposer(container, "Backspace"));
+  pause();
+  typeInComposer(container, "a");
+  act(() => {
+    const { from } = editor.state.selection;
+    editor.view.dispatch(editor.state.tr.delete(from - 1, from));
+  });
+  await settle();
+  assert.deepEqual(held(container).pictures, []);
+
+  for (let undo = 0; undo < 4 && held(container).pictures.length === 0; undo += 1) {
+    act(() => editor.commands.undo());
+    await settle();
+  }
+
+  assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
+});
+
+test("a save that leaves the box's words standing still lets one Backspace take a picture off with its chip", async () => {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  await act(async () => root.render(withQueryClient(createElement(RefusedEditBox))));
+  await settle();
+  await drop(container, [png("one.png"), png("two.png")]);
+
+  act(() => pressInComposer(container, "Enter"));
+  await settle();
+  act(() => pressInComposer(container, "Backspace"));
+  await settle();
+
+  assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
+});
+
+test("one Backspace taking a chip the box opened on out of the words takes its picture off", async () => {
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  await act(async () => root.render(withQueryClient(createElement(KeptDraftBox))));
+  await settle();
+  assert.deepEqual(held(container).pictures, ["Open Picture 1"]);
+
+  act(() => pressInComposer(container, "Backspace"));
+  await settle();
+
+  assert.deepEqual(held(container), { chips: [], pictures: [], note: null });
 });
 
 test("a file this machine cannot read says so in the agent's box and is reported with why", async () => {
@@ -185,7 +309,11 @@ test("a file this machine cannot read says so in the agent's box and is reported
   await drop(container, [file]);
   uninstall();
 
-  assert.deepEqual(held(container), { chips: [], note: "notes.txt couldn't be read." });
+  assert.deepEqual(held(container), {
+    chips: [],
+    pictures: [],
+    note: "notes.txt couldn't be read.",
+  });
   assert.deepEqual(
     reports.map((report) => [report.surface, report.cause]),
     [[FAILURE_SURFACE.ATTACHMENT_READ, unreadable]],
@@ -202,7 +330,8 @@ test("pictures past the bytes a message carries together leave the last out of t
     assert.deepEqual(
       held(container),
       {
-        chips: ["one.png", "two.png"],
+        chips: [],
+        pictures: ["Open Picture 1", "Open Picture 2"],
         note: "These files are too large to send together.",
       },
       box,
@@ -226,5 +355,5 @@ test("a note of files left out goes once the box's message is queued, as it goes
   act(() => queue.click());
   await settle();
 
-  assert.deepEqual(held(container), { chips: [], note: null });
+  assert.deepEqual(held(container), { chips: [], pictures: [], note: null });
 });

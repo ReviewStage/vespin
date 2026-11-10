@@ -1,3 +1,4 @@
+import { shortCommit } from "@repo/features/code-ref-words";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import type { TasksTreeAnswer } from "@repo/features/tasks-view";
 import {
@@ -49,7 +50,6 @@ import {
   FILE_READ,
   type FileRead,
   fileUrl,
-  shortCommit,
   WHOLE_TEXT,
   type WholeText,
   wholeTextOf,
@@ -556,7 +556,7 @@ export function paneToggleAction(
 /** Open on GitHub as an item of a phone's ⋯, dimmed with no page to open yet, as the bar's button is. */
 function gitHubAction(onGitHub: (() => void) | undefined, detail?: string): MenuAction {
   return {
-    ...commandAction(PANEL_COMMAND.OPEN_ON_GITHUB, () => onGitHub?.(), false),
+    ...commandAction(PANEL_COMMAND.OPEN_ON_GITHUB, () => onGitHub?.(), undefined),
     detail,
     disabled: onGitHub === undefined,
   };

@@ -5,7 +5,7 @@
  * service that launches the runner (P08) and the route that takes its events
  * (P09) import it without the SDK behind it. Every line on stdin is one JSON
  * object: the first is the config, each later one a message, a stop, a model
- * change, a retire, or a warm. A config that names `linesUrl` has the runner read
+ * change, a retire, a warm, or an approval. A config that names `linesUrl` has the runner read
  * the later lines from the service instead (`RUNNER_LINES`).
  *
  * The config says which harness the launch runs: Claude Code (P05), or Codex
@@ -99,10 +99,11 @@ export const RUNNER_PLACE = {
    * A machine its member runs our host on, a Linux box or a Mac, with
    * nobody signed in at it, where each launch runs straight on the box as
    * the host's own user, with full access to what that user reaches, beside
-   * the box's other processes. No harness runs a sandbox of its own or
-   * asks an approval there, as in the cloud's sandbox: Claude Code under
-   * `bypassPermissions`, and Codex in `danger-full-access` with approval
-   * `never`.
+   * the box's other processes. No harness runs a sandbox of its own there,
+   * as in the cloud's sandbox, and none asks an approval but where its
+   * agent's mode does (`PERMISSION_MODE`): Claude Code under
+   * `bypassPermissions` by default, and Codex in `danger-full-access` with
+   * approval `never`.
    */
   HOST: "host",
 } as const;
@@ -149,6 +150,48 @@ export const CLAUDE_CODE_TOOLS = {
 
 /** The read-only subagent a Claude Code launch defines, by the `subagent_type` the Agent tool takes. */
 export const CLAUDE_CODE_WORKER = "worker";
+
+/**
+ * How a Claude Code launch answers its agent's tool calls (its config's
+ * `permissionMode`): every call run unasked, as every launch ran before
+ * modes, under the CLI's `bypassPermissions` (`FULL_ACCESS`, the default);
+ * a file edit or a shell command asked of the member first, in the CLI's
+ * `default` mode (`ASK`); or each call left to the CLI's `auto` classifier,
+ * which asks the member where it cannot decide (`AUTO`). An ask reaches the
+ * service as an APPROVAL_REQUESTED event and is answered by an `approval`
+ * line. Codex reads no mode: it runs every call unasked, approval `never`,
+ * whatever its agent's mode.
+ */
+export const PERMISSION_MODE = {
+  FULL_ACCESS: "full_access",
+  ASK: "ask",
+  AUTO: "auto",
+} as const;
+export type PermissionMode = (typeof PERMISSION_MODE)[keyof typeof PERMISSION_MODE];
+const PermissionModeSchema = Schema.Literals(Object.values(PERMISSION_MODE));
+
+/**
+ * The built-in tools a launch whose mode asks runs unasked, by the names the
+ * CLI gives them: those that only read, the checkout or the web, load a
+ * skill's instructions or a deferred tool, or keep the agent's own to-do list
+ * and wakeups. Every MCP server the launch hands the CLI, ours and each
+ * integration's, runs unasked beside them by its `mcp__<server>` rule, so
+ * what asks is a file edit, a shell command, and a server the checkout adds.
+ */
+export const CLAUDE_CODE_UNASKED_TOOLS = [
+  "Read",
+  "Glob",
+  "Grep",
+  "WebFetch",
+  "WebSearch",
+  "Skill",
+  "ToolSearch",
+  "TaskCreate",
+  "TaskUpdate",
+  "TaskList",
+  "TaskGet",
+  "ScheduleWakeup",
+] as const;
 
 /** The harness a launch runs, spelled as `conversations.runtime` spells it. */
 export const RUNNER_HARNESS = {
@@ -209,6 +252,46 @@ export const INPUT_LINE = {
   MODEL: "model",
   RETIRE: "retire",
   WARM: "warm",
+  APPROVAL: "approval",
+} as const;
+
+/**
+ * The member's answers to a tool call's ask: allow the call; allow it and,
+ * for as long as the launch's CLI runs, every call its rule covers, as the
+ * CLI suggested it, kept in the session alone so nothing is written to the
+ * checkout (`ALLOW_FOR_AGENT`); or deny it.
+ */
+export const APPROVAL_DECISION = {
+  ALLOW: "allow",
+  ALLOW_FOR_AGENT: "allow_for_agent",
+  DENY: "deny",
+} as const;
+export type ApprovalDecision = (typeof APPROVAL_DECISION)[keyof typeof APPROVAL_DECISION];
+const ApprovalDecisionSchema = Schema.Literals(Object.values(APPROVAL_DECISION));
+
+/** What settled a tool call's ask, as APPROVAL_RESOLVED names it. */
+export const APPROVAL_BY = {
+  /** The member's answer, an `approval` line. */
+  MEMBER: "member",
+  /** A message the member sent while it waited, which denied it with the message's words. */
+  MESSAGE: "message",
+  /** The CLI withdrew it, as it does on a stop's interrupt: denied. */
+  ABORTED: "aborted",
+  /** The launch ended while it waited: denied. */
+  ENDED: "ended",
+} as const;
+export type ApprovalBy = (typeof APPROVAL_BY)[keyof typeof APPROVAL_BY];
+const ApprovalBySchema = Schema.Literals(Object.values(APPROVAL_BY));
+
+/**
+ * How much of a call's input its APPROVAL_REQUESTED event carries: each
+ * string cut to `TEXT_MAX` characters and each list to `ITEMS_MAX` items, an
+ * ellipsis ending a cut string, since a write's whole file can be its input,
+ * and the call stands whole in the transcript beside the ask.
+ */
+export const APPROVAL_INPUT = {
+  TEXT_MAX: 2_000,
+  ITEMS_MAX: 50,
 } as const;
 
 /**
@@ -263,17 +346,63 @@ export type RunnerLinesAnswer = typeof RunnerLinesAnswerSchema.Type;
  * names `transcriptsUrl`: Anthropic's reference `SessionStore`'s five calls
  * (the Agent SDK's `append`, `load`, `listSessions`, `delete`,
  * `listSubkeys`), each one POST under the runner's bearer, run against the
- * agent's own rows.
+ * agent's own rows. A runner loads a transcript a page at a time
+ * (`LOAD_PAGE`), so no one answer must hold a large session whole under the
+ * platform's bound on a function's response; `LOAD` is still answered for a
+ * runner from before pages, which a Mac may bundle.
  */
 export const RUNNER_TRANSCRIPTS = {
   CALL: {
     APPEND: "append",
     LOAD: "load",
+    LOAD_PAGE: "loadPage",
     LIST_SESSIONS: "listSessions",
     DELETE: "delete",
     LIST_SUBKEYS: "listSubkeys",
   },
+  /** The project Codex's threads are kept under (`codex-rollout.ts`), which names no checkout. */
+  CODEX_PROJECT: "codex",
 } as const;
+
+/**
+ * Whether a Codex rollout's subpath, as the store keeps it, names a file
+ * inside `CODEX_HOME`: a relative path of plain segments, none of them `.`
+ * or `..`, ending in `.jsonl`, as the mirror keys every rollout Codex
+ * writes. Note that a transcript is copied from agent to agent, a sandbox's
+ * onto a Mac among them, so a subpath its runner appended is never trusted
+ * as a place to write.
+ */
+export function rolloutSubpathContained(subpath: string): boolean {
+  if (!subpath.endsWith(".jsonl") || subpath.includes("\\") || subpath.includes("\0")) {
+    return false;
+  }
+  return subpath
+    .split("/")
+    .every((segment) => segment !== "" && segment !== "." && segment !== "..");
+}
+
+/** How long a Claude Code project key runs before the SDK cuts it and adds the path's hash. */
+const CLAUDE_PROJECT_KEY_CHARS = 200;
+
+/**
+ * The project the Agent SDK keys a Claude Code session's transcript under
+ * for the checkout given, as it keys it from the session's resolved working
+ * folder: each character but an ASCII letter or digit as `-`, and past 200
+ * characters cut there with the path's 32-bit string hash after it in base
+ * 36. Note that a path is read as the SDK reads it on a Mac, composed (NFC),
+ * which changes no ASCII path.
+ */
+export function claudeProjectKey(checkoutPath: string): string {
+  const path = checkoutPath.normalize("NFC");
+  const key = path.replace(/[^a-zA-Z0-9]/g, "-");
+  if (key.length <= CLAUDE_PROJECT_KEY_CHARS) return key;
+  let hash = 0;
+  for (let index = 0; index < path.length; index += 1) {
+    hash = (hash << 5) - hash + path.charCodeAt(index);
+    hash |= 0;
+  }
+  return `${key.slice(0, CLAUDE_PROJECT_KEY_CHARS)}-${Math.abs(hash).toString(36)}`;
+}
 
 /** The SDK's `SessionKey`: a project, a session, and a subpath, absent for the main transcript. */
 const TranscriptKeySchema = Schema.Struct({
@@ -285,6 +414,12 @@ const TranscriptKeySchema = Schema.Struct({
 /** One transcript line, opaque but for its `type`, as the SDK's `SessionStoreEntry` is. */
 const TranscriptEntrySchema = Schema.Record(Schema.String, Schema.Unknown);
 
+/** Where a transcript's next page starts: after the entry the last page ended on. */
+const TranscriptCursorSchema = Schema.Number.check(
+  Schema.isInt(),
+  Schema.isGreaterThanOrEqualTo(0),
+);
+
 /** One call of a runner's transcript store. */
 export const RunnerTranscriptCallSchema = Schema.Union([
   Schema.Struct({
@@ -295,6 +430,11 @@ export const RunnerTranscriptCallSchema = Schema.Union([
   Schema.Struct({
     call: Schema.Literal(RUNNER_TRANSCRIPTS.CALL.LOAD),
     key: TranscriptKeySchema,
+  }),
+  Schema.Struct({
+    call: Schema.Literal(RUNNER_TRANSCRIPTS.CALL.LOAD_PAGE),
+    key: TranscriptKeySchema,
+    after: Schema.NullOr(TranscriptCursorSchema),
   }),
   Schema.Struct({
     call: Schema.Literal(RUNNER_TRANSCRIPTS.CALL.LIST_SESSIONS),
@@ -313,6 +453,13 @@ export const RunnerTranscriptLoadSchema = Schema.Struct({
   entries: Schema.NullOr(Schema.Array(TranscriptEntrySchema)),
 });
 export type RunnerTranscriptLoad = typeof RunnerTranscriptLoadSchema.Type;
+
+/** What a page's load is answered: its entries in order, and the cursor the next is read after, none past the last. */
+export const RunnerTranscriptPageSchema = Schema.Struct({
+  entries: Schema.Array(TranscriptEntrySchema),
+  next: Schema.NullOr(TranscriptCursorSchema),
+});
+export type RunnerTranscriptPage = typeof RunnerTranscriptPageSchema.Type;
 
 /** What a listing of a project's sessions is answered: each with its last append, in epoch milliseconds. */
 export const RunnerTranscriptSessionsSchema = Schema.Struct({
@@ -395,6 +542,12 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   effort: Schema.optionalKey(EffortSchema),
   /** Whether Claude Code's own fast mode is on, for an agent on a model's fast version. */
   fast: Schema.optionalKey(Schema.Boolean),
+  /**
+   * Whether the CLI keeps the main conversation's prompt cache for an hour
+   * rather than five minutes (`CLAUDE_CODE_PROMPT_CACHE_TTL`), for an agent
+   * of the half the service runs it on; a runner from before this key ignores it.
+   */
+  promptCacheHour: Schema.optionalKey(Schema.Boolean),
   /** Our coder instructions, appended to Claude Code's own system prompt. */
   append: Schema.String,
   /** The CLI's session id to resume, where this launch continues one. */
@@ -410,6 +563,12 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   linesUrl: Schema.optionalKey(Schema.String),
   /** Our MCP server's streamable-HTTP endpoint. */
   mcpUrl: Schema.String,
+  /**
+   * Our MCP server's tools the worker subagent (`CLAUDE_CODE_WORKER`) may not
+   * call, by name: every one that does more than read. Absent in a config
+   * written before it, where the worker is denied the whole server.
+   */
+  workerDenied: Schema.optionalKey(Schema.Array(Schema.String)),
   /** Where the CLI's transcript is kept at the service (`RUNNER_TRANSCRIPTS`), handed to the SDK as its `sessionStore`; none where the CLI's own files are all it keeps. */
   transcriptsUrl: Schema.optionalKey(Schema.String),
   /** The integrations the agent is handed, one MCP server each; none in a config written before them. */
@@ -429,6 +588,8 @@ export const ClaudeCodeConfigSchema = Schema.Struct({
   trace: Schema.optionalKey(RunnerTraceSchema),
   /** How long a warm launch stays warm before it ends itself (`RUNNER_WARM`); `RUNNER_WARM.IDLE_CAP_MS` where absent. */
   warmForMs: Schema.optionalKey(Schema.Number),
+  /** How the launch answers its agent's tool calls (`PERMISSION_MODE`); full access where absent, as in a config written before modes. */
+  permissionMode: Schema.optionalKey(PermissionModeSchema),
 });
 export type ClaudeCodeConfig = typeof ClaudeCodeConfigSchema.Type;
 
@@ -438,6 +599,9 @@ export type ClaudeCodeConfig = typeof ClaudeCodeConfigSchema.Type;
  * from the launch's environment and must exist before the runner starts.
  * `threadId` is the thread to resume, where this launch continues one; a new
  * thread's id reaches the service in its `thread/started` notification.
+ * Note that it names no `permissionMode`, because Codex reads none: it runs
+ * every call unasked, approval `never`, whatever its agent's mode, and a
+ * mode the service writes anyway is let go as the line is read.
  */
 export const CodexConfigSchema = Schema.Struct({
   harness: Schema.Literal(RUNNER_HARNESS.CODEX),
@@ -520,12 +684,17 @@ const UuidSchema = Schema.String.check(
  * A message for the session, in the Messages API's own block shapes. `uuid`
  * is the service's id for the message, handed to the SDK as the prompt's own, so
  * the ACCEPTED event and the `result` that answers it name it; the runner
- * mints one where a line names none.
+ * mints one where a line names none. `resent` marks a message handed again
+ * to a session that already holds it, as a turn its plan's limit cut short
+ * is on the next payer: Claude Code drops a resumed session's prompt under
+ * a uuid the session holds, answering nothing, so the runner hands the SDK
+ * the prompt under a uuid of its own, and ACCEPTED still names the service's.
  */
 const MessageLineSchema = Schema.Struct({
   type: Schema.Literal(INPUT_LINE.MESSAGE),
   uuid: Schema.optionalKey(UuidSchema),
   content: Schema.Array(ContentBlockSchema),
+  resent: Schema.optionalKey(Schema.Boolean),
 });
 /**
  * Stop the running turn. `launch` names the launch the stop is for by its
@@ -577,12 +746,26 @@ const WarmLineSchema = Schema.Struct({
   type: Schema.Literal(INPUT_LINE.WARM),
 });
 
+/**
+ * The member's answer to a tool call's ask, naming the APPROVAL_REQUESTED
+ * event's `requestId`; `message` tells the agent why a call was denied, "The
+ * member denied this." where absent. A launch with no such ask waiting skips
+ * it, as one already settled has none.
+ */
+const ApprovalLineSchema = Schema.Struct({
+  type: Schema.Literal(INPUT_LINE.APPROVAL),
+  requestId: Schema.String,
+  decision: ApprovalDecisionSchema,
+  message: Schema.optionalKey(Schema.String),
+});
+
 export const InputLineSchema = Schema.Union([
   MessageLineSchema,
   StopLineSchema,
   ModelLineSchema,
   RetireLineSchema,
   WarmLineSchema,
+  ApprovalLineSchema,
 ]);
 export type InputLine = typeof InputLineSchema.Type;
 
@@ -601,12 +784,19 @@ export type InputLine = typeof InputLineSchema.Type;
  * (`RUNNER_WARM`), so the service's next message is a line on its stdin rather than
  * a resumed sandbox and a relaunched CLI. END is the last event a launch
  * posts, with why it ended.
+ *
+ * APPROVAL_REQUESTED is posted as a launch whose mode asks
+ * (`PERMISSION_MODE`) holds a tool call for the member's answer, and
+ * APPROVAL_RESOLVED once the ask is settled, whatever settled it, so each
+ * ask a launch posts is resolved before its END.
  */
 export const RUNNER_EVENT = {
   ACCEPTED: "vespin_runner_accepted",
   WAITING: "vespin_runner_waiting",
   IDLE: "vespin_runner_idle",
   END: "vespin_runner_end",
+  APPROVAL_REQUESTED: "vespin_runner_approval_requested",
+  APPROVAL_RESOLVED: "vespin_runner_approval_resolved",
 } as const;
 
 /** Why a launch ended. */
@@ -703,6 +893,36 @@ export interface RunnerEndEvent {
 }
 
 /**
+ * The APPROVAL_REQUESTED event: a tool call held for the member's answer, an
+ * `approval` line naming its `requestId`, the CLI's id for the ask.
+ * `toolUseId` is the call's `tool_use` block's id, so the ask stands on the
+ * call in the transcript; `agentId` the subagent's that made it, absent for
+ * the agent's own; `title` the CLI's sentence for the ask, or the tool's
+ * name where it gave none; `description` its subtitle, where it gave one;
+ * `input` the call's input, cut as `APPROVAL_INPUT` says.
+ */
+export const RunnerApprovalRequestedSchema = Schema.Struct({
+  type: Schema.Literal(RUNNER_EVENT.APPROVAL_REQUESTED),
+  requestId: Schema.String,
+  toolUseId: Schema.String,
+  agentId: Schema.optionalKey(Schema.String),
+  toolName: Schema.String,
+  title: Schema.String,
+  description: Schema.optionalKey(Schema.String),
+  input: Schema.Record(Schema.String, Schema.Unknown),
+});
+export type RunnerApprovalRequested = typeof RunnerApprovalRequestedSchema.Type;
+
+/** The APPROVAL_RESOLVED event: the ask by its `requestId` settled, with what was decided and what decided it. */
+export const RunnerApprovalResolvedSchema = Schema.Struct({
+  type: Schema.Literal(RUNNER_EVENT.APPROVAL_RESOLVED),
+  requestId: Schema.String,
+  decision: ApprovalDecisionSchema,
+  by: ApprovalBySchema,
+});
+export type RunnerApprovalResolved = typeof RunnerApprovalResolvedSchema.Type;
+
+/**
  * One notification `codex app-server` sent, as it wrote it (the pinned
  * protocol's `ServerNotification`, generated into `codex-protocol/`). Every
  * notification is posted, the thread's subagents' included; the projection
@@ -765,7 +985,9 @@ export type RunnerMessage =
   | RunnerAccepted
   | RunnerWaiting
   | RunnerIdle
-  | RunnerEndEvent;
+  | RunnerEndEvent
+  | RunnerApprovalRequested
+  | RunnerApprovalResolved;
 
 /** One event as posted: its number and its message. */
 export interface RunnerEvent {
@@ -787,7 +1009,7 @@ export interface RunnerEventBatch {
  * for as long as it runs, on its own timer whatever its harness says. A harness
  * may say nothing for an hour while a background command or a wakeup it waits
  * on runs, and the service touches the sandbox during a turn only on what the
- * runner posts, about once a minute, against a sandbox that stops five idle
+ * runner posts, about once a minute, against a sandbox that stops three idle
  * minutes after its last touch, so a minute leaves room for heartbeats the
  * service did not take, and costs one small post each.
  */

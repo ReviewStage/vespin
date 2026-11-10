@@ -10,6 +10,7 @@ import {
   type MenuEntry as SharedMenuEntry,
   Shortcut,
 } from "@repo/ui";
+import { type ShortcutSubject, shortcutActsOn, useShortcutTargets } from "../shortcut-target.js";
 
 /**
  * action-menu.tsx -- the window's own drop-down menu: a task's actions, a repository's, a side panel tab's, and the account's.
@@ -24,13 +25,17 @@ import {
  * `useMenu`; what is the window's own is an item's shortcut, named by the
  * command it takes and printed as the menu bar prints its chord, which
  * chooses the item while the menu stands, so a row's menu's P pins that
- * row's task rather than the one the window has open.
+ * row's task rather than the one the window has open. An item names what
+ * its command acts on (`subject`), and prints and hears its chord only
+ * while the chord acts on that now (`shortcut-target.ts`).
  */
 
 /** One of the window's menu items: the shared item, its shortcut named by the command that takes the same action. */
 export interface MenuAction extends Omit<SharedMenuAction, "hint" | "pressedBy"> {
   /** The shortcut that takes the same action, printed muted at the item's end. */
   command?: KeyedCommand;
+  /** What the item acts on, which the shortcut must act on now for the item to print it; none where it always does. */
+  subject?: ShortcutSubject | undefined;
 }
 
 /** An item that opens a menu of the window's own items beside it rather than acting. */
@@ -40,6 +45,8 @@ export interface MenuSubmenu {
   items: readonly MenuAction[];
   /** The shortcut that opens it, printed muted before its chevron. */
   command?: KeyedCommand;
+  /** What it acts on, which the shortcut must act on now for it to print it; none where it always does. */
+  subject?: ShortcutSubject | undefined;
 }
 
 /** One line of a menu: an action, a submenu of them, or a panel its owner draws beside it as its submenu (`@repo/ui`'s `MenuPanel`). */
@@ -57,18 +64,30 @@ function keyedBy(command: KeyedCommand): { hint: React.ReactNode; pressedBy: Men
   return { hint: <Shortcut chord={chord} />, pressedBy: (event) => shortcutMatches(chord, event) };
 }
 
+/** The chord an item prints now: its command's, where the command acts on what the item does, or where it names nothing it acts on. */
+export function actingCommand(entry: {
+  readonly command?: KeyedCommand | undefined;
+  readonly subject?: ShortcutSubject | undefined;
+}): KeyedCommand | undefined {
+  const { command, subject } = entry;
+  if (command === undefined) return undefined;
+  return subject === undefined || shortcutActsOn(command, subject) ? command : undefined;
+}
+
 /** The shared item for one of the window's, its command's chord as its hint. */
-function sharedAction({ command, ...action }: MenuAction): SharedMenuAction {
-  if (command === undefined) return action;
-  return { ...action, ...keyedBy(command) };
+function sharedAction({ command, subject, ...action }: MenuAction): SharedMenuAction {
+  const acting = actingCommand({ command, subject });
+  if (acting === undefined) return action;
+  return { ...action, ...keyedBy(acting) };
 }
 
 function sharedEntry(entry: MenuEntry): SharedMenuEntry {
   if ("panel" in entry) return entry;
   if (!("items" in entry)) return sharedAction(entry);
-  const { command, ...submenu } = entry;
+  const { command, subject, ...submenu } = entry;
   const items = submenu.items.map(sharedAction);
-  return command === undefined ? { ...submenu, items } : { ...submenu, items, ...keyedBy(command) };
+  const acting = actingCommand({ command, subject });
+  return acting === undefined ? { ...submenu, items } : { ...submenu, items, ...keyedBy(acting) };
 }
 
 /** A row's menu (`ListRow`'s `menu`) of the window's items, each item's chord at its end; `thing` is what the row is, which names its ⋯ and the menu, `shown` whether the surface the row stands on is, which the menu does not outlive, and `replayUnmasked` whether its items' words are the app's own, which a screen recording shows as they read. */
@@ -96,5 +115,7 @@ export function ActionMenu({
   /** Whether its items' words are the app's own, which a screen recording shows as they read, but for an item that is `replayMasked` (`Menu`'s `replayUnmasked`). */
   replayUnmasked?: boolean | undefined;
 }): React.JSX.Element {
+  // Note that a menu standing open is drawn again as the keys' targets change, so it never prints a chord that no longer acts on its items.
+  useShortcutTargets();
   return <Menu {...props} groups={groups.map((group) => group.map(sharedEntry))} />;
 }

@@ -20,6 +20,7 @@ import {
 } from "@repo/database/models/agent-store";
 import { appendSessionEntries } from "@repo/database/models/claude-session-entries";
 import { registerDevice } from "@repo/database/models/device-store";
+import { recordHostVersion } from "@repo/database/models/host-store";
 import {
   type KeyRing,
   parseKeyRing,
@@ -441,6 +442,21 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           assert.equal(plan.stored.includes(secret), false, "a secret in the row in the clear");
         }
         assert.equal(JSON.stringify(plan.secrets).includes("access-0"), false);
+        // A Mac whose host bundles a runner from before the transcript store keeps its threads on its disk alone.
+        assert.equal(plan.config.transcriptsUrl, undefined);
+
+        // From the host release whose runner mirrors them, they are kept at the service, its Codex home
+        // named at its default under the agent's own home, which the runner mirrors from.
+        yield* recordHostVersion(deviceId, "0.11.0");
+        const onKept = yield* localAgent(AGENT_PAYER.CHATGPT_SUBSCRIPTION);
+        const kept = yield* launched(onKept);
+        assert.deepEqual(
+          [kept.config.transcriptsUrl, kept.secrets.env.CODEX_HOME],
+          [
+            `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,
+            `/Users/fixture/.vespin/agents/${onKept.id}/home/.codex`,
+          ],
+        );
       }),
   );
 
@@ -529,6 +545,24 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
             return Option.getOrUndefined(record)?.fingerprint;
           });
 
+        // The plan pays while its sign-in has room, and the key once it is at its limit.
+        const sandboxPlan = yield* fingerprintOf(
+          yield* agentOn(AGENT_PAYER.CHATGPT_SUBSCRIPTION, AGENT_MACHINE.VERCEL),
+        );
+        const macPlan = yield* fingerprintOf(
+          yield* agentOn(AGENT_PAYER.CHATGPT_SUBSCRIPTION, AGENT_MACHINE.DEVICE),
+        );
+        const now = yield* DateTime.nowAsDate;
+        yield* setPlanStatus(
+          userId,
+          PROVIDER_KEY_PROVIDER.OPENAI,
+          PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+          PROVIDER_KEY_STATUS.LIMIT_REACHED,
+          new Date(now.getTime() + 30 * 60_000),
+          now,
+          now,
+        );
+
         // Each digest but the sandbox plan's is the one a launch recorded before its machine handed its
         // credential over, so a warm runner launched then is not relaunched for it: the first 32 hex
         // characters of the SHA-256 of
@@ -540,13 +574,9 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
             sandboxKey: yield* fingerprintOf(
               yield* agentOn(AGENT_PAYER.API_KEY, AGENT_MACHINE.VERCEL),
             ),
-            sandboxPlan: yield* fingerprintOf(
-              yield* agentOn(AGENT_PAYER.CHATGPT_SUBSCRIPTION, AGENT_MACHINE.VERCEL),
-            ),
+            sandboxPlan,
             macKey: yield* fingerprintOf(yield* agentOn(AGENT_PAYER.API_KEY, AGENT_MACHINE.DEVICE)),
-            macPlan: yield* fingerprintOf(
-              yield* agentOn(AGENT_PAYER.CHATGPT_SUBSCRIPTION, AGENT_MACHINE.DEVICE),
-            ),
+            macPlan,
           },
           {
             sandboxKey: "6b61996f589fd234bed48d87b442c8b9",

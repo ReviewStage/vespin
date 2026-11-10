@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { createTask } from "@repo/database/models/task-store";
 import { agentPullRequest } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
@@ -221,8 +222,13 @@ it.layer(getTestDB())("the Cost screen's reads", (it) => {
         { userId: owner, day: TODAY, calls: 3, dictationSeconds: 0 },
       ]);
       const workspace = yield* openWorkspace(owner);
+      const { id: taskId } = yield* createTask(owner, {
+        organizationId: workspace,
+        name: "Merges",
+      });
       const agentRow = {
         organizationId: workspace,
+        taskId,
         userId: owner,
         model: MODEL.OPUS,
         effort: "high",

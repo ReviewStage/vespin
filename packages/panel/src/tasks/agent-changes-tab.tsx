@@ -207,8 +207,9 @@ import { useViewedFiles, type ViewedFiles } from "./viewed-files.js";
  * (`useListCommenting`). The pointer resting on a review thread lights the
  * lines it is on (`useThreadHover`), over those of the comment written in
  * last.
- * Every name and line here is the repository's, so the tab is left out of
- * the screen recording (`ph-no-capture`).
+ * Every name and line here is the repository's: the recording masks the
+ * names, and the diff's lines are left out of it whole (`file-diff.tsx`),
+ * since their colors draw the code's shape.
  */
 
 /** A read that threw rather than answered, drawn as any other failed read. */
@@ -1906,7 +1907,7 @@ export function AgentChangesTab({
   return (
     // The view hears stage-cli's keys from whatever in it has the focus, the list's own scroller among them.
     <Fill
-      className="file-view ph-no-capture"
+      className="file-view"
       {...room.root}
       onKeyDown={(event) => {
         room.root.onKeyDown(event);

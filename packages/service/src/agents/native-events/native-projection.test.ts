@@ -1,18 +1,22 @@
 import assert from "node:assert/strict";
+import { RUN_EVENT, TURN_FAILURE } from "@repo/features/turn-run";
 import { test } from "vitest";
-import { NATIVE_ENDING, NATIVE_MOMENT } from "./native-moments.js";
-import { heldProjection, projectMoments } from "./native-projection.js";
+import { NATIVE_ENDING, NATIVE_MOMENT, PLAN_STATUS } from "./native-moments.js";
+import { heldProjection, NATIVE_WRITE, projectMoments } from "./native-projection.js";
+import { toolAnswerSettlement } from "./runner-moments.js";
 
-test("a call of a tool the record does not hold is reported, but the harness's own ToolSearch is left out without a word", () => {
-  const reports: string[] = [];
-  projectMoments(
+test("an unknown tool's call settled with a new input, as Codex settles one, keeps the input that names the tool it called", () => {
+  const result = projectMoments(
     heldProjection(null),
-    ["ToolSearch", "RemoteTrigger"].map((name, index) => ({
-      kind: NATIVE_MOMENT.TOOL_STARTED,
-      callId: `toolu_${index}`,
-      name,
-      input: {},
-    })),
+    [
+      { kind: NATIVE_MOMENT.TOOL_STARTED, callId: "call_plan", name: "edit_plan", input: {} },
+      {
+        kind: NATIVE_MOMENT.TOOL_SETTLED,
+        callId: "call_plan",
+        settlement: toolAnswerSettlement({ workspaceTool: true, text: "Unknown tool" }, true),
+        input: { notes: [] },
+      },
+    ],
     {
       conversationId: "c_projection",
       sequence: 0,
@@ -22,10 +26,22 @@ test("a call of a tool the record does not hold is reported, but the harness's o
       model: undefined,
       ownKey: false,
       registered: () => false,
-      report: (said) => reports.push(said),
+      report: () => undefined,
     },
   );
-  assert.deepEqual(reports, ["A call to RemoteTrigger names no stored tool and is not recorded."]);
+  assert.deepEqual(
+    result.writes.flatMap((write) =>
+      write.kind === NATIVE_WRITE.EVENT &&
+      (write.event.kind === RUN_EVENT.TOOL_CALL_STARTED ||
+        write.event.kind === RUN_EVENT.TOOL_CALL_SETTLED)
+        ? [[write.event.kind, write.event.name, write.event.input]]
+        : [],
+    ),
+    [
+      [RUN_EVENT.TOOL_CALL_STARTED, "unknown_tool", { name: "edit_plan", input: {} }],
+      [RUN_EVENT.TOOL_CALL_SETTLED, "unknown_tool", undefined],
+    ],
+  );
 });
 
 test("a warm launch that fails after its turn ended at its IDLE fails no turn of its own", () => {
@@ -91,4 +107,167 @@ test("a warm runner a newer launch cut off with no turn under way or queued fail
   assert.deepEqual(reports, [
     "A launch with no turn under way ended: failed the service refused the launch's lines: The service answered 401",
   ]);
+});
+
+test("an exhausted payer pool leaves a notice at the pause, and a payer with room one naming both payers", () => {
+  const context = {
+    conversationId: "c_projection",
+    sequence: 0,
+    now: 0,
+    attempt: 1,
+    queuedTurnId: undefined,
+    model: "anthropic/claude-opus-5.5",
+    ownKey: false,
+    registered: () => true,
+    report: () => undefined,
+  };
+  const moments = [
+    { kind: NATIVE_MOMENT.ACTIVE },
+    { kind: NATIVE_MOMENT.RATE_LIMIT, refused: true, detail: "limited", resetsAt: 60000 },
+    { kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.LIMIT_REACHED },
+    { kind: NATIVE_MOMENT.ENDED, ending: NATIVE_ENDING.FAILED },
+  ] as const;
+  const moved = { from: "Work plan", to: "API key · sk-…a91F" };
+  const notices = (movedAfterLimit: typeof moved | undefined) =>
+    projectMoments(heldProjection(null), moments, {
+      ...context,
+      movedAfterLimit,
+    }).writes.flatMap((write) =>
+      write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.USAGE_LIMIT_REACHED
+        ? [write.event.notice]
+        : [],
+    );
+  assert.deepEqual(notices(undefined), [{ agent: "Claude", resetsAt: 60000 }]);
+  assert.deepEqual(notices(moved), [{ agent: "Claude", resetsAt: null, moved }]);
+  const stopped = projectMoments(
+    heldProjection(null),
+    moments.filter((moment) => moment.kind !== NATIVE_MOMENT.RATE_LIMIT),
+    context,
+  );
+  assert.deepEqual(
+    stopped.writes.flatMap((write) =>
+      write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.USAGE_LIMIT_REACHED
+        ? [write.event.notice]
+        : [],
+    ),
+    [{ agent: "Claude", resetsAt: null }],
+  );
+});
+
+test("a successful result after a reported limit ends without a usage-limit notice or retry", () => {
+  const result = projectMoments(
+    heldProjection(null),
+    [
+      { kind: NATIVE_MOMENT.ACTIVE },
+      { kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.LIMIT_REACHED },
+      { kind: NATIVE_MOMENT.RESULT },
+      { kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.VERIFIED },
+      { kind: NATIVE_MOMENT.ENDED, ending: NATIVE_ENDING.DONE },
+    ],
+    {
+      conversationId: "c_projection",
+      sequence: 0,
+      now: 0,
+      attempt: 1,
+      queuedTurnId: undefined,
+      model: "anthropic/claude-opus-5.5",
+      ownKey: false,
+      movedAfterLimit: { from: "Work plan", to: "Personal plan" },
+      registered: () => true,
+      report: () => undefined,
+    },
+  );
+  assert.equal(
+    result.writes.some((write) => write.kind === NATIVE_WRITE.WAIT),
+    false,
+  );
+  assert.equal(
+    result.writes.some(
+      (write) =>
+        write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.USAGE_LIMIT_REACHED,
+    ),
+    false,
+  );
+  assert.ok(
+    result.writes.some(
+      (write) => write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.TURN_ENDED,
+    ),
+  );
+});
+
+test("a limit lifted before the turn failed for another reason fails it as that failure, never the plan's limit", () => {
+  const result = projectMoments(
+    heldProjection(null),
+    [
+      { kind: NATIVE_MOMENT.ACTIVE },
+      {
+        kind: NATIVE_MOMENT.RATE_LIMIT,
+        refused: true,
+        detail: "rate_limit_rejected",
+        resetsAt: 60000,
+      },
+      { kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.LIMIT_REACHED },
+      { kind: NATIVE_MOMENT.RATE_LIMIT, refused: false, detail: "rate_limit_allowed" },
+      { kind: NATIVE_MOMENT.RESULT, failure: "error_during_execution" },
+      { kind: NATIVE_MOMENT.ENDED, ending: NATIVE_ENDING.FAILED },
+    ],
+    {
+      conversationId: "c_projection",
+      sequence: 0,
+      now: 0,
+      attempt: 1,
+      queuedTurnId: undefined,
+      model: "anthropic/claude-opus-5.5",
+      ownKey: false,
+      registered: () => true,
+      report: () => undefined,
+    },
+  );
+  const ended = result.writes.flatMap((write) =>
+    write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.TURN_ENDED
+      ? [write.event.failure]
+      : [],
+  );
+  assert.deepEqual(ended, [TURN_FAILURE.MODEL]);
+  assert.equal(
+    result.writes.some(
+      (write) =>
+        write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.USAGE_LIMIT_REACHED,
+    ),
+    false,
+  );
+});
+
+test("a turn whose launch lost its session goes on once in a replayed launch, and a second loss fails it", () => {
+  const context = {
+    conversationId: "c_projection",
+    now: 0,
+    queuedTurnId: "t_lost",
+    model: undefined,
+    ownKey: false,
+    registered: () => true,
+    report: () => undefined,
+  };
+  const lostLaunch = [
+    { kind: NATIVE_MOMENT.LINE_ACCEPTED, clientId: "line_lost" },
+    { kind: NATIVE_MOMENT.RESULT, failure: "error_during_execution No conversation found" },
+    { kind: NATIVE_MOMENT.SESSION_LOST },
+    { kind: NATIVE_MOMENT.ENDED, ending: NATIVE_ENDING.DONE },
+  ] as const;
+  const first = projectMoments(heldProjection(null), lostLaunch, {
+    ...context,
+    sequence: 0,
+    attempt: 1,
+  });
+  const second = projectMoments(first.state, lostLaunch, { ...context, sequence: 1, attempt: 2 });
+  const kinds = (writes: typeof first.writes) =>
+    writes.flatMap((write) =>
+      write.kind === NATIVE_WRITE.RETRY || write.kind === NATIVE_WRITE.FAILED
+        ? [{ kind: write.kind, replay: write.kind === NATIVE_WRITE.RETRY && write.replay }]
+        : [],
+    );
+  assert.deepEqual(
+    [kinds(first.writes), kinds(second.writes)],
+    [[{ kind: NATIVE_WRITE.RETRY, replay: true }], [{ kind: NATIVE_WRITE.FAILED, replay: false }]],
+  );
 });

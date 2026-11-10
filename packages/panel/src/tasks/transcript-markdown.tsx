@@ -1,18 +1,20 @@
 import type { CodeLines } from "@repo/features/tasks-view";
-import { ACT_KIND, COLORED_CODE_MAX_CHARS, FENCE_LANGUAGE_MAX_CHARS } from "@repo/host/acts";
-import { CODE_CARD_TITLE, CODE_ROW, CodeCard, type CodeRow } from "@repo/ui";
+import { CODE_CARD_TITLE, CODE_ROW, CodeCard, type CodeRow, DraftCard } from "@repo/ui";
+import { draftKindOf } from "@repo/ui/draft-text";
 import { SUGGESTED_CHANGE_LANGUAGE } from "@repo/ui/github-html";
 import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
-import { queryOptions, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { type ComponentProps, createContext, type ReactNode, useContext, useMemo } from "react";
-import { askAct } from "../act.js";
+import { colorable, coloringQueryOptions } from "../code-coloring.js";
 import { codeLanguage, codeTitle } from "../code-language.js";
-import { copyThroughShell } from "../copy-feedback.js";
-import { QUERY_ROOT } from "../query-keys.js";
+import { copyRichThroughShell, copyThroughShell } from "../copy-feedback.js";
+import { DescriptionDiagram } from "../description-diagram.js";
+import { TextLink } from "../text-link.js";
 import { FileTypeIcon } from "./file-type-icon.js";
+import { useOpenLink } from "./use-open-link.js";
 
 /**
- * transcript-markdown.tsx -- code and tables as every rendered text draws them: a fenced block in the window's one code card, a note's as a transcript's, a table bare, and an inline span on a subtle fill.
+ * transcript-markdown.tsx -- code and tables as every rendered text draws them: a fenced block in the window's one code card, a draft to be sent elsewhere as it will look when sent, a note's as a transcript's, a table bare, and an inline span on a subtle fill.
  *
  * Streamdown, the markdown renderer behind AI Elements' Response, draws a
  * fenced block and a table with components of its own: a bordered card on
@@ -41,6 +43,9 @@ const SUGGESTION = {
   LABEL: "Suggested change",
 } as const;
 
+/** The language a fence names to be drawn as its diagram once it is whole. */
+const MERMAID_LANGUAGE = "mermaid";
+
 /** The language a diff is fenced in, whose rows are tinted by what they do. */
 const DIFF_LANGUAGE = "diff";
 
@@ -63,23 +68,6 @@ const FENCE_OPENING = /^ {0,3}(`{3,}|~{3,})/u;
 const QUOTE_MARKS = /^[\s>]*/u;
 
 /**
- * A block's coloring, asked of main the first time it is wanted and held for
- * the window's life while drawn, since a block's colors never change; one let
- * go of no longer drawn is forgotten after Query's garbage-collection time.
- * Note that a refusal draws the block plain and is held as one, so it is not
- * asked again.
- */
-function coloringQueryOptions(language: string, code: string) {
-  return queryOptions({
-    queryKey: [QUERY_ROOT.CODE_COLORING, language, code],
-    queryFn: (): Promise<CodeLines | null> =>
-      askAct(ACT_KIND.TASKS_COLOR_CODE, { language, code }).catch(() => null),
-    staleTime: Number.POSITIVE_INFINITY,
-    retry: false,
-  });
-}
-
-/**
  * The last line written inside a fenced block of a transcript's words still
  * waiting for its closing fence, or none where every fence closed, which a
  * block reads to tell whether it is the one still streaming. Note that it
@@ -88,16 +76,6 @@ function coloringQueryOptions(language: string, code: string) {
  * the words after the last block stream draws no block again.
  */
 const OpenFenceTail = createContext<string | undefined>(undefined);
-
-/** Whether main is asked to color a block at all: a named language, and code within the bound. */
-function colorable(language: string, code: string): boolean {
-  return (
-    language !== "" &&
-    language.length <= FENCE_LANGUAGE_MAX_CHARS &&
-    code.trim() !== "" &&
-    code.length <= COLORED_CODE_MAX_CHARS
-  );
-}
 
 /** Whether `line` closes a fence opened with `marker`: the opening's character at least as long, alone but for the quote marks of a block inside a quote. */
 function closesFence(line: string, marker: string): boolean {
@@ -195,13 +173,8 @@ function addedText(rows: readonly Row[]): string {
  * alone, which is the suggestion. A diff's rows are tinted the same way
  * (`rowsOf`).
  */
-export function TranscriptCodeBlock({
-  className,
-  node,
-}: ComponentProps<"code"> & MarkdownNodeProps): ReactNode {
+function CodeFence({ language, code }: { language: string; code: string }): ReactNode {
   const openTail = useContext(OpenFenceTail);
-  const language = LANGUAGE_CLASS.exec(className ?? "")?.[1] ?? "";
-  const code = blockText(node).replace(/\n$/u, "");
   // Note that the block still open is the one the words end on, so its last line ends them.
   const whole = openTail === undefined || !openTail.endsWith(code.split("\n").at(-1) ?? "");
   const suggesting = language === SUGGESTION.LANGUAGE || language === SUGGESTED_CHANGE_LANGUAGE;
@@ -225,6 +198,75 @@ export function TranscriptCodeBlock({
   );
 }
 
+/** A link in a draft's words, opening as a transcript's link does (`use-open-link.ts`). */
+function draftLink(url: string, children: ReactNode): ReactNode {
+  return <DraftLink url={url}>{children}</DraftLink>;
+}
+
+function DraftLink({ url, children }: { url: string; children: ReactNode }): ReactNode {
+  const openLink = useOpenLink();
+  return (
+    <TextLink href={url} words={undefined} onOpen={openLink}>
+      {children}
+    </TextLink>
+  );
+}
+
+/**
+ * Words an agent wrote to be sent elsewhere, fenced ```slack, ```email, or
+ * ```draft, in a `DraftCard` as they will look when sent
+ * (`@repo/ui/draft-text`), its Copy putting them on the clipboard as rich
+ * text; none for any other fence, which its place draws as code. A
+ * transcript's block and an Inbox to-do's step draw a draft alike.
+ */
+export function DraftFence({
+  language,
+  code,
+}: {
+  language: string | undefined;
+  code: string;
+}): ReactNode {
+  const draft = draftKindOf(language ?? "");
+  if (draft === undefined) return null;
+  return (
+    <DraftCard
+      kind={draft}
+      text={code}
+      link={draftLink}
+      copy={copyRichThroughShell}
+      copyText={copyThroughShell}
+    />
+  );
+}
+
+/** A fenced block as the transcript draws it: a draft as it will look when sent (`DraftFence`), and any other block in a `CodeCard` (`CodeFence`). */
+export function TranscriptCodeBlock({
+  className,
+  node,
+}: ComponentProps<"code"> & MarkdownNodeProps): ReactNode {
+  const language = LANGUAGE_CLASS.exec(className ?? "")?.[1] ?? "";
+  const code = blockText(node).replace(/\n$/u, "");
+  if (draftKindOf(language) === undefined) return <CodeFence language={language} code={code} />;
+  return <DraftFence language={language} code={code} />;
+}
+
+/**
+ * A transcript's fence: a whole Mermaid one as its diagram (`DescriptionDiagram`,
+ * the renderer a description draws with), over the code card it falls back to
+ * while the diagram draws or where Mermaid refuses it, and any other as a code
+ * card. Note that a fence still streaming stays a code card, so a half-written
+ * diagram is never handed to Mermaid.
+ */
+function TranscriptFence(props: ComponentProps<"code"> & MarkdownNodeProps): ReactNode {
+  const openTail = useContext(OpenFenceTail);
+  const language = LANGUAGE_CLASS.exec(props.className ?? "")?.[1] ?? "";
+  const code = blockText(props.node).replace(/\n$/u, "");
+  const source = <TranscriptCodeBlock {...props} />;
+  const streaming = openTail !== undefined && openTail.endsWith(code.split("\n").at(-1) ?? "");
+  if (language !== MERMAID_LANGUAGE || streaming) return source;
+  return <DescriptionDiagram code={code} source={source} />;
+}
+
 /**
  * How a transcript's markdown draws code and tables: a fenced block in the
  * window's one code card, an inline span on a subtle fill, and a table bare,
@@ -234,7 +276,7 @@ export function TranscriptCodeBlock({
  * it, which Streamdown hands on as the cell's style.
  */
 export const TRANSCRIPT_CODE_AND_TABLE_COMPONENTS: MarkdownComponents = {
-  code: TranscriptCodeBlock,
+  code: TranscriptFence,
   inlineCode: ({ children }) => <code className="transcript-inline-code">{children}</code>,
   table: ({ children }) => <table>{children}</table>,
   thead: ({ children }) => <thead>{children}</thead>,

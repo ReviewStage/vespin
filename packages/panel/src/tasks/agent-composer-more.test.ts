@@ -1,14 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import {
-  AGENT_STATUS,
-  type AgentContext,
-  type AgentPullRequestAnswer,
-  type AgentStatus,
-  CHECK_SUMMARY,
-  PULL_REQUEST_STATE,
-} from "@repo/features/agent-wire";
+import { AGENT_STATUS, type AgentContext, type AgentStatus } from "@repo/features/agent-wire";
 import { type CatalogModel, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { Effect } from "effect";
 import { act, createElement, type ReactNode, useState } from "react";
@@ -49,21 +42,6 @@ const MODELS: readonly CatalogModel[] = [
     efforts: ["low", "high"],
   },
 ];
-
-const PUBLISHED: AgentPullRequestAnswer = {
-  repository: "acme/relay",
-  branch: "fix/retry-backoff",
-  pullRequest: {
-    number: 2822,
-    title: "Back off failed retries",
-    url: "https://github.com/acme/relay/pull/2822",
-    state: PULL_REQUEST_STATE.OPEN,
-    checks: CHECK_SUMMARY.PASSING,
-    additions: 40,
-    deletions: 6,
-    changedFiles: 3,
-  },
-};
 
 const CONTEXT: AgentContext = {
   windowTokens: 1_000_000,
@@ -111,8 +89,6 @@ function Box({ status }: { status: AgentStatus }): ReactNode {
     model: { choice, note: undefined, choose },
     models: MODELS,
     context: CONTEXT,
-    published: PUBLISHED,
-    doors: { openGitHub: ignore, copy: ignore },
   });
 }
 
@@ -126,7 +102,7 @@ async function drawnAt(width: number, status: AgentStatus = AGENT_STATUS.COMPLET
   const foot =
     container.querySelector<HTMLElement>("form > :last-child") ?? assert.fail("the foot stands");
   const card =
-    container.querySelector<HTMLElement>(".agent-composer") ?? assert.fail("the card stands");
+    container.querySelector<HTMLElement>(".message-box") ?? assert.fail("the card stands");
   return {
     container,
     card,

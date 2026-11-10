@@ -1,7 +1,8 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
+import { descriptionSections } from "@repo/features/description-document";
+import type { MentionHolder } from "@repo/features/mention-holder";
 import { type MentionPlace, sectionAnchors } from "@repo/features/mention-link";
 import type { CatalogModel } from "@repo/features/models-wire";
-import { descriptionSections } from "@repo/features/description-document";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
@@ -24,13 +25,12 @@ import {
 } from "react";
 import { askAct } from "../act.js";
 import { actMutation } from "../act-mutations.js";
+import type { MentionNode } from "../description-editor/contract.js";
 import { descriptionDocumentQuery } from "../live-reads.js";
 import type { LinkDrawer } from "../markdown-message.js";
-import type { MentionNode } from "../description-editor/contract.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { agentActor, agentName } from "./agent-model.js";
 import { type MentionDoors, mentionLinkDrawer } from "./mention-chip.js";
-import type { MentionHolder } from "./mention-holder.js";
 import type {
   MentionAgentsReader,
   MentionableAgent,
@@ -446,18 +446,19 @@ export function useMentionLink(task?: MentionedTask): LinkDrawer {
   return useMemo(() => mentionLinkDrawer(doors), [doors]);
 }
 
-/** Makes the agent's message box the one a mention made elsewhere on the page is laid into, for as long as it is drawn. */
-export function useMentionBox(receive: MentionBox): void {
+/** Makes the agent's message box the one a mention made elsewhere on the page is laid into, for as long as it is drawn; none where the box takes none, as an Inbox answer's. */
+export function useMentionBox(receive: MentionBox | undefined): void {
   const stand = useContext(MentionBoxContext)?.stand;
   const latest = useRef(receive);
   latest.current = receive;
+  const takes = receive !== undefined;
   useEffect(() => {
-    if (stand === undefined) return;
-    const taking: MentionBox = (mention) => latest.current(mention);
+    if (stand === undefined || !takes) return;
+    const taking: MentionBox = (mention) => latest.current?.(mention);
     // Note that a box is set as a function's answer, since the box is itself a function.
     stand(() => taking);
     return () => stand((standing) => (standing === taking ? undefined : standing));
-  }, [stand]);
+  }, [stand, takes]);
 }
 
 /** Hands a mention to the agent's message box drawn on the page; nothing while no box stands there, or off a task's page. */

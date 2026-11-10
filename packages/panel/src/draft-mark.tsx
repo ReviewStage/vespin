@@ -1,5 +1,5 @@
 /**
- * draft-mark.tsx -- the mark a place wears for what was left in it: the small muted pencil (`@repo/ui`'s `DraftMark`), or the failed mark where a message did not go, on the open task's agent's, draft agent's, or Inbox tab while its box holds one and another tab is chosen, an Inbox item's row while its box holds one and another item is chosen, and the sidebar's New task row while its words wait in the workspace and neither its card nor Home shows them (`composer-drafts.ts`).
+ * draft-mark.tsx -- the mark a place wears for what was left in it: the small muted pencil (`@repo/ui`'s `DraftMark`), or the failed mark where a message did not go, on the open task's agent's, draft agent's, or Inbox tab while its box holds one and another tab is chosen, and an Inbox item's row while its box holds one and another item is chosen (`composer-drafts.ts`).
  *
  * Slack marks a channel holding an unsent message with a pencil, and a
  * draft here wears the same, in a row's marks before its time, in the muted
@@ -15,9 +15,8 @@
  * A message that was sent and did not go is no draft, so the place it went
  * wears the failed mark in the pencil's place while it waits on Retry, Edit,
  * or Delete (`tasks/failed-lines.ts`): the agent's tab while another is
- * chosen, as a chat app marks a conversation holding a message not
- * delivered. A sidebar row weighs both against its other marks and wears
- * one (`@repo/ui`'s `RowEndMark`).
+ * chosen, and a sidebar row of a task or an agent while another is open, as
+ * a chat app marks a conversation holding a message not delivered.
  */
 
 import { DraftMark, NotDeliveredMark } from "@repo/ui";

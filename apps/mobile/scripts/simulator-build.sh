@@ -5,7 +5,11 @@
 #
 # Expo generates `ios/` from app.config.ts (nothing under it is committed) and
 # installs its pods, then Xcode builds a Release app for the simulator, with
-# the JavaScript bundle embedded so no Metro server has to run beside it. The
+# the JavaScript bundle embedded so no Metro server has to run beside it,
+# signed to run locally: an ad-hoc signature, which needs no team or
+# certificate, under which Xcode writes the simulator's own entitlements into
+# the app, so it reaches the Keychain the sign-in seals its tokens with; an
+# unsigned app is refused the Keychain. The
 # derived data lands under `ios/build` unless a directory is named, as CI
 # names its runner's temporary one. Delete `ios/` once the app is no longer
 # needed: the pods and the build together take several gigabytes.
@@ -34,7 +38,25 @@ xcodebuild \
     -sdk iphonesimulator \
     -destination 'generic/platform=iOS Simulator' \
     -derivedDataPath "$derived_data" \
-    CODE_SIGNING_ALLOWED=NO \
+    CODE_SIGNING_ALLOWED=YES \
+    CODE_SIGN_IDENTITY=- \
     build | "${beautify[@]}"
 
-echo "$derived_data/Build/Products/Release-iphonesimulator/Vespin.app"
+app="$derived_data/Build/Products/Release-iphonesimulator/Vespin.app"
+
+# What the app's icon came out as, on stderr so the last line stays the app:
+# the icon name its Info.plist gives the system, and every rendition of that
+# name the compiled asset catalog holds, the Icon Composer bundle's and the
+# flat 1024 marketing icon App Store Connect reads among them. It reports and
+# never fails the build.
+{
+    echo "--- CFBundleIcons"
+    plutil -extract CFBundleIcons json -o - "$app/Info.plist" || true
+    echo
+    icon_name=$(plutil -extract CFBundleIcons.CFBundlePrimaryIcon.CFBundleIconName raw -o - "$app/Info.plist" || true)
+    echo "--- Assets.car renditions named ${icon_name:-?}"
+    xcrun --sdk iphonesimulator assetutil --info "$app/Assets.car" |
+        jq -c --arg name "$icon_name" '.[] | select(.Name? == $name) | del(.SHA1Digest, .Sizes)' || true
+} >&2
+
+echo "$app"

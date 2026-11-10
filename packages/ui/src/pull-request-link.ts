@@ -6,8 +6,8 @@ import { pullRequestAddressOf } from "@repo/features/link-grammar";
  * A pull request an agent opened is named in words by its page on GitHub,
  * as a mention's chip or a bare link, and the window draws that pull
  * request in the agent's Pull request tab. A place that holds agents and
- * their pull requests (a task, the Inbox beside an item, an agent with no
- * task) asks this which one a link names, and opens its tab where it does.
+ * their pull requests (a task, the Inbox beside an item) asks this which one
+ * a link names, and opens its tab where it does.
  */
 
 /** A pull request one of the place's agents opened, by its page on GitHub. */
@@ -46,24 +46,16 @@ interface ListedTaskPullRequests {
   }[];
 }
 
-/** A listed agent on no task as the window holds it: its id, and the pull request it opened, where it opened one. */
-interface ListedAgent {
-  readonly id: string;
-  readonly pullRequest?: { readonly url: string } | undefined;
-}
-
 /**
  * The agent whose Pull request tab a link to a pull request opens, and its
- * task, none for an agent on none, among the tasks and the agents on no
- * task the window lists, wherever the link is pressed: a thread, a task's
- * card, or another task, every pull request of a task the list followed
- * live holds among them.
+ * task, among the tasks the window lists, wherever the link is pressed: a
+ * thread, a task's card, or another task, every pull request of a task the
+ * list followed live holds among them.
  */
 export function listedPullRequestOf(
   href: string,
   tasks: Iterable<ListedTaskPullRequests>,
-  agents: Iterable<ListedAgent> = [],
-): { readonly taskId: string | undefined; readonly agentId: string } | undefined {
+): { readonly taskId: string; readonly agentId: string } | undefined {
   for (const task of tasks) {
     const opened = task.pullRequests.flatMap(({ url, agentId }) =>
       url === undefined || agentId === undefined ? [] : [{ agentId, url }],
@@ -71,11 +63,7 @@ export function listedPullRequestOf(
     const agentId = pullRequestAgentOf(href, opened);
     if (agentId !== undefined) return { taskId: task.taskId, agentId };
   }
-  const taskless = [...agents].flatMap(({ id, pullRequest }) =>
-    pullRequest === undefined ? [] : [{ agentId: id, url: pullRequest.url }],
-  );
-  const agentId = pullRequestAgentOf(href, taskless);
-  return agentId === undefined ? undefined : { taskId: undefined, agentId };
+  return undefined;
 }
 
 /**

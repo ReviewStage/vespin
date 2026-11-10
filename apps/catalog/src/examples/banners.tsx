@@ -24,8 +24,10 @@ import {
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  UsageLimitNotice,
   ViewingAsBanner,
 } from "@repo/ui";
+import { USAGE_LIMIT_AGENT } from "@repo/wire/ui-messages";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -120,6 +122,28 @@ function Banners(): React.JSX.Element {
             cannot push to.
           </Banner>
         </div>
+      </CatalogSection>
+      <CatalogSection id="banner-usage-limit" title="Usage limit">
+        <Stack gap={GAP.FIELD}>
+          <UsageLimitNotice
+            notice={{ agent: USAGE_LIMIT_AGENT.CLAUDE, resetsAt: Date.UTC(2026, 10, 9, 23) }}
+          />
+          <UsageLimitNotice notice={{ agent: USAGE_LIMIT_AGENT.CODEX, resetsAt: null }} />
+          <UsageLimitNotice
+            notice={{
+              agent: USAGE_LIMIT_AGENT.CLAUDE,
+              resetsAt: null,
+              moved: { from: "Work plan", to: "Personal plan" },
+            }}
+          />
+          <UsageLimitNotice
+            notice={{
+              agent: USAGE_LIMIT_AGENT.CODEX,
+              resetsAt: null,
+              moved: { from: "dean@acme.dev", to: "API key · sk-…a91F" },
+            }}
+          />
+        </Stack>
       </CatalogSection>
       <CatalogSection id="banner-viewing-as" title="Viewing as a member">
         <Stack gap={GAP.FIELD}>

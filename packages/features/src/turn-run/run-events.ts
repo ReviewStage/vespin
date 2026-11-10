@@ -7,6 +7,7 @@ import {
   valueFromJsonText,
   type WireRecord,
 } from "@repo/wire";
+import type { UsageLimitNotice } from "@repo/wire/ui-messages";
 import type { UIMessage } from "ai";
 import type { RunModelUsage, RunStatus, RunUsage, TurnFailure } from "./requests.js";
 import { spokenProse } from "./spoken-prose.js";
@@ -63,6 +64,8 @@ export const RUN_EVENT = {
   TEXT_DRAFTED: "text_drafted",
   /** The turn's execution is over, however it ended. */
   TURN_ENDED: "turn_ended",
+  /** Every payer was spent: a lasting notice at the pause or stop. */
+  USAGE_LIMIT_REACHED: "usage_limit_reached",
 } as const;
 
 /** The kinds of step that count as slow: a whole transcript read, a write the provider carries, or a task call's look into its repository. */
@@ -158,6 +161,7 @@ interface RunEventBase {
 }
 
 export type RunEventBody =
+  | { readonly kind: typeof RUN_EVENT.USAGE_LIMIT_REACHED; readonly notice: UsageLimitNotice }
   | {
       readonly kind: typeof RUN_EVENT.SLOW_STEP;
       readonly runId: string;

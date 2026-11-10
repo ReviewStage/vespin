@@ -354,6 +354,31 @@ export const INTEGRATION_ADD_ACCOUNT = "true";
 /** The most accounts a user account may hold at one provider. */
 export const INTEGRATION_ACCOUNTS_MAX = 5;
 
+/** Which account a call is about, and on a Connect whether it signs in a new one: none named is the provider's first. */
+export interface IntegrationAccountTarget {
+  readonly connection?: string | undefined;
+  readonly add?: boolean | undefined;
+}
+
+/** The query a provider's procedure names the account in; nothing for the provider's first account. */
+function accountQuery(target: IntegrationAccountTarget = {}) {
+  return {
+    ...(target.connection !== undefined
+      ? { [INTEGRATION_QUERY.CONNECTION]: target.connection }
+      : undefined),
+    ...(target.add === true ? { [INTEGRATION_QUERY.ADD]: INTEGRATION_ADD_ACCOUNT } : undefined),
+  };
+}
+
+/** A provider's input in parts: the path's provider, and the query only where it names something; the window's and the command line's alike. */
+export function integrationAccountInput(
+  provider: IntegrationProvider,
+  target?: IntegrationAccountTarget,
+) {
+  const query = accountQuery(target);
+  return { params: { provider }, ...(Object.keys(query).length > 0 ? { query } : undefined) };
+}
+
 /** The longest label an account may carry, in characters. */
 export const INTEGRATION_LABEL_MAX = 64;
 
@@ -375,7 +400,7 @@ export function integrationLabelUnread(
 }
 
 /** One account the user account holds at a provider, as the statuses read answers it. */
-const integrationAccountSchema = EffectSchema.Struct({
+export const integrationAccountSchema = EffectSchema.Struct({
   provider: integrationProviderSchema,
   connection: integrationConnectionNameSchema,
   /** Its name at the provider, or the developer's own for it, where either is known. */

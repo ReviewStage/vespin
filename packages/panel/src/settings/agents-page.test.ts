@@ -254,7 +254,7 @@ test("while the default and the keys are read, placeholder rows stand in each gr
   act(() => root.render(withQueryClient(createElement(AgentsPage, { signedIn: true }))));
 
   assert.deepEqual(placeholders(page), [
-    ["Reading your keys", 4],
+    ["Reading your keys", 2],
     ["Reading your default", 3],
   ]);
   await settle();
@@ -492,7 +492,7 @@ test("replacing the account's own Anthropic key moves the models the host holds,
 
   act(() =>
     (
-      page.querySelector<HTMLButtonElement>('[aria-label="Anthropic API key actions"]') ??
+      page.querySelector<HTMLButtonElement>('[aria-label="API key · sk-ant-…wxyz actions"]') ??
       assert.fail("no key's ⋯")
     ).click(),
   );

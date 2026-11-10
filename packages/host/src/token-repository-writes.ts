@@ -16,14 +16,7 @@
 
 import type { WorkspaceTokenRepository } from "@repo/features/github-repositories-wire";
 import type { TasksWorkspaceTokenRepositorySetParams } from "@repo/features/tasks-view";
-import type {
-  EntityKind,
-  EntityPool,
-  HeldRows,
-  Refused,
-  WriteDeclaration,
-  Written,
-} from "@repo/sync";
+import type { EntityPool, HeldRows, Refused, RowKind, WriteDeclaration, Written } from "@repo/sync";
 import { Effect, Equal, type Scope } from "effect";
 import type { AppTokenRepositories } from "./app-state.js";
 
@@ -42,7 +35,7 @@ interface TokenRepositoriesChange {
 }
 
 /** A workspace's token repositories, by the workspace, every addition and removal a change of its list. */
-const TOKEN_REPOSITORIES: EntityKind<TokenRepositoriesRow, TokenRepositoriesChange> = {
+const TOKEN_REPOSITORIES: RowKind<TokenRepositoriesRow, TokenRepositoriesChange> = {
   key: (row) => row.workspaceId,
   drawn: (change, row) => {
     if (row === undefined) return undefined;

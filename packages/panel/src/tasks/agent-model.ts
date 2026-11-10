@@ -1,23 +1,17 @@
 import {
   agentFailureWords,
   hostLostWords,
+  LIMIT_REACHED_WORDS,
   launchStoppedWords,
   mendedByNewAgent,
 } from "@repo/features/agent-failure-words";
-import { recordedVideosOf } from "@repo/features/agent-pictures-model";
+import { AGENT_PART, type AgentPart, agentParts, messageWords } from "@repo/features/agent-parts";
 import { harnessNameOf } from "@repo/features/agent-runtime-models";
 import { newerTurn, turnAgentStatus, turnOpen } from "@repo/features/agent-status";
-import {
-  AGENT_TOOL,
-  CLAUDE_CODE_TOOL,
-  CONNECTION_TOOL,
-  EVE_TOOL,
-  RETIRED_TOOL,
-} from "@repo/features/agent-tools";
+import { AGENT_TOOL, CLAUDE_CODE_TOOL } from "@repo/features/agent-tools";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
 import {
   AGENT_ARCHIVER,
-  AGENT_DELEGATE_TOOL,
   AGENT_FAILURE,
   AGENT_PAYER,
   AGENT_RUNTIME,
@@ -42,8 +36,6 @@ import {
   LOCAL_AGENT_REFUSAL,
   type LocalAgentRefusal,
   type NativeAgentRuntime,
-  PART_CUT_FIELD,
-  type PartCut,
   PULL_REQUEST_STATE,
   type PullRequestState,
   type RefusedDevice,
@@ -60,6 +52,7 @@ import {
   type FailureReason,
   remedyLabel,
 } from "@repo/features/failure-remedy";
+import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import { agentName, CATALOG_ID_SEPARATOR, modelLabel } from "@repo/features/model-label";
 import {
   type CatalogModel,
@@ -73,22 +66,23 @@ import {
   standardModelIdOf,
 } from "@repo/features/models-wire";
 import { formatCompact, formatUsd } from "@repo/features/number-format";
+import { plainWords } from "@repo/features/plain-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import {
+  PROVIDER_KEY_KIND,
+  PROVIDER_KEY_STATUS,
+  type ProviderKeyKind,
+  type SubscriptionKeySummary,
+} from "@repo/features/provider-key-wire";
 import {
   REPOSITORY_UNREACHED,
   type RepositoryUnreached,
 } from "@repo/features/repository-reach-wire";
-import { inPullRequestOrder } from "@repo/features/task-agents-model";
+import { agentStillWriting, inPullRequestOrder } from "@repo/features/task-agents-model";
 import type { DescriptionEditor, TaskPullRequestLine } from "@repo/features/task-wire";
-import { dayAndTimeText } from "@repo/features/time-format";
-import {
-  ROW_PART,
-  type RowReading,
-  TURN_ROW,
-  type TurnRow,
-  turnRows,
-} from "@repo/features/turn-rows";
-import { andList, readFailedWords } from "@repo/features/words";
+import { dayAndTimeText, dueText } from "@repo/features/time-format";
+import { TOOL_STATE, type ToolState } from "@repo/features/tool-call-block";
+import { andList, countWords, readFailedWords, TERM } from "@repo/features/words";
 import type { FormerMember, WorkspaceMember } from "@repo/features/workspace-wire";
 import {
   ACTOR_KIND,
@@ -104,6 +98,7 @@ import { MESSAGE_BLOCK, messageText } from "@repo/ui/reply-quote";
 import {
   ACTION_RESULT_STATUS,
   type AgentMessageMetadata,
+  type CarryOnLineMetadata,
   type CommentLineMetadata,
   GITHUB_CHECK_CONCLUSION,
   GITHUB_LINE_EVENT,
@@ -112,24 +107,18 @@ import {
   isFailingConclusion,
   isRecord,
   isWireNumber,
-  isWireString,
   MESSAGE_CHANNEL,
   MESSAGE_ROLE,
   type SlackLineMetadata,
   type ThreadLineMetadata,
   TURN_STATUS,
-  type UnparsedWireValue,
   USER_MESSAGE_METADATA,
   type UserMessageMetadata,
-  type WireValue,
 } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
+import { USAGE_LIMIT_AGENT, type UsageLimitNotice } from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
-import { TOOL_STATE, type ToolState } from "../ai-elements/tool.js";
 import { devicePlatformOf } from "../device-platform.js";
-import { GLYPH_STATE, type GlyphState, glyphStateWords } from "../state-glyph.js";
-import { drawnCall } from "./native-tool-calls.js";
-import { plainWords, remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-model.js";
 
 /**
  * agent-model.ts -- what the agent tabs, a Start, and an agent's transcript draw, decided from what the service answered.
@@ -141,7 +130,7 @@ import { plainWords, remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-m
  * than in the transcript, what its working line says it is doing, when a
  * line the developer sent has been read back, what a Start or a message
  * that did not land says, and what its
- * branch chip and the pull request's row say and open, and how what an agent or a turn cost is told.
+ * pull request's row says and opens, and how what an agent or a turn cost is told.
  * Nothing here asks anything.
  */
 
@@ -151,10 +140,60 @@ const LINE_SEPARATOR = " · ";
 /** Each payer as the model menu's last line names it; a key's line goes on to what the agent has cost. */
 const PAYER_WORDS = {
   [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: "Using Claude plan",
-  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Using ChatGPT plan",
+  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Using Codex plan",
   [AGENT_PAYER.APP]: `${PRODUCT_NAME}'s API key`,
   [AGENT_PAYER.MAC_SIGN_IN]: "Using your Mac's sign-in",
 } as const satisfies Record<Exclude<AgentPayer, typeof AGENT_PAYER.API_KEY>, string>;
+
+/** Each plan payer as the model menu's last line leads a plan it names: "Using Codex · ana@work.com". */
+const PLAN_PAYER_WORDS = {
+  [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: "Using Claude",
+  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: "Using Codex",
+} as const satisfies Partial<Record<AgentPayer, string>>;
+
+type PlanPayer = keyof typeof PLAN_PAYER_WORDS;
+
+/** The kind of plan each plan payer runs on. */
+const PLAN_PAYER_KIND = {
+  [AGENT_PAYER.CLAUDE_SUBSCRIPTION]: PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+  [AGENT_PAYER.CHATGPT_SUBSCRIPTION]: PROVIDER_KEY_KIND.CHATGPT_OAUTH,
+} as const satisfies Record<PlanPayer, ProviderKeyKind>;
+
+function planPayer(payer: AgentPayer | undefined): payer is PlanPayer {
+  return payer !== undefined && payer in PLAN_PAYER_WORDS;
+}
+
+/**
+ * The name of the reader's own plan that pays for the agent, for the model
+ * menu's last line: the subscription the page named, or, for one a new
+ * agent would start on (`next`), the first of the payer's kind in the
+ * reader's order with room left, as a turn picks it; by the name the reader
+ * gave it, else the ChatGPT account it signed in as. Nothing for a plan the
+ * reader does not hold, a teammate's, or one with neither name.
+ */
+export function payerPlanName(
+  payer: AgentPayer | undefined,
+  subscriptions: readonly SubscriptionKeySummary[] | undefined,
+  subscriptionId: string | undefined,
+  next: boolean,
+): string | undefined {
+  if (!planPayer(payer) || subscriptions === undefined) return undefined;
+  const kind = PLAN_PAYER_KIND[payer];
+  const plan =
+    subscriptionId !== undefined
+      ? subscriptions.find((one) => one.id === subscriptionId && one.kind === kind)
+      : next
+        ? subscriptions
+            .filter((one) => one.kind === kind)
+            .toSorted((a, b) => a.position - b.position)
+            .find(
+              (one) =>
+                one.status === PROVIDER_KEY_STATUS.VERIFIED ||
+                one.status === PROVIDER_KEY_STATUS.UNVERIFIED,
+            )
+        : undefined;
+  return plan?.label ?? plan?.email;
+}
 
 /** The member's own API key, named by the provider it is for. */
 export const API_KEY_WORDS = {
@@ -182,8 +221,13 @@ export function agentPayerLine(
   payer: AgentPayer | undefined,
   provider: ModelProvider | undefined,
   costUsd: number | undefined,
+  /** The plan that pays, by its name, where the reader's own keys name it (`payerPlanName`). */
+  planName?: string | undefined,
 ): string | undefined {
   if (payer === undefined) return undefined;
+  if (planPayer(payer) && planName !== undefined) {
+    return `${PLAN_PAYER_WORDS[payer]}${LINE_SEPARATOR}${planName}`;
+  }
   const words =
     payer === AGENT_PAYER.API_KEY
       ? provider === undefined
@@ -464,23 +508,25 @@ export function endLineParts(
   }
 }
 
+/** The harness a usage limit's notice names, by the provider of the agent's model: Codex for OpenAI's, Claude for any other. */
+export function usageLimitAgentOf(provider: ModelProvider | undefined): UsageLimitNotice["agent"] {
+  return provider === MODEL_PROVIDER.OPENAI ? USAGE_LIMIT_AGENT.CODEX : USAGE_LIMIT_AGENT.CLAUDE;
+}
+
+/** Whether a refusal a note keeps is the plan's usage limit's (`AGENT_PLAN_LIMIT_REACHED`). */
+export function refusedAtLimit(refusal: unknown): boolean {
+  return (
+    Predicate.hasProperty(refusal, "failure") &&
+    refusal.failure === AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED
+  );
+}
+
 /** What mends a failed turn from its end line: the API keys' page for a key refused; nothing else there is the developer's to mend. */
 export function endLineReason(failure: AgentFailure | undefined, starter?: string): FailureReason {
   // A teammate's key is theirs to mend, so the reader is offered no Settings of their own.
   return failure === AGENT_FAILURE.PROVIDER_KEY && starter === undefined
     ? FAILURE_REASON.API_KEY
     : FAILURE_REASON.OTHER;
-}
-
-/** The statuses an agent may still write under, which is when it can be stopped. */
-const FOLLOWED_STATUSES: ReadonlySet<AgentStatus> = new Set([
-  AGENT_STATUS.STARTING,
-  AGENT_STATUS.RUNNING,
-]);
-
-/** Whether an agent in this status may still write more. */
-export function agentStillWriting(status: AgentStatus): boolean {
-  return FOLLOWED_STATUSES.has(status);
 }
 
 /**
@@ -500,21 +546,6 @@ export function turnUnderWay(agent: Pick<AgentSummary, "status" | "stoppable">):
   return agent.status === AGENT_STATUS.RUNNING && agent.stoppable !== false;
 }
 
-/**
- * Where an agent stands as its tab's glyph wears it: working while it may
- * still write, failed once its turn failed, and at rest once it finished
- * or the developer stopped it, since a stop is the developer's own doing.
- */
-export function agentGlyphState(status: AgentStatus): GlyphState {
-  if (agentStillWriting(status)) return GLYPH_STATE.WORKING;
-  return status === AGENT_STATUS.FAILED ? GLYPH_STATE.FAILED : GLYPH_STATE.REST;
-}
-
-/** What an agent's tab says of where it stands beyond its glyph: a stop, which its glyph at rest does not tell from a finish. */
-export function agentStateWords(status: AgentStatus): string | undefined {
-  return glyphStateWords(agentGlyphState(status), status === AGENT_STATUS.CANCELED);
-}
-
 /** What a Start refused for want of a repository says. */
 const START_NEEDS_REPOSITORY = "Choose a repository";
 
@@ -532,9 +563,6 @@ export const UNHEARD_OFFLINE = {
   BESIDE_RETRY: "You're offline.",
   ALONE: "You're offline. Try again once you're back online.",
 } as const;
-
-/** What a plan's reached limit says where no reset is known; with one, `limitResetsWords`. */
-const LIMIT_REACHED_WORDS = "Usage limit reached";
 
 /** What the refusals a Start and a message meet alike say, worded once. */
 const SHARED_FAILURE_NOTE = {
@@ -659,13 +687,32 @@ export function endLineOffersContinue(input: {
 /**
  * The failures a message sent again would only meet again, since what mends
  * them is a choice the line's words name: a teammate's key, which only they
- * replace, or Fast, which a model chosen with it off mends.
+ * replace, Fast, which a model chosen with it off mends, or the model's
+ * refusal, which a continue on another model mends (`endLineOffersOtherModel`).
  */
 const MENDED_BY_CHOICE: ReadonlySet<AgentFailure> = new Set([
   AGENT_FAILURE.PROVIDER_KEY,
   AGENT_FAILURE.FAST_ON_OWN_KEY,
   AGENT_FAILURE.FAST_NOT_ENABLED,
+  AGENT_FAILURE.REFUSAL,
 ]);
+
+/**
+ * Whether the failed end line's row ends on the offer to continue on another
+ * model (`RefusalContinue`): where the model refused the turn, so a message
+ * only meets the refusal again, and until another agent continued it, when
+ * Continue again stands in its place (`endLineOffersContinue`).
+ */
+export function endLineOffersOtherModel(input: {
+  readonly status: AgentStatus;
+  readonly endReason: FailureReason;
+  readonly failure: AgentFailure | undefined;
+  readonly continued: boolean;
+  readonly boxClosed: boolean;
+}): boolean {
+  if (!endLineContinues(input.status, input.endReason)) return false;
+  return !input.continued && !input.boxClosed && input.failure === AGENT_FAILURE.REFUSAL;
+}
 
 /**
  * Whether the failed end line's row ends on Try again, which sends the
@@ -769,6 +816,12 @@ export function archiveWords(archived: boolean): {
   readonly refused: string;
 } {
   return archived ? ARCHIVED_WORDS : UNARCHIVED_WORDS;
+}
+
+/** What the toast says once `count` agents' archive, or its undoing, landed: one agent's words for one, else how many. */
+export function archivedManyWords(count: number, archived: boolean): string {
+  if (count === 1) return archiveWords(archived).done;
+  return `${countWords(count, TERM.AGENT)} ${archived ? "archived" : "unarchived"}`;
 }
 
 /** A refused start or message as the view hears it: why, why the repository is out of reach where it is and the service said, when a plan's reached limit resets where it is that and the provider said, and the provider whose credential is missing where it is that. */
@@ -928,7 +981,7 @@ export interface ConnectFailure {
 /** What would run a provider's models, as the connect note names it: the harness's plan or the provider's API key. */
 const CONNECT_CREDENTIALS = {
   [MODEL_PROVIDER.ANTHROPIC]: "a Claude plan or an Anthropic API key",
-  [MODEL_PROVIDER.OPENAI]: "a ChatGPT plan or an OpenAI API key",
+  [MODEL_PROVIDER.OPENAI]: "a Codex plan or an OpenAI API key",
 } as const satisfies Record<ModelProvider, string>;
 
 /**
@@ -1802,90 +1855,6 @@ export function effortLabel(effort: string): string {
 /** Where a worker stands as a page of its transcript read it: its status, and when the run under way began where the service said. */
 export type AgentRun = Pick<AgentSummary, "status" | "runStartedAt">;
 
-/** The kinds of part a stored message holds that the tab draws apart. */
-export const AGENT_PART = {
-  TEXT: "text",
-  REASONING: "reasoning",
-  TOOL: "tool",
-  STEP_START: "step-start",
-  /** A part of a kind this build does not draw, which is skipped rather than refused. */
-  OTHER: "other",
-  /** One of the developer's lines that reached the turn while it ran, drawn among the turn's parts where it arrived; never a part a message stores. */
-  ARRIVED: "arrived",
-} as const;
-
-/** How the SDK spells a tool part's type: the tool's name behind this prefix. */
-const TOOL_PART_TYPE_PREFIX = "tool-";
-
-const TOOL_STATES: ReadonlySet<string> = new Set(Object.values(TOOL_STATE));
-
-/** A part its page carried cut (`cutParts`): its two ends and its whole size, and the message and index it is fetched whole by. */
-export type AgentPartCut = Omit<PartCut, "field"> & { readonly messageId: string };
-
-/** One part of a stored message as the tab draws it. */
-export type AgentPart =
-  | { readonly kind: typeof AGENT_PART.TEXT; readonly text: string }
-  | {
-      readonly kind: typeof AGENT_PART.REASONING;
-      /** Empty on a thought its page carried cut, whose words `cut` holds the ends of. */
-      readonly text: string;
-      readonly cut?: AgentPartCut;
-    }
-  | {
-      readonly kind: typeof AGENT_PART.TOOL;
-      readonly tool: string;
-      readonly callId: string;
-      readonly state: ToolState;
-      readonly input: WireValue | undefined;
-      /** None while the call has not answered, and on a call whose answer its page carried cut, which `cut` holds the ends of. */
-      readonly output: WireValue | undefined;
-      /** The error's own text, on a call that ended in one. */
-      readonly errorText: string | undefined;
-      readonly cut?: AgentPartCut;
-    }
-  | { readonly kind: typeof AGENT_PART.STEP_START }
-  | { readonly kind: typeof AGENT_PART.OTHER }
-  | { readonly kind: typeof AGENT_PART.ARRIVED; readonly line: AgentTranscriptMessage };
-
-function toolState(value: WireValue | undefined): ToolState {
-  // SAFETY: membership in the set built from TOOL_STATE's values is what the union names.
-  return isWireString(value) && TOOL_STATES.has(value)
-    ? (value as ToolState)
-    : TOOL_STATE.INPUT_AVAILABLE;
-}
-
-/**
- * A stored part read for drawing. The row carries the SDK's own vocabulary
- * rather than one this wire declares, so the read is forgiving: a text or
- * reasoning part without its words, and any kind this build does not know,
- * draws nothing rather than refusing the message.
- */
-export function agentPart(part: WireValue): AgentPart {
-  if (!isRecord(part) || !isWireString(part.type)) return { kind: AGENT_PART.OTHER };
-  if (part.type === AGENT_PART.TEXT || part.type === AGENT_PART.REASONING) {
-    return isWireString(part.text)
-      ? { kind: part.type, text: part.text }
-      : { kind: AGENT_PART.OTHER };
-  }
-  if (part.type === AGENT_PART.STEP_START) return { kind: AGENT_PART.STEP_START };
-  if (part.type.startsWith(TOOL_PART_TYPE_PREFIX)) {
-    // A native harness's call is read as the call of the same kind, which draws it (`native-tool-calls.ts`).
-    const call = drawnCall({
-      tool: part.type.slice(TOOL_PART_TYPE_PREFIX.length),
-      input: part.input,
-      output: part.output,
-    });
-    return {
-      kind: AGENT_PART.TOOL,
-      ...call,
-      callId: isWireString(part.toolCallId) ? part.toolCallId : "",
-      state: toolState(part.state),
-      errorText: isWireString(part.errorText) ? part.errorText : undefined,
-    };
-  }
-  return { kind: AGENT_PART.OTHER };
-}
-
 /** A user row's metadata as the service stored it, or nothing where it holds none this build reads. */
 const readUserMetadata = Schema.decodeUnknownOption(USER_MESSAGE_METADATA);
 
@@ -1901,28 +1870,55 @@ export function agentMessageOf(message: AgentTranscriptMessage): AgentMessageMet
 }
 
 /**
- * Whether a line is one of the agent's own wakeups: the prompt a
- * `ScheduleWakeup` set, which the service once sent back to the agent as a
- * line of the agent's own when it came due, so its head says the agent woke
- * up.
+ * Whether a line is one of the agent's own wakeups: the prompt a wakeup set,
+ * which the service sends back to the agent as a line of the agent's own on
+ * the app's channel when it comes due (`schedule_wakeup`, delivered by the
+ * scheduled sweep), so its head says the agent woke up.
  */
 export function isWakeupLine(message: AgentTranscriptMessage): boolean {
   return userMetadataOf(message)?.channel === MESSAGE_CHANNEL.APP;
 }
 
+/** What the carry-on line the service sent after a cut-off turn says of why, where a line is one; nothing for any other line, or a row this build cannot read. */
+export function carryOnLineOf(message: AgentTranscriptMessage): CarryOnLineMetadata | undefined {
+  const read = userMetadataOf(message);
+  return read?.channel === MESSAGE_CHANNEL.CARRY_ON ? read : undefined;
+}
+
 /** A second, in the milliseconds a wakeup's wait is told in. */
 const SECOND_MS = 1_000;
 
-/** How long the last wakeup a turn set waited, in milliseconds, read off its `ScheduleWakeup` call; none where the turn set none. */
+/** The calls that book a wakeup, each with its delay under `delaySeconds`: Claude Code's own, and ours, which a Codex agent books with. */
+const WAKEUP_TOOLS: ReadonlySet<string> = new Set([
+  CLAUDE_CODE_TOOL.SCHEDULE_WAKEUP,
+  AGENT_TOOL.SCHEDULE_WAKEUP,
+]);
+
+/** Whether a wakeup call booked one: not a cancel, and not a call of ours the service refused, which left the booking before it standing. */
+function booksWakeup(part: AgentPart): boolean {
+  if (part.kind !== AGENT_PART.TOOL || !WAKEUP_TOOLS.has(part.tool)) return false;
+  if (isRecord(part.input) && part.input.stop === true) return false;
+  return !(isRecord(part.output) && part.output.status === ACTION_RESULT_STATUS.REJECTED);
+}
+
+/**
+ * How long the last wakeup a turn booked waited, in milliseconds: the delay
+ * the service held it to, as its answer names it, or else the delay the
+ * call asked for; none where the turn booked none.
+ */
 export function wakeupDelayOf(turn: AgentTranscriptMessage | undefined): number | undefined {
   if (turn === undefined) return undefined;
-  const call = agentParts(turn).findLast(
-    (part) => part.kind === AGENT_PART.TOOL && part.tool === CLAUDE_CODE_TOOL.SCHEDULE_WAKEUP,
-  );
-  const input = call?.kind === AGENT_PART.TOOL ? call.input : undefined;
-  return isRecord(input) && isWireNumber(input.delaySeconds)
-    ? input.delaySeconds * SECOND_MS
-    : undefined;
+  const call = agentParts(turn).findLast(booksWakeup);
+  if (call?.kind !== AGENT_PART.TOOL) return undefined;
+  const booked = isRecord(call.output) ? call.output.wakeup : undefined;
+  const held =
+    isRecord(booked) && isWireNumber(booked.delaySeconds) ? booked.delaySeconds : undefined;
+  const asked =
+    isRecord(call.input) && isWireNumber(call.input.delaySeconds)
+      ? call.input.delaySeconds
+      : undefined;
+  const seconds = held ?? asked;
+  return seconds === undefined ? undefined : seconds * SECOND_MS;
 }
 
 /** What a member did on a thread that a line steered into the agent carries, and the item it is on; nothing for any other line. */
@@ -2116,413 +2112,6 @@ function userMetadataOf(
   return read === undefined || !("channel" in read) ? undefined : read;
 }
 
-/**
- * A part its page carried cut, as the tab draws it: a thought with no words
- * of its own, or a call with no answer of its own, each with the ends it was
- * cut to; a part that is neither draws as it reads.
- */
-function cutAgentPart(part: WireValue, cut: PartCut, messageId: string): AgentPart {
-  const { field: _field, ...ends } = cut;
-  const marked = { ...ends, messageId };
-  if (cut.field === PART_CUT_FIELD.TEXT) {
-    return { kind: AGENT_PART.REASONING, text: "", cut: marked };
-  }
-  const read = agentPart(part);
-  return read.kind === AGENT_PART.TOOL ? { ...read, cut: marked } : read;
-}
-
-/** The parts of a message as the tab draws them, in the row's order, each its page carried cut marked so. */
-export function agentParts(message: AgentTranscriptMessage): readonly AgentPart[] {
-  const read = partsRead.get(message);
-  if (read !== undefined) return read;
-  const cuts = new Map((message.cutParts ?? []).map((cut) => [cut.index, cut]));
-  const parts = message.parts.map((part, index) => {
-    const cut = cuts.get(index);
-    return cut === undefined ? storedPartRead(part) : cutAgentPart(part, cut, message.id);
-  });
-  partsRead.set(message, parts);
-  return parts;
-}
-
-/**
- * Each stored part as read, by the part: a page that rewrites a message
- * keeps every part it did not touch (`keepIdentity`), so a running turn's
- * thousand parts are read once and each read stays the same value, which
- * lets the rows drawn from them stand as they were drawn.
- */
-const partRead = new WeakMap<object, AgentPart>();
-
-/** A stored part read for drawing, once per part. */
-function storedPartRead(part: WireValue): AgentPart {
-  if (typeof part !== "object" || part === null) return agentPart(part);
-  const read = partRead.get(part);
-  if (read !== undefined) return read;
-  const fresh = agentPart(part);
-  partRead.set(part, fresh);
-  return fresh;
-}
-
-/**
- * Each message's parts as last read, by the message: a message is never
- * changed in place (a page that rewrites one hands a new one), and a
- * running agent's transcript reads every message's parts on every page.
- */
-const partsRead = new WeakMap<AgentTranscriptMessage, readonly AgentPart[]>();
-
-/**
- * The coding agent a call started, read off its answer, which is the agent
- * its row opens; nothing for any other call, one still running, or a start
- * refused, which answers no agent.
- */
-export function startedAgentOf(part: AgentPart): string | undefined {
-  if (
-    part.kind !== AGENT_PART.TOOL ||
-    (part.tool !== AGENT_TOOL.START_AGENT && part.tool !== RETIRED_TOOL.START_CODING_AGENT)
-  ) {
-    return undefined;
-  }
-  const target = toolTarget(part);
-  return target?.kind === TOOL_TARGET.AGENT ? target.agent : undefined;
-}
-
-/**
- * Whether a call is a delegation to a worker, a coding agent's, the brain's,
- * or a native harness's subagent (`native-tool-calls.ts` draws Codex's spawn
- * as Claude Code's `Agent`), which the tab draws as a subagent's row rather
- * than a call's.
- */
-export function delegates(part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>): boolean {
-  return part.tool === AGENT_DELEGATE_TOOL || part.tool === EVE_TOOL.WORKER || nativeSubagent(part);
-}
-
-/**
- * Whether a delegation is a native harness's subagent, whose own work we
- * keep no transcript of yet, so its row opens no worker's tab.
- */
-export function nativeSubagent(
-  part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>,
-): boolean {
-  return part.tool === CLAUDE_CODE_TOOL.AGENT;
-}
-
-/** Whether a part is a delegation to a worker (`delegates`). */
-export function isDelegation(
-  part: AgentPart,
-): part is Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }> {
-  return part.kind === AGENT_PART.TOOL && delegates(part);
-}
-
-/** Claude Code's calls on its task list, each of which the tab draws as the list as it stood after it (`agent-todos.ts`). */
-const TASK_CALL_TOOLS: ReadonlySet<string> = new Set([
-  CLAUDE_CODE_TOOL.TASK_CREATE,
-  CLAUDE_CODE_TOOL.TASK_UPDATE,
-  CLAUDE_CODE_TOOL.TASK_LIST,
-  CLAUDE_CODE_TOOL.TASK_GET,
-]);
-
-/** Whether a tool is one of Claude Code's calls on its task list. */
-export function isTaskCall(tool: string): boolean {
-  return TASK_CALL_TOOLS.has(tool);
-}
-
-/** Whether a tool part carries the agent's to-do list, which the tab draws as the list on a row of its own: a write of the whole list, or a call on Claude Code's task list. */
-export function isTodos(
-  part: AgentPart,
-): part is Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }> {
-  return (
-    part.kind === AGENT_PART.TOOL && (part.tool === AGENT_TOOL.WRITE_TODOS || isTaskCall(part.tool))
-  );
-}
-
-/** How the fold reads a part: its words, its reasoning as a note, a delegation as a subagent, a to-do list and a set of pictures, a page, or a recording shown each on a row of its own, a start that began a coding agent counted apart, and every other call grouped with the calls beside it. */
-const AGENT_READING: RowReading<AgentPart> = {
-  key: (part, index) => {
-    if (part.kind === AGENT_PART.TOOL) return part.callId;
-    return part.kind === AGENT_PART.ARRIVED ? part.line.id : String(index);
-  },
-  part: (part) => {
-    if (part.kind === AGENT_PART.TEXT) return ROW_PART.WORDS;
-    if (part.kind === AGENT_PART.ARRIVED) return ROW_PART.ARRIVED;
-    if (part.kind !== AGENT_PART.TOOL) return ROW_PART.NOTE;
-    if (isDelegation(part)) return ROW_PART.SUBAGENT;
-    if (startedAgentOf(part) !== undefined) return ROW_PART.AGENT;
-    // Note that what the agent showed is never grouped, because a group folds closed once the agent moves on and would fold the pictures with it.
-    return isTodos(part) || isShownSet(part) || isShownPage(part) || keptRecording(part)
-      ? ROW_PART.LONE_CALL
-      : ROW_PART.CALL;
-  },
-  running: (part) =>
-    part.kind === AGENT_PART.TOOL &&
-    (part.state === TOOL_STATE.INPUT_STREAMING || part.state === TOOL_STATE.INPUT_AVAILABLE),
-};
-
-/** No subagent's session saying where it stands. */
-const NO_WORKERS: ReadonlyMap<string, ToolState> = new Map();
-
-/** What a tab knows of a turn beyond its message, which its rows read. */
-interface AgentTurnPlace {
-  /** The call whose to-do list stays out of a finished turn's fold. */
-  readonly newestTodos?: string | undefined;
-  /** Where each call's subagent stands as its own session says, which its row draws over the call's own state, since a call may settle the moment its worker is under way. */
-  readonly workers?: ReadonlyMap<string, ToolState>;
-  /** The developer's lines that reached the turn while it ran (`arrivedIn`), each drawn among its parts after the steps it arrived after. */
-  readonly arrived?: readonly AgentTranscriptMessage[];
-}
-
-/** The `connection_execute` calls among the parts that an integration's own call ran under, by their ids. */
-function runConnectionCalls(parts: readonly AgentPart[]): ReadonlySet<string> {
-  return new Set(
-    parts.flatMap((part) => {
-      const remote =
-        part.kind === AGENT_PART.TOOL ? remoteCallOf(part.tool, part.input) : undefined;
-      return remote === undefined ? [] : [remote.call.parentCallId];
-    }),
-  );
-}
-
-type ToolPart = Extract<AgentPart, { kind: typeof AGENT_PART.TOOL }>;
-
-/** Whether a part is a `show_image` call that showed its pictures, which a reader reads as their own and never folds away. */
-function isShownSet(part: AgentPart): part is ToolPart {
-  return (
-    part.kind === AGENT_PART.TOOL &&
-    part.tool === AGENT_TOOL.SHOW_IMAGE &&
-    part.state === TOOL_STATE.OUTPUT_AVAILABLE &&
-    isRecord(part.output) &&
-    part.output.status === ACTION_RESULT_STATUS.ACCEPTED
-  );
-}
-
-/**
- * Whether a part is a `show_page` call, whose page is drawn under its row
- * and, as a set of pictures is, never folds away. Note that the call stands
- * on a row of its own from the moment it starts, not only once it showed
- * its page, so a row opened while it runs stays open as the page lands.
- */
-function isShownPage(part: AgentPart): boolean {
-  return part.kind === AGENT_PART.TOOL && part.tool === AGENT_TOOL.SHOW_PAGE;
-}
-
-/** Whether a part is a browser call that kept a recording, which a reader watches as a shown set and never folds away. */
-function keptRecording(part: AgentPart): boolean {
-  return part.kind === AGENT_PART.TOOL && recordedVideosOf(part.tool, part.output).length > 0;
-}
-
-/**
- * A `show_image` call its tool refused, as the call that failed it is: the
- * service answers a refusal as an output carrying why, so the row reads
- * the reason as its error, its line wears the failed mark, and no picture
- * waits for bytes that were never kept; nothing for any other part.
- */
-function refusedSet(part: AgentPart): ToolPart | undefined {
-  if (part.kind !== AGENT_PART.TOOL || part.tool !== AGENT_TOOL.SHOW_IMAGE) return undefined;
-  if (part.state !== TOOL_STATE.OUTPUT_AVAILABLE || !isRecord(part.output)) return undefined;
-  const reason = part.output.reason;
-  if (part.output.status !== ACTION_RESULT_STATUS.REJECTED || !isWireString(reason))
-    return undefined;
-  return { ...part, state: TOOL_STATE.OUTPUT_ERROR, errorText: reason };
-}
-
-function listOf(value: UnparsedWireValue, key: string): readonly WireValue[] {
-  if (!isRecord(value)) return [];
-  const list = value[key];
-  return Array.isArray(list) ? list : [];
-}
-
-/** Two shown sets as one: the first's call, both sets' pictures in order. */
-function joinedSets(first: ToolPart, second: ToolPart): ToolPart {
-  return {
-    ...first,
-    input: { images: [...listOf(first.input, "images"), ...listOf(second.input, "images")] },
-    output: {
-      status: ACTION_RESULT_STATUS.ACCEPTED,
-      pictures: [...listOf(first.output, "pictures"), ...listOf(second.output, "pictures")],
-    },
-  };
-}
-
-/**
- * The parts of a message a row is drawn from: every part but a step
- * boundary, a kind this build does not draw, and a `connection_execute`
- * whose integration's own call stands in the message; and every run of
- * shown sets, one straight after another, joined into one set, as the
- * parallel calls of one step are meant to be. Note that such a wrapper is
- * left out, because the call it ran is the same call told twice, and that
- * one with no such call, or one that failed, keeps its row, because its row
- * is where it, or its error, is read. Each line that reached the turn
- * while it ran stands ahead of the first step after the steps it arrived
- * after, or at the end where that step has not begun.
- */
-function drawnParts(
-  message: AgentTranscriptMessage,
-  arrived: readonly AgentTranscriptMessage[] = [],
-): readonly AgentPart[] {
-  const parts = agentParts(message);
-  const ran = runConnectionCalls(parts);
-  const drawn: AgentPart[] = [];
-  const waiting = arrived.toSorted((a, b) => afterStepOf(a) - afterStepOf(b));
-  let begun = 0;
-  const arrive = (steps: number) => {
-    while (waiting[0] !== undefined && afterStepOf(waiting[0]) <= steps) {
-      const line = waiting.shift();
-      if (line !== undefined) drawn.push({ kind: AGENT_PART.ARRIVED, line });
-    }
-  };
-  for (const part of parts) {
-    if (part.kind === AGENT_PART.STEP_START) {
-      arrive(begun);
-      begun += 1;
-      continue;
-    }
-    if (part.kind === AGENT_PART.OTHER) continue;
-    if (
-      part.kind === AGENT_PART.TOOL &&
-      part.tool === CONNECTION_TOOL.EXECUTE &&
-      part.state !== TOOL_STATE.OUTPUT_ERROR &&
-      ran.has(part.callId)
-    ) {
-      continue;
-    }
-    const last = drawn.at(-1);
-    const refusal = refusedSet(part);
-    if (refusal !== undefined) {
-      drawn.push(refusal);
-      continue;
-    }
-    if (last !== undefined && isShownSet(last) && isShownSet(part)) {
-      drawn[drawn.length - 1] = joinedSets(last, part);
-    } else {
-      drawn.push(part);
-    }
-  }
-  arrive(Number.POSITIVE_INFINITY);
-  return drawn;
-}
-
-/** The steps of its turn a line arrived after; none for a line no turn took in under way. */
-function afterStepOf(line: AgentTranscriptMessage): number {
-  return line.arrivedIn?.afterStep ?? 0;
-}
-
-/**
- * One of the agent's turns as the rows every transcript draws, folded as
- * `turn-rows.ts` folds a turn. A step boundary and a part
- * this build does not draw are left out, because the parts keep one rhythm
- * across them. The turn moves while the agent may still write to it, which
- * is its last message; any other has ended. A worker's session folds as
- * its agent's does, since a run of calls reads the same whoever made it.
- * The agent's newest to-do list, named by the call that wrote it
- * (`newestTodos`), stays out of a finished turn's fold, so the list
- * standing is never folded away, and so does every set of pictures and
- * every page the agent showed, which is its answer as much as its words are. A line that
- * reached the turn while it ran (`arrived`) stands among its parts where it
- * arrived, splitting the fold of a finished turn around it.
- */
-export function agentRows(
-  message: AgentTranscriptMessage,
-  moving: boolean,
-  { newestTodos, workers = NO_WORKERS, arrived = [] }: AgentTurnPlace = {},
-): readonly TurnRow<AgentPart>[] {
-  const parts = drawnParts(message, arrived);
-  const reading: RowReading<AgentPart> = {
-    ...AGENT_READING,
-    running: (part) =>
-      AGENT_READING.running(part) ||
-      (part.kind === AGENT_PART.TOOL && workers.get(part.callId) === TOOL_STATE.INPUT_AVAILABLE),
-    kept: (part) =>
-      (part.kind === AGENT_PART.TOOL && part.callId === newestTodos) ||
-      isShownSet(part) ||
-      isShownPage(part) ||
-      keptRecording(part),
-  };
-  return turnRows(parts, reading, { key: message.id, moving, done: !moving });
-}
-
-/** One of a transcript's rows as the tab draws it, with the developer's lines that reached it while its turn ran. */
-export interface PlacedMessage {
-  readonly message: AgentTranscriptMessage;
-  /** The lines its turn took in under way (`arrivedIn`), oldest first; none on any row but a turn's journal. */
-  readonly arrived: readonly AgentTranscriptMessage[];
-}
-
-/**
- * The rows with each line that follows the newest turn while it is still
- * open placed in that turn after the steps it has begun, as a line it takes
- * in is placed once the service says where it arrived. Note that such a
- * line steers the turn, and drawn below it, it would stand the turn as
- * done, offering a finished turn's actions, then move into it as the
- * service takes it. A line that did not go (`unsent`) reached no turn, so
- * it stands where the order puts it.
- */
-function steeringPlaced(
-  messages: readonly AgentTranscriptMessage[],
-  unsent: (id: string) => boolean,
-): readonly AgentTranscriptMessage[] {
-  const at = messages.findLastIndex((message) => message.role === MESSAGE_ROLE.ASSISTANT);
-  const journal = messages[at];
-  if (journal === undefined || journal.finishedAt !== undefined) return messages;
-  const begun = agentParts(journal).filter((part) => part.kind === AGENT_PART.STEP_START).length;
-  const arrivedIn = { journalId: journal.id, afterStep: begun };
-  return messages.map((message, index) =>
-    index > at &&
-    message.role === MESSAGE_ROLE.USER &&
-    message.arrivedIn === undefined &&
-    !unsent(message.id)
-      ? { ...message, arrivedIn }
-      : message,
-  );
-}
-
-/**
- * A transcript's rows with each line that reached a turn under way moved
- * into that turn's journal, which draws it where it arrived, out of the
- * order the service keeps, where the journal closed behind it. A line whose
- * journal is not among the rows, as when its page is still to land, stands
- * where the order puts it, as every line does from a service older than it.
- */
-export function placedMessages(
-  messages: readonly AgentTranscriptMessage[],
-  unsent: (id: string) => boolean = () => false,
-): readonly PlacedMessage[] {
-  const shown = steeringPlaced(messages, unsent);
-  const journals = new Set(
-    shown.filter((message) => message.role === MESSAGE_ROLE.ASSISTANT).map((each) => each.id),
-  );
-  const arrived = new Map<string, AgentTranscriptMessage[]>();
-  for (const message of shown) {
-    const journal = message.arrivedIn?.journalId;
-    if (journal === undefined || !journals.has(journal)) continue;
-    arrived.set(journal, [...(arrived.get(journal) ?? []), message]);
-  }
-  return shown.flatMap((message) => {
-    const journal = message.arrivedIn?.journalId;
-    if (journal !== undefined && journals.has(journal)) return [];
-    return [{ message, arrived: arrived.get(message.id) ?? [] }];
-  });
-}
-
-/** A stretch of a turn's rows as the tab draws it: the turn's own rows, or a line that reached it while it ran, which stands between them as the developer's own message. */
-export type TurnStretch =
-  | { readonly line: AgentTranscriptMessage; readonly rows?: undefined }
-  | { readonly line?: undefined; readonly rows: readonly TurnRow<AgentPart>[] };
-
-/** A turn's rows cut at every line that reached it while it ran, so the tab draws each line as a message of its own between the turn's work before and after it. */
-export function turnStretches(rows: readonly TurnRow<AgentPart>[]): readonly TurnStretch[] {
-  const stretches: TurnStretch[] = [];
-  let run: TurnRow<AgentPart>[] = [];
-  for (const row of rows) {
-    if (row.kind !== TURN_ROW.BLOCK || row.block.kind !== AGENT_PART.ARRIVED) {
-      run.push(row);
-      continue;
-    }
-    if (run.length > 0) stretches.push({ rows: run });
-    run = [];
-    stretches.push({ line: row.block.line });
-  }
-  if (run.length > 0 || stretches.length === 0) stretches.push({ rows: run });
-  return stretches;
-}
-
 /** What an agent is doing while it may still write, as its newest turn's record says it and its working line words it. */
 export const WORKING_PHASE = {
   /** It is being taken back to an earlier line (`rewind-action.tsx`), and stopped first where it ran. */
@@ -2539,6 +2128,8 @@ export const WORKING_PHASE = {
   WORKING: "working",
   /** A Stop was asked of its newest turn, which runs until its runner ends it. */
   STOPPING: "stopping",
+  /** Its newest turn is held open until a usage limit resets, its starter's every subscription at one and no API key to pay, and runs again then (`AgentTurn`'s `waitsUntil`). */
+  WAITING: "waiting",
 } as const;
 
 export type WorkingPhase = (typeof WORKING_PHASE)[keyof typeof WORKING_PHASE];
@@ -2549,19 +2140,30 @@ const WORKING_PHASE_WORDS = {
   [WORKING_PHASE.STARTING]: "Starting…",
   [WORKING_PHASE.WORKING]: "Working…",
   [WORKING_PHASE.STOPPING]: "Stopping…",
+  [WORKING_PHASE.WAITING]: "Waiting for your usage limit to reset…",
 } as const satisfies Record<WorkingPhase, string>;
 
-/** What the working line says in a phase. */
-export function workingLineWords(phase: WorkingPhase): string {
-  return WORKING_PHASE_WORDS[phase];
+/** What the working line says in a phase, a wait naming when the limit it waits on resets, as of `now`: "3:40 PM" today. */
+export function workingLineWords(
+  phase: WorkingPhase,
+  waitsUntil?: number,
+  now: number = Date.now(),
+): string {
+  if (phase !== WORKING_PHASE.WAITING || waitsUntil === undefined)
+    return WORKING_PHASE_WORDS[phase];
+  return `Waiting for your usage limit to reset at ${dueText(waitsUntil, now)}`;
 }
 
 /** What a tab reads its agent standing by (`tabTurnOf`). */
 export interface TabTurn {
+  /** The turn whose status the tab draws, where one has been queued. */
+  readonly turnId: string | undefined;
   /** Whether the working line stands: the turn is open, a line sent has not been answered, or a rewind is out. */
   readonly working: boolean;
   /** What the working line says the agent is doing. */
   readonly phase: WorkingPhase;
+  /** When the usage limit its open turn waits on resets; none where it waits on none. */
+  readonly waitsUntil: number | undefined;
   /** Where the agent stands by that turn, which the end row is drawn from once it no longer works. */
   readonly status: AgentStatus;
   /** Why that turn failed, in the wire's word; none where it did not. */
@@ -2598,8 +2200,10 @@ export function tabTurnOf(agent: Pick<AgentSummary, "status" | "turn">, sends: T
       ? agent.status
       : turnAgentStatus({ status: turn.status, cancelRequested: turn.stopAsked === true });
   return {
+    turnId: turn?.id,
     working: open || sends.unanswered || sends.rewinding,
     phase: workingPhaseOf(turn, open, sends.rewinding),
+    waitsUntil: open ? turn?.waitsUntil : undefined,
     status,
     failure:
       turn === undefined
@@ -2610,7 +2214,7 @@ export function tabTurnOf(agent: Pick<AgentSummary, "status" | "turn">, sends: T
   };
 }
 
-/** What the working line says of the turn a tab reads: rewinding while a rewind is out, starting while no turn is open or it is still queued, then the open turn's state. */
+/** What the working line says of the turn a tab reads: rewinding while a rewind is out, starting while no turn is open or it is still queued, waiting while it is held open for a limit's reset, then the open turn's state. */
 function workingPhaseOf(
   turn: AgentTurn | undefined,
   open: boolean,
@@ -2619,6 +2223,7 @@ function workingPhaseOf(
   if (rewinding) return WORKING_PHASE.REWINDING;
   if (turn === undefined || !open) return WORKING_PHASE.STARTING;
   if (turn.stopAsked === true) return WORKING_PHASE.STOPPING;
+  if (turn.waitsUntil !== undefined) return WORKING_PHASE.WAITING;
   return turn.status === TURN_STATUS.QUEUED ? WORKING_PHASE.STARTING : WORKING_PHASE.WORKING;
 }
 
@@ -2697,13 +2302,6 @@ export function workerLines(
     { id: TASK_ROW_ID, role: MESSAGE_ROLE.USER, parts: [{ type: AGENT_PART.TEXT, text: words }] },
     ...messages.filter((message) => message.role !== MESSAGE_ROLE.USER),
   ];
-}
-
-/** A message's words: its text parts, one paragraph each, which is what a copy of a turn carries and what the developer's line reads as. */
-export function messageWords(message: AgentTranscriptMessage): string {
-  return agentParts(message)
-    .flatMap((part) => (part.kind === AGENT_PART.TEXT ? [part.text] : []))
-    .join("\n\n");
 }
 
 /** How many words a reply's lead holds at most, where its first sentence runs on. */
@@ -2912,18 +2510,6 @@ function shellWord(word: string): string {
 export function checkoutCommand(branch: string): string {
   const name = shellWord(branch);
   return `git fetch origin ${name} && git switch ${name}`;
-}
-
-/** A branch or a file's path as a GitHub address spells it: every character encoded but the slashes GitHub reads as the name's own. */
-function githubPath(name: string): string {
-  return encodeURIComponent(name).replaceAll("%2F", "/");
-}
-
-/** Where the chip opens on GitHub: the pull request, or the branch compared against the repository's default where there is no pull request yet. */
-export function publishedUrl(published: AgentPullRequestAnswer): string | undefined {
-  if (published.pullRequest !== null) return published.pullRequest.url;
-  if (published.branch === null || published.repository === null) return undefined;
-  return `https://github.com/${published.repository}/compare/${githubPath(published.branch)}?expand=1`;
 }
 
 /** What the agent's dock draws of a pull request: the parts its row reads, and its page. */

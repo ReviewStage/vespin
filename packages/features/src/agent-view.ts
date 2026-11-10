@@ -12,7 +12,6 @@ import {
   agentMessagesAnswerSchema,
   agentPinRequestSchema,
   agentQueueChangeSchema,
-  agentReadRequestSchema,
   agentRenameRequestSchema,
   agentServersRequestSchema,
   agentStartRequestFields,
@@ -50,14 +49,19 @@ import { memoryIdSchema } from "./memory-wire.js";
 import { modelChoiceSchema, modelProviderSchema } from "./models-wire.js";
 import {
   chatGptDeviceLoginRequestSchema,
+  chatGptDeviceStartRequestSchema,
   PROVIDER_KEY_PROVIDER,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
   providerKeySaveRequestSchema,
+  subscriptionIdSchema,
+  subscriptionLabelRequestSchema,
+  subscriptionOrderRequestSchema,
 } from "./provider-key-wire.js";
 import { pullRequestActionRequestSchema } from "./pull-request-write-wire.js";
 import { repositoryUnreachedSchema } from "./repository-reach-wire.js";
 import { countedNumber, HOSTED_API_ERROR, wireUuidSchema } from "./service-wire.js";
+import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
 
 /**
  * agent-view.ts -- a task's coding agents as one Mac's window hears them: each call's answer whole, or why there is none.
@@ -103,6 +107,8 @@ const AGENT_ACCOUNT_CALLS = {
     providerKeys: accountContract.providerKeys,
     saveProviderKey: accountContract.saveProviderKey,
     setProviderKeyForAgents: accountContract.setProviderKeyForAgents,
+    renameSubscription: accountContract.renameSubscription,
+    reorderSubscriptions: accountContract.reorderSubscriptions,
     removeProviderKey: accountContract.removeProviderKey,
     memories: accountContract.memories,
     forgetMemory: accountContract.forgetMemory,
@@ -437,10 +443,11 @@ export const providerKeySaveParamsSchema = providerKeySaveRequestSchema;
 
 export type ProviderKeySaveParams = typeof providerKeySaveParamsSchema.Type;
 
-/** Removing a key, as the window asks it: the provider, and the kind where it is no API key. */
+/** Removing a key, as the window asks it: the provider, the kind where it is no API key, and the subscription where it is not the first of its kind. */
 export const providerKeyRemoveParamsSchema = EffectSchema.Struct({
   provider: EffectSchema.Literals(Object.values(PROVIDER_KEY_PROVIDER)),
   kind: EffectSchema.optionalKey(providerKeyKindSchema),
+  subscriptionId: EffectSchema.optionalKey(subscriptionIdSchema),
 });
 
 export type ProviderKeyRemoveParams = typeof providerKeyRemoveParamsSchema.Type;
@@ -449,6 +456,23 @@ export type ProviderKeyRemoveParams = typeof providerKeyRemoveParamsSchema.Type;
 export const providerKeyForAgentsParamsSchema = providerKeyForAgentsRequestSchema;
 
 export type ProviderKeyForAgentsParams = typeof providerKeyForAgentsParamsSchema.Type;
+
+/** Naming a subscription, as the window asks it: which one, and its name or none for its default. */
+export const subscriptionLabelParamsSchema = subscriptionLabelRequestSchema;
+
+export type SubscriptionLabelParams = typeof subscriptionLabelParamsSchema.Type;
+
+/** Reordering a kind's subscriptions, as the window asks it: their ids, the first paying first. */
+export const subscriptionOrderParamsSchema = subscriptionOrderRequestSchema;
+
+export type SubscriptionOrderParams = typeof subscriptionOrderParamsSchema.Type;
+
+/** Codex's device-code login begun, as the window asks it: whether it adds a plan rather than replacing the first; nothing where it replaces. */
+export const chatGptDeviceStartParamsSchema = EffectSchema.UndefinedOr(
+  chatGptDeviceStartRequestSchema,
+);
+
+export type ChatGptDeviceStartParams = typeof chatGptDeviceStartParamsSchema.Type;
 
 /** The member's own GitHub token, as the window hears it read, saved, or removed: what it is, or why there is no answer. */
 export const githubTokenAnswerViewSchema = answerView(githubTokenContract.read);
@@ -703,14 +727,6 @@ export const agentPinParamsSchema = EffectSchema.Struct({
 
 export type AgentPinParams = typeof agentPinParamsSchema.Type;
 
-/** The reader's own read mark of one agent moved (`read-mark.ts`), as the window asks it: the agent and how. */
-export const agentMarkReadParamsSchema = EffectSchema.Struct({
-  agentId: EffectSchema.NonEmptyString,
-  ...agentReadRequestSchema.fields,
-});
-
-export type AgentMarkReadParams = typeof agentMarkReadParamsSchema.Type;
-
 /** One agent, as the window names it to stop or to delete. */
 export const agentStopParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
@@ -877,10 +893,16 @@ const agentInboxAnswerViewSchema = EffectSchema.Union([inboxAnswerSchema, failed
 
 export type AgentInboxAnswerView = typeof agentInboxAnswerViewSchema.Type;
 
-/** A nod on one notice of the inbox, Got it, as the window asks it: the item, and the acknowledgment the service takes, its key the window's own. */
+/**
+ * A nod on one notice of the inbox, Got it, as the window asks it: the
+ * item, and the acknowledgment the service takes, its key the window's own;
+ * and, where it is `held`, that the window offers Undo for it, held and let
+ * go as a close is (`agentInboxCloseParamsSchema`).
+ */
 export const agentInboxAnswerParamsSchema = EffectSchema.Struct({
   itemId: EffectSchema.NonEmptyString,
   ...inboxAcknowledgeRequestSchema.fields,
+  held: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 export type AgentInboxAnswerParams = typeof agentInboxAnswerParamsSchema.Type;
@@ -897,7 +919,7 @@ export type AgentInboxAnsweredView = typeof agentInboxAnsweredViewSchema.Type;
  * and the close request the service takes, its key the window's own; and,
  * where it is `held`, that the window offers Undo for it, so the host draws
  * it at once and sends it only once the window lets it go
- * (`agentInboxCloseReleaseParamsSchema`). It is heard as an answer is
+ * (`agentInboxReleaseParamsSchema`). It is heard as an answer is
  * (`agentInboxAnsweredViewSchema`).
  */
 export const agentInboxCloseParamsSchema = EffectSchema.Struct({
@@ -908,14 +930,14 @@ export const agentInboxCloseParamsSchema = EffectSchema.Struct({
 
 export type AgentInboxCloseParams = typeof agentInboxCloseParamsSchema.Type;
 
-/** A held close let go by the window that asked it, by the close's key: sent to the service, or, where `send` is false, taken back as its Undo asks. */
-export const agentInboxCloseReleaseParamsSchema = EffectSchema.Struct({
+/** A held close or nod let go by the window that asked it, by its key: sent to the service, or, where `send` is false, taken back as its Undo asks. */
+export const agentInboxReleaseParamsSchema = EffectSchema.Struct({
   clientKey: EffectSchema.NonEmptyString,
   send: EffectSchema.Boolean,
 });
 
-/** What letting a held close go found: whether it was still held, which an Undo that came too late hears as false. */
-export const agentInboxCloseReleasedViewSchema = EffectSchema.Struct({
+/** What letting a held close or nod go found: whether it was still held, which an Undo that came too late hears as false. */
+export const agentInboxReleasedViewSchema = EffectSchema.Struct({
   held: EffectSchema.Boolean,
 });
 
@@ -1001,6 +1023,8 @@ export type AgentAccountInboxAnswerView = typeof agentAccountInboxAnswerViewSche
 export const agentInboxAttachmentParamsSchema = EffectSchema.Struct({
   itemId: EffectSchema.NonEmptyString,
   attachmentId: EffectSchema.NonEmptyString,
+  /** The video the window plays: a recording is answered as its MP4 copy to one that plays MP4, as the iOS app's does, where one is kept; its WebM otherwise. */
+  playable: EffectSchema.optionalKey(playableVideoTypeSchema),
 });
 
 export type AgentInboxAttachmentParams = typeof agentInboxAttachmentParamsSchema.Type;
@@ -1010,6 +1034,8 @@ export const agentPictureParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
   pictureId: EffectSchema.NonEmptyString,
   callId: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
+  /** The video the window plays, as an inbox attachment's read takes it. */
+  playable: EffectSchema.optionalKey(playableVideoTypeSchema),
 });
 
 /** One part of a message of an agent's transcript, or one of its workers' where `callId` names the delegation call that started it, by the message's id and the part's index among its parts: what the page carried cut (`cutParts`). */
@@ -1036,10 +1062,11 @@ export type AgentPartView = typeof agentPartViewSchema.Type;
  */
 export const agentInboxAttachmentViewSchema = EffectSchema.Union([
   EffectSchema.Struct({
-    // A transcript's picture may be a WebM an agent recorded, read through this same view.
+    // A transcript's picture may be a WebM an agent recorded, read through this same view, or its MP4 copy to a window that plays MP4.
     contentType: EffectSchema.Literals([
       ...Object.values(AGENT_ATTACHMENT_TYPE),
       CONVERSATION_MEDIA_TYPE.WEBM,
+      MP4_TYPE,
     ]),
     base64: EffectSchema.String,
   }),

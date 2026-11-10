@@ -4,49 +4,41 @@ import {
   CHECK_SUMMARY,
 } from "@repo/features/agent-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { holderTaskId } from "@repo/features/mention-holder";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import {
-  BUTTON_SIZE,
-  CHIP_LOOK,
-  Chip,
-  ChipName,
   CountParts,
   LIST_VARIANT,
   List,
   ListRow,
   linesCount,
   MENU_DETAIL,
-  MoreButton,
   RowHint,
   RowHintOptions,
   SplitBar,
-  Tooltip,
-  useMenu,
 } from "@repo/ui";
-import { GitBranchIcon, GLYPH } from "@repo/ui/icons";
+import { GLYPH } from "@repo/ui/icons";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import type { ReactNode } from "react";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { LINK_COPY } from "../copy-feedback.js";
-import { ActionMenu, type MenuAction, rowMenu } from "../desktop/action-menu.js";
+import { type MenuAction, rowMenu } from "../desktop/action-menu.js";
+import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
 import {
   checkoutCommand,
   type DockedPullRequest,
-  publishedUrl,
   pullRequestStateLabel,
   pullRequestStateWord,
 } from "./agent-model.js";
 import { MentionChipCard } from "./mention-chip.js";
-import { holderTaskId } from "./mention-holder.js";
 import { PullRequestMark } from "./pull-request-mark.js";
 import { usePullRequestsOnGitHub } from "./pull-request-opens.js";
 import { useMentionDoors } from "./task-mentions.js";
 import { useLinkStanding } from "./use-link-standing.js";
-import { linkPressOf } from "./use-open-link.js";
 
 /**
- * agent-published.tsx -- what an agent published, on its tab: the pull request's row pinned over the box, or the branch's chip at the box's foot while no pull request stands.
+ * agent-published.tsx -- what an agent published, on its tab: the pull request's row pinned over the box.
  *
  * Once the agent has opened a pull request, its row stands over the box,
  * docked there the way the to-do list is (`agent-tab.tsx`), whether the
@@ -66,18 +58,14 @@ import { linkPressOf } from "./use-open-link.js";
  * state, size, who opened it and when, branches, labels, and counts, as
  * the workspace's GitHub App answers them (`use-link-standing.ts`).
  *
- * With a branch pushed and no pull request yet, the box's foot wears a
- * chip naming the branch instead, after the + and in the composer's pill
- * (`../chip.tsx`), its name in the code face: a press opens it compared on
- * GitHub, and its ⋯ and right-click offer the same copies and Open on GitHub. A composer too narrow
- * for its words draws the chip's mark alone, its hint and label still
- * naming it; the chip stands in a box of the composer's own that its ⋯
- * finds it by. Nothing here is drawn before the service has said what
- * stands, so a tab on an agent still reading the repository wears nothing
- * yet.
+ * A branch pushed with no pull request yet draws nothing here: the box's
+ * foot is left to what the next message is sent with, and the branch's
+ * name and checkout are the row's copies once its pull request opens.
+ * Nothing here is drawn before the service has said what stands, so a tab
+ * on an agent still reading the repository wears nothing yet.
  */
 
-/** The doors the chip and the row open: a page of GitHub's in the browser, and the clipboard, its toast reading `label`. */
+/** The doors the row opens: a page of GitHub's in the browser, and the clipboard, its toast reading `label`. */
 export interface PublishedDoors {
   openGitHub: (url: string) => void;
   copy: (words: string, label: string) => void;
@@ -87,9 +75,6 @@ export interface PublishedDoors {
   openPullRequestNumber?: ((number: number) => void) | undefined;
 }
 
-const MENU_LABEL = "Branch actions";
-/** What the branch's chip is, which names its ⋯. */
-const BRANCH_THING = "Branch";
 /** What the segment of the agent's other pull requests names its menu. */
 const OTHERS_LABEL = "Other pull requests";
 /** The width, in the bar's type size, from which a segment has room for its line counts. */
@@ -102,27 +87,23 @@ const CHECKS_FAILING = "Checks failing";
 export const PUBLISHED_META_CLASS = "agent-published-meta inline-flex items-center gap-icon-gap";
 
 /**
- * What a ⋯ and right-click offer: the pull request's address on GitHub, its
- * Copy GitHub link, where one stands, and the branch's name and the command
- * that checks it out, each to the clipboard, where a branch is named; then
- * `opens`, the place a press does not open it in.
+ * What a pull request's ⋯ and right-click offer: its Copy GitHub link,
+ * and the branch's name and the command that checks it out, each to the
+ * clipboard, where a branch is named; then `opens`, the place a press does
+ * not open it in.
  */
 function branchActions(
   branch: string | null,
   doors: PublishedDoors,
-  pullRequestUrl: string | undefined,
+  pullRequestUrl: string,
   opens: MenuAction | undefined,
 ): MenuAction[][] {
   const copies: MenuAction[] = [
-    ...(pullRequestUrl === undefined
-      ? []
-      : [
-          commandAction(
-            PANEL_COMMAND.COPY_GITHUB_LINK,
-            () => doors.copy(pullRequestUrl, LINK_COPY.COPIED),
-            false,
-          ),
-        ]),
+    commandAction(
+      PANEL_COMMAND.COPY_GITHUB_LINK,
+      () => doors.copy(pullRequestUrl, LINK_COPY.COPIED),
+      undefined,
+    ),
     ...(branch === null
       ? []
       : [
@@ -158,60 +139,15 @@ function pullRequestPlaces(
   const openGitHub = () => doors.openGitHub(url);
   if (inApp === undefined) return { press: openGitHub, other: undefined };
   return onGitHub
-    ? { press: openGitHub, other: commandAction(PANEL_COMMAND.OPEN_IN_APP, inApp, false) }
-    : { press: inApp, other: commandAction(PANEL_COMMAND.OPEN_ON_GITHUB, openGitHub, false) };
-}
-
-/** What the box's foot wears while a branch stands with no pull request: the branch's chip, which opens it compared on GitHub, and its ⋯, which its right-click drops too, offering the copies; nothing otherwise, the pull request's row standing over the box instead. */
-export function BranchChip({
-  published,
-  doors,
-  narrow = false,
-}: {
-  published: AgentPullRequestAnswer | undefined;
-  doors: PublishedDoors;
-  /** Whether the composer is too narrow for the chip's words, so it draws its mark alone. */
-  narrow?: boolean;
-}): ReactNode {
-  const menu = useMenu(true);
-  const url = published === undefined ? undefined : publishedUrl(published);
-  if (published === undefined || url === undefined) return null;
-  const { pullRequest, branch } = published;
-  if (pullRequest !== null || branch === null) return null;
-  // Note that the menu holds the copies alone, because the chip's own press already opens the branch on GitHub.
-  const actions = branchActions(branch, doors, undefined, undefined);
-  return (
-    <>
-      <span className="contents">
-        <Tooltip label={`Open ${branch} on GitHub`}>
-          <Chip
-            look={CHIP_LOOK.PILL}
-            iconOnly={narrow}
-            aria-label={branch}
-            href={url}
-            onClick={(event) => {
-              menu.close(false);
-              linkPressOf(doors.openGitHub, url)(event);
-            }}
-            {...menu.contextMenu()}
-          >
-            <GitBranchIcon aria-hidden="true" />
-            <ChipName mono>{branch}</ChipName>
-          </Chip>
-        </Tooltip>
-        <MoreButton thing={BRANCH_THING} size={BUTTON_SIZE.COMPACT} {...menu.trigger()} />
-      </span>
-      {menu.drawn === undefined ? null : (
-        <ActionMenu
-          replayUnmasked
-          menu={menu.drawn}
-          groups={actions}
-          label={MENU_LABEL}
-          onClose={menu.close}
-        />
-      )}
-    </>
-  );
+    ? { press: openGitHub, other: commandAction(PANEL_COMMAND.OPEN_IN_APP, inApp, undefined) }
+    : {
+        press: inApp,
+        other: commandAction(
+          PANEL_COMMAND.OPEN_ON_GITHUB,
+          openGitHub,
+          shortcutSubject(SHORTCUT_SUBJECT.GITHUB_PAGE, url),
+        ),
+      };
 }
 
 /** The lines a change adds and removes, as GitHub counts them: green, then red. */

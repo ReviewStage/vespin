@@ -20,14 +20,14 @@
  * flat in one list.
  */
 
-import type { ListRowFold, ListRowNest } from "@repo/ui";
 import {
   type DrawnTaskRow,
   drawnTaskRows,
   TASK_ROW,
   type TaskRow,
   type TasksById,
-} from "@repo/ui/task-list-model";
+} from "@repo/features/task-list-model";
+import type { ListRowFold, ListRowNest } from "@repo/ui";
 import { useRef } from "react";
 
 /** The words a parent's fold is named by, before its name. */

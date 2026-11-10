@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { AGENT_STATUS } from "@repo/features/agent-wire";
+import { taskHolder } from "@repo/features/inbox-list-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { act, createElement } from "react";
@@ -12,7 +13,6 @@ import { handState } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { listedAgent } from "../testing/tasks-control.js";
 import { ItemMark } from "./inbox-item-parts.js";
-import { taskHolder } from "./inbox-model.js";
 
 /**
  * inbox-item-mark.test.ts -- an Inbox item whose agent was archived still

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
-import { startsLikeWebm, webmDimensions } from "./video-signature.js";
+import { startsLikeWebm, streamableMp4, webmDimensions } from "./video-signature.js";
 
 /**
  * video-signature.test.ts -- a WebM told from its own bytes and its size
@@ -106,4 +106,31 @@ test("a picture, and a WebM cut short inside its header, are no WebM of any size
   assert.equal(startsLikeWebm(png), false);
   assert.equal(webmDimensions(png), undefined);
   assert.equal(webmDimensions(cut), undefined);
+});
+
+/** One MP4 box: its size, its type, and what it holds. */
+function box(type: string, payload: readonly number[] = []): number[] {
+  const size = 8 + payload.length;
+  return [
+    size >>> 24,
+    (size >>> 16) & 0xff,
+    (size >>> 8) & 0xff,
+    size & 0xff,
+    ...ascii(type),
+    ...payload,
+  ];
+}
+
+function ascii(word: string): number[] {
+  return [...word].map((letter) => letter.charCodeAt(0));
+}
+
+test("an MP4 copy streams only with its H.264 index ahead of its media, as +faststart writes it", () => {
+  const fileType = box("ftyp", ascii("isom"));
+  const index = box("moov", box("trak", box("stsd", box("avc1"))));
+  const media = box("mdat", [1, 2, 3]);
+  assert.equal(streamableMp4(Uint8Array.from([...fileType, ...index, ...media])), true);
+  assert.equal(streamableMp4(Uint8Array.from([...fileType, ...media, ...index])), false);
+  const vp9 = box("moov", box("trak", box("stsd", box("vp09"))));
+  assert.equal(streamableMp4(Uint8Array.from([...fileType, ...vp9, ...media])), false);
 });

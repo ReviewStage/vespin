@@ -12,6 +12,7 @@ import {
   INBOX_SCOPE_KIND,
 } from "@repo/features/agent-view";
 import type { AgentAttachment } from "@repo/features/agent-wire";
+import { awaitsNod } from "@repo/features/inbox-list-model";
 import { INBOX_REPLY, INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
 import type { AppInboxItems } from "@repo/host/app-state";
 import { useMinute } from "@repo/ui";
@@ -35,9 +36,9 @@ import { holderInboxQuery, holderInboxRetryMutation, inboxItemsQuery } from "../
 import type { PictureReader } from "../picture-query.js";
 import { useSendQueue } from "../send-queue.js";
 import { messageFailureWords } from "./agent-model.js";
+import type { InboxAcknowledger } from "./inbox-acknowledge.js";
 import { useInboxArrivals } from "./inbox-arrivals.js";
 import {
-  awaitsNod,
   EMPTY_INBOX_DRAFT,
   type InboxBoardView,
   type InboxDraft,
@@ -212,8 +213,8 @@ export interface TaskInboxControl {
     item: InboxItem,
     next: (was: readonly AgentAttachment[]) => readonly AgentAttachment[],
   ) => void;
-  /** Nods to a notice with Got it, settling it at the revision drawn, after every message of the item's on its way; nothing where a nod is out. */
-  readonly onAcknowledge: (item: InboxItem) => void;
+  /** Nods to a notice, settling it at the revision drawn, after every message of the item's on its way; nothing where a nod is out. Got it pressed hands its nod to `held` once its turn comes, which holds it behind an Undo (`inbox-acknowledge.tsx`); an opening sends it as it is (`useNodOnOpen`). */
+  readonly onAcknowledge: (item: InboxItem, held?: InboxAcknowledger) => void;
   /** Sends the box's words and files as a message on the item's thread, open or settled, with the answer attached to the thread's open ask where one is, after every message of the item's on its way; nothing where it holds nothing the service takes or a nod is out. `taken` is called once the service took it, never where it refused it. */
   readonly onMessage: (item: InboxItem, draft: InboxDraft, taken?: () => void) => void;
   /** How a card's image is read, by its item and attachment, and kept as the window's pictures are (`../picture-query.ts`). */
@@ -640,7 +641,7 @@ export function useHeldTaskInbox(input: {
   // Note that a nod is keyed by the revision it nods to, so a press again after a lost reply is
   // taken once, and a nod to the notice posted over since goes under a key of its own.
   const onAcknowledge = useCallback(
-    (item: InboxItem) => {
+    (item: InboxItem, held?: InboxAcknowledger) => {
       if (out.current.has(item.id)) return;
       out.current.add(item.id);
       const words = JSON.stringify([item.revision, INBOX_REPLY.ACKNOWLEDGED]);
@@ -660,6 +661,12 @@ export function useHeldTaskInbox(input: {
         // A nod behind a reply that settled the notice at this revision has nothing left to nod to, and says nothing.
         const settled = answered.current.get(item.id);
         if (settled !== undefined && settled.revision === item.revision && !awaitsNod(settled)) {
+          release();
+          return;
+        }
+        // Note that a Got it pressed goes held, its toast saying what became of it, and draws the notice settled at once, so the box is let go.
+        if (held !== undefined) {
+          held([item]);
           release();
           return;
         }

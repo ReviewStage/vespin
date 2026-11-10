@@ -8,21 +8,26 @@ import {
 import { TERMINAL_ASK } from "@repo/features/terminal-entry";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
-import { APP_COMMAND } from "@repo/settings/shortcuts";
+import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import { GLYPH } from "@repo/ui/icons";
 import { type InlineRename, useInlineRename } from "@repo/ui/use-inline-rename";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { pressMutation } from "../act-mutations.js";
 import { appPlatform } from "../app-platform.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
-import { agentPlace, useCopyLinkItem } from "../copy-link-item.js";
+import { agentPlace, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { useThisMac } from "../machine-name.js";
 import { renameWrite } from "../rename-write.js";
+import {
+  SHORTCUT_SUBJECT,
+  type ShortcutSubject,
+  shortcutSubject,
+  useShortcutTargetOn,
+} from "../shortcut-target.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { useAddRepository } from "../tasks/add-repository.js";
 import type { AgentFork } from "../tasks/fork-model.js";
 import { useMoveToEntry } from "../tasks/move-agent.js";
-import { markReadItem, type ReadMark } from "../tasks/task-menu-items.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND } from "../tasks/terminal-session.js";
 import {
@@ -45,15 +50,11 @@ import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
  *
  * Every surface that draws an agent offers what `useAgentActions` answers,
  * laid out by `agentMenuGroups` in the one order every menu of the window
- * keeps, Copy, then name and read, then organize, then open elsewhere, then
- * lifecycle, and Delete last and alone: Copy link and Copy transcript ›,
- * Concise or Full, read whole from the service; Rename, which opens its name's field
- * where the surface draws its name, while neither it nor what it stands
- * under is archived, and Mark as unread or Mark as read, for an agent with
- * no task, whose marks are a task's (`agent-read-marks.ts`); Pin or Unpin
- * and Move to section, the reader's own, for an agent with no task, which
- * has a row of its own among the sidebar's tasks (an agent on a task has
- * none, and its tab keeps Pin tab among its tab's keeping); Show terminal,
+ * keeps, Copy, then name, then open elsewhere, then lifecycle, and Delete
+ * last and alone: Copy link and Copy transcript ›, Concise or Full, read
+ * whole from the service; Rename, which opens its name's field where the
+ * surface draws its name, while neither it nor what it stands under is
+ * archived (its tab keeps Pin tab among its tab's keeping); Show terminal,
  * where the platform runs one, and none for an archived agent, whose sandbox
  * takes no shell, which for a local agent opens the Mac's own Terminal in
  * its worktree instead of the relayed tab; Open in Slack, for an agent
@@ -75,15 +76,23 @@ import { type TranscriptRead, useTranscriptCopier } from "./strip-tabs.js";
  * through the same control.
  */
 
+/**
+ * The keys an agent's own page offers on it while shown, and a task's chosen
+ * agent tab on what it shows, which every menu of it prints.
+ */
+export const AGENT_KEYS: readonly KeyedCommand[] = [
+  APP_COMMAND.COPY_CONTENT,
+  APP_COMMAND.COPY_FULL_TRANSCRIPT,
+  APP_COMMAND.SHOW_TERMINAL,
+  APP_COMMAND.OPEN_IN_TASK,
+  APP_COMMAND.TOGGLE_READ,
+  APP_COMMAND.PIN,
+  APP_COMMAND.DELETE,
+];
+
 /** What the agent menu's one copy of its words is called, and the two ways it copies them. */
 const COPY_TRANSCRIPT = "Copy transcript";
 const TRANSCRIPT_WAY = { CONCISE: "Concise", FULL: "Full" } as const;
-
-/** A pin as a menu offers it, Pin or Unpin: whether it stands, and the press that sets it or takes it away. */
-interface PinDoor {
-  pinned: boolean;
-  onToggle: () => void;
-}
 
 /**
  * What an agent's menu is built from: each door none where the surface, or
@@ -92,20 +101,14 @@ interface PinDoor {
  * other tab's, whose menu is these same groups over the few doors it has.
  */
 export interface AgentMenuDoors {
-  /** Whether the menu is the chosen tab's or the page's, whose Show terminal alone prints ⌘J, which opens the chosen agent's terminal. */
-  chosen?: boolean | undefined;
-  /** Copies the link of what the menu is about (`copy-link-item.tsx`). */
-  copyLink?: MenuAction | undefined;
+  /** What the menu acts on as it is drawn, the agent's own page or tab, or its sidebar row, whose keys its items print (`shortcut-target.ts`); none where no key reaches it. */
+  subject?: ShortcutSubject | undefined;
+  /** Copy link, and Open in new tab where the window opens tabs, for what the menu is about (`copy-link-item.tsx`'s `linkItems`). */
+  links?: readonly MenuAction[] | undefined;
   /** Copies the agent's transcript, concise or full. */
   onCopy?: ((copy: TranscriptCopy) => void) | undefined;
   /** Opens the agent's name's field where the surface draws its name. */
   onRename?: (() => void) | undefined;
-  /** Mark as unread or Mark as read, for an agent with read marks: one with no task. */
-  read?: ReadMark | undefined;
-  /** Pin or Unpin, for an agent with a sidebar row of its own: one with no task, not archived. */
-  agentPin?: PinDoor | undefined;
-  /** Move to section ▸, the reader's own sections, for the same agents (`sidebar-sections.tsx`). */
-  section?: MenuEntry | undefined;
   /** Opens the agent's own Terminal tab in the side panel, adding no shell. */
   onOpenTerminal?: (() => void) | undefined;
   /** Shows the cloud agent's Local tab viewed last in the side panel, opening no new terminal. */
@@ -124,34 +127,29 @@ export interface AgentMenuDoors {
   archive?: MenuAction | undefined;
   /** Deletes the agent for good, asked first (`agent-delete.tsx`). */
   deletion?: MenuAction | undefined;
-  /** Whether U and P act on the agent from its row while the row is focused, a sidebar row's, so its read mark and pin print them. */
-  rowKeys?: boolean | undefined;
 }
 
 /**
  * The agent's menu, built once for every surface that draws it, in the
- * groups every menu of the window keeps: Copy link and the transcript's two
- * copies; Rename and the read mark; Pin and Move to section; Show terminal,
+ * groups every menu of the window keeps: Copy link, Open in new tab in a
+ * browser, and the transcript's two
+ * copies; Rename; Show terminal,
  * Show browser where a phone offers it, Open in task, for an agent drawn
  * apart from its task, and Open in Slack, for one started from Slack;
  * Add repository…, Move to ›, and Archive or Unarchive; and last and alone, Permanently delete. The copies, Show
  * terminal, Open in task, and Permanently delete print ⌥⌘C, ⇧⌥⌘C, ⌘J, ⌘O,
- * and ⌘⌫ only where the menu is the chosen tab's or the agent's page's,
- * since each chord acts on that agent; the read mark and Pin print U and P
- * there too, and on a sidebar row, whose focus the letters act on
- * (`rowKeys`). A group with nothing in it is left out, so a surface
- * with few doors draws the few groups it has in the same order.
+ * and ⌘⌫ only where the chord acts on what the menu acts on (`subject`):
+ * the chosen tab, the agent's page, or a sidebar row. A group with nothing in it is left
+ * out, so a surface with few doors draws the few groups it has in the same
+ * order.
  */
 export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
-  const { copyLink, onCopy, onRename, read, agentPin, section, onOpenTerminal, onOpenLocal } =
-    doors;
+  const { links, onCopy, onRename, onOpenTerminal, onOpenLocal } = doors;
   const { onOpenInTask } = doors;
   const { onOpenBrowser, onOpenInSlack } = doors;
-  const { addRepository, moveTo, archive, deletion } = doors;
-  const chosen = doors.chosen === true;
-  const lettered = chosen || doors.rowKeys === true;
+  const { addRepository, moveTo, archive, deletion, subject } = doors;
   const copies: MenuEntry[] = [
-    ...(copyLink === undefined ? [] : [copyLink]),
+    ...(links ?? []),
     // Note that the two copies share one Copy transcript beside Copy link, so the menu leads with one copy of the agent's words rather than two.
     ...(onCopy === undefined
       ? []
@@ -164,7 +162,7 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
                 ...commandAction(
                   PANEL_COMMAND.COPY_CONCISE_TRANSCRIPT,
                   () => onCopy(TRANSCRIPT_COPY.CONCISE),
-                  chosen,
+                  subject,
                 ),
                 label: TRANSCRIPT_WAY.CONCISE,
               },
@@ -172,7 +170,7 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
                 ...commandAction(
                   PANEL_COMMAND.COPY_FULL_TRANSCRIPT,
                   () => onCopy(TRANSCRIPT_COPY.FULL),
-                  chosen,
+                  subject,
                 ),
                 label: TRANSCRIPT_WAY.FULL,
               },
@@ -181,55 +179,40 @@ export function agentMenuGroups(doors: AgentMenuDoors): MenuEntry[][] {
         ]),
   ];
   const named: MenuEntry[] = [
-    ...(onRename === undefined ? [] : [commandAction(PANEL_COMMAND.RENAME, onRename, false)]),
-    ...(read === undefined ? [] : [markReadItem(read, lettered)]),
-  ];
-  const organized: MenuEntry[] = [
-    ...(agentPin === undefined
-      ? []
-      : [
-          commandAction(
-            agentPin.pinned ? PANEL_COMMAND.UNPIN_AGENT : PANEL_COMMAND.PIN_AGENT,
-            agentPin.onToggle,
-            lettered,
-          ),
-        ]),
-    ...(section === undefined ? [] : [section]),
+    ...(onRename === undefined ? [] : [commandAction(PANEL_COMMAND.RENAME, onRename, subject)]),
   ];
   const opened: MenuEntry[] = [
     ...(onOpenTerminal === undefined
       ? []
-      : [commandAction(PANEL_COMMAND.SHOW_TERMINAL, onOpenTerminal, chosen)]),
+      : [commandAction(PANEL_COMMAND.SHOW_TERMINAL, onOpenTerminal, subject)]),
     ...(onOpenLocal === undefined
       ? []
-      : [commandAction(PANEL_COMMAND.SHOW_LOCAL, onOpenLocal, false)]),
+      : [commandAction(PANEL_COMMAND.SHOW_LOCAL, onOpenLocal, subject)]),
     ...(onOpenBrowser === undefined
       ? []
-      : [commandAction(PANEL_COMMAND.SHOW_BROWSER, onOpenBrowser, false)]),
+      : [commandAction(PANEL_COMMAND.SHOW_BROWSER, onOpenBrowser, subject)]),
     ...(onOpenInTask === undefined
       ? []
-      : [commandAction(PANEL_COMMAND.OPEN_IN_TASK, onOpenInTask, chosen)]),
+      : [commandAction(PANEL_COMMAND.OPEN_IN_TASK, onOpenInTask, subject)]),
     ...(onOpenInSlack === undefined
       ? []
-      : [commandAction(PANEL_COMMAND.OPEN_IN_SLACK, onOpenInSlack, false)]),
+      : [commandAction(PANEL_COMMAND.OPEN_IN_SLACK, onOpenInSlack, subject)]),
   ];
   return [
     copies,
     named,
-    organized,
     opened,
     [
       ...(addRepository === undefined ? [] : [addRepository]),
       ...(moveTo === undefined ? [] : [moveTo]),
       ...(archive === undefined ? [] : [archive]),
     ],
-    deletion === undefined
-      ? []
-      : [chosen ? { ...deletion, command: APP_COMMAND.DELETE } : deletion],
+    // Note that the delete names the agent it deletes, which the menu's own subject stands in for where it is drawn as a tab or a row.
+    deletion === undefined ? [] : [subject === undefined ? deletion : { ...deletion, subject }],
   ].filter((group) => group.length > 0);
 }
 
-/** What an agent offers on itself wherever it is drawn: the doors of its menu that are the agent's own, which a surface adds its own to (`read`, `agentPin`, `section`). */
+/** What an agent offers on itself wherever it is drawn: the doors of its menu that are the agent's own, which a surface adds its own to. */
 export type AgentDoors = Pick<
   AgentMenuDoors,
   | "onCopy"
@@ -242,15 +225,14 @@ export type AgentDoors = Pick<
   | "moveTo"
   | "archive"
   | "deletion"
-  | "copyLink"
+  | "links"
 >;
 
 /**
  * The doors an agent offers that its sidebar row leaves out, each with why,
  * and the one place that says so. Every other door this hook answers
- * stands in the row's menu (`sidebar-agent.tsx`), which
- * `sidebar-agent.test.ts` holds: a door added to `AgentDoors` either is
- * placed on the row or is named here, or that test fails.
+ * stands in an agent row's menu (`agent-list-row.tsx`): a door added to
+ * `AgentDoors` either is placed on the row or is named here.
  */
 const NOT_ON_A_ROW = {
   onOpenTerminal: "The terminal opens in a side panel, and a row has none.",
@@ -281,6 +263,10 @@ export interface AgentTerminalDoors {
 /** An agent's actions as a surface draws them: its doors, its rename where it is renamed, and the questions its Archive and its delete ask through, drawn beside them. */
 export interface AgentActions {
   readonly doors: AgentDoors;
+  /** The agent, as a menu of it names what it acts on, which a surface's own drawing of it may stand in for (`AgentMenuDoors`'s `subject`). */
+  readonly subject: ShortcutSubject;
+  /** Opens the agent in a tab of its own, which a middle-click on its row takes; none where the window opens no tabs. */
+  readonly openInTab: (() => void) | undefined;
   /** The rename its Rename opens; none while what it stands under is archived. */
   readonly rename: InlineRename | undefined;
   readonly dialog: React.JSX.Element;
@@ -386,8 +372,12 @@ export function useAgentActions(
   },
 ): AgentActions {
   const { label, shown, terminals, onOpenBrowser, onDeleted } = input;
+  const subject = shortcutSubject(SHORTCUT_SUBJECT.AGENT, agent.id);
+  // Note that a surface builds the agent's menu on its draw, so it is drawn again as the keys acting on the agent change.
+  useShortcutTargetOn(subject);
   const copied = useTranscriptCopier();
-  const copyLink = useCopyLinkItem()(agentPlace(agent.id));
+  const links = useLinkItems()(agentPlace(agent.id));
+  const openInTab = useOpenInTab()(agentPlace(agent.id));
   const renaming = useMutation(agents.rename.options);
   const rename = useInlineRename(agent.id, renameWrite(renaming, agents.rename));
   const archive = useAgentArchive(agent, agents, shown);
@@ -438,8 +428,10 @@ export function useAgentActions(
       moveTo,
       archive: agent.archivedAt === undefined ? archive.action : unarchive,
       deletion: deletion.action,
-      copyLink,
+      links,
     },
+    subject,
+    openInTab,
     rename: renamable ? rename : undefined,
     dialog: (
       <>

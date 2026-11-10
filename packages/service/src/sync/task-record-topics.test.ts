@@ -22,17 +22,16 @@ import {
   getTestDB,
   joinWorkspace,
   leaveWorkspace,
-  openTaskAgent,
   startTask,
 } from "@repo/database/testing";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
 import { BROWSER_CURSOR_KIND } from "@repo/features/browser-agent-actions";
 import { DESCRIPTION_COMMENT_ACTOR } from "@repo/features/description-comment-wire";
-import { PAGE_OWNER, PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
+import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { Clock, Duration, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { taskBrowserTabsRead } from "../live/reads/browser-tabs.js";
-import { agentPagesRead, taskPagesRead } from "../live/reads/pages.js";
+import { taskPagesRead } from "../live/reads/pages.js";
 import { taskCommentsRead } from "../live/reads/task-comments.js";
 import { taskHistoryRead } from "../live/reads/task-history.js";
 import { taskRecordRead } from "../live/reads/task-record.js";
@@ -43,14 +42,12 @@ import type { LiveTopics } from "./live-query.js";
 
 /**
  * An open task's live reads on the migrated capture: its record, pages,
- * history, comments, and Browser tabs (`taskRecordRead` and its neighbors), and an
- * agent's own pages on no task (`agentPagesRead`). Each write that moves
- * one, through its real writer, notifies a topic the read is woken on, so a
- * window holding it hears it within a coalesce window rather than at the
- * hold's end: the description saved, a page shown on the task and a comment left
- * on it, a page an agent
- * on no task shows, an agent's tab opened, pointed at, taken over, handed
- * back, and closed, an agent renamed, and what admits the reader to the
+ * history, comments, and Browser tabs (`taskRecordRead` and its neighbors).
+ * Each write that moves one, through its real writer, notifies a topic the
+ * read is woken on, so a window holding it hears it within a coalesce window
+ * rather than at the hold's end: the description saved, a page shown on the
+ * task and a comment left on it, an agent's tab opened, pointed at, taken
+ * over, handed back, and closed, an agent renamed, and what admits the reader to the
  * task. Note that an editor renamed wakes no history, which reads the name
  * at the hold's end, so no case here writes one.
  *
@@ -125,36 +122,6 @@ it.layer(getTestDB())("what moves an open task's record notifies", (it) => {
           ),
           onTask,
           [taskCommentsRead.topics({ ...params, page: pageId })],
-        );
-      }),
-  );
-
-  it.effect(
-    "a page an agent on no task shows, and the agent renamed, notify the agent, which wakes its pages",
-    () =>
-      Effect.gen(function* () {
-        const owner = yield* openAccount;
-        const task = yield* startTask(owner, { name: "Unrelated" });
-        const agentId = yield* openTaskAgent(owner, task.workspaceId, null);
-        const woken = [agentPagesRead.topics({ userId: owner, id: agentId })];
-
-        yield* wakes(
-          writePage(
-            owner,
-            { kind: PAGE_OWNER.AGENT, agentId },
-            { title: "Spike notes", html: "<p>One</p>" },
-            { kind: PAGE_SHOWER.AGENT, agentId },
-          ),
-          [[TOPIC.AGENT, agentId]],
-          woken,
-        );
-        yield* wakes(
-          renameAgent(owner, agentId, "Spike"),
-          [
-            [TOPIC.AGENT, agentId],
-            [TOPIC.WORKSPACE, task.workspaceId],
-          ],
-          woken,
         );
       }),
   );

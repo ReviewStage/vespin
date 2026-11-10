@@ -1,6 +1,7 @@
 import { markdownTree } from "@repo/features/markdown-tree";
 import type { MemorySummary } from "@repo/features/memory-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
   countWords,
@@ -60,8 +61,7 @@ import {
   personActor,
 } from "@repo/ui/actor-model";
 import { GLYPH, ListFilterIcon } from "@repo/ui/icons";
-import { matchesTokens, searchTokens } from "@repo/ui/search-tokens";
-import { ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import {
   VIRTUAL_ROWS_ANCHOR,
   type VirtualRowPlace,
@@ -122,9 +122,8 @@ import { ReadFailed } from "./marks.js";
  * in the page's own scroller, so a workspace's thousand draw as quickly as a
  * few; ⇧-clicks, ⇧↑↓, and ⌘A reach the memories it leaves undrawn, and the
  * memory holding the keyboard stays drawn wherever the page is scrolled.
- * The whole page is
- * kept out of the screen recording, since a memory is members' own words
- * about their work.
+ * A memory is members' own words about their work, so the list stands under
+ * the mask mark, which Settings' own unmask would otherwise leave readable.
  */
 
 /** What the page says while it cannot read or write, and with no account. */
@@ -153,9 +152,6 @@ const FORMER_KEY = "former";
 
 /** What everyone who left is called in the filter. */
 const FORMER_WORDS = "Former members";
-
-/** The class PostHog's recorder leaves out of a recording, element and children alike. */
-const NO_CAPTURE = "ph-no-capture";
 
 /** What the skeletons say to a reader who cannot see them. */
 const READING_LABEL = {
@@ -766,23 +762,21 @@ export function MemorySection({
       <MemoriesSkeleton label={READING_LABEL.WORKSPACES} />
     );
   }
-  return (
-    <div className={NO_CAPTURE}>
-      {memories.data !== undefined ? (
-        // Note that the keepers are read in the workspace Settings shows, which may not be the one the window's tasks stand in.
-        <MemberDirectory workspace={workspace} readerId={readerId}>
-          <MemoryList readerId={readerId} memories={memories.data} workspaceId={workspace.id} />
-        </MemberDirectory>
-      ) : memories.isError ? (
-        <ReadFailed
-          line={PAGE_LINE.FAILED}
-          surface={FAILURE_SURFACE.MEMORIES_READ}
-          about={{ workspaceId: workspace.id }}
-          onRetry={() => retryMemories.mutate({ workspaceId: workspace.id })}
-        />
-      ) : (
-        <MemoriesSkeleton label={READING_LABEL.MEMORY} />
-      )}
-    </div>
+  return memories.data !== undefined ? (
+    // Note that the keepers are read in the workspace Settings shows, which may not be the one the window's tasks stand in.
+    <MemberDirectory workspace={workspace} readerId={readerId}>
+      <ReplayMask>
+        <MemoryList readerId={readerId} memories={memories.data} workspaceId={workspace.id} />
+      </ReplayMask>
+    </MemberDirectory>
+  ) : memories.isError ? (
+    <ReadFailed
+      line={PAGE_LINE.FAILED}
+      surface={FAILURE_SURFACE.MEMORIES_READ}
+      about={{ workspaceId: workspace.id }}
+      onRetry={() => retryMemories.mutate({ workspaceId: workspace.id })}
+    />
+  ) : (
+    <MemoriesSkeleton label={READING_LABEL.MEMORY} />
   );
 }

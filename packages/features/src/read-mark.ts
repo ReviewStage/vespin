@@ -1,8 +1,8 @@
 /**
- * read-mark.ts -- how far a member has read a task or an agent with no task, kept on the account so it follows them to every Mac and browser.
+ * read-mark.ts -- how far a member has read a task, kept on the account so it follows them to every Mac and browser.
  *
  * A mark is the instant the member read the row through, which the service
- * stamps with its own clock as the write lands (`task_read`, `agent_read`),
+ * stamps with its own clock as the write lands (`task_read`),
  * and whether they marked it unread by hand. A row is unread while something
  * changed in it after that instant, or while it stands marked unread; the
  * row being looked at is never drawn unread by its changes, since they land

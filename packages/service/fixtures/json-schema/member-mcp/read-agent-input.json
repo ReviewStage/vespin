@@ -7,9 +7,55 @@
       "maxLength": 36,
       "description": "The agent's id, as list_agents answered it."
     },
+    "from": {
+      "type": "string",
+      "enum": [
+        "end",
+        "start"
+      ],
+      "description": "Where to read its transcript from where neither before nor after is given: end, the default, for its newest page, or start for its first, from the message it was started with."
+    },
+    "before": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entry": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seq",
+        "entry"
+      ],
+      "additionalProperties": false,
+      "description": "The older place a page answered, to read the page of entries before it."
+    },
+    "after": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "entry": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seq",
+        "entry"
+      ],
+      "additionalProperties": false,
+      "description": "The newer place a page answered, to read the page of entries after it."
+    },
     "entries": {
       "type": "integer",
-      "description": "How many entries of its transcript to read, the newest last; 20 when left out, at most 50."
+      "description": "At most how many entries of its transcript the page holds, such as 1 for what it last said or did; as many as fit in 16000 characters when left out."
     }
   },
   "required": [

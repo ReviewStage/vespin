@@ -2,6 +2,7 @@ import { CODEX_ERROR_INFO, codexErrorKind } from "@repo/agent-runner/protocol";
 import { CODEX_TOOL, WORKSPACE_MCP_SERVER_NAMES } from "@repo/features/agent-tools";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
+import { USAGE_LIMIT_AGENT } from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
 import { storedServerCall } from "../../integrations/connection-tools.js";
 import {
@@ -16,6 +17,7 @@ import {
   PICTURE_STAND_IN,
   runnerMoments,
   toolAnswerSettlement,
+  usageLimitSettlement,
 } from "./runner-moments.js";
 
 /**
@@ -242,7 +244,11 @@ const readTurnCompleted = Schema.decodeUnknownOption(
 );
 
 const RATE_LIMIT_WINDOW = Schema.NullOr(
-  Schema.Struct({ usedPercent: Schema.Number, resetsAt: Schema.NullOr(Schema.Number) }),
+  Schema.Struct({
+    usedPercent: Schema.Number,
+    windowDurationMins: Schema.optionalKey(Schema.NullOr(Schema.Number)),
+    resetsAt: Schema.NullOr(Schema.Number),
+  }),
 );
 const readRateLimits = Schema.decodeUnknownOption(
   Schema.Struct({
@@ -468,20 +474,28 @@ function running(call: Call, threads: readonly string[]): readonly NativeMoment[
   );
 }
 
-/** A subagent's thread finished its turn: the spawn it runs under settles, failed where the turn did not complete. */
+/**
+ * A subagent's thread finished its turn: the spawn it runs under settles,
+ * failed where the turn did not complete, but answered with the limit's
+ * notice where the plan's usage limit stopped it, rather than OpenAI's
+ * error.
+ */
 function childTurnMoments(threadId: string, params: unknown): readonly NativeMoment[] {
   const read = readTurnCompleted(params);
   if (Option.isNone(read)) return [];
   const { status, error } = read.value.turn;
   const text = error?.message ?? status;
+  const limited = planStatusOfInfo(error?.codexErrorInfo) === PLAN_STATUS.LIMIT_REACHED;
   return [
     {
       kind: NATIVE_MOMENT.SUBAGENT_ENDED,
       key: threadId,
-      settlement: toolAnswerSettlement(
-        { workspaceTool: false, text, output: { status } },
-        status !== TURN_COMPLETED,
-      ),
+      settlement: limited
+        ? usageLimitSettlement(USAGE_LIMIT_AGENT.CODEX)
+        : toolAnswerSettlement(
+            { workspaceTool: false, text, output: { status } },
+            status !== TURN_COMPLETED,
+          ),
     },
   ];
 }
@@ -691,21 +705,39 @@ function turnCompletedMoments(params: unknown): readonly NativeMoment[] {
   ];
 }
 
+/** How much of its primary window the plan has used, where the update names that window. */
+function primaryUsage(
+  primary: (typeof RATE_LIMIT_WINDOW)["Type"] | undefined,
+): readonly NativeMoment[] {
+  if (primary == null) return [];
+  return [
+    {
+      kind: NATIVE_MOMENT.PLAN_USAGE,
+      usedPercent: primary.usedPercent,
+      ...(primary.windowDurationMins == null ? {} : { windowMins: primary.windowDurationMins }),
+      // Note that Codex counts a window's reset in seconds since the epoch.
+      ...(primary.resetsAt === null ? {} : { resetsAt: primary.resetsAt * 1000 }),
+    },
+  ];
+}
+
 /**
- * The plan's limits as Codex last heard them, read only where one is
- * reached, with the latest reset among the windows spent. Note that a
- * rolling update may leave out what it does not know, so one that names no
- * reached limit lifts nothing: the turn's end clears the limit instead.
+ * The plan's limits as Codex last heard them: how much of its primary
+ * window it has used, and, where one is reached, the latest reset among the
+ * windows spent. Note that a rolling update may leave out what it does not
+ * know, so one that names no reached limit lifts nothing: the turn's end
+ * clears the limit instead.
  */
 function rateLimitMoments(params: unknown): readonly NativeMoment[] {
   const read = readRateLimits(params);
   if (Option.isNone(read)) return [];
   const { primary, secondary, rateLimitReachedType } = read.value.rateLimits;
+  const usage = primaryUsage(primary);
   const spent = [primary, secondary].filter(
     (window) => window != null && window.usedPercent >= WINDOW_SPENT_PERCENT,
   );
   const reached = rateLimitReachedType ?? (spent.length > 0 ? "rate_limit_reached" : undefined);
-  if (reached === undefined) return [];
+  if (reached === undefined) return usage;
   // Note that Codex counts a window's reset in seconds since the epoch.
   const resets = spent.flatMap((window) =>
     window?.resetsAt == null ? [] : [window.resetsAt * 1000],
@@ -714,6 +746,7 @@ function rateLimitMoments(params: unknown): readonly NativeMoment[] {
   const words = [reached];
   if (resetsAt !== undefined) words.push(`resets ${new Date(resetsAt).toISOString()}`);
   return [
+    ...usage,
     {
       kind: NATIVE_MOMENT.RATE_LIMIT,
       refused: true,

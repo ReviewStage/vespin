@@ -1,3 +1,4 @@
+import { pictureMarker } from "@repo/features/picture-marker";
 import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "@repo/ui";
 import {
   type ReactNode,
@@ -42,7 +43,7 @@ import { useSelectionToolbar } from "./selection-toolbar.js";
  * words the field draws while the draft is empty, rather than an attribute
  * of the editor's, so the recording masks it as it masks the words. A chip
  * the editor holds is drawn by the box, into the node's own element, as the
- * owner draws it (`chip`), and so is a quote block (`quote`). Words
+ * owner draws it (`chip`), and so are a picture's (`pictures`) and a quote block (`quote`). Words
  * selected raise the format toolbar over them, its marks alone
  * (`./selection-toolbar.tsx`), which stands aside while a list the box
  * opened stands, as its `aria-expanded` says. The field's
@@ -105,13 +106,14 @@ function typingElsewhere(): boolean {
   );
 }
 
-/** A chip the editor asked to be drawn: the element its node stands as, what it is, a skill, a mention, or a quote, and the key its drawing goes under. */
+/** A chip the editor asked to be drawn: the element its node stands as, what it is, a skill, a mention, a picture, or a quote, and the key its drawing goes under. */
 interface DrawnChip {
   readonly element: HTMLElement;
   readonly chip:
     | ComposerChip
     | { readonly mention: MentionNode; readonly node: MentionNodeDoors }
-    | { readonly quote: ComposerQuote };
+    | { readonly quote: ComposerQuote }
+    | { readonly picture: string };
   readonly key: number;
 }
 
@@ -122,6 +124,12 @@ export interface ComposerFieldMentions {
   readonly chip: (mention: MentionNode, node: MentionNodeDoors) => ReactNode;
   /** The mention words pasted whole stand for; nothing for words that paste as words. */
   readonly pasted: (words: string) => MentionNode | undefined;
+}
+
+/** The pictures a box takes into its words: the names it holds, whose markers are chips, and each chip's look. */
+export interface ComposerFieldPictures {
+  readonly names: ReadonlySet<string>;
+  readonly chip: (name: string) => ReactNode;
 }
 
 export function ComposerField({
@@ -138,6 +146,7 @@ export function ComposerField({
   aria,
   onKey,
   onEnter,
+  enterWrites = false,
   onPasteFiles,
   onPasteText,
   onPasteCut,
@@ -145,6 +154,7 @@ export function ComposerField({
   chip,
   quote,
   mentions,
+  pictures,
   takesFocus = true,
   focus,
   keystrokeSpan = PANEL_SPAN.KEYSTROKE_COMPOSER,
@@ -166,6 +176,8 @@ export function ComposerField({
   aria: Readonly<Record<string, string | undefined>>;
   onKey: (event: KeyboardEvent) => boolean;
   onEnter: () => void;
+  /** Whether a bare Enter writes a new line, so only ⌘ or Ctrl with Enter is `onEnter`, as in a field whose words are kept rather than sent. Read as it mounts. */
+  enterWrites?: boolean;
   onPasteFiles: (files: readonly File[]) => boolean;
   /** Takes pasted words as a file before they are laid in, answering whether it did; a box that takes none lays every paste in. */
   onPasteText?: ((words: string) => boolean) | undefined;
@@ -177,12 +189,14 @@ export function ComposerField({
   quote?: ((quote: ComposerQuote) => ReactNode) | undefined;
   /** What the box's mentions are picked and drawn with; none where the box takes no mentions, read as it mounts. */
   mentions?: ComposerFieldMentions | undefined;
+  /** The pictures the box holds and how each one's chip is drawn, by its name; none where the box takes no pictures into its words, read as it mounts. */
+  pictures?: ComposerFieldPictures | undefined;
   /** Whether the editor takes the caret as it mounts, unless the developer is typing elsewhere; a box that stands beside a list the keys step through takes none. */
   takesFocus?: boolean;
   /** Whether the editor takes the caret as it mounts, over `takesFocus` and whoever is typing elsewhere; left out, those decide. Read as it mounts. */
   focus?: boolean | undefined;
   /** The span its keystrokes are timed under. */
-  keystrokeSpan?: KeystrokeSpanName;
+  keystrokeSpan?: KeystrokeSpanName | undefined;
   /** What stands over the field, a list it opened. */
   children?: ReactNode;
 }): React.JSX.Element {
@@ -219,6 +233,7 @@ export function ComposerField({
     onPasteCut,
     onTrigger,
     mentions,
+    pictures,
     takesFocus,
     focus,
     format: toolbar.doors,
@@ -234,6 +249,7 @@ export function ComposerField({
     onPasteCut,
     onTrigger,
     mentions,
+    pictures,
     takesFocus,
     focus,
     format: toolbar.doors,
@@ -263,12 +279,18 @@ export function ComposerField({
       },
       onKey: (event) => latest.current.onKey(event),
       onEnter: () => latest.current.onEnter(),
+      enterWrites,
       onPasteFiles: (files) => latest.current.onPasteFiles(files),
       onPasteText: (words) => latest.current.onPasteText?.(words) === true,
       onPasteCut: () => latest.current.onPasteCut?.(),
       onTrigger: (trigger) => latest.current.onTrigger(trigger),
       drawChip: (element, drawnChip) => draw(element, drawnChip),
       drawQuote: (element, drawnQuote) => draw(element, { quote: drawnQuote }),
+      pictures: now.pictures?.names,
+      drawPicture:
+        now.pictures === undefined
+          ? undefined
+          : (element, name) => draw(element, { picture: name }),
       mentions:
         now.mentions === undefined
           ? undefined
@@ -299,6 +321,10 @@ export function ComposerField({
   }, [draft, editor]);
   useLayoutEffect(() => editor.current?.setInput(input), [input, editor, module]);
   useLayoutEffect(() => editor.current?.setSkills(skills), [skills, editor, module]);
+  const pictureNames = pictures?.names;
+  useLayoutEffect(() => {
+    if (pictureNames !== undefined) editor.current?.setPictures(pictureNames);
+  }, [pictureNames, editor, module]);
   useLayoutEffect(() => editor.current?.setAria(aria));
 
   return (
@@ -311,7 +337,9 @@ export function ComposerField({
             ? (mentions?.chip(each.chip.mention, each.chip.node) ?? `@${each.chip.mention.name}`)
             : "quote" in each.chip
               ? (quote?.(each.chip.quote) ?? each.chip.quote.words)
-              : chip(each.chip),
+              : "picture" in each.chip
+                ? (pictures?.chip(each.chip.picture) ?? pictureMarker(each.chip.picture))
+                : chip(each.chip),
           each.element,
           each.key,
         ),

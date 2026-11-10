@@ -8,7 +8,10 @@
  * rollout through the runner itself. Each call is one of Anthropic's
  * reference Postgres store's five (`@repo/database`'s
  * `claude-session-entries.ts`), run on the conversation the bearer names
- * alone, so no runner reads or writes another agent's transcript.
+ * alone, so no runner reads or writes another agent's transcript. A load is
+ * answered a page at a time, held under the platform's 4.5 MB bound on a
+ * function's response; the whole-transcript load is still answered for a
+ * runner from before pages.
  *
  * The bearer is admitted as the events route admits it
  * (`../workspace-mcp/bearer.ts`): one no standing agent holds, a retired
@@ -21,8 +24,10 @@ import {
   type RunnerTranscriptCall,
   RunnerTranscriptCallSchema,
   type RunnerTranscriptLoad,
+  type RunnerTranscriptPage,
   type RunnerTranscriptSessions,
   type RunnerTranscriptSubkeys,
+  rolloutSubpathContained,
 } from "@repo/agent-runner/protocol";
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
@@ -31,6 +36,7 @@ import {
   listSessionEntrySessions,
   listSessionEntrySubkeys,
   loadSessionEntries,
+  loadSessionEntryPage,
 } from "@repo/database/models/claude-session-entries";
 import { HTTP_METHOD } from "@repo/wire";
 import { Effect, Layer, Option, Schema } from "effect";
@@ -57,6 +63,23 @@ const MAX_BODY_BYTES = 4.5 * 1024 * 1024;
 
 const decodeCall = Schema.decodeUnknownOption(RunnerTranscriptCallSchema);
 
+/**
+ * Whether a call keeps its rows only where a restore may write them back:
+ * an append of a Codex rollout under a subpath inside `CODEX_HOME`
+ * (`rolloutSubpathContained`), and any other call as it is, since a
+ * transcript is copied to the agents continued or forked from it, a Mac's
+ * among them, whose runner writes a rollout back where its subpath names.
+ */
+function keptWhereRestored(call: RunnerTranscriptCall): boolean {
+  if (call.call !== RUNNER_TRANSCRIPTS.CALL.APPEND) return true;
+  const { projectKey, subpath } = call.key;
+  return (
+    projectKey !== RUNNER_TRANSCRIPTS.CODEX_PROJECT ||
+    subpath === undefined ||
+    rolloutSubpathContained(subpath)
+  );
+}
+
 /** One call run on the conversation given, and what it is answered. */
 const answerOf = Effect.fn("web/runnerTranscriptAnswer")(function* (
   userId: string,
@@ -71,6 +94,10 @@ const answerOf = Effect.fn("web/runnerTranscriptAnswer")(function* (
       const entries = yield* loadSessionEntries(userId, conversationId, call.key);
       // Note that a key never written is answered none, as the SDK's `load` answers null.
       return { entries: Option.getOrNull(entries) } satisfies RunnerTranscriptLoad;
+    }
+    case RUNNER_TRANSCRIPTS.CALL.LOAD_PAGE: {
+      const page = yield* loadSessionEntryPage(userId, conversationId, call.key, call.after);
+      return page satisfies RunnerTranscriptPage;
     }
     case RUNNER_TRANSCRIPTS.CALL.LIST_SESSIONS: {
       const sessions = yield* listSessionEntrySessions(userId, conversationId, call.projectKey);
@@ -107,7 +134,9 @@ const runnerTranscriptsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerTranscrip
     const { target } = admitted.value;
     const body = yield* readBodyBytesEffect(MAX_BODY_BYTES);
     const call = decodeCall(yield* parseJsonBytes(body));
-    if (Option.isNone(call)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    if (Option.isNone(call) || !keptWhereRestored(call.value)) {
+      return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    }
     const answer = yield* hostedStoreOrUnavailable(
       answerOf(target.userId, target.conversationId, call.value),
     );

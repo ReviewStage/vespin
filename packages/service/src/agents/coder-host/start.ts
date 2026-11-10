@@ -21,7 +21,7 @@ import {
   readTask,
   type StoredTask,
 } from "@repo/database/models/task-store";
-import { isWorkspaceMember, readAccountNames } from "@repo/database/models/workspace-store";
+import { readAccountNames } from "@repo/database/models/workspace-store";
 import {
   type AwaitingLineMetadata,
   automationLineMetadata,
@@ -123,6 +123,7 @@ import { agentLineSender } from "./steer.js";
 import { summaryOf } from "./stop.js";
 import {
   type Inherited,
+  inheritedPlaceOf,
   landedInheriting,
   openedTakingOver,
   type ReplayFitter,
@@ -216,11 +217,10 @@ export { placeOfAgent } from "./takeover.js";
 export type { StartWhere };
 
 /**
- * Where a Start puts the agent and what it is handed: on a plan, handed the
- * description or a prompt in its place, or in a workspace with no plan, on a
- * repository, handed a prompt, since there is no description to hand it; in either,
- * another agent of that place's brief and transcript in the prompt's place
- * where it takes over from one, and a note after any of them.
+ * Where a Start puts the agent and what it is handed: on a task, handed the
+ * description or a prompt in its place, another agent of that task's brief
+ * and transcript in the prompt's place where it takes over from one, and a
+ * note after any of them.
  */
 export type StartPlace = StartWhere & {
   /** The developer's words in the description's place; none for the description, or for a Start from another agent, whose brief stands for them. */
@@ -456,7 +456,7 @@ const handedOf = Effect.fnUntraced(function* (
   return { text: written(fitted?.replay), startedFrom: fitted?.startedFrom };
 });
 
-/** The task read as the account, or the workspace the account must be a member of; either refused as naming nothing. On a task the agent is handed its document or the prompt, its brief or name in place of its document where its workspace has Task descriptions off, in a workspace the prompt, with the replay of the agent it takes over from after either where there is one, whose brief stands for the prompt, or nothing for a blank Start on a task. */
+/** The task read as the account, refused as naming nothing where it reaches none. The agent is handed the task's document or the prompt, its brief or name in place of its document where its workspace has Task descriptions off, with the replay of the agent it takes over from after either where there is one, whose brief stands for the prompt, or nothing for a blank Start on a task. */
 const landingOf = Effect.fnUntraced(function* (
   userId: string,
   place: StartPlace,
@@ -465,27 +465,6 @@ const landingOf = Effect.fnUntraced(function* (
   landed: StoredTask | undefined,
 ): Effect.fn.Return<StartLanding, HostedRefusal, DatabaseServices> {
   const brief = fitter === undefined ? place.prompt : fitter.prompt;
-  if (place.taskId === null) {
-    const member = yield* hostedStoreOrUnavailable(isWorkspaceMember(userId, place.organizationId));
-    if (!member) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-    // An agent with no plan has only words to be handed, so a Start that names none starts
-    // nothing; one that names no repository works in none, as a blank agent on a task with none does.
-    if (brief === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-    const handed = yield* handedOf(brief, place, fitter, noteFiles);
-    return {
-      workspaceId: place.organizationId,
-      repository: place.repository,
-      task: undefined,
-      mover: undefined,
-      place: {
-        taskId: null,
-        organizationId: place.organizationId,
-        descriptionSnapshot: null,
-        prompt: handed.text,
-      },
-      startedFrom: handed.startedFrom,
-    };
-  }
   // A task its own start made a moment ago, in the same request, is landed on as it was made.
   const read =
     landed !== undefined && landed.task.id === place.taskId
@@ -768,7 +747,8 @@ const defaultPlaceOf = Effect.fnUntraced(function* (
  * names (`runsOn`), from another agent too, which is how an agent moves;
  * else where the agent it is started from runs, for a continue or a fork,
  * `start_agent` from another agent among them, so a local agent goes on
- * locally; else the starter's default (`defaultPlaceOf`). The starter is
+ * locally, but the cloud for a teammate's Start from another member's Mac
+ * agent (`inheritedPlaceOf`); else the starter's default (`defaultPlaceOf`). The starter is
  * the account the Start is made for: a member's own, the calling agent's
  * starter for `start_agent`, and the automation's owner for an automation's
  * run. Whichever decided it, a device runs only its owner's agents, so a
@@ -788,7 +768,7 @@ const machineOfStart = Effect.fnUntraced(function* (
   const place: PlaceRead =
     ask.runsOn ??
     (source !== undefined
-      ? { machine: source.machine ?? AGENT_MACHINE.VERCEL, deviceId: source.deviceId }
+      ? inheritedPlaceOf(userId, source)
       : yield* defaultPlaceOf(userId, task, ask.automationOrigin !== undefined));
   if (place.machine === AGENT_MACHINE.VERCEL) return IN_THE_CLOUD;
   const { deviceId } = place;
@@ -1199,7 +1179,8 @@ export const startAgent = /* @__PURE__ */ Effect.fn("web/startAgent")(function* 
       start_kind: rules.startKind,
       is_from_automation: automationRun(ask) !== undefined,
       started_by: starterOf(ask),
-      has_task: ask.taskId !== null,
+      // Note that every agent stands on a task now, so this is always true; the count keeps it for the charts that split by it.
+      has_task: true,
       agent_kind: agent.kind,
     },
   );

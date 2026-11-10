@@ -27,6 +27,7 @@ import {
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
+import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import { EXPERIMENT } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
@@ -54,7 +55,6 @@ import {
 } from "./agent-model.js";
 import { AgentTab } from "./agent-tab.js";
 import { ForkProvider } from "./fork-action.js";
-import { TOOL_TARGET, type ToolTarget } from "./tool-call-model.js";
 import type { AgentContinuer } from "./use-agents.js";
 
 /**

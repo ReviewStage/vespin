@@ -422,11 +422,10 @@ function bytes(text: string): Uint8Array {
   return Uint8Array.from(text, (character) => character.charCodeAt(0));
 }
 
-test("the tab is left out of the screen recording, its screen and bar with it", async () => {
+test("the tab's screen is left out of the screen recording", async () => {
   const tab = await mount();
   const screen = tab.container.querySelector(".terminal-tab-screen");
   assert.ok(screen?.closest(".ph-no-capture"));
-  assert.ok(tab.container.querySelector(".ui-pane-bar")?.closest(".ph-no-capture"));
 });
 
 test("shown, the tab has its agent's files mirrored and a shell opened in the mirror at the size its screen fits, and attaches to it; hidden and shown again, it keeps its port and asks nothing more", async () => {

@@ -1,0 +1,47 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "With repository, the workspace whose GitHub installation reaches it, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "agentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "description": "A coding agent whose pull request it is, by its id as list_agents answered it; leave it out to name a repository's pull request instead."
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 140,
+      "description": "The pull request's repository, as owner/name, one the workspace's GitHub installation reaches, with number; leave it out with agentId."
+    },
+    "number": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The pull request's number: with repository, the one meant; with agentId, another pull request of the agent's repository, left out for the agent's own."
+    },
+    "paths": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      },
+      "minItems": 1,
+      "maxItems": 50,
+      "description": "The files, by their paths as read_pull_request's changes name them."
+    },
+    "viewed": {
+      "type": "boolean",
+      "description": "true to mark them viewed, false to unmark them."
+    }
+  },
+  "required": [
+    "paths",
+    "viewed"
+  ],
+  "additionalProperties": false
+}

@@ -15,13 +15,13 @@ import { confirmFailure } from "../failure-report.js";
 import type { EditComposerDoors } from "./edit-composer.js";
 
 /**
- * rewind-action.tsx -- a coding agent taken back to an earlier point of its transcript: a line of the developer's Edit, which writes it again where it stands, and a reply's Revert to here.
+ * rewind-action.tsx -- a coding agent taken back to an earlier point of its transcript: a line of the developer's Edit, which writes it again where it stands, and a reply's Rewind conversation to here.
  *
  * An agent's tab hands its messages what a rewind takes (`RewindProvider`):
  * Edit opens a line for writing again in its own place, in the agent's own
  * message box (`edit-composer.tsx`), leaving the foot's box as it is, and its Send takes the agent
  * back to just before it, so the new words go in its place, asked first where
- * anything follows the line, since what it drops is gone; Revert to here, asked
+ * anything follows the line, since what it drops is gone; Rewind conversation to here, asked
  * first for the same reason, takes the agent back to just after a
  * reply, dropping the developer's next line and everything after it. Only a
  * line that opened a turn is written again, and a reply is reverted to only
@@ -30,7 +30,7 @@ import type { EditComposerDoors } from "./edit-composer.js";
  * checkout stays as it is. A worker's tab hands none.
  */
 
-/** Which rewind a message offers: a line of the developer's its Edit, a reply its Revert to here. */
+/** Which rewind a message offers: a line of the developer's its Edit, a reply its Rewind conversation to here. */
 export const REWIND_ACTION = {
   EDIT: "edit",
   REVERT: "revert",
@@ -41,22 +41,22 @@ export type RewindAction = (typeof REWIND_ACTION)[keyof typeof REWIND_ACTION];
 /** What the actions say. */
 const REWIND_WORDS = {
   EDIT: "Edit",
-  REVERT: "Revert to here",
+  REVERT: "Rewind conversation to here",
 } as const;
 
 /** What a rewind counts the dropped messages of another member's in. */
 const MESSAGE: Noun = { one: "message", many: "messages" };
 
 /**
- * What Revert to here asks before it drops anything. Where `takes` names
+ * What Rewind conversation to here asks before it drops anything. Where `takes` names
  * another member's messages among those dropped, the body says so.
  */
 function revertQuestion(takes: string | undefined): DialogQuestion {
   return {
-    title: "Revert to this message?",
-    body: `Everything after it${takes === undefined ? "" : `, including ${takes},`} will be removed from the transcript, and the agent stopped if it is working. Changes the agent made to its files stay as they are.`,
-    verb: "Revert to message",
-    running: "Reverting",
+    title: "Rewind conversation to this message?",
+    body: `Everything after it${takes === undefined ? "" : `, including ${takes},`} will be removed from the transcript, and the agent stopped if it is working. Only the conversation goes back: changes the agent made to its files stay as they are.`,
+    verb: "Rewind conversation",
+    running: "Rewinding",
     loss: CONFIRM_LOSS.IRREVERSIBLE,
     replayUnmasked: true,
     // Note that `takes` names the members whose messages go.
@@ -64,7 +64,7 @@ function revertQuestion(takes: string | undefined): DialogQuestion {
   };
 }
 
-/** What an agent's tab hands its messages: Edit of a line, and Revert to here of a reply. */
+/** What an agent's tab hands its messages: Edit of a line, and Rewind conversation to here of a reply. */
 interface RewindDoors {
   /** The line open for writing again where it stands, by its message id; none while none is. */
   readonly editing: string | undefined;
@@ -78,17 +78,17 @@ interface RewindDoors {
     words: string,
     attachments: readonly AgentAttachment[],
   ) => void;
-  /** What the line's box is drawn with beside the tab's own box, read as it opens, so the doors stand as they were while the tab's props change. */
+  /** What the line's box is drawn with beside the tab's own box, read as it opens, so what it reads stands as it was while the tab's props change. */
   readonly editor: () => Omit<EditComposerDoors, "cuts" | "onCancel" | "onSend">;
   /** Takes the agent back to just before the line named, sending nothing. */
   readonly onRevert: (lineId: string) => void;
-  /** The line a reply's Revert to here drops from, by the reply's id: the developer's next line that opened a turn; none where none follows it. */
+  /** The line a reply's Rewind conversation to here drops from, by the reply's id: the developer's next line that opened a turn; none where none follows it. */
   readonly revertsAt: ReadonlyMap<string, string>;
   /** The lines Edit writes again, by their ids: the developer's lines that opened a turn. */
   readonly editable: ReadonlySet<string>;
   /** The messages something follows, by their ids, so the send of a line written again drops them and asks first. */
   readonly followed: ReadonlySet<string>;
-  /** What a reply's Revert to here drops of other members' messages, by the reply's id, as "2 messages from Sam"; none where it drops none of theirs. */
+  /** What a reply's Rewind conversation to here drops of other members' messages, by the reply's id, as "2 messages from Sam"; none where it drops none of theirs. */
   readonly revertTakes: ReadonlyMap<string, string>;
   /** What the send of a line written again drops of other members' messages, by the line's id, said as `revertTakes` does; none where it drops none of theirs. */
   readonly editTakes: ReadonlyMap<string, string>;
@@ -103,7 +103,7 @@ const PERSON_SENDERS: ReadonlySet<string> = new Set([AGENT_SENDER.MEMBER, AGENT_
  * Whether a person wrote the line, the reader or a teammate, which Edit
  * writes again: no sender kept, as on a line from before senders were, or a
  * member's. The app from a call, an automation, GitHub, and another agent write
- * lines no person said, which Revert to here still drops.
+ * lines no person said, which Rewind conversation to here still drops.
  */
 function writtenByPerson(message: AgentTranscriptMessage): boolean {
   const sender = message.sentBy;
@@ -233,7 +233,7 @@ export function EditMessageAction({ messageId }: { messageId: string }): ReactNo
   );
 }
 
-/** A reply's Revert to here, asked first; nothing where its tab offers no rewind, or no line of the developer's follows it. */
+/** A reply's Rewind conversation to here, asked first; nothing where its tab offers no rewind, or no line of the developer's follows it. */
 export function RevertMessageAction({ messageId }: { messageId: string }): ReactNode {
   const doors = useContext(RewindContext);
   const lineId = doors?.revertsAt.get(messageId);

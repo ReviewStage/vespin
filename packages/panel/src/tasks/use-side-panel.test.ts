@@ -266,28 +266,23 @@ test("a Changes tab pins to the sidebar, keeps its pin across a launch, and take
   assert.deepEqual(second.control().changes, [changesTab(AGENT)]);
 });
 
-test("a tab pinned on an agent's own page keeps its pin across a launch, under a key of its own an earlier version's record leaves alone", () => {
-  const first = launch({ task: AGENT, taskAgents: [AGENT] });
-  act(() => first.control().onPin({ agent: AGENT }, changesTab(AGENT), "#88 Quarantine"));
-  act(() => first.control().onPin({ task: TASK }, changesTab(OTHER_AGENT), "#42 Invites"));
-  first.quit();
-  const { pins, agentPins } = JSON.parse(window.localStorage.getItem("app.sidePanel") ?? "{}");
-  assert.deepEqual(
-    [
-      pins.map((pin: { task?: string }) => pin.task),
-      agentPins.map((pin: { agent?: string }) => pin.agent),
-    ],
-    [[TASK], [AGENT]],
+test("a record an earlier version kept with a tab pinned on an agent's own page still reads, that pin let go and the rest of the record kept", () => {
+  window.localStorage.setItem(
+    "app.sidePanel",
+    JSON.stringify({
+      open: true,
+      tabs: ["comments"],
+      width: 480,
+      pins: [{ task: TASK, tab: changesTab(OTHER_AGENT), label: "#42 Invites", at: 1 }],
+      agentPins: [{ agent: AGENT, tab: changesTab(AGENT), label: "#88 Quarantine", at: 2 }],
+    }),
   );
-
-  const second = launch({ task: TASK, taskAgents: [OTHER_AGENT] });
+  const panel = launch({ task: TASK, taskAgents: [OTHER_AGENT] });
   assert.deepEqual(
-    second.control().pins.map(({ tab, label, at: _at, ...holder }) => ({ ...holder, tab, label })),
-    [
-      { task: TASK, tab: changesTab(OTHER_AGENT), label: "#42 Invites" },
-      { agent: AGENT, tab: changesTab(AGENT), label: "#88 Quarantine" },
-    ],
+    panel.control().pins.map(({ tab, label, at: _at, ...holder }) => ({ ...holder, tab, label })),
+    [{ task: TASK, tab: changesTab(OTHER_AGENT), label: "#42 Invites" }],
   );
+  assert.equal(panel.control().width, 480, "the record's width is kept");
 });
 
 test("a file's pin opens its tab on the pin's task after a launch, which keeps no file's tab", () => {

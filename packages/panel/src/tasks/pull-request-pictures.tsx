@@ -227,9 +227,10 @@ function GitHubPicture({
   // Note that a height written alone stands as written; with a width beside it, the height follows the width at their written shape, so a picture the column narrows keeps its shape.
   const heightOnly = size.height !== undefined && size.width === undefined;
   const shape = writtenShape(size);
+  // Note that the picture is left out of the screen recording, as every picture the window draws is.
   return state.kind === PICTURE_STATE.READY ? (
     <img
-      className={`inline-block max-w-full rounded-ui-6 align-middle${heightOnly ? "" : " h-auto"}`}
+      className={`ph-no-capture inline-block max-w-full rounded-ui-6 align-middle${heightOnly ? "" : " h-auto"}`}
       src={state.url}
       alt={alt}
       width={size.width}

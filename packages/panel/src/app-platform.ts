@@ -2,7 +2,7 @@
  * app-platform.ts -- what this window can do that only its platform can: installed by its root before anything reads it.
  *
  * The bridge (`app-bridge.ts`) reaches the host; this reaches what stands
- * beside it. Copying words or a picture, saving a file, bringing the panel forward, the address
+ * beside it. Copying words, rich text, or a picture, saving a file, bringing the panel forward, the address
  * an agent's page is drawn from, the folder the panel's static files are
  * served from, the menu bar, the key a chord's Command is pressed with, a
  * shortcut being recorded, a counted surface event, and a link opened
@@ -47,6 +47,13 @@ export interface AppPlatform {
    * because a browser takes a picture only in the press's own task.
    */
   copyImage(png: Promise<string>): Promise<void>;
+  /**
+   * Puts words on the system clipboard as rich text, their HTML and their
+   * plain text together, so they paste with their links and bold where a
+   * field takes HTML and as words where it takes text; rejects where the
+   * clipboard refused them.
+   */
+  copyRich(rich: { readonly html: string; readonly text: string }): Promise<void>;
   /** Saves the text as a file of the name given, where the person chooses; answers whether it was saved rather than declined. */
   saveFile(file: { readonly name: string; readonly text: string }): Promise<boolean>;
   /** Brings the panel forward, where the shell can. */
@@ -76,6 +83,14 @@ export interface AppPlatform {
   openGitHub(url: string): void;
   /** Opens a web page outside the window. */
   openWeb(url: string): void;
+  /**
+   * Opens one of the app's own links in a tab of its own, at the window's
+   * own address rather than the link's home, so a preview opens a tab of the
+   * same preview: what a middle-click on a sidebar's place or a task's row
+   * does, and a task's Open in new tab. Only a browser has tabs, so the Mac
+   * app leaves this out, and those offer nothing there.
+   */
+  openInTab?(link: string): void;
   /**
    * Opens a cloud Browser tab's live view socket: the desktop from its host
    * under the account's bearer, reached over a port main posts this window,
@@ -154,6 +169,11 @@ export function installAppPlatform(platform: AppPlatform): () => void {
 export function appPlatform(): AppPlatform {
   if (installed === undefined) throw new Error("No app platform is installed in this window.");
   return installed;
+}
+
+/** Whether this window opens the app's own links in tabs of their own (`openInTab`), as a browser's does; not before its root installed what it can do. */
+export function opensTabs(): boolean {
+  return installed?.openInTab !== undefined;
 }
 
 /** The absolute address of one of the panel's static files, named by its path under the shell's asset base. */

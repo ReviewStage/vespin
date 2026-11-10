@@ -2,10 +2,12 @@ import {
   CODE_CARD_TITLE,
   CODE_ROW,
   CodeCard,
+  CodeEditor,
   FileCodeCard,
   TerminalIcon,
   TextButton,
 } from "@repo/ui";
+import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -15,7 +17,9 @@ import { CatalogSection } from "../section";
  * runs, a block of 60 lines cut at 40 behind Show all, a suggestion drawn
  * as rows on the added and removed grounds, a body the caller draws under
  * a header with an action of its own, and a file's lines with the file's
- * opening beside the Copy, as an Inbox item's code stands. The catalog's
+ * opening beside the Copy, as an Inbox item's code stands; and a code
+ * editor over the same colored lines, its edited lines drawn plain until
+ * colored again, and an empty one with its placeholder. The catalog's
  * copy act is the browser's own clipboard; an app hands in its shell's.
  */
 
@@ -56,6 +60,20 @@ const LONG = Array.from(
   { length: 60 },
   (_, at) => `  step${at + 1}: "Line ${at + 1} of the block",`,
 ).join("\n");
+
+/** A code editor over `COLORED`, holding its colors for the lines they still spell, as the host's would arrive a moment after a keystroke. */
+function EditedCode(): React.JSX.Element {
+  const [code, setCode] = useState(COLORED);
+  return <CodeEditor label="Colored code" value={code} onChange={setCode} lines={COLORED_LINES} />;
+}
+
+/** An empty code editor, its placeholder standing. */
+function EmptyCode(): React.JSX.Element {
+  const [code, setCode] = useState("");
+  return (
+    <CodeEditor label="Empty code" value={code} onChange={setCode} placeholder={SHORT} rows={3} />
+  );
+}
 
 function CodeCards(): React.JSX.Element {
   return (
@@ -111,6 +129,15 @@ function CodeCards(): React.JSX.Element {
           copy={copyToClipboard}
           onOpen={() => {}}
         />
+      </CatalogSection>
+      <CatalogSection
+        id="code-editor"
+        title="A code editor, colored where its colors still spell a line"
+      >
+        <EditedCode />
+      </CatalogSection>
+      <CatalogSection id="code-editor-empty" title="An empty code editor, with its placeholder">
+        <EmptyCode />
       </CatalogSection>
     </>
   );

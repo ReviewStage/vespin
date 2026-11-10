@@ -1,7 +1,7 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
+import { NO_ITEMS, waitingByAgent } from "@repo/features/inbox-list-model";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { LINK_PLACE } from "@repo/features/link-grammar";
-import type { MentionLines } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type {
@@ -9,6 +9,7 @@ import type {
   TaskCreateRelationKind,
   TaskStanding,
 } from "@repo/features/task-wire";
+import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -74,7 +75,8 @@ import {
 } from "../tasks/description-body.js";
 import { CommentFocusScope } from "../tasks/description-comments.js";
 import { useDescriptionEdit, useDescriptionRetry } from "../tasks/description-doors.js";
-import { keyedItem, NO_ITEMS, waitingByAgent } from "../tasks/inbox-model.js";
+import { keyedItem } from "../tasks/inbox-model.js";
+import type { OpenFileLines } from "../tasks/mention-chip.js";
 import { peopleOf } from "../tasks/pull-request-card.js";
 import { SkillFiles } from "../tasks/skill-chip.js";
 import { TAB_KIND } from "../tasks/tab-look.js";
@@ -92,7 +94,6 @@ import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
-import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
@@ -321,19 +322,17 @@ function TaskPageSkeleton({
           ) : null
         }
         column={
-          <>
-            <TaskBody>
-              <Fill className="desktop-task-column">
-                <AgentColumn>
-                  {starting === undefined ? (
-                    <AgentTabSkeleton label={TASK_LOADING_LABEL} />
-                  ) : (
-                    <StartingAgentTab line={starting.line} model={starting.model} />
-                  )}
-                </AgentColumn>
-              </Fill>
-            </TaskBody>
-          </>
+          <TaskBody>
+            <Fill className="desktop-task-column">
+              <AgentColumn>
+                {starting === undefined ? (
+                  <AgentTabSkeleton label={TASK_LOADING_LABEL} />
+                ) : (
+                  <StartingAgentTab line={starting.line} model={starting.model} />
+                )}
+              </AgentColumn>
+            </Fill>
+          </TaskBody>
         }
       >
         {panel === undefined ? null : <SidePanelSkeleton drawing={frame} panel={panel} />}
@@ -567,7 +566,7 @@ function DescriptionDocument({
   const onPressTab = (pressed: TabPressed) =>
     pressTab({ sidePanel, mainTabs, onKeys: setFocus }, pressed);
   // A file a mention names opens in its tab, its lines at the commit the mention pins them to.
-  const openMentionedFile = (path: string, lines: MentionLines | undefined) =>
+  const openMentionedFile = (path: string, lines: OpenFileLines | undefined) =>
     onPressTab(
       lines === undefined
         ? { kind: TAB_PRESS.FILE, ref: { path } }
@@ -967,6 +966,7 @@ function DescriptionDocument({
         // Overview's agents stand open, its list the task's own rather than a fold under the description's head.
         folded={false}
         waiting={waitingOf}
+        shown={tasks.shown}
         onOpenAgent={(agentId) => openAgentTab(agentTab(agentId))}
         onOpenPullRequest={openPullRequestDoor}
         // Note that New agent stands at every width, a fresh plan's one next step, as the "+" offers it.

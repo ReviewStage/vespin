@@ -14,7 +14,6 @@ import {
   INBOX_APPROVAL_OPTION,
   INBOX_ASK,
   INBOX_ASK_STATUS,
-  INBOX_BOUNDS,
   INBOX_FIELD,
   INBOX_IMAGE_TYPE,
   INBOX_MESSAGE_AUTHOR,
@@ -32,7 +31,6 @@ import {
   closeInboxItem,
   closeInboxItemAsMember,
   INBOX_ASK_ANSWER,
-  INBOX_POST_REFUSAL,
   type InboxPostRefusal,
   postInboxMessage,
   postInboxThread,
@@ -88,25 +86,6 @@ const openAgentIn = Effect.gen(function* () {
 });
 
 const openAgent = Effect.map(openAgentIn, ({ agent }) => agent);
-
-/** An account's workspace with one agent started in it on no task, as an automation's run starts one. */
-const openTasklessAgent = Effect.gen(function* () {
-  const userId = yield* openUser;
-  const workspaceId = yield* openWorkspace(userId);
-  const started = yield* createAgent(userId, {
-    taskId: null,
-    organizationId: workspaceId,
-    idempotencyKey: randomUUID(),
-    model: "anthropic/claude-opus-5.5",
-    effort: "high",
-    repository: "acme/relay",
-    descriptionSnapshot: null,
-    prompt: "Check the preview.",
-    runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
-  });
-  assert.ok(Option.isSome(started));
-  return { userId, taskId: null, agentId: started.value.agent.id };
-});
 
 /** A choice between two regions, one recommended. */
 const REGION = {
@@ -573,7 +552,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
   );
 
   it.effect(
-    "a post's pictures are kept as files of its message, its words drawing each by its address under the item, under its agent whether it works on a task or none, and served as they were posted",
+    "a post's pictures are kept as files of its message, its words drawing each by its address under the item, under its agent, and served as they were posted",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -606,7 +585,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         assert.ok(posting?.text.startsWith("The rule as it stands:\n\n![The branch rule]("));
         assert.equal(ruleFile.name, "rule.png");
 
-        const taskless = yield* openTasklessAgent;
+        const other = yield* openAgent;
         const picture = {
           path: "shots/before.png",
           name: "before.png",
@@ -615,7 +594,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
         };
         const asked = posted(
           yield* postInboxThread(
-            taskless,
+            other,
             {
               key: "preview-look",
               title: "Ship the new page?",
@@ -636,17 +615,17 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
           {
             itemId: asked.id,
             attachmentId: kept.attachmentId,
-            holder: `agent/${taskless.agentId}`,
+            holder: `agent/${other.agentId}`,
           },
         ]);
         assert.ok(question?.text.endsWith("`![x](shots/before.png)`"));
-        const served = yield* readInboxAttachment(taskless.userId, asked.id, kept.attachmentId);
+        const served = yield* readInboxAttachment(other.userId, asked.id, kept.attachmentId);
         assert.deepEqual(new Uint8Array(Option.getOrThrow(served).bytes), SHOT);
 
         yield* later;
         const followed = posted(
           yield* postInboxThread(
-            taskless,
+            other,
             { key: "preview-look", title: "", body: "And now: ![The new page](shots/before.png)" },
             [picture],
           ),
@@ -657,7 +636,7 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
           {
             itemId: asked.id,
             attachmentId: said?.files?.[0]?.attachmentId,
-            holder: `agent/${taskless.agentId}`,
+            holder: `agent/${other.agentId}`,
           },
         ]);
       }),
@@ -762,50 +741,6 @@ it.layer(getTestDB())("an inbox item's thread", (it) => {
           [read.status, read.thread?.[0]?.ask?.status],
           [INBOX_STATUS.OPEN, INBOX_ASK_STATUS.OPEN],
         );
-      }),
-  );
-
-  it.effect(
-    "a post that asks nothing takes no place among the open asks, so an agent holding as many as it may still posts one, and notices left open keep no ask from being posted; past as many open notices, one more is refused until the developer nods to one, while a follow-up on one stands",
-    () =>
-      Effect.gen(function* () {
-        const agent = yield* openAgent;
-        for (let at = 0; at < INBOX_BOUNDS.MAX_OPEN_PER_AGENT; at += 1) {
-          posted(
-            yield* postInboxThread(agent, {
-              key: `notice-${at}`,
-              title: "The preview is up",
-              body: "It deploys from main.",
-            }),
-          );
-        }
-        for (let at = 0; at < INBOX_BOUNDS.MAX_OPEN_PER_AGENT; at += 1) {
-          posted(yield* postInboxThread(agent, { ...SETTINGS, key: `open-${at}` }));
-        }
-
-        const refused = yield* postInboxThread(agent, { ...SETTINGS, key: "one-more" });
-        const notice = {
-          key: "preview-up",
-          title: "The preview is up",
-          body: "It deploys from main.",
-        };
-
-        assert.deepEqual(refused, Result.fail(INBOX_POST_REFUSAL.TOO_MANY_OPEN));
-        assert.deepEqual(
-          yield* postInboxThread(agent, notice),
-          Result.fail(INBOX_POST_REFUSAL.TOO_MANY_NOTICES),
-          "the notice bound counts the notices open, whatever the ask bound holds",
-        );
-        const first = posted(
-          yield* postInboxThread(agent, { key: "notice-0", body: "Redeployed from main." }),
-        );
-        assert.equal(first.status, INBOX_STATUS.OPEN, "a follow-up on a notice still open stands");
-        assert.ok(
-          Option.isSome(
-            yield* acknowledgeInboxItem(agent.userId, first.id, first.revision, randomUUID()),
-          ),
-        );
-        assert.equal(posted(yield* postInboxThread(agent, notice)).status, INBOX_STATUS.OPEN);
       }),
   );
 

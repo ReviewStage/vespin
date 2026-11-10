@@ -73,7 +73,7 @@ export function App(): React.JSX.Element {
       />
       <LandingSection
         title="Bring your own keys."
-        lead="Run agents on your ChatGPT or Claude plan, or bring your own API keys."
+        lead="Run agents on your Codex or Claude plan, or bring your own API keys."
         scene={LANDING_SCENE.KEYS}
       />
     </LandingPage>

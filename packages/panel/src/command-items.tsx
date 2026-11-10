@@ -1,3 +1,4 @@
+import { INBOX_READ_MARK } from "@repo/features/inbox-list-model";
 /**
  * command-items.tsx -- the window's commands as every place offering one words, marks, and keys it: the one list ⌘K and the action menus both read.
  *
@@ -43,6 +44,7 @@ import {
   UserCheckIcon,
 } from "@repo/ui/icons";
 import type { MenuAction } from "./desktop/action-menu.js";
+import type { ShortcutSubject } from "./shortcut-target.js";
 
 /** Where a command is offered: a menu on a row that names its thing, or ⌘K, whose row names nothing. */
 export const COMMAND_PLACE = {
@@ -105,6 +107,7 @@ export const PANEL_COMMAND = {
   COPY_CONTENT: keyed(APP_COMMAND.COPY_CONTENT, <GLYPH.COPY />),
   COPY_DESCRIPTION: keyedAs(APP_COMMAND.COPY_CONTENT, "Copy description", <GLYPH.COPY />),
   COPY_LINK: keyed(APP_COMMAND.COPY_LINK, <GLYPH.LINK />),
+  OPEN_IN_NEW_TAB: unkeyed("Open in new tab", <GLYPH.OPEN_EXTERNALLY />),
   MARK_TASK_DONE: unkeyed("Mark done", <GLYPH.DONE />),
   DELETE: keyed(APP_COMMAND.DELETE, <GLYPH.DELETE />),
   DELETE_TASK: keyedAs(APP_COMMAND.DELETE, "Permanently delete", <GLYPH.DELETE />, NOUN.TASK),
@@ -114,8 +117,8 @@ export const PANEL_COMMAND = {
   PIN_AGENT: keyedAs(APP_COMMAND.PIN, "Pin", <GLYPH.PIN />, NOUN.AGENT),
   UNPIN_AGENT: keyedAs(APP_COMMAND.PIN, "Unpin", <GLYPH.UNPIN />, NOUN.AGENT),
   TOGGLE_READ: keyed(APP_COMMAND.TOGGLE_READ, <MailIcon />),
-  MARK_UNREAD: keyedAs(APP_COMMAND.TOGGLE_READ, "Mark as unread", <MailIcon />),
-  MARK_READ: keyedAs(APP_COMMAND.TOGGLE_READ, "Mark as read", <MailOpenIcon />),
+  MARK_UNREAD: keyedAs(APP_COMMAND.TOGGLE_READ, INBOX_READ_MARK.UNREAD, <MailIcon />),
+  MARK_READ: keyedAs(APP_COMMAND.TOGGLE_READ, INBOX_READ_MARK.READ, <MailOpenIcon />),
   RENAME: unkeyed("Rename", <GLYPH.RENAME />),
   RENAME_TASK: unkeyed("Rename", <GLYPH.RENAME />, NOUN.TASK),
   VERSION_HISTORY: keyed(APP_COMMAND.VERSION_HISTORY, <HistoryIcon />),
@@ -185,14 +188,18 @@ export function commandHead(item: PanelCommand): { label: string; icon: React.JS
 
 /**
  * The command as an action menu draws it, on a row that names its thing:
- * its verb and glyph, and its chord where `keyed` says the chord acts on
- * what the menu does, as on the open task's menu and on no other task's.
+ * its verb and glyph, and its chord where the chord acts on `subject`, what
+ * the menu acts on, as on the open task's menu and on no other task's
+ * (`shortcut-target.ts`), read as the menu draws; none where the menu acts
+ * on nothing a key reaches.
  */
 export function commandAction(
   item: PanelCommand,
   onSelect: () => void,
-  keyed: boolean,
+  subject: ShortcutSubject | undefined,
 ): MenuAction {
   const action: MenuAction = { ...commandHead(item), onSelect };
-  return keyed && item.command !== undefined ? { ...action, command: item.command } : action;
+  return subject === undefined || item.command === undefined
+    ? action
+    : { ...action, command: item.command, subject };
 }

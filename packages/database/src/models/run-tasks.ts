@@ -5,8 +5,8 @@
  * its own and names it (`automation_run.task_id`). A same-agent automation's
  * runs name their agent's standing task too, which is every run's and no
  * one run's, so it is not one; nor is any task a member or an agent made.
- * The task's finish (`task-finish.ts`) and the task list (`task-store.ts`,
- * `task-list-live.ts`) read it by this one rule.
+ * The task list (`task-store.ts`, `task-list-live.ts`) reads it by this one
+ * rule.
  */
 
 import { AUTOMATION_TARGET } from "@repo/features/automation-wire";

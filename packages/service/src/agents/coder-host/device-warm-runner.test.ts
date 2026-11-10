@@ -6,21 +6,27 @@
 
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
+import type { ClaudeCodeConfig } from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
-import { latestTurnsOf } from "@repo/database/models/agent-store";
+import { latestTurnsOf, recordAgentNativeSession } from "@repo/database/models/agent-store";
 import {
   deviceAgentLinesWaiting,
   latestDeviceAgentLaunch,
 } from "@repo/database/models/device-agent-store";
 import { beatDevice } from "@repo/database/models/device-store";
+import { recordHostVersion } from "@repo/database/models/host-store";
 import { turns } from "@repo/database/schemas/storage";
 import { getTestDB } from "@repo/database/testing";
-import { DEVICE_AGENT_LINE_KIND, HOST_UPDATE } from "@repo/features/device-agent-wire";
+import {
+  DEVICE_AGENT_LINE_KIND,
+  deviceAgentLaunchSecretsSchema,
+  HOST_UPDATE,
+} from "@repo/features/device-agent-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
-import { DateTime, Effect, Layer, Option } from "effect";
+import { DateTime, Effect, Layer, Option, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { driven, forkClockDriven } from "../../testing/clock-driven.js";
 import {
@@ -39,6 +45,9 @@ import { runnerIdled } from "./runner-sessions.js";
 
 /** No network, and sandboxes kept in memory, which a Mac's agent never reaches. */
 const UNREACHED = Layer.merge(noNetwork, memorySandbox().layer);
+
+/** A Claude Code session the agent's Mac began before its host kept transcripts at the service. */
+const BEGUN_BEFORE = "5b7c9d1e-3f40-4a5b-8c6d-7e8f9a0b1c2d";
 
 /** The line a retire writes to a warm runner, as its Mac takes it. */
 const RETIRE_LINE = '{"type":"retire"}\n';
@@ -162,6 +171,42 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
             yield* launchCarries(warm, "And the tests."),
             "the new launch's first lines carry the message",
           );
+        }),
+    );
+
+    it.effect(
+      "a relaunch on a Mac whose host keeps transcripts at the service resumes a session begun before, which the store holds none of, from its disk with the store left out",
+      () =>
+        Effect.gen(function* () {
+          const warm = yield* warmLocalAgent;
+          const { userId, deviceId, agent } = warm;
+          // The Mac updated to a host whose runner keeps transcripts while the session it began stood on its disk alone.
+          yield* recordHostVersion(deviceId, "0.11.0");
+          assert.equal(yield* recordAgentNativeSession(userId, agent.id, BEGUN_BEFORE), true);
+          const launch = yield* latestDeviceAgentLaunch(userId, agent.id);
+          assert.ok(Option.isSome(launch));
+          yield* TestClock.adjust("1 minute");
+          yield* settledDeviceAgentLine(userId, deviceId, launch.value.id, 0);
+
+          const sent = yield* warm.sessions.send(
+            warm.sessionId,
+            typedMessage(agent, "And the tests."),
+          );
+
+          assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+          const relaunch = (yield* deviceAgentLinesWaiting(userId, deviceId)).find(
+            (line) => line.kind === DEVICE_AGENT_LINE_KIND.LAUNCH,
+          );
+          assert.ok(relaunch !== undefined);
+          const claimed = Option.getOrThrow(
+            yield* claimedDeviceAgentLine(userId, deviceId, relaunch.id),
+          );
+          assert.ok("secrets" in claimed);
+          const { stdin } = Schema.decodeUnknownSync(deviceAgentLaunchSecretsSchema)(
+            claimed.secrets,
+          );
+          const config: ClaudeCodeConfig = JSON.parse(stdin.split("\n")[0] ?? "");
+          assert.deepEqual([config.resume, config.transcriptsUrl], [BEGUN_BEFORE, undefined]);
         }),
     );
 

@@ -15,7 +15,7 @@ import {
 } from "./rewind-action.js";
 
 /**
- * copy-message.tsx -- the actions under a transcript's message: a copy of its words to the clipboard, where its transcript names its messages Copy link, on an agent's own message where its tab offers it, Fork to new agent (`fork-action.tsx`), and, where its tab offers a rewind, a line's Edit or a reply's Revert to here (`rewind-action.tsx`).
+ * copy-message.tsx -- the actions under a transcript's message: a copy of its words to the clipboard, where its transcript names its messages Copy link, on an agent's own message where its tab offers it, Fork to new agent (`fork-action.tsx`), and, where its tab offers a rewind, a line's Edit or a reply's Rewind conversation to here (`rewind-action.tsx`).
  *
  * A thin wrapper over AI Elements' message actions, shared by every
  * transcript's messages, whose Copy is `@repo/ui`'s, answered as every copy
@@ -45,7 +45,7 @@ export function CopyMessageAction({
   forkCut?: ForkCut | undefined;
   /** An action of the message's own set before Copy. */
   lead?: ReactNode;
-  /** How its tab may offer to rewind to it: Edit on a line of the developer's, Revert to here on the agent's own; none where it offers neither. */
+  /** How its tab may offer to rewind to it: Edit on a line of the developer's, Rewind conversation to here on the agent's own; none where it offers neither. */
   rewind?: RewindAction | undefined;
 }): ReactNode {
   const place = useMessagePlace(messageId ?? "");

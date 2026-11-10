@@ -13,6 +13,7 @@ import { useMutation } from "@tanstack/react-query";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
+import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
 import { agentName } from "../tasks/agent-model.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MenuAction } from "./action-menu.js";
@@ -85,7 +86,14 @@ export function useAgentDelete(
     confirmFailure(FAILURE_SURFACE.AGENT_DELETE, { agentId: agent.id }),
   );
   return {
-    action: { ...commandAction(PANEL_COMMAND.DELETE_AGENT, confirm.ask, false), danger: true },
+    action: {
+      ...commandAction(
+        PANEL_COMMAND.DELETE_AGENT,
+        confirm.ask,
+        shortcutSubject(SHORTCUT_SUBJECT.AGENT, agent.id),
+      ),
+      danger: true,
+    },
     dialog: (
       <ConfirmDialog
         open

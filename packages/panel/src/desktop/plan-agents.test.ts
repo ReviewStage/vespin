@@ -9,9 +9,11 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import type { InboxItem } from "@repo/features/inbox-wire";
+import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test } from "vitest";
+import { type AgentsControl, agentsArchiveMutation } from "../tasks/use-agents.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { item } from "../testing/desktop-inbox.js";
 import { agentsControl } from "../testing/tasks-control.js";
@@ -20,12 +22,14 @@ import { PlanAgents } from "./plan-agents.js";
 /**
  * plan-agents.test.ts -- the plan's agents list those waiting on the
  * developer first, each counting what needs them, then those at work,
- * then the newest started, each saying where it runs itself; a row opens its agent, its pull request's chip opens
+ * then the newest started, each saying where it runs itself; a row opens its agent, its ⋯ offers the
+ * agent's menu, its pull request's chip opens
  * the pull request and not the agent, and a task with no agent and no start
  * draws no list; the group ends with New agent, even on a task with no
  * agent, and on a phone the task's Inbox follows it only while something
  * waits there that no listed agent's row marks, on a task that starts no
- * agent too.
+ * agent too; and the agents are chosen together, New agent never among
+ * them, a row chosen among several offering the acts on every one chosen.
  * Synthetic agents throughout.
  */
 
@@ -87,11 +91,14 @@ function mount(
     starts = false,
     phone = false,
     waiting = new Map(),
+    acts = {},
   }: {
     folded?: boolean;
     starts?: boolean;
     phone?: boolean;
     waiting?: ReadonlyMap<string, readonly InboxItem[]>;
+    /** The agents control's acts the test answers itself. */
+    acts?: Partial<AgentsControl>;
   } = {},
 ) {
   const opened: { agents: string[]; pullRequests: string[]; phone: string[] } = {
@@ -118,6 +125,7 @@ function mount(
         },
       ],
     ]),
+    ...acts,
   });
   const host = document.createElement("div");
   document.body.append(host);
@@ -131,6 +139,7 @@ function mount(
           tab: undefined,
           folded,
           waiting,
+          shown: true,
           onOpenAgent: (agentId) => opened.agents.push(agentId),
           onOpenPullRequest: (agentId) => opened.pullRequests.push(agentId),
           starts: starts
@@ -176,6 +185,19 @@ test("the agents at work come first, then the newest, each saying where it runs,
   assert.ok(press !== undefined);
   act(() => press.click());
   assert.deepEqual(opened.agents, [OLDEST.id]);
+});
+
+test("an agent's row offers the agent's menu from its ⋯, as its row on a person's page does", () => {
+  const { host } = mount([NEWEST]);
+  const more = host.querySelector<HTMLButtonElement>('button[aria-label="Agent actions"]');
+  assert.ok(more !== null, "the row draws a ⋯");
+  act(() => more.click());
+  const labels = [...document.querySelectorAll('[role="menuitem"]')].map(
+    (each) => each.textContent,
+  );
+  assert.ok(labels.includes("Rename"));
+  assert.ok(labels.includes("Archive"));
+  assert.ok(labels.includes("Permanently delete"));
 });
 
 test("an agent waiting on the developer comes first, counting what needs them but not naming the thread, and a phone's Inbox row leaves that thread to it", () => {
@@ -235,4 +257,42 @@ test("the group ends with New agent even on a task with no agent, and on a phone
   const archived = mount([], { phone: true, waiting: waitingOn(NEWEST.id, 1) });
   press(archived.host, "1 thread needs you");
   assert.deepEqual(archived.opened.phone, ["inbox"]);
+});
+
+test("the agents are chosen together by their boxes, never New agent, and a row chosen among several archives every one chosen at once", async () => {
+  const archived: (readonly string[])[] = [];
+  const { host, opened } = mount([OLDEST, NEWEST], {
+    starts: true,
+    acts: {
+      archiveAgents: agentsArchiveMutation(({ agentIds }) => {
+        archived.push(agentIds);
+        return Promise.resolve(agentIds.map(() => ({ status: ACTION_RESULT_STATUS.ACCEPTED })));
+      }),
+    },
+  });
+  const rows = [...host.querySelectorAll('[aria-label="Agents"] li')];
+  const start = rows.find((row) => row.textContent?.includes("New agent"));
+  assert.equal(start?.querySelector('[role="checkbox"]'), null, "New agent draws no box");
+  for (const title of [OLDEST.title, NEWEST.title]) {
+    const box = rows
+      .find((row) => row.textContent?.includes(title))
+      ?.querySelector<HTMLElement>('[role="checkbox"]');
+    act(() => (box ?? assert.fail(`${title} draws its box`)).click());
+  }
+  assert.deepEqual(opened.agents, [], "choosing opens nothing");
+
+  const more = rows
+    .find((row) => row.textContent?.includes(OLDEST.title))
+    ?.querySelector<HTMLButtonElement>('button[aria-label="Agent actions"]');
+  act(() => (more ?? assert.fail("the row draws a ⋯")).click());
+  const menu = document.querySelector('[role="menu"]:not([data-leaving])');
+  assert.match(menu?.textContent ?? "", /2 agents/u);
+  const items = [...(menu?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])];
+  assert.deepEqual(
+    items.map((item) => item.textContent),
+    ["Archive", "Permanently delete"],
+  );
+  act(() => items[0]?.click());
+  await act(async () => undefined);
+  assert.deepEqual(archived, [[NEWEST.id, OLDEST.id]]);
 });

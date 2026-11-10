@@ -272,7 +272,7 @@ test("an answer box whose editor bundle could not be loaded says so beside Retry
   const { page } = mount([], { chosen: ON_THRESHOLD, bundles });
   await settle();
   const note = page.querySelector(".ui-composer-foot-note");
-  assert.equal(note?.textContent, "The answer box could not be loaded.Retry");
+  assert.equal(note?.textContent, "The message box could not be loaded.Retry");
 
   await act(async () => note?.querySelector("button")?.click());
   await settle();
@@ -352,7 +352,11 @@ test("Enter on a focused option sends the reply carrying the pick and never pres
   assert.equal(sendHeld(pane), true, "Send stands held");
   assert.deepEqual(
     boxParts(pane),
-    ["controls", "line: Add a note", "row: Attach files, Dictate, Send"],
+    [
+      "controls",
+      "line: Add a note",
+      "row: Add files and more, Opus 5.5 High, Dictate, Composer actions, Send",
+    ],
     "the note line stands on its own under the options, over the row of presses",
   );
   keyOn(openOptions(pane)[0] ?? assert.fail("no option"), "Enter");
@@ -885,10 +889,10 @@ test("an answer no reply came back for is taken as sent once its thread holds a 
   assert.equal(pane.querySelector('.agent-composer [role="alert"]'), null);
 });
 
-test("a nod on a notice the agent posted over first is not taken: the notice stands open again, and the box says so", async () => {
+test("a nod on a notice the agent posted over first is not taken: the notice stands open again, and a toast says so", async () => {
   const notice: InboxItem = { ...noticeOf(THRESHOLD), startedBy: TEAMMATE };
   world.inboxes.set(BILLING.id, [notice, RETRY]);
-  const { page } = mount();
+  const { page } = mount([], { toasts: true });
   await settle();
   const waiting: ((view: AgentInboxAnsweredView) => void)[] = [];
   const bridge = appBridge();
@@ -912,9 +916,11 @@ test("a nod on a notice the agent posted over first is not taken: the notice sta
   await act(async () => waiting.shift()?.({ item: asked, taken: false }));
   await settle();
   assert.equal(sendWords(itemPane(page)), "Got it", "the notice stands open, to nod to again");
-  assert.equal(
-    itemPane(page).querySelector('.agent-composer [role="alert"]')?.textContent,
-    "The agent changed this item before your answer landed. Answer it as it stands now.",
+  assert.deepEqual(
+    [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
+      (words) => words.textContent,
+    ),
+    ["Acknowledged “Alert at 80%?”", "The agent changed this item before you acknowledged it."],
   );
 });
 
@@ -1023,7 +1029,10 @@ test("picking an option in the draft reply stands it picked and lights Send, the
   assert.deepEqual(subjectParts(pane), ["How long should invites last?"]);
   assert.deepEqual(draftReply(pane), ["You"], "the draft stands at the end, plain");
   assert.equal(composerEditor(pane).getAttribute("aria-label"), "Reply");
-  assert.deepEqual(boxParts(pane), ["line: Reply", "row: Attach files, Dictate, Send"]);
+  assert.deepEqual(boxParts(pane), [
+    "line: Reply",
+    "row: Add files and more, Opus 5.5 High, Dictate, Composer actions, Send",
+  ]);
 });
 
 test("an approve-or-request-changes ask is two small buttons in the draft reply, the one the agent recommends saying so: the one pressed stands pressed, pressed again it is let go, and the reply sent with words carries it, stamped as requested changes", async () => {
@@ -1083,7 +1092,10 @@ test("an ask of words alone is a plain box with no controls, its line asking for
   const sent = heldMessages(repliedOn(shown, "e1b2c3d4-0000-4000-8000-000000000015"));
   assert.deepEqual(draftReply(pane), ["You"], "no controls stand in the box");
   assert.equal(pane.querySelector("[data-inbox-draft-ask]"), null, "and no Answer press");
-  assert.deepEqual(boxParts(pane), ["line: Reply", "row: Attach files, Dictate, Send"]);
+  assert.deepEqual(boxParts(pane), [
+    "line: Reply",
+    "row: Add files and more, Opus 5.5 High, Dictate, Composer actions, Send",
+  ]);
   assert.equal(sendHeld(pane), true, "an empty box sends nothing");
   assert.equal(footWords(pane), "");
 
@@ -1132,7 +1144,11 @@ test("a form's fields attach to the reply as they are filled, with no Submit, an
   assert.deepEqual(draftReply(pane), ["You", "controls"]);
   assert.deepEqual(
     boxParts(pane),
-    ["controls", "line: Add a note", "row: Attach files, Dictate, Send"],
+    [
+      "controls",
+      "line: Add a note",
+      "row: Add files and more, Opus 5.5 High, Dictate, Composer actions, Send",
+    ],
     "the note line stands on its own under the form, over the row of presses",
   );
   assert.equal(sendWords(pane), "Send");

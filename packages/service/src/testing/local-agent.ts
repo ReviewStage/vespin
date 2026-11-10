@@ -150,7 +150,7 @@ export const typedMessage = (agent: Agent, text: string) => ({
  * A local agent on its starter's API key whose Start launched its runner,
  * which its Mac took, and whose first turn then settled, as its IDLE's
  * batch writes it: the agent, its sessions, the session its Start claimed,
- * and the turn that settled.
+ * the turn that settled, and the launch line its Mac claimed.
  */
 export const warmLocalAgent = Effect.gen(function* () {
   const db = yield* Database;
@@ -184,7 +184,7 @@ export const warmLocalAgent = Effect.gen(function* () {
     })
     .returning({ id: turns.id });
   assert.ok(settled !== undefined);
-  return { ...opened, sessions, sessionId, turnId: settled.id };
+  return { ...opened, sessions, sessionId, turnId: settled.id, launchId: launch.id };
 });
 
 export type WarmLocalAgent = Effect.Success<typeof warmLocalAgent>;

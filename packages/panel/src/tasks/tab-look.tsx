@@ -1,4 +1,10 @@
-import type { AgentPullRequest, AgentStatus } from "@repo/features/agent-wire";
+import {
+  AGENT_FAILURE,
+  type AgentFailure,
+  type AgentPullRequest,
+  type AgentStatus,
+} from "@repo/features/agent-wire";
+import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { AgentPlaceholderIcon, DocumentIcon, PlusIcon, TaskStatusMark } from "@repo/ui";
@@ -7,8 +13,8 @@ import { pullRequestLabelOf, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION } from "@repo/ui/tasks-model";
 import { AppWindowIcon, BotIcon, GitPullRequestIcon, GlobeIcon, InboxIcon } from "lucide-react";
 import { HarnessMark } from "../harness-marks.js";
-import { GLYPH_STATE, type GlyphState, StateGlyph, stateEndMark } from "../state-glyph.js";
-import { agentGlyphState, providerOf } from "./agent-model.js";
+import { StateGlyph, stateEndMark } from "../state-glyph.js";
+import { providerOf } from "./agent-model.js";
 import { fileLook } from "./file-ref.js";
 import { PullRequestMark, type PullRequestMarked } from "./pull-request-mark.js";
 import { type FixedSidePanelTab, SIDE_PANEL_TAB } from "./task-tab-model.js";
@@ -192,9 +198,11 @@ function SubagentGlyph({ model, state }: { model: string | undefined; state: Gly
 
 /** The mark at the end of an agent's row or tab: the failed mark once its turn failed, nothing otherwise (`stateEndMark`). */
 export function agentEndMark(
-  agent: { readonly status: AgentStatus },
+  agent: { readonly status: AgentStatus; readonly turn?: { readonly failure?: AgentFailure } },
   hinted: boolean,
 ): React.JSX.Element | undefined {
+  // An agent its plan's usage limit stopped failed for no fault of its own, so it wears no failed mark.
+  if (agent.turn?.failure === AGENT_FAILURE.PLAN_LIMIT) return undefined;
   return stateEndMark(agentGlyphState(agent.status), hinted);
 }
 

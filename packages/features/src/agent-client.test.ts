@@ -19,7 +19,6 @@ import {
 } from "./provider-key-wire.js";
 import { PULL_REQUEST_CHAPTERS_CALL_FAILURE } from "./pull-request-chapters-view.js";
 import { PULL_REQUEST_CHAPTERS_STATE } from "./pull-request-chapters-wire.js";
-import { READ_MARK } from "./read-mark.js";
 import { REPOSITORY_UNREACHED } from "./repository-reach-wire.js";
 import { HOSTED_API_ERROR, IDEMPOTENCY_KEY } from "./service-wire.js";
 
@@ -521,11 +520,6 @@ const KEYED_WRITES: readonly KeyedWrite[] = [
     write: "an agent pinned",
     route: `PATCH /api/agents/${AGENT_ID}`,
     retried: (key: string) => client().pin(AGENT_ID, { pinned: true }, key),
-  },
-  {
-    write: "an agent marked read",
-    route: `PATCH /api/agents/${AGENT_ID}`,
-    retried: (key: string) => client().markRead(AGENT_ID, { readMark: READ_MARK.READ }, key),
   },
 ];
 

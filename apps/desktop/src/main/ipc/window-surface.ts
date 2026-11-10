@@ -47,6 +47,8 @@ interface WindowSurfaceDependencies {
   copyText: (words: string) => void;
   /** Writes a PNG, its bytes in base64, to the system's clipboard as a picture; answers false where the bytes draw no picture. */
   copyImage: (png: string) => boolean;
+  /** Writes words to the system's clipboard as rich text, their HTML beside their plain text. */
+  copyRich: (rich: { readonly html: string; readonly text: string }) => void;
   /** Asks where to save a file in the system's save dialog over the asking window and writes it there, answering whether it was saved. */
   saveFile: (sender: WebContents, name: string, text: string) => Promise<boolean>;
   /** Carries a note to the people who make the app, answering whether it arrived. */
@@ -144,6 +146,9 @@ export function windowSurfaceProcedures(
     ].handler(({ input, errors }) => {
       if (!dependencies.copyImage(input.png)) throw errors.REFUSED();
     }),
+    [WINDOW_SURFACE_ACT_KIND.WINDOW_COPY_RICH]: surfacePort[
+      WINDOW_SURFACE_ACT_KIND.WINDOW_COPY_RICH
+    ].handler(({ input }) => dependencies.copyRich(input)),
     [WINDOW_SURFACE_ACT_KIND.WINDOW_SAVE_FILE]: surfacePort[
       WINDOW_SURFACE_ACT_KIND.WINDOW_SAVE_FILE
     ].handler(async ({ input, context, errors }) => {

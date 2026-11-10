@@ -1,5 +1,5 @@
 /**
- * compose-mobile.ts -- the shared host composed inside the Expo app: its seams answered by the device, signed out until the sign-in task lands, and reached by the screens through the in-process bridge.
+ * compose-mobile.ts -- the shared host composed inside the Expo app: its seams answered by the device, its account the `ios` OAuth client's, and reached by the screens through the in-process bridge.
  *
  * The host is the desktop's own (`@repo/host`), assembled as the web's is
  * (`apps/web/src/app/web-host.ts`) with one platform concern, an agent's
@@ -9,8 +9,8 @@
  * device answers instead (`device-seams.ts`): the settings file under the
  * app's Documents, ids from `expo-crypto`, the service at its production
  * origin unless a Preview's is built in, and the account from the desktop's
- * OAuth source, whose consent and cipher the sign-in task brings: until
- * then the host runs signed out, and a sign-in is refused in a sentence.
+ * OAuth source signed in as the `ios` client, its consent the system's
+ * authentication session and its cipher the Keychain's.
  *
  * The screens' acts reach the host's own procedures on the act port in this
  * process, over a channel of two ends (`in-process-channel.ts`); every
@@ -24,8 +24,12 @@
 
 import { createORPCClient } from "@orpc/client";
 import { RPCLink } from "@orpc/client/message-port";
+import { type AuthSession, authSessionConsent } from "@repo/credentials";
 import { PRODUCT_PLATFORM } from "@repo/features/analytics";
+import { IOS_OAUTH_CALLBACK_URL } from "@repo/features/ios-sign-in-wire";
 import { LINK_ORIGIN } from "@repo/features/link-home";
+import type { OpenTerminalSocket } from "@repo/features/relay-socket";
+import type { SecretCipher as SecretCipherSeam } from "@repo/host";
 import { runModeFor } from "@repo/host";
 import {
   type ActPortDependencies,
@@ -63,8 +67,8 @@ import {
   hostKernelLayer,
   hostStandingLayer,
   IdSource,
-  type OpenTerminalSocket,
-  oauthAccountSourceLayer,
+  OAUTH_ACCOUNT_CLIENT,
+  oauthAccountSourceLayerFor,
   RunMode,
   reporterLayer,
   SecretCipher,
@@ -116,6 +120,10 @@ export interface DeviceSeams {
   readonly openSocket: OpenTerminalSocket;
   /** Whether the app is in the foreground, at each change, for as long as the subscription stands. */
   readonly onAppActiveChanged: (listener: (active: boolean) => void) => () => void;
+  /** What the account's tokens are sealed with in the settings file. */
+  readonly cipher: SecretCipherSeam;
+  /** Where a sign-in's authorization page is shown and its redirect caught. */
+  readonly authSession: AuthSession;
 }
 
 /** What the app hands the composition. */
@@ -149,33 +157,22 @@ const report = (message: string): void => {
 };
 
 /**
- * The cipher the settings store would seal the account's tokens with. The
- * app has none yet: the sign-in task brings the Keychain's, so until then
- * no token is kept, as the store refuses to keep one where the cipher is
- * unavailable, and the host runs signed out.
+ * The account's two seams, as the phone answers them: the tokens sealed
+ * under the Keychain's key (`keychain-cipher.ts`), and each sign-in shown in
+ * the system's authentication session, which returns on the `ios` client's
+ * one registered callback (`@repo/features/ios-sign-in-wire`).
  */
-const noCipherLayer = Layer.succeed(SecretCipher, {
-  isAvailable: () => false,
-  encrypt: () => {
-    throw new Error("The app keeps no account yet.");
-  },
-  decrypt: () => {
-    throw new Error("The app keeps no account yet.");
-  },
-});
-
-/**
- * The consent a sign-in would open. The app has none yet, so a trip refuses
- * in a sentence: the sign-in task stands one up over the universal link.
- */
-const noConsentLayer = Layer.succeed(SignInConsent, {
-  open: () => ({
-    signInEffect: () =>
-      Effect.succeed({ reason: "Signing in on the iPhone is not available yet." }),
-    cancel: () => undefined,
-    reopen: () => undefined,
-  }),
-});
+function accountSeams(device: DeviceSeams) {
+  return Layer.merge(
+    Layer.succeed(SecretCipher, device.cipher),
+    Layer.succeed(SignInConsent, {
+      open: authSessionConsent({
+        callbackUrl: IOS_OAUTH_CALLBACK_URL,
+        session: device.authSession,
+      }),
+    }),
+  );
+}
 
 /** Every seam the host's kernel and assembly stand on, as the app answers it. */
 function seamLayers(options: MobileHostOptions) {
@@ -389,7 +386,7 @@ export function composeMobile(
       device.fileSystem,
       Path.layer,
       httpClient,
-      Layer.provide(oauthAccountSourceLayer, Layer.merge(noCipherLayer, noConsentLayer)),
+      Layer.provide(oauthAccountSourceLayerFor(OAUTH_ACCOUNT_CLIENT.IOS), accountSeams(device)),
     ),
   ).pipe(Layer.provideMerge(serviceReachLayer));
   const launched = Layer.unwrap(

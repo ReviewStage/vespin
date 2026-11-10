@@ -2,7 +2,6 @@
 
 import assert from "node:assert/strict";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
-import { AGENT_STATUS, type TasklessAgent } from "@repo/features/agent-wire";
 import {
   TASK_SECTION_ICON_COLOR,
   TASK_SECTION_ICON_KIND,
@@ -10,12 +9,12 @@ import {
   type TaskSections,
   type TaskSectionWrite,
 } from "@repo/features/task-section-wire";
-import { applySectionWrite, memberOf } from "@repo/features/task-section-writes";
+import { applySectionWrite } from "@repo/features/task-section-writes";
+import { sectionTaskIds, workspaceSections } from "@repo/features/task-sections-model";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
-import { sectionOrder, sectionTaskIds, workspaceSections } from "@repo/ui/task-sections-model";
 import { type PinMove, TASK_MARK, type TaskMark } from "@repo/ui/tasks-model";
 import { act, createElement, Fragment, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -24,6 +23,7 @@ import { appCommandOffered, runAppCommand } from "../app-commands.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeActPortCalls } from "../testing/app-bridge.js";
+import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handState, writeListedTasks } from "../testing/app-state.js";
 import { settleQueries, testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
@@ -644,6 +644,53 @@ test("⌘-clicking a section's task and one under Tasks chooses both, opening ne
   ]);
 });
 
+test("in a browser, a middle-click on a place or a task opens its address in a tab of its own, its menu offers Open in new tab under Copy link, and a ⌘-click still chooses it", async () => {
+  const tabbed: string[] = [];
+  const opened: string[] = [];
+  onTestFinished(
+    fakeAppPlatform({ ...QUIET_PANEL, openInTab: (link: string) => tabbed.push(link) }),
+  );
+  const sidebar = await mountSidebar([], SECTIONS, { onResume: (taskId) => opened.push(taskId) });
+  const press = (button: HTMLElement, init: MouseEventInit) =>
+    act(() => {
+      button.dispatchEvent(
+        new MouseEvent("mousedown", { bubbles: true, cancelable: true, ...init }),
+      );
+      button.dispatchEvent(
+        new MouseEvent(init.button === 1 ? "auxclick" : "click", {
+          bubbles: true,
+          cancelable: true,
+          ...init,
+        }),
+      );
+    });
+  const inbox =
+    [...sidebar.querySelectorAll<HTMLElement>("button")].find(
+      (each) => heardName(each) === "Inbox",
+    ) ?? assert.fail("no Inbox row");
+  const retries =
+    [...sidebar.querySelectorAll<HTMLElement>(".sidebar-tasks > li > button")].find((each) =>
+      each.textContent?.includes(RETRIES.name),
+    ) ?? assert.fail(`no ${RETRIES.name} row`);
+
+  press(inbox, { button: 1 });
+  press(retries, { button: 1 });
+  assert.deepEqual(tabbed, [
+    "https://vespin.dev/workspace-personal/inbox",
+    "https://vespin.dev/workspace-personal/task/0a1b2c3d-0000-4000-8000-100000000002",
+  ]);
+  assert.deepEqual(opened, [], "a middle-click opens nothing in this tab");
+
+  press(retries, { button: 0, metaKey: true });
+  assert.equal(retries.getAttribute("aria-description"), "Selected");
+  assert.equal(tabbed.length, 2, "a ⌘-click opens no tab");
+  assert.deepEqual(opened, []);
+
+  openRowMenu(sidebar, INVITES.name);
+  const labels = menuLabels();
+  assert.equal(labels[labels.indexOf("Copy link") + 1], "Open in new tab");
+});
+
 test("a plain click on any row, with tasks chosen and no bar to let them go, opens it and chooses none", async () => {
   const opened: string[] = [];
   const sidebar = await mountSidebar([], SECTIONS, { onResume: (taskId) => opened.push(taskId) });
@@ -767,18 +814,18 @@ test("two sections titled alike are two items in Move to section, on one task's 
   );
 });
 
-/** The scope switcher, whose menu offers New section. */
-function scopeSwitcher(sidebar: HTMLElement): HTMLButtonElement {
+/** The Tasks head's New section, which names a section in place. */
+function newSectionButton(sidebar: HTMLElement): HTMLButtonElement {
   return (
-    sidebar.querySelector<HTMLButtonElement>('.sidebar-scope button[aria-haspopup="menu"]') ??
-    assert.fail("no scope switcher")
+    sidebar.querySelector<HTMLButtonElement>(
+      '.sidebar-tasks-head button[aria-label="New section"]',
+    ) ?? assert.fail("no New section on the Tasks head")
   );
 }
 
-/** Chooses New section in the scope switcher's menu, which names a section in place. */
+/** Presses the Tasks head's New section, which names a section in place. */
 function newSectionInPlace(sidebar: HTMLElement): HTMLInputElement {
-  act(() => scopeSwitcher(sidebar).click());
-  act(() => item("New section").click());
+  act(() => newSectionButton(sidebar).click());
   return sectionNameField();
 }
 
@@ -874,7 +921,7 @@ test("New section's field is labeled, and Enter on a blank name marks it invalid
   assert.deepEqual(writes, [], "no section is made from a blank name");
 });
 
-test("New section in the scope switcher's menu names a section in place, with no dialog, and Return makes it", async () => {
+test("New section on the Tasks head names a section in place, with no dialog, and Return makes it", async () => {
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes);
 
@@ -893,7 +940,7 @@ test("New section in the scope switcher's menu names a section in place, with no
   assert.equal(document.querySelector('input[aria-label="Section name"]'), null);
 });
 
-test("Escape on a section named in place makes nothing and hands the focus back to the scope switcher", async () => {
+test("Escape on a section named in place makes nothing and hands the focus back to New section", async () => {
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes);
 
@@ -903,7 +950,7 @@ test("Escape on a section named in place makes nothing and hands the focus back 
 
   assert.deepEqual(writes, []);
   assert.equal(document.querySelector('input[aria-label="Section name"]'), null);
-  assert.equal(document.activeElement, scopeSwitcher(sidebar));
+  assert.equal(document.activeElement, newSectionButton(sidebar));
 });
 
 test("Rename names a section in place, and Return keeps the new name with the icon it wears", async () => {
@@ -1757,122 +1804,6 @@ test("⇧⌘↓ on a task in a section moves the task within it, and ⇧⌘↑ o
     workspaceSections(written(), WORKSPACE.id).map((section) => section.title),
     [...before].reverse(),
   );
-});
-
-/** An agent Ada started with no task, last active before either task was saved. */
-const SWEEP: TasklessAgent = {
-  id: "0a1b2c3d-0000-4000-8000-200000000001",
-  planId: null,
-  model: "anthropic/claude-opus-5.5",
-  effort: "high",
-  title: "Sweep flaky tests",
-  createdAt: 1,
-  status: AGENT_STATUS.COMPLETED,
-  turnId: null,
-  startedBy: { userId: "user-ada", name: "Ada Lovelace" },
-  automationId: null,
-  workspaceId: WORKSPACE.id,
-  repository: "acme/relay",
-  activityAt: 1,
-};
-
-/** The sidebar's agents with no task: Sweep flaky tests alone. */
-const WITH_SWEEP: Partial<TasksControl> = { listedAgents: { standing: [SWEEP], archived: [] } };
-
-/** Launch holding Invite expiry and, put there after it, Sweep flaky tests. */
-const SWEEP_IN_LAUNCH: TaskSections = {
-  ...SECTIONS,
-  agentEntries: [{ agentId: SWEEP.id, sectionId: LAUNCH, addedAt: 3 }],
-};
-
-test("an agent kept in a section stands among its tasks in its order, which Tasks leaves out, and goes back under Tasks once the section is deleted", async () => {
-  const writes: TaskSectionWrite[] = [];
-  const { container: sidebar, draw } = await mountSidebarRedrawn(
-    writes,
-    SWEEP_IN_LAUNCH,
-    WITH_SWEEP,
-  );
-
-  // Put there last and never dragged, it stands on top.
-  assert.deepEqual(namesIn(sidebar, "Sections"), ["Sweep flaky tests", "Invite expiry"]);
-  assert.deepEqual(namesIn(sidebar, "My tasks"), ["Retry audit"]);
-
-  await draw(
-    applySectionWrite(SWEEP_IN_LAUNCH, { kind: TASK_SECTION_WRITE.DELETE, id: LAUNCH }, 9),
-  );
-  assert.deepEqual(namesIn(sidebar, "Sections"), []);
-  assert.deepEqual(namesIn(sidebar, "My tasks"), [
-    "Invite expiry",
-    "Retry audit",
-    "Sweep flaky tests",
-  ]);
-});
-
-test("an agent's menu offers Move to section beside Pin, before Archive, as the one agent menu orders them, and a section chosen writes it there", async () => {
-  const writes: TaskSectionWrite[] = [];
-  const sidebar = await mountSidebar(writes, SECTIONS, WITH_SWEEP);
-
-  openRowMenu(sidebar, "Sweep flaky tests");
-  const labels = menuLabels();
-  assert.deepEqual(labels.slice(labels.indexOf("Pin"), labels.indexOf("Pin") + 3), [
-    "Pin",
-    "Move to section",
-    "Archive",
-  ]);
-  await act(async () => item("Move to section").click());
-  await act(async () => item("Launch").click());
-
-  assert.deepEqual(writes, [
-    { kind: TASK_SECTION_WRITE.PLACE_AGENT, agentId: SWEEP.id, sectionId: LAUNCH },
-  ]);
-});
-
-test("an agent's Move to section checks the section it stands in and offers Remove from section", async () => {
-  const writes: TaskSectionWrite[] = [];
-  const sidebar = await mountSidebar(writes, SWEEP_IN_LAUNCH, WITH_SWEEP);
-
-  openMoveToSection(sidebar, "Sweep flaky tests", "Move to section");
-  assert.equal(item("Launch").getAttribute("aria-checked"), "true");
-  await act(async () => item("Remove from section").click());
-
-  assert.deepEqual(writes, [
-    { kind: TASK_SECTION_WRITE.PLACE_AGENT, agentId: SWEEP.id, sectionId: null },
-  ]);
-});
-
-test("an agent dragged from Tasks into a section lands where it was let go, among the section's tasks", async () => {
-  const asked = noneAsked();
-  // Down the column once a row is lifted: Pinned's slot, Invite expiry under Launch, then Retry audit and Sweep flaky tests under Tasks.
-  const sidebar = await mountDraggable([INVITES, RETRIES], SECTIONS, asked, WITH_SWEEP);
-
-  drag(sidebar, "Sweep flaky tests", 2 * ROW_HEIGHT - 4);
-  await settle();
-
-  assert.deepEqual(asked.marks, []);
-  const after = asked.writes.reduce(
-    (state, write) => applySectionWrite(state, write, AFTER_FIXTURES),
-    SECTIONS,
-  );
-  assert.deepEqual(
-    sectionOrder(after, LAUNCH).map((entry) => memberOf(entry)),
-    [
-      { agent: false, id: INVITES.id },
-      { agent: true, id: SWEEP.id },
-    ],
-  );
-});
-
-test("an agent dragged from a section onto Tasks leaves every section", async () => {
-  const asked = noneAsked();
-  // Down the column once a row is lifted: Pinned's slot, Sweep flaky tests and Invite expiry under Launch, Retry audit under Tasks.
-  const sidebar = await mountDraggable([INVITES, RETRIES], SWEEP_IN_LAUNCH, asked, WITH_SWEEP);
-
-  drag(sidebar, "Sweep flaky tests", 4 * ROW_HEIGHT - 4);
-  await settle();
-
-  assert.deepEqual(asked.writes, [
-    { kind: TASK_SECTION_WRITE.PLACE_AGENT, agentId: SWEEP.id, sectionId: null },
-  ]);
 });
 
 test("in a shared workspace, your one task standing in a section leaves Tasks saying nothing of a view that matches none", async () => {

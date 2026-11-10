@@ -1,5 +1,5 @@
 /**
- * task.ts -- `vespin task list`, `view`, `create`, and `update`: the workspace's tasks, one task with its agents, pull requests, and open asks, a new task, and a task changed.
+ * task.ts -- `vespin task list`, `view`, `create`, `update`, `relate`, `delete`, `cat`, and `ls`: the workspace's tasks, one task with its agents, pull requests, and open asks, a new task, a task changed, a relation between two tasks moved, a task deleted, and its repository's files read.
  *
  * Each reads the workspace a command acts in (`../workspace.js`) and names a
  * task by its id, its number, or its key (`../tasks.js`). `create` takes its
@@ -7,33 +7,49 @@
  * with `--start` or `--prompt` starts an agent on the new task, the one-shot
  * every peer leads with: in the create's own request where there is no plan
  * to write first, else created, then planned through `plans.editDescription`, then
- * started, so the agent reads the plan it was given.
+ * started, so the agent reads the plan it was given. `cat` and `ls` read the
+ * task's repository as its File tab does, on GitHub at the default branch's
+ * head or a commit, never from an agent's sandbox.
  */
 
 import { CLI_EXIT } from "@repo/features/cli-exit";
+import { TASK_FILE_QUERY_FLAG } from "@repo/features/contract";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import { INBOX_STATUS, type InboxItem, openAskOf } from "@repo/features/inbox-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
 import {
+  TASK_BLOCK_CHANGE,
+  TASK_BLOCK_RELATION,
+  TASK_FILE_REFUSAL,
   TASK_PRIORITY_ORDER,
+  TASK_RELATION_KIND,
   TASK_STATUS_ORDER,
+  TASK_TREE_ENTRY,
+  type Task,
   type TaskPullRequestLine,
+  type TaskRelationKind,
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { Effect, Option } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
+import { fileRefused } from "../file-refusal.js";
 import { originRepository } from "../git.js";
-import { answer, CommandFailed, columns, readInput } from "../output.js";
+import { answer, CommandFailed, columns, confirmOrYes, note, readInput } from "../output.js";
 import { askService, session } from "../session.js";
 import { resolveTaskId, signedInMemberId } from "../tasks.js";
 import { resolveWorkspace } from "../workspace.js";
 import { agentLines, startAgent, startedLines } from "./agent.js";
 import { writeDescription } from "./description.js";
+import { resolveSection } from "./section.js";
 
 /** What `--assignee` takes to assign the task to nobody, and to the signed-in member. */
 const ASSIGNEE_WORD = { NONE: "none", ME: "me" } as const;
+
+/** What `--parent` and `--section` take to take the task out from under its parent, or out of its section. */
+const NONE_WORD = "none";
 
 /** The fields of a task every answer prints, its key beside them where it has a number. */
 function taskJson(task: Omit<TaskSummary, "agents">, workspaceName: string | undefined) {
@@ -319,6 +335,37 @@ const createCommand = Command.make(
   ]),
 );
 
+/** A task flag that may be given again, once for each task it names. */
+function taskFlags(name: string, description: string) {
+  return Flag.String(name).pipe(Flag.atLeast(0), Flag.withDescription(description));
+}
+
+/** The blocks `--blocked-by`, `--blocks`, and their `--remove-` forms name, each as `plans.block` takes it, the tasks resolved to ids. */
+function blockChangesOf(named: {
+  readonly blockedBy: readonly string[];
+  readonly blocks: readonly string[];
+  readonly removeBlockedBy: readonly string[];
+  readonly removeBlocks: readonly string[];
+}) {
+  const asked = [
+    ...named.blockedBy.map(
+      (task) => [TASK_BLOCK_CHANGE.ADD, TASK_BLOCK_RELATION.BLOCKED_BY, task] as const,
+    ),
+    ...named.blocks.map(
+      (task) => [TASK_BLOCK_CHANGE.ADD, TASK_BLOCK_RELATION.BLOCKS, task] as const,
+    ),
+    ...named.removeBlockedBy.map(
+      (task) => [TASK_BLOCK_CHANGE.REMOVE, TASK_BLOCK_RELATION.BLOCKED_BY, task] as const,
+    ),
+    ...named.removeBlocks.map(
+      (task) => [TASK_BLOCK_CHANGE.REMOVE, TASK_BLOCK_RELATION.BLOCKS, task] as const,
+    ),
+  ];
+  return Effect.forEach(asked, ([change, relation, task]) =>
+    Effect.map(resolveTaskId(task), (taskId) => ({ change, relation, taskId })),
+  );
+}
+
 const updateCommand = Command.make(
   "update",
   {
@@ -338,13 +385,30 @@ const updateCommand = Command.make(
       Flag.withDescription("A member by email, name, or id; me for you, none for nobody"),
     ),
     name: Flag.String("name").pipe(Flag.optional, Flag.withDescription("Its new name")),
+    parent: Flag.String("parent").pipe(
+      Flag.optional,
+      Flag.withDescription("The task to put it under, by id, number, or key; none for the top"),
+    ),
+    blockedBy: taskFlags("blocked-by", "A task it waits on, added; again for each"),
+    blocks: taskFlags("blocks", "A task that waits on it, added; again for each"),
+    removeBlockedBy: taskFlags("remove-blocked-by", "A task it waits on, taken away"),
+    removeBlocks: taskFlags("remove-blocks", "A task that waits on it, taken away"),
+    section: Flag.String("section").pipe(
+      Flag.optional,
+      Flag.withDescription("Your sidebar section to keep it in, by id or title; none for none"),
+    ),
   },
-  ({ task, status, priority, assignee, name }) =>
+  ({ task, status, priority, assignee, name, parent, section, ...blockFlags }) =>
     Effect.gen(function* () {
-      if ([status, priority, assignee, name].every(Option.isNone)) {
+      const blocksAsked = Object.values(blockFlags).some((named) => named.length > 0);
+      if (
+        [status, priority, assignee, name, parent, section].every(Option.isNone) &&
+        !blocksAsked
+      ) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
-          message: "Name a change: --status, --priority, --assignee, or --name.",
+          message:
+            "Name a change: --status, --priority, --assignee, --name, --parent, --blocked-by, --blocks, their --remove- forms, or --section.",
         });
       }
       const id = yield* resolveTaskId(task);
@@ -352,32 +416,218 @@ const updateCommand = Command.make(
       const assigneeId = Option.isSome(assignee)
         ? yield* memberIdOf(id, assignee.value)
         : undefined;
-      const { plan } = yield* askService(hosted.plans.update, {
+      const parentTaskId = Option.isNone(parent)
+        ? undefined
+        : parent.value === NONE_WORD
+          ? null
+          : yield* resolveTaskId(parent.value);
+      const blockChanges = yield* blockChangesOf(blockFlags);
+      const fields = {
+        ...(Option.isSome(status) ? { status: status.value } : undefined),
+        ...(Option.isSome(priority) ? { priority: priority.value } : undefined),
+        ...(assigneeId === undefined ? undefined : { assigneeId }),
+        ...(Option.isSome(name) ? { name: name.value } : undefined),
+      };
+      // Note that each change is its own request, as the task menu's are, and the task as the last one answers is the one printed.
+      let plan: Task | undefined;
+      if (Object.keys(fields).length > 0) {
+        plan = (yield* askService(hosted.plans.update, { params: { id }, body: fields })).plan;
+      }
+      if (parentTaskId !== undefined) {
+        plan = (yield* askService(hosted.plans.parent, { params: { id }, body: { parentTaskId } }))
+          .plan;
+      }
+      for (const block of blockChanges) {
+        plan = (yield* askService(hosted.plans.block, { params: { id }, body: block })).plan;
+      }
+      plan ??= (yield* askService(hosted.plans.open, { id })).plan;
+      const sectionId = Option.isNone(section)
+        ? undefined
+        : section.value === NONE_WORD
+          ? null
+          : (yield* resolveSection(plan.workspaceId, section.value)).section.id;
+      if (sectionId !== undefined) {
+        yield* askService(hosted.taskSections.write, {
+          kind: TASK_SECTION_WRITE.PLACE,
+          taskId: id,
+          sectionId,
+        });
+      }
+      const { workspaces } = yield* askService(hosted.workspaces.list, undefined);
+      const found = {
+        ...taskJson(plan, workspaceNamed(workspaces, plan.workspaceId)),
+        parentTaskId: plan.parentTaskId ?? null,
+        blockedBy: plan.blockedBy ?? [],
+        blocks: plan.blocks ?? [],
+        ...(sectionId === undefined ? undefined : { sectionId }),
+      };
+      yield* answer({
+        json: found,
+        lines: [
+          `Updated ${taskLabel(found)} ${found.name}: ${found.status ?? "none"}, ${found.priority ?? "none"}, ${found.assignee?.name ?? "nobody"}.`,
+          ...(parentTaskId === undefined ? [] : [`  Parent: ${found.parentTaskId ?? "none"}`]),
+          ...(blockChanges.length === 0
+            ? []
+            : [
+                `  Blocked by: ${found.blockedBy.join(", ") || "none"}`,
+                `  Blocks: ${found.blocks.join(", ") || "none"}`,
+              ]),
+          ...(sectionId === undefined ? [] : [`  Section: ${sectionId ?? "none"}`]),
+        ],
+        ids: [found.id],
+      });
+    }),
+).pipe(
+  Command.withDescription(
+    "Change a task's status, priority, assignee, name, parent, blocks, or sidebar section",
+  ),
+  Command.withExamples([
+    { command: "vespin task update ACME-42 --status done", description: "Mark a task done" },
+    {
+      command: "vespin task update ACME-42 --assignee me --priority high",
+      description: "Take a task, and raise it",
+    },
+    {
+      command: "vespin task update ACME-42 --blocked-by ACME-41 --parent ACME-40",
+      description: "Make it wait on another, under a parent",
+    },
+    {
+      command: 'vespin task update ACME-42 --section "This week"',
+      description: "Keep it in one of your sidebar sections",
+    },
+  ]),
+);
+
+const deleteCommand = Command.make(
+  "delete",
+  {
+    task: Argument.String("task").pipe(
+      Argument.withDescription("The task, by its id, its number, or its key such as ACME-42"),
+    ),
+    yes: Flag.Boolean("yes").pipe(
+      Flag.withAlias("y"),
+      Flag.withDefault(false),
+      Flag.withDescription("Delete without asking; required where stdin is no terminal"),
+    ),
+  },
+  ({ task, yes }) =>
+    Effect.gen(function* () {
+      const id = yield* resolveTaskId(task);
+      const { hosted } = yield* session;
+      const [{ plan }, { workspaces }] = yield* Effect.all(
+        [askService(hosted.plans.open, { id }), askService(hosted.workspaces.list, undefined)],
+        { concurrency: "unbounded" },
+      );
+      const found = taskJson(plan, workspaceNamed(workspaces, plan.workspaceId));
+      yield* confirmOrYes(
+        `Delete ${taskLabel(found)} ${found.name} for good, with its agents and their transcripts?`,
+        yes,
+      );
+      yield* askService(hosted.plans.delete, { id });
+      yield* answer({
+        json: { id: found.id, key: found.key, name: found.name, deleted: true },
+        lines: [`Deleted ${taskLabel(found)} ${found.name}.`],
+        ids: [found.id],
+      });
+    }),
+).pipe(
+  Command.withDescription(
+    "Delete a task for good: its agents are stopped first, then it goes with its description and transcripts",
+  ),
+  Command.withExamples([
+    { command: "vespin task delete ACME-42", description: "Delete a task, after you confirm" },
+    { command: "vespin task delete ACME-42 --yes", description: "The same, from a script" },
+  ]),
+);
+
+/** The kind each kind is the other side of, which a relation can never stand in beside it, so a move from it turns the relation around. */
+const INVERSE_RELATION_KIND = {
+  [TASK_RELATION_KIND.BLOCKED_BY]: TASK_RELATION_KIND.BLOCKS,
+  [TASK_RELATION_KIND.BLOCKS]: TASK_RELATION_KIND.BLOCKED_BY,
+  [TASK_RELATION_KIND.SUB_TASK]: TASK_RELATION_KIND.PARENT,
+  [TASK_RELATION_KIND.PARENT]: TASK_RELATION_KIND.SUB_TASK,
+} as const satisfies Record<TaskRelationKind, TaskRelationKind>;
+
+/** How a relation reads with the task first and the other task after it. */
+const RELATION_WORDS = {
+  [TASK_RELATION_KIND.BLOCKED_BY]: "blocked by",
+  [TASK_RELATION_KIND.BLOCKS]: "blocks",
+  [TASK_RELATION_KIND.SUB_TASK]: "parent of",
+  [TASK_RELATION_KIND.PARENT]: "sub-task of",
+} as const satisfies Record<TaskRelationKind, string>;
+
+/** A flag naming the other task in one kind of relation. */
+const relatedFlag = (kind: TaskRelationKind, words: string) =>
+  Flag.String(kind).pipe(Flag.optional, Flag.withDescription(words));
+
+const relateCommand = Command.make(
+  "relate",
+  {
+    task: Argument.String("task").pipe(
+      Argument.withDescription("The task, by its id, its number, or its key such as ACME-42"),
+    ),
+    blockedBy: relatedFlag(TASK_RELATION_KIND.BLOCKED_BY, "The other task, made to block it"),
+    blocks: relatedFlag(TASK_RELATION_KIND.BLOCKS, "The other task, made to wait on it"),
+    subTask: relatedFlag(TASK_RELATION_KIND.SUB_TASK, "The other task, made its sub-task"),
+    parent: relatedFlag(TASK_RELATION_KIND.PARENT, "The other task, made its parent"),
+    from: Flag.Literals("from", Object.values(TASK_RELATION_KIND)).pipe(
+      Flag.optional,
+      Flag.withDescription(
+        "How the other task stands to it now; the other side of the new kind where left out",
+      ),
+    ),
+  },
+  ({ task, blockedBy, blocks, subTask, parent, from }) =>
+    Effect.gen(function* () {
+      const named = [
+        { to: TASK_RELATION_KIND.BLOCKED_BY, other: blockedBy },
+        { to: TASK_RELATION_KIND.BLOCKS, other: blocks },
+        { to: TASK_RELATION_KIND.SUB_TASK, other: subTask },
+        { to: TASK_RELATION_KIND.PARENT, other: parent },
+      ].flatMap(({ to, other }) => (Option.isSome(other) ? [{ to, other: other.value }] : []));
+      const [asked, ...others] = named;
+      if (asked === undefined || others.length > 0) {
+        return yield* new CommandFailed({
+          exit: CLI_EXIT.USAGE,
+          message: "Name one relation: --blocked-by, --blocks, --sub-task, or --parent.",
+        });
+      }
+      const fromKind = Option.getOrElse(from, () => INVERSE_RELATION_KIND[asked.to]);
+      if (fromKind === asked.to) {
+        return yield* new CommandFailed({
+          exit: CLI_EXIT.USAGE,
+          message: `--from names the kind it stands in now, so it is another than ${asked.to}.`,
+        });
+      }
+      const id = yield* resolveTaskId(task);
+      const otherId = yield* resolveTaskId(asked.other);
+      const { hosted } = yield* session;
+      const { plan } = yield* askService(hosted.plans.relation, {
         params: { id },
-        body: {
-          ...(Option.isSome(status) ? { status: status.value } : undefined),
-          ...(Option.isSome(priority) ? { priority: priority.value } : undefined),
-          ...(assigneeId === undefined ? undefined : { assigneeId }),
-          ...(Option.isSome(name) ? { name: name.value } : undefined),
-        },
+        body: { taskId: otherId, from: fromKind, to: asked.to },
       });
       const { workspaces } = yield* askService(hosted.workspaces.list, undefined);
       const found = taskJson(plan, workspaceNamed(workspaces, plan.workspaceId));
       yield* answer({
         json: found,
         lines: [
-          `Updated ${taskLabel(found)} ${found.name}: ${found.status ?? "none"}, ${found.priority ?? "none"}, ${found.assignee?.name ?? "nobody"}.`,
+          `Related ${taskLabel(found)} ${found.name}: ${RELATION_WORDS[asked.to]} ${asked.other}.`,
         ],
         ids: [found.id],
       });
     }),
 ).pipe(
-  Command.withDescription("Change a task's status, priority, assignee, or name"),
+  Command.withDescription(
+    "Move a relation between two tasks to another kind in one step, or add it where none stood",
+  ),
   Command.withExamples([
-    { command: "vespin task update ACME-42 --status done", description: "Mark a task done" },
     {
-      command: "vespin task update ACME-42 --assignee me --priority high",
-      description: "Take a task, and raise it",
+      command: "vespin task relate ACME-42 --sub-task ACME-43 --from blocked-by",
+      description: "Make the task blocking ACME-42 its sub-task instead",
+    },
+    {
+      command: "vespin task relate ACME-42 --blocked-by ACME-43",
+      description: "Turn a block around: ACME-43 blocks ACME-42, where ACME-42 blocked it",
     },
   ]),
 );
@@ -415,10 +665,118 @@ function memberIdOf(taskId: string, named: string) {
   });
 }
 
-/** The task group: list, view, create, and update. */
+/** A file or folder named by its task, as `cat` and `ls` take it. */
+const taskArgument = Argument.String("task").pipe(
+  Argument.withDescription("The task, by its id, its number, or its key such as ACME-42"),
+);
+
+const commitFlag = Flag.String("commit").pipe(
+  Flag.withDescription(
+    "Read at this commit, by its full SHA, rather than the default branch's head",
+  ),
+  Flag.optional,
+);
+
+const catCommand = Command.make(
+  "cat",
+  {
+    task: taskArgument,
+    path: Argument.String("path").pipe(
+      Argument.withDescription("The file's path from the repository's root"),
+    ),
+    commit: commitFlag,
+  },
+  ({ task, path, commit }) =>
+    Effect.gen(function* () {
+      const id = yield* resolveTaskId(task);
+      const { hosted } = yield* session;
+      // Note that a raw read carries the whole text, so its window stands for nothing.
+      const read = yield* askService(hosted.taskFiles.file, {
+        id,
+        path,
+        first: "1",
+        last: "1",
+        raw: TASK_FILE_QUERY_FLAG,
+        ...(Option.isSome(commit) ? { ref: commit.value } : undefined),
+      });
+      if ("refusal" in read) return yield* fileRefused(read);
+      if (!("text" in read)) return yield* fileRefused({ refusal: TASK_FILE_REFUSAL.NOT_TEXT });
+      yield* answer({ json: read.text, lines: [read.text.text], ids: [read.text.path] });
+    }),
+).pipe(
+  Command.withDescription(
+    "Print a file of a task's repository as GitHub holds it, at the default branch's head or a commit",
+  ),
+  Command.withExamples([
+    {
+      command: "vespin task cat ACME-42 README.md",
+      description: "The file as the default branch holds it",
+    },
+    {
+      command: "vespin task cat ACME-42 src/index.ts --commit <sha>",
+      description: "The file at a commit",
+    },
+  ]),
+);
+
+const lsCommand = Command.make(
+  "ls",
+  {
+    task: taskArgument,
+    path: Argument.String("path").pipe(
+      Argument.withDescription(
+        "The folder's path from the repository's root; the root where left out",
+      ),
+      Argument.optional,
+    ),
+    recursive: Flag.Boolean("recursive").pipe(
+      Flag.withAlias("r"),
+      Flag.withDefault(false),
+      Flag.withDescription("List everything under the folder, each by its path from it"),
+    ),
+  },
+  ({ task, path, recursive }) =>
+    Effect.gen(function* () {
+      const id = yield* resolveTaskId(task);
+      const { hosted } = yield* session;
+      const listed = yield* askService(hosted.taskFiles.tree, {
+        id,
+        ...(Option.isSome(path) && path.value !== "" ? { path: path.value } : undefined),
+        ...(recursive ? { recursive: TASK_FILE_QUERY_FLAG } : undefined),
+      });
+      if ("refusal" in listed) return yield* fileRefused(listed);
+      const { folder } = listed;
+      const names = folder.entries.map((entry) =>
+        entry.kind === TASK_TREE_ENTRY.FOLDER ? `${entry.name}/` : entry.name,
+      );
+      if (folder.truncated) yield* note("The folder holds more entries than one listing carries.");
+      yield* answer({ json: folder, lines: names, ids: names });
+    }),
+).pipe(
+  Command.withDescription(
+    "List a folder of a task's repository as GitHub holds it at the default branch's head",
+  ),
+  Command.withExamples([
+    { command: "vespin task ls ACME-42", description: "The repository's root" },
+    { command: "vespin task ls ACME-42 src -r", description: "Everything under src" },
+  ]),
+);
+
+/** The task group: list, view, create, update, relate, delete, cat, and ls. */
 export const taskCommand = Command.make("task").pipe(
-  Command.withDescription("List, view, create, and change tasks"),
-  Command.withSubcommands([listCommand, viewCommand, createCommand, updateCommand]),
+  Command.withDescription(
+    "List, view, create, change, and delete tasks, and read their repository's files",
+  ),
+  Command.withSubcommands([
+    listCommand,
+    viewCommand,
+    createCommand,
+    updateCommand,
+    relateCommand,
+    deleteCommand,
+    catCommand,
+    lsCommand,
+  ]),
   Command.withExamples([
     { command: "vespin task list --mine", description: "Your tasks" },
     { command: 'vespin task create "Fix X" --prompt -', description: "A task, and an agent on it" },

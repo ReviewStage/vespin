@@ -7,7 +7,7 @@ import {
   type AgentRunsOnRequest,
   type AgentSummary,
   CONTEXT_WINDOW,
-  type TasklessAgent,
+  type ListedAgent,
 } from "@repo/features/agent-wire";
 import { FAILURE_REASON, type Failure } from "@repo/features/failure-remedy";
 import type {
@@ -22,12 +22,14 @@ import {
 } from "@repo/features/pull-request-chapters-view";
 import { SENTRY_SEND_SPAN } from "@repo/features/sentry-tracing";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { ListedPullRequest } from "@repo/features/task-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import type { PortActPayload } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
 import { STATUS_TONE } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import {
   mutationOptions,
@@ -81,7 +83,7 @@ import {
 } from "../use-app-state.js";
 import {
   ARCHIVE_NOT_READY,
-  agentStillWriting,
+  archivedManyWords,
   archiveWords,
   choiceRequest,
   continueFailureNote,
@@ -330,6 +332,22 @@ export function agentArchiveMutation(run: (asked: ArchiveAsk) => Promise<ActedRe
 /** An agent's archive, as a place pressing it holds it. */
 type AgentArchiveMutation = ReturnType<typeof agentArchiveMutation>;
 
+/** Several agents archived or brought back at once, as a selection asks it, and whether a question was asked first. */
+interface ArchiveManyAsk extends ArchivePress {
+  readonly agentIds: readonly string[];
+  readonly archived: boolean;
+}
+
+/** Several agents' archive at once, as a selection pressing it holds its own mutation over it, run through `run`, answering whether each was kept, in order. */
+export function agentsArchiveMutation(
+  run: (asked: ArchiveManyAsk) => Promise<readonly ActedResult[]>,
+) {
+  return mutationOptions({ mutationKey: [ROW_WRITE.AGENT_ARCHIVE.kind], mutationFn: run });
+}
+
+/** Several agents' archive, as a selection pressing it holds it. */
+type AgentsArchiveMutation = ReturnType<typeof agentsArchiveMutation>;
+
 /** Who an agent's pull request names, as its Changes tab last read them, and the pull request's page they were read for. */
 export interface HeldPeople {
   readonly url: string;
@@ -511,6 +529,8 @@ export interface AgentsControl {
   onArchive: (agentId: string, archived: boolean, how?: ArchivePress) => Promise<ActedResult>;
   /** The same archive, as a question asking it first holds its own mutation over it. */
   archiveAgent: AgentArchiveMutation;
+  /** The same archive of several agents at once, as a selection holds its own mutation over it: one toast, with one Undo, says every agent it kept. */
+  archiveAgents: AgentsArchiveMutation;
   /** An agent's delete, as the question asking it holds its own mutation over it, answered as that question reads it. */
   deleteAgent: AgentDeleteMutation;
   /** Reads one agent again now by its id, as its own page reads it, answering it as it stands, or nothing where the read did not land. */
@@ -710,24 +730,27 @@ interface PendingStart {
 /**
  * Starts a new agent on the open task from one of its agents' whole
  * transcript, with the developer's words and the files attached to them as
- * its note where given, and where `runsOn` names, which moves the agent
- * there (`move-agent.tsx`); answers why it did not start, or nothing once
- * it did.
+ * its note where given, where `runsOn` names, which moves the agent
+ * there (`move-agent.tsx`), and on `choice` where one is given, which a
+ * refused turn's offer names (`refusal-offer.ts`), else on the source's
+ * own; answers why it did not start, or nothing once it did.
  */
 export type AgentContinuer = (
   agentId: string,
   note?: string,
   attachments?: readonly AgentAttachment[],
   runsOn?: AgentRunsOnRequest,
+  choice?: ModelChoice,
 ) => Promise<Failure | undefined>;
 
-/** A continue on its way or asked again: the task or the page's agent it was pressed on, the key the press minted, the note and files it carried, and where it moves the agent, if anywhere. */
+/** A continue on its way or asked again: the task or the page's agent it was pressed on, the key the press minted, the note and files it carried, where it moves the agent, if anywhere, and the choice it runs on, if one was named. */
 interface PendingContinue {
   on: string;
   key: string;
   note: string | undefined;
   attachments: readonly AgentAttachment[];
   runsOn: AgentRunsOnRequest | undefined;
+  choice: ModelChoice | undefined;
 }
 
 /** Whether two presses name the same place, or both none. */
@@ -834,13 +857,13 @@ export function useAgents(input: {
   /** The open task's repository, or null while it names none. */
   repository: string | null;
   /**
-   * Every agent the task list followed live carries, on a task or with
-   * none, the archived ones among them; none where it is not followed, or
-   * does not list the open task.
+   * Every agent the task list followed live carries, the archived ones
+   * among them; none where it is not followed, or does not list the open
+   * task.
    */
   listedAgents?: readonly AgentSummary[] | undefined;
   /** The page's agent as the task list carries it, with its workspace and its repository. */
-  listedPage?: Pick<TasklessAgent, "id" | "workspaceId" | "repository"> | undefined;
+  listedPage?: Pick<ListedAgent, "id" | "workspaceId" | "repository"> | undefined;
   /** Where the task list's read stands, which the page's agent is drawn from: read, failed, and its Try again; none on a task, whose agents the task's own tab waits on. */
   list?:
     | { readonly read: boolean; readonly failed: boolean; readonly onRetry: () => void }
@@ -926,6 +949,18 @@ export function useAgents(input: {
         tone: STATUS_TONE.DANGER,
         hold: TOAST_HOLD.FAILED,
         failure,
+      }),
+    [toast],
+  );
+  const limitReached = useCallback(
+    (words: string) =>
+      toast({
+        replayUnmasked: true,
+        words,
+        tone: STATUS_TONE.ATTENTION,
+        // The clock the usage-limit card wears, so a limit reads as the one thing wherever it is said.
+        glyph: GLYPH.TIME,
+        hold: TOAST_HOLD.FAILED,
       }),
     [toast],
   );
@@ -1102,7 +1137,13 @@ export function useAgents(input: {
   // Note that a press carries the key its agent's last press minted while the
   // service has not answered it and the words, files, and place are the same,
   // so a press asked again opens the agent the first may already have started.
-  const continueAgent: AgentContinuer = async (sourceId, note, attachments = [], runsOn) => {
+  const continueAgent: AgentContinuer = async (
+    sourceId,
+    note,
+    attachments = [],
+    runsOn,
+    choice,
+  ) => {
     if (startsOn === undefined) return undefined;
     const held = continues.current.get(sourceId);
     const carried = note !== undefined || attachments.length > 0 ? (note ?? "") : undefined;
@@ -1111,10 +1152,18 @@ export function useAgents(input: {
       held.on === startsOn &&
       held.note === carried &&
       sameFiles(held.attachments, attachments) &&
-      samePlace(held.runsOn, runsOn)
+      samePlace(held.runsOn, runsOn) &&
+      sameChoice(held.choice, choice)
         ? held.key
         : mintKey();
-    continues.current.set(sourceId, { on: startsOn, key, note: carried, attachments, runsOn });
+    continues.current.set(sourceId, {
+      on: startsOn,
+      key,
+      note: carried,
+      attachments,
+      runsOn,
+      choice,
+    });
     // Note that only this press's own key is let go, because another press of the agent, to another
     // place or with other words, may have replaced it while this one was out.
     const forgetPress = () => {
@@ -1126,6 +1175,7 @@ export function useAgents(input: {
       ...(carried === undefined ? undefined : { note: carried }),
       ...(attachments.length === 0 ? undefined : { attachments }),
       ...(runsOn === undefined ? undefined : { runsOn }),
+      ...(choice === undefined ? undefined : choiceRequest(choice)),
     });
     if ("failure" in answer) {
       // Only a service that never answered is asked again under the same key.
@@ -1138,10 +1188,12 @@ export function useAgents(input: {
       };
       // Note that a move is chosen from a menu, which has no line beside it to say why, so its
       // refusal is said in a toast wherever the developer stands.
-      if (runsOn !== undefined) failed(refused.text, shown);
-      else if ((latest.current.taskId ?? latest.current.agentId) !== startsOn) {
-        failed(START_FAILED_AWAY, shown);
-      }
+      const away = (latest.current.taskId ?? latest.current.agentId) !== startsOn;
+      // A plan's reached limit is said calmly in its own words, never as a failure to start.
+      if (answer.failure === AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED) {
+        if (runsOn !== undefined || away) limitReached(refused.text);
+      } else if (runsOn !== undefined) failed(refused.text, shown);
+      else if (away) failed(START_FAILED_AWAY, shown);
       return refused;
     }
     forgetPress();
@@ -1556,56 +1608,89 @@ export function useAgents(input: {
     rows: () => listedNow.current,
     send: sendArchive,
   };
-  // The host draws the agent moved at once, and back where the service
+  // The host draws the agents moved at once, and back where the service
   // refuses. An archive kept is ⌘Z's to take back, and its toast's Undo
   // runs the same entry, unless a question was asked first, since ⌘Z must
   // not put back what took one: its toast then keeps an Undo of its own,
   // read through a ref because the press lands renders after the toast was
-  // raised, as it does where the list shows no row of the agent to put back.
-  const archiveAgent = agentArchiveMutation(async ({ agentId, archived, asked }) => {
-    const pressed = pressRows(ROW_WRITE.AGENT_ARCHIVE, agentDoors, [
-      { id: agentId, after: { archived } },
-    ]);
-    const answer: AgentActAnswer = await sendAct(ROW_WRITE.AGENT_ARCHIVE.kind, {
-      agentId,
-      archived,
-    }).catch(agentUnreached);
+  // raised, as it does where the list shows no row of some agent to put
+  // back. However many agents it takes, one toast says every one kept,
+  // and its one Undo puts them all back.
+  const archiveRows = async (
+    agentIds: readonly string[],
+    archived: boolean,
+    asked: true | undefined,
+  ): Promise<readonly ActedResult[]> => {
+    const drawn = agentIds.every(
+      (agentId) => ROW_WRITE.AGENT_ARCHIVE.read(listedNow.current, agentId) !== undefined,
+    );
+    const pressed = pressRows(
+      ROW_WRITE.AGENT_ARCHIVE,
+      agentDoors,
+      agentIds.map((id) => ({ id, after: { archived } })),
+    );
     const words = archiveWords(archived);
-    if ("failure" in answer) {
+    const answers = await Promise.all(
+      agentIds.map(
+        (agentId): Promise<AgentActAnswer> =>
+          sendAct(ROW_WRITE.AGENT_ARCHIVE.kind, { agentId, archived }).catch(agentUnreached),
+      ),
+    );
+    const results = answers.map((answer): ActedResult => {
+      if (!("failure" in answer)) return { status: ACTION_RESULT_STATUS.ACCEPTED };
       const notReady = answer.failure === AGENT_CALL_FAILURE.AGENT_NOT_READY;
       return {
         status: ACTION_RESULT_STATUS.REJECTED,
         reason: notReady ? ARCHIVE_NOT_READY : words.refused,
         cause: answer,
       };
-    }
+    });
+    const kept = agentIds.filter((_, at) => results[at]?.status === ACTION_RESULT_STATUS.ACCEPTED);
+    if (kept.length === 0) return results;
+    const done = archivedManyWords(kept.length, archived);
     const unarchive = () =>
-      void archiveNow.current(agentId, !archived).then((result) => sayRefusal(result, agentId));
+      void archiveManyNow
+        .current({ agentIds: kept, archived: !archived })
+        .then((undone) => sayRefusals(undone, kept));
     const said =
-      asked || !pressed.drawn
-        ? toastOnlyUndo(TOAST_ONLY_UNDO.AGENT_ARCHIVE, words.done, unarchive)
-        : pressed.keep(words.done);
+      asked || !drawn
+        ? toastOnlyUndo(TOAST_ONLY_UNDO.AGENT_ARCHIVE, done, unarchive)
+        : pressed.keep(done, (id) => kept.includes(id));
     if (said !== undefined) toast(said);
-    return { status: ACTION_RESULT_STATUS.ACCEPTED };
-  });
+    return results;
+  };
+  const archiveAgent = agentArchiveMutation(({ agentId, archived, asked }) =>
+    archiveRows([agentId], archived, asked).then(
+      ([result]) =>
+        result ?? { status: ACTION_RESULT_STATUS.REJECTED, reason: archiveWords(archived).refused },
+    ),
+  );
+  const archiveAgents = agentsArchiveMutation(({ agentIds, archived, asked }) =>
+    archiveRows(agentIds, archived, asked),
+  );
   const { mutateAsync: archive } = useMutation(archiveAgent);
   const onArchive = (
     agentId: string,
     archived: boolean,
     how: ArchivePress = {},
   ): Promise<ActedResult> => archive({ agentId, archived, ...how });
-  const archiveNow = useRef(onArchive);
-  archiveNow.current = onArchive;
+  const { mutateAsync: archiveMany } = useMutation(archiveAgents);
+  const archiveManyNow = useRef(archiveMany);
+  archiveManyNow.current = archiveMany;
 
   const deleteAgent = agentDeleteMutation((agentId) =>
     sendAct(ACT_KIND.AGENTS_DELETE, { agentId }).catch(agentUnreached),
   );
-  const sayRefusal = (result: ActionResult, agentId: string) => {
-    if (result.status === ACTION_RESULT_STATUS.ACCEPTED) return;
+  // Note that an Undo refused is said once, by the first agent it could not put back.
+  const sayRefusals = (results: readonly ActionResult[], agentIds: readonly string[]) => {
+    const at = results.findIndex((result) => result.status !== ACTION_RESULT_STATUS.ACCEPTED);
+    const result = results[at];
+    const agentId = agentIds[at];
+    if (result === undefined || result.status === ACTION_RESULT_STATUS.ACCEPTED) return;
     failed(result.reason, {
       surface: FAILURE_SURFACE.AGENT_ARCHIVE,
       cause: result,
-      about: { agentId },
+      about: agentId === undefined ? undefined : { agentId },
     });
   };
 
@@ -1743,6 +1828,7 @@ export function useAgents(input: {
     onOpenApiKeys: (provider) => latest.current.onOpenApiKeys(provider),
     archiving,
     archiveAgent,
+    archiveAgents,
     rename,
     onArchive,
     deleteAgent,
