@@ -360,8 +360,8 @@ export interface AgentApprovalsControl {
   readonly asks: readonly ApprovalView[];
   /** How many still wait on an answer. */
   readonly waiting: number;
-  /** Says a message went while asks waited, which the service denied them with. */
-  readonly messageSent: () => void;
+  /** Says a message went while asks waited, which the service denies them with once it takes the message; a refused send takes that back. */
+  readonly messageSent: (sent: Promise<AgentActAnswer>) => void;
 }
 
 /** The line an ask that stopped waiting with no answer of this window's settles into. */
@@ -455,17 +455,24 @@ export function useAgentApprovals(input: {
     [settle],
   );
 
-  const messageSent = useCallback(() => {
-    const waitingIds = (latest.current.agent.pendingApprovals ?? NO_ASKS).map((each) => each.id);
+  // Note that the asks are marked as the message goes, since the service may take them off before it answers, and a refused send takes the mark back, its line too where the mark had said it.
+  const messageSent = useCallback((sent: Promise<AgentActAnswer>) => {
+    const { agent: sentTo } = latest.current;
+    const waitingIds = (sentTo.pendingApprovals ?? NO_ASKS).map((each) => each.id);
     if (waitingIds.length === 0) return;
-    setState((was) => {
-      const next = new Map(was.held);
-      for (const id of waitingIds) {
-        const ask = next.get(id);
-        if (ask !== undefined && ask.settled === undefined)
-          next.set(id, { ...ask, messaged: true });
-      }
-      return { ...was, held: next };
+    const mark = (messaged: boolean) =>
+      setState((was) => {
+        if (was.agentId !== sentTo.id) return was;
+        const next = new Map(was.held);
+        for (const id of waitingIds) {
+          const ask = next.get(id);
+          if (ask !== undefined) next.set(id, markedAsk(ask, messaged, latest.current.agent));
+        }
+        return { ...was, held: next };
+      });
+    mark(true);
+    sent.then((answer) => {
+      if ("failure" in answer) mark(false);
     });
   }, []);
 
@@ -489,6 +496,16 @@ export function useAgentApprovals(input: {
     waiting: asks.filter((ask) => ask.settled === undefined).length,
     messageSent,
   };
+}
+
+/** An ask marked as a message's to deny, or the mark taken back, its line said again where it was settled by leaving the waiting asks. */
+function markedAsk(ask: HeldAsk, messaged: boolean, agent: Pick<AgentSummary, "status">): HeldAsk {
+  if (messaged) return ask.settled === undefined ? { ...ask, messaged: true } : ask;
+  if (ask.messaged !== true) return ask;
+  const running = agent.status === AGENT_STATUS.RUNNING;
+  return ask.vanished === true
+    ? { ...ask, messaged: false, settled: vanishedLine(false, running) }
+    : { ...ask, messaged: false };
 }
 
 /** An ask once its answer came back: settled as the answer says, or offered again with why it did not go. */

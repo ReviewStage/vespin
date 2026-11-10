@@ -3422,8 +3422,9 @@ function AgentTabBody({
   // Note that a message sent while a call waits denies it, which its card then says.
   const send = useCallback<MessageWriter>(
     (...sent) => {
-      messageSent();
-      return onMessage(...sent);
+      const answered = onMessage(...sent);
+      messageSent(answered);
+      return answered;
     },
     [messageSent, onMessage],
   );
