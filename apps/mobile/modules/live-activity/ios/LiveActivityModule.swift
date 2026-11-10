@@ -3,7 +3,8 @@
 // The service starts, updates, and ends the activity by push, so the app
 // only hands it tokens: the push-to-start token, and the update token of
 // each activity iOS starts. It also says when an activity ends or is
-// dismissed. Each goes to JavaScript as an event (`src/live-activity/`),
+// dismissed, but for one it ended itself because a newer one started, so a
+// push-to-start sent twice never stands two activities. Each goes to JavaScript as an event (`src/live-activity/`),
 // and the latest token is sent again when it starts listening for it, since
 // iOS hands each once. A Stop pressed on the activity (`StopAgentIntent`, in
 // the app's target) waits in the standard defaults; each is handed on while
@@ -27,6 +28,8 @@ public final class LiveActivityModule: Module {
   private var listening: Set<String> = []
   private var startToken: String?
   private var activityTokens: [String: String] = [:]
+  /// The activities ended because a newer one started, whose end the service is not told, since it would drop the newer one's token.
+  private var superseded: Set<String> = []
   /// The Stop requests handed on and not yet answered, so none is handed on twice.
   private var handedStops: Set<String> = []
   private var watchers: [Task<Void, Never>] = []
@@ -116,7 +119,10 @@ public final class LiveActivityModule: Module {
     watchers.append(
       Task { @MainActor [weak self] in
         for activity in Activity<AgentsActivityAttributes>.activities { self?.follow(activity) }
-        for await activity in Activity<AgentsActivityAttributes>.activityUpdates { self?.follow(activity) }
+        for await activity in Activity<AgentsActivityAttributes>.activityUpdates {
+          self?.supersede(by: activity)
+          self?.follow(activity)
+        }
       })
   }
 
@@ -136,18 +142,30 @@ public final class LiveActivityModule: Module {
       })
   }
 
+  /// Ends every activity older than `newest` at once, so a push-to-start the service sent twice never stands two activities on the phone.
+  @MainActor private func supersede(by newest: Activity<AgentsActivityAttributes>) {
+    for older in Activity<AgentsActivityAttributes>.activities where older.id != newest.id {
+      superseded.insert(older.id)
+      activityTokens[older.id] = nil
+      Task { await older.end(nil, dismissalPolicy: .immediate) }
+    }
+  }
+
   @MainActor private func took(startToken token: String) {
     startToken = token
     if listening.contains("onStartToken") { sendEvent("onStartToken", ["token": token]) }
   }
 
   @MainActor private func took(activity id: String, token: String) {
+    // A superseded activity's late token never reaches the service, which pushes to the newest alone.
+    guard !superseded.contains(id) else { return }
     activityTokens[id] = token
     if listening.contains("onActivityToken") { sendEvent("onActivityToken", ["token": token]) }
   }
 
   @MainActor private func ended(activity id: String) {
     activityTokens[id] = nil
+    if superseded.remove(id) != nil { return }
     if listening.contains("onActivityEnded") { sendEvent("onActivityEnded") }
   }
 
