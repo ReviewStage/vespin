@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "f910aa09-c86a-4c13-aa07-201cd4eb9453",
-  "prevIds": ["42516e30-61f1-4409-a53e-c753f9ef74ef", "f8ff0f5d-8d42-41d2-8171-63d8ec97566f"],
+  "id": "d13716ab-6fdf-4dce-bd3b-1264d8a72a97",
+  "prevIds": ["93b8385e-2a68-4462-80d1-f4a093086774"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -396,13 +396,13 @@
     },
     {
       "isRlsEnabled": false,
-      "name": "pull_request_chapters",
+      "name": "member_presence",
       "entityType": "tables",
       "schema": "public"
     },
     {
       "isRlsEnabled": false,
-      "name": "member_presence",
+      "name": "pull_request_chapters",
       "entityType": "tables",
       "schema": "public"
     },
@@ -9035,6 +9035,32 @@
       "table": "account_preference"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "member_presence"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "last_active_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "member_presence"
+    },
+    {
       "type": "uuid",
       "typeSchema": null,
       "notNull": true,
@@ -9241,32 +9267,6 @@
       "entityType": "columns",
       "schema": "public",
       "table": "pull_request_chapters"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "user_id",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "member_presence"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "last_active_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "member_presence"
     },
     {
       "type": "uuid",
@@ -12379,34 +12379,6 @@
       "entityType": "columns",
       "schema": "public",
       "table": "write_receipt"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "user_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "provider",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": "\"kind\" = 'api_key'",
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "account_provider_key_api_key",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "account_provider_key"
     },
     {
       "nameExplicit": true,
@@ -17481,6 +17453,19 @@
     },
     {
       "nameExplicit": false,
+      "columns": ["user_id"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "member_presence_user_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "member_presence"
+    },
+    {
+      "nameExplicit": false,
       "columns": ["organization_id"],
       "schemaTo": "public",
       "tableTo": "organization",
@@ -17504,19 +17489,6 @@
       "entityType": "fks",
       "schema": "public",
       "table": "pull_request_chapters"
-    },
-    {
-      "nameExplicit": false,
-      "columns": ["user_id"],
-      "schemaTo": "public",
-      "tableTo": "user",
-      "columnsTo": ["id"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "member_presence_user_id_user_id_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "member_presence"
     },
     {
       "nameExplicit": false,
@@ -18905,19 +18877,19 @@
       "entityType": "pks"
     },
     {
-      "columns": ["id"],
-      "nameExplicit": false,
-      "name": "pull_request_chapters_pkey",
-      "schema": "public",
-      "table": "pull_request_chapters",
-      "entityType": "pks"
-    },
-    {
       "columns": ["user_id"],
       "nameExplicit": false,
       "name": "member_presence_pkey",
       "schema": "public",
       "table": "member_presence",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "pull_request_chapters_pkey",
+      "schema": "public",
+      "table": "pull_request_chapters",
       "entityType": "pks"
     },
     {
