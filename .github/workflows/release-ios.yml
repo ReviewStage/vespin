@@ -21,11 +21,16 @@ name: Release iOS
 # the run's, so every upload is one TestFlight has not seen.
 #
 # The app reports crashes to the desktop's Sentry project, under the same DSN
-# (SENTRY_DSN), and the archive uploads its Hermes source maps and dSYMs there
-# through sentry-cli (SENTRY_AUTH_TOKEN), as Sentry's Expo config plugin adds
-# the build phases for. A refused upload warns and the build goes on
-# (SENTRY_ALLOW_FAILURE), so Sentry being down never holds a TestFlight build
-# back; its reports read unsymbolicated until symbols are uploaded by hand.
+# (SENTRY_DSN), and its symbols go there through sentry-cli
+# (SENTRY_AUTH_TOKEN): the archive uploads its Hermes source maps in the
+# bundle phase Sentry's Expo config plugin wraps, and the job uploads the
+# archive's dSYMs once Xcode has written them all, printing what sentry-cli
+# answered for both. Note that the plugin's own dSYM phase is turned off
+# (SENTRY_DISABLE_XCODE_DEBUG_UPLOAD), because it runs inside the app target
+# before Xcode generates Vespin.app.dSYM, so it waits and uploads without it.
+# A refused upload warns and the build goes on (SENTRY_ALLOW_FAILURE), so
+# Sentry being down never holds a TestFlight build back; its reports read
+# unsymbolicated until symbols are uploaded by hand.
 
 on:
   push:
@@ -135,6 +140,7 @@ jobs:
           APP_STORE_CONNECT_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_P8_BASE64 }}
           SENTRY_ALLOW_FAILURE: "true"
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_DISABLE_XCODE_DEBUG_UPLOAD: "true"
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           set -o pipefail
@@ -144,6 +150,7 @@ jobs:
           printf '%s' "$APP_STORE_CONNECT_KEY_P8_BASE64" | /usr/bin/base64 -D > "$key_path"
           chmod 600 "$key_path"
           archive_path="$RUNNER_TEMP/Vespin.xcarchive"
+          archive_log="$key_directory/archive.log"
           export_path="$key_directory/export"
           authentication=(
             -allowProvisioningUpdates
@@ -168,7 +175,23 @@ jobs:
             AD_HOC_CODE_SIGNING_ALLOWED=YES \
             CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
             PROVISIONING_PROFILE_SPECIFIER= \
-            archive | xcbeautify
+            archive | tee "$archive_log" | xcbeautify
+
+          # What sentry-cli answered for the source maps, which xcbeautify
+          # drops from the archive's output.
+          echo "--- Sentry source maps"
+          if ! grep -E "^(output|warning|error): sentry-cli - " "$archive_log"; then
+            echo "::warning::sentry-cli printed nothing in the archive, so its source maps may not have reached Sentry"
+          fi
+
+          # The dSYMs, from the finished archive through the sentry-cli
+          # Sentry's package ships, under the org and project the plugin
+          # wrote into ios/sentry.properties.
+          echo "--- Sentry dSYMs"
+          sentry_cli_package=$(node --print "require('path').dirname(require.resolve('@sentry/cli/package.json', { paths: [require.resolve('@sentry/react-native/package.json')] }))")
+          if ! SENTRY_PROPERTIES=ios/sentry.properties node "$sentry_cli_package/bin/sentry-cli" debug-files upload "$archive_path/dSYMs"; then
+            echo "::warning::sentry-cli could not upload the archive's dSYMs, so this build's native crashes read unsymbolicated"
+          fi
 
           entitlements=$(codesign -d --entitlements - --xml "$archive_path/Products/Applications/Vespin.app" 2>/dev/null)
           if ! grep -q "aps-environment" <<< "$entitlements"; then
