@@ -3656,7 +3656,7 @@ const UPDATE_SLACK_BOT_TOOL = memberMcpTool({
     `${MEMBER_MCP_TOOL.READ_SLACK_BOT} reads it, or \`rejected\` and why, the changes before ` +
     "the refused one standing.",
   input: UpdateSlackBotInputSchema,
-  annotations: IDEMPOTENT_CHANGE,
+  annotations: DESTRUCTIVE,
   run: ({ workspace, notifications, defaultRepository, channel }) =>
     asMemberInWorkspace(workspace, (userId, workspaceId) =>
       Effect.gen(function* () {
