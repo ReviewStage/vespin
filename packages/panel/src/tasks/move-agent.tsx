@@ -83,7 +83,7 @@ function placeDetail(agent: MovedAgent): string | undefined {
   return pushedOnly ? MOVE_WORDS.STOPS_FIRST_PUSHED_ONLY : MOVE_WORDS.STOPS_FIRST;
 }
 
-/** The agent continued at a place, stopped first where it still writes, and left where it as it was where the Stop did not take, which says why in its toast. */
+/** The agent continued at a place, stopped first where it still writes, and left as it was where the Stop did not take, which says why in its toast. */
 function movedBy(
   agent: MovedAgent,
   {
