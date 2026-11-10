@@ -15,6 +15,7 @@
  */
 
 import { LINK_PREVIEW_BOUNDS } from "@repo/features/link-preview-wire";
+import { webPageAddressOf } from "./link-address.js";
 
 /** What a page's head says of it, each where it says one. */
 export interface PageHead {
@@ -138,13 +139,12 @@ export function charsetOf(headBytes: Uint8Array): string | undefined {
   return META_CHARSET.exec(headOf(latin))?.[1]?.toLowerCase();
 }
 
-/** An address a page names, made absolute against the page's own; none where it makes no HTTPS web address, as the guard reads none. */
+/** An address a page names, made absolute against the page's own; none where it makes no address the guard reads (`link-address.ts`). */
 function absolute(address: string | undefined, page: URL): string | undefined {
   if (address === undefined) return undefined;
   const spelled = address.trim();
   if (spelled === "" || !URL.canParse(spelled, page)) return undefined;
-  const url = new URL(spelled, page);
-  return url.protocol === "https:" ? url.href : undefined;
+  return webPageAddressOf(new URL(spelled, page).href)?.href;
 }
 
 /** What a page's head says of the page, from its markup and its own address. */
