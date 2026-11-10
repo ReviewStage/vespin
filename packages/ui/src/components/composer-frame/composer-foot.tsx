@@ -1,6 +1,8 @@
 import type { ShortcutChord } from "@repo/settings/shortcuts";
+import type { UsageLimitNotice as UsageLimit } from "@repo/wire/ui-messages";
 import { type ReactNode, useId } from "react";
 import { inputProblem, type ReportedFailure, type Unreported } from "../../reported-failure.js";
+import { UsageLimitNotice } from "../banner/usage-limit-notice.js";
 import {
   BUTTON_SHAPE,
   BUTTON_TYPE,
@@ -123,6 +125,8 @@ export interface ComposerNote {
   readonly remedy?: ErrorStateRemedy | undefined;
   /** What mends it under the line where that is more than one press, as a closed agent's Continue in new agent. */
   readonly mends?: ReactNode;
+  /** The plan's usage limit that refused the send, whose notice stands in the failure's place, since a limit is no failure. */
+  readonly usageLimit?: UsageLimit | undefined;
 }
 
 /**
@@ -318,9 +322,13 @@ export function ComposerFoot({
       )}
       {note === undefined ? null : (
         <div className="ui-composer-foot-note flex flex-col items-start gap-tight-gap">
-          <ErrorState onRetry={note.onRetry} remedy={note.remedy} failure={note.failure}>
-            {note.words}
-          </ErrorState>
+          {note.usageLimit === undefined ? (
+            <ErrorState onRetry={note.onRetry} remedy={note.remedy} failure={note.failure}>
+              {note.words}
+            </ErrorState>
+          ) : (
+            <UsageLimitNotice notice={note.usageLimit} />
+          )}
           {note.mends}
         </div>
       )}

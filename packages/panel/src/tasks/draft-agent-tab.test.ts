@@ -255,6 +255,20 @@ test("a refused Start offers Retry, which sends the message again", async () => 
   assert.deepEqual(tab.starts, [DRAFT.prompt, DRAFT.prompt]);
 });
 
+test("a Start the plan's usage limit refused draws the limit's notice in the failure's place, with no Retry", async () => {
+  const refused = {
+    failure: AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED,
+    resetsAt: Date.UTC(2026, 10, 10, 4),
+  } as const;
+  // Note that a refused Start's note keeps the answer that refused it, as `use-agents.ts` hands it on.
+  const note: Failure = { ...startFailureNote(refused, TASK_ID), cause: refused } as Failure;
+  const tab = mount([note, undefined]);
+  await tab.send();
+
+  assert.match(tab.note() ?? "", /usage limit reached/u);
+  assert.equal(tab.button("Retry"), undefined);
+});
+
 /** A Start refused for the repository out of reach, as the host hears the service say why. */
 const unreachable = (unreached: RepositoryUnreached): Failure =>
   startFailureNote({ failure: AGENT_CALL_FAILURE.REPOSITORY_NOT_REACHABLE, unreached }, TASK_ID);

@@ -10,6 +10,7 @@ import { useConnected } from "../connection.js";
 import { failureShown } from "../failure-report.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { AgentComposer } from "./agent-composer.js";
+import { providerOf, refusedUsageLimit } from "./agent-model.js";
 import { focusMissing } from "./inbox-ask-controls.js";
 import { type InboxDraft, inboxMissing, inboxNoteReading, inboxThreadSend } from "./inbox-model.js";
 import { ReplyToSelection } from "./reply-to-selection.js";
@@ -281,6 +282,10 @@ function AnswerCard({
             refused: true,
           }),
           remedy: noted?.unarchive === true ? { label: UNARCHIVE, onClick: unarchive } : undefined,
+          usageLimit: refusedUsageLimit(
+            kept,
+            agent === undefined ? undefined : providerOf(agent.model),
+          ),
         };
   const message = () => {
     setRefusal(undefined);

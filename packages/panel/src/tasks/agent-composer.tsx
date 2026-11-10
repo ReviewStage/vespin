@@ -55,7 +55,7 @@ import { PANEL_SPAN } from "../panel-spans.js";
 import { useAttachedFiles } from "../use-attached-files.js";
 import { AgentContextRing, ContextRingIcon } from "./agent-context.js";
 import { contextHint } from "./agent-context-model.js";
-import { noteWhileOffline } from "./agent-model.js";
+import { noteWhileOffline, providerOf, refusedUsageLimit } from "./agent-model.js";
 import { AgentModelChip } from "./agent-model-chip.js";
 import { type AgentServersControl, serversMenuPanel } from "./agent-servers.js";
 import { AttachFilesButton, type AttachPicker, attachmentRow } from "./attach-files-button.js";
@@ -993,6 +993,13 @@ export function AgentComposer({
               : {
                   words: note.text,
                   failure: noteFailure,
+                  usageLimit:
+                    note === sendNote
+                      ? refusedUsageLimit(
+                          sendNote.cause,
+                          model === undefined ? undefined : providerOf(model.choice.model),
+                        )
+                      : undefined,
                   remedy:
                     remedyWords === undefined || remedy === undefined
                       ? undefined
