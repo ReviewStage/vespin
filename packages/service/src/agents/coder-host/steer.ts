@@ -121,7 +121,8 @@ import { agentStatusOf } from "./status.js";
  * message (`runtime-sessions.ts`). An archived agent takes
  * no message, and is refused as one that names nothing, since every list
  * leaves it out until it is brought back, which a member's words from Slack
- * or an inbox thread do first (`agentTakingMessage`); it is read again under the
+ * or an inbox thread, and another agent's message, do first
+ * (`agentTakingMessage`); it is read again under the
  * conversation's dispatch claim just before the send, which is taken under
  * the row lock its archive takes, so a send claimed after the archive is
  * refused, and an archive after the claim finds the line awaiting. A
@@ -594,8 +595,8 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
  * conversation; nothing where it is gone. Note that it is read again after
  * and answered as it then stands, because one brought back by someone else
  * meanwhile takes the words too, and one archived again since takes none,
- * which the steer refuses. Only a member's words bring an agent back:
- * another agent's message, GitHub's, and an automation's are refused.
+ * which the steer refuses. Only a member's words and another agent's
+ * message bring an agent back: GitHub's and an automation's are refused.
  */
 export const agentTakingMessage = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
