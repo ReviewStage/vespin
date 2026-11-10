@@ -197,15 +197,30 @@ jobs:
           payload="$key_directory/payload"
           ditto -x -k "$export_path/Vespin.ipa" "$payload"
           app="$payload/Payload/Vespin.app"
+          # Note that a read codesign refuses fails the run rather than
+          # reading as empty, because the widget extension legitimately
+          # carries no entitlements, so an empty answer proves nothing.
           for bundle in "$app" "$app/PlugIns/NotificationService.appex" "$app/PlugIns/AgentsLiveActivity.appex"; do
-            echo "--- $(basename "$bundle")"
-            codesign -dvv "$bundle" 2>&1 | grep -E "^(Identifier|Authority|TeamIdentifier)=" || true
-            bundle_entitlements=$(codesign -d --entitlements - --xml "$bundle" 2>/dev/null || true)
+            bundle_name=$(basename "$bundle")
+            echo "--- $bundle_name"
+            if ! signature=$(codesign -dvv "$bundle" 2>&1); then
+              echo "error: cannot read the exported $bundle_name's signature" >&2
+              exit 1
+            fi
+            if ! grep -q "^Authority=Apple Distribution: " <<< "$signature"; then
+              echo "error: the exported $bundle_name is not signed with an Apple Distribution certificate" >&2
+              exit 1
+            fi
+            grep -E "^(Identifier|Authority|TeamIdentifier)=" <<< "$signature"
+            if ! bundle_entitlements=$(codesign -d --entitlements - --xml "$bundle" 2>/dev/null); then
+              echo "error: cannot read the exported $bundle_name's entitlements" >&2
+              exit 1
+            fi
             if [[ -n "$bundle_entitlements" ]]; then
               plutil -p - <<< "$bundle_entitlements"
             fi
             if [[ "$(plutil -extract get-task-allow raw -o - - <<< "$bundle_entitlements" 2>/dev/null)" == "true" ]]; then
-              echo "error: the exported $(basename "$bundle") is signed for development" >&2
+              echo "error: the exported $bundle_name is signed for development" >&2
               exit 1
             fi
           done
