@@ -10,7 +10,9 @@ import { CodeEditor } from "./code-editor.js";
  * the words typed, never the ones its colors were for, so the colored layer
  * under the caret always spells what the field holds; and a numbered one
  * numbers each line the field holds, its empty ones and a closing empty one
- * included, so each number stands beside the line the caret is on.
+ * included, so each number stands beside the line the caret is on; and ⌘S
+ * and Escape in one answer its save and its escape, the browser's own Save
+ * Page kept from opening.
  * Synthetic code.
  */
 
@@ -66,4 +68,35 @@ test("a numbered editor numbers every line it holds, empty ones included", () =>
     (line) => line.firstElementChild?.textContent,
   );
   expect(drawn).toEqual(["1", "2", "3", "4"]);
+});
+
+test("⌘S in an editor answers its save, kept from the browser, and Escape answers its escape", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  const pressed: string[] = [];
+  act(() =>
+    root.render(
+      createElement(CodeEditor, {
+        label: "Script",
+        value: "pnpm install",
+        onChange: () => {},
+        onSave: () => pressed.push("save"),
+        onEscape: () => pressed.push("escape"),
+      }),
+    ),
+  );
+  const field = document.querySelector("textarea") ?? expect.fail("No field");
+  const save = new KeyboardEvent("keydown", {
+    key: "s",
+    metaKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  act(() => field.dispatchEvent(save));
+  act(() => field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+  expect({ pressed, browserSaveKept: save.defaultPrevented }).toEqual({
+    pressed: ["save", "escape"],
+    browserSaveKept: true,
+  });
 });
