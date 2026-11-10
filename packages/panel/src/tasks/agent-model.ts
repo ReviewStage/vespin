@@ -2003,10 +2003,10 @@ export function agentMessageOf(message: AgentTranscriptMessage): AgentMessageMet
 }
 
 /**
- * Whether a line is one of the agent's own wakeups: the prompt a
- * `ScheduleWakeup` set, which the service once sent back to the agent as a
- * line of the agent's own when it came due, so its head says the agent woke
- * up.
+ * Whether a line is one of the agent's own wakeups: the prompt a wakeup set,
+ * which the service sends back to the agent as a line of the agent's own on
+ * the app's channel when it comes due (`schedule_wakeup`, delivered by the
+ * scheduled sweep), so its head says the agent woke up.
  */
 export function isWakeupLine(message: AgentTranscriptMessage): boolean {
   return userMetadataOf(message)?.channel === MESSAGE_CHANNEL.APP;
@@ -2015,16 +2015,37 @@ export function isWakeupLine(message: AgentTranscriptMessage): boolean {
 /** A second, in the milliseconds a wakeup's wait is told in. */
 const SECOND_MS = 1_000;
 
-/** How long the last wakeup a turn set waited, in milliseconds, read off its `ScheduleWakeup` call; none where the turn set none. */
+/** The calls that book a wakeup, each with its delay under `delaySeconds`: Claude Code's own, and ours, which a Codex agent books with. */
+const WAKEUP_TOOLS: ReadonlySet<string> = new Set([
+  CLAUDE_CODE_TOOL.SCHEDULE_WAKEUP,
+  AGENT_TOOL.SCHEDULE_WAKEUP,
+]);
+
+/** Whether a wakeup call booked one: not a cancel, and not a call of ours the service refused, which left the booking before it standing. */
+function booksWakeup(part: AgentPart): boolean {
+  if (part.kind !== AGENT_PART.TOOL || !WAKEUP_TOOLS.has(part.tool)) return false;
+  if (isRecord(part.input) && part.input.stop === true) return false;
+  return !(isRecord(part.output) && part.output.status === ACTION_RESULT_STATUS.REJECTED);
+}
+
+/**
+ * How long the last wakeup a turn booked waited, in milliseconds: the delay
+ * the service held it to, as its answer names it, or else the delay the
+ * call asked for; none where the turn booked none.
+ */
 export function wakeupDelayOf(turn: AgentTranscriptMessage | undefined): number | undefined {
   if (turn === undefined) return undefined;
-  const call = agentParts(turn).findLast(
-    (part) => part.kind === AGENT_PART.TOOL && part.tool === CLAUDE_CODE_TOOL.SCHEDULE_WAKEUP,
-  );
-  const input = call?.kind === AGENT_PART.TOOL ? call.input : undefined;
-  return isRecord(input) && isWireNumber(input.delaySeconds)
-    ? input.delaySeconds * SECOND_MS
-    : undefined;
+  const call = agentParts(turn).findLast(booksWakeup);
+  if (call?.kind !== AGENT_PART.TOOL) return undefined;
+  const booked = isRecord(call.output) ? call.output.wakeup : undefined;
+  const held =
+    isRecord(booked) && isWireNumber(booked.delaySeconds) ? booked.delaySeconds : undefined;
+  const asked =
+    isRecord(call.input) && isWireNumber(call.input.delaySeconds)
+      ? call.input.delaySeconds
+      : undefined;
+  const seconds = held ?? asked;
+  return seconds === undefined ? undefined : seconds * SECOND_MS;
 }
 
 /** What a member did on a thread that a line steered into the agent carries, and the item it is on; nothing for any other line. */

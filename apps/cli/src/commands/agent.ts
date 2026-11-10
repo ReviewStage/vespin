@@ -1,5 +1,5 @@
 /**
- * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `stop`, `wait`, `checkout`, `diff` and `pr` (`agent-pull-request.ts`), `ports`, `share`, `tabs`, `forward` (`agent-forward.ts`), and `shell` and `shells` (`agent-shell.ts`): coding agents started, continued, read, followed, messaged, stopped, waited on, their work brought into the working folder, their pull request read and changed, the ports their sandbox listens on shared by link and served on localhost, the tabs of their cloud browser listed, opened, taken over, and handed back, and its shells attached here.
+ * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `stop`, `update`, `wait`, `checkout`, `diff` and `pr` (`agent-pull-request.ts`), `ports`, `share`, `tabs`, `forward` (`agent-forward.ts`), and `shell` and `shells` (`agent-shell.ts`): coding agents started, continued, read, followed, messaged, stopped, changed, waited on, their work brought into the working folder, their pull request read and changed, the ports their sandbox listens on shared by link and served on localhost, the tabs of their cloud browser listed, opened, taken over, and handed back, and its shells attached here.
  *
  * A turn is followed on the held transcript read (`messages.agent`): asked
  * past the cursor the last answer handed back, the service holds it while
@@ -20,6 +20,8 @@
 import { isWireUuid } from "@repo/features";
 import type { AgentBrowserTab } from "@repo/features/agent-browser-tab-wire";
 import {
+  ADDED_REPOSITORY_CHECKOUT,
+  type AddedRepositoryCheckout,
   AGENT_CURSOR_START,
   AGENT_MACHINE,
   AGENT_STATUS,
@@ -1073,10 +1075,233 @@ const tabsCommand = Command.make("tabs", { agent: agentArgument }, ({ agent: id 
   ]),
 );
 
+/** What `update` changes, each one PATCH of the agent. */
+const AGENT_CHANGE = {
+  TITLE: "title",
+  CHOICE: "choice",
+  PIN: "pin",
+  ARCHIVE: "archive",
+  SERVERS: "servers",
+  REPOSITORY: "repository",
+} as const;
+
+type AgentChange = (typeof AGENT_CHANGE)[keyof typeof AGENT_CHANGE];
+
+/** The change each of `update`'s flags names, as the usage refusal lists them. */
+const AGENT_CHANGE_FLAGS: Record<AgentChange, string> = {
+  [AGENT_CHANGE.TITLE]: "--title",
+  [AGENT_CHANGE.CHOICE]: "--model with --effort",
+  [AGENT_CHANGE.PIN]: "--pin or --unpin",
+  [AGENT_CHANGE.ARCHIVE]: "--archive or --unarchive",
+  [AGENT_CHANGE.SERVERS]: "--disabled-servers",
+  [AGENT_CHANGE.REPOSITORY]: "--add-repository",
+};
+
+/** What `update`'s flags say, before they are read into the one change they name. */
+interface AgentUpdateFlags {
+  readonly title: Option.Option<string>;
+  readonly model: Option.Option<string>;
+  readonly effort: Option.Option<string>;
+  readonly pin: boolean;
+  readonly unpin: boolean;
+  readonly archive: boolean;
+  readonly unarchive: boolean;
+  readonly reason: Option.Option<string>;
+  readonly disabledServers: Option.Option<string>;
+  readonly addRepository: Option.Option<string>;
+  readonly branch: Option.Option<string>;
+}
+
+/** Fails `update` as a usage error, in `message`. */
+const usage = (message: string) => new CommandFailed({ exit: CLI_EXIT.USAGE, message });
+
+/**
+ * The one change `update`'s flags name, as the agent's PATCH takes it, or a
+ * usage refusal where they name none, several, or one half of a pair. The
+ * service writes one change a call, so the command names one rather than
+ * writing several that could stand half done.
+ */
+function agentChangeOf(flags: AgentUpdateFlags) {
+  return Effect.gen(function* () {
+    const named: Record<AgentChange, boolean> = {
+      [AGENT_CHANGE.TITLE]: Option.isSome(flags.title),
+      [AGENT_CHANGE.CHOICE]: Option.isSome(flags.model) || Option.isSome(flags.effort),
+      [AGENT_CHANGE.PIN]: flags.pin || flags.unpin,
+      [AGENT_CHANGE.ARCHIVE]: flags.archive || flags.unarchive,
+      [AGENT_CHANGE.SERVERS]: Option.isSome(flags.disabledServers),
+      [AGENT_CHANGE.REPOSITORY]: Option.isSome(flags.addRepository),
+    };
+    const changes = Object.values(AGENT_CHANGE).filter((change) => named[change]);
+    const [change, ...others] = changes;
+    if (change === undefined || others.length > 0) {
+      const listed = Object.values(AGENT_CHANGE_FLAGS).join(", ");
+      return yield* usage(`Name one change: ${listed}.`);
+    }
+    if (flags.pin && flags.unpin) return yield* usage("Name one of --pin and --unpin.");
+    if (flags.archive && flags.unarchive) {
+      return yield* usage("Name one of --archive and --unarchive.");
+    }
+    if (Option.isSome(flags.reason) && !flags.archive) {
+      return yield* usage("--reason goes with --archive.");
+    }
+    if (Option.isSome(flags.branch) && Option.isNone(flags.addRepository)) {
+      return yield* usage("--branch goes with --add-repository.");
+    }
+    if (Option.isSome(flags.title)) return { change, body: { title: flags.title.value } };
+    if (Option.isSome(flags.model) && Option.isSome(flags.effort)) {
+      return { change, body: { model: flags.model.value, effort: flags.effort.value } };
+    }
+    if (change === AGENT_CHANGE.CHOICE) {
+      return yield* usage("Name --model and --effort together (vespin models lists them).");
+    }
+    if (change === AGENT_CHANGE.PIN) return { change, body: { pinned: flags.pin } };
+    if (change === AGENT_CHANGE.ARCHIVE) {
+      return {
+        change,
+        body: {
+          archived: flags.archive,
+          ...(Option.isSome(flags.reason) ? { reason: flags.reason.value } : undefined),
+        },
+      };
+    }
+    if (Option.isSome(flags.disabledServers)) {
+      // Note that an empty list switches every server back on.
+      const names = flags.disabledServers.value.split(",").map((name) => name.trim());
+      return { change, body: { disabledServers: names.filter((name) => name !== "") } };
+    }
+    return {
+      change,
+      body: {
+        addRepository: {
+          repository: Option.getOrThrow(flags.addRepository),
+          ...(Option.isSome(flags.branch) ? { branch: flags.branch.value } : undefined),
+        },
+      },
+    };
+  });
+}
+
+/** What `update` says of the agent once its change landed. */
+function updatedLines(
+  change: AgentChange,
+  agent: AgentSummary,
+  addedCheckout: AddedRepositoryCheckout | undefined,
+): string[] {
+  const name = agent.title ?? agent.model;
+  if (change === AGENT_CHANGE.TITLE) return [`Renamed agent ${agent.id} to ${name}.`];
+  if (change === AGENT_CHANGE.CHOICE) {
+    return [`Agent ${agent.id} runs on ${agent.model} (${agent.effort}) from its next step.`];
+  }
+  if (change === AGENT_CHANGE.PIN) return [`Changed the pin of agent ${agent.id}.`];
+  if (change === AGENT_CHANGE.ARCHIVE) {
+    const how = agent.archivedAt === undefined ? "Brought back" : "Archived";
+    return [`${how} agent ${agent.id}.`];
+  }
+  if (change === AGENT_CHANGE.SERVERS) {
+    const off = agent.disabledServers ?? [];
+    return [
+      off.length === 0
+        ? `Every MCP server is on for agent ${agent.id}.`
+        : `Switched off for agent ${agent.id}: ${off.join(", ")}.`,
+    ];
+  }
+  const when =
+    addedCheckout === ADDED_REPOSITORY_CHECKOUT.NOW
+      ? "checked out now"
+      : "checked out at its next turn";
+  return [`Added the repository to agent ${agent.id}, ${when}.`];
+}
+
+const updateCommand = Command.make(
+  "update",
+  {
+    agent: agentArgument,
+    title: Flag.String("title").pipe(
+      Flag.optional,
+      Flag.withDescription("Rename it; empty clears the title, so the model's name shows"),
+    ),
+    model: modelFlag.pipe(
+      Flag.withDescription("Move it to this model from its next step, with --effort"),
+    ),
+    effort: effortFlag,
+    pin: Flag.Boolean("pin").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription("Pin it in your sidebar; the pin is yours alone"),
+    ),
+    unpin: Flag.Boolean("unpin").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription("Unpin it from your sidebar"),
+    ),
+    archive: Flag.Boolean("archive").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription(
+        "Archive it, stopping a turn still running; its transcript, branch, and pull request stay",
+      ),
+    ),
+    unarchive: Flag.Boolean("unarchive").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription("Bring an archived agent back"),
+    ),
+    reason: Flag.String("reason").pipe(
+      Flag.optional,
+      Flag.withDescription("Why it is archived, shown on its archived banner, with --archive"),
+    ),
+    disabledServers: Flag.String("disabled-servers").pipe(
+      Flag.optional,
+      Flag.withDescription(
+        'The MCP servers switched off for it, comma-separated, replacing the list; "" switches every one on',
+      ),
+    ),
+    addRepository: Flag.String("add-repository").pipe(
+      Flag.optional,
+      Flag.withDescription(
+        "A repository, owner/name, it works in beside its own from now on; only for a cloud agent you started",
+      ),
+    ),
+    branch: Flag.String("branch").pipe(
+      Flag.optional,
+      Flag.withDescription(
+        "The branch the added repository is checked out at, with --add-repository (default: its default branch)",
+      ),
+    ),
+  },
+  ({ agent: id, ...flags }) =>
+    Effect.gen(function* () {
+      const { change, body } = yield* agentChangeOf(flags);
+      const { hosted } = yield* session;
+      const changed = yield* askService(hosted.agents.change, { params: { id }, body });
+      const { agent } = changed;
+      yield* answer({
+        json: changed,
+        lines: updatedLines(change, agent, changed.addedCheckout),
+        ids: [agent.id],
+      });
+    }),
+).pipe(
+  Command.withDescription(
+    "Change an agent, one change a call: rename it, move it to another model, pin or unpin it, archive it or bring it back, switch its MCP servers off, or add a repository",
+  ),
+  Command.withExamples([
+    { command: 'vespin agent update <id> --title "Fix the login"', description: "Rename it" },
+    {
+      command: "vespin agent update <id> --model anthropic/claude-opus-5.5 --effort high",
+      description: "Move it to another model from its next step",
+    },
+    {
+      command: 'vespin agent update <id> --archive --reason "Its pull request merged"',
+      description: "Archive it, saying why",
+    },
+    {
+      command: "vespin agent update <id> --disabled-servers linear,notion",
+      description: "Switch two MCP servers off for it",
+    },
+  ]),
+);
+
 /** The agent group: start, continue, and the rest through tabs, with diff, pr, forward, and the shells from their own files. */
 export const agentCommand = Command.make("agent").pipe(
   Command.withDescription(
-    `Start, continue, follow, message, and stop ${PRODUCT_NAME}'s coding agents`,
+    `Start, continue, follow, message, change, and stop ${PRODUCT_NAME}'s coding agents`,
   ),
   Command.withSubcommands([
     startCommand,
@@ -1086,6 +1311,7 @@ export const agentCommand = Command.make("agent").pipe(
     logsCommand,
     sendCommand,
     stopCommand,
+    updateCommand,
     forwardCommand,
     waitCommand,
     checkoutCommand,

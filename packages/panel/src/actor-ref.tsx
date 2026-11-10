@@ -504,6 +504,30 @@ export function ActorMark({
 }
 
 /**
+ * An actor as a chip's glyph: an agent's mark or an automation's alone,
+ * wearing where its work stands, at the size of every glyph beside it in the
+ * line; anyone else as their mark (`ActorMark`). Note that an agent and an
+ * automation stand bare here rather than on their square, because a bare
+ * square draws no ground of its own and only shrinks its glyph to its share,
+ * which reads in a chip as a glyph too small and set off from its name.
+ */
+export function ActorGlyph({ actor }: { actor: Actor }): React.JSX.Element {
+  switch (actor.kind) {
+    case ACTOR_KIND.AGENT:
+      return (
+        <StateGlyph
+          glyph={<AgentMark provider={actor.provider} />}
+          state={GLYPH_OF_STATE[actor.state]}
+        />
+      );
+    case ACTOR_KIND.AUTOMATION:
+      return automationGlyph(actor);
+    default:
+      return <ActorMark actor={actor} size={ACTOR_SIZE.INLINE} />;
+  }
+}
+
+/**
  * No one, where a place says who is on something and nobody is: the shared
  * dashed outline (`UnassignedAvatar`) at an actor's size, so it stands
  * level with the faces around it, named Unassigned on hover and to a screen
