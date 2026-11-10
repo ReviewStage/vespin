@@ -4,8 +4,8 @@
  * Each is the one operation its doors run: `mcpClients.list` and
  * `mcpClients.revoke` (`clients-procedures.ts`) for Settings › MCP on the
  * desktop and the web app and for the command-line tool, under the account's
- * OAuth token, and `list_mcp_clients` (`integrations.ts`) for an outside
- * agent acting for a member. A client a member allowed holds their consent
+ * OAuth token, and `list_mcp_clients` and `revoke_mcp_client`
+ * (`integrations.ts`) for an outside agent acting for a member. A client a member allowed holds their consent
  * and the tokens minted on it, in the OAuth provider's own tables. The read
  * lists the member's consents for every client but the desktop's, and the
  * command-line tool, which skips consent, by the live token it holds,

@@ -1,0 +1,15 @@
+{
+  "type": "object",
+  "properties": {
+    "clientId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048,
+      "description": "The client, by the id list_mcp_clients answered."
+    }
+  },
+  "required": [
+    "clientId"
+  ],
+  "additionalProperties": false
+}

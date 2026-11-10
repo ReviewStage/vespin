@@ -110,6 +110,7 @@ import {
   integrationRenameRequestSchema,
 } from "@repo/features/integration-wire";
 import { commitShaSchema } from "@repo/features/link-grammar";
+import { MCP_ACCESS_TOKEN_MINUTES, mcpClientIdSchema } from "@repo/features/mcp-client-wire";
 import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-mcp-tool";
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
 import { agentName } from "@repo/features/model-label";
@@ -341,6 +342,7 @@ import {
   listMcpClientsAsMember,
   readSentryAsMember,
   renameIntegrationAsMember,
+  revokeMcpClientAsMember,
 } from "./integrations.js";
 import {
   MARK_FILES_VIEWED_FIELDS,
@@ -3588,11 +3590,33 @@ const LIST_MCP_CLIENTS_TOOL = memberMcpTool({
     `List the outside MCP clients the member allowed to act for them on ${PRODUCT_NAME}'s MCP ` +
     "server, as Settings › MCP lists them, and the server's address: each client by its id " +
     "and name, where it signs in, when the member allowed it, and when it last renewed its " +
-    "access. The member revokes one in Settings › MCP. Answers `accepted` with them, never a " +
-    "token, or `rejected` and why.",
+    `access. ${MEMBER_MCP_TOOL.REVOKE_MCP_CLIENT} revokes one. Answers \`accepted\` with them, ` +
+    "never a token, or `rejected` and why.",
   input: NoInputSchema,
   annotations: READ_ONLY,
   run: listMcpClientsAsMember,
+});
+
+const RevokeMcpClientInputSchema = Schema.Struct({
+  clientId: describeWire(
+    mcpClientIdSchema,
+    `The client, by the id ${MEMBER_MCP_TOOL.LIST_MCP_CLIENTS} answered.`,
+  ),
+});
+
+const REVOKE_MCP_CLIENT_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.REVOKE_MCP_CLIENT,
+  description:
+    "Revoke one outside MCP client the member allowed, by its id, as Revoke in Settings › MCP " +
+    "does: the member's own consent to it and the tokens it holds for them are deleted, and " +
+    "no other member's. It cannot renew its access, and its next sign-in asks the member " +
+    `again. Revoking the client making this call cuts that client off: its access ends within ` +
+    `${MCP_ACCESS_TOKEN_MINUTES} minutes and it must sign in again. A client the member never ` +
+    `allowed, or ${PRODUCT_NAME}'s own desktop app, is left as it is. Answers \`accepted\` with ` +
+    "the clients as they then stand, never a token, or `rejected` and why.",
+  input: RevokeMcpClientInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ clientId }) => revokeMcpClientAsMember(clientId),
 });
 
 /** A Sentry call run as the member, in the workspace its slug names or their only one; refused, naming theirs, where that names none. */
@@ -4136,6 +4160,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   RENAME_INTEGRATION_TOOL,
   DISCONNECT_INTEGRATION_TOOL,
   LIST_MCP_CLIENTS_TOOL,
+  REVOKE_MCP_CLIENT_TOOL,
   LIST_SENTRY_INSTALLATIONS_TOOL,
   DISCONNECT_SENTRY_TOOL,
   READ_SANDBOX_SETUP_TOOL,

@@ -6,15 +6,15 @@
  * answer them and refuses what those refuse: the integrations read and
  * settled as the desktop's bearer reads them (`statusesAnswer`), an account
  * at a provider signed in, named, or disconnected
- * (`integrations-procedures.ts`), the clients listed
+ * (`integrations-procedures.ts`), the clients listed and one revoked
  * (`clients-procedures.ts`), and a workspace's Sentry installations read by
  * any member of it and one disconnected by an owner or an admin
  * (`../triggers/sentry/sentry-installations.ts`).
  *
  * A sign-in is never run here: a connect answers the address the member
  * opens in their own browser to finish it, at the deployment's own callback,
- * as the desktop's Connect does. Revoking a client, which deletes the
- * member's consent under a session of theirs, is not offered. Root
+ * as the desktop's Connect does. A revoke ends the member's own consent
+ * to one client and no one else's, as Settings › MCP's Revoke does. Root
  * AGENTS.md pins that no credential travels in an answer, and none of these
  * carries one: each answers status words, names, labels, and the sign-in
  * address, never a token.
@@ -39,7 +39,7 @@ import {
   readWorkspaceSentry,
 } from "../triggers/sentry/sentry-installations.js";
 import { AdmittedMember } from "./admission.js";
-import { mcpClientsRead } from "./mcp-client-operations.js";
+import { mcpClientRevoke, mcpClientsRead } from "./mcp-client-operations.js";
 import { memberMcpResourceUrl } from "./resource.js";
 
 /**
@@ -166,6 +166,16 @@ export const listMcpClientsAsMember = () =>
     const member = yield* AdmittedMember;
     return yield* accepted(
       mcpClientsRead(member.userId, memberMcpResourceUrl(member.baseURL)),
+      MEMBER_INTEGRATION_REFUSAL.UNANSWERED,
+    );
+  });
+
+/** One client the member allowed revoked, their tokens and Allow for it deleted, answered with the clients as they then stand. */
+export const revokeMcpClientAsMember = (clientId: string) =>
+  Effect.gen(function* () {
+    const member = yield* AdmittedMember;
+    return yield* accepted(
+      mcpClientRevoke(member.userId, clientId, memberMcpResourceUrl(member.baseURL)),
       MEMBER_INTEGRATION_REFUSAL.UNANSWERED,
     );
   });
