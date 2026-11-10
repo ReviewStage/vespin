@@ -22,7 +22,23 @@ import { ANNOUNCE, Announcer, useAnnounce } from "../announcer/announcer.js";
 /** Less than this, in CSS pixels, is not a move worth playing. */
 const STILL = 0.5;
 
-/** Glides each toast a change moved from where it was drawn to where it now stands. */
+/**
+ * How far a toast's top stands above the stack's foot as laid out, which no
+ * transform moves: neither its own arrival nor a glide still playing, so a
+ * redraw that moved nothing reads the same rise however far either has run.
+ * The foot is where the stack is pinned, so a toast added under another
+ * raises that one's rise as the stack grows upward.
+ */
+function riseOf(list: HTMLElement, toast: HTMLElement): number {
+  return list.offsetTop + list.offsetHeight - toast.offsetTop;
+}
+
+/**
+ * Glides each toast a change moved from where it was drawn to where it now
+ * stands. Note that it starts from where the toast shows on screen this
+ * frame, its arrival or an earlier glide included, so a move made mid-motion
+ * carries on from there rather than jumping back to where it was laid out.
+ */
 function useStackGlide(): RefObject<HTMLOListElement | null> {
   const list = useRef<HTMLOListElement>(null);
   const drawn = useRef(new Map<Element, number>());
@@ -36,12 +52,17 @@ function useStackGlide(): RefObject<HTMLOListElement | null> {
     }
     const timing = tokenTiming(root, MOTION_TOKEN.DURATION_FAST, MOTION_TOKEN.SPRING_FAST);
     const next = new Map<Element, number>();
+    const foot = root.getBoundingClientRect().bottom;
     for (const toast of root.children) {
-      const top = toast.getBoundingClientRect().top;
+      if (!(toast instanceof HTMLElement)) continue;
+      const rise = riseOf(root, toast);
       const was = drawn.current.get(toast);
-      next.set(toast, top);
-      if (was === undefined || Math.abs(was - top) < STILL || timing === undefined) continue;
-      toast.animate([{ transform: `translateY(${was - top}px)` }, { transform: "none" }], timing);
+      next.set(toast, rise);
+      if (was === undefined || Math.abs(rise - was) < STILL || timing === undefined) continue;
+      // Where it shows now, against where it is laid out, then back by as far as the change moved it.
+      const shown = toast.getBoundingClientRect().top - (foot - rise);
+      const from = shown + rise - was;
+      toast.animate([{ transform: `translateY(${from}px)` }, { transform: "none" }], timing);
     }
     drawn.current = next;
   });
