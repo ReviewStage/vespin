@@ -1,4 +1,5 @@
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import { agentBootsOf } from "@repo/database/models/agent-boot-store";
 import {
   type Agent,
   type AgentLatestTurn,
@@ -1491,11 +1492,12 @@ interface AgentReading {
   readonly activity: string | null;
 }
 
-/** The agents' standings, read once for the lot: each one's newest turn. The agents were read through their workspace's gate, so their conversations are read by id. */
+/** The agents' standings, read once for the lot: each one's newest turn and first launch's boot. The agents were read through their workspace's gate, so their conversations are read by id. */
 const standingsOf = (agents: readonly Agent[]) =>
   Effect.gen(function* () {
     const ids = agents.map((agent) => agent.conversationId);
     const turns = yield* latestTurnsOfReached(ids);
+    const boots = yield* agentBootsOf(agents.map((agent) => agent.id));
     const now = yield* Clock.currentTimeMillis;
     return (agent: Agent) => {
       const turn = turns.get(agent.conversationId);
@@ -1503,6 +1505,7 @@ const standingsOf = (agents: readonly Agent[]) =>
         createdAt: agent.createdAt,
         now,
         blank: startedBlank(agent),
+        boot: boots.get(agent.id)?.phase,
       });
       // Why the newest turn failed is said only while the agent reads as failed.
       return {
@@ -2800,11 +2803,12 @@ const stopOf = (call: AgentCall, agent: Agent) =>
           key,
           ...(by === undefined ? undefined : { by }),
         });
-    const after = (yield* turnStandingsOf([agent.conversationId]))(agent.conversationId);
+    const after = (yield* turnStandingsOf([agent.conversationId], [agent]))(agent.conversationId);
     const status = agentStatusOf(after.turn, {
       createdAt: agent.createdAt,
       now: yield* Clock.currentTimeMillis,
       blank: startedBlank(agent),
+      boot: after.boot,
     });
     const standing = stopStands(before.turn) && after.turn?.id === before.turn?.id;
     return { stopped: earlier || canceled || standing, status };
