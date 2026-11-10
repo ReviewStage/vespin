@@ -19,7 +19,9 @@ import {
  * from its top draws the rows its scroller shows, wherever in the scroller
  * the boxes around it place it, by the sizes it measured when it was last
  * drawn where it is handed them. A run anchored to its end, drawn before its
- * scroller is laid out, opens at its end once the scroller is. A list of
+ * scroller is laid out, opens at its end once the scroller is. A row wholly
+ * above the view that grows while the reader scrolls up keeps their words
+ * where they stood. A list of
  * several runs answers every row's key, in the order its runs stand.
  */
 
@@ -300,6 +302,102 @@ test("a run anchored to its end, first drawn in a scroller not laid out, opens a
     for (const hear of heard) hear([], {} as ResizeObserver);
   });
   assert.equal(top, 49_400);
+});
+
+test("a row wholly above the view that grows while the reader scrolls up moves the scroll by as much, so the words they read stay put", () => {
+  // Note that an inline page or a picture above the view draws small and grows once it loads, which a reader scrolling up meets in every long log.
+  const hears: ResizeObserverCallback[] = [];
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      constructor(hear: ResizeObserverCallback) {
+        hears.push(hear);
+      }
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    },
+  );
+  let top = 0;
+  const isScroller = (element: Element) => element.id === "scroller";
+  vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    return isScroller(this) ? 600 : 0;
+  });
+  vi.spyOn(HTMLElement.prototype, "scrollHeight", "get").mockImplementation(function (
+    this: HTMLElement,
+  ) {
+    // The scroller holds the run's block, as tall as the virtualizer writes it.
+    const block = this.querySelector<HTMLElement>(".ui-virtual-rows");
+    return isScroller(this) ? Number.parseFloat(block?.style.height ?? "0") : 0;
+  });
+  vi.spyOn(Element.prototype, "scrollTop", "get").mockImplementation(function (this: Element) {
+    return isScroller(this) ? top : 0;
+  });
+  vi.spyOn(Element.prototype, "scrollTop", "set").mockImplementation(function (
+    this: Element,
+    to: number,
+  ) {
+    if (!isScroller(this) || to === top) return;
+    top = to;
+    this.dispatchEvent(new Event("scroll"));
+  });
+  Object.defineProperty(HTMLElement.prototype, "scrollTo", {
+    configurable: true,
+    value(this: HTMLElement, options?: ScrollToOptions) {
+      if (options?.top !== undefined) this.scrollTop = options.top;
+    },
+  });
+  const keys = Array.from({ length: 100 }, (_, index) => `row-${index}`);
+  const scroller = createRef<HTMLDivElement>();
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  act(() =>
+    root.render(
+      createElement(
+        "div",
+        { id: "scroller", ref: scroller },
+        createElement(VirtualRows, {
+          scroller,
+          keys,
+          estimate: 100,
+          overscan: 10,
+          children: (index: number) => createElement("p", null, keys[index]),
+        }),
+      ),
+    ),
+  );
+  const rowOf = (key: string) => {
+    const row = container.querySelector(`[data-row-key="${key}"]`);
+    assert.ok(row !== null, `${key} is drawn`);
+    return row;
+  };
+  const resize = (key: string, height: number) => {
+    const entry = {
+      target: rowOf(key),
+      borderBoxSize: [{ blockSize: height, inlineSize: 800 }],
+    } as unknown as ResizeObserverEntry;
+    for (const hear of hears) hear([entry], {} as ResizeObserver);
+  };
+  const scrollUpTo = (to: number) => {
+    assert.ok(to < top, "the reader scrolls up");
+    act(() => {
+      scroller.current?.dispatchEvent(new WheelEvent("wheel"));
+      top = to;
+      scroller.current?.dispatchEvent(new Event("scroll"));
+    });
+  };
+  // The reader scrolls up from the end until row-85 is drawn above the view, where it is measured at 50px.
+  scrollUpTo(Number.parseFloat((rowOf("row-85") as HTMLElement).style.top) + 200);
+  act(() => resize("row-85", 50));
+  // They scroll on up, row-85 still wholly above the view's top, and it grows once its picture loads.
+  const placed = Number.parseFloat((rowOf("row-85") as HTMLElement).style.top);
+  scrollUpTo(placed + 100);
+  const reading = top;
+  act(() => resize("row-85", 600));
+  assert.equal(top, reading + 550);
 });
 
 test("a list's runs answer every row's key, those left undrawn among them, in the order the runs stand", () => {

@@ -65,7 +65,14 @@ import { type RovingReach, reachedKey, rovingItemIn } from "../roving-keys/rovin
  * A run read from its top, as a list of items is, is anchored to its start
  * instead (`VIRTUAL_ROWS_ANCHOR.START`): it opens wherever its scroller
  * stands, and rows growing or shrinking above the view move the scroll by
- * as much, as the end-anchored run's do. Several runs may stand in one
+ * as much, as the end-anchored run's do.
+ *
+ * Note that a row wholly above the view moves the scroll by as much as it
+ * resizes whichever way the reader scrolls (`holdsAbove`), where TanStack
+ * Virtual's own rule skips a row measured before while the reader scrolls
+ * up: a log's inline page, picture, or diagram draws small and grows once
+ * it loads, which a reader scrolling up meets in every long log, and left
+ * alone it pushes the words they read down the screen by all it grew. Several runs may stand in one
  * scroller, a list's groups each a run, each counting its rows from where
  * it stands in the scroller; a box whose resizing moves where a run stands,
  * the list around the runs, is heard as the scroller's own size is
@@ -221,6 +228,23 @@ export function sizeWhileShown<Item extends Element>(
 /** The room a run takes its view to have before its scroller is measured: the window's, which no view of it outgrows. */
 function windowRect(): Rect {
   return { width: window.innerWidth, height: window.innerHeight };
+}
+
+/**
+ * Whether a row's resize moves the scroll by as much, so the rows in view
+ * stay put (`shouldAdjustScrollPositionOnItemSizeChange`): a row measured
+ * for the first time where it starts above the view's top, as TanStack
+ * Virtual's own rule has it, and a row measured before where it stands
+ * wholly above it, whichever way the reader scrolls. A row across the top
+ * grows below it, as a streaming reply does, so it moves nothing.
+ */
+function holdsAbove(
+  item: VirtualItem,
+  _delta: number,
+  instance: Virtualizer<HTMLElement, HTMLElement>,
+): boolean {
+  const top = instance.scrollOffset ?? 0;
+  return instance.itemSizeCache.has(item.key) ? item.end <= top : item.start < top;
 }
 
 /** Whether two runs of keys name the same rows in the same order. */
@@ -436,6 +460,7 @@ export function VirtualRows({
     directDomUpdates: true,
     directDomUpdatesMode: "position",
   });
+  virtualizer.shouldAdjustScrollPositionOnItemSizeChange = holdsAbove;
   // What the run measured is handed back as it is let go, the rows it measured alone (`takeSnapshot()`).
   const heard = useRef(onMeasurements);
   heard.current = onMeasurements;
