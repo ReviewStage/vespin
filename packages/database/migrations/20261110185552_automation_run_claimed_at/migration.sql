@@ -2,7 +2,8 @@ DROP TRIGGER IF EXISTS "app_sync_update" ON "automation_run";
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS "app_sync_write" ON "automation_run";
 --> statement-breakpoint
-ALTER TABLE "automation_run" ADD COLUMN "claimed_at" timestamp with time zone;
+ALTER TABLE "automation_run" ADD COLUMN "claimed_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "automation_run_claimed" ON "automation_run" ("automation_id","settled_at") WHERE "claimed_at" is not null;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION "app_sync_automation_run"() RETURNS trigger LANGUAGE plpgsql AS $app_sync$
 DECLARE

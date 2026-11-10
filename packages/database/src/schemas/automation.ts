@@ -182,5 +182,9 @@ export const automationRun = pgTable(
     index("automation_run_unrecorded_settled")
       .on(table.status, table.settledAt)
       .where(sql`${table.agentId} is null`),
+    // The concurrency guard counts one automation's claims still starting, by when each was claimed.
+    index("automation_run_claimed")
+      .on(table.automationId, table.settledAt)
+      .where(sql`${table.claimedAt} is not null`),
   ],
 );

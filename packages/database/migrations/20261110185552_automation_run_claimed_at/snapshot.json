@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "af9aece4-ade6-4281-9fdc-e75170f60331",
+  "id": "a2208a14-f341-443b-9289-2829d68e173b",
   "prevIds": [
     "20b4afc6-9024-4622-bd80-a537dfe74071",
     "5e620699-3ec1-40ef-958b-057ab782d789",
@@ -14155,6 +14155,34 @@
       "method": "btree",
       "concurrently": false,
       "name": "automation_run_unrecorded_settled",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "automation_run"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "automation_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "settled_at",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": "\"claimed_at\" is not null",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "automation_run_claimed",
       "entityType": "indexes",
       "schema": "public",
       "table": "automation_run"
