@@ -56,7 +56,6 @@ import { ComposerField, type ComposerFieldFiles } from "./composer-field.js";
 import { type ComposerPickers, useComposerPickers } from "./composer-pickers.js";
 import { DictateButton, DictationStrip } from "./dictation-strip.js";
 import { useWordFiles } from "./file-chips.js";
-import { ComposerQuoteView } from "./reply-to-selection.js";
 import type { DictationControl } from "./use-dictation.js";
 
 /**
@@ -464,7 +463,6 @@ function BoxField({
       onPasteFiles={takesFiles ? files.paste : () => false}
       onPasteText={options.pastesTextAsFile === true ? files.pasteText : undefined}
       files={inWords.field}
-      quote={(quote) => <ComposerQuoteView quote={quote} held={held || box.dictating} />}
     />
   );
 }

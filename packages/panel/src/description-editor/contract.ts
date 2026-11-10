@@ -496,12 +496,6 @@ export interface ComposerChip {
   readonly name: string;
 }
 
-/** A quote of the agent's words the composer holds as a block of its own (`@repo/ui/reply-quote`): its words, and what takes it out of the box. */
-export interface ComposerQuote {
-  readonly words: string;
-  readonly remove: () => void;
-}
-
 /** What the message box hands its editor as it mounts it. */
 export interface ComposerEditorProps {
   /** The words it opens on, each `/name` of a known skill a chip. */
@@ -536,8 +530,6 @@ export interface ComposerEditorProps {
   readonly files?: ReadonlySet<string> | undefined;
   /** Draws a file's chip into the element its node stands as, handed the file's name; answers what takes the drawing down. Where none is given, its marker is drawn as the words it is. */
   readonly drawFile?: ((element: HTMLElement, name: string) => () => void) | undefined;
-  /** Draws a quote into the element its block stands as; answers what takes the drawing down. Where none is given, the quote's words are drawn as they are. */
-  readonly drawQuote?: ((element: HTMLElement, quote: ComposerQuote) => () => void) | undefined;
   /** What the box's mentions are picked and drawn with: an `@` word reported as `/` words are, and each mention drawn into its node's element; none where the box takes no mentions. */
   readonly mentions?: ComposerMentions | undefined;
   /** The format toolbar's doors, the selection told to it and ⌘K over words handed to it, where one stands over the box. */
@@ -562,7 +554,7 @@ export interface ComposerMark {
   readonly release: () => void;
 }
 
-/** A composer's editor as mounted: every change from outside goes through one of these, never through the words handed back, a format toolbar's presses among them. Note that the box holds no block, so its toolbar offers no Turn into. */
+/** A composer's editor as mounted: every change from outside goes through one of these, never through the words handed back, a format toolbar's presses among them. Note that the box's toolbar offers its marks alone, never Turn into, since its one block, the quote, is typed or chorded. */
 export interface ComposerEditorHandle extends EditorFormatting {
   /** Empties the words, as a send that was taken does. */
   readonly clear: () => void;
@@ -573,10 +565,10 @@ export interface ComposerEditorHandle extends EditorFormatting {
   /** The `/` word the caret ends written as the skill named, a space after it. */
   readonly chooseSkill: (name: string) => void;
   /**
-   * Words of the agent's laid in as a quote block under the line the caret
-   * stands on, or in its place where the line is empty, the caret on an
-   * empty line under it and the box focused; cut where the bound cuts it.
-   * Answers whether any went in.
+   * Words of the agent's laid in as a quote block under the line or the
+   * quote the caret stands in, or in its place where the line is empty, the
+   * caret on an empty line under it and the box focused; cut where the bound
+   * cuts it. Answers whether any went in.
    */
   readonly insertQuote: (words: string) => boolean;
   /** The `@` word the caret ends written as the mention chosen, a space after it, the caret after the space. */

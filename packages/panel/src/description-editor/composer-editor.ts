@@ -9,8 +9,9 @@ import {
 import { fenceAfter } from "@repo/features/description-document";
 import { fileMarker, fileMarkers } from "@repo/features/file-marker";
 import { skillWord } from "@repo/features/skill-word";
-import { WRITING_MARK } from "@repo/settings/shortcuts";
+import { WRITING_BLOCK, WRITING_MARK } from "@repo/settings/shortcuts";
 import { TEXT_LINK_MARK_ATTRIBUTES } from "@repo/ui/link-face";
+import { QUOTE_CLASS } from "@repo/ui/quote-face";
 import {
   cutReply,
   MESSAGE_BLOCK,
@@ -21,6 +22,13 @@ import {
 } from "@repo/ui/reply-quote";
 import { insideCode, mentionAt, skillTokens, type TextRange } from "@repo/ui/skill-mention";
 import { type AnyExtension, Editor, Extension, Node } from "@tiptap/core";
+import Blockquote from "@tiptap/extension-blockquote";
+import {
+  chainCommands,
+  createParagraphNear,
+  liftEmptyBlock,
+  splitBlock,
+} from "@tiptap/pm/commands";
 import {
   type Fragment,
   type Mark,
@@ -45,7 +53,6 @@ import {
   type ComposerEditorProps,
   type ComposerInput,
   type ComposerMark,
-  type ComposerQuote,
   type ComposerTrigger,
   type EditorAria,
   type MentionNode,
@@ -65,25 +72,33 @@ import { editorFormatting, formatReports } from "./writing-format.js";
 import { withoutTipTapChords, writingKeys } from "./writing-keys.js";
 
 /**
- * composer-editor.ts -- an agent's message box on TipTap: words and their inline marks, a line break, a chosen skill as a chip, and a quote of the agent's words as a block, read out as the one string the message is.
+ * composer-editor.ts -- an agent's message box on TipTap: words and their inline marks, a line break, a chosen skill as a chip, and a quote, read out as the one string the message is.
  *
- * The box holds lines of words and nothing a block would make of them, so
- * its schema is StarterKit cut down to a document of paragraphs, text, a
- * hard break, undo, and the inline marks: bold, italic, strikethrough,
- * code, and a link. A mark is typed as its Markdown, by its chord from the
- * writing vocabulary (`./writing-keys.ts`, its marks' chords alone), or from
- * the format toolbar its owner stands over the words selected
+ * The box holds lines of words and one block, the quote, so its schema is
+ * StarterKit cut down to a document of paragraphs, text, a hard break,
+ * undo, the inline marks (bold, italic, strikethrough, code, and a link),
+ * and the quote as the description's editor holds it, TipTap's own
+ * blockquote in the quote's face (`@repo/ui/quote-face`), holding lines
+ * alone. A mark is typed as its Markdown, by its chord from the writing
+ * vocabulary (`./writing-keys.ts`, its marks' chords and the quote's), or
+ * from the format toolbar its owner stands over the words selected
  * (`./writing-format.ts`), and is read out and back as the Markdown it is
  * (`./composer-markdown.ts`); words wearing none read out exactly as typed.
- * No list, heading, or quote is typed into being, and no link is made of
- * an address as it is typed. A chip wears no mark, so words selected
- * around one and bolded leave it as it was. One node is added, the `skill` chip, an atom that one
- * Backspace takes out whole and that reads out as `/name`; and the quote,
- * a block of the agent's words laid in by Reply where the caret stands
- * (`insertQuote`), never edited, that one Backspace on the line under it
- * takes out whole as it does a chip, and that reads out as a Markdown
- * blockquote with a blank line around it (`@repo/ui/reply-quote`), read
- * back into a block as the words are laid in again. The words leave
+ * A quote is typed as `> ` at a line's start, or by its chord, as Notion's,
+ * Linear's, and Slack's are, and its keys are the editor's own: Backspace
+ * at its start turns the line back into words, and the caret stands over a
+ * quote that starts the box as a gap cursor. Since Enter alone is the
+ * owner's send, Shift with Enter is the box's Enter as a document has it
+ * (`DOCUMENT_ENTER`): a new line, or, on an empty line of a quote, the line
+ * out of it. No list or heading is typed into being, and no link is made of
+ * an address as it is typed. A chip wears no mark, so words selected around
+ * one and bolded leave it as it was. One node is added, the `skill` chip,
+ * an atom that one Backspace takes out whole and that reads out as
+ * `/name`. Reply lays the agent's words in as a quote where the caret
+ * stands (`insertQuote`), edited as any quote is. A quote reads out as a
+ * Markdown blockquote with a blank line around it
+ * (`@repo/ui/reply-quote`), read back into a quote as the words are laid
+ * in again. The words leave
  * the editor one way, `onDraft`, as the string `textOf` reads off the
  * document; nothing hands them back in. A change from outside is one of
  * the handle's commands (`./contract.ts`): `clear` after a send, `replace`
@@ -140,7 +155,7 @@ const SPACE = " ";
 const NEWLINE = "\n";
 const SKILL_NODE = "skill";
 const FILE_NODE = "fileChip";
-const QUOTE_NODE = "replyQuote";
+const QUOTE_NODE = "blockquote";
 const HARD_BREAK_NODE = "hardBreak";
 
 /** A run of plain text in the words: where it starts in the string, and where in the document. */
@@ -150,11 +165,11 @@ interface TextRun {
   readonly length: number;
 }
 
+/** The writing actions the box answers: its marks', and a quote's. */
+const WRITING_ACTIONS = [...Object.values(WRITING_MARK), WRITING_BLOCK.QUOTE];
+
 /** The marks the box holds, by name. */
 const INLINE_MARKS: ReadonlySet<string> = new Set(Object.values(INLINE_MARK));
-
-/** The writing actions the box answers: its marks', and no block's. */
-const MARK_ACTIONS = Object.values(WRITING_MARK);
 
 /** Whether a mark's name is one the box holds. */
 function isInlineMark(name: string): name is InlineMarkName {
@@ -184,9 +199,9 @@ function isQuote(node: PmNode): boolean {
   return node.type.name === QUOTE_NODE;
 }
 
-/** A quote block's words. */
+/** A quote block's words: its lines, each as the Markdown it is written as. */
 function quoteWords(node: PmNode): string {
-  return String(node.attrs.words);
+  return fragmentText(node.content);
 }
 
 /** Inline nodes written as one line of Markdown: the line, and where each text node's words landed in it, by the node's index. */
@@ -219,32 +234,59 @@ function textOf(doc: PmNode): string {
   return fragmentText(doc.content);
 }
 
-/** Every run of words in the document, in order, each with where it stands in the words, a mark's delimiters around it. */
+/** Where a character of a quote's line stands once the line is quoted: past the `> ` (or, on an empty line, `>`) of its own line and of each line a break opened before it. */
+function quotedOffset(line: string, at: number): number {
+  const lines = line.split(NEWLINE);
+  const before = line.slice(0, at).split(NEWLINE).length;
+  let prefixes = 0;
+  for (let index = 0; index < before; index += 1) prefixes += lines[index] === "" ? 1 : 2;
+  return at + prefixes;
+}
+
+/** The runs of words of one line of the document, `start` the place its paragraph stands at and `offset` where its words start, a quote's lines shifted past their `> `. */
+function lineRuns(
+  paragraph: PmNode,
+  start: number,
+  offset: number,
+  quoted: boolean,
+): { runs: TextRun[]; length: number } {
+  const children: PmNode[] = [];
+  const starts: number[] = [];
+  paragraph.forEach((child, childStart) => {
+    children.push(child);
+    starts.push(start + 1 + childStart);
+  });
+  const line = writtenLine(children);
+  const runs = line.segments.map((segment) => ({
+    offset: offset + (quoted ? quotedOffset(line.text, segment.offset) : segment.offset),
+    pos: (starts[segment.piece] ?? 0) + segment.from,
+    length: segment.length,
+  }));
+  return { runs, length: quoted ? quoteOf(line.text).length : line.text.length };
+}
+
+/** Every run of words in the document, in order, each with where it stands in the words, a mark's delimiters around it, a quote's lines among them. */
 function textRuns(doc: PmNode): TextRun[] {
   const runs: TextRun[] = [];
   let offset = 0;
   let previous: PmNode | undefined;
-  doc.forEach((paragraph, start) => {
+  doc.forEach((block, start) => {
     if (previous !== undefined) {
-      offset += isQuote(previous) || isQuote(paragraph) ? QUOTE_GAP.length : NEWLINE.length;
+      offset += isQuote(previous) || isQuote(block) ? QUOTE_GAP.length : NEWLINE.length;
     }
-    previous = paragraph;
-    if (isQuote(paragraph)) {
-      offset += quoteOf(quoteWords(paragraph)).length;
+    previous = block;
+    if (!isQuote(block)) {
+      const line = lineRuns(block, start, offset, false);
+      runs.push(...line.runs);
+      offset += line.length;
       return;
     }
-    const children: PmNode[] = [];
-    const starts: number[] = [];
-    paragraph.forEach((child, childStart) => {
-      children.push(child);
-      starts.push(start + 1 + childStart);
+    block.forEach((paragraph, childStart) => {
+      if (childStart > 0) offset += NEWLINE.length;
+      const line = lineRuns(paragraph, start + 1 + childStart, offset, true);
+      runs.push(...line.runs);
+      offset += line.length;
     });
-    const line = writtenLine(children);
-    for (const segment of line.segments) {
-      const pos = (starts[segment.piece] ?? 0) + segment.from;
-      runs.push({ offset: offset + segment.offset, pos, length: segment.length });
-    }
-    offset += line.text.length;
   });
   return runs;
 }
@@ -388,7 +430,7 @@ function documentOf(schema: Schema, text: string, chipping: Chipping): PmNode {
   const blocks = messageBlocks(text);
   const nodes = blocks.flatMap((block) =>
     block.kind === MESSAGE_BLOCK.QUOTE
-      ? [schema.node(QUOTE_NODE, { words: block.words })]
+      ? [schema.node(QUOTE_NODE, null, paragraphsOf(schema, block.words, chipping))]
       : paragraphsOf(schema, block.lines.join(NEWLINE), chipping),
   );
   if (blocks.at(-1)?.kind === MESSAGE_BLOCK.QUOTE) nodes.push(schema.node("paragraph"));
@@ -442,27 +484,18 @@ function chipped(
   return tr.setMeta(CHIPPED_META, true);
 }
 
-/** The quote block beside an empty caret at a line's edge, the one above for Backspace at its start and the one below for Delete at its end, taken out whole; answers whether there was one. */
-function removedQuote(view: EditorView, back: boolean): boolean {
-  const { doc, selection } = view.state;
-  const { $from } = selection;
-  if ($from.depth !== 1) return false;
-  const atEdge = back ? $from.parentOffset === 0 : $from.parentOffset === $from.parent.content.size;
-  const index = $from.index(0) + (back ? -1 : 1);
-  if (!atEdge || index < 0 || index >= doc.childCount) return false;
-  const beside = doc.child(index);
-  if (!isQuote(beside)) return false;
-  const from = back ? $from.before(1) - beside.nodeSize : $from.after(1);
-  view.dispatch(view.state.tr.delete(from, from + beside.nodeSize).scrollIntoView());
-  return true;
-}
+/**
+ * Shift with Enter as a document's Enter: a new line, or, on an empty line
+ * of a quote, the line out of the quote. Note that Enter alone is the
+ * owner's send, so Shift with Enter is the box's one way to a new line.
+ */
+const DOCUMENT_ENTER = chainCommands(createParagraphNear, liftEmptyBlock, splitBlock);
 
-/** The chip or the quote beside an empty selection taken out whole, before it for Backspace and after it for Delete; answers whether there was one. */
+/** The chip beside an empty selection taken out whole, before it for Backspace and after it for Delete; answers whether there was one. */
 function removedChip(view: EditorView, key: string): boolean {
   const { selection } = view.state;
   if (!selection.empty || (key !== "Backspace" && key !== "Delete")) return false;
   const back = key === "Backspace";
-  if (removedQuote(view, back)) return true;
   const beside = back ? selection.$from.nodeBefore : selection.$from.nodeAfter;
   if (beside === null || beside === undefined || !isChip(beside)) return false;
   const from = back ? selection.from - 1 : selection.from;
@@ -626,58 +659,6 @@ function fileNode(drawFile: ComposerEditorProps["drawFile"], held: (name: string
 }
 
 /**
- * The quote block: an atom no caret stands in and no key edits, read out as
- * a blockquote, its look the panel's (`drawQuote`), with the press that
- * takes it out. Note that its words stand in no attribute of the DOM, as a
- * chip's name does not, so the recording masks them as text.
- */
-function quoteNode(drawQuote: ComposerEditorProps["drawQuote"]) {
-  return Node.create({
-    name: QUOTE_NODE,
-    group: "block",
-    atom: true,
-    selectable: false,
-    draggable: false,
-    addAttributes() {
-      return { words: { default: "", rendered: false } };
-    },
-    parseHTML() {
-      return [
-        {
-          tag: "blockquote[data-quote]",
-          getAttrs: (element) => ({ words: element.textContent }),
-        },
-      ];
-    },
-    renderHTML({ node }) {
-      return ["blockquote", { "data-quote": "" }, quoteWords(node)];
-    },
-    renderText({ node }) {
-      return quoteOf(quoteWords(node));
-    },
-    addNodeView() {
-      return ({ node, getPos, editor }) => {
-        const dom = document.createElement("div");
-        dom.contentEditable = "false";
-        dom.dataset.quote = "";
-        const quote: ComposerQuote = {
-          words: quoteWords(node),
-          remove: () => {
-            const pos = getPos();
-            if (pos === undefined || !editor.isEditable) return;
-            editor.view.dispatch(editor.state.tr.delete(pos, pos + node.nodeSize));
-            editor.view.focus();
-          },
-        };
-        if (drawQuote === undefined) dom.textContent = quote.words;
-        const undraw = drawQuote?.(dom, quote) ?? (() => undefined);
-        return { dom, ignoreMutation: () => true, destroy: undraw };
-      };
-    },
-  });
-}
-
-/**
  * What the box may hold: paragraphs, text, a hard break, undo, and the
  * inline marks, StarterKit's and nothing more, the chips, and the quote
  * block; the marks' chords the writing vocabulary's, and the selection told
@@ -692,11 +673,11 @@ function composerExtensions(
   held: (name: string) => boolean,
 ): AnyExtension[] {
   const kit = StarterKit.configure({
+    // Note that a quote holds lines alone, never a quote of its own, as a message's quotes are read back (`@repo/ui/reply-quote`).
     blockquote: false,
     bulletList: false,
     codeBlock: false,
     dropcursor: false,
-    gapcursor: false,
     heading: false,
     horizontalRule: false,
     listItem: false,
@@ -708,12 +689,14 @@ function composerExtensions(
   });
   return [
     withoutTipTapChords(kit),
-    writingKeys.configure({ actions: MARK_ACTIONS }),
+    writingKeys.configure({ actions: WRITING_ACTIONS }),
     ...formatReports(props.format),
     skillNode(props.drawChip, known),
     fileNode(props.drawFile, held),
     mentionNode(props.mentions?.drawMention),
-    quoteNode(props.drawQuote),
+    Blockquote.extend({ content: "paragraph+" }).configure({
+      HTMLAttributes: { class: QUOTE_CLASS },
+    }),
   ];
 }
 
@@ -871,7 +854,10 @@ function composerProps(state: ComposerState, props: ComposerEditorProps): Editor
       if (composing(view, event)) return false;
       if (props.onKey(event) || removedChip(view, event.key)) return true;
       // Note that Shift with Enter is never the owner's, ⌘ or Ctrl held too, since Shift is what breaks a line.
-      if (event.shiftKey) return false;
+      if (event.shiftKey) {
+        const plain = event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.altKey;
+        return plain && DOCUMENT_ENTER(view.state, view.dispatch);
+      }
       if (!(props.enterWrites === true ? modEnterSends(event) : enterSends(event))) return false;
       props.onEnter();
       return true;
@@ -1033,12 +1019,12 @@ function laidInMention(
   editor.view.focus();
 }
 
-/** The quote laid in under the line the caret stands on, or in its place where the line is empty, an empty line under it holding the caret. */
-function quotedAt(editor: Editor, words: string): Transaction {
+/** The quote laid in under the line or the quote the caret stands in, or in its place where the line is empty, an empty line under it holding the caret. */
+function quotedAt(editor: Editor, chipping: Chipping, words: string): Transaction {
   const { doc, selection, schema } = editor.state;
   const { $from } = selection;
   const line = doc.child($from.index(0));
-  const quote = schema.node(QUOTE_NODE, { words });
+  const quote = schema.node(QUOTE_NODE, null, paragraphsOf(schema, words, chipping));
   const from = $from.before(1);
   const empty = line.type.name === "paragraph" && line.content.size === 0;
   const tr = empty
@@ -1063,12 +1049,12 @@ function laidInQuote(
   maxLength: number,
   words: string,
 ): boolean {
-  if (state.input !== COMPOSER_INPUT.EDITABLE || editor.state.selection.$from.depth !== 1) {
+  if (state.input !== COMPOSER_INPUT.EDITABLE || editor.state.selection.$from.depth < 1) {
     return false;
   }
   let kept = words;
   while (kept !== "") {
-    const tr = quotedAt(editor, kept);
+    const tr = quotedAt(editor, state, kept);
     const over = textOf(tr.doc).length - maxLength;
     if (over <= 0) {
       editor.view.dispatch(tr.scrollIntoView());

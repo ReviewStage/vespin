@@ -253,17 +253,20 @@
 }
 
 /* The caret where no line stands to take one, between two dividers or past
-   one at the text's ends (TipTap's gap cursor), which TipTap's left-out base
-   rules drew: out of the flow, so it moves no block as it stands, and a short
-   accent line blinking where the next block's line would start. */
-.description-document-text .ProseMirror-gapcursor {
+   one at the text's ends, or over a quote that starts a message box
+   (TipTap's gap cursor), which TipTap's left-out base rules drew: out of the
+   flow, so it moves no block as it stands, and a short accent line blinking
+   where the next block's line would start. */
+.description-document-text .ProseMirror-gapcursor,
+.composer-editor .ProseMirror-gapcursor {
   display: none;
   position: absolute;
   margin: 0;
   pointer-events: none;
 }
 
-.description-document-text.ProseMirror-focused .ProseMirror-gapcursor {
+.description-document-text.ProseMirror-focused .ProseMirror-gapcursor,
+.composer-editor.ProseMirror-focused .ProseMirror-gapcursor {
   display: block;
 }
 
@@ -274,7 +277,8 @@
   top: -0.75em;
 }
 
-.description-document-text .ProseMirror-gapcursor::after {
+.description-document-text .ProseMirror-gapcursor::after,
+.composer-editor .ProseMirror-gapcursor::after {
   content: "";
   position: absolute;
   top: -2px;
@@ -287,7 +291,8 @@
 /* Note that reduced motion takes the blink away rather than pausing it,
    because a blink paused in its hidden half would hide the caret. */
 @media (prefers-reduced-motion: reduce) {
-  .description-document-text .ProseMirror-gapcursor::after {
+  .description-document-text .ProseMirror-gapcursor::after,
+  .composer-editor .ProseMirror-gapcursor::after {
     animation: none;
   }
 }
@@ -2142,6 +2147,12 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
 
 .agent-composer-input p {
   margin: 0;
+}
+
+/* A quote stands a tight gap off the lines around it, as the blank line it
+   is sent with sets it apart once drawn. */
+.composer-editor > blockquote {
+  margin-block: var(--ui-tight-gap);
 }
 
 .agent-composer-placeholder {

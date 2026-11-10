@@ -590,9 +590,11 @@ test("a mention laid in from elsewhere stands where the caret is, spaced from th
   assert.equal(box.drafts.at(-1), `Fix [@invite.ts:2–3](${lines.target}) now first`);
 });
 
-/** The quote blocks the box holds, by their words. */
-function quotesIn(host: HTMLElement): (string | null)[] {
-  return [...host.querySelectorAll("[data-quote]")].map((element) => element.textContent);
+/** The quotes the box holds, by their words, a line for each of their lines. */
+function quotesIn(host: HTMLElement): string[] {
+  return [...host.querySelectorAll("blockquote")].map((element) =>
+    [...element.querySelectorAll("p")].map((line) => line.textContent).join("\n"),
+  );
 }
 
 test("a quote laid in stands as a block under the caret's line, the caret on a line under it, and reads out as a blockquote set apart", () => {
@@ -622,19 +624,28 @@ test("words laid in with quotes set apart hold them as blocks, and hand the same
   assert.deepEqual(quotesIn(box.host), [], "a > line run into its neighbors stays words");
 });
 
-test("one Backspace at the start of the line under a quote takes the quote out whole, and Delete at the end of the line above it too", () => {
+test("a quote is typed with `> `, edited like any words, Backspace at its start turns its line back into words, and Shift with Enter on its empty last line leaves it", () => {
   const box = mounted("");
-  box.handle.insertQuote("A or B?");
+  typeKeys(box.host, "> Option A ships today.");
+  assert.deepEqual(quotesIn(box.host), ["Option A ships today."]);
+  assert.equal(box.drafts.at(-1), "> Option A ships today.");
+
+  // The quote's line starts past the quote's and the line's openings.
+  const line = 2;
+  box.caretAt(line + "Option A ships today".length);
+  typeKeys(box.host, ", surely");
+  assert.equal(box.drafts.at(-1), "> Option A ships today, surely.");
+
+  box.caretAt(line + "Option A ships today, surely.".length);
+  pressInComposer(box.host, "Enter", { shiftKey: true });
+  pressInComposer(box.host, "Enter", { shiftKey: true });
+  typeKeys(box.host, "Why?");
+  assert.equal(box.drafts.at(-1), "> Option A ships today, surely.\n\nWhy?");
+
+  box.caretAt(line);
   pressInComposer(box.host, "Backspace");
   assert.deepEqual(quotesIn(box.host), []);
-  assert.equal(box.drafts.at(-1), "");
-
-  typeInComposer(box.host, "Above");
-  box.handle.insertQuote("A or B?");
-  typeInComposer(box.host, "Below");
-  box.caretAt(1 + "Above".length);
-  pressInComposer(box.host, "Delete");
-  assert.equal(box.drafts.at(-1), "Above\nBelow");
+  assert.equal(box.drafts.at(-1), "Option A ships today, surely.\nWhy?");
 });
 
 test("a quote is cut from its end to the room the bound leaves, and none is laid in where there is none", () => {

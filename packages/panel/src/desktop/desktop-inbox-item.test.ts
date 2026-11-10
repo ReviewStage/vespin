@@ -1638,7 +1638,7 @@ test("words selected in an open item's question quote into its box, its reply ca
   act(() => again.click());
   await settle();
   assert.equal(
-    pane.querySelector(".composer-quote-words")?.textContent,
+    pane.querySelector(".composer-editor blockquote")?.textContent,
     "Usage alerts fire at 80% of the plan's quota.",
     "the quote lands in the box behind the reply on its way",
   );
@@ -2071,9 +2071,7 @@ function selectWithin(within: Element, words: string, from: string, to: string):
 /** The quotes the item's box holds, in order. */
 function boxQuotes(pane: HTMLElement): (string | null)[] {
   const box = pane.querySelector(".inbox-answer") ?? assert.fail("the box is drawn");
-  return [...box.querySelectorAll(".composer-editor .composer-quote-words")].map(
-    (quote) => quote.textContent,
-  );
+  return [...box.querySelectorAll(".composer-editor blockquote")].map((quote) => quote.textContent);
 }
 
 test("words selected in what an open ask offers, an option's words, quote into its box as the agent's message's do", async () => {

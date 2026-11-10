@@ -12,15 +12,12 @@
  * into the box, a run of quoted lines with a blank line or the message's
  * edge on each side is a quote again; any other line is the words it is.
  * The picked words are kept as the selection read them, but for the blank
- * lines around them and runs of them inside, and cut to `MAX_REPLY_CHARS`,
- * so a whole long message picked still leaves the message room for its
- * words.
+ * lines around them and runs of them inside, whole: only the message's own
+ * bound cuts a quote, where the box has no room left for all of it
+ * (`cutReply`).
  */
 
 import { fenceAfter } from "@repo/features/description-document";
-
-/** The most characters a reply keeps of the words picked, its ellipsis included. */
-export const MAX_REPLY_CHARS = 2000;
 
 const ELLIPSIS = "…";
 const NEWLINE = "\n";
@@ -79,13 +76,9 @@ export function cutReply(reply: string, chars: number): string {
   return keep <= 0 ? "" : `${reply.slice(0, keep).trimEnd()}${ELLIPSIS}`;
 }
 
-/** The reply the words picked stand for: trimmed, one blank line at most between their blocks, and cut to the bound; empty where nothing but space was picked. */
+/** The reply the words picked stand for: trimmed, and one blank line at most between their blocks; empty where nothing but space was picked. */
 export function replyOf(picked: string): string {
-  const words = keptBlankLines(
-    picked.replace(/\r\n?/gu, NEWLINE).replace(TRAILING_SPACES, ""),
-    1,
-  ).trim();
-  return cutReply(words, MAX_REPLY_CHARS);
+  return keptBlankLines(picked.replace(/\r\n?/gu, NEWLINE).replace(TRAILING_SPACES, ""), 1).trim();
 }
 
 /** A reply as a Markdown blockquote, every line of it quoted. */

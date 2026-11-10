@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "vitest";
 import {
-  MAX_REPLY_CHARS,
   MESSAGE_BLOCK,
   type MessageBlock,
   messageBlocks,
@@ -11,7 +10,7 @@ import {
 
 /**
  * reply-quote.test.ts -- words picked out of an agent's message are kept
- * tidy and bounded; a message holds them as blockquotes set apart from the
+ * tidy; a message holds them as blockquotes set apart from the
  * developer's lines by a blank line, and reads back as the same quotes and
  * lines. Synthetic words.
  */
@@ -25,12 +24,6 @@ test("words picked across a message's blocks keep one blank line between them, a
     "Run the migration first.\n\nThen deploy.",
   );
   assert.equal(replyOf(" \n\t\n"), "", "nothing but space picked is no reply");
-});
-
-test("a long pick is cut to the bound and says so", () => {
-  const reply = replyOf("word ".repeat(1000));
-  assert.ok(reply.length <= MAX_REPLY_CHARS);
-  assert.ok(reply.endsWith("word…"));
 });
 
 test("a fenced block's blank lines are kept as its code holds them", () => {

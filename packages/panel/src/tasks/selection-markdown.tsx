@@ -30,12 +30,12 @@ const WRITTEN = new WeakMap<Element, string>();
 /** What bold is written with, as a heading is too. */
 const STRONG_DELIMITER = "**";
 
-/** The delimiters each inline mark is written with, by its element's tag. */
+/** The delimiters each inline mark is written with, by its element's tag, as the message box reads them (`@repo/features/composer-markdown`), so a quote laid in draws its marks. */
 const MARK_DELIMITER: Readonly<Record<string, string>> = {
   STRONG: STRONG_DELIMITER,
   B: STRONG_DELIMITER,
-  EM: "_",
-  I: "_",
+  EM: "*",
+  I: "*",
   DEL: "~~",
   S: "~~",
 };

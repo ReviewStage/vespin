@@ -38,8 +38,8 @@ import { type HeldComposer, type MessageSender, useAgentComposer } from "./use-a
  * thoughts or the developer's words; each press lays a quote block in where
  * the caret stands and hands the box the caret on a line under it, the
  * message sent holds each quote as a Markdown blockquote set apart, a
- * message that did not go comes back with its quotes as blocks, a quote's
- * way off takes it out, and a typed `>` line alone sends; on a touch
+ * message that did not go comes back with its quotes as blocks, and a
+ * typed `>` line alone sends; on a touch
  * screen, whose handles may let go with no pointerup, Reply stands under a
  * selection once it rests, and with a mouse only once the pointer lets it
  * go; and on the agent's own tab, Reply stands while a message is out;
@@ -51,7 +51,7 @@ import { type HeldComposer, type MessageSender, useAgentComposer } from "./use-a
 const AGENT_WORDS = "Option A ships today. Option B waits for review.";
 /** The agent's words with marks, a code span, and a mention, which draws as its chip. */
 const MARKED_WORDS =
-  "**The invite form** ([@Teammate invitations](https://vespin.dev/acme/task/42)) keeps its _draft_ in `localStorage`.";
+  "**The invite form** ([@Teammate invitations](https://vespin.dev/acme/task/42)) keeps its *draft* in `localStorage`.";
 const AGENT_THOUGHT = "Weighing the release calendar.";
 const DEVELOPER_WORDS = "Which one is safer?";
 
@@ -190,9 +190,7 @@ async function mounted(answer: () => Promise<AgentAgentAnswer> = () => new Promi
     /** The box's blocks, in order: each quote as `> ` and its words, each line as typed. */
     blocks: () =>
       [...composerEditor(container).children].map((each) =>
-        each.matches("[data-quote]")
-          ? `> ${each.querySelector(".composer-quote-words")?.textContent ?? ""}`
-          : each.textContent,
+        each.matches("blockquote") ? `> ${each.textContent ?? ""}` : each.textContent,
       ),
     /** Presses Reply where it stands. */
     pressReply: async () => {
@@ -358,7 +356,7 @@ test("a triple-click's selection is offered Reply past words no selection takes,
   assert.equal(tab.reply() === undefined, true, "Reply goes once the developer's words are held");
 });
 
-test("a message that did not go comes back on Edit with its quotes as blocks, a quote's way off takes it out, and a quote alone sends as any words do", async () => {
+test("a message that did not go comes back on Edit with its quotes as blocks, and a quote alone sends as any words do", async () => {
   const tab = await mounted(() => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }));
   tab.select(AGENT_WORDS, "Option A", "today.");
   await tab.pressReply();
@@ -377,13 +375,6 @@ test("a message that did not go comes back on Edit with its quotes as blocks, a 
     "Ship it",
   ]);
 
-  const remove = tab.container.querySelector<HTMLButtonElement>(
-    'button[aria-label="Remove quote"]',
-  );
-  assert.ok(remove);
-  act(() => remove.click());
-  await settle();
-  assert.deepEqual(tab.blocks(), ["> Option B waits for review.", "Ship it"]);
   pressInComposer(tab.container, "Enter");
   await settle();
 
@@ -394,7 +385,7 @@ test("a message that did not go comes back on Edit with its quotes as blocks, a 
   await settle();
   assert.deepEqual(tab.sent, [
     "> Option A ships today.\n\n> Option B waits for review.\n\nShip it",
-    "> Option B waits for review.\n\nShip it",
+    "> Option A ships today.\n\n> Option B waits for review.\n\nShip it",
     "> Ship today?",
   ]);
 });

@@ -14,7 +14,6 @@ import type {
   ComposerChip,
   ComposerEditorHandle,
   ComposerInput,
-  ComposerQuote,
   ComposerTrigger,
   DescriptionEditorModule,
   MentionNode,
@@ -43,7 +42,7 @@ import { useSelectionToolbar } from "./selection-toolbar.js";
  * words the field draws while the draft is empty, rather than an attribute
  * of the editor's, so the recording masks it as it masks the words. A chip
  * the editor holds is drawn by the box, into the node's own element, as the
- * owner draws it (`chip`), and so are a file's (`files`) and a quote block (`quote`). Words
+ * owner draws it (`chip`), and so is a file's (`files`); a quote is the editor's own block. Words
  * selected raise the format toolbar over them, its marks alone
  * (`./selection-toolbar.tsx`), which stands aside while a list the box
  * opened stands, as its `aria-expanded` says. The field's
@@ -106,13 +105,12 @@ function typingElsewhere(): boolean {
   );
 }
 
-/** A chip the editor asked to be drawn: the element its node stands as, what it is, a skill, a mention, a file, or a quote, and the key its drawing goes under. */
+/** A chip the editor asked to be drawn: the element its node stands as, what it is, a skill, a mention, or a file, and the key its drawing goes under. */
 interface DrawnChip {
   readonly element: HTMLElement;
   readonly chip:
     | ComposerChip
     | { readonly mention: MentionNode; readonly node: MentionNodeDoors }
-    | { readonly quote: ComposerQuote }
     | { readonly file: string };
   readonly key: number;
 }
@@ -152,7 +150,6 @@ export function ComposerField({
   onPasteCut,
   onTrigger,
   chip,
-  quote,
   mentions,
   files,
   takesFocus = true,
@@ -185,8 +182,6 @@ export function ComposerField({
   onPasteCut?: (() => void) | undefined;
   onTrigger: (trigger: ComposerTrigger | undefined) => void;
   chip: (chip: ComposerChip) => ReactNode;
-  /** How a quote block the editor holds is drawn; its words alone where none is given. */
-  quote?: ((quote: ComposerQuote) => ReactNode) | undefined;
   /** What the box's mentions are picked and drawn with; none where the box takes no mentions, read as it mounts. */
   mentions?: ComposerFieldMentions | undefined;
   /** The files the box holds and how each one's chip is drawn, by its name; none where the box takes no files into its words, read as it mounts. */
@@ -285,7 +280,6 @@ export function ComposerField({
       onPasteCut: () => latest.current.onPasteCut?.(),
       onTrigger: (trigger) => latest.current.onTrigger(trigger),
       drawChip: (element, drawnChip) => draw(element, drawnChip),
-      drawQuote: (element, drawnQuote) => draw(element, { quote: drawnQuote }),
       files: now.files?.names,
       drawFile:
         now.files === undefined ? undefined : (element, name) => draw(element, { file: name }),
@@ -333,11 +327,9 @@ export function ComposerField({
         createPortal(
           "mention" in each.chip
             ? (mentions?.chip(each.chip.mention, each.chip.node) ?? `@${each.chip.mention.name}`)
-            : "quote" in each.chip
-              ? (quote?.(each.chip.quote) ?? each.chip.quote.words)
-              : "file" in each.chip
-                ? (files?.chip(each.chip.file) ?? fileMarker(each.chip.file))
-                : chip(each.chip),
+            : "file" in each.chip
+              ? (files?.chip(each.chip.file) ?? fileMarker(each.chip.file))
+              : chip(each.chip),
           each.element,
           each.key,
         ),
