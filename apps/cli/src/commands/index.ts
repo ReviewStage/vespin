@@ -12,7 +12,9 @@ import { ACCOUNT_COMMANDS } from "./account.js";
 import { agentCommand } from "./agent.js";
 import { apiCommand } from "./api.js";
 import { descriptionCommand } from "./description.js";
+import { githubCommand } from "./github.js";
 import { inboxCommand } from "./inbox.js";
+import { keysCommand } from "./keys.js";
 import { mcpCommand } from "./mcp.js";
 import { modelsCommand } from "./models.js";
 import { sectionCommand } from "./section.js";
@@ -28,8 +30,10 @@ export const COMMANDS = [
   descriptionCommand,
   agentCommand,
   workspaceCommand,
+  githubCommand,
   inboxCommand,
   modelsCommand,
+  keysCommand,
   mcpCommand,
   apiCommand,
   updateCommand,

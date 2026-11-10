@@ -50,6 +50,10 @@ Other commands:
 | `inbox list [--unread]` · `inbox view <thread>` | Threads agents posted, and one thread with its open ask |
 | `inbox answer <thread> <option>` · `inbox answer <thread> -F <json\|->` · `inbox reply <thread> -F <msg\|->` · `inbox close <thread>` | Answer a decide's option, `done` for a to-do, or a form as JSON by field; write on the thread; close it |
 | `agent shells <id>` · `agent shell <id> [<shell>] [--title t]` | An agent's Terminal tab shells; open a new one, or attach to one, in this terminal (Ctrl-] detaches). `shell` is interactive and refuses to run piped, so a coding agent hands it to the person |
+| `keys list` · `keys set <anthropic\|openai> [--plan]` · `keys remove <provider> [--plan] [--id id] [--yes]` · `keys for-agents <provider> on\|off [--id id]` | Your own provider keys and plans, which pay for your agents: which are set and how each stands (never a key); add an API key from stdin, checked with the provider first, or with `--plan` your Claude plan as `claude setup-token` printed it (a ChatGPT plan connects in the app alone); remove one (the first unless `--id`, which `list` prints); whether your plan pays for agents by default |
+| `github token show` · `github token set` · `github token remove [--yes]` | Your own classic GitHub token: the login it belongs to, its status, and expiry (never the token); save one from stdin, replacing the one set, which GitHub checks first; remove it |
+
+A key or token is read from stdin alone, never from an argument, and no command prints one back; Vespin's MCP server has no tool for either. Pipe one in only where the person handed it to you; otherwise ask them to run `keys set` or `github token set` themselves. `keys remove` and `github token remove` ask at a terminal; piped they need `--yes`, so remove only when the person asked.
 
 `description edit` replaces the whole description, so run `description show` first and edit that; piped, `show` prints JSON, so take its `body` (`jq -r .body`). Run `vespin <group> --help` for any flag not listed here.
 
