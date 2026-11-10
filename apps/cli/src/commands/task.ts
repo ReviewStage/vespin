@@ -392,6 +392,14 @@ const INVERSE_RELATION_KIND = {
   [TASK_RELATION_KIND.PARENT]: TASK_RELATION_KIND.SUB_TASK,
 } as const satisfies Record<TaskRelationKind, TaskRelationKind>;
 
+/** How a relation reads with the task first and the other task after it. */
+const RELATION_WORDS = {
+  [TASK_RELATION_KIND.BLOCKED_BY]: "blocked by",
+  [TASK_RELATION_KIND.BLOCKS]: "blocks",
+  [TASK_RELATION_KIND.SUB_TASK]: "parent of",
+  [TASK_RELATION_KIND.PARENT]: "sub-task of",
+} as const satisfies Record<TaskRelationKind, string>;
+
 /** A flag naming the other task in one kind of relation. */
 const relatedFlag = (kind: TaskRelationKind, words: string) =>
   Flag.String(kind).pipe(Flag.optional, Flag.withDescription(words));
@@ -446,7 +454,9 @@ const relateCommand = Command.make(
       const found = taskJson(plan, workspaceNamed(workspaces, plan.workspaceId));
       yield* answer({
         json: found,
-        lines: [`Related ${taskLabel(found)} ${found.name}: ${asked.other} is now ${asked.to}.`],
+        lines: [
+          `Related ${taskLabel(found)} ${found.name}: ${RELATION_WORDS[asked.to]} ${asked.other}.`,
+        ],
         ids: [found.id],
       });
     }),
