@@ -252,6 +252,8 @@ export function PlanAgents({
       {grouped ? (
         <ReplayUnmask>
           <GroupHeader
+            // Note that the head is drawn anew as it empties or fills, so a fold closed over agents now gone does not hide the next one, as the group used to leave and come back open.
+            key={holds ? "holds" : "empty"}
             heading={GROUP_HEADING.NONE}
             label={AGENTS_LIST}
             glyph={<EntityGlyph kind={ENTITY_KIND.AGENT} />}

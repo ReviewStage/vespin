@@ -106,57 +106,61 @@ function mount(
     pullRequests: [],
     phone: [],
   };
-  const control = agentsControl({
-    agents,
-    agentIds: agents.map((each) => each.id),
-    models: [],
-    pullRequests: new Map([
-      [
-        NEWEST.id,
-        {
-          number: 42,
-          title: "Send the invite email",
-          url: "https://github.com/acme/relay/pull/42",
-          state: PULL_REQUEST_STATE.MERGED,
-          checks: CHECK_SUMMARY.PASSING,
-          additions: 10,
-          deletions: 2,
-          changedFiles: 1,
-        },
-      ],
-    ]),
-    ...acts,
-  });
+  const controlOf = (listed: readonly AgentSummary[]) =>
+    agentsControl({
+      agents: listed,
+      agentIds: listed.map((each) => each.id),
+      models: [],
+      pullRequests: new Map([
+        [
+          NEWEST.id,
+          {
+            number: 42,
+            title: "Send the invite email",
+            url: "https://github.com/acme/relay/pull/42",
+            state: PULL_REQUEST_STATE.MERGED,
+            checks: CHECK_SUMMARY.PASSING,
+            additions: 10,
+            deletions: 2,
+            changedFiles: 1,
+          },
+        ],
+      ]),
+      ...acts,
+    });
   const host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  act(() =>
-    root?.render(
-      withQueryClient(
-        createElement(PlanAgents, {
-          agents: control,
-          held: { agents: new Map(), workers: new Map() },
-          tab: undefined,
-          folded,
-          waiting,
-          shown: true,
-          onOpenAgent: (agentId) => opened.agents.push(agentId),
-          onOpenPullRequest: (agentId) => opened.pullRequests.push(agentId),
-          newAgent: newAgent
-            ? { label: "New agent", onSelect: () => opened.phone.push("new agent") }
-            : undefined,
-          starts: [],
-          phone: !phone
-            ? undefined
-            : {
-                archived: null,
-                onOpenInbox: () => opened.phone.push("inbox"),
-              },
-        }),
+  // Note that a redraw renders the same group over another list, as the task's agents move under it.
+  const redraw = (listed: readonly AgentSummary[]) =>
+    act(() =>
+      root?.render(
+        withQueryClient(
+          createElement(PlanAgents, {
+            agents: controlOf(listed),
+            held: { agents: new Map(), workers: new Map() },
+            tab: undefined,
+            folded,
+            waiting,
+            shown: true,
+            onOpenAgent: (agentId) => opened.agents.push(agentId),
+            onOpenPullRequest: (agentId) => opened.pullRequests.push(agentId),
+            newAgent: newAgent
+              ? { label: "New agent", onSelect: () => opened.phone.push("new agent") }
+              : undefined,
+            starts: [],
+            phone: !phone
+              ? undefined
+              : {
+                  archived: null,
+                  onOpenInbox: () => opened.phone.push("inbox"),
+                },
+          }),
+        ),
       ),
-    ),
-  );
-  return { host, opened };
+    );
+  redraw(agents);
+  return { host, opened, redraw };
 }
 
 /** What a row says but when it last moved, which the fixture's clock leaves at no time worth reading. */
@@ -263,6 +267,19 @@ test("New agent stands on the group's head, a task with no agent draws the group
   const archived = mount([], { phone: true, waiting: waitingOn(NEWEST.id, 1) });
   press(archived.host, "1 thread needs you");
   assert.deepEqual(archived.opened.phone, ["inbox"]);
+});
+
+test("a group folded before its last agent left stands open again for the next one", () => {
+  const { host, redraw } = mount([OLDEST], { newAgent: true });
+  const head = host.querySelector<HTMLButtonElement>("button[aria-expanded]");
+  act(() => (head ?? assert.fail("the group folds")).click());
+  redraw([]);
+  redraw([NEWEST]);
+  assert.match(
+    host.querySelector('[aria-label="Agents"]')?.textContent ?? "",
+    new RegExp(NEWEST.title, "u"),
+    "the next agent's row stands",
+  );
 });
 
 test("the agents are chosen together by their boxes, and a row chosen among several archives every one chosen at once", async () => {
