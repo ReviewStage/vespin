@@ -105,6 +105,26 @@ it("a quit with unsaved description words asks first, with Cancel what Return an
   assert.equal(quit.held(), false);
 });
 
+it("a yes lets through only the quit it asked for again: held elsewhere, the next quit asks again", async () => {
+  const { quit, asked, quitsAgain, tell } = composedQuit();
+  let heldElsewhere = true;
+  quit.holdWhile(() => heldElsewhere);
+  tell(true);
+
+  assert.equal(quit.held(), true);
+  asked[0]?.answer(true);
+  await settled();
+  assert.equal(quitsAgain(), 1);
+
+  // The quit asked for again, held back by something else.
+  assert.equal(quit.held(), true);
+  assert.equal(asked.length, 1);
+
+  heldElsewhere = false;
+  assert.equal(quit.held(), true);
+  assert.equal(asked.length, 2);
+});
+
 it("a quit with nothing at stake asks nothing, and a panel that says its words saved is at stake no longer", () => {
   const { quit, asked, tell } = composedQuit();
 

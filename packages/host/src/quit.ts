@@ -97,12 +97,25 @@ export function desktopQuit(): DesktopQuit {
   };
 }
 
+/** Where a confirming hold stands: nothing asked, a question standing, or a yes owed to the one quit it asked for again. */
+const CONFIRMING = {
+  RESTING: "resting",
+  ASKING: "asking",
+  AGREED: "agreed",
+} as const;
+
+type Confirming = (typeof CONFIRMING)[keyof typeof CONFIRMING];
+
 /**
  * A hold that asks before a quit while `standing` says something would be
  * lost, as a Mac app asks before it loses anything: the quit is held while the
  * question stands, a second quit asked meanwhile asks nothing more, and a
  * yes asks for the quit `again`, which this hold then lets through. Nothing
  * standing holds nothing, so an ordinary quit asks nothing at all.
+ *
+ * Note that a yes lets through only the next quit, the one it asked for
+ * again, and then rests, because that quit may still be held elsewhere or
+ * canceled: a later quit must ask again rather than ride an old yes.
  */
 export function confirmingHold(options: {
   standing: () => boolean;
@@ -110,25 +123,29 @@ export function confirmingHold(options: {
   again: () => void;
 }): () => boolean {
   const { standing, confirm, again } = options;
-  let asking = false;
-  let agreed = false;
+  let confirming: Confirming = CONFIRMING.RESTING;
   return () => {
-    if (agreed || !standing()) return false;
-    if (asking) return true;
-    asking = true;
+    if (confirming === CONFIRMING.AGREED) {
+      confirming = CONFIRMING.RESTING;
+      return false;
+    }
+    if (!standing()) return false;
+    if (confirming === CONFIRMING.ASKING) return true;
+    confirming = CONFIRMING.ASKING;
     // A question that could not be asked is a no: nothing is lost without one.
-    void confirm()
-      .then(
-        (yes) => {
-          if (!yes) return;
-          agreed = true;
-          again();
-        },
-        () => undefined,
-      )
-      .finally(() => {
-        asking = false;
-      });
+    void confirm().then(
+      (yes) => {
+        if (!yes) {
+          confirming = CONFIRMING.RESTING;
+          return;
+        }
+        confirming = CONFIRMING.AGREED;
+        again();
+      },
+      () => {
+        confirming = CONFIRMING.RESTING;
+      },
+    );
     return true;
   };
 }
