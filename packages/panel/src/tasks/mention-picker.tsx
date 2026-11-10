@@ -126,6 +126,7 @@ import { inboxItemGlyph } from "./inbox-item-parts.js";
 import { PageCard } from "./page-card.js";
 import { PullRequestMark } from "./pull-request-mark.js";
 import { skillOption } from "./skill-ref.js";
+import { TaskKey } from "./task-standing.js";
 import { useKnownNames } from "./use-known-names.js";
 
 /**
@@ -429,6 +430,8 @@ type MentionRow = {
   readonly terms: string;
   /** A task's key, as `ACME-42`, which typed whole finds the task first. */
   readonly key?: string | undefined;
+  /** What a task's key is drawn from at the row's end (`TaskKey`), as ⌘K's and the Tasks list's rows draw it; none for any other row. */
+  readonly taskKey?: { readonly workspaceName: string; readonly number: number } | undefined;
   /** A person's picture, which their row wears; none for any other row. */
   readonly actor?: Actor | undefined;
   /** An agent's row as every agent menu draws it (`agent-menu-row.tsx`), or a skill's as the `/` list does (`skill-ref.tsx`): its glyph, its end, and its card; none for any other row. */
@@ -652,9 +655,14 @@ function workspaceTaskRows(
       {
         mention: { kind: MENTION_KIND.TASK, taskId: task.id },
         name: task.name,
-        detail: key,
+        // Note that the key stands at the row's end in TaskKey's words, as ⌘K and the Tasks list set it, never as the detail's plain words.
+        detail: undefined,
         terms: key === undefined ? task.name : `${key} ${task.name}`,
         key,
+        taskKey:
+          task.number === undefined
+            ? undefined
+            : { workspaceName: workspace.name, number: task.number },
       },
     ];
   });
@@ -1294,6 +1302,7 @@ function comboboxGroups(
   rowGlyph: RowGlyphOf,
 ): ComboboxGroup[] {
   const highlighted = groups.flatMap((group) => group.rows)[at];
+  const tokens = searchTokens(query);
   return groups.map((group) => ({
     label: group.label,
     options: group.rows.map((row) => ({
@@ -1302,7 +1311,17 @@ function comboboxGroups(
       words: row.name,
       // A group's foot keeps the glyph's room empty, so its words stand in line with the rows above.
       icon: isShowMore(row) ? null : (row.look?.icon ?? rowGlyph(row)),
-      hint: row === highlighted && opens(row) && !("from" in row) ? WALK_INTO_HINT : row.look?.end,
+      hint:
+        row === highlighted && opens(row) && !("from" in row)
+          ? WALK_INTO_HINT
+          : (row.look?.end ??
+            (row.taskKey === undefined ? undefined : (
+              <TaskKey
+                workspaceName={row.taskKey.workspaceName}
+                number={row.taskKey.number}
+                tokens={tokens}
+              />
+            ))),
       card: row.look?.card ?? row.card ?? rowCard(row),
       opens: "from" in row,
     })),

@@ -159,10 +159,10 @@ async function mountedOnDescription(chosen: MentionNode[]) {
   };
 }
 
-/** The rows the open list draws, by name and the detail beside it. */
+/** The rows the open list draws, by name, the detail beside it, and what stands at its end, as a task's key does. */
 const detailedRows = (page: HTMLElement) =>
   [...page.querySelectorAll('[role="option"]')].map((row) =>
-    [".ui-combobox-option-label", ".ui-combobox-option-detail"]
+    [".ui-combobox-option-label", ".ui-combobox-option-detail", ".ui-combobox-option-hint"]
       .map((part) => row.querySelector(part)?.textContent)
       .filter((words) => words !== undefined)
       .join(" · "),
