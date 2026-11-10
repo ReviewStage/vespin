@@ -92,6 +92,12 @@ const WORDS = {
 
 /** What turning each workspace experiment on or off changes for everyone in `workspace`, as its question says it. */
 const FLIP_WORDS = {
+  [EXPERIMENT.REWIND_FILES]: {
+    on: (workspace: string) =>
+      `Offers everyone in ${workspace} a choice, on Rewind and Edit, to put the agent's files back to how they stood before that message.`,
+    off: (workspace: string) =>
+      `Takes that choice off Rewind and Edit for everyone in ${workspace}; a rewind then takes back the conversation alone.`,
+  },
   [EXPERIMENT.DESCRIPTIONS]: {
     on: (workspace: string) =>
       `Shows each task's description, its comments and version history to everyone in ${workspace}, and has agents keep descriptions current as they work.`,

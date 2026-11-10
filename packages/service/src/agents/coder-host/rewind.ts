@@ -12,6 +12,7 @@ import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { LOCAL_AGENT_REFUSAL } from "@repo/features/agent-wire";
 import type { Sandbox } from "@repo/sandbox";
+import { EXPERIMENT } from "@repo/settings";
 import { Effect, Option, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
 import {
@@ -24,6 +25,7 @@ import {
 import { admitsPlanWriter, controlsAgent } from "../agent-reach.js";
 import { LaunchRefused, RESTORE_OUTCOME } from "../machine/agent-machine.js";
 import { deploymentLifecycle } from "../machine/agent-machines.js";
+import { experimentOnIn } from "../workspace-experiment-on.js";
 import { harnessOf } from "./native-runtime.js";
 import { runnerHalted } from "./runtime-sessions.js";
 
@@ -131,6 +133,10 @@ export const rewoundAgent = /* @__PURE__ */ Effect.fn("web/rewoundAgent")(functi
   if (!controlsAgent(account, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* admitsPlanWriter(account, agent);
   if (agent.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  // The files go back only while the agent's workspace has the experiment on: off, no window offers the choice, so a request asking it is malformed.
+  if (restoreFiles && !(yield* experimentOnIn(agent.organizationId, EXPERIMENT.REWIND_FILES))) {
+    return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+  }
   const target = { userId: agent.userId, conversationId: agent.conversationId };
   // A cut that would be refused stops nothing.
   const rewindable = yield* hostedStoreOrUnavailable(readRewindable(target, messageId));

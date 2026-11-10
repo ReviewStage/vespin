@@ -8,12 +8,15 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
+import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
+import { EXPERIMENT } from "@repo/settings";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { Effect } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test } from "vitest";
 import { fakeAppBridge } from "../testing/app-bridge.js";
+import { handState } from "../testing/app-state.js";
 import {
   composerEditor,
   editorBundleLanded,
@@ -104,9 +107,42 @@ async function settle(): Promise<void> {
   await settleQueries();
 }
 
-/** The agent's tab over the transcript, every rewind and send it makes written down in order, a rewind that puts the files back marked `:files`. */
-async function drawnTab(holdSends = false, messages: readonly AgentTranscriptMessage[] = MESSAGES) {
-  fakeAppBridge({});
+/**
+ * The agent's tab over the transcript, every rewind and send it makes written
+ * down in order, a rewind that puts the files back marked `:files`; the
+ * agent's workspace has the files-back experiment on where `restoring`.
+ */
+async function drawnTab(
+  holdSends = false,
+  messages: readonly AgentTranscriptMessage[] = MESSAGES,
+  restoring = false,
+) {
+  if (restoring) {
+    handState(
+      { [EXPERIMENT.REWIND_FILES]: true },
+      {
+        tasks: {
+          ...IDLE_TASKS_VIEW,
+          taskAgents: [
+            {
+              id: AGENT,
+              planId: TASK,
+              turnId: null,
+              title: AGENT_SUMMARY.title,
+              model: AGENT_SUMMARY.model,
+              effort: AGENT_SUMMARY.effort,
+              status: AGENT_SUMMARY.status,
+              createdAt: AGENT_SUMMARY.createdAt,
+              workspaceId: "workspace-1",
+              repository: "acme/relay",
+            },
+          ],
+        },
+      },
+    );
+  } else {
+    fakeAppBridge({});
+  }
   const calls: string[] = [];
   pushedTranscripts(() => [
     {
@@ -224,13 +260,26 @@ test("a line sent and not yet read back follows the last message, so editing it 
   assert.deepEqual(tab.calls, ["send:And the docs."], "nothing was cut yet");
 });
 
-test("an edited message whose turn recorded the files offers them back in its box, and Send in the question hands the choice on with the rewind", async () => {
-  const tab = await drawnTab(
-    false,
-    MESSAGES.map((each) =>
-      each.id === "middle" ? { ...each, filesRestorable: true as const } : each,
-    ),
+test("an edited message whose turn recorded the files offers them back in its box while the workspace has the experiment on, and Send in the question hands the choice on with the rewind", async () => {
+  const recorded = MESSAGES.map((each) =>
+    each.id === "middle" ? { ...each, filesRestorable: true as const } : each,
   );
+  const plain = await drawnTab(false, recorded);
+  const plainEdit = plain
+    .message("middle")
+    .querySelector<HTMLButtonElement>('button[aria-label="Edit"]');
+  assert.ok(plainEdit);
+  await act(async () => plainEdit.click());
+  await settle();
+  assert.equal(
+    plain.message("middle").querySelector('[role="checkbox"]'),
+    null,
+    "with the experiment off, the box offers no files back",
+  );
+  for (const root of roots.splice(0)) act(() => root.unmount());
+  document.body.innerHTML = "";
+
+  const tab = await drawnTab(false, recorded, true);
   const edit = tab.message("middle").querySelector<HTMLButtonElement>('button[aria-label="Edit"]');
   assert.ok(edit);
   await act(async () => edit.click());

@@ -327,14 +327,14 @@ test("Rewind conversation to here says whose messages it drops where a teammate'
 });
 
 /** Rewind conversation to here pressed on `reply-1` over `shared`, with the files offered back where the point allows: the dialog's words, its checkbox, and what the revert was handed. */
-async function revertOffered(shared: readonly AgentTranscriptMessage[]) {
+async function revertOffered(shared: readonly AgentTranscriptMessage[], restores: boolean) {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
   const nothing = () => undefined;
   const reverted: [string, boolean][] = [];
-  const points = rewindPoints(shared, false, "user-1");
+  const points = rewindPoints(shared, false, "user-1", new Set(), restores);
   await act(async () =>
     root.render(
       withQueryClient(
@@ -385,7 +385,7 @@ test("Rewind conversation to here offers the files back only where the next line
     each.id === "b" ? { ...each, filesRestorable: true as const } : each,
   );
 
-  const plain = await revertOffered(unrecorded);
+  const plain = await revertOffered(unrecorded, true);
   assert.equal(
     plain.checkbox(),
     undefined,
@@ -396,7 +396,14 @@ test("Rewind conversation to here offers the files back only where the next line
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 
-  const offered = await revertOffered(recorded);
+  const off = await revertOffered(recorded, false);
+  assert.equal(off.checkbox(), undefined, "with the experiment off, a recorded point offers none");
+  await off.confirm();
+  assert.deepEqual(off.reverted, [["b", false]]);
+  for (const root of roots.splice(0)) act(() => root.unmount());
+  document.body.innerHTML = "";
+
+  const offered = await revertOffered(recorded, true);
   const checkbox = offered.checkbox();
   assert.ok(checkbox, "the files are offered back");
   assert.equal(checkbox.getAttribute("aria-checked"), "false");

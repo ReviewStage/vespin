@@ -24,6 +24,7 @@ import { registerDevice } from "@repo/database/models/device-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { createTask, saveDescriptionText } from "@repo/database/models/task-store";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
+import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
@@ -55,6 +56,7 @@ import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
 import { keptPictureIdOf } from "@repo/features/conversation-picture-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
 import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
+import { EXPERIMENT } from "@repo/settings";
 import { TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
 import { temporaryDirectory } from "@repo/wire/testing";
 import { MockLanguageModelV4 } from "ai/test";
@@ -187,10 +189,10 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   });
 
   it.effect(
-    "a rewind asked to put the files back is refused where no snapshot of them stands for the line, and the conversation is left whole",
+    "a rewind asked to put the files back is refused as malformed while the workspace has the experiment off, and where no snapshot of them stands for the line once it is on, the conversation left whole either way",
     () =>
       Effect.gen(function* () {
-        const { owner, ask, source, stored, laterLine } = yield* sourceAgent;
+        const { owner, task, ask, source, stored, laterLine } = yield* sourceAgent;
         const db = yield* Database;
         const rowsOf = () =>
           db
@@ -198,14 +200,28 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
             .from(messages)
             .where(eq(messages.conversationId, stored.conversationId));
         const before = yield* rowsOf();
+        const asked = () =>
+          ask(
+            request(AGENT_REWIND, owner, {
+              method: "POST",
+              id: source.id,
+              body: { messageId: laterLine, restoreFiles: true },
+            }),
+          );
 
-        const answered = yield* ask(
-          request(AGENT_REWIND, owner, {
-            method: "POST",
-            id: source.id,
-            body: { messageId: laterLine, restoreFiles: true },
-          }),
+        const off = yield* asked();
+        assert.deepEqual(
+          [off.status, off.body],
+          [HOSTED_HTTP_STATUS.BAD_REQUEST, { error: HOSTED_API_ERROR.INVALID_REQUEST }],
         );
+
+        yield* setWorkspaceExperiment({
+          organizationId: task.workspaceId,
+          experiment: EXPERIMENT.REWIND_FILES,
+          on: true,
+          by: owner,
+        });
+        const answered = yield* asked();
 
         assert.deepEqual(answered.body, { error: HOSTED_API_ERROR.CHECKOUT_SNAPSHOT_MISSING });
         assert.equal(answered.status, HOSTED_HTTP_STATUS.CONFLICT);
