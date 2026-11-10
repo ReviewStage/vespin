@@ -437,6 +437,23 @@ interface CommentFocus {
   readonly onListing: (listing: CommentsFilter | undefined) => void;
 }
 
+/** What the description's comments are focused on: nothing, an open thread, or a thread being started. */
+const FOCUS_KIND = { NONE: "none", THREAD: "thread", STARTING: "starting" } as const;
+
+/** The one focus, so a thread opened while another is being started is never held behind it. */
+type Focused =
+  | { readonly kind: typeof FOCUS_KIND.NONE }
+  | { readonly kind: typeof FOCUS_KIND.THREAD; readonly id: string }
+  | { readonly kind: typeof FOCUS_KIND.STARTING; readonly pending: PendingThread };
+
+const UNFOCUSED: Focused = { kind: FOCUS_KIND.NONE };
+
+/** The thread drawn open, the one being started under its stand-in id. */
+function activeOf(focused: Focused): string | undefined {
+  if (focused.kind === FOCUS_KIND.THREAD) return focused.id;
+  return focused.kind === FOCUS_KIND.STARTING ? PENDING_THREAD : undefined;
+}
+
 const CommentFocusContext = createContext<CommentFocus>({
   active: undefined,
   onActive: () => undefined,
@@ -2520,8 +2537,7 @@ export function CommentFocusScope({
   /** A thread to open, as a link to it asks; opened once per ask. */
   reveal?: { readonly thread: string; readonly ask: number } | undefined;
 }): React.JSX.Element {
-  const [active, setActive] = useState<string | undefined>(undefined);
-  const [pending, setPending] = useState<PendingThread | undefined>(undefined);
+  const [focused, setFocused] = useState<Focused>(UNFOCUSED);
   const [revealed, setRevealed] = useState<CommentFocus["revealed"]>(undefined);
   // Note that the list stands across the descriptions opened, as a document app's comments view does, until it is put back.
   const [listing, setListing] = useState<CommentsFilter | undefined>(undefined);
@@ -2529,14 +2545,26 @@ export function CommentFocusScope({
   // Note that the thread being started is let go in the render the description changes in, so it is never posted to another description.
   if (focusedOn !== planId) {
     setFocusedOn(planId);
-    setActive(undefined);
-    setPending(undefined);
+    setFocused(UNFOCUSED);
     setRevealed(undefined);
   }
+  // Note that a thread opened or closed while one is being started changes nothing, since the one being started holds the focus until it is let go.
+  const onActive = useCallback((thread: string | undefined) => {
+    setFocused((was) => {
+      if (was.kind === FOCUS_KIND.STARTING) return was;
+      return thread === undefined ? UNFOCUSED : { kind: FOCUS_KIND.THREAD, id: thread };
+    });
+  }, []);
+  // Letting go of the thread being started leaves an open thread open.
+  const setPending = useCallback((pending: PendingThread | undefined) => {
+    setFocused((was) => {
+      if (pending !== undefined) return { kind: FOCUS_KIND.STARTING, pending };
+      return was.kind === FOCUS_KIND.STARTING ? UNFOCUSED : was;
+    });
+  }, []);
   const asked = useRef<number | undefined>(undefined);
   const onReveal = useCallback((thread: string) => {
-    setPending(undefined);
-    setActive(thread);
+    setFocused({ kind: FOCUS_KIND.THREAD, id: thread });
     setRevealed((was) => ({ thread, ask: (was?.ask ?? 0) + 1 }));
   }, []);
   useEffect(() => {
@@ -2544,18 +2572,18 @@ export function CommentFocusScope({
     asked.current = reveal.ask;
     onReveal(reveal.thread);
   }, [reveal, onReveal]);
-  const focus = useMemo(
-    () => ({
-      active: focusedOn !== planId ? undefined : pending === undefined ? active : PENDING_THREAD,
-      onActive: setActive,
-      pending: focusedOn === planId ? pending : undefined,
+  const focus = useMemo(() => {
+    const now = focusedOn === planId ? focused : UNFOCUSED;
+    return {
+      active: activeOf(now),
+      onActive,
+      pending: now.kind === FOCUS_KIND.STARTING ? now.pending : undefined,
       reveal: onReveal,
       revealed,
       listing,
       onListing: setListing,
-    }),
-    [active, pending, onReveal, revealed, listing, focusedOn, planId],
-  );
+    };
+  }, [focused, onActive, onReveal, revealed, listing, focusedOn, planId]);
   return (
     <CommentFocusContext.Provider value={focus}>
       <PendingSetter.Provider value={setPending}>{children}</PendingSetter.Provider>

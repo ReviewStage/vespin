@@ -6,9 +6,14 @@ import {
   INLINE_EDIT_LOOK,
   InlineEdit,
   type InlineEditEnd,
+  TASK_ROW_EDGES,
+  type TaskRowCell,
+  TaskRowDraft,
   usePressAway,
 } from "@repo/ui";
-import { Fragment, type RefObject, useMemo, useRef, useState } from "react";
+import { ReplayMask } from "@repo/ui/session-replay-marks";
+import { TASK_PROPERTY } from "@repo/ui/tasks-page-model";
+import { Fragment, type ReactNode, type RefObject, useMemo, useRef, useState } from "react";
 import { useMemberDirectory } from "../member-directory.js";
 import { type QuickAddInto, useQuickAddStart } from "../tasks/use-new-task.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -16,7 +21,7 @@ import { useAnnounceShown } from "../use-announce-shown.js";
 import { AssigneeChip, PriorityChip, StatusChip } from "./task-row-parts.js";
 
 /**
- * quick-add.tsx -- a Tasks page group's quick add: its + opens a new task's draft at the group's top, its title written in place as a line on a description is, and Return adds the task there with no agent, opening nothing.
+ * quick-add.tsx -- a Tasks page group's quick add, and a task's Sub-tasks': its + opens a new task's draft at the group's top, or at the end of the sub-tasks, its title written in place as a line on a description is, and Return adds the task there with no agent, opening nothing.
  *
  * The draft is drawn as its view draws a task, a Board's card or a List's
  * row (`QuickAddLine`), so it reads as the task it is about to be: the
@@ -31,6 +36,10 @@ import { AssigneeChip, PriorityChip, StatusChip } from "./task-row-parts.js";
  * next line. Escape, Return on nothing, or a press outside an empty draft
  * lets it go; the focus leaving for a chip's menu keeps it, so the title
  * ends by its keys alone.
+ *
+ * A task's Sub-tasks add into the task itself (`parentTaskId`), in its
+ * repository, since a tree works in one, its draft under the adds still
+ * out (`QUICK_ADD_ORDER.ADDS_FIRST`), so each stands where its row lands.
  *
  * Note that an added task waits for the task list to carry it before its
  * card draws (`compose-tasks.ts`'s quiet start), so its name stands muted
@@ -88,6 +97,17 @@ function askedOf(draft: DraftStanding): TaskStanding {
   };
 }
 
+/** The chips a quick add's draft draws in the cells of the properties a row draws, by the property each says. */
+const DRAFT_CELLS = [TASK_PROPERTY.PRIORITY, TASK_PROPERTY.STATUS, TASK_PROPERTY.ASSIGNEE] as const;
+
+/** The draft's chip for a property, where it has one. */
+function draftChip(draft: DraftParts, property: TaskRowCell): ReactNode {
+  if (property === TASK_PROPERTY.PRIORITY) return draft.priority;
+  if (property === TASK_PROPERTY.STATUS) return draft.status;
+  if (property === TASK_PROPERTY.ASSIGNEE) return draft.assignee;
+  return null;
+}
+
 /** A group's quick add, held by the group: whether its draft stands, what its chips chose, the adds out, and why the last was refused. */
 export interface QuickAdd {
   readonly drafting: boolean;
@@ -143,6 +163,7 @@ export function useQuickAdd(tasks: TasksControl, into: QuickAddInto): QuickAdd {
     setNote(undefined);
     const asked = {
       ...(into.repository === undefined ? undefined : { repository: into.repository }),
+      ...(into.parentTaskId === undefined ? undefined : { parentTaskId: into.parentTaskId }),
       standing: askedOf(draft),
     };
     void quickAdd(name, asked).then((refused) => {
@@ -192,47 +213,105 @@ export type QuickAddLine = (line: {
   readonly refused?: string;
 }) => React.ReactNode;
 
-/** A group's quick add as its first lines, each drawn as its view draws one (`line`): the draft, while it stands, the adds out under it, and why the last was refused. */
+/** Where a quick add's draft stands among the adds still out: over them, as a group's first lines, or under them, as a list's last, so each add stands where its row will. */
+export const QUICK_ADD_ORDER = {
+  DRAFT_FIRST: "draft-first",
+  ADDS_FIRST: "adds-first",
+} as const;
+
+type QuickAddOrder = (typeof QUICK_ADD_ORDER)[keyof typeof QUICK_ADD_ORDER];
+
+/** A group's quick add as its lines, each drawn as its view draws one (`line`): the draft, while it stands, the adds out beside it on the side `order` names, and why the last was refused. */
 export function QuickAddLines({
   quick,
   line,
+  order = QUICK_ADD_ORDER.DRAFT_FIRST,
 }: {
   quick: QuickAdd;
   line: QuickAddLine;
+  order?: QuickAddOrder | undefined;
 }): React.JSX.Element {
   const chip = { task: quick.draft, look: CHIP_LOOK.TOOLBAR, onStanding: quick.onStanding };
+  const draft = quick.drafting ? (
+    <Fragment key="draft">
+      {line({
+        draft: {
+          title: (
+            <InlineEdit
+              key={quick.round}
+              value=""
+              label={DRAFT_WORDS.LABEL}
+              placeholder={DRAFT_WORDS.PLACEHOLDER}
+              maxLength={TASK_BOUNDS.MAX_NAME_CHARS}
+              look={INLINE_EDIT_LOOK.WELL}
+              endsOnBlur={false}
+              editing
+              onEnd={quick.end}
+            />
+          ),
+          status: <StatusChip {...chip} />,
+          priority: <PriorityChip {...chip} />,
+          assignee: <AssigneeChip {...chip} />,
+        },
+      })}
+    </Fragment>
+  ) : null;
+  const adds = quick.pending.map((each) => (
+    <Fragment key={each.id}>{line({ pending: each.name })}</Fragment>
+  ));
   return (
     <>
-      {quick.drafting ? (
-        <Fragment key="draft">
-          {line({
-            draft: {
-              title: (
-                <InlineEdit
-                  key={quick.round}
-                  value=""
-                  label={DRAFT_WORDS.LABEL}
-                  placeholder={DRAFT_WORDS.PLACEHOLDER}
-                  maxLength={TASK_BOUNDS.MAX_NAME_CHARS}
-                  look={INLINE_EDIT_LOOK.WELL}
-                  endsOnBlur={false}
-                  editing
-                  onEnd={quick.end}
-                />
-              ),
-              status: <StatusChip {...chip} />,
-              priority: <PriorityChip {...chip} />,
-              assignee: <AssigneeChip {...chip} />,
-            },
-          })}
-        </Fragment>
-      ) : null}
-      {quick.pending.map((each) => (
-        <Fragment key={each.id}>{line({ pending: each.name })}</Fragment>
-      ))}
+      {order === QUICK_ADD_ORDER.ADDS_FIRST ? adds : draft}
+      {order === QUICK_ADD_ORDER.ADDS_FIRST ? draft : adds}
       {quick.note === undefined ? null : (
         <Fragment key="note">{line({ refused: quick.note })}</Fragment>
       )}
     </>
+  );
+}
+
+/**
+ * A quick add's line in a list of task rows, the List's group's or a task's
+ * Sub-tasks': a row of the list's own cells, raised as a card off the page
+ * as a Board's draft is, so it reads as one being written, the draft's
+ * chips in the cells of its priority, status, and assignee and its bare
+ * title in the name's, so it reads as the row it is about to be; a chip
+ * whose column the list does not draw stands after the title, so each
+ * stays in reach. An add still out stands as its row, its name muted, and
+ * why one was refused in the name's cell. After a run of a list's rows
+ * drawing only those near the view (`afterRun`), as a task's Sub-tasks
+ * stand, it holds each column as wide as the run's rows do and starts at
+ * their gutter.
+ */
+export function rowQuickAddLine(
+  properties: readonly TaskRowCell[],
+  afterRun = false,
+): QuickAddLine {
+  return ({ draft, pending, refused }) => (
+    <TaskRowDraft
+      cells={properties}
+      placed={afterRun}
+      edges={afterRun ? TASK_ROW_EDGES.LIST : TASK_ROW_EDGES.UNCHOSEN}
+      content={
+        draft === undefined
+          ? {}
+          : Object.fromEntries(
+              DRAFT_CELLS.map((property) => [property, draftChip(draft, property)]),
+            )
+      }
+      name={
+        <>
+          <ReplayMask>{draft?.title ?? pending}</ReplayMask>
+          {draft === undefined
+            ? null
+            : DRAFT_CELLS.filter((property) => !properties.includes(property)).map((property) => (
+                <Fragment key={property}>{draftChip(draft, property)}</Fragment>
+              ))}
+        </>
+      }
+      note={refused === undefined ? undefined : <ReplayMask>{refused}</ReplayMask>}
+      drafting={draft !== undefined}
+      pending={pending !== undefined}
+    />
   );
 }

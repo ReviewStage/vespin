@@ -1,5 +1,6 @@
 import type { CodeLines } from "@repo/features/tasks-view";
-import { Fragment, type ReactNode, useLayoutEffect, useRef } from "react";
+import { Fragment, type KeyboardEvent, type ReactNode, useLayoutEffect, useRef } from "react";
+import { isComposingKey } from "../../composing-key.js";
 import { cssCustomProperties } from "../../css.js";
 import { lineRuns } from "./code-card.js";
 
@@ -28,11 +29,19 @@ import { lineRuns } from "./code-card.js";
  * line that wraps keeps one number and its later rows stand under its words.
  * The gutter is as wide as the last line's number, and never narrower than
  * two digits, so the words do not move as a short script grows.
+ *
+ * A field that holds an edit not yet saved says so (`changed`): its border
+ * takes the accent, as a changed setting's does, so an unsaved edit is seen
+ * from across the page. Where it is handed `onSave`, ⌘S (Ctrl+S off a Mac)
+ * in it answers it, as in any code editor, the browser's own Save Page never
+ * opening; where it is handed `onEscape`, Escape in it answers that, as the
+ * text field's does. A key an input method is composing is the input
+ * method's.
  */
 
 /** The field's well, a text area's, whose ground lightens while the caret is in it. */
 const WELL =
-  "ui-code-editor grid min-w-0 rounded-control border border-border-strong bg-field transition-[border-color,background-color] duration-(--ui-duration-hover) ease-plain focus-within:bg-field-focus has-aria-invalid:border-destructive has-disabled:opacity-disabled";
+  "ui-code-editor grid min-w-0 rounded-control border border-border-strong bg-field transition-[border-color,background-color] duration-(--ui-duration-hover) ease-plain focus-within:bg-field-focus data-[changed=true]:border-accent-fill has-aria-invalid:border-destructive has-disabled:opacity-disabled";
 
 /** What both layers share, so their words stand on the same places, less where their words start. */
 const LAYER_BASE =
@@ -65,6 +74,21 @@ const GUTTER_DIGITS = 2;
 
 /** An empty line's stand-in beneath, so its block stands a line tall as the text area's empty line does. */
 const ZERO_WIDTH_SPACE = "\u200b";
+
+/** A Latin letter, as a key's character is on a layout that types them. */
+const LATIN_LETTER = /^[a-z]$/i;
+
+/**
+ * Whether a key is the save chord: ⌘S on a Mac, Ctrl+S elsewhere, with no
+ * other modifier. The character is read, as the app's shortcuts read it, so
+ * a Dvorak S is S; the physical S key answers too where its character is no
+ * Latin letter, as on a Cyrillic or Greek layout, which would type none.
+ */
+function savingKey(event: KeyboardEvent): boolean {
+  const key = event.key.toLowerCase();
+  const isS = key === "s" || (event.code === "KeyS" && !LATIN_LETTER.test(key));
+  return isS && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey;
+}
 
 /** One line as drawn beneath: in its colors where they spell it, plain where they do not. */
 function drawnLine(text: string, tokens: CodeLines[number] | undefined): ReactNode {
@@ -111,6 +135,9 @@ export function CodeEditor({
   placeholder,
   rows = 1,
   lineNumbers = false,
+  changed = false,
+  onSave,
+  onEscape,
   disabled,
   readOnly,
   autoFocus,
@@ -130,6 +157,12 @@ export function CodeEditor({
   rows?: number;
   /** Whether each line's number stands in a gutter before it, as in a script. */
   lineNumbers?: boolean;
+  /** Whether it holds an edit not yet saved, which its border says in the accent. */
+  changed?: boolean;
+  /** What ⌘S (Ctrl+S off a Mac) in it does; none leaves the key to the browser. */
+  onSave?: (() => void) | undefined;
+  /** What Escape in it does; none leaves the key to the window. */
+  onEscape?: (() => void) | undefined;
   disabled?: boolean | undefined;
   readOnly?: boolean | undefined;
   /** Whether the caret lands in it as it is drawn, as in a script just added. */
@@ -148,8 +181,20 @@ export function CodeEditor({
         "--ui-code-editor-gutter": `${Math.max(GUTTER_DIGITS, String(lineCount).length)}ch`,
       })
     : undefined;
+  // Note that a key taken is marked even mid-composition, so the browser's Save Page never opens, and answered only once composing ends.
+  const answerKey = (event: KeyboardEvent<HTMLTextAreaElement>) => {
+    const answer =
+      onSave !== undefined && savingKey(event)
+        ? onSave
+        : onEscape !== undefined && event.key === "Escape"
+          ? onEscape
+          : undefined;
+    if (answer === undefined) return;
+    event.preventDefault();
+    if (!isComposingKey(event)) answer();
+  };
   return (
-    <div className={WELL} style={gutter}>
+    <div className={WELL} style={gutter} data-changed={changed || undefined}>
       <pre className={`${LAYER_BASE} ${start} ${SHOWN}`} aria-hidden>
         {lineNumbers ? numberedLines(value, lines) : shownLines(value, lines)}
       </pre>
@@ -169,6 +214,7 @@ export function CodeEditor({
         autoCorrect="off"
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onKeyDown={onSave === undefined && onEscape === undefined ? undefined : answerKey}
       />
     </div>
   );

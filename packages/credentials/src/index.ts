@@ -1,5 +1,12 @@
 export { AccountClient, accountGateOpen, type StoredAccount } from "./account/client.js";
 export {
+  ACCOUNT_LIFECYCLE,
+  ACCOUNT_LIFECYCLE_MOVES,
+  type AccountLifecycle,
+  type AccountLifecycleKind,
+  moveAccountLifecycle,
+} from "./account/lifecycle.js";
+export {
   AccountSessionManager,
   DeletionUnconfirmed,
   SignInFailed,

@@ -1,5 +1,5 @@
 /**
- * ios-app-links.ts -- which of the home host's links the iPhone app opens, spelled once for the association file that hands them to the app and the app that routes them to its screens.
+ * ios-app-links.ts -- which of the home host's links the iPhone app opens, spelled once for the association file that hands them to the app and the app that routes them to its screens, and which pull requests on GitHub it opens on its own.
  *
  * A link the app draws a screen for is claimed for it in the host's Apple
  * App Site Association (`@repo/service/auth/apple-app-site-association`), so
@@ -16,7 +16,15 @@
  */
 
 import { IOS_OAUTH_CALLBACK_PATH } from "./ios-sign-in-wire.js";
-import { LINK_DESTINATION, type LinkDestination } from "./link-grammar.js";
+import {
+  GITHUB_PAGE,
+  gitHubPageLink,
+  LINK_DESTINATION,
+  type LinkDestination,
+  type NumberedAddress,
+  pullRequestAddressOf,
+  readLink,
+} from "./link-grammar.js";
 
 /** One path pattern of the association's `applinks` components, as Apple's format names its keys. */
 export interface AppLinkComponent {
@@ -30,6 +38,12 @@ export const IOS_APP_LINK_COMPONENTS: readonly AppLinkComponent[] = [
   { "/": IOS_OAUTH_CALLBACK_PATH, comment: "The sign-in's return." },
   { "/": "/*/task/*/inbox/*", comment: "A thread on a task's Inbox." },
   { "/": "/*/agent/*/inbox/*", comment: "A thread on an agent's Inbox." },
+  {
+    "/": "/*/agent/*/*",
+    exclude: true,
+    comment: "An agent's pages, workers, changes, and messages, which the web draws.",
+  },
+  { "/": "/*/agent/*", comment: "An agent, under its task or its workspace." },
   {
     "/": "/*/task/*/*",
     exclude: true,
@@ -45,7 +59,29 @@ export const IOS_APP_LINK_COMPONENTS: readonly AppLinkComponent[] = [
 const IOS_ROUTE = {
   INBOX: "/inbox",
   TASKS: "/tasks",
+  AGENT: "/tasks/agent",
+  PULL_REQUEST: "pull",
 } as const;
+
+/** A pull request one of the member's agents opened, by the agent and the pull request's page on GitHub. */
+export interface AgentPullRequestLink {
+  readonly agentId: string;
+  readonly pullRequest: { readonly url: string };
+}
+
+/** The path an address names, without its query, its fragment, or a trailing slash. */
+function addressPath(address: string): string {
+  return (address.split(/[?#]/u)[0] ?? "").replace(/\/$/u, "");
+}
+
+/** Whether two pull requests on GitHub are one: the same number in the same repository, whatever its case. */
+function samePullRequest(one: NumberedAddress, other: NumberedAddress | undefined): boolean {
+  return (
+    other !== undefined &&
+    one.number === other.number &&
+    one.repository.toLowerCase() === other.repository.toLowerCase()
+  );
+}
 
 /**
  * The app's route for a place it draws, or none for a place it leaves to the
@@ -62,7 +98,42 @@ export function iosAppRouteOf(place: LinkDestination): string | undefined {
       return IOS_ROUTE.TASKS;
     case LINK_DESTINATION.TASK:
       return `${IOS_ROUTE.TASKS}/${encodeURIComponent(place.planId)}`;
+    case LINK_DESTINATION.AGENT:
+      return iosAgentRoute(place.agentId);
     default:
       return undefined;
   }
+}
+
+/** The app's route for an agent's page: its transcript and its composer. */
+export function iosAgentRoute(agentId: string): string {
+  return `${IOS_ROUTE.AGENT}/${encodeURIComponent(agentId)}`;
+}
+
+/** The app's route for a pull request an agent opened, on its own screen under the agent's page. */
+export function iosPullRequestRoute(agentId: string, number: number): string {
+  return `${iosAgentRoute(agentId)}/${IOS_ROUTE.PULL_REQUEST}/${number}`;
+}
+
+/**
+ * The app's route for an address a link or a chip names: a vespin.dev
+ * place the app draws, or a pull request's own page on GitHub that one of
+ * `pullRequests` is, which opens on the app's pull request screen; none for
+ * any other, which Safari opens. Note that a page under a pull request, its
+ * Files changed or a commit, stays GitHub's, since the app draws no diff.
+ */
+export function iosAppRouteOfAddress(
+  address: string,
+  pullRequests: readonly AgentPullRequestLink[],
+): string | undefined {
+  const read = readLink(address);
+  if (read !== undefined) return iosAppRouteOf(read.place);
+  const named = pullRequestAddressOf(address);
+  if (named === undefined) return undefined;
+  const own = gitHubPageLink({ kind: GITHUB_PAGE.PULL_REQUEST, ...named });
+  if (addressPath(address).toLowerCase() !== own.toLowerCase()) return undefined;
+  const opened = pullRequests.find(({ pullRequest }) =>
+    samePullRequest(named, pullRequestAddressOf(pullRequest.url)),
+  );
+  return opened === undefined ? undefined : iosPullRequestRoute(opened.agentId, named.number);
 }

@@ -766,3 +766,24 @@ it.effect("an account stored without an id still refuses a session for another a
     assert.deepEqual(subject.endedSessions, ["signed-session"]);
   }),
 );
+
+it.effect("a sign-out ends a sign-in again still open, which answers no", () =>
+  Effect.gen(function* () {
+    const subject = yield* manager({ stored: STORED });
+    subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
+    const again = yield* Effect.forkChild(subject.instance.signInAgain(ACCOUNT_PROVIDER.GITHUB));
+    yield* Effect.promise(() => armed(subject.authorizations));
+
+    yield* subject.instance.signOut();
+
+    // A trip left open would wait out the loopback's timeout, so a few turns stand in for it.
+    const answered = yield* Effect.race(
+      Fiber.join(again),
+      Effect.as(
+        Effect.promise(() => turns(500)),
+        "still open",
+      ),
+    );
+    assert.equal(answered, false);
+  }),
+);

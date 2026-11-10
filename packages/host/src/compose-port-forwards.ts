@@ -32,7 +32,7 @@ import {
 import { type ForwardedPort, forwardPort } from "@repo/features/port-forward-tunnel";
 import type { ListenOnLoopback, OpenTerminalSocket } from "@repo/features/relay-socket";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
-import { Duration, Effect, Exit, Schedule, Scope } from "effect";
+import { Duration, Effect, Exit, Schedule, Scope, Semaphore } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import type { AccountComposer } from "./compose-account.js";
 import type { Composer } from "./composer.js";
@@ -72,6 +72,23 @@ interface Forward {
   readonly scope: Scope.Closeable;
 }
 
+/** A port shared by public link, and its link. */
+interface SharedLink {
+  readonly port: number;
+  readonly url: string;
+}
+
+/** Whether the agent's public link has been read yet. */
+const SHARE_READ = {
+  UNREAD: "unread",
+  READ: "read",
+} as const;
+
+/** The agent's public link: not yet read, or read, with the port shared where one is. */
+type ShareStanding =
+  | { readonly read: typeof SHARE_READ.UNREAD }
+  | { readonly read: typeof SHARE_READ.READ; readonly shared?: SharedLink };
+
 /** The one agent forwarded, everything it began in its scope. */
 interface Forwarding {
   readonly agentId: string;
@@ -80,15 +97,24 @@ interface Forwarding {
   readonly forwards: Map<number, Forward>;
   /** What serves each port, as the last read said. */
   labels: ReadonlyMap<number, string>;
-  /** The port shared by public link and its link; none until read, or where none is. */
-  shared: { readonly port: number; readonly url: string } | undefined;
-  sharedRead: boolean;
-  /** How many times a share or its close set `shared`, so a read begun before one does not undo it. */
+  /** The port shared by public link and its link, as last read or set. */
+  share: ShareStanding;
+  /** How many times a share or its close set `share`, so a read begun before one does not undo it. */
   shareMoves: number;
 }
 
 /** What an agent forwarding is off for answers. */
 const OFF: PortForwardingAnswer = { on: false, running: false, ports: [] };
+
+/** The link as read or set: the port shared, or none. */
+function shareRead(shared: SharedLink | null): ShareStanding {
+  return shared === null ? { read: SHARE_READ.READ } : { read: SHARE_READ.READ, shared };
+}
+
+/** The forwarded agent's shared port and link, where one is known. */
+function sharedLink(current: Forwarding): SharedLink | undefined {
+  return current.share.read === SHARE_READ.READ ? current.share.shared : undefined;
+}
 
 export function composePortForwards(
   dependencies: PortForwardsDependencies,
@@ -101,6 +127,8 @@ export function composePortForwards(
     const gate = () => kernel.runMode.sendsNetwork && account.capabilitiesActive();
     let forwarding: Forwarding | undefined;
     let toldText = JSON.stringify(null);
+    // Note that turning forwarding on or off runs one at a time, because each lets the forwarded agent go across a wait and a second move in that wait would leave a scope no one closes.
+    const oneAtATime = (yield* Semaphore.make(1)).withPermits(1);
 
     /** How the forwarded agent's forwarding stands, told to the windows where it moved since it was last told. */
     const tell = Effect.sync(() => {
@@ -154,13 +182,14 @@ export function composePortForwards(
           if (!current.forwards.has(port))
             current.forwards.set(port, yield* forwarded(current, port));
         }
-        if (answer.running && (!current.sharedRead || current.shared !== undefined)) {
+        if (
+          answer.running &&
+          (current.share.read === SHARE_READ.UNREAD || sharedLink(current) !== undefined)
+        ) {
           const moves = current.shareMoves;
           const read = yield* withHttp(client.shared(current.agentId));
-          if (!("failure" in read) && moves === current.shareMoves) {
-            current.shared = read.shared ?? undefined;
-            current.sharedRead = true;
-          }
+          if (!("failure" in read) && moves === current.shareMoves)
+            current.share = shareRead(read.shared);
         }
         yield* tell;
       });
@@ -168,7 +197,7 @@ export function composePortForwards(
     /** The ending agent's public link closed, a close the service refuses logged rather than holding forwarding on. */
     const unshared = (ending: Forwarding) =>
       Effect.gen(function* () {
-        if (ending.shared === undefined) return;
+        if (sharedLink(ending) === undefined) return;
         const answer = yield* withHttp(client.unshare(ending.agentId));
         if ("failure" in answer)
           yield* Effect.logWarning(
@@ -193,25 +222,28 @@ export function composePortForwards(
               Effect.andThen(tell),
             );
       });
-    const turnOff = letGo(false);
+    /** Forwarding let go for the agent, unless another agent has taken it since. */
+    const turnOff = (agentId: string) =>
+      oneAtATime(
+        Effect.suspend(() => (forwarding?.agentId === agentId ? letGo(false) : Effect.void)),
+      );
 
-    /** Forwarding let go for the agent it was on, unless another agent has taken it since. */
+    /** Forwarding let go for the forward it was on, unless another has taken it since. */
     const released = (current: Forwarding) =>
-      Effect.suspend(() => (forwarding === current ? turnOff : Effect.void));
+      oneAtATime(Effect.suspend(() => (forwarding === current ? letGo(false) : Effect.void)));
 
     /** Forwarding started for the agent, and whichever agent was forwarded before let go. */
     const turnOn = (agentId: string) =>
       Effect.gen(function* () {
         if (forwarding?.agentId === agentId) return;
-        yield* turnOff;
+        yield* letGo(false);
         const current: Forwarding = {
           agentId,
           scope: yield* Scope.fork(lifetimeScope),
           running: false,
           forwards: new Map(),
           labels: new Map(),
-          shared: undefined,
-          sharedRead: false,
+          share: { read: SHARE_READ.UNREAD },
           shareMoves: 0,
         };
         forwarding = current;
@@ -220,7 +252,7 @@ export function composePortForwards(
           Effect.repeat(look(current), Schedule.spaced(PORT_FORWARD.LOOK_EVERY)),
           current.scope,
         );
-      });
+      }).pipe(oneAtATime);
 
     /** How the agent's forwarding stands, its ports the lowest first. */
     const standing = (agentId: string): PortForwardingAnswer => {
@@ -228,7 +260,8 @@ export function composePortForwards(
       const forwards = [...forwarding.forwards.values()]
         .map((forward) => forward.forwarded)
         .sort((a, b) => a.port - b.port);
-      const { shared, labels } = forwarding;
+      const { labels } = forwarding;
+      const shared = sharedLink(forwarding);
       return {
         on: true,
         running: forwarding.running,
@@ -252,7 +285,7 @@ export function composePortForwards(
       PORT_FORWARD_SET: ({ agentId, on }) =>
         Effect.gen(function* () {
           if (!on) {
-            if (forwarding?.agentId === agentId) yield* turnOff;
+            yield* turnOff(agentId);
             return standing(agentId);
           }
           // Note that a signed-out host refuses in the act's own sentence, as the Gateway's refusal of its method was drawn.
@@ -268,19 +301,18 @@ export function composePortForwards(
           if (port === null) {
             const answer = yield* withHttp(client.unshare(agentId));
             if ("failure" in answer) return yield* Effect.fail(new ActRefused({}));
-            current.shared = undefined;
+            current.share = shareRead(null);
           } else {
             const answer = yield* withHttp(client.share(agentId, port));
             if ("failure" in answer) return yield* Effect.fail(new ActRefused({}));
-            current.shared = { port, url: answer.url };
+            current.share = shareRead({ port, url: answer.url });
           }
           current.shareMoves++;
-          current.sharedRead = true;
           yield* tell;
           return standing(agentId);
         }),
     };
 
-    return { methods, acts, lifetime: Effect.void, reset: letGo(true) };
+    return { methods, acts, lifetime: Effect.void, reset: oneAtATime(letGo(true)) };
   });
 }

@@ -18,7 +18,7 @@ import {
   integrationAccountLabel,
 } from "@repo/features/integration-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { readFailedWords } from "@repo/features/words";
+import { readFailedWords, VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   AccountWords,
@@ -90,10 +90,19 @@ const ROW_LINE = {
 
 /** What a row offers to mend its connection, on its button or in its ⋯. */
 const ROW_ACT = {
-  RECONNECT: "Reconnect",
+  RECONNECT: VERB.RECONNECT,
   ADD_ACCOUNT: "Add another account",
   RENAME: "Rename",
 } as const;
+
+/** Where a row's own grant stands: at rest, a sign-in being begun, or one being called off. */
+const ROW_GRANT = {
+  IDLE: "idle",
+  CONNECTING: "connecting",
+  CANCELING: "canceling",
+} as const;
+
+type RowGrant = (typeof ROW_GRANT)[keyof typeof ROW_GRANT];
 
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 
@@ -289,16 +298,16 @@ export function IntegrationRow({
   const bySignIn = grantedBySignIn(provider);
   const github = useGitHubConnection();
   const signIn = statuses.signInOf(connection);
-  const [connecting, setConnecting] = useState(false);
-  // Note that the sign-in's own Cancel is the one busy while it is called off, as Connect is while one begins.
-  const [canceling, setCanceling] = useState(false);
+  // Note that the sign-in's own Cancel is the one busy while it is called off, as Connect is while one begins, and either holds every other grant back.
+  const [stage, setStage] = useState<RowGrant>(ROW_GRANT.IDLE);
   const [rejection, setRejection] = useState<string | undefined>(undefined);
   // Several accounts at a provider are each renamed, and each disconnected leaving the others.
   const several = row.accounts > 1 && account !== undefined;
 
   /** How a grant begun went, said under the row where it could not begin. */
   const began = (outcome: (typeof GRANT_OUTCOME)[keyof typeof GRANT_OUTCOME]) => {
-    setConnecting(false);
+    // A Cancel under way stands until it answers, whatever a grant begun before it answers.
+    setStage((now) => (now === ROW_GRANT.CANCELING ? now : ROW_GRANT.IDLE));
     if (outcome === GRANT_OUTCOME.NOT_OPENED) setRejection(ROW_LINE.NOT_OPENED);
     if (outcome === GRANT_OUTCOME.REFUSED) {
       setRejection(`${name} could not be connected. Try again.`);
@@ -306,24 +315,22 @@ export function IntegrationRow({
   };
 
   const connect = useCallback(() => {
-    setConnecting(true);
+    setStage(ROW_GRANT.CONNECTING);
     setRejection(undefined);
     void grant.begin(connection).then(began);
   }, [grant, connection, name]);
 
   const addAccount = () => {
-    setConnecting(true);
+    setStage(ROW_GRANT.CONNECTING);
     setRejection(undefined);
     void grant.add(provider).then(began);
   };
 
   const cancel = useCallback(() => {
-    setConnecting(true);
-    setCanceling(true);
+    setStage(ROW_GRANT.CANCELING);
     setRejection(undefined);
     void cancelSignIn(connection).then((canceled) => {
-      setConnecting(false);
-      setCanceling(false);
+      setStage(ROW_GRANT.IDLE);
       if (!canceled) setRejection(`The sign-in to ${name} could not be canceled. Try again.`);
     });
   }, [cancelSignIn, connection, name]);
@@ -356,6 +363,7 @@ export function IntegrationRow({
     confirmFailure(FAILURE_SURFACE.INTEGRATION_DISCONNECT),
   );
 
+  const busy = stage !== ROW_GRANT.IDLE;
   const line = rowLine(provider, status, health, signIn);
   const broken = connected && health.kind === CONNECTION_HEALTH.BROKEN && health.reconnect;
   const waiting = !connected && signIn?.kind === SIGN_IN.WAITING;
@@ -370,7 +378,7 @@ export function IntegrationRow({
   const reconnect = {
     label: ROW_ACT.RECONNECT,
     icon: <RefreshCwIcon />,
-    disabled: connecting,
+    disabled: busy,
     onSelect: connect,
   };
   const leave = {
@@ -388,7 +396,7 @@ export function IntegrationRow({
           {
             label: ROW_ACT.ADD_ACCOUNT,
             icon: <PlusIcon />,
-            disabled: connecting,
+            disabled: busy,
             onSelect: addAccount,
           },
         ]
@@ -456,18 +464,18 @@ export function IntegrationRow({
             <>
               <Button
                 variant={BUTTON_VARIANT.QUIET}
-                busy={connecting && !canceling}
+                busy={stage === ROW_GRANT.CONNECTING}
                 busyLabel="Reopening the sign-in"
-                disabled={canceling}
+                disabled={stage === ROW_GRANT.CANCELING}
                 onClick={connect}
               >
                 {SIGN_IN_ACTION.REOPEN}
               </Button>
               <Button
                 variant={BUTTON_VARIANT.OUTLINE}
-                busy={canceling}
+                busy={stage === ROW_GRANT.CANCELING}
                 busyLabel="Canceling the sign-in"
-                disabled={connecting && !canceling}
+                disabled={stage === ROW_GRANT.CONNECTING}
                 onClick={cancel}
               >
                 {SIGN_IN_ACTION.CANCEL}
@@ -480,7 +488,7 @@ export function IntegrationRow({
               variant={BUTTON_VARIANT.OUTLINE}
               // Note that the name starts with the words the button shows, so a voice command that says them finds it, and names the row, since several rows may offer the same words.
               label={`${grantLabel(status, signIn)} ${name}`}
-              busy={connecting}
+              busy={busy}
               busyLabel={`Connecting ${name}`}
               onClick={connect}
             >

@@ -3235,7 +3235,7 @@ function AgentTabView({
             brief={agent.brief}
             tools={(narrow) => (
               <>
-                <AgentPlace agent={agent} readerId={readerId} move={placeMove} narrow={narrow} />
+                <AgentPlace agent={agent} move={placeMove} narrow={narrow} />
                 <ForwardChip agent={agent} />
               </>
             )}

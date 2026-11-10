@@ -27,7 +27,6 @@ import {
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
 import { INBOX_STATUS, inboxWaitsOn } from "@repo/features/inbox-wire";
-import { iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { cardTitle } from "@repo/features/plain-words";
 import {
@@ -45,7 +44,6 @@ import {
   LIST_LOOK,
   type ListLook,
   ListRow,
-  type MarkdownPlace,
   type MarkdownVideo,
   PATH_PART,
   ROW_ACTION_TONE,
@@ -60,7 +58,6 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { openURL } from "expo-linking";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -73,6 +70,7 @@ import {
   useThreadMedia,
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
+import { openInSafari, useOpenLink } from "../open-link.js";
 import { SettingsBarButton, useSettingsAccount } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
@@ -106,19 +104,6 @@ const UNTITLED_AGENT = "Agent";
 /** What the list's search says where it finds nothing. */
 function noMatchWords(search: string): string {
   return `No items match “${search}”.`;
-}
-
-/** A link a message names opened where it goes: a place the app draws on its own screen, and anything else in Safari. */
-function useOpenPlace(): (place: MarkdownPlace) => void {
-  const router = useRouter();
-  return (place) => {
-    const route = iosAppRouteOf(place.place);
-    if (route !== undefined) {
-      router.push(route);
-      return;
-    }
-    openURL(place.href).catch((error: unknown) => console.error("The link did not open.", error));
-  };
 }
 
 type InboxRowsProps = {
@@ -279,7 +264,7 @@ function ThreadDetail({
 }) {
   const colors = useColors();
   const { holder, item } = listed;
-  const openPlace = useOpenPlace();
+  const openLink = useOpenLink();
   const titles = useAgentTitles();
   const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
   const messages = useMemo(
@@ -323,7 +308,7 @@ function ThreadDetail({
       itemId: item.id,
     } as const;
     const address = linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
-    openURL(address).catch((error: unknown) => console.error("The thread did not open.", error));
+    openInSafari(address);
   };
   const sources = useThreadMedia(item.id, media);
   useReadOnOpen(listed);
@@ -379,7 +364,7 @@ function ThreadDetail({
       title={cardTitle(item.title)}
       messages={drawn}
       repository={holder.task.repository}
-      onOpenPlace={openPlace}
+      onOpenLink={openLink}
       pictureSource={pictureSource}
       videoAt={videoAt}
       standing={item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(item)}
@@ -418,6 +403,37 @@ function ThreadDetail({
       </GlassDock>
     </>
   );
+}
+
+/** What stands where a thread named by its id is not drawn: that the feed is still read, that it could not be, with Retry, or that it holds no such thread. */
+function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
+  const { refresh, refreshTasks } = useInboxActs();
+  if (feed === INBOX_FEED.READING) return <EmptyState title={READING_INBOX} symbol="tray" />;
+  if (feed === INBOX_FEED.FAILED) {
+    return (
+      <EmptyState
+        title={INBOX_NOT_READ}
+        symbol="exclamationmark.triangle"
+        action={{
+          label: RETRY,
+          // The feed or the task list that holds the thread failed, so both are read again.
+          onPress: () => void Promise.all([refresh(), refreshTasks()]),
+        }}
+      />
+    );
+  }
+  return <EmptyState title={THREAD_NOT_FOUND} symbol="tray" />;
+}
+
+/**
+ * A split view's detail: the thread the list selected, read by its id as a
+ * pushed screen reads it, so a link to a thread of a workspace the list does
+ * not show still opens it, and one still read, refused, or missing says so.
+ */
+function ThreadColumn({ id }: { readonly id: string }) {
+  const { listed, readerId, feed } = useInboxThread(id);
+  if (listed === undefined) return <ThreadNotDrawn feed={feed} />;
+  return <ThreadDetail listed={listed} readerId={readerId} />;
 }
 
 /** What the list screens share: the scope and its pills, the search, the listing under both, and the acts on it. */
@@ -503,7 +519,6 @@ function InboxSplitScreen({
 }) {
   const { show, search, setSearch, listing, acts, scopes, menu } = useInboxScreen(selected);
   const account = useSettingsAccount();
-  const chosen = listing.listed.find(({ item }) => item.id === selected);
   return (
     <>
       <Stack.Screen options={{ headerShown: false }} />
@@ -532,10 +547,10 @@ function InboxSplitScreen({
             </ScopePills>
           }
           detail={
-            chosen === undefined ? (
+            selected === undefined ? (
               <EmptyState title={SELECT_A_THREAD} symbol="tray" />
             ) : (
-              <ThreadDetail key={chosen.item.id} listed={chosen} readerId={listing.readerId} />
+              <ThreadColumn key={selected} id={selected} />
             )
           }
           sidebarAccount={account}
@@ -562,7 +577,6 @@ export function InboxListScreen() {
 export function InboxThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { listed, readerId, feed } = useInboxThread(id);
-  const { refresh, refreshTasks } = useInboxActs();
   if (useHandToSplit(SPLIT_TAB.INBOX, id)) return null;
   return (
     <>
@@ -573,21 +587,7 @@ export function InboxThreadScreen() {
         <ThreadDetail listed={listed} readerId={readerId} inStack />
       ) : (
         <Screen>
-          {feed === INBOX_FEED.READING ? (
-            <EmptyState title={READING_INBOX} symbol="tray" />
-          ) : feed === INBOX_FEED.FAILED ? (
-            <EmptyState
-              title={INBOX_NOT_READ}
-              symbol="exclamationmark.triangle"
-              action={{
-                label: RETRY,
-                // The feed or the task list that holds the thread failed, so both are read again.
-                onPress: () => void Promise.all([refresh(), refreshTasks()]),
-              }}
-            />
-          ) : (
-            <EmptyState title={THREAD_NOT_FOUND} symbol="tray" />
-          )}
+          <ThreadNotDrawn feed={feed} />
         </Screen>
       )}
     </>

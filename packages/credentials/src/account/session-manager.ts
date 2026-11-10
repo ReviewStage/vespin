@@ -35,6 +35,7 @@ import {
   type StoredAccount,
   withIssuedAccountTokens,
 } from "./client.js";
+import { ACCOUNT_LIFECYCLE, type AccountLifecycle, moveAccountLifecycle } from "./lifecycle.js";
 import { ACCOUNT_STATUS, type AccountProvider, type AccountSnapshot } from "./snapshot.js";
 
 /** Why a sign-in again that landed on another account is refused. */
@@ -90,6 +91,35 @@ function connectionSource(provider: AccountProvider): LoopbackConnectionSource |
   if (provider === LOOPBACK_CONNECTION_SOURCE.GITHUB) return LOOPBACK_CONNECTION_SOURCE.GITHUB;
   return undefined;
 }
+
+/**
+ * The presses on Cancel a sign-in waiting on a sign-out reads back once it
+ * ends: one cell per round of presses, set when Cancel withdraws them, so a
+ * press withdraws every sign-in waiting and none begun after it.
+ */
+interface WaitingPresses {
+  withdrawn: boolean;
+}
+
+/** What the session is doing beside the account it holds (`lifecycle.ts`), with the fiber each kind but idle runs. */
+type SessionLifecycle = AccountLifecycle<{
+  [ACCOUNT_LIFECYCLE.IDLE]: Record<never, never>;
+  [ACCOUNT_LIFECYCLE.SIGNING_IN]: {
+    readonly fiber: Fiber.Fiber<AccountSnapshot, SignInFailed>;
+    readonly cancel: () => void;
+  };
+  [ACCOUNT_LIFECYCLE.SIGNING_IN_AGAIN]: {
+    readonly provider: AccountProvider;
+    readonly fiber: Fiber.Fiber<boolean, SignInFailed>;
+    readonly cancel: () => void;
+  };
+  [ACCOUNT_LIFECYCLE.SIGNING_OUT]: {
+    readonly fiber: Fiber.Fiber<AccountSnapshot>;
+    readonly presses: WaitingPresses;
+  };
+}>;
+
+const IDLE: SessionLifecycle = { kind: ACCOUNT_LIFECYCLE.IDLE };
 
 interface AccountSessionStore {
   readAccount(): Effect.Effect<StoredAccount | undefined>;
@@ -214,18 +244,22 @@ export class AccountSessionManager {
    */
   readonly changes: Effect.Effect<Stream.Stream<AccountSnapshot>, never, Scope.Scope>;
   #account: AccountSnapshot = { status: ACCOUNT_STATUS.SIGNED_OUT };
+  /** Moved by every change of the account, so work begun before one stores nothing over it (`#storeCurrent`). */
   #generation = 0;
-  #signInRunning: Fiber.Fiber<AccountSnapshot, SignInFailed> | undefined;
-  #againRunning:
-    | { readonly provider: AccountProvider; readonly fiber: Fiber.Fiber<boolean, SignInFailed> }
+  /**
+   * One trip, the sign-out a refused renewal started, or nothing, moved only
+   * through `#move`. Note that only that sign-out stands here, the one
+   * `refresh` and a sign-in wait on and no renewal does; a sign-out pressed
+   * ends the trip standing and moves nothing else.
+   */
+  #lifecycle: SessionLifecycle = IDLE;
+  /** The session hand-off under way, which runs beside a trip rather than in place of one. */
+  #session:
+    | {
+        readonly fiber: Fiber.Fiber<LoopbackConsentOutcome<AccountSnapshot>>;
+        readonly cancel: () => void;
+      }
     | undefined;
-  #cancelSignIn: (() => void) | undefined;
-  #sessionRunning: Fiber.Fiber<LoopbackConsentOutcome<AccountSnapshot>> | undefined;
-  #cancelSession: (() => void) | undefined;
-  /** The sign-out a refused renewal started, which `refresh` and a sign-in wait on and no renewal does. */
-  #signingOut: Fiber.Fiber<AccountSnapshot> | undefined;
-  /** How many cancels were pressed while a sign-in waited on `#signingOut`. */
-  #waitCancels = 0;
 
   private constructor(
     options: AccountSessionManagerOptions,
@@ -251,7 +285,57 @@ export class AccountSessionManager {
   }
 
   cancelSignIn(): void {
-    this.#cancelSignIn?.();
+    const standing = this.#lifecycle;
+    if (standing.kind === ACCOUNT_LIFECYCLE.SIGNING_OUT) {
+      // A press during the wait withdraws every sign-in waiting, and a fresh
+      // round of presses stands for any begun after it.
+      standing.presses.withdrawn = true;
+      this.#move({ ...standing, presses: { withdrawn: false } });
+      return;
+    }
+    if (standing.kind !== ACCOUNT_LIFECYCLE.IDLE) standing.cancel();
+  }
+
+  #move(next: SessionLifecycle): void {
+    this.#lifecycle = moveAccountLifecycle(this.#lifecycle, next);
+  }
+
+  /**
+   * Ends the trip standing, if one does: moved back to idle first, so the
+   * trip's own ending finds nothing left to settle, then its consent
+   * withdrawn. A trip begun under a generation a sign-out moved could never
+   * store what it lands, so it is not left listening for a browser.
+   */
+  #endTrip(): void {
+    const standing = this.#lifecycle;
+    if (
+      standing.kind !== ACCOUNT_LIFECYCLE.SIGNING_IN &&
+      standing.kind !== ACCOUNT_LIFECYCLE.SIGNING_IN_AGAIN
+    ) {
+      return;
+    }
+    this.#move(IDLE);
+    standing.cancel();
+  }
+
+  /**
+   * `effect` as the fiber a lifecycle kind holds, which moves the lifecycle
+   * back to idle as it ends unless a later move already passed it over.
+   * Note that the fiber is forked onto the scheduler rather than started at
+   * once, so the move that stores it always lands before this ending runs.
+   */
+  #settling<A, E>(effect: Effect.Effect<A, E>): Effect.Effect<A, E> {
+    return Effect.ensuring(
+      effect,
+      Effect.withFiber((fiber) =>
+        Effect.sync(() => {
+          const standing = this.#lifecycle;
+          if (standing.kind !== ACCOUNT_LIFECYCLE.IDLE && standing.fiber === fiber) {
+            this.#move(IDLE);
+          }
+        }),
+      ),
+    );
   }
 
   signOut(options: { revokeRemote?: boolean } = {}): Effect.Effect<AccountSnapshot> {
@@ -286,7 +370,8 @@ export class AccountSessionManager {
   #clearAccount(): Effect.Effect<StoredAccount | undefined> {
     return Effect.gen({ self: this }, function* () {
       this.#generation += 1;
-      this.#cancelSession?.();
+      this.#endTrip();
+      this.#session?.cancel();
       this.#account = { status: ACCOUNT_STATUS.SIGNED_OUT };
       yield* this.#publishChange();
       const stored = yield* this.#options.store.readAccount();
@@ -372,7 +457,8 @@ export class AccountSessionManager {
       yield* this.renewOnce();
       // Note that the launch's refresh holds nothing a teardown needs, so it
       // alone waits for the sign-out a refused renewal started.
-      if (this.#signingOut) yield* Fiber.await(this.#signingOut);
+      const standing = this.#lifecycle;
+      if (standing.kind === ACCOUNT_LIFECYCLE.SIGNING_OUT) yield* Fiber.await(standing.fiber);
     });
   }
 
@@ -398,9 +484,15 @@ export class AccountSessionManager {
       if (Result.isFailure(renewed)) {
         if (
           accountFailureAction(renewed.failure) === ACCOUNT_FAILURE_ACTION.SIGN_OUT &&
-          this.#isCurrent(generation)
+          this.#isCurrent(generation) &&
+          this.#lifecycle.kind !== ACCOUNT_LIFECYCLE.SIGNING_OUT
         ) {
-          this.#signingOut = yield* Effect.forkDetach(this.signOut());
+          // Note that the trip standing is ended here rather than by the
+          // sign-out's own clearing, because the sign-out stands in its place
+          // from now on and nothing starts while it does.
+          this.#endTrip();
+          const fiber = yield* Effect.forkDetach(this.#settling(this.signOut()));
+          this.#move({ kind: ACCOUNT_LIFECYCLE.SIGNING_OUT, fiber, presses: { withdrawn: false } });
         }
         return;
       }
@@ -439,33 +531,31 @@ export class AccountSessionManager {
     // standing for the developer's own press, exactly as the held promise did.
     return Effect.uninterruptibleMask((restore) =>
       Effect.gen({ self: this }, function* () {
+        const standing = this.#lifecycle;
         // Note that a sign-out a refused renewal started is let finish first,
         // because its capability stop and cleared account would otherwise
-        // land over the session this sign-in starts.
-        if (this.#signingOut) {
-          // A cancel pressed during the wait withdraws every press waiting,
-          // and still reaches a consent already standing, a sign-in again's.
-          const cancels = this.#waitCancels;
-          const standing = this.#cancelSignIn;
-          const cancel = () => {
-            this.#waitCancels += 1;
-            standing?.();
-          };
-          this.#cancelSignIn = cancel;
-          yield* restore(Fiber.await(this.#signingOut));
-          if (this.#cancelSignIn === cancel) this.#cancelSignIn = standing;
-          if (this.#waitCancels !== cancels) return this.#account;
+        // land over the session this sign-in starts. A cancel pressed during
+        // the wait withdraws this press; otherwise it is asked again over
+        // whatever the sign-out left.
+        if (standing.kind === ACCOUNT_LIFECYCLE.SIGNING_OUT) {
+          const presses = standing.presses;
+          yield* restore(Fiber.await(standing.fiber));
+          if (presses.withdrawn) return this.#account;
+          return yield* restore(this.beginSignIn(provider));
         }
         if (this.#account.status === ACCOUNT_STATUS.SIGNED_IN) return this.#account;
-        if (this.#signInRunning) return yield* restore(Fiber.join(this.#signInRunning));
+        if (standing.kind === ACCOUNT_LIFECYCLE.SIGNING_IN) {
+          return yield* restore(Fiber.join(standing.fiber));
+        }
+        // A sign-in again only stands over a signed-in account, so one still
+        // standing here is over an account already gone.
+        this.#endTrip();
         this.#account = { status: ACCOUNT_STATUS.SIGNING_IN };
         const generation = ++this.#generation;
         yield* this.#publishChange();
         const consent = this.#consent(provider, generation);
-        const cancel = () => consent.cancel();
-        this.#cancelSignIn = cancel;
-        const fiber = yield* Effect.forkDetach(this.#trip(consent, generation, cancel));
-        this.#signInRunning = fiber;
+        const fiber = yield* Effect.forkDetach(this.#settling(this.#trip(consent, generation)));
+        this.#move({ kind: ACCOUNT_LIFECYCLE.SIGNING_IN, fiber, cancel: () => consent.cancel() });
         return yield* restore(Fiber.join(fiber));
       }),
     );
@@ -486,53 +576,52 @@ export class AccountSessionManager {
     // The same one uninterruptible decide-fork-store as `beginSignIn`'s.
     return Effect.uninterruptibleMask((restore) =>
       Effect.gen({ self: this }, function* () {
-        if (this.#account.status !== ACCOUNT_STATUS.SIGNED_IN) {
+        const standing = this.#lifecycle;
+        // Note that an account a refused renewal is signing out is as good as
+        // gone, so the ask waits on that sign-out as a first sign-in does
+        // rather than opening a trip the sign-out would end.
+        if (
+          standing.kind === ACCOUNT_LIFECYCLE.SIGNING_OUT ||
+          this.#account.status !== ACCOUNT_STATUS.SIGNED_IN
+        ) {
           const account = yield* restore(this.beginSignIn(provider));
           return account.status === ACCOUNT_STATUS.SIGNED_IN;
         }
-        const running = this.#againRunning;
-        if (running !== undefined) {
-          if (running.provider !== provider) return false;
-          return yield* restore(Fiber.join(running.fiber));
+        if (standing.kind === ACCOUNT_LIFECYCLE.SIGNING_IN_AGAIN) {
+          if (standing.provider !== provider) return false;
+          return yield* restore(Fiber.join(standing.fiber));
+        }
+        // A first sign-in that already landed may still be finishing its
+        // trip; the trip again is taken once it ends.
+        if (standing.kind === ACCOUNT_LIFECYCLE.SIGNING_IN) {
+          yield* restore(Fiber.await(standing.fiber));
+          return yield* restore(this.signInAgain(provider));
         }
         const consent = this.#consent(provider, this.#generation, { again: true });
-        const cancel = () => consent.cancel();
-        this.#cancelSignIn = cancel;
-        const fiber = yield* Effect.forkDetach(this.#tripAgain(consent, cancel));
-        this.#againRunning = { provider, fiber };
+        const fiber = yield* Effect.forkDetach(this.#settling(this.#tripAgain(consent)));
+        this.#move({
+          kind: ACCOUNT_LIFECYCLE.SIGNING_IN_AGAIN,
+          provider,
+          fiber,
+          cancel: () => consent.cancel(),
+        });
         return yield* restore(Fiber.join(fiber));
       }),
     );
   }
 
-  #tripAgain(
-    consent: LoopbackConsent<AccountSnapshot>,
-    cancel: () => void,
-  ): Effect.Effect<boolean, SignInFailed> {
+  #tripAgain(consent: LoopbackConsent<AccountSnapshot>): Effect.Effect<boolean, SignInFailed> {
     return Effect.gen(function* () {
       const outcome = yield* Effect.scoped(consent.signInEffect());
       if (!("reason" in outcome)) return true;
       if (outcome.reason === LOOPBACK_CONSENT_CANCELED) return false;
       return yield* Effect.fail(signInFailed(outcome));
-    }).pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          this.#dropCancel(cancel);
-          this.#againRunning = undefined;
-        }),
-      ),
-    );
-  }
-
-  /** Lets a trip's cancel go, unless a later trip's now stands in its place. */
-  #dropCancel(cancel: () => void): void {
-    if (this.#cancelSignIn === cancel) this.#cancelSignIn = undefined;
+    });
   }
 
   #trip(
     consent: LoopbackConsent<AccountSnapshot>,
     generation: number,
-    cancel: () => void,
   ): Effect.Effect<AccountSnapshot, SignInFailed> {
     return Effect.gen({ self: this }, function* () {
       const outcome = yield* Effect.scoped(consent.signInEffect());
@@ -546,14 +635,7 @@ export class AccountSessionManager {
       // Anything else is a failure the panel has to be able to report.
       if (outcome.reason === LOOPBACK_CONSENT_CANCELED) return this.#account;
       return yield* Effect.fail(signInFailed(outcome));
-    }).pipe(
-      Effect.ensuring(
-        Effect.sync(() => {
-          this.#dropCancel(cancel);
-          this.#signInRunning = undefined;
-        }),
-      ),
-    );
+    });
   }
 
   /**
@@ -569,7 +651,7 @@ export class AccountSessionManager {
       Effect.gen({ self: this }, function* () {
         if (this.#account.status !== ACCOUNT_STATUS.SIGNED_IN) return false;
         const fiber =
-          this.#sessionRunning ??
+          this.#session?.fiber ??
           (yield* this.#startSession(this.#generation, (url) => this.#options.openExternal(url)));
         const outcome = yield* restore(Fiber.join(fiber));
         if (!("reason" in outcome)) return true;
@@ -590,7 +672,7 @@ export class AccountSessionManager {
   #continueToSession(): Effect.Effect<string | undefined> {
     return Effect.gen({ self: this }, function* () {
       const stored = yield* this.#options.store.readAccount();
-      if (!stored || stored.sessionToken !== undefined || this.#sessionRunning) return undefined;
+      if (!stored || stored.sessionToken !== undefined || this.#session) return undefined;
       const page = yield* Deferred.make<string | undefined>();
       const settle = (url: string | undefined) => {
         Deferred.doneUnsafe(page, Exit.succeed(url));
@@ -609,21 +691,17 @@ export class AccountSessionManager {
     return Effect.gen({ self: this }, function* () {
       const consent = this.#sessionConsent(generation, openExternal);
       const cancel = () => consent.cancel();
-      this.#cancelSession = cancel;
       const fiber = yield* Effect.forkDetach(
         Effect.scoped(consent.signInEffect()).pipe(
           Effect.ensuring(
             Effect.sync(() => {
-              if (this.#cancelSession === cancel) {
-                this.#cancelSession = undefined;
-                this.#sessionRunning = undefined;
-              }
+              if (this.#session?.cancel === cancel) this.#session = undefined;
               onEnd?.();
             }),
           ),
         ),
       );
-      this.#sessionRunning = fiber;
+      this.#session = { fiber, cancel };
       return fiber;
     });
   }

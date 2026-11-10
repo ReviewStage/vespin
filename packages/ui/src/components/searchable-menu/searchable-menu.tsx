@@ -98,7 +98,9 @@ import { RowHint, RowHintOptions, Tooltip } from "../tooltip/hint.js";
  * the owner's, which says where it stands and how wide. An owner whose pick
  * acts at once may head it with what a pick does ("Add a sub-task"), led by
  * the folded way back to the menu it was chosen from where there is one, as
- * a sheet's head draws a submenu's (`MenuHead`). Its owner holds it
+ * a sheet's head draws a submenu's (`MenuHead`). An owner may also stand
+ * what the rows are for over them (`lead`), pressed by nothing, as a cloud
+ * sandbox's status stands over the places to move its agent to. Its owner holds it
  * drawn through its exit (`useDisclosure`), handing it `leaving`, which
  * leaves it inert and fading, focus already handed back.
  *
@@ -299,6 +301,10 @@ const FOOT = "ui-searchable-menu-foot block flex-none border-t border-border p-m
 /** One muted line under a submenu's rows, inset as a row's words are: what the long context window costs. */
 const NOTE =
   "ui-searchable-menu-note px-row-inset pt-ui-4 pb-0 [.ui-searchable-menu-submenu>&]:pb-menu-inset";
+
+/** What stands over the rows, inset as a popover card's content is, behind a hairline from them. */
+const LEAD =
+  "ui-searchable-menu-lead flex flex-none flex-col gap-block-gap border-b border-border p-card-inset-snug text-caption";
 
 /** The menu's last line, in a block of its own behind the pinned rows' hairline, its words inset as a row's are. */
 const LAST_LINE =
@@ -711,6 +717,8 @@ export function SearchableMenu(
     foot?: readonly FootRow[] | undefined;
     /** What a pick does, said over the field, led by the way back to the menu it was chosen from where there is one. */
     head?: MenuHead | undefined;
+    /** What stands over the rows, read before them and pressed by nothing: a sandbox's status over the places to move it to. */
+    lead?: React.ReactNode;
     /** One muted line under its own hairline, after the pinned rows: who pays for the agent. */
     lastLine?: MenuLastLine | undefined;
     /** The menu is on its way out: drawn fading, and taking nothing. */
@@ -1089,6 +1097,9 @@ export function SearchableMenu(
     />
   );
 
+  // What stands over the rows, at the rows' inset, under a hairline of its own.
+  const lead = props.lead === undefined ? null : <div className={LEAD}>{props.lead}</div>;
+
   // The submenu standing beside its row, which a sheet never draws there.
   const beside = sheet ? undefined : open;
   const pinnedRows = footed ? (
@@ -1164,6 +1175,7 @@ export function SearchableMenu(
       >
         {open === undefined ? (
           <>
+            {lead}
             {rowList}
             {footRows}
           </>
@@ -1188,6 +1200,7 @@ export function SearchableMenu(
       onBlur={(event) => props.onLeave(event.relatedTarget)}
     >
       {props.head === undefined ? null : <Head head={props.head} unmasked={unmasked} />}
+      {lead}
       {searchField}
       {rowList}
       {open === undefined || footAt >= 0 || rowBox === undefined ? null : (

@@ -16,6 +16,7 @@ import {
   confirmWrite,
   followTakingRows,
   LIVE_STATE,
+  type LiveState,
   restarting,
   type TxWait,
 } from "./live-follow.js";
@@ -50,7 +51,7 @@ interface LiveInbox {
 type Standing =
   | {
       readonly kind: typeof LIVE_STATE.LIVE;
-      readonly inbox: SubscriptionRef.SubscriptionRef<LiveState>;
+      readonly inbox: SubscriptionRef.SubscriptionRef<ScopeInboxState>;
     }
   | { readonly kind: typeof LIVE_STATE.REFUSED; readonly failure: AgentCallFailure };
 
@@ -58,10 +59,7 @@ type Standing =
 type AgentCallFailure = typeof AGENT_CALL_FAILURE.NOT_FOUND | typeof AGENT_CALL_FAILURE.UNANSWERED;
 
 /** A follow before its first rows, with them, or stopped for good. */
-type LiveState =
-  | { readonly kind: typeof LIVE_STATE.WAITING }
-  | { readonly kind: typeof LIVE_STATE.STANDING; readonly inbox: LiveInbox }
-  | { readonly kind: typeof LIVE_STATE.BROKEN };
+type ScopeInboxState = LiveState<{ readonly inbox: LiveInbox }>;
 
 export interface ScopeInboxDependencies {
   /** The scope's read for the account named, its rows inline, held past `after` where it names one; not found, signed out, or a failure where the service answered none. */
@@ -101,7 +99,7 @@ export function scopeInboxes(
               : AGENT_CALL_FAILURE.UNANSWERED;
           return { kind: LIVE_STATE.REFUSED, failure } as const;
         }
-        const inbox = yield* SubscriptionRef.make<LiveState>({ kind: LIVE_STATE.WAITING });
+        const inbox = yield* SubscriptionRef.make<ScopeInboxState>({ kind: LIVE_STATE.WAITING });
         let wait: TxWait | undefined;
         let answered = false;
         // Note that nothing is told before the read first answers, since a write drawn on no items shows nothing of the scope.

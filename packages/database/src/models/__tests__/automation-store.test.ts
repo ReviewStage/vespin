@@ -16,14 +16,18 @@ import { eq } from "drizzle-orm";
 import { DateTime, Duration, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
+import { agentTable } from "../../schemas/agent.js";
 import { member, organization, user } from "../../schemas/auth.js";
-import { getTestDB } from "../../testing/index.js";
+import { getTestDB, openAgentOnOwnTask } from "../../testing/index.js";
 import {
+  attachRunAgent,
   automationRunsSince,
   automationRunToAct,
   claimAutomationRun,
+  claimedRunsStarting,
   createAutomation,
   deleteAutomation,
+  failClaimedRun,
   githubAutomationsOn,
   integrationAutomationsOn,
   listAutomationRuns,
@@ -498,6 +502,48 @@ it.layer(getTestDB())("the automation store", (it) => {
         assert.equal(after, false, "a run started before the instant holds nothing");
         assert.equal(skippedIssue, false);
         assert.equal(otherIssue, false);
+      }),
+  );
+
+  it.effect(
+    "a started run whose agent was deleted is no claim: it counts nothing against concurrency, and neither a start nor a failed start rewrites it",
+    () =>
+      Effect.gen(function* () {
+        const db = yield* Database;
+        const owner = yield* openAccount;
+        const workspaceId = yield* openWorkspace(owner);
+        const made = Option.getOrThrow(
+          yield* createAutomation(owner, { ...nightly(workspaceId), nextRunAt: null }),
+        );
+        yield* TestClock.setTime(Date.parse("2026-10-15T12:00:00Z"));
+        const run = Option.getOrThrow(
+          yield* recordAutomationRun(made, {
+            dedupeKey: randomUUID(),
+            firing: { kind: AUTOMATION_FIRING.MANUAL },
+            firedAt: yield* DateTime.nowAsDate,
+          }),
+        );
+        yield* claimAutomationRun(run.id);
+        const since = new Date("2026-10-15T11:50:00Z");
+        const claimedBefore = yield* claimedRunsStarting(made.id, since);
+        const agentId = yield* openAgentOnOwnTask(owner, workspaceId);
+        assert.equal(yield* attachRunAgent(run.id, agentId), true);
+        yield* db.delete(agentTable).where(eq(agentTable.id, agentId));
+
+        const claimedAfter = yield* claimedRunsStarting(made.id, since);
+        const restarted = yield* attachRunAgent(
+          run.id,
+          yield* openAgentOnOwnTask(owner, workspaceId),
+        );
+        const refused = yield* failClaimedRun(run.id, AUTOMATION_RUN_REASON.MODEL);
+        const [kept] = yield* automationRunsSince(made.id, since);
+
+        assert.equal(claimedBefore, 1, "a claim still starting counts");
+        assert.equal(claimedAfter, 0);
+        assert.equal(restarted, false);
+        assert.equal(refused, false);
+        assert.equal(kept?.status, AUTOMATION_RUN_STATUS.STARTED);
+        assert.equal(kept?.agentId, null);
       }),
   );
 });
