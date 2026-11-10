@@ -1484,7 +1484,10 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     reconnecting: false,
     carriedOnAt: undefined,
     heard,
-    snapshot: (lineId) => snapshots.take(config.cwd, config.agentId, lineId),
+    snapshot: (lineId) =>
+      config.agentId === undefined
+        ? Effect.succeed(undefined)
+        : snapshots.take(config.cwd, config.agentId, lineId),
   };
 
   // The service's lines join the signals in a loop of their own, so a line is
