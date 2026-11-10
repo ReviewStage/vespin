@@ -425,7 +425,7 @@ const computerShotSchema = EffectSchema.Struct({
 
 export type ComputerShot = typeof computerShotSchema.Type;
 
-/** What an action came to: the apps listed, an app's window read, or the action done. */
+/** What an action came to: the apps listed, an app's window read, or the action done on its app. */
 const computerOutcomeSchema = EffectSchema.Union([
   EffectSchema.Struct({
     apps: EffectSchema.Array(computerAppSchema).check(
@@ -449,7 +449,8 @@ const computerOutcomeSchema = EffectSchema.Union([
       EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_SHOTS),
     ),
   }),
-  EffectSchema.Struct({ done: keyName }),
+  // Note that an action names the app it acted on, as the Mac described it before asking, so its row wears the app's icon.
+  EffectSchema.Struct({ done: keyName, app: EffectSchema.optionalKey(computerAppSchema) }),
 ]);
 
 export type ComputerOutcome = typeof computerOutcomeSchema.Type;

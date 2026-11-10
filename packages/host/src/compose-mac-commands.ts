@@ -6,6 +6,7 @@ import {
 } from "@repo/features/mac-command-live";
 import {
   COMPUTER_ACTION,
+  type ComputerApp,
   isMacComputerCommand,
   isMacShellCommand,
   MAC_COMMAND_KIND,
@@ -227,9 +228,13 @@ function neverOffered(app: string): MacCommandRefusal {
 }
 
 /** What an action came to, as the helper answered it. */
-function computerResult(answer: ComputerHelperAnswer): MacCommandResult {
-  if ("outcome" in answer) return { computer: answer.outcome };
-
+function computerResult(answer: ComputerHelperAnswer, app?: ComputerApp): MacCommandResult {
+  if ("outcome" in answer) {
+    // Note that a done action names the app it acted on, which the helper's own answer does not.
+    const outcome =
+      "done" in answer.outcome && app !== undefined ? { ...answer.outcome, app } : answer.outcome;
+    return { computer: outcome };
+  }
   if ("failure" in answer) return { refused: `Not run: ${answer.message}` };
 
   return { refused: "Not run: the computer-use helper answered something else." };
@@ -413,14 +418,15 @@ export function composeMacCommands(
     /**
      * Whether the agent may use the app its action names: the app named by
      * the helper, launching nothing, then refused, allowed already, or asked
-     * about until `deadline`. Answers why not, or nothing where it may.
+     * about until `deadline`. Answers why not, or the app as the helper
+     * named it where it may.
      */
     const appAllowed = (
       use: MacComputerUse,
       command: MacComputerCommand & { readonly action: { readonly app: string } },
       userId: string,
       deadline: number,
-    ): Effect.Effect<MacCommandRefusal | undefined> =>
+    ): Effect.Effect<MacCommandRefusal | { readonly app: ComputerApp }> =>
       Effect.gen(function* () {
         const named = yield* use.helper.ask(
           { op: COMPUTER_HELPER_OP.DESCRIBE_APP, app: command.action.app },
@@ -440,7 +446,7 @@ export function composeMacCommands(
         const allowed = yield* use.allowedApps;
 
         if (allowed.includes(key) || allowedOnce.get(command.conversationId)?.has(key) === true) {
-          return undefined;
+          return { app };
         }
 
         const asked: MacAppAsk = {
@@ -469,8 +475,7 @@ export function composeMacCommands(
           command.conversationId,
           new Set([...(allowedOnce.get(command.conversationId) ?? []), key]),
         );
-
-        return undefined;
+        return { app };
       });
 
     /**
@@ -491,18 +496,18 @@ export function composeMacCommands(
           Duration.toMillis(Duration.seconds(command.timeoutSeconds));
 
         const { action } = command;
-
+        let app: ComputerApp | undefined;
         if (action.op !== COMPUTER_ACTION.LIST_APPS) {
-          const refusal = yield* appAllowed(computer, { ...command, action }, userId, deadline);
-
-          if (refusal !== undefined) return yield* settled(command.id, refusal);
+          const allowed = yield* appAllowed(computer, { ...command, action }, userId, deadline);
+          if ("refused" in allowed) return yield* settled(command.id, allowed);
+          app = allowed.app;
         }
 
         const left = deadline - (yield* Clock.currentTimeMillis);
 
         if (left < 1000) return yield* settled(command.id, APP_UNANSWERED);
         const answer = yield* computer.helper.ask(action, Duration.millis(left));
-        yield* settled(command.id, computerResult(answer));
+        yield* settled(command.id, computerResult(answer, app));
       });
 
     /** Whether the Mac takes commands now: an account signed in, a run that sends, and the setting not Never. */

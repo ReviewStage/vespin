@@ -715,6 +715,7 @@ function ToolCallView({
         state={part.state}
         kind={view.kind}
         provider={view.provider}
+        appIcon={view.appIcon}
         server={server}
         subject={view.subject}
         description={view.description}
