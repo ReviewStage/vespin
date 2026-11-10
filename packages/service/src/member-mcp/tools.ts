@@ -1075,6 +1075,7 @@ const memberQueue = (call: AgentCall, userId: string, agent: Agent, text: string
       status: ACTION_RESULT_STATUS.ACCEPTED,
       delivery: place === -1 ? MEMBER_QUEUE_DELIVERY.HANDED_ON : MEMBER_QUEUE_DELIVERY.QUEUED,
       ...(place === -1 ? undefined : { ahead: place }),
+      ...(queued.success.paused === undefined ? undefined : { paused: queued.success.paused }),
       agent: { id: agent.id, title: agentName(agent), model: agent.model },
     };
   });
@@ -1117,7 +1118,9 @@ const MEMBER_MESSAGE_AGENT_TOOL = memberMcpTool({
     "agent's session has taken it, without waiting for it to act or reply, or `rejected` and " +
     "why nothing was sent. With queue, it waits behind the agent's turn instead, and answers " +
     "`accepted` with `delivery` `queued` and how many messages stand `ahead` of it, or " +
-    `\`handed-on\` where the agent stood idle and it goes at once. ${FOLLOW_WORDS}`,
+    `\`handed-on\` where the agent stood idle and it goes at once, and \`paused\` with why where ` +
+    "the queue stands paused, which sends nothing until the member resumes it in the app. " +
+    FOLLOW_WORDS,
   input: MessageAgentInputSchema,
   annotations: ADDITIVE,
   run: (asked) =>

@@ -704,7 +704,7 @@ const sendCommand = Command.make(
     queue: Flag.Boolean("queue").pipe(
       Flag.withDefault(false),
       Flag.withDescription(
-        "Queue it behind the agent's turn, as ⌘↩ does, rather than steer the turn under way; only the agent's starter queues",
+        "Queue it behind the agent's turn, as ⌘↩ does, rather than steer the turn under way; only the agent's starter queues, and a paused queue sends nothing until Resume in the app",
       ),
     ),
   },
@@ -723,6 +723,7 @@ const sendCommand = Command.make(
         // Note that an agent standing idle is handed the message at once, so it leaves the queue the answer reads.
         const ahead = answered.queue.messages.findIndex((message) => message.id === messageId);
         const queued = ahead !== -1;
+        const { paused } = answered.queue;
         yield* answer({
           json: {
             messageId,
@@ -734,6 +735,11 @@ const sendCommand = Command.make(
             queued
               ? `Queued for agent ${id}, ${ahead} ahead of it.`
               : `Handed to agent ${id} to go now, as it stood idle; a refusal would pause its queue.`,
+            ...(paused === undefined
+              ? []
+              : [
+                  `Its queue is paused (${paused.because}${paused.refusal === undefined ? "" : `: ${paused.refusal}`}), so nothing goes until Resume in the app.`,
+                ]),
           ],
           ids: [id],
         });
