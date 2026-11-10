@@ -129,6 +129,7 @@ it.layer(getTestDB())("a shared port's preview host", (it) => {
           .from(organization)
           .where(eq(organization.id, task.workspaceId));
         const name = previewNameOf(workspace?.slug ?? "", task.number ?? 0, agentId);
+        assert.equal(name.kind, PREVIEW_NAME_KIND.TASK);
 
         const own = yield* visit(member, agentId, true, name);
         const another = yield* visit(member, other, true, name);
