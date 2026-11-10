@@ -18,6 +18,8 @@ export const EXPERIMENT = {
   BRING_YOUR_OWN_HOST: "bring-your-own-host",
   /** Descriptions: a task's description its coding agents keep current as they work, its comments and version history, and the tools and instructions they write it and answer its comments with. */
   DESCRIPTIONS: "descriptions",
+  /** Done and follow-ups: an agent ends a turn with a short summary, and the bar over its box says what it needs from you, or that it is done, with what is still open and the follow-ups it offers. */
+  TURN_END: "turn-end",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -36,7 +38,11 @@ export type ExperimentScope = (typeof EXPERIMENT_SCOPE)[keyof typeof EXPERIMENT_
  * member's choice cannot stand apart from another's. Every experiment not
  * listed here is each account's own.
  */
-export const WORKSPACE_EXPERIMENT_LIST = [EXPERIMENT.DESCRIPTIONS, EXPERIMENT.MEMORY] as const;
+export const WORKSPACE_EXPERIMENT_LIST = [
+  EXPERIMENT.DESCRIPTIONS,
+  EXPERIMENT.MEMORY,
+  EXPERIMENT.TURN_END,
+] as const;
 
 export type WorkspaceExperiment = (typeof WORKSPACE_EXPERIMENT_LIST)[number];
 export type AccountExperiment = Exclude<Experiment, WorkspaceExperiment>;
@@ -72,6 +78,14 @@ export interface ExperimentEntry {
  * there is no status to drift and every experiment is off until turned on.
  */
 export const EXPERIMENTS = [
+  {
+    key: EXPERIMENT.TURN_END,
+    name: "Done and follow-ups",
+    detail:
+      "When an agent finishes, the bar over its box says what it needs from you, or that it's done, with follow-ups to send.",
+    owner: "Dean",
+    since: "2026-11-10",
+  },
   {
     key: EXPERIMENT.DESCRIPTIONS,
     name: "Task descriptions",
