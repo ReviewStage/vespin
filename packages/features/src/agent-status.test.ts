@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { TURN_STATUS } from "@repo/wire";
 import { test } from "vitest";
+import { BOOT_PHASE } from "./agent-boot.js";
 import {
   agentStatusAt,
   STARTING_GRACE_MILLIS,
@@ -63,4 +64,17 @@ test("an agent started blank with no turn reads completed however long ago it st
   const blank = { ...standing(STARTING_GRACE_MILLIS * 3), blank: true };
   assert.equal(agentStatusAt(undefined, blank), AGENT_STATUS.COMPLETED);
   assert.equal(statusClockEdge(undefined, { ...standing(0), blank: true }), undefined);
+});
+
+test("an agent whose first launch boots reads starting however long it boots and failed once its boot failed, and the clock moves it nowhere", () => {
+  const longBoot = { ...standing(STARTING_GRACE_MILLIS * 3), boot: BOOT_PHASE.RUNNING_SCRIPTS };
+  assert.equal(agentStatusAt(undefined, longBoot), AGENT_STATUS.STARTING);
+  assert.equal(
+    statusClockEdge(undefined, { ...standing(0), boot: BOOT_PHASE.STARTING }),
+    undefined,
+  );
+  assert.equal(
+    agentStatusAt(undefined, { ...standing(0), boot: BOOT_PHASE.FAILED }),
+    AGENT_STATUS.FAILED,
+  );
 });
