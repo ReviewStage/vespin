@@ -209,8 +209,7 @@ import { sayRestored } from "./version-view.js";
  * the window's toast. The side panel stands as it was behind it.
  */
 
-/** The item chosen in the window's Inbox, and the task it belongs to. */
-/** The item chosen in the window's Inbox, by the task it stands on, or, for an agent with no task, by its agent. */
+/** The item chosen in the window's Inbox, by the task it stands on. */
 export type InboxChoice =
   // Note that an item of a task names the agent that posted it too, which its link is written under, but for one an older link named under its task alone.
   (
