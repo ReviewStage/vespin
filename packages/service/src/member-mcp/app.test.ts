@@ -166,6 +166,19 @@ const decodeWritten = Schema.decodeUnknownSync(
   Schema.Struct({ thread: Schema.Struct({ status: Schema.String }) }),
 );
 const decodeAgents = Schema.decodeUnknownSync(Schema.Struct({ agents: IdsSchema }));
+/** A workspace `create_workspace` answers it made. */
+const decodeCreated = Schema.decodeUnknownSync(
+  Schema.Struct({
+    status: Schema.Literal("accepted"),
+    workspace: Schema.Struct({
+      id: Schema.String,
+      slug: Schema.String,
+      name: Schema.String,
+      role: Schema.String,
+    }),
+  }),
+);
+
 const decodeListed = Schema.decodeUnknownSync(
   Schema.Struct({
     workspaces: Schema.Array(
@@ -410,6 +423,40 @@ it.effect.each(Object.values(REVISION))(
           },
         ],
       });
+    }),
+);
+
+it.effect(
+  "create_workspace makes a workspace the member owns, which list_workspaces then names",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch } = yield* standing;
+      const { cookie } = yield* Effect.promise(() => signUp(auth));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const call = (name: string, args: Record<string, unknown>) =>
+        Effect.promise(async () => decodeAnswer(await client.callTool({ name, arguments: args })));
+
+      const created = yield* call(MEMBER_MCP_TOOL.CREATE_WORKSPACE, { name: "  Research  " });
+      const listed = yield* call(MEMBER_MCP_TOOL.LIST_WORKSPACES, {});
+      yield* Effect.promise(() => client.close());
+
+      assert.notEqual(created.isError, true, created.content[0].text);
+      const { workspace } = decodeCreated(JSON.parse(created.content[0].text));
+      assert.deepEqual(
+        { slug: workspace.slug, name: workspace.name, role: workspace.role },
+        { slug: "research", name: "Research", role: WORKSPACE_ROLE.OWNER },
+      );
+      const ownedIds = decodeListed(JSON.parse(listed.content[0].text)).workspaces.map(
+        ({ id }) => id,
+      );
+      assert.ok(ownedIds.includes(workspace.id));
     }),
 );
 

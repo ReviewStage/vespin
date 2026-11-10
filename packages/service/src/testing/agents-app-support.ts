@@ -490,7 +490,7 @@ export const standing = (
     });
     yield* Effect.addFinalizer(() => Effect.promise(() => agents.dispose()));
     const memberMcp = HttpRouter.toWebHandler(
-      memberMcpApp(memberMcpBearers(bearers), MEMBER_MCP_AGENT_SANDBOX).pipe(
+      memberMcpApp(memberMcpBearers(bearers), MEMBER_MCP_AGENT_SANDBOX, seams.workspaces).pipe(
         HttpRouter.provideRequest(services),
       ),
       { disableLogger: true },

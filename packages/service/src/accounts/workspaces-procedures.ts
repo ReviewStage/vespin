@@ -66,13 +66,12 @@
  * unauthenticated and an oversized body as too large whatever it carries.
  */
 
-import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import type { DatabaseServices } from "@repo/database/core/query";
 import { type Agent, listAgentsOfDeletedWorkspace } from "@repo/database/models/agent-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import type { MemberSeams, WorkspaceSeams } from "@repo/database/models/workspace-seams";
 import { setWorkspaceSlug } from "@repo/database/models/workspace-slug-store";
 import {
-  createWorkspace,
   ensurePersonalWorkspace,
   listWorkspaces,
   workspaceOf,
@@ -87,7 +86,7 @@ import {
   workspaceSlugProblemOf,
 } from "@repo/features/workspace-wire";
 import { isExperiment, isWorkspaceExperiment } from "@repo/settings";
-import { type Cause, Effect, Option } from "effect";
+import { Effect, Option } from "effect";
 import { everyTurnStoppedByStarter } from "../agents/coder-host/stop.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import {
@@ -107,6 +106,7 @@ import {
 import { accountMiddleware, hosted, sessionMiddleware } from "../orpc/base.js";
 import type { WorkspaceDeleteCall } from "./deletion-hooks.js";
 import { answeredWorkspace, managedWorkspace, pluginCallOrRefused } from "./workspace-access.js";
+import { createdWorkspace, pluginWriteOrUnavailable } from "./workspace-create.js";
 import { listFormerMembers, listMembers, memberIdOf } from "./workspace-members.js";
 
 /** How many of a workspace's agents a delete reads at once, page by page, before it stops any. */
@@ -143,25 +143,6 @@ export interface WorkspacesProcedureSeams {
   members: MemberSeams;
   /** The plugin's delete of a workspace, made under the same session, its hooks run on the asking fiber's services. */
   deleteWorkspace: WorkspaceDeleteCall;
-}
-
-/**
- * A write through the plugin, a store failure answered as
- * `hostedStoreOrUnavailable` answers one and the plugin's refusal as the
- * same outage the Mac may retry, logged by its kind alone, since what the
- * plugin threw may quote what it was asked to write.
- */
-export function pluginWriteOrUnavailable<A, R>(
-  effect: Effect.Effect<A, StoreFailure | Cause.UnknownError, R>,
-): Effect.Effect<A, HostedRefusal, R> {
-  return Effect.catch(effect, (failure) =>
-    failure._tag === "UnknownError"
-      ? Effect.andThen(
-          Effect.logWarning("Workspace not made: UnknownError"),
-          Effect.fail(HOSTED_REFUSAL.UNAVAILABLE),
-        )
-      : hostedStoreOrUnavailable(Effect.fail(failure)),
-  );
 }
 
 /**
@@ -240,16 +221,7 @@ export function workspacesProcedures(seams: WorkspacesProcedureSeams) {
       return { workspaces: yield* hostedStoreOrUnavailable(listWorkspaces(context.userId)) };
     }),
     create: account.create.effect(function* ({ context, input }) {
-      yield* pluginWriteOrUnavailable(ensurePersonalWorkspace(context.userId, seams.workspaces));
-      const organizationId = yield* pluginWriteOrUnavailable(
-        createWorkspace(context.userId, input.name, seams.workspaces),
-      );
-      yield* recordServerEvent(
-        SERVER_EVENT.WORKSPACE_CREATE,
-        { userId: context.userId, workspaceId: organizationId },
-        {},
-      );
-      return { workspace: yield* answeredWorkspace(context.userId, organizationId) };
+      return { workspace: yield* createdWorkspace(seams.workspaces, context.userId, input.name) };
     }),
     members: account.members.effect(function* ({ context, input }) {
       const workspace = yield* answeredWorkspace(

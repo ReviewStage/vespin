@@ -1,5 +1,5 @@
 /**
- * workspace.ts -- `vespin workspace list` and `use`: the member's workspaces, and the one a command acts in where nothing else names one.
+ * workspace.ts -- `vespin workspace list`, `use`, and `create`: the member's workspaces, the one a command acts in where nothing else names one, and a new one (`workspace-create.ts`).
  *
  * `list` reads them through `workspaces.list` and marks the default the
  * config keeps for the service. `use` takes a slug, a slug the workspace
@@ -16,6 +16,7 @@ import { Argument, Command } from "effect/cli";
 import { configuredWorkspace, keepWorkspace } from "../config-store.js";
 import { answer, CommandFailed } from "../output.js";
 import { askService, session } from "../session.js";
+import { createCommand } from "./workspace-create.js";
 
 /** A config file this version could not read or write, as the command's failure. */
 function configFailed(failed: { readonly message: string }): CommandFailed {
@@ -93,8 +94,8 @@ const useCommand = Command.make(
 );
 
 export const workspaceCommand = Command.make("workspace").pipe(
-  Command.withDescription("List your workspaces, and choose the default one"),
-  Command.withSubcommands([listCommand, useCommand]),
+  Command.withDescription("List your workspaces, choose the default one, and create one"),
+  Command.withSubcommands([listCommand, useCommand, createCommand]),
   Command.withExamples([
     { command: "vespin workspace use acme", description: "Make acme the default workspace" },
   ]),

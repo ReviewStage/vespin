@@ -30,6 +30,7 @@ type McpCliRow = { readonly command: readonly [string, ...string[]] } | { readon
 /** Each tool's command, or its gap. */
 export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.LIST_WORKSPACES]: { command: ["workspace", "list"] },
+  [MEMBER_MCP_TOOL.CREATE_WORKSPACE]: { command: ["workspace", "create"] },
   [MEMBER_MCP_TOOL.LIST_TASKS]: { command: ["task", "list"] },
   [MEMBER_MCP_TOOL.READ_TASK]: { command: ["task", "view"] },
   [MEMBER_MCP_TOOL.LIST_AGENTS]: { command: ["agent", "list"] },
