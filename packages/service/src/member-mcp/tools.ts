@@ -998,7 +998,9 @@ const CreateTaskInputSchema = Schema.Struct({
   priority: CREATE_TASK_TOOL.inputSchema.fields.priority,
   assignee: CREATE_TASK_TOOL.inputSchema.fields.assignee,
   parentTaskId: CREATE_TASK_TOOL.inputSchema.fields.parentTaskId,
-  relation: CREATE_TASK_TOOL.inputSchema.fields.relation,
+  subTaskIds: CREATE_TASK_TOOL.inputSchema.fields.subTaskIds,
+  blockedBy: CREATE_TASK_TOOL.inputSchema.fields.blockedBy,
+  blocks: CREATE_TASK_TOOL.inputSchema.fields.blocks,
 });
 
 /** A task the member makes where none of their workspaces has Task descriptions on: the same, bar its description. */
@@ -1012,9 +1014,11 @@ function memberCreateTaskWords(startsWith: string): string {
     `would: owned by them, on the repository named or none, ${startsWith}, and no agent on it; the desktop shows it as one they made. Give ` +
     "it a status, a priority, and an assignee where the member said them. Give it a " +
     "parentTaskId to make it a child task of another, to any depth: a child always works in " +
-    "its parent's repository, so leave repository out for one. Give it a " +
-    "relation instead to make it blocked by, blocking, a sub-task of, or the parent of another " +
-    `task of the workspace in the same call. ${WORKSPACE_WORDS} Then start an agent on it ` +
+    "its parent's repository, so leave repository out for one. Give it subTaskIds to make it " +
+    "the parent of tasks that have none, and blockedBy and blocks for the tasks it waits on and " +
+    `the tasks that wait on it, as ${MEMBER_MCP_TOOL.UPDATE_TASK} names them, all written in the ` +
+    "same call: a child that waits on a sibling takes a parentTaskId and a blockedBy. " +
+    `${WORKSPACE_WORDS} Then start an agent on it ` +
     `with ${MEMBER_MCP_TOOL.START_AGENT}'s taskId. Each call makes a task of its own, so call ` +
     "it once for each. Answers `accepted` with the task's id, key, name, status, priority, " +
     "assignee, and repository, or `rejected` and why."

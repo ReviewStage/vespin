@@ -839,6 +839,13 @@ it.effect(
         yield* refused(MEMBER_MCP_TOOL.CREATE_TASK, { name: "Seat billing", plan: "## Problem" }),
         /named description, not plan/u,
       );
+      assert.match(
+        yield* refused(MEMBER_MCP_TOOL.CREATE_TASK, {
+          name: "Seat billing",
+          relation: { kind: "blocks", taskId },
+        }),
+        /takes no relation now/u,
+      );
       yield* call(MEMBER_MCP_TOOL.EDIT_DESCRIPTION, {
         taskId,
         notes: [{ kind: NOTE_KIND.ADD, section: "Problem", text: "Invoices lag too." }],
