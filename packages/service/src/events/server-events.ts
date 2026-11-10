@@ -8,7 +8,7 @@ import type { AgentKind, AgentMachineKind } from "@repo/features/agent-wire";
 import type { AutomationFiringKind, AutomationTriggerKind } from "@repo/features/automation-wire";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import type { ProviderKeyProvider } from "@repo/features/provider-key-wire";
-import type { TASK_STATUS } from "@repo/features/task-wire";
+import type { TaskSettledStatus } from "@repo/features/task-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
 import type { INVITATION_ROLE } from "@repo/features/workspace-invitation-wire";
 import { TURN_STATUS } from "@repo/wire";
@@ -329,9 +329,6 @@ export const SERVER_AGENT_TOOL = {
 
 type Values<T> = T[keyof T];
 
-/** Where a task came to rest: done or canceled, the two a finish counts. */
-type ServerTaskFinishStatus = typeof TASK_STATUS.DONE | typeof TASK_STATUS.CANCELED;
-
 export type ServerAgentStartFailure = Values<typeof SERVER_AGENT_START_FAILURE>;
 
 export type ServerAgentStarter = Values<typeof SERVER_AGENT_STARTER>;
@@ -424,7 +421,7 @@ export interface ServerEventProperties {
   [SERVER_EVENT.HOST_INSTALL]: { kind: Values<typeof SERVER_HOST_KIND> };
   /** A task moved to Done or Canceled, by a member's or an agent's move. */
   [SERVER_EVENT.TASK_FINISH]: {
-    status: ServerTaskFinishStatus;
+    status: TaskSettledStatus;
     by: Values<typeof SERVER_TASK_FINISHER>;
   };
   /** A Start whose agent was made and then discarded because its session never opened. */
