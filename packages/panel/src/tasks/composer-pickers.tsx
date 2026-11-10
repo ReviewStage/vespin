@@ -1,4 +1,5 @@
 import { INTEGRATION_STATUS } from "@repo/features/integration-wire";
+import { holderTaskId } from "@repo/features/mention-holder";
 import { namedServers } from "@repo/ui/agent-servers-model";
 import type { ReactNode, RefObject } from "react";
 import type {
@@ -9,7 +10,6 @@ import type {
 import type { IntegrationStatuses } from "../integration-statuses.js";
 import type { ComposerFieldMentions } from "./composer-field.js";
 import { MentionNodeChip, pastedMentionNode } from "./mention-chip.js";
-import { holderTaskId } from "./mention-holder.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide, useMentionPicker } from "./mention-picker.js";
 import { MentionedServers, type MentionedServersPlace } from "./server-card.js";
 import { useSkillOpener } from "./skill-chip.js";

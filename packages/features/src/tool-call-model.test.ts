@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
-import { cardTitle, plainWords } from "@repo/features/plain-words";
-import { CALL_KIND, callLine, callPlace } from "@repo/features/turn-rows";
 import type { WireRecord } from "@repo/wire";
 import { test } from "vitest";
-import { TOOL_BLOCK } from "../ai-elements/tool.js";
+import { cardTitle, plainWords } from "./plain-words.js";
+import { TOOL_BLOCK } from "./tool-call-block.js";
 import {
   calledAgent,
   sentWords,
@@ -11,6 +10,7 @@ import {
   toolCallView,
   toolTarget,
 } from "./tool-call-model.js";
+import { CALL_KIND, callLine, callPlace } from "./turn-rows.js";
 
 const ESCAPE = String.fromCharCode(27);
 

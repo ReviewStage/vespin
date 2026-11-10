@@ -1,3 +1,4 @@
+import { fileName } from "@repo/features/code-ref-words";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TasksFileAnswer } from "@repo/features/tasks-view";
@@ -15,7 +16,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { unreadShown } from "../failure-report.js";
-import { fileName } from "./file-ref-model.js";
 import {
   FILE_READ,
   type FileRead,

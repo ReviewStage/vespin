@@ -1,5 +1,6 @@
 import { AGENT_MACHINE, type AgentAttachment, type AgentSummary } from "@repo/features/agent-wire";
 import { LINK_PLACE } from "@repo/features/link-grammar";
+import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import {
   CARD_CORNER,
   CARD_LOOK,
@@ -22,7 +23,6 @@ import { MessageAction } from "../ai-elements/message.js";
 import { agentActor, agentName } from "./agent-model.js";
 import type { TranscriptCards } from "./agent-tab.js";
 import { type AgentFork, FORK_WORDS, type ForkCut, forksOf, messageOpening } from "./fork-model.js";
-import { TOOL_TARGET, type ToolTarget } from "./tool-call-model.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useOpenPlace } from "./use-open-link.js";
 
