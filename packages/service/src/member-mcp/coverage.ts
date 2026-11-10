@@ -45,7 +45,7 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
   SCREEN_ONLY: "screen-only",
   /** A sign-in or connect flow that finishes in a browser, or a link only a person opens; a disconnect is no such flow. */
   NEEDS_BROWSER: "needs-browser",
-  /** It reads or writes a secret, which no tool ever carries: a provider key or the GitHub token goes in through the CLI's stdin alone. */
+  /** It reads or writes a secret no tool carries: a provider key or the GitHub token goes in through the CLI's stdin alone. A workspace environment variable's value is the one secret a tool takes, `set_environment_variable`'s input, and no tool ever answers one. */
   SECRET: "secret",
   /** It hands a person trust in the account, a decision the member makes in the app alone and never through an agent. */
   SECURITY: "security",

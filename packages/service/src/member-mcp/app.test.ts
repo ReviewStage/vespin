@@ -1548,6 +1548,41 @@ it.effect(
     }),
 );
 
+it.effect(
+  "an owner's set on a deployment holding no key ring is refused in words that say a retry will not help, and nothing is stored",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch, services } = yield* standing;
+      const owner = yield* Effect.promise(() => signUp(auth));
+      const workspaceId = yield* openWorkspace(owner.userId).pipe(Effect.provide(services));
+      const token = yield* Effect.promise(() =>
+        mintedToken(auth, owner.cookie, {
+          clientId: MCP_CLIENT.id,
+          scope: [MEMBER_MCP_SCOPE.MCP],
+          resource: RESOURCE,
+        }),
+      );
+      const { client } = yield* connected(fetch, token, REVISION.MODERN);
+      const answer = decodeAnswer(
+        yield* Effect.promise(() =>
+          client.callTool({
+            name: MEMBER_MCP_TOOL.SET_ENVIRONMENT_VARIABLE,
+            arguments: { workspace: `workspace-${workspaceId}`, name: "DATABASE_URL", value: "x" },
+          }),
+        ),
+      );
+      yield* Effect.promise(() => client.close());
+      const ring = Result.getOrThrow(parseKeyRing(AGENT_KEY_RING));
+      const stored = yield* openWorkspaceEnvironment(ring, workspaceId).pipe(
+        Effect.provide(services),
+      );
+
+      assert.equal(answer.isError, true);
+      assert.match(answer.content[0].text, /Calling again will not help/u);
+      assert.deepEqual(stored, {});
+    }),
+);
+
 it.effect("the metadata names the resource, the auth service, the scopes, and the header", () =>
   Effect.gen(function* () {
     const { fetch } = yield* standing;
