@@ -17,6 +17,7 @@ import { agoText, dateOfText, momentText, sinceText } from "@repo/features/time-
 import { EXPERIMENT } from "@repo/settings";
 import {
   Button,
+  DocumentRule,
   EDITABLE_BLOCK_CLASS,
   IconButton,
   SavedTick,
@@ -1498,6 +1499,8 @@ export const DescriptionBody = memo(function DescriptionBody({
           />
           {documented ? <ChangedLine looks={looks} marks={marks} /> : null}
           <Fragment key={HEAD_KEY}>{head?.(room)}</Fragment>
+          {/* A hairline parts the head from the description's text, as Notion's parts a page's properties from its body. */}
+          {documented ? <DocumentRule /> : null}
           {!documented ? null : editing.editor === undefined ? (
             editable && views.length === 0 ? (
               <EmptyDocumentBlock entry={entry === EDITOR_PLACE.EMPTY} editing={editing}>
