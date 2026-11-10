@@ -857,7 +857,8 @@ function namedOutcome(failure: { readonly _tag: string }): boolean {
     (failure.planRefusal !== undefined ||
       failure.keyRefusal !== undefined ||
       failure.deviceRemoved === true ||
-      failure.deviceAway === true)
+      failure.deviceAway === true ||
+      failure.modesUnsupported === true)
   );
 }
 
@@ -1486,6 +1487,9 @@ export const runnerSessions = <
             : undefined),
           ...(failure instanceof LaunchRefused && failure.deviceAway === true
             ? { runtimeRefusal: RUNTIME_REFUSAL.DEVICE_AWAY }
+            : undefined),
+          ...(failure instanceof LaunchRefused && failure.modesUnsupported === true
+            ? { runtimeRefusal: RUNTIME_REFUSAL.MODES_UNSUPPORTED }
             : undefined),
         } as const,
       );

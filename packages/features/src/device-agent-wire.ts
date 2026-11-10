@@ -149,6 +149,13 @@ export const DEVICE_CAPABILITY = {
    * such agent is started on, or launched to, a device without it.
    */
   GITHUB_SIGN_IN: "github-sign-in",
+  /**
+   * It runs an agent in the permission mode its launch names: the runner its
+   * release bundles reads the config's `permissionMode`. A runner from
+   * before it runs every agent with full access whatever mode it is handed,
+   * so no launch in a mode that asks goes to a device without it.
+   */
+  PERMISSION_MODES: "permission-modes",
 } as const;
 
 export type DeviceCapability = (typeof DEVICE_CAPABILITY)[keyof typeof DEVICE_CAPABILITY];
