@@ -17,8 +17,9 @@
  * member or an agent moved to Done archives its agent with it
  * (`archivedWithDoneTask`); and "Archive finished runs", which a Slack agent
  * is put away by too, archives an agent that finished well and stands as it
- * was read (`archivedUnmovedAgent`). The last two let an agent go on its
- * device alone, leaving its sandbox be.
+ * was read (`archivedUnmovedAgent`), recorded as the app's with why, since
+ * no member asked for it. The last two let an agent go on its device alone,
+ * leaving its sandbox be.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
@@ -40,6 +41,7 @@ import {
 } from "@repo/database/models/task-store";
 import type { StoreWriter } from "@repo/database/models/writer";
 import type { StoredArchive } from "@repo/database/schemas/agent";
+import { AGENT_ARCHIVER } from "@repo/features/agent-wire";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { Data, Effect, Option } from "effect";
 import { SqlClient } from "effect/sql";
@@ -49,6 +51,15 @@ import { runnerChoiceApplied } from "./coder-host/runtime-sessions.js";
 import { idleStandingAgents, stoppedForGood } from "./coder-host/stop.js";
 import { discardedOrLogged } from "./device-discard.js";
 import { deletedInBackground, type SandboxDeleteReach } from "./session-sandboxes.js";
+
+/** Why the app archived an agent on its own, as its banner says beneath who archived it. */
+export const AUTOMATIC_ARCHIVE_REASON = {
+  RUN_FINISHED: "Automation run finished",
+  SLACK_FINISHED: "Slack agent finished",
+} as const;
+
+export type AutomaticArchiveReason =
+  (typeof AUTOMATIC_ARCHIVE_REASON)[keyof typeof AUTOMATIC_ARCHIVE_REASON];
 
 /** The changes asked of an agent, each already read, and a choice already the catalog's; any left out stands. */
 export interface AgentChanges {
@@ -187,16 +198,21 @@ export const archivedWithDoneTask = (userId: string, taskId: string, agentId: st
   );
 
 /**
- * The agent archived where it stands unarchived and its lines have run no
- * further than `seenSeq`, with nothing open (`archiveUnmovedAgent`), then let
- * go of on its device: whether it was archived, and whether nothing failed
- * letting it go, true where nothing was asked.
+ * The agent archived by the app for its starter, for `reason`, where it
+ * stands unarchived and its lines have run no further than `seenSeq`, with
+ * nothing open (`archiveUnmovedAgent`), then let go of on its device:
+ * whether it was archived, and whether nothing failed letting it go, true
+ * where nothing was asked. Note that the app's archiver is reused rather
+ * than a new one, because a build from before it rejects an archiver it
+ * does not know.
  */
 export const archivedUnmovedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
   agent: Pick<Agent, "id" | "userId">,
   seenSeq: number,
+  reason: AutomaticArchiveReason,
 ) {
-  const archived = yield* archiveUnmovedAgent(agent.userId, agent.id, seenSeq);
+  const archivedBy = { by: AGENT_ARCHIVER.APP, userId: agent.userId, reason } as const;
+  const archived = yield* archiveUnmovedAgent(agent.userId, agent.id, seenSeq, archivedBy);
   const discarded = archived ? yield* discardedOrLogged(agent) : true;
   return { archived, discarded };
 });

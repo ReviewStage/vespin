@@ -1108,8 +1108,10 @@ export const AGENT_LIST_ARCHIVED = {
 
 /**
  * Who archived an agent: a member from the window, the app on a call for the
- * member on it, or another coding agent of the workspace for the member who
- * started that agent, through its `archive_agent` tool.
+ * member on it or on its own for the agent's starter (an automation run or a
+ * Slack agent that finished, with why), or another coding agent of the
+ * workspace for the member who started that agent, through its
+ * `archive_agent` tool.
  */
 export const AGENT_ARCHIVER = {
   MEMBER: "member",
