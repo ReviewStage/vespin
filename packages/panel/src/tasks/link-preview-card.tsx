@@ -1,6 +1,14 @@
 import type { LinkPreviewPicture } from "@repo/features/link-preview-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { HoverCard, HoverCardHead, HoverCardNote, HoverCardSkeleton, PageThumb } from "@repo/ui";
+import {
+  HOVER_CARD_ROW_LOOK,
+  HoverCard,
+  HoverCardHead,
+  HoverCardNote,
+  HoverCardRow,
+  HoverCardSkeleton,
+  PageThumb,
+} from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { siteName } from "@repo/ui/link-face";
 import { queryOptions, useQuery } from "@tanstack/react-query";
@@ -12,9 +20,11 @@ import { QUERY_ROOT } from "../query-keys.js";
  *
  * A link the window has no chip for (`../text-link.tsx`) hangs this card
  * where a chip hangs its own: the page's icon and title, its site's name
- * over its host under them, its description as the card's note, and its
- * picture under that, each where the page says one, as a message app
- * unfurls a link. The page is read by the service, never by this window,
+ * over its host under them, the whole address on a quieter line under
+ * those, since the card stands where the hint that said the address stood
+ * and a reader still weighs a link's path and query before opening it, its
+ * description as the card's note, and its picture under that, each where
+ * the page says one, as a message app unfurls a link. The page is read by the service, never by this window,
  * which loads nothing from a third party: each picture arrives as bytes
  * the card draws from a `data:` URL of its own (`link-preview-wire.ts`).
  * While the read is under way the card stands as its skeleton, a globe
@@ -33,6 +43,19 @@ const PREVIEW_KEPT_MS = {
 
 /** What parts a site's name from its host under the title. */
 const SEPARATOR = " · ";
+
+/** The most characters of the address the card says: one line fading at its end, so a long address is cut well before it weighs on the card. */
+const ADDRESS_MAX_CHARS = 300;
+
+/** The address as the card says it: whole, or cut at the bound and marked. */
+function addressOf(href: string): string {
+  return href.length <= ADDRESS_MAX_CHARS ? href : `${href.slice(0, ADDRESS_MAX_CHARS - 1)}…`;
+}
+
+/** The address on a quiet line under the head, on the name's column, faded where it runs past the card. */
+function AddressRow({ href }: { href: string }): React.JSX.Element {
+  return <HoverCardRow look={HOVER_CARD_ROW_LOOK.DETAIL} glyph={null} label={addressOf(href)} />;
+}
 
 /** The page's preview, by its address, as the host answers it. */
 const linkPreviewQuery = (href: string) =>
@@ -70,6 +93,7 @@ export function LinkPreviewCard({ href }: { href: string }): React.JSX.Element {
     return (
       <HoverCard data-link-preview="" data-link-preview-state="none">
         <HoverCardHead glyph={globe} name={host} />
+        <AddressRow href={href} />
       </HoverCard>
     );
   }
@@ -87,6 +111,7 @@ export function LinkPreviewCard({ href }: { href: string }): React.JSX.Element {
         name={preview.title ?? host}
         sub={subOf(host, preview.siteName)}
       />
+      <AddressRow href={href} />
       {preview.description === undefined ? null : (
         <HoverCardNote>{preview.description}</HoverCardNote>
       )}

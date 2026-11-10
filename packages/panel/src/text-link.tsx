@@ -32,8 +32,9 @@ import { opensAsLink } from "./tasks/use-open-link.js";
  * (`tasks/link-preview-card.tsx`), what the page says of itself as the
  * service reads it, so a reader sees where a link goes before pressing
  * it, as a chip's card says what the chip names; the whole address stays
- * the hint's words, said of the link. A link going nowhere hangs none,
- * since the window would open nothing the card previews.
+ * the hint's words, said of the link, and the card says it too on a line
+ * of its own. A link going nowhere hangs none, since the window would
+ * open nothing the card previews.
  */
 
 /**
