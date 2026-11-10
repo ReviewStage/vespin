@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ARCHIVE_WRITE_GUARD_RULE, namesArchiveWrite } from "./shared/archive-write-guard.ts";
 import { ARROW_KEY_GUARD_RULE, NAMES_ARROW_KEY } from "./shared/arrow-key-guard.ts";
 import { BUSY_GUARD_RULE } from "./shared/busy-guard.ts";
 import { TYPESCRIPT_SOURCE } from "./shared/effect-edges.ts";
@@ -67,7 +68,9 @@ import {
  * file's baseline is the only way past it, on a vendored shadcn component
  * holding one that would silence `no-shadcn-focus-ring`, on any TypeScript
  * file calling a menu-item builder that takes the menu's subject and holding
- * one that would silence `no-shortcut-flag`, which has no way past it, on any test file
+ * one that would silence `no-shortcut-flag`, which has no way past it, on any
+ * TypeScript file holding one that would silence `archive-through-agent-change`,
+ * whose allowed list is the only way past it, on any test file
  * holding one that would silence `no-internal-vi-mock`,
  * `no-focused-or-skipped-test` or `no-source-read-in-test`, which hold rules
  * root AGENTS.md's "Testing" says never bend, and on an `.oxlintrc.json` that
@@ -258,6 +261,17 @@ const GUARDS = [
       callsSubjectBuilder(readFileSync(absolute, "utf8")),
     remedy:
       "Pass the menu's subject (`shortcutSubject`), and say where its keys act from the place that offers them (`useShortcutTarget`)",
+  },
+  {
+    rule: ARCHIVE_WRITE_GUARD_RULE,
+    sources: TYPESCRIPT_SOURCE,
+    // A file that names no archive writer and writes no archive column has nothing to silence; the guards' own tests spell fixtures.
+    watches: (absolute: string) =>
+      !path.relative(REPOSITORY_ROOT, absolute).startsWith("tools/anti-slop/") &&
+      existsSync(absolute) &&
+      namesArchiveWrite(readFileSync(absolute, "utf8")),
+    remedy:
+      "Archive or bring back the agent through packages/service/src/agents/agent-change.ts, or name a file that must call the store itself in tools/anti-slop/archive-writes.json with its reason",
   },
   {
     rule: INTERNAL_MOCK_GUARD_RULE,

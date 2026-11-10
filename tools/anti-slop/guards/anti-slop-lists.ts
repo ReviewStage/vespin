@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 
+import { ARCHIVE_ALLOWED } from "../shared/archive-write-guard.ts";
 import { ARROW_KEY_BASELINE, ARROW_KEY_EXEMPTIONS } from "../shared/arrow-key-guard.ts";
 import { BUSY_BASELINE } from "../shared/busy-guard.ts";
 import { KEPT_STORAGE_BASELINE, NOT_VIEW_STORAGE } from "../shared/kept-guard.ts";
@@ -62,6 +63,7 @@ async function antiSlopListProblems(root: string): Promise<readonly string[]> {
     { name: "arrow-keys.json's baseline", paths: Object.keys(ARROW_KEY_BASELINE) },
     { name: "arrow-keys.json's exemptions", paths: ARROW_KEY_EXEMPTIONS },
     { name: "row-behavior.json's drawers", paths: Object.keys(ROW_DRAWERS) },
+    { name: "archive-writes.json's allowed", paths: Object.keys(ARCHIVE_ALLOWED) },
     { name: "message-box.json's builders", paths: Object.keys(BOX_BUILDERS) },
     ...RETIRED.map((retirement) => ({
       name: `retired/${retirement.file}'s baseline`,
