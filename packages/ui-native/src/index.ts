@@ -29,7 +29,7 @@ export { type Choice, ChoiceList } from "./choice-list.js";
 export { Composer, ComposerFoot } from "./composer.js";
 export { EmptyState } from "./empty-state.js";
 export { DOCK_ROOM, GlassBar, GlassDock } from "./glass-bar.js";
-export { type Glyph, isLucideSymbol, type LucideSymbol } from "./glyph.js";
+export { type Glyph, isLucideSymbol, type LucideSymbol, type MarkLook } from "./glyph.js";
 export { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 export {
   ListRow,
@@ -58,6 +58,13 @@ export {
   type ProviderMarkAsset,
 } from "./provider-button.js";
 export { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
+export {
+  CHECK_LOOK,
+  CHECK_SUMMARY_LOOK,
+  pullRequestLook,
+  REVIEW_LOOK,
+} from "./pull-request-look.js";
+export { ConfirmAsk, MarkRow, PullRequestHead, WriteNoteRow } from "./pull-request-page.js";
 export { LIST_LOOK, type ListLook, ListSection, RowList } from "./row-list.js";
 export { Screen, Spacer } from "./screen.js";
 export { SealedPage } from "./sealed-page.js";

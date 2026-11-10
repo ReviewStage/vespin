@@ -17,7 +17,9 @@ builds a control of its own.
   `ScopePills`, `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
   answer's fields, and `AskNote` for what a send that did not go said),
-  `PullRequestCard`, `AuthPage` and `ProviderButton`, `SettingsForm` and its
+  `PullRequestCard`, a pull request's page (`PullRequestHead`, `MarkRow`
+  for its checks and reviewers, `WriteNoteRow`), `ConfirmAsk` (the system's
+  alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, `AccountButton`, and the marks (`UnreadDot`, `NeedsYouDot`,
   `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
@@ -129,7 +131,15 @@ navigation, tab bar, swipes, menus, sheets and glass.
   boolean's toggle, the rows a SwiftUI `Form` holds, drawn in a card because
   a `Form` scrolls on its own inside the thread's scroll) and the pull request
   (`PullRequestCard`: its state's glyph, its title, its lines in green and
-  red, and its acts as pills), each on `SURFACE` inside a hairline.
+  red, and its acts as pills; a press on it opens its own page), each on
+  `SURFACE` inside a hairline.
+- **A pull request's page** reads as the panel's Pull request tab, from the
+  same model (`@repo/features/pull-request-model`): its state as a chip in
+  GitHub's color, the merge queue's in the attention ink with its place
+  ("Queued #2"), its branches, and GitHub's sentence of whether it merges;
+  its checks and reviewers as rows, each glyph the SF Symbol closest to the
+  panel's (`pull-request-look.ts`); and its acts in the bar, an act that
+  asks first asking in `ConfirmAsk`.
 - **The tab bar** is `NativeTabs`: icons alone in a compact window, through
   its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
   New task; a regular window's sidebar keeps its labels.

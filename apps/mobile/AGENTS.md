@@ -118,13 +118,18 @@ Inbox profile's threads and the tasks holding them among it
 a thread's file read, or a reply or a resolve, answered by the fixture, the
 migration's approval refused so a flow sees a refused answer taken back
 (`fixtureActs` in `src/host/fixture-host.ts`), which is how the Maestro
-flows run with no server. A `-authServer stub` launch argument
+flows run with no server. A change to one of the fixture agent's pull
+requests is taken as GitHub would take it and moves it on the document,
+merged or out of the queue (`pullRequestPartsAppState`), so a flow sees its
+press land. A `-authServer stub` launch argument
 instead signs in against an account service the app answers itself
 (`src/host/stub-auth-server.ts`), whose authorization page grants at once,
 which is how `maestro/sign-in.yaml` signs in, relaunches signed in, and
 signs out. A `-agent <id>` launch argument opens the app on
 that agent's page, as `maestro/agent.yaml` reaches the Inbox fixture's
-invitations agent, whose transcript the fixture holds. What Hermes lacks of the web platform
+invitations agent, whose transcript the fixture holds, and `-pullRequest
+<number>` beside it opens that agent's pull request on its own screen, as
+`maestro/pull-request.yaml` reaches the fixture's failing and queued ones. What Hermes lacks of the web platform
 the host stands on is polyfilled in one place, `src/host/polyfills.ts`, each
 with a line on why; Shiki stays out of the app, and a fenced block is drawn
 plain.

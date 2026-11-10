@@ -1,5 +1,5 @@
 /**
- * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, and `-agent <id>`, which opens on that agent's page.
+ * launch-arguments.ts -- the launch arguments a flow runs the app under: `-fixture <profile>`, which stands the app's host on the desktop's synthetic data, as the desktop's `--fixture` does, `-authServer stub`, which signs in against an account service the app answers itself, `-agent <id>`, which opens on that agent's page, and `-pullRequest <number>` beside it, which opens on that pull request of the agent's.
  *
  * iOS registers a launch argument of the form `-key value` in the app's
  * `NSUserDefaults` argument domain, which React Native's `Settings` reads,
@@ -17,6 +17,7 @@ const LAUNCH_ARGUMENT = {
   FIXTURE: "fixture",
   AUTH_SERVER: "authServer",
   AGENT: "agent",
+  PULL_REQUEST: "pullRequest",
 } as const;
 
 /** The one account service a launch argument may name in place of the real one. */
@@ -40,4 +41,12 @@ export function launchAgent(): string | undefined {
   if (Platform.OS !== "ios") return undefined;
   const named: unknown = Settings.get(LAUNCH_ARGUMENT.AGENT);
   return typeof named === "string" && named !== "" ? named : undefined;
+}
+
+/** The pull request of the launch's agent this launch opens on, as `-pullRequest <number>` names it; none on any other platform, and where none is named. */
+export function launchPullRequest(): number | undefined {
+  if (Platform.OS !== "ios") return undefined;
+  const named: unknown = Settings.get(LAUNCH_ARGUMENT.PULL_REQUEST);
+  const number = typeof named === "number" ? named : Number(named);
+  return Number.isInteger(number) && number > 0 ? number : undefined;
 }
