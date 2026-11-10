@@ -117,6 +117,7 @@ import {
   AppServerRequestFailed,
   spawnAppServer,
 } from "./app-server.js";
+import { CheckoutSnapshots } from "./checkout-snapshot.js";
 import { CODEX_BUNDLED_MODELS_JSON } from "./codex-protocol/bundled-models.js";
 import type {
   ChatgptAuthTokensRefreshResponse,
@@ -142,6 +143,7 @@ import {
 import { codexMemoryWatch } from "./out-of-memory.js";
 import { CODEX_PIN, SANDBOX_TOOL_ENV } from "./pins.js";
 import {
+  type CheckoutSnapshot,
   CODEX_EFFORT,
   CODEX_ERROR_INFO,
   CODEX_PLAN_BACKEND,
@@ -304,6 +306,8 @@ interface Outgoing {
   readonly clientId: string;
   readonly input: readonly UserInput[];
   readonly lines: readonly string[];
+  /** The checkout as it stood before the turn this message started (`checkout-snapshot.ts`); none for a steer, or where it could not be recorded. */
+  readonly snapshot?: CheckoutSnapshot | undefined;
 }
 
 /** The fields of an answer the controller reads. */
@@ -724,6 +728,8 @@ interface CodexLaunch {
   carriedOnAt: number | undefined;
   /** How many items the thread has started but the service's own messages, which say nothing of the model. */
   readonly heard: { count: number };
+  /** The checkout recorded before a turn the line named opens (`checkout-snapshot.ts`); none where it could not be. */
+  readonly snapshot: (lineId: string) => Effect.Effect<CheckoutSnapshot | undefined>;
 }
 
 /**
@@ -1007,7 +1013,11 @@ const accepted = Effect.fn("agent-runner/codex/accepted")(function* (
   for (const uuid of outgoing.lines) {
     if (launch.accepted.has(uuid)) continue;
     launch.accepted.add(uuid);
-    yield* launch.context.sink.emit({ type: RUNNER_EVENT.ACCEPTED, uuid });
+    yield* launch.context.sink.emit({
+      type: RUNNER_EVENT.ACCEPTED,
+      uuid,
+      ...(outgoing.snapshot === undefined ? undefined : { snapshot: outgoing.snapshot }),
+    });
   }
 });
 
@@ -1016,7 +1026,7 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
   launch: CodexLaunch,
   messages: readonly Outgoing[],
 ) {
-  const outgoing: Outgoing =
+  const merged: Outgoing =
     messages.length === 1 && messages[0] !== undefined
       ? messages[0]
       : {
@@ -1024,6 +1034,10 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
           input: messages.flatMap((message) => message.input),
           lines: messages.flatMap((message) => message.lines),
         };
+  // The checkout is recorded before app-server can touch it, under the first line the turn takes.
+  const first = merged.lines[0];
+  const snapshot = first === undefined ? undefined : yield* launch.snapshot(first);
+  const outgoing: Outgoing = { ...merged, snapshot };
   const answer = decodeTurnAnswer(
     yield* launch.server.request(METHOD.TURN_START, {
       threadId: launch.threadId,
@@ -1359,6 +1373,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
   context: LaunchContext<CodexConfig>,
 ) {
   const { config } = context;
+  const snapshots = yield* CheckoutSnapshots;
   const backend = planBackendOf(context);
   if (backend === undefined) {
     return ended(RUNNER_END.FAILED, "the plan's backend is not one this runner knows");
@@ -1469,6 +1484,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     reconnecting: false,
     carriedOnAt: undefined,
     heard,
+    snapshot: (lineId) => snapshots.take(config.cwd, lineId),
   };
 
   // The service's lines join the signals in a loop of their own, so a line is

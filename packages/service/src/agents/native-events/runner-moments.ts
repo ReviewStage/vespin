@@ -72,7 +72,18 @@ export function withoutNul(value: WireValue): WireValue {
 export const PICTURE_STAND_IN = "[image]";
 
 const readType = Schema.decodeUnknownOption(Schema.Struct({ type: Schema.String }));
-const readAccepted = Schema.decodeUnknownOption(Schema.Struct({ uuid: Schema.String }));
+const readAccepted = Schema.decodeUnknownOption(
+  Schema.Struct({
+    uuid: Schema.String,
+    snapshot: Schema.optionalKey(
+      Schema.Struct({
+        commit: Schema.String,
+        head: Schema.optionalKey(Schema.String),
+        branch: Schema.optionalKey(Schema.String),
+      }),
+    ),
+  }),
+);
 const readConnectionLost = Schema.decodeUnknownOption(Schema.Struct({ host: Schema.String }));
 const readConnectionRestored = Schema.decodeUnknownOption(
   Schema.Struct({ host: Schema.String, carryOn: Schema.Boolean }),
@@ -155,8 +166,12 @@ export function runnerMoments(message: WireValue): Option.Option<readonly Native
     case RUNNER_EVENT.ACCEPTED:
       return Option.some(
         Option.match(readAccepted(message), {
-          onSome: ({ uuid }): readonly NativeMoment[] => [
-            { kind: NATIVE_MOMENT.LINE_ACCEPTED, clientId: uuid },
+          onSome: ({ uuid, snapshot }): readonly NativeMoment[] => [
+            {
+              kind: NATIVE_MOMENT.LINE_ACCEPTED,
+              clientId: uuid,
+              ...(snapshot === undefined ? undefined : { snapshot }),
+            },
           ],
           onNone: () => [],
         }),

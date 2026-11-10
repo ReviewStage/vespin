@@ -863,10 +863,32 @@ export interface RunnerIdle {
   readonly type: typeof RUNNER_EVENT.IDLE;
 }
 
-/** The ACCEPTED event: the message line, by its `uuid`, handed to the SDK, or taken by Codex's app-server. */
+/** Where a checkout keeps the snapshot taken before each turn (`checkout-snapshot.ts`): under the line's id, among the worktree's own refs. */
+export const CHECKOUT_SNAPSHOT = {
+  REF_PREFIX: "refs/worktree/vespin/turns/",
+  /** How many snapshots a checkout keeps: the oldest beyond go as a new one is taken. */
+  KEEP: 20,
+} as const;
+
+/** The checkout as it stood before a turn: the snapshot commit, `HEAD` where the checkout had commits, and the branch checked out where one was. */
+export interface CheckoutSnapshot {
+  readonly commit: string;
+  /** `HEAD` at the snapshot, the snapshot's parent; none in a repository with no commits yet. */
+  readonly head?: string | undefined;
+  /** The branch checked out at the snapshot; none on a detached `HEAD`. */
+  readonly branch?: string | undefined;
+}
+
+/**
+ * The ACCEPTED event: the message line, by its `uuid`, handed to the SDK, or
+ * taken by Codex's app-server, with the checkout as it stood before the turn
+ * the line opens (`checkout-snapshot.ts`); no snapshot where the line joined
+ * a turn under way, or where the checkout could not be snapshotted.
+ */
 export interface RunnerAccepted {
   readonly type: typeof RUNNER_EVENT.ACCEPTED;
   readonly uuid: string;
+  readonly snapshot?: CheckoutSnapshot | undefined;
 }
 
 /** The WAITING event: what the Stop hook before the `result` reported still in flight, as the SDK spells it. */

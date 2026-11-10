@@ -54,6 +54,7 @@ import {
   type Script,
   type Spawned,
 } from "./testing/fake-app-server.js";
+import { fakeCheckoutSnapshots, fakeSnapshotOf } from "./testing/fake-checkout-snapshots.js";
 import { fakeClaudeCode } from "./testing/fake-claude-code.js";
 import { fakeProbe } from "./testing/fake-probe.js";
 import { makeFakeService } from "./testing/fake-service.js";
@@ -244,6 +245,7 @@ function launch(
           extra.http ?? service.layer,
           claude.layer,
           probe.layer,
+          fakeCheckoutSnapshots().layer,
           Logger.layer([recorder]),
         ),
       ),
@@ -378,8 +380,21 @@ it.effect(
         kinds(service.applied).filter((kind) => kind !== RUNNER_EVENT.ACCEPTED),
         [...notified(WORKFLOW.exchanges), RUNNER_EVENT.END],
       );
-      // Each line is said taken once, under the service's own id, which Codex is handed to echo.
-      assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST, LINE.STEERED]);
+      // Each line is said taken once, under the service's own id, which Codex is handed to echo; the
+      // first opened the turn, so its ACCEPTED carries the checkout as it stood before it, and the steer's none.
+      assert.deepEqual(
+        service.applied.flatMap(({ message: posted }) =>
+          "type" in posted && posted.type === RUNNER_EVENT.ACCEPTED ? [posted] : [],
+        ),
+        [
+          {
+            type: RUNNER_EVENT.ACCEPTED,
+            uuid: LINE.FIRST,
+            snapshot: fakeSnapshotOf(CONFIG.cwd, LINE.FIRST),
+          },
+          { type: RUNNER_EVENT.ACCEPTED, uuid: LINE.STEERED },
+        ],
+      );
       assert.deepEqual(
         service.applied.map(({ sequence }) => sequence),
         service.applied.map((_, index) => FIRST_SEQUENCE + index),
