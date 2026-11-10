@@ -84,7 +84,7 @@ import {
   settledDeviceAgentLine,
 } from "../device-agent.js";
 import { LaunchRefused, RESTORE_OUTCOME } from "./agent-machine.js";
-import { deviceMachine } from "./device-machine.js";
+import { deviceMachine, MAC_MACHINE } from "./device-machine.js";
 
 const RING = `1:${Buffer.alloc(32, 7).toString("base64")}`;
 const BEARER = "fixture-runner-bearer-0123456789";
@@ -347,6 +347,17 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           yield* settleDeviceAgentLine(userId, deviceId, second.id, 0);
           yield* TestClock.adjust("1 second");
           assert.equal(yield* Fiber.join(again), RESTORE_OUTCOME.RESTORED);
+
+          // A line the Mac never takes fails the restore once the wait ends, and is withdrawn with it.
+          const unclaimed = yield* Effect.forkChild(machine.restoreCheckout(session, snapshot));
+          const third = yield* untilQueued(userId, deviceId);
+          yield* TestClock.adjust(MAC_MACHINE.RESTORE_WAIT);
+          assert.equal(yield* Fiber.join(unclaimed), RESTORE_OUTCOME.FAILED);
+          assert.deepEqual(
+            (yield* deviceAgentLinesWaiting(userId, deviceId)).map((line) => line.id),
+            [],
+            `the line ${third.id} is withdrawn`,
+          );
         }),
     );
 

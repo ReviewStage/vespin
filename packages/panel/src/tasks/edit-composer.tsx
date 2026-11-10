@@ -60,17 +60,25 @@ import type { AgentComposerControl } from "./use-agent-composer.js";
 const CANCEL_WORDS = "Cancel";
 
 /**
- * What Send asks before it drops the messages after the line. Where `takes`
- * names another member's messages among them, the body says so, and where
- * `restoring` the files go back too, it says that in place of their staying.
+ * What Send asks before it drops the messages after the line, or puts the
+ * files back. Where `takes` names another member's messages among those
+ * dropped, the body says so; where `restoring` the files go back too, it
+ * says that in place of their staying, and where nothing follows the line
+ * (`cuts` false), that alone.
  */
-function sendQuestion(takes: string | undefined, restoring: boolean): DialogQuestion {
+function sendQuestion(
+  takes: string | undefined,
+  restoring: boolean,
+  cuts: boolean,
+): DialogQuestion {
   const dropped = `Everything after it${takes === undefined ? "" : `, including ${takes},`} will be removed from the conversation, and the agent stopped if it is working.`;
   return {
     title: "Send the edited message?",
-    body: restoring
-      ? `${dropped} ${FILES_RESTORED_WORDS}`
-      : `${dropped} Changes the agent made to its files stay as they are.`,
+    body: !cuts
+      ? `The agent is stopped if it is working. ${FILES_RESTORED_WORDS}`
+      : restoring
+        ? `${dropped} ${FILES_RESTORED_WORDS}`
+        : `${dropped} Changes the agent made to its files stay as they are.`,
     verb: "Send message",
     running: "Sending",
     loss: CONFIRM_LOSS.IRREVERSIBLE,
@@ -200,13 +208,15 @@ export function EditComposer({
   // Note that the choice to put the files back is off each time the box opens, so an edit never puts them back unasked.
   const [restoreFiles, setRestoreFiles] = useState(false);
   const restoring = edit.restorable && restoreFiles;
+  // A send that drops what follows, or puts the files back, is asked first, since neither comes back.
+  const asks = edit.cuts || restoring;
   const send = () => {
     writer.update(place, () => EMPTY_DRAFT);
     edit.onSend(draft, attachments, restoring);
   };
   // Note that the send answers at once: the tab takes it in turn behind any send, and says there if it did not go.
   const confirm = useConfirmDialog(
-    { subject: edit.cuts, surfaceOpen: true },
+    { subject: asks, surfaceOpen: true },
     neverBusyAct(send),
     confirmFailure(FAILURE_SURFACE.MESSAGE_EDIT),
   );
@@ -228,7 +238,7 @@ export function EditComposer({
     // Note that the box sends nothing while one of the line's pictures is still read, which it would leave behind.
     send: () => {
       if (line.reading) return;
-      if (edit.cuts) confirm.ask();
+      if (asks) confirm.ask();
       else send();
     },
     retry: noop,
@@ -267,7 +277,11 @@ export function EditComposer({
           </Button>
         )}
       />
-      <ConfirmDialog open confirm={confirm} question={sendQuestion(edit.takes, restoring)} />
+      <ConfirmDialog
+        open
+        confirm={confirm}
+        question={sendQuestion(edit.takes, restoring, edit.cuts)}
+      />
     </>
   );
 }
