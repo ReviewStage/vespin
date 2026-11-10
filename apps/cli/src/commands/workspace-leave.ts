@@ -26,6 +26,7 @@ import { namedMember } from "./workspace-members.js";
 const LEAVE_REFUSAL_WORDS = {
   [HOSTED_API_ERROR.NOT_PERMITTED]:
     "The owner cannot leave the workspace: hand it to an admin first with vespin workspace transfer.",
+  [HOSTED_API_ERROR.NOT_FOUND]: "You are no longer a member of that workspace, or it was deleted.",
 } as const;
 const TRANSFER_REFUSAL_WORDS = {
   [HOSTED_API_ERROR.NOT_PERMITTED]:
@@ -35,6 +36,7 @@ const TRANSFER_REFUSAL_WORDS = {
 const DELETE_REFUSAL_WORDS = {
   [HOSTED_API_ERROR.NOT_PERMITTED]:
     "Only the workspace's owner may delete it, and never your own first workspace, which goes only with your account.",
+  [HOSTED_API_ERROR.NOT_FOUND]: "You are no longer a member of that workspace, or it was deleted.",
 } as const;
 
 /** The flag each command takes to go ahead without asking. */

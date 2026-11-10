@@ -12,7 +12,7 @@
 import { HOSTED_API_ERROR } from "@repo/features";
 import { CLI_EXIT } from "@repo/features/cli-exit";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
-import { sniffMediaType } from "@repo/features/media-signature";
+import { sniffImageType } from "@repo/features/image-signature";
 import { WORKSPACE_PHOTO_BOUNDS, WORKSPACE_PHOTO_TYPE } from "@repo/features/workspace-wire";
 import { Effect, FileSystem, Option } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
@@ -37,7 +37,7 @@ const photoUrlOf = Effect.fnUntraced(function* (file: string) {
     fileSystem.readFile(file),
     () => new CommandFailed({ exit: CLI_EXIT.USAGE, message: `Could not read ${file}.` }),
   );
-  const type = sniffMediaType(bytes);
+  const type = sniffImageType(bytes);
   if (type === undefined) {
     return yield* new CommandFailed({ exit: CLI_EXIT.USAGE, message: PHOTO_WORDS });
   }
