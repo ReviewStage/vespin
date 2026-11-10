@@ -22,6 +22,7 @@ import {
   PlusIcon,
   POPOVER_ALIGN,
   RepositoryPicture,
+  SETTINGS_ROW_CONTROLS,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
   SettingsRowControlHold,
@@ -334,6 +335,8 @@ function ScriptRow({
               </Inline>
             ),
           error: saveRefusal(saving.error),
+          // Note that Discard and Save stay beside the name at any width, the name giving way, since dropping under it would move the editor at a phone's width.
+          controls: SETTINGS_ROW_CONTROLS.BESIDE,
           control:
             changed || added !== undefined ? (
               <EditActions
