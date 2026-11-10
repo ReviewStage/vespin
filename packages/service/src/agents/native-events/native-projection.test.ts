@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { RUN_EVENT } from "@repo/features/turn-run";
+import { RUN_EVENT, TURN_FAILURE } from "@repo/features/turn-run";
 import { test } from "vitest";
 import { NATIVE_ENDING, NATIVE_MOMENT, PLAN_STATUS } from "./native-moments.js";
 import { heldProjection, NATIVE_WRITE, projectMoments } from "./native-projection.js";
@@ -177,5 +177,48 @@ test("a successful result after a reported limit ends without a usage-limit noti
     result.writes.some(
       (write) => write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.TURN_ENDED,
     ),
+  );
+});
+
+test("a limit lifted before the turn failed for another reason fails it as that failure, never the plan's limit", () => {
+  const result = projectMoments(
+    heldProjection(null),
+    [
+      { kind: NATIVE_MOMENT.ACTIVE },
+      {
+        kind: NATIVE_MOMENT.RATE_LIMIT,
+        refused: true,
+        detail: "rate_limit_rejected",
+        resetsAt: 60000,
+      },
+      { kind: NATIVE_MOMENT.PLAN, status: PLAN_STATUS.LIMIT_REACHED },
+      { kind: NATIVE_MOMENT.RATE_LIMIT, refused: false, detail: "rate_limit_allowed" },
+      { kind: NATIVE_MOMENT.RESULT, failure: "error_during_execution" },
+      { kind: NATIVE_MOMENT.ENDED, ending: NATIVE_ENDING.FAILED },
+    ],
+    {
+      conversationId: "c_projection",
+      sequence: 0,
+      now: 0,
+      attempt: 1,
+      queuedTurnId: undefined,
+      model: "anthropic/claude-opus-5.5",
+      ownKey: false,
+      registered: () => true,
+      report: () => undefined,
+    },
+  );
+  const ended = result.writes.flatMap((write) =>
+    write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.TURN_ENDED
+      ? [write.event.failure]
+      : [],
+  );
+  assert.deepEqual(ended, [TURN_FAILURE.MODEL]);
+  assert.equal(
+    result.writes.some(
+      (write) =>
+        write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.USAGE_LIMIT_REACHED,
+    ),
+    false,
   );
 });
