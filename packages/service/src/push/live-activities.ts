@@ -135,6 +135,9 @@ export const LIVE_ACTIVITY_PUSH = {
 /** How many of a journal's newest parts its step line is looked for in, so a long turn's whole journal is never read for its last line. */
 const STEP_TAIL_PARTS = 16;
 
+/** The state an end to a phone set to never take a push carries: nothing of what ran after it was set so. */
+const NOTHING_SHOWN: LiveActivityContentState = { running: 0, waiting: 0, agents: [] };
+
 /** What the start's alert says under the newest agent's name. */
 const START_ALERT_BODY = "Started working.";
 
@@ -359,7 +362,7 @@ function endOn(
       const delivery = yield* sendTo(
         phone,
         phone.activityToken,
-        endPayload(state, now),
+        endPayload(never ? NOTHING_SHOWN : state, now),
         APNS_PRIORITY.IMMEDIATE,
         LIVE_ACTIVITY_PUSH.LIFETIME,
         now,

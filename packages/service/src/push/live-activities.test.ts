@@ -425,6 +425,12 @@ it.layer(getTestDB())("a member's live activity", (it) => {
 
       yield* refreshLiveActivity(member, LIVE_ACTIVITY_CAUSE.ROUTINE);
       assert.deepEqual(events(sender.sent), ["start", "end"]);
+      // Note that the end says nothing of the agents that run after the phone was set so.
+      assert.deepEqual(said(sender.sent[1]).aps["content-state"], {
+        running: 0,
+        waiting: 0,
+        agents: [],
+      });
       const [ended] = yield* listLiveActivityPhones(member);
       assert.equal(ended?.startedAt, null);
 
