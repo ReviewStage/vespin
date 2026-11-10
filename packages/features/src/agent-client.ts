@@ -615,16 +615,16 @@ export class HostedAgentClient {
     });
   }
 
-  /**
-   * One dictated clip's words, under the held deadline, since the service
-   * answers only once the model has heard the clip through; a clip the
-   * service would refuse by shape is refused here without traveling at all.
-   */
   /** Tells the service the member used this client just now, which holds their phone's pushes (`presence-wire.ts`); its answer is read by no one. */
   markActive(): Effect.Effect<void, never, HttpClient.HttpClient> {
     return Effect.asVoid(hostedCall(this.#hosted.account.active, undefined));
   }
 
+  /**
+   * One dictated clip's words, under the held deadline, since the service
+   * answers only once the model has heard the clip through; a clip the
+   * service would refuse by shape is refused here without traveling at all.
+   */
   transcribeDictation(
     params: DictationTranscribeParams,
   ): Effect.Effect<DictationTranscribeAnswerView, never, HttpClient.HttpClient> {

@@ -18,6 +18,7 @@ import { postToInbox } from "../agents/coder-host/inbox.js";
 import { TURN_FAILURE } from "../core.js";
 import { answerInboxAsk, taskInboxItems } from "../inbox/inbox-store.js";
 import { recordingApnsSender } from "../testing/apns-fake.js";
+import { APNS_PUSH_TYPE } from "./apns.js";
 import { pushFailedTurn, pushThreadSettled, releaseHeldPushes } from "./inbox-pushes.js";
 
 /**
@@ -116,7 +117,10 @@ const walkAway = Effect.gen(function* () {
 /** The phones each alert went to, in order, as their tokens. */
 const alertedTokens = (sender: {
   readonly sent: readonly { pushType: string; device: { token: string } }[];
-}) => sender.sent.filter((each) => each.pushType === "alert").map((each) => each.device.token);
+}) =>
+  sender.sent
+    .filter((each) => each.pushType === APNS_PUSH_TYPE.ALERT)
+    .map((each) => each.device.token);
 
 /** A sandbox door a post with words alone never opens. */
 const noSandbox = () => Promise.reject(new Error("the sandbox was opened"));
