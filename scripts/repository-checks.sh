@@ -55,7 +55,8 @@ fi
 # sign-in lives there: the loopback consent sits behind
 # `@repo/credentials/node`, handed to the host as its `SignInConsent` seam.
 # It crosses into `@repo/sync` too, since every row the host holds lives in
-# its pool. The relay sockets and port-forward tunnel the host composes from
+# its pool, and into `@repo/wire`, whose doors (`/effect` among them, which
+# `/follow-stream` reopens a stream on) every one of these reaches. The relay sockets and port-forward tunnel the host composes from
 # `@repo/features` (`/relay-socket`, `/relay-credential`,
 # `/port-forward-tunnel`) are walked as doors of their own, held to the same
 # imports and globals, since their Node seams sit behind
@@ -94,7 +95,7 @@ node --input-type=module -e '
       ],
       forbidden: /^(node:|ws$|electron$|@effect\/platform-node|@repo\/host\/node|@repo\/features\/node)/,
       globals: /\b(Buffer|process)\.\w+/,
-      follows: ["@repo/credentials", "@repo/sync"],
+      follows: ["@repo/credentials", "@repo/sync", "@repo/wire"],
     },
     {
       name: "@repo/features relay doors the host composes",
