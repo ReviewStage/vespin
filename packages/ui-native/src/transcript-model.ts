@@ -10,7 +10,9 @@
  * opens in place to its body. What the agent thought is left out, as the
  * phone has no room for it. A finished turn ends on how long it worked, and
  * the transcript on Working… while its agent works. The pictures and the
- * recordings it showed stand under the call that showed them, a page it
+ * recordings it showed, and those a call answered and the service kept (a
+ * browser's screenshots, an integration's pictures), stand under the call
+ * that showed them, a page it
  * showed as a card under its line, which opens it whole, and a pull request
  * it opened as the pull request's card, as it stands now where the task list
  * holds it.
@@ -24,7 +26,11 @@ import {
   placedMessages,
   turnStretches,
 } from "@repo/features/agent-parts";
-import { recordedVideosOf, shownPicturesOf } from "@repo/features/agent-pictures-model";
+import {
+  calledPicturesOf,
+  recordedVideosOf,
+  shownPicturesOf,
+} from "@repo/features/agent-pictures-model";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
   type AgentPullRequest,
@@ -382,6 +388,12 @@ function callItems(
       caption,
       video: true,
     })),
+    // Note that a picture a call answered that was not kept has no bytes to draw, so it is left out.
+    ...calledPicturesOf(part.tool, part.input, part.output).flatMap((called) =>
+      called.kept
+        ? [{ id: called.picture.id, caption: "", video: isVideoType(called.picture.mediaType) }]
+        : [],
+    ),
   ];
   const mediaItem: readonly TranscriptItem[] =
     media.length === 0
