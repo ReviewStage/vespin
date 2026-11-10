@@ -5,6 +5,10 @@
  * (a voice call, a dictated clip) runs on the account's own key and never on
  * ours, since we pay for no model call. The key is read afresh on every
  * call, so one saved, replaced, or removed in Settings is the next call's.
+ * Where the account keeps several for a provider, a call runs on the first
+ * in its order, and a coding agent's launch on the one its payer chose
+ * (`agent-runtime-choice.ts`'s `turnPayerOf`), or the first where that one
+ * was removed since.
  * A row the deployment's ring cannot open (no ring, a malformed one, or one
  * that no longer holds the row's version) answers unreadable rather than
  * none, since the account did save a key and adding another would not help:
@@ -59,14 +63,16 @@ export function previewKeysOf(
   return Effect.map(readAccountAccess(userId), (access) => (isAdminRole(access.role) ? keys : {}));
 }
 
-/** The account's own API key for the provider, opened under the deployment's ring, nothing where it saved none, or unreadable where it does not open. */
+/** The account's own API key for the provider, the one of `keyId` or else its first, opened under the deployment's ring, nothing where it saved none, or unreadable where it does not open. */
 function openedOwnKey(
   userId: string,
   provider: ProviderKeyProvider,
   ring: Redacted.Redacted | undefined,
+  keyId: string | undefined,
 ): TaskStoreEffect<OwnApiKey> {
   return Effect.map(listProviderKeyRows(userId, PROVIDER_KEY_KIND.API_KEY), (rows) => {
-    const row = rows.find((each) => each.provider === provider);
+    const provided = rows.filter((each) => each.provider === provider);
+    const row = provided.find((each) => each.id === keyId) ?? provided[0];
     if (row === undefined) return undefined;
     const parsed = ring === undefined ? undefined : parseKeyRing(ring);
     if (parsed === undefined || Result.isFailure(parsed)) return PROVIDER_KEY_UNREADABLE;
@@ -84,9 +90,10 @@ export function ownApiKeyOf(
   userId: string,
   provider: ProviderKeyProvider,
   environment: AccountKeyEnvironment,
+  keyId?: string,
 ): TaskStoreEffect<OwnApiKey> {
   return Effect.gen(function* () {
-    const own = yield* openedOwnKey(userId, provider, environment.providerKeyEncryptionKeys);
+    const own = yield* openedOwnKey(userId, provider, environment.providerKeyEncryptionKeys, keyId);
     if (Redacted.isRedacted(own)) return own;
     const standIns = yield* previewKeysOf(userId, environment);
     return standIns[provider] ?? own;

@@ -71,7 +71,7 @@ export function ComposerFrame({
   ...rest
 }: Omit<HTMLAttributes<HTMLElement>, "className" | "children"> & {
   as?: ComposerElement;
-  look?: ComposerLook;
+  look?: ComposerLook | undefined;
   /** Whether files are dragged over it, which brightens its edge, so the drop target is the frame itself. */
   dropping?: boolean | undefined;
   /** Whether what it holds is what stops its form, as a text field marked invalid is drawn. */

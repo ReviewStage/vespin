@@ -47,6 +47,7 @@ export function SettingsOrderedRows({
     <ol
       className="ui-settings-ordered-rows"
       aria-label={label}
+      data-movable={movable}
       onPointerDown={movable ? onPointerDown : undefined}
     >
       {rows.map(({ key, row }) => (

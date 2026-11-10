@@ -145,6 +145,7 @@
     "./diff-hunks": "./src/diff-hunks.js",
     "./provider-key-wire": "./src/provider-key-wire.js",
     "./push-device-wire": "./src/push-device-wire.js",
+    "./presence-wire": "./src/presence-wire.js",
     "./github-token-wire": "./src/github-token-wire.js",
     "./workspace-environment-wire": "./src/workspace-environment-wire.js",
     "./workspace-sandbox-setup-wire": "./src/workspace-sandbox-setup-wire.js",

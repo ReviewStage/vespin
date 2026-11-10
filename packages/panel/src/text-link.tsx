@@ -1,4 +1,4 @@
-import { TextLink as SharedTextLink, TEXT_LINK_LOOK, Tooltip } from "@repo/ui";
+import { TextLink as SharedTextLink, TEXT_LINK_LOOK, type TextLinkLook, Tooltip } from "@repo/ui";
 import { linkFace } from "@repo/ui/link-face";
 import type { ReactNode } from "react";
 import { opensAsLink } from "./tasks/use-open-link.js";
@@ -46,12 +46,15 @@ export function TextLink({
   words,
   children,
   onOpen,
+  look = TEXT_LINK_LOOK.UNDERLINED,
 }: {
   href: string;
   words: string | undefined;
   children: ReactNode;
   /** Opens the link; without one, the link is words going nowhere. */
   onOpen?: ((href: string) => void) | undefined;
+  /** How it looks: underlined in a line of words, or as the inline code that is its label (`TEXT_LINK_LOOK.CODE`). */
+  look?: TextLinkLook;
 }): React.JSX.Element {
   const face = words === undefined ? undefined : linkFace(href, words);
   const opens = onOpen !== undefined && opensAsLink(href);
@@ -59,7 +62,7 @@ export function TextLink({
     <Tooltip label={hintOf(href)}>
       <SharedTextLink
         href={opens ? href : undefined}
-        look={TEXT_LINK_LOOK.UNDERLINED}
+        look={look}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
