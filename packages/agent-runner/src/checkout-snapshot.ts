@@ -35,10 +35,10 @@ const SNAPSHOT_BOUNDS = {
   STDERR_TAIL: 400,
 } as const;
 
-/** Who the snapshot commits are by: no one's identity but a name the runner's own, since a snapshot is never pushed. */
+/** Who the snapshot commits are by: no one's identity but a label of the runner's own, since a snapshot is never pushed. */
 const SNAPSHOT_COMMITTER = {
-  NAME: "Vespin",
-  EMAIL: "snapshot@vespin.invalid",
+  NAME: "Checkout snapshot",
+  EMAIL: "checkout-snapshot@runner.invalid",
 } as const;
 
 export interface CheckoutSnapshotsShape {

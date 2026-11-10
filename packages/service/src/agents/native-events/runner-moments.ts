@@ -72,16 +72,23 @@ export function withoutNul(value: WireValue): WireValue {
 export const PICTURE_STAND_IN = "[image]";
 
 const readType = Schema.decodeUnknownOption(Schema.Struct({ type: Schema.String }));
+/** The most characters a snapshot's branch name may carry, past which it is no ref git takes. */
+const SNAPSHOT_BRANCH_MAX_CHARS = 255;
 const readAccepted = Schema.decodeUnknownOption(
+  Schema.Struct({ uuid: Schema.String, snapshot: Schema.optionalKey(Schema.Unknown) }),
+);
+/** A commit as git names it, which the runner checked the snapshot's against before it posted them. */
+const CommitSchema = Schema.String.check(Schema.isPattern(/^[0-9a-f]{40,64}$/u));
+/**
+ * The checkout the runner recorded before the turn, as its ACCEPTED carries
+ * it, read apart from the line so one spelled wrong is left out rather than
+ * dropping the line: a branch is bounded as git bounds a ref's name.
+ */
+const readSnapshot = Schema.decodeUnknownOption(
   Schema.Struct({
-    uuid: Schema.String,
-    snapshot: Schema.optionalKey(
-      Schema.Struct({
-        commit: Schema.String,
-        head: Schema.optionalKey(Schema.String),
-        branch: Schema.optionalKey(Schema.String),
-      }),
-    ),
+    commit: CommitSchema,
+    head: Schema.optionalKey(CommitSchema),
+    branch: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(SNAPSHOT_BRANCH_MAX_CHARS))),
   }),
 );
 const readConnectionLost = Schema.decodeUnknownOption(Schema.Struct({ host: Schema.String }));
@@ -170,7 +177,10 @@ export function runnerMoments(message: WireValue): Option.Option<readonly Native
             {
               kind: NATIVE_MOMENT.LINE_ACCEPTED,
               clientId: uuid,
-              ...(snapshot === undefined ? undefined : { snapshot }),
+              ...Option.match(readSnapshot(snapshot), {
+                onSome: (read) => ({ snapshot: read }),
+                onNone: () => undefined,
+              }),
             },
           ],
           onNone: () => [],

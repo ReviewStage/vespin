@@ -4,6 +4,7 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -106,7 +107,8 @@ it.layer(LIVE)("the checkout's snapshot", (it) => {
       const cwd = repository();
       yield* Effect.addFinalizer(() => Effect.sync(() => rmSync(cwd, { recursive: true })));
       const snapshots = yield* CheckoutSnapshots;
-      const lines = [LINE.FIRST, LINE.SECOND, LINE.THIRD];
+      // One more snapshot than the checkout keeps, each under a line of its own, so the oldest goes.
+      const lines = Array.from({ length: CHECKOUT_SNAPSHOT.KEEP + 1 }, () => randomUUID());
       for (const [index, line] of lines.entries()) {
         writeFileSync(join(cwd, "kept.txt"), `turn ${index}\n`);
         assert.ok((yield* snapshots.take(cwd, line)) !== undefined);
@@ -116,7 +118,7 @@ it.layer(LIVE)("the checkout's snapshot", (it) => {
       const kept = git(cwd, "for-each-ref", "--format=%(refname)", CHECKOUT_SNAPSHOT.REF_PREFIX)
         .split("\n")
         .filter((ref) => ref !== "");
-      assert.equal(kept.length, Math.min(lines.length, CHECKOUT_SNAPSHOT.KEEP));
+      assert.equal(kept.length, CHECKOUT_SNAPSHOT.KEEP);
 
       const empty = mkdtempSync(join(tmpdir(), "checkout-snapshot-empty-"));
       yield* Effect.addFinalizer(() => Effect.sync(() => rmSync(empty, { recursive: true })));
