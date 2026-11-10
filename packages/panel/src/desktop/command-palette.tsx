@@ -208,6 +208,7 @@ import {
   settingsSearchEntries,
 } from "../settings-search.js";
 import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
+import { agentSummaryEnd } from "../tasks/agent-menu-row.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
@@ -216,7 +217,7 @@ import { FileCard, fileLook } from "../tasks/file-ref.js";
 import { refusalLine } from "../tasks/file-tab-model.js";
 import { InboxItemCard, InboxItemEnd, inboxItemGlyph } from "../tasks/inbox-item-parts.js";
 import { refusedAnswer, taskTreeQueryOptions } from "../tasks/repository-reads.js";
-import { agentEndMark, openPlanStanding, TAB_KIND, tabLook } from "../tasks/tab-look.js";
+import { openPlanStanding, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import { markReadItem, type OpenTaskRename, useTaskRenameOffer } from "../tasks/task-menu-items.js";
 import { TaskKey } from "../tasks/task-standing.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
@@ -1034,7 +1035,7 @@ function agentRows(
       onChoose: () => show(onPick),
     };
   });
-  return [...standing, ...archivedAgentRows(tasks, taskName, show)];
+  return [...standing, ...archivedAgentRows(tasks, taskName, show, directory)];
 }
 
 /**
@@ -1048,6 +1049,7 @@ function archivedAgentRows(
   tasks: TasksControl,
   taskName: string | undefined,
   show: (pick: () => void) => void,
+  directory: EditReader,
 ): readonly PaletteRow[] {
   const { agents } = tasks;
   return (agents.archived ?? []).map((agent) => {
@@ -1061,7 +1063,7 @@ function archivedAgentRows(
       replayMasked: true,
       // Note that the task leads and Archived follows, as every agent menu says it (`agentMenuRow`).
       detail: [taskName, ARCHIVED_WORD].filter((word) => word !== undefined).join(" · "),
-      endMark: agentEndMark(agent, true),
+      endMark: agentSummaryEnd(agent, directory),
       card: (
         <AgentCard
           subject={agentSubject(agents, agent.id, NOTHING_HELD, false)}

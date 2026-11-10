@@ -253,7 +253,6 @@
         "packages/panel/src/actor-ref.tsx": 1,
         "packages/panel/src/desktop/agent-archive.tsx": 2,
         "packages/panel/src/desktop/agent-list-row.tsx": 2,
-        "packages/panel/src/desktop/command-palette.tsx": 1,
         "packages/panel/src/desktop/main-tabs.tsx": 1,
         "packages/panel/src/desktop/side-panel.tsx": 3,
         "packages/panel/src/desktop/sidebar-pinned-tab.tsx": 1,
