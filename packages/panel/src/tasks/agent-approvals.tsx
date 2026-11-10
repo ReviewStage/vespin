@@ -340,6 +340,8 @@ interface HeldAsk {
   readonly settled?: ApprovalSettled | undefined;
   /** Whether it was settled only by leaving the row's waiting asks, which its return to them takes back. */
   readonly vanished?: boolean | undefined;
+  /** Whether a message went while it waited, which the service denies it with; a return to the waiting asks clears it. */
+  readonly messaged?: boolean | undefined;
   readonly error?: ShownError | undefined;
 }
 
@@ -382,7 +384,6 @@ function vanishedLine(byMessage: boolean, running: boolean): ApprovalSettled {
 function heldWith(
   held: ReadonlyMap<string, HeldAsk>,
   pending: readonly AgentPendingApproval[],
-  denied: ReadonlySet<string>,
   running: boolean,
 ): ReadonlyMap<string, HeldAsk> {
   const waiting = new Set(pending.map((each) => each.id));
@@ -394,7 +395,7 @@ function heldWith(
   }
   for (const [id, ask] of next) {
     if (waiting.has(id) || ask.settled !== undefined || ask.answering !== undefined) continue;
-    next.set(id, { ...ask, settled: vanishedLine(denied.has(id), running), vanished: true });
+    next.set(id, { ...ask, settled: vanishedLine(ask.messaged === true, running), vanished: true });
   }
   return next;
 }
@@ -422,13 +423,10 @@ export function useAgentApprovals(input: {
   const [state, setState] = useState<{
     agentId: string;
     held: ReadonlyMap<string, HeldAsk>;
-    denied: ReadonlySet<string>;
-  }>(() => ({ agentId: agent.id, held: new Map(), denied: new Set<string>() }));
+  }>(() => ({ agentId: agent.id, held: new Map() }));
   const fresh =
-    state.agentId === agent.id
-      ? state
-      : { agentId: agent.id, held: new Map<string, HeldAsk>(), denied: new Set<string>() };
-  const held = heldWith(fresh.held, pending, fresh.denied, running);
+    state.agentId === agent.id ? state : { agentId: agent.id, held: new Map<string, HeldAsk>() };
+  const held = heldWith(fresh.held, pending, running);
   if (fresh !== state || !sameHeld(held, state.held)) setState({ ...fresh, held });
   const latest = useRef(input);
   latest.current = input;
@@ -460,7 +458,15 @@ export function useAgentApprovals(input: {
   const messageSent = useCallback(() => {
     const waitingIds = (latest.current.agent.pendingApprovals ?? NO_ASKS).map((each) => each.id);
     if (waitingIds.length === 0) return;
-    setState((was) => ({ ...was, denied: new Set([...was.denied, ...waitingIds]) }));
+    setState((was) => {
+      const next = new Map(was.held);
+      for (const id of waitingIds) {
+        const ask = next.get(id);
+        if (ask !== undefined && ask.settled === undefined)
+          next.set(id, { ...ask, messaged: true });
+      }
+      return { ...was, held: next };
+    });
   }, []);
 
   const asks = useMemo(
