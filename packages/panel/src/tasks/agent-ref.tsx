@@ -5,6 +5,7 @@ import {
   type ListedAgent,
   type TasklessAgent,
 } from "@repo/features/agent-wire";
+import { agentStateWords } from "@repo/features/glyph-state";
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { agentMovedAt, agentStillWriting } from "@repo/features/task-agents-model";
@@ -23,7 +24,6 @@ import type { HeldTranscripts } from "../desktop/strip-tabs.js";
 import {
   agentActor,
   agentName,
-  agentStateWords,
   archivedByReading,
   providerOf,
   teammateRef,

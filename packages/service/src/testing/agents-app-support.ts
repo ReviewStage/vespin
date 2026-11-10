@@ -557,6 +557,7 @@ function memberMcpBearers(bearers: ReadonlyMap<string, string>): MemberMcpAuth {
         : Promise.resolve({ sub, client_id: MEMBER_MCP_CLIENT_ID });
     },
     metadata: () => Promise.resolve({}),
+    baseURL: ORIGIN,
   };
 }
 

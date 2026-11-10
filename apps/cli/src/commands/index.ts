@@ -16,6 +16,7 @@ import { commentCommand } from "./comment.js";
 import { descriptionCommand } from "./description.js";
 import { githubCommand } from "./github.js";
 import { inboxCommand } from "./inbox.js";
+import { integrationsCommand } from "./integrations.js";
 import { keysCommand } from "./keys.js";
 import { mcpCommand } from "./mcp.js";
 import { memoryCommand } from "./memory.js";
@@ -25,6 +26,7 @@ import { prCommand } from "./pr.js";
 import { preferencesCommand } from "./preferences.js";
 import { repoCommand } from "./repo.js";
 import { sectionCommand } from "./section.js";
+import { sentryCommand } from "./sentry.js";
 import { setupCommand } from "./setup.js";
 import { slackCommand } from "./slack.js";
 import { taskCommand } from "./task.js";
@@ -50,6 +52,8 @@ export const COMMANDS = [
   memoryCommand,
   automationCommand,
   modelsCommand,
+  integrationsCommand,
+  sentryCommand,
   preferencesCommand,
   keysCommand,
   mcpCommand,

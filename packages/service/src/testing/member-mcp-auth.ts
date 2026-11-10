@@ -56,6 +56,7 @@ import {
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
+import type { IntegrationConnect } from "../integrations/integration-connect.js";
 import { memberMcpApp, memberMcpAuth } from "../member-mcp/app.js";
 import {
   MEMBER_MCP_PATH,
@@ -69,6 +70,7 @@ import { SlackBot, slackBotOver } from "../slack/slack-bot.js";
 import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-config.js";
 import { FAKE_IMAGE } from "./agent-browser-fake.js";
 import { NO_GITHUB } from "./github-app-fake.js";
+import { CONNECTOR_ASKED_NOTHING, integrationConnectOf } from "./integration-connect.js";
 import { recordingHarness } from "./native-harness-fake.js";
 
 /** The deployment the test stands at: its origin, the resource and the auth service under it. */
@@ -203,10 +205,11 @@ export const MEMBER_MCP_AGENT_SANDBOX = Layer.mergeAll(
   agentBrowserServices,
 ).pipe(Layer.provide(Layer.succeed(AgentImage, FAKE_IMAGE)));
 
-/** What a test stands the server up over: the transport its metadata documents are fetched through, and the GitHub its tools reach. */
+/** What a test stands the server up over: the transport its metadata documents are fetched through, the GitHub its tools reach, and the Vercel Connect the member's integrations are begun and ended through. */
 export interface MemberMcpStandingOptions {
   readonly fetchClientMetadataResource?: ClientMetadataResourceFetch;
   readonly github?: Layer.Layer<GitHubApp | HttpClient.HttpClient>;
+  readonly integrations?: Layer.Layer<IntegrationConnect>;
 }
 
 /**
@@ -232,6 +235,7 @@ export function memberMcpStanding(options: MemberMcpStandingOptions = {}) {
       harness.layer,
       Layer.succeed(SentryApp, sentryAppService(undefined, [])),
       Layer.succeed(PageLinks, { sandbox: undefined }),
+      options.integrations ?? integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
       Layer.succeed(SlackBot, slackBotOver(undefined)),
     );
     yield* seedRows.pipe(Effect.provide(services));

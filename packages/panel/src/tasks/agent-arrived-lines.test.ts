@@ -233,7 +233,7 @@ test("a line sent to steer a turn still running stands inside the turn, which st
 
   assert.equal(drawnOrder(container).at(-1), "line: steer", "at the turn's end");
   assert.equal(
-    container.querySelector('button[aria-label="Revert to here"]'),
+    container.querySelector('button[aria-label="Rewind conversation to here"]'),
     null,
     "the turn under way offers no end's actions",
   );

@@ -5,9 +5,10 @@ import { askLiveRead, type HostedPoll, hostedCall } from "./hosted-call.js";
 import { type HostedClient, hostedClient } from "./hosted-link.js";
 import { INTEGRATION_CALL_FAILURE, INTEGRATION_RENAMES } from "./integration-view.js";
 import {
-  INTEGRATION_ADD_ACCOUNT,
   INTEGRATION_QUERY,
+  type IntegrationAccountTarget,
   type IntegrationProvider,
+  integrationAccountInput,
 } from "./integration-wire.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import { HOSTED_API_ERROR } from "./service-wire.js";
@@ -34,28 +35,6 @@ export interface HostedIntegrationsClientOptions {
 const LIVE_RENAMES = {
   [HOSTED_API_ERROR.UNAVAILABLE]: INTEGRATION_CALL_FAILURE.UNAVAILABLE,
 } as const;
-
-/** Which account a call is about, and on a Connect whether it signs in a new one: none named is the provider's first. */
-export interface IntegrationAccountTarget {
-  readonly connection?: string | undefined;
-  readonly add?: boolean | undefined;
-}
-
-/** The query a provider's procedure names the account in; nothing for the provider's first account. */
-function accountQuery(target: IntegrationAccountTarget = {}) {
-  return {
-    ...(target.connection !== undefined
-      ? { [INTEGRATION_QUERY.CONNECTION]: target.connection }
-      : undefined),
-    ...(target.add === true ? { [INTEGRATION_QUERY.ADD]: INTEGRATION_ADD_ACCOUNT } : undefined),
-  };
-}
-
-/** A provider's input in parts: the path's provider, and the query only where it names something. */
-function accountInput(provider: IntegrationProvider, target?: IntegrationAccountTarget) {
-  const query = accountQuery(target);
-  return { params: { provider }, ...(Object.keys(query).length > 0 ? { query } : undefined) };
-}
 
 /** How every call reads its failure: the service's own unavailable as the window's. */
 const READING = { as: INTEGRATION_RENAMES } as const;
@@ -97,7 +76,11 @@ export class HostedIntegrationsClient {
 
   /** A browser sign-in to one account at a provider begun, or to a new one: the address the browser opens, which the caller opens and never shows, and the account it signs in. */
   connect(provider: IntegrationProvider, target?: IntegrationAccountTarget) {
-    return hostedCall(this.#hosted.integrations.connect, accountInput(provider, target), READING);
+    return hostedCall(
+      this.#hosted.integrations.connect,
+      integrationAccountInput(provider, target),
+      READING,
+    );
   }
 
   /** The tools one account's server offers the account's agents. */
@@ -116,14 +99,18 @@ export class HostedIntegrationsClient {
 
   /** One account's sign-in under way ended, answering where it then stands. */
   cancel(provider: IntegrationProvider, target?: IntegrationAccountTarget) {
-    return hostedCall(this.#hosted.integrations.cancel, accountInput(provider, target), READING);
+    return hostedCall(
+      this.#hosted.integrations.cancel,
+      integrationAccountInput(provider, target),
+      READING,
+    );
   }
 
   /** One account's connection ended, answering where it then stands. */
   disconnect(provider: IntegrationProvider, target?: IntegrationAccountTarget) {
     return hostedCall(
       this.#hosted.integrations.disconnect,
-      accountInput(provider, target),
+      integrationAccountInput(provider, target),
       READING,
     );
   }
@@ -132,7 +119,7 @@ export class HostedIntegrationsClient {
   rename(provider: IntegrationProvider, connection: string, label: string) {
     return hostedCall(
       this.#hosted.integrations.rename,
-      { ...accountInput(provider, { connection }), body: { label } },
+      { ...integrationAccountInput(provider, { connection }), body: { label } },
       READING,
     );
   }

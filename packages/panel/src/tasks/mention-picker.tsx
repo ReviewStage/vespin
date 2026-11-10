@@ -2,6 +2,7 @@ import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import type { AgentPullRequest, AgentSummary, TasklessAgent } from "@repo/features/agent-wire";
 import { automationTriggerText } from "@repo/features/automation-list-model";
 import type { AutomationSummary } from "@repo/features/automation-wire";
+import { fileName } from "@repo/features/code-ref-words";
 import {
   type DateSpan,
   dateChipText,
@@ -15,6 +16,7 @@ import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
 import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { holderTaskId, type MentionHolder } from "@repo/features/mention-holder";
 import {
   encodeMention,
   isMentionableTool,
@@ -27,6 +29,7 @@ import { agentName } from "@repo/features/model-label";
 import type { PageLine } from "@repo/features/page-wire";
 import { searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { skillWord } from "@repo/features/skill-word";
 import { TASK_TREE_ENTRY, type TaskSummary } from "@repo/features/task-wire";
 import { thingOfMention } from "@repo/features/thing-kind";
 import {
@@ -78,7 +81,7 @@ import { type Actor, APP_ACTOR } from "@repo/ui/actor-model";
 import type { NamedServer } from "@repo/ui/agent-servers-model";
 import { GLYPH } from "@repo/ui/icons";
 import { hitRangesIn, LOOSE_FROM, type SearchSubject, searchHit } from "@repo/ui/search-score";
-import { type SkillOption, skillWord } from "@repo/ui/skill-mention";
+import type { SkillOption } from "@repo/ui/skill-mention";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
 import {
   queryOptions,
@@ -125,11 +128,10 @@ import {
   dateMentionNode,
   useDatePicker,
 } from "./date-picker.js";
-import { fileFolder, fileName } from "./file-ref-model.js";
+import { fileFolder } from "./file-ref-model.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 import { InboxItemChipCard } from "./inbox-item-chip.js";
 import { inboxItemGlyph } from "./inbox-item-parts.js";
-import { holderTaskId, type MentionHolder } from "./mention-holder.js";
 import { PageCard } from "./page-card.js";
 import { PullRequestMark } from "./pull-request-mark.js";
 import { skillOption } from "./skill-ref.js";
