@@ -492,7 +492,7 @@ test("replacing the account's own Anthropic key moves the models the host holds,
 
   act(() =>
     (
-      page.querySelector<HTMLButtonElement>('[aria-label="Anthropic API key actions"]') ??
+      page.querySelector<HTMLButtonElement>('[aria-label="API key · sk-ant-…wxyz actions"]') ??
       assert.fail("no key's ⋯")
     ).click(),
   );

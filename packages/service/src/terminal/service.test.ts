@@ -68,6 +68,7 @@ function agents() {
     listeningPorts: unused,
     share: unused,
     unshare: unused,
+    preview: unused,
     shared: unused,
     start: unused,
     rename: unused,

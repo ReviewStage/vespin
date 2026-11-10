@@ -112,7 +112,7 @@ import { type Directory, useMemberDirectory, usePerson } from "../member-directo
 import { useShortcutTarget } from "../shortcut-target.js";
 import { useSteadyDoor } from "../steady-door.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
-import { COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
+import { LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
 import { type AnswerNewThread, InboxAnswerBox, type NewThreadStart } from "./inbox-answer-box.js";
@@ -206,16 +206,15 @@ import type { TasksControl } from "./use-tasks-tab.js";
  *
  * The draft reply is the reader's chip, "You" and nothing after it, over
  * the agent composer's box, its card and its field, with its `@` mentions,
- * its skills, and its microphone (`inbox-answer-box.tsx`), docked under the
- * thread as an agent's composer docks under its transcript, so the thread's
- * scroll box holds its messages alone, as TanStack Virtual's chat guide has
- * a log; a notice's Send reads "Got it" until a word is written. The draft
- * reply stands under a settled item's thread too. The board is a log, as an
- * agent's transcript is: each item opens at its newest message, and keeps to
- * it as messages land while the reader is there; scrolled up, the
- * transcript's way back to the newest line floats over the foot; and the
- * reader's own reply takes the thread to its end as it lands
- * (`ConversationRows`' `ownLast`). The pane's bar is its path, task › agent, each
+ * its skills, and its microphone (`inbox-answer-box.tsx`), flowing at the
+ * thread's end as its last row rather than docked under it, and a notice's
+ * Send reads "Got it" until a word is written. The draft reply ends a
+ * settled item's thread too. The board is a log, as an agent's transcript
+ * is: each item opens at its newest message, the draft reply just over the
+ * board's foot, and keeps to it as messages land while the reader is there;
+ * scrolled up, the transcript's way back to the newest line floats over the
+ * foot; and the reader's own reply takes the thread to its end as it lands,
+ * the draft under it (`ConversationRows`' `ownLast`). The pane's bar is its path, task › agent, each
  * crumb drawn as its tab in the task's column, opening what it names and
  * hanging the card its sidebar row or tab hangs, after a way back to the
  * list where the item stands alone, and nothing else that opens the agent,
@@ -346,21 +345,25 @@ function useReader(readerId: string | undefined): Actor {
 }
 
 /**
- * The reader's reply not yet sent, docked under the thread, drawn as a
- * member's comment is: headed by the reader's own chip, "You", with nothing
- * after it, and the box under it, so what is sent drops into the thread
- * above it.
+ * The reader's reply not yet sent, as the thread's last comment, drawn as
+ * a member's is: headed by the reader's own chip, "You", with nothing after
+ * it, and the box under it, so what is sent drops into the thread in its
+ * place and the box stands at the end again, as an issue's thread is
+ * written on.
  */
 function DraftReply({
   readerId,
+  place,
   children,
 }: {
   readerId: string | undefined;
+  place: VirtualRowPlace;
   children: React.ReactNode;
 }): React.JSX.Element {
   const reader = useReader(readerId);
   return (
     <InboxComment
+      place={place}
       kind={COMMENT.DRAFT}
       author={commentAuthor(reader)}
       nameRef={<ActorRef actor={reader} nameOnly />}
@@ -794,7 +797,7 @@ function closeNotes(events: ThreadEventsAfter): ReadonlySet<string> {
   return notes;
 }
 
-/** What a row of the thread draws: a line of what happened to it, a message, the line saying earlier messages are cut, or a reply on its way; the reader's draft reply docks under them. */
+/** What a row of the thread draws: a line of what happened to it, a message, the line saying earlier messages are cut, or a reply on its way; the reader's draft reply is the run's last row after them. */
 const THREAD_ROW = {
   EVENT: "event",
   MESSAGE: "message",
@@ -819,15 +822,17 @@ type ThreadRow =
 /** The height a row of the thread is taken to have before it is drawn, in pixels: a short message's. */
 const THREAD_ROW_ESTIMATE_PX = 96;
 
+/** The key of the thread's last row, the reader's draft reply, which no message's row takes. */
+const DRAFT_ROW_KEY = "draft-reply";
+
 /**
  * The thread's rows in order, each one of its comments, as the log's run
  * draws them (`ConversationRows`): the lines of what happened before its
  * first message, then each message, a close's note drawn under the close's
  * own line instead, with the lines that follow it, the line saying earlier
  * messages are cut after the first, which always stands, and the reader's
- * replies on their way; the draft reply docks under the thread. Note that
- * the run names
- * its rows by one string each (`VirtualRows`), and a line of what happened
+ * replies on their way; the draft reply stands after them as the run's last
+ * row (`DRAFT_ROW_KEY`). Note that the run names its rows by one string each (`VirtualRows`), and a line of what happened
  * is kept by the message it follows, so its row is that message's id with
  * the line's kind after it.
  */
@@ -1619,8 +1624,8 @@ function PhoneHolder({
  * One item at reading size, as a comment thread: under the pane's crumbs,
  * the item's title alone as the thread's subject, then every message of
  * its thread, oldest first, the reader's plain replies on their way after
- * them, in the order sent (`PendingReply`), and the reader's draft reply
- * docked under it, the open ask's controls standing in it.
+ * them, in the order sent (`PendingReply`), and the reader's draft reply at
+ * its end, the open ask's controls standing in it.
  * Where the item stands alone, the whole Inbox wide, the crumbs follow a
  * way back to the list (`inbox-columns.ts`), its tooltip naming Back's
  * chord, which goes back as Escape does, and the bar ends in the pager,
@@ -1685,8 +1690,9 @@ export function InboxPane({
       setQuoteDoor(lay === undefined ? undefined : { lay }),
     [],
   );
-  // The thread's run of rows.
+  // The thread's run of rows, which a quote laid into the box takes to its end, the box being its last row.
   const run = useRef<VirtualRowsHandle>(null);
+  const onQuoted = useCallback(() => run.current?.scrollToEnd(), []);
   const directory = useMemberDirectory();
   const readerId = directory.readerId ?? agents.me;
   const [heading, setHeading] = useState<HTMLElement | null>(null);
@@ -1718,7 +1724,8 @@ export function InboxPane({
   const pending = pendingRepliesOn(control.pendingReplies, item);
   const events = useMemo(() => threadEvents(item, thread), [item, thread]);
   const rows = useMemo(() => threadRows(thread, events, pending), [thread, events, pending]);
-  const rowKeys = useMemo(() => rows.map((row) => row.key), [rows]);
+  // The draft reply stands after the thread's rows as its last, under a key of its own that no row takes.
+  const rowKeys = useMemo(() => [...rows.map((row) => row.key), DRAFT_ROW_KEY], [rows]);
   // The reader's own newest reply, on its way or landed, which takes the thread to its end as it lands, as TanStack's example does on a send.
   const ownLast = rows.findLast(
     (row) =>
@@ -1757,10 +1764,10 @@ export function InboxPane({
         />
       </DraftQuestion>
     );
-  // The box docks under the thread as the reader's draft reply.
-  const draftReply = (
+  // The box stands at the thread's end as the reader's draft reply.
+  const draftReply = (place: VirtualRowPlace) => (
     <AnswerMentions value={mentions}>
-      <DraftReply readerId={readerId}>
+      <DraftReply readerId={readerId} place={place}>
         <InboxAnswerBox
           item={item}
           readerId={readerId}
@@ -1771,8 +1778,9 @@ export function InboxPane({
           controls={question}
           skills={agents.readSkills}
           keywords={answerKeywords(holder, item)}
-          replyScope={pane}
+          replyScope={board}
           onQuoteDoor={onQuoteDoor}
+          onQuoted={onQuoted}
           onUnarchiveAgent={() => agents.onArchive(item.agentId, false)}
           newThread={newThread === undefined ? undefined : answerNewThread(newThread, item, by)}
         />
@@ -1871,7 +1879,7 @@ export function InboxPane({
         />
       )}
       <Fill className="desktop-inbox">
-        {/* The thread is a log as an agent's transcript is: each item opens at its newest message and keeps to it while the reader is there; scrolled up, the way back floats over its foot. */}
+        {/* The thread is a log as an agent's transcript is: each item opens at its newest message, the box at its end, and keeps to it while the reader is there; scrolled up, the way back floats over its foot. */}
         <Conversation list={board}>
           <ConversationContent
             className={`inbox-board ${LOG_OVER_COMPOSER_CLASS} flex flex-col pt-section-gap`}
@@ -1934,7 +1942,7 @@ export function InboxPane({
                           />
                         );
                       default:
-                        return null;
+                        return at === rows.length ? draftReply(place) : null;
                     }
                   }}
                 </ConversationRows>
@@ -1943,12 +1951,6 @@ export function InboxPane({
           </ConversationContent>
           <ConversationScrollButton />
         </Conversation>
-        {/* The reader's draft reply docks under the thread, as an agent's composer docks under its transcript, so the thread's scroll box holds its messages alone. */}
-        <div className={`inbox-draft-dock ${COMPOSER_DOCK_CLASS}`}>
-          <ItemWords itemId={item.id} workspaceId={workspaceId} images={images} code={doors.code}>
-            {draftReply}
-          </ItemWords>
-        </div>
       </Fill>
     </section>
   );

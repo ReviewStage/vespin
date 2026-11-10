@@ -22,7 +22,12 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { type Agent, readAgent, readAgentOfConversation } from "@repo/database/models/agent-store";
 import { readMessageByClientId } from "@repo/database/models/message-reads";
 import { type SettledAgentTurn, storeWriter } from "@repo/database/models/writer";
-import { AGENT_MESSAGE_LEAD, agentMessageReplyLine } from "@repo/features/agent-wire";
+import { agentFailureWords } from "@repo/features/agent-failure-words";
+import {
+  AGENT_FAILURE,
+  AGENT_MESSAGE_LEAD,
+  agentMessageReplyLine,
+} from "@repo/features/agent-wire";
 import { MENTION_KIND } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
 import { causeKind } from "@repo/runtime/effect";
@@ -33,7 +38,7 @@ import { isTextUIPart } from "ai";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
 import type { SessionsForAccount } from "../../automations/automation-runs.js";
-import { MESSAGE_CHANNEL } from "../../core.js";
+import { MESSAGE_CHANNEL, TURN_FAILURE } from "../../core.js";
 import type { GitHubApp } from "../../github/github-app.js";
 import { workspaceStepOf, writtenMention } from "../written-mentions.js";
 import { MAX_MESSAGE_WORDS_CHARS } from "./agent-message.js";
@@ -72,6 +77,10 @@ function finalWords(journal: StoredUIMessage): string | undefined {
 /** How the turn ended, in the head's words. */
 function ended(turn: SettledAgentTurn): string {
   if (turn.status === TURN_STATUS.CANCELED) return "was stopped before it finished";
+  // A turn its plan's usage limit stopped is said so, not as a failure word.
+  if (turn.failure === TURN_FAILURE.PLAN_LIMIT) {
+    return `was stopped: ${agentFailureWords(AGENT_FAILURE.PLAN_LIMIT, undefined)}`;
+  }
   if (turn.status === TURN_STATUS.FAILED) {
     return `failed its turn${turn.failure === null ? "" : ` (${turn.failure})`}`;
   }

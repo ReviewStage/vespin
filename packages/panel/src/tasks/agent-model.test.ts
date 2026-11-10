@@ -52,7 +52,6 @@ import {
   payerPlanName,
   placedMessages,
   planPayerOf,
-  publishedUrl,
   pullRequestPillLabel,
   pullRequestStateWord,
   readModelChoice,
@@ -356,29 +355,15 @@ test("the dock lists every pull request the agent opened, one still open before 
   );
 });
 
-test("the checkout command fetches and switches to the branch, and the chip opens the pull request, else the branch compared, else nowhere", () => {
+test("the checkout command fetches and switches to the branch", () => {
   assert.equal(
     checkoutCommand("luke/teammate-invitations"),
     "git fetch origin luke/teammate-invitations && git switch luke/teammate-invitations",
   );
-  const repository = "acme/relay";
-  assert.equal(
-    publishedUrl({ repository, branch: "luke/x", pullRequest: PULL_REQUEST }),
-    "https://github.com/acme/relay/pull/123",
-  );
-  assert.equal(
-    publishedUrl({ repository, branch: "luke/x", pullRequest: null }),
-    "https://github.com/acme/relay/compare/luke/x?expand=1",
-  );
-  assert.equal(publishedUrl({ repository, branch: null, pullRequest: null }), undefined);
-  // A branch a shell or an address would read into is quoted or encoded, never read.
+  // A branch a shell would read into is quoted, never read.
   assert.equal(
     checkoutCommand("luke/$(touch pwned)'x"),
     "git fetch origin 'luke/$(touch pwned)'\\''x' && git switch 'luke/$(touch pwned)'\\''x'",
-  );
-  assert.equal(
-    publishedUrl({ repository, branch: "luke/issue#12 fix", pullRequest: null }),
-    "https://github.com/acme/relay/compare/luke/issue%2312%20fix?expand=1",
   );
 });
 

@@ -295,7 +295,12 @@ const writeRequeued = SqlSchema.void({
     Database.use((db) =>
       db
         .update(runnerLine)
-        .set({ acceptedAt: null, launch: ANY_LAUNCH })
+        // The line is resent to a session that already holds it (`MessageLineSchema`'s `resent`).
+        .set({
+          acceptedAt: null,
+          launch: ANY_LAUNCH,
+          text: sql`(${runnerLine.text}::jsonb || '{"resent":true}'::jsonb)::text`,
+        })
         .where(
           and(
             eq(runnerLine.userId, userId),
@@ -468,8 +473,9 @@ export function acceptRunnerLine(
 
 /**
  * The account's agent's message line under its id put back as no launch's
- * and untaken, as a turn its plan's limit cut short is handed on to a launch
- * on the next payer (`retry`): the line it queues again under the same id
+ * and untaken, and marked resent, as a turn its plan's limit cut short is
+ * handed on to a launch on the next payer (`retry`), whose session already
+ * holds it: the line it queues again under the same id
  * then takes the row over for that launch (`insertLine`), which a line taken
  * would otherwise keep from it. Nothing where no such line stands, or the id
  * is none a line could carry.

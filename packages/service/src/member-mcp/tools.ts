@@ -86,6 +86,7 @@ import {
   INBOX_STATUS,
   inboxAnswersSchema,
 } from "@repo/features/inbox-wire";
+import { commitShaSchema } from "@repo/features/link-grammar";
 import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-mcp-tool";
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
 import { agentName } from "@repo/features/model-label";
@@ -97,7 +98,17 @@ import {
   type PullRequestWriteAnswer,
   pullRequestActionRequestSchema,
 } from "@repo/features/pull-request-write-wire";
-import { TASK_STATUS } from "@repo/features/task-wire";
+import {
+  CODE_PATH_MAX_CHARS,
+  codeLineSchema,
+  TASK_FILE_BOUNDS,
+  TASK_FILE_REFUSAL,
+  TASK_STATUS,
+  TASK_TREE_BOUNDS,
+  type TaskFileAnswer,
+  type TaskFileRefusal,
+  type TaskTreeAnswer,
+} from "@repo/features/task-wire";
 import { WORKSPACE_BOUNDS, workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { Sandbox } from "@repo/sandbox";
 import {
@@ -172,6 +183,7 @@ import { steerMemberWords } from "../agents/coder-host/steer.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import {
   type MemoryCall,
+  runListMemories,
   runRecall,
   runRemember,
   SAVE_MEMORY_TOOL,
@@ -228,6 +240,8 @@ import {
   type MentioningComment,
   memberCommentAnswer,
 } from "../tasks/description-comments-procedures.js";
+import { readTaskFile } from "../tasks/task-file.js";
+import { readTaskTree } from "../tasks/task-tree.js";
 import type { SentryApp } from "../triggers/sentry/sentry-app-config.js";
 import { AdmittedMember, type AdmittedMemberValues } from "./admission.js";
 import { answerAskAsMember, closeThreadAsMember, readMemberInbox, replyAsMember } from "./inbox.js";
@@ -602,6 +616,124 @@ const MEMBER_READ_PAGE_TOOL = memberMcpTool({
       READ_PAGE_REFUSAL.NO_PAGE,
       (call) => runReadPage(call, asked),
     ),
+});
+
+// A task's repository as its File tab reads it, through the reads its procedures run (`../tasks/task-file.ts`, `../tasks/task-tree.ts`).
+
+/** Why a file is not read or a folder not listed, in words the agent can act on. */
+const TASK_FILE_REFUSAL_WORDS = {
+  [TASK_FILE_REFUSAL.SECRET]:
+    "Not read: the file may hold a secret, so its contents are never read.",
+  [TASK_FILE_REFUSAL.MISSING]: `Not read: nothing of that kind stands at that path; ${MEMBER_MCP_TOOL.LIST_TASK_FOLDER} lists what does.`,
+  [TASK_FILE_REFUSAL.NOT_TEXT]: "Not read: the file is too large, or not text.",
+  [TASK_FILE_REFUSAL.NO_REPOSITORY]: "Not read: the task has no repository yet.",
+  [TASK_FILE_REFUSAL.NOT_REACHABLE]:
+    "Not read: the workspace's GitHub installation does not reach the task's repository.",
+  [TASK_FILE_REFUSAL.UNAVAILABLE]: "Not read: GitHub did not answer just now; try again shortly.",
+} as const satisfies Record<TaskFileRefusal, string>;
+
+/** A read's answer to the agent: accepted with what it found, or rejected and why, naming the branch GitHub found nothing on. */
+function taskFileAnswerOf(
+  read: Option.Option<TaskFileAnswer | TaskTreeAnswer>,
+): MemberMcpToolResult {
+  if (Option.isNone(read)) return agentToolRejected(READ_TASK_REFUSAL.NO_TASK);
+  const answer = read.value;
+  if (!("refusal" in answer)) return { status: ACTION_RESULT_STATUS.ACCEPTED, ...answer };
+  const words = TASK_FILE_REFUSAL_WORDS[answer.refusal];
+  return agentToolRejected(
+    answer.branch === undefined ? words : `${words} (read on ${answer.branch})`,
+  );
+}
+
+const TASK_FILE_TASK_INPUT = describeWire(
+  wireUuidSchema,
+  `The task whose repository to read, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
+);
+
+/** A read of a file names its task, its path, at most the line to start at, and the commit to read it at. */
+const ReadTaskFileInputSchema = Schema.Struct({
+  taskId: TASK_FILE_TASK_INPUT,
+  path: describeWire(
+    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(CODE_PATH_MAX_CHARS)),
+    "The file's path from the repository's root, such as src/index.ts.",
+  ),
+  firstLine: Schema.optionalKey(
+    describeWire(codeLineSchema, "The first line to read, from 1; 1 where left out."),
+  ),
+  commit: Schema.optionalKey(
+    describeWire(
+      commitShaSchema,
+      "The commit to read the file at, by its full SHA, such as the head a pull request stands " +
+        "on; the default branch's head where left out.",
+    ),
+  ),
+});
+
+const READ_TASK_FILE_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.READ_TASK_FILE,
+  description:
+    "Read a file of the task's repository on GitHub, for a task the member can open, by the " +
+    "task's id and the file's path, as the task's File tab shows it: read through the " +
+    "workspace's installation at the default branch's head, or at the commit you name, never " +
+    "from an agent's sandbox, which may hold work not pushed yet. Answers `accepted` with the file's " +
+    "path, the repository and the branch read, the commit read at where GitHub named one, the " +
+    `line the window starts at, how many lines the whole file has, and up to ` +
+    `${TASK_FILE_BOUNDS.WINDOW_LINES} of its lines, each cut at ` +
+    `${TASK_FILE_BOUNDS.MAX_LINE_CHARS} characters; pass firstLine to read further. A file ` +
+    "that may hold a secret, is too large, or is not text is refused. Answers `rejected` and " +
+    `why otherwise. ${MEMBER_MCP_TOOL.LIST_TASK_FOLDER} lists a folder.`,
+  input: ReadTaskFileInputSchema,
+  annotations: READ_ONLY,
+  run: ({ taskId, path, firstLine = 1, commit }) =>
+    Effect.gen(function* () {
+      const member = yield* AdmittedMember;
+      const window = {
+        path,
+        firstLine,
+        lastLine: firstLine + TASK_FILE_BOUNDS.WINDOW_LINES - 1,
+        ...(commit === undefined ? undefined : { ref: commit }),
+      };
+      return taskFileAnswerOf(yield* readTaskFile(member.userId, taskId, window));
+    }),
+});
+
+/** A listing names its task, at most the folder, and whether everything under it is listed. */
+const ListTaskFolderInputSchema = Schema.Struct({
+  taskId: TASK_FILE_TASK_INPUT,
+  path: Schema.optionalKey(
+    describeWire(
+      Schema.String.check(Schema.isMaxLength(CODE_PATH_MAX_CHARS)),
+      "The folder's path from the repository's root, such as src; the root where left out.",
+    ),
+  ),
+  recursive: Schema.optionalKey(
+    describeWire(
+      Schema.Boolean,
+      "true to list everything under the folder, each entry by its path from the folder; " +
+        "false or left out for the folder's own entries.",
+    ),
+  ),
+});
+
+const LIST_TASK_FOLDER_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_TASK_FOLDER,
+  description:
+    "List a folder of the task's repository on GitHub, for a task the member can open, by the " +
+    "task's id, as the tree beside its File tab lists it: read through the workspace's " +
+    "installation at the default branch's head, never from an agent's sandbox. Answers `accepted` with " +
+    "the folder's path, the repository and the branch read, its entries in GitHub's order, " +
+    "each with its name and whether it is a file or a folder, and truncated true where there " +
+    `were more than ${TASK_TREE_BOUNDS.MAX_ENTRIES} (or ${TASK_TREE_BOUNDS.MAX_RECURSIVE_ENTRIES} ` +
+    "with recursive), or `rejected` and why. " +
+    `${MEMBER_MCP_TOOL.READ_TASK_FILE} reads a file it lists.`,
+  input: ListTaskFolderInputSchema,
+  annotations: READ_ONLY,
+  run: ({ taskId, path = "", recursive }) =>
+    Effect.gen(function* () {
+      const member = yield* AdmittedMember;
+      const folder = { path, ...(recursive === true ? { recursive } : undefined) };
+      return taskFileAnswerOf(yield* readTaskTree(member.userId, taskId, folder));
+    }),
 });
 
 /*
@@ -1908,6 +2040,25 @@ const MEMBER_SAVE_MEMORY_TOOL = memberMcpTool({
   experiment: EXPERIMENT.MEMORY,
 });
 
+/** A list names the workspace whose memories to list. */
+const ListMemoriesInputSchema = Schema.Struct({ workspace: MEMORY_WORKSPACE_INPUT });
+
+const MEMBER_LIST_MEMORIES_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_MEMORIES,
+  description:
+    "List every memory in the shared memory of a workspace the member belongs to, most " +
+    "recently kept or corrected first, as Settings › Memory lists them: each with its id, its " +
+    "words, when it was last kept, who kept it, and whether the member may forget it. Use " +
+    `${MEMBER_MCP_TOOL.SEARCH_MEMORY} to find the few about an area at hand; list them all ` +
+    `only when the member asks to review what the workspace keeps. ${WORKSPACE_WORDS} ` +
+    "Answers `accepted` with the memories and how many there are, or `rejected` and why, such " +
+    "as the member having Memory off.",
+  input: ListMemoriesInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace }) => memoryAsMember(workspace, runListMemories),
+  experiment: EXPERIMENT.MEMORY,
+});
+
 /** A forget names the workspace and the memory. */
 const ForgetMemoryInputSchema = Schema.Struct({
   workspace: MEMORY_WORKSPACE_INPUT,
@@ -2171,6 +2322,8 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_READ_AGENT_TOOL,
   READ_AGENT_CHANGES_TOOL,
   MEMBER_READ_PAGE_TOOL,
+  READ_TASK_FILE_TOOL,
+  LIST_TASK_FOLDER_TOOL,
   MEMBER_LIST_MODELS_TOOL,
   MEMBER_CREATE_TASK_TOOL,
   MEMBER_UPDATE_TASK_TOOL,
@@ -2194,6 +2347,7 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_UPDATE_COMMENT_TOOL,
   MEMBER_SEARCH_MEMORY_TOOL,
   MEMBER_SAVE_MEMORY_TOOL,
+  MEMBER_LIST_MEMORIES_TOOL,
   MEMBER_FORGET_MEMORY_TOOL,
   MEMBER_LIST_AUTOMATIONS_TOOL,
   MEMBER_CREATE_AUTOMATION_TOOL,

@@ -112,10 +112,11 @@ const ENVIRONMENT: HostedEnvironmentValues = {
 /** How long the limit a turn meets stands from the test's clock. */
 const LIMIT_FOR = Duration.hours(1);
 
-/** Who may pay once the first subscription meets its limit. */
+/** Who may pay once the first subscription meets its limit, or, with no subscription, once the first of two API keys runs out of quota. */
 const FALLBACK = {
   NEXT_PLAN: "next_plan",
   API_KEY: "api_key",
+  NEXT_KEY: "next_key",
   NONE: "none",
 } as const;
 type Fallback = (typeof FALLBACK)[keyof typeof FALLBACK];
@@ -184,6 +185,23 @@ const HARNESS = {
           content: [{ type: "text", text: "You've hit your session limit · resets 5pm" }],
         },
         error: "rate_limit",
+        uuid: randomUUID(),
+        ...CLAUDE_TOP,
+      },
+      { type: "result", subtype: "success", is_error: true, ...CLAUDE_TOP },
+      { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+    ],
+    /** An API key's organization out of credit, as the CLI flags the answer Anthropic refused. */
+    outOfQuota: (lineId: string): readonly unknown[] => [
+      { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
+      { type: "system", subtype: "init", ...CLAUDE_TOP },
+      {
+        type: "assistant",
+        message: {
+          id: "msg_credit",
+          content: [{ type: "text", text: "Credit balance is too low" }],
+        },
+        error: "billing_error",
         uuid: randomUUID(),
         ...CLAUDE_TOP,
       },
@@ -260,6 +278,23 @@ const HARNESS = {
       }),
       { type: RUNNER_EVENT.END, reason: RUNNER_END.FAILED },
     ],
+    /** An API key OpenAI refused for its quota, which Codex files as a usage limit. */
+    outOfQuota: (lineId: string): readonly unknown[] => [
+      { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
+      codexNotification("turn/started", { turn: { id: "turn-1" } }),
+      codexNotification("turn/completed", {
+        turn: {
+          id: "turn-1",
+          status: "failed",
+          error: {
+            message: 'unexpected status 429: {"error":{"code":"insufficient_quota"}}',
+            codexErrorInfo: "usageLimitExceeded",
+            additionalDetails: null,
+          },
+        },
+      }),
+      { type: RUNNER_EVENT.END, reason: RUNNER_END.FAILED },
+    ],
     finished: (lineId: string): readonly unknown[] => [
       { type: RUNNER_EVENT.ACCEPTED, uuid: lineId },
       codexNotification("turn/started", { turn: { id: "turn-2" } }),
@@ -270,12 +305,13 @@ const HARNESS = {
 } as const;
 type Harness = keyof typeof HARNESS;
 
-/** A launch's runner as a case reads it: how it reaches the events route, where it numbers its events from, and the developer's words of each message it is handed. */
+/** A launch's runner as a case reads it: how it reaches the events route, where it numbers its events from, the developer's words of each message it is handed, and whether each of those it is handed first was resent. */
 interface Launched {
   readonly bearer: string;
   readonly launch: number;
   readonly firstSequence: number;
   readonly texts: readonly string[];
+  readonly resent: readonly boolean[];
 }
 
 /** The developer's words of a message line, past the turn's own words that lead it. */
@@ -283,6 +319,10 @@ const wordsOf = (line: InputLine): readonly string[] =>
   line.type === INPUT_LINE.MESSAGE
     ? line.content.slice(1).flatMap((block) => (block.type === "text" ? [block.text] : []))
     : [];
+
+/** Whether a message line was resent to a session that holds it. */
+const resentOf = (line: InputLine): readonly boolean[] =>
+  line.type === INPUT_LINE.MESSAGE ? [line.resent === true] : [];
 
 /** The launch a runner's config names in its URLs. */
 const launchNamed = (config: RunnerConfig) =>
@@ -303,11 +343,13 @@ const sandboxLaunch = (
       after: 0,
       limit: 50,
     });
+    const lines = read.map((row) => JSON.parse(row.text) as InputLine);
     const launched: Launched = {
       bearer,
       launch: launchNamed(config),
       firstSequence: config.firstSequence,
-      texts: read.flatMap((row) => wordsOf(JSON.parse(row.text) as InputLine)),
+      texts: lines.flatMap(wordsOf),
+      resent: lines.flatMap(resentOf),
     };
     return launched;
   });
@@ -331,6 +373,7 @@ const macLaunch = (userId: string, deviceId: string, lineId: string) =>
       launch: launchNamed(config),
       firstSequence: config.firstSequence,
       texts: lines.flatMap(wordsOf),
+      resent: lines.flatMap(resentOf),
     };
     return launched;
   });
@@ -343,11 +386,9 @@ const accountWith = (harness: Harness, onMac: boolean, fallback: Fallback) =>
     yield* Effect.flatMap(Database, (db) =>
       db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
     );
-    yield* spec.savePlan(userId, false);
-    if (fallback === FALLBACK.NEXT_PLAN) yield* spec.savePlan(userId, true);
-    if (fallback === FALLBACK.API_KEY) {
+    const saveKey = () => {
       const owner = { userId, provider: spec.keyProvider, kind: PROVIDER_KEY_KIND.API_KEY };
-      yield* saveProviderKey(
+      return saveProviderKey(
         userId,
         owner.provider,
         owner.kind,
@@ -356,6 +397,13 @@ const accountWith = (harness: Harness, onMac: boolean, fallback: Fallback) =>
         null,
         new Date(0),
       );
+    };
+    if (fallback !== FALLBACK.NEXT_KEY) yield* spec.savePlan(userId, false);
+    if (fallback === FALLBACK.NEXT_PLAN) yield* spec.savePlan(userId, true);
+    if (fallback === FALLBACK.API_KEY) yield* saveKey();
+    if (fallback === FALLBACK.NEXT_KEY) {
+      yield* saveKey();
+      yield* saveKey();
     }
     const deviceId = randomUUID();
     if (onMac) {
@@ -515,7 +563,7 @@ const CASES = [CONVERSATION_RUNTIME.CLAUDE_CODE, CONVERSATION_RUNTIME.CODEX].fla
       harness,
       onMac,
       fallback,
-      payer: (fallback === FALLBACK.API_KEY
+      payer: (fallback === FALLBACK.API_KEY || fallback === FALLBACK.NEXT_KEY
         ? AGENT_PAYER.API_KEY
         : HARNESS[harness].planPayer) as AgentPayer,
     })),
@@ -551,7 +599,12 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
 
         // The first launch's turn meets its subscription's limit, which the route writes and hands the turn on past.
         const resetsAt = (yield* Clock.currentTimeMillis) + Duration.toMillis(LIMIT_FOR);
-        const limited = numbered(first.firstSequence, spec.limited(sent.lineId, resetsAt));
+        const limited = numbered(
+          first.firstSequence,
+          fallback === FALLBACK.NEXT_KEY
+            ? spec.outOfQuota(sent.lineId)
+            : spec.limited(sent.lineId, resetsAt),
+        );
         sequence.next = first.firstSequence + limited.length;
         assert.equal(yield* post(first, limited), 200);
         // Where no payer has room, the turn waits for the reset, which the sweep hands on.
@@ -567,6 +620,8 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
         const [, second] = all;
         assert.ok(second !== undefined);
         assert.deepEqual(second.texts, ["Fix the invitations."]);
+        // The line goes to a session that already holds it, which drops a prompt under an id it holds.
+        assert.deepEqual(second.resent, [true]);
         const routing = Option.getOrThrow(yield* readAgentRouting(userId, agent.id));
         assert.deepEqual(
           [routing.payer, routing.subscriptionId === limitedOn.subscriptionId],
@@ -604,7 +659,12 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
         const [first] = yield* launches;
         assert.ok(first !== undefined);
         const resetsAt = (yield* Clock.currentTimeMillis) + Duration.toMillis(LIMIT_FOR);
-        const limited = numbered(first.firstSequence, spec.limited(sent.lineId, resetsAt));
+        const limited = numbered(
+          first.firstSequence,
+          fallback === FALLBACK.NEXT_KEY
+            ? spec.outOfQuota(sent.lineId)
+            : spec.limited(sent.lineId, resetsAt),
+        );
         sequence.next = first.firstSequence + limited.length;
         assert.equal(yield* post(first, limited), 200);
 

@@ -10,7 +10,10 @@ import { Progress as ShadcnProgress } from "../../shadcn/progress.js";
  * of its own, named by it and read as a percentage. A wait with no known end
  * is a spinner's, never an empty bar. A count that needs a person, such as a
  * plan at its usage limit, fills in the attention ink instead
- * (`PROGRESS_TONE.ATTENTION`).
+ * (`PROGRESS_TONE.ATTENTION`). A bar under a line of words in a list of
+ * them, such as a settings row's meter, is drawn thinner
+ * (`PROGRESS_SIZE.THIN`), so it reads as their underline rather than a row
+ * of its own.
  *
  * The bar is shadcn/ui's progress over Base UI (`../../shadcn/progress.tsx`),
  * drawn in Tailwind utilities over the theme. Base UI's root would name
@@ -29,6 +32,14 @@ export const PROGRESS_TONE = {
 
 export type ProgressTone = (typeof PROGRESS_TONE)[keyof typeof PROGRESS_TONE];
 
+/** How thick a bar is drawn: the hairline, or thinner still under a row's words. */
+export const PROGRESS_SIZE = {
+  REGULAR: "regular",
+  THIN: "thin",
+} as const;
+
+export type ProgressSize = (typeof PROGRESS_SIZE)[keyof typeof PROGRESS_SIZE];
+
 /** The share of the work done, as a percentage held to 0–100, a value that is not a number read as none. */
 function percentOf(value: number): number {
   if (!Number.isFinite(value)) return 0;
@@ -40,6 +51,7 @@ export function Progress({
   value,
   label,
   tone = PROGRESS_TONE.WORKING,
+  size = PROGRESS_SIZE.REGULAR,
 }: {
   /** How far the work has come, in percent. */
   value: number;
@@ -47,6 +59,8 @@ export function Progress({
   label?: string | undefined;
   /** The ink it fills in; the working ink where none is named. */
   tone?: ProgressTone | undefined;
+  /** How thick it is drawn; the hairline where none is named. */
+  size?: ProgressSize | undefined;
 }): React.JSX.Element {
   const percent = percentOf(value);
   // Note that each attribute Base UI's root sets is named here, undefined where the bar never said it, because a prop given overrides the root's own.
@@ -68,5 +82,5 @@ export function Progress({
           "aria-valuenow": Math.round(percent),
           "aria-valuetext": undefined,
         } as const);
-  return <ShadcnProgress value={percent} data-tone={tone} {...read} />;
+  return <ShadcnProgress value={percent} data-tone={tone} data-size={size} {...read} />;
 }

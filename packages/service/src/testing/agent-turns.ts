@@ -13,14 +13,21 @@ import {
   type RunStatus,
   TURN_FAILURE,
   TURN_TRIGGER,
+  type TurnFailure,
 } from "@repo/features/turn-run";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { TURN_ORIGIN } from "@repo/wire";
 import { Effect } from "effect";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 
-/** One turn of the agent's, begun just before `at`, answered with the words given where some are, and ended in the run status given at `at`; its id. */
-export const endedAt = (agent: Agent, status: RunStatus, at: number, said?: string) =>
+/** One turn of the agent's, begun just before `at`, answered with the words given where some are, and ended in the run status given at `at`, a failed one for `failure`; its id. */
+export const endedAt = (
+  agent: Agent,
+  status: RunStatus,
+  at: number,
+  said?: string,
+  failure: TurnFailure = TURN_FAILURE.MODEL,
+) =>
   Effect.gen(function* () {
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     const target = { userId: agent.userId, conversationId: agent.conversationId };
@@ -57,7 +64,7 @@ export const endedAt = (agent: Agent, status: RunStatus, at: number, said?: stri
       kind: RUN_EVENT.TURN_ENDED,
       sequence: 3,
       status,
-      ...(status === RUN_STATUS.FAILED ? { failure: TURN_FAILURE.MODEL } : undefined),
+      ...(status === RUN_STATUS.FAILED ? { failure } : undefined),
       responseIds: [],
       at,
     });

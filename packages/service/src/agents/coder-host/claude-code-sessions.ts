@@ -183,15 +183,15 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
   });
 
   /**
-   * The account's Anthropic API key opened, as the CLI's documented
+   * The account's Anthropic API key the launch chose opened, as the CLI's documented
    * `ANTHROPIC_API_KEY` (https://code.claude.com/docs/en/agent-sdk/quickstart),
    * for a launch the starter's key pays for, or a Preview's stand-in where
    * that key is gone or unreadable (`accounts/own-api-key.ts`); refused
    * where neither is.
    */
-  const apiKeyCredential = Effect.gen(function* () {
+  const apiKeyCredential = Effect.fnUntraced(function* (keyId: string | undefined) {
     const environment = yield* HostedEnvironment;
-    const key = yield* ownApiKeyOf(userId, PROVIDER_KEY_PROVIDER.ANTHROPIC, environment);
+    const key = yield* ownApiKeyOf(userId, PROVIDER_KEY_PROVIDER.ANTHROPIC, environment, keyId);
     if (key === undefined) {
       return yield* new LaunchRefused({ reason: "no API key", keyRefusal: KEY_REFUSAL.MISSING });
     }
@@ -300,7 +300,7 @@ function claudeCode(options: RunnerSessionsOptions): RunnerHarness<{ readonly _t
       Effect.gen(function* () {
         const turn = yield* turnPayerOf(userId, agent.id, MODEL_PROVIDER.ANTHROPIC);
         return yield* turn.payer === AGENT_PAYER.API_KEY
-          ? apiKeyCredential
+          ? apiKeyCredential(turn.subscriptionId)
           : planCredential(turn.subscriptionId);
       }),
     config,

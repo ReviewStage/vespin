@@ -2,6 +2,7 @@ import { CODEX_ERROR_INFO, codexErrorKind } from "@repo/agent-runner/protocol";
 import { CODEX_TOOL, WORKSPACE_MCP_SERVER_NAMES } from "@repo/features/agent-tools";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
+import { USAGE_LIMIT_AGENT } from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
 import { storedServerCall } from "../../integrations/connection-tools.js";
 import {
@@ -16,6 +17,7 @@ import {
   PICTURE_STAND_IN,
   runnerMoments,
   toolAnswerSettlement,
+  usageLimitSettlement,
 } from "./runner-moments.js";
 
 /**
@@ -472,20 +474,28 @@ function running(call: Call, threads: readonly string[]): readonly NativeMoment[
   );
 }
 
-/** A subagent's thread finished its turn: the spawn it runs under settles, failed where the turn did not complete. */
+/**
+ * A subagent's thread finished its turn: the spawn it runs under settles,
+ * failed where the turn did not complete, but answered with the limit's
+ * notice where the plan's usage limit stopped it, rather than OpenAI's
+ * error.
+ */
 function childTurnMoments(threadId: string, params: unknown): readonly NativeMoment[] {
   const read = readTurnCompleted(params);
   if (Option.isNone(read)) return [];
   const { status, error } = read.value.turn;
   const text = error?.message ?? status;
+  const limited = planStatusOfInfo(error?.codexErrorInfo) === PLAN_STATUS.LIMIT_REACHED;
   return [
     {
       kind: NATIVE_MOMENT.SUBAGENT_ENDED,
       key: threadId,
-      settlement: toolAnswerSettlement(
-        { workspaceTool: false, text, output: { status } },
-        status !== TURN_COMPLETED,
-      ),
+      settlement: limited
+        ? usageLimitSettlement(USAGE_LIMIT_AGENT.CODEX)
+        : toolAnswerSettlement(
+            { workspaceTool: false, text, output: { status } },
+            status !== TURN_COMPLETED,
+          ),
     },
   ];
 }

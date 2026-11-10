@@ -473,6 +473,8 @@ export const AGENT_FAILURE = {
   LINE_UNTAKEN: "line_untaken",
   /** The plan's usage limit cut the turn short, and its launch on the next payer, or past the reset, never took it up. */
   PLAN_LIMIT: "plan_limit",
+  /** The model refused the turn, as a provider's safeguards do, and no other model retried it; a continue on another model goes on. */
+  REFUSAL: "refusal",
   OTHER: "other",
 } as const;
 
