@@ -159,7 +159,7 @@ import {
   integrationConnectOf,
 } from "../../testing/integration-connect.js";
 import { LOCAL_AGENT_ENVIRONMENT } from "../../testing/local-agent.js";
-import { scriptedHarness } from "../../testing/native-harness-fake.js";
+import { openedOnBoot, scriptedHarness } from "../../testing/native-harness-fake.js";
 import { SentryApp, sentryAppService } from "../../triggers/sentry/sentry-app-config.js";
 import {
   AGENT_CALLER,
@@ -492,39 +492,40 @@ function harnessRecording(
       }),
       body: JSON.stringify(body),
     });
-  const sessionsOf = (account: string): AgentSessions => ({
-    // An open claims the conversation's record for the session it takes, as the harness does (`runner-sessions.ts`).
-    open: (message) =>
-      Effect.promise(async () => {
-        recorded(SESSIONS_PATH, account, message, { message: message.message });
-        const session = sessionId();
-        const target = { userId: account, conversationId: message.conversationId };
-        await database.run(claimRuntimeSession(target, session, new Date(NOW)));
-        return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: session } as const;
-      }),
-    send: (session, message) =>
-      Effect.sync(() => {
-        recorded(`${SESSIONS_PATH}/${session}`, account, message, { message: message.message });
-        return retired()
-          ? ({ outcome: SESSION_SEND_OUTCOME.RETIRED } as const)
-          : ({
-              outcome: SESSION_SEND_OUTCOME.ACCEPTED,
-              sessionId: session,
-              deliveryId: "delivery-1",
-            } as const);
-      }),
-    cancel: (session, turnId) =>
-      Effect.sync(() => {
-        recorded(`${SESSIONS_PATH}/${session}/cancel`, account, undefined, { turnId });
-        return {
-          outcome:
-            cancelStatus === SESSION_CANCEL_OUTCOME.NO_ACTIVE_TURN
-              ? SESSION_CANCEL_OUTCOME.NO_ACTIVE_TURN
-              : SESSION_CANCEL_OUTCOME.ACCEPTED,
-        };
-      }),
-    reset: () => Effect.succeed({ outcome: SESSION_RESET_OUTCOME.RESET }),
-  });
+  const sessionsOf = (account: string): AgentSessions =>
+    openedOnBoot({
+      // An open claims the conversation's record for the session it takes, as the harness does (`runner-sessions.ts`).
+      open: (message) =>
+        Effect.promise(async () => {
+          recorded(SESSIONS_PATH, account, message, { message: message.message });
+          const session = sessionId();
+          const target = { userId: account, conversationId: message.conversationId };
+          await database.run(claimRuntimeSession(target, session, new Date(NOW)));
+          return { outcome: SESSION_SEND_OUTCOME.ACCEPTED, sessionId: session } as const;
+        }),
+      send: (session, message) =>
+        Effect.sync(() => {
+          recorded(`${SESSIONS_PATH}/${session}`, account, message, { message: message.message });
+          return retired()
+            ? ({ outcome: SESSION_SEND_OUTCOME.RETIRED } as const)
+            : ({
+                outcome: SESSION_SEND_OUTCOME.ACCEPTED,
+                sessionId: session,
+                deliveryId: "delivery-1",
+              } as const);
+        }),
+      cancel: (session, turnId) =>
+        Effect.sync(() => {
+          recorded(`${SESSIONS_PATH}/${session}/cancel`, account, undefined, { turnId });
+          return {
+            outcome:
+              cancelStatus === SESSION_CANCEL_OUTCOME.NO_ACTIVE_TURN
+                ? SESSION_CANCEL_OUTCOME.NO_ACTIVE_TURN
+                : SESSION_CANCEL_OUTCOME.ACCEPTED,
+          };
+        }),
+      reset: () => Effect.succeed({ outcome: SESSION_RESET_OUTCOME.RESET }),
+    });
   return Layer.succeed(NativeAgentSessions, scriptedHarness(sessionsOf, checkout));
 }
 

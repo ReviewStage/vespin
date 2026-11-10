@@ -31,10 +31,57 @@ import {
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
+  type SessionTurn,
 } from "../agents/sessions/agent-sessions.js";
 
-/** A script's sessions, and where it scripts one, how a member's answer to an ask reaches the runner; not live unless scripted. */
-export type ScriptedSessions = AgentSessions & Partial<Pick<NativeSessions, "answer">>;
+/** A script's sessions, and where it scripts one, how a member's answer to an ask reaches the runner, not live unless scripted, and how a first launch's machine boots, up at once unless scripted. */
+export type ScriptedSessions = Omit<AgentSessions, "boot"> &
+  Partial<Pick<NativeSessions, "answer" | "boot">>;
+
+/** The sessions fakes booted whose first message is still to come, by their minted ids, which no two boots share. */
+const BOOTED = new Set<string>();
+
+/** A first launch's machine as a fake's sessions boot it: a session minted and the machine up at once. */
+export const bootedAtOnce: AgentSessions["boot"] = () =>
+  Effect.succeed({
+    outcome: SESSION_SEND_OUTCOME.ACCEPTED,
+    sessionId: `${NATIVE_SESSION_PREFIX.claude_code}${randomUUID()}`,
+    up: Effect.succeed(undefined),
+  } as const);
+
+/**
+ * A fake's sessions as a first launch reaches them: its boot mints a session
+ * with its machine up at once, and the first message sent to that session,
+ * the Start's own as its queue hands it on, is taken by the fake's `open`,
+ * as it was before a first launch booted its machine first, so what the
+ * fake writes down of an open still stands for the Start's.
+ */
+export function openedOnBoot<Turn extends SessionTurn>(
+  sessions: Omit<AgentSessions<Turn>, "boot">,
+): AgentSessions<Turn> {
+  const booted = BOOTED;
+  return {
+    ...sessions,
+    boot: () =>
+      Effect.sync(() => {
+        const sessionId = `${NATIVE_SESSION_PREFIX.claude_code}${randomUUID()}`;
+        booted.add(sessionId);
+        return {
+          outcome: SESSION_SEND_OUTCOME.ACCEPTED,
+          sessionId,
+          up: Effect.succeed(undefined),
+        } as const;
+      }),
+    send: (sessionId, message) =>
+      booted.delete(sessionId)
+        ? Effect.map(sessions.open(message), (opened) =>
+            opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED
+              ? { outcome: opened.outcome, sessionId, deliveryId: randomUUID() }
+              : opened,
+          )
+        : sessions.send(sessionId, message),
+  };
+}
 
 /** Who the script writes down a harness's call as made for: the agent's starter. */
 export function harnessFor(account: string): string {
@@ -46,18 +93,47 @@ export function scriptedHarness(
   script: (account: string) => ScriptedSessions,
   checkout: RunnerCheckout = RUNNER_CHECKOUT.NOT_LIVE,
 ): NativeAgentSessionsService {
+  // Note that a script with no boot of its own takes a first launch's first message by its open (`openedOnBoot`),
+  // whichever of the harness's sessions the boot and the queue's hand-off each reached.
+  const booted = BOOTED;
+  const bootedScript = (account: string): ScriptedSessions => {
+    const scripted = script(account);
+    if (scripted.boot !== undefined) return scripted;
+    return {
+      ...scripted,
+      boot: () =>
+        Effect.sync(() => {
+          const sessionId = `${NATIVE_SESSION_PREFIX.claude_code}${randomUUID()}`;
+          booted.add(sessionId);
+          return {
+            outcome: SESSION_SEND_OUTCOME.ACCEPTED,
+            sessionId,
+            up: Effect.succeed(undefined),
+          } as const;
+        }),
+      send: (sessionId, message) =>
+        booted.delete(sessionId)
+          ? Effect.map(scripted.open(message), (opened) =>
+              opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED
+                ? { outcome: opened.outcome, sessionId, deliveryId: randomUUID() }
+                : opened,
+            )
+          : scripted.send(sessionId, message),
+    };
+  };
   return {
     sessions: (_runtime, account) =>
       Option.some(
         Effect.succeed({
           answer: () => Effect.succeed(RUNNER_ANSWER.NOT_LIVE),
-          ...script(account),
-          retry: (sessionId, message) => script(account).send(sessionId, message),
+          ...bootedScript(account),
+          retry: (sessionId, message) => bootedScript(account).send(sessionId, message),
           retune: () => Effect.succeed(RUNNER_CHOICE.NOT_LIVE),
           checkOut: () => Effect.succeed(checkout),
           halt: () => Effect.succeed(true),
           deliverTurn: () => Effect.succeed(TURN_HANDOVER.HANDED),
           warm: () => Effect.void,
+          boot: bootedScript(account).boot ?? bootedAtOnce,
         }),
       ),
   };

@@ -85,7 +85,11 @@ import {
   SHARED_FILES_DIRECTORY,
 } from "@repo/agent-runner/pins";
 import { LAUNCH_PATH, type LaunchPath } from "@repo/agent-runner/protocol";
-import type { DatabaseServices } from "@repo/database/core/query";
+import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import {
+  agentBootScriptsEnded,
+  agentBootScriptsStarted,
+} from "@repo/database/models/agent-boot-store";
 import {
   type AgentRunnerRecord,
   forgetAgentRunnerRecord,
@@ -959,6 +963,18 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
             Effect.withSpan("web/lockfileMoved"),
           );
     });
+
+  /** A write of the agent's first launch, which nothing waits on: a failure is logged, never the open's. */
+  const bootNoted = (
+    context: Context.Context<DatabaseServices>,
+    write: Effect.Effect<void, StoreFailure, DatabaseServices>,
+  ) =>
+    write.pipe(
+      Effect.provideContext(context),
+      Effect.catch((failure) =>
+        Effect.logWarning(`A first launch's boot was not noted: ${failure._tag}`),
+      ),
+    );
 
   /**
    * The workspace's cloud setup scripts run in the sandbox just created

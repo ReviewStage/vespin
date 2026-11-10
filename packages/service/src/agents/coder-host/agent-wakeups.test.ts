@@ -17,6 +17,7 @@ import { Duration, Effect, Layer, Option } from "effect";
 import { TestClock } from "effect/testing";
 import { connectAgentApiKeys } from "../../testing/agent-credentials.js";
 import { githubReaching } from "../../testing/github-app-fake.js";
+import { bootedAtOnce } from "../../testing/native-harness-fake.js";
 import { AGENT_CALLER, type AgentCall } from "../agent-tools.js";
 import {
   type AgentSessions,
@@ -56,6 +57,7 @@ const OPENED = new Date("2026-10-21T12:00:00Z");
 function fakeAgentSessions(refusing = false) {
   const sent: { readonly sessionId: string; readonly message: SessionMessage }[] = [];
   const sessions: AgentSessions = {
+    boot: bootedAtOnce,
     open: () =>
       Effect.succeed({
         outcome: SESSION_SEND_OUTCOME.ACCEPTED,
