@@ -348,8 +348,9 @@ export function readRunActions(
  * a run going on is still known as its action; any other is named afresh, so
  * no save reaches another repository's or workspace's action. Note that the
  * old list is read, deleted, and the new one written in one transaction, so
- * a reader sees one list or the other, never a mix; two saves racing on one
- * repository end on one list, the loser refused by the position index.
+ * a reader sees one list or the other, never a mix; and that it is held under
+ * the repository's lock, so two saves of one repository land one after the
+ * other, the later reading and replacing what the earlier wrote.
  */
 export function setRunActions(
   organizationId: string,
@@ -360,6 +361,8 @@ export function setRunActions(
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
+        // The repository's lock, its name however cased, so a save waiting on another reads the list that one wrote.
+        yield* client`select pg_advisory_xact_lock(hashtext(${organizationId}), hashtext(lower(${repository})))`;
         const standing = yield* findRepositoryRunActions({ organizationId, repository });
         const keepable = new Set(standing.map((row) => row.id));
         yield* deleteRunActions({ organizationId, repository });
