@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   AGENT_PART,
   agentParts,
+  agentRows,
   delegates,
   messageWords,
   placedMessages,
@@ -35,6 +36,7 @@ import {
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
+import { TURN_ROW } from "@repo/features/turn-rows";
 import { MESSAGE_ROLE, TURN_STATUS, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { test } from "vitest";
@@ -47,6 +49,7 @@ import {
   choiceOn,
   continueFailureNote,
   dockedPullRequests,
+  finishedReplyLead,
   messageFailureNote,
   modelLabel,
   noteWhileOffline,
@@ -145,6 +148,34 @@ test("a stored message's parts are read for drawing: text, reasoning, a tool cal
     { kind: AGENT_PART.OTHER },
     { kind: AGENT_PART.OTHER },
   ]);
+});
+
+test("a finished turn that ended with end_turn replies in its summary, folding the words it wrote on the way with its work, while a turn still moving keeps its words", () => {
+  const summary = "- Fixed the failing check.\n- Pushed to #214.";
+  const turn: AgentTranscriptMessage = {
+    id: "t",
+    role: MESSAGE_ROLE.ASSISTANT,
+    parts: [
+      { type: "text", text: "Reading the check's log." },
+      {
+        type: "tool-end_turn",
+        toolCallId: "call_end",
+        state: "output-available",
+        input: { summary, followUps: ["Show pending invitations on the Members page"] },
+        output: { status: "accepted" },
+      },
+      { type: "text", text: "It's all in the summary above." },
+    ],
+  };
+  const words = (moving: boolean) =>
+    agentRows(turn, moving).flatMap((row) =>
+      row.kind === TURN_ROW.BLOCK && row.block.kind === AGENT_PART.TEXT ? [row.block.text] : [],
+    );
+
+  assert.deepEqual(words(false), [summary]);
+  assert.deepEqual(words(true), ["Reading the check's log.", "It's all in the summary above."]);
+  assert.equal(messageWords(turn), summary);
+  assert.equal(finishedReplyLead([turn])?.lead, "Fixed the failing check.");
 });
 
 test("the wakeup a turn booked is read off Claude Code's own call or ours alike, by the delay held or asked, past a cancel or a refused call", () => {
