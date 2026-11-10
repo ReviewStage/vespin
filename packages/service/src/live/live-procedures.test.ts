@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { pointBrowserTab, upsertBrowserTab } from "@repo/database/models/agent-browser-tabs";
+import { recordSandboxBooting } from "@repo/database/models/agent-sandbox-store";
 import { createAgent } from "@repo/database/models/agent-store";
 import { startDescriptionCommentThread } from "@repo/database/models/description-comments";
 import { approveHostPairing, openHostPairing } from "@repo/database/models/host-pairing-store";
@@ -46,6 +47,7 @@ import {
 } from "@repo/features/account-preferences-live";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
 import { AGENT_ORIGIN_READ, agentOriginOfLive } from "@repo/features/agent-origin-live";
+import { SANDBOX_STATE, SANDBOX_STEP } from "@repo/features/agent-sandbox-wire";
 import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
 import { AGENT_CURSOR_START } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING } from "@repo/features/automation-wire";
@@ -2012,7 +2014,7 @@ const messageWritten = (userId: string, agentId: string) =>
 /** The agent's row among a part's rows, as the task list reads it. */
 const agentRowOf = (part: { readonly rows?: readonly unknown[] }, agentId: string) =>
   (part.rows ?? []).find((row) => (row as { readonly id: string }).id === agentId) as
-    | { readonly sandboxOpen?: boolean }
+    | { readonly sandboxOpen?: boolean; readonly sandboxState?: string | null }
     | undefined;
 
 it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
@@ -2084,6 +2086,33 @@ it.layer(getTestDB())("the task list's live read in delta mode", (it) => {
 
         assert.deepEqual(idsOf(moved.agents), [agentId]);
         assert.equal(agentRowOf(moved.agents, agentId)?.sandboxOpen, true);
+      }),
+  );
+
+  it.effect(
+    "a sandbox's record written alone moves its agent in the next delta, with the record",
+    () =>
+      Effect.gen(function* () {
+        const dana = yield* openUser;
+        const started = yield* startTask(dana, { name: "Teammate invitations" });
+        const agentId = yield* openTaskAgent(dana, started.workspaceId, started.id);
+        const whole = yield* askTasks(dana, "");
+        const past = whole.agents.sync?.next;
+        assert.ok(past !== undefined);
+        assert.equal(agentRowOf(whole.agents, agentId)?.sandboxState, null);
+
+        yield* recordSandboxBooting(
+          yield* conversationOf(agentId),
+          "session-1",
+          SANDBOX_STEP.CREATING,
+        );
+        // Note that the hold is let run to its end, so a write no log row records answers nothing moved rather than holding the test.
+        const asked = yield* Effect.forkChild(askTasks(dana, past));
+        yield* TestClock.adjust(Duration.seconds(25));
+        const moved = yield* Fiber.join(asked);
+
+        assert.deepEqual(idsOf(moved.agents), [agentId]);
+        assert.equal(agentRowOf(moved.agents, agentId)?.sandboxState, SANDBOX_STATE.BOOTING);
       }),
   );
 
