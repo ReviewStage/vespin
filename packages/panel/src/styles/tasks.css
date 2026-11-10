@@ -1478,7 +1478,7 @@
    never wraps onto a line of its own: it overhangs the title's end into its
    inset and the header's own (`--column-inset`), the title keeping just
    enough of an inset that the two hold it. The field takes the title's own
-   type and room. */
+   type and room, bare as a task's name renames. */
 .pull-request-title.pull-request-title-editable {
   padding-inline-end: max(
     var(--row-inset),
@@ -1502,12 +1502,16 @@
 }
 
 .pull-request-title-edit {
-  display: inline-block;
+  display: inline-flex;
   position: relative;
   width: 0;
   overflow: visible;
   inset-inline-start: var(--ui-space-2);
-  vertical-align: middle;
+  /* Note that the pencil hangs past the line by as much as it is taller,
+     so the line stands its own leading and the words do not move as the
+     field opens in their place. */
+  margin-block: calc((1lh - var(--ui-space-24)) / 2);
+  vertical-align: top;
   opacity: 0;
   transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
 }

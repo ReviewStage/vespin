@@ -668,9 +668,10 @@ export function PullRequestTitleLine({
 
 /**
  * The pull request's title and number, the number wrapping with the
- * title's last word, its pencil opening a field over the
- * title where its words may be changed: kept on Enter, or as the focus
- * leaves, where they changed and are not empty, and given up on Escape.
+ * title's last word, its pencil opening a bare field in the title's place,
+ * as a task's name renames, where its words may be changed: kept on Enter,
+ * or as the focus leaves, where they changed and are not empty, and given
+ * up on Escape.
  * The title stands as it was until GitHub answers with the new one, its
  * pencil unavailable while the write is out.
  */
@@ -699,7 +700,7 @@ export function PullRequestTitle({
           label={TITLE_WORDS.FIELD}
           editing
           maxLength={PULL_REQUEST_WRITE_BOUNDS.MAX_TITLE_CHARS}
-          look={INLINE_EDIT_LOOK.INPUT}
+          look={INLINE_EDIT_LOOK.FIELD}
           onEnd={end}
         />
       </PullRequestTitleLine>
