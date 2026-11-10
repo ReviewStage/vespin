@@ -95,8 +95,12 @@ describe("the suppression check", () => {
 
   it("refuses a glyph's file by its bare name, whichever alias it spells", () => {
     expect(namesRetired('import { LucideRetiredExample } from "@repo/ui/icons";')).toBe(true);
-    expect(namesRetired("const a = G.RETIRED_EXAMPLE;")).toBe(true);
-    expect(namesRetired('import { BotIcon } from "@repo/ui/icons";')).toBe(false);
+    expect(
+      namesRetired('import { GLYPH as G } from "@repo/ui/icons"; const a = G.RETIRED_EXAMPLE;'),
+    ).toBe(true);
+    expect(namesRetired('import { PlusIcon } from "@repo/ui/icons";')).toBe(false);
+    // A word holding a glyph's name, or another table's member of a concept's key, spells neither.
+    expect(namesRetired("const RetiredExamples = SHOT.RETIRED_EXAMPLE;")).toBe(false);
     // An import narrowed to names is spelled by them, not by its module, which every file spells.
     expect(namesRetired('import { BackIcon } from "@repo/ui";')).toBe(true);
     expect(namesRetired('import { Button } from "@repo/ui";')).toBe(false);

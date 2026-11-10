@@ -223,9 +223,28 @@ export function namesRetired(text: string, retirements: readonly Retirement[] = 
     if (retirement.kind === RETIRED_KIND.IMPORT && retirement.names.length > 0) {
       return retirement.names.some((imported) => text.includes(imported));
     }
-    const needle = retirement.kind === RETIRED_KIND.GLYPH ? bareGlyph(name) : name;
-    return text.includes(needle.replace(`${GLYPH_REGISTRY}.`, ""));
+    if (retirement.kind === RETIRED_KIND.GLYPH) return spellsGlyph(text, name);
+    return text.includes(name);
   });
+}
+
+/**
+ * Whether `text` spells a glyph: a registry concept as a member read off
+ * the registry, in a file that names the registry, aliased or not, and a
+ * Lucide glyph as a whole identifier, its aliases alike. Note that a
+ * word holding the name (`Bottom` for `Bot`) or another table's member of
+ * the same key (`SHOT.TASK`) spells nothing, because short concepts such
+ * as `GLYPH.TASK` are spelled that way by files that draw no glyph at all.
+ */
+function spellsGlyph(text: string, name: string): boolean {
+  if (name.startsWith(`${GLYPH_REGISTRY}.`)) {
+    const key = name.slice(GLYPH_REGISTRY.length + 1);
+    return (
+      new RegExp(`\\b${GLYPH_REGISTRY}\\b`, "u").test(text) &&
+      new RegExp(`\\.${key}\\b`, "u").test(text)
+    );
+  }
+  return new RegExp(`\\b(?:Lucide)?${bareGlyph(name)}(?:Icon)?\\b`, "u").test(text);
 }
 
 // ---------------------------------------------------------------- CSS

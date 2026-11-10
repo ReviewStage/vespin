@@ -1,0 +1,233 @@
+{
+  "instead": "Draw an entity (a task, agent, person, file, thread, automation, pull request, page, skill, MCP server, or place) through packages/panel/src/entities/: its kind's glyph, mark, row, or card; add the variant there. The baseline holds what each file drew by hand when the guard landed, and only shrinks.",
+  "glyphs": [
+    {
+      "glyph": "GLYPH.AGENT",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/settings/mcp-clients-section.tsx": 1,
+        "packages/panel/src/settings/pages.tsx": 1,
+        "packages/panel/src/tasks/agent-pull-request-tab.tsx": 1,
+        "packages/ui/src/components/landing/landing-scenes.tsx": 1
+      }
+    },
+    {
+      "glyph": "GLYPH.AUTOMATION",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/actor-ref.tsx": 1,
+        "packages/panel/src/desktop/automation-agent-run.tsx": 2,
+        "packages/panel/src/desktop/automation-runs-panel.tsx": 1,
+        "packages/panel/src/desktop/command-palette.tsx": 1,
+        "packages/panel/src/tasks/inbox-item-parts.tsx": 1,
+        "packages/panel/src/tasks/mention-picker.tsx": 1
+      }
+    },
+    {
+      "glyph": "GLYPH.TASK",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/command-items.tsx": 1,
+        "packages/panel/src/tasks/mention-picker.tsx": 1,
+        "packages/panel/src/tasks/transcript-blocks.tsx": 1
+      }
+    },
+    {
+      "glyph": "GLYPH.THREAD",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/tasks/inbox-item-chip.tsx": 1,
+        "packages/panel/src/tasks/inbox-item-parts.tsx": 1,
+        "packages/panel/src/tasks/mention-picker.tsx": 1,
+        "packages/panel/src/tasks/tab-look.tsx": 1
+      }
+    },
+    {
+      "glyph": "GLYPH.PAGE",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"]
+    },
+    {
+      "glyph": "GLYPH.SKILL",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/settings/pages.tsx": 1
+      }
+    },
+    {
+      "glyph": "GLYPH.PULL_REQUEST",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/command-items.tsx": 1,
+        "packages/panel/src/tasks/agent-published.tsx": 1,
+        "packages/panel/src/tasks/agent-pull-request-tab.tsx": 1,
+        "packages/panel/src/tasks/transcript-blocks.tsx": 1,
+        "packages/ui/src/components/landing/landing-scenes.tsx": 1
+      }
+    },
+    {
+      "glyph": "GLYPH.MCP_SERVER",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/tasks/mention-picker.tsx": 1,
+        "packages/panel/src/tasks/transcript-blocks.tsx": 2
+      }
+    },
+    {
+      "glyph": "GLYPH.PEOPLE",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/settings/memory-page.tsx": 1,
+        "packages/panel/src/settings/pages.tsx": 1
+      }
+    },
+    {
+      "glyph": "GLYPH.FOLDER",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"]
+    },
+    {
+      "glyph": "GLYPH.DESCRIPTION",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/settings/skills-page.tsx": 1,
+        "packages/panel/src/tasks/agent-tab-card.tsx": 1
+      }
+    },
+    {
+      "glyph": "Bot",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/actor-ref.tsx": 1,
+        "packages/panel/src/desktop/automations-page.tsx": 1,
+        "packages/panel/src/desktop/tasks-page-options.tsx": 1,
+        "packages/panel/src/tasks/agent-tab.tsx": 1,
+        "packages/panel/src/tasks/inbox-pane.tsx": 1,
+        "packages/panel/src/tasks/tab-look.tsx": 1,
+        "packages/panel/src/tasks/transcript-blocks.tsx": 1
+      }
+    },
+    {
+      "glyph": "Zap",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/desktop/automation-editor.tsx": 1,
+        "packages/panel/src/desktop/automations-page.tsx": 1,
+        "packages/panel/src/desktop/desktop-sidebar.tsx": 1,
+        "packages/panel/src/desktop/section-icon-picker.tsx": 1,
+        "packages/panel/src/desktop/tab-switcher.tsx": 1,
+        "packages/panel/src/tasks/agent-tab.tsx": 1,
+        "packages/panel/src/tasks/inbox-pane.tsx": 1,
+        "packages/ui/src/components/landing/landing-desktop.tsx": 1,
+        "packages/ui/src/components/landing/landing-scenes.tsx": 1
+      }
+    },
+    {
+      "glyph": "ListTodo",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/desktop/desktop-sidebar.tsx": 1,
+        "packages/panel/src/desktop/mobile-bar.tsx": 1,
+        "packages/panel/src/desktop/tab-switcher.tsx": 1,
+        "packages/panel/src/desktop/tasks-list.tsx": 1,
+        "packages/ui/src/components/landing/landing-desktop.tsx": 1,
+        "packages/ui/src/components/landing/landing-scenes.tsx": 1
+      }
+    },
+    {
+      "glyph": "MessagesSquare",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/tasks/agent-pull-request-tab.tsx": 1
+      }
+    },
+    {
+      "glyph": "AppWindow",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/tasks/lone-link-card.tsx": 1,
+        "packages/panel/src/tasks/mention-picker.tsx": 1,
+        "packages/panel/src/tasks/page-card.tsx": 1,
+        "packages/panel/src/tasks/tab-look.tsx": 1,
+        "packages/panel/src/tasks/transcript-blocks.tsx": 1
+      }
+    },
+    {
+      "glyph": "BookOpen",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/tasks/mention-picker.tsx": 1,
+        "packages/panel/src/tasks/skill-ref.tsx": 1,
+        "packages/panel/src/tasks/transcript-blocks.tsx": 1
+      }
+    },
+    {
+      "glyph": "GitPullRequest",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/tasks/mention-picker.tsx": 1,
+        "packages/panel/src/tasks/pull-request-writes.tsx": 1,
+        "packages/panel/src/tasks/tab-look.tsx": 1,
+        "packages/ui/src/marks/pull-request-glyph.ts": 1
+      }
+    },
+    {
+      "glyph": "Users",
+      "allow": ["packages/panel/src/entities/", "packages/ui/src/icons/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/admin/chrome/places.tsx": 1,
+        "packages/panel/src/desktop/person-page.tsx": 1,
+        "packages/panel/src/member-rows.tsx": 1,
+        "packages/panel/src/tasks/inbox-list.tsx": 1,
+        "packages/panel/src/tasks/mention-picker.tsx": 1
+      }
+    }
+  ],
+  "patterns": [
+    {
+      "import": "packages/panel/src/tasks/tab-look",
+      "names": ["PlanGlyph", "AgentGlyph", "AgentMark", "SubagentMark", "agentEndMark"],
+      "allow": ["packages/panel/src/entities/", "packages/panel/src/tasks/tab-look"],
+      "baseline": {
+        "packages/panel/src/actor-ref.tsx": 1,
+        "packages/panel/src/desktop/agent-archive.tsx": 2,
+        "packages/panel/src/desktop/agent-entries.tsx": 1,
+        "packages/panel/src/desktop/agent-list-row.tsx": 2,
+        "packages/panel/src/desktop/command-palette.tsx": 1,
+        "packages/panel/src/desktop/main-tabs.tsx": 1,
+        "packages/panel/src/desktop/side-panel.tsx": 3,
+        "packages/panel/src/desktop/sidebar-agent.tsx": 1,
+        "packages/panel/src/desktop/sidebar-pinned-tab.tsx": 1,
+        "packages/panel/src/desktop/tab-switcher.tsx": 2,
+        "packages/panel/src/desktop/task-actions.tsx": 1,
+        "packages/panel/src/desktop/task-card.tsx": 2,
+        "packages/panel/src/state-glyph.test.ts": 1,
+        "packages/panel/src/tasks/agent-menu-row.tsx": 1,
+        "packages/panel/src/tasks/agent-tab.tsx": 1,
+        "packages/panel/src/tasks/inbox-item-parts.tsx": 1,
+        "packages/panel/src/tasks/inbox-list.tsx": 1,
+        "packages/panel/src/tasks/mention-picker.tsx": 2,
+        "packages/panel/src/tasks/terminal-tab.tsx": 1,
+        "packages/panel/src/tasks/transcript-blocks.tsx": 1
+      }
+    },
+    {
+      "import": "@repo/ui",
+      "names": ["AgentPlaceholderIcon", "TaskStatusMark"],
+      "allow": ["packages/panel/src/entities/", "packages/ui/", "apps/catalog/"],
+      "baseline": {
+        "packages/panel/src/command-items.tsx": 1,
+        "packages/panel/src/desktop/standing-submenus.tsx": 1,
+        "packages/panel/src/desktop/task-card.tsx": 1,
+        "packages/panel/src/desktop/task-row-parts.tsx": 1,
+        "packages/panel/src/desktop/tasks-board.tsx": 1,
+        "packages/panel/src/desktop/tasks-list.tsx": 1,
+        "packages/panel/src/desktop/tasks-page-options.tsx": 1,
+        "packages/panel/src/tasks/agent-tab.tsx": 1,
+        "packages/panel/src/tasks/inbox-item-parts.tsx": 1,
+        "packages/panel/src/tasks/new-task-relation.tsx": 1,
+        "packages/panel/src/tasks/tab-look.tsx": 2,
+        "packages/panel/src/tasks/task-relation-menu.tsx": 1,
+        "packages/panel/src/tasks/task-standing.tsx": 1
+      }
+    }
+  ]
+}
