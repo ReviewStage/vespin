@@ -12,6 +12,10 @@ const TOO_DEEP = {
   "bullets on one line": "- ".repeat(8000) + "x",
   "ordered markers on one line": "1. ".repeat(8000) + "x",
   "quotes and bullets alternating": "> - ".repeat(3000) + "x",
+  "quote markers after a bare carriage return": `\r${">".repeat(8000)} hi`,
+  "quote markers after carriage return and line feed": `a\r\n${">".repeat(8000)} hi`,
+  "quote markers inside a fence": `\`\`\`\n${">".repeat(8000)}\n\`\`\`\n`,
+  "emphasis after a fence a longer opener holds open": `\`\`\`\`\n\`\`\`\n\`\`\`\`\n${"*_".repeat(50)}a`,
   "emphasis opened and never closed": "*_".repeat(5000) + "a",
   "emphasis nested around a word": `${"*_".repeat(5000)}a${"_*".repeat(5000)}`,
 } as const;
@@ -25,7 +29,9 @@ const NORMAL = {
   "snake_case words": `${"some_long_name ".repeat(300)}and ${"**bold** ".repeat(300)}`,
   "balanced emphasis": `${"*a ".repeat(10)}${"a* ".repeat(10)}`,
   "a banner of stars": `${"*".repeat(500)} title ${"*".repeat(500)}`,
-  "quote markers in a fence": `\`\`\`\n${">".repeat(500)}\n\`\`\`\n`,
+  "unclosed emphasis in a fence": `\`\`\`c\n${"int **argv;\n".repeat(100)}\`\`\`\n`,
+  "a shorter fence inside a longer one": `\`\`\`\`\n\`\`\`\n${"int **argv;\n".repeat(100)}\`\`\`\`\n`,
+  "a closer with trailing words": `\`\`\`\n\`\`\` js\n${"int **argv;\n".repeat(100)}\`\`\`\n`,
 } as const;
 
 describe("markdownTooDeep", () => {

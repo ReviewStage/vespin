@@ -14,10 +14,12 @@ const TAB_COLUMNS = 4;
 /** How many digits an ordered list's number may have (CommonMark's). */
 const ORDERED_DIGITS = 9;
 
+/** Whether a character is a space or a tab. */
 function isSpace(code: number): boolean {
   return code === 32 || code === 9;
 }
 
+/** Whether a character is an ASCII digit. */
 function isDigit(code: number): boolean {
   return code >= 48 && code <= 57;
 }
@@ -82,41 +84,75 @@ function emphasisAfter(text: string, from: number, end: number, open: number): n
   return depth;
 }
 
+/** How long the run of one character is at a place on a line. */
+function runLength(text: string, at: number, end: number, code: number): number {
+  let run = at;
+  while (run < end && text.charCodeAt(run) === code) run += 1;
+  return run - at;
+}
+
+/** Whether any character of a line, from a place on, is one the test accepts. */
+function lineHas(
+  text: string,
+  from: number,
+  end: number,
+  test: (code: number) => boolean,
+): boolean {
+  for (let at = from; at < end; at += 1) if (test(text.charCodeAt(at))) return true;
+  return false;
+}
+
 /**
  * Whether Markdown nests quotes, list items, or emphasis past
- * `MARKDOWN_NESTING_LIMIT`. One pass over the words, a line at a time, so its
- * cost is the words' length, whatever they hold: a quote or a list is read
- * from the markers and indent that open it, emphasis from a count of the runs
- * left open since the last blank line, and a fenced block is skipped. It
- * reads a little more than the parser nests, never less, so a false answer
- * means the parser holds.
+ * `MARKDOWN_NESTING_LIMIT`. One pass over the words, a line at a time (a line
+ * ends at a line feed, a carriage return, or both, as the parser's does), so
+ * its cost is the words' length, whatever they hold: a quote or a list is
+ * read from the markers and indent that open it, on every line, since the
+ * parser overflows on those wherever they stand; emphasis from a count of the
+ * runs left open since the last blank line, which a fenced block's lines
+ * leave out, opened and closed as CommonMark's fences are. It reads a little
+ * more than the parser nests, so a false answer means the parser holds.
  */
 export function markdownTooDeep(text: string): boolean {
   let fence = 0;
+  let fenceLength = 0;
   let open = 0;
   let start = 0;
   while (start <= text.length) {
-    let end = text.indexOf("\n", start);
-    if (end === -1) end = text.length;
+    let end = start;
+    while (end < text.length && text.charCodeAt(end) !== 10 && text.charCodeAt(end) !== 13) {
+      end += 1;
+    }
     let at = start;
     let indent = 0;
     while (at < end && isSpace(text.charCodeAt(at))) {
       indent += text.charCodeAt(at) === 9 ? TAB_COLUMNS : 1;
       at += 1;
     }
-    const code = text.charCodeAt(at);
-    const fencing = (code === 96 || code === 126) && indent < TAB_COLUMNS;
     if (at === end) {
       open = 0;
-    } else if (fencing && text.startsWith(String.fromCharCode(code).repeat(3), at)) {
-      fence = fence === 0 ? code : fence === code ? 0 : fence;
-    } else if (fence === 0) {
+    } else {
       const [words, depth] = containers(text, at, end, indent);
       if (depth > MARKDOWN_NESTING_LIMIT) return true;
-      open = emphasisAfter(text, words, end, open);
-      if (open > MARKDOWN_NESTING_LIMIT) return true;
+      const code = text.charCodeAt(at);
+      const run =
+        (code === 96 || code === 126) && indent < TAB_COLUMNS ? runLength(text, at, end, code) : 0;
+      if (fence !== 0) {
+        if (
+          code === fence &&
+          run >= fenceLength &&
+          !lineHas(text, at + run, end, (c) => !isSpace(c))
+        )
+          fence = 0;
+      } else if (run >= 3 && !(code === 96 && lineHas(text, at + run, end, (c) => c === 96))) {
+        fence = code;
+        fenceLength = run;
+      } else {
+        open = emphasisAfter(text, words, end, open);
+        if (open > MARKDOWN_NESTING_LIMIT) return true;
+      }
     }
-    start = end + 1;
+    start = text.charCodeAt(end) === 13 && text.charCodeAt(end + 1) === 10 ? end + 2 : end + 1;
   }
   return false;
 }
