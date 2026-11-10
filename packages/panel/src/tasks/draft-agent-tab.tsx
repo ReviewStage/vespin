@@ -169,7 +169,6 @@ export function DraftAgentTab({
     if (fork === undefined && !hasWordsOrFiles(prompt, draft.attachments)) return;
     void starting.run(() => {
       if (draft.refused !== undefined) latest.current.onDraftChange({ refused: undefined });
-      if (fork !== undefined) setSentAt(Date.now());
       const { id, choice, attachments, disabledServers } = draft;
       // Note that a place picked while the experiment was on is not sent once it is off.
       const runsOn = placesOn ? draft.runsOn : undefined;
@@ -185,10 +184,9 @@ export function DraftAgentTab({
               disabledServers,
               runsOn,
             );
-      return started.then((failed) => {
-        setSentAt(undefined);
-        return failed;
-      });
+      // Note that the working line stands only once the Start is out, and goes however it lands.
+      if (fork !== undefined) setSentAt(Date.now());
+      return started.finally(() => setSentAt(undefined));
     });
   };
   const composer: AgentComposerControl = {
