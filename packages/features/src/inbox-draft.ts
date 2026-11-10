@@ -37,6 +37,7 @@ import {
   inboxAnswersRefusal,
   inboxReplyRefusal,
   openAskOf,
+  optionsCarryMedia,
 } from "./inbox-wire.js";
 import { markdownTree } from "./markdown-tree.js";
 
@@ -232,11 +233,35 @@ export function withChoice(
   draft: InboxDraft,
   label: string,
 ): InboxDraft {
-  if (choice.multiple !== true) return { ...draft, choices: [label] };
-  const choices = draft.choices.includes(label)
-    ? draft.choices.filter((each) => each !== label)
-    : [...draft.choices, label];
-  return { ...draft, choices };
+  const picking = picksNone(draft) ? { ...draft, press: undefined } : draft;
+  if (choice.multiple !== true) return { ...picking, choices: [label] };
+  const choices = picking.choices.includes(label)
+    ? picking.choices.filter((each) => each !== label)
+    : [...picking.choices, label];
+  return { ...picking, choices };
+}
+
+/**
+ * Whether the draft picks none of a choice's options, None of these, which
+ * a choice whose options carry media offers (`optionsCarryMedia`): held as
+ * a pick pressed with no option in it, as its answer is sent.
+ */
+export function picksNone(draft: Pick<InboxDraft, "choices" | "press">): boolean {
+  return draft.press === INBOX_REPLY.CHOSE && draft.choices.length === 0;
+}
+
+/** The draft after None of these is pressed: every option let go and none picked, or, where it stood picked, let go itself. */
+export function withNoneOfThese(draft: InboxDraft): InboxDraft {
+  return picksNone(draft)
+    ? { ...draft, press: undefined }
+    : { ...draft, choices: [], press: INBOX_REPLY.CHOSE };
+}
+
+/** The draft holding the options picked, as a list of them answers a press: None of these let go once an option is. */
+export function withPicks(draft: InboxDraft, choices: readonly string[]): InboxDraft {
+  return choices.length > 0 && picksNone(draft)
+    ? { ...draft, choices, press: undefined }
+    : { ...draft, choices };
 }
 
 /** How many steps a `do` ask shows: its own, or one, the item's title, for a to-do from before version 5 that named none. */
@@ -379,9 +404,13 @@ function attachedAnswers(asking: InboxAsking, draft: InboxDraft): InboxAnswers |
   const id = asking.message.id;
   switch (ask.type) {
     case INBOX_ASK.DECIDE:
-      return draft.choices.length === 0
-        ? undefined
-        : { ask: id, reply: INBOX_REPLY.CHOSE, choices: draft.choices };
+      if (draft.choices.length > 0) {
+        return { ask: id, reply: INBOX_REPLY.CHOSE, choices: draft.choices };
+      }
+      // None of these is a pick of no option, which only a choice of cards offers.
+      return picksNone(draft) && optionsCarryMedia(ask)
+        ? { ask: id, reply: INBOX_REPLY.CHOSE, choices: [] }
+        : undefined;
     case INBOX_ASK.DO: {
       const decision = doDecision(ask, draft);
       const named = (steps: readonly number[]) => steps.filter((at) => at < ask.steps.length);

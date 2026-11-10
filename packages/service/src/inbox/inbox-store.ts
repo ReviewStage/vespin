@@ -2236,8 +2236,8 @@ interface PostView {
   readonly needsReply: boolean;
 }
 
-/** One picture a post keeps as a file of its message: the id its blocks and words name it by, its file's own name, its type, and its bytes. */
-interface PostPicture extends InboxNamedImage {
+/** One picture a post keeps as a file of its message: the id its words or its ask's options name it by, its file's own name, its type, and its bytes. */
+export interface PostPicture extends InboxNamedImage {
   readonly id: string;
 }
 
@@ -2253,6 +2253,7 @@ interface PostWrite {
   /** The message's words, its pictures written by the addresses the item gives them. */
   readonly body: (addressOf: PictureAddress) => string;
   readonly ask: InboxAsk | undefined;
+  /** The message's files: the pictures its words name, then those its ask's options carry. */
   readonly pictures: readonly PostPicture[];
   readonly addresseeId: string | null;
 }
@@ -2461,7 +2462,9 @@ function followUp(
  * words in Markdown, and the ask they end with, if any. The pictures are
  * those the words name by their paths in the agent's sandbox, read by the
  * caller, each kept as a file of the agent's message under an id minted
- * here, its path in the words written as its address. A post that asks is
+ * here, its path in the words written as its address; the files its ask's
+ * options carry follow them, under the ids the caller minted and the ask
+ * names them by, and are written only with an ask. A post that asks is
  * written as `keepPost` writes one; it is refused where the agent would hold more open
  * asks than the bound, and a notice where it would hold more open notices
  * than the same bound. A post that asks nothing on a thread whose ask
@@ -2481,6 +2484,7 @@ export function postInboxThread(
   agent: InboxAgent,
   post: InboxThreadPost,
   pictures: readonly InboxBodyPicture[] = [],
+  optionFiles: readonly PostPicture[] = [],
 ): InboxStoreEffect<Result.Result<InboxItem, InboxPostRefusal>> {
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
@@ -2507,7 +2511,7 @@ export function postInboxThread(
           view,
           body,
           ask: post.ask,
-          pictures: kept,
+          pictures: [...kept, ...optionFiles],
           ...placed.success,
         };
         return Result.succeed(yield* keepPost(agent, locked.value, write, now));
