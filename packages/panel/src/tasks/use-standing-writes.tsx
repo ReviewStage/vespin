@@ -32,15 +32,10 @@ import type { TasksView } from "@repo/features/tasks-view";
 import { CONFIRM_LOSS, ConfirmDialog, STATUS_TONE, useConfirmDialog } from "@repo/ui";
 import { neverBusyAct } from "@repo/ui/confirm-state";
 import { useQuery } from "@tanstack/react-query";
-<<<<<<< HEAD:packages/panel/src/tasks/use-standing-writes.ts
-import { askKept, firstRefusal, type Kept, notKept } from "../act.js";
-import { useToast } from "../toast.js";
-=======
 import { useState } from "react";
 import { askKept, firstRefusal, KEPT, type Kept, notKept } from "../act.js";
 import { confirmFailure } from "../failure-report.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
->>>>>>> 760728ed6 (feat(panel,service): confirm before a person stops running agents):packages/panel/src/tasks/use-standing-writes.tsx
+import { useToast } from "../toast.js";
 import { heldTask, pressRows, ROW_WRITE, type TaskRows } from "../undo-stack.js";
 import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useTaskRowDoors } from "./task-row-doors.js";
