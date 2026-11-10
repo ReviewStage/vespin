@@ -25,8 +25,8 @@ import { AgentTab } from "./agent-tab.js";
 /**
  * agent-approvals.test.ts -- a tool call a Claude Code agent holds says so on
  * its own row, and Allow sends the answer and the row says it was allowed;
- * a Codex agent's composer offers no permission mode, where a Claude Code
- * agent's does.
+ * a Claude Code agent's model chip and a Codex agent's both name their mode
+ * off Full access.
  */
 
 const TASK = "7b0f5f3e-2c1d-4c7a-9a55-5e3b6f1d2a10";
@@ -144,9 +144,12 @@ function buttonReading(container: HTMLElement, words: string): HTMLButtonElement
   return [...container.querySelectorAll("button")].find((each) => each.textContent === words);
 }
 
-/** The composer's permission mode chip, or none. */
-function modeChip(container: HTMLElement): HTMLButtonElement | null {
-  return container.querySelector<HTMLButtonElement>('button[aria-label^="Permission mode"]');
+/** What the composer's model chip is called for a reader. */
+function modelChipLabel(container: HTMLElement): string {
+  const chip =
+    container.querySelector<HTMLButtonElement>(".agent-model-chip button") ??
+    assert.fail("the model chip");
+  return chip.getAttribute("aria-label") ?? "";
 }
 
 test("Allow on a held call's row sends the answer, and the row says it was allowed", async () => {
@@ -165,9 +168,9 @@ test("Allow on a held call's row sends the answer, and the row says it was allow
   assert.ok(call.textContent?.includes("Allowed"));
 });
 
-test("a Codex agent's composer names the Codex app's modes, where a Claude Code agent's names Claude Code's", async () => {
+test("a Claude Code agent's model chip and a Codex agent's both name their mode off Full access", async () => {
   const claude = await drawnTab(CLAUDE_AGENT);
-  const claudeChip = modeChip(claude.container)?.getAttribute("aria-label");
+  const claudeLabel = modelChipLabel(claude.container);
   for (const root of roots.splice(0)) act(() => root.unmount());
   document.body.innerHTML = "";
 
@@ -177,10 +180,10 @@ test("a Codex agent's composer names the Codex app's modes, where a Claude Code 
     model: "openai/gpt-5.5",
     runtime: AGENT_RUNTIME.CODEX,
   });
-  const codexChip = modeChip(codex.container)?.getAttribute("aria-label");
+  const codexLabel = modelChipLabel(codex.container);
 
   assert.deepEqual(
-    [claudeChip, codexChip],
-    ["Permission mode: Ask before edits", "Permission mode: Ask for approval"],
+    [claudeLabel.endsWith("Ask for approval"), codexLabel.endsWith("Ask for approval")],
+    [true, true],
   );
 });

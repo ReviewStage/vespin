@@ -21,6 +21,7 @@ import {
 } from "@effect/platform-node";
 import { Effect, Exit, Layer, Stream } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
+import { checkoutSnapshotsLive } from "./checkout-snapshot.js";
 import { claudeCodeLive } from "./claude-code.js";
 import { codexToken } from "./codex-token.js";
 import { RunnerUnconfigured } from "./launch.js";
@@ -42,6 +43,10 @@ const stdinLines = Stream.fromAsyncIterable(stdin, () => undefined).pipe(
 
 const [, script, mode, tokenUrl] = process.argv;
 
+const spawner = NodeChildProcessSpawner.layer.pipe(
+  Layer.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
+);
+
 const launch = runAgent({
   lines: stdinLines,
   env: process.env,
@@ -61,10 +66,10 @@ const launch = runAgent({
       claudeCodeLive,
       providerProbeLive,
       FetchHttpClient.layer,
-      // Codex's app-server, spawned as the runner's own child (codex.ts).
-      NodeChildProcessSpawner.layer.pipe(
-        Layer.provide(Layer.mergeAll(NodeFileSystem.layer, NodePath.layer)),
-      ),
+      // Codex's app-server, spawned as the runner's own child (codex.ts), and git for the
+      // checkout's snapshot before each turn (checkout-snapshot.ts).
+      spawner,
+      checkoutSnapshotsLive(process.env).pipe(Layer.provide(spawner)),
     ),
   ),
 );

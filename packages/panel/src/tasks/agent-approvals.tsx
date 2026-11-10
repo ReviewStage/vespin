@@ -10,12 +10,7 @@ import {
 } from "@repo/features/agent-approval-wire";
 import { AGENT_PART, type AgentPart } from "@repo/features/agent-parts";
 import { AGENT_CALL_FAILURE, type AgentApprovalAnswerView } from "@repo/features/agent-view";
-import {
-  AGENT_RUNTIME,
-  AGENT_STATUS,
-  type AgentRuntime,
-  type AgentSummary,
-} from "@repo/features/agent-wire";
+import { AGENT_RUNTIME, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { TOOL_STATE } from "@repo/features/tool-call-block";
 import {
@@ -24,18 +19,9 @@ import {
   ApprovalActions,
   AskFirstIcon,
   AutoApproveIcon,
-  CHIP_LOOK,
-  Chip,
-  ChipName,
   FullAccessIcon,
-  MENU_DETAIL,
-  riseAboveEnd,
+  type MenuRow,
   STATUS_TONE,
-  TEXT_TONE,
-  TEXT_VARIANT,
-  Text,
-  Tooltip,
-  useMenu,
 } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
 import {
@@ -48,33 +34,31 @@ import {
   useState,
 } from "react";
 import type { AgentActAnswer, Unreached } from "../act.js";
-import { ActionMenu, type MenuAction } from "../desktop/action-menu.js";
 import { failureShown } from "../failure-report.js";
 import { showToast } from "../toast.js";
-import { OVERFLOW_PRESS, type OverflowOffer } from "./message-box.js";
 import type { HeldCall } from "./transcript-blocks.js";
 
 /**
- * agent-approvals.tsx -- how a Claude Code agent's tool calls are answered, as its tab draws it: the mode chip at the composer's foot, a card on each call the agent holds for an answer, and how many wait.
+ * agent-approvals.tsx -- how a Claude Code agent's tool calls are answered, as its tab draws it: the permission mode the model chip's menu offers, a card on each call the agent holds for an answer, and how many wait.
  *
- * The mode chip stands beside the model chip, as Threadbear and T3 Code put
- * it on their composers, naming how the agent's tool calls are answered
- * after the mode's shield: Full access, the default, which runs commands and
- * edits without asking; Ask before edits, which asks before it edits a file
- * or runs a command; and Auto, which leaves each call to Claude, which asks
- * where it is unsure (`AGENT_PERMISSION_MODE`). A press opens the menu of the
- * three over the chip, each with its one-line hint under it and the agent's
- * checked, and a line under them saying a change reaches the agent from its
- * next turn, which a toast says again as a change is made, since a turn under
- * way runs on the mode it started with. The host draws a change on the agent's
- * row at once and takes it back where the service refused it, which the
- * composer says under its bar. A Codex agent's chip names the Codex app's
- * own modes, Full access, Ask for approval, and Approve for me, with what
- * each does there; an agent on neither harness asks nothing, so no chip
- * stands on it. A
- * composer too narrow for the chip's words draws its shield alone, and one
- * narrower still folds it into its ⋯, which offers the three modes in its
- * place, as it does the context ring.
+ * The mode is offered as the Codex app offers its own, in the model chip's
+ * menu (`model-menu.tsx`): a Permissions row naming the agent's mode opens
+ * the three under the question "How should actions be approved?", each with
+ * its glyph, its one-line hint under its name, and the agent's checked, in
+ * Codex's order and words: Ask for approval, a hand, which always asks to
+ * edit external files and use the internet; Approve for me, a shield round
+ * a prompt, which asks only for actions the CLI's classifier finds unsafe;
+ * and Full access, the default, a shield round a "!" in the attention ink,
+ * which runs every call unasked (`AGENT_PERMISSION_MODE`). A line under them
+ * says a change reaches the agent from its next turn, which a toast says
+ * again as a change is made, since a turn under way runs on the mode it
+ * started with. Off Full access the model chip wears the mode's glyph
+ * before the model's name, so a mode that asks is seen at rest. The host
+ * draws a change on the agent's row at once and takes it back where the
+ * service refused it, which the composer says under its bar. Claude Code
+ * and Codex agents each ask in their own harness's terms, which these words
+ * and hints, Codex's own, fit both; an agent on neither asks nothing, so no
+ * other is offered a mode.
  *
  * A call the agent holds waits on a member's answer (`pendingApprovals`),
  * which the call's own row says, found by the call's id (`toolUseId`): its
@@ -116,65 +100,41 @@ export type ApprovalAnswerWriter = (
   request: ApprovalAnswerRequest,
 ) => Promise<ApprovalActAnswer>;
 
-/** What the chip and its menu call the mode, and what each does. */
-const MODE_WORDS = {
-  [AGENT_PERMISSION_MODE.FULL_ACCESS]: {
-    label: "Full access",
-    hint: "Runs commands and edits without asking",
-  },
-  [AGENT_PERMISSION_MODE.ASK]: {
-    label: "Ask before edits",
-    hint: "Asks before it edits a file or runs a command",
-  },
-  [AGENT_PERMISSION_MODE.AUTO]: {
-    label: "Auto",
-    hint: "Claude decides; asks when unsure",
-  },
-} as const satisfies Record<AgentPermissionMode, { label: string; hint: string }>;
-
-/** What the chip and its menu call each mode on a Codex agent: the Codex app's own names, and what each does there. */
-const CODEX_MODE_WORDS = {
-  [AGENT_PERMISSION_MODE.FULL_ACCESS]: {
-    label: "Full access",
-    hint: "Runs commands and edits without asking",
-  },
+/** What the menu calls each mode, and what each does, in the Codex app's words. */
+export const MODE_WORDS = {
   [AGENT_PERMISSION_MODE.ASK]: {
     label: "Ask for approval",
-    hint: "Works in a sandbox; asks before going outside it",
+    hint: "Always ask to edit external files and use the internet",
   },
   [AGENT_PERMISSION_MODE.AUTO]: {
     label: "Approve for me",
-    hint: "Works in a sandbox; Codex reviews what goes outside it",
+    hint: "Only ask for actions detected as potentially unsafe",
+  },
+  [AGENT_PERMISSION_MODE.FULL_ACCESS]: {
+    label: "Full access",
+    hint: "Unrestricted access to the internet and any file on your computer",
   },
 } as const satisfies Record<AgentPermissionMode, { label: string; hint: string }>;
 
-/** What each mode is called and does, by the harness that runs it. */
-type ModeWords = Readonly<
-  Record<AgentPermissionMode, { readonly label: string; readonly hint: string }>
->;
-
-/** The modes' words for each harness that asks. */
-const MODE_WORDS_OF = {
-  [AGENT_RUNTIME.CLAUDE_CODE]: MODE_WORDS,
-  [AGENT_RUNTIME.CODEX]: CODEX_MODE_WORDS,
-} as const satisfies Partial<Record<AgentRuntime, ModeWords>>;
-
-/** The shield each mode wears. */
-const MODE_GLYPH = {
-  [AGENT_PERMISSION_MODE.FULL_ACCESS]: FullAccessIcon,
+/** The glyph each mode wears: a hand, a shield round a prompt, a shield round a "!". */
+export const MODE_GLYPH = {
   [AGENT_PERMISSION_MODE.ASK]: AskFirstIcon,
   [AGENT_PERMISSION_MODE.AUTO]: AutoApproveIcon,
+  [AGENT_PERMISSION_MODE.FULL_ACCESS]: FullAccessIcon,
 } as const satisfies Record<AgentPermissionMode, () => React.JSX.Element>;
 
-/** The modes in the order the menu offers them. */
-const MODES = [
-  AGENT_PERMISSION_MODE.FULL_ACCESS,
+/** The modes in the order the menu offers them: the most asking first, Full access last, as Codex orders its own. */
+export const MODES = [
   AGENT_PERMISSION_MODE.ASK,
   AGENT_PERMISSION_MODE.AUTO,
+  AGENT_PERMISSION_MODE.FULL_ACCESS,
 ] as const;
 
-/** The chip's name for a reader, and its menu's. */
-const MODE_THING = "Permission mode";
+/** What the modes are called as a row among the model menu's. */
+export const MODE_GROUP = "Permissions";
+
+/** The question the modes answer, heading their submenu. */
+export const MODE_QUESTION = "How should actions be approved?";
 
 /** When a change reaches the agent, said under the menu and on the change's toast. */
 export const MODE_APPLIES = "Takes effect from the next turn.";
@@ -229,8 +189,6 @@ function modeOf(agent: Pick<AgentSummary, "permissionMode">): AgentPermissionMod
 /** The mode chip's control: the mode it shows, a change, and why the last did not take. */
 export interface AgentModeControl {
   readonly mode: AgentPermissionMode;
-  /** What each mode is called and does on this agent's harness. */
-  readonly words: ModeWords;
   /** Changes the agent's mode from its next turn. */
   readonly choose: (mode: AgentPermissionMode) => void;
   /** Why the last change did not take, said under the composer's bar; nothing while none failed. */
@@ -258,7 +216,6 @@ export function useAgentPermissionMode(input: {
   ) {
     return undefined;
   }
-  const words = MODE_WORDS_OF[agent.runtime];
   const choose = (mode: AgentPermissionMode) => {
     if (mode === modeOf(agent)) return;
     writes.current += 1;
@@ -266,7 +223,7 @@ export function useAgentPermissionMode(input: {
     setNote(undefined);
     showToast({
       replayUnmasked: true,
-      words: `${words[mode].label}. ${MODE_APPLIES}`,
+      words: `${MODE_WORDS[mode].label}. ${MODE_APPLIES}`,
       tone: STATUS_TONE.COMPLETE,
       glyph: MODE_GLYPH[mode],
     });
@@ -277,77 +234,30 @@ export function useAgentPermissionMode(input: {
   };
   return {
     mode: modeOf(agent),
-    words,
     choose,
     note: note?.agentId === agent.id ? note.words : undefined,
   };
 }
 
-/** The menu's rows, the agent's mode checked, each with its hint under it. */
-function modeRows(control: AgentModeControl): readonly MenuAction[] {
+/** The mode an agent's chip names beside its model: none on Full access, the default, so a chip at rest reads as it always has. */
+export function modeShown(control: AgentModeControl | undefined): AgentPermissionMode | undefined {
+  return control === undefined || control.mode === AGENT_PERMISSION_MODE.FULL_ACCESS
+    ? undefined
+    : control.mode;
+}
+
+/** The modes as the model menu's Permissions submenu offers them, each with its hint under its name. */
+export function modeMenuRows(): readonly MenuRow[] {
   return MODES.map((mode) => {
     const Glyph = MODE_GLYPH[mode];
     return {
-      key: mode,
-      label: control.words[mode].label,
-      detail: control.words[mode].hint,
-      detailPlace: MENU_DETAIL.WRAPPED,
+      id: mode,
+      label: MODE_WORDS[mode].label,
       icon: <Glyph />,
-      checked: control.mode === mode,
-      onSelect: () => control.choose(mode),
+      detail: MODE_WORDS[mode].hint,
+      detailUnder: true,
     };
   });
-}
-
-/** What the composer's ⋯ offers in the chip's place once it folds the chip in: the three modes. */
-export function modeOverflow(control: AgentModeControl | undefined): readonly OverflowOffer[] {
-  if (control === undefined) return [];
-  return [{ press: OVERFLOW_PRESS.MODE, entries: modeRows(control) }];
-}
-
-/** The chip naming the agent's mode at the composer's foot, and the menu that changes it. */
-export function AgentModeChip({
-  control,
-  narrow,
-}: {
-  control: AgentModeControl;
-  /** Whether the composer is too narrow for its words, which draws its shield alone. */
-  narrow: boolean;
-}): React.JSX.Element {
-  const menu = useMenu(true);
-  const trigger = menu.trigger(riseAboveEnd);
-  const Glyph = MODE_GLYPH[control.mode];
-  const label = `${MODE_THING}: ${control.words[control.mode].label}`;
-  return (
-    <span className={`${OVERFLOW_PRESS.MODE} flex min-w-0`}>
-      <Tooltip label={label}>
-        <Chip
-          look={CHIP_LOOK.TOOLBAR}
-          iconOnly={narrow}
-          chevron={!narrow}
-          aria-label={label}
-          {...trigger}
-        >
-          <Glyph />
-          {narrow ? null : <ChipName>{control.words[control.mode].label}</ChipName>}
-        </Chip>
-      </Tooltip>
-      {menu.drawn === undefined ? null : (
-        <ActionMenu
-          replayUnmasked
-          label={MODE_THING}
-          menu={menu.drawn}
-          groups={[modeRows(control)]}
-          footer={
-            <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-              {MODE_APPLIES}
-            </Text>
-          }
-          onClose={menu.close}
-        />
-      )}
-    </span>
-  );
 }
 
 /** One ask as this window holds it: the ask, the answer out, how it settled, and why an answer did not go. */

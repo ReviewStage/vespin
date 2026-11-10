@@ -46,6 +46,7 @@ import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import {
   DEVICE_AGENT_LINE_KIND,
+  DEVICE_CAPABILITY,
   deviceAgentLaunchSecretsSchema,
 } from "@repo/features/device-agent-wire";
 import {
@@ -83,6 +84,7 @@ import { agentMachinesLayer } from "../machine/agent-machines.js";
 import { sandboxMachineLayer } from "../machine/sandbox-machine.js";
 import {
   PLAN_REFUSAL,
+  RUNTIME_REFUSAL,
   SESSION_CANCEL_OUTCOME,
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
@@ -450,7 +452,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         assert.equal(JSON.stringify(plan.secrets).includes("access-0"), false);
         // A Mac whose host bundles a runner from before the transcript store keeps its threads on its disk alone.
         assert.equal(plan.config.transcriptsUrl, undefined);
-        // Nor does its runner read a Codex mode, so one that asks is refused rather than run with full access.
+        // Nor does a Mac that never said its runner reads a mode run one that asks: it is refused by name rather than run with full access.
         const asking = yield* localAgent(AGENT_PAYER.CHATGPT_SUBSCRIPTION);
         yield* updateAgentPermissionModeCommitted(userId, asking.id, AGENT_PERMISSION_MODE.ASK);
         const unasked = yield* Effect.gen(function* () {
@@ -460,7 +462,11 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
           );
           return yield* deliveredOpen(sessions, yield* writtenLine(asking, "Fix the invitations."));
         });
-        assert.equal(unasked.outcome, SESSION_SEND_OUTCOME.FAILED);
+        assert.deepEqual(unasked, {
+          outcome: SESSION_SEND_OUTCOME.FAILED,
+          status: 422,
+          runtimeRefusal: RUNTIME_REFUSAL.MODES_UNSUPPORTED,
+        });
         const askingLines = yield* Effect.flatMap(Database, (db) =>
           db.select().from(deviceAgentLine).where(eq(deviceAgentLine.agentId, asking.id)),
         );
@@ -472,11 +478,19 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
 
         // From the host release whose runner mirrors them, they are kept at the service, its Codex home
         // named at its default under the agent's own home, which the runner mirrors from.
+        // That release's host also says its runner reads a mode.
+        yield* registerDevice(userId, {
+          id: deviceId,
+          name: "Studio",
+          ...DEVICE_LAYOUT,
+          codexExecutable,
+          capabilities: [DEVICE_CAPABILITY.PERMISSION_MODES],
+        });
         yield* recordHostVersion(deviceId, "0.11.0");
         const onKept = yield* localAgent(AGENT_PAYER.CHATGPT_SUBSCRIPTION);
         yield* updateAgentPermissionModeCommitted(userId, onKept.id, AGENT_PERMISSION_MODE.ASK);
         const kept = yield* launched(onKept);
-        // That release's runner reads the mode, so it is handed one that asks.
+        // Its runner reads the mode, so it is handed one that asks.
         assert.equal(kept.config.permissionMode, PERMISSION_MODE.ASK);
         assert.deepEqual(
           [kept.config.transcriptsUrl, kept.secrets.env.CODEX_HOME],
@@ -662,6 +676,7 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         assert.deepEqual(config, {
           harness: RUNNER_HARNESS.CODEX,
           cwd: "/workspace/repository",
+          agentId: agent.id,
           executable: "/usr/local/bin/codex",
           model: "gpt-6.1-sol",
           effort: "xhigh",

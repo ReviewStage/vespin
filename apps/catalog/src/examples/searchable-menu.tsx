@@ -63,6 +63,10 @@ import { CatalogSection } from "../section";
  * sheet's place and Fast switching where it stands.
  */
 
+const NOW = Date.now();
+const HOUR = 60 * 60_000;
+const DAY = 24 * HOUR;
+
 /** The last line a ChatGPT-paid agent's model menu ends on: who pays, Manage usage set apart at its end, and the plan's usage under it, full width. */
 const PLAN_LINE: MenuLastLine = {
   words: "Your Codex plan",
@@ -75,8 +79,8 @@ const PLAN_LINE: MenuLastLine = {
     <UsageMeters
       width={USAGE_METERS_WIDTH.FILL}
       rows={[
-        { label: "5-hour", usedPercent: 12, resets: "in 4h" },
-        { label: "Weekly", usedPercent: 64, resets: "in 5d" },
+        { label: "5-hour", usedPercent: 12, resetsAt: NOW + 4 * HOUR },
+        { label: "Weekly", usedPercent: 64, resetsAt: NOW + 5 * DAY },
       ]}
     />
   ),
@@ -137,6 +141,7 @@ function Hung({
   const drawn = useDisclosure(open);
   const [chosen, setChosen] = useState<string | undefined>("acme/app");
   const [effort, setEffort] = useState("high");
+  const [approval, setApproval] = useState("ask");
   const menuId = useId();
   const root = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -186,6 +191,20 @@ function Hung({
                       ],
                       value: effort,
                       onPick: setEffort,
+                    },
+                  },
+                  // A submenu under a heading, each row's hint on a line of its own under its name, as the model menu's Permissions are.
+                  {
+                    id: "permissions",
+                    label: "Permissions",
+                    detail: APPROVALS.find((each) => each.id === approval)?.label,
+                    submenu: {
+                      label: "Permissions",
+                      heading: "How should actions be approved?",
+                      rows: APPROVALS,
+                      value: approval,
+                      note: "Takes effect from the next turn.",
+                      onPick: setApproval,
                     },
                   },
                   // A row with a quiet mark after its label, as Start's Run on wears its Experimental tag.
@@ -366,6 +385,28 @@ const MODELS: readonly MenuRow[] = [
   { id: "opus-5", label: "Opus 5", icon: CLAUDE, end: CONNECT_CLAUDE, searchOnly: true },
   { id: "opus-4.8", label: "Opus 4.8", icon: CLAUDE, end: CONNECT_CLAUDE, searchOnly: true },
   { id: "opus-4.7", label: "Opus 4.7", icon: CLAUDE, end: CONNECT_CLAUDE, searchOnly: true },
+];
+
+/** How an agent's actions are approved, as the Permissions submenu lists them: each with its hint under its name. */
+const APPROVALS: readonly MenuRow[] = [
+  {
+    id: "ask",
+    label: "Ask for approval",
+    detail: "Always ask to edit external files and use the internet",
+    detailUnder: true,
+  },
+  {
+    id: "auto",
+    label: "Approve for me",
+    detail: "Only ask for actions detected as potentially unsafe",
+    detailUnder: true,
+  },
+  {
+    id: "full",
+    label: "Full access",
+    detail: "Unrestricted access to the internet and any file on your computer",
+    detailUnder: true,
+  },
 ];
 
 /** The efforts a model runs at, as the Effort submenu lists them. */

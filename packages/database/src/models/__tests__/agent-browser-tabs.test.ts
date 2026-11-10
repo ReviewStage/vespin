@@ -11,9 +11,8 @@ import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { agentTable } from "../../schemas/agent.js";
 import { user } from "../../schemas/auth.js";
-import { conversations } from "../../schemas/storage.js";
 import { task } from "../../schemas/task.js";
-import { CONVERSATION_KIND, CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
+import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
 import { getTestDB, joinWorkspace, openWorkspace } from "../../testing/index.js";
 import {
   type BrowserTabAction,
@@ -353,26 +352,18 @@ it.layer(getTestDB())("an agent's Browser tabs", (it) => {
     }),
   );
 
-  it.effect("a tab stands on the task its agent is on, and on none for an agent on none", () =>
+  it.effect("a tab stands on the task its agent is on", () =>
     Effect.gen(function* () {
-      const { starter, taskId, agent } = yield* openTask;
+      const { taskId, agent, starter } = yield* openTask;
       const elsewhere = yield* openTask;
-      const [loose] = yield* Database.use((db) =>
-        db
-          .insert(conversations)
-          .values({ userId: starter, kind: CONVERSATION_KIND.AGENT })
-          .returning({ id: conversations.id }),
-      );
-      assert.ok(loose);
       const own = yield* upsertBrowserTab(
         action(agent.conversationId, "target-1", "https://a.test/"),
       );
       const theirs = yield* upsertBrowserTab(
         action(elsewhere.agent.conversationId, "target-1", "https://b.test/"),
       );
-      const none = yield* upsertBrowserTab(action(loose.id, "target-1", "https://c.test/"));
 
-      assert.deepEqual([own.taskId, theirs.taskId, none.taskId], [taskId, elsewhere.taskId, null]);
+      assert.deepEqual([own.taskId, theirs.taskId], [taskId, elsewhere.taskId]);
       assert.deepEqual(
         Option.getOrThrow(yield* listBrowserTabs(starter, { taskId })).map(({ tab }) => tab.id),
         [own.id],

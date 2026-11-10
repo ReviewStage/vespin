@@ -100,7 +100,7 @@ import { EXCESS_KEYS, type UnparsedWireValue } from "../core.js";
 import type { ServerAgentTool } from "../events/server-events.js";
 import { SERVER_AGENT_TOOL } from "../events/server-events.js";
 import { jsonOf } from "../http/http-effect.js";
-import { NO_TOPICS, Sync } from "../sync/watch.js";
+import { Sync } from "../sync/watch.js";
 import type { RelaySocket } from "../terminal/relay.js";
 import { BROWSER_LIVE_BOUNDS } from "./bounds.js";
 
@@ -491,13 +491,10 @@ function checkTab(view: LiveView): Effect.Effect<boolean> {
 /**
  * The topics a write that moves the tab, or the member's reach of it,
  * notifies: the tab's task, which its row, its agent's, and the task's own
- * name, and the member's account, which their memberships name. Note that a
- * tab on no task names no topic of its own, so it is read on the clock
- * alone, as before Sync.
+ * name, and the member's account, which their memberships name.
  */
 function tabTopics(view: LiveView): readonly SyncTopic[] {
   const { taskId } = view.reached.tab;
-  if (taskId === null) return NO_TOPICS;
   return [
     [TOPIC.TASK, taskId],
     [TOPIC.ACCOUNT, view.ask.userId],

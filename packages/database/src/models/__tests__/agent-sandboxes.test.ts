@@ -1,18 +1,23 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { TURN_ORIGIN, TURN_STATUS } from "@repo/wire";
 import { eq } from "drizzle-orm";
 import { Effect } from "effect";
 import { Database } from "../../core/query.js";
+import { agentTable } from "../../schemas/agent.js";
 import { AGENT_SANDBOX_STATE, agentSandboxTable } from "../../schemas/agent-sandbox.js";
 import { user } from "../../schemas/auth.js";
+import { turns } from "../../schemas/storage.js";
 import { getTestDB, openTaskAgent, startTask } from "../../testing/index.js";
 import {
   markAgentSandboxReleasing,
   recordAgentSandboxBooting,
+  recordAgentSandboxDiscarded,
   recordAgentSandboxOpen,
   recordAgentSandboxUse,
   releasableAgentSandboxes,
+  settleAgentSandboxRelease,
 } from "../agent-sandboxes.js";
 
 /**
@@ -52,7 +57,74 @@ const rowOf = (sandboxName: string) =>
       .where(eq(agentSandboxTable.sandboxName, sandboxName)),
   );
 
+/** A settled turn of the agent's conversation holding the checkout its runner recorded; answers the turn's id. */
+const turnWithSnapshot = (agentId: string) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const [agent] = yield* db
+      .select({ userId: agentTable.userId, conversationId: agentTable.conversationId })
+      .from(agentTable)
+      .where(eq(agentTable.id, agentId));
+    assert.ok(agent !== undefined);
+    const id = randomUUID();
+    yield* db.insert(turns).values({
+      id,
+      userId: agent.userId,
+      conversationId: agent.conversationId,
+      origin: TURN_ORIGIN.TYPED,
+      status: TURN_STATUS.SETTLED,
+      snapshotCommit: "0123456789abcdef0123456789abcdef01234567",
+      snapshotHead: "89abcdef0123456789abcdef0123456789abcdef",
+      snapshotBranch: "main",
+    });
+    return id;
+  });
+
+/** Whether the turn still holds its snapshot. */
+const holdsSnapshot = (turnId: string) =>
+  Effect.map(
+    Effect.flatMap(Database, (db) =>
+      db.select({ commit: turns.snapshotCommit }).from(turns).where(eq(turns.id, turnId)),
+    ),
+    ([row]) => row?.commit !== null,
+  );
+
 it.layer(getTestDB())("when each cloud agent's sandbox was last used", (it) => {
+  it.effect(
+    "the snapshots an agent's turns hold go with its sandbox: forgotten as it is discarded, released, or opened anew, and kept across an open that resumed it",
+    () =>
+      Effect.gen(function* () {
+        const agentId = yield* openAgent;
+        const name = `agent-sandbox-${randomUUID()}`;
+        yield* recordAgentSandboxOpen(agentId, useAt(name, OPENED));
+
+        const resumed = yield* turnWithSnapshot(agentId);
+        yield* recordAgentSandboxOpen(agentId, useAt(name, MINUTES_LATER));
+        assert.equal(yield* holdsSnapshot(resumed), true, "a resume keeps the disk");
+
+        yield* recordAgentSandboxDiscarded(name);
+        assert.equal(yield* holdsSnapshot(resumed), false, "a discard loses it");
+        assert.deepEqual(
+          (yield* rowOf(name)).map((row) => row.state),
+          [AGENT_SANDBOX_STATE.RELEASED],
+        );
+
+        const created = yield* turnWithSnapshot(agentId);
+        yield* recordAgentSandboxOpen(agentId, useAt(name, MINUTES_LATER), true);
+        assert.equal(yield* holdsSnapshot(created), false, "a sandbox made anew holds none");
+
+        const released = yield* turnWithSnapshot(agentId);
+        yield* Effect.flatMap(Database, (db) =>
+          db
+            .update(agentSandboxTable)
+            .set({ state: AGENT_SANDBOX_STATE.RELEASING })
+            .where(eq(agentSandboxTable.sandboxName, name)),
+        );
+        yield* settleAgentSandboxRelease(name, AGENT_SANDBOX_STATE.RELEASED);
+        assert.equal(yield* holdsSnapshot(released), false, "a release deletes the disk");
+      }),
+  );
+
   it.effect("a touch moves the last use on only once the row is older than the cutoff", () =>
     Effect.gen(function* () {
       const agentId = yield* openAgent;

@@ -325,12 +325,11 @@ it.effect(
 );
 
 it.effect(
-  "reads one agent as its own page by its id, an agent with no plan among them, and one the account does not reach as not found",
+  "reads one agent as its own page by its id, and one the account does not reach as not found",
   () =>
     Effect.gen(function* () {
       const page = {
         ...AGENT,
-        planId: null,
         automationId: "5a0c4d2e-8f1b-4c3a-9e7d-2b6f1a8c9d04",
         workspaceId: "workspace-1",
         repository: "acme/relay",

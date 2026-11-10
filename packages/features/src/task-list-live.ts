@@ -58,9 +58,8 @@ import {
  * task-list-live.ts -- the plan list followed over Neon Realtime: the sealed statements the service answers, the rows they deliver, and the list as the held read answers it, built from them at an instant.
  *
  * The plan list is two statements: the plans the account reaches, each with
- * its reader's own pin and its owner's name, and every agent of those plans
- * and every agent with no plan in the account's workspaces, archived ones
- * among them, each with its newest turn, whether a line of the developer's
+ * its reader's own pin and its owner's name, and every agent of those plans,
+ * archived ones among them, each with its newest turn, whether a line of the developer's
  * awaits its turn, what it last published, and the names of the members it
  * names. A third, the issues those plans linked (`issues`), answers no rows
  * now that a plan links none, and stands because a released desktop
@@ -141,7 +140,7 @@ const archiveLiveSchema = EffectSchema.Struct({
 /** One agent as its row delivers it: its own columns, its newest turn's, and what stands beside it, null where none does. */
 const agentLiveRowSchema = EffectSchema.Struct({
   id: EffectSchema.String,
-  planId: EffectSchema.NullOr(EffectSchema.String),
+  planId: EffectSchema.String,
   workspaceId: EffectSchema.String,
   model: EffectSchema.String,
   effort: EffectSchema.String,
@@ -283,7 +282,7 @@ const PULL_REQUEST_RANK = {
   [PULL_REQUEST_STATE.CLOSED]: 2,
 } as const satisfies Record<TaskPullRequestLine["state"], number>;
 
-/** Newest started first, and by id among those started at one instant, as the held read orders plans and agents with no plan. */
+/** Newest started first, and by id among those started at one instant, as the held read orders plans. */
 function newestFirst<Row extends { readonly id: string; readonly createdAt: number }>(
   a: Row,
   b: Row,
@@ -611,10 +610,10 @@ function earlierEdge(a: number | undefined, b: number | undefined): number | und
   return b === undefined ? a : Math.min(a, b);
 }
 
-/** The reader's pin of an agent on a plan; none for an agent on no plan, unpinned, or archived, since an archived agent stands in no list a pin is drawn in. */
+/** The reader's pin of an agent; none for one unpinned or archived, since an archived agent stands in no list a pin is drawn in. */
 function agentPinOf(row: AgentLiveRow): TaskAgentPin | undefined {
   const { planId, pinnedAt, pinPosition } = row;
-  if (planId === null || pinnedAt === null || row.archivedAt !== null) return undefined;
+  if (pinnedAt === null || row.archivedAt !== null) return undefined;
   const at = { agentId: row.id, taskId: planId, pinnedAt };
   return pinPosition === null ? at : { ...at, pinPosition };
 }
@@ -679,13 +678,13 @@ interface DrawnGroup extends AgentGroup {
 
 /** The plan list and every part drawn beside it, as the live rows stand at one instant. */
 export interface TaskListDrawing {
-  /** The plans newest started first, each with its agents in brief, and the agents with no plan newest started first, the archived among them. */
+  /** The plans newest started first, each with its agents in brief. */
   readonly list: TaskListAnswer;
   /** Every agent on a plan, the archived among them, first started first, with the workspace and repository its own row names. */
   readonly taskAgents: readonly ListedAgent[];
   /** Every pull request of each plan that has one, those still open first, the newest agent's first within each. */
   readonly taskPullRequests: readonly TaskPullRequests[];
-  /** The pull request of every agent whose row keeps one, on a plan or none, the archived among them. */
+  /** The pull request of every agent whose row keeps one, the archived among them. */
   readonly agentPullRequests: readonly ListedPullRequest[];
   /** The reader's pins of agents on a plan, the archived left out. */
   readonly taskAgentPins: readonly TaskAgentPin[];
@@ -750,7 +749,6 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
     // Each plan's agents in the order the rows name them, and their pull requests, built again only where their rows moved.
     const byTask = new Map<string, AgentLiveRow[]>();
     for (const row of rows.agents) {
-      if (row.planId === null) continue;
       const group = byTask.get(row.planId);
       if (group === undefined) byTask.set(row.planId, [row]);
       else group.push(row);
@@ -775,8 +773,6 @@ export function taskListDrawer(): (rows: TaskListLiveRows, now: number) => TaskL
     let edge: number | undefined;
     for (const row of rows.agents) {
       const continuedBy = nextContinued.get(row.id)?.by;
-      // Note that every agent stands on a task now; a row from before that was so is drawn nowhere.
-      if (row.planId === null) continue;
       const built = rebuilt(listed.get(row.id), row, continuedBy, now, () => ({
         value: listedAgentOf(row, now, continuedBy),
         until: clockEdgeOf(row, now),
@@ -872,7 +868,6 @@ export function taskAgentPinsOfLiveRows(rows: TaskListLiveRows): readonly TaskAg
 export function taskPullRequestsOfLiveRows(rows: TaskListLiveRows): readonly TaskPullRequests[] {
   const byTask = new Map<string, AgentLiveRow[]>();
   for (const row of rows.agents) {
-    if (row.planId === null) continue;
     byTask.set(row.planId, [...(byTask.get(row.planId) ?? []), row]);
   }
   return [...byTask].flatMap(([taskId, agents]) => {
@@ -882,7 +877,7 @@ export function taskPullRequestsOfLiveRows(rows: TaskListLiveRows): readonly Tas
 }
 
 /**
- * The pull request of every agent whose row keeps one, on a plan or none,
+ * The pull request of every agent whose row keeps one,
  * the archived among them, as the service last read it on GitHub: what a
  * plan's or an agent's tabs offer each agent's Changes by.
  */

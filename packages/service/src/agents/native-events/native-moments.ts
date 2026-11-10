@@ -1,3 +1,4 @@
+import type { CheckoutSnapshot } from "@repo/agent-runner/protocol";
 import { PROVIDER_KEY_STATUS } from "@repo/features/provider-key-wire";
 import type { RunUsage, ToolCallSettlement } from "@repo/features/turn-run";
 import type { UnparsedWireValue, WireValue } from "@repo/wire";
@@ -115,7 +116,12 @@ export const PLAN_STATUS = {
 export type PlanStatus = (typeof PLAN_STATUS)[keyof typeof PLAN_STATUS];
 
 export type NativeMoment =
-  | { readonly kind: typeof NATIVE_MOMENT.LINE_ACCEPTED; readonly clientId: string }
+  | {
+      readonly kind: typeof NATIVE_MOMENT.LINE_ACCEPTED;
+      readonly clientId: string;
+      /** The checkout as it stood before the turn the line opened, where the runner recorded it. */
+      readonly snapshot?: CheckoutSnapshot | undefined;
+    }
   | { readonly kind: typeof NATIVE_MOMENT.SESSION; readonly sessionId: string }
   | { readonly kind: typeof NATIVE_MOMENT.TRANSCRIPT_BROKEN; readonly sessionId: string }
   | { readonly kind: typeof NATIVE_MOMENT.SESSION_LOST }

@@ -240,8 +240,8 @@ export interface AgentNotices {
 
 /** What the ledger keeps of one agent: enough to tell one turn's end from the next's. */
 interface HeldAgent {
-  /** The plan it works on; null for one an automation started with no plan. */
-  taskId: string | null;
+  /** The task it works on. */
+  taskId: string;
   status: AgentStatus;
   /** Why the turn the status is read from failed, where it did. */
   failure: AgentFailure | undefined;
@@ -450,7 +450,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
       }
       const accountId = dependencies.accountId();
       if (accountId !== undefined && agent.startedBy === accountId) {
-        const taskName = agent.taskId === null ? undefined : dependencies.taskName(agent.taskId);
+        const taskName = dependencies.taskName(agent.taskId);
         heard(
           { kind: NOTICE_KIND.AGENT_FINISHED, agentId },
           {
@@ -465,7 +465,7 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
                   : "Your agent failed.",
             place: {
               kind: LINK_DESTINATION.AGENT,
-              ...(agent.taskId === null ? undefined : { planId: agent.taskId }),
+              planId: agent.taskId,
               agentId,
             },
           },
@@ -695,7 +695,6 @@ export const createAgentNotices = /* @__PURE__ */ Effect.fn("desktop/createAgent
         // after that, as one archived before the list ever named it.
         const named = new Set(agents.map((agent) => agent.id));
         forget((agent, agentId) => {
-          if (agent.taskId === null) return true;
           if (!held.has(agent.taskId)) return false;
           if (named.has(agentId)) return true;
           if (followedAgents.has(agentId)) return false;

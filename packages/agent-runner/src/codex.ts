@@ -153,6 +153,7 @@ import {
   makeApprovals,
   settleAsk,
 } from "./approvals.js";
+import { CheckoutSnapshots } from "./checkout-snapshot.js";
 import { CODEX_BUNDLED_MODELS_JSON } from "./codex-protocol/bundled-models.js";
 import type {
   ApprovalsReviewer,
@@ -186,6 +187,7 @@ import {
   APPROVAL_DECISION,
   type ApprovalBy,
   type ApprovalDecision,
+  type CheckoutSnapshot,
   CODEX_EFFORT,
   CODEX_ERROR_INFO,
   CODEX_PLAN_BACKEND,
@@ -379,6 +381,8 @@ interface Outgoing {
   readonly clientId: string;
   readonly input: readonly UserInput[];
   readonly lines: readonly string[];
+  /** The checkout as it stood before the turn this message started (`checkout-snapshot.ts`); none for a steer, or where it could not be recorded. */
+  readonly snapshot?: CheckoutSnapshot | undefined;
 }
 
 /** The fields of an answer the controller reads. */
@@ -934,6 +938,15 @@ interface CodexLaunch {
   effort: CodexEffort | undefined;
   /** The service tier the next turn names (`turnTierOf`); null for the standard one. */
   tier: ServiceTier | null;
+  /**
+   * Whether the agent's turn is under way, as the service holds it: opened
+   * by the turn a message starts, and over at the completion that leaves
+   * no message unanswered (the end-of-run rule above). A turn started
+   * while it is under way, for a steer the last turn could not take, is a
+   * continuation of the same turn of the service's, so it records no
+   * checkout: the one recorded as the turn opened stands.
+   */
+  open: boolean;
   /** The thread's rollout as the store mirrors it, where the config names the store. */
   readonly mirror: RolloutMirror | undefined;
   /** The provider's host, as app-server reaches it, which a lost connection is probed for. */
@@ -944,6 +957,8 @@ interface CodexLaunch {
   carriedOnAt: number | undefined;
   /** How many items the thread has started but the service's own messages, which say nothing of the model. */
   readonly heard: { count: number };
+  /** The checkout recorded before a turn the line named opens (`checkout-snapshot.ts`); none where it could not be. */
+  readonly snapshot: (lineId: string) => Effect.Effect<CheckoutSnapshot | undefined>;
 }
 
 /**
@@ -1375,7 +1390,9 @@ const revertedBefore = Effect.fn("agent-runner/codex/revertedBefore")(function* 
  * Says each of the service's lines a message carries was taken by app-server, as
  * Claude Code's launch says a line was handed to the SDK, so the service ties the
  * line to the turn that runs it. A line said once is not said again when a
- * message is sent again in the next turn.
+ * message is sent again in the next turn. The checkout recorded before the
+ * turn is said with the line that opened it alone, the first of a merged
+ * message, since that is the line the turn stands under.
  */
 const accepted = Effect.fn("agent-runner/codex/accepted")(function* (
   launch: CodexLaunch,
@@ -1384,7 +1401,12 @@ const accepted = Effect.fn("agent-runner/codex/accepted")(function* (
   for (const uuid of outgoing.lines) {
     if (launch.accepted.has(uuid)) continue;
     launch.accepted.add(uuid);
-    yield* launch.context.sink.emit({ type: RUNNER_EVENT.ACCEPTED, uuid });
+    const opening = uuid === outgoing.lines[0] ? outgoing.snapshot : undefined;
+    yield* launch.context.sink.emit({
+      type: RUNNER_EVENT.ACCEPTED,
+      uuid,
+      ...(opening === undefined ? undefined : { snapshot: opening }),
+    });
   }
 });
 
@@ -1393,7 +1415,7 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
   launch: CodexLaunch,
   messages: readonly Outgoing[],
 ) {
-  const outgoing: Outgoing =
+  const merged: Outgoing =
     messages.length === 1 && messages[0] !== undefined
       ? messages[0]
       : {
@@ -1401,6 +1423,12 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
           input: messages.flatMap((message) => message.input),
           lines: messages.flatMap((message) => message.lines),
         };
+  // The checkout is recorded before app-server can touch it, under the first line the turn takes,
+  // where the turn opens the agent's; a turn continuing one under way leaves the opening record standing.
+  const first = merged.lines[0];
+  const snapshot = launch.open || first === undefined ? undefined : yield* launch.snapshot(first);
+  launch.open = true;
+  const outgoing: Outgoing = { ...merged, snapshot };
   const answer = decodeTurnAnswer(
     yield* launch.server.request(METHOD.TURN_START, {
       threadId: launch.threadId,
@@ -1585,6 +1613,7 @@ const takeTurnCompleted = Effect.fn("agent-runner/codex/takeTurnCompleted")(func
     if (done !== undefined) return done;
   }
   if (launch.state.kind !== LAUNCH_STATE.IDLE) return undefined;
+  launch.open = false;
   if (launch.context.config.warm !== true) return ended(RUNNER_END.TURN_ENDED);
   // The agent's turn is over: the launch stays warm for the service's next message
   // rather than ending.
@@ -1760,6 +1789,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
   context: LaunchContext<CodexConfig>,
 ) {
   const { config } = context;
+  const snapshots = yield* CheckoutSnapshots;
   const backend = planBackendOf(context);
   if (backend === undefined) {
     return ended(RUNNER_END.FAILED, "the plan's backend is not one this runner knows");
@@ -1868,11 +1898,16 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     model: config.model,
     effort: config.effort,
     tier: serviceTierOf(config.fast, config.ultrafast),
+    open: false,
     mirror,
     providerHost: provider.host,
     probeTarget: probeTargetOf(context.env, provider),
     carriedOnAt: undefined,
     heard,
+    snapshot: (lineId) =>
+      config.agentId === undefined
+        ? Effect.succeed(undefined)
+        : snapshots.take(config.cwd, config.agentId, lineId),
   };
 
   // The service's lines join the signals in a loop of their own, so a line is

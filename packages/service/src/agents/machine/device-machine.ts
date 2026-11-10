@@ -154,12 +154,6 @@ export const MAC_MACHINE = {
    * keeps its sessions on its disk alone, as before.
    */
   TRANSCRIPTS_SINCE: "0.11.0",
-  /**
-   * The first host release whose bundled runner runs a Codex agent in the
-   * mode its config names; a Mac on an older one runs Codex with full
-   * access whatever it is handed, so a mode that asks is refused there.
-   */
-  CODEX_MODES_SINCE: "0.11.0",
 } as const;
 
 /** Codex's own folder under a home, where it keeps its threads unless `CODEX_HOME` names another. */
@@ -340,9 +334,7 @@ function deviceMachineOver(
         linesRead: false,
         transcriptsKept: kept,
         diskSessions: true,
-        codexModes:
-          device.value.version !== null &&
-          hostVersionMeets(device.value.version, MAC_MACHINE.CODEX_MODES_SINCE),
+        permissionModes: device.value.capabilities.includes(DEVICE_CAPABILITY.PERMISSION_MODES),
       };
       return layout;
     });

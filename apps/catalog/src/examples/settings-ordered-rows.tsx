@@ -41,6 +41,10 @@ interface Plan {
   readonly usage?: readonly UsageMeterRow[];
 }
 
+const NOW = Date.now();
+const HOUR = 60 * 60_000;
+const DAY = 24 * HOUR;
+
 const PLANS: readonly Plan[] = [
   {
     id: "work",
@@ -53,8 +57,8 @@ const PLANS: readonly Plan[] = [
     id: "personal",
     name: "ana.personal@example.com",
     usage: [
-      { label: "5-hour", usedPercent: 42, resets: "in 2h" },
-      { label: "Weekly", usedPercent: 18, resets: "in 3d" },
+      { label: "5-hour", usedPercent: 42, resetsAt: NOW + 2 * HOUR },
+      { label: "Weekly", usedPercent: 18, resetsAt: NOW + 3 * DAY },
     ],
   },
   { id: "side", name: "ana@sideproject.example", state: "Ready" },

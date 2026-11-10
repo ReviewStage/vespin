@@ -803,18 +803,16 @@ function taskDetail(
 }
 
 /**
- * Every plan and every agent with no task, as the sidebar lists them among
- * each other (`task-list-model.ts`'s rows): the pinned first, then the rest
- * by their last activity (`taskTime`), then the archived agents, each in
- * its tab's look, an archived one saying so in its detail. Within each, the
+ * Every task, as the sidebar lists them (`task-list-model.ts`'s rows): the
+ * pinned first, then the rest by their last activity (`taskTime`), each in
+ * its tab's look. Within each, the
  * listed workspace's come first and every other workspace's tasks after
  * them, naming its workspace and found by its name, since opening one
  * switches the window to it. A task wears at its end who is on it and its
  * row's mark, as its sidebar row does (`assigneeFace`, `TaskRowStatus`),
  * leads with its key and says its repository by its name, as the Tasks
  * list's row does, and is found by its key, its assignee's name, and its
- * creator's, a key typed whole listing its task first. An agent opens on its own page, as its
- * sidebar row does. An agent's line on a task's card opens the task on its
+ * creator's, a key typed whole listing its task first. An agent's line on a task's card opens the task on its
  * tab through `showAgent`, which leaves the palette as a row does.
  */
 function taskRows(
@@ -1068,10 +1066,7 @@ function archivedAgentRows(
         />
       ),
       terms: [look.label, ...(taskName === undefined ? [] : [taskName])],
-      onChoose: () =>
-        show(() => {
-          if (agent.planId !== null) tasks.onShowAgent(agent.planId, agent.id);
-        }),
+      onChoose: () => show(() => tasks.onShowAgent(agent.planId, agent.id)),
     };
   });
 }

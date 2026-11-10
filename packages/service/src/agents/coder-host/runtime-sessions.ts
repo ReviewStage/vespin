@@ -111,6 +111,8 @@ export const TURN_HANDOVER = {
   AWAITED: "awaited",
   /** The hand-over could not succeed, and the turn was failed with why. */
   FAILED: "failed",
+  /** The plan's usage limit refused the launch, and the turn is held until its reset, which the sweep hands it on at. */
+  WAITING: "waiting",
   /** Nothing here reaches the turn's agent: it runs on no harness, its session never claimed its record, or this function holds no harness. */
   UNREACHED: "unreached",
 } as const;
@@ -554,6 +556,9 @@ export function failedCallRefusal(failed: {
   // Note that an away device refuses a message as it refuses a Start, so the words are the same.
   if (failed.runtimeRefusal === RUNTIME_REFUSAL.DEVICE_AWAY) {
     return localAgentRefused(LOCAL_AGENT_REFUSAL.MAC_AWAY);
+  }
+  if (failed.runtimeRefusal === RUNTIME_REFUSAL.MODES_UNSUPPORTED) {
+    return localAgentRefused(LOCAL_AGENT_REFUSAL.PERMISSION_MODES);
   }
   return HOSTED_REFUSAL.UNAVAILABLE;
 }

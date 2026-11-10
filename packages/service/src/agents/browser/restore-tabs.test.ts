@@ -8,9 +8,7 @@ import {
   upsertBrowserTab,
 } from "@repo/database/models/agent-browser-tabs";
 import { user } from "@repo/database/schemas/auth";
-import { conversations } from "@repo/database/schemas/storage";
-import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
-import { getTestDB } from "@repo/database/testing";
+import { getTestDB, openAgentConversation, openWorkspace } from "@repo/database/testing";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
 import type { CdpSession } from "@repo/features/browser-cdp";
 import { Effect } from "effect";
@@ -31,20 +29,14 @@ import { connectRestoring, restoreBrowserTabs } from "./restore-tabs.js";
 
 const SESSION = "wrun_restore_tabs_fixture";
 
-/** A new account and a conversation of its own, the one an agent's tabs are kept under. */
+/** A new account and the conversation of its own agent on a task, the one an agent's tabs are kept under. */
 const openConversation = Effect.gen(function* () {
   const id = `user-${randomUUID()}`;
   yield* Database.use((db) =>
     db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` }),
   );
-  const [row] = yield* Database.use((db) =>
-    db
-      .insert(conversations)
-      .values({ userId: id, kind: CONVERSATION_KIND.AGENT })
-      .returning({ id: conversations.id }),
-  );
-  assert.ok(row);
-  return row.id;
+  const conversationId = yield* openAgentConversation(id, yield* openWorkspace(id));
+  return conversationId;
 });
 
 /** A tab kept for the conversation at the target and address given. */

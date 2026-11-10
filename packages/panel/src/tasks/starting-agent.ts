@@ -13,7 +13,7 @@ import { useOpenPlace } from "./use-open-link.js";
  *
  * An agent another agent's `start_agent` started carries that agent's id
  * (`AgentSummary.startedByAgentId`). Its card names the starter as the
- * task list carries it, every task's agents and those on no task, so
+ * task list carries it, every task's agents, so
  * hanging the card asks the service nothing. A starter the list does not
  * carry, one on a task the reader does not reach, or one the list has not
  * yet answered for, is none, and the card names whoever else started the
@@ -43,11 +43,10 @@ export function useStartingAgent(
   );
   const agent = useQuery({ ...appStateQuery, select }).data;
   if (agent === undefined) return undefined;
-  const taskId = agent.planId ?? undefined;
   const actor = {
     ...agentActor(agent, agentName(agent, models)),
     agentId: agent.id,
-    ...(taskId === undefined ? undefined : { taskId }),
+    taskId: agent.planId,
   };
   const onOpen =
     openPlace === undefined
@@ -55,7 +54,7 @@ export function useStartingAgent(
       : () =>
           openPlace({
             kind: LINK_DESTINATION.AGENT,
-            ...(taskId === undefined ? undefined : { planId: taskId }),
+            planId: agent.planId,
             agentId: agent.id,
           });
   return { actor, onOpen };

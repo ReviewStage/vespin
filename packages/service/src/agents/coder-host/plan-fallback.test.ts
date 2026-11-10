@@ -20,7 +20,7 @@ import {
 import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
 import { beatDevice, registerDevice } from "@repo/database/models/device-store";
 import { parseKeyRing, sealProviderKey } from "@repo/database/models/provider-key-seal";
-import { saveProviderKey } from "@repo/database/models/provider-key-store";
+import { saveProviderKey, setPlanStatus } from "@repo/database/models/provider-key-store";
 import { runnerLinesPast } from "@repo/database/models/runner-line-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
@@ -36,7 +36,11 @@ import {
   DEVICE_AGENT_LINE_KIND,
   deviceAgentLaunchSecretsSchema,
 } from "@repo/features/device-agent-wire";
-import { PROVIDER_KEY_KIND, PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
+import {
+  PROVIDER_KEY_KIND,
+  PROVIDER_KEY_PROVIDER,
+  PROVIDER_KEY_STATUS,
+} from "@repo/features/provider-key-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { fixtureToken } from "@repo/sandbox/vercel/testing";
@@ -71,6 +75,7 @@ import { NativeAgentSessions } from "./runtime-sessions.js";
 import { agentFailureOf } from "./status.js";
 import { resumeWaitedTurns } from "./steer.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
+import { TurnQueue } from "./turn-delivery.js";
 
 /**
  * A plan's usage limit met mid-turn, end to end through the service, on
@@ -720,5 +725,67 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
           [TURN_STATUS.FAILED, AGENT_FAILURE.PLAN_LIMIT],
         );
       }),
+  );
+});
+
+it.layer(SUITE)("a queued turn whose launch its plan's limit refuses", (it) => {
+  it.effect("waits for the reset, which the sweep delivers it at, and finishes", () =>
+    Effect.gen(function* () {
+      vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+      const spec = HARNESS[CONVERSATION_RUNTIME.CLAUDE_CODE];
+      const { userId, agent, sessions, sequence, launches } = yield* accountWith(
+        CONVERSATION_RUNTIME.CLAUDE_CODE,
+        false,
+        FALLBACK.NONE,
+      );
+      const reached = reaching(userId, sessions);
+      const post = yield* eventsRoute(reached);
+      const sent = yield* writtenLine(agent, "Fix the invitations.");
+      const opened = yield* sessions.open(sent);
+      assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+
+      // The account's one plan meets its limit before the turn's delivery launches a runner, and no API key is kept.
+      const now = yield* DateTime.nowAsDate;
+      const resetsAt = now.getTime() + Duration.toMillis(LIMIT_FOR);
+      yield* setPlanStatus(
+        userId,
+        PROVIDER_KEY_PROVIDER.ANTHROPIC,
+        PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
+        PROVIDER_KEY_STATUS.LIMIT_REACHED,
+        new Date(resetsAt),
+        now,
+        now,
+      );
+      yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
+      const waiting = (yield* latestTurnsOfReached([agent.conversationId])).get(
+        agent.conversationId,
+      );
+      assert.ok(waiting !== undefined);
+      assert.deepEqual(
+        [waiting.status, waiting.waitsUntil?.getTime(), (yield* launches).length],
+        [TURN_STATUS.QUEUED, resetsAt, 0],
+      );
+
+      // Past the reset the sweep publishes the turn again, and its delivery launches the runner on its line.
+      const published: string[] = [];
+      yield* TestClock.adjust(LIMIT_FOR);
+      yield* resumeWaitedTurns(yield* Clock.currentTimeMillis).pipe(
+        Effect.provideService(TurnQueue, {
+          publish: (turn) => Effect.sync(() => void published.push(turn.turnId)),
+        }),
+        Effect.provide(reached),
+      );
+      assert.deepEqual(published, [waiting.id]);
+      yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
+      const [launched] = yield* launches;
+      assert.ok(launched !== undefined);
+      assert.deepEqual(launched.texts, ["Fix the invitations."]);
+
+      const finished = numbered(launched.firstSequence, spec.finished(sent.lineId));
+      sequence.next = launched.firstSequence + finished.length;
+      assert.equal(yield* post(launched, finished), 200);
+      const turn = (yield* latestTurnsOfReached([agent.conversationId])).get(agent.conversationId);
+      assert.deepEqual([turn?.id, turn?.status], [waiting.id, TURN_STATUS.SETTLED]);
+    }),
   );
 });

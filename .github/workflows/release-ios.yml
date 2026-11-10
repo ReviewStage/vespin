@@ -6,17 +6,31 @@ name: Release iOS
 # way: a TestFlight build is a rehearsal of its own, since nothing reaches a
 # tester until it is added to a group.
 #
-# Expo generates the native project, Xcode archives it with automatic signing
-# through an App Store Connect API key of its own, apart from the one the Mac
-# release notarizes with, and exports it straight to App Store Connect. The
-# build number is the run's, so every upload is one TestFlight has not seen.
+# Expo generates the native project and Xcode archives it signed to run
+# locally: an ad-hoc signature, which needs no certificate, profile, or account,
+# but under which Xcode still writes each target's entitlements into its
+# signature, and the export reads them from there. The export then signs the
+# app and its two extensions for the App Store through Apple's cloud-managed
+# distribution certificate, under an App Store Connect API key of its own,
+# apart from the one the Mac release notarizes with, and uploads it to App
+# Store Connect. Note that the archive never signs automatically, because a
+# runner's keychain starts empty, so automatic signing would create a new
+# Apple Development certificate on every run until the team reaches Apple's
+# cap; and it is never unsigned, because an unsigned archive carries no
+# entitlements, so the export would drop aps-environment. The build number is
+# the run's, so every upload is one TestFlight has not seen.
 #
 # The app reports crashes to the desktop's Sentry project, under the same DSN
-# (SENTRY_DSN), and the archive uploads its Hermes source maps and dSYMs there
-# through sentry-cli (SENTRY_AUTH_TOKEN), as Sentry's Expo config plugin adds
-# the build phases for. A refused upload warns and the build goes on
-# (SENTRY_ALLOW_FAILURE), so Sentry being down never holds a TestFlight build
-# back; its reports read unsymbolicated until symbols are uploaded by hand.
+# (SENTRY_DSN), and its symbols go there through sentry-cli
+# (SENTRY_AUTH_TOKEN): the archive uploads its Hermes source maps in the
+# bundle phase Sentry's Expo config plugin wraps, and the job uploads the
+# archive's dSYMs once Xcode has written them all, printing what sentry-cli
+# answered for both. Note that the plugin's own dSYM phase is turned off
+# (SENTRY_DISABLE_XCODE_DEBUG_UPLOAD), because it runs inside the app target
+# before Xcode generates Vespin.app.dSYM, so it waits and uploads without it.
+# A refused upload warns and the build goes on (SENTRY_ALLOW_FAILURE), so
+# Sentry being down never holds a TestFlight build back; its reports read
+# unsymbolicated until symbols are uploaded by hand.
 
 on:
   push:
@@ -126,6 +140,7 @@ jobs:
           APP_STORE_CONNECT_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_P8_BASE64 }}
           SENTRY_ALLOW_FAILURE: "true"
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_DISABLE_XCODE_DEBUG_UPLOAD: "true"
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           set -o pipefail
@@ -135,6 +150,8 @@ jobs:
           printf '%s' "$APP_STORE_CONNECT_KEY_P8_BASE64" | /usr/bin/base64 -D > "$key_path"
           chmod 600 "$key_path"
           archive_path="$RUNNER_TEMP/Vespin.xcarchive"
+          archive_log="$key_directory/archive.log"
+          export_path="$key_directory/export"
           authentication=(
             -allowProvisioningUpdates
             -authenticationKeyPath "$key_path"
@@ -142,16 +159,41 @@ jobs:
             -authenticationKeyIssuerID "$APP_STORE_CONNECT_ISSUER_ID"
           )
 
+          # Signed to run locally, with no key, so the archive cannot reach
+          # the account to create a certificate or a profile. Base
+          # entitlements are left out, since they would add a development
+          # get-task-allow the distribution profile refuses.
           xcodebuild \
             -workspace ios/Vespin.xcworkspace \
             -scheme Vespin \
             -configuration Release \
             -destination 'generic/platform=iOS' \
             -archivePath "$archive_path" \
-            "${authentication[@]}" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
-            CODE_SIGN_STYLE=Automatic \
-            archive | xcbeautify
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY=- \
+            AD_HOC_CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+            PROVISIONING_PROFILE_SPECIFIER= \
+            archive | tee "$archive_log" | xcbeautify
+
+          # What sentry-cli answered for the source maps, which xcbeautify
+          # drops from the archive's output.
+          echo "--- Sentry source maps"
+          if ! grep -E "^(output|warning|error): sentry-cli - " "$archive_log"; then
+            echo "::warning::sentry-cli printed nothing in the archive, so its source maps may not have reached Sentry"
+          fi
+
+          # The dSYMs, from the finished archive through the sentry-cli
+          # Sentry's package ships, under the org and project the plugin
+          # wrote into ios/sentry.properties. A sentry-cli that cannot be
+          # found warns as a refused upload does, rather than failing the
+          # step under bash -e.
+          echo "--- Sentry dSYMs"
+          sentry_cli_package=$(node --print "require('path').dirname(require.resolve('@sentry/cli/package.json', { paths: [require.resolve('@sentry/react-native/package.json')] }))" || true)
+          if [[ -z "$sentry_cli_package" ]] || ! SENTRY_PROPERTIES=ios/sentry.properties node "$sentry_cli_package/bin/sentry-cli" debug-files upload "$archive_path/dSYMs"; then
+            echo "::warning::sentry-cli could not upload the archive's dSYMs, so this build's native crashes read unsymbolicated"
+          fi
 
           entitlements=$(codesign -d --entitlements - --xml "$archive_path/Products/Applications/Vespin.app" 2>/dev/null)
           if ! grep -q "aps-environment" <<< "$entitlements"; then
@@ -159,12 +201,64 @@ jobs:
             exit 1
           fi
 
+          # Exported once to a local .ipa, so the app the export signed is
+          # checked before anything uploads: the app must carry
+          # aps-environment production, and no bundle may be signed for
+          # development. The upload below exports the same archive under the
+          # same profiles.
           export_options="$key_directory/ExportOptions.plist"
           cp release/ExportOptions.plist "$export_options"
           plutil -insert teamID -string "$APPLE_TEAM_ID" "$export_options"
+          local_options="$key_directory/ExportOptions-local.plist"
+          cp "$export_options" "$local_options"
+          plutil -replace destination -string export "$local_options"
+          xcodebuild \
+            -exportArchive \
+            -archivePath "$archive_path" \
+            -exportOptionsPlist "$local_options" \
+            -exportPath "$export_path" \
+            "${authentication[@]}" | xcbeautify
+
+          payload="$key_directory/payload"
+          ditto -x -k "$export_path/Vespin.ipa" "$payload"
+          app="$payload/Payload/Vespin.app"
+          # Note that a read codesign refuses fails the run rather than
+          # reading as empty, because the widget extension legitimately
+          # carries no entitlements, so an empty answer proves nothing.
+          for bundle in "$app" "$app/PlugIns/NotificationService.appex" "$app/PlugIns/AgentsLiveActivity.appex"; do
+            bundle_name=$(basename "$bundle")
+            echo "--- $bundle_name"
+            if ! signature=$(codesign -dvv "$bundle" 2>&1); then
+              echo "error: cannot read the exported $bundle_name's signature" >&2
+              exit 1
+            fi
+            if ! grep -q "^Authority=Apple Distribution: " <<< "$signature"; then
+              echo "error: the exported $bundle_name is not signed with an Apple Distribution certificate" >&2
+              exit 1
+            fi
+            grep -E "^(Identifier|Authority|TeamIdentifier)=" <<< "$signature"
+            if ! bundle_entitlements=$(codesign -d --entitlements - --xml "$bundle" 2>/dev/null); then
+              echo "error: cannot read the exported $bundle_name's entitlements" >&2
+              exit 1
+            fi
+            if [[ -n "$bundle_entitlements" ]]; then
+              plutil -p - <<< "$bundle_entitlements"
+            fi
+            if [[ "$(plutil -extract get-task-allow raw -o - - <<< "$bundle_entitlements" 2>/dev/null)" == "true" ]]; then
+              echo "error: the exported $bundle_name is signed for development" >&2
+              exit 1
+            fi
+          done
+          aps_environment=$(codesign -d --entitlements - --xml "$app" 2>/dev/null | plutil -extract aps-environment raw -o - - 2>/dev/null || true)
+          if [[ "$aps_environment" != "production" ]]; then
+            echo "error: the exported app's aps-environment is '${aps_environment:-missing}', not production" >&2
+            exit 1
+          fi
+
+          rm -rf "$export_path"
           xcodebuild \
             -exportArchive \
             -archivePath "$archive_path" \
             -exportOptionsPlist "$export_options" \
-            -exportPath "$key_directory/export" \
+            -exportPath "$export_path" \
             "${authentication[@]}" | xcbeautify

@@ -22,6 +22,7 @@ import { type Glyph, isLucideSymbol } from "./glyph.js";
 import {
   COLUMN_ALIGN,
   type ColumnAlign,
+  heardLine,
   LINK_TARGET,
   type LinkTarget,
   MARKDOWN_BLOCK,
@@ -295,7 +296,10 @@ function Line({
   readonly style?: TextStyle | undefined;
 }) {
   return (
-    <Text style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}>
+    <Text
+      accessibilityLabel={heardLine(runs)}
+      style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}
+    >
       <Runs runs={runs} drawing={drawing} />
     </Text>
   );

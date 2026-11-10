@@ -825,14 +825,14 @@ export type TaskPullRequests = typeof taskPullRequestsSchema.Type;
 
 /**
  * The pull request one agent opened, as its row keeps what the service last
- * read of it on GitHub, the agent on a plan or none, archived or not, and
- * the plan it stands on: what a plan's or an agent's own tabs and summary
- * offer the agent's Changes by.
+ * read of it on GitHub, the agent archived or not, and the task it stands
+ * on: what a task's or an agent's own tabs and summary offer the agent's
+ * Changes by.
  */
 export const listedPullRequestSchema = EffectSchema.Struct({
   agentId: EffectSchema.String,
-  /** The plan the agent stands on; null for one on none. */
-  taskId: EffectSchema.NullOr(EffectSchema.String),
+  /** The task the agent stands on. */
+  taskId: EffectSchema.String,
   pullRequest: agentPullRequestSchema,
 });
 

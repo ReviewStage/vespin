@@ -11,7 +11,7 @@ import {
   dispatchClaimStands,
   waitingOutDispatchClaim,
 } from "./dispatch-claim.js";
-import { settleKeptTurn } from "./turn-state.js";
+import { settleKeptTurn, type TurnCheckoutSnapshot } from "./turn-state.js";
 import type { ConversationTarget } from "./writer.js";
 
 /**
@@ -293,6 +293,39 @@ const findMessageSeq = SqlSchema.findOneOption({
     ),
 });
 
+/** The checkout the runner recorded before the turn one of the account's own lines opened, as the turn's row keeps it; none where the line awaits its turn or that turn recorded none. */
+const findLineSnapshot = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    conversationId: Schema.String,
+    messageId: Schema.String,
+  }),
+  Result: Schema.Struct({
+    commit: Schema.NullOr(Schema.String),
+    head: Schema.NullOr(Schema.String),
+    branch: Schema.NullOr(Schema.String),
+  }),
+  execute: ({ userId, conversationId, messageId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          commit: turns.snapshotCommit,
+          head: turns.snapshotHead,
+          branch: turns.snapshotBranch,
+        })
+        .from(messages)
+        .innerJoin(turns, eq(turns.id, messages.turnId))
+        .where(
+          and(
+            eq(messages.conversationId, conversationId),
+            eq(messages.userId, userId),
+            eq(messages.id, messageId),
+            eq(messages.role, MESSAGE_ROLE.USER),
+          ),
+        ),
+    ),
+});
+
 /** The developer's first line past a place in the conversation, where one stands. */
 const findLineAfter = SqlSchema.findOneOption({
   Request: Schema.Struct({ conversationId: Schema.String, seq: Schema.Number }),
@@ -461,6 +494,25 @@ export function readRewoundRevision(
   return Effect.map(findRewoundRevision(target), (row) =>
     Option.getOrUndefined(
       Option.flatMap(row, ({ rewoundRevision }) => Option.fromNullishOr(rewoundRevision)),
+    ),
+  );
+}
+
+/**
+ * The checkout as the agent's runner recorded it before the turn the line
+ * named opened (`turns.snapshot_*`), which a rewind that restores the files
+ * puts the checkout back to; none where the line awaits its turn, or its
+ * turn's runner recorded none.
+ */
+export function readRewindSnapshot(
+  target: ConversationTarget,
+  messageId: string,
+): Effect.Effect<Option.Option<TurnCheckoutSnapshot>, StoreFailure, DatabaseServices> {
+  return Effect.map(findLineSnapshot({ ...target, messageId }), (found) =>
+    Option.flatMap(found, (row) =>
+      row.commit === null
+        ? Option.none()
+        : Option.some({ commit: row.commit, head: row.head, branch: row.branch }),
     ),
   );
 }
