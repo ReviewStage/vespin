@@ -317,21 +317,13 @@ function AnswerCard({
       if (emptyBox(standing.current)) control.onDraft(item, { ...standing.current, ...sent });
     });
   };
-  // The files the card holds as of the last change, which words written before the next render keep.
-  const filesNow = useRef(draft.attachments);
-  filesNow.current = draft.attachments;
   const composer: AgentComposerControl = {
     draft: draft.note,
-    // Note that the words keep the files as the last change left them, not as this render drew them,
-    // because a file's chip goes into the words the moment the file is held, before the box draws again.
-    setDraft: (text) =>
-      control.onDraft(item, { ...draft, note: text, attachments: filesNow.current }),
+    // Note that each change moves the card on from what it holds as the write lands, since a file's chip goes into the words the moment the file is held, before the box draws again.
+    setDraft: (text) => control.onChange(item, (was) => ({ ...was, note: text })),
     attachments: draft.attachments,
     setAttachments: (next) =>
-      control.onAttachments(item, (was) => {
-        filesNow.current = next(was);
-        return filesNow.current;
-      }),
+      control.onChange(item, (was) => ({ ...was, attachments: next(was.attachments) })),
     sending,
     note: undefined,
     closed: undefined,

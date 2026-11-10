@@ -208,11 +208,8 @@ export interface TaskInboxControl {
   readonly drafted: boolean;
   /** Keeps what the developer has put on the item's card, at its revision. */
   readonly onDraft: (item: InboxItem, draft: InboxDraft) => void;
-  /** Moves the files on the item's card on from what they are as the write lands, so two reads landing in one render both stand. */
-  readonly onAttachments: (
-    item: InboxItem,
-    next: (was: readonly AgentAttachment[]) => readonly AgentAttachment[],
-  ) => void;
+  /** Moves what is on the item's card on from what it is as the write lands, so two changes landing in one render, a file read and its chip's words, both stand. */
+  readonly onChange: (item: InboxItem, next: (was: InboxDraft) => InboxDraft) => void;
   /** Nods to a notice, settling it at the revision drawn, after every message of the item's on its way; nothing where a nod is out. Got it pressed hands its nod to `held` once its turn comes, which holds it behind an Undo (`inbox-acknowledge.tsx`); an opening sends it as it is (`useNodOnOpen`). */
   readonly onAcknowledge: (item: InboxItem, held?: InboxAcknowledger) => void;
   /** Sends the box's words and files as a message on the item's thread, open or settled, with the answer attached to the thread's open ask where one is, after every message of the item's on its way; nothing where it holds nothing the service takes or a nod is out. `taken` is called once the service took it, never where it refused it. */
@@ -436,7 +433,7 @@ function draftScope(
 }
 
 /** The doors of a held read's cards' drafts (`useInboxCardDrafts`). */
-type InboxCardDrafts = Pick<TaskInboxControl, "draftOf" | "drafted" | "onDraft" | "onAttachments">;
+type InboxCardDrafts = Pick<TaskInboxControl, "draftOf" | "drafted" | "onDraft" | "onChange">;
 
 /**
  * A held read without its cards' drafts, which the window's Inbox reads in
@@ -875,6 +872,19 @@ export function useInboxDraftsLetGo(
   }, [drawn, items, whole, ownTask, readAgent, draftsOn, standings, drop, update]);
 }
 
+/** A kept draft as an item's card reads it as the item now stands (`draftOfItem`). */
+function cardDraft(kept: Draft, item: InboxItem): InboxDraft {
+  const read = draftOfItem(kept, item);
+  return {
+    choices: read.choices,
+    values: read.values,
+    note: read.text,
+    attachments: read.attachments,
+    steps: read.steps,
+    press: read.press,
+  };
+}
+
 /**
  * The cards' drafts of a held read (`useHeldTaskInbox`), as the box that
  * writes them reads them (`../composer-drafts.ts`), read here alone, so a
@@ -897,46 +907,34 @@ export function useInboxCardDrafts(
   const draftOf = useCallback(
     (item: InboxItem): InboxDraft => {
       const found = drafts.find((each) => each.place.itemId === item.id);
-      const kept = found === undefined ? undefined : draftOfItem(found, item);
-      return kept === undefined
-        ? EMPTY_INBOX_DRAFT
-        : {
-            choices: kept.choices,
-            values: kept.values,
-            note: kept.text,
-            attachments: kept.attachments,
-            steps: kept.steps,
-            press: kept.press,
-          };
+      return found === undefined ? EMPTY_INBOX_DRAFT : cardDraft(found, item);
     },
     [drafts],
   );
   const drafted = drafts.some((kept) =>
     items.some((item) => item.id === kept.place.itemId && !holdsNothing(draftOfItem(kept, item))),
   );
+  const onChange = useCallback(
+    (item: InboxItem, next: (was: InboxDraft) => InboxDraft) =>
+      writer.update(draftPlace(item, draftsOn), (was) => {
+        const draft = next(cardDraft(was, item));
+        return {
+          ...was,
+          revision: item.revision,
+          text: draft.note,
+          choices: draft.choices,
+          values: draft.values,
+          attachments: draft.attachments,
+          steps: draft.steps,
+          press: draft.press,
+        };
+      }),
+    [writer, draftsOn],
+  );
   const onDraft = useCallback(
-    (item: InboxItem, draft: InboxDraft) =>
-      writer.update(draftPlace(item, draftsOn), (was) => ({
-        ...was,
-        revision: item.revision,
-        text: draft.note,
-        choices: draft.choices,
-        values: draft.values,
-        attachments: draft.attachments,
-        steps: draft.steps,
-        press: draft.press,
-      })),
-    [writer, draftsOn],
+    (item: InboxItem, draft: InboxDraft) => onChange(item, () => draft),
+    [onChange],
   );
 
-  const onAttachments = useCallback(
-    (item: InboxItem, next: (was: readonly AgentAttachment[]) => readonly AgentAttachment[]) =>
-      writer.update(draftPlace(item, draftsOn), (was) => ({
-        ...was,
-        attachments: next(was.attachments),
-      })),
-    [writer, draftsOn],
-  );
-
-  return { draftOf, drafted, onDraft, onAttachments };
+  return { draftOf, drafted, onDraft, onChange };
 }

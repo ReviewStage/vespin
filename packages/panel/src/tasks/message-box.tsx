@@ -1,5 +1,4 @@
 import type { AgentAttachment } from "@repo/features/agent-wire";
-import { fileMarkers } from "@repo/features/file-marker";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { pasteCutWords } from "@repo/features/words";
 import {
@@ -56,7 +55,7 @@ import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
 import { ComposerField, type ComposerFieldFiles } from "./composer-field.js";
 import { type ComposerPickers, useComposerPickers } from "./composer-pickers.js";
 import { DictateButton, DictationStrip } from "./dictation-strip.js";
-import { useWordFileViewer, WordFileChip, type WordFiles } from "./file-chips.js";
+import { useWordFiles } from "./file-chips.js";
 import { ComposerQuoteView } from "./reply-to-selection.js";
 import type { DictationControl } from "./use-dictation.js";
 
@@ -74,8 +73,8 @@ import type { DictationControl } from "./use-dictation.js";
  * composer card (`../ai-elements/prompt-input.tsx`), a form whose Send and
  * Enter both submit it, each file it takes written into its words as its
  * chip where the caret stood (`file-chips.tsx`), and the files its words
- * do not name in a row over its field, after any the owner draws first
- * (`carried`), in `@repo/ui`'s `ComposerBody`, and its foot (`ComposerFoot`): the + at the left, which
+ * do not name in a row over its field (`@repo/ui`'s `ComposerBody`), and
+ * its foot (`ComposerFoot`): the + at the left, which
  * opens the file picker or, where the owner hands rows (`plus`), a menu of
  * Attachment and those rows; the owner's `tools` after it; at the right the
  * owner's `actions`, the microphone, the ⋯, and the owner's `beforeSend`;
@@ -180,10 +179,6 @@ interface MessageBoxOptions extends PickerOptions {
   readonly held?: boolean | undefined;
   /** Where the box's files are kept; the box keeps its own where none is handed. */
   readonly holder?: AttachedFilesOptions["holder"];
-  /** The most files the box takes; a message's where none is given, fewer where the owner draws files of its own beside them (`carried`). */
-  readonly most?: number | undefined;
-  /** Files the owner holds beside the box's own, a comment's edit's kept of the comment's: drawn as their chips where the words name them, and named past by any file the box takes. */
-  readonly carriedFiles?: WordFiles | undefined;
   /** Whether the box takes files at all, each written into its words as its chip; a field-only box sends words alone. */
   readonly takesFiles?: boolean | undefined;
   /** Whether words pasted long enough to bury the message come as a text file, as an agent's box takes them. */
@@ -409,41 +404,16 @@ function useBoxFiles(
   takes: boolean,
   draft: string,
   attachments: readonly AgentAttachment[],
-  carried: WordFiles | undefined,
 ): BoxFiles {
+  const chips = attachmentChips(attachments);
+  const shown = useWordFiles(chips, takes ? draft : "");
   const names = useMemo(() => new Set(attachments.map((file) => file.name)), [attachments]);
-  // Note that the words are read once for every file they name, in the order they first name each.
-  const { inWords, ordered } = useMemo(() => {
-    if (!takes) return { inWords: [], ordered: [] };
-    const named = new Set(fileMarkers(draft).map((marker) => marker.name));
-    return {
-      inWords: attachments.filter((file) => named.has(file.name)),
-      ordered: [...named].flatMap((name) => {
-        const file = attachments.find((each) => each.name === name);
-        return file === undefined ? [] : [file];
-      }),
-    };
-  }, [takes, draft, attachments]);
-  const chips = attachmentChips(ordered);
-  const viewer = useWordFileViewer(chips);
   if (!takes) return { beside: attachments, field: undefined, viewer: null };
   return {
-    beside: attachments.filter((file) => !inWords.includes(file)),
-    // Note that a file the owner holds is drawn by the owner's chip, and the box's own by the box's.
-    field: {
-      names: carried === undefined ? names : new Set([...names, ...carried.names]),
-      chip: (name) =>
-        carried !== undefined && !names.has(name) ? (
-          carried.chip(name)
-        ) : (
-          <WordFileChip
-            name={name}
-            file={chips.find((chip) => chip.name === name)}
-            onOpen={viewer.open}
-          />
-        ),
-    },
-    viewer: viewer.viewer,
+    beside: attachments.filter((_, at) => shown.beside.some((chip) => chip === chips[at])),
+    // Note that every file the box holds is chipped, so a marker undo brings back is its chip at once.
+    field: { names, chip: shown.chip },
+    viewer: shown.viewer,
   };
 }
 
@@ -514,8 +484,6 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
   const takesFiles = options.takesFiles !== false;
   const files = useAttachedFiles({
     holder: options.holder,
-    most: options.most,
-    named: options.carriedFiles === undefined ? undefined : [...options.carriedFiles.names],
     held: options.held === true || !takesFiles,
     onRefusal: (words) => say(SAID.FILE, words),
     words: options.draft,
@@ -528,7 +496,7 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
         }
       : undefined,
   });
-  const inWords = useBoxFiles(takesFiles, options.draft, files.attachments, options.carriedFiles);
+  const inWords = useBoxFiles(takesFiles, options.draft, files.attachments);
   const { draft, placeholder, keywords = NO_KEYWORDS, ...picked } = options;
   const pickers = useComposerPickers({
     ...picked,
@@ -583,7 +551,6 @@ export function MessageBox({
   look,
   className,
   head,
-  carried,
   tools,
   actions,
   beforeSend,
@@ -600,8 +567,6 @@ export function MessageBox({
   className?: string | undefined;
   /** What stands over the field inside the card: an answer's question, a comment's sends not sent. */
   head?: ReactNode;
-  /** Files the owner draws before the box's own, in their row: those a comment's edit keeps of the comment's. */
-  carried?: ReactNode;
   /** What stands after the + at the foot's left: New task's Runs on chip. */
   tools?: ReactNode;
   /** What stands first at the foot's right, before the microphone: an agent's model chip and context ring, a comment's Start a review. */
@@ -670,8 +635,7 @@ export function MessageBox({
         files={
           takesFiles ? (
             <>
-              {/* Note that the row holds only files the words do not name: one the words could not take, its editor not loaded or its bound reached, one whose marker stands in code, and a comment's own files sent before markers (`carried`). */}
-              {carried}
+              {/* Note that the row holds only files the words do not name: one the words could not take, its editor not loaded or its bound reached, one whose marker stands in code, and a comment's own files sent before markers. */}
               <AttachedFileChips
                 files={attachmentChips(inWords.beside)}
                 onRemove={

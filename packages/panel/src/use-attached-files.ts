@@ -221,8 +221,6 @@ export interface AttachedFilesOptions {
   readonly inWords?: AttachedInWords | undefined;
   /** The box's words as it opens, whose markers name the files its chips hold already, as a draft kept or a message opened for editing does. */
   readonly words?: string | undefined;
-  /** The names of files the owner holds beside the box's, a comment's edit's kept of the comment's, which a file the box takes is named past. */
-  readonly named?: readonly string[] | undefined;
 }
 
 /** The files a box holds and the ways it takes more and lets them go. */
@@ -278,16 +276,11 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
   // Whether the box's message went, so the next time its words and files stand empty its files are let go.
   const settling = useRef(false);
 
-  /** Every name held, taken off, or handed out, and the owner's, which no file the box takes is named again. */
+  /** Every name held, taken off, or handed out, which no file the box takes is named again. */
   const usedNames = () =>
-    new Set([
-      ...heldNow().map((file) => file.name),
-      ...stashed.current.keys(),
-      ...minted.current,
-      ...(latest.current.named ?? []),
-    ]);
+    new Set([...heldNow().map((file) => file.name), ...stashed.current.keys(), ...minted.current]);
   /** The files read named as their markers name them: an image as the next picture, any other file by its own name written so a marker can carry it, each past every name used, so no two files of the box share one. */
-  const named = (read: FilesRead): FilesRead => {
+  const renamed = (read: FilesRead): FilesRead => {
     const used = usedNames();
     const attachments = read.attachments.map((file) => {
       const picture = file.mediaType.startsWith("image/");
@@ -300,7 +293,7 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
   };
   const take = (read: FilesRead, place: ((names: readonly string[]) => boolean) | undefined) => {
     const { most = AGENT_BOUNDS.MAX_ATTACHMENTS, onRefusal } = latest.current;
-    const kept = place === undefined ? read : named(read);
+    const kept = place === undefined ? read : renamed(read);
     const taken = withFiles(heldNow(), kept, most);
     holderNow().update((now) => withFiles(now, kept, most).attachments);
     onRefusal(taken.refusal);

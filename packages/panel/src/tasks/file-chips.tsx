@@ -85,37 +85,38 @@ export function filesInWords(files: readonly FileChip[], words: string): readonl
   });
 }
 
-/**
- * The files among a message's that its words name, each drawn where its
- * marker stands as its chip and opening over the window, walking them in the
- * order the words name them, and the names of those it draws in place, which
- * its files' row leaves out; nothing where the words name none, as every
- * message written before markers.
- */
-export function useWordFiles(
-  files: readonly FileChip[],
-  words: string,
-): {
-  readonly files: WordFiles | undefined;
-  readonly inWords: ReadonlySet<string>;
+/** A message's files as its words draw them: those the words name, for the words to draw where each marker stands, the rest for the row over them, and the viewer a chip opens. */
+export interface ShownWordFiles {
+  /** The files the words name; nothing where they name none, as every message written before markers. */
+  readonly named: WordFiles | undefined;
+  /** The files the words name none of, in the order given: those sent before markers, or named only in code. */
+  readonly beside: readonly FileChip[];
+  /** Any of the files' chip by its name, as a box draws one the moment its marker goes in. */
+  readonly chip: (name: string) => ReactNode;
   readonly viewer: ReactNode;
-} {
+}
+
+/**
+ * A message's files as its words draw them: each file its words name drawn
+ * where its marker stands as its chip, opening over the window and walking
+ * them in the order the words name them, and every other file left for the
+ * row over the words.
+ */
+export function useWordFiles(files: readonly FileChip[], words: string): ShownWordFiles {
   const placed = filesInWords(files, words);
   const viewer = useWordFileViewer(placed.filter((file) => file.url !== ""));
-  const inWords = new Set(placed.map((file) => file.name));
-  if (placed.length === 0) return { files: undefined, inWords, viewer: viewer.viewer };
+  const chip = (name: string) => (
+    <WordFileChip
+      name={name}
+      file={files.find((file) => namedBy(file, name))}
+      onOpen={viewer.open}
+    />
+  );
   return {
-    files: {
-      names: inWords,
-      chip: (name) => (
-        <WordFileChip
-          name={name}
-          file={placed.find((file) => file.name === name)}
-          onOpen={viewer.open}
-        />
-      ),
-    },
-    inWords,
+    named:
+      placed.length === 0 ? undefined : { names: new Set(placed.map((file) => file.name)), chip },
+    beside: files.filter((file) => !placed.includes(file)),
+    chip,
     viewer: viewer.viewer,
   };
 }

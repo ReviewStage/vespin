@@ -34,13 +34,7 @@ import {
   messageFileChips,
 } from "./attached-file-chips.js";
 import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
-import {
-  filesInWords,
-  useWordFileViewer,
-  WordFileChip,
-  type WordFiles,
-  WordFilesContext,
-} from "./file-chips.js";
+import { useWordFiles, WordFilesContext } from "./file-chips.js";
 
 /**
  * agent-pictures.tsx -- the pictures in an agent's transcript: a set it showed with `show_image`, the pictures an integration's call answered, under the call's row, and an image a line handed it, over the line.
@@ -616,23 +610,12 @@ export function WordFilesOf({
   words: string;
   children: ReactNode;
 }): ReactNode {
-  const placed = filesInWords(useKeptChips(files), words);
-  const viewer = useWordFileViewer(placed.filter((chip) => chip.url !== ""));
-  if (placed.length === 0) return children;
-  const named: WordFiles = {
-    names: new Set(placed.map((chip) => chip.name)),
-    chip: (name) => (
-      <WordFileChip
-        name={name}
-        file={placed.find((chip) => chip.name === name)}
-        onOpen={viewer.open}
-      />
-    ),
-  };
+  const shown = useWordFiles(useKeptChips(files), words);
+  if (shown.named === undefined) return children;
   return (
-    <WordFilesContext.Provider value={named}>
+    <WordFilesContext.Provider value={shown.named}>
       {children}
-      {viewer.viewer}
+      {shown.viewer}
     </WordFilesContext.Provider>
   );
 }

@@ -379,12 +379,10 @@ function SendingReplyWords({
   text: string;
   attachments: readonly AgentAttachment[];
 }): React.JSX.Element {
-  const chips = attachmentChips(attachments);
-  const shown = useWordFiles(chips, text);
-  const row = chips.filter((chip) => !shown.inWords.has(chip.name));
+  const shown = useWordFiles(attachmentChips(attachments), text);
   return (
-    <WordFilesContext.Provider value={shown.files}>
-      {row.length === 0 ? null : <AttachedFileChips files={row} uploading />}
+    <WordFilesContext.Provider value={shown.named}>
+      {shown.beside.length === 0 ? null : <AttachedFileChips files={shown.beside} uploading />}
       {text === "" ? null : (
         <div
           className="inbox-message-words m-0 leading-reading select-text"

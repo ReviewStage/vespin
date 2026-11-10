@@ -577,6 +577,13 @@ export const AGENT_ATTACHMENT_TYPE = {
 export type AgentAttachmentType =
   (typeof AGENT_ATTACHMENT_TYPE)[keyof typeof AGENT_ATTACHMENT_TYPE];
 
+const AGENT_ATTACHMENT_TYPES: ReadonlySet<string> = new Set(Object.values(AGENT_ATTACHMENT_TYPE));
+
+/** Whether a type read off the wire is one a message's file may be. */
+export function isAgentAttachmentType(type: string): type is AgentAttachmentType {
+  return AGENT_ATTACHMENT_TYPES.has(type);
+}
+
 /** The most bytes one file of each type may hold. */
 const AGENT_ATTACHMENT_BYTES = {
   [AGENT_ATTACHMENT_TYPE.PNG]: AGENT_BOUNDS.MAX_IMAGE_BYTES,

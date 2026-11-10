@@ -12,13 +12,7 @@ import { usePerson } from "../member-directory.js";
 import { pictureQuery } from "../picture-query.js";
 import { AgentActorRef, type AgentSubject } from "./agent-ref.js";
 import { AttachedFileChips } from "./attached-file-chips.js";
-import {
-  filesInWords,
-  useWordFileViewer,
-  WordFileChip,
-  type WordFiles,
-  WordFilesContext,
-} from "./file-chips.js";
+import { filesInWords, type ShownWordFiles, useWordFiles, WordFilesContext } from "./file-chips.js";
 import type { InboxCodeDoors } from "./inbox-code-card.js";
 import { inboxFileChips } from "./inbox-model.js";
 import { InboxPicture, InboxPictures } from "./inbox-pictures.js";
@@ -177,7 +171,7 @@ function CommentFiles({
  * The files a member's words name (`@repo/features/file-marker`), each read
  * as the files over the words are and drawn where its marker stands as its
  * chip, opening over the window, as a sent message's to an agent are
- * (`file-chips.tsx`); nothing where the words name none, or for an agent's
+ * (`file-chips.tsx`); none where the words name none, or for an agent's
  * words, which write no markers.
  */
 function useInboxWordFiles(
@@ -185,7 +179,8 @@ function useInboxWordFiles(
   files: NonNullable<InboxMessage["files"]>,
   words: string | undefined,
   images: InboxImageReads,
-): { readonly named: WordFiles | undefined; readonly viewer: ReactNode } {
+): ShownWordFiles {
+  // Note that only the files the words name are read here, since the files over the words read their own.
   const placed = useMemo(() => {
     const names = new Set(
       filesInWords(
@@ -204,22 +199,7 @@ function useInboxWordFiles(
       return read?.kind === PICTURE_STATE.READY ? [[file.attachmentId, read.url] as const] : [];
     }),
   );
-  const chips = inboxFileChips(placed, urls);
-  const viewer = useWordFileViewer(chips.filter((chip) => chip.url !== ""));
-  if (chips.length === 0) return { named: undefined, viewer: viewer.viewer };
-  return {
-    named: {
-      names: new Set(chips.map((chip) => chip.name)),
-      chip: (name) => (
-        <WordFileChip
-          name={name}
-          file={chips.find((chip) => chip.name === name)}
-          onOpen={viewer.open}
-        />
-      ),
-    },
-    viewer: viewer.viewer,
-  };
+  return useWordFiles(inboxFileChips(placed, urls), words ?? "");
 }
 
 /**
