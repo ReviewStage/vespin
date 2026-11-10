@@ -89,8 +89,8 @@ const FIGURE = `${CELL} text-end tabular-nums`;
 /** The name's cell takes the room the figures leave it, a long name cut at its edge (`resources-popover.css` fades it). */
 const NAME = `${CELL} w-full max-w-0 overflow-hidden`;
 
-/** A name pushed in by its depth, a nested list row's step a level (`--ui-list-row-depth`). */
-const NESTED = "ui-resources-name block overflow-hidden ps-list-row-nest";
+/** A name pushed in by its depth, a short step a level (`--resource-depth`). */
+const NESTED = "ui-resources-name block overflow-hidden ps-resource-nest";
 
 /** A process's name, marked while its cell cuts it short, so it fades out at its end rather than stopping on a cut letter. */
 function ResourceName({ name, depth }: { name: string; depth: number }): React.JSX.Element {
@@ -100,7 +100,7 @@ function ResourceName({ name, depth }: { name: string; depth: number }): React.J
       ref={measured}
       className={NESTED}
       data-overflow={clipped ? "true" : undefined}
-      style={cssCustomProperties({ "--ui-list-row-depth": depth })}
+      style={cssCustomProperties({ "--resource-depth": depth })}
     >
       {name}
     </span>
