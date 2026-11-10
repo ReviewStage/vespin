@@ -175,9 +175,19 @@ test("a refused message that would pass a message's bound beside the box's newer
   const putBack = [...document.querySelectorAll<HTMLButtonElement>(".ui-toast button")].find(
     (button) => button.textContent === "Put back",
   );
-  act(() => (putBack ?? assert.fail("a toast keeps the message with Put back")).click());
+  const press = putBack ?? assert.fail("a toast keeps the message with Put back");
+  // Note that a second press lands while the toast pressed is still leaving.
+  act(() => press.click());
+  act(() => press.click());
 
   assert.equal(now().composer.draft, `${long}\nOk`);
+  assert.deepEqual(
+    [...document.querySelectorAll(".ui-toast:not([data-leaving]) button")]
+      .map((button) => button.textContent)
+      .filter((label) => label === "Put back"),
+    [],
+    "no toast keeps the message once it is back",
+  );
 });
 
 test("an edit the queue refused to save stays open with its new words, the box's own still kept aside", async () => {

@@ -71,7 +71,9 @@ function heldAhead(went: BoxHeld, now: BoxHeld, most: number): BoxHeld | undefin
 /**
  * Puts a refused send back into its box ahead of what the box holds, or,
  * where the two would not fit together, keeps it on a toast whose Put back
- * tries again from what the box holds then.
+ * tries again from what the box holds then. Note that each toast's Put back
+ * acts once, because a toast pressed stays under the pointer through its
+ * exit, and a second press would lay the send in twice.
  */
 export function putBackRefused(refused: RefusedSend): void {
   let laid = false;
@@ -81,6 +83,7 @@ export function putBackRefused(refused: RefusedSend): void {
     return joined;
   });
   if (laid) return;
+  let pressed = false;
   showToast({
     replayUnmasked: true,
     words: NO_ROOM.WORDS,
@@ -90,7 +93,11 @@ export function putBackRefused(refused: RefusedSend): void {
     action: {
       label: NO_ROOM.PUT_BACK,
       replayUnmasked: true,
-      onPress: () => putBackRefused(refused),
+      onPress: () => {
+        if (pressed) return;
+        pressed = true;
+        putBackRefused(refused);
+      },
     },
   });
 }
