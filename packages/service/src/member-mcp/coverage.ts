@@ -93,6 +93,13 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.REPLY_TO_THREAD]: { inbox: ["message"] },
   [MEMBER_MCP_TOOL.CLOSE_THREAD]: { inbox: ["close"] },
   [MEMBER_MCP_TOOL.AGENT_PULL_REQUEST_ACTION]: { agentPullRequests: ["action"] },
+  [MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS]: {
+    agentPullRequests: ["pullRequest"],
+    pullRequestChapters: ["read", "repositoryRead"],
+  },
+  [MEMBER_MCP_TOOL.GENERATE_PULL_REQUEST_CHAPTERS]: {
+    pullRequestChapters: ["generate", "repositoryGenerate"],
+  },
   [MEMBER_MCP_TOOL.READ_COMMENTS]: { descriptionComments: ["read"] },
   [MEMBER_MCP_TOOL.COMMENT_ON_DESCRIPTION]: { plans: ["open"], descriptionComments: ["start"] },
   [MEMBER_MCP_TOOL.REPLY_TO_COMMENT]: { descriptionComments: ["act"] },
@@ -306,12 +313,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     descriptionRevisions: NOT_YET_BUILT,
     descriptionRevision: NOT_YET_BUILT,
     restoreDescription: NOT_YET_BUILT,
-  },
-  pullRequestChapters: {
-    read: NOT_YET_BUILT,
-    generate: NOT_YET_BUILT,
-    repositoryRead: NOT_YET_BUILT,
-    repositoryGenerate: NOT_YET_BUILT,
   },
   pullRequests: {
     pullRequest: NOT_YET_BUILT,

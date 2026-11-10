@@ -44,6 +44,7 @@ Other commands:
 | `agent send <id> -F <msg\|->` · `agent stop <id>` | Message an agent; stop its turn (what it pushed stays) |
 | `agent diff <id> [--stat] [--number n]` | The diff of an agent's pull request as GitHub holds it, every file's patch; `--stat` one line a file, `-q` the paths; `--number` another pull request of its repository |
 | `agent pr <id> ready\|draft\|merge\|auto-merge [--method merge\|squash\|rebase] [--head sha] [--off] [--number n]` | Change the pull request on GitHub as you: mark it ready, turn it back into a draft, merge it now, or turn auto-merge on (`--off` turns it off). A merge is made against the head as it stands now unless `--head` pins the one you reviewed, by the first method the repository allows unless `--method` names one |
+| `pr chapters <pr\|agent> [--generate] [--number n]` | A pull request's chapters, the story of its diff in reading order, as its Pull request tab shows them. Name it by its GitHub link or `owner/name#n` (in the workspace `-w` names), or by an agent's id for its own pull request (`--number` another of its repository). `--generate` makes them for the head now: one model call on your own API key, which costs money and takes a minute or more, so read first and generate only where none stand or they are stale |
 | `agent ports <id>` | Ports a server listens on in a cloud agent's sandbox, and the one shared by link; none unless the sandbox is running |
 | `agent share <id> <port>` · `agent share <id>` · `agent share <id> --stop` | Share a port by public link (replacing any shared before), print the link shared now, or close it; `-q` prints the link alone |
 | `agent forward <id> [port…] [--local <port>]` | Serve a cloud agent's ports on `localhost` (the ones it listens on now, or those named) until Ctrl-C or its sandbox stops; a local port that will not listen is refused, so pick another with `--local` |
@@ -133,4 +134,11 @@ vespin agent wait "$id" --timeout 600; case $? in
   5) vespin agent logs "$id" | tail -50 ;;
   6) vespin agent send "$id" -F - <<< "Status?" ;;
 esac
+```
+
+Read a pull request's chapters, generating them only where none stand yet:
+
+```sh
+state=$(vespin pr chapters acme/app#42 --json | jq -r .pullRequest.chapters.status)
+[ "$state" = none ] && vespin pr chapters acme/app#42 --generate   # slow; spends your API key
 ```

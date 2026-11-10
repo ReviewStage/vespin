@@ -42,6 +42,7 @@
 import { randomUUID } from "node:crypto";
 import type { ToolAnnotations } from "@modelcontextprotocol/server";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import type { Agent } from "@repo/database/models/agent-store";
 import { readAutomation } from "@repo/database/models/automation-store";
 import {
   actOnDescriptionCommentThread,
@@ -91,6 +92,10 @@ import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
 import { agentName } from "@repo/features/model-label";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import {
+  PULL_REQUEST_CHAPTERS_STATE,
+  type PullRequestChaptersAnswer,
+} from "@repo/features/pull-request-chapters-wire";
 import {
   PULL_REQUEST_ACTION,
   PULL_REQUEST_WRITE_OUTCOME,
@@ -201,6 +206,12 @@ import {
   experimentOnIn,
   NO_EXPERIMENT_ON,
 } from "../agents/workspace-experiment-on.js";
+import {
+  agentChaptersGenerate,
+  agentChaptersRead,
+  repositoryChaptersGenerate,
+  repositoryChaptersRead,
+} from "../chapters/pull-request-chapters-procedures.js";
 import {
   ACTION_RESULT_STATUS,
   HOSTED_API_ERROR,
@@ -1496,6 +1507,201 @@ const AGENT_PULL_REQUEST_ACTION_TOOL = memberMcpTool({
 });
 
 /*
+ * A pull request's chapters, read and generated as its Pull request tab
+ * reads and generates them, through the operations its procedures run
+ * (`../chapters/pull-request-chapters-procedures.ts`): an agent's pull
+ * request by the agent's id, or any pull request of a repository the
+ * workspace reaches by its repository and number. A Generate runs one model
+ * call on the member's own API key, as the tab's does, held to its claim, so
+ * a second Generate of the same head while one runs answers it as it stands.
+ */
+
+/** Why chapters were not read or generated, in words the agent can act on. */
+const CHAPTERS_REFUSAL = {
+  NAME_ONE:
+    "Not run: name the pull request either by agentId, or by repository and number, not both " +
+    "and not neither.",
+  NO_PULL_REQUEST:
+    "Not run: the member reaches no such pull request: the agent, the workspace, or the " +
+    "repository's pull request of that number is none of theirs.",
+  NOT_REACHABLE:
+    "Not run: the GitHub installation connected to the workspace no longer reaches that " +
+    "repository.",
+  NO_KEY:
+    "Not generated: the member saved no API key to generate chapters on, or the service could " +
+    `not run it just now. Chapters run on the member's own Anthropic or OpenAI key, saved in ` +
+    `${PRODUCT_NAME}'s settings.`,
+  UNANSWERED:
+    "Not run: GitHub or the service could not be reached just now. The call may be made again.",
+} as const;
+
+/** A refusal of a chapters read or Generate, in the agent's words: unavailable is a Generate's missing key, or a read's store down. */
+function chaptersRefusalWords(refusal: HostedRefusal, generates: boolean): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return CHAPTERS_REFUSAL.NO_PULL_REQUEST;
+    case HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE:
+      return CHAPTERS_REFUSAL.NOT_REACHABLE;
+    case HOSTED_API_ERROR.UNAVAILABLE:
+      return generates ? CHAPTERS_REFUSAL.NO_KEY : CHAPTERS_REFUSAL.UNANSWERED;
+    default:
+      return CHAPTERS_REFUSAL.UNANSWERED;
+  }
+}
+
+/** A chapters call names an agent's pull request, or a repository's by its number, in the workspace a slug names. */
+const PullRequestChaptersInputSchema = Schema.Struct({
+  agentId: Schema.optionalKey(
+    describeWire(
+      wireUuidSchema,
+      `An agent whose pull request to read, by its id as ${MEMBER_MCP_TOOL.LIST_AGENTS} answered ` +
+        "it; leave it out to name a repository's pull request instead.",
+    ),
+  ),
+  repository: Schema.optionalKey(
+    describeWire(
+      githubRepositoryFullNameSchema,
+      "The repository whose pull request to read, as owner/name, with number; leave it out " +
+        "with agentId.",
+    ),
+  ),
+  number: Schema.optionalKey(
+    describeWire(
+      githubPullRequestNumberSchema,
+      "The pull request's number: with repository, the one to read; with agentId, another " +
+        "pull request of the agent's repository, left out for the agent's own.",
+    ),
+  ),
+  workspace: Schema.optionalKey(
+    describeWire(
+      WORKSPACE_INPUT.schema,
+      `With repository, the workspace whose GitHub installation reaches it, by the slug ` +
+        `${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; leave it out where the member belongs to ` +
+        "one workspace alone.",
+    ),
+  ),
+});
+
+type PullRequestChaptersInput = typeof PullRequestChaptersInputSchema.Type;
+
+/** The two ways a chapters call reaches its pull request: through the agent that published it, or by its repository and number. */
+interface ChaptersCall<R> {
+  /** Whether it generates, which spends the member's key, rather than reads. */
+  readonly generates: boolean;
+  readonly agent: (
+    userId: string,
+    agent: Agent,
+    number: number | undefined,
+  ) => Effect.Effect<PullRequestChaptersAnswer, HostedRefusal, R>;
+  readonly repository: (
+    userId: string,
+    query: { readonly workspaceId: string; readonly repository: string; readonly number: number },
+  ) => Effect.Effect<PullRequestChaptersAnswer, HostedRefusal, R>;
+}
+
+/** A chapters read or Generate run as the member on the pull request its input names, answered with the chapters as the tab reads them, or refused in the agent's words. */
+const chaptersAsMember = <R>(asked: PullRequestChaptersInput, call: ChaptersCall<R>) => {
+  const answered = (effect: Effect.Effect<PullRequestChaptersAnswer, HostedRefusal, R>) =>
+    effect.pipe(
+      Effect.map((answer): WireRecord => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answer })),
+      Effect.catch((refusal) =>
+        Effect.succeed(agentToolRejected(chaptersRefusalWords(refusal, call.generates))),
+      ),
+    );
+  const { agentId, repository, number, workspace } = asked;
+  if (agentId !== undefined) {
+    if (repository !== undefined || workspace !== undefined) {
+      return Effect.succeed(agentToolRejected(CHAPTERS_REFUSAL.NAME_ONE));
+    }
+    return readAsMember(
+      (userId) => agentWorkspace(userId, { id: agentId }),
+      AGENT_TOOL_REFUSAL.NO_AGENT,
+      (member) =>
+        orStoreRefusal(
+          Effect.gen(function* () {
+            const found = yield* workspaceAgentOf(member.caller, agentId);
+            if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
+            return yield* answered(
+              call.agent(callerUserId(member.caller), found.value.agent, number),
+            );
+          }),
+        ),
+    );
+  }
+  if (repository === undefined || number === undefined) {
+    return Effect.succeed(agentToolRejected(CHAPTERS_REFUSAL.NAME_ONE));
+  }
+  return listAsMember(workspace, (member) =>
+    answered(
+      call.repository(callerUserId(member.caller), {
+        workspaceId: callerWorkspaceId(member.caller),
+        repository,
+        number,
+      }),
+    ),
+  );
+};
+
+/** How a chapters tool tells the agent what it answers. */
+const CHAPTERS_ANSWER_WORDS =
+  "Answers `accepted` with the pull request's number, whether the member can generate " +
+  "chapters (generatable) and on which model and provider (runsOn), and where its newest " +
+  `chapters stand (${Object.values(PULL_REQUEST_CHAPTERS_STATE).join(", ")}): the head and base ` +
+  "they were told for, and, where ready, each chapter's title, summary, kind, risk and why, key " +
+  "changes with the lines they are on, and the hunks it holds; chapters told for a head older " +
+  "than the pull request's now are stale. pullRequest is null where the agent opened none yet. " +
+  "Or `rejected` and why.";
+
+const READ_PULL_REQUEST_CHAPTERS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS,
+  description:
+    "Read a pull request's chapters as its Pull request tab shows them: the story of its diff " +
+    "told as chapters a reviewer reads in order. Name a coding agent's pull request by the " +
+    "agent's id, or any pull request of a repository the workspace's GitHub installation " +
+    "reaches by its repository and number. It only reads, and never generates: " +
+    `${MEMBER_MCP_TOOL.GENERATE_PULL_REQUEST_CHAPTERS} does, where none stand or they are stale. ` +
+    CHAPTERS_ANSWER_WORDS,
+  input: PullRequestChaptersInputSchema,
+  annotations: READ_ONLY,
+  run: (asked) =>
+    chaptersAsMember(asked, {
+      generates: false,
+      agent: (userId, agent, number) => agentChaptersRead(KEPT_PUBLISHED, userId, agent, number),
+      repository: repositoryChaptersRead,
+    }),
+});
+
+const GENERATE_PULL_REQUEST_CHAPTERS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.GENERATE_PULL_REQUEST_CHAPTERS,
+  description:
+    "Generate a pull request's chapters for its head now, as its Pull request tab's Generate " +
+    "does, then answer them as " +
+    `${MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS} does. It runs one model call on the member's ` +
+    "own API key, which costs them money, and is far slower than reading, often a minute or " +
+    `more: read first with ${MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS}, and generate only ` +
+    "where no chapters stand, they are stale, or they failed. Where another Generate of the " +
+    "same head is under way, it answers that one as generating rather than starting a second. " +
+    "A pull request too large to tell is answered as failed, too_large. Refused where the " +
+    "member saved no API key (generatable false). Name the pull request as the read does. " +
+    CHAPTERS_ANSWER_WORDS,
+  input: PullRequestChaptersInputSchema,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+  run: (asked) =>
+    chaptersAsMember(asked, {
+      generates: true,
+      agent: (userId, agent, number) =>
+        agentChaptersGenerate(
+          {},
+          KEPT_PUBLISHED,
+          userId,
+          agent,
+          number === undefined ? undefined : String(number),
+        ),
+      repository: (userId, query) => repositoryChaptersGenerate({}, userId, query),
+    }),
+});
+
+/*
  * The comments and the memory. A description's comment threads, and its task's
  * pages', are read, answered, resolved, and reopened as the member, on a task
  * they can open, as their window's own threads are: a read and a settle run
@@ -2188,6 +2394,8 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   REPLY_TO_THREAD_TOOL,
   CLOSE_THREAD_TOOL,
   AGENT_PULL_REQUEST_ACTION_TOOL,
+  READ_PULL_REQUEST_CHAPTERS_TOOL,
+  GENERATE_PULL_REQUEST_CHAPTERS_TOOL,
   MEMBER_READ_COMMENTS_TOOL,
   MEMBER_COMMENT_ON_DESCRIPTION_TOOL,
   MEMBER_REPLY_TO_COMMENT_TOOL,
