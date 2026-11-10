@@ -72,8 +72,6 @@ export function withoutNul(value: WireValue): WireValue {
 export const PICTURE_STAND_IN = "[image]";
 
 const readType = Schema.decodeUnknownOption(Schema.Struct({ type: Schema.String }));
-/** The most characters a snapshot's branch name may carry, past which it is no ref git takes. */
-const SNAPSHOT_BRANCH_MAX_CHARS = 255;
 const readAccepted = Schema.decodeUnknownOption(
   Schema.Struct({ uuid: Schema.String, snapshot: Schema.optionalKey(Schema.Unknown) }),
 );
@@ -82,13 +80,14 @@ const CommitSchema = Schema.String.check(Schema.isPattern(/^[0-9a-f]{40,64}$/u))
 /**
  * The checkout the runner recorded before the turn, as its ACCEPTED carries
  * it, read apart from the line so one spelled wrong is left out rather than
- * dropping the line: a branch is bounded as git bounds a ref's name.
+ * dropping the line. Note that the branch is bounded by nothing but the
+ * event's own size, since git bounds a ref's name by no length of its own.
  */
 const readSnapshot = Schema.decodeUnknownOption(
   Schema.Struct({
     commit: CommitSchema,
     head: Schema.optionalKey(CommitSchema),
-    branch: Schema.optionalKey(Schema.String.check(Schema.isMaxLength(SNAPSHOT_BRANCH_MAX_CHARS))),
+    branch: Schema.optionalKey(Schema.String),
   }),
 );
 const readConnectionLost = Schema.decodeUnknownOption(Schema.Struct({ host: Schema.String }));

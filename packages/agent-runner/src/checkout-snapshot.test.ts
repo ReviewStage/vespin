@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { NodeChildProcessSpawner, NodeFileSystem, NodePath } from "@effect/platform-node";
 import { it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
+import { TestClock } from "effect/testing";
 import { CheckoutSnapshots, checkoutSnapshotsLive } from "./checkout-snapshot.js";
 import { CHECKOUT_SNAPSHOT } from "./protocol.js";
 
@@ -85,10 +86,11 @@ it.layer(LIVE)("the checkout's snapshot", (it) => {
           { head: snapshot.head, branch: snapshot.branch },
           { head, branch: "main" },
         );
-        assert.equal(
-          git(cwd, "rev-parse", `${CHECKOUT_SNAPSHOT.REF_PREFIX}${LINE.FIRST}`),
-          snapshot.commit,
-        );
+        const [ref] = git(cwd, "for-each-ref", "--format=%(refname)", CHECKOUT_SNAPSHOT.REF_PREFIX)
+          .split("\n")
+          .filter((each) => each.endsWith(`-${LINE.FIRST}`));
+        assert.ok(ref !== undefined, "the snapshot stands under a ref named for the line");
+        assert.equal(git(cwd, "rev-parse", ref), snapshot.commit);
         assert.equal(git(cwd, "rev-parse", `${snapshot.commit}^`), head);
         assert.deepEqual(treeOf(cwd, snapshot.commit), {
           ".gitignore": "out/",
@@ -110,15 +112,18 @@ it.layer(LIVE)("the checkout's snapshot", (it) => {
       // One more snapshot than the checkout keeps, each under a line of its own, so the oldest goes.
       const lines = Array.from({ length: CHECKOUT_SNAPSHOT.KEEP + 1 }, () => randomUUID());
       for (const [index, line] of lines.entries()) {
+        // Each is taken a moment after the last, as turns are, so their stamps order them.
+        yield* TestClock.adjust("1 millis");
         writeFileSync(join(cwd, "kept.txt"), `turn ${index}\n`);
         assert.ok((yield* snapshots.take(cwd, line)) !== undefined);
       }
-      // Note that the refs are kept by their commits' dates, which a test cannot space out, so
-      // what this checks is only that the cap holds: how many stand, never which.
+      // The oldest goes and the rest stand, named for the lines they were taken under.
       const kept = git(cwd, "for-each-ref", "--format=%(refname)", CHECKOUT_SNAPSHOT.REF_PREFIX)
         .split("\n")
-        .filter((ref) => ref !== "");
-      assert.equal(kept.length, CHECKOUT_SNAPSHOT.KEEP);
+        .filter((ref) => ref !== "")
+        // The line's id follows the stamp, past the first dash after the prefix.
+        .map((ref) => ref.slice(ref.indexOf("-", CHECKOUT_SNAPSHOT.REF_PREFIX.length) + 1));
+      assert.deepEqual(kept.sort(), [...lines.slice(1)].sort());
 
       const empty = mkdtempSync(join(tmpdir(), "checkout-snapshot-empty-"));
       yield* Effect.addFinalizer(() => Effect.sync(() => rmSync(empty, { recursive: true })));

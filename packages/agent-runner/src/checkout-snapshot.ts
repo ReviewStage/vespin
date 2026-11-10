@@ -8,21 +8,23 @@
  * a copy of the checkout's own index, kept beside it under `.git`, so the
  * index's stat cache carries over and only the files changed since are
  * hashed, and the checkout's own index, its working tree, its branch, and
- * `HEAD` are never touched. The commit stands under a ref named for the
- * line (`CHECKOUT_SNAPSHOT.REF_PREFIX`), the one id the runner holds, which
- * the service ties to the turn the line opened as it records the ACCEPTED
- * event that carries the snapshot. The ref is one of the worktree's own
+ * `HEAD` are never touched. The commit stands under a ref named for when
+ * it was taken and for the line (`CHECKOUT_SNAPSHOT.REF_PREFIX`), the one
+ * id the runner holds, which the service ties to the turn the line opened
+ * as it records the ACCEPTED event that carries the snapshot; a restore
+ * finds the commit by what the turn's row says, so the ref only keeps it
+ * from being collected. The ref is one of the worktree's own
  * (`refs/worktree/`), so a Mac's worktree keeps its own apart from the
  * clone it was cut from and they go when the worktree does; a sandbox's
  * clone keeps them as any ref. The ref never leaves the machine: it is
  * not pushed, and a commit is signed by no one, made under a name of the
  * runner's own rather than the agent's identity. Each snapshot prunes the
- * refs beyond the newest `KEEP` and lets `git gc --auto` collect what they
- * held. A snapshot that fails, or runs past its bound, is a miss the turn
+ * refs beyond the newest `KEEP`, newest by the stamp in their names, and
+ * lets `git gc --auto` collect what they held. A snapshot that fails, or runs past its bound, is a miss the turn
  * goes on without, logged, so a rewind to before that turn offers no restore.
  */
 
-import { Context, Duration, Effect, Layer, Option, Result, Stream } from "effect";
+import { Clock, Context, Duration, Effect, Layer, Option, Result, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { CHECKOUT_SNAPSHOT, type CheckoutSnapshot } from "./protocol.js";
 
@@ -56,10 +58,10 @@ export class CheckoutSnapshots extends Context.Service<CheckoutSnapshots, Checko
  * to the copy, the tree written and committed on `HEAD`, the ref written,
  * the refs beyond the newest kept pruned, and the commit, `HEAD`, and the
  * branch printed on three lines, the last two empty where there is none.
- * Note that a commit is always made, even where the tree is `HEAD`'s,
- * because the refs are pruned by their commits' dates, which a ref reusing
- * `HEAD` would misdate. `git gc --auto` returns at once and packs in the
- * background where there is something to pack.
+ * The refs are pruned by their names, which sort by the stamp each opens
+ * with, so two taken within a second still stand in the order they were
+ * taken. `git gc --auto` returns at once and packs in the background where
+ * there is something to pack.
  */
 const SNAPSHOT_SCRIPT = [
   "set -eu",
@@ -77,11 +79,19 @@ const SNAPSHOT_SCRIPT = [
   "unset GIT_INDEX_FILE",
   'git update-ref "$1" "$commit"',
   "prefix=${1%/*}/",
-  'git for-each-ref --sort=-committerdate --format="%(refname)" "$prefix" | tail -n +"$(($2 + 1))" | while read -r stale; do git update-ref -d "$stale"; done',
+  'git for-each-ref --sort=-refname --format="%(refname)" "$prefix" | tail -n +"$(($2 + 1))" | while read -r stale; do git update-ref -d "$stale"; done',
   "git gc --auto --quiet 2>/dev/null || true",
   "branch=$(git symbolic-ref --short --quiet HEAD) || branch=",
   'printf \'%s\\n%s\\n%s\\n\' "$commit" "$head" "$branch"',
 ].join("\n");
+
+/** How many digits the stamp a ref opens with is padded to, so the refs sort by it as text for as long as epoch milliseconds fit. */
+const STAMP_DIGITS = 16;
+
+/** The ref a snapshot taken at `now` for the line stands under: its stamp first, so the refs sort by when they were taken, then the line's id. */
+export function snapshotRef(now: number, lineId: string): string {
+  return `${CHECKOUT_SNAPSHOT.REF_PREFIX}${String(now).padStart(STAMP_DIGITS, "0")}-${lineId}`;
+}
 
 const SHA = /^[0-9a-f]{40,64}$/u;
 
@@ -123,7 +133,7 @@ const takeIn = Effect.fn("agent-runner/checkoutSnapshot")(function* (
           "-c",
           SNAPSHOT_SCRIPT,
           "sh",
-          `${CHECKOUT_SNAPSHOT.REF_PREFIX}${lineId}`,
+          snapshotRef(yield* Clock.currentTimeMillis, lineId),
           String(CHECKOUT_SNAPSHOT.KEEP),
         ],
         {

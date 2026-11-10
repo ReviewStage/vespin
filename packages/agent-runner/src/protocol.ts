@@ -863,7 +863,7 @@ export interface RunnerIdle {
   readonly type: typeof RUNNER_EVENT.IDLE;
 }
 
-/** Where a checkout keeps the snapshot taken before each turn (`checkout-snapshot.ts`): under the line's id, among the worktree's own refs. */
+/** Where a checkout keeps the snapshot taken before each turn (`checkout-snapshot.ts`): under a stamp of when it was taken and the line's id, among the worktree's own refs. */
 export const CHECKOUT_SNAPSHOT = {
   REF_PREFIX: "refs/worktree/vespin/turns/",
   /** How many snapshots a checkout keeps: the oldest beyond go as a new one is taken. */
