@@ -641,7 +641,7 @@ test("Show their tasks in the sidebar lists the tasks assigned to them", async (
   assert.deepEqual(keptViews()[ACME.id]?.assignee, { kind: "member", userId: CHARLES.userId });
 });
 
-test("a person's tasks assigned to them stand above those they created, a task both listed once as assigned, and its foot counts the two it leaves out and lists every one assigned in the sidebar", async () => {
+test("a person's tasks assigned to them stand above those they created, a task both listed once as assigned, its foot counts the two it leaves out and lists every one assigned in the sidebar, and a press on its head folds the rows and the foot away together", async () => {
   // Six tasks Dean created for Charles, one more than the page draws, and one Charles made for himself.
   const handed = [5, 6, 7, 8, 9, 10].map((n) =>
     task(n, `Handed over ${n}`, DEAN, n * MINUTE, [], CHARLES),
@@ -663,6 +663,23 @@ test("a person's tasks assigned to them stand above those they created, a task b
 
   button(page, "Show 2 more").click();
   assert.deepEqual(keptViews()[ACME.id]?.assignee, { kind: "member", userId: CHARLES.userId });
+
+  const head = page.querySelector<HTMLButtonElement>(
+    'section[aria-label="Assigned"] button[aria-expanded]',
+  );
+  const foot = () =>
+    [...page.querySelectorAll("button")].some((each) =>
+      each.textContent?.startsWith("Show 2 more"),
+    );
+  act(() => head?.click());
+  await vi.waitFor(() => assert.deepEqual(sections(page).Assigned, []));
+  assert.equal(head?.getAttribute("aria-expanded"), "false");
+  assert.equal(foot(), false, "the foot folds away with the rows");
+  assert.deepEqual(sections(page).Created, ["Relay retries on 502", "Retry budget dashboard"]);
+
+  act(() => head?.click());
+  await vi.waitFor(() => assert.equal(sections(page).Assigned?.length, 5));
+  assert.equal(foot(), true, "and comes back with them");
 });
 
 test("a person's task is the Tasks page's row: its status before its name, one from before statuses under Todo, and its card hung beside it while rested on", async () => {
