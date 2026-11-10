@@ -451,6 +451,34 @@ it.layer(getTestDB())("a workspace's GitHub installations in the store", (it) =>
   );
 
   it.effect(
+    "a late suspend or unsuspend after the webhook deleted an installation leaves it deleted",
+    () =>
+      Effect.gen(function* () {
+        const workspace = yield* openWorkspace(yield* openGithubUser());
+        const installation = freshInstallation();
+        yield* linkInstallation(workspace, installation);
+
+        yield* setInstallationStatus(
+          installation.installationId,
+          GITHUB_INSTALLATION_STATUS.DELETED,
+        );
+        yield* setInstallationStatus(
+          installation.installationId,
+          GITHUB_INSTALLATION_STATUS.SUSPENDED,
+        );
+        yield* setInstallationStatus(
+          installation.installationId,
+          GITHUB_INSTALLATION_STATUS.ACTIVE,
+        );
+
+        assert.deepEqual(
+          (yield* rowsOf(installation.installationId)).map((row) => row.status),
+          [GITHUB_INSTALLATION_STATUS.DELETED],
+        );
+      }),
+  );
+
+  it.effect(
     "a workspace's GitHub accounts are read by its members, and an account outside it reads no workspace at all",
     () =>
       Effect.gen(function* () {

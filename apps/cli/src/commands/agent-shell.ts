@@ -30,8 +30,9 @@ import { openTerminalSocketOverWs } from "@repo/features/node";
 import { openedUnderCredential } from "@repo/features/relay-credential";
 import type { TerminalSocket } from "@repo/features/relay-socket";
 import {
+  RELAY_SOCKET_END,
   SANDBOX_STATE,
-  TERMINAL_RELAY_CLOSE,
+  socketEnding,
   TERMINAL_RELAY_FRAME,
   terminalRelayServiceFrameSchema,
 } from "@repo/features/terminal-wire";
@@ -109,12 +110,12 @@ class RelayDropped extends Data.TaggedError("RelayDropped") {}
 const SANDBOX_STOPPED_WORDS =
   "The agent's sandbox is stopped; resume it from the agent's Terminal tab, then run this again.";
 
-/** Why the relay ended a shell's socket for good, by its close code, in words for a person. */
-const ENDED_BY_CLOSE: ReadonlyMap<number, string> = new Map([
-  [TERMINAL_RELAY_CLOSE.STOPPED, SANDBOX_STOPPED_WORDS],
-  [TERMINAL_RELAY_CLOSE.STARTING, "The agent hasn't opened its sandbox yet."],
-  [TERMINAL_RELAY_CLOSE.GONE, "The shell is gone: the agent was archived, or the shell ended."],
-]);
+/** Why the relay ended a shell's socket for good, in words for a person. */
+const ENDED_WORDS = {
+  [RELAY_SOCKET_END.STOPPED]: SANDBOX_STOPPED_WORDS,
+  [RELAY_SOCKET_END.STARTING]: "The agent hasn't opened its sandbox yet.",
+  [RELAY_SOCKET_END.GONE]: "The shell is gone: the agent was archived, or the shell ended.",
+} as const;
 
 const readServiceFrame = Schema.decodeUnknownOption(
   Schema.fromJsonString(terminalRelayServiceFrameSchema),
@@ -286,15 +287,22 @@ function attached(agentId: string, terminalId: string) {
               }),
             );
           });
-          if (closeCode === TERMINAL_RELAY_CLOSE.EXITED) {
-            return { ending: SOCKET_ENDING.EXITED, code: exitCode } satisfies SocketEnding;
+          const end = socketEnding(closeCode, exitCode, attachedOnce);
+          switch (end.kind) {
+            case RELAY_SOCKET_END.EXITED:
+              return { ending: SOCKET_ENDING.EXITED, code: end.code } satisfies SocketEnding;
+            case RELAY_SOCKET_END.STOPPED:
+            case RELAY_SOCKET_END.STARTING:
+            case RELAY_SOCKET_END.GONE:
+              return yield* new CommandFailed({
+                exit: CLI_EXIT.REFUSED,
+                message: ENDED_WORDS[end.kind],
+              });
+            case RELAY_SOCKET_END.UNATTACHED:
+              return yield* new RelayDropped();
+            case RELAY_SOCKET_END.DROPPED:
+              return { ending: SOCKET_ENDING.DROPPED } satisfies SocketEnding;
           }
-          const ended = closeCode === undefined ? undefined : ENDED_BY_CLOSE.get(closeCode);
-          if (ended !== undefined) {
-            return yield* new CommandFailed({ exit: CLI_EXIT.REFUSED, message: ended });
-          }
-          if (!attachedOnce) return yield* new RelayDropped();
-          return { ending: SOCKET_ENDING.DROPPED } satisfies SocketEnding;
         }),
       );
 

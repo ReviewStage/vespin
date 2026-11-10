@@ -41,7 +41,7 @@ import {
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { useQuery } from "@tanstack/react-query";
 import { useParams } from "@tanstack/react-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
 import { AutomationDirectory } from "../automation-directory.js";
@@ -151,7 +151,9 @@ import type { TaskHeadBack } from "./task-pane-switcher.js";
  * its name's field, Show terminal, Archive, and Permanently delete; ⌘J and
  * New terminal open its terminal as on a task (`terminal-commands.tsx`). An archived agent takes no message, so
  * its composer gives way to its own Unarchive, which its ⋯ offers in
- * Archive's place, and it is not renamed. An agent the task list does not carry,
+ * Archive's place, and it is not renamed; one archived while its page
+ * stands, by its ⋯ or by its task marked done or canceled, leaves the page
+ * for Home. An agent the task list does not carry,
  * deleted or of a workspace the reader is not in, as a link may name, is not
  * found, and nothing of it is drawn. Whoever sent it a message is read against its
  * workspace's members, as on a plan, and the automation whose run started
@@ -425,6 +427,16 @@ function DesktopAgentPage({
     me: tasks.me,
   });
   const agent = agents.agents?.[0] ?? agents.archived?.[0];
+  // An agent archived while its page stands, as marking its task done or canceled archives it, leaves the page for Home.
+  // Note that only the move into archived does, because an agent opened archived, from History or a link, is read where it stands.
+  const archived = agent === undefined ? undefined : agent.archivedAt !== undefined;
+  const wasArchived = useRef(archived);
+  const { onGoHome } = tasks;
+  useEffect(() => {
+    const archivedHere = archived === true && wasArchived.current === false;
+    if (archived !== undefined) wasArchived.current = archived;
+    if (archivedHere) onGoHome();
+  }, [archived, onGoHome]);
   // The run that started an automation's agent, held while its page stands; an agent the list names no automation of has none, and asks nothing.
   const run = useQuery(agentOriginQuery(agent?.automationName === undefined ? undefined : agentId));
   // Note that the models come from the open task's agents where this page has not read them, so

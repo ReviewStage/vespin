@@ -81,6 +81,7 @@
      strength for every tone (`status-tone.css`). */
   --ui-color-neutral-tint: color-mix(in srgb, var(--ui-color-text-muted) 14%, transparent);
   --ui-color-working-tint: color-mix(in srgb, var(--ui-color-working) 14%, transparent);
+  --ui-color-starting-tint: color-mix(in srgb, var(--ui-color-starting) 14%, transparent);
   --ui-color-attention-tint: color-mix(in srgb, var(--ui-color-attention) 14%, transparent);
   --ui-color-complete-tint: color-mix(in srgb, var(--ui-color-complete) 14%, transparent);
   --ui-color-merged-tint: color-mix(in srgb, var(--ui-color-merged) 14%, transparent);
@@ -178,6 +179,7 @@
   --ui-color-on-attention: #fff;
   --ui-color-neutral-tint: color-mix(in srgb, var(--ui-color-text-muted) 14%, transparent);
   --ui-color-working-tint: color-mix(in srgb, var(--ui-color-working) 14%, transparent);
+  --ui-color-starting-tint: color-mix(in srgb, var(--ui-color-starting) 14%, transparent);
   --ui-color-attention-tint: color-mix(in srgb, var(--ui-color-attention) 14%, transparent);
   --ui-color-complete-tint: color-mix(in srgb, var(--ui-color-complete) 14%, transparent);
   --ui-color-merged-tint: color-mix(in srgb, var(--ui-color-merged) 14%, transparent);
@@ -254,6 +256,7 @@
   --ui-color-on-attention: #fff;
   --ui-color-neutral-tint: color-mix(in srgb, var(--ui-color-text-muted) 14%, transparent);
   --ui-color-working-tint: color-mix(in srgb, var(--ui-color-working) 14%, transparent);
+  --ui-color-starting-tint: color-mix(in srgb, var(--ui-color-starting) 14%, transparent);
   --ui-color-attention-tint: color-mix(in srgb, var(--ui-color-attention) 14%, transparent);
   --ui-color-complete-tint: color-mix(in srgb, var(--ui-color-complete) 14%, transparent);
   --ui-color-merged-tint: color-mix(in srgb, var(--ui-color-merged) 14%, transparent);

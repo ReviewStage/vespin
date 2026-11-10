@@ -1,4 +1,4 @@
-import { TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
+import { isTaskSettled, TASK_STATUS, type TaskStatus, type TaskSummary } from "./task-wire.js";
 
 /**
  * task-list-model.ts -- how the sidebar's task list is grouped and filtered: the view a workspace keeps, the groups it draws, and the time each row shows.
@@ -398,11 +398,16 @@ export function drawnTaskRows(
  * stands under the nearest ancestor a list does hold, and its open work
  * never leaves the sidebar; one none of whose ancestors any list holds is
  * drawn nowhere, never at the top, and so is every task under it, however
- * deep. A pinned task stays in Pinned, under no parent.
+ * deep. A task the member put in a list by hand, a pinned one in Pinned
+ * or a sectioned one in its section, the first `placed` lists, stays there
+ * with every task under it, and nests under its parent only where that
+ * list holds the parent too, so a child task dragged into a section stands
+ * in it rather than going back under its parent.
  */
 export function homedTaskRows(
   lists: readonly (readonly TaskSummary[])[],
   every: TasksById,
+  placed: number,
 ): TaskSummary[][] {
   const listOf = new Map<string, number>();
   const byId = new Map<string, TaskSummary>();
@@ -414,16 +419,19 @@ export function homedTaskRows(
     }
   });
   const held = (taskId: string) => listOf.has(taskId);
+  const putByHand = (taskId: string) => (listOf.get(taskId) ?? placed) < placed;
   const homeOf = (task: TaskSummary): number | undefined => {
     const walked = new Set([task.id]);
     let at = task;
     let above = heldAncestor(at, held, every);
     // Note that a loop of parents, which nothing writes, ends the walk where it closes, at the last task it reached, `above` still set.
-    while (above !== undefined && !walked.has(above)) {
+    while (above !== undefined && !walked.has(above) && !putByHand(at.id)) {
       walked.add(above);
       at = byId.get(above) ?? at;
       above = heldAncestor(at, held, every);
     }
+    // The walk ends at a task put in its list by hand, which every task under it follows.
+    if (putByHand(at.id)) return listOf.get(at.id);
     // The top of the walk is drawn nowhere where it stands under a parent no list holds, so neither is anything under it.
     return above === undefined && underParent(at) ? undefined : listOf.get(at.id);
   };
@@ -444,7 +452,7 @@ export interface ChildTaskCount {
 
 /** Whether a task has settled: done, or canceled, which is as settled as done. */
 export function taskFinished(task: TaskSummary): boolean {
-  return task.status === TASK_STATUS.DONE || task.status === TASK_STATUS.CANCELED;
+  return isTaskSettled(task.status);
 }
 
 /** A task's direct sub-tasks, oldest first, so they read in the order they were made; never itself, which no one writes. */

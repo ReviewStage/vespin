@@ -1,8 +1,11 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { AGENT_ATTACHMENT_TYPE } from "@repo/features/agent-wire";
-import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
+import {
+  AGENT_ATTACHMENT_TYPE,
+  AGENT_BOUNDS,
+  type AgentAttachment,
+} from "@repo/features/agent-wire";
 import {
   DESCRIPTION_COMMENT_ACTION,
   DESCRIPTION_COMMENT_ACTOR,
@@ -14,6 +17,7 @@ import {
   type DescriptionCommentStartRequest,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
+import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
@@ -23,10 +27,10 @@ import { createAgent } from "../agent-store.js";
 import { readDescriptionAttachment } from "../description-attachments.js";
 import {
   actOnDescriptionCommentThread,
-  moveDescriptionCommentAnchors,
   DESCRIPTION_COMMENT_OUTCOME,
   type DescriptionCommentOutcome,
   type DescriptionCommentWriterRef,
+  moveDescriptionCommentAnchors,
   readDescriptionCommentFile,
   readDescriptionCommentThreads,
   startDescriptionCommentThread,
@@ -718,6 +722,67 @@ it.layer(getTestDB())("a description's comment threads", (it) => {
           { status: DESCRIPTION_COMMENT_OUTCOME.DONE, answer: { deleted: reply.id } },
         );
         assert.ok(Option.isNone(yield* readDescriptionCommentFile(owner, taskId, fileId)));
+      }),
+  );
+
+  it.effect(
+    "an edit keeps the files it names in its order, adds its own after them, and deletes the rest; one naming none leaves them; one past a message's files is refused",
+    () =>
+      Effect.gen(function* () {
+        const { owner, teammate, taskId } = yield* openSharedTask;
+        const text = (name: string) => ({
+          name,
+          mediaType: AGENT_ATTACHMENT_TYPE.TEXT,
+          data: Buffer.from(`${name}\n`).toString("base64"),
+        });
+        const started = threadOf(
+          yield* startDescriptionCommentThread(member(teammate), taskId, {
+            ...startOn(DESCRIPTION_TEXT, "seven days", "See the attached."),
+            attachments: [text("a.txt"), text("b.txt"), text("c.txt")],
+          }),
+        );
+        const entry = started.entries[0]?.id ?? "";
+        const named = (thread: DescriptionCommentThread) =>
+          thread.entries[0]?.files?.map((file) => file.name);
+        const idOf = (thread: DescriptionCommentThread, name: string) =>
+          thread.entries[0]?.files?.find((file) => file.name === name)?.attachmentId ?? "";
+        const edit = (words: string, files: { keep?: string[]; attachments?: AgentAttachment[] }) =>
+          actOnDescriptionCommentThread(member(teammate), taskId, started.id, {
+            action: DESCRIPTION_COMMENT_ACTION.EDIT,
+            entry,
+            words,
+            ...files,
+          });
+
+        const dropped = idOf(started, "a.txt");
+        const edited = threadOf(
+          yield* edit("See these.", {
+            keep: [idOf(started, "c.txt"), idOf(started, "b.txt")],
+            attachments: [text("d.txt")],
+          }),
+        );
+        assert.deepEqual(named(edited), ["c.txt", "b.txt", "d.txt"]);
+        assert.ok(Option.isNone(yield* readDescriptionCommentFile(owner, taskId, dropped)));
+
+        const reworded = threadOf(yield* edit("See these three.", {}));
+        assert.deepEqual(named(reworded), ["c.txt", "b.txt", "d.txt"]);
+
+        assert.deepEqual(
+          withoutTxid(
+            yield* edit("Too many.", {
+              attachments: Array.from({ length: AGENT_BOUNDS.MAX_ATTACHMENTS - 2 }, (_, at) =>
+                text(`more-${at}.txt`),
+              ),
+            }),
+          ),
+          {
+            status: DESCRIPTION_COMMENT_OUTCOME.DONE,
+            answer: { refused: DESCRIPTION_COMMENT_REFUSAL.TOO_MANY_FILES },
+          },
+        );
+        const read = yield* readOne(owner, taskId);
+        assert.equal(read?.entries[0]?.words, "See these three.");
+        assert.deepEqual(read?.entries[0]?.files?.length, 3);
       }),
   );
 });

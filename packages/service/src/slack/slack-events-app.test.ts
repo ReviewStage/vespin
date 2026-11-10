@@ -62,8 +62,9 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  * the thread of an archived agent brings it back and hands it the message,
  * and one in the thread of an agent whose session ended continues it in a
  * new agent on the same task, which the thread moves to; a member's reply under the DM of an inbox
- * thread is posted on that thread as theirs, bringing its archived agent back as a Submit
- * in the DM does, and starts no agent; and a
+ * thread is posted on that thread as theirs, bringing its archived agent back as a press
+ * in the DM does, and starts no agent; a press of an ask the agent's archive withdrew
+ * answers nothing; and a
  * direct message sharing an image and no words starts an agent handed the
  * image.
  *
@@ -494,7 +495,7 @@ it.layer(SUITE)("our Slack route", (it) => {
   );
 
   it.effect(
-    "a Submit of an ask taking several options, its agent archived, brings the agent back and answers it with the options ticked in the DM",
+    "a Submit of an ask taking several options answers it with the options ticked in the DM",
     () => {
       const calls: SlackCall[] = [];
       const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
@@ -518,9 +519,6 @@ it.layer(SUITE)("our Slack route", (it) => {
         const ticked = checkboxes.options.filter(
           (option: { text: { text: string } }) => option.text.text !== "Slack",
         );
-        // The archive settles the ask, which bringing the agent back opens again for the answer.
-        yield* archiveAgent(owner, item.agentId, true);
-
         const kept = keptAfterResponse();
         yield* answer(
           bot,
@@ -537,7 +535,6 @@ it.layer(SUITE)("our Slack route", (it) => {
         const stored = Option.getOrThrow(yield* readInboxItem(owner, item.id));
         const asked = stored.item.thread?.find((message) => message.ask);
         assert.equal(asked?.ask?.status, INBOX_ASK_STATUS.ANSWERED);
-        assert.equal(Option.getOrThrow(yield* readAgent(owner, item.agentId)).archivedAt, null);
         const updated = calls.filter(
           (call) => call.method === "chat.update" && call.args.text !== title?.args.text,
         );
@@ -545,6 +542,38 @@ it.layer(SUITE)("our Slack route", (it) => {
           updated[0]?.args.text,
           "How long should an invitation last? · You chose Email, SMS",
         );
+      });
+    },
+  );
+
+  it.effect(
+    "a press of an ask its agent's archive withdrew brings the agent back and answers nothing, telling the agent nothing",
+    () => {
+      const calls: SlackCall[] = [];
+      const bot = Layer.succeed(SlackBot, slackBotOver(fakeSlack(calls)));
+      return Effect.gen(function* () {
+        const { owner, item } = yield* openAskedMember(bot);
+        const [title, posted] = calls.filter((call) => call.method === "chat.postMessage");
+        const [actions] = JSON.parse(posted?.args.blocks ?? "[]").filter(
+          (block: { type: string }) => block.type === "actions",
+        );
+        const [month] = actions.elements.filter(
+          (element: { text: { text: string } }) => element.text.text === "A month",
+        );
+        yield* archiveAgent(owner, item.agentId, true);
+        const heard = HARNESS.heard.length;
+
+        const kept = keptAfterResponse();
+        yield* answer(bot, press(month, title?.args.channel ?? "", CONNECT_TOKEN), kept.layer);
+        yield* kept.run;
+
+        const stored = Option.getOrThrow(yield* readInboxItem(owner, item.id));
+        assert.equal(
+          stored.item.thread?.find((message) => message.ask)?.ask?.status,
+          INBOX_ASK_STATUS.WITHDRAWN,
+        );
+        assert.equal(Option.getOrThrow(yield* readAgent(owner, item.agentId)).archivedAt, null);
+        assert.equal(HARNESS.heard.length, heard);
       });
     },
   );
@@ -791,7 +820,11 @@ it.layer(SUITE)("our Slack route", (it) => {
             .map((m) => m.text),
           ["A week, but let admins extend it"],
         );
-        assert.equal(thread.find((message) => message.ask)?.ask?.status, INBOX_ASK_STATUS.OPEN);
+        // The archive withdrew the ask, which bringing the agent back leaves withdrawn.
+        assert.equal(
+          thread.find((message) => message.ask)?.ask?.status,
+          INBOX_ASK_STATUS.WITHDRAWN,
+        );
         assert.equal(Option.getOrThrow(yield* readAgent(owner, item.agentId)).archivedAt, null);
         assert.deepEqual(HARNESS.heard.at(-1), { call: "send", account: owner });
         assert.equal(HARNESS.heard.filter((heard) => heard.call === "open").length, opened);

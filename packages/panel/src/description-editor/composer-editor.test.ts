@@ -459,6 +459,27 @@ test("an @ word is reported to the mentions, and a pick writes the mention into 
   assert.deepEqual(box.drawn, ["session-store.ts luke://file/apps/web/session-store.ts"]);
 });
 
+test("a pick before closing punctuation leaves it standing, no space before it, and replaces a dot inside the name", () => {
+  const box = mountedWithMentions("");
+
+  typeInComposer(box.host, "Fix @ses.");
+  // The caret back before the period, inside the word: the paragraph opens at 1.
+  box.caretAt(1 + "Fix @ses".length);
+  box.handle.chooseMention({
+    name: "session-store.ts",
+    target: "luke://file/apps/web/session-store.ts",
+  });
+  assert.equal(box.drafts.at(-1), `Fix ${STORE_LINK}.`);
+
+  box.handle.replace("See @session-store.ts");
+  box.caretAt(1 + "See @ses".length);
+  box.handle.chooseMention({
+    name: "session-store.ts",
+    target: "luke://file/apps/web/session-store.ts",
+  });
+  assert.equal(box.drafts.at(-1), `See ${STORE_LINK} `);
+});
+
 test("words laid in with a mention's link hold it as its chip, and hand the same words back", () => {
   const box = mountedWithMentions("");
 
@@ -551,20 +572,22 @@ test("a page's address pasted on the line after a closing fence is laid in as it
   assert.deepEqual(box.drawn, [`ACME-142/fix-the-thing ${ISSUE_URL}`]);
 });
 
-test("a mention laid in from elsewhere stands where the caret is, a space after it, and none is laid in past the box's bound", () => {
-  const box = mountedWithMentions("Fix  first");
+test("a mention laid in from elsewhere stands where the caret is, spaced from the words either side, and none is laid in past the box's bound", () => {
+  const box = mountedWithMentions("Fixfirst");
   const lines = {
     name: "invite.ts:2–3",
     target: "https://github.com/acme/relay/blob/HEAD/src/invite.ts#L2-L3",
   };
   const full = mounted("12345678", { maxLength: 10 });
 
-  box.caretAt(1 + "Fix ".length);
+  box.caretAt(1 + "Fix".length);
   box.handle.insertMention(lines);
   full.handle.insertMention(lines);
 
   assert.equal(box.drafts.at(-1), `Fix [@invite.ts:2–3](${lines.target}) first`);
   assert.deepEqual(full.drafts, []);
+  typeInComposer(box.host, "now ");
+  assert.equal(box.drafts.at(-1), `Fix [@invite.ts:2–3](${lines.target}) now first`);
 });
 
 /** The quote blocks the box holds, by their words. */

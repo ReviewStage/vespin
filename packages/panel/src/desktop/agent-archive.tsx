@@ -22,6 +22,7 @@ import {
   useConfirmDialog,
 } from "@repo/ui";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
 import { Schema } from "effect";
@@ -30,7 +31,6 @@ import { useCoarsePointer } from "../coarse-pointer.js";
 import { commandAction, commandHead, PANEL_COMMAND } from "../command-items.js";
 import { sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
-import { useBusyPress } from "../settings/busy-press.js";
 import { SHORTCUT_SUBJECT, shortcutSubject } from "../shortcut-target.js";
 import { agentName, teammateStarter } from "../tasks/agent-model.js";
 import { AgentCard, agentSubject, NOTHING_HELD } from "../tasks/agent-ref.js";
@@ -238,7 +238,7 @@ function ArchivedAgentRow({
     shown,
     terminals: { onOpenTerminal: undefined },
   });
-  const unarchiving = useBusyPress(() => press(agent.id, false));
+  const unarchiving = useAsyncAction(rejectionWords);
   const coarse = useCoarsePointer();
   return (
     <>
@@ -269,9 +269,9 @@ function ArchivedAgentRow({
                   icon={UNARCHIVE.icon}
                   label={UNARCHIVE.label}
                   size={BUTTON_SIZE.COMPACT}
-                  busy={unarchiving.busy}
+                  busy={unarchiving.running}
                   busyLabel={UNARCHIVING}
-                  onClick={unarchiving.onPress}
+                  onClick={() => void unarchiving.run(() => press(agent.id, false))}
                 />
               </Tooltip>
             )

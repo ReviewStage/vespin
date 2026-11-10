@@ -38,9 +38,9 @@ import {
 } from "./agent-approvals.js";
 import { AgentContextRing, ContextRingIcon } from "./agent-context.js";
 import { contextHint } from "./agent-context-model.js";
-import { noteWhileOffline, paidByOf, providerOf } from "./agent-model.js";
+import { noteWhileOffline, paidByOf, planNameOf, providerOf } from "./agent-model.js";
 import { AgentModelChip } from "./agent-model-chip.js";
-import { PayerValue, usePayerPlanName } from "./agent-payer.js";
+import { PayerValue, usePayerPlan } from "./agent-payer.js";
 import { type AgentServersControl, serversMenuPanel } from "./agent-servers.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide } from "./mention-picker.js";
 import { FOLD_WIDTH, MessageBox, OVERFLOW_PRESS, useMessageBox } from "./message-box.js";
@@ -325,7 +325,7 @@ export function AgentComposer({
   /** The agent the box writes to, which its `@` list does not offer; none for a draft not yet started. */
   agentId?: string | undefined;
   status: AgentStatus;
-  /** Whether Stop stands in Send's place while the box is empty: while the agent runs where unsaid, and while it may still write where the tab knows (`offersStop`). */
+  /** Whether Stop stands in Send's place while the box is empty: while the agent runs where unsaid, and while a turn runs that a Stop can cancel where the tab knows (`offersStop`). */
   stoppable?: boolean;
   /** Whether a message sent now steers a turn under way rather than opening one: where Stop stands, where unsaid (`turnUnderWay`). */
   steers?: boolean;
@@ -401,11 +401,8 @@ export function AgentComposer({
   const connected = useConnected();
   // Who pays, as the chip's menu names it, is the context popover's last line too.
   const paying = model === undefined ? payer : paidByOf(payer, usage, model.runtime);
-  const planName = usePayerPlanName(
-    paying,
-    payerSubscriptionId,
-    (payer ?? usage?.payer) === undefined,
-    owner,
+  const planName = planNameOf(
+    usePayerPlan(paying, payerSubscriptionId, (payer ?? usage?.payer) === undefined, owner),
   );
   const payerValue =
     paying === undefined ? undefined : (

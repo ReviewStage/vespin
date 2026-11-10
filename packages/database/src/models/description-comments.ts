@@ -1,5 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { AGENT_ATTACHMENT_TYPE, type AgentAttachment } from "@repo/features/agent-wire";
+import {
+  AGENT_ATTACHMENT_TYPE,
+  AGENT_BOUNDS,
+  type AgentAttachment,
+} from "@repo/features/agent-wire";
 import {
   type CommentSpan,
   spanWithin,
@@ -411,6 +415,20 @@ const findFiles = SqlSchema.findAll({
     ),
 });
 
+/** The files one comment carries, by their ids and sizes, in the order it carries them. */
+const findCarriedFiles = SqlSchema.findAll({
+  Request: Schema.Struct({ taskId: Schema.String, entryId: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String, byteCount: Schema.Number }),
+  execute: ({ taskId, entryId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: attachment.id, byteCount: attachment.byteCount })
+        .from(attachment)
+        .where(and(eq(attachment.taskId, taskId), eq(attachment.descriptionCommentId, entryId)))
+        .orderBy(asc(attachment.position)),
+    ),
+});
+
 /** One file a comment of the description carries, with its bytes, where the account reaches the plan. */
 const findCommentFile = SqlSchema.findOneOption({
   Request: Schema.Struct({
@@ -541,15 +559,16 @@ interface EntryPlace {
   readonly threadId: string;
 }
 
-/** A comment's files as the rows it keeps, in the order they were attached. */
+/** A comment's files as the rows it keeps, in the order they were attached, the first at `first` among the comment's files. */
 function fileRowsOf(
   place: EntryPlace,
   entryId: string,
   userId: string,
   files: readonly AgentAttachment[],
   now: Date,
+  first = 0,
 ): Effect.Effect<(typeof attachment.$inferInsert)[]> {
-  return Effect.forEach(files, (file, position) => {
+  return Effect.forEach(files, (file, index) => {
     const bytes = Base64.decode(file.data);
     // Note that the wire schema held the data to padded base64, so a decode that fails is a broken contract, not a refusal.
     if (Result.isFailure(bytes))
@@ -560,7 +579,7 @@ function fileRowsOf(
       taskId: place.taskId,
       descriptionCommentId: entryId,
       name: file.name,
-      position,
+      position: first + index,
       contentType: file.mediaType,
       byteCount: bytes.success.byteLength,
       bytes: bytes.success,
@@ -604,6 +623,58 @@ function writeEntry(
     );
     if (files.length > 0) yield* Database.use((db) => db.insert(attachment).values(files));
     return txid;
+  });
+}
+
+/**
+ * A comment's files as an edit leaves them: the files it names kept, in the
+ * order it names them, and the files it adds after them, the rest deleted.
+ * An id naming no file the comment carries, one a concurrent edit already
+ * took off say, keeps nothing. Answers the refusal where the files left
+ * would be more, or more bytes, than one message carries, writing nothing,
+ * and nothing where the edit names no files and leaves them as they stand.
+ */
+function filesEdited(
+  place: EntryPlace,
+  entryId: string,
+  userId: string,
+  edit: { readonly keep?: readonly string[]; readonly attachments?: readonly AgentAttachment[] },
+  now: Date,
+): TaskStoreEffect<DescriptionCommentRefusal | undefined> {
+  return Effect.gen(function* () {
+    if (edit.keep === undefined && edit.attachments === undefined) return undefined;
+    const carried = yield* findCarriedFiles({ taskId: place.taskId, entryId });
+    const kept =
+      edit.keep === undefined
+        ? carried
+        : [...new Set(edit.keep)].flatMap((id) => carried.filter((file) => file.id === id));
+    const named = new Set(kept.map((file) => file.id));
+    const added = yield* fileRowsOf(
+      place,
+      entryId,
+      userId,
+      edit.attachments ?? [],
+      now,
+      kept.length,
+    );
+    const bytes = [...kept, ...added].reduce((sum, file) => sum + file.byteCount, 0);
+    if (
+      kept.length + added.length > AGENT_BOUNDS.MAX_ATTACHMENTS ||
+      bytes > AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES
+    ) {
+      return DESCRIPTION_COMMENT_REFUSAL.TOO_MANY_FILES;
+    }
+    const gone = carried.filter((file) => !named.has(file.id)).map((file) => file.id);
+    if (gone.length > 0) {
+      yield* Database.use((db) => db.delete(attachment).where(inArray(attachment.id, gone)));
+    }
+    yield* Effect.forEach(kept, (file, position) =>
+      Database.use((db) =>
+        db.update(attachment).set({ position }).where(eq(attachment.id, file.id)),
+      ),
+    );
+    if (added.length > 0) yield* Database.use((db) => db.insert(attachment).values(added));
+    return undefined;
   });
 }
 
@@ -1032,6 +1103,8 @@ export function actOnDescriptionCommentThread(
           }
           if (!writtenBy(entry, writer)) return refused(DESCRIPTION_COMMENT_REFUSAL.NOT_YOURS);
           if (request.action === DESCRIPTION_COMMENT_ACTION.EDIT) {
+            const tooMany = yield* filesEdited(place, entry.id, writer.userId, request, now);
+            if (tooMany !== undefined) return refused(tooMany);
             yield* Database.use((db) =>
               db
                 .update(descriptionComment)

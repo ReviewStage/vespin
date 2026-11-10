@@ -48,10 +48,14 @@ export {
   type SchemaRefusal,
 } from "./schema-vocabulary.js";
 export {
+  TURN_OPEN,
   TURN_ORIGIN,
   TURN_STATUS,
+  TURN_TERMINAL,
+  type TurnOpenStatus,
   type TurnOrigin,
   type TurnStatus,
+  type TurnTerminalStatus,
 } from "./turn.js";
 export {
   type AgentMessageMetadata,

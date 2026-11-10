@@ -233,10 +233,28 @@ const WORDS_BAR = "[.ui-choice-bar-frame>&]:flex-1";
 const WORDS_MORE =
   "ui-choice-bar-more absolute inset-y-0 end-0 flex items-center pointer-events-none text-muted-foreground [&>svg]:size-control-icon";
 
+/**
+ * A segmented bar's trough is its content box, painted alone, its inset
+ * the room its segments keep around them (`OPTION_LOOK_STATE`). Note that
+ * the inset is theirs rather than the bar's padding, because the bar is its
+ * own scroll box, which clips a segment's press at its padding's edge: on a
+ * coarse pointer it pads itself above and below with unpainted room for a
+ * finger's press (`SEGMENTED_REACH`) and gives that room back as a negative
+ * margin, so the trough stands where it stood and draws as it did, and its
+ * corner runs taller by that room, so it is round where the trough is.
+ */
 const BAR_LOOK = {
   fill: "flex flex-none [.ui-pane-bar-middle>&]:flex-1 self-stretch @container/ui-choice-bar",
-  segmented: "inline-flex gap-0.5 p-0.5 rounded-control bg-muted",
+  segmented: "inline-flex gap-0.5 p-0 rounded-control bg-muted bg-clip-content",
 } as const satisfies Record<ChoiceBarLook, string>;
+
+/** The room a segmented bar keeps above and below its trough on a coarse pointer, at each size. */
+const SEGMENTED_REACH = {
+  regular:
+    "pointer-coarse:py-choice-reach pointer-coarse:-my-choice-reach pointer-coarse:rounded-choice-trough",
+  compact:
+    "pointer-coarse:py-choice-reach-compact pointer-coarse:-my-choice-reach-compact pointer-coarse:rounded-choice-trough-compact",
+} as const satisfies Record<ChoiceBarSize, string>;
 
 /** A fill bar's room between its options: compact takes it in. */
 const FILL_GAP = {
@@ -282,8 +300,8 @@ const OPTION = cn(
 /**
  * Each look's option at each size. A fill option is the control's height,
  * lit under the pointer while not chosen; compact a step smaller, in the
- * caption's type. A segment sits inside its trough's inset, its corner the
- * trough's less that inset; on the site, whose muted ink holds AA on its
+ * caption's type. A segment keeps its trough's inset around it, its corner
+ * the trough's less that inset; on the site, whose muted ink holds AA on its
  * page's ground and not on the trough, it is drawn in the text's own ink.
  */
 const OPTION_LOOK = {
@@ -299,7 +317,8 @@ const OPTION_LOOK = {
 
 const OPTION_LOOK_STATE = {
   fill: "rounded-control hover:not-disabled:not-aria-selected:not-aria-checked:bg-muted",
-  segmented: "rounded-choice-segment [[data-ui-profile=web]_&]:text-foreground",
+  segmented:
+    "my-0.5 first-of-type:ms-0.5 last-of-type:me-0.5 rounded-choice-segment [[data-ui-profile=web]_&]:text-foreground",
 } as const satisfies Record<ChoiceBarLook, string>;
 
 /** A stretched segment shares its row alike with the others; any other option keeps its own width. */
@@ -860,7 +879,7 @@ export function ChoiceBar<Value extends string>(props: ChoiceBarProps<Value>): R
         BAR_FADE.className,
         BAR_LOOK[look],
         segmented
-          ? SEGMENTED_WIDTH[stretch ? "stretch" : "hug"]
+          ? [SEGMENTED_WIDTH[stretch ? "stretch" : "hug"], SEGMENTED_REACH[size]]
           : [FILL_GAP[size], tight && FILL_TIGHT_BAR],
         words && WORDS_BAR,
       )}

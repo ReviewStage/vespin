@@ -606,13 +606,12 @@ test("a tab reads its agent from the newer of its summary's turn and its answere
   ]);
 });
 
-test("Stop is offered while an agent may still write, a stalled one starting or awaiting its turn included, and not once it has ended", () => {
-  // A line awaiting a turn that never opens reads running with nothing yet to cancel, which a Stop settles where its runner went quiet.
-  const awaitingItsTurn = { status: AGENT_STATUS.RUNNING, stoppable: false } as const;
-  assert.equal(offersStop(awaitingItsTurn), true);
-  assert.equal(offersStop({ status: AGENT_STATUS.STARTING }), true);
+test("Stop is offered only while a turn runs that it can cancel, not while the agent sets up or once it has ended", () => {
+  assert.equal(offersStop({ status: AGENT_STATUS.RUNNING }), true);
+  // A line awaiting a runner to take it, as while the agent's machine is set up, has no turn to cancel yet.
+  assert.equal(offersStop({ status: AGENT_STATUS.RUNNING, stoppable: false }), false);
+  assert.equal(offersStop({ status: AGENT_STATUS.STARTING }), false);
   assert.equal(offersStop({ status: AGENT_STATUS.COMPLETED }), false);
-  assert.equal(offersStop({ status: AGENT_STATUS.CANCELED }), false);
 });
 
 test("the working line counts from the press of the line that opened the turn, through the turn and a line steering it", () => {

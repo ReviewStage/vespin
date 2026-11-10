@@ -43,6 +43,7 @@ export const TERM = {
 export const VERB = {
   SIGN_OUT: "Sign out",
   RETRY: "Retry",
+  RECONNECT: "Reconnect",
   OPEN: "Open",
   RESET_TO_DEFAULTS: "Reset to defaults",
 } as const;

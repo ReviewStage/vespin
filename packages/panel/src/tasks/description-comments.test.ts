@@ -9,6 +9,7 @@ import {
   DESCRIPTION_COMMENT_SCOPE,
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentActionRequest,
+  type DescriptionCommentFile,
   type DescriptionCommentStartRequest,
   type DescriptionCommentThread,
   type DescriptionCommentWriter,
@@ -1837,7 +1838,7 @@ function ownComment(landing?: () => boolean | Promise<boolean>) {
   const press = (label: string) =>
     act(() =>
       [...container.querySelectorAll<HTMLButtonElement>(".comment-editing button")]
-        .find((each) => each.textContent === label)
+        .find((each) => (each.getAttribute("aria-label") ?? each.textContent) === label)
         ?.click(),
     );
   return { ...drawnTab, edit, field, press };
@@ -1873,6 +1874,107 @@ test("an edit's words outlast Cancel and Esc, come back as Edit opens it again, 
     "Ship by [@Oct 23, 2026](mention://date/2026-10-23).",
     "saved, its draft is let go",
   );
+});
+
+/** The reader's own comment carrying two files, its Edit opened, with the files the field holds and a press of Save. */
+function editWithFiles(
+  landing?: () => boolean | Promise<boolean>,
+  more: readonly DescriptionCommentFile[] = [],
+) {
+  fakeActs({
+    act: (request: AnyAct): Promise<FakeActAnswer> =>
+      Promise.resolve(
+        request.kind === ACT_KIND.TASKS_PICTURE_READ
+          ? { status: FAKE_ANSWER.DONE, value: { contentType: "text/plain", base64: "" } }
+          : { status: FAKE_ANSWER.UNKNOWN_ACT },
+      ),
+  });
+  const kept = "5e6f7a8b-9c0d-4e1f-8a2b-4c5d6e7f8091";
+  const dated = datedThread({ userId: "u-dean", name: "Dean" });
+  const withFiles: DescriptionCommentThread = {
+    ...dated,
+    entries: dated.entries.map((entry) => ({
+      ...entry,
+      files: [
+        {
+          attachmentId: "6f7a8b9c-0d1e-4f2a-9b3c-5d6e7f8091a2",
+          name: "old.txt",
+          mediaType: "text/plain",
+        },
+        { attachmentId: kept, name: "kept.txt", mediaType: "text/plain" },
+        ...more,
+      ],
+    })),
+  };
+  const drawnTab = drawn("list", [withFiles], landing);
+  const { container } = drawnTab;
+  const field = () => container.querySelector(".comment-editing") ?? assert.fail("no edit field");
+  const edit = () => {
+    act(() =>
+      container.querySelector<HTMLButtonElement>('button[aria-label="Comment actions"]')?.click(),
+    );
+    act(() =>
+      [...document.querySelectorAll<HTMLElement>('[role="menuitem"]')]
+        .find((each) => each.textContent === "Edit")
+        ?.click(),
+    );
+  };
+  const held = () =>
+    [...field().querySelectorAll('[aria-label="Attached files"] > li')].map(attachmentChipName);
+  const change = async () => {
+    act(() =>
+      field().querySelector<HTMLButtonElement>('button[aria-label="Remove old.txt"]')?.click(),
+    );
+    await pickFiles(field(), [new File(["new\n"], "new.txt", { type: "text/plain" })]);
+  };
+  const save = () =>
+    act(async () => field().querySelector<HTMLButtonElement>('button[aria-label="Save"]')?.click());
+  return { ...drawnTab, kept, edit, field, held, change, save };
+}
+
+test("an edit takes a comment's file off by its \u00d7 and adds one picked by its +, saving the files kept by their ids and the file added", async () => {
+  const { asked, kept, edit, held, change, save } = editWithFiles();
+  edit();
+  await change();
+  assert.deepEqual(held(), ["kept.txt", "new.txt"]);
+  await save();
+
+  const [sent] = asked;
+  assert.ok(sent?.action.action === DESCRIPTION_COMMENT_ACTION.EDIT);
+  assert.deepEqual(sent.action.keep, [kept]);
+  assert.deepEqual(
+    sent.action.attachments?.map((file) => [file.name, file.data]),
+    [["new.txt", Buffer.from("new\n").toString("base64")]],
+  );
+});
+
+test("an edit holding as many files as a message carries takes no more, and says a message carries that many", async () => {
+  // Note that the comment carries eight files beside the helper's two, so the edit stands full.
+  const more = Array.from({ length: 8 }, (_, at) => ({
+    attachmentId: `7a8b9c0d-1e2f-4a3b-8c4d-6e7f8091a2${String(at).padStart(2, "0")}`,
+    name: `more-${String(at)}.txt`,
+    mediaType: "text/plain",
+  }));
+  const { edit, held, field } = editWithFiles(undefined, more);
+  edit();
+  await pickFiles(field(), [new File(["new\n"], "new.txt", { type: "text/plain" })]);
+
+  assert.equal(held().length, 10, "the edit keeps the comment's ten files and adds none");
+  assert.equal(
+    field().querySelector(".ui-composer-foot-note")?.textContent,
+    "A message can carry up to 10 files.",
+  );
+});
+
+test("an edit refused opens again on the files it took off and added, as on its words", async () => {
+  const { edit, held, change, save } = editWithFiles(() => false);
+  edit();
+  await change();
+  await save();
+  for (let round = 0; round < 2; round += 1) await act(() => Promise.resolve());
+
+  edit();
+  assert.deepEqual(held(), ["kept.txt", "new.txt"]);
 });
 
 test("an edit's field closes on Save, before the service answers", () => {

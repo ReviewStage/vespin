@@ -94,9 +94,12 @@ test("⌘S in an editor answers its save, kept from the browser, and Escape answ
     cancelable: true,
   });
   act(() => field.dispatchEvent(save));
+  // The same physical key on a Cyrillic layout, whose character is no Latin letter.
+  const cyrillic = { key: "ы", code: "KeyS", metaKey: true, bubbles: true, cancelable: true };
+  act(() => field.dispatchEvent(new KeyboardEvent("keydown", cyrillic)));
   act(() => field.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
   expect({ pressed, browserSaveKept: save.defaultPrevented }).toEqual({
-    pressed: ["save", "escape"],
+    pressed: ["save", "save", "escape"],
     browserSaveKept: true,
   });
 });

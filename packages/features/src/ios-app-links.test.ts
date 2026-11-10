@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { IOS_APP_LINK_COMPONENTS, iosAppRouteOf } from "./ios-app-links.js";
+import { IOS_APP_LINK_COMPONENTS, iosAppRouteOf, iosAppRouteOfAddress } from "./ios-app-links.js";
 import { readLink } from "./link-grammar.js";
 
 /**
@@ -31,11 +31,36 @@ describe("a vespin.dev link", () => {
     ["/acme/tasks", "/tasks"],
     ["/acme/task/42", "/tasks/42"],
     ["/acme/task/task-1/page/page-1", undefined],
-    ["/acme/agent/agent-1", undefined],
+    ["/acme/agent/agent-1", "/tasks/agent/agent-1"],
+    ["/acme/task/task-1/agent/agent-1", "/tasks/agent/agent-1"],
+    ["/acme/agent/agent-1/page/page-1", undefined],
+    ["/acme/task/task-1/agent/agent-1/changes", undefined],
     ["/acme/settings", undefined],
   ])("%s opens in the app at %s, and only then", (path, route) => {
     const read = readLink(`https://vespin.dev${path}`);
     expect(read === undefined ? undefined : iosAppRouteOf(read.place)).toBe(route);
     expect(claimed(path)).toBe(route !== undefined);
+  });
+});
+
+// Note that the regression these catch is a pull request a chip names leaving the app for GitHub
+// though the app draws it, or its diff, which the app does not draw, opening on the app's screen.
+describe("a pull request's address", () => {
+  const opened = [
+    { agentId: "agent-1", pullRequest: { url: "https://github.com/acme/relay/pull/42" } },
+  ];
+
+  it.each([
+    ["https://github.com/acme/relay/pull/42", "/tasks/agent/agent-1/pull/42"],
+    ["https://github.com/Acme/Relay/pull/42/", "/tasks/agent/agent-1/pull/42"],
+    ["https://github.com/acme/relay/pull/42/files", undefined],
+    ["https://github.com/acme/relay/pull/43", undefined],
+    ["https://github.com/acme/other/pull/42", undefined],
+  ])("%s opens in the app at %s", (address, route) => {
+    expect(iosAppRouteOfAddress(address, opened)).toBe(route);
+  });
+
+  it("names a vespin.dev place by the route its link opens", () => {
+    expect(iosAppRouteOfAddress("https://vespin.dev/acme/task/42", opened)).toBe("/tasks/42");
   });
 });

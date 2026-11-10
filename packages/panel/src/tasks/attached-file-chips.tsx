@@ -71,7 +71,8 @@ export function attachmentChips(attachments: readonly AgentAttachment[]): FileCh
     const chip = {
       name: file.name,
       mediaType: file.mediaType,
-      url: `data:${file.mediaType};base64,${file.data}`,
+      // Note that a file whose bytes are not here yet, a comment's kept by its edit, is drawn by its name alone.
+      url: file.data === "" ? "" : `data:${file.mediaType};base64,${file.data}`,
     };
     BOX_CHIPS.set(file, chip);
     return chip;

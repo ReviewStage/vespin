@@ -164,15 +164,38 @@ function planPayer(payer: AgentPayer | undefined): payer is PlanPayer {
 }
 
 /**
- * The name of the reader's own plan that pays for the agent, for the model
- * menu's last line: the subscription the page named, or, for one a new
- * agent would start on (`next`), the first of the payer's kind in the
- * reader's order with room left, as a turn picks it; by the name the reader
- * gave it, else the ChatGPT account it signed in as. Nothing for a plan the
- * reader does not hold, one with neither name, or a teammate's agent
- * (`teammate`), whose starter's plan pays and whose page may name none yet,
- * since the reader's own next plan is never the one that pays there.
+ * The reader's own plan that pays for the agent, for the model menu's last
+ * line: the subscription the page named, or, for one a new agent would
+ * start on (`next`), the first of the payer's kind in the reader's order
+ * with room left, as a turn picks it. Nothing for a plan the reader does not
+ * hold or a teammate's agent (`teammate`), whose starter's plan pays and
+ * whose page may name none yet, since the reader's own next plan is never
+ * the one that pays there.
  */
+export function payerPlanOf(
+  payer: AgentPayer | undefined,
+  subscriptions: readonly SubscriptionKeySummary[] | undefined,
+  subscriptionId: string | undefined,
+  next: boolean,
+  teammate = false,
+): SubscriptionKeySummary | undefined {
+  if (teammate || !planPayer(payer) || subscriptions === undefined) return undefined;
+  const kind = PLAN_PAYER_KIND[payer];
+  return subscriptionId !== undefined
+    ? subscriptions.find((one) => one.id === subscriptionId && one.kind === kind)
+    : next
+      ? subscriptions
+          .filter((one) => one.kind === kind)
+          .toSorted((a, b) => a.position - b.position)
+          .find(
+            (one) =>
+              one.status === PROVIDER_KEY_STATUS.VERIFIED ||
+              one.status === PROVIDER_KEY_STATUS.UNVERIFIED,
+          )
+      : undefined;
+}
+
+/** The reader's own plan that pays (`payerPlanOf`) by its name: the one the reader gave it, else the ChatGPT account it signed in as; nothing for one with neither. */
 export function payerPlanName(
   payer: AgentPayer | undefined,
   subscriptions: readonly SubscriptionKeySummary[] | undefined,
@@ -180,21 +203,11 @@ export function payerPlanName(
   next: boolean,
   teammate = false,
 ): string | undefined {
-  if (teammate || !planPayer(payer) || subscriptions === undefined) return undefined;
-  const kind = PLAN_PAYER_KIND[payer];
-  const plan =
-    subscriptionId !== undefined
-      ? subscriptions.find((one) => one.id === subscriptionId && one.kind === kind)
-      : next
-        ? subscriptions
-            .filter((one) => one.kind === kind)
-            .toSorted((a, b) => a.position - b.position)
-            .find(
-              (one) =>
-                one.status === PROVIDER_KEY_STATUS.VERIFIED ||
-                one.status === PROVIDER_KEY_STATUS.UNVERIFIED,
-            )
-        : undefined;
+  return planNameOf(payerPlanOf(payer, subscriptions, subscriptionId, next, teammate));
+}
+
+/** A plan by its name: the one the reader gave it, else the ChatGPT account it signed in as. */
+export function planNameOf(plan: SubscriptionKeySummary | undefined): string | undefined {
   return plan?.label ?? plan?.email;
 }
 
@@ -559,15 +572,14 @@ export function endLineReason(failure: AgentFailure | undefined, starter?: strin
 }
 
 /**
- * Whether the agent's tab offers Stop: whenever it may still write, starting
- * or with a line awaiting its turn included. Note that we offer it where no
- * turn runs yet, because a Stop first settles a runner that went quiet
- * (`lapsed-runner.ts`), which is all a stalled agent needs, as an agent's
- * `stop_agent` already does; a press that found nothing to stop yet says so
- * (`STOP_NOTHING_YET`), so it is never dropped unheard.
+ * Whether the agent's tab offers Stop: only while a turn of its runs that a
+ * Stop can cancel (`turnUnderWay`). Note that we offer none while the agent
+ * starts or its line awaits a runner to take it, as while its machine is set
+ * up, because the service has no turn to cancel there yet and a press would
+ * only be answered that nothing was stopped.
  */
-export function offersStop(agent: Pick<AgentSummary, "status">): boolean {
-  return agentStillWriting(agent.status);
+export function offersStop(agent: Pick<AgentSummary, "status" | "stoppable">): boolean {
+  return turnUnderWay(agent);
 }
 
 /** Whether a turn of the agent's runs that a message steers, rather than one it opens: it runs, and its service has not said its turn is stopped or not open yet (`stoppable`). */

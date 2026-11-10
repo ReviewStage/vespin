@@ -33,6 +33,10 @@ test("a long pick is cut to the bound and says so", () => {
   assert.ok(reply.endsWith("word…"));
 });
 
+test("a fenced block's blank lines are kept as its code holds them", () => {
+  assert.equal(replyOf("Run:\n\n\n```\na\n\n\nb\n```"), "Run:\n\n```\na\n\n\nb\n```");
+});
+
 test("quotes and the developer's lines between them are written apart by a blank line, every quoted line marked", () => {
   assert.equal(
     messageText([

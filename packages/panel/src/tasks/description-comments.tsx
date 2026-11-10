@@ -8,6 +8,7 @@ import {
   DESCRIPTION_COMMENT_SCOPE,
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentEntry,
+  type DescriptionCommentFile,
   type DescriptionCommentStart,
   type DescriptionCommentThread,
   type DescriptionCommentWriter,
@@ -151,7 +152,7 @@ import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import { AgentActorRef, type AgentSubject, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
 import { CommentMenu } from "./comment-menu.js";
-import { CommentFiles } from "./description-comment-files.js";
+import { CommentFiles, useCommentFileEntries } from "./description-comment-files.js";
 import { EDITOR_ROOM_CLASS } from "./description-document-editor.js";
 import type { EditAgents } from "./edit-ref.js";
 import { MessageBox, useMessageBox } from "./message-box.js";
@@ -435,6 +436,23 @@ interface CommentFocus {
   /** Which threads the description lists in its margin's place, open or resolved; none while its open threads stand in the margin beside their words. */
   readonly listing: CommentsFilter | undefined;
   readonly onListing: (listing: CommentsFilter | undefined) => void;
+}
+
+/** What the description's comments are focused on: nothing, an open thread, or a thread being started. */
+const FOCUS_KIND = { NONE: "none", THREAD: "thread", STARTING: "starting" } as const;
+
+/** The one focus, so a thread opened while another is being started is never held behind it. */
+type Focused =
+  | { readonly kind: typeof FOCUS_KIND.NONE }
+  | { readonly kind: typeof FOCUS_KIND.THREAD; readonly id: string }
+  | { readonly kind: typeof FOCUS_KIND.STARTING; readonly pending: PendingThread };
+
+const UNFOCUSED: Focused = { kind: FOCUS_KIND.NONE };
+
+/** The thread drawn open, the one being started under its stand-in id. */
+function activeOf(focused: Focused): string | undefined {
+  if (focused.kind === FOCUS_KIND.THREAD) return focused.id;
+  return focused.kind === FOCUS_KIND.STARTING ? PENDING_THREAD : undefined;
 }
 
 const CommentFocusContext = createContext<CommentFocus>({
@@ -760,21 +778,42 @@ function CommentEntry({
       text: words.trim() === "" || words === shown ? "" : words,
     }));
   };
-  const save = () => {
+  const save = (files: EditedFiles) => {
     const words = editing?.trim() ?? "";
     // Note that a comment is never saved empty, so an edit emptied asks to delete it, as its menu's Delete does.
     if (words === "") {
       deleting.ask();
       return;
     }
-    // Note that the edit is drawn by the host on the press, so the field closes at once; words refused come back as its draft (`use-description-comments.ts`), which Edit opens on again.
+    // Note that the edit is drawn by the host on the press, so the field closes at once; words refused come back as its draft (`use-description-comments.ts`), and its files here, which Edit opens on again.
     setEditing(undefined);
     edited.update(() => EMPTY_DRAFT);
-    void doors.control.act(thread.id, {
-      action: DESCRIPTION_COMMENT_ACTION.EDIT,
-      entry: entry.id,
-      words,
-    });
+    const carried = entry.files ?? [];
+    void doors.control
+      .act(thread.id, {
+        action: DESCRIPTION_COMMENT_ACTION.EDIT,
+        entry: entry.id,
+        words,
+        ...filesChanged(carried, files),
+      })
+      .then((landed) => {
+        if (landed) return;
+        const kept = new Set(files.kept.map((file) => file.attachmentId));
+        edited.update((was) => ({
+          ...was,
+          attachments: files.added,
+          dropped: carried.map((file) => file.attachmentId).filter((id) => !kept.has(id)),
+        }));
+      });
+  };
+  // The files the edit changes, kept in its draft beside its words.
+  const editFiles: EditFilesHolder = {
+    files: { dropped: edited.draft.dropped ?? [], attachments: edited.draft.attachments },
+    update: (next) =>
+      edited.update((was) => {
+        const files = next({ dropped: was.dropped ?? [], attachments: was.attachments });
+        return { ...was, dropped: files.dropped, attachments: files.attachments };
+      }),
   };
   return (
     <div className="comment-entry relative py-tight-gap" data-entry={entry.id}>
@@ -827,6 +866,9 @@ function CommentEntry({
           </>
         ) : (
           <CommentEditField
+            planId={doors.control.planId}
+            files={entry.files ?? NO_FILES}
+            changes={editFiles}
             value={editing}
             onChange={write}
             onSave={save}
@@ -838,44 +880,138 @@ function CommentEntry({
   );
 }
 
-/** The field a comment's words are edited in, in its place, on the message box: Cancel, then Save. */
+/**
+ * The field a comment's words are edited in, in their place, on the message
+ * box as the field a thread's first comment is written in: the words stay
+ * where they were read, bare on the card with no box around them, and the
+ * box's foot stands under them, its + and microphone and Cancel beside the
+ * round send, which saves. The box holds the comment's own files first, as
+ * entries of its own (`useCommentFileEntries`), and the files added by the
+ * +, a paste, or a drop after them, so the two are taken off alike and held
+ * together to the bounds of one message's; the edit keeps what changed as
+ * the ids it took off and the files it added.
+ */
 function CommentEditField({
+  planId,
+  files,
+  attached = NO_ATTACHMENTS,
+  changes: handed,
   value,
   onChange,
   onSave,
   onCancel,
 }: {
+  planId: string;
+  /** The files the service keeps for the comment. */
+  files: readonly DescriptionCommentFile[];
+  /** The files the window holds for it as the edit opens, a held comment's not yet sent; none for a posted one's. */
+  attached?: readonly AgentAttachment[];
+  /** Where what the edit changes of the files is kept, as its words are, so Cancel, Esc, or a save refused finds them as the edit opens again; the field keeps its own where none is handed. */
+  changes?: EditFilesHolder | undefined;
   value: string;
   onChange: (words: string) => void;
-  onSave: () => void;
+  /** Saves the words, with the files the field holds. */
+  onSave: (files: EditedFiles) => void;
   onCancel: () => void;
 }): React.JSX.Element {
-  // Note that an edit keeps the files its comment was sent with, so it takes none.
+  const [own, setOwn] = useState<EditFiles>({ dropped: [], attachments: attached });
+  const changes = handed ?? { files: own, update: setOwn };
+  const { entries, idOf } = useCommentFileEntries(planId, files);
+  /** The box's files for what the edit changed: the comment's own it keeps, then those added. */
+  const held = (edit: EditFiles) => [
+    ...entries.filter((entry) => !edit.dropped.includes(idOf(entry) ?? "")),
+    ...edit.attachments,
+  ];
   const box = useMessageBox({
     draft: value,
     setDraft: onChange,
     placeholder: COMMENT_WORDS.EDIT,
     label: COMMENT_WORDS.EDIT,
     maxLength: DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS,
-    takesFiles: false,
+    // Note that what the box holds after a change is read back as the comment's files it no longer holds and the files it added.
+    holder: {
+      attachments: held(changes.files),
+      update: (next) =>
+        changes.update((was) => {
+          const now = next(held(was));
+          return {
+            dropped: entries.flatMap((entry) => {
+              const id = idOf(entry);
+              return id === undefined || now.includes(entry) ? [] : [id];
+            }),
+            attachments: now.filter((entry) => idOf(entry) === undefined),
+          };
+        }),
+    },
     onLeave: onCancel,
-    onSubmit: onSave,
+    onSubmit: () => {
+      if (box.files.reading) return;
+      // Note that a file the box holds no entry of is kept as it stands, after those it holds, in their order.
+      const held = new Set(box.files.attachments.flatMap((entry) => idOf(entry) ?? []));
+      const unheld = files.filter(
+        (file) => !entries.some((entry) => idOf(entry) === file.attachmentId),
+      );
+      onSave({
+        kept: [
+          ...[...held].flatMap((id) => files.find((file) => file.attachmentId === id) ?? []),
+          ...unheld,
+        ],
+        added: box.files.attachments.filter((entry) => idOf(entry) === undefined),
+      });
+    },
     focus: true,
   });
   return (
     <MessageBox
       box={box}
-      look={COMPOSER_LOOK.FIELD}
+      look={COMPOSER_LOOK.BARE}
       className="comment-field comment-editing"
+      data-variant={REPLY_VARIANT.EDIT}
       beforeSend={
         <Button variant={BUTTON_VARIANT.QUIET} size={BUTTON_SIZE.COMPACT} onClick={onCancel}>
           <ReplayUnmask>{COMMENT_WORDS.CANCEL}</ReplayUnmask>
         </Button>
       }
-      // Note that an edit is drawn on the press, which closes the field, so Save is never busy.
-      send={{ label: COMMENT_WORDS.SAVE, inWords: true, empty: false }}
+      // Note that an edit emptied asks to delete the comment, so the send takes a press while empty, that it waits on files still read, and that an edit is drawn on the press, which closes the field, so it is never busy.
+      send={{ label: COMMENT_WORDS.SAVE, empty: false, held: box.files.reading }}
     />
   );
+}
+
+/** The files an edit's field holds as it saves: the comment's own it kept, in order, and those added after them. */
+interface EditedFiles {
+  readonly kept: readonly DescriptionCommentFile[];
+  readonly added: readonly AgentAttachment[];
+}
+
+/** The files an edit changes as it stands open: the comment's own taken off, by their ids, and those added. */
+interface EditFiles {
+  readonly dropped: readonly string[];
+  readonly attachments: readonly AgentAttachment[];
+}
+
+/** Where an edit's files are kept while it stands open, and how they change. */
+interface EditFilesHolder {
+  readonly files: EditFiles;
+  readonly update: (next: (was: EditFiles) => EditFiles) => void;
+}
+
+/** A comment that carries no files. */
+const NO_FILES: readonly DescriptionCommentFile[] = [];
+
+/** An edit that opens holding no files of the window's. */
+const NO_ATTACHMENTS: readonly AgentAttachment[] = [];
+
+/** What an edit says of its comment's files: nothing where it leaves them as they stand, else the files it keeps by their ids, in order, and those it adds. */
+function filesChanged(
+  carried: readonly DescriptionCommentFile[],
+  { kept, added }: EditedFiles,
+): { readonly keep?: readonly string[]; readonly attachments?: readonly AgentAttachment[] } {
+  const keep = kept.map((file) => file.attachmentId);
+  const same =
+    keep.length === carried.length && keep.every((id, at) => carried[at]?.attachmentId === id);
+  if (same && added.length === 0) return {};
+  return { keep, ...(added.length === 0 ? undefined : { attachments: added }) };
 }
 
 /**
@@ -1176,8 +1312,8 @@ function sameFiles(was: readonly AgentAttachment[], now: readonly AgentAttachmen
   return was.length === now.length && was.every((file, at) => file === now[at]);
 }
 
-/** How a comment's field stands: as a thread's first comment, the card itself, or as a reply under its comments. */
-const REPLY_VARIANT = { FIRST: "first", REPLY: "reply" } as const;
+/** How a comment's field stands: as a thread's first comment, the card itself, as a reply under its comments, or as a comment's words edited in their place (`CommentEditField`). */
+const REPLY_VARIANT = { FIRST: "first", REPLY: "reply", EDIT: "edit" } as const;
 
 type ReplyVariant = (typeof REPLY_VARIANT)[keyof typeof REPLY_VARIANT];
 
@@ -2520,8 +2656,7 @@ export function CommentFocusScope({
   /** A thread to open, as a link to it asks; opened once per ask. */
   reveal?: { readonly thread: string; readonly ask: number } | undefined;
 }): React.JSX.Element {
-  const [active, setActive] = useState<string | undefined>(undefined);
-  const [pending, setPending] = useState<PendingThread | undefined>(undefined);
+  const [focused, setFocused] = useState<Focused>(UNFOCUSED);
   const [revealed, setRevealed] = useState<CommentFocus["revealed"]>(undefined);
   // Note that the list stands across the descriptions opened, as a document app's comments view does, until it is put back.
   const [listing, setListing] = useState<CommentsFilter | undefined>(undefined);
@@ -2529,14 +2664,26 @@ export function CommentFocusScope({
   // Note that the thread being started is let go in the render the description changes in, so it is never posted to another description.
   if (focusedOn !== planId) {
     setFocusedOn(planId);
-    setActive(undefined);
-    setPending(undefined);
+    setFocused(UNFOCUSED);
     setRevealed(undefined);
   }
+  // Note that a thread opened or closed while one is being started changes nothing, since the one being started holds the focus until it is let go.
+  const onActive = useCallback((thread: string | undefined) => {
+    setFocused((was) => {
+      if (was.kind === FOCUS_KIND.STARTING) return was;
+      return thread === undefined ? UNFOCUSED : { kind: FOCUS_KIND.THREAD, id: thread };
+    });
+  }, []);
+  // Letting go of the thread being started leaves an open thread open.
+  const setPending = useCallback((pending: PendingThread | undefined) => {
+    setFocused((was) => {
+      if (pending !== undefined) return { kind: FOCUS_KIND.STARTING, pending };
+      return was.kind === FOCUS_KIND.STARTING ? UNFOCUSED : was;
+    });
+  }, []);
   const asked = useRef<number | undefined>(undefined);
   const onReveal = useCallback((thread: string) => {
-    setPending(undefined);
-    setActive(thread);
+    setFocused({ kind: FOCUS_KIND.THREAD, id: thread });
     setRevealed((was) => ({ thread, ask: (was?.ask ?? 0) + 1 }));
   }, []);
   useEffect(() => {
@@ -2544,18 +2691,18 @@ export function CommentFocusScope({
     asked.current = reveal.ask;
     onReveal(reveal.thread);
   }, [reveal, onReveal]);
-  const focus = useMemo(
-    () => ({
-      active: focusedOn !== planId ? undefined : pending === undefined ? active : PENDING_THREAD,
-      onActive: setActive,
-      pending: focusedOn === planId ? pending : undefined,
+  const focus = useMemo(() => {
+    const now = focusedOn === planId ? focused : UNFOCUSED;
+    return {
+      active: activeOf(now),
+      onActive,
+      pending: now.kind === FOCUS_KIND.STARTING ? now.pending : undefined,
       reveal: onReveal,
       revealed,
       listing,
       onListing: setListing,
-    }),
-    [active, pending, onReveal, revealed, listing, focusedOn, planId],
-  );
+    };
+  }, [focused, onActive, onReveal, revealed, listing, focusedOn, planId]);
   return (
     <CommentFocusContext.Provider value={focus}>
       <PendingSetter.Provider value={setPending}>{children}</PendingSetter.Provider>
@@ -3334,11 +3481,11 @@ export function PendingPageComment({
           ],
         ];
   // Note that an edit emptied deletes the comment, as a posted one's does, here at once with Undo.
-  const save = () => {
+  const save = ({ added }: EditedFiles) => {
     const next = editing?.trim() ?? "";
     setEditing(undefined);
     if (next === "") review.remove(clientKey);
-    else review.edit(clientKey, next);
+    else review.edit(clientKey, next, added);
   };
   return (
     <div className="comment-entry relative py-tight-gap" data-pending={clientKey}>
@@ -3374,6 +3521,9 @@ export function PendingPageComment({
           </>
         ) : (
           <CommentEditField
+            planId={comment.planId}
+            files={NO_FILES}
+            attached={comment.attachments}
             value={editing}
             onChange={setEditing}
             onSave={save}

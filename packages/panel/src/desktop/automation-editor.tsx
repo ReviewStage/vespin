@@ -154,6 +154,7 @@ import { confirmAsked, neverBusyAct } from "@repo/ui/confirm-state";
 import { GLYPH } from "@repo/ui/icons";
 import { inputProblem, UNREPORTED } from "@repo/ui/reported-failure";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
@@ -2619,6 +2620,29 @@ export function AutomationPageSkeleton({
 /** The setup's own scrolling column, which a run with nothing of its own to open hands the keyboard. */
 const SETUP_COLUMN = ".ui-detail-page-main";
 
+/** Why Save or Run now was last refused, under the name, while it stands. */
+function EditorRefusal({
+  refusal,
+  automationId,
+}: {
+  refusal: string | undefined;
+  automationId: string | undefined;
+}): React.JSX.Element | null {
+  if (refusal === undefined) return null;
+  return (
+    <FailureNote
+      failure={failureShown({
+        surface: FAILURE_SURFACE.AUTOMATION_SAVE,
+        cause: FAILURE_CONDITION.REFUSED,
+        about: { automationId },
+        refused: true,
+      })}
+    >
+      <ReplayUnmask>{refusal}</ReplayUnmask>
+    </FailureNote>
+  );
+}
+
 /** An automation's page's two screens in a narrow room: its setup, toolbar and all, and its runs. */
 const EDITOR_SCREENS: NarrowColumns = {
   list: ":scope > .automation-editor-screen",
@@ -2690,7 +2714,6 @@ export function AutomationEditor({
 }): React.JSX.Element {
   const runs = useAutomationRuns(automation?.id);
   const linkedRun = linked?.runId;
-  const [running, setRunning] = useState(false);
   const [defaults] = useState<DraftDefaults>(() => ({
     timezone: readerZone(),
     owner: AUTOMATION_SCOPE.PERSONAL,
@@ -2703,8 +2726,9 @@ export function AutomationEditor({
   );
   const [draft, setDraft] = useState(start);
   const [shownProblems, setShownProblems] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [refusal, setRefusal] = useState<string | undefined>(undefined);
+  // Note that Save and Run now each hold their own stage, so one's refusal neither hides nor lets go of the other's.
+  const saving = useAsyncAction(rejectionWords);
+  const starting = useAsyncAction(rejectionWords);
   // The webhook secret a write just minted, shown once on this page and gone when it is left.
   const [shownSecret, setShownSecret] = useState<string | undefined>(undefined);
   const taskBacked = automation !== undefined && automation.planId !== null;
@@ -2753,17 +2777,12 @@ export function AutomationEditor({
       : drafted;
   const editDraft = (patch: Partial<AutomationDraft>) => {
     setDraft((was) => ({ ...was, ...patch }));
-    setRefusal(undefined);
+    saving.clear();
+    starting.clear();
   };
-  // Note that a write out is held here as well as in state, so a second ⌘Enter pressed before the page draws again sends no second write.
-  const writing = useRef(false);
-  const landed = (answer: AutomationWriteAnswer) => {
-    writing.current = false;
-    setSaving(false);
-    if ("failure" in answer) {
-      setRefusal(SAVE_REFUSAL_WORDS[answer.failure]);
-      return;
-    }
+  // What a landed write leaves the page: why it was refused, or nothing once it saved.
+  const landed = (answer: AutomationWriteAnswer): string | undefined => {
+    if ("failure" in answer) return SAVE_REFUSAL_WORDS[answer.failure];
     // Note that the draft is kept rather than replaced by the answer, so what was typed while the save was out stands, unsaved.
     setShownProblems(false);
     // A save that leaves it no webhook lets go of any secret shown, since that secret no longer admits anything.
@@ -2771,11 +2790,13 @@ export function AutomationEditor({
     else if (answer.webhookSecret !== undefined) setShownSecret(answer.webhookSecret);
     // Note that the page it now stands as is this one, saved, so the move there passes the ask.
     if (automation === undefined) placeLeave.pass(() => onCreated(answer.automation.id));
+    return undefined;
   };
+  // Note that a second ⌘Enter pressed while the write is out sends no second write, since the action holds one out at a time.
   const save = () => {
-    if (writing.current) return;
+    if (saving.running) return;
     if (sentryWithheld(sentry, automation, draft)) {
-      setRefusal(SENTRY_WITHHELD);
+      saving.refuse(SENTRY_WITHHELD);
       return;
     }
     if (Object.keys(problems).length > 0) {
@@ -2783,36 +2804,34 @@ export function AutomationEditor({
       return;
     }
     if (workspace === undefined || (automation !== undefined && change === undefined)) return;
-    writing.current = true;
-    setSaving(true);
-    setRefusal(undefined);
-    const saved =
-      automation === undefined
+    void saving.run(() =>
+      (automation === undefined
         ? writes.create(createRequestOf(draft, workspace.id))
-        : writes.change({ automationId: automation.id, change: change ?? {} });
-    saved.then(landed);
+        : writes.change({ automationId: automation.id, change: change ?? {} })
+      ).then(landed),
+    );
   };
   const runNow = () => {
-    setRunning(true);
-    setRefusal(undefined);
-    runs.runNow().then((answer) => {
-      setRunning(false);
-      if ("failure" in answer) setRefusal(RUN_REFUSAL_WORDS[answer.failure]);
-    });
+    void starting.run(() =>
+      runs
+        .runNow()
+        .then((answer) => ("failure" in answer ? RUN_REFUSAL_WORDS[answer.failure] : undefined)),
+    );
   };
   // Note that any way out of the page, a crumb, Escape, a run's agent, the sidebar, ⌘K, history,
   // or Settings, asks first while something written would be lost, and goes once Leave is pressed.
-  const [leavingBy, setLeavingBy] = useState<
-    { readonly leave: () => void; readonly stay: () => void } | undefined
-  >(undefined);
+  // Note that the dialog's stage alone says whether a leave is asked; the move it holds is kept beside it only for its answer to reach.
+  const leavingBy = useRef<{ readonly leave: () => void; readonly stay: () => void } | undefined>(
+    undefined,
+  );
   const leaving = useConfirmDialog(
-    { subject: leavingBy !== undefined, surfaceOpen: true },
-    neverBusyAct(() => leavingBy?.leave()),
+    { subject: true, surfaceOpen: true },
+    neverBusyAct(() => leavingBy.current?.leave()),
     confirmFailure(FAILURE_SURFACE.AUTOMATION_LEAVE),
   );
   const askLeave = useRef<LeaveAsk>(() => undefined);
   askLeave.current = (leave, stay) => {
-    setLeavingBy({ leave, stay });
+    leavingBy.current = { leave, stay };
     leaving.ask();
   };
   useEffect(
@@ -2822,10 +2841,11 @@ export function AutomationEditor({
   // The ask put away however it went, Cancel among them, keeps the window where it stands, as the move held waits to hear; once Leave went, staying is too late to hold anything.
   const leaveAsked = confirmAsked(leaving.stage);
   useEffect(() => {
-    if (leaveAsked || leavingBy === undefined) return;
-    leavingBy.stay();
-    setLeavingBy(undefined);
-  }, [leaveAsked, leavingBy]);
+    if (leaveAsked) return;
+    const by = leavingBy.current;
+    leavingBy.current = undefined;
+    by?.stay();
+  }, [leaveAsked]);
   const toggle = (enabled: boolean) =>
     automation === undefined
       ? Promise.resolve<AutomationView>({ failure: AUTOMATION_CALL_FAILURE.NOT_FOUND })
@@ -2894,13 +2914,13 @@ export function AutomationEditor({
               (automation === undefined ? NEW_AUTOMATION : UNTITLED_AUTOMATION),
           }}
           dirty={dirty}
-          saving={saving}
-          saveRefused={refusal !== undefined}
+          saving={saving.running}
+          saveRefused={saving.refusal !== undefined}
           onBack={onBack}
           onSave={save}
           onToggle={toggle}
           onDelete={deletion.ask}
-          running={running}
+          running={starting.running}
           onRunNow={runNow}
           runs={{
             shown: runsPanel.open,
@@ -2917,18 +2937,8 @@ export function AutomationEditor({
               <ReplayUnmask>{problems[DRAFT_FIELD.NAME]}</ReplayUnmask>
             </FailureNote>
           ) : null}
-          {refusal === undefined ? null : (
-            <FailureNote
-              failure={failureShown({
-                surface: FAILURE_SURFACE.AUTOMATION_SAVE,
-                cause: FAILURE_CONDITION.REFUSED,
-                about: { automationId: automation?.id },
-                refused: true,
-              })}
-            >
-              <ReplayUnmask>{refusal}</ReplayUnmask>
-            </FailureNote>
-          )}
+          <EditorRefusal refusal={saving.refusal} automationId={automation?.id} />
+          <EditorRefusal refusal={starting.refusal} automationId={automation?.id} />
           <EditorForm
             draft={draft}
             automation={automation}

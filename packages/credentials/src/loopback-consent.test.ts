@@ -6,7 +6,12 @@ import { SIGN_IN_FAILURE } from "@repo/features/words";
 import { Deferred, Duration, Effect, Exit, Fiber } from "effect";
 import { TestClock } from "effect/testing";
 import { vi } from "vitest";
-import type { LoopbackAuthorization, LoopbackConsentOptions, LoopbackExchange } from "./consent.js";
+import {
+  LOOPBACK_CONSENT_CANCELED,
+  type LoopbackAuthorization,
+  type LoopbackConsentOptions,
+  type LoopbackExchange,
+} from "./consent.js";
 import { loopbackConsent } from "./loopback-consent.js";
 
 interface Grant {
@@ -274,6 +279,28 @@ it.effect("a second press while a trip waits is answered that one is already wai
       reason: "A sign-in is already waiting in your browser.",
       failure: SIGN_IN_FAILURE.ALREADY_WAITING,
     });
+  }),
+);
+
+it.effect("a redirect after a cancel given while the browser opens runs no exchange", () =>
+  Effect.gen(function* () {
+    const armed = yield* Deferred.make<LoopbackAuthorization>();
+    const browser = Promise.withResolvers<void>();
+    const { consent, exchanges } = harness(armed, { openExternal: () => browser.promise });
+
+    const waiting = yield* trip(consent);
+    const authorization = yield* armedTrip(armed);
+    consent.cancel();
+
+    const late = yield* callback(authorization.redirectUri, {
+      state: authorization.state,
+      code: "auth-code",
+    });
+    browser.resolve();
+
+    assert.equal(late.status, 404);
+    assert.deepEqual(exchanges, []);
+    assert.deepEqual(yield* Fiber.join(waiting), { reason: LOOPBACK_CONSENT_CANCELED });
   }),
 );
 

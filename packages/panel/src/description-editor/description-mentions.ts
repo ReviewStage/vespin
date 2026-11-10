@@ -1,19 +1,14 @@
 import type { Editor } from "@tiptap/core";
 import type { MarkdownManager } from "@tiptap/markdown";
 import type { Node as PmNode } from "@tiptap/pm/model";
-import {
-  type EditorState,
-  Plugin,
-  PluginKey,
-  TextSelection,
-  type Transaction,
-} from "@tiptap/pm/state";
+import { type EditorState, Plugin, PluginKey, type Transaction } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
+import { atWordAround, spacedChip } from "./chip-spacing.js";
 import {
   type ComposerTrigger,
+  type DescriptionEditorMentions,
   type HeadingsChange,
   type MentionNode,
-  type DescriptionEditorMentions,
   sameTrigger,
 } from "./contract.js";
 import { MENTION_NODE } from "./mention-node.js";
@@ -21,12 +16,10 @@ import { MENTION_NODE } from "./mention-node.js";
 /**
  * description-mentions.ts -- the description editor's `@`: the word the caret ends reported to the panel, the mention it picks written in its place, and a mention of a heading the developer renames named again with the new words.
  *
- * An `@` at the start of a word, outside code, opens the panel's list
- * (`onTrigger`): the word runs from the `@` to the caret, up to six words
- * of its own, since a section's heading has spaces in it, and a date's
- * range runs as long as `next fri at 3pm to 5pm`. A pick replaces the
- * word with the mention's node and a space (`chooseMention`), the caret
- * after the space. The keys the list takes are the panel's first
+ * An `@` word, outside code, opens the panel's list (`onTrigger`), read as
+ * every composer reads one (`atWordAround`). A pick replaces the word with
+ * the mention's node, spaced as every chip is (`spacedChip`).
+ * The keys the list takes are the panel's first
  * (`../description-editor.ts`'s `handleKeyDown`).
  *
  * A section is named by its heading's anchor, so renaming a heading in the
@@ -48,16 +41,8 @@ const SECTION_LEVELS = new Set([1, 2]);
 /** What a change that named mentions again is tagged with, so it names none of its own. */
 const RETARGETED_META = "plan-retargeted";
 
-/** The `@` word the caret ends: `@`, at the start of a word, then up to six words with no bracket, parenthesis, or `@` in them. */
-const MENTION_WORD = /(^|\s)@((?:[^\s@[\]()]+(?: [^\s@[\]()]+){0,5})?)$/u;
-
 /** The character an inline node that is no text stands for in its block's words, one position wide as the node is. */
 const LEAF_CHARACTER = "￼";
-
-/** The rest of an `@` word after the caret, which a pick replaces too: up to a space, a bracket, a parenthesis, an `@`, or a chip, which is no word's. */
-const WORD_REST = /^[^\s@[\]()\uFFFC]*/u;
-
-const SPACE = " ";
 
 /** The `@` word the caret ends: the report, and the range a pick replaces. */
 interface TaskTrigger {
@@ -78,11 +63,12 @@ function triggerAt(view: EditorView): TaskTrigger | undefined {
   if (!selection.empty || !view.hasFocus()) return undefined;
   const { $from } = selection;
   if ($from.parent.type.spec.code === true) return undefined;
-  const before = $from.parent.textBetween(0, $from.parentOffset, undefined, LEAF_CHARACTER);
-  const match = MENTION_WORD.exec(before);
-  if (match === null) return undefined;
-  const query = match[2] ?? "";
-  const from = $from.start() + before.length - query.length - 1;
+  const { parent, parentOffset } = $from;
+  const before = parent.textBetween(0, parentOffset, undefined, LEAF_CHARACTER);
+  const after = parent.textBetween(parentOffset, parent.content.size, undefined, LEAF_CHARACTER);
+  const word = atWordAround(before, after);
+  if (word === undefined) return undefined;
+  const from = $from.start() + before.length - word.query.length - 1;
   if (
     doc
       .resolve(from + 1)
@@ -91,18 +77,14 @@ function triggerAt(view: EditorView): TaskTrigger | undefined {
   )
     return undefined;
   const box = view.coordsAtPos(from);
-  // Note that a pick with the caret inside the word replaces the word through its end.
-  const after = $from.parent.textBetween(
-    $from.parentOffset,
-    $from.parent.content.size,
-    undefined,
-    LEAF_CHARACTER,
-  );
-  const rest = WORD_REST.exec(after)?.[0].length ?? 0;
   return {
-    trigger: { start: from, query, rect: { left: box.left, top: box.top, bottom: box.bottom } },
+    trigger: {
+      start: from,
+      query: word.query,
+      rect: { left: box.left, top: box.top, bottom: box.bottom },
+    },
     from,
-    to: selection.from + rest,
+    to: selection.from + word.rest,
   };
 }
 
@@ -242,21 +224,13 @@ export function descriptionMentions(
       },
     },
   });
-  /** The `@` word the caret ends written as the mention chosen, a space after it unless one follows, the caret after the space. */
+  /** The `@` word the caret ends written as the mention chosen, spaced as every chip is (`spacedChip`). */
   const choose = (editor: Editor, mention: MentionNode): void => {
     const word = state.found;
     if (word === undefined) return;
-    const { doc, schema } = editor.state;
-    const spaced = doc.textBetween(word.to, Math.min(word.to + 1, doc.content.size)) === SPACE;
-    const chip = schema.node(MENTION_NODE, { name: mention.name, target: mention.target });
-    const tr = editor.state.tr.replaceWith(
-      word.from,
-      word.to,
-      spaced ? [chip] : [chip, schema.text(SPACE)],
-    );
-    editor.view.dispatch(
-      tr.setSelection(TextSelection.create(tr.doc, word.from + 2)).scrollIntoView(),
-    );
+    const chip = editor.schema.node(MENTION_NODE, { name: mention.name, target: mention.target });
+    const tr = editor.state.tr.replaceWith(word.from, word.to, chip);
+    editor.view.dispatch(spacedChip(tr, word.from, word.from + chip.nodeSize).scrollIntoView());
     editor.view.focus();
   };
   return { plugin, choose };

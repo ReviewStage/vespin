@@ -23,7 +23,7 @@
  * more.
  */
 
-import { TURN_STATUS, type WireValue, WireValueSchema } from "@repo/wire";
+import { TURN_OPEN, type WireValue, WireValueSchema } from "@repo/wire";
 import {
   and,
   asc,
@@ -168,7 +168,7 @@ function awaitsOpenTurn() {
           eq(agentTable.id, runnerLine.agentId),
           // Note that a line's id is the uuid its message's client id spells as text.
           sql`${messages.clientId} = ${runnerLine.lineId}::text`,
-          inArray(turns.status, [TURN_STATUS.QUEUED, TURN_STATUS.RUNNING]),
+          inArray(turns.status, [...TURN_OPEN]),
         ),
       ),
   );

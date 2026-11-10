@@ -1,8 +1,10 @@
-import type { FileChip } from "@repo/features/attachment-model";
+import { type AgentAttachment, isAgentAttachmentType } from "@repo/features/agent-wire";
+import { chipBase64, type FileChip } from "@repo/features/attachment-model";
 import type { DescriptionCommentFile } from "@repo/features/description-comment-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { PICTURE_STATE } from "@repo/ui/picture-read";
 import { useQueries } from "@tanstack/react-query";
+import { useRef } from "react";
 import { sendAct } from "../act.js";
 import { pictureQuery } from "../picture-query.js";
 import { AttachedFileChips } from "./attached-file-chips.js";
@@ -22,6 +24,9 @@ import { AttachedFileChips } from "./attached-file-chips.js";
  * A comment's field takes files by its + (`attach-files-button.tsx`), a
  * paste of pictures, or a drop, as every message box does
  * (`../use-attached-files.ts`), held to the bounds a message to an agent is.
+ * Its edit holds the files it keeps in its box with the files it adds, as
+ * ordinary entries of the box's (`useCommentFileEntries`), each with its ×
+ * to take it off.
  */
 
 /** How a plan's comment's file is read: as the plan's attachment, which its pictures read too. */
@@ -29,7 +34,19 @@ function readDescriptionFile(planId: string, attachmentId: string) {
   return sendAct(ACT_KIND.TASKS_PICTURE_READ, { planId, attachmentId });
 }
 
-/** A comment's files over its words, each read once and kept as the plan's pictures are (`../picture-query.ts`). */
+/** A comment's files as read, in order: each one's `data:` URL once it landed, and an empty one until then or where it did not. */
+function useCommentFileReads(planId: string, files: readonly DescriptionCommentFile[]): string[] {
+  const reads = useQueries({
+    queries: files.map((file) => pictureQuery(planId, file.attachmentId, readDescriptionFile)),
+    combine: (results) => results.map((result) => result.data),
+  });
+  return files.map((_, index) => {
+    const read = reads[index];
+    return read?.kind === PICTURE_STATE.READY ? read.url : "";
+  });
+}
+
+/** A comment's files over its words. */
 export function CommentFiles({
   planId,
   files,
@@ -37,21 +54,49 @@ export function CommentFiles({
   planId: string;
   files: readonly DescriptionCommentFile[];
 }): React.ReactNode {
-  const reads = useQueries({
-    queries: files.map((file) => pictureQuery(planId, file.attachmentId, readDescriptionFile)),
-    combine: (results) => results.map((result) => result.data),
-  });
-  const chips: FileChip[] = files.map((file, index) => {
-    const read = reads[index];
-    return {
-      name: file.name,
-      mediaType: file.mediaType,
-      url: read?.kind === PICTURE_STATE.READY ? read.url : "",
-    };
-  });
+  const urls = useCommentFileReads(planId, files);
+  const chips: FileChip[] = files.map((file, index) => ({
+    name: file.name,
+    mediaType: file.mediaType,
+    url: urls[index] ?? "",
+  }));
   return (
     <div className="comment-files mx-0 mt-tight-gap mb-item-gap">
       <AttachedFileChips files={chips} />
     </div>
   );
+}
+
+/**
+ * A comment's files as its edit's box holds them, each read as the
+ * comment's are: a file of the box's, its bytes empty until they land, and
+ * the comment's file each one is, by its id. Note that an entry stays the
+ * same object for as long as its file and bytes do, because the box knows
+ * each file it holds by the object, and a new one each draw would take it
+ * for another file; and that a file of a type this window does not know,
+ * one added after it, is no entry, since no box holds it, and stays on the
+ * comment as it stands.
+ */
+export function useCommentFileEntries(
+  planId: string,
+  files: readonly DescriptionCommentFile[],
+): {
+  readonly entries: readonly AgentAttachment[];
+  readonly idOf: (entry: AgentAttachment) => string | undefined;
+} {
+  const urls = useCommentFileReads(planId, files);
+  const known = useRef(new Map<string, AgentAttachment>());
+  const entries = files.flatMap((file, index) => {
+    const { mediaType } = file;
+    if (!isAgentAttachmentType(mediaType)) return [];
+    const data = chipBase64({ name: file.name, mediaType, url: urls[index] ?? "" });
+    const was = known.current.get(file.attachmentId);
+    if (was?.name === file.name && was.mediaType === mediaType && was.data === data) return [was];
+    const entry: AgentAttachment = { name: file.name, mediaType, data };
+    known.current.set(file.attachmentId, entry);
+    return [entry];
+  });
+  const idOf = (entry: AgentAttachment) =>
+    [...known.current].find(([, each]) => each === entry)?.[0];
+  return { entries, idOf };
 }

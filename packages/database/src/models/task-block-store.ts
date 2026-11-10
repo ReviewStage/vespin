@@ -1,4 +1,4 @@
-import { TASK_STATUS } from "@repo/features/task-wire";
+import { TASK_SETTLED } from "@repo/features/task-wire";
 import { and, asc, eq, exists, inArray, notInArray, or, type SQL, sql } from "drizzle-orm";
 import { Data, DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
@@ -54,9 +54,6 @@ export class TaskBlockAcrossWorkspaces extends Data.TaggedError("TaskBlockAcross
 
 /** The blocked task already blocks the blocker, itself or through others, so the block would close a cycle; nothing was written. */
 export class TaskBlockCycle extends Data.TaggedError("TaskBlockCycle") {}
-
-/** The statuses a blocker no longer holds work up in: its work is finished, or it was cut. */
-const SETTLED = [TASK_STATUS.DONE, TASK_STATUS.CANCELED];
 
 const IdRowSchema = Schema.Struct({ id: Schema.String });
 
@@ -238,7 +235,7 @@ export function taskBlockedFor(userId: string): SQL {
   const open = queryBuilder
     .select({ id: task.id })
     .from(task)
-    .where(and(notInArray(task.status, SETTLED), taskReachableBy(userId)));
+    .where(and(notInArray(task.status, [...TASK_SETTLED]), taskReachableBy(userId)));
   return exists(
     queryBuilder
       .select({ one: sql`1` })

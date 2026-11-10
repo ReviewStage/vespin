@@ -8,7 +8,8 @@
  * is answered not found, exactly as one no account holds, so no account
  * registers a token for another's phone; the app registers the phone itself
  * first (`push-devices-procedures.ts`) and tries again. An end of a phone
- * the account does not hold is done all the same. Every token is kept in
+ * the account does not hold is done all the same, and one that names the
+ * activity that ended leaves a newer activity's token standing. Every token is kept in
  * lower case, however the app spelled its hex. Nothing of a token is logged
  * or answered.
  */
@@ -67,10 +68,11 @@ export function liveActivitiesProcedures(seams: LiveActivitiesProcedureSeams) {
 
     ended: signedIn.ended.effect(function* ({ input, context: { userId } }) {
       yield* hostedStoreOrUnavailable(
-        endLiveActivityOnPhone(userId, {
-          token: input.deviceToken.toLowerCase(),
-          environment: input.environment,
-        }),
+        endLiveActivityOnPhone(
+          userId,
+          { token: input.deviceToken.toLowerCase(), environment: input.environment },
+          input.activityToken?.toLowerCase(),
+        ),
       );
       return DONE;
     }),
