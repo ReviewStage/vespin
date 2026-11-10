@@ -1,0 +1,25 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace whose setup it is, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 140,
+      "description": "The repository whose setup script to save, as owner/name; leave it out to save the workspace's install script."
+    },
+    "script": {
+      "type": "string",
+      "maxLength": 65536,
+      "description": "The whole script, which replaces the one that stood; an empty one removes it."
+    }
+  },
+  "required": [
+    "script"
+  ],
+  "additionalProperties": false
+}
