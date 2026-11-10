@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { cappedExponential } from "@repo/wire/effect";
 import { and, eq, lt, sql } from "drizzle-orm";
 import { Data, DateTime, Duration, Effect, Option, Schedule, Schema } from "effect";
-import { SqlSchema } from "effect/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { conversations, dispatchWaiters } from "../schemas/storage.js";
 import { InstantColumnSchema } from "./columns.js";
@@ -327,5 +327,34 @@ export function waitingOutDispatchClaim<A, E, R>(
       });
     }
     return yield* exit;
+  });
+}
+
+/**
+ * Runs `work` holding the conversation's dispatch claim, as a hand-over
+ * holds it, so no hand-over to its runtime is made meanwhile: for a change
+ * of the runtime's session that must not cross a message on its way (a
+ * `/clear`). The claim is waited for as a send waits for it, and released
+ * however the work ends; past the wait it fails as `DispatchClaimHeld`.
+ */
+export function underDispatchClaim<A, E, R>(
+  conversationId: string,
+  work: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E | DispatchClaimHeld | StoreFailure, R | DatabaseServices> {
+  return Effect.gen(function* () {
+    const client = yield* SqlClient.SqlClient;
+    const claim = yield* waitingOutDispatchClaim(conversationId, (place) =>
+      client.withTransaction(
+        Effect.gen(function* () {
+          if (yield* dispatchClaimStands(conversationId, place)) {
+            return yield* new DispatchClaimHeld();
+          }
+          return yield* takeDispatchClaim(conversationId, place);
+        }),
+      ),
+    );
+    return yield* work.pipe(
+      Effect.ensuring(Effect.ignore(releaseDispatchClaim(conversationId, claim))),
+    );
   });
 }

@@ -5,6 +5,7 @@ import {
   recordAgentNativeSession,
 } from "@repo/database/models/agent-store";
 import { cancelAgentWakeup } from "@repo/database/models/agent-wakeups";
+import { DispatchClaimHeld, underDispatchClaim } from "@repo/database/models/dispatch-claim";
 import { latestTurnsOf } from "@repo/database/models/message-reads";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import type { StoreWriter } from "@repo/database/models/writer";
@@ -30,7 +31,10 @@ import { runnerHalted } from "./runtime-sessions.js";
  * The transcript gains a mark after its last row (`markSessionCleared`),
  * which the tab draws as the line between the two sessions. An agent at
  * work is refused rather than stopped, so a clear never cuts a turn short;
- * so is one on no harness, which has no session to let go.
+ * so is one on no harness, which has no session to let go. The clear holds
+ * the conversation's dispatch claim as a send does (`dispatch-claim.ts`),
+ * so a message on its way either reaches the old session before it, or the
+ * fresh one after it.
  */
 
 /** The agent's harness started on a fresh session, as above; refused where the caller may not write to it, where it works, or where it runs on no harness. */
@@ -44,23 +48,34 @@ export const clearedAgent = /* @__PURE__ */ Effect.fn("web/clearedAgent")(functi
   yield* admitsPlanWriter(account, agent);
   if (agent.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const target = { userId: agent.userId, conversationId: agent.conversationId };
-  const latest = yield* hostedStoreOrUnavailable(
-    latestTurnsOf(agent.userId, [agent.conversationId]),
-  );
-  if (latest.get(agent.conversationId)?.settledAt === null) {
-    return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
-  }
   const routing = yield* hostedStoreOrUnavailable(readAgentRouting(agent.userId, agent.id));
   const runtime = harnessOf(Option.getOrUndefined(routing)?.runtime);
   if (runtime === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-  // A wakeup the agent booked belongs to the session let go.
-  yield* hostedStoreOrUnavailable(cancelAgentWakeup(agent.id));
-  const sessionId = yield* hostedStoreOrUnavailable(recordedRuntimeSession(target));
-  if (sessionId !== undefined && !(yield* runnerHalted(agent, runtime, sessionId))) {
-    return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-  }
-  yield* hostedStoreOrUnavailable(recordAgentNativeSession(agent.userId, agent.id, null));
-  const store = yield* writer;
-  const marked = yield* hostedStoreOrUnavailable(store.markSessionCleared(target));
-  if (Result.isFailure(marked)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  // Note that the clear holds the conversation's dispatch claim throughout, so no message reaches the
+  // harness between the read that finds no turn under way and the session let go.
+  const cleared = Effect.gen(function* () {
+    const latest = yield* hostedStoreOrUnavailable(
+      latestTurnsOf(agent.userId, [agent.conversationId]),
+    );
+    if (latest.get(agent.conversationId)?.settledAt === null) {
+      return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
+    }
+    const sessionId = yield* hostedStoreOrUnavailable(recordedRuntimeSession(target));
+    if (sessionId !== undefined && !(yield* runnerHalted(agent, runtime, sessionId))) {
+      return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+    }
+    // A wakeup the agent booked belongs to the session let go, so it goes once nothing can refuse the clear.
+    yield* hostedStoreOrUnavailable(cancelAgentWakeup(agent.id));
+    yield* hostedStoreOrUnavailable(recordAgentNativeSession(agent.userId, agent.id, null));
+    const store = yield* writer;
+    const marked = yield* hostedStoreOrUnavailable(store.markSessionCleared(target));
+    if (Result.isFailure(marked)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  });
+  // Note that messages that kept the claim past a send's own wait read as an agent at work.
+  yield* underDispatchClaim(agent.conversationId, cleared).pipe(
+    Effect.mapError((failure) => {
+      if (failure instanceof DispatchClaimHeld) return HOSTED_REFUSAL.AGENT_NOT_READY;
+      return "_tag" in failure ? HOSTED_REFUSAL.UNAVAILABLE : failure;
+    }),
+  );
 });
