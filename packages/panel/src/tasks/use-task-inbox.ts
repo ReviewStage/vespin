@@ -46,6 +46,7 @@ import {
   inboxBoard,
   inboxThreadSend,
 } from "./inbox-model.js";
+import { joinedAhead } from "./refused-send.js";
 
 /**
  * use-task-inbox.ts -- the open task's inbox as one control: its items, drawn from the account's feed at once and from the holder's own read as the host holds it, and the answers on their way back.
@@ -365,11 +366,7 @@ function keptDraft(draft: InboxDraft, revision: number): Draft {
  */
 function withRefused(now: Draft, went: Draft): Draft {
   if (holdsNothing(now)) return went;
-  return {
-    ...(holdsPicks(now) ? now : went),
-    text: [went.text, now.text].filter((words) => words !== "").join("\n"),
-    attachments: [...went.attachments, ...now.attachments],
-  };
+  return { ...(holdsPicks(now) ? now : went), ...joinedAhead(went, now) };
 }
 
 /**
@@ -380,11 +377,7 @@ function withRefused(now: Draft, went: Draft): Draft {
  */
 function carriedBack(first: Draft, behind: readonly Draft[]): Draft {
   return behind.reduce(
-    (joined, went) => ({
-      ...(holdsPicks(went) ? went : joined),
-      text: [joined.text, went.text].filter((words) => words !== "").join("\n"),
-      attachments: [...joined.attachments, ...went.attachments],
-    }),
+    (joined, went) => ({ ...(holdsPicks(went) ? went : joined), ...joinedAhead(joined, went) }),
     first,
   );
 }

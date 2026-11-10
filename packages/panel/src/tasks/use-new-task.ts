@@ -142,7 +142,7 @@ export interface NewTaskPreset {
 }
 
 /** The card as it pressed Start, and why the start was refused, which the card opens again on. */
-interface NewTaskRefusal {
+export interface NewTaskRefusal {
   readonly card: NewTaskCardKept;
   readonly note: Failure;
 }

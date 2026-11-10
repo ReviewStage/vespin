@@ -13,6 +13,7 @@ import { AgentComposer } from "./agent-composer.js";
 import { useInboxAcknowledger } from "./inbox-acknowledge.js";
 import { focusMissing } from "./inbox-ask-controls.js";
 import { type InboxDraft, inboxMissing, inboxNoteReading, inboxThreadSend } from "./inbox-model.js";
+import { putBackRefused } from "./refused-send.js";
 import { ReplyToSelection } from "./reply-to-selection.js";
 import type { SkillSource } from "./skill-picker.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
@@ -296,7 +297,7 @@ function AnswerCard({
   };
   // Note that the same words and files sent again go under the key they went under, so a retry starts one thread.
   // The box lets go of what it sent at once, as a reply does, so words written while the start is out stay
-  // there; a start refused puts what it sent back only into a box that holds nothing, so neither is lost.
+  // there; a start refused puts what it sent back ahead of them (`refused-send.ts`), so neither is lost.
   const start = (offer: AnswerNewThread) => {
     const sent = { note: draft.note, attachments: draft.attachments };
     const text = sent.note.trim();
@@ -314,7 +315,16 @@ function AnswerCard({
         return;
       }
       setRefusal(refused);
-      if (emptyBox(standing.current)) control.onDraft(item, { ...standing.current, ...sent });
+      putBackRefused({
+        went: { text: sent.note, attachments: sent.attachments },
+        most: INBOX_BOUNDS.MAX_MESSAGE_CHARS,
+        update: (next) => {
+          const now = standing.current;
+          const joined = next({ text: now.note, attachments: now.attachments });
+          if (joined === undefined) return;
+          control.onDraft(item, { ...now, note: joined.text, attachments: joined.attachments });
+        },
+      });
     });
   };
   const composer: AgentComposerControl = {

@@ -1316,6 +1316,43 @@ test("words written in the box while its new thread starts stay in it once the t
   assert.equal(composerEditor(itemPane(page)).textContent, "And the footer.");
 });
 
+test("a new thread refused comes back into the box ahead of the words written while it was out", async () => {
+  world.listedWorkspace = ACME;
+  world.inboxes = new Map([[BILLING.id, [noticeOf(THRESHOLD)]]]);
+  const answer = Promise.withResolvers<FakeActAnswer>();
+  const previous = fakeActsAnswer();
+  fakeActs({
+    ...appBridge(),
+    act: (request: AnyAct): Promise<FakeActAnswer> =>
+      request.kind === ACT_KIND.AGENTS_INBOX_START ? answer.promise : previous(request),
+  });
+  const { page } = mount([], { chosen: ON_THRESHOLD });
+  await settle();
+
+  const pane = itemPane(page);
+  act(() =>
+    (
+      pane.querySelector<HTMLElement>('[role="checkbox"]') ??
+      assert.fail("the box offers a new thread")
+    ).click(),
+  );
+  typeInComposer(pane, "Draft the annual plan's line too.");
+  act(() =>
+    (
+      pane.querySelector<HTMLButtonElement>("form.inbox-answer button[type='submit']") ??
+      assert.fail("the box has a Send")
+    ).click(),
+  );
+  typeInComposer(pane, "And the footer.");
+  await act(async () => answer.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Unreachable" }));
+  await settle();
+
+  assert.deepEqual(
+    [...composerEditor(itemPane(page)).querySelectorAll("p")].map((line) => line.textContent),
+    ["Draft the annual plan's line too.", "And the footer."],
+  );
+});
+
 test("an item opened whose agent's inbox could not be read says so in the pane, and Retry reads it there", async () => {
   world.listedWorkspace = ACME;
   // Note that no holding names the billing task, nor the feed its agent, so its item is opened by its agent, whose own read fails.

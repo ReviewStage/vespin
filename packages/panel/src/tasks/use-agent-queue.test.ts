@@ -142,6 +142,18 @@ test("a message the queue refused comes back into the box it was queued from", a
   assert.equal(now().composer.draft, "Please update the tests");
 });
 
+test("a message the queue refused comes back ahead of the words and files written while it was out", async () => {
+  act(() => now().composer.setDraft("Please update the tests"));
+  act(() => now().composer.setAttachments(() => [SHOT]));
+  act(() => now().editing.queue());
+  act(() => now().composer.setDraft("And the docs"));
+  act(() => now().composer.setAttachments(() => [SPEC]));
+  await answer(refused);
+
+  assert.equal(now().composer.draft, "Please update the tests\nAnd the docs");
+  assert.deepEqual(now().composer.attachments, [SHOT, SPEC]);
+});
+
 test("an edit the queue refused to save stays open with its new words, the box's own still kept aside", async () => {
   act(() => now().page({ messages: [message("m1", "Run tests")], revision: 1 }));
   act(() => now().composer.setDraft("my own words"));
