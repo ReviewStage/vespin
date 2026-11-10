@@ -376,7 +376,14 @@ export function useHandedTabActions(
     handed.current = actions;
     told.current?.(actions === undefined ? undefined : throughLatest(actions, latest));
   });
-  useEffect(() => () => told.current?.(undefined), []);
+  // Note that what was handed is forgotten as it is let go, because a body hidden under `Activity` and shown again must hand its actions anew.
+  useEffect(
+    () => () => {
+      handed.current = undefined;
+      told.current?.(undefined);
+    },
+    [],
+  );
 }
 
 /** Hands the actions to the panel tab the body is drawn in (`HandTabActionsContext`); nothing outside one. */
