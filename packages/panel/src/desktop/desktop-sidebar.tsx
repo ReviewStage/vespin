@@ -1,5 +1,6 @@
 import type { AccountSnapshot } from "@repo/credentials/snapshot";
 import type { AgentSummary, TasklessAgent } from "@repo/features/agent-wire";
+import { GLYPH_STATE } from "@repo/features/glyph-state";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { LINK_PLACE, type LinkPlace, linkOf } from "@repo/features/link-grammar";
 import {
@@ -147,7 +148,7 @@ import type { NavigationHistory } from "../places/window-history.js";
 import { type HistoryPage, type HistoryStep, sameHistoryPage } from "../places/window-steps.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import { GLYPH_STATE, stateEndMark } from "../state-glyph.js";
+import { stateEndMark } from "../state-glyph.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";

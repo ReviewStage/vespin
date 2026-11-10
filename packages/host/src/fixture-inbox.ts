@@ -58,9 +58,11 @@ import {
   type AppInboxTask,
   type AppInboxTaskHolding,
   type AppStateSnapshot,
+  OWN_TRANSCRIPT,
   RUN_PROFILE,
 } from "./app-state.js";
 import type { PortActKind, PortActPayload, PortActResult } from "./contract/index.js";
+import { fixtureAgentPicture, fixtureAgentTranscript } from "./fixture-agent-transcript.js";
 import { FIXTURE_PICTURE_PNG, FIXTURE_VIDEO_WEBM } from "./fixture-inbox-media.js";
 import { FIXTURE_IDS, FIXTURE_PAGE, FIXTURE_TASK_NAME } from "./fixture-stage.js";
 
@@ -935,6 +937,32 @@ function noneHeldIn(workspaceIds: readonly string[]): AppHeldById<readonly never
   return Object.fromEntries(workspaceIds.map((id) => [id, { rows: [] }]));
 }
 
+/** The invitations agent's transcript as the host holds one read, its run begun as its agent was started. */
+const INVITES_TRANSCRIPT = fixtureAgentTranscript(
+  LANDED - 3 * DAY,
+  ADA,
+  "Build teammate invitations",
+);
+
+/** The transcripts main holds with the invitations agent's laid over them, one object for each of main's. */
+const STAGED_TRANSCRIPTS = new WeakMap<
+  AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT],
+  AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT]
+>();
+
+function stagedTranscripts(
+  held: AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT],
+): AppStateSnapshot[typeof LIVE_READ.TRANSCRIPT] {
+  const kept = STAGED_TRANSCRIPTS.get(held);
+  if (kept !== undefined) return kept;
+  const staged = {
+    ...held,
+    [AGENT.INVITES]: { ...held[AGENT.INVITES], [OWN_TRANSCRIPT]: { rows: INVITES_TRANSCRIPT } },
+  };
+  STAGED_TRANSCRIPTS.set(held, staged);
+  return staged;
+}
+
 /**
  * Main's document as these profiles draw it: the account signed in, its
  * read of what waits naming the tasks holding items, and each of
@@ -960,6 +988,7 @@ export function inboxAppState(
     [LIVE_READ.PAGES]: stagedPages(state),
     [LIVE_READ.AUTOMATIONS]: noneHeldIn(workspaceIds),
     [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: noneHeldIn(workspaceIds),
+    [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
   };
 }
 
@@ -995,6 +1024,9 @@ const ANSWERS: { readonly [Kind in PortActKind]?: StagedAnswer<Kind> } = {
   },
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
+  // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
+  [ACT_KIND.AGENTS_PICTURE]: ({ pictureId }) => fixtureAgentPicture(pictureId),
+  [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
   [ACT_KIND.AGENTS_INBOX_READ_ALL]: () => ({
     marked: [...INBOXES.values()].flat().filter(({ unread }) => unread === true).length,
   }),
