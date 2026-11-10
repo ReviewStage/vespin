@@ -66,6 +66,8 @@ const { SCREEN_ONLY, NEEDS_BROWSER, SECRET, SECURITY, DESTRUCTIVE, INTERNAL, NOT
 /** Each tool's procedures: at least one, so no row stands empty. */
 export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.LIST_WORKSPACES]: { workspaces: ["list"] },
+  [MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS]: { workspaces: ["members"] },
+  [MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG]: { workspaces: ["setSlug"] },
   [MEMBER_MCP_TOOL.LIST_TASKS]: { plans: ["list"], taskSections: ["list"] },
   [MEMBER_MCP_TOOL.READ_TASK]: { plans: ["open"] },
   [MEMBER_MCP_TOOL.LIST_AGENTS]: { agents: ["listOfWorkspace", "listOfTask"] },
@@ -363,10 +365,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   workspaces: {
     create: NOT_YET_BUILT,
     rename: NOT_YET_BUILT,
-    setSlug: NOT_YET_BUILT,
     setPhoto: NOT_YET_BUILT,
     setExperiment: INTERNAL,
-    members: NOT_YET_BUILT,
     removeMember: NOT_YET_BUILT,
     changeRole: NOT_YET_BUILT,
     transfer: DESTRUCTIVE,

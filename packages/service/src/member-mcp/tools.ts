@@ -122,6 +122,7 @@ import { describeWire, type StandardSchemaWithJson, standardSchemaOf } from "@re
 import { Effect, Option, Result, Schema } from "effect";
 import type { HttpClient } from "effect/http";
 import { forgetWorkspaceMemory, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
+import { workspaceMembersRead, workspaceSlugSet } from "../accounts/workspace-operations.js";
 import {
   BROWSER_TAKEOVER_HOLD_MS,
   handBackAgentBrowserTab,
@@ -1287,6 +1288,113 @@ const MEMBER_UPDATE_AGENT_TOOL = memberMcpTool({
       (userId) => agentWorkspace(userId, { id: asked.agentId }),
       AGENT_TOOL_REFUSAL.NO_AGENT,
       (call) => runUpdateAgent(call, asked),
+    ),
+});
+
+// A workspace's members and its slug, through the operations the hosted procedures run (`../accounts/workspace-operations.ts`), as the member.
+
+/** Why a members read or a slug change was refused, in words the agent can act on. */
+const WORKSPACE_TOOL_REFUSAL = {
+  NOT_OWNER: "Not changed: only the workspace's owner may change its slug.",
+  SLUG_MALFORMED: `Not changed: a slug is lowercase letters and digits, with single hyphens between them, at most ${WORKSPACE_BOUNDS.MAX_SLUG_CHARS} characters.`,
+  SLUG_RESERVED: `Not changed: that slug is reserved by ${PRODUCT_NAME}; choose another.`,
+  SLUG_TAKEN: "Not changed: another workspace holds or held that slug; choose another.",
+  UNANSWERED: "Not run: the workspace could not be read just now. The call may be made again.",
+} as const;
+
+/** A workspace read or write refused by its operation, in the agent's words. */
+function workspaceRefusalWords(refusal: HostedRefusal): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_PERMITTED:
+      return WORKSPACE_TOOL_REFUSAL.NOT_OWNER;
+    case HOSTED_API_ERROR.WORKSPACE_SLUG_MALFORMED:
+      return WORKSPACE_TOOL_REFUSAL.SLUG_MALFORMED;
+    case HOSTED_API_ERROR.WORKSPACE_SLUG_RESERVED:
+      return WORKSPACE_TOOL_REFUSAL.SLUG_RESERVED;
+    case HOSTED_API_ERROR.WORKSPACE_SLUG_TAKEN:
+      return WORKSPACE_TOOL_REFUSAL.SLUG_TAKEN;
+    default:
+      return WORKSPACE_TOOL_REFUSAL.UNANSWERED;
+  }
+}
+
+/** An operation on the workspace a slug names, or the member's only one, as the member; refused in the agent's words. */
+const workspaceAsMember = <A extends WireRecord, R>(
+  slug: string | undefined,
+  operation: (userId: string, workspaceId: string) => Effect.Effect<A, HostedRefusal, R>,
+) =>
+  Effect.gen(function* () {
+    const member = yield* AdmittedMember;
+    const workspace = yield* listedWorkspace(member.userId, slug);
+    if (Result.isFailure(workspace)) return agentToolRejected(workspace.failure);
+    return yield* operation(member.userId, workspace.success).pipe(
+      Effect.map(
+        (answered): WireRecord => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answered }),
+      ),
+      Effect.catch((refusal) => Effect.succeed(agentToolRejected(workspaceRefusalWords(refusal)))),
+    );
+  });
+
+/** A members read names the workspace it reads. */
+const ListWorkspaceMembersInputSchema = Schema.Struct({ workspace: WORKSPACE_INPUT });
+
+const LIST_WORKSPACE_MEMBERS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS,
+  description:
+    "List the members of a workspace the member you act for belongs to, as its Settings › " +
+    "Members page shows them, owners first, then admins, then members: each with their " +
+    "account id, name, email, and role (owner, admin, or member), and, as former, whoever the " +
+    "workspace's tasks and agents still name but left it, by account id and name. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with them, or \`rejected\` and why.`,
+  input: ListWorkspaceMembersInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace }) =>
+    workspaceAsMember(workspace, (userId, workspaceId) =>
+      Effect.map(workspaceMembersRead(userId, workspaceId), ({ members, former }) => ({
+        members: members.map(({ userId: id, name, email, role }) => ({
+          userId: id,
+          name,
+          email,
+          role,
+        })),
+        ...(former === undefined
+          ? {}
+          : { former: former.map(({ userId: id, name }) => ({ userId: id, name })) }),
+      })),
+    ),
+});
+
+/** A slug change names the workspace it changes and the slug it takes. */
+const SetWorkspaceSlugInputSchema = Schema.Struct({
+  workspace: Schema.optionalKey(
+    describeWire(
+      WORKSPACE_INPUT.schema,
+      `The workspace whose slug to change, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} ` +
+        "answered; leave it out where the member belongs to one workspace alone.",
+    ),
+  ),
+  slug: describeWire(
+    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
+    "The new slug: lowercase letters and digits, with single hyphens between them.",
+  ),
+});
+
+const SET_WORKSPACE_SLUG_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG,
+  description:
+    "Change the slug of a workspace the member you act for owns, the first step of its links, " +
+    "as its Settings › General page would. Only the owner may. A link written under the old " +
+    "slug still opens it, since a slug the workspace stood under stays its own, and no other " +
+    "workspace may take a slug one holds or held. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the workspace under its new slug, or ` +
+    "`rejected` and why: not the owner, or a slug that is malformed, reserved, or taken.",
+  input: SetWorkspaceSlugInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ workspace, slug }) =>
+    workspaceAsMember(workspace, (userId, workspaceId) =>
+      Effect.map(workspaceSlugSet(userId, workspaceId, slug), ({ workspace: changed }) => ({
+        workspace: { id: changed.id, slug: changed.slug ?? slug, name: changed.name },
+      })),
     ),
 });
 
@@ -2493,6 +2601,8 @@ export const memberExperimentsOn = (
 
 export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   LIST_WORKSPACES_TOOL,
+  LIST_WORKSPACE_MEMBERS_TOOL,
+  SET_WORKSPACE_SLUG_TOOL,
   MEMBER_LIST_TASKS_TOOL,
   MEMBER_READ_TASK_TOOL,
   MEMBER_LIST_AGENTS_TOOL,
