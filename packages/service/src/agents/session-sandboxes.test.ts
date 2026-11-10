@@ -38,8 +38,7 @@ import {
  * session's sandbox, as the agent's user, and is ended past its bound. An
  * agent's sandbox unused for `SANDBOX_RELEASE.UNUSED_FOR` is released by the
  * sweep, deleted and recorded released, one touched after the sweep found
- * it due is left standing, and none is touched while deleting is off, not
- * even one whose release was queued before it was turned off. A release
+ * it due is left standing. A release
  * backs off from a sandbox whose archived agent's archive script is running.
  * Synthetic accounts, agents, and sandbox names throughout.
  */
@@ -184,24 +183,23 @@ const stateOf = (name: string) =>
     (rows) => rows.map((row) => row.state),
   );
 
-/** The sweep run at the clock's now, deleting on or off as `deleting` says, answering the releases it published. */
-const swept = (deleting: boolean) =>
+/** The sweep run at the clock's now, answering the releases it published. */
+const swept = () =>
   Effect.gen(function* () {
     const published: string[] = [];
     const now = yield* Clock.currentTimeMillis;
     yield* releaseUnusedSandboxes(now).pipe(
       Effect.provideService(SandboxReleases, {
-        deleting,
         publish: (name) => Effect.sync(() => void published.push(name)),
       }),
     );
     return published;
   });
 
-/** One release consumed with deleting on. */
+/** One release consumed. */
 const consumed = (name: string) =>
   consumeSandboxRelease(name).pipe(
-    Effect.provideService(SandboxReleases, { deleting: true, publish: () => Effect.void }),
+    Effect.provideService(SandboxReleases, { publish: () => Effect.void }),
   );
 
 it.layer(getTestDB())("an unused sandbox's release", (it) => {
@@ -210,7 +208,7 @@ it.layer(getTestDB())("an unused sandbox's release", (it) => {
       const { name, sandbox } = yield* openedSandbox;
       yield* TestClock.adjust(SANDBOX_RELEASE.UNUSED_FOR);
 
-      const published = yield* swept(true).pipe(Effect.provide(sandbox.layer));
+      const published = yield* swept().pipe(Effect.provide(sandbox.layer));
       const outcome = yield* consumed(name).pipe(Effect.provide(sandbox.layer));
 
       assert.ok(published.includes(name));
@@ -225,41 +223,12 @@ it.layer(getTestDB())("an unused sandbox's release", (it) => {
       const { name, sandbox } = yield* openedSandbox;
       yield* TestClock.adjust(SANDBOX_RELEASE.UNUSED_FOR);
 
-      const published = yield* swept(true).pipe(Effect.provide(sandbox.layer));
+      const published = yield* swept().pipe(Effect.provide(sandbox.layer));
       yield* touchAgentSandbox(name).pipe(Effect.provide(sandbox.layer));
       const outcome = yield* consumed(name).pipe(Effect.provide(sandbox.layer));
 
       assert.ok(published.includes(name));
       assert.equal(outcome, SANDBOX_RELEASE_OUTCOME.USED_SINCE);
-      assert.deepEqual(sandbox.state.deleted, []);
-      assert.deepEqual(yield* stateOf(name), [AGENT_SANDBOX_STATE.LIVE]);
-    }),
-  );
-
-  it.effect("with deleting off the sweep publishes nothing and marks nothing", () =>
-    Effect.gen(function* () {
-      const { name, sandbox } = yield* openedSandbox;
-      yield* TestClock.adjust(SANDBOX_RELEASE.UNUSED_FOR);
-
-      const published = yield* swept(false).pipe(Effect.provide(sandbox.layer));
-
-      assert.deepEqual(published, []);
-      assert.deepEqual(yield* stateOf(name), [AGENT_SANDBOX_STATE.LIVE]);
-    }),
-  );
-
-  it.effect("a release queued before deleting was turned off deletes nothing and stands live", () =>
-    Effect.gen(function* () {
-      const { name, sandbox } = yield* openedSandbox;
-      yield* TestClock.adjust(SANDBOX_RELEASE.UNUSED_FOR);
-
-      yield* swept(true).pipe(Effect.provide(sandbox.layer));
-      const outcome = yield* consumeSandboxRelease(name).pipe(
-        Effect.provideService(SandboxReleases, { deleting: false, publish: () => Effect.void }),
-        Effect.provide(sandbox.layer),
-      );
-
-      assert.equal(outcome, SANDBOX_RELEASE_OUTCOME.DELETES_OFF);
       assert.deepEqual(sandbox.state.deleted, []);
       assert.deepEqual(yield* stateOf(name), [AGENT_SANDBOX_STATE.LIVE]);
     }),
@@ -294,7 +263,7 @@ it.layer(getTestDB())("an unused sandbox's release", (it) => {
         archiveFor: () => Effect.andThen(Deferred.succeed(running, undefined), Effect.never),
       });
 
-      yield* swept(true).pipe(Effect.provide(sandbox.layer));
+      yield* swept().pipe(Effect.provide(sandbox.layer));
       yield* archivedInBackground(
         { sessionSandboxes: scriptRunning, keepAwake: keepAwakeDetached },
         [{ id: agentId, userId, conversationId }],
