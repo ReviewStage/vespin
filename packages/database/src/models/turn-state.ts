@@ -24,7 +24,10 @@
  * A running turn its plan's limit cut short, with no other payer to go on
  * with it but a limit whose reset is known, is held open until that reset
  * (`turns.waits_until`), its deadline pushed past it, and the minute sweep
- * releases it once the reset has passed, to go on in a launch then.
+ * releases it once the reset has passed, to go on in a launch then. A queued
+ * turn whose launch the limit refused is held the same way, its pickup
+ * deadline running from the reset, and the sweep republishes it no more
+ * until it is released.
  *
  * A turn still open past its deadline, or past its cap, is lapsed
  * (`@repo/features/turn-deadline`), and only the minute sweep's reconcile
@@ -444,7 +447,7 @@ const AwaitingRunnerSchema = Schema.Struct({
   turnId: Schema.String,
 });
 
-/** A coding agent's turns still queued that were queued before the instant given and stand inside their pickup deadline at the other, oldest first. */
+/** A coding agent's turns still queued that were queued before the instant given and stand inside their pickup deadline at the other, waiting on no limit's reset, oldest first. */
 const findAwaitingRunner = SqlSchema.findAll({
   Request: Schema.Struct({ before: Schema.Date, at: Schema.Date, limit: Schema.Int }),
   Result: AwaitingRunnerSchema,
@@ -463,6 +466,7 @@ const findAwaitingRunner = SqlSchema.findAll({
             eq(turns.status, TURN_STATUS.QUEUED),
             lt(turns.queuedAt, before),
             gte(turns.leaseUntil, at),
+            isNull(turns.waitsUntil),
           ),
         )
         .orderBy(asc(turns.queuedAt), asc(turns.id))
@@ -581,10 +585,38 @@ const holdRunning = SqlSchema.findAll({
     ),
 });
 
-/** The running turns no Stop was asked of whose wait has passed at the instant given, their wait cleared, soonest reset first, at most `limit` of them. */
+/** The conversation's queued turns no Stop was asked of held until the reset given, their pickup deadline running from it. */
+const holdQueued = SqlSchema.findAll({
+  Request: Schema.Struct({ conversationId: Schema.String, until: Schema.Date }),
+  Result: IdSchema,
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set({
+          waitsUntil: row.until,
+          leaseUntil: new Date(row.until.getTime() + TURN_DEADLINE.PICKUP_MS),
+        })
+        .where(
+          and(
+            eq(turns.conversationId, row.conversationId),
+            eq(turns.status, TURN_STATUS.QUEUED),
+            isNull(turns.cancelRequestedAt),
+          ),
+        )
+        .returning({ id: turns.id }),
+    ),
+});
+
+const WaitedTurnSchema = Schema.Struct({
+  ...AwaitingRunnerSchema.fields,
+  status: TurnStatusSchema,
+});
+
+/** The running and queued turns no Stop was asked of whose wait has passed at the instant given, their wait cleared, soonest reset first, at most `limit` of them. */
 const releaseWaited = SqlSchema.findAll({
   Request: Schema.Struct({ at: Schema.Date, limit: Schema.Int }),
-  Result: AwaitingRunnerSchema,
+  Result: WaitedTurnSchema,
   execute: ({ at, limit }) =>
     Database.use((db) =>
       db
@@ -598,7 +630,7 @@ const releaseWaited = SqlSchema.findAll({
               .from(turns)
               .where(
                 and(
-                  eq(turns.status, TURN_STATUS.RUNNING),
+                  inArray(turns.status, [TURN_STATUS.RUNNING, TURN_STATUS.QUEUED]),
                   isNull(turns.cancelRequestedAt),
                   lte(turns.waitsUntil, at),
                 ),
@@ -611,6 +643,7 @@ const releaseWaited = SqlSchema.findAll({
           userId: turns.userId,
           conversationId: turns.conversationId,
           turnId: turns.id,
+          status: turns.status,
         }),
     ),
 });
@@ -1073,15 +1106,34 @@ export function holdTurn(
 }
 
 /**
- * The coding agents' running turns, among every account's, no Stop asked
- * of, whose wait for a limit's reset has passed at `at`, their wait cleared,
- * soonest reset first, at most `limit` of them: the minute sweep has each
- * go on in a launch.
+ * Holds the conversation's queued turns, no Stop asked of, until the usage
+ * limit that refused their launch resets at `until`, their pickup deadline
+ * running from then, so neither the sweep's republish nor its reap reaches
+ * them before a launch past the reset has had its time; answers the turns
+ * held.
+ */
+export function holdQueuedTurns(
+  target: TurnTarget,
+  until: Date,
+): TurnStateEffect<readonly string[]> {
+  return Effect.map(holdQueued({ conversationId: target.conversationId, until }), (held) =>
+    held.map((row) => row.id),
+  );
+}
+
+/** A turn whose wait for a limit's reset the sweep released: the account, the conversation, the turn, and whether it stood running or queued. */
+export type WaitedTurn = typeof WaitedTurnSchema.Type;
+
+/**
+ * The coding agents' running and queued turns, among every account's, no
+ * Stop asked of, whose wait for a limit's reset has passed at `at`, their
+ * wait cleared, soonest reset first, at most `limit` of them: the minute
+ * sweep has each go on in a launch.
  */
 export function releaseWaitedTurns(
   at: Date,
   limit: number,
-): TurnStateEffect<readonly AwaitingRunner[]> {
+): TurnStateEffect<readonly WaitedTurn[]> {
   return releaseWaited({ at, limit });
 }
 
