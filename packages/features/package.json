@@ -161,6 +161,7 @@
     "./provider-key-wire": "./src/provider-key-wire.js",
     "./inbox-push-wire": "./src/inbox-push-wire.js",
     "./push-device-wire": "./src/push-device-wire.js",
+    "./live-activity-wire": "./src/live-activity-wire.js",
     "./push-device-model": "./src/push-device-model.js",
     "./presence-wire": "./src/presence-wire.js",
     "./github-token-wire": "./src/github-token-wire.js",
