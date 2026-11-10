@@ -2,12 +2,12 @@ import assert from "node:assert/strict";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { test } from "vitest";
-import { appInUse } from "./computer-dock.js";
+import { appsInUse } from "./computer-dock.js";
 
 /**
- * computer-dock.test.ts -- the dock over an agent's box names the app its
- * newest call is on, with the newest window it read of that app, and stands
- * only while that call is the newest and the agent works. Synthetic words.
+ * computer-dock.test.ts -- the stack over an agent's box holds every app
+ * it used this turn, the one it used last first, each with the newest window
+ * it read of that app, and stands only while the agent works. Synthetic words.
  */
 
 const WINDOW = {
@@ -56,26 +56,35 @@ function turn(id: string, parts: readonly WireRecord[]): AgentTranscriptMessage 
   return { id, role: MESSAGE_ROLE.ASSISTANT, parts };
 }
 
-test("the newest call's app is named with its icon and the newest window read of it, another app's window passed over", () => {
+function asked(id: string): AgentTranscriptMessage {
+  return { id, role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Try the invite flow" }] };
+}
+
+test("every app used this turn stands once, the one used last first, each with its newest window, an earlier turn's left out", () => {
   const messages = [
-    turn("turn-1", [read("r1", "Simulator", WINDOW), read("r2", "Xcode", OTHER_WINDOW)]),
-    turn("turn-2", [click("c1", "Simulator")]),
+    asked("ask-1"),
+    turn("turn-1", [read("r0", "Notes", OTHER_WINDOW)]),
+    asked("ask-2"),
+    turn("turn-2", [read("r1", "Simulator", WINDOW), read("r2", "Xcode", OTHER_WINDOW)]),
+    turn("turn-3", [click("c1", "Simulator")]),
   ];
 
-  assert.deepEqual(appInUse(messages, true), {
-    app: "Simulator",
-    icon: ICON.id,
-    window: WINDOW,
+  assert.deepEqual(appsInUse(messages, true), {
+    apps: [
+      { app: "Simulator", icon: ICON.id, window: WINDOW },
+      { app: "Xcode", icon: ICON.id, window: OTHER_WINDOW },
+    ],
+    using: true,
   });
 });
 
-test("nothing is named once the agent calls another tool or stops working", () => {
-  const using = [turn("turn-1", [read("r1", "Simulator", WINDOW)])];
+test("the app used last is no longer in use once another tool is called, and nothing stands once the agent stops working", () => {
+  const using = [asked("ask-1"), turn("turn-1", [read("r1", "Simulator", WINDOW)])];
   const movedOn = [
     ...using,
     turn("turn-2", [call("b1", "bash", { command: "ls" }, { stdout: "", exitCode: 0 })]),
   ];
 
-  assert.equal(appInUse(movedOn, true), undefined);
-  assert.equal(appInUse(using, false), undefined);
+  assert.equal(appsInUse(movedOn, true)?.using, false);
+  assert.equal(appsInUse(using, false), undefined);
 });

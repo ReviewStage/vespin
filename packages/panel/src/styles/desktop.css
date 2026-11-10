@@ -1602,6 +1602,15 @@ body,
 .side-panel-content .agent-tab-foot .agent-composer {
   padding-inline: max(var(--content-inset), var(--reading-room));
 }
+/* The apps an agent is using float at the right edge of that same column. */
+.side-panel-content .agent-computer-float {
+  inset-inline-end: max(var(--content-inset), var(--reading-room));
+}
+@container agent-tab-foot (width < 480px) {
+  .side-panel-content .agent-computer-float {
+    margin-inline-end: max(var(--content-inset), var(--reading-room));
+  }
+}
 
 /* Tabs ------------------------------------------------------------------------ */
 

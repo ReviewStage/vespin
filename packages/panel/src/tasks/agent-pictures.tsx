@@ -18,12 +18,9 @@ import {
   AppIcon,
   type AppIconSize,
   isVideoDataUrl,
-  PAGE_THUMB_SIZE,
-  PageThumb,
   PICTURE_SET_SHOWN,
   PictureSet,
   PictureSetTile,
-  PictureTile,
 } from "@repo/ui";
 import {
   PICTURE_STATE,
@@ -160,7 +157,7 @@ interface ViewedPicture {
 }
 
 /** The viewer a set or a call's chips open: how one is opened over its pictures, and the viewer while it stands. */
-interface PictureViewer {
+export interface PictureViewer {
   readonly open: (items: readonly ViewedPicture[], id: string) => void;
   readonly viewer: ReactNode;
 }
@@ -475,30 +472,16 @@ export function KeptAppIcon({
   return <AppIcon src={state.kind === PICTURE_STATE.READY ? state.url : undefined} size={size} />;
 }
 
-/** A window a call kept, as a row's small thumb read through the transcript's door, which opens it full size in the viewer. */
-export function KeptWindowThumb({
-  picture,
-  words,
-}: {
-  picture: KeptPicture;
-  /** What the window is named, its app's name. */
-  words: string;
-}): ReactNode {
+/** A picture a call kept, read through the transcript's door: its state while it is read, and its bytes once they land; none is read for no id. */
+export function useKeptPicture(id: string | undefined): PictureState {
   const door = useContext(AgentPicturesContext);
-  const { open, viewer } = useViewer(door);
-  const state = usePicture(pictureQuery(door?.owner ?? "", picture.id, door?.read), pictureUnread);
-  if (door === undefined) return null;
-  return (
-    <>
-      <PictureTile name={words} onOpen={() => open([{ picture, words }], picture.id)}>
-        <PageThumb
-          size={PAGE_THUMB_SIZE.ROW}
-          image={state.kind === PICTURE_STATE.READY ? state.url : undefined}
-        />
-      </PictureTile>
-      {viewer}
-    </>
-  );
+  const read = id === undefined ? undefined : door?.read;
+  return usePicture(pictureQuery(door?.owner ?? "", id ?? "", read), pictureUnread);
+}
+
+/** The viewer over pictures the calls kept, opened from one of them, and the viewer while it stands; nothing opens outside the transcript's door. */
+export function useKeptPictureViewer(): PictureViewer {
+  return useViewer(useContext(AgentPicturesContext));
 }
 
 export function CallPictures({
