@@ -428,7 +428,11 @@ export const PAGE_PICK_SCRIPT = `(() => {
   addEventListener("message", (event) => {
     const ask = event.data;
     if (event.source !== parent || ask === null || typeof ask !== "object" || ask.type !== TYPE) return;
-    if (ask.act === ${JSON.stringify(PAGE_PICK_ACT.START)}) pick.on = true;
+    // Note that a pick under way is over nothing marked, so the element the pointer stays on is told again once it ends.
+    if (ask.act === ${JSON.stringify(PAGE_PICK_ACT.START)}) {
+      pick.on = true;
+      tellOver(null);
+    }
     else if (ask.act === ${JSON.stringify(PAGE_PICK_ACT.STOP)}) stop();
     else if (ask.act === ${JSON.stringify(PAGE_PICK_ACT.UNSELECT)}) getSelection()?.removeAllRanges();
     else if (ask.act === ${JSON.stringify(PAGE_PICK_ACT.MARK)} && Array.isArray(ask.marks)) {

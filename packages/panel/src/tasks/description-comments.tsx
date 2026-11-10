@@ -3438,23 +3438,24 @@ function pinOf(
 /**
  * Tells the comments on the element marked that the pointer is over in the
  * page (`over`), as the pointer over its pin tells them, and lets them go
- * as it leaves for another or for none. Note that its pin may be drawn only
- * after the pointer arrived, as a comment held there is, so whether it is
- * drawn (`drawn`) asks again.
+ * as it leaves for another or for none. Note that its pins may be drawn
+ * only after the pointer arrived, as a comment held there is, or a held one
+ * posted, so whether each is drawn (`drawn`) asks again.
  */
 function usePointedPin(
   over: string | undefined,
-  drawn: boolean,
+  drawn: { readonly held: boolean; readonly posted: boolean },
   held: ReadonlyMap<string, HTMLElement>,
   posted: ReadonlyMap<string, HTMLElement>,
 ): void {
+  const { held: heldDrawn, posted: postedDrawn } = drawn;
   useEffect(() => {
-    if (over === undefined || !drawn) return undefined;
+    if (over === undefined || !(heldDrawn || postedDrawn)) return undefined;
     const pin = pinOf([held, posted], over);
     if (pin === undefined) return undefined;
     pointCard(pin, true);
     return () => pointCard(pin, false);
-  }, [over, drawn, held, posted]);
+  }, [over, heldDrawn, postedDrawn, held, posted]);
 }
 
 /** Where a thread on the whole page is started: the frame's top edge. */
@@ -3979,7 +3980,10 @@ export function PageCommentLayer({
   });
   usePointedPin(
     over,
-    pins.some((pin) => pin.path === over) || heldMarks.some((mark) => mark.path === over),
+    {
+      held: heldMarks.some((mark) => mark.path === over),
+      posted: pins.some((pin) => pin.path === over),
+    },
     heldPins.current,
     postedPins.current,
   );
