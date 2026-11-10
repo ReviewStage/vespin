@@ -393,7 +393,7 @@ function titledWithTask(
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
   const written = Effect.gen(function* () {
     const filled = yield* fillAgentTitle(userId, agent.id, title);
-    if (!filled || agent.taskId === null) return;
+    if (!filled) return;
     yield* nameUntitledTask(userId, agent.taskId, title);
   });
   return Effect.flatMap(SqlClient.SqlClient, (client) => client.withTransaction(written));

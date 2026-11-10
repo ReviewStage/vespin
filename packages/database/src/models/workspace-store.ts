@@ -786,8 +786,8 @@ export function agentSeenBy(userId: string): SQL {
 
 /**
  * The condition that the account reaches the coding agent row itself: it is
- * a member of the agent's workspace, an agent with no task as much as one on
- * a task, and sees it as its GitHub access allows. It gates
+ * a member of the agent's workspace, and sees it as its GitHub access
+ * allows. It gates
  * what an agent does as itself, under the member who started it: its own
  * writes and reads by its id or its conversation, and its posts. What a
  * member, or another agent, reads or does to an agent keeps `agentVisibleTo`.
@@ -800,8 +800,7 @@ export function agentReachableBy(userId: string): SQL {
  * The condition that the account may read and write the coding agent row a
  * statement reads, the one rule a member, or another agent, keeps for every
  * list of agents and every read or write by id: it reaches the agent
- * (`agentReachableBy`), and for an agent on a task that task too
- * (`taskReachableBy`). Note that the task is asked as well, because a read
+ * (`agentReachableBy`), and its task too (`taskReachableBy`). Note that the task is asked as well, because a read
  * of an agent by its id would otherwise skip the GitHub visibility of its
  * task, which a list of the task's agents keeps. An agent acting as itself
  * keeps `agentReachableBy` alone, so its starter losing the task's
@@ -814,7 +813,7 @@ export function agentVisibleTo(userId: string): SQL {
       .from(task)
       .where(and(eq(task.id, agentTable.taskId), taskReachableBy(userId))),
   );
-  return sql`(${agentReachableBy(userId)} and (${agentTable.taskId} is null or ${taskReached}))`;
+  return sql`(${agentReachableBy(userId)} and ${taskReached})`;
 }
 
 /** The condition that the account sees the task row as its GitHub access allows (`seenThroughGitHub`), for a statement that gates its workspace already. */

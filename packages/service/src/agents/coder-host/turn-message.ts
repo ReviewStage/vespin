@@ -78,8 +78,8 @@ const previousTurnStart = (target: ConversationTarget, turnId: string | undefine
 /**
  * The agent's task as the turn's message hands it (`turn-context.ts`), read
  * as the member whose turn this is, and what the session has handed of it
- * once this turn is (`taskKey`), or nothing for an agent on no task or one
- * whose task is gone. The task is handed where a revision of the description
+ * once this turn is (`taskKey`), or nothing for an agent whose task is
+ * gone. The task is handed where a revision of the description
  * another writer made was saved after the agent's previous turn started,
  * so a save made while that turn ran, which none of its steps may have
  * read, is handed too; or where the rest of it is not what the session
@@ -98,7 +98,6 @@ const taskOf = (
 ) =>
   Effect.gen(function* () {
     const { taskId } = agent;
-    if (taskId === null) return undefined;
     const descriptionsSince = yield* experimentOnSinceIn(
       agent.organizationId,
       EXPERIMENT.DESCRIPTIONS,

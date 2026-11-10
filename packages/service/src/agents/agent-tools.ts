@@ -1750,7 +1750,7 @@ const startedReading = (agent: Agent, offered: readonly OfferedModel[], ownTask:
       modelName: modelLabel(agent.model, offered),
       effort: agent.effort,
       status: standing(agent).status,
-      onYourTask: agent.taskId !== null && agent.taskId === ownTask,
+      onYourTask: agent.taskId === ownTask,
     };
   });
 
@@ -2149,7 +2149,7 @@ const sourceLanding = (
     if (named !== undefined && named !== source.taskId) {
       return Result.fail(START_AGENT_REFUSAL.SOURCE_OTHER_TASK);
     }
-    // An agent with no task is started from in its own workspace, on the repository it cloned, or in none.
+    // A start from an agent lands on the source's own task.
     const place = placeOfAgent(source);
     // A fork names one of the source's own messages, and leaves the source going on beside it.
     if (from.messageId !== undefined) {
