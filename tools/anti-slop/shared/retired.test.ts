@@ -101,6 +101,11 @@ describe("the suppression check", () => {
     expect(namesRetired('import { PlusIcon } from "@repo/ui/icons";')).toBe(false);
     // A word holding a glyph's name, or another table's member of a concept's key, spells neither.
     expect(namesRetired("const RetiredExamples = SHOT.RETIRED_EXAMPLE;")).toBe(false);
+    expect(
+      namesRetired(
+        'import { GLYPH } from "@repo/ui/icons"; const a = GLYPH.SETTINGS; const b = SHOT.RETIRED_EXAMPLE;',
+      ),
+    ).toBe(false);
     // An import narrowed to names is spelled by them, not by its module, which every file spells.
     expect(namesRetired('import { BackIcon } from "@repo/ui";')).toBe(true);
     expect(namesRetired('import { Button } from "@repo/ui";')).toBe(false);

@@ -230,7 +230,7 @@ export function namesRetired(text: string, retirements: readonly Retirement[] = 
 
 /**
  * Whether `text` spells a glyph: a registry concept as a member read off
- * the registry, in a file that names the registry, aliased or not, and a
+ * the registry or a name it was imported as, and a
  * Lucide glyph as a whole identifier, its aliases alike. Note that a
  * word holding the name (`Bottom` for `Bot`) or another table's member of
  * the same key (`SHOT.TASK`) spells nothing, because short concepts such
@@ -239,10 +239,12 @@ export function namesRetired(text: string, retirements: readonly Retirement[] = 
 function spellsGlyph(text: string, name: string): boolean {
   if (name.startsWith(`${GLYPH_REGISTRY}.`)) {
     const key = name.slice(GLYPH_REGISTRY.length + 1);
-    return (
-      new RegExp(`\\b${GLYPH_REGISTRY}\\b`, "u").test(text) &&
-      new RegExp(`\\.${key}\\b`, "u").test(text)
-    );
+    // Note that the member is read off the registry itself or a name it was imported as, never off any receiver, so a file reading GLYPH.SETTINGS and SHOT.TASK spells no GLYPH.TASK.
+    const aliases = [
+      ...text.matchAll(new RegExp(`\\b${GLYPH_REGISTRY}\\s+as\\s+(\\w+)`, "gu")),
+    ].map((match) => match[1] ?? GLYPH_REGISTRY);
+    const receivers = [GLYPH_REGISTRY, ...aliases].join("|");
+    return new RegExp(`\\b(?:${receivers})\\.${key}\\b`, "u").test(text);
   }
   return new RegExp(`\\b(?:Lucide)?${bareGlyph(name)}(?:Icon)?\\b`, "u").test(text);
 }
