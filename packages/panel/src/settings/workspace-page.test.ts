@@ -856,7 +856,7 @@ test("the identity row says who shares the workspace and nothing of the account'
 
 test("a personal workspace shows its owner's name with no Rename to its owner and an admin alike, and still offers its photo, and its slug to the owner alone", async () => {
   for (const [role, acts] of [
-    [WORKSPACE_ROLE.OWNER, ["Change slug"]],
+    [WORKSPACE_ROLE.OWNER, ["Change URL"]],
     [WORKSPACE_ROLE.ADMIN, []],
   ] as const) {
     const { page } = await mount({ ...FIRST, role });
@@ -876,9 +876,9 @@ const slugs = () =>
     request.kind === ACT_KIND.WORKSPACE_SLUG_SET ? [request.payload] : [],
   );
 
-test("the owner's Change slug opens on the slug as it stands, says what is wrong with one typed under the field, and Save sends the new one", async () => {
+test("the owner's Change URL opens on the slug as it stands, says what is wrong with one typed under the field, and Save sends the new one", async () => {
   const { page } = await mount({ ...ACME, role: WORKSPACE_ROLE.OWNER });
-  await chooseAction(identity(page), "Change slug");
+  await chooseAction(identity(page), "Change URL");
   const card = document.querySelector<HTMLElement>('[role="dialog"]') ?? assert.fail("no dialog");
   const field = card.querySelector<HTMLInputElement>("input") ?? assert.fail("no slug field");
   const opened = field.value;

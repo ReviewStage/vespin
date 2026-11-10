@@ -24,6 +24,7 @@ import {
 import type { DescriptionEditAnswer } from "@repo/features/description-edit";
 import type { GitHubConnection } from "@repo/features/github-connection-wire";
 import { WRITE_UNTAKEN, type WriteUntaken } from "@repo/features/keyed-write";
+import { LINK_PREVIEW_UNANSWERED } from "@repo/features/link-preview-view";
 import {
   LIVE_READ,
   LIVE_SIGNED_OUT,
@@ -1076,6 +1077,7 @@ export function fakeService(tasks: Task[]): FakeService {
         service.reads.push(`skills:${taskId}`);
         return service.skills[taskId];
       }),
+    linkPreview: () => Effect.succeed(LINK_PREVIEW_UNANSWERED),
     readRepositoryFile: (place, window) =>
       Effect.sync(() => service.places[place.workspaceId]?.[place.repository]?.files[window.path]),
     readRepositoryTree: (place, folder) =>
@@ -1582,7 +1584,7 @@ export const answered = (set: () => void) =>
   );
 
 /** One plan as the plans statement delivers its row. */
-export function taskRow(id: string, name: string) {
+export function planRow(id: string, name: string) {
   return {
     id,
     workspaceId: "workspace-personal",
@@ -1607,7 +1609,7 @@ export function taskRow(id: string, name: string) {
 /** One plan as the plans statement delivers the service's task. */
 export function rowOfTask(each: Task) {
   return {
-    ...taskRow(each.id, each.name),
+    ...planRow(each.id, each.name),
     workspaceId: each.workspaceId,
     repository: each.repository,
     createdAt: each.createdAt,

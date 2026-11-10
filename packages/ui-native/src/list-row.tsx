@@ -1,8 +1,19 @@
 // list-row.tsx -- the rows the Inbox and Tasks draw: plain and edge to edge, a 14 pt leading mark, a 15 pt title over a 13 pt muted line, and a hairline inset to the words.
 
-import { Button, ContextMenu, HStack, Spacer, SwipeActions, Text, VStack } from "@expo/ui/swift-ui";
 import {
+  Button,
+  ContextMenu,
+  HStack,
+  Image,
+  Spacer,
+  SwipeActions,
+  Text,
+  VStack,
+} from "@expo/ui/swift-ui";
+import {
+  accessibilityLabel,
   alignmentGuide,
+  buttonStyle,
   font,
   foregroundStyle,
   frame,
@@ -15,14 +26,22 @@ import {
   tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import type { PullRequestState } from "@repo/features/agent-wire";
 import type { InboxLineKind } from "@repo/features/inbox-list-model";
+import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceText } from "@repo/features/time-format";
-import type { ReactElement, ReactNode } from "react";
+import { type ReactElement, type ReactNode, useState } from "react";
 import { useWindowDimensions } from "react-native";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { Avatar, TaskStatusMark, ToneGlyph, UnreadDot } from "./marks.js";
+import {
+  Avatar,
+  FailedMark,
+  NeedsYouDot,
+  TaskStatusMark,
+  ToneGlyph,
+  UnreadDot,
+  WorkingMark,
+} from "./marks.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
@@ -97,10 +116,18 @@ type TaskRowProps = RowActs & {
   readonly status: TaskStatus;
   /** Whether the task has news unread, which carries the dot and sets its name in medium. */
   readonly unread?: boolean | undefined;
-  /** Its pull request's state, drawn as the mark before the time. */
-  readonly pullRequest?: PullRequestState | undefined;
-  readonly at?: number | undefined;
-  readonly now?: number | undefined;
+  /** Whether the task is done or canceled, which mutes its name, as a search finds one. */
+  readonly finished?: boolean | undefined;
+  /** Whether a thread of it waits on the reader, which its end says before anything of its agents. */
+  readonly needsYou?: boolean | undefined;
+  /** What its agents say at the line's end, as the panel's row end says it: failed, at work, or its pull request. */
+  readonly agents?: TaskAgentsStatus | undefined;
+  /** Its key, `ACME-42`, which ends the line. */
+  readonly taskKey?: string | undefined;
+  /** Its sub-tasks' rows, folded under it until its chevron opens them, as the panel folds them. */
+  readonly subRows?: ReactNode | undefined;
+  /** How deep it stands under the tasks above it, which sets it in from the list's edge. */
+  readonly depth?: number | undefined;
 };
 
 function actionButton(action: RowAction, colors: BrandColors) {
@@ -119,7 +146,7 @@ function actionButton(action: RowAction, colors: BrandColors) {
 }
 
 /** A row's time, 12 pt in the muted ink and tabular figures, as the panel's rows end. */
-function RowTime({ at, now }: { readonly at: number; readonly now: number | undefined }) {
+export function RowTime({ at, now }: { readonly at: number; readonly now: number | undefined }) {
   const colors = useColors();
   return (
     <Text
@@ -134,27 +161,9 @@ function RowTime({ at, now }: { readonly at: number; readonly now: number | unde
   );
 }
 
-/**
- * A row's frame in its list: the id its list picks it by, the list's own
- * ground behind it rather than a card's, its insets, which stand the unread
- * dot in the margin, and its hairline, which starts under the words rather
- * than the mark. Its acts stand twice, as the system's own rows carry them:
- * behind a swipe from either edge, and in the menu a long press opens, the
- * trailing ones first, so a person who never swipes still finds them.
- */
-function RowFrame({
-  id,
-  row,
-  trailingActions = [],
-  leadingActions = [],
-}: RowActs & {
-  readonly id: string;
-  readonly row: ReactElement;
-}) {
-  const colors = useColors();
-  const actions = [...trailingActions, ...leadingActions];
-  const frameModifiers = [
-    tag(id),
+/** Where a row stands in its list: on the list's own ground, inset so the unread dot stands in the margin, its hairline starting under the words. */
+export function rowPlacement(colors: BrandColors) {
+  return [
     listRowBackground("clear"),
     listRowInsets({
       leading: ROW_INSET.LEADING,
@@ -165,6 +174,28 @@ function RowFrame({
     listRowSeparatorTint(colors.CHIP_EDGE),
     alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT - ROW_INSET.LEADING),
   ];
+}
+
+/**
+ * A row's frame in its list: the id its list picks it by, the list's own
+ * ground behind it rather than a card's, its insets, which stand the unread
+ * dot in the margin, and its hairline, which starts under the words rather
+ * than the mark. Its acts stand twice, as the system's own rows carry them:
+ * behind a swipe from either edge, and in the menu a long press opens, the
+ * trailing ones first, so a person who never swipes still finds them.
+ */
+export function RowFrame({
+  id,
+  row,
+  trailingActions = [],
+  leadingActions = [],
+}: RowActs & {
+  readonly id: string;
+  readonly row: ReactElement;
+}) {
+  const colors = useColors();
+  const actions = [...trailingActions, ...leadingActions];
+  const frameModifiers = [tag(id), ...rowPlacement(colors)];
   if (actions.length === 0) return <HStack modifiers={frameModifiers}>{row}</HStack>;
   return (
     <SwipeActions modifiers={frameModifiers}>
@@ -193,7 +224,7 @@ function RowFrame({
  * column, the title, and what ends the line. The line centers its pieces,
  * so the mark stands on the title at any Dynamic Type size.
  */
-function RowHead({
+export function RowHead({
   unread,
   faded,
   lead,
@@ -318,29 +349,109 @@ export function ListRow(props: ListRowProps) {
   return <RowFrame {...props} id={id} row={row} />;
 }
 
+/** What a task row's end says first: a thread that needs the reader, then a failed agent, one at work, or its pull request's state. */
+function TaskEndMark({ needsYou = false, agents }: Pick<TaskRowProps, "needsYou" | "agents">) {
+  if (needsYou) return <NeedsYouDot />;
+  switch (agents?.kind) {
+    case TASK_AGENTS_STATUS.FAILED:
+      return <FailedMark />;
+    case TASK_AGENTS_STATUS.WORKING:
+      return <WorkingMark />;
+    case TASK_AGENTS_STATUS.PULL_REQUEST: {
+      const pull = PULL_REQUEST_LOOK[agents.pullRequest.state];
+      return <ToneGlyph glyph={pull.symbol} tone={pull.tone} />;
+    }
+    case TASK_AGENTS_STATUS.NONE:
+    case undefined:
+      return null;
+    default: {
+      const unhandled: never = agents;
+      throw new Error(
+        `A task's agents stand in no status a row draws: ${JSON.stringify(unhandled)}`,
+      );
+    }
+  }
+}
+
+/** How far each level of sub-tasks stands in, in points: past a parent's mark, so a sub-task's mark stands under its parent's name. */
+const SUB_TASK_INDENT = MARK_SIZE.LEAD + SPACE.ROW;
+
+/** What a parent's chevron is heard as, folded and open. */
+const SHOW_SUB_TASKS = "Show sub-tasks";
+const HIDE_SUB_TASKS = "Hide sub-tasks";
+
+/** A parent's fold in its ring's place: a chevron that opens its sub-tasks under it, so a press on the row itself still opens the task. */
+function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPress: () => void }) {
+  const colors = useColors();
+  return (
+    <Button
+      onPress={onPress}
+      modifiers={[
+        buttonStyle("borderless"),
+        accessibilityLabel(open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS),
+      ]}
+    >
+      <Image
+        systemName={open ? "chevron.down" : "chevron.right"}
+        size={MARK_SIZE.GLYPH - 4}
+        color={colors.TEXT_MUTED}
+        modifiers={[frame({ width: MARK_SIZE.LEAD, height: MARK_SIZE.LEAD })]}
+      />
+    </Button>
+  );
+}
+
 /**
- * One task on a single line: the dot while it has news, its status ring,
- * its name in 15 pt, and at the line's end its pull request's mark and the
- * time.
+ * One task on a single line, as Linear's rows stand: the dot while it has
+ * news, its status ring, its name in 15 pt, and at the line's end what its
+ * agents say and its key. A task with sub-tasks leads with the panel's fold
+ * in its ring's place, which opens them under it a level deeper. Note that
+ * SwiftUI's disclosure is not used, because a press on its row folds it
+ * rather than picking the row.
  */
 export function TaskRow(props: TaskRowProps) {
-  const { id, name, status, unread = false, pullRequest, at, now } = props;
+  const { id, name, status, unread = false, finished = false, taskKey, subRows, depth = 0 } = props;
   const colors = useColors();
-  const pull = pullRequest === undefined ? undefined : PULL_REQUEST_LOOK[pullRequest];
+  const [open, setOpen] = useState(false);
   const row: ReactElement = (
-    <RowHead
-      unread={unread}
-      faded={false}
-      lead={<TaskStatusMark status={status} />}
-      title={name}
-      ink={titleInk(colors, unread, false)}
-      end={
-        <HStack spacing={SPACE.TIGHT + 2}>
-          {pull === undefined ? null : <ToneGlyph glyph={pull.symbol} tone={pull.tone} />}
-          {at === undefined ? null : <RowTime at={at} now={now} />}
-        </HStack>
-      }
-    />
+    <HStack modifiers={[padding({ leading: depth * SUB_TASK_INDENT })]}>
+      <RowHead
+        unread={unread}
+        faded={finished}
+        lead={
+          subRows === undefined ? (
+            <TaskStatusMark status={status} />
+          ) : (
+            <SubTaskFold open={open} onPress={() => setOpen(!open)} />
+          )
+        }
+        title={name}
+        ink={titleInk(colors, unread, finished)}
+        end={
+          <HStack spacing={SPACE.TIGHT + 2}>
+            <TaskEndMark needsYou={props.needsYou} agents={props.agents} />
+            {taskKey === undefined ? null : (
+              <Text
+                modifiers={[
+                  font({ textStyle: TYPE_ROLE.TIME }),
+                  monospacedDigit(),
+                  foregroundStyle(colors.TEXT_MUTED),
+                ]}
+              >
+                {taskKey}
+              </Text>
+            )}
+          </HStack>
+        }
+      />
+    </HStack>
   );
-  return <RowFrame {...props} id={id} row={row} />;
+  const framed = <RowFrame {...props} id={id} row={row} />;
+  if (subRows === undefined || !open) return framed;
+  return (
+    <>
+      {framed}
+      {subRows}
+    </>
+  );
 }

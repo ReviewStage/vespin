@@ -56,6 +56,7 @@
     "anti-slop/one-message-box": "error",
     "anti-slop/retired": "error",
     "anti-slop/row-behavior-in-row": "error",
+    "anti-slop/sandbox-delete-in-one-place": "error",
     "anti-slop/settings-row-end": "error",
     "anti-slop/skeleton-through-components": "error"
   },

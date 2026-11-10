@@ -139,12 +139,12 @@ const PAGE_LINE = {
 
 /** What the Filter is called, on its tooltip and its menu, and its one field. */
 const FILTER = "Filter";
-const KEPT_BY = "Kept by";
+const KEPT_BY = "Saved by";
 
 /** What the selection's acts and a row's menu say. */
 const MEMORY_ACT = {
   FORGET: "Delete",
-  COPY: "Copy words",
+  COPY: "Copy text",
 } as const;
 
 /** The key the Kept by filter keeps everyone who left the workspace under, together. */
@@ -406,7 +406,7 @@ function KeptByFilter({
     label: keeper.label,
     replayMasked: keeper.named,
     icon: <>{keeper.face}</>,
-    detail: `${String(keeper.count)} kept`,
+    detail: String(keeper.count),
     checked: kept.has(keeper.key),
     stays: true,
     onSelect: () => onKept(toggled(kept, keeper.key)),
@@ -461,20 +461,23 @@ function KeptByLine({
   if (drawn.length === 0) return null;
   return (
     <Inline gap={GAP.TIGHT} ref={line} moves>
-      {drawn.map(({ key, value: keeper, leaving }) => (
-        <Chip
-          key={key}
-          look={CHIP_LOOK.FILTER}
-          motionKey={key}
-          removeLabel={`Show memories kept by anyone, not only ${keeper.label}`}
-          onRemove={() => {
-            if (!leaving) onKept(toggled(kept, keeper.key));
-          }}
-        >
-          {keeper.face}
-          <ChipName>{`${KEPT_BY} ${keeper.label === PEOPLE_FILTER_WORDS.ME ? "me" : keeper.label}`}</ChipName>
-        </Chip>
-      ))}
+      {drawn.map(({ key, value: keeper, leaving }) => {
+        const name = `${KEPT_BY} ${keeper.label === PEOPLE_FILTER_WORDS.ME ? "me" : keeper.label}`;
+        return (
+          <Chip
+            key={key}
+            look={CHIP_LOOK.FILTER}
+            motionKey={key}
+            removeLabel={`Remove filter: ${name}`}
+            onRemove={() => {
+              if (!leaving) onKept(toggled(kept, keeper.key));
+            }}
+          >
+            {keeper.face}
+            <ChipName>{name}</ChipName>
+          </Chip>
+        );
+      })}
       {kept.size === 0 ? null : (
         <Button variant={BUTTON_VARIANT.QUIET} onClick={() => onKept(new Set())}>
           Clear

@@ -77,6 +77,9 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_CHOOSE]: "Could not change the agent's model on this system.",
   [AGENT_ACT_KIND.AGENTS_RENAME]: "Could not rename the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_SERVERS]: "Could not switch the agent's MCP servers on this system.",
+  [AGENT_ACT_KIND.AGENTS_PERMISSION_MODE]:
+    "Could not change the agent's permission mode on this system.",
+  [AGENT_ACT_KIND.AGENTS_ANSWER_APPROVAL]: "Could not answer the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_ADD_REPOSITORY]: "Could not add a repository to the agent on this system.",
   [AGENT_ACT_KIND.AGENTS_QUEUE]: "Could not change the agent's queue on this system.",
   [AGENT_ACT_KIND.AGENTS_STOP]: "Could not stop the agent on this system.",
@@ -118,6 +121,12 @@ const PAYLOAD: { readonly [Name in keyof typeof AGENT_ACTS]: WireBoundaryInput }
   AGENTS_CHOOSE: { agentId: AGENT_ID, model: "anthropic/claude-opus-5.5", effort: "high" },
   AGENTS_RENAME: { agentId: AGENT_ID, title: "Sign-out button" },
   AGENTS_SERVERS: { agentId: AGENT_ID, disabledServers: ["linear"] },
+  AGENTS_PERMISSION_MODE: { agentId: AGENT_ID, permissionMode: "ask" },
+  AGENTS_ANSWER_APPROVAL: {
+    agentId: AGENT_ID,
+    approvalId: "0b1c4a39-3b5e-4f7c-9a52-8d4f0e7c2a11",
+    answer: "allow",
+  },
   AGENTS_ADD_REPOSITORY: { agentId: AGENT_ID, addRepository: { repository: "acme/app" } },
   AGENTS_QUEUE: {
     agentId: AGENT_ID,
@@ -157,6 +166,7 @@ const NOTED_ACTS = [
   "AGENTS_CHOOSE",
   "AGENTS_RENAME",
   "AGENTS_SERVERS",
+  "AGENTS_PERMISSION_MODE",
   "AGENTS_ADD_REPOSITORY",
   "AGENTS_STOP",
   "AGENTS_REWIND",

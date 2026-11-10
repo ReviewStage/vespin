@@ -15,7 +15,7 @@ import { SchemaSettingRows } from "./schema-rows.js";
 import type { SettingsWrites } from "./writes.js";
 
 /**
- * privacy-section.tsx -- whether this copy of the app shares its usage data, and whether a maintainer may sign in as the member to help, the Profile page's Privacy group under Links.
+ * privacy-section.tsx -- whether this copy of the app shares its usage data, and whether a maintainer may sign in as the member to help, the Account page's Privacy group, under who is signed in.
  *
  * The switch is kept on this device, but the counts it stops are sent under
  * the account, so it stands on Profile beside what is the account's. The
@@ -23,8 +23,8 @@ import type { SettingsWrites } from "./writes.js";
  * access and written through the host under the account's own session.
  */
 
-/** What granting means, said beside the row whether or not it stands. */
-const SUPPORT_ACCESS_MEANING = `A ${PRODUCT_NAME} maintainer may sign in as you, for up to an hour at a time, to help.`;
+/** What granting means, said beside the row while no grant stands. */
+const SUPPORT_ACCESS_MEANING = `Let the ${PRODUCT_NAME} team sign in as you to help.`;
 
 /**
  * The member's grant of support access: whether it stands and until when,
@@ -51,8 +51,8 @@ function SupportAccessRow(): React.JSX.Element {
       label="Support access"
       description={
         granted
-          ? `Granted until ${formatInstant(until)}. ${SUPPORT_ACCESS_MEANING}`
-          : `${SUPPORT_ACCESS_MEANING} A grant lasts seven days, and you can revoke it at any time.`
+          ? `The ${PRODUCT_NAME} team can sign in as you until ${formatInstant(until)}.`
+          : SUPPORT_ACCESS_MEANING
       }
     >
       {() =>

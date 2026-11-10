@@ -24,18 +24,16 @@ import {
   type DrawnTaskRow,
   drawnTaskRows,
   homedTaskRows,
-  orderTaskRows,
+  orderTasks,
   repositoryHeadingsDrawn,
   repositoryLabel,
   TASK_GROUPING,
-  TASK_ROW,
-  type TaskRow,
-  taskRow,
-  taskRowInView,
-  taskRowsAssignedTo,
-  taskRowTime,
+  TASK_ORDER,
+  taskInView,
   taskSections,
+  tasksAssignedTo,
   tasksById,
+  taskTime,
 } from "./task-list-model.js";
 import type { TaskSection } from "./task-section-wire.js";
 import { NO_TASK_SECTIONS, sectionedTasks, sectionInView } from "./task-sections-model.js";
@@ -117,20 +115,20 @@ export function taskTree(input: TaskTreeInput): TaskTree {
   const { view, workspaceId, readerId } = input;
   const listed = workspaceTasks(view.tasks, workspaceId);
   const every = tasksById(listed);
-  const pinnedRows = inPinOrder(
+  const pinned = inPinOrder(
     listed.filter((task) => task.pinnedAt !== undefined),
     (task) => ({ position: task.pinPosition, at: task.pinnedAt ?? 0 }),
-  ).map(taskRow);
+  );
   const free = listed.filter((task) => task.pinnedAt === undefined);
   const sectioned = sectionedTasks(view.taskSections ?? NO_TASK_SECTIONS, workspaceId, free);
   const sections = sectioned.sections.map((drawn) =>
     sectionInView(drawn, DEFAULT_TASK_LIST_VIEW, readerId),
   );
-  const rest = taskRowsAssignedTo(
-    free.filter((task) => !sectioned.taskIds.has(task.id)).map(taskRow),
+  const rest = tasksAssignedTo(
+    free.filter((task) => !sectioned.taskIds.has(task.id)),
     DEFAULT_TASK_LIST_VIEW.assignedTo,
     readerId,
-  ).filter((row) => taskRowInView(row, DEFAULT_TASK_LIST_VIEW));
+  ).filter((task) => taskInView(task, DEFAULT_TASK_LIST_VIEW));
   const grouped = taskSections(
     rest,
     TASK_GROUPING.REPOSITORY,
@@ -138,14 +136,14 @@ export function taskTree(input: TaskTreeInput): TaskTree {
   );
   const groups = grouped.grouping === TASK_GROUPING.REPOSITORY ? grouped.groups : [];
   const homed = homedTaskRows(
-    [pinnedRows, ...sections.map((drawn) => drawn.rows), ...groups.map((group) => group.rows)],
+    [pinned, ...sections.map((drawn) => drawn.tasks), ...groups.map((group) => group.tasks)],
     every,
   );
   const drawn = (at: number) => drawnTaskRows(homed[at] ?? [], ALL_OPEN, NONE_STANDING, every);
   const headings = repositoryHeadingsDrawn(groups);
   return {
     pinned:
-      pinnedRows.length === 0
+      pinned.length === 0
         ? undefined
         : {
             kind: TASK_TREE_GROUP.PINNED,
@@ -200,9 +198,7 @@ export function searchedTasks(input: {
       tokens,
     ),
   );
-  return orderTaskRows(found.map(taskRow)).flatMap((row: TaskRow) =>
-    row.kind === TASK_ROW.TASK ? [row.task] : [],
-  );
+  return orderTasks(found);
 }
 
 /** What a task's row says beyond its status and name: whether it reads unread, whether a thread of it waits on the reader, what its agents say, and when it last moved. */
@@ -224,7 +220,7 @@ export function taskRowLook(
   waiting: number,
   taskPullRequests: TasksView["taskPullRequests"],
 ): TaskRowLook {
-  const at = taskRowTime(taskRow(task));
+  const at = taskTime(task, TASK_ORDER.UPDATED);
   return {
     unread: readsUnread(task, at),
     needsYou: waiting > 0,
@@ -243,9 +239,8 @@ export interface TaskTreeNode {
 export function taskTreeNodes(rows: readonly DrawnTaskRow[]): readonly TaskTreeNode[] {
   const tops: { task: TaskSummary; children: TaskTreeNode[] }[] = [];
   const open: { depth: number; node: { task: TaskSummary; children: TaskTreeNode[] } }[] = [];
-  for (const { row, depth } of rows) {
-    if (row.kind !== TASK_ROW.TASK) continue;
-    const node = { task: row.task, children: [] };
+  for (const { task, depth } of rows) {
+    const node = { task, children: [] };
     while ((open.at(-1)?.depth ?? -1) >= depth) open.pop();
     const parent = open.at(-1);
     if (parent === undefined) tops.push(node);

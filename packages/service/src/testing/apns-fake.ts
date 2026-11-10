@@ -43,15 +43,17 @@ export interface RecordingApnsSender {
   readonly sent: ApnsNotification[];
 }
 
-/** A sender that records each notification and answers every one as `delivery` says, for a test of what decides to push. */
+/** A sender that records each notification and answers it as `delivery` says, one answer for every one or one by the notification, for a test of what decides to push. */
 export function recordingApnsSender(
-  delivery: ApnsDelivery = APNS_DELIVERY.DELIVERED,
+  delivery:
+    | ApnsDelivery
+    | ((notification: ApnsNotification) => ApnsDelivery) = APNS_DELIVERY.DELIVERED,
 ): RecordingApnsSender {
   const sent: ApnsNotification[] = [];
   const layer = Layer.succeed(ApnsSender, {
     send: (notification) => {
       sent.push(notification);
-      return Effect.succeed(delivery);
+      return Effect.succeed(typeof delivery === "function" ? delivery(notification) : delivery);
     },
   });
   return { layer, sent };

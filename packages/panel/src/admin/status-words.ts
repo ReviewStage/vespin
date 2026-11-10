@@ -17,8 +17,8 @@ import {
 } from "@repo/features/github-installation-wire";
 import type { IntegrationRowStatus } from "@repo/features/integration-row-wire";
 import { INTEGRATION_STATUS_WORDS } from "@repo/features/integration-status-words";
+import { PULL_REQUEST_STATE_LABEL } from "@repo/features/pull-request-model";
 import { QUIET_MARK, type QuietMark } from "@repo/ui";
-import { PULL_REQUEST_STATE_LABEL } from "../tasks/agent-model.js";
 
 /** The state each pull request the admin pages draw stands in; a draft is one of the open. */
 const ADMIN_PULL_REQUEST_STATE = {

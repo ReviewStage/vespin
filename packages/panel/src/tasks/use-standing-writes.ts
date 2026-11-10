@@ -10,14 +10,14 @@
 
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskStanding, TaskStatus, TaskSummary } from "@repo/features/task-wire";
-import type { TasksView } from "@repo/features/tasks-view";
-import { STATUS_TONE } from "@repo/ui";
 import {
   type StatusChange,
   settleChanges,
   settledNote,
   settleFailedNote,
-} from "@repo/ui/tasks-model";
+} from "@repo/features/tasks-model";
+import type { TasksView } from "@repo/features/tasks-view";
+import { STATUS_TONE } from "@repo/ui";
 import { useQuery } from "@tanstack/react-query";
 import { askKept, firstRefusal, type Kept, notKept } from "../act.js";
 import { TOAST_HOLD, useToast } from "../toast.js";

@@ -2,8 +2,7 @@
 
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
-  holderName,
-  INBOX_HOLDER,
+  ANSWER_TONE,
   INBOX_MEDIA,
   INBOX_NOT_READ,
   INBOX_READ_MARK,
@@ -18,6 +17,7 @@ import {
   inboxLineKind,
   inboxMemberName,
   inboxPreview,
+  inboxSettledStanding,
   inboxThreadMessages,
   isDone,
   isUnread,
@@ -26,7 +26,7 @@ import {
   RETRY,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
-import { inboxWaitsOn } from "@repo/features/inbox-wire";
+import { INBOX_STATUS, inboxWaitsOn } from "@repo/features/inbox-wire";
 import { iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { cardTitle } from "@repo/features/plain-words";
@@ -38,9 +38,10 @@ import {
 } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
-  type BarAction,
   type BarMenu,
+  DOCK_ROOM,
   EmptyState,
+  GlassDock,
   LIST_LOOK,
   type ListLook,
   ListRow,
@@ -71,8 +72,11 @@ import {
   useReadOnOpen,
   useThreadMedia,
 } from "../inbox/use-inbox.js";
+import { useThreadAnswer } from "../inbox/use-thread-answer.js";
+import { SettingsBarButton, useSettingsAccount } from "../settings-button.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
+import { OpenAskCard, ThreadComposer, threadMenu } from "./inbox-ask.js";
 
 /** The Inbox's name, at its head and on its back button. */
 const INBOX_TITLE = "Inbox";
@@ -158,8 +162,8 @@ function InboxRows({
             id={item.id}
             title={cardTitle(item.title)}
             task={{
-              name: holderName(holder),
-              status: holder.kind === INBOX_HOLDER.TASK ? holder.task.status : undefined,
+              name: holder.task.name,
+              status: holder.task.status,
             }}
             line={inboxLineKind(item)}
             summary={inboxPreview(item, (member) => inboxMemberName(member, readerId))}
@@ -229,11 +233,10 @@ function scopePills(
   }));
 }
 
-/** The Inbox's ⋯ menu: Mark all as read, and the bar's own act, such as Settings, under it. */
+/** The Inbox's ⋯ menu: Mark all as read. */
 function moreMenu(
   unread: readonly string[],
   markAll: (itemIds: readonly string[]) => void,
-  barAction: BarAction | undefined,
 ): BarMenu {
   return {
     ...MORE,
@@ -245,7 +248,6 @@ function moreMenu(
         disabled: unread.length === 0,
         onPress: () => markAll(unread),
       },
-      ...(barAction === undefined ? [] : [barAction]),
     ],
   };
 }
@@ -256,7 +258,14 @@ function useAgentTitles(): ReadonlyMap<string, string> {
   return data;
 }
 
-/** A thread's page from its item: its path, its subject, and each message with its files as they are read. */
+/**
+ * A thread's page from its item: its path, its subject, each message with
+ * its files as they are read, the open ask's card under them, and the box
+ * at its foot that answers or replies, with Resolve in its ⋯ menu. A compact
+ * window's pushed screen docks the box over the screen's foot, above the
+ * keyboard, and holds the menu in the stack's bar; a split view's detail
+ * stands both in its own column.
+ */
 function ThreadDetail({
   listed,
   readerId,
@@ -271,10 +280,7 @@ function ThreadDetail({
   const { holder, item } = listed;
   const openPlace = useOpenPlace();
   const titles = useAgentTitles();
-  const agentName =
-    titles.get(item.agentId) ??
-    (holder.kind === INBOX_HOLDER.AGENT ? holder.agent.agentTitle : null) ??
-    UNTITLED_AGENT;
+  const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
   const messages = useMemo(
     () => inboxThreadMessages(item, agentName, readerId),
     [item, agentName, readerId],
@@ -306,22 +312,28 @@ function ThreadDetail({
     [messages],
   );
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
-  const workspaceId =
-    holder.kind === INBOX_HOLDER.TASK ? holder.task.workspaceId : holder.agent.workspaceId;
+  const { workspaceId } = holder.task;
   const workspace = workspaces.find(({ id }) => id === workspaceId);
   // A video the system's player cannot read opens with its thread on vespin.dev in Safari, which plays it.
   const openOnWeb = () => {
-    const place =
-      holder.kind === INBOX_HOLDER.TASK
-        ? { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id }
-        : { kind: LINK_DESTINATION.INBOX_ITEM, agentId: holder.agent.agentId, itemId: item.id };
+    const place = {
+      kind: LINK_DESTINATION.INBOX_ITEM,
+      planId: holder.task.id,
+      itemId: item.id,
+    } as const;
     const address = linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
     openURL(address).catch((error: unknown) => console.error("The thread did not open.", error));
   };
   const sources = useThreadMedia(item.id, media);
   useReadOnOpen(listed);
+  const answer = useThreadAnswer(listed);
+  const menu = threadMenu(item, answer);
   const drawn: readonly ThreadMessage[] = messages.map((message) => ({
     ...message,
+    stamp:
+      message.stamp === undefined
+        ? undefined
+        : { words: message.stamp.words, ahead: message.stamp.tone === ANSWER_TONE.AHEAD },
     media: message.media.map((each) =>
       each.kind === INBOX_MEDIA.VIDEO
         ? {
@@ -358,55 +370,73 @@ function ThreadDetail({
       onOpenElsewhere: openOnWeb,
     };
   };
-  const path = [holderName(holder), agentName];
+  const path = [holder.task.name, agentName];
+  const page = (
+    <ThreadPage
+      path={path}
+      status={holder.task.status}
+      title={cardTitle(item.title)}
+      messages={drawn}
+      repository={holder.task.repository}
+      onOpenPlace={openPlace}
+      pictureSource={pictureSource}
+      videoAt={videoAt}
+      standing={item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(item)}
+      ask={<OpenAskCard item={item} answer={answer} />}
+      {...(inStack
+        ? { footRoom: DOCK_ROOM }
+        : { menu, foot: <ThreadComposer item={item} answer={answer} inColumn /> })}
+    />
+  );
+  if (!inStack) return page;
   return (
     <>
-      {inStack ? (
-        <Stack.Screen
-          options={{
-            title: path.join(PATH_PART),
-            headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
-          }}
-        />
-      ) : null}
-      <ThreadPage
-        path={path}
-        status={holder.kind === INBOX_HOLDER.TASK ? holder.task.status : undefined}
-        title={cardTitle(item.title)}
-        messages={drawn}
-        repository={
-          holder.kind === INBOX_HOLDER.TASK ? holder.task.repository : holder.agent.repository
-        }
-        onOpenPlace={openPlace}
-        pictureSource={pictureSource}
-        videoAt={videoAt}
+      <Stack.Screen
+        options={{
+          title: path.join(PATH_PART),
+          headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
+        }}
       />
+      {menu === undefined ? null : (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Menu icon={menu.symbol} accessibilityLabel={menu.label}>
+            {menu.actions.map((action) => (
+              <Stack.Toolbar.MenuAction
+                key={action.label}
+                icon={action.symbol}
+                onPress={action.onPress}
+              >
+                {action.label}
+              </Stack.Toolbar.MenuAction>
+            ))}
+          </Stack.Toolbar.Menu>
+        </Stack.Toolbar>
+      )}
+      <GlassDock bar={<ThreadComposer item={item} answer={answer} />}>
+        <Screen>{page}</Screen>
+      </GlassDock>
     </>
   );
 }
 
 /** What the list screens share: the scope and its pills, the search, the listing under both, and the acts on it. */
-function useInboxScreen(barAction: BarAction | undefined, chosen?: string | undefined) {
+function useInboxScreen(chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
   const [search, setSearch] = useState("");
   const listing = useInboxListing({ show, search, chosen });
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);
-  const menu = moreMenu(listing.unread, acts.markAll, barAction);
+  const menu = moreMenu(listing.unread, acts.markAll);
   return { show, search, setSearch, listing, acts, scopes, menu };
 }
 
-type InboxListScreenProps = {
-  /** The act the list's bar holds beside its menu, such as Settings. */
-  readonly barAction?: BarAction | undefined;
-};
-
 // A compact window: the list under the Stack's inline title and the scope
-// pills, its search and its ⋯ menu as round glass buttons in the bar, each
+// pills, the account's photo opening Settings at the bar's leading edge, and
+// its search and its ⋯ menu as round glass buttons at its trailing one, each
 // row pushing its thread as the Stack's next screen.
-function InboxStackList({ barAction }: InboxListScreenProps) {
+function InboxStackList() {
   const router = useRouter();
-  const { show, search, setSearch, listing, acts, scopes, menu } = useInboxScreen(barAction);
+  const { show, search, setSearch, listing, acts, scopes, menu } = useInboxScreen();
   return (
     <>
       <Stack.Screen options={{ title: INBOX_TITLE }}>
@@ -418,6 +448,7 @@ function InboxStackList({ barAction }: InboxListScreenProps) {
           onCancelButtonPress={() => setSearch("")}
         />
       </Stack.Screen>
+      <SettingsBarButton />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={menu.symbol} accessibilityLabel={menu.label}>
           {menu.actions.map((action) => (
@@ -458,15 +489,14 @@ function InboxStackList({ barAction }: InboxListScreenProps) {
 }
 
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the list
-// under its scope pills as the split view's sidebar, its search and ⋯ menu in
-// the sidebar's bar, and the selected thread beside it. The Stack's header
-// steps aside, since the split view draws each column's navigation bar itself.
-function InboxSplitScreen({ barAction }: InboxListScreenProps) {
+// under its scope pills as the split view's sidebar, the account's photo, its
+// search and ⋯ menu in the sidebar's bar, and the selected thread beside it.
+// The Stack's header steps aside, since the split view draws each column's
+// navigation bar itself.
+function InboxSplitScreen() {
   const [selected, setSelected] = useState<string | undefined>(undefined);
-  const { show, search, setSearch, listing, acts, scopes, menu } = useInboxScreen(
-    barAction,
-    selected,
-  );
+  const { show, search, setSearch, listing, acts, scopes, menu } = useInboxScreen(selected);
+  const account = useSettingsAccount();
   const chosen = listing.listed.find(({ item }) => item.id === selected);
   return (
     <>
@@ -502,6 +532,7 @@ function InboxSplitScreen({ barAction }: InboxListScreenProps) {
               <ThreadDetail key={chosen.item.id} listed={chosen} readerId={listing.readerId} />
             )
           }
+          sidebarAccount={account}
           sidebarMenu={menu}
           sidebarSearch={{ placeholder: SEARCH_INBOX, onChange: setSearch }}
         />
@@ -511,13 +542,9 @@ function InboxSplitScreen({ barAction }: InboxListScreenProps) {
 }
 
 /** The Inbox tab's root screen: its list, laid out by the window's size class. */
-export function InboxListScreen({ barAction }: InboxListScreenProps) {
+export function InboxListScreen() {
   const sizeClass = useWindowSizeClass();
-  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
-    <InboxSplitScreen barAction={barAction} />
-  ) : (
-    <InboxStackList barAction={barAction} />
-  );
+  return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? <InboxSplitScreen /> : <InboxStackList />;
 }
 
 /** The Inbox's pushed screen: one thread, named by the route's `id`, its path small in the bar over its heading. */
@@ -530,25 +557,27 @@ export function InboxThreadScreen() {
       <Stack.Screen
         options={{ headerBackTitle: INBOX_TITLE, ...(listed === undefined ? { title: "" } : {}) }}
       />
-      <Screen>
-        {listed !== undefined ? (
-          <ThreadDetail listed={listed} readerId={readerId} inStack />
-        ) : feed === INBOX_FEED.READING ? (
-          <EmptyState title={READING_INBOX} symbol="tray" />
-        ) : feed === INBOX_FEED.FAILED ? (
-          <EmptyState
-            title={INBOX_NOT_READ}
-            symbol="exclamationmark.triangle"
-            action={{
-              label: RETRY,
-              // The feed or the task list that holds the thread failed, so both are read again.
-              onPress: () => void Promise.all([refresh(), refreshTasks()]),
-            }}
-          />
-        ) : (
-          <EmptyState title={THREAD_NOT_FOUND} symbol="tray" />
-        )}
-      </Screen>
+      {listed !== undefined ? (
+        <ThreadDetail listed={listed} readerId={readerId} inStack />
+      ) : (
+        <Screen>
+          {feed === INBOX_FEED.READING ? (
+            <EmptyState title={READING_INBOX} symbol="tray" />
+          ) : feed === INBOX_FEED.FAILED ? (
+            <EmptyState
+              title={INBOX_NOT_READ}
+              symbol="exclamationmark.triangle"
+              action={{
+                label: RETRY,
+                // The feed or the task list that holds the thread failed, so both are read again.
+                onPress: () => void Promise.all([refresh(), refreshTasks()]),
+              }}
+            />
+          ) : (
+            <EmptyState title={THREAD_NOT_FOUND} symbol="tray" />
+          )}
+        </Screen>
+      )}
     </>
   );
 }

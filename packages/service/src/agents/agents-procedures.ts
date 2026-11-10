@@ -36,7 +36,6 @@
 
 import { randomUUID } from "node:crypto";
 import type { DatabaseServices } from "@repo/database/core/query";
-import { agentOwnerFactsOf } from "@repo/database/models/agent-owners";
 import {
   type Agent,
   type AgentCommitted,
@@ -44,7 +43,6 @@ import {
   hasRepository,
   listAgentLines,
   listWorkspaceAgentLines,
-  markAgentReadCommitted,
   nativeRouteOfReached,
   readVisibleAgentWorkspace,
 } from "@repo/database/models/agent-store";
@@ -168,19 +166,10 @@ const listedSummaries = /* @__PURE__ */ Effect.fnUntraced(function* (
     agents.map((agent) => agent.id),
   );
   const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices(agents)));
-  const owners = yield* hostedStoreOrUnavailable(agentOwnerFactsOf(agents));
   const now = yield* Clock.currentTimeMillis;
   return {
     agents: agents.map((agent) =>
-      agentSummary(
-        agent,
-        standing(agent.conversationId),
-        now,
-        names,
-        owners,
-        continuedBy(agent.id),
-        macs,
-      ),
+      agentSummary(agent, standing(agent.conversationId), now, names, continuedBy(agent.id), macs),
     ),
   };
 });
@@ -426,7 +415,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       );
       return startAnswer(started);
     }),
-    /** The agent as its own page, an agent with no task as much as one on a task. */
+    /** The agent as its own page. */
     read: signedIn.read.effect(function* ({ input, context }) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
       // An open of the agent hands on, past its answer, the queue a hand-off cut off left claimed, once
@@ -440,7 +429,6 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       const names = yield* hostedStoreOrUnavailable(readAccountNames(pageAccounts(agent)));
       const continuedBy = yield* continuedByOf(userId, [agent.id]);
       const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices([agent])));
-      const owners = yield* hostedStoreOrUnavailable(agentOwnerFactsOf([agent]));
       const now = yield* Clock.currentTimeMillis;
       return {
         agent: agentPage(
@@ -448,7 +436,6 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
           standing(agent.conversationId),
           now,
           names,
-          owners,
           continuedBy(agent.id),
           macs,
         ),
@@ -460,7 +447,8 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
      * tab falls back to the model's name. `archived` archives the agent,
      * stopping a turn still running first as a Stop does, or brings it back.
      * `pinned` pins it for the asking member alone, or unpins it.
-     * `readMark` moves the asking member's own read mark of it.
+     * `readMark`, which a released desktop still sends, changes nothing,
+     * since an agent is read through its task's mark alone.
      * `disabledServers` replaces the list of MCP servers switched off for
      * it, which its next turn reads as it starts. `addRepository` adds a
      * repository beside the ones it works in, checked out and told to it
@@ -502,12 +490,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
           yield* hostedStoreOrUnavailable(changedAgent(userId, agent, { pinned, position })),
         );
       }
-      if ("readMark" in body) {
-        return yield* committedAgent(
-          userId,
-          yield* hostedStoreOrUnavailable(markAgentReadCommitted(userId, agent.id, body.readMark)),
-        );
-      }
+      if ("readMark" in body) return { agent: yield* summaryOf(userId, agent) };
       if ("disabledServers" in body) {
         const { disabledServers } = body;
         return yield* committedAgent(

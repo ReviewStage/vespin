@@ -153,6 +153,7 @@ const STAGED_INSTALL_SCRIPT = "https://app.test/install.sh";
 /** The page each Settings profile opens on, and the workspace it shows where that is not the sidebar's first. */
 const SETTINGS_LINKS: ReadonlyMap<string, SettingsLink> = new Map<string, SettingsLink>([
   [RUN_PROFILE.SETTINGS_ACCOUNT, { page: SETTINGS_VIEW.ACCOUNT }],
+  [RUN_PROFILE.SETTINGS_PREFERENCES, { page: SETTINGS_VIEW.PREFERENCES }],
   [RUN_PROFILE.SETTINGS_WORKSPACE, { page: SETTINGS_VIEW.WORKSPACE, workspaceId: WORKSPACE.ACME }],
   [RUN_PROFILE.SETTINGS_AGENTS, { page: SETTINGS_VIEW.AGENTS }],
   [RUN_PROFILE.SETTINGS_HOSTS, { page: SETTINGS_VIEW.HOSTS }],
@@ -625,7 +626,7 @@ let acmeSlackBot: WorkspaceSlackBot = {
   ],
 };
 
-/* ----- Settings › Environment ----- */
+/* ----- Settings › Cloud environment's Variables ----- */
 
 /** Acme's environment variables by name, as an add, a replace, and a delete leave them. */
 let acmeVariables: readonly WorkspaceVariable[] = [
@@ -640,7 +641,7 @@ function variablesAnswer(variables: readonly WorkspaceVariable[]) {
   return { variables: acmeVariables };
 }
 
-/* ----- Settings › Cloud setup ----- */
+/* ----- Settings › Cloud environment's scripts ----- */
 
 /** Acme's sandbox setup, as a save leaves it: an install script, setup scripts for two of its repositories, and an archive script for one. */
 let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {

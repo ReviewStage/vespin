@@ -8,9 +8,9 @@ import { createContext, type ReactNode, useContext, useEffect, useState } from "
 import { HostFailedScreen } from "../screens/host-failed.js";
 import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
-import { fixtureActs } from "./fixture-host.js";
 import { launchFixtureProfile, launchStubsAuthServer } from "./launch-arguments.js";
 import {
+  type HostFollow,
   type MobileHostStartOptions,
   type StandingMobileHost,
   startMobileHost,
@@ -22,17 +22,27 @@ const UNVERSIONED = "0.0.0";
 
 /** Where the host's start stands: not yet answered, standing with its document in a client and its act port, or failed. */
 type Standing =
-  | { readonly client: QueryClient; readonly acts: ActPortClient }
+  | { readonly client: QueryClient; readonly acts: ActPortClient; readonly follow: HostFollow }
   | { readonly failed: true };
 
 /** The act port the screens act through, once the host stands. */
 const HostActs = createContext<ActPortClient | undefined>(undefined);
+
+/** The follows a screen holds open on the host, once it stands. */
+const HostFollows = createContext<HostFollow | undefined>(undefined);
 
 /** The host's act port, for a screen drawn under `HostProvider`. */
 export function useHostActs(): ActPortClient {
   const acts = useContext(HostActs);
   if (acts === undefined) throw new Error("A screen acted outside the host's provider.");
   return acts;
+}
+
+/** How a screen drawn under `HostProvider` holds a follow open on the host, such as a transcript's, until it lets it go. */
+export function useHostFollow(): HostFollow {
+  const follow = useContext(HostFollows);
+  if (follow === undefined) throw new Error("A screen followed outside the host's provider.");
+  return follow;
 }
 
 /**
@@ -93,9 +103,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
             error,
           );
         }
-        const profile = launchFixtureProfile();
-        const acts = profile === undefined ? host.acts : fixtureActs(host.acts, profile);
-        if (live) setStanding({ client, acts });
+        if (live) setStanding({ client, acts: host.acts, follow: host.follow });
         else void host.close();
       },
       (error: unknown) => {
@@ -115,7 +123,9 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
   }
   return (
     <QueryClientProvider client={standing.client}>
-      <HostActs.Provider value={standing.acts}>{children}</HostActs.Provider>
+      <HostActs.Provider value={standing.acts}>
+        <HostFollows.Provider value={standing.follow}>{children}</HostFollows.Provider>
+      </HostActs.Provider>
     </QueryClientProvider>
   );
 }

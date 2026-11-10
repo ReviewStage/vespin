@@ -24,7 +24,6 @@ function SchemaToggleRow({
   field,
   label,
   detail,
-  changed,
   checked,
   onTurned,
 }: {
@@ -32,7 +31,6 @@ function SchemaToggleRow({
   field: AppSettingField;
   label: string;
   detail: string | undefined;
-  changed: boolean;
   checked: boolean;
   onTurned: ((enabled: boolean) => void) | undefined;
 }): React.JSX.Element {
@@ -58,7 +56,6 @@ function SchemaToggleRow({
       label={label}
       labelReplayUnmasked
       detail={detail}
-      changed={changed}
       checked={checked}
       write={write}
     />
@@ -77,7 +74,6 @@ function SchemaChoiceRow({
   view,
   label,
   detail,
-  changed,
   value,
   options,
   search,
@@ -89,7 +85,6 @@ function SchemaChoiceRow({
   view: SettingsRowsInput;
   label: string;
   detail: string | undefined;
-  changed: boolean;
   value: string;
   options: readonly SettingOption[];
   /** What an option's token shows beside its words, where it shows anything. */
@@ -105,7 +100,6 @@ function SchemaChoiceRow({
       label={label}
       labelReplayUnmasked
       detail={detail}
-      changed={changed}
       value={value}
       options={
         faces === undefined
@@ -155,7 +149,7 @@ export function SchemaSettingRows({
   onTurned?: ((field: AppSettingField, enabled: boolean) => void) | undefined;
 }): React.JSX.Element {
   const rows = settingRowsForPage(page, section, view).flatMap((row) => {
-    const { field, entry, changed, control } = row;
+    const { field, entry, control } = row;
     if (entry.kind === APP_SETTING_KIND.TOGGLE) {
       return [
         <SchemaToggleRow
@@ -164,7 +158,6 @@ export function SchemaSettingRows({
           field={field}
           label={entry.label}
           detail={entry.detail}
-          changed={changed}
           checked={entry.value === APP_TOGGLE_VALUE.ON}
           onTurned={onTurned === undefined ? undefined : (enabled) => onTurned(field, enabled)}
         />,
@@ -179,7 +172,6 @@ export function SchemaSettingRows({
         view={view}
         label={entry.label}
         detail={entry.detail}
-        changed={changed}
         value={control.value}
         options={control.options}
         search={control.search}

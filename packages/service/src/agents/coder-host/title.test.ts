@@ -201,6 +201,16 @@ const titledAs = (owner: string, agent: Agent, title: string) =>
     agent,
   );
 
+/** Answers a model gives that are no title, which name nothing. */
+const NO_TITLE_ANSWERS = [
+  { named: "the untitled name", answer: "<Untitled>." },
+  {
+    named: "the exchange rather than naming it",
+    answer:
+      "Hello! I'm not sure which description you mean, since I don't see one in our conversation. Could you share it?",
+  },
+] as const;
+
 /** The task's name as the account reads it. */
 const taskName = (owner: string, taskId: string) =>
   Effect.map(readTask(owner, taskId), (read) => Option.getOrThrow(read).task.name);
@@ -223,20 +233,26 @@ it.layer(getTestDB())("an untitled task's name", (it) => {
     }),
   );
 
-  it.effect("a model answering the untitled name names neither the agent nor its task", () =>
-    Effect.gen(function* () {
-      const owner = yield* openGithubUser();
-      const organizationId = yield* openWorkspace(owner);
-      const task = yield* createTask(owner, { organizationId });
-      const first = yield* startOnTask(owner, task.id, "Expire teammate invitations after a week.");
-      const second = yield* startOnTask(owner, task.id, "Send a reminder the day before.");
+  it.effect.each(NO_TITLE_ANSWERS)(
+    "a model answering $named names neither the agent nor its task",
+    ({ answer }) =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        const organizationId = yield* openWorkspace(owner);
+        const task = yield* createTask(owner, { organizationId });
+        const first = yield* startOnTask(
+          owner,
+          task.id,
+          "Expire teammate invitations after a week.",
+        );
+        const second = yield* startOnTask(owner, task.id, "Send a reminder the day before.");
 
-      yield* titledAs(owner, first, "<Untitled>.");
-      yield* titledAs(owner, second, "Send invitation reminders");
+        yield* titledAs(owner, first, answer);
+        yield* titledAs(owner, second, "Send invitation reminders");
 
-      assert.equal(Option.getOrThrow(yield* readAgent(owner, first.id)).title, null);
-      assert.equal(yield* taskName(owner, task.id), "Send invitation reminders");
-    }),
+        assert.equal(Option.getOrThrow(yield* readAgent(owner, first.id)).title, null);
+        assert.equal(yield* taskName(owner, task.id), "Send invitation reminders");
+      }),
   );
 
   it.effect("a task named by a member keeps its name when its agent is titled", () =>

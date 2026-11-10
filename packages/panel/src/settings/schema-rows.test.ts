@@ -147,11 +147,9 @@ async function settle(): Promise<void> {
   await act(async () => undefined);
 }
 
-test("Zoom is a pop-up naming the stored size, described by its row, and choosing another size writes it", async () => {
+test("Zoom is a pop-up naming the stored size, and choosing another size writes it", async () => {
   const page = mount();
   const zoom = control(page, "Zoom: 100%");
-  assert.equal(describedAs(zoom), "⌘+ and ⌘− step through these sizes, and ⌘0 returns to 100%.");
-
   // The pop-up is the picker's menu, which the settings search lands on through the chip.
   assert.equal(zoom.getAttribute("data-search-anchor"), "zoom");
   assert.equal(zoom.getAttribute("aria-haspopup"), "dialog");

@@ -76,12 +76,12 @@ import {
   NOT_FOUND_LIVE,
   nextPoll,
   PERSONAL,
+  planRow,
   type RecordPart,
   rowOfTask,
   SECTION_ID,
   subject,
   task,
-  taskRow,
   workspacesLiveRows,
 } from "./testing/tasks-subject.js";
 import { testCipher } from "./testing/test-cipher.js";
@@ -2697,7 +2697,7 @@ it.effect(
       service.live.list.refuse(undefined);
       yield* TestClock.adjust(Duration.seconds(5));
       yield* listAnswers(service, {
-        plans: [taskRow(INVITES, "Teammate invitations, live")],
+        plans: [planRow(INVITES, "Teammate invitations, live")],
         agents: [],
         issues: [],
       });
@@ -2730,7 +2730,7 @@ it.effect(
       const { call, last } = yield* subject(service);
       yield* call("TASKS_REFRESH", undefined);
       yield* listAnswers(service, {
-        plans: [taskRow(INVITES, "Teammate invitations"), taskRow(BILLING, "Billing export")],
+        plans: [planRow(INVITES, "Teammate invitations"), planRow(BILLING, "Billing export")],
         agents: [],
         issues: [],
       });
@@ -2742,7 +2742,7 @@ it.effect(
       );
 
       // Another member deleted the billing task, and nothing else moved.
-      yield* listAnswers(service, { plans: [taskRow(INVITES, "Teammate invitations")] });
+      yield* listAnswers(service, { plans: [planRow(INVITES, "Teammate invitations")] });
 
       assert.deepEqual(
         last()?.tasks.map((row) => row.id),
@@ -2761,7 +2761,7 @@ it.effect(
 
       yield* call("TASKS_REFRESH", undefined);
       yield* listAnswers(service, {
-        plans: [taskRow(INVITES, "Teammate invitations, live")],
+        plans: [planRow(INVITES, "Teammate invitations, live")],
         agents: [agentRow(INVITES, 60_000)],
         issues: [],
       });
@@ -2797,7 +2797,7 @@ it.effect(
       const { call, last, settled } = yield* subject(service);
       yield* call("TASKS_REFRESH", undefined);
       yield* listAnswers(service, {
-        plans: [taskRow(INVITES, "Teammate invitations, live")],
+        plans: [planRow(INVITES, "Teammate invitations, live")],
         agents: [],
         issues: [],
       });
@@ -2812,7 +2812,7 @@ it.effect(
       assert.equal(last()?.tasks[0]?.name, "Teammate invitations, live");
 
       // The rows decode again by the time the follow starts again, a pause later.
-      service.live.list.set({ plans: [taskRow(INVITES, "Teammate invitations, again")] });
+      service.live.list.set({ plans: [planRow(INVITES, "Teammate invitations, again")] });
       yield* TestClock.adjust(Duration.seconds(5));
       yield* settled;
       assert.equal(last()?.live, HOST_LIVE.LIVE);
@@ -2834,7 +2834,7 @@ it.effect(
 
       yield* call("TASKS_REFRESH", undefined);
       yield* listAnswers(service, {
-        plans: [taskRow(INVITES, "Teammate invitations, live")],
+        plans: [planRow(INVITES, "Teammate invitations, live")],
         agents: [],
         issues: [],
       });

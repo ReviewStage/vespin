@@ -20,7 +20,7 @@ import {
   experimentsIn,
   NO_EXPERIMENTS,
 } from "@repo/settings";
-import { SETTINGS_PAGE_LIST, type SettingsView } from "@repo/settings/settings-views";
+import { settingsViewNamed } from "@repo/settings/settings-views";
 import { type QueryClient, useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { useKeptChoice } from "./desktop/chosen-workspace.js";
@@ -138,11 +138,6 @@ export function adminRouteStands(access: RouteAccess): boolean {
   return access.admin;
 }
 
-/** The Settings page a page segment names; none for a segment naming no page. */
-export function settingsViewOfPage(page: string): SettingsView | undefined {
-  return SETTINGS_PAGE_LIST.find((view) => view === page);
-}
-
 /** The experiments on in the workspace an address's first step names, else the listed one, beside the account's own. */
 function experimentsAt(workspace: string | undefined, access: RouteAccess): ExperimentChoices {
   const step = workspace ?? access.listed;
@@ -166,7 +161,7 @@ export function settingsPageRouteStands(
   access: RouteAccess,
   workspace?: string,
 ): boolean {
-  const view = settingsViewOfPage(page);
+  const view = settingsViewNamed(page);
   if (view === undefined || !access.experimentsRead) return true;
   // Note that only a page a workspace experiment holds waits on the workspaces, since an account's own experiment is read already.
   if (access.workspaces.length === 0 && settingsPageWaitsOnWorkspaces(view)) return true;

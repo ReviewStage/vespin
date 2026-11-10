@@ -404,6 +404,12 @@ export const SCENES: readonly Scene[] = [
   // Settings, page by page.
   { id: "settings-account", place: PLACE.SETTINGS, title: "Account", profile: "settings-account" },
   {
+    id: "settings-preferences",
+    place: PLACE.SETTINGS,
+    title: "Preferences",
+    profile: "settings-preferences",
+  },
+  {
     id: "settings-workspace",
     place: PLACE.SETTINGS,
     title: "Workspace",
@@ -413,7 +419,7 @@ export const SCENES: readonly Scene[] = [
   {
     id: "settings-hosts",
     place: PLACE.SETTINGS,
-    title: "Hosts",
+    title: "Machines",
     profile: "settings-hosts",
   },
   {

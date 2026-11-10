@@ -25,6 +25,8 @@ import {
   QueuedTurnListener,
   type SettledAgentTurn,
   SettledTurnListener,
+  type StartedAgentTurn,
+  StartedTurnListener,
   type StoreWriter,
   storeWriter,
 } from "@repo/database/models/writer";
@@ -983,9 +985,13 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   // writer's savepoint inside it ends, so what a listener reads of a turn (its final words, for
   // the Slack thread and the agent's starter) is what the batch wrote, and a rolled back batch
   // tells nobody.
+  const started: StartedAgentTurn[] = [];
   const settled: SettledAgentTurn[] = [];
   const queued: QueuedAgentTurn[] = [];
-  const collecting = Layer.merge(
+  const collecting = Layer.mergeAll(
+    Layer.succeed(StartedTurnListener, {
+      heard: (turn) => Effect.sync(() => void started.push(turn)),
+    }),
     Layer.succeed(SettledTurnListener, {
       heard: (turn) => Effect.sync(() => void settled.push(turn)),
     }),
@@ -1001,6 +1007,10 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
       admitted.value.launch,
     ).pipe(Effect.provide(collecting)),
   );
+  const starting = yield* Effect.serviceOption(StartedTurnListener);
+  if (Option.isSome(starting)) {
+    yield* Effect.forEach(started, starting.value.heard, { discard: true });
+  }
   const listener = yield* Effect.serviceOption(SettledTurnListener);
   if (Option.isSome(listener)) {
     yield* Effect.forEach(settled, listener.value.heard, { discard: true });
@@ -1019,7 +1029,7 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     yield* sayTurnFailed(failed, harness, applying.payer, {
       agentId: agent.value.id,
       conversationId: target.conversationId,
-      ...(taskId === null ? undefined : { taskId }),
+      taskId,
       ...(runtimeSessionId === undefined ? undefined : { sandboxSessionId: runtimeSessionId }),
     });
   }
@@ -1066,10 +1076,10 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
   // The task follows the turns the batch moved, once their rows are written: a turn starting takes
   // it up, and a turn's end archives the agent with a task moved to Done while it worked
   // (`tasks/task-finish.ts`).
-  if (taskId !== null && applied.value.turns.started) {
+  if (applied.value.turns.started) {
     yield* reopenTaskForWork(target.userId, taskId);
   }
-  if (taskId !== null && applied.value.turns.ended) {
+  if (applied.value.turns.ended) {
     yield* settleTaskAfterTurn(target.userId, taskId, agent.value.id);
   }
   // Note that the title runs after the answer, kept awake past it, because the runner need not wait on a model.

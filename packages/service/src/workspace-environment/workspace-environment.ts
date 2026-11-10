@@ -2,7 +2,7 @@
  * workspace-environment.ts -- a workspace's shared environment variables as the account reaches them: list their names to a member, and set or delete one as an owner or admin.
  *
  * The one operation behind every door to them: the hosted procedures
- * (`workspace-environment-procedures.ts`), which Settings › Environment and
+ * (`workspace-environment-procedures.ts`), which Settings › Cloud environment and
  * the CLI call, and the member MCP tools (`../member-mcp/tools.ts`). Each
  * resolves the workspace as the account is a member of it, a workspace it
  * is not in refused as not found, and a set or a delete by a member who is

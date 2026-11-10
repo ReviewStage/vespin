@@ -41,18 +41,7 @@ const HOLDING = {
 /** The same, its agent archived: no longer drawn, though still held. */
 const ARCHIVED = { ...HOLDING, agentIds: [], heldIds: [AGENT] };
 
-const ITEM: InboxItemHere = {
-  kind: HERE.INBOX_ITEM,
-  taskId: TASK,
-  agentId: undefined,
-  ...HOLDING,
-};
-const TASKLESS_ITEM: InboxItemHere = {
-  kind: HERE.INBOX_ITEM,
-  taskId: undefined,
-  agentId: AGENT,
-  ...HOLDING,
-};
+const ITEM: InboxItemHere = { kind: HERE.INBOX_ITEM, taskId: TASK, ...HOLDING };
 
 const NOTHING: Route = { kind: ROUTE.NOTHING };
 
@@ -90,12 +79,6 @@ it.each<[string, string, InboxItemHere, Route]>([
     NOTHING,
   ],
   [
-    "an Inbox item of an agent on no task: another pull request of its repository, by its number in its agent's tab",
-    "https://github.com/acme/relay/pull/41",
-    TASKLESS_ITEM,
-    beside({ kind: THING.PULL_REQUEST, agentId: AGENT, number: 41 }),
-  ],
-  [
     "an Inbox item: a page under its agent's own pull request's, in that agent's own Pull request tab",
     `${PR}/files`,
     ITEM,
@@ -125,12 +108,6 @@ it.each<[string, string, InboxItemHere, Route]>([
     }),
   ],
   [
-    "an Inbox item of an agent on no task: a file of its repository, beside it",
-    FILE,
-    TASKLESS_ITEM,
-    beside({ kind: THING.FILE, path: "src/invites.ts", lines: undefined }),
-  ],
-  [
     "an Inbox item not yet chosen: nothing beside it",
     FILE,
     { ...ITEM, taskId: undefined },
@@ -155,15 +132,9 @@ it.each<[string, string, InboxItemHere, Route]>([
     NOTHING,
   ],
   [
-    "an Inbox item of an agent on no task: that agent's page, beside it",
-    `${APP}/agent/${AGENT}/page/${PAGE}`,
-    TASKLESS_ITEM,
-    beside({ kind: THING.PAGE, pageId: PAGE }),
-  ],
-  [
-    "an Inbox item of an agent on no task: another agent's page, beside it read on that agent",
+    "an Inbox item: a page an agent showed on itself, as an older link names it, beside it read on that agent",
     `${APP}/agent/${OTHER}/page/${PAGE}`,
-    TASKLESS_ITEM,
+    ITEM,
     beside({ kind: THING.PAGE, pageId: PAGE, place: { agentId: OTHER } }),
   ],
   ["an Inbox item: its task's plan, the window's", `${APP}/plan/${TASK}`, ITEM, NOTHING],
@@ -196,12 +167,6 @@ it.each<[string, string, InboxItemHere, Route]>([
     NOTHING,
   ],
   [
-    "an Inbox item of an agent on no task: a message of that agent, the window's",
-    `${APP}/agent/${AGENT}/message/${MESSAGE}`,
-    TASKLESS_ITEM,
-    NOTHING,
-  ],
-  [
     "an Inbox item: a review thread of an archived agent's pull request, beside it at the thread",
     `${APP}/agent/${AGENT}/changes/conversation/thread/${THREAD}`,
     { ...ITEM, ...ARCHIVED },
@@ -230,12 +195,6 @@ it.each<[string, string, InboxItemHere, Route]>([
     `${APP}/agent/${OTHER}/inbox/${INBOX_ITEM}`,
     ITEM,
     NOTHING,
-  ],
-  [
-    "an Inbox item of an agent on no task: another item of that agent, chosen in this Inbox",
-    `${APP}/agent/${AGENT}/inbox/${INBOX_ITEM}`,
-    TASKLESS_ITEM,
-    beside({ kind: THING.INBOX_ITEM, itemId: INBOX_ITEM, taskId: undefined, agentId: AGENT }),
   ],
 ])("%s", (_, href, here, expected) => {
   assert.deepEqual(besideItem(addressOf(href, ROUTER), here), expected);

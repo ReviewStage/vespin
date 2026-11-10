@@ -11,6 +11,7 @@ import {
   type DevicePlatform,
   type DeviceSetup,
 } from "@repo/features/device-agent-wire";
+import { devicePlatformOf } from "@repo/features/device-platform";
 import type { MacOffer } from "@repo/features/models-wire";
 import { agentRunsOnWords, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import type { TaskRunsOnRequest } from "@repo/features/task-wire";
@@ -32,7 +33,6 @@ import {
 import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { Schema } from "effect";
-import { devicePlatformOf } from "../device-platform.js";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
 import { machineName, type ThisMac, useThisMac } from "../machine-name.js";
 import { Picker } from "../settings/picker-row.js";

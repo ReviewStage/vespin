@@ -84,14 +84,15 @@ import {
 } from "../github/pull-request-writes.js";
 import {
   GRAPHQL_REACTION_OF,
+  NO_VIEWER_RIGHTS,
   type PullRequestReadFailure,
   pullRequestChecks,
   pullRequestConversation,
   pullRequestDeployments,
   pullRequestOverview,
-  viewerCanUpdateOf,
   viewerPendingReviewOf,
   viewerReactionsOf,
+  viewerRightsOf,
 } from "../github/pull-requests.js";
 import { HOSTED_REFUSAL, type UserIdResolver } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
@@ -203,10 +204,12 @@ const mergingOrNone = (token: Redacted.Redacted, repository: string, number: num
     ),
   );
 
-/** Whether the member may edit the pull request's description, read on their own token; not where they hold no sign-in GitHub takes. */
-const memberCanEdit = (userId: string, repository: string, number: number) =>
+/** What the member may do to the pull request, read on their own token: edit its description, and merge it past its base's rules; nothing where they hold no sign-in GitHub takes. */
+const memberRights = (userId: string, repository: string, number: number) =>
   Effect.flatMap(memberReadToken(userId), (token) =>
-    token === undefined ? Effect.succeed(false) : viewerCanUpdateOf(token, repository, number),
+    token === undefined
+      ? Effect.succeed(NO_VIEWER_RIGHTS)
+      : viewerRightsOf(token, repository, number),
   );
 
 /**
@@ -215,8 +218,8 @@ const memberCanEdit = (userId: string, repository: string, number: number) =>
  * last read, the stack it stands in, its people named against the
  * workspace's members and its stack by their agents (`github-people.ts`),
  * with who its row says it writes as; and, read beside it on the member's
- * own token, whether they may edit its description. None where the
- * repository no longer holds it.
+ * own token, whether they may edit its description and merge it past its
+ * base's rules. None where the repository no longer holds it.
  */
 export const overviewPullRequestRead = (
   token: Redacted.Redacted,
@@ -226,16 +229,16 @@ export const overviewPullRequestRead = (
 ) =>
   Effect.gen(function* () {
     const { repository } = subject;
-    const [read, merging, canEditDescription] = yield* Effect.all(
+    const [read, merging, rights] = yield* Effect.all(
       [
         pullRequestOverview(token, repository, pullRequest.number, stackable(pullRequest)),
         mergingOrNone(token, repository, pullRequest.number),
-        memberCanEdit(userId, repository, pullRequest.number),
+        memberRights(userId, repository, pullRequest.number),
       ],
       { concurrency: "unbounded" },
     );
     if (Option.isNone(read)) return null;
-    const named = { ...(yield* namedOverviewPullRequest(subject, read.value)), canEditDescription };
+    const named = { ...(yield* namedOverviewPullRequest(subject, read.value)), ...rights };
     return Option.isNone(merging) ? named : { ...named, merging: merging.value };
   });
 

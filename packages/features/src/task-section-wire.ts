@@ -189,7 +189,7 @@ export const taskSectionEntrySchema = EffectSchema.Struct({
 
 export type TaskSectionEntry = typeof taskSectionEntrySchema.Type;
 
-/** A coding agent with no task the account keeps in one of its sections, standing among its tasks by the same order. */
+/** A coding agent with no task the account kept in one of its sections, which a released desktop still decodes; the service answers none, since every agent stands on a task. */
 export const agentSectionEntrySchema = EffectSchema.Struct({
   agentId: wireUuidSchema,
   sectionId: wireUuidSchema,

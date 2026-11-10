@@ -100,8 +100,7 @@ import { summaryOf } from "../agents/coder-host/stop.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import type { SandboxDeleteReach } from "../agents/session-sandboxes.js";
 import type { TypedTurn } from "../agents/sessions/agent-sessions.js";
-import { listTasklessAgents, withTaskAgents } from "../agents/task-agents.js";
-import { TASK_LIST_ARCHIVED } from "../core.js";
+import { withTaskAgents } from "../agents/task-agents.js";
 import { SERVER_TASK_SOURCE } from "../events/server-events.js";
 import { refreshRepositoryReads } from "../github/repository-reads.js";
 import {
@@ -167,7 +166,7 @@ const startingWorkspace = /* @__PURE__ */ Effect.fnUntraced(function* (
  * The plan and the agent a start's earlier request made under the agent's
  * key: a retry after a lost answer is answered with them rather than with a
  * second plan. A key already spent on an agent anywhere else, on another
- * workspace's plan, on no plan, or on a plan the account no longer reaches,
+ * workspace's plan, or on a plan the account no longer reaches,
  * is no retry of this start, and is refused as invalid with nothing written.
  */
 const startedBefore = /* @__PURE__ */ Effect.fnUntraced(function* (
@@ -177,10 +176,7 @@ const startedBefore = /* @__PURE__ */ Effect.fnUntraced(function* (
 ): Effect.fn.Return<Option.Option<TaskStartAnswer>, HostedRefusal, DatabaseServices> {
   const made = yield* hostedStoreOrUnavailable(readAgentByKey(userId, idempotencyKey));
   if (Option.isNone(made)) return Option.none();
-  const task =
-    made.value.taskId === null
-      ? Option.none()
-      : yield* hostedStoreOrUnavailable(readTaskDescription(userId, made.value.taskId));
+  const task = yield* hostedStoreOrUnavailable(readTaskDescription(userId, made.value.taskId));
   if (Option.isNone(task) || task.value.workspaceId !== organizationId) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
@@ -393,26 +389,22 @@ export function tasksProcedures(seams: TasksProcedureSeams) {
   const plans = hosted.plans.use(accountMiddleware(seams.resolveUserId));
   return {
     /**
-     * The account's plans, and beside them the agents with no plan in its
-     * workspaces; a teammate's plan or agent on their own GitHub token among
+     * The account's plans; a teammate's plan on their own GitHub token among
      * them where the account's own token reads its repository, asked of
-     * GitHub first where the answer kept is older than the hour. The query's
-     * `archived=include`, which an older build still sends, lists the
-     * archived agents with no plan among the rest, as it did, and no plan
-     * more: a plan is archived no longer.
+     * GitHub first where the answer kept is older than the hour. Every agent
+     * stands on a task, so the answer carries no `planlessAgents`, which a
+     * released desktop reads as none, and the query's `archived=include`,
+     * which an older build still sends, changes nothing: a plan is archived
+     * no longer.
      */
-    list: plans.list.effect(function* ({ input, context }) {
-      const includeArchived = input.archived === TASK_LIST_ARCHIVED.INCLUDE;
+    list: plans.list.effect(function* ({ context }) {
       yield* refreshRepositoryReads(context.userId);
       const tasks = yield* hostedStoreOrUnavailable(
         Effect.flatMap(listTasks(context.userId), (listed) =>
           withTaskAgents(context.userId, listed),
         ),
       );
-      const tasklessAgents = yield* hostedStoreOrUnavailable(
-        listTasklessAgents(context.userId, { includeArchived }),
-      );
-      return { plans: tasks, planlessAgents: tasklessAgents };
+      return { plans: tasks };
     }),
 
     /**

@@ -56,16 +56,18 @@ export function SettingsForm({ children }: { readonly children: ReactNode }) {
 type AccountRowProps = {
   readonly name: string;
   readonly email: string;
+  /** The account's sign-in picture, drawn in place of its letters where it has one. */
+  readonly picture?: string | undefined;
   /** A quiet line under the address, such as how the account signed in. */
   readonly detail?: string | undefined;
 };
 
-/** Who is signed in: their monogram, their name, their address, and how they signed in. */
-export function AccountRow({ name, email, detail }: AccountRowProps) {
+/** Who is signed in: their photo or monogram, their name, their address, and how they signed in. */
+export function AccountRow({ name, email, picture, detail }: AccountRowProps) {
   const colors = useColors();
   return (
     <HStack spacing={SPACE.ROW + 2} modifiers={[listRowBackground(colors.SURFACE)]}>
-      <Avatar name={name} size={ACCOUNT_FACE_SIZE} />
+      <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE} />
       <VStack alignment="leading" spacing={2}>
         <Text
           modifiers={[

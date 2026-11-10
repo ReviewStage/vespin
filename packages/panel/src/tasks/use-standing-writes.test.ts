@@ -2,9 +2,9 @@
 
 import assert from "node:assert/strict";
 import { TASK_PRIORITY, TASK_STATUS } from "@repo/features/task-wire";
+import { SETTLED_STATUS } from "@repo/features/tasks-model";
 import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { SETTLED_STATUS } from "@repo/ui/tasks-model";
 import { Option, Schema } from "effect";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";

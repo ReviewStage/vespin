@@ -13,7 +13,6 @@
  * Nothing here draws.
  */
 
-import { type AgentInboxScope, INBOX_SCOPE_KIND } from "./agent-view.js";
 import { ATTACHMENT_VIEW, attachmentView } from "./attachment-model.js";
 import { CONVERSATION_MEDIA_TYPE } from "./conversation-picture-wire.js";
 import { fillInWords, WRITE_AN_ANSWER } from "./inbox-ask-words.js";
@@ -480,84 +479,30 @@ function lastWords(
   return words === "" ? stamp : `${stamp}${PREVIEW_PART}${words}`;
 }
 
-/** What holds an item: the task its agent works on, or, for an agent with no task, the agent itself. */
-export const INBOX_HOLDER = {
-  TASK: "plan",
-  AGENT: "agent",
-} as const;
-
 /**
- * An agent with no task as the Inbox names it: what its row names it by,
- * the automation whose run started it, which its group stands under, the
- * repository it works in, and the workspace whose list holds it, where the
- * service names it; one with an item waiting, or one a link names whose
- * items are all settled.
+ * What holds an item: the task its agent works on. Note that every item
+ * names its task, since every agent works on one.
  */
-export interface TasklessInboxAgent {
-  readonly agentId: string;
-  readonly agentTitle: string | null;
-  readonly agentModel: string;
-  readonly automationId: string | null;
-  readonly automationName: string | null;
-  readonly repository: string | null;
-  readonly workspaceId?: string;
+export interface InboxHolder {
+  readonly task: TaskSummary;
 }
 
 /**
- * What holds an item: the task its agent works on, or the agent itself
- * where it works on none.
+ * Each task's holder as last made, kept for as long as the task stands.
+ * Note that a list read again from the same task is held by the same
+ * holder, because the window's document keeps the identity of what a
+ * delivery did not change (`keepIdentity`), and every object the list makes
+ * of a holder is kept by it in turn.
  */
-export type InboxHolder =
-  | { readonly kind: typeof INBOX_HOLDER.TASK; readonly task: TaskSummary }
-  | { readonly kind: typeof INBOX_HOLDER.AGENT; readonly agent: TasklessInboxAgent };
+const keptHolders = new WeakMap<TaskSummary, InboxHolder>();
 
-/**
- * Each task's and each agent's holder as last made, kept for as long as what
- * it holds for stands. Note that a list read again from the same task or
- * agent is held by the same holder, because the window's document keeps the
- * identity of what a delivery did not change (`keepIdentity`), and every
- * object the list makes of a holder is kept by it in turn.
- */
-const keptHolders = new WeakMap<TaskSummary | TasklessInboxAgent, InboxHolder>();
-
-/** The agent with no task as the holder of its items. */
-export function agentHolder(agent: TasklessInboxAgent): InboxHolder {
-  const kept = keptHolders.get(agent);
-  if (kept !== undefined) return kept;
-  const holder: InboxHolder = { kind: INBOX_HOLDER.AGENT, agent };
-  keptHolders.set(agent, holder);
-  return holder;
-}
-
-/** The automation whose group an agent's items stand in; none for a task, and the agents no automation the reader may read names. */
-export function holderAutomationId(holder: InboxHolder): string | null {
-  if (holder.kind === INBOX_HOLDER.TASK) return null;
-  return holder.agent.automationId;
-}
-
-/** A task as the holder of its items, kept as an agent's is (`keptHolders`). */
+/** A task as the holder of its items, kept (`keptHolders`). */
 export function taskHolder(task: TaskSummary): InboxHolder {
   const kept = keptHolders.get(task);
   if (kept !== undefined) return kept;
-  const holder: InboxHolder = { kind: INBOX_HOLDER.TASK, task };
+  const holder: InboxHolder = { task };
   keptHolders.set(task, holder);
   return holder;
-}
-
-/**
- * The workspace an item belongs to: its plan's, or, for an agent with no
- * plan, the agent's own, where the service named it; none where it did not,
- * since the Inbox may list an item whose workspace it does not know.
- */
-export function itemWorkspaceId(holder: InboxHolder): string | undefined {
-  return holder.kind === INBOX_HOLDER.TASK ? holder.task.workspaceId : holder.agent.workspaceId;
-}
-
-/** A holder's name as its group's header and a row's context say it: the task's, the automation's, or the name of the agents no automation names. */
-export function holderName(holder: InboxHolder): string {
-  if (holder.kind === INBOX_HOLDER.TASK) return holder.task.name;
-  const { automationId, automationName } = holder.agent;
-  return automationId === null ? NO_AUTOMATION_NAME : (automationName ?? NO_AUTOMATION_NAME);
 }
 
 /** The words options say: each one's label and the trade-off written under it. */
@@ -609,65 +554,20 @@ export function inboxItemWords(item: InboxItem): readonly string[] {
   return words;
 }
 
-/** Whether an item answers a list's search: every word of it somewhere in the item's words (`inboxItemWords`) or its holder's name; any item answers none. */
+/** Whether an item answers a list's search: every word of it somewhere in the item's words (`inboxItemWords`) or its task's name; any item answers none. */
 function searchedItem(holder: InboxHolder, item: InboxItem, search: readonly string[]): boolean {
-  return (
-    search.length === 0 || matchesTokens([holderName(holder), ...inboxItemWords(item)], search)
-  );
+  return search.length === 0 || matchesTokens([holder.task.name, ...inboxItemWords(item)], search);
 }
 
-/** What the group of agents no automation the reader may read started is called. */
-const NO_AUTOMATION_NAME = "Other agents";
+/** Every task's items as a read holds them, by the task's id. */
+export type InboxReads = ReadonlyMap<string, readonly InboxItem[]>;
 
 /**
- * Whether a waiting item of an agent with no task is listed in the workspace
- * given: one of that workspace's agents', or one whose workspace the service
- * does not name. Note that with no workspace listed every agent's items
- * stand, as every task's do.
- */
-export function listedIn(
-  entry: { readonly workspaceId?: string | undefined },
-  workspaceId: string | undefined,
-): boolean {
-  return (
-    workspaceId === undefined ||
-    entry.workspaceId === undefined ||
-    entry.workspaceId === workspaceId
-  );
-}
-
-/**
- * Each agent with no task as the holder of its items, once whatever many
- * of its items main lists, holding every item its read holds, settled ones
- * too; only the listed workspace's agents, where the service names an
- * agent's workspace, so another workspace's list holds none of them.
- */
-export function agentGroups(
-  agents: readonly TasklessInboxAgent[],
-  read: ReadonlyMap<string, readonly InboxItem[]>,
-  workspaceId: string | undefined,
-): readonly InboxGroup[] {
-  const holders = new Map<string, InboxHolder>();
-  for (const agent of agents) {
-    if (listedIn(agent, workspaceId) && !holders.has(agent.agentId)) {
-      holders.set(agent.agentId, agentHolder(agent));
-    }
-  }
-  return [...holders].map(([agentId, holder]) => inboxGroup(holder, read.get(agentId) ?? NO_ITEMS));
-}
-
-/** Every holder's items as a read holds them, a task's and an agent's apart by kind, each by its own id. */
-export type InboxReads = {
-  readonly [Kind in AgentInboxScope["kind"]]: ReadonlyMap<string, readonly InboxItem[]>;
-};
-
-/**
- * Every holder as the Inbox groups it, with its items as `read` holds them:
+ * Every task as the Inbox groups it, with its items as `read` holds them:
  * each task main says holds items that the listed workspace's list holds,
- * so one not yet read, or another workspace's, is listed nowhere, and each
- * agent with no task of the listed workspace (`agentGroups`). Note that a
- * task's status never leaves it out: a task done or canceled is listed,
- * its items with it. Each holder's group is the one made last while its
+ * so one not yet read, or another workspace's, is listed nowhere. Note that
+ * a task's status never leaves it out: a task done or canceled is listed,
+ * its items with it. Each task's group is the one made last while its
  * items are (`inboxGroup`), so the page drawn again regroups nothing that
  * did not move.
  */
@@ -676,20 +576,14 @@ export function inboxGroups(
   holders: {
     readonly tasks: readonly { readonly taskId: string }[];
     readonly listed: readonly TaskSummary[];
-    readonly agents: readonly TasklessInboxAgent[];
-    readonly workspaceId: string | undefined;
   },
 ): readonly InboxGroup[] {
   const listed = new Map(holders.listed.map((task) => [task.id, task]));
-  const ofTasks = holders.tasks.flatMap(({ taskId }) => {
+  return holders.tasks.flatMap(({ taskId }) => {
     const task = listed.get(taskId);
     if (task === undefined) return [];
-    return [inboxGroup(taskHolder(task), read[INBOX_SCOPE_KIND.PLAN].get(taskId) ?? NO_ITEMS)];
+    return [inboxGroup(taskHolder(task), read.get(taskId) ?? NO_ITEMS)];
   });
-  return [
-    ...ofTasks,
-    ...agentGroups(holders.agents, read[INBOX_SCOPE_KIND.AGENT], holders.workspaceId),
-  ];
 }
 
 /**
@@ -740,7 +634,7 @@ export interface InboxCounts {
   readonly [INBOX_SHOW.REMINDERS]: number;
 }
 
-/** One holder, a task or an agent, and every item it holds, as the list is handed them. */
+/** One task and every item it holds, as the list is handed them. */
 export interface InboxGroup {
   readonly holder: InboxHolder;
   readonly items: readonly InboxItem[];
@@ -858,9 +752,7 @@ export function needsYou(listed: InboxListed, readerId: string | undefined): boo
 
 /** The groups of an Inbox narrowed to one task: that task's alone, as a task's "needs you" count opens it. */
 export function taskGroups(groups: readonly InboxGroup[], taskId: string): readonly InboxGroup[] {
-  return groups.filter(
-    ({ holder }) => holder.kind === INBOX_HOLDER.TASK && holder.task.id === taskId,
-  );
+  return groups.filter(({ holder }) => holder.task.id === taskId);
 }
 
 /**
@@ -1276,6 +1168,8 @@ export interface InboxThreadMessage {
   readonly media: readonly InboxMessageMedia[];
   /** The item's own files its words draw where they name them, a picture or a video it carried, by the attachment each is read by. */
   readonly drawn: readonly InboxDrawnMedia[];
+  /** What the answer it carries says it was, in the past, as the panel's stamp says it: "Chose Both", "Done 3/3"; none on a message that answers nothing. */
+  readonly stamp?: AnswerStamp | undefined;
 }
 
 /** One of the item's own files a message's words draw in place, and how: a picture, or a video it carried, played where the words name it. */
@@ -1326,6 +1220,9 @@ export function inboxThreadMessages(
         ? []
         : [{ kind, attachmentId: file.attachmentId, name: file.name, mediaType: file.mediaType }];
     });
+    const { answers } = message;
+    const asked =
+      answers === undefined ? undefined : item.thread?.find(({ id }) => id === answers.ask);
     return {
       id: message.id,
       writer: { name: agent ? agentName : inboxMemberName(message.member, readerId), agent },
@@ -1334,6 +1231,7 @@ export function inboxThreadMessages(
       typed: !agent,
       media,
       drawn,
+      ...(answers === undefined ? undefined : { stamp: sentStamp(answers, asked?.ask) }),
     };
   });
 }

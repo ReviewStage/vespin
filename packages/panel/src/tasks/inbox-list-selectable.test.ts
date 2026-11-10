@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { INBOX_HOLDER, type InboxListView } from "@repo/features/inbox-list-model";
+import type { InboxListView } from "@repo/features/inbox-list-model";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -72,7 +72,7 @@ function item(number: number): InboxItem {
 const VIEW: InboxListView = {
   readerId: undefined,
   items: [1, 2, 3, 4, 5].map((number) => ({
-    holder: { kind: INBOX_HOLDER.TASK, task: TASK },
+    holder: { task: TASK },
     item: item(number),
   })),
 };

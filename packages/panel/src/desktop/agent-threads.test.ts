@@ -12,9 +12,9 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import type { Task } from "@repo/features/task-wire";
+import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { agentTab } from "@repo/ui/tab-strip-model";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/ui/tasks-model";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
@@ -125,7 +125,7 @@ async function mount(
     DOMRect.fromRect({ width: 1200, height: 800 }),
   );
   handInboxItems({
-    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: items }, [INBOX_SCOPE_KIND.AGENT]: {} },
+    rows: { [INBOX_SCOPE_KIND.PLAN]: { [TASK.id]: items } },
   });
   pushedTranscripts(() => [
     { messages: [], cursor: "1:0", status: AGENT_STATUS.COMPLETED, title: null },
