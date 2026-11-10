@@ -716,6 +716,15 @@ interface CodexLaunch {
   stopping: boolean;
   /** Whether the launch is warm: started warm, or its turn completed with nothing left and an IDLE posted, and no message taken since. */
   warm: boolean;
+  /**
+   * Whether the agent's turn is under way, as the service holds it: opened
+   * by the turn a message starts, and over at the completion that leaves
+   * no message unanswered (the end-of-run rule above). A turn started
+   * while it is under way, for a steer the last turn could not take, is a
+   * continuation of the same turn of the service's, so it records no
+   * checkout: the one recorded as the turn opened stands.
+   */
+  open: boolean;
   /** The thread's rollout as the store mirrors it, where the config names the store. */
   readonly mirror: RolloutMirror | undefined;
   /** The provider's host, as app-server reaches it, which a lost connection is probed for. */
@@ -1004,7 +1013,9 @@ const revertedBefore = Effect.fn("agent-runner/codex/revertedBefore")(function* 
  * Says each of the service's lines a message carries was taken by app-server, as
  * Claude Code's launch says a line was handed to the SDK, so the service ties the
  * line to the turn that runs it. A line said once is not said again when a
- * message is sent again in the next turn.
+ * message is sent again in the next turn. The checkout recorded before the
+ * turn is said with the line that opened it alone, the first of a merged
+ * message, since that is the line the turn stands under.
  */
 const accepted = Effect.fn("agent-runner/codex/accepted")(function* (
   launch: CodexLaunch,
@@ -1013,10 +1024,11 @@ const accepted = Effect.fn("agent-runner/codex/accepted")(function* (
   for (const uuid of outgoing.lines) {
     if (launch.accepted.has(uuid)) continue;
     launch.accepted.add(uuid);
+    const opening = uuid === outgoing.lines[0] ? outgoing.snapshot : undefined;
     yield* launch.context.sink.emit({
       type: RUNNER_EVENT.ACCEPTED,
       uuid,
-      ...(outgoing.snapshot === undefined ? undefined : { snapshot: outgoing.snapshot }),
+      ...(opening === undefined ? undefined : { snapshot: opening }),
     });
   }
 });
@@ -1034,9 +1046,11 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
           input: messages.flatMap((message) => message.input),
           lines: messages.flatMap((message) => message.lines),
         };
-  // The checkout is recorded before app-server can touch it, under the first line the turn takes.
+  // The checkout is recorded before app-server can touch it, under the first line the turn takes,
+  // where the turn opens the agent's; a turn continuing one under way leaves the opening record standing.
   const first = merged.lines[0];
-  const snapshot = first === undefined ? undefined : yield* launch.snapshot(first);
+  const snapshot = launch.open || first === undefined ? undefined : yield* launch.snapshot(first);
+  launch.open = true;
   const outgoing: Outgoing = { ...merged, snapshot };
   const answer = decodeTurnAnswer(
     yield* launch.server.request(METHOD.TURN_START, {
@@ -1198,6 +1212,7 @@ const takeTurnCompleted = Effect.fn("agent-runner/codex/takeTurnCompleted")(func
     if (done !== undefined) return done;
   }
   if (launch.turnId !== undefined) return undefined;
+  launch.open = false;
   if (launch.context.config.warm !== true) return ended(RUNNER_END.TURN_ENDED);
   // The agent's turn is over: the launch stays warm for the service's next message
   // rather than ending.
@@ -1478,6 +1493,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     stopping: false,
     // Note that a warm launch is warm from its start, so one launched with no message waits for its first as one past an IDLE does.
     warm: config.warm === true,
+    open: false,
     mirror,
     providerHost: provider.host,
     probeTarget: probeTargetOf(context.env, provider),
