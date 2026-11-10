@@ -1219,6 +1219,63 @@ it.effect(
     }),
 );
 
+it.effect(
+  "an admin acting through the server reads the workspace's members but is refused its slug, which the owner changes",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch, services } = yield* standing;
+      const owner = yield* Effect.promise(() => signUp(auth));
+      const admin = yield* Effect.promise(() => signUp(auth));
+      const workspaceId = yield* Effect.gen(function* () {
+        const workspaceId = yield* openWorkspace(owner.userId);
+        yield* joinWorkspace(workspaceId, admin.userId, WORKSPACE_ROLE.ADMIN);
+        return workspaceId;
+      }).pipe(Effect.provide(services));
+      const callAs = (cookie: string, name: string, args: Record<string, unknown>) =>
+        Effect.gen(function* () {
+          const token = yield* Effect.promise(() =>
+            mintedToken(auth, cookie, {
+              clientId: MCP_CLIENT.id,
+              scope: [MEMBER_MCP_SCOPE.MCP],
+              resource: RESOURCE,
+            }),
+          );
+          const { client } = yield* connected(fetch, token, REVISION.MODERN);
+          const answer = decodeAnswer(
+            yield* Effect.promise(() => client.callTool({ name, arguments: args })),
+          );
+          yield* Effect.promise(() => client.close());
+          return answer;
+        });
+
+      const members = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS, {});
+      const refused = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG, {
+        slug: "seats",
+      });
+      const changed = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG, {
+        slug: "seats",
+      });
+
+      assert.notEqual(members.isError, true, members.content[0].text);
+      assert.deepEqual(
+        JSON.parse(members.content[0].text).members.map(
+          ({ userId, role }: { userId: string; role: string }) => [userId, role],
+        ),
+        [
+          [owner.userId, WORKSPACE_ROLE.OWNER],
+          [admin.userId, WORKSPACE_ROLE.ADMIN],
+        ],
+      );
+      assert.equal(refused.isError, true);
+      assert.notEqual(changed.isError, true, changed.content[0].text);
+      assert.deepEqual(JSON.parse(changed.content[0].text).workspace, {
+        id: workspaceId,
+        slug: "seats",
+        name: "Test Workspace",
+      });
+    }),
+);
+
 it.effect("the metadata names the resource, the auth service, the scopes, and the header", () =>
   Effect.gen(function* () {
     const { fetch } = yield* standing;
