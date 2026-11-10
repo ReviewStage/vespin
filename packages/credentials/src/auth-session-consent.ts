@@ -115,24 +115,20 @@ export function authSessionConsent(options: {
   let showing: symbol | undefined;
   return <Grant extends object>(trip: LoopbackConsentOptions<Grant>): LoopbackConsent<Grant> => {
     const own = Symbol("auth session trip");
-    const run = Effect.fnUntraced(function* (): Effect.fn.Return<LoopbackConsentOutcome<Grant>> {
-      if (showing !== undefined) return { reason: AUTH_SESSION_REASON.ALREADY_WAITING };
+    /** Gives up this trip's claim, and never another trip's. */
+    const release = Effect.sync(() => {
+      if (showing === own) showing = undefined;
+    });
+    const show = Effect.fnUntraced(function* (): Effect.fn.Return<LoopbackConsentOutcome<Grant>> {
       const codeVerifier = createCodeVerifier();
       const state = stateOf(trip.statePrefix);
       const redirectUri = callback.href;
       const challenge = yield* Effect.result(codeChallenge(codeVerifier));
       if (Result.isFailure(challenge)) return { reason: AUTH_SESSION_REASON.CHALLENGE };
       const page = trip.authorizationUrl({ state, redirectUri, codeChallenge: challenge.success });
-      showing = own;
       const answer = yield* Effect.result(
         Effect.tryPromise(() => options.session.open(page, redirectUri)),
-      ).pipe(
-        Effect.ensuring(
-          Effect.sync(() => {
-            showing = undefined;
-          }),
-        ),
-      );
+      ).pipe(Effect.ensuring(release));
       if (Result.isFailure(answer)) {
         return { reason: AUTH_SESSION_REASON.SHOWN, failure: SIGN_IN_FAILURE.BROWSER };
       }
@@ -142,6 +138,13 @@ export function authSessionConsent(options: {
       const read = readCaught(answer.success.url, { state, callback }, trip.reasons.refused);
       if ("reason" in read) return read;
       return yield* trip.exchange({ code: read.code, state, redirectUri, codeVerifier });
+    });
+    const run = Effect.fnUntraced(function* (): Effect.fn.Return<LoopbackConsentOutcome<Grant>> {
+      if (showing !== undefined) return { reason: AUTH_SESSION_REASON.ALREADY_WAITING };
+      // Note that the claim is taken before the digest yields, because a trip started beside
+      // this one would otherwise pass the check above too and open a second sheet.
+      showing = own;
+      return yield* show().pipe(Effect.ensuring(release));
     });
 
     return {
