@@ -1,6 +1,10 @@
 import { Schema as EffectSchema } from "effect";
 import { accountInboxAnswerSchema } from "./account-inbox-wire.js";
 import {
+  agentPermissionModeRequestSchema,
+  approvalAnswerRequestSchema,
+} from "./agent-approval-wire.js";
+import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
   agentAddRepositoryRequestSchema,
@@ -598,6 +602,11 @@ export const agentDeleteAnswerViewSchema = answerView(agentsContract.delete, {
 
 export type AgentDeleteAnswerView = typeof agentDeleteAnswerViewSchema.Type;
 
+/** An ask answered, as the window hears it: how the ask then stands, or why it was not answered, an ask settled already naming how it stands. */
+export const agentApprovalAnswerViewSchema = answerView(agentsContract.answerApproval);
+
+export type AgentApprovalAnswerView = typeof agentApprovalAnswerViewSchema.Type;
+
 /** An agent on screen kept warm, as the window hears it: that the service took the call, or why not. */
 export const agentWarmAnswerViewSchema = answerView(agentsContract.warm);
 
@@ -704,6 +713,23 @@ export const agentServersParamsSchema = EffectSchema.Struct({
 });
 
 export type AgentServersParams = typeof agentServersParamsSchema.Type;
+
+/** One agent's permission mode changed for its next turn, as the window asks it: the agent and the mode. */
+export const agentPermissionModeParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  ...agentPermissionModeRequestSchema.fields,
+});
+
+export type AgentPermissionModeParams = typeof agentPermissionModeParamsSchema.Type;
+
+/** One ask of an agent answered, as the window asks it: the agent, the ask, and the answer with a denial's words. */
+export const agentApprovalAnswerParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  approvalId: EffectSchema.NonEmptyString,
+  ...approvalAnswerRequestSchema.fields,
+});
+
+export type AgentApprovalAnswerParams = typeof agentApprovalAnswerParamsSchema.Type;
 
 /** A repository added to one agent beside the ones it works in, as the window asks it of the host. */
 export const agentAddRepositoryParamsSchema = EffectSchema.Struct({

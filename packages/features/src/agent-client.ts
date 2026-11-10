@@ -12,6 +12,12 @@ import {
 } from "./account-call.js";
 import type { AccountPreferencesAnswerWire } from "./account-wire.js";
 import {
+  type AgentPermissionModeRequest,
+  type ApprovalAnswerRequest,
+  agentPermissionModeRequestSchema,
+  approvalAnswerRequestSchema,
+} from "./agent-approval-wire.js";
+import {
   AGENT_ADD_REPOSITORY_RENAMES,
   AGENT_ARCHIVE_RENAMES,
   AGENT_CALL_FAILURE,
@@ -22,6 +28,7 @@ import {
   AGENT_RENAMES,
   AGENT_START_RENAMES,
   type AgentAgentAnswer,
+  type AgentApprovalAnswerView,
   type AgentCallFailure,
   type AgentChangesAnswerView,
   type AgentDefaultAnswer,
@@ -909,6 +916,40 @@ export class HostedAgentClient {
         { as: AGENT_NOT_FOUND_RENAMES },
       ),
       rowWritten,
+    );
+  }
+
+  /** Changes one agent's permission mode, which reaches it from its next turn, answering it as it then stands; a mode the service would refuse by shape is refused here without traveling. */
+  choosePermissionMode(
+    agentId: string,
+    request: AgentPermissionModeRequest,
+  ): Effect.Effect<AgentAgentAnswer, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(agentPermissionModeRequestSchema)(request));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return Effect.map(
+      hostedCall(
+        this.#hosted.agents.change,
+        { params: { id: agentId }, body: admitted },
+        { as: AGENT_NOT_FOUND_RENAMES },
+      ),
+      rowWritten,
+    );
+  }
+
+  /** Answers one ask of an agent, answering how it then stands, or how it already stood where it no longer waited; an answer the service would refuse by shape is refused here without traveling. */
+  answerApproval(
+    agentId: string,
+    approvalId: string,
+    request: ApprovalAnswerRequest,
+  ): Effect.Effect<AgentApprovalAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(approvalAnswerRequestSchema)(request));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return Effect.map(
+      hostedCall(this.#hosted.agents.answerApproval, {
+        params: { id: agentId, approval: approvalId },
+        body: admitted,
+      }),
+      unansweredBare,
     );
   }
 

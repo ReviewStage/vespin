@@ -308,6 +308,8 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
     onRetry: () => Promise.resolve(false),
     onChoose: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     onSwitchServers: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    onPermissionMode: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    onAnswerApproval: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     onOpenIntegrations: ignore,
     onOpenApiKeys: ignore,
     archiving: false,

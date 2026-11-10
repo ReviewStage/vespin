@@ -54,6 +54,8 @@ export const FAILURE_SURFACE = {
   ADMIN_WRITE: "admin.write",
   AGENTS_READ: "agents.read",
   AGENT_ADD_REPOSITORY: "agent_repository.add",
+  /** An answer to a tool call an agent held for one that did not go. */
+  AGENT_APPROVAL: "agent.approval",
   AGENT_ARCHIVE: "agent.archive",
   AGENT_CHANGES_READ: "agent_changes.read",
   AGENT_CHANGES_REFRESH: "agent_changes.refresh",
@@ -65,6 +67,8 @@ export const FAILURE_SURFACE = {
   AGENT_KEYS_READ: "agent_keys.read",
   AGENT_KEY_REMOVE: "agent_key.remove",
   AGENT_KEY_SAVE: "agent_key.save",
+  /** A change of an agent's permission mode that did not take. */
+  AGENT_PERMISSION_MODE: "agent.permission_mode",
   AGENT_PIN: "agent.pin",
   /** A change of an agent's queue the host drew and took back: a message queued, edited, held, steered, put in order, or the pause dropped. */
   AGENT_QUEUE_CHANGE: "agent_queue.change",

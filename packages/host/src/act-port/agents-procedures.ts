@@ -41,6 +41,7 @@ type NotedAgentAct =
   | "AGENTS_CHOOSE"
   | "AGENTS_RENAME"
   | "AGENTS_SERVERS"
+  | "AGENTS_PERMISSION_MODE"
   | "AGENTS_ADD_REPOSITORY"
   | "AGENTS_STOP"
   | "AGENTS_REWIND"
@@ -118,6 +119,13 @@ export function agentProcedures(dependencies: AgentProceduresDependencies) {
         declaredAnswer(AGENT_ACTS.AGENTS_SERVERS, acts.AGENTS_SERVERS, input),
       );
     }),
+    [AGENT_ACT_KIND.AGENTS_PERMISSION_MODE]: actPort[AGENT_ACT_KIND.AGENTS_PERMISSION_MODE].effect(
+      function* ({ input }) {
+        return yield* notedAgent(
+          declaredAnswer(AGENT_ACTS.AGENTS_PERMISSION_MODE, acts.AGENTS_PERMISSION_MODE, input),
+        );
+      },
+    ),
     [AGENT_ACT_KIND.AGENTS_ADD_REPOSITORY]: actPort[AGENT_ACT_KIND.AGENTS_ADD_REPOSITORY].effect(
       function* ({ input }) {
         return yield* notedAgent(

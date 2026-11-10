@@ -3,6 +3,7 @@ import { ACCOUNT_WORDS_EXAMPLE } from "./examples/account-words";
 import { ADDRESS_FIELDS_EXAMPLE } from "./examples/address-fields";
 import { ANCHORED_POPOVER_EXAMPLE } from "./examples/anchored-popover";
 import { ANNOUNCER_EXAMPLE } from "./examples/announcer";
+import { APPROVAL_CARD_EXAMPLE } from "./examples/approval-card";
 import { ARRIVALS_EXAMPLE } from "./examples/arrivals";
 import { ARTWORK_EXAMPLE } from "./examples/artwork";
 import { ATTACHMENT_CHIPS_EXAMPLE } from "./examples/attachment-chips";
@@ -164,6 +165,7 @@ export const EXAMPLES: readonly Example[] = [
   ARTWORK_EXAMPLE,
   ANCHORED_POPOVER_EXAMPLE,
   ANNOUNCER_EXAMPLE,
+  APPROVAL_CARD_EXAMPLE,
   ARRIVALS_EXAMPLE,
   TYPOGRAPHY_EXAMPLE,
   LAYOUT_EXAMPLE,

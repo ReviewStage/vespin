@@ -4,6 +4,7 @@ export * from "./components/address-field/address-field.js";
 export * from "./components/anchored-popover/anchored-popover.js";
 export * from "./components/anchored-popover/press-away.js";
 export * from "./components/announcer/announcer.js";
+export * from "./components/approval-card/approval-card.js";
 export * from "./components/arrival/arrival.js";
 export * from "./components/attachment-chip/attachment-chip.js";
 export * from "./components/attention-mark/attention-mark.js";
