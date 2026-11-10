@@ -24,7 +24,7 @@ const PLAN: SubscriptionKeySummary = {
   position: 0,
 };
 
-test("a plan's windows are named by their length and any one model they count, a full one in the attention ink, and a reading past fifteen minutes says when it was heard", () => {
+test("a plan's windows are named by their length and any one model they count, a reset no clock can name dropped, a full one in the attention ink, and a reading past fifteen minutes says when it was heard", () => {
   const meters = planUsageMeters(
     {
       ...PLAN,
@@ -35,7 +35,7 @@ test("a plan's windows are named by their length and any one model they count, a
           usedPercent: 12,
           windowMins: WEEK_MINS,
           model: "Opus",
-          resetsAt: NOW + 4 * 24 * 60 * MINUTE,
+          resetsAt: Number.MAX_SAFE_INTEGER,
         },
       ],
       usageHeardAt: NOW - 2 * 60 * MINUTE,
@@ -50,6 +50,11 @@ test("a plan's windows are named by their length and any one model they count, a
       ["Weekly", 64, PROGRESS_TONE.WORKING],
       ["Weekly (Opus)", 12, PROGRESS_TONE.WORKING],
     ],
+  );
+  // Note that a reset past the dates a clock can name is dropped, since the meters could not say it.
+  assert.deepEqual(
+    meters?.rows.map((row) => row.resetsAt),
+    [NOW + 90 * MINUTE, NOW + 4 * 24 * 60 * MINUTE, undefined],
   );
   assert.equal(meters?.heard, "Updated 2h ago");
   assert.equal(

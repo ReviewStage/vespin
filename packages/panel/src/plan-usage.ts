@@ -43,12 +43,20 @@ function windowLabel(window: PlanUsage): string {
   return window.model === undefined ? length : `${length} (${window.model})`;
 }
 
+/** When a window resets, where a clock can name it: a reset past the dates `Date` holds, as an undocumented answer could send, is none. */
+function resetOf(window: PlanUsage): number | undefined {
+  const { resetsAt } = window;
+  return resetsAt === undefined || Number.isNaN(new Date(resetsAt).getTime())
+    ? undefined
+    : resetsAt;
+}
+
 /** One window as its meter row draws it. */
 function windowRow(window: PlanUsage): UsageMeterRow {
   return {
     label: windowLabel(window),
     usedPercent: window.usedPercent,
-    resetsAt: window.resetsAt,
+    resetsAt: resetOf(window),
     tone: window.usedPercent >= FULL_PERCENT ? PROGRESS_TONE.ATTENTION : PROGRESS_TONE.WORKING,
   };
 }
