@@ -11,7 +11,6 @@ import { fileMarker, fileMarkers } from "@repo/features/file-marker";
 import { skillWord } from "@repo/features/skill-word";
 import { WRITING_BLOCK, WRITING_MARK } from "@repo/settings/shortcuts";
 import { TEXT_LINK_MARK_ATTRIBUTES } from "@repo/ui/link-face";
-import { QUOTE_CLASS } from "@repo/ui/quote-face";
 import {
   cutReply,
   MESSAGE_BLOCK,
@@ -22,7 +21,6 @@ import {
 } from "@repo/ui/reply-quote";
 import { insideCode, mentionAt, skillTokens, type TextRange } from "@repo/ui/skill-mention";
 import { type AnyExtension, Editor, Extension, Node } from "@tiptap/core";
-import Blockquote from "@tiptap/extension-blockquote";
 import {
   chainCommands,
   createParagraphNear,
@@ -68,6 +66,7 @@ import {
   mentionTokens,
   pastedMention,
 } from "./mention-node.js";
+import { quoteNode } from "./quote-node.js";
 import { editorFormatting, formatReports } from "./writing-format.js";
 import { withoutTipTapChords, writingKeys } from "./writing-keys.js";
 
@@ -77,9 +76,7 @@ import { withoutTipTapChords, writingKeys } from "./writing-keys.js";
  * The box holds lines of words and one block, the quote, so its schema is
  * StarterKit cut down to a document of paragraphs, text, a hard break,
  * undo, the inline marks (bold, italic, strikethrough, code, and a link),
- * and the quote as the description's editor holds it, TipTap's own
- * blockquote in the quote's face (`@repo/ui/quote-face`), holding lines
- * alone. A mark is typed as its Markdown, by its chord from the writing
+ * and the quote both editors hold (`./quote-node.ts`), holding lines alone. A mark is typed as its Markdown, by its chord from the writing
  * vocabulary (`./writing-keys.ts`, its marks' chords and the quote's), or
  * from the format toolbar its owner stands over the words selected
  * (`./writing-format.ts`), and is read out and back as the Markdown it is
@@ -673,7 +670,7 @@ function composerExtensions(
   held: (name: string) => boolean,
 ): AnyExtension[] {
   const kit = StarterKit.configure({
-    // Note that a quote holds lines alone, never a quote of its own, as a message's quotes are read back (`@repo/ui/reply-quote`).
+    // Note that the quote is the description's own (`quoteNode`), holding lines alone.
     blockquote: false,
     bulletList: false,
     codeBlock: false,
@@ -694,9 +691,7 @@ function composerExtensions(
     skillNode(props.drawChip, known),
     fileNode(props.drawFile, held),
     mentionNode(props.mentions?.drawMention),
-    Blockquote.extend({ content: "paragraph+" }).configure({
-      HTMLAttributes: { class: QUOTE_CLASS },
-    }),
+    quoteNode(true),
   ];
 }
 

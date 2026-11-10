@@ -1,7 +1,6 @@
 import { WRITING_BLOCK, WRITING_SHORTCUTS } from "@repo/settings/shortcuts";
 import { linkMarkAttributes } from "@repo/ui/link-face";
 import { MARKDOWN_CLASS } from "@repo/ui/markdown-class";
-import { QUOTE_CLASS } from "@repo/ui/quote-face";
 import { type AnyExtension, Editor, Extension, type NodeViewRenderer } from "@tiptap/core";
 import Heading from "@tiptap/extension-heading";
 import { TaskItem, TaskList } from "@tiptap/extension-list";
@@ -57,6 +56,7 @@ import {
   removedPicture,
   settledPicture,
 } from "./picture-node.js";
+import { quoteNode } from "./quote-node.js";
 import { editorFormatting, formatReports } from "./writing-format.js";
 import { blockRulesOutOfCells, withoutTipTapChords, writingKeys } from "./writing-keys.js";
 
@@ -309,7 +309,7 @@ export function markdownExtensions(
   drawTaskBox?: TaskBoxDrawer | undefined,
 ): AnyExtension[] {
   const kit = StarterKit.configure({
-    blockquote: { HTMLAttributes: { class: QUOTE_CLASS } },
+    blockquote: false,
     heading: false,
     paragraph: false,
     underline: false,
@@ -318,6 +318,7 @@ export function markdownExtensions(
   });
   return [
     blockRulesOutOfCells(withoutTipTapChords(kit)),
+    blockRulesOutOfCells(quoteNode(false)),
     withoutTipTapChords(DocumentParagraph),
     blockRulesOutOfCells(withoutTipTapChords(DocumentHeading)),
     Markdown,
