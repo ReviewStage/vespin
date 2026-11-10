@@ -839,7 +839,7 @@ function applyBatch(applying: Applying, batch: RunnerEventBatch, held: NativePro
       idle,
       turns: turnsMovedBy(writes),
       failed: writes.filter((write): write is FailedTurn => write.kind === NATIVE_WRITE.FAILED),
-      retried: writes.flatMap((write) => (write.kind === NATIVE_WRITE.RETRY ? [write.turnId] : [])),
+      retried: writes.flatMap((write) => (write.kind === NATIVE_WRITE.RETRY ? [write] : [])),
       keepsAlive,
     };
     return sequence === null || (last === undefined && !keepsAlive)
@@ -980,16 +980,18 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
       ...(runtimeSessionId === undefined ? undefined : { sandboxSessionId: runtimeSessionId }),
     });
   }
-  // A turn kept open on its plan's limit goes on in a launch on the next payer, once the limit is written.
-  for (const turnId of applied.value.retried) {
+  // A turn kept open on its plan's limit goes on in a launch on the next payer, once the limit is written;
+  // one whose session the harness could not resume, in a fresh session handed the agent's steps.
+  for (const { turnId, replay } of applied.value.retried) {
+    const what = replay === true ? "a turn whose session was lost" : "a limited turn";
     yield* afterResponse(
-      "a limited turn's retry",
-      turnRetried({ ...target, turnId }).pipe(
+      `${what}'s retry`,
+      turnRetried({ ...target, turnId }, replay === true).pipe(
         Effect.flatMap((went) =>
-          went ? Effect.void : Effect.logWarning("runner-events: a limited turn was not retried"),
+          went ? Effect.void : Effect.logWarning(`runner-events: ${what} was not retried`),
         ),
         Effect.catch((failure) =>
-          Effect.logWarning(`runner-events: a limited turn was not retried: ${failure._tag}`),
+          Effect.logWarning(`runner-events: ${what} was not retried: ${failure._tag}`),
         ),
         Effect.annotateLogs({
           agentId: agent.value.id,

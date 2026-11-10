@@ -5,7 +5,7 @@ import {
   isUnread,
   settledOnRead,
 } from "@repo/features/inbox-list-model";
-import { INBOX_REPLY, INBOX_STATUS, type InboxItem } from "@repo/features/inbox-wire";
+import type { InboxItem } from "@repo/features/inbox-wire";
 import { FAILURE_SURFACE, type FailureAbout } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -17,14 +17,9 @@ import { actMutation } from "../act-mutations.js";
 import { afterPaint } from "../after-paint.js";
 import { useAppCommand } from "../app-commands.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
+import { useInboxAcknowledger } from "./inbox-acknowledge.js";
 import { type InboxReminder, type RemindSaying, remindWords } from "./inbox-remind.js";
-import {
-  acknowledgedNote,
-  changedNote,
-  markedNote,
-  REMIND_REFUSED,
-  useInboxPresses,
-} from "./inbox-writes.js";
+import { markedNote, REMIND_REFUSED, useInboxPresses } from "./inbox-writes.js";
 import type { TaskInboxControl } from "./use-task-inbox.js";
 
 /**
@@ -50,7 +45,9 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
  * the reader's own notices among them that opening would (`settledOnRead`),
  * so a thread that asks nothing stops waiting on them as it does once
  * opened; a question keeps waiting, since only its answer settles it. A
- * notice put away under a reminder still ahead keeps it.
+ * notice put away under a reminder still ahead keeps it. The notices go as
+ * Got it does, held behind a toast whose Undo has them wait again
+ * (`inbox-acknowledge.tsx`).
  *
  * Opening an item marks it read, once each time it is shown
  * (`useReadOnOpen`), so an item the reader marks unread while it is shown
@@ -96,7 +93,6 @@ export function useInboxReadMarks({
   const toast = useToast();
   const { mutateAsync: sendReadState } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_READ_STATE));
   const { mutateAsync: sendReadAll } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_READ_ALL));
-  const { mutateAsync: sendNod } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_ANSWER));
   const { mutateAsync: sendRemind } = useMutation(actMutation(ACT_KIND.AGENTS_INBOX_REMIND));
   const refused = useCallback(
     (words: string, cause: unknown, about: FailureAbout) =>
@@ -109,44 +105,14 @@ export function useInboxReadMarks({
       }),
     [toast],
   );
-  // Note that each notice's nod goes on its own, at the revision the reader was shown, as Got it's does, so one the agent posted over since is not settled unseen and the reader is told it still waits; one settled already is not taken and says nothing.
+  const acknowledge = useInboxAcknowledger();
   const nodAll = useCallback(
     (items: readonly InboxItem[]) => {
       const now = Date.now();
       const nodding = items.filter((item) => settledOnRead(item, readerId, now));
-      if (nodding.length === 0) return;
-      const nods = nodding.map((item) =>
-        sendNod({
-          itemId: item.id,
-          revision: item.revision,
-          reply: INBOX_REPLY.ACKNOWLEDGED,
-          clientKey: crypto.randomUUID(),
-        })
-          .catch(unreached)
-          .then((answer) =>
-            "failure" in answer
-              ? { mark: notKept(answer), changed: false }
-              : { mark: KEPT, changed: !answer.taken && answer.item.status === INBOX_STATUS.OPEN },
-          ),
-      );
-      void Promise.all(nods).then((answered) => {
-        const taken = answered.map((each) => each.mark);
-        const failed = taken.filter((each) => !each.kept).length;
-        const changed = answered.filter((each) => each.changed).length;
-        if (failed > 0) {
-          const acknowledged = nodding.length - failed - changed;
-          refused(acknowledgedNote(acknowledged, failed), firstRefusal(taken), { workspaceId });
-        }
-        if (changed === 0) return;
-        toast({
-          replayUnmasked: true,
-          words: changedNote(changed),
-          tone: STATUS_TONE.ATTENTION,
-          hold: TOAST_HOLD.FAILED,
-        });
-      });
+      if (nodding.length > 0) acknowledge(nodding);
     },
-    [sendNod, readerId, workspaceId, refused, toast],
+    [acknowledge, readerId],
   );
   const sendMark = useCallback(
     (item: InboxItem, unread: boolean, saying?: MarkSaying): Promise<Kept> =>

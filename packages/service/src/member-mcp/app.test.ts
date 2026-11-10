@@ -23,9 +23,10 @@ import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { listTaskSections, writeTaskSections } from "@repo/database/models/task-section-store";
 import { createTask, readTask } from "@repo/database/models/task-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
+import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
 import { messages } from "@repo/database/schemas/storage";
-import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
+import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import {
   getTestDB,
   joinWorkspace,
@@ -52,7 +53,7 @@ import { INSTALLED_SKILL_SCOPE } from "@repo/features/installed-skill-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
 import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
-import { DESCRIPTION_ACTOR, TASK_STATUS } from "@repo/features/task-wire";
+import { DESCRIPTION_ACTOR, TASK_RELATION_KIND, TASK_STATUS } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { EXPERIMENT, WORKSPACE_EXPERIMENT_LIST } from "@repo/settings";
 import { settleJsonSchemaGolden } from "@repo/wire/testing";
@@ -62,6 +63,7 @@ import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { readWorkspaceMemories, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
 import { recordMemberDescriptionNotes } from "../agents/coder-host/description-edit.js";
+import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { EXPERIMENT_OFF_REFUSAL } from "../agents/workspace-experiment-on.js";
 import { DESKTOP_OAUTH_CLIENT } from "../auth/oauth-clients.js";
 import { ACTION_RESULT_STATUS } from "../core.js";
@@ -172,6 +174,14 @@ const decodeInbox = Schema.decodeUnknownSync(
   }),
 );
 /** A write's answer: the thread as it then stands. */
+/** A read_agent's page, each entry by its words and the lineId a line sent to the agent names. */
+const decodeTranscript = Schema.decodeUnknownSync(
+  Schema.Struct({
+    transcript: Schema.Array(
+      Schema.Struct({ lineId: Schema.optionalKey(Schema.String), text: Schema.String }),
+    ),
+  }),
+);
 const decodeWritten = Schema.decodeUnknownSync(
   Schema.Struct({ thread: Schema.Struct({ status: Schema.String }) }),
 );
@@ -193,7 +203,10 @@ const decodeListed = Schema.decodeUnknownSync(
 );
 
 const decodeMade = Schema.decodeUnknownSync(
-  Schema.Struct({ task: Schema.Struct({ id: Schema.String }) }),
+  Schema.Struct({ task: Schema.Struct({ id: Schema.String, key: Schema.String }) }),
+);
+const decodeRelated = Schema.decodeUnknownSync(
+  Schema.Struct({ task: Schema.Struct({ blockedBy: Schema.Array(Schema.Unknown) }) }),
 );
 const decodeAutomation = Schema.decodeUnknownSync(
   Schema.Struct({ automation: Schema.Struct({ id: Schema.String }) }),
@@ -687,6 +700,7 @@ it.effect(
           [MEMBER_MCP_TOOL.START_AGENT, { workspace, prompt: "Go." }],
           [MEMBER_MCP_TOOL.START_AGENT, { from: { agentId } }],
           [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello." }],
+          [MEMBER_MCP_TOOL.MESSAGE_AGENT, { agentId, text: "Hello.", queue: true }],
           [MEMBER_MCP_TOOL.STOP_AGENT, { agentId }],
           [MEMBER_MCP_TOOL.UPDATE_AGENT, { agentId, archived: true }],
           [MEMBER_MCP_TOOL.LIST_AGENT_PORTS, { agentId }],
@@ -862,6 +876,19 @@ it.effect(
         notes: [{ kind: NOTE_KIND.ADD, section: "Problem", text: "Invoices lag too." }],
       });
       yield* call(MEMBER_MCP_TOOL.UPDATE_TASK, { taskId, status: TASK_STATUS.IN_PROGRESS });
+      // A task found by its key is the one made; a blocker of it moved to its sub-task in one call.
+      const found = decodeMade(yield* call(MEMBER_MCP_TOOL.FIND_TASK, { task: made.task.key }));
+      const blockerId = decodeMade(
+        yield* call(MEMBER_MCP_TOOL.CREATE_TASK, { name: "Invoice lag" }),
+      ).task.id;
+      yield* call(MEMBER_MCP_TOOL.UPDATE_TASK, { taskId, blockedBy: { add: [blockerId] } });
+      yield* call(MEMBER_MCP_TOOL.CHANGE_TASK_RELATION, {
+        taskId,
+        otherTaskId: blockerId,
+        from: TASK_RELATION_KIND.BLOCKED_BY,
+        to: TASK_RELATION_KIND.SUB_TASK,
+      });
+      const related = decodeRelated(yield* call(MEMBER_MCP_TOOL.READ_TASK, { taskId }));
       yield* call(MEMBER_MCP_TOOL.UPDATE_AGENT, { agentId, archived: true, reason: "Done." });
       const automationId = decodeAutomation(
         yield* call(MEMBER_MCP_TOOL.CREATE_AUTOMATION, {
@@ -883,6 +910,7 @@ it.effect(
       const after = yield* Effect.gen(function* () {
         return {
           task: Option.getOrThrow(yield* readTask(member.userId, taskId)),
+          blocker: Option.getOrThrow(yield* readTask(member.userId, blockerId)),
           revisions: yield* listRevisions(member.userId, taskId),
           agent: Option.getOrThrow(yield* readAgent(member.userId, agentId)),
           automation: yield* readAutomation(member.userId, automationId),
@@ -891,6 +919,9 @@ it.effect(
 
       assert.equal(after.task.ownerId, member.userId);
       assert.equal(after.task.task.status, TASK_STATUS.IN_PROGRESS);
+      assert.equal(found.task.id, taskId);
+      assert.deepEqual(related.task.blockedBy, []);
+      assert.equal(after.blocker.task.parentTaskId, taskId);
       assert.equal(after.task.text, "## Problem\n\nSeats drift.\n\nInvoices lag too.");
       // The description's first text and the note are the member's own, as their window writes it, and no agent's.
       assert.deepEqual(
@@ -1245,6 +1276,55 @@ it.layer(getTestDB())("the member's inbox over a started agent", (it) => {
         );
         const handed = JSON.stringify(agentSessions.sent.at(-1)?.message.message);
         assert.ok(handed.includes(INBOX_ANSWER_LEAD) && handed.includes("30 days"), handed);
+      }),
+  );
+
+  it.effect(
+    "an outside agent rewinds the member's agent to just before a line by the lineId read_agent names, dropping it, then deletes the agent for good",
+    () =>
+      Effect.gen(function* () {
+        const { owner, task, ask, mcpFetch } = yield* openTask({});
+        const { agent, target } = yield* startedAgent(owner, task.id, ask);
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        yield* writer.writeAwaitingLine(
+          target,
+          {
+            text: "Why does it stall?",
+            clientKey: randomUUID(),
+            sender: { kind: MESSAGE_SENDER.MEMBER, userId: owner },
+          },
+          Effect.succeed(true),
+        );
+        const { client } = yield* connected(mcpFetch, owner, REVISION.MODERN);
+        const call = (name: string, args: Record<string, unknown>) =>
+          Effect.promise(async () =>
+            decodeAnswer(await client.callTool({ name, arguments: args })),
+          );
+        const transcript = (read: ReturnType<typeof decodeAnswer>) =>
+          decodeTranscript(JSON.parse(read.content[0].text)).transcript;
+
+        const before = transcript(
+          yield* call(MEMBER_MCP_TOOL.READ_AGENT, { agentId: agent.id, from: "start" }),
+        );
+        const line = before.at(-1);
+        assert.ok(line?.lineId !== undefined, "a line sent to the agent names its lineId");
+        assert.match(line.text, /Why does it stall\?/u);
+        const rewound = yield* call(MEMBER_MCP_TOOL.REWIND_AGENT, {
+          agentId: agent.id,
+          lineId: line.lineId,
+        });
+        assert.notEqual(rewound.isError, true, rewound.content[0].text);
+        const after = transcript(
+          yield* call(MEMBER_MCP_TOOL.READ_AGENT, { agentId: agent.id, from: "start" }),
+        );
+        const deleted = yield* call(MEMBER_MCP_TOOL.DELETE_AGENT, { agentId: agent.id });
+        const gone = yield* call(MEMBER_MCP_TOOL.READ_AGENT, { agentId: agent.id });
+        yield* Effect.promise(() => client.close());
+
+        assert.deepEqual(after, before.slice(0, -1), "the line is dropped, and nothing before it");
+        assert.notEqual(deleted.isError, true, deleted.content[0].text);
+        assert.ok(Option.isNone(yield* readAgent(owner, agent.id)), "the agent is deleted");
+        assert.match(gone.content[0].text, /rejected/u);
       }),
   );
 
