@@ -706,15 +706,22 @@ const sendCommand = Command.make(
       const text = yield* readInput(file);
       const { hosted } = yield* session;
       if (queue) {
+        const messageId = crypto.randomUUID();
         const answered = yield* askService(
           hosted.messages.queue,
-          { params: { id }, body: { change: QUEUE_CHANGE.ADD, id: crypto.randomUUID(), text } },
+          { params: { id }, body: { change: QUEUE_CHANGE.ADD, id: messageId, text } },
           HOSTED_DEADLINE.USUAL,
           QUEUE_REFUSAL_WORDS,
         );
+        // Note that an agent standing idle is handed the message at once, so it leaves the queue the answer reads.
+        const ahead = answered.queue.messages.findIndex((message) => message.id === messageId);
         yield* answer({
           json: answered.queue,
-          lines: [`Queued for agent ${id}; ${answered.queue.messages.length} waiting.`],
+          lines: [
+            ahead === -1
+              ? `Sent to agent ${id}; it stood idle.`
+              : `Queued for agent ${id}, ${ahead} ahead of it.`,
+          ],
           ids: [id],
         });
         return;

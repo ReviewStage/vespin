@@ -111,6 +111,8 @@ const applyChange = Effect.fn("web/applyQueueChange")(function* (
     case QUEUE_CHANGE.RESUME:
       yield* found(resumeAgentQueue(userId, agent.id));
       return;
+    default:
+      return yield* Effect.die(`unhandled queue change: ${JSON.stringify(body satisfies never)}`);
   }
 });
 
