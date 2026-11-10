@@ -1,4 +1,4 @@
-# agent.yaml -- an agent's page: its transcript opened at its newest turn, still running, a call opened on its body, a finished turn's fold opened, the pictures and the recording it showed, and the page it showed opened whole.
+# agent.yaml -- an agent's page: its transcript opened at its newest turn, still running, a call opened on its body, a run of calls opened, the pictures and the recording it showed, and the page it showed opened whole.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -42,8 +42,8 @@ appId: dev.vespin.ios
 - tapOn:
     id: "BackButton"
     optional: true
-# The first turn finished: its calls folded ahead of its last words, the
-# pictures it showed kept out of the fold.
+# The first turn finished: its run of calls folded under one line, the
+# pictures it showed standing apart after it.
 - scrollUntilVisible:
     element: "The invite dialog"
     direction: UP
