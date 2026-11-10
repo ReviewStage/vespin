@@ -64,6 +64,7 @@
 import type { TasklessAgent } from "@repo/features/agent-wire";
 import { automationTriggerText } from "@repo/features/automation-list-model";
 import type { AutomationSummary } from "@repo/features/automation-wire";
+import { fileName } from "@repo/features/code-ref-words";
 import { holderName, type InboxListed, inboxItemWords } from "@repo/features/inbox-list-model";
 import { formatCount } from "@repo/features/number-format";
 import { cardTitle } from "@repo/features/plain-words";
@@ -203,7 +204,6 @@ import { AgentCard, agentSubject, NOTHING_HELD, tasklessRowSubject } from "../ta
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { useChangesPeopleOf } from "../tasks/changes-people.js";
 import { FileCard, fileLook } from "../tasks/file-ref.js";
-import { fileName } from "../tasks/file-ref-model.js";
 import { refusalLine } from "../tasks/file-tab-model.js";
 import { InboxItemCard, InboxItemEnd, ItemMark } from "../tasks/inbox-item-parts.js";
 import { refusedAnswer, taskTreeQueryOptions } from "../tasks/repository-reads.js";

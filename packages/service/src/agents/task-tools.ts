@@ -13,6 +13,7 @@ import {
   TASK_CREATE_RELATION_KIND,
   TASK_PRIORITY,
   TASK_STATUS,
+  type TaskCreateRelation,
   type TaskOrigin,
   taskPrioritySchema,
   taskStatusSchema,
@@ -53,7 +54,7 @@ import {
 } from "./agent-tools.js";
 import { calledId } from "./called-id.js";
 import { assigneeIdOf, TASK_ASSIGNEE_INPUT } from "./task-assignee.js";
-import { taskBlockReadings } from "./task-block-changes.js";
+import { TASK_IDS, taskBlockReadings } from "./task-block-changes.js";
 import {
   EVERY_EXPERIMENT_ON,
   type ExperimentsOn,
@@ -122,7 +123,7 @@ export function readTaskToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
     description:
       "Read one task of your workspace by its id, a teammate's included: its " +
       "key (such as ACME-42), name, where it stands (its status) and how much it matters (its " +
-      "priority), repository, who started it, whether it is the task you " +
+      "priority), repository, who started it (startedBy, and startedByUserId to link them by), whether it is the task you " +
       "work on, the brief the developer started it with (null for none), the tasks " +
       "it is blocked by and the tasks it blocks (each with its id, name, and status)" +
       `${READ_TASK_DESCRIPTION_WORDS[on.descriptionsOn ? "on" : "off"]} Read one before you start an agent on it, or to learn what another task is about; ` +
@@ -175,6 +176,7 @@ export function runReadTask(
           name: task.name,
           repository: task.repository ?? null,
           startedBy: task.createdBy?.name ?? null,
+          startedByUserId: task.createdBy?.userId ?? null,
           isYourTask: task.id === callerTask(call.caller),
           brief: brief ?? null,
           ...blocks,
@@ -203,8 +205,7 @@ export const CREATE_TASK_REFUSAL = {
     `(${Object.values(TASK_STATUS).join(", ")}) or none, a priority ` +
     `(${Object.values(TASK_PRIORITY).join(", ")}) or none, an assignee as a member's ` +
     `mention link or none, a parent task by the id ${AGENT_TOOL.LIST_TASKS} answered or none, ` +
-    `a relation (${Object.values(TASK_CREATE_RELATION_KIND).join(", ")}) to a task by that id ` +
-    "or none.",
+    "and subTaskIds, blockedBy, and blocks as lists of such ids or none.",
   NOT_MEMBER:
     "Not made: that assignee is no member of the workspace, or names no person; name a member by " +
     `the mention link ${AGENT_TOOL.LIST_TASKS} hands you, or leave it out for no one.`,
@@ -212,23 +213,30 @@ export const CREATE_TASK_REFUSAL = {
   PARENT_REPOSITORY:
     "Not made: a child task always works in its parent's repository; leave repository out to " +
     "take the parent's, or make it with no parent to work in another.",
-  PARENT_AND_RELATION:
-    "Not made: name its parent once, by parentTaskId or by a relation, not both; a relation of " +
-    `${TASK_CREATE_RELATION_KIND.SUB_TASK_OF} says what parentTaskId says.`,
-  NO_RELATED: `Not made: no task of your workspace has that id to relate it to; ${AGENT_TOOL.LIST_TASKS} names them.`,
+  NO_RELATED:
+    "Not made: a task named in subTaskIds, blockedBy, or blocks is no task of your workspace, so " +
+    `it is none you can join to this one; ${AGENT_TOOL.LIST_TASKS} names them.`,
   CHILD_REPOSITORY:
-    "Not made: a parent task always works in its child's repository; leave repository out to " +
-    "take that task's, or relate it another way to work in another.",
+    "Not made: a task always works in its sub-tasks' repository; leave repository out to take " +
+    "theirs, and name in subTaskIds only tasks that work in one repository.",
   PARENT_HELD:
-    "Not made: that task has a parent already, which a new task never takes the place of; make " +
-    `it a ${TASK_CREATE_RELATION_KIND.SUB_TASK_OF} of that parent, or relate it another way.`,
+    "Not made: a task named in subTaskIds has a parent already, which a new task never takes " +
+    "the place of; give that parent as parentTaskId to make the new task its sibling, or leave " +
+    "that task out.",
   RELATION_CYCLE:
-    "Not made: that relation would close a cycle among the workspace's tasks; read_task names " +
-    "how they stand, and relate it another way.",
+    "Not made: that would close a cycle, since a task it would block already blocks a blocker, " +
+    "or a task named in subTaskIds stands above its parent, directly or through other tasks; " +
+    "take away the relation that runs the other way first.",
   // Note that the field was `plan` before the task's document was its description, and an agent whose session listed the tool then may still send it, which the schema would otherwise drop and make the task empty.
   RENAMED_DESCRIPTION:
     "Not made: the task's starting text is now named description, not plan; call again with the " +
     "same text as description.",
+  // Note that one relation was the field before the tree and the blocks were lists of their own, and an agent whose session listed the tool then may still send it, which the schema would otherwise drop and make the task unrelated.
+  RENAMED_RELATION:
+    "Not made: create_task takes no relation now; name the other task in parentTaskId for " +
+    `${TASK_CREATE_RELATION_KIND.SUB_TASK_OF}, subTaskIds for ${TASK_CREATE_RELATION_KIND.PARENT_OF}, ` +
+    `blockedBy for ${TASK_CREATE_RELATION_KIND.BLOCKED_BY}, or blocks for ` +
+    `${TASK_CREATE_RELATION_KIND.BLOCKS}, and call again.`,
 } as const;
 
 /** `create_task`'s fields before its description, which every workspace offers. */
@@ -267,29 +275,31 @@ const CREATE_TASK_FIELDS_AFTER = {
   parentTaskId: Schema.optionalKey(
     describeWire(
       wireUuidSchema,
-      `The task to make it a child of, by the id ${AGENT_TOOL.LIST_TASKS} answered: a part of ` +
-        "that task's work, which works in its repository. Left out, it stands at the top.",
+      `The task to make it a child of, by the id ${AGENT_TOOL.LIST_TASKS} answered: a task of ` +
+        "your workspace, whose repository it works in. Left out, it stands at the top.",
     ),
   ),
-  relation: Schema.optionalKey(
+  subTaskIds: Schema.optionalKey(
     describeWire(
-      Schema.Struct({
-        kind: describeWire(
-          Schema.Literals(Object.values(TASK_CREATE_RELATION_KIND)),
-          "How the new task stands to the other, from the new task's side: blocked-by, it waits " +
-            "on the other's work; blocks, the other waits on its work; sub-task-of, a child of " +
-            "the other, as parentTaskId makes one; parent-of, the other's parent, refused where " +
-            "the other has a parent already.",
-        ),
-        taskId: describeWire(
-          wireUuidSchema,
-          `The other task, of your workspace, by the id ${AGENT_TOOL.LIST_TASKS} answered.`,
-        ),
-      }),
-      "Another task of your workspace the new task starts related to, written with it so both " +
-        "land together. A sub-task-of or parent-of takes the other task's repository, so leave " +
-        "repository out, and another is refused; a block takes nothing of it. Not beside " +
-        "parentTaskId; left out, it starts related to none.",
+      TASK_IDS,
+      `Its sub-tasks (the tasks it is the parent of), by the id ${AGENT_TOOL.LIST_TASKS} ` +
+        "answered, each a task of your workspace with no parent yet, working in one repository " +
+        "with it, which it takes, so leave repository out. Left out, it has none.",
+    ),
+  ),
+  blockedBy: Schema.optionalKey(
+    describeWire(
+      TASK_IDS,
+      `Its blocked-by (the tasks it waits on), by the id ${AGENT_TOOL.LIST_TASKS} answered, ` +
+        "each a task of your workspace, such as a sibling whose work comes first. Left out, it " +
+        "waits on none.",
+    ),
+  ),
+  blocks: Schema.optionalKey(
+    describeWire(
+      TASK_IDS,
+      `Its blocks (the tasks that wait on it), by the id ${AGENT_TOOL.LIST_TASKS} answered, each ` +
+        "a task of your workspace. Left out, none waits on it.",
     ),
   ),
 };
@@ -326,6 +336,9 @@ const readCreateAsked = Schema.decodeUnknownResult(CREATE_TASK_INPUT);
 /** A make that names the starting text by the field's name before the rename. */
 const namesRetiredPlan = Schema.is(Schema.Struct({ plan: Schema.Unknown }));
 
+/** A make that names one relation, as the tool took before the tree and the blocks were lists of their own. */
+const namesRetiredRelation = Schema.is(Schema.Struct({ relation: Schema.Unknown }));
+
 /** What a made task starts with, as a workspace with Task descriptions on or off words it. */
 const CREATE_TASK_STARTS_WITH = {
   on: "with their brief and a description to start from where given",
@@ -351,9 +364,10 @@ function createTaskWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
     `work on no task; then start an agent on it with ${AGENT_TOOL.START_AGENT}'s taskId. ` +
     "Give it a status, a priority, and an assignee where the developer said them. Give it a " +
     "parentTaskId to make it a child task of another, to any depth: a child always works in " +
-    "its parent's repository, so leave repository out for one. Give it a " +
-    "relation instead to make it blocked by, blocking, a sub-task of, or the parent of another " +
-    "task of your workspace in the same call. Answers " +
+    "its parent's repository, so leave repository out for one. Give it subTaskIds to make it " +
+    "the parent of tasks that have none, and blockedBy and blocks for the tasks it waits on and " +
+    `the tasks that wait on it, as ${AGENT_TOOL.UPDATE_TASK} names them, all written in the same ` +
+    "call: a child that waits on a sibling takes a parentTaskId and a blockedBy. Answers " +
     "`accepted` with the task's id, key, name, status, priority, assignee, and repository, or " +
     "`rejected` and why."
   );
@@ -381,6 +395,21 @@ function revisionWriterOf(call: AgentCall): NonNullable<TaskCreateAsked["writer"
     : { actor: DESCRIPTION_ACTOR.AGENT, agentId: agent.id };
 }
 
+/** The relations a make asks, from the new task's side: the parent of each sub-task, then each block on either side. */
+function relationsOf(asked: {
+  readonly subTaskIds?: readonly string[];
+  readonly blockedBy?: readonly string[];
+  readonly blocks?: readonly string[];
+}): readonly TaskCreateRelation[] {
+  const sideOf = (ids: readonly string[] | undefined, kind: TaskCreateRelation["kind"]) =>
+    (ids ?? []).map((taskId) => ({ kind, taskId }));
+  return [
+    ...sideOf(asked.subTaskIds, TASK_CREATE_RELATION_KIND.PARENT_OF),
+    ...sideOf(asked.blockedBy, TASK_CREATE_RELATION_KIND.BLOCKED_BY),
+    ...sideOf(asked.blocks, TASK_CREATE_RELATION_KIND.BLOCKS),
+  ];
+}
+
 /** Who made a task for the caller's member: the coding agent by its id; none for the member calling, as for one they make by hand. */
 function originOf(call: AgentCall): { readonly origin?: TaskOrigin } {
   const agent = callerAgent(call.caller);
@@ -391,9 +420,9 @@ function originOf(call: AgentCall): { readonly origin?: TaskOrigin } {
 
 /**
  * Why the make made nothing (`createTaskAsked`), in words the model can act
- * on; a store failure is left to `orStoreRefusal`. Note that a call naming a
- * parent names no other relation, so the parent's refusals are told apart
- * from a relation's by whether the call named one.
+ * on; a store failure is left to `orStoreRefusal`. Note that the parent's
+ * refusals and a sub-task's share their tags, so they are told apart by
+ * whether the call named a parent, which is read before any sub-task.
  */
 const madeRefusal =
   (parentNamed: boolean) =>
@@ -445,19 +474,15 @@ export function runCreateTask(
   if (namesRetiredPlan(input)) {
     return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.RENAMED_DESCRIPTION));
   }
+  if (namesRetiredRelation(input)) {
+    return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.RENAMED_RELATION));
+  }
   const asked = readCreateAsked(input);
   if (Result.isFailure(asked)) {
     return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.UNREADABLE));
   }
-  const { name, brief, description, status, priority, assignee, relation } = asked.success;
-  if (asked.success.parentTaskId !== undefined && relation !== undefined) {
-    return Effect.succeed(agentToolRejected(CREATE_TASK_REFUSAL.PARENT_AND_RELATION));
-  }
-  // A sub-task of another is a child of it, which parentTaskId names as well.
-  const parentTaskId =
-    relation?.kind === TASK_CREATE_RELATION_KIND.SUB_TASK_OF
-      ? relation.taskId
-      : asked.success.parentTaskId;
+  const { name, brief, description, status, priority, assignee, parentTaskId } = asked.success;
+  const relations = relationsOf(asked.success);
   const assigneeId =
     assignee === undefined || assignee === null ? undefined : assigneeIdOf(assignee);
   if (assignee !== undefined && assignee !== null && assigneeId === undefined) {
@@ -473,8 +498,7 @@ export function runCreateTask(
       const id = calledId(userId, call.clientKey);
       const naming = yield* workspaceNamingOf(userId, workspace.value);
       // Left out, the repository is the one the caller works in, unless the task joins a tree, whose it takes.
-      const inTree =
-        parentTaskId !== undefined || relation?.kind === TASK_CREATE_RELATION_KIND.PARENT_OF;
+      const inTree = parentTaskId !== undefined || (asked.success.subTaskIds ?? []).length > 0;
       const repository =
         asked.success.repository !== undefined || inTree
           ? asked.success.repository
@@ -500,7 +524,7 @@ export function runCreateTask(
               ...originOf(call),
               text: descriptionsOn ? descriptionTextOf(description ?? "") : "",
               writer: revisionWriterOf(call),
-              relations: relation === undefined ? [] : [relation],
+              relations,
             },
             SERVER_TASK_SOURCE.AGENT,
           ).pipe(

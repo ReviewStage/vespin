@@ -1,0 +1,53 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace, by the slug list_workspaces answered, whose skills to list or whose GitHub installation reads a source; leave it out where the member belongs to one workspace alone."
+    },
+    "source": {
+      "type": "string",
+      "maxLength": 131072,
+      "description": "What to install from, as the member would paste it into Add skill: a GitHub repository (owner/name or its address), a link to one of its folders, an `npx skills add` line naming one, or a skill's own SKILL.md text."
+    },
+    "scope": {
+      "type": "string",
+      "enum": [
+        "personal",
+        "workspace"
+      ],
+      "description": "Whose the skills are: personal, the member's alone in every workspace they belong to; or workspace, offered to the agents of every member of the workspace, never in the member's personal workspace."
+    },
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "From a GitHub source, the skills to install by name, as preview_skill_install listed them; at least one."
+    },
+    "sha": {
+      "type": "string",
+      "minLength": 40,
+      "maxLength": 40,
+      "description": "From a GitHub source, the commit preview_skill_install answered, so the files installed are the ones the member was shown."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "For a skill's text, the name to install it by; its frontmatter's where left out."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "For a skill's text, the summary to install it by, which tells agents when to use it; its frontmatter's where left out."
+    }
+  },
+  "required": [
+    "source",
+    "scope"
+  ],
+  "additionalProperties": false
+}

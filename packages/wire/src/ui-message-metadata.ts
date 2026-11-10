@@ -63,7 +63,23 @@ export const MESSAGE_CHANNEL = {
   APP: "app",
   AUTOMATION: "automation",
   SLACK: "slack",
+  /** A line the service sent to carry a turn on after it was cut off, saying why (`CARRY_ON_REASON`). */
+  CARRY_ON: "carry_on",
 } as const;
+
+/**
+ * Why a turn was cut off, as the carry-on line the service sent after it
+ * says: the Mac the agent runs on restarted, or its host there did, and
+ * came back; the cloud runner stopped before the turn ended; or the
+ * connection to the model's provider was lost and came back.
+ */
+export const CARRY_ON_REASON = {
+  HOST_RESTART: "host_restart",
+  RUNNER_LOST: "runner_lost",
+  CONNECTION_LOST: "connection_lost",
+} as const;
+
+export type CarryOnReason = (typeof CARRY_ON_REASON)[keyof typeof CARRY_ON_REASON];
 
 /** What a member did on a thread that a line steered into its agent carries. */
 export const THREAD_LINE_EVENT = {
@@ -416,6 +432,19 @@ const APP_LINE_METADATA = EffectSchema.Struct({
 export type AppLineMetadata = EffectSchema.Schema.Type<typeof APP_LINE_METADATA>;
 
 /**
+ * A carry-on line is one the service sent the agent on its own once a turn
+ * of its was cut off, to go on from where it stopped, naming why the turn
+ * was cut; the transcript draws the line by that reason, and a turn such a
+ * line opened is never carried on again.
+ */
+const CARRY_ON_LINE_METADATA = EffectSchema.Struct({
+  channel: EffectSchema.Literal(MESSAGE_CHANNEL.CARRY_ON),
+  reason: EffectSchema.Literals(Object.values(CARRY_ON_REASON)),
+});
+
+export type CarryOnLineMetadata = EffectSchema.Schema.Type<typeof CARRY_ON_LINE_METADATA>;
+
+/**
  * An automation line is an automation's run's prompt, the agent's first line
  * or a later one, and whether what fired the run put words its owner did not
  * write beside that prompt, such as a webhook's body, which `run_on_mac`
@@ -464,6 +493,7 @@ export type UserMessageMetadata =
   | StartLineMetadata
   | GitHubLineMetadata
   | AppLineMetadata
+  | CarryOnLineMetadata
   | AutomationLineMetadata
   | SlackLineMetadata
   | ObservationMetadata;
@@ -478,6 +508,7 @@ export const USER_MESSAGE_METADATA = EffectSchema.Union([
   START_LINE_METADATA,
   GITHUB_LINE_METADATA,
   APP_LINE_METADATA,
+  CARRY_ON_LINE_METADATA,
   AUTOMATION_LINE_METADATA,
   SLACK_LINE_METADATA,
   OBSERVATION_METADATA,

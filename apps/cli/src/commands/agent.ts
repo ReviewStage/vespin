@@ -17,7 +17,7 @@
  * refuses one GitHub does not hold yet rather than failing its fetch.
  */
 
-import { isWireUuid } from "@repo/features";
+import { HOSTED_API_ERROR, isWireUuid } from "@repo/features";
 import type { AgentBrowserTab } from "@repo/features/agent-browser-tab-wire";
 import {
   ADDED_REPOSITORY_CHECKOUT,
@@ -31,6 +31,7 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
   agentStartRequestOnWire,
+  QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
 import { CLI_EXIT, cliExitOfAgentStatus } from "@repo/features/cli-exit";
 import {
@@ -751,6 +752,19 @@ const logsCommand = Command.make(
   ]),
 );
 
+/** What a queued send came to: waiting behind the turn, or handed on at once to an agent standing idle, as the member MCP's `message_agent` says it. */
+const QUEUED_SEND = {
+  QUEUED: "queued",
+  HANDED_ON: "handed-on",
+} as const;
+
+/** A queued send's refusals, in words that say what to do. */
+const QUEUE_REFUSAL_WORDS = {
+  [HOSTED_API_ERROR.NOT_PERMITTED]:
+    "Only the member who started that agent queues to it; send without --queue to steer it instead.",
+  [HOSTED_API_ERROR.INVALID_REQUEST]: "That agent's queue is full.",
+};
+
 const sendCommand = Command.make(
   "send",
   {
@@ -759,11 +773,50 @@ const sendCommand = Command.make(
       Flag.withAlias("F"),
       Flag.withDescription("The message, from a file or - for stdin"),
     ),
+    queue: Flag.Boolean("queue").pipe(
+      Flag.withDefault(false),
+      Flag.withDescription(
+        "Queue it behind the agent's turn, as ⌘↩ does, rather than steer the turn under way; only the agent's starter queues, and a paused queue sends nothing until Resume in the app",
+      ),
+    ),
   },
-  ({ agent: id, file }) =>
+  ({ agent: id, file, queue }) =>
     Effect.gen(function* () {
       const text = yield* readInput(file);
       const { hosted } = yield* session;
+      if (queue) {
+        const messageId = crypto.randomUUID();
+        const answered = yield* askService(
+          hosted.messages.queue,
+          { params: { id }, body: { change: QUEUE_CHANGE.ADD, id: messageId, text } },
+          HOSTED_DEADLINE.USUAL,
+          QUEUE_REFUSAL_WORDS,
+        );
+        // Note that an agent standing idle is handed the message at once, so it leaves the queue the answer reads.
+        const ahead = answered.queue.messages.findIndex((message) => message.id === messageId);
+        const queued = ahead !== -1;
+        const { paused } = answered.queue;
+        yield* answer({
+          json: {
+            messageId,
+            delivery: queued ? QUEUED_SEND.QUEUED : QUEUED_SEND.HANDED_ON,
+            ahead: queued ? ahead : null,
+            queue: answered.queue,
+          },
+          lines: [
+            queued
+              ? `Queued for agent ${id}, ${ahead} ahead of it.`
+              : `Handed to agent ${id} to go now, as it stood idle; a refusal would pause its queue.`,
+            ...(paused === undefined
+              ? []
+              : [
+                  `Its queue is paused (${paused.because}${paused.refusal === undefined ? "" : `: ${paused.refusal}`}), so nothing goes until Resume in the app.`,
+                ]),
+          ],
+          ids: [id],
+        });
+        return;
+      }
       const { agent } = yield* askService(
         hosted.messages.send,
         { params: { id }, body: { text, clientKey: crypto.randomUUID() } },
@@ -777,6 +830,10 @@ const sendCommand = Command.make(
     {
       command: 'echo "Also update the README" | vespin agent send <id> -F -',
       description: "A follow-up from stdin",
+    },
+    {
+      command: "vespin agent send <id> --queue -F next.md",
+      description: "Queued to go once the turn under way ends",
     },
   ]),
 );

@@ -682,7 +682,12 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         assert.equal(open.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.deepEqual(open.inbox?.[0]?.thread, [
           { from: "you", text: QUEUE.body, ask: { ...QUEUE.ask, status: INBOX_ASK_STATUS.OPEN } },
-          { from: "Test User", text: "Is Redis free?", files: ["pricing.txt"] },
+          {
+            from: "Test User",
+            fromUserId: agent.userId,
+            text: "Is Redis free?",
+            files: ["pricing.txt"],
+          },
           { from: "you", text: "No: it needs a new service." },
         ]);
 
@@ -728,12 +733,13 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
               },
               {
                 from: "Test User",
+                fromUserId: agent.userId,
                 text: "Go with the outbox.",
                 answers: { reply: INBOX_REPLY.CHOSE, choices: ["Postgres outbox"] },
               },
               { from: "you", text: "Thanks." },
               { from: "you", text: "Shipping it." },
-              { from: "Test User", text: "Great." },
+              { from: "Test User", fromUserId: agent.userId, text: "Great." },
             ],
           },
         ]);
@@ -771,7 +777,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
   );
 
   it.effect(
-    "the agent reads back which member closed a thread without an answer, and its own withdrawal by its reason",
+    "the agent reads back which member closed a thread without an answer, by name and by the account their link names them by, and its own withdrawal by its reason",
     () =>
       Effect.gen(function* () {
         const agent = yield* openAgent;
@@ -787,12 +793,19 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
         assert.equal(read.status, ACTION_RESULT_STATUS.ACCEPTED);
         assert.deepEqual(
           read.inbox
-            ?.map((line) => [line.key, line.status, line.closedBy, line.thread[0]?.ask])
+            ?.map((line) => [
+              line.key,
+              line.status,
+              line.closedBy,
+              line.closedByUserId,
+              line.thread[0]?.ask,
+            ])
             .sort(),
           [
             [
               "own",
               INBOX_STATUS.CLOSED,
+              undefined,
               undefined,
               {
                 type: INBOX_ASK.DO,
@@ -804,6 +817,7 @@ it.layer(getTestDB())("the coding agent's inbox", (it) => {
               SETTINGS.key,
               INBOX_STATUS.CLOSED,
               "Test User",
+              agent.userId,
               { type: INBOX_ASK.DO, status: INBOX_ASK_STATUS.WITHDRAWN },
             ],
           ].sort(),

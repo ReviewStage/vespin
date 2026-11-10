@@ -1299,6 +1299,78 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
+    "a call to a tool the record does not hold is stored as an unknown tool's, refused, naming the tool it called, and the harness's own ToolSearch is left out",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const refused =
+          "<tool_use_error>Error: No such tool available: mcp__workspace__edit_plan</tool_use_error>";
+        const messagesOfTurn = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          {
+            type: "assistant",
+            message: {
+              id: "msg_1",
+              content: [
+                { type: "tool_use", id: "toolu_search", name: "ToolSearch", input: {} },
+                {
+                  type: "tool_use",
+                  id: "toolu_plan",
+                  name: "mcp__workspace__edit_plan",
+                  input: { notes: [] },
+                },
+              ],
+            },
+            ...top,
+          },
+          {
+            type: "user",
+            message: {
+              content: [
+                { type: "tool_result", tool_use_id: "toolu_search", content: "Loaded." },
+                {
+                  type: "tool_result",
+                  tool_use_id: "toolu_plan",
+                  content: refused,
+                  is_error: true,
+                },
+              ],
+            },
+            ...top,
+          },
+        ];
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        const events = messagesOfTurn.map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, events);
+        const { rows } = yield* transcriptOf(agent.target.conversationId);
+        const parts = rows.at(-1)?.parts ?? [];
+
+        assert.deepEqual(
+          parts.map((part) => [
+            part.type,
+            "state" in part ? part.state : undefined,
+            "input" in part ? part.input : undefined,
+            "errorText" in part ? part.errorText : undefined,
+          ]),
+          [
+            ["step-start", undefined, undefined, undefined],
+            [
+              "tool-unknown_tool",
+              "output-error",
+              { name: "edit_plan", input: { notes: [] } },
+              refused,
+            ],
+          ],
+        );
+      }),
+  );
+
+  it.effect(
     "the last event applied is kept on the conversation, for a relaunch to number after",
     () =>
       Effect.gen(function* () {
@@ -2603,6 +2675,45 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         );
         const ran = workflowTurn(agent.lineId).map((event) => event.message);
         yield* post(bearer, numberedFrom(limited.length, ran), launch);
+        const finished = yield* transcriptOf(agent.target.conversationId);
+
+        assert.deepEqual(
+          [cut.turns.map((turn) => turn.status), finished.turns.map((turn) => turn.status)],
+          [[TURN_STATUS.RUNNING], [TURN_STATUS.SETTLED]],
+        );
+        assert.equal(finished.rows.filter((row) => row.role === "user").length, 1);
+      }),
+  );
+
+  it.effect(
+    "a turn whose launch Claude Code could not resume the session of stays open for the next launch, which finishes it with the line shown once",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentOn(HARNESS.CLAUDE_CODE, ["Run the probe."]);
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        // As the CLI answers a resume of a session it finds nowhere it looks.
+        const refused = numberedFrom(0, [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          {
+            type: "result",
+            subtype: "error_during_execution",
+            is_error: true,
+            errors: [`No conversation found with session ID: ${SESSION}`],
+            ...top,
+          },
+          { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+        ]);
+        yield* post(agent.bearer, refused);
+        const cut = yield* transcriptOf(agent.target.conversationId);
+
+        // The launch on a fresh session, handed the turn's own line again.
+        const bearer = randomBytes(32).toString("base64url");
+        const launch = Option.getOrThrow(
+          yield* recordAgentRunnerLaunch(agent.userId, agent.agentId, runnerTokenDigest(bearer)),
+        );
+        const ran = workflowTurn(agent.lineId).map((event) => event.message);
+        yield* post(bearer, numberedFrom(refused.length, ran), launch);
         const finished = yield* transcriptOf(agent.target.conversationId);
 
         assert.deepEqual(

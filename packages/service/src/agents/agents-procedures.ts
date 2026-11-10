@@ -269,6 +269,29 @@ export const pullRequestChangesRead = (
     };
   });
 
+/**
+ * The changes of the pull request asked about of an agent (`askedPullRequest`),
+ * read on a token minted for the agent's repository on its task's workspace
+ * installation (`pullRequestChangesRead`); none where it names no pull request
+ * yet. The `changes` procedure reads them, and so does the member MCP server's
+ * `read_pull_request`.
+ */
+export const agentChangesOf = (
+  userId: string,
+  agent: Agent,
+  pullRequest: AgentPullRequest | null,
+) =>
+  Effect.gen(function* () {
+    if (pullRequest === null || !hasRepository(agent)) return { pullRequest: null };
+    const changes = yield* githubReadRefusal(
+      Effect.gen(function* () {
+        const { token } = yield* agentPullRequestReach(userId, agent);
+        return yield* pullRequestChangesRead(token, agent, pullRequest);
+      }),
+    );
+    return { pullRequest: changes };
+  });
+
 /** The agents resource: every procedure to a signed-in caller, a body read under its own cap. */
 export function agentsProcedures(seams: AgentsProcedureSeams) {
   const writer = storeWriter({ tools: CODER_TOOL_SET });
@@ -582,14 +605,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       const { userId, agent } = yield* reachedAgentById(context.userId, input.id);
       const number = yield* pullRequestNumberOf(input.number === undefined ? [] : [input.number]);
       const pullRequest = yield* askedPullRequest(yield* published, userId, agent, number);
-      if (pullRequest === null || !hasRepository(agent)) return { pullRequest: null };
-      const changes = yield* githubReadRefusal(
-        Effect.gen(function* () {
-          const { token } = yield* agentPullRequestReach(userId, agent);
-          return yield* pullRequestChangesRead(token, agent, pullRequest);
-        }),
-      );
-      return { pullRequest: changes };
+      return yield* agentChangesOf(userId, agent, pullRequest);
     }),
     /**
      * What the reviewer and label pickers offer, of the agent's repository

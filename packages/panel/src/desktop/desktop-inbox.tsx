@@ -1,6 +1,5 @@
 import { AGENT_CALL_FAILURE, type AgentInboxMessagedView } from "@repo/features/agent-view";
 import {
-  anyUnread,
   holderAutomationId,
   INBOX_HOLDER,
   type InboxHolder,
@@ -15,6 +14,7 @@ import type { PagePlace } from "@repo/features/page-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { CodeRef } from "@repo/features/task-wire";
+import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { backToWords, readFailedWords } from "@repo/features/words";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
@@ -28,7 +28,7 @@ import {
   sameTab,
 } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
-import { memo, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { memo, useEffect, useLayoutEffect, useRef } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { AutomationDirectory } from "../automation-directory.js";
 import { LinkWorkspaceProvider } from "../copy-link-item.js";
@@ -67,7 +67,6 @@ import {
   useSavedDescriptionText,
 } from "../tasks/task-mentions.js";
 import { PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
-import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "../tasks/tool-call-model.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import { useInboxListing } from "../tasks/use-inbox-listing.js";
 import { useNodOnOpen, useReadOnOpen } from "../tasks/use-inbox-read-marks.js";
@@ -223,6 +222,7 @@ export const DesktopInbox = memo(function DesktopInbox({
     named,
     marks,
     standing,
+    markable: unread,
     counts,
     list,
     listedRows,
@@ -241,7 +241,6 @@ export const DesktopInbox = memo(function DesktopInbox({
     resolveItems,
     onRetry,
   } = useInboxListing(tasks, narrowedTask);
-  const unread = useMemo(() => anyUnread(standing), [standing]);
   // Mark all as read marks the listed workspace's items, or a task's alone, each on its own, since the service marks a workspace's whole.
   const { onMarkAll, onMarkEach } = marks;
   const markAll = () =>
@@ -459,7 +458,7 @@ export const DesktopInbox = memo(function DesktopInbox({
     shown: opened?.item,
     chosen: chosen?.item,
     active: tasks.shown && !sideFocused,
-    onMark: markItem,
+    marks,
   });
   // ⌘O opens what holds the keys in its full place: the agent the panel shows while it holds them, in its task; else the item shown, in its task, or on its agent's page where it has none.
   const panelAgent =

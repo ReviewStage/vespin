@@ -1,3 +1,5 @@
+import type { AgentAttachment } from "@repo/features/agent-wire";
+import { pictureMarkers } from "@repo/features/picture-marker";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { pasteCutWords } from "@repo/features/words";
 import {
@@ -25,6 +27,7 @@ import {
   type ReactNode,
   type RefObject,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -41,6 +44,7 @@ import type { KeystrokeSpanName } from "../panel-spans.js";
 import {
   type AttachedFiles,
   type AttachedFilesOptions,
+  isPictureFile,
   useAttachedFiles,
 } from "../use-attached-files.js";
 import {
@@ -50,9 +54,10 @@ import {
   attachmentRow,
 } from "./attach-files-button.js";
 import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
-import { ComposerField } from "./composer-field.js";
+import { ComposerField, type ComposerFieldPictures } from "./composer-field.js";
 import { type ComposerPickers, useComposerPickers } from "./composer-pickers.js";
 import { DictateButton, DictationStrip } from "./dictation-strip.js";
+import { PictureChip, usePictureViewer } from "./picture-chips.js";
 import { ComposerQuoteView } from "./reply-to-selection.js";
 import type { DictationControl } from "./use-dictation.js";
 
@@ -178,6 +183,8 @@ interface MessageBoxOptions extends PickerOptions {
   readonly takesFiles?: boolean | undefined;
   /** Whether words pasted long enough to bury the message come as a text file, as an agent's box takes them. */
   readonly pastesTextAsFile?: boolean | undefined;
+  /** Whether a picture handed to the box goes into its words as its chip (`picture-chips.tsx`), as an agent's box takes one; beside its words where unsaid. */
+  readonly takesPictures?: boolean | undefined;
   /** The words a dictation is likely to say (`dictation-keywords.ts`); none for a comment. */
   readonly keywords?: readonly string[] | undefined;
   /** A key the field's lists and dictation left, answering whether the owner took it. */
@@ -199,6 +206,7 @@ interface MessageBoxOptions extends PickerOptions {
 /** What `MessageBox` and `MessageField` draw a box from, which its owner never reads. */
 interface Drawn {
   readonly options: MessageBoxOptions;
+  readonly pictures: BoxPictures;
   readonly module: DescriptionEditorModule | undefined;
   readonly pickers: ComposerPickers;
   readonly takesFocus: boolean;
@@ -379,6 +387,61 @@ export function ComposerActions({ children }: { children: ReactNode }): React.JS
   );
 }
 
+/** The pictures a box holds as its words name them: the files drawn beside the words, the field's picture chips, and the viewer a chip opens. */
+interface BoxPictures {
+  readonly beside: readonly AgentAttachment[];
+  readonly field: ComposerFieldPictures | undefined;
+  readonly viewer: ReactNode;
+}
+
+/**
+ * The box's pictures: each picture whose marker the words hold drawn there
+ * as its chip, opening over the window and walking the pictures in the
+ * order the words name them, and every other file beside the words, as
+ * every file stood before pictures went into the words; where the box
+ * takes none into its words, every file beside them.
+ */
+function useBoxPictures(
+  takes: boolean,
+  draft: string,
+  attachments: readonly AgentAttachment[],
+): BoxPictures {
+  const names = useMemo(
+    () => new Set(attachments.filter(isPictureFile).map((file) => file.name)),
+    [attachments],
+  );
+  // Note that the words are read once for every picture they name, in the order they first name each.
+  const { inWords, ordered } = useMemo(() => {
+    if (!takes) return { inWords: [], ordered: [] };
+    const named = new Set(pictureMarkers(draft).map((marker) => marker.name));
+    const pictures = attachments.filter(isPictureFile);
+    return {
+      inWords: pictures.filter((file) => named.has(file.name)),
+      ordered: [...named].flatMap((name) => {
+        const file = pictures.find((each) => each.name === name);
+        return file === undefined ? [] : [file];
+      }),
+    };
+  }, [takes, draft, attachments]);
+  const chips = attachmentChips(ordered);
+  const viewer = usePictureViewer(chips);
+  if (!takes) return { beside: attachments, field: undefined, viewer: null };
+  return {
+    beside: attachments.filter((file) => !inWords.includes(file)),
+    field: {
+      names,
+      chip: (name) => (
+        <PictureChip
+          name={name}
+          file={chips.find((chip) => chip.name === name)}
+          onOpen={viewer.open}
+        />
+      ),
+    },
+    viewer: viewer.viewer,
+  };
+}
+
 /** The box's field, as both its card and a field-only frame draw it; `onEnter` is what a bare Enter, or ⌘ with Enter where Enter writes, does. */
 function BoxField({
   box,
@@ -387,7 +450,7 @@ function BoxField({
   box: MessageBoxControl;
   onEnter: () => void;
 }): React.JSX.Element {
-  const { options, module, pickers, takesFocus, say } = box[DRAWN];
+  const { options, module, pickers, takesFocus, say, pictures } = box[DRAWN];
   const { files } = box;
   const held = options.held === true;
   const takesFiles = options.takesFiles !== false;
@@ -402,6 +465,7 @@ function BoxField({
       setDraft={(text) => {
         if (box.note?.cut === true) box.quiet();
         options.setDraft(text);
+        files.follow(text);
       }}
       onPasteCut={() => say(SAID.CUT, pasteCutWords(options.maxLength))}
       placeholder={options.placeholder}
@@ -423,6 +487,7 @@ function BoxField({
       onEnter={onEnter}
       onPasteFiles={takesFiles ? files.paste : () => false}
       onPasteText={options.pastesTextAsFile === true ? files.pasteText : undefined}
+      pictures={pictures.field}
       quote={(quote) => <ComposerQuoteView quote={quote} held={held || box.dictating} />}
     />
   );
@@ -445,7 +510,18 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
     holder: options.holder,
     held: options.held === true || options.takesFiles === false,
     onRefusal: (words) => say(SAID.FILE, words),
+    words: options.draft,
+    pictures:
+      options.takesPictures === true
+        ? {
+            place: () => {
+              const mark = editor.current?.mark();
+              return mark === undefined ? undefined : (names) => mark.insertPictures(names);
+            },
+          }
+        : undefined,
   });
+  const pictures = useBoxPictures(options.takesPictures === true, options.draft, files.attachments);
   const { draft, placeholder, keywords = NO_KEYWORDS, ...picked } = options;
   const pickers = useComposerPickers({
     ...picked,
@@ -484,6 +560,7 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
     handBack,
     [DRAWN]: {
       options,
+      pictures,
       module: bundle.data,
       pickers,
       takesFocus:
@@ -530,7 +607,7 @@ export function MessageBox({
   /** What the owner says under the bar over the box's own notes; nothing where it has nothing to say, which says the box's. */
   note?: ComposerNote | undefined;
 }): React.JSX.Element {
-  const { options, module } = box[DRAWN];
+  const { options, module, pictures } = box[DRAWN];
   const { files, room, dictation } = box;
   const picker = useRef<AttachPicker>(null);
   const held = options.held === true;
@@ -582,10 +659,20 @@ export function MessageBox({
       <ComposerBody
         files={
           takesFiles ? (
-            <AttachedFileChips
-              files={attachmentChips(files.attachments)}
-              onRemove={held ? undefined : files.remove}
-            />
+            <>
+              <AttachedFileChips
+                files={attachmentChips(pictures.beside)}
+                onRemove={
+                  held
+                    ? undefined
+                    : (index) => {
+                        const file = pictures.beside[index];
+                        if (file !== undefined) files.remove(files.attachments.indexOf(file));
+                      }
+                }
+              />
+              {pictures.viewer}
+            </>
           ) : undefined
         }
       >

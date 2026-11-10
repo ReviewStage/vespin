@@ -14,7 +14,10 @@ import {
   MAC_COMMANDS_LABEL,
   type MacCommandMode,
 } from "@repo/settings";
+import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import {
+  CHIP_LOOK,
+  CHIP_WIDTH,
   CHOICE_BAR_LOOK,
   CHOICE_BAR_SIZE,
   ChipName,
@@ -25,6 +28,9 @@ import {
   HoverCardNote,
   HoverCardRow,
   HoverCardRule,
+  type MenuRow,
+  POPOVER_ALIGN,
+  POPOVER_WIDTH,
   STATUS_TONE,
   StaticChip,
   StatusGlyph,
@@ -41,8 +47,11 @@ import { ActorLine, ActorRef } from "../actor-ref.js";
 import { presenceStanding, useDevicePresence } from "../device-presence.js";
 import { machineName, useThisMac } from "../machine-name.js";
 import { useMemberDirectory } from "../member-directory.js";
+import { useOpenSettings } from "../open-settings.js";
+import { Picker } from "../settings/picker-row.js";
+import { MOVE_WORDS, type PlaceMove } from "./move-agent.js";
 import { type RunOnMacRead, useRunOnMac } from "./run-on-mac.js";
-import { DeviceGlyph } from "./runs-on.js";
+import { CLOUD_ROW, DeviceGlyph, rowRequest, runsOnRows } from "./runs-on.js";
 
 /**
  * agent-place.tsx -- the chip an agent's message box wears saying where the agent runs: its device by name, or the cloud.
@@ -50,9 +59,11 @@ import { DeviceGlyph } from "./runs-on.js";
  * It is a start's Runs on chip as the agent keeps it (`runs-on.tsx`): the
  * same toolbar chip, the same glyph by the device's platform, and the same
  * name every list of machines gives it (`machine-name.ts`), This Mac among
- * them, so an agent reads alike before and after it starts. Since where an
- * agent runs is set as it starts, the chip ends in no chevron and
- * takes no press (`StaticChip`); a rest on it, or a tap under a finger,
+ * them, so an agent reads alike before and after it starts. Where a move is
+ * offered (`move-agent.tsx`'s `useMovePlace`), it is the move control,
+ * ending in its chevron and dropping the places to move the agent to
+ * (`PlaceMenuChip`); otherwise it ends in no chevron and takes no press
+ * (`StaticChip`). Either way a rest on it, or a tap under a finger,
  * hangs a card saying where the agent runs and whether the
  * device is online, and a reader hears "Runs on:" before its words. An
  * agent in a sandbox says "Cloud" beside the cloud glyph, and its card names
@@ -78,6 +89,9 @@ import { DeviceGlyph } from "./runs-on.js";
 
 /** What a reader hears before the name, which the glyph says to the eye. */
 const RUNS_ON = "Runs on: ";
+
+/** What the card adds where the chip moves the agent, since its note says the place was set as it started. */
+const MOVE_NOTE = "Pick another place to move it there: a new agent goes on from its conversation.";
 
 /** The label's words, by where the device stands. */
 function macWords(name: string, standing: DeviceStanding | undefined): string {
@@ -126,12 +140,14 @@ function CloudChip({
   agentId,
   vcpus,
   readerId,
+  move,
   narrow,
 }: {
   agentId: string;
   /** The vCPUs its sandbox opens with, which the card's head names with their memory; none from a service older than it. */
   vcpus: number | undefined;
   readerId: string | undefined;
+  move: PlaceMove | undefined;
   narrow: boolean;
 }): React.JSX.Element {
   const read = useRunOnMac(agentId, (userId) => userId === readerId);
@@ -151,6 +167,8 @@ function CloudChip({
   ].flatMap((part) => (part === undefined ? [] : [`, ${part}`]));
   return (
     <PlaceChip
+      here={CLOUD_ROW}
+      move={move}
       glyph={<GLYPH.CLOUD aria-hidden="true" />}
       words={RUNS_ON_WORDS.CLOUD}
       sub={size}
@@ -198,11 +216,14 @@ function CloudChip({
 export function AgentPlace({
   agent,
   readerId,
+  move,
   narrow = false,
 }: {
   agent: Pick<AgentSummary, "id" | "mac" | "machine" | "sandboxVcpus">;
   /** The reader's account, whose own Mac the card calls "Your Mac". */
   readerId: string | undefined;
+  /** The move the chip offers, which drops its menu of places (`move-agent.tsx`'s `useMovePlace`); none where it takes no press. */
+  move?: PlaceMove | undefined;
   /** Whether the box is too narrow for the chip's words, so it draws its glyph alone. */
   narrow?: boolean;
 }): React.JSX.Element | null {
@@ -212,16 +233,92 @@ export function AgentPlace({
         agentId={agent.id}
         vcpus={agent.sandboxVcpus}
         readerId={readerId}
+        move={move}
         narrow={narrow}
       />
     );
   }
   if (agent.mac === undefined) return null;
-  return <MacChip mac={agent.mac} narrow={narrow} />;
+  return <MacChip mac={agent.mac} move={move} narrow={narrow} />;
 }
 
-/** The chip and its card: the glyph, the words a reader hears after "Runs on:", and the card's head and note. */
+/** The id of the row that opens Settings › Hosts, which no place's id is. */
+const SET_UP_ROW = "set-up-a-host";
+
+/** What the row says that sends a member with no device to add one. */
+const SET_UP_WORDS = { LABEL: "Set up a Mac", DETAIL: "Settings › Hosts" } as const;
+
+/**
+ * The chip as the move control: a toolbar picker ending in its chevron, its
+ * menu the places a start's Runs on lists (`runs-on.tsx`'s `runsOnRows`),
+ * the agent's own checked, each other saying only pushed work comes along
+ * where the agent runs on a device, and, where the member has no device, a
+ * row opening Settings › Hosts to add one. Picking another place moves the
+ * agent there; picking its own does nothing. Its card stands as the static
+ * chip's does while the menu is shut.
+ */
+function PlaceMenuChip({
+  here,
+  glyph,
+  words,
+  card,
+  move,
+  narrow,
+}: {
+  /** The agent's own place's row: Cloud's, or its device's; none for a device the service no longer names, which lists the cloud alone. */
+  here: string | undefined;
+  glyph: ReactNode;
+  words: string;
+  card: ReactNode;
+  move: PlaceMove;
+  narrow: boolean;
+}): React.JSX.Element {
+  const listed = here === undefined && move.pushedOnly ? [] : move.devices;
+  const book = useDevicePresence(listed.length > 0);
+  const thisMac = useThisMac();
+  const openSettings = useOpenSettings();
+  const places = runsOnRows(listed, book, thisMac).map(
+    (row): MenuRow =>
+      row.id === here || !move.pushedOnly ? row : { detail: MOVE_WORDS.PUSHED_ONLY, ...row },
+  );
+  const setUp: readonly MenuRow[] =
+    move.devices.length > 0
+      ? []
+      : [
+          {
+            id: SET_UP_ROW,
+            label: SET_UP_WORDS.LABEL,
+            icon: <DeviceGlyph device={undefined} />,
+            detail: SET_UP_WORDS.DETAIL,
+          },
+        ];
+  return (
+    <Picker
+      label={RUNS_ON_WORDS.LABEL}
+      value={here}
+      valueLabel={words}
+      valueIcon={glyph}
+      iconOnly={narrow}
+      rows={[...places, ...setUp]}
+      noMatch={RUNS_ON_WORDS.NO_MATCH}
+      hint={`${RUNS_ON}${words}`}
+      card={card}
+      align={POPOVER_ALIGN.START}
+      width={CHIP_WIDTH.AUTO}
+      look={CHIP_LOOK.TOOLBAR}
+      chevron
+      menuWidth={POPOVER_WIDTH.REGULAR}
+      onPick={(id) => {
+        if (id === SET_UP_ROW) return openSettings({ page: SETTINGS_VIEW.HOSTS });
+        if (id !== here) move.moveTo(rowRequest(id));
+      }}
+    />
+  );
+}
+
+/** The chip and its card: the glyph, the words a reader hears after "Runs on:", and the card's head and note; the move control where a move is offered (`PlaceMenuChip`). */
 function PlaceChip({
+  here,
   glyph,
   words,
   sub,
@@ -229,8 +326,10 @@ function PlaceChip({
   said,
   more,
   quiet = true,
+  move,
   narrow,
 }: {
+  here: string | undefined;
   glyph: ReactNode;
   words: string;
   sub: string | undefined;
@@ -240,19 +339,30 @@ function PlaceChip({
   /** What the card lists after its note, where it lists anything. */
   more?: ReactNode;
   quiet?: boolean;
+  move: PlaceMove | undefined;
   narrow: boolean;
 }): React.JSX.Element {
+  const card = (
+    <HoverCard>
+      <HoverCardHead glyph={glyph} name={words} sub={sub} />
+      <HoverCardNote>{move === undefined ? note : `${note} ${MOVE_NOTE}`}</HoverCardNote>
+      {more}
+    </HoverCard>
+  );
+  if (move !== undefined) {
+    return (
+      <PlaceMenuChip
+        here={here}
+        glyph={glyph}
+        words={words}
+        card={card}
+        move={move}
+        narrow={narrow}
+      />
+    );
+  }
   return (
-    <Tooltip
-      label={`${RUNS_ON}${words}`}
-      card={
-        <HoverCard>
-          <HoverCardHead glyph={glyph} name={words} sub={sub} />
-          <HoverCardNote>{note}</HoverCardNote>
-          {more}
-        </HoverCard>
-      }
-    >
+    <Tooltip label={`${RUNS_ON}${words}`} card={card}>
       <StaticChip tone={quiet ? undefined : STATUS_TONE.ATTENTION} iconOnly={narrow}>
         {glyph}
         <VisuallyHidden>{RUNS_ON}</VisuallyHidden>
@@ -266,9 +376,11 @@ function PlaceChip({
 /** The chip of an agent on a device, held against the window's clock, so a Mac that goes quiet reads offline without another read. */
 function MacChip({
   mac,
+  move,
   narrow,
 }: {
   mac: NonNullable<AgentSummary["mac"]>;
+  move: PlaceMove | undefined;
   narrow: boolean;
 }): React.JSX.Element {
   const presence = useDevicePresence(true);
@@ -283,6 +395,8 @@ function MacChip({
   const name = machineName({ deviceId: mac.deviceId, name: mac.name }, [], thisMac);
   return (
     <PlaceChip
+      here={mac.deviceId}
+      move={move}
       glyph={<DeviceGlyph device={undefined} />}
       words={macWords(name, standing)}
       sub={standing === DEVICE_STANDING.ONLINE ? RUNS_ON_WORDS.ONLINE : undefined}

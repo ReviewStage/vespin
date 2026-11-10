@@ -47,12 +47,14 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
   NEEDS_BROWSER: "needs-browser",
   /** It reads or writes a secret, which no tool ever carries: a provider key or the GitHub token goes in through the CLI's stdin alone. */
   SECRET: "secret",
-  /** It hands a person trust in the account, a decision the member makes in the app alone and never through an agent. */
+  /** It hands a person trust in the account, or takes a way into it away under a fresh session, a decision the member makes in the app alone and never through an agent. */
   SECURITY: "security",
   /** It cannot be undone and stays in the app and the CLI alone, by design. */
   DESTRUCTIVE: "destructive",
   /** Pairing, devices, the admin dashboard, and the service's own bookkeeping: no member's work. */
   INTERNAL: "internal",
+  /** It refuses every caller, and stands only for an older client that still sends it. */
+  RETIRED: "retired",
   /** A member could use a tool for it, and none exists yet. */
   NOT_YET_BUILT: "not-yet-built",
 } as const;
@@ -60,8 +62,16 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
 export type MemberMcpExclusionReason =
   (typeof MEMBER_MCP_EXCLUSION_REASON)[keyof typeof MEMBER_MCP_EXCLUSION_REASON];
 
-const { SCREEN_ONLY, NEEDS_BROWSER, SECRET, SECURITY, DESTRUCTIVE, INTERNAL, NOT_YET_BUILT } =
-  MEMBER_MCP_EXCLUSION_REASON;
+const {
+  SCREEN_ONLY,
+  NEEDS_BROWSER,
+  SECRET,
+  SECURITY,
+  DESTRUCTIVE,
+  INTERNAL,
+  RETIRED,
+  NOT_YET_BUILT,
+} = MEMBER_MCP_EXCLUSION_REASON;
 
 /** Each tool's procedures: at least one, so no row stands empty. */
 export const MEMBER_MCP_COVERAGE = {
@@ -94,6 +104,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.LIST_TASK_FOLDER]: { taskFiles: ["tree"] },
   [MEMBER_MCP_TOOL.CREATE_TASK]: { plans: ["create", "editDescription"] },
   [MEMBER_MCP_TOOL.UPDATE_TASK]: { plans: ["update", "parent", "block"], taskSections: ["write"] },
+  [MEMBER_MCP_TOOL.DELETE_TASK]: { plans: ["delete"] },
   [MEMBER_MCP_TOOL.EDIT_DESCRIPTION]: { plans: ["open", "editDescription"] },
   [MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS]: { plans: ["descriptionRevisions"] },
   [MEMBER_MCP_TOOL.READ_DESCRIPTION_REVISION]: { plans: ["descriptionRevision"] },
@@ -101,7 +112,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.CREATE_SECTION]: { taskSections: ["write"] },
   [MEMBER_MCP_TOOL.DELETE_SECTION]: { taskSections: ["write"] },
   [MEMBER_MCP_TOOL.START_AGENT]: { agents: ["start", "startFrom"], plans: ["create"] },
-  [MEMBER_MCP_TOOL.MESSAGE_AGENT]: { messages: ["send"] },
+  [MEMBER_MCP_TOOL.MESSAGE_AGENT]: { messages: ["send", "queue"] },
   [MEMBER_MCP_TOOL.STOP_AGENT]: { agents: ["stop"] },
   [MEMBER_MCP_TOOL.UPDATE_AGENT]: { agents: ["change"] },
   [MEMBER_MCP_TOOL.LIST_AGENT_PORTS]: { agentPorts: ["list", "shared"] },
@@ -118,8 +129,21 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.ANSWER_ASK]: { inbox: ["message"] },
   [MEMBER_MCP_TOOL.REPLY_TO_THREAD]: { inbox: ["message"] },
   [MEMBER_MCP_TOOL.CLOSE_THREAD]: { inbox: ["close"] },
+  [MEMBER_MCP_TOOL.MARK_THREAD_READ]: { inbox: ["markItemRead", "markItemUnread"] },
+  [MEMBER_MCP_TOOL.MARK_INBOX_READ]: { inbox: ["markAllRead"] },
+  // `snoozeItem` is `remindItem` under the path an older desktop still calls.
+  [MEMBER_MCP_TOOL.REMIND_THREAD]: { inbox: ["remindItem", "snoozeItem"] },
+  [MEMBER_MCP_TOOL.START_THREAD]: { inbox: ["start"] },
   [MEMBER_MCP_TOOL.AGENT_PULL_REQUEST_ACTION]: { agentPullRequests: ["action"] },
   [MEMBER_MCP_TOOL.READ_PULL_REQUEST]: {
+    agentPullRequests: [
+      "pullRequest",
+      "overviewPullRequest",
+      "overviewChecks",
+      "overviewConversation",
+      "viewed",
+    ],
+    agents: ["changes"],
     pullRequests: [
       "pullRequest",
       "overviewPullRequest",
@@ -129,7 +153,10 @@ export const MEMBER_MCP_COVERAGE = {
       "viewed",
     ],
   },
-  [MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED]: { pullRequests: ["action"] },
+  [MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED]: {
+    agentPullRequests: ["pullRequest", "action"],
+    pullRequests: ["action"],
+  },
   [MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS]: {
     agentPullRequests: ["pullRequest"],
     pullRequestChapters: ["read", "repositoryRead"],
@@ -150,8 +177,20 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.UPDATE_AUTOMATION]: { automations: ["read", "change"] },
   [MEMBER_MCP_TOOL.RUN_AUTOMATION]: { automations: ["run"] },
   [MEMBER_MCP_TOOL.DELETE_AUTOMATION]: { automations: ["remove"] },
+  [MEMBER_MCP_TOOL.LIST_INSTALLED_SKILLS]: { installedSkills: ["list"] },
+  [MEMBER_MCP_TOOL.READ_INSTALLED_SKILL]: { installedSkills: ["read"] },
+  [MEMBER_MCP_TOOL.PREVIEW_SKILL_INSTALL]: { installedSkills: ["preview"] },
+  [MEMBER_MCP_TOOL.INSTALL_SKILL]: { installedSkills: ["install"] },
+  [MEMBER_MCP_TOOL.REMOVE_INSTALLED_SKILL]: { installedSkills: ["remove"] },
   [MEMBER_MCP_TOOL.READ_SANDBOX_SETUP]: { workspaceSandboxSetup: ["read"] },
   [MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP]: { workspaceSandboxSetup: ["putInstall", "putRepository"] },
+  [MEMBER_MCP_TOOL.LIST_INTEGRATIONS]: { integrations: ["statuses", "settle"] },
+  [MEMBER_MCP_TOOL.CONNECT_INTEGRATION]: { integrations: ["connect"] },
+  [MEMBER_MCP_TOOL.RENAME_INTEGRATION]: { integrations: ["rename"] },
+  [MEMBER_MCP_TOOL.DISCONNECT_INTEGRATION]: { integrations: ["disconnect"] },
+  [MEMBER_MCP_TOOL.LIST_MCP_CLIENTS]: { mcpClients: ["list"] },
+  [MEMBER_MCP_TOOL.LIST_SENTRY_INSTALLATIONS]: { workspaceSentry: ["installations"] },
+  [MEMBER_MCP_TOOL.DISCONNECT_SENTRY]: { workspaceSentry: ["disconnect"] },
 } as const satisfies Record<MemberMcpToolName, HostedProcedureNames>;
 
 type Coverage = typeof MEMBER_MCP_COVERAGE;
@@ -210,12 +249,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     workspaces: INTERNAL,
   },
   agentPages: { frame: SCREEN_ONLY },
-  agentPullRequests: {
-    viewed: NOT_YET_BUILT,
-    overviewPullRequest: NOT_YET_BUILT,
-    overviewChecks: NOT_YET_BUILT,
-    overviewConversation: NOT_YET_BUILT,
-  },
   agents: {
     delete: NOT_YET_BUILT,
     warm: NOT_YET_BUILT,
@@ -235,7 +268,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     connect: NEEDS_BROWSER,
     claim: NEEDS_BROWSER,
     connection: NOT_YET_BUILT,
-    disconnect: NOT_YET_BUILT,
+    // Note that Better Auth's unlink asks a fresh session, which no OAuth token is, so it stays the app's.
+    disconnect: SECURITY,
     repositories: NOT_YET_BUILT,
     tokenRepositories: NOT_YET_BUILT,
     setTokenRepository: NOT_YET_BUILT,
@@ -257,29 +291,11 @@ export const MEMBER_MCP_EXCLUSIONS = {
   inbox: {
     home: SCREEN_ONLY,
     answer: NOT_YET_BUILT,
-    start: NOT_YET_BUILT,
-    markItemRead: NOT_YET_BUILT,
-    markItemUnread: NOT_YET_BUILT,
-    remindItem: NOT_YET_BUILT,
-    snoozeItem: NOT_YET_BUILT,
-    markAllRead: NOT_YET_BUILT,
-  },
-  installedSkills: {
-    list: NOT_YET_BUILT,
-    read: NOT_YET_BUILT,
-    preview: NOT_YET_BUILT,
-    install: NOT_YET_BUILT,
-    remove: NOT_YET_BUILT,
   },
   integrations: {
-    statuses: NOT_YET_BUILT,
-    settle: NEEDS_BROWSER,
     github: NEEDS_BROWSER,
-    connect: NEEDS_BROWSER,
     tools: NOT_YET_BUILT,
     cancel: NEEDS_BROWSER,
-    disconnect: NOT_YET_BUILT,
-    rename: NOT_YET_BUILT,
   },
   live: {
     inbox: SCREEN_ONLY,
@@ -329,14 +345,11 @@ export const MEMBER_MCP_EXCLUSIONS = {
     answerRequest: INTERNAL,
   },
   macCommands: { waiting: INTERNAL, settle: INTERNAL, claim: INTERNAL, listening: INTERNAL },
-  mcpClients: { list: NOT_YET_BUILT, revoke: NOT_YET_BUILT },
-  messages: {
-    queue: NOT_YET_BUILT,
-  },
+  // Note that a revoke deletes the member's consent through Better Auth under a session of theirs, which no OAuth token carries.
+  mcpClients: { revoke: NOT_YET_BUILT },
   plans: {
     find: NOT_YET_BUILT,
     relation: NOT_YET_BUILT,
-    delete: NOT_YET_BUILT,
   },
   pullRequests: { reviewOptions: SCREEN_ONLY },
   pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },
@@ -348,18 +361,14 @@ export const MEMBER_MCP_EXCLUSIONS = {
     pageFrame: SCREEN_ONLY,
   },
   workspaceEnvironment: { list: NOT_YET_BUILT, put: NOT_YET_BUILT, delete: NOT_YET_BUILT },
-  workspaceGithub: { connect: NEEDS_BROWSER, disconnect: NOT_YET_BUILT },
+  workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: {
     list: NOT_YET_BUILT,
     invite: NOT_YET_BUILT,
     cancel: NOT_YET_BUILT,
     offer: NEEDS_BROWSER,
   },
-  workspaceSentry: {
-    install: NEEDS_BROWSER,
-    installations: NOT_YET_BUILT,
-    disconnect: NOT_YET_BUILT,
-  },
+  workspaceSentry: { install: NEEDS_BROWSER },
   workspaceSlackBot: {
     read: NOT_YET_BUILT,
     connect: NEEDS_BROWSER,

@@ -6,6 +6,7 @@ import {
   automationRunTitle,
 } from "@repo/features/automation-list-model";
 import { AUTOMATION_FIRING, type AutomationRunSummary } from "@repo/features/automation-wire";
+import { GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import { LINK_PLACE, type LinkPlace } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { momentText, sinceText } from "@repo/features/time-format";
@@ -47,7 +48,7 @@ import { useCoarsePointer } from "../coarse-pointer.js";
 import { useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { unreadShown } from "../failure-report.js";
 import { centerWithin, scrollerOf } from "../scroll-within.js";
-import { GLYPH_STATE, type GlyphState, stateEndMark } from "../state-glyph.js";
+import { stateEndMark } from "../state-glyph.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { type MenuAction, rowMenu } from "./action-menu.js";
 import { AUTOMATION_ROW_META } from "./automation-list-frame.js";

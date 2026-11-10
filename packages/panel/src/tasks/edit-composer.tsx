@@ -46,7 +46,7 @@ import type { AgentComposerControl } from "./use-agent-composer.js";
  * switch away keeps what was written, which Edit opens on again; Send lets
  * it go, and so does writing the line back as it was. The line's files
  * join the box again as it opens on a draft, but for those it took off,
- * since a relaunch keeps a draft's words alone. Where messages follow the line, Send asks first, as Revert to here
+ * since a relaunch keeps a draft's words alone. Where messages follow the line, Send asks first, as Rewind conversation to here
  * does, since the send drops them and what it drops is gone.
  */
 

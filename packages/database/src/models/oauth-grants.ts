@@ -6,7 +6,7 @@ import { oauthAccessToken, oauthClient, oauthConsent, oauthRefreshToken } from "
 import { InstantColumnSchema } from "./columns.js";
 
 /**
- * oauth-grants.ts -- the OAuth clients a member allowed, read from the OAuth provider's own tables, and one client's tokens for that member revoked.
+ * oauth-grants.ts -- the OAuth clients a member allowed, read from the OAuth provider's own tables, and one client's tokens and Allow for that member revoked.
  *
  * The provider (`@better-auth/oauth-provider`) keeps a member's Allow as a
  * consent row per client, and what it minted on it as refresh and access
@@ -18,8 +18,10 @@ import { InstantColumnSchema } from "./columns.js";
  * member's tokens for one client, its own family teardown being internal,
  * so it is written here as that teardown writes it, the access tokens
  * first and then the refresh tokens they name, for that member and that
- * client alone. Note that an access token minted as a JWT has no row, so
- * it stands until it expires. The consent is the provider's own to delete.
+ * client alone, and then the member's consents for the client, as the
+ * provider's `delete-consent` deletes one, which takes a session too.
+ * Note that an access token minted as a JWT has no row, so it stands until
+ * it expires.
  *
  * Note that a client registered to skip consent, as the seeded first-party
  * ones are, leaves no consent row: the provider mints its tokens straight
@@ -169,6 +171,16 @@ const deleteRefreshTokens = SqlSchema.void({
     ),
 });
 
+const deleteConsents = SqlSchema.void({
+  Request: ClientTokensSchema,
+  execute: (key) =>
+    Database.use((db) =>
+      db
+        .delete(oauthConsent)
+        .where(and(eq(oauthConsent.userId, key.userId), eq(oauthConsent.clientId, key.clientId))),
+    ),
+});
+
 /**
  * The clients the member allowed, by consent but for those left out, and by
  * a live token for the skip-consent clients named, newest allowed first,
@@ -191,11 +203,13 @@ export function listOAuthGrants(
 
 /**
  * Deletes every access and refresh token the client holds for the member,
- * and no one else's: its next refresh finds no token, and a call on an
- * access token kept as a row finds none. Deleting what is already gone
- * deletes nothing, so a revoke retried after it landed does the same.
+ * and then the member's Allow of it, and no one else's, in one transaction:
+ * its next refresh finds no token, a call on an access token kept as a row
+ * finds none, and its next sign-in asks the member again. Deleting what is
+ * already gone deletes nothing, so a revoke retried after it landed does
+ * the same.
  */
-export function revokeOAuthClientTokens(
+export function revokeOAuthClient(
   userId: string,
   clientId: string,
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
@@ -205,6 +219,7 @@ export function revokeOAuthClientTokens(
         // The access tokens go first, as the provider's teardown deletes them, since each may name a refresh token.
         yield* deleteAccessTokens({ userId, clientId });
         yield* deleteRefreshTokens({ userId, clientId });
+        yield* deleteConsents({ userId, clientId });
       }),
     ),
   );

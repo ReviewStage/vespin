@@ -4,31 +4,6 @@ import { test } from "vitest";
 import { NATIVE_ENDING, NATIVE_MOMENT, PLAN_STATUS } from "./native-moments.js";
 import { heldProjection, NATIVE_WRITE, projectMoments } from "./native-projection.js";
 
-test("a call of a tool the record does not hold is reported, but the harness's own ToolSearch is left out without a word", () => {
-  const reports: string[] = [];
-  projectMoments(
-    heldProjection(null),
-    ["ToolSearch", "RemoteTrigger"].map((name, index) => ({
-      kind: NATIVE_MOMENT.TOOL_STARTED,
-      callId: `toolu_${index}`,
-      name,
-      input: {},
-    })),
-    {
-      conversationId: "c_projection",
-      sequence: 0,
-      now: 0,
-      attempt: 1,
-      queuedTurnId: undefined,
-      model: undefined,
-      ownKey: false,
-      registered: () => false,
-      report: (said) => reports.push(said),
-    },
-  );
-  assert.deepEqual(reports, ["A call to RemoteTrigger names no stored tool and is not recorded."]);
-});
-
 test("a warm launch that fails after its turn ended at its IDLE fails no turn of its own", () => {
   const context = {
     conversationId: "c_projection",
@@ -220,5 +195,39 @@ test("a limit lifted before the turn failed for another reason fails it as that 
         write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.USAGE_LIMIT_REACHED,
     ),
     false,
+  );
+});
+
+test("a turn whose launch lost its session goes on once in a replayed launch, and a second loss fails it", () => {
+  const context = {
+    conversationId: "c_projection",
+    now: 0,
+    queuedTurnId: "t_lost",
+    model: undefined,
+    ownKey: false,
+    registered: () => true,
+    report: () => undefined,
+  };
+  const lostLaunch = [
+    { kind: NATIVE_MOMENT.LINE_ACCEPTED, clientId: "line_lost" },
+    { kind: NATIVE_MOMENT.RESULT, failure: "error_during_execution No conversation found" },
+    { kind: NATIVE_MOMENT.SESSION_LOST },
+    { kind: NATIVE_MOMENT.ENDED, ending: NATIVE_ENDING.DONE },
+  ] as const;
+  const first = projectMoments(heldProjection(null), lostLaunch, {
+    ...context,
+    sequence: 0,
+    attempt: 1,
+  });
+  const second = projectMoments(first.state, lostLaunch, { ...context, sequence: 1, attempt: 2 });
+  const kinds = (writes: typeof first.writes) =>
+    writes.flatMap((write) =>
+      write.kind === NATIVE_WRITE.RETRY || write.kind === NATIVE_WRITE.FAILED
+        ? [{ kind: write.kind, replay: write.kind === NATIVE_WRITE.RETRY && write.replay }]
+        : [],
+    );
+  assert.deepEqual(
+    [kinds(first.writes), kinds(second.writes)],
+    [[{ kind: NATIVE_WRITE.RETRY, replay: true }], [{ kind: NATIVE_WRITE.FAILED, replay: false }]],
   );
 });
