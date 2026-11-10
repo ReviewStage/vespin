@@ -1162,6 +1162,7 @@ const CALL_ICON = {
   [CALL_KIND.SLEEP]: TimerIcon,
   [CALL_KIND.SCHEDULE_WAKEUP]: AlarmClockCheckIcon,
   [CALL_KIND.CANCEL_WAKEUP]: AlarmClockOffIcon,
+  [CALL_KIND.END_TURN]: () => <GLYPH.DONE />,
   [CALL_KIND.LIST_TASKS]: () => <EntityGlyph kind={ENTITY_KIND.PLAN} />,
   [CALL_KIND.REMEMBER]: () => <GLYPH.MEMORY />,
   [CALL_KIND.RECALL]: () => <GLYPH.MEMORY />,

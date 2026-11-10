@@ -142,6 +142,7 @@ import {
   EDIT_DESCRIPTION_TOOL,
   requestedNotes,
 } from "../coder-host/description-edit.js";
+import { END_TURN_TOOL, runEndTurn } from "../coder-host/end-turn-tool.js";
 import { INBOX_TOOLS } from "../coder-host/inbox.js";
 import { runAgentInbox } from "../coder-host/inbox-door.js";
 import type { InboxSandboxDoor } from "../coder-host/inbox-image.js";
@@ -575,6 +576,8 @@ const CATALOG = [
   portTool(SHARE_PORT_TOOL, runSharePort),
   // A wakeup booked for later, on a harness with no wakeup of its own.
   agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup, { gate: TOOL_GATE.WAKEUP }),
+  // A turn's end: the summary its developer reads as the reply, and the follow-ups it offers.
+  agentTool(END_TURN_TOOL, runEndTurn, { gate: TOOL_GATE.TURN_END }),
 ] as const;
 
 /** The name of a tool the catalog serves. */
