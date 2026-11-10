@@ -1212,14 +1212,11 @@ export function agentOwnerOf(read: AgentOwnerRead): AgentOwner | undefined {
 /**
  * One agent as the tabs draw it: the task it works on, its title, what it
  * runs on, when it started, where it stands, which turn that is, and when
- * that run began. The task is null for an agent an automation started with
- * no task, which only a read naming that agent answers: a task's list holds
- * the task's own, so a build that predates agents with no task never meets
- * one.
+ * that run began.
  */
 export const agentSummarySchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  planId: EffectSchema.NullOr(wireUuidSchema),
+  planId: wireUuidSchema,
   /** AI Gateway's catalog id, such as `anthropic/claude-opus-5.5`. */
   model: EffectSchema.String,
   effort: EffectSchema.String,
@@ -2062,10 +2059,10 @@ const reviewTeamSchema = EffectSchema.Struct({
 
 export type PullRequestReviewTeam = typeof reviewTeamSchema.Type;
 
-/** The agent whose pull request one of a stack is: its id, and its plan's, null for an agent on none. */
+/** The agent whose pull request one of a stack is: its id, and its task's. */
 const stackAgentSchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  taskId: EffectSchema.NullOr(wireUuidSchema),
+  taskId: wireUuidSchema,
 });
 
 /**

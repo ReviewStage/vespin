@@ -2367,6 +2367,32 @@ export const runnerSessions = <
         );
 
     /**
+     * A turn's delivery whose launch its plan's usage limit refused, with
+     * the reset named, as `turnPayerOf` chooses the plan that resets soonest
+     * where no payer has room and no API key is kept: the conversation's
+     * queued turns held until then (`holdQueuedTurns`), their lines kept for
+     * the launch the sweep's release delivers them to (`resumeWaitedTurns`),
+     * as a running turn the limit cut short waits; answers whether any was
+     * held. Any other refusal holds nothing, and the turn fails as before.
+     */
+    const heldForReset = (agent: Agent, failure: { readonly _tag: string }) =>
+      Effect.gen(function* () {
+        if (
+          !(failure instanceof LaunchRefused) ||
+          failure.planRefusal !== PLAN_REFUSAL.LIMIT_REACHED ||
+          failure.planResetsAt === undefined
+        ) {
+          return false;
+        }
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        const held = yield* writer.holdQueuedTurns(
+          { userId, conversationId: agent.conversationId },
+          new Date(failure.planResetsAt),
+        );
+        return Result.isSuccess(held) && held.success.length > 0;
+      });
+
+    /**
      * A message to the session for the agent its conversation is, as `send`
      * hands it on: held behind the agent's runner lease, or queued at once
      * where the lease is another call's, as `send` says.
@@ -2650,9 +2676,10 @@ export const runnerSessions = <
 
       // A queued turn's delivery, from its queue's consumer (`turn-delivery.ts`): taken up only where
       // no other call holds the runner lease, which is at work on the runner and is tried again
-      // after; a launch that cannot succeed is written as the agent's failed turn, as a Start's is,
-      // and one that may yet, its store or its machine unreachable, fails for the queue to deliver
-      // the turn again.
+      // after; a launch its plan's limit refused, with the reset named, holds the turn until then
+      // (`heldForReset`); any other launch that cannot succeed is written as the agent's failed
+      // turn, as a Start's is, and one that may yet, its store or its machine unreachable, fails
+      // for the queue to deliver the turn again.
       deliverTurn: (sessionId, conversationId) =>
         Effect.gen(function* () {
           // Note that only an agent gone is unreached; a store that could not be read fails, for the queue to deliver the turn again.
@@ -2672,7 +2699,14 @@ export const runnerSessions = <
             Effect.catchIf(
               (failure) => !mayTakeAgain(failure),
               (failure) =>
-                Effect.as(launchFailed(agent.value, sessionId)(failure), TURN_HANDOVER.FAILED),
+                Effect.flatMap(heldForReset(agent.value, failure), (held) =>
+                  held
+                    ? Effect.succeed(TURN_HANDOVER.WAITING)
+                    : Effect.as(
+                        launchFailed(agent.value, sessionId)(failure),
+                        TURN_HANDOVER.FAILED,
+                      ),
+                ),
             ),
             Effect.annotateLogs(agentLogIds(agent.value, sessionId)),
           );

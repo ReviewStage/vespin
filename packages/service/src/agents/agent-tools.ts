@@ -435,7 +435,7 @@ export const START_AGENT_REFUSAL = {
     "Not started: no agent of your workspace has that id to start from; " +
     `${AGENT_TOOL.LIST_AGENTS} names them.`,
   SOURCE_OTHER_TASK:
-    "Not started: that agent works on another task than the taskId named, or on none; leave " +
+    "Not started: that agent works on another task than the taskId named; leave " +
     "taskId out to start where it works.",
   FROM_WITH_PROMPT:
     "Not started: an agent started from another is handed that agent's brief, transcript, and " +
@@ -895,8 +895,7 @@ function startAgentInputOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
             ),
           ),
         }),
-        "Another agent of your workspace to take over from, on its own task, or on no " +
-          "task where it has none: the new " +
+        "Another agent of your workspace to take over from, on its own task: the new " +
           `agent is handed its brief and its transcript (with ${PRODUCT_NAME}'s summary of the steps that ` +
           "do not fit) and a copy of its work, runs on its model unless you name one, and hears " +
           "the note after them; it takes no prompt and no branch. Without messageId it continues " +
@@ -1005,13 +1004,13 @@ const readStart = Schema.decodeUnknownResult(START_AGENT_CALL);
 export const LIST_AGENTS_TOOL = {
   name: AGENT_TOOL.LIST_AGENTS,
   description:
-    "List the agents of your workspace, on any task or none and started by any member, " +
+    "List the agents of your workspace, on any task and started by any member, " +
     "yourself left out: each with its id, its title (how the developer sees it named), the model " +
     "and effort it runs on with the model's name to say it by, its status (starting, running, " +
     "completed, failed, canceled) and why where it failed, its repository and the branch its " +
     "sandbox is on if a turn " +
     "has ended, one line of what it last did, its task (id and name; null for " +
-    "an agent on no task) and whether that is the task you work on, and whether the agent is " +
+    "one you cannot open) and whether that is the task you work on, and whether the agent is " +
     "archived. The agents " +
     "that matter to you come first: the agent that started you and the agents you started, " +
     "then those on your task; then the rest of the workspace, the newest started first, at most " +
@@ -1067,12 +1066,6 @@ const START_HANDED_WORDS = {
     "images.",
 } as const;
 
-/** Why a start on no task needs a prompt, said only where a task would otherwise hand its description. */
-const NEW_TASK_PROMPT_WORDS = {
-  on: "; it needs a prompt, since that task has no description to hand it",
-  off: "",
-} as const;
-
 /** `start_agent` in the words of the workspace's experiments: its name, its words, and its input schema. */
 export function startAgentToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
   return {
@@ -1091,10 +1084,7 @@ function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
     "out, for any part of that task's work, even one that runs apart from yours, so its " +
     "branch, pull request, and transcript stand under that task; name another task only for " +
     "work unrelated to it, or where the developer asked for that, and for work that should " +
-    `stand as a task of its own, make it with ${AGENT_TOOL.CREATE_TASK} first. Where you work ` +
-    "on no task, taskId left out starts it on a new task made for it, named as its agent is, " +
-    "assigned to the member you work for, in the repository you work in or the one repository " +
-    `names${NEW_TASK_PROMPT_WORDS[words]}. ` +
+    `stand as a task of its own, make it with ${AGENT_TOOL.CREATE_TASK} first. ` +
     "This one call carries everything the agent is told as " +
     "it starts, and the agent sets to work on it at once, so never follow it with a message to " +
     "the agent it started; message it only when there is something new to say. Its checkout is " +
@@ -1202,8 +1192,7 @@ export const READ_PAGE_TOOL = {
   description:
     "Read a page an agent showed in your workspace, by its id: its title, the version read " +
     "(the newest unless you name one) and the newest there is, its task and whether that is " +
-    "the task you work on, or, for a page an agent on no task showed on itself, that agent " +
-    "and whether it is you, and its HTML as it " +
+    "the task you work on, and its HTML as it " +
     "stands, cut on a line at " +
     `${READ_PAGE_CHARS} characters with how many were left out. Read a page the developer ` +
     "pointed you at, or one another agent showed, before you build on it or revise it; to " +
@@ -1332,8 +1321,7 @@ const UPDATE_AGENT_INPUT = Schema.Struct({
   pinned: Schema.optionalKey(
     describeWire(
       Schema.Boolean,
-      "Whether the developer you work for keeps it pinned in their sidebar, the pin theirs alone; " +
-        "an agent on a task or on none alike.",
+      "Whether the developer you work for keeps it pinned in their sidebar, the pin theirs alone.",
     ),
   ),
   disabledServers: Schema.optionalKey(

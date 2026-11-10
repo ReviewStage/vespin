@@ -1,5 +1,5 @@
 import type { PlanUsage, SubscriptionKeySummary } from "@repo/features/provider-key-wire";
-import { agoText, distanceText, weekdayAndTimeText } from "@repo/features/time-format";
+import { agoText } from "@repo/features/time-format";
 import { PROGRESS_TONE, type UsageMeterRow } from "@repo/ui";
 
 /**
@@ -8,10 +8,9 @@ import { PROGRESS_TONE, type UsageMeterRow } from "@repo/ui";
  * A window is named from its length, never its place in the provider's
  * answer, since Codex's primary window is usually but not always the
  * 5-hour one: "5-hour", "Weekly", "Daily", "30-day"; and a window on one
- * model alone names the model after it, "Weekly (Opus)", as Claude Code's `/usage` does. A window
- * shorter than a day says its reset as a countdown, "in 2h", and one a day
- * or longer as its weekday and time, "Thu 9:00 AM", as Claude's own usage
- * page says them, since "in 3d" leaves the hour to guess. The rows keep the
+ * model alone names the model after it, "Weekly (Opus)", as Claude Code's `/usage` does. Each
+ * row carries when its window resets, which the meters say as every time is
+ * said (`TIME_LOOK.UNTIL`). The rows keep the
  * order the service answers, the shortest window first. A reading older than
  * `STALE_MS` says when it was heard, as Codex's `/status` warns that its
  * limits may be stale, because a plan's usage is heard only from the turns
@@ -44,19 +43,20 @@ function windowLabel(window: PlanUsage): string {
   return window.model === undefined ? length : `${length} (${window.model})`;
 }
 
-/** When a window resets: a countdown inside a day, "in 2h", and its weekday and time past one, "Thu 9:00 AM". */
-function resetWords(window: PlanUsage, resetsAt: number, now: number): string {
-  return window.windowMins !== undefined && window.windowMins >= MINUTES.DAY
-    ? weekdayAndTimeText(resetsAt)
-    : distanceText(resetsAt - now);
+/** When a window resets, where a clock can name it: a reset past the dates `Date` holds, as an undocumented answer could send, is none. */
+function resetOf(window: PlanUsage): number | undefined {
+  const { resetsAt } = window;
+  return resetsAt === undefined || Number.isNaN(new Date(resetsAt).getTime())
+    ? undefined
+    : resetsAt;
 }
 
 /** One window as its meter row draws it. */
-function windowRow(window: PlanUsage, now: number): UsageMeterRow {
+function windowRow(window: PlanUsage): UsageMeterRow {
   return {
     label: windowLabel(window),
     usedPercent: window.usedPercent,
-    resets: window.resetsAt === undefined ? undefined : resetWords(window, window.resetsAt, now),
+    resetsAt: resetOf(window),
     tone: window.usedPercent >= FULL_PERCENT ? PROGRESS_TONE.ATTENTION : PROGRESS_TONE.WORKING,
   };
 }
@@ -74,7 +74,7 @@ export function planUsageMeters(
 ): PlanUsageMeters | undefined {
   const windows = plan.usageWindows ?? (plan.usage === undefined ? [] : [plan.usage]);
   if (windows.length === 0) return undefined;
-  const rows = windows.map((window) => windowRow(window, now));
+  const rows = windows.map(windowRow);
   const heardAt = plan.usageHeardAt;
   return heardAt !== undefined && now - heardAt > STALE_MS
     ? { rows, heard: `Updated ${agoText(heardAt, now)}` }

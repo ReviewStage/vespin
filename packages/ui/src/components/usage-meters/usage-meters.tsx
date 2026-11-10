@@ -1,3 +1,4 @@
+import { untilText } from "@repo/features/time-format";
 import { cn } from "../../cn.js";
 import {
   PROGRESS_SIZE,
@@ -6,6 +7,8 @@ import {
   Progress,
   type ProgressTone,
 } from "../progress/progress.js";
+import { TIME_LOOK, Time } from "../time/time.js";
+import { useMinute } from "../time/time-clock.js";
 
 /**
  * usage-meters.tsx -- how much of each usage window a plan has used, one row a window: its name, a bar, the share used, and when it resets.
@@ -13,7 +16,9 @@ import {
  * A plan is counted in more than one window at once, a 5-hour session and
  * a week, as Claude Code's `/usage` and Codex's `/status` list them, so each
  * is a row of its own: "5-hour", a bar filled to the share used, "22%", and
- * when the window resets in the muted ink ("in 2h", "in 4d"). The rows line
+ * when the window resets in the muted ink ("in 2h", "Thu 9:00 AM"), a
+ * `Time` that counts down on the window's minute and hangs the moment in
+ * full on hover, as every other time does. The rows line
  * their bars up in one column whatever their names' widths, as Capy's model
  * picker does, each bar thin as a row's meter is, a meter's length beside a row's words, or running
  * the whole width it is given where the meters stand alone at a menu's foot
@@ -37,8 +42,8 @@ export interface UsageMeterRow {
   readonly label: string;
   /** The share of the window used, in percent. */
   readonly usedPercent: number;
-  /** When the window resets, as the row says it: "in 2h", "in 4d"; none where the provider did not say. */
-  readonly resets?: string | undefined;
+  /** When the window resets, in epoch milliseconds; none where the provider did not say. */
+  readonly resetsAt?: number | undefined;
   /** The ink its bar fills in: the attention ink at its limit. */
   readonly tone?: ProgressTone | undefined;
 }
@@ -68,19 +73,21 @@ function percentWords(usedPercent: number): string {
   return `${String(Math.round(usedPercent))}%`;
 }
 
-/** One cell's words, as wide as the widest of `sizes`, which it holds hidden in the same place. */
+/** One cell's words, drawn by `children` where given, as wide as the widest of `sizes`, which it holds hidden in the same place. */
 function Cell({
   words,
   sizes,
   className,
+  children,
 }: {
   words: string;
   sizes: readonly string[];
   className: string;
+  children?: React.ReactNode;
 }): React.JSX.Element {
   return (
     <span className={cn("grid", className)}>
-      <span className="col-start-1 row-start-1">{words}</span>
+      {children ?? <span className="col-start-1 row-start-1">{words}</span>}
       {sizes
         .filter((size) => size !== words)
         .map((size) => (
@@ -92,13 +99,15 @@ function Cell({
   );
 }
 
-/** Each column's words among the rows, each once. */
-function columnWords(rows: readonly UsageMeterRow[]) {
+/** Each column's words among the rows, each once, the resets counted from `now`. */
+function columnWords(rows: readonly UsageMeterRow[], now: number) {
   const unique = (words: readonly string[]) => [...new Set(words)];
   return {
     labels: unique(rows.map((row) => row.label)),
     percents: unique(rows.map((row) => percentWords(row.usedPercent))),
-    resets: unique(rows.flatMap((row) => (row.resets === undefined ? [] : [row.resets]))),
+    resets: unique(
+      rows.flatMap((row) => (row.resetsAt === undefined ? [] : [untilText(row.resetsAt, now)])),
+    ),
   };
 }
 
@@ -117,7 +126,9 @@ export function UsageMeters({
   alignWith?: readonly UsageMeterRow[] | undefined;
 }): React.JSX.Element {
   const { grid, bar } = WIDTHS[width];
-  const sizes = columnWords(alignWith);
+  // Note that the resets and their hidden sizes count from the one minute, so a column never holds words its rows have moved past.
+  const now = useMinute();
+  const sizes = columnWords(alignWith, now);
   return (
     <div className="ui-usage-meters flex flex-col gap-ui-4 text-caption">
       <div className={cn("grid items-center gap-x-ui-8 gap-y-ui-4", grid)}>
@@ -136,10 +147,20 @@ export function UsageMeters({
               className="justify-items-end tabular-nums"
             />
             <Cell
-              words={row.resets ?? ""}
+              words={row.resetsAt === undefined ? "" : untilText(row.resetsAt, now)}
               sizes={sizes.resets}
-              className="text-muted-foreground tabular-nums"
-            />
+              className="text-muted-foreground"
+            >
+              {row.resetsAt === undefined ? null : (
+                <Time
+                  at={row.resetsAt}
+                  now={now}
+                  look={TIME_LOOK.UNTIL}
+                  hint
+                  className="col-start-1 row-start-1"
+                />
+              )}
+            </Cell>
           </div>
         ))}
       </div>

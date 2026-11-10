@@ -113,12 +113,17 @@ test("a known ask that fails its own shape is refused, and an ask without where 
     ask: { ...DEPLOY, options: [{ label: "Ship it" }], status: "open" },
   };
   assert.equal(read(inboxMessageSchema, oneOption), undefined);
-  const nineSteps = {
+  const tooManySteps = {
     ...ASKING,
-    ask: { ...SECRET, steps: Array(9).fill("Step."), status: "open" },
+    ask: { ...SECRET, steps: Array(51).fill("Step."), status: "open" },
   };
-  assert.equal(read(inboxMessageSchema, nineSteps), undefined);
+  assert.equal(read(inboxMessageSchema, tooManySteps), undefined);
   assert.equal(read(inboxMessageSchema, { ...ASKING, ask: DEPLOY }), undefined);
+});
+
+test("a do ask of more steps than an agent may post reads, so a build reads what a later service lets an agent post", () => {
+  const nineSteps = { ...SECRET, steps: Array(9).fill("Step."), status: "open" };
+  assert.deepEqual(read(inboxMessageSchema, { ...ASKING, ask: nineSteps })?.ask, nineSteps);
 });
 
 test("an ask of a type this build does not know reads as its type and where it stands alone", () => {

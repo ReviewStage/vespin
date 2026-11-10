@@ -69,8 +69,9 @@ const SAME_ORIGIN_ANSWER = {
 /**
  * The most any request's body may carry, in bytes: Vercel's own limit on a
  * function's request body (4.5 MB), which no hosted request passes anyway,
- * and above the largest cap any hosted endpoint holds (a task's Start, about
- * 4.2 MB, which carries an agent's Start with its files).
+ * and above the largest cap any hosted endpoint holds (a member's message on
+ * an inbox thread, about 4.42 MB, which carries a form's values with its
+ * files).
  */
 export const HOSTED_BODY_CEILING_BYTES = 4_500_000;
 

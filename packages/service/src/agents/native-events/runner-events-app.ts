@@ -555,7 +555,19 @@ function landWrite(
             (handed) =>
               Option.isSome(handed) ? recordNativeHanded(target, handed.value) : Effect.void,
           ),
-          writer.takeAwaitingLine(target, { clientId: write.clientId, turnId: write.turnId }),
+          writer.takeAwaitingLine(target, {
+            clientId: write.clientId,
+            turnId: write.turnId,
+            ...(write.snapshot === undefined
+              ? undefined
+              : {
+                  snapshot: {
+                    commit: write.snapshot.commit,
+                    head: write.snapshot.head ?? null,
+                    branch: write.snapshot.branch ?? null,
+                  },
+                }),
+          }),
         ),
         (result) => reportRefused("a line's taking", result),
       );

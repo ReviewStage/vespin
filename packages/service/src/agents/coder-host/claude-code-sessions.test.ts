@@ -863,6 +863,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.deepEqual(config, {
           harness: RUNNER_HARNESS.CLAUDE_CODE,
           cwd: "/workspace/repository",
+          agentId: agent.id,
           executable:
             "/opt/agent/claude-agent-sdk/node_modules/@anthropic-ai/claude-agent-sdk-linux-x64/claude",
           model: "claude-opus-5-5",

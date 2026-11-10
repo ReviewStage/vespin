@@ -127,8 +127,7 @@ const PAGE_LAYOUT_WORDS =
 export const CODER_SHOW_PAGE_TOOL = {
   name: AGENT_TOOL.SHOW_PAGE,
   description:
-    "Show the developer an interactive HTML page in your transcript, your task's or, on no task, " +
-    "your own: a chart, a table to " +
+    "Show the developer an interactive HTML page in your transcript, your task's: a chart, a table to " +
     "sort, a mockup of a screen, or a comparison they can click through, when it says more than " +
     "a diagram or words would. Write the page as one self-contained HTML file in your sandbox, " +
     "its scripts and styles inline and libraries only from https://cdnjs.cloudflare.com, then " +
