@@ -360,8 +360,8 @@ function createTaskWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
     "would: owned by them, on the repository named or the one you work in, " +
     `${CREATE_TASK_STARTS_WITH[on.descriptionsOn ? "on" : "off"]}, and no agent on it. ` +
     "Make one for a separate piece of work that should stand as a task of its own, " +
-    "where the developer asked for it or you " +
-    `work on no task; then start an agent on it with ${AGENT_TOOL.START_AGENT}'s taskId. ` +
+    "where the developer asked for it; " +
+    `then start an agent on it with ${AGENT_TOOL.START_AGENT}'s taskId. ` +
     "Give it a status, a priority, and an assignee where the developer said them. Give it a " +
     "parentTaskId to make it a child task of another, to any depth: a child always works in " +
     "its parent's repository, so leave repository out for one. Give it subTaskIds to make it " +
