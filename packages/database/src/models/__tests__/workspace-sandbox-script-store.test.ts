@@ -99,16 +99,15 @@ it.layer(getTestDB())("the workspace sandbox script store", (it) => {
   );
 
   it.effect(
-    "a save replaces a repository's run actions in its order, an action keeps the id it is given, and an empty list removes them",
+    "a save replaces a repository's run actions in its order, an action keeps only its own repository's id and only once, and an empty list removes them",
     () =>
       Effect.gen(function* () {
         const workspace = yield* openOwnedWorkspace;
-        const dev = randomUUID();
         yield* setRunActions(
           workspace,
           "acme/relay",
           [
-            { id: dev, label: "Dev server", command: "pnpm dev" },
+            { id: randomUUID(), label: "Dev server", command: "pnpm dev" },
             { label: "Tests", command: "pnpm test" },
           ],
           AT,
@@ -119,12 +118,16 @@ it.layer(getTestDB())("the workspace sandbox script store", (it) => {
           [{ label: "Serve", command: "uv run serve" }],
           AT,
         );
+        const dev = (yield* readRunActions(workspace, "acme/relay"))[0]?.id ?? "";
+        const api = (yield* readRunActions(workspace, "acme/api"))[0]?.id ?? "";
         yield* setRunActions(
           workspace,
           "Acme/Relay",
           [
             { label: "Storybook", command: "pnpm storybook" },
             { id: dev, label: "Dev", command: "pnpm dev --port 3000" },
+            { id: dev, label: "Dev again", command: "pnpm dev" },
+            { id: api, label: "Serve", command: "uv run serve" },
           ],
           LATER,
         );
@@ -135,6 +138,8 @@ it.layer(getTestDB())("the workspace sandbox script store", (it) => {
             ["acme/api", "Serve"],
             ["Acme/Relay", "Storybook"],
             ["Acme/Relay", "Dev"],
+            ["Acme/Relay", "Dev again"],
+            ["Acme/Relay", "Serve"],
           ],
         );
         const relay = yield* readRunActions(workspace, "ACME/relay");
@@ -143,9 +148,14 @@ it.layer(getTestDB())("the workspace sandbox script store", (it) => {
           [
             ["Storybook", "pnpm storybook", LATER.getTime()],
             ["Dev", "pnpm dev --port 3000", LATER.getTime()],
+            ["Dev again", "pnpm dev", LATER.getTime()],
+            ["Serve", "uv run serve", LATER.getTime()],
           ],
         );
-        assert.equal(relay[1]?.id, dev);
+        const ids = relay.map((row) => row.id);
+        assert.equal(ids[1], dev);
+        assert.equal(new Set(ids).size, 4);
+        assert.equal(ids.includes(api), false);
 
         yield* setRunActions(workspace, "acme/relay", [], LATER);
         assert.deepEqual(yield* readRunActions(workspace, "acme/relay"), []);

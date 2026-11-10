@@ -685,18 +685,21 @@ let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
   ],
 };
 
-/** How many run actions the fixture has named, so each new one takes an id of its own. */
-let runActionsNamed = 0;
-
-/** The setup a run actions save leaves, an empty list removing the repository's, an action named afresh where it names no id. */
+/** The setup a run actions save leaves, an empty list removing the repository's, an action keeping its id only where it is already the repository's and only once, as the service keeps them. */
 function runActionsAnswer(repository: string, actions: readonly RunActionPut[]) {
   const others = acmeSandboxSetup.runActions.filter(
     (each) => each.repository.toLowerCase() !== repository.toLowerCase(),
   );
-  const named = actions.map(({ id, label, command }) => {
-    runActionsNamed += 1;
-    return { id: id ?? `fixture-run-action-${runActionsNamed}`, label, command };
-  });
+  const keepable = new Set(
+    acmeSandboxSetup.runActions
+      .filter((each) => each.repository.toLowerCase() === repository.toLowerCase())
+      .flatMap((each) => each.actions.map((action) => action.id)),
+  );
+  const named = actions.map(({ id, label, command }) => ({
+    id: id !== undefined && keepable.delete(id) ? id : crypto.randomUUID(),
+    label,
+    command,
+  }));
   const lists =
     named.length === 0 ? others : [...others, { repository, actions: named, updatedAt: NOW }];
   acmeSandboxSetup = {

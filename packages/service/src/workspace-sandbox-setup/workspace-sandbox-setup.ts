@@ -15,7 +15,6 @@ import {
   listRepositorySetups,
   listRunActions,
   readInstallScript,
-  readRunActions,
   removeInstallScript,
   removeRepositorySetup,
   setInstallScript,
@@ -138,11 +137,9 @@ export const saveRepositorySetup = Effect.fn("web/saveRepositorySetup")(function
 /**
  * A repository's run actions in a workspace the account manages saved, the
  * whole list in its order, replacing the one under any casing of its name,
- * or removed where the list is empty; the setup as it then stands. Note that
- * an action keeps the id it names only where that id is one of the
- * repository's actions already, so a run going on is still known as its
- * action, and that any other id is named afresh rather than taken, so no save
- * can reach another repository's or workspace's action.
+ * or removed where the list is empty; the setup as it then stands. An action
+ * keeps the id it names only where it is already the repository's
+ * (`setRunActions`).
  */
 export const saveRunActions = Effect.fn("web/saveRunActions")(function* (
   userId: string,
@@ -152,19 +149,6 @@ export const saveRunActions = Effect.fn("web/saveRunActions")(function* (
 ): Effect.fn.Return<WorkspaceSandboxSetupAnswer, HostedRefusal, DatabaseServices> {
   const workspace = yield* managedWorkspace(userId, workspaceId);
   const now = yield* DateTime.nowAsDate;
-  yield* hostedStoreOrUnavailable(
-    Effect.gen(function* () {
-      const standing = new Set(
-        (yield* readRunActions(workspace.id, repository)).map((row) => row.id),
-      );
-      const kept = new Set<string>();
-      const written = actions.map(({ id, label, command }) => {
-        const keeps = id !== undefined && standing.has(id) && !kept.has(id);
-        if (keeps) kept.add(id);
-        return keeps ? { id, label, command } : { label, command };
-      });
-      yield* setRunActions(workspace.id, repository, written, now);
-    }),
-  );
+  yield* hostedStoreOrUnavailable(setRunActions(workspace.id, repository, actions, now));
   return yield* setupAnswer(workspace.id);
 });

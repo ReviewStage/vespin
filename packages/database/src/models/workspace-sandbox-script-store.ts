@@ -343,11 +343,13 @@ export function readRunActions(
 /**
  * The repository's run actions set, the whole list in its order, replacing
  * the one that stood under any casing of its name; an empty list removes it.
- * An action keeps the id it is given, and one given none is named afresh.
- * Note that the old list is deleted and the new one written in one
- * transaction, so a reader sees one list or the other, never a mix; two
- * saves racing on one repository end on one list, the loser refused by the
- * position index.
+ * An action keeps the id it is given only where that id is one of the
+ * repository's actions already, and only at its first place in the list, so
+ * a run going on is still known as its action; any other is named afresh, so
+ * no save reaches another repository's or workspace's action. Note that the
+ * old list is read, deleted, and the new one written in one transaction, so
+ * a reader sees one list or the other, never a mix; two saves racing on one
+ * repository end on one list, the loser refused by the position index.
  */
 export function setRunActions(
   organizationId: string,
@@ -358,8 +360,11 @@ export function setRunActions(
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
+        const standing = yield* findRepositoryRunActions({ organizationId, repository });
+        const keepable = new Set(standing.map((row) => row.id));
         yield* deleteRunActions({ organizationId, repository });
         for (const [position, action] of actions.entries()) {
+          const keeps = action.id !== undefined && keepable.delete(action.id);
           yield* insertRunAction({
             organizationId,
             repository,
@@ -367,7 +372,7 @@ export function setRunActions(
             label: action.label,
             command: action.command,
             now,
-            ...(action.id === undefined ? {} : { id: action.id }),
+            ...(keeps && action.id !== undefined ? { id: action.id } : {}),
           });
         }
       }),
