@@ -1,21 +1,38 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { AGENT_USER } from "@repo/agent-runner/pins";
-import { getTestDB } from "@repo/database/testing";
+import { Database } from "@repo/database/core/query";
+import { AGENT_SANDBOX_STATE, agentSandboxTable } from "@repo/database/schemas/agent-sandbox";
+import { user } from "@repo/database/schemas/auth";
+import { getTestDB, openAgentOnOwnTask, openWorkspace } from "@repo/database/testing";
 import { SANDBOX_CALL, SANDBOX_STATUS, SandboxUnavailable } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { Duration, Effect, Fiber } from "effect";
+import { eq } from "drizzle-orm";
+import { Clock, Duration, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
 import { ARCHIVE_SCRIPT } from "./archive-script.js";
-import { SessionSandboxes, sessionSandboxesLayer } from "./session-sandboxes.js";
+import { SANDBOX_RELEASE } from "./sandbox-release-bounds.js";
+import { recordedSandboxOpen, touchAgentSandbox } from "./sandbox-use.js";
+import {
+  consumeSandboxRelease,
+  releaseUnusedSandboxes,
+  SANDBOX_RELEASE_OUTCOME,
+  SandboxReleases,
+  SessionSandboxes,
+  sessionSandboxesLayer,
+} from "./session-sandboxes.js";
 
 /**
  * A session's sandboxes deleted through `Sandbox` as an archive deletes
  * them: every sandbox carrying the session's tag goes, with the drive it
  * owns where it owns one, one from before drives as well, and a delete the
  * sandbox refused fails as it answered. An archive script runs in the
- * session's sandbox before that, as the agent's user, and is ended past its
- * bound.
+ * session's sandbox, as the agent's user, and is ended past its bound. An
+ * agent's sandbox unused for `SANDBOX_RELEASE.UNUSED_FOR` is released by the
+ * sweep, deleted and recorded released, one touched after the sweep found
+ * it due is left standing, and none is touched while deleting is off.
+ * Synthetic accounts, agents, and sandbox names throughout.
  */
 
 const SESSION = "wrun_fixture";
@@ -131,3 +148,93 @@ it.effect("an archive script that runs past its bound is ended", () =>
     );
   }),
 );
+
+/** An agent's sandbox standing in the memory and opened in the ledger now, with the memory it stands in. */
+const openedSandbox = Effect.gen(function* () {
+  const userId = `user-${randomUUID()}`;
+  yield* Effect.flatMap(Database, (db) =>
+    db.insert(user).values({ id: userId, name: "Test User", email: `${userId}@app.test` }),
+  );
+  const agentId = yield* openAgentOnOwnTask(userId, yield* openWorkspace(userId));
+  const name = `agent-sandbox-${randomUUID()}`;
+  const sandbox = memorySandbox();
+  sandbox.stand({ name, tags: { sessionId: SESSION }, status: SANDBOX_STATUS.STOPPED });
+  yield* recordedSandboxOpen(agentId, name);
+  return { name, sandbox };
+});
+
+const stateOf = (name: string) =>
+  Effect.map(
+    Effect.flatMap(Database, (db) =>
+      db
+        .select({ state: agentSandboxTable.state })
+        .from(agentSandboxTable)
+        .where(eq(agentSandboxTable.sandboxName, name)),
+    ),
+    (rows) => rows.map((row) => row.state),
+  );
+
+/** The sweep run at the clock's now, deleting on or off as `deleting` says, answering the releases it published. */
+const swept = (deleting: boolean) =>
+  Effect.gen(function* () {
+    const published: string[] = [];
+    const now = yield* Clock.currentTimeMillis;
+    yield* releaseUnusedSandboxes(now).pipe(
+      Effect.provideService(SandboxReleases, {
+        deleting,
+        publish: (name) => Effect.sync(() => void published.push(name)),
+      }),
+    );
+    return published;
+  });
+
+/** One release consumed with deleting on. */
+const consumed = (name: string) =>
+  consumeSandboxRelease(name).pipe(
+    Effect.provideService(SandboxReleases, { deleting: true, publish: () => Effect.void }),
+  );
+
+it.layer(getTestDB())("an unused sandbox's release", (it) => {
+  it.effect("a sandbox unused for its keep is deleted by its release and recorded released", () =>
+    Effect.gen(function* () {
+      const { name, sandbox } = yield* openedSandbox;
+      yield* TestClock.adjust(SANDBOX_RELEASE.UNUSED_FOR);
+
+      const published = yield* swept(true).pipe(Effect.provide(sandbox.layer));
+      const outcome = yield* consumed(name).pipe(Effect.provide(sandbox.layer));
+
+      assert.ok(published.includes(name));
+      assert.equal(outcome, SANDBOX_RELEASE_OUTCOME.RELEASED);
+      assert.deepEqual(sandbox.state.deleted, [name]);
+      assert.deepEqual(yield* stateOf(name), [AGENT_SANDBOX_STATE.RELEASED]);
+    }),
+  );
+
+  it.effect("a sandbox touched after the sweep found it due is left standing and live", () =>
+    Effect.gen(function* () {
+      const { name, sandbox } = yield* openedSandbox;
+      yield* TestClock.adjust(SANDBOX_RELEASE.UNUSED_FOR);
+
+      const published = yield* swept(true).pipe(Effect.provide(sandbox.layer));
+      yield* touchAgentSandbox(name).pipe(Effect.provide(sandbox.layer));
+      const outcome = yield* consumed(name).pipe(Effect.provide(sandbox.layer));
+
+      assert.ok(published.includes(name));
+      assert.equal(outcome, SANDBOX_RELEASE_OUTCOME.USED_SINCE);
+      assert.deepEqual(sandbox.state.deleted, []);
+      assert.deepEqual(yield* stateOf(name), [AGENT_SANDBOX_STATE.LIVE]);
+    }),
+  );
+
+  it.effect("with deleting off the sweep publishes nothing and marks nothing", () =>
+    Effect.gen(function* () {
+      const { name, sandbox } = yield* openedSandbox;
+      yield* TestClock.adjust(SANDBOX_RELEASE.UNUSED_FOR);
+
+      const published = yield* swept(false).pipe(Effect.provide(sandbox.layer));
+
+      assert.deepEqual(published, []);
+      assert.deepEqual(yield* stateOf(name), [AGENT_SANDBOX_STATE.LIVE]);
+    }),
+  );
+});

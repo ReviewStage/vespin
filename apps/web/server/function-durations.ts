@@ -3,6 +3,7 @@ import { LIVE_SOCKET } from "@repo/features/live-wire";
 import { SANDBOX_TUNNEL } from "@repo/features/sandbox-tunnel-wire";
 import { TERMINAL_RELAY } from "@repo/features/terminal-wire";
 import { TURN_DELIVERY } from "@repo/service/agents/coder-host/turn-delivery-bounds";
+import { SANDBOX_RELEASE } from "@repo/service/agents/sandbox-release-bounds";
 import { WORKSPACE_MCP_FUNCTION, WORKSPACE_MCP_PATH } from "@repo/service/agents/workspace-mcp/app";
 import { AUTOMATION_RUNS } from "@repo/service/automations/automation-run-bounds";
 import {
@@ -139,7 +140,7 @@ const STANDALONE_ROUTES: readonly string[] = [
  * The queue consumers, each a function of its own, since a function the
  * queue invokes is reached by nothing else: the automation-runs consumer and
  * the agent-turns consumer, each under the Fluid default a Start's function
- * runs under.
+ * runs under, and the sandbox-releases consumer, under its own short bound.
  */
 const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
   {
@@ -155,6 +156,13 @@ const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
     routes: [routeKeyOf(TURN_DELIVERY.PATH)],
     dispatches: false,
     queueTopic: TURN_DELIVERY.TOPIC,
+  },
+  {
+    file: routeKeyOf(SANDBOX_RELEASE.PATH),
+    maxDuration: SANDBOX_RELEASE.MAX_DURATION_SECONDS,
+    routes: [routeKeyOf(SANDBOX_RELEASE.PATH)],
+    dispatches: false,
+    queueTopic: SANDBOX_RELEASE.TOPIC,
   },
 ];
 

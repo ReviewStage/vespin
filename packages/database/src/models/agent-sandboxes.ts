@@ -10,11 +10,16 @@
  * recorded writes nothing (`../schemas/agent-sandbox.ts`).
  */
 
-import { and, eq, lt, ne, sql } from "drizzle-orm";
-import { type Effect, Schema } from "effect";
+import { and, asc, eq, lt, lte, ne, or, sql } from "drizzle-orm";
+import { Effect, type Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
-import { AGENT_SANDBOX_STATE, agentSandboxTable } from "../schemas/agent-sandbox.js";
+import { agentTable } from "../schemas/agent.js";
+import {
+  AGENT_SANDBOX_STATE,
+  type AgentSandboxState,
+  agentSandboxTable,
+} from "../schemas/agent-sandbox.js";
 
 type SandboxUseEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
@@ -65,6 +70,97 @@ const updateUse = SqlSchema.void({
     ),
 });
 
+const StateSchema = Schema.Literals([
+  AGENT_SANDBOX_STATE.LIVE,
+  AGENT_SANDBOX_STATE.RELEASING,
+  AGENT_SANDBOX_STATE.RELEASED,
+]);
+
+/** A sandbox a release names: its name, its agent's conversation, when it was last used, and its state. */
+const ReleaseRowSchema = Schema.Struct({
+  sandboxName: Schema.String,
+  conversationId: Schema.String,
+  usedAt: Schema.Date,
+  state: StateSchema,
+});
+
+export type AgentSandboxRelease = typeof ReleaseRowSchema.Type;
+
+const findReleasable = SqlSchema.findAll({
+  Request: Schema.Struct({ usedBy: Schema.Date, limit: Schema.Int }),
+  Result: Schema.Struct({ sandboxName: Schema.String, state: StateSchema }),
+  execute: ({ usedBy, limit }) =>
+    Database.use((db) =>
+      db
+        .select({ sandboxName: agentSandboxTable.sandboxName, state: agentSandboxTable.state })
+        .from(agentSandboxTable)
+        .where(
+          or(
+            and(
+              eq(agentSandboxTable.state, AGENT_SANDBOX_STATE.LIVE),
+              lte(agentSandboxTable.usedAt, usedBy),
+            ),
+            eq(agentSandboxTable.state, AGENT_SANDBOX_STATE.RELEASING),
+          ),
+        )
+        .orderBy(asc(agentSandboxTable.usedAt))
+        .limit(limit),
+    ),
+});
+
+const markReleasing = SqlSchema.findAll({
+  Request: Schema.Struct({ sandboxName: Schema.String, usedBy: Schema.Date }),
+  Result: Schema.Struct({ sandboxName: Schema.String }),
+  execute: ({ sandboxName, usedBy }) =>
+    Database.use((db) =>
+      db
+        .update(agentSandboxTable)
+        .set({ state: AGENT_SANDBOX_STATE.RELEASING })
+        .where(
+          and(
+            eq(agentSandboxTable.sandboxName, sandboxName),
+            eq(agentSandboxTable.state, AGENT_SANDBOX_STATE.LIVE),
+            lte(agentSandboxTable.usedAt, usedBy),
+          ),
+        )
+        .returning({ sandboxName: agentSandboxTable.sandboxName }),
+    ),
+});
+
+const findRelease = SqlSchema.findOneOption({
+  Request: Schema.Struct({ sandboxName: Schema.String }),
+  Result: ReleaseRowSchema,
+  execute: ({ sandboxName }) =>
+    Database.use((db) =>
+      db
+        .select({
+          sandboxName: agentSandboxTable.sandboxName,
+          conversationId: agentTable.conversationId,
+          usedAt: agentSandboxTable.usedAt,
+          state: agentSandboxTable.state,
+        })
+        .from(agentSandboxTable)
+        .innerJoin(agentTable, eq(agentTable.id, agentSandboxTable.agentId))
+        .where(eq(agentSandboxTable.sandboxName, sandboxName)),
+    ),
+});
+
+const settleReleasing = SqlSchema.void({
+  Request: Schema.Struct({ sandboxName: Schema.String, state: StateSchema }),
+  execute: ({ sandboxName, state }) =>
+    Database.use((db) =>
+      db
+        .update(agentSandboxTable)
+        .set({ state })
+        .where(
+          and(
+            eq(agentSandboxTable.sandboxName, sandboxName),
+            eq(agentSandboxTable.state, AGENT_SANDBOX_STATE.RELEASING),
+          ),
+        ),
+    ),
+});
+
 /** The agent's sandbox recorded LIVE and used at `at`, where its row was written before the cutoff or stood RELEASED. */
 export function recordAgentSandboxOpen(
   agentId: string,
@@ -76,4 +172,41 @@ export function recordAgentSandboxOpen(
 /** The sandbox's row used at `at`, where an open recorded one and it was written before the cutoff. */
 export function recordAgentSandboxUse(use: AgentSandboxUse): SandboxUseEffect<void> {
   return updateUse(use);
+}
+
+/**
+ * The sandboxes a release sweep acts on, at most `limit`, the oldest used
+ * first: each LIVE one last used at or before `usedBy`, and each RELEASING,
+ * whose release may have been lost on its way to the queue.
+ */
+export function releasableAgentSandboxes(
+  usedBy: Date,
+  limit: number,
+): SandboxUseEffect<
+  ReadonlyArray<{ readonly sandboxName: string; readonly state: AgentSandboxState }>
+> {
+  return findReleasable({ usedBy, limit });
+}
+
+/** The sandbox marked RELEASING, where it stands LIVE and was last used at or before `usedBy`; answers whether this write marked it. */
+export function markAgentSandboxReleasing(
+  sandboxName: string,
+  usedBy: Date,
+): SandboxUseEffect<boolean> {
+  return Effect.map(markReleasing({ sandboxName, usedBy }), (rows) => rows.length > 0);
+}
+
+/** The sandbox's row as a release reads it again, with its agent's conversation; none where the row or its agent is gone. */
+export function agentSandboxRelease(
+  sandboxName: string,
+): SandboxUseEffect<Option.Option<AgentSandboxRelease>> {
+  return findRelease({ sandboxName });
+}
+
+/** A release settled: the row written LIVE, where it was skipped, or RELEASED, once deleted, only where it still stands RELEASING. */
+export function settleAgentSandboxRelease(
+  sandboxName: string,
+  state: typeof AGENT_SANDBOX_STATE.LIVE | typeof AGENT_SANDBOX_STATE.RELEASED,
+): SandboxUseEffect<void> {
+  return settleReleasing({ sandboxName, state });
 }
