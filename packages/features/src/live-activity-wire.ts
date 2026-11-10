@@ -3,8 +3,7 @@
  *
  * One activity stands per member per phone. The service push-to-starts it
  * when the member's first agent begins a turn, updates it as their agents
- * start and settle turns, as a running agent's step line changes, and as an
- * ask starts or stops waiting on them, and ends it, with a dismissal date,
+ * start and settle turns and as an ask starts or stops waiting on them, and ends it, with a dismissal date,
  * once none of their agents runs (`@repo/service/push/live-activities`).
  * ActivityKit decodes `aps.content-state` into the widget's Swift
  * `ContentState`, so the keys here are the Swift's, exactly: a key renamed
@@ -34,8 +33,6 @@ export const LIVE_ACTIVITY_BOUNDS = {
   MAX_AGENTS: 3,
   /** The most characters of an agent's title the content state carries; Apple caps a Live Activity's payload at 4 KB. */
   MAX_TITLE_CHARS: 80,
-  /** The most characters of a step line the content state carries. */
-  MAX_STEP_CHARS: 120,
 } as const;
 
 /** One running agent as the activity lists it. */
@@ -45,10 +42,6 @@ export const liveActivityAgentSchema = EffectSchema.Struct({
     EffectSchema.isMaxLength(LIVE_ACTIVITY_BOUNDS.MAX_ID_CHARS),
   ),
   title: EffectSchema.String.check(EffectSchema.isMaxLength(LIVE_ACTIVITY_BOUNDS.MAX_TITLE_CHARS)),
-  /** The agent's current step line on one line, such as "Editing session-store.ts"; null before its first step. */
-  step: EffectSchema.NullOr(
-    EffectSchema.String.check(EffectSchema.isMaxLength(LIVE_ACTIVITY_BOUNDS.MAX_STEP_CHARS)),
-  ),
   /** When its running turn started, in epoch milliseconds, from which the widget counts the time elapsed. */
   startedAt: EffectSchema.Number.check(EffectSchema.isGreaterThanOrEqualTo(0)),
 });
