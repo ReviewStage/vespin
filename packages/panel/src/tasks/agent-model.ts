@@ -559,15 +559,14 @@ export function endLineReason(failure: AgentFailure | undefined, starter?: strin
 }
 
 /**
- * Whether the agent's tab offers Stop: whenever it may still write, starting
- * or with a line awaiting its turn included. Note that we offer it where no
- * turn runs yet, because a Stop first settles a runner that went quiet
- * (`lapsed-runner.ts`), which is all a stalled agent needs, as an agent's
- * `stop_agent` already does; a press that found nothing to stop yet says so
- * (`STOP_NOTHING_YET`), so it is never dropped unheard.
+ * Whether the agent's tab offers Stop: only while a turn of its runs that a
+ * Stop can cancel (`turnUnderWay`). Note that we offer none while the agent
+ * starts or its line awaits a runner to take it, as while its machine is set
+ * up, because the service has no turn to cancel there yet and a press would
+ * only be answered that nothing was stopped.
  */
-export function offersStop(agent: Pick<AgentSummary, "status">): boolean {
-  return agentStillWriting(agent.status);
+export function offersStop(agent: Pick<AgentSummary, "status" | "stoppable">): boolean {
+  return turnUnderWay(agent);
 }
 
 /** Whether a turn of the agent's runs that a message steers, rather than one it opens: it runs, and its service has not said its turn is stopped or not open yet (`stoppable`). */
