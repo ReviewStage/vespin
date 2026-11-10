@@ -3438,20 +3438,23 @@ function pinOf(
 /**
  * Tells the comments on the element marked that the pointer is over in the
  * page (`over`), as the pointer over its pin tells them, and lets them go
- * as it leaves for another or for none.
+ * as it leaves for another or for none. Note that its pin may be drawn only
+ * after the pointer arrived, as a comment held there is, so whether it is
+ * drawn (`drawn`) asks again.
  */
 function usePointedPin(
   over: string | undefined,
+  drawn: boolean,
   held: ReadonlyMap<string, HTMLElement>,
   posted: ReadonlyMap<string, HTMLElement>,
 ): void {
   useEffect(() => {
-    if (over === undefined) return undefined;
+    if (over === undefined || !drawn) return undefined;
     const pin = pinOf([held, posted], over);
     if (pin === undefined) return undefined;
     pointCard(pin, true);
     return () => pointCard(pin, false);
-  }, [over, held, posted]);
+  }, [over, drawn, held, posted]);
 }
 
 /** Where a thread on the whole page is started: the frame's top edge. */
@@ -3955,7 +3958,6 @@ export function PageCommentLayer({
   // The pins drawn, by their element's path, which a card opened from one stands under.
   const postedPins = useRef(new Map<string, HTMLElement>());
   const heldPins = useRef(new Map<string, HTMLElement>());
-  usePointedPin(over, heldPins.current, postedPins.current);
   // The element whose held comments stand open by it, by its path; none open.
   const [heldOpen, setHeldOpen] = useState<string | undefined>(undefined);
   const heldThere =
@@ -3975,6 +3977,12 @@ export function PageCommentLayer({
     if (box === undefined || box === null || box.bottom < 0) return [];
     return [{ path, held, box, step: byElement.has(path) ? HELD_PIN_STEP : 0 }];
   });
+  usePointedPin(
+    over,
+    pins.some((pin) => pin.path === over) || heldMarks.some((mark) => mark.path === over),
+    heldPins.current,
+    postedPins.current,
+  );
   // Note that a draft's pin stands left of its element's posted and held pins, so none covers another.
   const draftMark = draftPinAt(
     drafted,
