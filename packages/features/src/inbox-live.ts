@@ -481,15 +481,14 @@ export function inboxOfLiveRows(rows: ScopeInboxLiveRows): readonly InboxItem[] 
 }
 
 /**
- * Where one item stands as its row carries it: its plan, null for an item
- * of an agent with no task, and its agent; its stamp; whether it is unread
+ * Where one item stands as its row carries it: its plan and its agent; its stamp; whether it is unread
  * for the reader, which a read mark moves without moving `updatedAt`; who
  * it waits on; and how many messages its thread holds, which a withdrawn
  * message moves.
  */
 const inboxItemStampRowSchema = EffectSchema.Struct({
   id: EffectSchema.String,
-  planId: EffectSchema.NullOr(EffectSchema.String),
+  planId: EffectSchema.String,
   agentId: EffectSchema.String,
   revision: countedNumber,
   version: countedNumber,
