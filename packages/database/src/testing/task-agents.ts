@@ -57,6 +57,20 @@ export const openAgentOnOwnTask = (userId: string, organizationId: string) =>
     return yield* openTaskAgent(userId, organizationId, taskId);
   });
 
+/** The conversation of a new agent of the member's on a task of its own in the workspace, the one its Browser tabs are kept under; its id. */
+export const openAgentConversation = (userId: string, organizationId: string) =>
+  Effect.gen(function* () {
+    const agentId = yield* openAgentOnOwnTask(userId, organizationId);
+    const [row] = yield* Database.use((db) =>
+      db
+        .select({ conversationId: agentTable.conversationId })
+        .from(agentTable)
+        .where(eq(agentTable.id, agentId)),
+    );
+    if (row === undefined) return yield* Effect.die("the agent just written is gone");
+    return row.conversationId;
+  });
+
 /** An inbox item of the task's agent, open and holding its message's ask open, or open as a notice, its message asking nothing, where `asking` is false; its id. The task is null only for a migration's test on a database from before every item stood on one. */
 export const openInboxItem = (
   userId: string,

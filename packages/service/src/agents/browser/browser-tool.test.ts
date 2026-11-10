@@ -9,9 +9,7 @@ import {
 } from "@repo/database/models/agent-browser-tabs";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
 import { user } from "@repo/database/schemas/auth";
-import { conversations } from "@repo/database/schemas/storage";
-import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
-import { getTestDB } from "@repo/database/testing";
+import { getTestDB, openAgentConversation, openWorkspace } from "@repo/database/testing";
 import { AGENT_BROWSER_TAB_OPENER } from "@repo/features/agent-browser-tab-wire";
 import { BROWSER_AGENT_ACTION, BROWSER_STEP_STATUS } from "@repo/features/browser-agent-actions";
 import type { PageTarget } from "@repo/features/browser-cdp";
@@ -255,21 +253,15 @@ function runningBrowser(peer: FakeCdpPeer) {
 /** The account each conversation the suite opened belongs to, so a call names the transcript it is written to. */
 const owners = new Map<string, string>();
 
-/** A new account and a conversation of its own, the one an agent's tabs are kept under. */
+/** A new account and the conversation of its own agent on a task, the one an agent's tabs are kept under. */
 const openConversation = Effect.gen(function* () {
   const id = `user-${randomUUID()}`;
   yield* Database.use((db) =>
     db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` }),
   );
-  const [row] = yield* Database.use((db) =>
-    db
-      .insert(conversations)
-      .values({ userId: id, kind: CONVERSATION_KIND.AGENT })
-      .returning({ id: conversations.id }),
-  );
-  assert.ok(row);
-  owners.set(row.id, id);
-  return { userId: id, conversationId: row.id };
+  const conversationId = yield* openAgentConversation(id, yield* openWorkspace(id));
+  owners.set(conversationId, id);
+  return { userId: id, conversationId };
 });
 
 /** One call of the tool, as an agent's root makes it, on the browser given. */

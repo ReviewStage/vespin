@@ -127,6 +127,14 @@ const DROPPED_INDEXES = [
   "inbox_item_org_open_taskless_updated",
 ] as const;
 
+/** The constraints and triggers a later migration dropped on a table that stands, by every name each held: a page's owner check and the trigger that deleted the pages of an agent on no task, with its function (`every_row_on_a_task`). */
+const DROPPED_CONSTRAINTS = [
+  "plan_page_version_owner",
+  "task_page_version_owner",
+  "plan_page_version_agent_delete",
+  "task_page_version_agent_delete",
+] as const;
+
 /** The columns a later migration dropped, by every name each held, and the indexes that went with them: an automation's task (`20261028195432_automation_task_drop`), a private memory's member (`operator_drop`), and an agent's read mark from before every agent stood on a task (`agent_drop_read_through`). */
 const DROPPED_COLUMNS = [
   {
@@ -154,6 +162,7 @@ export function replayable(statements: readonly string[]): readonly string[] {
     (statement) =>
       DROPPED_TABLES.every((table) => !statement.includes(`"${table}`)) &&
       DROPPED_INDEXES.every((index) => !statement.includes(`"${index}"`)) &&
+      DROPPED_CONSTRAINTS.every((constraint) => !statement.includes(`"${constraint}"`)) &&
       !namesDroppedColumn(statement),
   );
 }
