@@ -12,6 +12,12 @@
  * Note that the drafts and the sends are kept in one store beside the
  * screens rather than in a screen's state, so folding or unfolding the
  * iPhone Duo, which draws the thread on another screen, keeps both.
+ *
+ * A notification's action, a decide's option or a reply typed in place,
+ * opens the app on its thread and is held here (`pressFromNotification`)
+ * until the thread's box stands, which sends it once as though it were
+ * pressed there, so it is drawn, refused, and buzzed as any send is. An
+ * option whose ask is no longer the thread's open one is let go unsent.
  */
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
@@ -23,8 +29,10 @@ import {
   type InboxDraft,
   inboxMissing,
   inboxThreadSend,
+  withChoice,
 } from "@repo/features/inbox-draft";
 import { awaitsNod, type InboxListed, knownAsk } from "@repo/features/inbox-list-model";
+import { INBOX_PUSH_PRESS, type InboxPushPress } from "@repo/features/inbox-push-wire";
 import {
   INBOX_ASK,
   INBOX_FIELD,
@@ -49,11 +57,12 @@ import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 
-/** What the app holds of one thread: the draft on its box, the sends not yet carried by a read, by key, and what its last refused send said. */
+/** What the app holds of one thread: the draft on its box, the sends not yet carried by a read, by key, what its last refused send said, and a notification's action not yet sent. */
 interface ThreadHeld {
   readonly draft: InboxDraft;
   readonly sending: ReadonlyMap<string, InboxSending>;
   readonly note: string | undefined;
+  readonly pressed?: InboxPushPress;
 }
 
 /** A thread the app holds nothing of. */
@@ -86,6 +95,21 @@ function unreadableNumber(thread: readonly InboxMessage[], draft: InboxDraft): s
 /** What the box says of a number field whose words read as no number. */
 function unreadableWords(label: string): string {
   return `Write a number in ${label}.`;
+}
+
+/** The draft a notification's action sends on the thread: its option on the ask it answers, while that ask is still the open one, or its words; none otherwise. */
+function pressedDraft(
+  thread: readonly InboxMessage[],
+  press: InboxPushPress,
+): InboxDraft | undefined {
+  if (press.kind === INBOX_PUSH_PRESS.REPLY) return { ...EMPTY_INBOX_DRAFT, note: press.text };
+  const asking = openAskOf(thread);
+  if (asking?.message.id !== press.messageId || !knownAsk(asking.ask)) return undefined;
+  const { ask } = asking;
+  if (ask.type !== INBOX_ASK.DECIDE) return undefined;
+  return ask.options.some((option) => option.label === press.option)
+    ? withChoice(ask, EMPTY_INBOX_DRAFT, press.option)
+    : undefined;
 }
 
 /** A send the act port answered with a refusal, carrying the words it says. */
@@ -140,6 +164,11 @@ function letGoCarriedCloses(items: readonly InboxItem[]): void {
 /** Buzzes the phone as the system does for an outcome: a send taken, a send refused, or one that lacks something. */
 function buzz(type: NotificationFeedbackType): void {
   notificationAsync(type).catch((error: unknown) => console.error("The buzz did not go.", error));
+}
+
+/** Holds a notification's action for its thread's box to send once it stands, in place of any held before it. */
+export function pressFromNotification(press: InboxPushPress): void {
+  hold(press.itemId, (was) => ({ ...was, pressed: press }));
 }
 
 /* ----- Reads ----- */
@@ -304,6 +333,14 @@ export function useThreadAnswer(listed: InboxListed): ThreadAnswer {
         );
       });
   };
+  // A notification's action held for this thread, taken once and sent as though pressed here.
+  const pressed = store.get(itemId)?.pressed;
+  useEffect(() => {
+    if (pressed === undefined) return;
+    hold(itemId, ({ pressed: _taken, ...was }) => was);
+    const sending = pressedDraft(thread, pressed);
+    if (sending !== undefined) send(sending);
+  }, [pressed]);
   return {
     draft,
     onDraft,

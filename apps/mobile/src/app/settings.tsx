@@ -35,6 +35,7 @@ import {
   type NotificationStanding,
   useNotificationPermission,
 } from "../notification-permission.js";
+import { clearAccountNotifications } from "../notifications.js";
 import {
   isPushNotify,
   unregisterPushDevice,
@@ -84,6 +85,7 @@ export default function SettingsScreen() {
     signingOut.current = true;
     unregisterPushDevice(acts, fixture)
       .then(() => acts[ACT_KIND.ACCOUNT_SIGN_OUT]())
+      .then(() => clearAccountNotifications())
       .catch((error: unknown) => console.error("The sign-out did not finish.", error))
       .finally(() => {
         signingOut.current = false;

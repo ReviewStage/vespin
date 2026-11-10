@@ -78,7 +78,11 @@ gh run download <run id> --name mobile-screenshots --dir /tmp/mobile-screenshots
 Each simulator's pictures, in each appearance, are under
 `/tmp/mobile-screenshots/<slug>/<light|dark>/debug/<flow>/takeScreenshot/`,
 named as the flow's `takeScreenshot` steps name them; a failed step's own
-screenshot is under `debug/<flow>/screenshots/` beside them.
+screenshot is under `debug/<flow>/screenshots/` beside them. The notification
+flow, whose push Maestro cannot send, runs apart: the script runs
+`maestro/notification/background.yaml`, pushes `ask.apns` with
+`xcrun simctl push`, and runs `open.yaml`, its output under
+`<light|dark>/notification/`.
 
 ## The host
 

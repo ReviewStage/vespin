@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
+import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
 
 /**
@@ -15,7 +16,8 @@ import { usePushRegistration } from "../push-device.js";
  * sign-out anywhere, Settings' or a refused renewal's, lands on it and a
  * sign-in lands on the Inbox. A fixture run stands signed in as its
  * profile's account. While an account is signed in, the phone registers
- * itself for its pushes once a launch (`push-device.ts`).
+ * itself for its pushes once a launch (`push-device.ts`), and a tapped
+ * notification opens its thread (`notifications.ts`).
  */
 function GuardedScreens() {
   const { data: signedIn = false } = useQuery({
@@ -23,6 +25,7 @@ function GuardedScreens() {
     select: (state) => state.account.status === ACCOUNT_STATUS.SIGNED_IN,
   });
   usePushRegistration(signedIn);
+  useInboxNotifications(signedIn);
   return (
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Protected guard={signedIn}>

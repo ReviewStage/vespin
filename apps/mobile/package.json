@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Vespin's iOS app: an Expo shell over the shared client host, drawn SwiftUI-first through @expo/ui",
-  "main": "expo-router/entry",
+  "main": "index.ts",
   "scripts": {
     "export:ios": "EXPO_NO_TELEMETRY=1 expo export --platform ios --output-dir dist",
     "ios": "expo run:ios",
@@ -44,6 +44,7 @@
     "expo-secure-store": "58.0.2",
     "expo-splash-screen": "58.0.13",
     "expo-symbols": "58.0.4",
+    "expo-task-manager": "58.0.13",
     "expo-video": "58.0.13",
     "expo-web-browser": "58.0.7",
     "react": "catalog:mobile",
