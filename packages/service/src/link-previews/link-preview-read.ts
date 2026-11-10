@@ -4,15 +4,21 @@
  * Every address is held to `link-address.ts` before a byte is sent: the
  * page's, each redirect's, and each picture's, so a page on the internet
  * that redirects into a network, or names its picture there, answers
- * nothing of what stands inside. A host is resolved through the resolver
- * handed in and every address it resolves to must be public. Redirects are
- * followed by hand, a few at most, so each hop is held the same way. No
- * cookie or credential is sent, only the plain headers below, and the whole
- * read is held to a deadline, the page's bytes to a bound past which the
- * head is taken as whole, and each picture to its own bound, past which it
- * is left out. A picture is carried only as the type its bytes sniff as,
- * never as the type the server named. A page that is no HTML, answers an
- * error, redirects too often, or takes too long has no preview.
+ * nothing of what stands inside. A host is resolved once per hop through
+ * the resolver handed in, every address it resolves to must be public, and
+ * the connection is then made to those very addresses (`HopTransport`),
+ * never by resolving the name again, so a resolver that answers a public
+ * address to the check and a private one to the connection (DNS rebinding)
+ * reaches nothing: the name stays what the server is asked for, its TLS
+ * name and its `Host` header, and only where the socket goes is pinned.
+ * Redirects are followed by hand, a few at most, so each hop is held the
+ * same way. No cookie or credential is sent, only the plain headers below,
+ * and the whole read is held to a deadline, the page's bytes to a bound
+ * past which the head is taken as whole, and each picture to its own
+ * bound, past which it is left out. A picture is carried only as the type
+ * its bytes sniff as, never as the type the server named. A page that is
+ * no HTML, answers an error, redirects too often, or takes too long has no
+ * preview.
  */
 
 import {
@@ -25,20 +31,37 @@ import {
   type LinkPreviewPictureType,
 } from "@repo/features/link-preview-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { Duration, Effect, Option, Stream } from "effect";
-import { FetchHttpClient } from "effect/http";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientRequest from "effect/http/HttpClientRequest";
-import type * as HttpClientResponse from "effect/http/HttpClientResponse";
+import { Duration, Effect, Option } from "effect";
 import { allPublic, ipLiteralOf, webPageAddressOf } from "./link-address.js";
 import { charsetOf, HEAD_MAX_BYTES, pageHeadOf } from "./link-preview-html.js";
 
 /** The addresses a host name resolves to, every one of them; none where it resolves to nothing or the resolver failed. */
 export type AddressResolver = (hostname: string) => Effect.Effect<readonly string[]>;
 
-/** What a read reaches the world through: the resolver its hosts are checked by. */
+/** One hop as the transport is asked for it: the address, the checked addresses the socket may go to and no other, the headers, and the most bytes to read. */
+export interface HopRequest {
+  readonly url: URL;
+  /** The addresses the guard admitted for the address's host, the only ones a connection may be made to. */
+  readonly addresses: readonly string[];
+  readonly headers: Readonly<Record<string, string>>;
+  readonly maxBytes: number;
+}
+
+/** What one hop answered: its status and headers, and its bytes read up to the bound, with whether more stood past them. */
+export interface HopAnswer {
+  readonly status: number;
+  readonly headers: Readonly<Record<string, string | undefined>>;
+  readonly bytes: Uint8Array;
+  readonly cut: boolean;
+}
+
+/** How one hop is sent: to one of the checked addresses alone, following no redirect itself, sending no credential; none where the connection or the read failed. */
+export type HopTransport = (request: HopRequest) => Effect.Effect<HopAnswer | undefined>;
+
+/** What a read reaches the world through: the resolver its hosts are checked by, and the transport that connects to what the check admitted. */
 export interface LinkPreviewReach {
   readonly resolve: AddressResolver;
+  readonly connect: HopTransport;
 }
 
 /** How far and how long a read goes. */
@@ -65,9 +88,6 @@ const HTML_TYPES: ReadonlySet<string> = new Set(["text/html", "application/xhtml
 
 /** The statuses that send the reader elsewhere, each with a `location`. */
 const REDIRECT_STATUSES: ReadonlySet<number> = new Set([301, 302, 303, 307, 308]);
-
-/** How the fetch underneath is told to send: following no redirect itself, since each hop is held here, and carrying no credential. */
-const FETCH_INIT: RequestInit = { redirect: "manual", credentials: "omit", cache: "no-store" };
 
 const ASCII = new TextEncoder();
 
@@ -100,28 +120,11 @@ const READ_OUTCOME = {
   UNREAD: "unread",
 } as const;
 
-/** What one address answered: its final address, status, headers, and bytes within the bound, or why not. */
+/** What one address answered: its final address and the hop's answer, or why not. */
 type Reached =
-  | {
-      readonly outcome: "answered";
-      readonly url: URL;
-      readonly status: number;
-      readonly contentType: string | undefined;
-      /** The bytes read, cut at the bound; whether they were cut. */
-      readonly bytes: Uint8Array;
-      readonly cut: boolean;
-    }
+  | { readonly outcome: "answered"; readonly url: URL; readonly answer: HopAnswer }
   | { readonly outcome: typeof READ_OUTCOME.REFUSED }
   | { readonly outcome: typeof READ_OUTCOME.UNREAD };
-
-/** What one hop answered: where it sends the reader, or its status, type, and bytes within the bound, none where the body failed to read. */
-type HopAnswer =
-  | { readonly redirect: string }
-  | {
-      readonly answered: { readonly bytes: Uint8Array; readonly cut: boolean } | undefined;
-      readonly status: number;
-      readonly contentType: string | undefined;
-    };
 
 const REFUSED = { outcome: READ_OUTCOME.REFUSED } as const;
 const UNREAD = { outcome: READ_OUTCOME.UNREAD } as const;
@@ -136,105 +139,58 @@ function charsetParameterOf(header: string | undefined): string | undefined {
   return /;\s*charset\s*=\s*["']?([\w-]+)/iu.exec(header ?? "")?.[1]?.toLowerCase();
 }
 
-/** The response's bytes up to `max`, and whether more stood past them; nothing where the body failed to read. */
-function boundedBytes(
-  response: HttpClientResponse.HttpClientResponse,
-  max: number,
-): Effect.Effect<{ readonly bytes: Uint8Array; readonly cut: boolean } | undefined> {
-  const counted = response.stream.pipe(
-    Stream.mapAccum(
-      () => 0,
-      (size: number, chunk: Uint8Array) => {
-        const total = size + chunk.byteLength;
-        return [total, [{ chunk, total }]] as const;
-      },
-    ),
-    Stream.takeUntil(({ total }) => total > max),
-    Stream.runCollect,
-  );
-  return Effect.map(
-    Effect.option(counted),
-    Option.match({
-      onNone: () => undefined,
-      onSome: (chunks) => {
-        const total = chunks.at(-1)?.total ?? 0;
-        const whole = new Uint8Array(Math.min(total, max));
-        let at = 0;
-        for (const { chunk } of chunks) {
-          const room = whole.byteLength - at;
-          if (room <= 0) break;
-          whole.set(chunk.subarray(0, Math.min(room, chunk.byteLength)), at);
-          at += Math.min(room, chunk.byteLength);
-        }
-        return { bytes: whole, cut: total > max };
-      },
-    }),
-  );
-}
-
-/** Whether the host an address names may be read: a public literal, or a name every address of which resolves public. */
-function hostAdmitted(url: URL, reach: LinkPreviewReach): Effect.Effect<boolean> {
+/** The addresses the guard admits for an address's host: the literal itself, or every address the name resolves to where all are public; none where any is not. */
+function admittedAddresses(
+  url: URL,
+  reach: LinkPreviewReach,
+): Effect.Effect<readonly string[] | undefined> {
   const literal = ipLiteralOf(url.hostname);
-  if (literal !== undefined) return Effect.succeed(true);
-  return Effect.map(reach.resolve(url.hostname), allPublic);
+  if (literal !== undefined) return Effect.succeed([literal]);
+  return Effect.map(reach.resolve(url.hostname), (addresses) =>
+    allPublic(addresses) ? addresses : undefined,
+  );
 }
 
 /**
  * One address answered, following redirects by hand up to the bound, each
- * hop's address held as the first was, and the body read within `maxBytes`.
- * A hop the guard refuses is the whole read refused; a hop that fails,
- * redirects nowhere the guard admits as a web address, or runs past the
- * bound of redirects is unread.
+ * hop's host resolved once, checked, and connected to at the checked
+ * addresses alone, and the body read within `maxBytes`. A hop the guard
+ * refuses is the whole read refused; a hop that fails, redirects nowhere
+ * the guard admits as a web address, or runs past the bound of redirects
+ * is unread.
  */
 const reached = Effect.fnUntraced(function* (
   start: URL,
   accept: string,
   maxBytes: number,
   reach: LinkPreviewReach,
-): Effect.fn.Return<Reached, never, HttpClient.HttpClient> {
-  const client = yield* HttpClient.HttpClient;
+): Effect.fn.Return<Reached> {
   let url = start;
   for (let hop = 0; hop <= LINK_PREVIEW_READ.MAX_REDIRECTS; hop += 1) {
-    if (!(yield* hostAdmitted(url, reach))) return REFUSED;
-    const request = HttpClientRequest.get(url.href).pipe(
-      HttpClientRequest.setHeaders({
+    const addresses = yield* admittedAddresses(url, reach);
+    if (addresses === undefined) return REFUSED;
+    const answer = yield* reach.connect({
+      url,
+      addresses,
+      headers: {
         "user-agent": LINK_PREVIEW_READ.USER_AGENT,
         accept,
         "accept-language": "en",
-      }),
-    );
-    const hopAnswer: HopAnswer | undefined = yield* Effect.scoped(
-      Effect.flatMap(client.execute(request), (response): Effect.Effect<HopAnswer> => {
-        const location = response.headers.location;
-        if (REDIRECT_STATUSES.has(response.status) && location !== undefined) {
-          return Effect.succeed({ redirect: location });
-        }
-        return Effect.map(boundedBytes(response, maxBytes), (body) => ({
-          answered: body,
-          status: response.status,
-          contentType: response.headers["content-type"],
-        }));
-      }),
-    ).pipe(Effect.orElseSucceed((): HopAnswer | undefined => undefined));
-    if (hopAnswer === undefined) return UNREAD;
-    if ("redirect" in hopAnswer) {
+      },
+      maxBytes,
+    });
+    if (answer === undefined) return UNREAD;
+    const location = answer.headers.location;
+    if (REDIRECT_STATUSES.has(answer.status) && location !== undefined) {
       // Note that a redirect target is read against the hop it came from, as a browser reads it, then held as any address asked for is.
-      const next = URL.canParse(hopAnswer.redirect, url)
-        ? webPageAddressOf(new URL(hopAnswer.redirect, url).href)
+      const next = URL.canParse(location, url)
+        ? webPageAddressOf(new URL(location, url).href)
         : undefined;
       if (next === undefined) return REFUSED;
       url = next;
       continue;
     }
-    if (hopAnswer.answered === undefined) return UNREAD;
-    return {
-      outcome: "answered",
-      url,
-      status: hopAnswer.status,
-      contentType: hopAnswer.contentType,
-      bytes: hopAnswer.answered.bytes,
-      cut: hopAnswer.answered.cut,
-    };
+    return { outcome: "answered", url, answer };
   }
   return UNREAD;
 });
@@ -254,20 +210,19 @@ function pictureAt(
   address: string | undefined,
   maxBytes: number,
   reach: LinkPreviewReach,
-): Effect.Effect<LinkPreviewPicture | undefined, never, HttpClient.HttpClient> {
+): Effect.Effect<LinkPreviewPicture | undefined> {
   const url = address === undefined ? undefined : webPageAddressOf(address);
   if (url === undefined) return Effect.succeed(undefined);
   const read = Effect.map(
     reached(url, ACCEPT.PICTURE, maxBytes, reach),
-    (answer): LinkPreviewPicture | undefined => {
-      if (answer.outcome !== "answered" || answer.cut) return undefined;
-      if (answer.status < 200 || answer.status >= 300 || answer.bytes.byteLength === 0) {
-        return undefined;
-      }
-      const type = pictureTypeOf(answer.bytes);
+    (reach): LinkPreviewPicture | undefined => {
+      if (reach.outcome !== "answered" || reach.answer.cut) return undefined;
+      const { status, bytes } = reach.answer;
+      if (status < 200 || status >= 300 || bytes.byteLength === 0) return undefined;
+      const type = pictureTypeOf(bytes);
       return type === undefined
         ? undefined
-        : { type, base64: Buffer.from(answer.bytes).toString("base64") };
+        : { type, base64: Buffer.from(bytes).toString("base64") };
     },
   );
   return Effect.map(Effect.timeoutOption(read, LINK_PREVIEW_READ.PICTURE_DEADLINE), (picture) =>
@@ -285,29 +240,30 @@ function pictureAt(
 export const readLinkPreview = /* @__PURE__ */ Effect.fn("web/linkPreview")(function* (
   href: string,
   reach: LinkPreviewReach,
-): Effect.fn.Return<LinkPreviewAnswer, never, HttpClient.HttpClient> {
+): Effect.fn.Return<LinkPreviewAnswer> {
   const url = webPageAddressOf(href);
   if (url === undefined) return { refused: LINK_PREVIEW_REFUSAL.ADDRESS };
   const page = yield* Effect.timeoutOption(
     reached(url, ACCEPT.PAGE, HEAD_MAX_BYTES, reach),
     LINK_PREVIEW_READ.PAGE_DEADLINE,
-  ).pipe(Effect.provideService(FetchHttpClient.RequestInit, FETCH_INIT));
+  );
   if (Option.isNone(page)) return { refused: LINK_PREVIEW_REFUSAL.UNREAD };
-  const answer = page.value;
-  if (answer.outcome === READ_OUTCOME.REFUSED) return { refused: LINK_PREVIEW_REFUSAL.ADDRESS };
-  if (answer.outcome === READ_OUTCOME.UNREAD) return { refused: LINK_PREVIEW_REFUSAL.UNREAD };
-  const html = mediaTypeOf(answer.contentType);
-  if (answer.status < 200 || answer.status >= 300 || html === undefined || !HTML_TYPES.has(html)) {
+  const read = page.value;
+  if (read.outcome === READ_OUTCOME.REFUSED) return { refused: LINK_PREVIEW_REFUSAL.ADDRESS };
+  if (read.outcome === READ_OUTCOME.UNREAD) return { refused: LINK_PREVIEW_REFUSAL.UNREAD };
+  const { status, headers, bytes } = read.answer;
+  const html = mediaTypeOf(headers["content-type"]);
+  if (status < 200 || status >= 300 || html === undefined || !HTML_TYPES.has(html)) {
     return { refused: LINK_PREVIEW_REFUSAL.UNREAD };
   }
-  const head = pageHeadOf(decoded(answer.bytes, answer.contentType), answer.url);
+  const head = pageHeadOf(decoded(bytes, headers["content-type"]), read.url);
   const [icon, image] = yield* Effect.all(
     [
       pictureAt(head.iconUrl, LINK_PREVIEW_BOUNDS.MAX_ICON_BYTES, reach),
       pictureAt(head.imageUrl, LINK_PREVIEW_BOUNDS.MAX_IMAGE_BYTES, reach),
     ],
     { concurrency: "unbounded" },
-  ).pipe(Effect.provideService(FetchHttpClient.RequestInit, FETCH_INIT));
+  );
   const preview: LinkPreview = {
     url: href,
     ...(head.title === undefined ? undefined : { title: head.title }),

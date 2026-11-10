@@ -18,7 +18,7 @@ import { resolveHostedUserId } from "@repo/service/auth/bearer";
 import { resolveBrowserSessionUserId } from "@repo/service/auth/browser-session";
 import { githubUnlink } from "@repo/service/github/github-unlink";
 import { integrationsAppSeams } from "@repo/service/integrations/integration-seams";
-import { nodeAddressResolver } from "@repo/service/link-previews/node-address-resolver";
+import { nodeLinkReach } from "@repo/service/link-previews/node-link-reach";
 import { clientConsentDelete } from "@repo/service/member-mcp/client-consents";
 import { memberMcpResourceUrl } from "@repo/service/member-mcp/resource";
 import { type HostedFetch, hostedFetch } from "@repo/service/orpc/handler";
@@ -69,7 +69,7 @@ const DEPLOYMENT_SEAMS: HostedRouterSeams = {
   ...integrationsAppSeams(),
   resolveUserId: resolveHostedUserId,
   resolveSessionUserId: resolveBrowserSessionUserId,
-  resolveAddresses: nodeAddressResolver,
+  linkReach: nodeLinkReach,
   unlinkGitHub: githubUnlink(auth.api),
   deleteClientConsent: clientConsentDelete(auth.api),
   supportAccess: supportAccessCalls(auth.api),

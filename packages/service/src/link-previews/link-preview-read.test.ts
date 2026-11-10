@@ -5,16 +5,18 @@ import {
   LINK_PREVIEW_REFUSAL,
   type LinkPreviewAnswer,
 } from "@repo/features/link-preview-wire";
-import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { Effect } from "effect";
-import { readLinkPreview } from "./link-preview-read.js";
+import { type HopAnswer, type HopRequest, readLinkPreview } from "./link-preview-read.js";
 
 /**
  * link-preview-read.test.ts -- a page is read for a link's card only where
  * its address, every redirect's, and every picture's stand on the public
  * internet: a private, loopback, link-local, or metadata address, in IPv4
  * or IPv6, mapped or not, a host that resolves to one, and a redirect into
- * one are refused before a byte is sent there; a page that is no HTML or
+ * one are refused before a byte is sent there; a connection goes only to
+ * the addresses the check saw, the name resolved once per hop, so a name
+ * that answers public to the check and private to the connection reaches
+ * nothing private; a page that is no HTML or
  * sends the reader round too often has no preview; and a page that answers
  * says its title, description, site, icon, and picture, each carried as the
  * type its bytes are. A scripted web and a scripted resolver; synthetic
@@ -42,27 +44,54 @@ function picture(bytes: Uint8Array<ArrayBuffer>, type: string): Response {
   return new Response(bytes, { status: 200, headers: { "content-type": type } });
 }
 
-/** The web as a test scripts it: what each address answers, and what each host resolves to. */
+/** The web as a test scripts it: what each address answers, and what each host resolves to, one answer per ask where several are scripted, the last repeating. */
 interface ScriptedWeb {
   readonly answers: Readonly<Record<string, () => Response>>;
-  readonly resolves?: Readonly<Record<string, readonly string[]>>;
+  readonly resolves?: Readonly<Record<string, readonly string[] | readonly (readonly string[])[]>>;
 }
 
-/** The preview read over the scripted web, with every address a request was sent to, in order. */
+/** One hop as the fake transport saw it: where it was sent, and the addresses it was allowed to connect to. */
+interface SentHop {
+  readonly url: string;
+  readonly addresses: readonly string[];
+  readonly headers: Readonly<Record<string, string>>;
+}
+
+/** Whether a scripted resolution is one answer per ask rather than one answer. */
+function perAsk(
+  scripted: readonly string[] | readonly (readonly string[])[],
+): scripted is readonly (readonly string[])[] {
+  return scripted.length > 0 && typeof scripted[0] !== "string";
+}
+
+/** The preview read over the scripted web, with every hop the transport was asked to send, in order, and how often each host was resolved. */
 const readOver = (href: string, web: ScriptedWeb) =>
   Effect.gen(function* () {
-    const sent: { url: string; init: RequestInit }[] = [];
-    const layer = fakeHttpClientLayer((url, init) => {
-      sent.push({ url, init });
-      const answer = web.answers[url];
-      return answer === undefined ? new Response("not scripted", { status: 404 }) : answer();
-    });
-    const resolve = (hostname: string) =>
-      Effect.succeed(web.resolves?.[hostname] ?? [PUBLIC_ADDRESS]);
-    const answer: LinkPreviewAnswer = yield* readLinkPreview(href, { resolve }).pipe(
-      Effect.provide(layer),
-    );
-    return { answer, sent };
+    const sent: SentHop[] = [];
+    const resolved = new Map<string, number>();
+    const resolve = (hostname: string) => {
+      const asked = resolved.get(hostname) ?? 0;
+      resolved.set(hostname, asked + 1);
+      const scripted = web.resolves?.[hostname] ?? [PUBLIC_ADDRESS];
+      if (!perAsk(scripted)) return Effect.succeed(scripted);
+      return Effect.succeed(scripted[Math.min(asked, scripted.length - 1)] ?? []);
+    };
+    const connect = ({ url, addresses, headers, maxBytes }: HopRequest) =>
+      Effect.promise(async (): Promise<HopAnswer | undefined> => {
+        sent.push({ url: url.href, addresses, headers });
+        const answer = web.answers[url.href];
+        if (answer === undefined) return undefined;
+        const response = answer();
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        return {
+          status: response.status,
+          headers: Object.fromEntries(response.headers.entries()),
+          bytes: bytes.subarray(0, maxBytes),
+          cut: bytes.byteLength > maxBytes,
+        };
+      });
+    const answer: LinkPreviewAnswer = yield* readLinkPreview(href, { resolve, connect });
+    return { answer, sent, resolved };
   });
 
 const PAGE = "https://docs.example.com/guide";
@@ -189,10 +218,31 @@ it.effect(
           },
         },
       });
-      for (const { init } of sent) {
-        const headers = new Headers(init.headers);
-        assert.equal(headers.get("cookie"), null);
-        assert.equal(headers.get("authorization"), null);
+      for (const { headers, addresses } of sent) {
+        assert.equal(headers.cookie, undefined);
+        assert.equal(headers.authorization, undefined);
+        assert.deepEqual(addresses, [PUBLIC_ADDRESS]);
       }
+    }),
+);
+
+it.effect(
+  "a host that resolves public to the check and private to a later ask is connected to at the checked address alone, resolved once per hop",
+  () =>
+    Effect.gen(function* () {
+      const flipping = "https://flip.example.com/";
+      const { answer, sent, resolved } = yield* readOver(flipping, {
+        answers: { [flipping]: () => html("<title>Flipped</title>") },
+        resolves: { "flip.example.com": [[PUBLIC_ADDRESS], ["10.0.0.1"]] },
+      });
+
+      assert.ok("preview" in answer && answer.preview.title === "Flipped");
+      // The page's hop went to the public address the check saw, and the private answer the name gave next was never connected to: the icon's hop, which resolves afresh, saw it and was refused instead.
+      assert.equal(resolved.get("flip.example.com"), 2);
+      assert.deepEqual(
+        sent.map(({ url, addresses }) => ({ url, addresses })),
+        [{ url: flipping, addresses: [PUBLIC_ADDRESS] }],
+      );
+      assert.equal(answer.preview.icon, undefined);
     }),
 );

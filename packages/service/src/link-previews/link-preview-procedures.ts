@@ -6,6 +6,8 @@
  * has no preview, inside the answer. The read is the service's own, from
  * its network, so the member's machine contacts no third party; what the
  * service may reach is held by `link-address.ts` before any byte is sent.
+ * The connection goes to the addresses the guard checked and no other
+ * (`node-link-reach.ts`), so a name cannot point the fetch elsewhere.
  * An answer is kept for a while per address, a few minutes where the page
  * answered and a moment where it did not, so a link many members hover
  * is read once, and the reads under way at once are bounded per instance.
@@ -15,16 +17,15 @@
 
 import { LINK_PREVIEW_REFUSAL, type LinkPreviewAnswer } from "@repo/features/link-preview-wire";
 import { Cache, Duration, Effect, type Exit, Semaphore } from "effect";
-import type * as HttpClient from "effect/http/HttpClient";
 import type { UserIdResolver } from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
 import { webPageAddressOf } from "./link-address.js";
-import { type AddressResolver, readLinkPreview } from "./link-preview-read.js";
+import { type LinkPreviewReach, readLinkPreview } from "./link-preview-read.js";
 
 export interface LinkPreviewsProcedureSeams {
   resolveUserId: UserIdResolver;
-  /** The addresses a host name resolves to, which the guard holds every page and picture to. */
-  resolveAddresses: AddressResolver;
+  /** How the reads reach the web: the resolver the guard checks every host by, and the transport pinned to what it admitted. */
+  linkReach: LinkPreviewReach;
 }
 
 /** How previews are kept on one instance. */
@@ -40,7 +41,7 @@ const PREVIEWS_KEPT = {
 } as const;
 
 /** The previews one instance keeps, by the page's address without its fragment. */
-type LinkPreviewCache = Cache.Cache<string, LinkPreviewAnswer, never, HttpClient.HttpClient>;
+type LinkPreviewCache = Cache.Cache<string, LinkPreviewAnswer>;
 
 /** How long an answer is kept: longer where the page answered. */
 function previewKept(exit: Exit.Exit<LinkPreviewAnswer>): Duration.Duration {
@@ -55,13 +56,12 @@ function previewKept(exit: Exit.Exit<LinkPreviewAnswer>): Duration.Duration {
  * (`agents/coder-host/published.ts`), since the procedures are built with
  * no Effect to build one in.
  */
-function instanceLinkPreviewCache(resolve: AddressResolver): Effect.Effect<LinkPreviewCache> {
+function instanceLinkPreviewCache(reach: LinkPreviewReach): Effect.Effect<LinkPreviewCache> {
   const reads = Semaphore.makeUnsafe(PREVIEWS_KEPT.CONCURRENT_READS);
   const made = Cache.makeWith(
-    (address: string) => reads.withPermits(1)(readLinkPreview(address, { resolve })),
+    (address: string) => reads.withPermits(1)(readLinkPreview(address, reach)),
     {
       capacity: PREVIEWS_KEPT.CAPACITY,
-      requireServicesAt: "lookup",
       timeToLive: previewKept,
     },
   );
@@ -73,7 +73,7 @@ function instanceLinkPreviewCache(resolve: AddressResolver): Effect.Effect<LinkP
 
 /** The link previews resource: one page's preview, read for a signed-in account. */
 export function linkPreviewsProcedures(seams: LinkPreviewsProcedureSeams) {
-  const previews = instanceLinkPreviewCache(seams.resolveAddresses);
+  const previews = instanceLinkPreviewCache(seams.linkReach);
   const signedIn = hosted.linkPreviews.use(accountMiddleware(seams.resolveUserId));
   return {
     read: signedIn.read.effect(function* ({ input }) {

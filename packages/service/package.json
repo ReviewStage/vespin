@@ -137,7 +137,7 @@
     "./integrations/integrations": "./src/integrations/integrations.js",
     "./integrations/integrations-app": "./src/integrations/integrations-app.js",
     "./integrations/mcp-tools": "./src/integrations/mcp-tools.js",
-    "./link-previews/node-address-resolver": "./src/link-previews/node-address-resolver.js",
+    "./link-previews/node-link-reach": "./src/link-previews/node-link-reach.js",
     "./live/live-procedures": "./src/live/live-procedures.js",
     "./live/live-socket": "./src/live/live-socket.js",
     "./live/reads/workspaces": "./src/live/reads/workspaces.js",
