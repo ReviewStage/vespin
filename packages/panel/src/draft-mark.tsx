@@ -15,9 +15,8 @@
  * A message that was sent and did not go is no draft, so the place it went
  * wears the failed mark in the pencil's place while it waits on Retry, Edit,
  * or Delete (`tasks/failed-lines.ts`): the agent's tab while another is
- * chosen, as a chat app marks a conversation holding a message not
- * delivered. A sidebar row weighs both against its other marks and wears
- * one (`@repo/ui`'s `RowEndMark`).
+ * chosen, and a sidebar row of a task or an agent while another is open, as
+ * a chat app marks a conversation holding a message not delivered.
  */
 
 import { DraftMark, NotDeliveredMark } from "@repo/ui";

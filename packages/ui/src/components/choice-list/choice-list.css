@@ -79,7 +79,7 @@
     color: var(--ui-color-text-muted);
   }
 
-  /* A finger picks a row by pressing it, so its key says nothing there, as a menu's keys do not (`menu-keys.css`). */
+  /* A finger picks a row by pressing it, so its key says nothing there. */
   @media (pointer: coarse) {
     .ui-choice-number {
       display: none;

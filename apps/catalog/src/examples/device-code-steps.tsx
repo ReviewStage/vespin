@@ -1,20 +1,19 @@
 import {
   BUTTON_VARIANT,
   Button,
-  ButtonLink,
   COPY_FIELD_WIDTH,
   CopyField,
   ErrorLine,
   GAP,
   Inline,
+  OutsideLink,
+  OutsideSteps,
   STEP_STATE,
   Stack,
   Step,
-  Steps,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
-  WaitingLine,
 } from "@repo/ui";
 import { CATALOG_FAILURE } from "../catalog-failure";
 import type { Example } from "../example";
@@ -42,34 +41,29 @@ const EXPIRED = {
 /** The two steps, and the wait under them. */
 function CodeSteps(): React.JSX.Element {
   return (
-    <Stack gap={GAP.CONTROL}>
-      <Steps>
-        <Step
-          number={1}
-          title="Turn on device codes in your account's security settings"
-          state={STEP_STATE.CURRENT}
-        >
-          <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-            If you don't see this option, ask your workspace admin to turn it on
-          </Text>
-        </Step>
-        <Step number={2} title="Sign in and enter the code:" state={STEP_STATE.CURRENT}>
-          <CopyField
-            label="Code"
-            value="225Q-1343X"
-            what="code"
-            copy={copyToClipboard}
-            width={COPY_FIELD_WIDTH.HUG}
-          />
-          <Inline>
-            <ButtonLink href={VERIFICATION_URL} variant={BUTTON_VARIANT.OUTLINE} external>
-              Verification page
-            </ButtonLink>
-          </Inline>
-        </Step>
-      </Steps>
-      <WaitingLine>Waiting for the other site</WaitingLine>
-    </Stack>
+    <OutsideSteps waiting="Waiting for the other site">
+      <Step
+        number={1}
+        title="Turn on device codes in your account's security settings"
+        state={STEP_STATE.CURRENT}
+      >
+        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+          If you don't see this option, ask your workspace admin to turn it on
+        </Text>
+      </Step>
+      <Step number={2} title="Sign in and enter the code:" state={STEP_STATE.CURRENT}>
+        <CopyField
+          label="Code"
+          value="225Q-1343X"
+          what="code"
+          copy={copyToClipboard}
+          width={COPY_FIELD_WIDTH.HUG}
+        />
+        <OutsideLink href={VERIFICATION_URL} open={() => undefined}>
+          Open the verification page
+        </OutsideLink>
+      </Step>
+    </OutsideSteps>
   );
 }
 

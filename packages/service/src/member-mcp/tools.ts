@@ -42,6 +42,7 @@
 import { randomUUID } from "node:crypto";
 import type { ToolAnnotations } from "@modelcontextprotocol/server";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import type { Agent } from "@repo/database/models/agent-store";
 import { readAutomation } from "@repo/database/models/automation-store";
 import {
   actOnDescriptionCommentThread,
@@ -51,17 +52,20 @@ import {
   readDescriptionCommentThread,
   startDescriptionCommentThread,
 } from "@repo/database/models/description-comments";
+import { listRevisions, readRevision } from "@repo/database/models/description-revisions";
 import { readPageById } from "@repo/database/models/task-pages";
 import { listTaskSections } from "@repo/database/models/task-section-store";
 import { readTask, readTaskWorkspace } from "@repo/database/models/task-store";
 import { listWorkspaces } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
+import type { AgentBrowserTab } from "@repo/features/agent-browser-tab-wire";
 import { RETIRED_TOOL } from "@repo/features/agent-tools";
 import {
   AGENT_BOUNDS,
   AGENT_STATUS,
   CHANGED_FILE_STATUS,
   CHECK_SUMMARY,
+  contextWindowSchema,
   disabledServersSchema,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
@@ -90,8 +94,13 @@ import { commitShaSchema } from "@repo/features/link-grammar";
 import { MEMBER_MCP_TOOL, type MemberMcpToolName } from "@repo/features/member-mcp-tool";
 import { MEMORY_BOUNDS, memoryIdSchema } from "@repo/features/memory-wire";
 import { agentName } from "@repo/features/model-label";
+import { modelChoiceSchema } from "@repo/features/models-wire";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import {
+  PULL_REQUEST_CHAPTERS_STATE,
+  type PullRequestChaptersAnswer,
+} from "@repo/features/pull-request-chapters-wire";
 import {
   PULL_REQUEST_ACTION,
   PULL_REQUEST_WRITE_OUTCOME,
@@ -101,6 +110,9 @@ import {
 import {
   CODE_PATH_MAX_CHARS,
   codeLineSchema,
+  DESCRIPTION_HISTORY_BOUNDS,
+  type DescriptionRevisionLine,
+  descriptionRevisionSeqSchema,
   TASK_FILE_BOUNDS,
   TASK_FILE_REFUSAL,
   TASK_STATUS,
@@ -109,6 +121,10 @@ import {
   type TaskFileRefusal,
   type TaskTreeAnswer,
 } from "@repo/features/task-wire";
+import {
+  type WorkspaceSandboxSetupAnswer,
+  workspaceInstallScriptPutRequestSchema,
+} from "@repo/features/workspace-sandbox-setup-wire";
 import { WORKSPACE_BOUNDS, workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { Sandbox } from "@repo/sandbox";
 import {
@@ -120,8 +136,17 @@ import {
 import { describeWire, type StandardSchemaWithJson, standardSchemaOf } from "@repo/wire/effect";
 import { Effect, Option, Result, Schema } from "effect";
 import type { HttpClient } from "effect/http";
+import { writeOwnPreferences } from "../accounts/account-preferences.js";
+import { accountProcedureSeams } from "../accounts/account-seams.js";
 import { forgetWorkspaceMemory, WORKSPACE_MEMORY } from "../accounts/workspace-memories.js";
 import { workspaceMembersRead, workspaceSlugSet } from "../accounts/workspace-operations.js";
+import {
+  BROWSER_TAKEOVER_HOLD_MS,
+  handBackAgentBrowserTab,
+  listAgentBrowserTabs,
+  openAgentBrowserTab,
+  takeOverAgentBrowserTab,
+} from "../agents/agent-browser-tabs.js";
 import { READ_AGENT_CHANGES_INPUT, runReadAgentChanges } from "../agents/agent-changes-tool.js";
 import { agentPullRequestAction } from "../agents/agent-pull-request-procedures.js";
 import {
@@ -134,6 +159,7 @@ import {
   CODER_READ_AGENT_TOOL,
   callerUserId,
   callerWorkspaceId,
+  cutOnLine,
   LIST_AGENTS_TOOL,
   LIST_TASKS_TOOL,
   orStoreRefusal,
@@ -176,6 +202,7 @@ import {
   runUpdateAutomation,
   UPDATE_AUTOMATION_TOOL,
 } from "../agents/automation-tools.js";
+import type { AgentBrowser } from "../agents/browser/agent-browser.js";
 import { MESSAGE_AGENT_REFUSAL, messageRefusalWords } from "../agents/coder-host/agent-message.js";
 import {
   DESCRIPTION_EDIT_REFUSAL,
@@ -225,6 +252,12 @@ import {
   NO_EXPERIMENT_ON,
 } from "../agents/workspace-experiment-on.js";
 import {
+  agentChaptersGenerate,
+  agentChaptersRead,
+  repositoryChaptersGenerate,
+  repositoryChaptersRead,
+} from "../chapters/pull-request-chapters-procedures.js";
+import {
   ACTION_RESULT_STATUS,
   HOSTED_API_ERROR,
   type WireRecord,
@@ -251,16 +284,33 @@ import {
   type MentioningComment,
   memberCommentAnswer,
 } from "../tasks/description-comments-procedures.js";
+import {
+  DESCRIPTION_SAVE_REFUSAL,
+  DESCRIPTION_SAVE_STATUS,
+  restoreRevision,
+} from "../tasks/description-notes.js";
 import { readTaskFile } from "../tasks/task-file.js";
 import { readTaskTree } from "../tasks/task-tree.js";
 import type { SentryApp } from "../triggers/sentry/sentry-app-config.js";
+import {
+  readSandboxSetup,
+  saveInstallScript,
+  saveRepositorySetup,
+} from "../workspace-sandbox-setup/workspace-sandbox-setup.js";
 import { AdmittedMember, type AdmittedMemberValues } from "./admission.js";
 import { answerAskAsMember, closeThreadAsMember, readMemberInbox, replyAsMember } from "./inbox.js";
+import {
+  MARK_FILES_VIEWED_FIELDS,
+  READ_PULL_REQUEST_FIELDS,
+  runMarkFilesViewed,
+  runReadPullRequest,
+} from "./pull-request-tools.js";
 
-/** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against, an agent's sandbox its ports are read and shared in, the deployment's page links its shares answer, and the member the call acts for. */
+/** What a tool's effect runs against: the store, GitHub through the App, the model catalog, the deployment's environment a start's summary model reads, our Sentry integration an automation's trigger is checked against, an agent's sandbox its ports are read and shared in and the browser in it a tab is opened in, the deployment's page links its shares answer, and the member the call acts for. */
 export type MemberMcpServices =
   | Sandbox
   | AgentSandbox
+  | AgentBrowser
   | PageLinks
   | DatabaseServices
   | HttpClient.HttpClient
@@ -464,8 +514,7 @@ const MEMBER_LIST_TASKS_TOOL = memberMcpTool({
     `stands (its status: ${Object.values(TASK_STATUS).join(", ")}) and how much it matters (its ` +
     "priority), who it is assigned to (its assignee's mention link, null for no one), the " +
     "repository its agents work in (null for none yet), who started it, the sectionId of the " +
-    "sidebar section the member keeps it in (null for none), and its mention, the " +
-    "`[@name](link)` to name it by in your words, the newest first and at most " +
+    "sidebar section the member keeps it in (null for none), the newest first and at most " +
     `${TASKS_LIST_LIMIT} a page, with nextOffset where more stand; and beside them every ` +
     "section the member keeps in that workspace's sidebar, each with its id and title. Narrow " +
     "it by words of a task's name with nameContains, by where it stands with status, and by " +
@@ -481,9 +530,9 @@ const MEMBER_READ_TASK_TOOL = memberMcpTool({
   description:
     "Read one task the member can open, by its id, a teammate's included, in whichever of the " +
     "member's workspaces it stands: its key (such as ACME-42), name, where it stands (its " +
-    "status) and how much it matters (its priority), repository, who started it, its mention, " +
+    "status) and how much it matters (its priority), repository, who started it, " +
     "the brief it was started with (null for none), the tasks it is blocked by and the tasks it " +
-    "blocks (each with its id, name, status, and mention), and its description as last saved, cut on a " +
+    "blocks (each with its id, name, and status), and its description as last saved, cut on a " +
     `line at ${DESCRIPTION_TEXT_READ_CHARS} characters with how many were left out. ` +
     `${MEMBER_MCP_TOOL.LIST_AGENTS} with its taskId names the agents on it.`,
   input: READ_TASK_TOOL.inputSchema,
@@ -491,9 +540,9 @@ const MEMBER_READ_TASK_TOOL = memberMcpTool({
     description:
       "Read one task the member can open, by its id, a teammate's included, in whichever of the " +
       "member's workspaces it stands: its key (such as ACME-42), name, where it stands (its " +
-      "status) and how much it matters (its priority), repository, who started it, its mention, " +
+      "status) and how much it matters (its priority), repository, who started it, " +
       "the brief it was started with (null for none), and the tasks it is blocked by and the " +
-      "tasks it blocks (each with its id, name, status, and mention). " +
+      "tasks it blocks (each with its id, name, and status). " +
       `${MEMBER_MCP_TOOL.LIST_AGENTS} with its taskId names the agents on it.`,
     input: READ_TASK_TOOL.inputSchema,
   },
@@ -541,8 +590,8 @@ const MEMBER_LIST_AGENTS_TOOL = memberMcpTool({
     "model and effort it runs on with the model's name to say it by, its status " +
     `(${Object.values(AGENT_STATUS).join(", ")}) and why where it failed, its repository and the ` +
     "branch its sandbox is on if a turn has ended, one line of what it last did, its task (id " +
-    "and name; null for an agent on no task), whether it is archived, and its mention, the " +
-    "`[@title](link)` to name it by in your words; the newest started first, at most " +
+    "and name; null for an agent on no task), and whether it is archived; the newest started " +
+    "first, at most " +
     `${WORKSPACE_AGENTS_LIST_LIMIT} a page, with nextOffset where more stand, which offset ` +
     "reads the next page by. Pass words to search by words of an agent's title or its task's " +
     `name, or a taskId for one task's agents. ${WORKSPACE_WORDS} Failed covers a session that ` +
@@ -657,8 +706,8 @@ const MEMBER_READ_PAGE_TOOL = memberMcpTool({
     "Read a page an agent showed, by the page's id, on a task the member can open or on an " +
     "agent of theirs with no task, in whichever of the member's workspaces it stands: its " +
     "title, the version read (the newest unless you name one) and the newest there is, its " +
-    "task, or, for a page an agent on no task showed on itself, that agent, its mention ready " +
-    `to write, and its HTML as it stands, cut on a line at ${READ_PAGE_CHARS} characters with ` +
+    "task, or, for a page an agent on no task showed on itself, that agent, " +
+    `and its HTML as it stands, cut on a line at ${READ_PAGE_CHARS} characters with ` +
     "how many were left out.",
   input: ReadPageInputSchema,
   annotations: READ_ONLY,
@@ -809,6 +858,70 @@ const IDEMPOTENT_CHANGE: ToolAnnotations = {
   idempotentHint: true,
 };
 
+/** A change of the member's preferences names their coding agents' default model and effort together, and at most its context window. */
+const UpdatePreferencesInputSchema = Schema.Struct({
+  model: describeWire(
+    modelChoiceSchema.fields.model,
+    `The default model, by its catalog id as ${MEMBER_MCP_TOOL.LIST_MODELS} answers it.`,
+  ),
+  effort: describeWire(
+    modelChoiceSchema.fields.effort,
+    "The default reasoning effort, as the model lists it.",
+  ),
+  contextWindow: Schema.optionalKey(
+    describeWire(
+      contextWindowSchema,
+      "The default context window, standard or long; leave it out for the model's standard one.",
+    ),
+  ),
+});
+
+/** Why a change of the member's preferences took nothing, in words for one acting for the member. */
+const UPDATE_PREFERENCES_REFUSAL = {
+  NOT_OFFERED:
+    "Not changed: the member is not offered that model and effort, or no credential of theirs " +
+    `pays for that model; ${MEMBER_MCP_TOOL.LIST_MODELS} lists the choices.`,
+  UNAVAILABLE:
+    "Not changed: the model catalog or the member's preferences could not be read; try again.",
+} as const;
+
+/**
+ * `update_preferences`: the member's coding agents' default, written as
+ * their Settings writes it (`writeOwnPreferences`), so a choice the catalog
+ * does not offer them, or one no credential of theirs pays for, is refused
+ * as Settings is.
+ */
+const UPDATE_PREFERENCES_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.UPDATE_PREFERENCES,
+  description:
+    "Change the member's own preferences, as their Settings would: the default model and " +
+    "effort their coding agents start on where a start names neither, and its context window, " +
+    `as ${MEMBER_MCP_TOOL.LIST_MODELS} lists them. The default is the member's own, the same ` +
+    "in every workspace, and agents already started keep the model they run on. Answers " +
+    "`accepted` with the default as it then stands, or `rejected` and why; " +
+    `${MEMBER_MCP_TOOL.LIST_MODELS} reads it back.`,
+  input: UpdatePreferencesInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: (agent) =>
+    Effect.flatMap(AdmittedMember, (member) =>
+      writeOwnPreferences(accountProcedureSeams(), member.userId, { agent }).pipe(
+        Effect.map((written) => ({
+          status: ACTION_RESULT_STATUS.ACCEPTED,
+          default: written.agent,
+        })),
+        Effect.catch((refusal) =>
+          Effect.succeed(
+            agentToolRejected(
+              refusal.error === HOSTED_API_ERROR.INVALID_REQUEST
+                ? UPDATE_PREFERENCES_REFUSAL.NOT_OFFERED
+                : UPDATE_PREFERENCES_REFUSAL.UNAVAILABLE,
+            ),
+          ),
+        ),
+      ),
+    ),
+});
+
 /** A write that may take something away, such as a turn under way, an archived agent's place, or a section, which the same call made again leaves as it stood. */
 const DESTRUCTIVE: ToolAnnotations = {
   readOnlyHint: false,
@@ -910,7 +1023,7 @@ function memberCreateTaskWords(startsWith: string): string {
     `task of the workspace in the same call. ${WORKSPACE_WORDS} Then start an agent on it ` +
     `with ${MEMBER_MCP_TOOL.START_AGENT}'s taskId. Each call makes a task of its own, so call ` +
     "it once for each. Answers `accepted` with the task's id, key, name, status, priority, " +
-    "assignee, repository, and mention, or `rejected` and why."
+    "assignee, and repository, or `rejected` and why."
   );
 }
 
@@ -1068,6 +1181,180 @@ const MEMBER_EDIT_DESCRIPTION_TOOL = memberMcpTool({
   experiment: EXPERIMENT.DESCRIPTIONS,
 });
 
+/*
+ * A description's history. Each runs the operation the window's History tab
+ * runs through its procedure (`plans.descriptionRevisions`,
+ * `descriptionRevision`, `restoreDescription`): the history read under the
+ * member's membership of the task's workspace, and a restore the member's own
+ * save, kept as a revision naming the one it brought back.
+ */
+
+/** Why a history call answered nothing, in words the agent can act on. */
+const DESCRIPTION_HISTORY_REFUSAL = {
+  NO_TASK: `Not read: no task the member can open has that id; ${MEMBER_MCP_TOOL.LIST_TASKS} names them.`,
+  NO_REVISION: `Not read: the description has no revision of that number; ${MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS} names them.`,
+  NOT_RESTORED_NO_TASK: `Not restored: no task the member can open has that id; ${MEMBER_MCP_TOOL.LIST_TASKS} names them.`,
+  NOT_RESTORED_NO_REVISION: `Not restored: the description has no revision of that number; ${MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS} names them.`,
+  NOT_RESTORED_TOO_LONG: "Not restored: the revision is longer than a description may now be.",
+  NOT_RESTORED: "Not restored: the service could not reach its store.",
+} as const;
+
+/** What a restore that saved nothing answers, by why. */
+const RESTORE_REFUSAL_WORDS: ReadonlyMap<string, string> = new Map([
+  [DESCRIPTION_SAVE_REFUSAL.NO_TASK, DESCRIPTION_HISTORY_REFUSAL.NOT_RESTORED_NO_TASK],
+  [DESCRIPTION_SAVE_REFUSAL.NO_REVISION, DESCRIPTION_HISTORY_REFUSAL.NOT_RESTORED_NO_REVISION],
+  [DESCRIPTION_SAVE_REFUSAL.TOO_LONG, DESCRIPTION_HISTORY_REFUSAL.NOT_RESTORED_TOO_LONG],
+]);
+
+/** The task whose description's history a call is about. */
+const HISTORY_TASK_INPUT = describeWire(
+  wireUuidSchema,
+  `The task whose description's history to read, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
+);
+
+/** A revision a call names, by its number. */
+const revisionSeqInput = (words: string) =>
+  describeWire(
+    descriptionRevisionSeqSchema,
+    `${words}, by the number ${MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS} answered.`,
+  );
+
+const ListDescriptionRevisionsInputSchema = Schema.Struct({
+  taskId: HISTORY_TASK_INPUT,
+  before: Schema.optionalKey(
+    describeWire(
+      descriptionRevisionSeqSchema,
+      "The earlier a page answered, to read the next older page; leave it out for the newest.",
+    ),
+  ),
+});
+
+const ReadDescriptionRevisionInputSchema = Schema.Struct({
+  taskId: HISTORY_TASK_INPUT,
+  seq: revisionSeqInput("The revision to read"),
+});
+
+const RestoreDescriptionRevisionInputSchema = Schema.Struct({
+  taskId: describeWire(
+    wireUuidSchema,
+    `The task whose description to restore, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
+  ),
+  seq: revisionSeqInput("The revision to put back"),
+});
+
+/** Epoch milliseconds as the agent reads a moment. */
+const momentOf = (at: number) => new Date(at).toISOString();
+
+/** One revision as the agent reads it: its number, who wrote it, when, how many changes, and the revision it brought back where it is a restore. */
+const revisionLineOf = (line: DescriptionRevisionLine) => ({
+  seq: line.seq,
+  writer: line.lastEdit.actor,
+  by: line.lastEdit.by?.name ?? line.lastEdit.label ?? null,
+  ...(line.agentId === undefined ? undefined : { agentId: line.agentId }),
+  startedAt: momentOf(line.startedAt),
+  editedAt: momentOf(line.lastEdit.at),
+  changes: line.changes,
+  ...(line.restoredFrom === undefined ? undefined : { restoredFrom: line.restoredFrom.seq }),
+});
+
+/** A history call run as the member, about the workspace that holds the task as they reach it, refused where that workspace has Task descriptions off. */
+const historyAsMember = <R>(
+  taskId: string,
+  noTask: string,
+  run: (userId: string) => Effect.Effect<WireRecord, StoreFailure, R>,
+) =>
+  readAsMember(
+    (userId) => readTaskWorkspace(userId, taskId),
+    noTask,
+    ({ caller }) =>
+      Effect.flatMap(
+        experimentOnIn(callerWorkspaceId(caller), EXPERIMENT.DESCRIPTIONS),
+        (descriptionsOn) =>
+          descriptionsOn
+            ? orStoreRefusal(run(callerUserId(caller)))
+            : Effect.succeed(agentToolRejected(EXPERIMENT_OFF_REFUSAL)),
+      ),
+  );
+
+const LIST_DESCRIPTION_REVISIONS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS,
+  description:
+    "List the history of a task's description, by its taskId, as its History tab does: every save " +
+    "is kept, and saves one writer makes one after another are one revision. Answers the newest " +
+    `${DESCRIPTION_HISTORY_BOUNDS.PAGE} revisions first, each with its number (seq), its writer ` +
+    "(developer for a member, notetaker, agent, or earlier for the text from before history began), " +
+    "by whom (the member's or the agent's name, null for none), the agentId of an agent's, when it " +
+    "began and last moved, how many changes its saves made, and restoredFrom, the revision a " +
+    "member's restore brought back; and earlier, which before takes to read the next older page, " +
+    `absent on the oldest. ${MEMBER_MCP_TOOL.READ_DESCRIPTION_REVISION} reads one revision's text. ` +
+    "Answers `accepted` with them, or `rejected` and why.",
+  input: ListDescriptionRevisionsInputSchema,
+  annotations: READ_ONLY,
+  run: (asked) =>
+    historyAsMember(asked.taskId, DESCRIPTION_HISTORY_REFUSAL.NO_TASK, (userId) =>
+      Effect.map(listRevisions(userId, asked.taskId, asked.before), (page) => ({
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        revisions: page.revisions.map(revisionLineOf),
+        ...(page.earlier === undefined ? undefined : { earlier: page.earlier }),
+      })),
+    ),
+  experiment: EXPERIMENT.DESCRIPTIONS,
+});
+
+const READ_DESCRIPTION_REVISION_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.READ_DESCRIPTION_REVISION,
+  description:
+    "Read one revision of a task's description, by its taskId and the revision's number (seq): the " +
+    `whole description as it stood after that revision, cut on a line at ${DESCRIPTION_TEXT_READ_CHARS} ` +
+    "characters with how many were left out. Read the revision before it, seq less one, to see what " +
+    `it changed. Answers \`accepted\` with its text, or \`rejected\` and why.`,
+  input: ReadDescriptionRevisionInputSchema,
+  annotations: READ_ONLY,
+  run: (asked) =>
+    historyAsMember(asked.taskId, DESCRIPTION_HISTORY_REFUSAL.NO_TASK, (userId) =>
+      Effect.map(readRevision(userId, asked.taskId, asked.seq), (revision) => {
+        if (Option.isNone(revision)) {
+          return agentToolRejected(DESCRIPTION_HISTORY_REFUSAL.NO_REVISION);
+        }
+        const text = cutOnLine(revision.value.document.body, DESCRIPTION_TEXT_READ_CHARS);
+        return {
+          status: ACTION_RESULT_STATUS.ACCEPTED,
+          revision: { seq: asked.seq, text: text.text, leftOutChars: text.leftOutChars },
+        };
+      }),
+    ),
+  experiment: EXPERIMENT.DESCRIPTIONS,
+});
+
+const RESTORE_DESCRIPTION_REVISION_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.RESTORE_DESCRIPTION_REVISION,
+  description:
+    "Put one revision of a task's description back as its text, by its taskId and the revision's " +
+    "number (seq), as the History tab's Restore does: the restore is the member's own save, kept " +
+    "as a revision of its own that names the one it brought back, so the text it replaced stays " +
+    "in the history, and a restore is undone by restoring the revision before it. Restore one only " +
+    "when the member asks for it. Answers `accepted` with the revision restored and whether the " +
+    "description changed, false where it already held that text, or `rejected` and why.",
+  input: RestoreDescriptionRevisionInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: (asked) =>
+    historyAsMember(asked.taskId, DESCRIPTION_HISTORY_REFUSAL.NOT_RESTORED_NO_TASK, (userId) =>
+      Effect.map(restoreRevision({ userId, taskId: asked.taskId }, asked.seq), (restored) =>
+        restored.status === DESCRIPTION_SAVE_STATUS.SAVED
+          ? {
+              status: ACTION_RESULT_STATUS.ACCEPTED,
+              restored: asked.seq,
+              changed: restored.txid !== undefined,
+            }
+          : agentToolRejected(
+              RESTORE_REFUSAL_WORDS.get(restored.reason) ??
+                DESCRIPTION_HISTORY_REFUSAL.NOT_RESTORED,
+            ),
+      ),
+    ),
+  experiment: EXPERIMENT.DESCRIPTIONS,
+});
+
 /** A section the member makes names the workspace it is made in, its title, and its emoji. */
 const CreateSectionInputSchema = Schema.Struct({
   workspace: WORKSPACE_INPUT,
@@ -1203,7 +1490,7 @@ function memberStartAgentWords(handed: string, newTaskPrompt: string): string {
     "instead: continue an agent that failed, ended, or ran out of context, which is handed " +
     "over and stopped, or fork one at a messageId to try another direction while it goes on. " +
     "Each call starts an agent of its own, so call it once for each. Answers `accepted` with " +
-    "the agent's id, model, the model's name to say it by, effort, status, and mention once " +
+    "the agent's id, title, model, the model's name to say it by, effort, and status once " +
     "its session is open, which may take a minute or two, or `rejected` and why nothing was " +
     `started; a rejected model or effort lists the choices. ${FOLLOW_WORDS}`
   );
@@ -1514,6 +1801,173 @@ const SHARE_AGENT_PORT_TOOL = memberMcpTool({
     Effect.flatMap(memberPortsReach(agentId), (reach) => runSharePort(reach, { port })),
 });
 
+/*
+ * An agent's cloud browser's tabs, through the one operation the Browser
+ * tab's procedures run (`../agents/agent-browser-tabs.ts`), reached as the
+ * member by the agent's own rule. A tab is answered by its address and
+ * title as the service keeps them, and who drives it; never a frame, a
+ * screenshot, or the page's text.
+ */
+
+/** Why a tab call changed nothing, in words for one acting for the member. */
+const BROWSER_TAB_REFUSAL = {
+  NOT_FOUND:
+    "Not run: the member sees no such agent, or no such tab in its browser; " +
+    `${MEMBER_MCP_TOOL.LIST_AGENT_BROWSER_TABS} lists its tabs.`,
+  NOT_PERMITTED:
+    "Not run: only the agent's starter may drive its browser, since the agent works on their " +
+    "own GitHub token.",
+  RETIRED: "Not opened: the agent is archived.",
+  NOT_READY:
+    "Not opened: the agent has opened no sandbox yet, or its sandbox is starting. The call " +
+    "may be made again in a moment.",
+  NOT_AN_ADDRESS: "Not opened: give an http or https address.",
+  UNAVAILABLE:
+    "Not run: the agent's browser could not be reached just now. The call may be made again.",
+} as const;
+
+/** Each refusal of the tabs operation in the words above; any other is the browser unavailable. */
+const BROWSER_TAB_REFUSAL_WORDS = new Map<HostedRefusal["error"], string>([
+  [HOSTED_API_ERROR.NOT_FOUND, BROWSER_TAB_REFUSAL.NOT_FOUND],
+  [HOSTED_API_ERROR.NOT_PERMITTED, BROWSER_TAB_REFUSAL.NOT_PERMITTED],
+  [HOSTED_API_ERROR.AGENT_RETIRED, BROWSER_TAB_REFUSAL.RETIRED],
+  [HOSTED_API_ERROR.AGENT_NOT_READY, BROWSER_TAB_REFUSAL.NOT_READY],
+  [HOSTED_API_ERROR.INVALID_REQUEST, BROWSER_TAB_REFUSAL.NOT_AN_ADDRESS],
+]);
+
+/** Who drives a tab, as the member's agent reads it: the agent, the member, or another member. */
+const BROWSER_TAB_DRIVER = {
+  AGENT: "agent",
+  YOU: "you",
+  ANOTHER_MEMBER: "another member",
+} as const;
+
+/** A tab as the tools answer it: its id, address, title, who opened it, and who drives it until when; never its cursor. */
+function memberBrowserTab(tab: AgentBrowserTab, userId: string) {
+  const driver =
+    tab.driver === null
+      ? BROWSER_TAB_DRIVER.AGENT
+      : tab.driver.userId === userId
+        ? BROWSER_TAB_DRIVER.YOU
+        : BROWSER_TAB_DRIVER.ANOTHER_MEMBER;
+  return {
+    id: tab.id,
+    address: tab.address,
+    title: tab.title,
+    openedBy: tab.openedBy.kind,
+    driver,
+    ...(tab.driver === null ? {} : { heldUntil: new Date(tab.driver.heldUntil).toISOString() }),
+  };
+}
+
+/** A tab call run as the member: the operation's answer as accepted, or its refusal in words. */
+const browserTabAnswer = <A, R>(
+  operation: (userId: string) => Effect.Effect<A, HostedRefusal, R>,
+  answered: (answer: A, userId: string) => WireRecord,
+) =>
+  Effect.gen(function* () {
+    const member = yield* AdmittedMember;
+    return yield* operation(member.userId).pipe(
+      Effect.map((answer) => answered(answer, member.userId)),
+      Effect.catch((refusal) =>
+        Effect.succeed(
+          agentToolRejected(
+            BROWSER_TAB_REFUSAL_WORDS.get(refusal.error) ?? BROWSER_TAB_REFUSAL.UNAVAILABLE,
+          ),
+        ),
+      ),
+    );
+  });
+
+/** One tab as a write answers it. */
+const oneTab = ({ tab }: { readonly tab: AgentBrowserTab }, userId: string): WireRecord => ({
+  status: ACTION_RESULT_STATUS.ACCEPTED,
+  tab: memberBrowserTab(tab, userId),
+});
+
+/** A take-over and a hand-back name the agent and the tab. */
+const AgentBrowserTabInputSchema = Schema.Struct({
+  agentId: AgentIdInputSchema.fields.agentId,
+  tabId: describeWire(
+    wireUuidSchema,
+    `The tab's id, as ${MEMBER_MCP_TOOL.LIST_AGENT_BROWSER_TABS} answered it.`,
+  ),
+});
+
+/** An open names the agent and the address. */
+const OpenAgentBrowserTabInputSchema = Schema.Struct({
+  agentId: AgentIdInputSchema.fields.agentId,
+  address: describeWire(Schema.String, "The http or https address to open the tab at."),
+});
+
+/** How long a takeover stands, in the tools' words. */
+const TAKEOVER_WORDS =
+  `A takeover stands for ${BROWSER_TAKEOVER_HOLD_MS / 1_000} seconds past the member's last ` +
+  `take, which ${MEMBER_MCP_TOOL.TAKE_OVER_AGENT_BROWSER_TAB} moves on when called again, and ` +
+  "the tab goes back to the agent once it lapses.";
+
+const LIST_AGENT_BROWSER_TABS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_AGENT_BROWSER_TABS,
+  description:
+    "List the tabs open in the cloud browser of a coding agent the member can see, by its id, " +
+    "the oldest first, as the agent's Browser tab lists them: each by its id, address, and " +
+    "title, who opened it, the agent or a member, and who drives it, the agent, you (the " +
+    "member), or another member, with when that member's takeover lapses. Answers `accepted` " +
+    "with the tabs, or `rejected` and why.",
+  input: AgentIdInputSchema,
+  annotations: READ_ONLY,
+  run: ({ agentId }) =>
+    browserTabAnswer(
+      (userId) => listAgentBrowserTabs(userId, { agentId }),
+      ({ tabs }, userId) => ({
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        tabs: tabs.map((tab) => memberBrowserTab(tab, userId)),
+      }),
+    ),
+});
+
+const OPEN_AGENT_BROWSER_TAB_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.OPEN_AGENT_BROWSER_TAB,
+  description:
+    "Open a tab at an http or https address in the cloud browser of a coding agent the member " +
+    "can see and controls, by its id, as the member's Browser tab opens one, such as a sign-in " +
+    "page the member should finish for the agent; a stopped sandbox is resumed for it. The " +
+    "tab is taken over for the member at once, so the agent does not act on it until it is " +
+    `handed back with ${MEMBER_MCP_TOOL.HAND_BACK_AGENT_BROWSER_TAB}. ${TAKEOVER_WORDS} ` +
+    "Answers `accepted` with the tab, or `rejected` and why.",
+  input: OpenAgentBrowserTabInputSchema,
+  annotations: ADDITIVE,
+  run: ({ agentId, address }) =>
+    browserTabAnswer((userId) => openAgentBrowserTab(userId, { agentId, address }), oneTab),
+});
+
+const TAKE_OVER_AGENT_BROWSER_TAB_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.TAKE_OVER_AGENT_BROWSER_TAB,
+  description:
+    "Take over a tab in the cloud browser of a coding agent the member controls, by the " +
+    "agent's id and the tab's, as the member's Browser tab's Take over does, so the agent does " +
+    `not act on it, or move the member's own takeover on. ${TAKEOVER_WORDS} A tab another ` +
+    "member drives is left to them and answered with them as its driver. Answers `accepted` " +
+    "with the tab as it then stands, or `rejected` and why.",
+  input: AgentBrowserTabInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ agentId, tabId }) =>
+    browserTabAnswer((userId) => takeOverAgentBrowserTab(userId, { agentId }, tabId), oneTab),
+});
+
+const HAND_BACK_AGENT_BROWSER_TAB_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.HAND_BACK_AGENT_BROWSER_TAB,
+  description:
+    "Hand a tab the member drives in a coding agent's cloud browser back to the agent, by the " +
+    "agent's id and the tab's, as the member's Browser tab's Hand back does, so the agent may " +
+    "act on it again. A tab the member does not drive is left as it stands. Answers " +
+    "`accepted` with the tab as it then stands, or `rejected` and why.",
+  input: AgentBrowserTabInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ agentId, tabId }) =>
+    browserTabAnswer((userId) => handBackAgentBrowserTab(userId, { agentId }, tabId), oneTab),
+});
+
 // The member's inbox (`inbox.ts`): the threads their agents ask them things on, read and worked as theirs.
 
 /** How an answer or a message tells the agent what the thread's agent hears. */
@@ -1540,8 +1994,7 @@ const READ_INBOX_TOOL = memberMcpTool({
     "changed first. Each thread has its id, which the other inbox tools take, its title, where " +
     `it stands (${Object.values(INBOX_STATUS).join(", ")}) and its revision, the agent that ` +
     "posted it (agentId), who it waits on by name and whether that is the member " +
-    "(waitsOnMember), whether it is unread for them, its mention, the `[@title](link)` to name " +
-    "it by in your words, and its messages in order: who wrote each (agent, `you` for the " +
+    "(waitsOnMember), whether it is unread for them, and its messages in order: who wrote each (agent, `you` for the " +
     "member, or another member by name), its words, its files by name, the ask it ends with " +
     "and where that stands, and the answer a member's message carries. An open ask reads " +
     `whole: a ${INBOX_ASK.DECIDE}'s options, those recommended, and whether several may be ` +
@@ -1810,6 +2263,257 @@ const AGENT_PULL_REQUEST_ACTION_TOOL = memberMcpTool({
     ),
 });
 
+// Any pull request of a repository the member's workspace reaches, by its repository and number (`pull-request-tools.ts`).
+
+/** A read names its workspace, as a list does, and the pull request and its part. */
+const ReadPullRequestInputSchema = Schema.Struct({
+  workspace: WORKSPACE_INPUT,
+  ...READ_PULL_REQUEST_FIELDS,
+});
+
+/** A mark names its workspace, as a list does, and the pull request's files. */
+const MarkPullRequestFilesViewedInputSchema = Schema.Struct({
+  workspace: WORKSPACE_INPUT,
+  ...MARK_FILES_VIEWED_FIELDS,
+});
+
+const READ_PULL_REQUEST_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.READ_PULL_REQUEST,
+  description:
+    "Read any pull request of a repository the member's workspace reaches on GitHub, by its " +
+    "repository (owner/name) and number, one part a call, as its Pull request tab draws it. " +
+    "overview (the default) answers the pull request as GitHub holds it now: its state, its " +
+    "checks in one word, the head commit it stands on (headSha), the lines it adds and removes, " +
+    "the branch it is from, and its overview: its body as written in Markdown, cut to a bound, its " +
+    "base and head, whether it would merge, who opened it, who it asks for a review, its labels, " +
+    "and the stack it stands in. checks answers each check on its head and its deployments. " +
+    "conversation answers where each reviewer stands and its comments and reviews, newest " +
+    "first, each with its review threads, a page at a time held to a bound, with nextOffset " +
+    "where more stand. changes answers the files it changes, a page at a time with nextOffset, " +
+    "each with what became of it, the lines it adds and removes, and whether the member marked " +
+    "it viewed; name a path to read that file's patch as well. " +
+    `${WORKSPACE_WORDS} Answers \`rejected\` and why where the member is in no such workspace ` +
+    "or the repository holds no pull request of that number. It only reads.",
+  input: ReadPullRequestInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace, ...asked }) =>
+    listAsMember(workspace, (call) =>
+      runReadPullRequest(callerUserId(call.caller), callerWorkspaceId(call.caller), asked),
+    ),
+});
+
+const MARK_PULL_REQUEST_FILES_VIEWED_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED,
+  description:
+    "Mark files of any pull request of a repository the member's workspace reaches as viewed, " +
+    "or unmark them, by the pull request's repository (owner/name) and number and the files' " +
+    `paths as ${MEMBER_MCP_TOOL.READ_PULL_REQUEST}'s changes name them, as GitHub's own Viewed ` +
+    "box does: on GitHub as the member, on their own GitHub sign-in. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the paths marked, or \`rejected\` and why ` +
+    "at the first GitHub did not take, naming those marked before it.",
+  input: MarkPullRequestFilesViewedInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: ({ workspace, ...asked }) =>
+    listAsMember(workspace, (call) =>
+      runMarkFilesViewed(callerUserId(call.caller), callerWorkspaceId(call.caller), asked),
+    ),
+});
+
+/*
+ * A pull request's chapters, read and generated as its Pull request tab
+ * reads and generates them, through the operations its procedures run
+ * (`../chapters/pull-request-chapters-procedures.ts`): an agent's pull
+ * request by the agent's id, or any pull request of a repository the
+ * workspace reaches by its repository and number. A Generate runs one model
+ * call on the member's own API key, as the tab's does, held to its claim, so
+ * a second Generate of the same head while one runs answers it as it stands.
+ */
+
+/** Why chapters were not read or generated, in words the agent can act on. */
+const CHAPTERS_REFUSAL = {
+  NAME_ONE:
+    "Not run: name the pull request either by agentId, or by repository and number, not both " +
+    "and not neither.",
+  NO_PULL_REQUEST:
+    "Not run: the member reaches no such pull request: the agent, the workspace, or the " +
+    "repository's pull request of that number is none of theirs.",
+  NOT_REACHABLE:
+    "Not run: the GitHub installation connected to the workspace no longer reaches that " +
+    "repository.",
+  NO_KEY:
+    "Not generated: the member saved no API key to generate chapters on, or the service could " +
+    `not run it just now. Chapters run on the member's own Anthropic or OpenAI key, saved in ` +
+    `${PRODUCT_NAME}'s settings.`,
+  UNANSWERED:
+    "Not run: GitHub or the service could not be reached just now. The call may be made again.",
+} as const;
+
+/** A refusal of a chapters read or Generate, in the agent's words: unavailable is a Generate's missing key, or a read's store down. */
+function chaptersRefusalWords(refusal: HostedRefusal, generates: boolean): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return CHAPTERS_REFUSAL.NO_PULL_REQUEST;
+    case HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE:
+      return CHAPTERS_REFUSAL.NOT_REACHABLE;
+    case HOSTED_API_ERROR.UNAVAILABLE:
+      return generates ? CHAPTERS_REFUSAL.NO_KEY : CHAPTERS_REFUSAL.UNANSWERED;
+    default:
+      return CHAPTERS_REFUSAL.UNANSWERED;
+  }
+}
+
+/** A chapters call names an agent's pull request, or a repository's by its number, in the workspace a slug names. */
+const PullRequestChaptersInputSchema = Schema.Struct({
+  agentId: Schema.optionalKey(
+    describeWire(
+      wireUuidSchema,
+      `An agent whose pull request to read, by its id as ${MEMBER_MCP_TOOL.LIST_AGENTS} answered ` +
+        "it; leave it out to name a repository's pull request instead.",
+    ),
+  ),
+  repository: Schema.optionalKey(
+    describeWire(
+      githubRepositoryFullNameSchema,
+      "The repository whose pull request to read, as owner/name, with number; leave it out " +
+        "with agentId.",
+    ),
+  ),
+  number: Schema.optionalKey(
+    describeWire(
+      githubPullRequestNumberSchema,
+      "The pull request's number: with repository, the one to read; with agentId, another " +
+        "pull request of the agent's repository, left out for the agent's own.",
+    ),
+  ),
+  workspace: Schema.optionalKey(
+    describeWire(
+      WORKSPACE_INPUT.schema,
+      `With repository, the workspace whose GitHub installation reaches it, by the slug ` +
+        `${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; leave it out where the member belongs to ` +
+        "one workspace alone.",
+    ),
+  ),
+});
+
+type PullRequestChaptersInput = typeof PullRequestChaptersInputSchema.Type;
+
+/** The two ways a chapters call reaches its pull request: through the agent that published it, or by its repository and number. */
+interface ChaptersCall<R> {
+  /** Whether it generates, which spends the member's key, rather than reads. */
+  readonly generates: boolean;
+  readonly agent: (
+    userId: string,
+    agent: Agent,
+    number: number | undefined,
+  ) => Effect.Effect<PullRequestChaptersAnswer, HostedRefusal, R>;
+  readonly repository: (
+    userId: string,
+    query: { readonly workspaceId: string; readonly repository: string; readonly number: number },
+  ) => Effect.Effect<PullRequestChaptersAnswer, HostedRefusal, R>;
+}
+
+/** A chapters read or Generate run as the member on the pull request its input names, answered with the chapters as the tab reads them, or refused in the agent's words. */
+const chaptersAsMember = <R>(asked: PullRequestChaptersInput, call: ChaptersCall<R>) => {
+  const answered = (effect: Effect.Effect<PullRequestChaptersAnswer, HostedRefusal, R>) =>
+    effect.pipe(
+      Effect.map((answer): WireRecord => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...answer })),
+      Effect.catch((refusal) =>
+        Effect.succeed(agentToolRejected(chaptersRefusalWords(refusal, call.generates))),
+      ),
+    );
+  const { agentId, repository, number, workspace } = asked;
+  if (agentId !== undefined) {
+    if (repository !== undefined || workspace !== undefined) {
+      return Effect.succeed(agentToolRejected(CHAPTERS_REFUSAL.NAME_ONE));
+    }
+    return readAsMember(
+      (userId) => agentWorkspace(userId, { id: agentId }),
+      AGENT_TOOL_REFUSAL.NO_AGENT,
+      (member) =>
+        orStoreRefusal(
+          Effect.gen(function* () {
+            const found = yield* workspaceAgentOf(member.caller, agentId);
+            if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
+            return yield* answered(
+              call.agent(callerUserId(member.caller), found.value.agent, number),
+            );
+          }),
+        ),
+    );
+  }
+  if (repository === undefined || number === undefined) {
+    return Effect.succeed(agentToolRejected(CHAPTERS_REFUSAL.NAME_ONE));
+  }
+  return listAsMember(workspace, (member) =>
+    answered(
+      call.repository(callerUserId(member.caller), {
+        workspaceId: callerWorkspaceId(member.caller),
+        repository,
+        number,
+      }),
+    ),
+  );
+};
+
+/** How a chapters tool tells the agent what it answers. */
+const CHAPTERS_ANSWER_WORDS =
+  "Answers `accepted` with the pull request's number, whether the member can generate " +
+  "chapters (generatable) and on which model and provider (runsOn), and where its newest " +
+  `chapters stand (${Object.values(PULL_REQUEST_CHAPTERS_STATE).join(", ")}): the head and base ` +
+  "they were told for, and, where ready, each chapter's title, summary, kind, risk and why, key " +
+  "changes with the lines they are on, and the hunks it holds; chapters told for a head older " +
+  "than the pull request's now are stale. pullRequest is null where the agent opened none yet. " +
+  "Or `rejected` and why.";
+
+const READ_PULL_REQUEST_CHAPTERS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS,
+  description:
+    "Read a pull request's chapters as its Pull request tab shows them: the story of its diff " +
+    "told as chapters a reviewer reads in order. Name a coding agent's pull request by the " +
+    "agent's id, or any pull request of a repository the workspace's GitHub installation " +
+    "reaches by its repository and number. It only reads, and never generates: " +
+    `${MEMBER_MCP_TOOL.GENERATE_PULL_REQUEST_CHAPTERS} does, where none stand or they are stale. ` +
+    CHAPTERS_ANSWER_WORDS,
+  input: PullRequestChaptersInputSchema,
+  annotations: READ_ONLY,
+  run: (asked) =>
+    chaptersAsMember(asked, {
+      generates: false,
+      agent: (userId, agent, number) => agentChaptersRead(KEPT_PUBLISHED, userId, agent, number),
+      repository: repositoryChaptersRead,
+    }),
+});
+
+const GENERATE_PULL_REQUEST_CHAPTERS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.GENERATE_PULL_REQUEST_CHAPTERS,
+  description:
+    "Generate a pull request's chapters for its head now, as its Pull request tab's Generate " +
+    "does, then answer them as " +
+    `${MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS} does. It runs one model call on the member's ` +
+    "own API key, which costs them money, and is far slower than reading, often a minute or " +
+    `more: read first with ${MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS}, and generate only ` +
+    "where no chapters stand, they are stale, or they failed. Where another Generate of the " +
+    "same head is under way, it answers that one as generating rather than starting a second. " +
+    "A pull request too large to tell is answered as failed, too_large. Refused where the " +
+    "member saved no API key (generatable false). Name the pull request as the read does. " +
+    CHAPTERS_ANSWER_WORDS,
+  input: PullRequestChaptersInputSchema,
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+  run: (asked) =>
+    chaptersAsMember(asked, {
+      generates: true,
+      agent: (userId, agent, number) =>
+        agentChaptersGenerate(
+          {},
+          KEPT_PUBLISHED,
+          userId,
+          agent,
+          number === undefined ? undefined : String(number),
+        ),
+      repository: (userId, query) => repositoryChaptersGenerate({}, userId, query),
+    }),
+});
+
 /*
  * The comments and the memory. A description's comment threads, and its task's
  * pages', are read, answered, resolved, and reopened as the member, on a task
@@ -2006,9 +2710,9 @@ const memberDescriptionComment = (writer: MemberCommentWriter, asked: CommentOnD
 
 /** How a comment tool tells the outside agent whom a comment reaches. */
 const MENTION_WORDS =
-  "Each agent of the task the words mention by its mention link, the `[@title](link)` " +
-  `${MEMBER_MCP_TOOL.LIST_AGENTS} answers, joins the thread and is sent it, as a mention typed ` +
-  "in the window does.";
+  "Each agent of the task the words mention by its link, built from the id " +
+  `${MEMBER_MCP_TOOL.LIST_AGENTS} answers as this server's instructions say, joins the thread ` +
+  "and is sent it, as a mention typed in the window does.";
 
 const MEMBER_COMMENT_ON_DESCRIPTION_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.COMMENT_ON_DESCRIPTION,
@@ -2474,6 +3178,118 @@ const MEMBER_DELETE_AUTOMATION_TOOL = memberMcpTool({
     ),
 });
 
+// A workspace's cloud sandbox setup (`../workspace-sandbox-setup/workspace-sandbox-setup.ts`), read and saved as Settings does.
+
+/** Why a setup was not read or saved, in words the agent can act on. */
+const SANDBOX_SETUP_REFUSAL = {
+  NO_WORKSPACE: `Not run: the member is no longer in that workspace; ${MEMBER_MCP_TOOL.LIST_WORKSPACES} names theirs.`,
+  NOT_PERMITTED:
+    "Not saved: only an owner or an admin of the workspace saves its sandbox setup, and the " +
+    "member is neither.",
+  UNAVAILABLE:
+    "Not run: the service could not reach the workspace's sandbox setup just now. The call may " +
+    "be made again.",
+} as const;
+
+/** A read's or a save's refusal in the agent's words. */
+function sandboxSetupRefusalWords(refusal: HostedRefusal): string {
+  switch (refusal.error) {
+    case HOSTED_API_ERROR.NOT_FOUND:
+      return SANDBOX_SETUP_REFUSAL.NO_WORKSPACE;
+    case HOSTED_API_ERROR.NOT_PERMITTED:
+      return SANDBOX_SETUP_REFUSAL.NOT_PERMITTED;
+    default:
+      return SANDBOX_SETUP_REFUSAL.UNAVAILABLE;
+  }
+}
+
+/** A setup read or saved as the member, as the agent reads it, or the refusal in its words. */
+const sandboxSetupAnswer = <R>(
+  answered: Effect.Effect<WorkspaceSandboxSetupAnswer, HostedRefusal, R>,
+  accepted: (setup: WorkspaceSandboxSetupAnswer) => WireRecord,
+) =>
+  answered.pipe(
+    Effect.map(accepted),
+    Effect.catch((refusal) => Effect.succeed(agentToolRejected(sandboxSetupRefusalWords(refusal)))),
+  );
+
+/** The workspace whose setup a call reads or saves, by its slug, where the member has more than one. */
+const SANDBOX_SETUP_WORKSPACE_INPUT = Schema.optionalKey(
+  describeWire(
+    Schema.String.check(Schema.isNonEmpty(), Schema.isMaxLength(WORKSPACE_BOUNDS.MAX_SLUG_CHARS)),
+    `The workspace whose setup it is, by the slug ${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; ` +
+      "leave it out where the member belongs to one workspace alone.",
+  ),
+);
+
+/** A read of the setup names its workspace. */
+const ReadSandboxSetupInputSchema = Schema.Struct({ workspace: SANDBOX_SETUP_WORKSPACE_INPUT });
+
+/** A save names its workspace, at most the repository whose setup script it is, and the script. */
+const EditSandboxSetupInputSchema = Schema.Struct({
+  workspace: SANDBOX_SETUP_WORKSPACE_INPUT,
+  repository: Schema.optionalKey(
+    describeWire(
+      githubRepositoryFullNameSchema,
+      "The repository whose setup script to save, as owner/name; leave it out to save the " +
+        "workspace's install script.",
+    ),
+  ),
+  script: describeWire(
+    workspaceInstallScriptPutRequestSchema.fields.script,
+    "The whole script, which replaces the one that stood; an empty one removes it.",
+  ),
+});
+
+const READ_SANDBOX_SETUP_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.READ_SANDBOX_SETUP,
+  description:
+    "Read the cloud sandbox setup of a workspace the member belongs to, as its Settings › Cloud " +
+    "setup shows it: its install script, which runs once in each build of a repository's base " +
+    "snapshot, and each repository's setup script, which runs once in each new agent sandbox " +
+    "of it after its checkout, each with when it was last saved in epoch milliseconds. " +
+    `${WORKSPACE_WORDS} Answers the install script, or install null where none is saved, and ` +
+    "the repositories' setup scripts in the order of their names, or `rejected` and why.",
+  input: ReadSandboxSetupInputSchema,
+  annotations: READ_ONLY,
+  run: ({ workspace }) =>
+    listAsMember(workspace, ({ caller }) =>
+      sandboxSetupAnswer(
+        readSandboxSetup(callerUserId(caller), callerWorkspaceId(caller)),
+        (setup) => setup,
+      ),
+    ),
+});
+
+const EDIT_SANDBOX_SETUP_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.EDIT_SANDBOX_SETUP,
+  description:
+    "Save one script of the cloud sandbox setup of a workspace the member is an owner or an " +
+    "admin of, as its Settings › Cloud setup would: the install script, or, naming a " +
+    "repository, that repository's setup script, under any casing of its name. The script " +
+    "given replaces the one that stood whole, so read it first with " +
+    `${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} to change part of it; an empty script removes it. ` +
+    "Sandboxes already running keep the script they ran. " +
+    `${WORKSPACE_WORDS} Answers \`accepted\` with the setup as it then stands, or ` +
+    "`rejected` and why.",
+  input: EditSandboxSetupInputSchema,
+  annotations: DESTRUCTIVE,
+  run: ({ workspace, repository, script }) =>
+    listAsMember(workspace, ({ caller }) =>
+      sandboxSetupAnswer(
+        repository === undefined
+          ? saveInstallScript(callerUserId(caller), callerWorkspaceId(caller), script)
+          : saveRepositorySetup(
+              callerUserId(caller),
+              callerWorkspaceId(caller),
+              repository,
+              script,
+            ),
+        (setup) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...setup }),
+      ),
+    ),
+});
+
 /** Every tool the server offers, listed in the order an agent reads them. */
 /**
  * The workspace experiments on in one of the member's workspaces at least,
@@ -2512,10 +3328,14 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   READ_TASK_FILE_TOOL,
   LIST_TASK_FOLDER_TOOL,
   MEMBER_LIST_MODELS_TOOL,
+  UPDATE_PREFERENCES_TOOL,
   MEMBER_CREATE_TASK_TOOL,
   MEMBER_UPDATE_TASK_TOOL,
   MEMBER_CHANGE_TASK_RELATION_TOOL,
   MEMBER_EDIT_DESCRIPTION_TOOL,
+  LIST_DESCRIPTION_REVISIONS_TOOL,
+  READ_DESCRIPTION_REVISION_TOOL,
+  RESTORE_DESCRIPTION_REVISION_TOOL,
   MEMBER_CREATE_SECTION_TOOL,
   MEMBER_DELETE_SECTION_TOOL,
   MEMBER_START_AGENT_TOOL,
@@ -2524,11 +3344,19 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_UPDATE_AGENT_TOOL,
   LIST_AGENT_PORTS_TOOL,
   SHARE_AGENT_PORT_TOOL,
+  LIST_AGENT_BROWSER_TABS_TOOL,
+  OPEN_AGENT_BROWSER_TAB_TOOL,
+  TAKE_OVER_AGENT_BROWSER_TAB_TOOL,
+  HAND_BACK_AGENT_BROWSER_TAB_TOOL,
   READ_INBOX_TOOL,
   ANSWER_ASK_TOOL,
   REPLY_TO_THREAD_TOOL,
   CLOSE_THREAD_TOOL,
   AGENT_PULL_REQUEST_ACTION_TOOL,
+  READ_PULL_REQUEST_TOOL,
+  MARK_PULL_REQUEST_FILES_VIEWED_TOOL,
+  READ_PULL_REQUEST_CHAPTERS_TOOL,
+  GENERATE_PULL_REQUEST_CHAPTERS_TOOL,
   MEMBER_READ_COMMENTS_TOOL,
   MEMBER_COMMENT_ON_DESCRIPTION_TOOL,
   MEMBER_REPLY_TO_COMMENT_TOOL,
@@ -2542,4 +3370,6 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_UPDATE_AUTOMATION_TOOL,
   MEMBER_RUN_AUTOMATION_TOOL,
   MEMBER_DELETE_AUTOMATION_TOOL,
+  READ_SANDBOX_SETUP_TOOL,
+  EDIT_SANDBOX_SETUP_TOOL,
 ];

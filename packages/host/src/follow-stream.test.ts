@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
-import { followStream } from "./act-stream.js";
+import { followStream } from "./follow-stream.js";
 
 /**
  * A followed stream over a fake act port: each open hands the next stream

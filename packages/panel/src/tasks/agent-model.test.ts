@@ -1,4 +1,12 @@
 import assert from "node:assert/strict";
+import {
+  AGENT_PART,
+  agentParts,
+  delegates,
+  messageWords,
+  placedMessages,
+  startedAgentOf,
+} from "@repo/features/agent-parts";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
 import {
   AGENT_FAILURE,
@@ -24,46 +32,41 @@ import {
 } from "@repo/features/provider-key-wire";
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import { dayAndTimeText } from "@repo/features/time-format";
-import { MESSAGE_ROLE, TURN_STATUS } from "@repo/wire";
+import { TOOL_STATE } from "@repo/features/tool-call-block";
+import { MESSAGE_ROLE, TURN_STATUS, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { test } from "vitest";
-import { TOOL_STATE } from "../ai-elements/tool.js";
 import {
-  AGENT_PART,
   agentLines,
-  agentParts,
   agentWorkingSince,
   checkoutCommand,
   choiceLabel,
   choiceModelId,
   choiceOn,
   continueFailureNote,
-  delegates,
   dockedPullRequests,
   effortFor,
   messageFailureNote,
   messageFailureWords,
-  messageWords,
   modelLabel,
   noteWhileOffline,
   offeredModels,
   offersStop,
   openingLineOf,
   payerPlanName,
-  placedMessages,
   planPayerOf,
   pullRequestPillLabel,
   pullRequestStateWord,
   readModelChoice,
   SENT_LINE_STATE,
   type SentLine,
-  startedAgentOf,
   startFailureNote,
   type TabSends,
   tabTurnOf,
   transcriptRowKey,
   unreadOpeningLine,
   unreadSentLines,
+  wakeupDelayOf,
   workingLineWords,
 } from "./agent-model.js";
 import { inboxNoteReading } from "./inbox-model.js";
@@ -142,6 +145,63 @@ test("a stored message's parts are read for drawing: text, reasoning, a tool cal
     { kind: AGENT_PART.OTHER },
     { kind: AGENT_PART.OTHER },
   ]);
+});
+
+test("the wakeup a turn booked is read off Claude Code's own call or ours alike, by the delay held or asked, past a cancel or a refused call", () => {
+  type Call = { input: Record<string, number | string | boolean>; output?: WireValue };
+  const turnWith = (tool: string, ...calls: Call[]) => ({
+    id: "t",
+    role: "assistant" as const,
+    parts: [
+      { type: "text", text: "Pushed; waiting on the checks." },
+      ...calls.map((call, index) => ({
+        type: `tool-${tool}`,
+        toolCallId: `call_${index}`,
+        state: "output-available",
+        input: call.input,
+        output: call.output ?? "ok",
+      })),
+    ],
+  });
+  assert.equal(
+    wakeupDelayOf(turnWith("ScheduleWakeup", { input: { delaySeconds: 270, prompt: "Check CI" } })),
+    270_000,
+  );
+  // The service held the booking to a minute, which its answer names, so the head says a minute and not the second asked.
+  assert.equal(
+    wakeupDelayOf(
+      turnWith("schedule_wakeup", {
+        input: { delaySeconds: 1, prompt: "Check CI" },
+        output: {
+          status: "accepted",
+          wakeup: { at: "2026-10-21T12:01:00.000Z", delaySeconds: 60 },
+        },
+      }),
+    ),
+    60_000,
+  );
+  // A refused call left the booking before it standing, and a cancel books none.
+  assert.equal(
+    wakeupDelayOf(
+      turnWith(
+        "schedule_wakeup",
+        {
+          input: { delaySeconds: 600, prompt: "Check CI" },
+          output: {
+            status: "accepted",
+            wakeup: { at: "2026-10-21T12:10:00.000Z", delaySeconds: 600 },
+          },
+        },
+        {
+          input: { delaySeconds: 3_600 },
+          output: { status: "rejected", reason: "Not booked: pass a prompt." },
+        },
+      ),
+    ),
+    600_000,
+  );
+  assert.equal(wakeupDelayOf(turnWith("schedule_wakeup", { input: { stop: true } })), undefined);
+  assert.equal(wakeupDelayOf(undefined), undefined);
 });
 
 /** A row of the developer's, as the service writes one. */

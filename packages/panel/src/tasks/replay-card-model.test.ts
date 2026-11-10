@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { messageWords } from "@repo/features/agent-parts";
 import {
   firstMessageText,
   REPLAY_SENDER,
@@ -18,11 +19,10 @@ import {
   type AgentSummary,
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
+import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
 import { CALL_KIND } from "@repo/features/turn-rows";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { test } from "vitest";
-import { TOOL_BLOCK, TOOL_STATE } from "../ai-elements/tool.js";
-import { messageWords } from "./agent-model.js";
 import { messageFileChips } from "./attached-file-chips.js";
 import {
   briefAgent,

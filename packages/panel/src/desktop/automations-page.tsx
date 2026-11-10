@@ -16,6 +16,7 @@ import {
   type AutomationScope,
   type AutomationSummary,
 } from "@repo/features/automation-wire";
+import { GLYPH_STATE, glyphStateWords } from "@repo/features/glyph-state";
 import { LINK_PLACE } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { momentText } from "@repo/features/time-format";
@@ -80,7 +81,7 @@ import { workspaceIntegrationsQuery, workspaceIntegrationsRetryMutation } from "
 import { MemberDirectory, useCreator } from "../member-directory.js";
 import { useAutomationsDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import { GLYPH_STATE, glyphStateWords, stateEndMark } from "../state-glyph.js";
+import { stateEndMark } from "../state-glyph.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { TOAST_HOLD, useToast } from "../toast.js";

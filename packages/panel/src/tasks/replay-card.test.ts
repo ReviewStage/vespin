@@ -17,6 +17,7 @@ import {
   type AgentTranscriptMessage,
 } from "@repo/features/agent-wire";
 import { LINK_PLACE, type LinkPlace, type ReadLink } from "@repo/features/link-grammar";
+import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { Effect } from "effect";
@@ -29,7 +30,6 @@ import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
 import { AgentTab, type TranscriptCards } from "./agent-tab.js";
-import { TOOL_TARGET, type ToolTarget } from "./tool-call-model.js";
 import { OpenLinkProvider } from "./use-open-link.js";
 
 /**
