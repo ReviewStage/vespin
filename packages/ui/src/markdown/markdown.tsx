@@ -27,12 +27,16 @@
  *   it is drawn inside a label or any other element that holds words alone,
  *   as a to-do's step is.
  *
+ * Words nested too deep to parse safely (`markdownTooDeep`) are drawn as
+ * plain text rather than parsed, whatever the look.
+ *
  * Exported at `@repo/ui/markdown` alone, so the parser rides into no bundle
  * behind the barrel. Whatever a place knows better than this package, a
  * mention's chip, a colored code block, a diagram, arrives as a component
  * or a step, so nothing here reaches an app.
  */
 
+import { markdownTooDeep } from "@repo/features/markdown-nesting";
 import type { ElementContent, Root } from "hast";
 import type { Root as MarkdownRoot, PhrasingContent, RootContent } from "mdast";
 import { memo, type ReactNode, useMemo, useRef } from "react";
@@ -49,6 +53,7 @@ import {
   type UrlTransform,
 } from "streamdown";
 import { cn } from "../cn.js";
+import { FileText } from "../components/file-text/file-text.js";
 import { INLINE_REF_FIT, InlineRefFitScope } from "../components/inline-ref/inline-ref-fit.js";
 import { QUOTE_CLASS } from "../quote-face.js";
 import { MARKDOWN_CLASS, markdownClass } from "./markdown-class.js";
@@ -392,15 +397,7 @@ function WholeWords({
   );
 }
 
-/**
- * Words drawn as the Markdown they were written in. A note and a document
- * are drawn again only when what they are handed changes, since the words
- * are parsed afresh on every draw, and a description redrawn on a save would parse
- * every section; a place hands its components and steps memoised for the
- * same reason. A chip in the words wraps across lines as they do
- * (`InlineRefFitScope`), but in a transcript's line, which keeps to one.
- */
-export const Markdown = memo(function Markdown({
+function ParsedMarkdown({
   className,
   streaming = false,
   ...whole
@@ -468,4 +465,29 @@ export const Markdown = memo(function Markdown({
       </div>
     </InlineRefFitScope>
   );
+}
+
+/**
+ * Words nested too deep to parse (`markdownTooDeep`) are drawn as they were
+ * written, a note and a transcript in a block of plain text and a line or a
+ * label's run as one run of it, so the parser never sees them.
+ */
+function PlainWords({ words, look, className }: MarkdownProps): React.JSX.Element {
+  if (look === MARKDOWN_LOOK.NOTE || look === MARKDOWN_LOOK.TRANSCRIPT) {
+    return <FileText text={words} label="Message text" />;
+  }
+  return <span className={className}>{words}</span>;
+}
+
+/**
+ * Words drawn as the Markdown they were written in. A note and a document
+ * are drawn again only when what they are handed changes, since the words
+ * are parsed afresh on every draw, and a description redrawn on a save would parse
+ * every section; a place hands its components and steps memoised for the
+ * same reason. A chip in the words wraps across lines as they do
+ * (`InlineRefFitScope`), but in a transcript's line, which keeps to one.
+ */
+export const Markdown = memo(function Markdown(props: MarkdownProps): React.JSX.Element {
+  const tooDeep = useMemo(() => markdownTooDeep(props.words), [props.words]);
+  return tooDeep ? <PlainWords {...props} /> : <ParsedMarkdown {...props} />;
 });

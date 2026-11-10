@@ -58,6 +58,7 @@
     "./ios-app-links": "./src/ios-app-links.js",
     "./ios-sign-in-wire": "./src/ios-sign-in-wire.js",
     "./video-signature": "./src/video-signature.js",
+    "./markdown-nesting": "./src/markdown-nesting.js",
     "./markdown-tree": "./src/markdown-tree.js",
     "./media-signature": "./src/media-signature.js",
     "./agent-origin-live": "./src/agent-origin-live.js",
@@ -228,7 +229,16 @@
     "./automation-draft-model": "./src/automation-draft-model.js",
     "./trigger-catalog": "./src/trigger-catalog.js",
     "./time-format": "./src/time-format.js",
-    "./number-format": "./src/number-format.js"
+    "./number-format": "./src/number-format.js",
+    "./tool-call-block": "./src/tool-call-block.js",
+    "./native-tool-calls": "./src/native-tool-calls.js",
+    "./code-ref-words": "./src/code-ref-words.js",
+    "./skill-word": "./src/skill-word.js",
+    "./mention-holder": "./src/mention-holder.js",
+    "./tool-call-model": "./src/tool-call-model.js",
+    "./agent-parts": "./src/agent-parts.js",
+    "./glyph-state": "./src/glyph-state.js",
+    "./sealed-page": "./src/sealed-page.js"
   },
   "types": "./src/index.ts",
   "scripts": {

@@ -42,11 +42,13 @@ import {
  * or closing its thread (`inbox/inbox-procedures.ts`), asked once the
  * answer was handed to the agent, so an agent woken by the answer reads as
  * running and the task stays in progress until it is done. An orchestrated
- * rollout needs no reading of its own: a worker merges and then messages
- * its orchestrator, which wakes and starts the next, so some agent is at
- * work at every hand-off, and the task finishes once the last pull request
- * merged and everyone is idle. The agents' standing is read as the sidebar
- * reads it (`stop.ts`'s `standsStopped`): a line awaiting its turn reads as
+ * rollout needs no reading of its own: each pull request's child task
+ * finishes once its worker's pull request merged and the worker is idle,
+ * and the parent, whose orchestrator opens none, is marked done by that
+ * orchestrator once the last child task is; a parent made for itself (below)
+ * reads done while its orchestrator stands idle between reports, and in
+ * progress again as the next report wakes it. The agents' standing is read
+ * as the sidebar reads it (`stop.ts`'s `standsStopped`): a line awaiting its turn reads as
  * running, an agent started blank with no turn as idle.
  *
  * A task an automation's run or a Slack message made for itself, or

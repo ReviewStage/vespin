@@ -11,6 +11,7 @@
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
+import { GLYPH_STATE } from "@repo/features/glyph-state";
 import {
   holderAutomationId,
   holderName,
@@ -64,7 +65,7 @@ import { ACTOR_SIZE, ActorMark, AutomationCard, automationActor } from "../actor
 import { useAutomation } from "../automation-directory.js";
 import { useInboxItemDrafted } from "../composer-drafts.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
-import { GLYPH_STATE, StateGlyph } from "../state-glyph.js";
+import { StateGlyph } from "../state-glyph.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { providerOf } from "./agent-model.js";
 import { AgentMarkRef, type AgentSubject, lineSubject, tasklessSubject } from "./agent-ref.js";
