@@ -345,10 +345,12 @@ const HEADING = "ui-searchable-menu-heading px-row-inset pt-ui-8 pb-ui-4";
  * row's and its near edge a gap off the menu's own; it turns to the menu's
  * other side where its room ends before it does, is pushed back over the
  * menu (`--ui-submenu-shift`) where neither side holds it, and stands up
- * from the row's foot where its room's bottom would cut it.
+ * from the row's foot where its room's bottom would cut it. One whose rows
+ * say what each does under its name stands wider, so a hint reads in a line
+ * or two.
  */
 const SUBMENU =
-  "ui-searchable-menu-submenu absolute top-0 left-submenu-reach z-1 w-submenu data-[side=left]:right-submenu-reach data-[side=left]:left-auto data-[stand=up]:top-auto data-[stand=up]:bottom-0";
+  "ui-searchable-menu-submenu absolute top-0 left-submenu-reach z-1 w-submenu data-[hinted]:w-submenu-hinted data-[side=left]:right-submenu-reach data-[side=left]:left-auto data-[stand=up]:top-auto data-[stand=up]:bottom-0";
 
 /** The row a submenu stands beside, which holds it. */
 const BRANCH = "ui-searchable-menu-branch relative";
@@ -1069,6 +1071,7 @@ export function SearchableMenu(
       inset={MENU_SURFACE_INSET.NONE}
       data-side={place.side}
       data-stand={place.stand}
+      data-hinted={shown.rows.some((row) => row.detailUnder === true) ? "" : undefined}
       style={cssCustomProperties({ "--ui-submenu-shift": `${place.shift}px` })}
       onMouseDown={(event) => event.preventDefault()}
     >
