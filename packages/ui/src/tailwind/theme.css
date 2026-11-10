@@ -1206,6 +1206,13 @@
     auto-fit,
     minmax(min(220px, 100%), 1fr)
   ); /* off-scale: a video's bar, its play, time, scrubber, Expand, and Full screen */
+  /* An option's media on its card (`components/option-media/`): equal
+     tiles, two to a phone's card, and at most four to a wide one so each
+     stays big enough to compare, the rest wrapping under them. */
+  --grid-template-columns-option-media: repeat(
+    auto-fill,
+    minmax(max(min(112px, 100%), 22%), 1fr)
+  ); /* off-scale: two thumbnails to a phone's card, four to a wide one */
   /* The description's comments (`description-comments.tsx`): the margin past the column
      its cards stand in at their own width, a reply's line set in under the
      name past the writer's mark, and the quote's edge, struck where its

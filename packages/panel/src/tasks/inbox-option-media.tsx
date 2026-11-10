@@ -1,3 +1,4 @@
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import {
   INBOX_FILE_TYPE,
   INBOX_OPTION_MEDIA,
@@ -9,25 +10,24 @@ import {
 } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import {
-  ExternalIcon,
   OPTION_MEDIA_KIND,
   OptionMedia,
-  type OptionMediaLine,
-  PAGE_THUMB_SIZE,
+  type OptionMediaPiece,
+  PAGE_THUMB_FIT,
   PageThumb,
-  PictureSet,
-  PictureSetTile,
 } from "@repo/ui";
+import { GLYPH, ImageOffIcon } from "@repo/ui/icons";
 import { PICTURE_STATE } from "@repo/ui/picture-read";
 import { useRef } from "react";
 import { appPlatform } from "../app-platform.js";
+import { EntityGlyph } from "../entities/entity-glyph.js";
 import { useInboxPictureThumb } from "./inbox-pictures.js";
 import { PAGE_SANDBOX } from "./page-pane.js";
 import { PAGE_ROOM, usePageTheme } from "./page-theme.js";
 import { useOpenLink, useOpenPlace } from "./use-open-link.js";
 
 /**
- * inbox-option-media.tsx -- what an option of an Inbox `decide` carries, drawn on its card: its pictures as thumbnails, and a line each for its recordings, pages, and live addresses.
+ * inbox-option-media.tsx -- what an option of an Inbox `decide` carries, drawn on its card: every picture, recording, page, and live address as an equal tile with its caption.
  *
  * The pictures and recordings are the item's own files, read as its
  * pictures are and counted among them (`inbox-pictures.tsx`), so a press
@@ -39,7 +39,7 @@ import { useOpenLink, useOpenPlace } from "./use-open-link.js";
  * does not know is left out.
  */
 
-/** Whether an option's file is a recording, which its line plays in the viewer, rather than a still. */
+/** Whether an option's file is a recording, which the viewer plays, rather than a still. */
 function isRecording(file: InboxOptionFile): boolean {
   return file.mediaType === INBOX_FILE_TYPE.WEBM;
 }
@@ -49,55 +49,60 @@ function fileWords(label: string, file: InboxOptionFile, at: number): string {
   return `${label} · ${file.caption ?? `${at + 1}`}`;
 }
 
-/** One picture of an option, a thumbnail opening the item's viewer at it. */
-function OptionPicture({ file, words }: { file: InboxOptionFile; words: string }) {
-  const thumb = useInboxPictureThumb(file.attachmentId, words);
-  return (
-    <PictureSetTile
-      ref={thumb?.anchor}
-      state={thumb?.state ?? { kind: PICTURE_STATE.READING }}
-      words={words}
-      onOpen={thumb?.open}
-    />
-  );
+/** What an address is called where its agent gave it no words: its host, as a reader knows a site by. */
+function addressWords(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
 }
 
-/** What opens the item's viewer at each recording, by its attachment, as its thumb last drew it. */
-type RecordingOpeners = Map<string, () => void>;
+/** What opens the item's viewer at each of an option's files, by its attachment, as its thumb last drew it. */
+type FileOpeners = Map<string, () => void>;
 
 /**
- * A recording's thumb: its first frame once its bytes are read, holding its
- * place among the item's pictures, and leaving what opens the viewer at it
- * for its line's press. Note that the thumb counts the recording among the
- * item's pictures, not the line, because the line is drawn by `@repo/ui`.
+ * A picture's or a recording's thumb: the picture, or the recording's first
+ * frame, whole on the thumb's ground once its bytes are read, and a gone
+ * picture's glyph where they could not be, holding its place among the
+ * item's pictures so the viewer walks it with the rest, and leaving what
+ * opens the viewer at it for its tile's press. Note that the thumb counts
+ * the file among the item's pictures, not the tile, because the tile is
+ * drawn by `@repo/ui`.
  */
-function RecordingThumb({
+function FileThumb({
   file,
   words,
   openers,
 }: {
   file: InboxOptionFile;
   words: string;
-  openers: RecordingOpeners;
+  openers: FileOpeners;
 }) {
   const thumb = useInboxPictureThumb(file.attachmentId, words);
   if (thumb === undefined) openers.delete(file.attachmentId);
   else openers.set(file.attachmentId, thumb.open);
-  const video = thumb?.state.kind === PICTURE_STATE.READY ? thumb.state.url : undefined;
+  const url = thumb?.state.kind === PICTURE_STATE.READY ? thumb.state.url : undefined;
+  const gone =
+    thumb?.state.kind === PICTURE_STATE.FAILED || thumb?.state.kind === PICTURE_STATE.MISSING;
   return (
-    <span ref={thumb?.anchor} className="inline-flex">
-      <PageThumb size={PAGE_THUMB_SIZE.ROW} video={video} />
+    <span ref={thumb?.anchor} className="block">
+      <PageThumb
+        fit={PAGE_THUMB_FIT.CONTAIN}
+        image={isRecording(file) ? undefined : url}
+        video={isRecording(file) ? url : undefined}
+        glyph={gone ? <ImageOffIcon /> : undefined}
+      />
     </span>
   );
 }
 
 /** A page's thumb: the version the agent showed, drawn small as its tab draws it. */
-function PageRowThumb({ page }: { page: InboxOptionPage }) {
+function PageFrameThumb({ page }: { page: InboxOptionPage }) {
   const frame = useRef<HTMLIFrameElement>(null);
   usePageTheme(frame, PAGE_ROOM.OWN);
   return (
     <PageThumb
-      size={PAGE_THUMB_SIZE.ROW}
       frameRef={frame}
       frame={{
         title: `${page.title} preview`,
@@ -112,86 +117,68 @@ function PageRowThumb({ page }: { page: InboxOptionPage }) {
   );
 }
 
-/** One recording's line, read and opened as a picture of the item. */
-function recordingLine(
-  file: InboxOptionFile,
-  words: string,
-  openers: RecordingOpeners,
-): OptionMediaLine {
-  return {
-    id: file.attachmentId,
-    kind: OPTION_MEDIA_KIND.RECORDING,
-    title: file.caption ?? words,
-    thumb: <RecordingThumb file={file} words={words} openers={openers} />,
-    onOpen: () => openers.get(file.attachmentId)?.(),
-  };
+/** The doors an option's tiles open through: the viewer at a file, a page's tab, and the browser. */
+interface PieceDoors {
+  readonly openers: FileOpeners;
+  readonly openPage: (page: InboxOptionPage) => void;
+  readonly openLink: (url: string) => void;
 }
 
-/** The media of one option as its card draws it, or nothing where it carries none this build draws. */
+/** One piece of an option's media as its tile: its kind, its caption, its thumb, and what a press opens. */
+function pieceOf(
+  option: InboxOption,
+  piece: InboxOptionMedia,
+  at: number,
+  doors: PieceDoors,
+): OptionMediaPiece {
+  switch (piece.type) {
+    case INBOX_OPTION_MEDIA.FILE: {
+      const words = fileWords(option.label, piece, at);
+      return {
+        id: piece.attachmentId,
+        kind: isRecording(piece) ? OPTION_MEDIA_KIND.RECORDING : OPTION_MEDIA_KIND.PICTURE,
+        caption: piece.caption,
+        thumb: <FileThumb file={piece} words={words} openers={doors.openers} />,
+        onOpen: () => doors.openers.get(piece.attachmentId)?.(),
+      };
+    }
+    case INBOX_OPTION_MEDIA.PAGE:
+      return {
+        id: piece.pageId,
+        kind: OPTION_MEDIA_KIND.PAGE,
+        caption: piece.title,
+        thumb: <PageFrameThumb page={piece} />,
+        mark: <EntityGlyph kind={ENTITY_KIND.PAGE} />,
+        onOpen: () => doors.openPage(piece),
+      };
+    case INBOX_OPTION_MEDIA.LINK:
+      return {
+        id: piece.url,
+        kind: OPTION_MEDIA_KIND.LINK,
+        caption: piece.label ?? addressWords(piece.url),
+        thumb: <PageThumb glyph={<GLYPH.OPEN_EXTERNALLY />} />,
+        onOpen: () => doors.openLink(piece.url),
+      };
+  }
+}
+
+/** The media of one option as its card draws it, one tile each, or nothing where it carries none this build draws. */
 export function OptionCardMedia({ option }: { option: InboxOption }): React.JSX.Element | null {
   const openPlace = useOpenPlace();
   const openLink = useOpenLink();
-  const openers = useRef<RecordingOpeners>(new Map()).current;
-  const media = knownOptionMedia(option);
-  const files = media.filter(
-    (piece): piece is InboxOptionFile => piece.type === INBOX_OPTION_MEDIA.FILE,
-  );
-  const pictures = files.filter((file) => !isRecording(file));
-  const lines = media.flatMap((piece: InboxOptionMedia): OptionMediaLine[] => {
-    switch (piece.type) {
-      case INBOX_OPTION_MEDIA.FILE:
-        return isRecording(piece)
-          ? [recordingLine(piece, fileWords(option.label, piece, files.indexOf(piece)), openers)]
-          : [];
-      case INBOX_OPTION_MEDIA.PAGE:
-        return [
-          {
-            id: piece.pageId,
-            kind: OPTION_MEDIA_KIND.PAGE,
-            title: piece.title,
-            thumb: <PageRowThumb page={piece} />,
-            onOpen: () =>
-              openPlace?.({
-                kind: LINK_DESTINATION.PAGE,
-                ...("taskId" in piece.place
-                  ? { planId: piece.place.taskId }
-                  : { agentId: piece.place.agentId }),
-                pageId: piece.pageId,
-              }),
-          },
-        ];
-      case INBOX_OPTION_MEDIA.LINK:
-        return [
-          {
-            id: piece.url,
-            kind: OPTION_MEDIA_KIND.LINK,
-            title: piece.label ?? piece.url,
-            thumb: <PageThumb size={PAGE_THUMB_SIZE.ROW} glyph={<ExternalIcon />} />,
-            onOpen: () => openLink(piece.url),
-          },
-        ];
-      default:
-        return [];
-    }
-  });
-  if (pictures.length === 0 && lines.length === 0) return null;
-  return (
-    <OptionMedia
-      label={option.label}
-      pictures={
-        pictures.length === 0 ? undefined : (
-          <PictureSet label={`${option.label} pictures`} count={pictures.length} thumbnails>
-            {pictures.map((file) => (
-              <OptionPicture
-                key={file.attachmentId}
-                file={file}
-                words={fileWords(option.label, file, files.indexOf(file))}
-              />
-            ))}
-          </PictureSet>
-        )
-      }
-      lines={lines}
-    />
-  );
+  const openers = useRef<FileOpeners>(new Map()).current;
+  const doors: PieceDoors = {
+    openers,
+    openLink,
+    openPage: (page) =>
+      openPlace?.({
+        kind: LINK_DESTINATION.PAGE,
+        ...("taskId" in page.place
+          ? { planId: page.place.taskId }
+          : { agentId: page.place.agentId }),
+        pageId: page.pageId,
+      }),
+  };
+  const pieces = knownOptionMedia(option).map((piece, at) => pieceOf(option, piece, at, doors));
+  return <OptionMedia label={option.label} pieces={pieces} />;
 }
