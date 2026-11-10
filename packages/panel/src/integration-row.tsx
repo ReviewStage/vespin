@@ -445,9 +445,11 @@ export function IntegrationRow({
             ) : (
               <RowLineText line={line} />
             ),
-          // Note that a rename's refusal is the rename's own, so a connect begun meanwhile does not erase it.
+          // Note that a rename's refusal is the rename's own, so a connect begun meanwhile neither erases it nor is hidden by it.
           error: refusedShown(
-            rename.refused ? `${name} could not be renamed. Try again.` : rejection,
+            [rename.refused ? `${name} could not be renamed. Try again.` : undefined, rejection]
+              .filter((words) => words !== undefined)
+              .join(" "),
             FAILURE_SURFACE.INTEGRATION_RENAME,
           ),
           control: waiting ? (

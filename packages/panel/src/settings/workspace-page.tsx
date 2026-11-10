@@ -1774,7 +1774,8 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
   const endedByKey = useRefocusAfterEdit(rename.editing, button);
   const end = ({ value: name, byKey }: InlineEditEnd) => {
     endedByKey(byKey);
-    rename.end(name);
+    // Note that a field reopened over a refused name and typed back to the one drawn changes nothing.
+    rename.end(name === workspace.name ? undefined : name);
   };
   const upload = (file: File) => {
     setRefusal(undefined);

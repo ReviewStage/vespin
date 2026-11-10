@@ -1147,7 +1147,7 @@ function PlanRow({
             editing={rename.editing}
             look={INLINE_EDIT_LOOK.INPUT}
             maxLength={SUBSCRIPTION_LABEL_MAX_CHARS}
-            onEnd={({ value }) => rename.end(value)}
+            onEnd={({ value }) => rename.end(value === name ? undefined : value)}
           />
         }
         description={
@@ -1251,7 +1251,7 @@ function KeyRow({
             editing={rename.editing}
             look={INLINE_EDIT_LOOK.INPUT}
             maxLength={SUBSCRIPTION_LABEL_MAX_CHARS}
-            onEnd={({ value }) => rename.end(value)}
+            onEnd={({ value }) => rename.end(value === name ? undefined : value)}
           />
         }
         description={
@@ -1446,11 +1446,16 @@ function HarnessCredentials({
           })}
         />
       )}
-      {order.refused === undefined && !renames.refused ? null : (
+      {order.refused === undefined ? null : (
         <SettingsLine>
-          <State ok={false}>{order.refused ?? WORDS.RENAME_FAILED}</State>
+          <State ok={false}>{order.refused}</State>
         </SettingsLine>
       )}
+      {renames.refused ? (
+        <SettingsLine>
+          <State ok={false}>{WORDS.RENAME_FAILED}</State>
+        </SettingsLine>
+      ) : null}
     </SettingsSection>
   );
 }
