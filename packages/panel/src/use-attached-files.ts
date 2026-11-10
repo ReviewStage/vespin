@@ -4,6 +4,7 @@ import {
   type AgentAttachment,
   base64Bytes,
 } from "@repo/features/agent-wire";
+import { isPictureName, nextPictureName, pictureMarkers } from "@repo/features/picture-marker";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { useRef, useState } from "react";
 import { reportShownFailure } from "./failure-report.js";
@@ -37,6 +38,15 @@ import { type FileDrop, useFileDrop } from "./use-file-drop.js";
  * is held to its type's bound, a message to ten files and to 3 MB
  * together, and the first file that cannot come says why in the box's
  * note while the ones that can still come.
+ *
+ * A box that takes pictures into its words (`pictures`) attaches each image
+ * under a picture's name, "Picture 1" and on (`@repo/features/picture-marker`),
+ * and has its marker put in as a chip where the caret stood as the files
+ * were handed, once they are read. A picture whose marker was in the words
+ * goes with it: deleting its chip takes the picture off, and undo bringing
+ * the chip back brings the picture back (`follow`), until the box empties.
+ * A picture the words could not take, the box's editor not loaded or its
+ * bound reached, stays attached beside the words, as every file is.
  */
 
 /** Why a file did not come, in the words the box's note says. */
@@ -184,6 +194,16 @@ interface AttachedFilesHolder {
   readonly update: (next: (was: readonly AgentAttachment[]) => readonly AgentAttachment[]) => void;
 }
 
+/** Whether a file is a picture the words may name: an image under a picture's name. */
+export function isPictureFile(file: AgentAttachment): boolean {
+  return file.mediaType.startsWith("image/") && isPictureName(file.name);
+}
+
+/** Where a box puts its pictures' markers: a place marked as files are handed, which once they are read puts in the pictures named and answers whether it did; nothing where the words take none now. */
+export interface AttachedPictures {
+  readonly place: () => ((names: readonly string[]) => boolean) | undefined;
+}
+
 /** What a box takes and where its files and its note go. */
 export interface AttachedFilesOptions {
   /** Says the box's note: why the last files handed did not all come, or nothing once they did. */
@@ -194,6 +214,8 @@ export interface AttachedFilesOptions {
   readonly most?: number | undefined;
   /** Whether the box takes no files now, as the agent box while a send holds it. */
   readonly held?: boolean | undefined;
+  /** Where the box puts the pictures it takes into its words; none where it takes them beside the words alone. */
+  readonly pictures?: AttachedPictures | undefined;
 }
 
 /** The files a box holds and the ways it takes more and lets them go. */
@@ -214,6 +236,8 @@ export interface AttachedFiles {
   readonly set: (attachments: readonly AgentAttachment[]) => void;
   /** The drop target the box's card spreads, and whether files are over it. */
   readonly drop: FileDrop;
+  /** The box's words as they now stand, which take off a picture whose marker they no longer hold and bring back one whose marker came back. */
+  readonly follow: (words: string) => void;
 }
 
 /** The files a box holds, read as they are handed to it on the terms `options` sets. */
@@ -234,18 +258,49 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
   const holderNow = () => latest.current.holder ?? ownHolder;
   const heldNow = () => latest.current.holder?.attachments ?? ownNow.current;
   const [reading, setReading] = useState(0);
+  // The pictures whose markers the words have held, the pictures taken off with their markers, by name, and every picture's name handed out, all until the box empties.
+  const placed = useRef(new Set<string>());
+  const stashed = useRef(new Map<string, AgentAttachment>());
+  const minted = useRef(new Set<string>());
 
-  const take = (read: FilesRead) => {
+  /** The images read named as pictures, each past every name held, taken off, or handed out, so no two pictures of the box share one. */
+  const named = (read: FilesRead): FilesRead => {
+    const used = [
+      ...heldNow().map((file) => file.name),
+      ...stashed.current.keys(),
+      ...minted.current,
+    ];
+    const attachments = read.attachments.map((file) => {
+      if (!file.mediaType.startsWith("image/")) return file;
+      const name = nextPictureName(used);
+      used.push(name);
+      minted.current.add(name);
+      return { ...file, name };
+    });
+    return { ...read, attachments };
+  };
+  const take = (read: FilesRead, place: ((names: readonly string[]) => boolean) | undefined) => {
     const { most = AGENT_BOUNDS.MAX_ATTACHMENTS, onRefusal } = latest.current;
-    const taken = withFiles(heldNow(), read, most);
-    holderNow().update((now) => withFiles(now, read, most).attachments);
+    const kept = place === undefined ? read : named(read);
+    const taken = withFiles(heldNow(), kept, most);
+    holderNow().update((now) => withFiles(now, kept, most).attachments);
     onRefusal(taken.refusal);
+    // Note that the markers go in once the pictures are held, so the words never name a picture the box does not hold.
+    const names = kept.attachments
+      .filter((file) => isPictureFile(file) && taken.attachments.includes(file))
+      .map((file) => file.name);
+    // Note that the place is answered even with no picture to put in, so its mark is let go.
+    if (place?.(names) === true) {
+      for (const name of names) placed.current.add(name);
+    }
   };
   const attach = (files: readonly File[]) => {
     if (files.length === 0 || latest.current.held === true) return;
+    // Note that the place is marked as the files are handed, so their pictures land where the caret stood then.
+    const place = latest.current.pictures?.place();
     setReading((count) => count + 1);
     void readFiles(files)
-      .then(take)
+      .then((read) => take(read, place))
       .finally(() => setReading((count) => count - 1));
   };
   const drop = useFileDrop((files) => attach(Array.from(files)), { over: options.held !== true });
@@ -286,5 +341,30 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
       holderNow().update(() => next);
     },
     drop,
+    follow: (words) => {
+      if (latest.current.pictures === undefined) return;
+      const held = heldNow();
+      if (words === "" && held.length === 0) {
+        placed.current.clear();
+        stashed.current.clear();
+        minted.current.clear();
+        return;
+      }
+      const marked = new Set(pictureMarkers(words).map((marker) => marker.name));
+      const gone = held.filter(
+        (file) => isPictureFile(file) && placed.current.has(file.name) && !marked.has(file.name),
+      );
+      const back = [...stashed.current.values()].filter(
+        (file) => marked.has(file.name) && !held.some((each) => each.name === file.name),
+      );
+      for (const file of gone) stashed.current.set(file.name, file);
+      for (const file of back) stashed.current.delete(file.name);
+      for (const name of marked) placed.current.add(name);
+      if (gone.length === 0 && back.length === 0) return;
+      holderNow().update((now) => [
+        ...now.filter((file) => !gone.includes(file)),
+        ...back.filter((file) => !now.some((each) => each.name === file.name)),
+      ]);
+    },
   };
 }

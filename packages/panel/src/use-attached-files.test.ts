@@ -17,6 +17,7 @@ import {
   composerEditor,
   editorBundleLanded,
   installEditorLayout,
+  pressInComposer,
   QUIET_COMPOSER,
 } from "./testing/composer.js";
 import { testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js";
@@ -24,8 +25,9 @@ import { installScrollIntoView } from "./testing/scroll-into-view.js";
 
 /**
  * The agent's box takes files: a picture dropped on the card or pasted into
- * the field is held as its chip, and pictures past the bytes a message
- * carries together are left out, the box saying why in its note while the
+ * the field is held as "Picture 1", its chip written into the words where
+ * the caret stood, and goes with its chip when one Backspace takes it out;
+ * pictures past the bytes a message carries together are left out, the box saying why in its note while the
  * ones that fit still come; the note goes once the box's message goes,
  * whichever way it goes, queued behind a running turn as sent.
  */
@@ -143,31 +145,44 @@ async function paste(container: HTMLElement, files: readonly File[]): Promise<bo
   return !event.defaultPrevented;
 }
 
-/** What the box shows of its files: its chips by name, and its note. */
+/** What the box shows of its files: its chips beside the words by name, the pictures its words hold by what their chips open, and its note. */
 function held(container: HTMLElement) {
   return {
     chips: [...container.querySelectorAll('[aria-label="Attached files"] > li')].map(
       attachmentChipName,
     ),
+    pictures: [
+      ...composerEditor(container).querySelectorAll('[data-chip="pictureChip"] [aria-label]'),
+    ].map((chip) => chip.getAttribute("aria-label")),
     note: container.querySelector('.ui-composer-foot-note [role="alert"]')?.textContent ?? null,
   };
 }
 
-test("a picture dropped on the agent's box is held as its chip, and says nothing", async () => {
+test("a picture dropped on the agent's box is held as its chip in the words, and says nothing", async () => {
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
     await drop(container, [png("dropped.png")]);
-    assert.deepEqual(held(container), { chips: ["dropped.png"], note: null }, box);
+    assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null }, box);
   }
 });
 
-test("a picture pasted into the agent's box is held as its chip, the paste writing no words", async () => {
+test("a picture pasted into the agent's box is held as its chip in the words, the paste writing no words of its own", async () => {
   for (const box of Object.keys(BOXES) as (keyof typeof BOXES)[]) {
     const container = await mounted(box);
     assert.equal(await paste(container, [png("pasted.png")]), false, `${box} takes the paste`);
-    assert.deepEqual(held(container), { chips: ["pasted.png"], note: null }, box);
-    assert.equal(composerEditor(container).textContent, "", `${box} writes no words`);
+    assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null }, box);
   }
+});
+
+test("one Backspace taking a picture's chip out of the words takes the picture off the message", async () => {
+  const container = await mounted("agent");
+  await drop(container, [png("one.png"), png("two.png")]);
+  assert.deepEqual(held(container).pictures, ["Open Picture 1", "Open Picture 2"]);
+
+  act(() => pressInComposer(container, "Backspace"));
+  await settle();
+
+  assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
 });
 
 test("a file this machine cannot read says so in the agent's box and is reported with why", async () => {
@@ -185,7 +200,11 @@ test("a file this machine cannot read says so in the agent's box and is reported
   await drop(container, [file]);
   uninstall();
 
-  assert.deepEqual(held(container), { chips: [], note: "notes.txt couldn't be read." });
+  assert.deepEqual(held(container), {
+    chips: [],
+    pictures: [],
+    note: "notes.txt couldn't be read.",
+  });
   assert.deepEqual(
     reports.map((report) => [report.surface, report.cause]),
     [[FAILURE_SURFACE.ATTACHMENT_READ, unreadable]],
@@ -202,7 +221,8 @@ test("pictures past the bytes a message carries together leave the last out of t
     assert.deepEqual(
       held(container),
       {
-        chips: ["one.png", "two.png"],
+        chips: [],
+        pictures: ["Open Picture 1", "Open Picture 2"],
         note: "These files are too large to send together.",
       },
       box,
@@ -226,5 +246,5 @@ test("a note of files left out goes once the box's message is queued, as it goes
   act(() => queue.click());
   await settle();
 
-  assert.deepEqual(held(container), { chips: [], note: null });
+  assert.deepEqual(held(container), { chips: [], pictures: [], note: null });
 });

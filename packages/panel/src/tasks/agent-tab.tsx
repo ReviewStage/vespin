@@ -194,6 +194,7 @@ import {
   AgentPicturesProvider,
   CallPictures,
   MessageFileChips,
+  MessagePictures,
   ShownPictures,
   useAgentPictureDoor,
 } from "./agent-pictures.js";
@@ -1673,43 +1674,47 @@ export function AgentMessage({
       </MessageContent>
     );
     return (
-      <Message
-        from={received ? MESSAGE_ROLE.ASSISTANT : message.role}
-        className={received ? RECEIVED_MESSAGE_CLASS : undefined}
-        data-message-id={message.id}
-        data-undelivered={marked ? "" : undefined}
-      >
-        {received ? <MessageHead sender={named}>{subject}</MessageHead> : subject}
-        <MessageFileChips message={message} sending={sending} />
-        {shown === "" ? null : marked ? (
-          <MessageBeside mark={<UndeliveredMark messageId={message.id} />}>{content}</MessageBeside>
-        ) : (
-          content
-        )}
-        {/* A line of files alone stands its mark on a row of its own, kept clear of the files' fade. */}
-        {shown === "" && marked ? (
-          <MessageBeside mark={<UndeliveredMark messageId={message.id} />}>{null}</MessageBeside>
-        ) : null}
-        <MessageLine
-          align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
-          status={status}
-          at={sentAt}
-          // Note that a line of no words, files alone, still offers its Copy link, though it has nothing to copy or edit.
-          actions={
-            <CopyMessageAction
-              words={shown}
-              copyable={shown !== ""}
-              messageId={message.id}
-              // Note that a comment's or a Slack message's line is drawn from what it carries rather than its words, so it is written again nowhere, as GitHub's is not.
-              rewind={
-                shown === "" || comment !== undefined || slack !== undefined
-                  ? undefined
-                  : REWIND_ACTION.EDIT
-              }
-            />
-          }
-        />
-      </Message>
+      <MessagePictures message={message} words={shown}>
+        <Message
+          from={received ? MESSAGE_ROLE.ASSISTANT : message.role}
+          className={received ? RECEIVED_MESSAGE_CLASS : undefined}
+          data-message-id={message.id}
+          data-undelivered={marked ? "" : undefined}
+        >
+          {received ? <MessageHead sender={named}>{subject}</MessageHead> : subject}
+          <MessageFileChips message={message} sending={sending} />
+          {shown === "" ? null : marked ? (
+            <MessageBeside mark={<UndeliveredMark messageId={message.id} />}>
+              {content}
+            </MessageBeside>
+          ) : (
+            content
+          )}
+          {/* A line of files alone stands its mark on a row of its own, kept clear of the files' fade. */}
+          {shown === "" && marked ? (
+            <MessageBeside mark={<UndeliveredMark messageId={message.id} />}>{null}</MessageBeside>
+          ) : null}
+          <MessageLine
+            align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
+            status={status}
+            at={sentAt}
+            // Note that a line of no words, files alone, still offers its Copy link, though it has nothing to copy or edit.
+            actions={
+              <CopyMessageAction
+                words={shown}
+                copyable={shown !== ""}
+                messageId={message.id}
+                // Note that a comment's or a Slack message's line is drawn from what it carries rather than its words, so it is written again nowhere, as GitHub's is not.
+                rewind={
+                  shown === "" || comment !== undefined || slack !== undefined
+                    ? undefined
+                    : REWIND_ACTION.EDIT
+                }
+              />
+            }
+          />
+        </Message>
+      </MessagePictures>
     );
   }
   const { startedAt, finishedAt } = message;

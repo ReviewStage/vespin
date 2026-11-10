@@ -1,6 +1,7 @@
 import {
   AGENT_BOUNDS,
   AGENT_STATUS,
+  type AgentAttachment,
   type AgentBrief,
   type AgentContext,
   type AgentPayer,
@@ -16,6 +17,7 @@ import {
   retriesBesideRemedy,
 } from "@repo/features/failure-remedy";
 import type { CatalogModel } from "@repo/features/models-wire";
+import { pictureMarkers } from "@repo/features/picture-marker";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { pasteCutWords } from "@repo/features/words";
 import type { ShortcutChord } from "@repo/settings/shortcuts";
@@ -41,6 +43,7 @@ import {
   type ReactNode,
   type RefObject,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -53,7 +56,7 @@ import { modEnterSends } from "../enter-sends.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { PANEL_SPAN } from "../panel-spans.js";
-import { useAttachedFiles } from "../use-attached-files.js";
+import { isPictureFile, useAttachedFiles } from "../use-attached-files.js";
 import { AgentContextRing, ContextRingIcon } from "./agent-context.js";
 import { contextHint } from "./agent-context-model.js";
 import { noteWhileOffline } from "./agent-model.js";
@@ -62,10 +65,11 @@ import { BranchChip, type PublishedDoors } from "./agent-published.js";
 import { type AgentServersControl, serversMenuPanel } from "./agent-servers.js";
 import { AttachFilesButton, type AttachPicker, attachmentRow } from "./attach-files-button.js";
 import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
-import { ComposerField } from "./composer-field.js";
+import { ComposerField, type ComposerFieldPictures } from "./composer-field.js";
 import { useComposerPickers } from "./composer-pickers.js";
 import { DictateButton, DictationStrip } from "./dictation-strip.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide } from "./mention-picker.js";
+import { PictureChip, usePictureViewer } from "./picture-chips.js";
 import { ComposerQuoteView } from "./reply-to-selection.js";
 import { useRepositoryRemedy } from "./repository-remedy.js";
 import type { SkillSource } from "./skill-picker.js";
@@ -469,6 +473,57 @@ export interface ComposerQueueing {
   readonly onCancel: () => void;
 }
 
+/** The pictures a box holds as its words name them: the files drawn beside the words, the field's picture chips, and the viewer a chip opens. */
+interface BoxPictures {
+  readonly beside: readonly AgentAttachment[];
+  readonly field: ComposerFieldPictures | undefined;
+  readonly viewer: ReactNode;
+}
+
+/**
+ * The box's pictures: each picture whose marker the words hold drawn there
+ * as its chip, opening over the window and walking the pictures in the
+ * order the words name them, and every other file beside the words, as
+ * every file stood before pictures went into the words; where the box
+ * takes none into its words, every file beside them.
+ */
+function useBoxPictures(
+  takes: boolean,
+  draft: string,
+  attachments: readonly AgentAttachment[],
+): BoxPictures {
+  const names = useMemo(
+    () => new Set(attachments.filter(isPictureFile).map((file) => file.name)),
+    [attachments],
+  );
+  const inWords = useMemo(() => {
+    const named = new Set(pictureMarkers(draft).map((marker) => marker.name));
+    return attachments.filter((file) => isPictureFile(file) && named.has(file.name));
+  }, [draft, attachments]);
+  const ordered = pictureMarkers(draft).flatMap((marker, index, markers) => {
+    const file = inWords.find((each) => each.name === marker.name);
+    const first = markers.findIndex((each) => each.name === marker.name) === index;
+    return file === undefined || !first ? [] : [file];
+  });
+  const chips = attachmentChips(ordered);
+  const viewer = usePictureViewer(chips);
+  if (!takes) return { beside: attachments, field: undefined, viewer: null };
+  return {
+    beside: attachments.filter((file) => !inWords.includes(file)),
+    field: {
+      names,
+      chip: (name) => (
+        <PictureChip
+          name={name}
+          file={chips.find((chip) => chip.name === name)}
+          onOpen={viewer.open}
+        />
+      ),
+    },
+    viewer: viewer.viewer,
+  };
+}
+
 export function AgentComposer({
   agentId,
   status,
@@ -608,6 +663,8 @@ export function AgentComposer({
   const closed = composer.closed !== undefined;
   const held = composer.sending || closed;
   // Note that Send waits while files are read, so no message goes without a file the developer already handed the box.
+  // Note that a box written to an agent takes pictures into its words, where the Inbox's answer box keeps them beside its words, as the Inbox draws them.
+  const takesPictures = answer === undefined;
   const files = useAttachedFiles({
     holder: { attachments: composer.attachments, update: composer.setAttachments },
     held,
@@ -615,7 +672,16 @@ export function AgentComposer({
       setRefusal(words);
       setFilesRefused(words !== undefined);
     },
+    pictures: takesPictures
+      ? {
+          place: () => {
+            const mark = editor.current?.mark();
+            return mark === undefined ? undefined : (names) => mark.insertPictures(names);
+          },
+        }
+      : undefined,
   });
+  const pictures = useBoxPictures(takesPictures, composer.draft, composer.attachments);
   const editingQueued = queueing?.editing === true;
   // Whether Send takes nothing now: the box held, unable to send, or still reading a file handed to it.
   const sendHeld = held || !sendable || files.reading;
@@ -892,10 +958,20 @@ export function AgentComposer({
         {answer?.question}
         <ComposerBody
           files={
-            <AttachedFileChips
-              files={attachmentChips(composer.attachments)}
-              onRemove={held ? undefined : files.remove}
-            />
+            <>
+              <AttachedFileChips
+                files={attachmentChips(pictures.beside)}
+                onRemove={
+                  held
+                    ? undefined
+                    : (index) => {
+                        const file = pictures.beside[index];
+                        if (file !== undefined) files.remove(composer.attachments.indexOf(file));
+                      }
+                }
+              />
+              {pictures.viewer}
+            </>
           }
         >
           <ComposerField
@@ -908,6 +984,7 @@ export function AgentComposer({
             setDraft={(text) => {
               setCut(false);
               composer.setDraft(text);
+              files.follow(text);
             }}
             onPasteCut={() => setCut(true)}
             placeholder={placeholder}
@@ -933,6 +1010,7 @@ export function AgentComposer({
             }}
             onPasteFiles={files.paste}
             onPasteText={files.pasteText}
+            pictures={pictures.field}
             quote={(quote) => <ComposerQuoteView quote={quote} held={held} />}
           />
         </ComposerBody>
