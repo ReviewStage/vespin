@@ -120,6 +120,14 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.CLOSE_THREAD]: { inbox: ["close"] },
   [MEMBER_MCP_TOOL.AGENT_PULL_REQUEST_ACTION]: { agentPullRequests: ["action"] },
   [MEMBER_MCP_TOOL.READ_PULL_REQUEST]: {
+    agentPullRequests: [
+      "pullRequest",
+      "overviewPullRequest",
+      "overviewChecks",
+      "overviewConversation",
+      "viewed",
+    ],
+    agents: ["changes"],
     pullRequests: [
       "pullRequest",
       "overviewPullRequest",
@@ -129,7 +137,10 @@ export const MEMBER_MCP_COVERAGE = {
       "viewed",
     ],
   },
-  [MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED]: { pullRequests: ["action"] },
+  [MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED]: {
+    agentPullRequests: ["pullRequest", "action"],
+    pullRequests: ["action"],
+  },
   [MEMBER_MCP_TOOL.READ_PULL_REQUEST_CHAPTERS]: {
     agentPullRequests: ["pullRequest"],
     pullRequestChapters: ["read", "repositoryRead"],
@@ -210,12 +221,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     workspaces: INTERNAL,
   },
   agentPages: { frame: SCREEN_ONLY },
-  agentPullRequests: {
-    viewed: NOT_YET_BUILT,
-    overviewPullRequest: NOT_YET_BUILT,
-    overviewChecks: NOT_YET_BUILT,
-    overviewConversation: NOT_YET_BUILT,
-  },
   agents: {
     delete: NOT_YET_BUILT,
     warm: NOT_YET_BUILT,

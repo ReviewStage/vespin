@@ -1000,7 +1000,7 @@ it.effect(
 );
 
 it.effect(
-  "an outside agent reads any pull request of the member's workspace by its repository and number, its files with the member's viewed marks, and marks one viewed on the member's own GitHub sign-in",
+  "an outside agent reads a pull request by its repository and number or by the agent that opened it, its files with the member's viewed marks, and marks them on the member's own GitHub sign-in",
   () =>
     Effect.gen(function* () {
       const calls: GraphqlCall[] = [];
@@ -1055,7 +1055,7 @@ it.effect(
       );
       const { auth, fetch, services } = yield* memberMcpStanding({ github: github.layer });
       const member = yield* Effect.promise(() => signUp(auth));
-      yield* Effect.gen(function* () {
+      const agents = yield* Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
         yield* signInWithGitHub(member.userId, {
           ...standingGithubRow(now),
@@ -1063,6 +1063,22 @@ it.effect(
         });
         const workspaceId = yield* openWorkspace(member.userId);
         yield* connectWorkspaceGitHub(workspaceId, installation);
+        const task = yield* createTask(member.userId, {
+          organizationId: workspaceId,
+          name: "Teammate invitations",
+        });
+        const published = yield* openTaskAgent(member.userId, workspaceId, task.id);
+        // One agent pushed the branch its pull request stands open from; the other has opened none yet.
+        yield* Database.use((db) =>
+          db
+            .update(agentTable)
+            .set({ repository: RELAY_FULL_NAME, branch: PUBLISHED.branch })
+            .where(eq(agentTable.id, published)),
+        );
+        return {
+          published,
+          unpublished: yield* openTaskAgent(member.userId, workspaceId, task.id),
+        };
       }).pipe(Effect.provide(services));
       const token = yield* Effect.promise(() =>
         mintedToken(auth, member.cookie, {
@@ -1083,22 +1099,40 @@ it.effect(
         paths: ["src/expire.ts"],
         viewed: true,
       });
+      const agentChanges = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, {
+        agentId: agents.published,
+        part: "changes",
+      });
+      const agentMarked = yield* call(MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED, {
+        agentId: agents.published,
+        paths: ["src/invite.ts"],
+        viewed: false,
+      });
+      const unopened = yield* call(MEMBER_MCP_TOOL.READ_PULL_REQUEST, {
+        agentId: agents.unpublished,
+      });
       yield* Effect.promise(() => client.close());
 
-      assert.notEqual(changes.isError, true, changes.content[0].text);
-      assert.deepEqual(
-        JSON.parse(changes.content[0].text).files.map(
-          ({ path, viewed }: { path: string; viewed: string }) => [path, viewed],
-        ),
-        [
-          ["src/invite.ts", "viewed"],
-          ["src/expire.ts", "unviewed"],
-        ],
-      );
+      // The agent's own pull request is the same pull request, read through the agent.
+      for (const read of [changes, agentChanges]) {
+        assert.notEqual(read.isError, true, read.content[0].text);
+        assert.deepEqual(
+          JSON.parse(read.content[0].text).files.map(
+            ({ path, viewed }: { path: string; viewed: string }) => [path, viewed],
+          ),
+          [
+            ["src/invite.ts", "viewed"],
+            ["src/expire.ts", "unviewed"],
+          ],
+        );
+      }
+      assert.equal(unopened.isError, true);
+      assert.match(unopened.content[0].text, /opened no pull request yet/u);
       // A number the repository holds no pull request under is refused as the hosted read refuses it.
       assert.equal(missing.isError, true);
       assert.match(missing.content[0].text, /no pull request of that number/u);
       assert.notEqual(marked.isError, true, marked.content[0].text);
+      assert.notEqual(agentMarked.isError, true, agentMarked.content[0].text);
       assert.deepEqual(
         calls.flatMap((one) => {
           const mutation = mutationOf(one);
@@ -1108,6 +1142,11 @@ it.effect(
           [
             "markFileAsViewed",
             { id: PULL_REQUEST_NODE_ID, path: "src/expire.ts" },
+            `Bearer ${MEMBER_GITHUB_TOKEN}`,
+          ],
+          [
+            "unmarkFileAsViewed",
+            { id: PULL_REQUEST_NODE_ID, path: "src/invite.ts" },
             `Bearer ${MEMBER_GITHUB_TOKEN}`,
           ],
         ],

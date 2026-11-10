@@ -296,7 +296,9 @@ import { answerAskAsMember, closeThreadAsMember, readMemberInbox, replyAsMember 
 import {
   MARK_FILES_VIEWED_FIELDS,
   READ_PULL_REQUEST_FIELDS,
+  runMarkAgentFilesViewed,
   runMarkFilesViewed,
+  runReadAgentPullRequest,
   runReadPullRequest,
 } from "./pull-request-tools.js";
 
@@ -2214,25 +2216,95 @@ const AGENT_PULL_REQUEST_ACTION_TOOL = memberMcpTool({
     ),
 });
 
-// Any pull request of a repository the member's workspace reaches, by its repository and number (`pull-request-tools.ts`).
+// A coding agent's pull request by the agent's id, or any pull request of a repository the member's workspace reaches by its repository and number (`pull-request-tools.ts`).
 
-/** A read names its workspace, as a list does, and the pull request and its part. */
+/** Why a pull request call reached nothing before it began, in words the agent can act on. */
+const PULL_REQUEST_NAME_ONE =
+  "Not run: name the pull request either by agentId, or by repository and number, not both " +
+  "and not neither.";
+
+/** With repository, the workspace whose installation reaches it, as a chapters call names it. */
+const PULL_REQUEST_WORKSPACE = Schema.optionalKey(
+  describeWire(
+    WORKSPACE_INPUT.schema,
+    `With repository, the workspace whose GitHub installation reaches it, by the slug ` +
+      `${MEMBER_MCP_TOOL.LIST_WORKSPACES} answered; leave it out where the member belongs to ` +
+      "one workspace alone.",
+  ),
+);
+
+/** A read names the pull request, by its agent or its repository, and its part. */
 const ReadPullRequestInputSchema = Schema.Struct({
-  workspace: WORKSPACE_INPUT,
+  workspace: PULL_REQUEST_WORKSPACE,
   ...READ_PULL_REQUEST_FIELDS,
 });
 
-/** A mark names its workspace, as a list does, and the pull request's files. */
+/** A mark names the pull request, by its agent or its repository, and its files. */
 const MarkPullRequestFilesViewedInputSchema = Schema.Struct({
-  workspace: WORKSPACE_INPUT,
+  workspace: PULL_REQUEST_WORKSPACE,
   ...MARK_FILES_VIEWED_FIELDS,
 });
+
+/** The pull request a call names, either way. */
+interface PullRequestNamedInput {
+  readonly agentId: string | undefined;
+  readonly repository: string | undefined;
+  readonly number: number | undefined;
+  readonly workspace: string | undefined;
+}
+
+/** Each way a pull request call runs: on an agent the member reached, or on a repository's pull request in the workspace given. */
+interface PullRequestCall<R> {
+  readonly agent: (
+    userId: string,
+    agent: Agent,
+    number: number | undefined,
+  ) => Effect.Effect<WireRecord, never, R>;
+  readonly repository: (
+    userId: string,
+    workspaceId: string,
+    named: { readonly repository: string; readonly number: number },
+  ) => Effect.Effect<WireRecord, never, R>;
+}
+
+/** A pull request call run as the member on the pull request its input names: by the agent, found as `read_agent` finds it, or by its repository and number in the workspace named. */
+const pullRequestAsMember = <R>(named: PullRequestNamedInput, call: PullRequestCall<R>) => {
+  const { agentId, repository, number, workspace } = named;
+  if (agentId !== undefined) {
+    if (repository !== undefined || workspace !== undefined) {
+      return Effect.succeed(agentToolRejected(PULL_REQUEST_NAME_ONE));
+    }
+    return readAsMember(
+      (userId) => agentWorkspace(userId, { id: agentId }),
+      AGENT_TOOL_REFUSAL.NO_AGENT,
+      (member) =>
+        orStoreRefusal(
+          Effect.gen(function* () {
+            const found = yield* workspaceAgentOf(member.caller, agentId);
+            if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
+            return yield* call.agent(callerUserId(member.caller), found.value.agent, number);
+          }),
+        ),
+    );
+  }
+  if (repository === undefined || number === undefined) {
+    return Effect.succeed(agentToolRejected(PULL_REQUEST_NAME_ONE));
+  }
+  return listAsMember(workspace, (member) =>
+    call.repository(callerUserId(member.caller), callerWorkspaceId(member.caller), {
+      repository,
+      number,
+    }),
+  );
+};
 
 const READ_PULL_REQUEST_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.READ_PULL_REQUEST,
   description:
-    "Read any pull request of a repository the member's workspace reaches on GitHub, by its " +
-    "repository (owner/name) and number, one part a call, as its Pull request tab draws it. " +
+    "Read a pull request one part a call, as its Pull request tab draws it: a coding agent's " +
+    "by the agent's id, what it published or another of its repository by number, or any " +
+    "pull request of a repository the member's workspace reaches on GitHub by its repository " +
+    "(owner/name) and number. " +
     "overview (the default) answers the pull request as GitHub holds it now: its state, its " +
     "checks in one word, the head commit it stands on (headSha), the lines it adds and removes, " +
     "the branch it is from, and its overview: its body as written in Markdown, cut to a bound, its " +
@@ -2243,30 +2315,44 @@ const READ_PULL_REQUEST_TOOL = memberMcpTool({
     "where more stand. changes answers the files it changes, a page at a time with nextOffset, " +
     "each with what became of it, the lines it adds and removes, and whether the member marked " +
     "it viewed; name a path to read that file's patch as well. " +
-    `${WORKSPACE_WORDS} Answers \`rejected\` and why where the member is in no such workspace ` +
-    "or the repository holds no pull request of that number. It only reads.",
+    `${WORKSPACE_WORDS} Answers \`rejected\` and why where the member reaches no such agent, ` +
+    "the agent opened no pull request yet, the member is in no such workspace, or the " +
+    "repository holds no pull request of that number. It only reads.",
   input: ReadPullRequestInputSchema,
   annotations: READ_ONLY,
-  run: ({ workspace, ...asked }) =>
-    listAsMember(workspace, (call) =>
-      runReadPullRequest(callerUserId(call.caller), callerWorkspaceId(call.caller), asked),
+  run: ({ workspace, agentId, repository, number, ...asked }) =>
+    pullRequestAsMember(
+      { workspace, agentId, repository, number },
+      {
+        agent: (userId, agent, other) =>
+          runReadAgentPullRequest(KEPT_PUBLISHED, userId, agent, other, asked),
+        repository: (userId, workspaceId, named) =>
+          runReadPullRequest(userId, workspaceId, named, asked),
+      },
     ),
 });
 
 const MARK_PULL_REQUEST_FILES_VIEWED_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.MARK_PULL_REQUEST_FILES_VIEWED,
   description:
-    "Mark files of any pull request of a repository the member's workspace reaches as viewed, " +
-    "or unmark them, by the pull request's repository (owner/name) and number and the files' " +
-    `paths as ${MEMBER_MCP_TOOL.READ_PULL_REQUEST}'s changes name them, as GitHub's own Viewed ` +
-    "box does: on GitHub as the member, on their own GitHub sign-in. " +
+    "Mark files of a pull request as viewed, or unmark them, as GitHub's own Viewed box does: " +
+    "on GitHub as the member, on their own GitHub sign-in. Name a coding agent's pull request " +
+    "by the agent's id, or any pull request of a repository the member's workspace reaches by " +
+    "its repository (owner/name) and number, and the files by their paths as " +
+    `${MEMBER_MCP_TOOL.READ_PULL_REQUEST}'s changes name them. ` +
     `${WORKSPACE_WORDS} Answers \`accepted\` with the paths marked, or \`rejected\` and why ` +
     "at the first GitHub did not take, naming those marked before it.",
   input: MarkPullRequestFilesViewedInputSchema,
   annotations: IDEMPOTENT_CHANGE,
-  run: ({ workspace, ...asked }) =>
-    listAsMember(workspace, (call) =>
-      runMarkFilesViewed(callerUserId(call.caller), callerWorkspaceId(call.caller), asked),
+  run: ({ workspace, agentId, repository, number, ...asked }) =>
+    pullRequestAsMember(
+      { workspace, agentId, repository, number },
+      {
+        agent: (userId, agent, other) =>
+          runMarkAgentFilesViewed(KEPT_PUBLISHED, userId, agent, other, asked),
+        repository: (userId, workspaceId, named) =>
+          runMarkFilesViewed(userId, workspaceId, named, asked),
+      },
     ),
 });
 
@@ -2282,9 +2368,6 @@ const MARK_PULL_REQUEST_FILES_VIEWED_TOOL = memberMcpTool({
 
 /** Why chapters were not read or generated, in words the agent can act on. */
 const CHAPTERS_REFUSAL = {
-  NAME_ONE:
-    "Not run: name the pull request either by agentId, or by repository and number, not both " +
-    "and not neither.",
   NO_PULL_REQUEST:
     "Not run: the member reaches no such pull request: the agent, the workspace, or the " +
     "repository's pull request of that number is none of theirs.",
@@ -2373,36 +2456,13 @@ const chaptersAsMember = <R>(asked: PullRequestChaptersInput, call: ChaptersCall
       ),
     );
   const { agentId, repository, number, workspace } = asked;
-  if (agentId !== undefined) {
-    if (repository !== undefined || workspace !== undefined) {
-      return Effect.succeed(agentToolRejected(CHAPTERS_REFUSAL.NAME_ONE));
-    }
-    return readAsMember(
-      (userId) => agentWorkspace(userId, { id: agentId }),
-      AGENT_TOOL_REFUSAL.NO_AGENT,
-      (member) =>
-        orStoreRefusal(
-          Effect.gen(function* () {
-            const found = yield* workspaceAgentOf(member.caller, agentId);
-            if (Option.isNone(found)) return agentToolRejected(AGENT_TOOL_REFUSAL.NO_AGENT);
-            return yield* answered(
-              call.agent(callerUserId(member.caller), found.value.agent, number),
-            );
-          }),
-        ),
-    );
-  }
-  if (repository === undefined || number === undefined) {
-    return Effect.succeed(agentToolRejected(CHAPTERS_REFUSAL.NAME_ONE));
-  }
-  return listAsMember(workspace, (member) =>
-    answered(
-      call.repository(callerUserId(member.caller), {
-        workspaceId: callerWorkspaceId(member.caller),
-        repository,
-        number,
-      }),
-    ),
+  return pullRequestAsMember(
+    { agentId, repository, number, workspace },
+    {
+      agent: (userId, agent, other) => answered(call.agent(userId, agent, other)),
+      repository: (userId, workspaceId, named) =>
+        answered(call.repository(userId, { workspaceId, ...named })),
+    },
   );
 };
 
