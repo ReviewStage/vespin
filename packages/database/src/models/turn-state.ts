@@ -68,6 +68,7 @@ import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
 import { agentRunnerRecord } from "../schemas/agent-runner-record.js";
+import { agentSandboxTable } from "../schemas/agent-sandbox.js";
 import { messages, turns } from "../schemas/storage.js";
 import { TurnUsageColumnSchema } from "./columns.js";
 
@@ -995,6 +996,63 @@ export function dropAwaitingNothing(
       }),
     { discard: true },
   );
+}
+
+/** The snapshot columns cleared, as a turn whose runner recorded none holds them. */
+const NO_SNAPSHOT = { snapshotCommit: null, snapshotHead: null, snapshotBranch: null } as const;
+
+const forgetSnapshotsOfSandbox = SqlSchema.void({
+  Request: Schema.Struct({ sandboxName: Schema.String }),
+  execute: ({ sandboxName }) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set(NO_SNAPSHOT)
+        .where(
+          inArray(
+            turns.conversationId,
+            db
+              .select({ conversationId: agentTable.conversationId })
+              .from(agentSandboxTable)
+              .innerJoin(agentTable, eq(agentTable.id, agentSandboxTable.agentId))
+              .where(eq(agentSandboxTable.sandboxName, sandboxName)),
+          ),
+        ),
+    ),
+});
+
+const forgetSnapshotsOfAgent = SqlSchema.void({
+  Request: Schema.Struct({ agentId: Schema.String }),
+  execute: ({ agentId }) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set(NO_SNAPSHOT)
+        .where(
+          inArray(
+            turns.conversationId,
+            db
+              .select({ conversationId: agentTable.conversationId })
+              .from(agentTable)
+              .where(eq(agentTable.id, agentId)),
+          ),
+        ),
+    ),
+});
+
+/**
+ * The snapshots the turns of the sandbox's agent hold forgotten, since a
+ * snapshot stands only while the sandbox it was taken in does: written as
+ * the sandbox is released, discarded, or made anew under its name
+ * (`agent-sandboxes.ts`), so no turn claims a checkout no sandbox holds.
+ */
+export function forgetTurnSnapshotsOfSandbox(sandboxName: string): TurnStateEffect<void> {
+  return forgetSnapshotsOfSandbox({ sandboxName });
+}
+
+/** The snapshots the agent's turns hold forgotten, as `forgetTurnSnapshotsOfSandbox` forgets them, for a sandbox the agent opens anew. */
+export function forgetTurnSnapshotsOfAgent(agentId: string): TurnStateEffect<void> {
+  return forgetSnapshotsOfAgent({ agentId });
 }
 
 /**

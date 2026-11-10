@@ -777,6 +777,8 @@ export const agentStopParamsSchema = EffectSchema.Struct({
 export const agentRewindParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
   messageId: EffectSchema.NonEmptyString,
+  /** Whether the agent's files go back too, to the snapshot its runner took before the turn the line opened. */
+  restoreFiles: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 /** One agent, as the window asks to read it whole as its own page, on a task or with none. */

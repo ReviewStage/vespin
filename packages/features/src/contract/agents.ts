@@ -335,9 +335,15 @@ export const agentsContract = {
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/warm` }))
     .input(idParams)
     .output(EffectSchema.flip(agentWarmAnswerSchema)),
-  /** One agent taken back to just before one of the developer's lines, stopped first where it still works. */
+  /** One agent taken back to just before one of the developer's lines, stopped first where it still works, its files put back too where asked and a snapshot of them stands. */
   rewind: declaredProcedure
-    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.NOT_PERMITTED,
+        HOSTED_API_ERROR.CHECKOUT_SNAPSHOT_MISSING,
+      ),
+    )
     .meta(bodyCap(CHOICE_BODY_BYTES))
     .meta(
       openapi({

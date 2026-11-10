@@ -18,6 +18,8 @@ export const EXPERIMENT = {
   BRING_YOUR_OWN_HOST: "bring-your-own-host",
   /** Descriptions: a task's description its coding agents keep current as they work, its comments and version history, and the tools and instructions they write it and answer its comments with. */
   DESCRIPTIONS: "descriptions",
+  /** Rewind restores files: a rewind or an edit of a message may put the agent's files back as they stood before it, from the checkout its runner records before each turn. */
+  REWIND_FILES: "rewind-files",
   /** Done and follow-ups: an agent ends a turn with a short summary, and the bar over its box says what it needs from you, or that it is done, with what is still open and the follow-ups it offers. */
   TURN_END: "turn-end",
 } as const;
@@ -39,6 +41,7 @@ export type ExperimentScope = (typeof EXPERIMENT_SCOPE)[keyof typeof EXPERIMENT_
  * listed here is each account's own.
  */
 export const WORKSPACE_EXPERIMENT_LIST = [
+  EXPERIMENT.REWIND_FILES,
   EXPERIMENT.DESCRIPTIONS,
   EXPERIMENT.MEMORY,
   EXPERIMENT.TURN_END,
@@ -78,6 +81,14 @@ export interface ExperimentEntry {
  * there is no status to drift and every experiment is off until turned on.
  */
 export const EXPERIMENTS = [
+  {
+    key: EXPERIMENT.REWIND_FILES,
+    name: "Rewind restores files",
+    detail:
+      "Rewinding or editing a message can also put the agent's files back to how they stood before it.",
+    owner: "Dean",
+    since: "2026-11-10",
+  },
   {
     key: EXPERIMENT.TURN_END,
     name: "Done and follow-ups",
