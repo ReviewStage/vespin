@@ -120,8 +120,12 @@ function threadOf(item: InboxItem, userId: string): WireRecord {
     ...(asking === undefined ? undefined : { askId: asking.message.id }),
     ...(earlier > 0 ? { earlier } : undefined),
     thread: told.map((message) => threadLineOf(message, writerOf(message, userId))),
-    ...(item.answeredBy === undefined ? undefined : { answeredBy: item.answeredBy.name }),
-    ...(item.closedBy === undefined ? undefined : { closedBy: item.closedBy.name }),
+    ...(item.answeredBy === undefined
+      ? undefined
+      : { answeredBy: item.answeredBy.name, answeredByUserId: item.answeredBy.userId }),
+    ...(item.closedBy === undefined
+      ? undefined
+      : { closedBy: item.closedBy.name, closedByUserId: item.closedBy.userId }),
     ...(item.closedReason === undefined ? undefined : { closedReason: item.closedReason }),
   };
 }

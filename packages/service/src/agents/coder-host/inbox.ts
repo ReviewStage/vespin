@@ -140,9 +140,9 @@ export const INBOX_TOOLS = {
     description:
       "Read your threads as they stand now: every one still asking, whole, and the latest settled ones by their last messages and their latest ask and answer; " +
       `a thread longer than ${INBOX_BOUNDS.MAX_MESSAGES_READ} messages reads its first, its open ask, and its latest ${INBOX_BOUNDS.MAX_MESSAGES_READ}. ` +
-      "Each message reads in order with who wrote it, you or a member by name, the ask it ends with and where that stands " +
+      "Each message reads in order with who wrote it, you or a member by name and fromUserId, which their link names them by, the ask it ends with and where that stands " +
       "(open, answered, replaced by a newer ask, or withdrawn, with your reason), and the answer a member's message carries. " +
-      "A member may close a thread without answering, which withdraws its ask with no reason, and closedBy names them; " +
+      "A member may close a thread without answering, which withdraws its ask with no reason, and closedBy and closedByUserId name them; " +
       `where it held an ask open, that reaches you as a developer's message whose first line starts "${INBOX_CLOSE_LEAD}" and names the key: ` +
       "take it as their not wanting what the ask asked.",
     inputSchema: inboxReadInputSchema,
@@ -163,6 +163,8 @@ type AgentAskLine =
 /** One message of a thread as an agent reads it back: who wrote it, its words, its files by name, its ask, and the answer it carries. Note that it is a type rather than an interface, because the record a member's thread answers as (`WireRecord`) takes an object type's keys and no interface's. */
 export type AgentThreadLine = {
   readonly from: string;
+  /** The account of the member who wrote it, which their link names them by; none for an agent's message or a former member's. */
+  readonly fromUserId?: string;
   readonly text: string;
   readonly files?: readonly string[];
   readonly ask?: AgentAskLine;
@@ -180,6 +182,8 @@ interface AgentInboxLine {
   readonly thread: readonly AgentThreadLine[];
   /** The member who closed the thread without answering, by name: a former member's where their account is gone. */
   readonly closedBy?: string;
+  /** The account of that member, which their link names them by; none for a former member. */
+  readonly closedByUserId?: string;
   /** Why a thread whose messages ask nothing, a notice, was closed. */
   readonly closedReason?: string;
 }
@@ -275,6 +279,7 @@ function answersLineOf(answers: InboxAnswers): Omit<InboxAnswers, "ask"> {
 export function threadLineOf(message: InboxMessage, from: string): AgentThreadLine {
   return {
     from,
+    ...(message.member === undefined ? undefined : { fromUserId: message.member.userId }),
     text: message.text,
     ...(message.files === undefined
       ? undefined
@@ -286,13 +291,15 @@ export function threadLineOf(message: InboxMessage, from: string): AgentThreadLi
 
 /**
  * Who closed an item without answering it, as the agent reads it: the
- * member by name. Note that the agent's own withdrawal always says why, so
+ * member by name and by the account their link names them by. Note that the agent's own withdrawal always says why, so
  * a closed item without a reason or a member is one a member closed whose
  * account is gone.
  */
-function closerOf(item: InboxItem): Pick<AgentInboxLine, "closedBy"> {
+function closerOf(item: InboxItem): Pick<AgentInboxLine, "closedBy" | "closedByUserId"> {
   if (item.status !== INBOX_STATUS.CLOSED) return {};
-  if (item.closedBy !== undefined) return { closedBy: item.closedBy.name };
+  if (item.closedBy !== undefined) {
+    return { closedBy: item.closedBy.name, closedByUserId: item.closedBy.userId };
+  }
   return item.closedReason === undefined ? { closedBy: "a former member" } : {};
 }
 

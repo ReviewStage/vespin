@@ -122,7 +122,7 @@ export function readTaskToolOf(on: Pick<ExperimentsOn, "descriptionsOn">) {
     description:
       "Read one task of your workspace by its id, a teammate's included: its " +
       "key (such as ACME-42), name, where it stands (its status) and how much it matters (its " +
-      "priority), repository, who started it, whether it is the task you " +
+      "priority), repository, who started it (startedBy, and startedByUserId to link them by), whether it is the task you " +
       "work on, the brief the developer started it with (null for none), the tasks " +
       "it is blocked by and the tasks it blocks (each with its id, name, and status)" +
       `${READ_TASK_DESCRIPTION_WORDS[on.descriptionsOn ? "on" : "off"]} Read one before you start an agent on it, or to learn what another task is about; ` +
@@ -175,6 +175,7 @@ export function runReadTask(
           name: task.name,
           repository: task.repository ?? null,
           startedBy: task.createdBy?.name ?? null,
+          startedByUserId: task.createdBy?.userId ?? null,
           isYourTask: task.id === callerTask(call.caller),
           brief: brief ?? null,
           ...blocks,

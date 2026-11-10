@@ -505,7 +505,8 @@ const MEMBER_READ_TASK_TOOL = memberMcpTool({
   description:
     "Read one task the member can open, by its id, a teammate's included, in whichever of the " +
     "member's workspaces it stands: its key (such as ACME-42), name, where it stands (its " +
-    "status) and how much it matters (its priority), repository, who started it, " +
+    "status) and how much it matters (its priority), repository, who started it (startedBy, and " +
+    "startedByUserId to link them by), " +
     "the brief it was started with (null for none), the tasks it is blocked by and the tasks it " +
     "blocks (each with its id, name, and status), and its description as last saved, cut on a " +
     `line at ${DESCRIPTION_TEXT_READ_CHARS} characters with how many were left out. ` +
@@ -515,7 +516,8 @@ const MEMBER_READ_TASK_TOOL = memberMcpTool({
     description:
       "Read one task the member can open, by its id, a teammate's included, in whichever of the " +
       "member's workspaces it stands: its key (such as ACME-42), name, where it stands (its " +
-      "status) and how much it matters (its priority), repository, who started it, " +
+      "status) and how much it matters (its priority), repository, who started it (startedBy, " +
+      "and startedByUserId to link them by), " +
       "the brief it was started with (null for none), and the tasks it is blocked by and the " +
       "tasks it blocks (each with its id, name, and status). " +
       `${MEMBER_MCP_TOOL.LIST_AGENTS} with its taskId names the agents on it.`,
@@ -1753,7 +1755,8 @@ const READ_INBOX_TOOL = memberMcpTool({
     `it stands (${Object.values(INBOX_STATUS).join(", ")}) and its revision, the agent that ` +
     "posted it (agentId), who it waits on by name and whether that is the member " +
     "(waitsOnMember), whether it is unread for them, and its messages in order: who wrote each (agent, `you` for the " +
-    "member, or another member by name), its words, its files by name, the ask it ends with " +
+    "member, or another member by name, with fromUserId to link a member by), its words, its " +
+    "files by name, the ask it ends with " +
     "and where that stands, and the answer a member's message carries. An open ask reads " +
     `whole: a ${INBOX_ASK.DECIDE}'s options, those recommended, and whether several may be ` +
     `picked; a ${INBOX_ASK.DO}'s steps, which the member does by hand; or an ` +
