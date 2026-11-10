@@ -3533,7 +3533,9 @@ function heldWords(comment: HeldComment): string {
  * field, and Delete, which takes it out of the review at once with Undo.
  * Where it stands apart from its element, in the Review panel, its quote line
  * says what it is on, its element's words, its thread's quote where it is a
- * reply, or the page's title, and pressed, shows its element on the page.
+ * reply, or the page's title, and pressed, shows its element on the page; by
+ * its element, it says the words it was started on where they were selected
+ * in it, as several comments' may be.
  */
 export function PendingPageComment({
   comment,
@@ -3546,7 +3548,7 @@ export function PendingPageComment({
   review: Pick<PageReviewControl, "edit" | "remove" | "markEditing">;
   /** Whether the review is on its way, which offers no Edit or Delete. */
   busy: boolean;
-  /** The page's title, the quote line of a comment on the whole page; none draws no quote line, as by its element. */
+  /** The page's title, the quote line of a comment on the whole page; none where it stands by its element, which draws the words selected alone. */
   title?: string | undefined;
   /** Shows its element on the page; none where its quote line is only words. */
   onShow?: ((path: string) => void) | undefined;
@@ -3563,6 +3565,13 @@ export function PendingPageComment({
     return () => markEditing(comment.clientKey, false);
   }, [open, markEditing, comment.clientKey]);
   const { clientKey, element } = comment;
+  // What its quote line says: apart from its element, what it is on; by it, the words it was started on where they are a few of the element's.
+  const quoted =
+    title === undefined
+      ? element?.words === true
+        ? element.quote
+        : undefined
+      : (comment.reply?.quote ?? element?.quote ?? title);
   // The element its quote line shows: its own, or the one its thread is on, where it is a reply.
   const shownPath = comment.reply === undefined ? element?.path : comment.reply.path;
   // Note that one a send posted already is the service's as it stood, so it offers neither.
@@ -3607,9 +3616,9 @@ export function PendingPageComment({
           ) : undefined
         }
       >
-        {title === undefined ? null : (
+        {quoted === undefined ? null : (
           <QuoteLine
-            words={comment.reply?.quote ?? element?.quote ?? title}
+            words={quoted}
             label={COMMENT_WORDS.SHOW_ELEMENT}
             onShow={
               shownPath === undefined || onShow === undefined ? undefined : () => onShow(shownPath)
@@ -3979,6 +3988,8 @@ export function PageCommentLayer({
                   open
                   place={THREAD_PLACE.FLOAT}
                   doors={full}
+                  // Note that words selected in the element are quoted over their thread, since several threads' words may stand in one element.
+                  quote={thread.scope === DESCRIPTION_COMMENT_SCOPE.WORDS}
                 />
               ))}
             </div>
@@ -4034,9 +4045,9 @@ export function PageCommentLayer({
             <PendingCard
               on={pageDraftOn(page.id)}
               place={THREAD_PLACE.FLOAT}
-              // Note that the element's words stand over the field as the thread's quote line will, rather than as a quote in its words.
+              // Note that an element picked has its words stand over the field as the thread's quote line will, while words replied to stand in the field as the quote Reply laid in.
               head={
-                pending.element === undefined ? undefined : (
+                pending.element === undefined || pending.element.words === true ? undefined : (
                   <QuoteLine words={pending.element.quote} label={COMMENT_WORDS.SHOW_ELEMENT} />
                 )
               }

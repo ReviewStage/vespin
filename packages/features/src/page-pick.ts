@@ -74,7 +74,7 @@ export type PagePickAsk =
       readonly marks: readonly PageMark[];
     };
 
-/** An element the panel marks: by its path, with the words selected in it that a thread quotes, where one does. */
+/** An element the panel marks: by its path, with the words selected in it that a thread quotes, where one does; an element several threads quote words of is marked once for each. */
 export interface PageMark {
   readonly path: string;
   readonly words?: string;
@@ -251,22 +251,27 @@ export const PAGE_PICK_SCRIPT = `(() => {
   const told = { marks: [], said: "[]", selected: "", queued: false, settle: undefined };
 
   // The words a thread quotes, found in its element's text as one string, as a range; none where they stand there no more.
+  // Note that both are read with each run of whitespace as one space, because a selection's words are the page as drawn, its source's line breaks and indents run together, and a quote cut to its bound ends in an ellipsis the page never held.
   const wordsIn = (element, words) => {
-    const nodes = [];
+    const sought = flat(words).replace(/…$/u, "");
+    if (sought === "") return null;
+    const at = [];
     let text = "";
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
     for (let node = walker.nextNode(); node !== null; node = walker.nextNode()) {
-      nodes.push({ node, start: text.length });
-      text += node.data;
+      for (let offset = 0; offset < node.data.length; offset += 1) {
+        const spaced = /\\s/u.test(node.data[offset]);
+        if (spaced && (text === "" || text.endsWith(" "))) continue;
+        text += spaced ? " " : node.data[offset];
+        at.push({ node, offset });
+      }
     }
-    const at = text.indexOf(words);
-    if (at < 0 || words === "") return null;
-    const end = at + words.length;
-    const first = nodes.findLast((each) => each.start <= at);
-    const last = nodes.findLast((each) => each.start < end);
+    const from = text.indexOf(sought);
+    if (from < 0) return null;
+    const last = at[from + sought.length - 1];
     const range = document.createRange();
-    range.setStart(first.node, at - first.start);
-    range.setEnd(last.node, end - last.start);
+    range.setStart(at[from].node, at[from].offset);
+    range.setEnd(last.node, last.offset + 1);
     return range;
   };
 
@@ -281,14 +286,38 @@ export const PAGE_PICK_SCRIPT = `(() => {
     CSS.highlights.set(WORDS, new Highlight(...ranges));
   };
 
+  // The block holding the words a range takes: the nearest one around every text it takes more than spaces of, so a triple-click's selection, which runs on to the start of the next block, stands on its own block rather than the list or the section around both.
+  const holderOf = (range) => {
+    const around = range.commonAncestorContainer;
+    let first = null;
+    let last = null;
+    const walker = document.createTreeWalker(around, NodeFilter.SHOW_TEXT);
+    for (let node = around.nodeType === Node.TEXT_NODE ? around : walker.nextNode(); node !== null; node = walker.nextNode()) {
+      const from = node === range.startContainer ? range.startOffset : 0;
+      const to = node === range.endContainer ? range.endOffset : node.data.length;
+      if (!range.intersectsNode(node) || node.data.slice(from, to).trim() === "") continue;
+      first ??= node;
+      last = node;
+    }
+    let element = around instanceof Element ? around : around.parentElement;
+    if (first !== null) {
+      const taken = document.createRange();
+      taken.setStart(first, 0);
+      taken.setEnd(last, last.data.length);
+      element = taken.commonAncestorContainer instanceof Element ? taken.commonAncestorContainer : taken.commonAncestorContainer.parentElement;
+    }
+    // Note that words inside a run of bold or a link stand on the block they are read in, as an element picked with the pointer does.
+    while (element !== null && element !== document.body && element.parentElement !== null && getComputedStyle(element).display.startsWith("inline")) element = element.parentElement;
+    return element;
+  };
+
   // The words selected, as an element picked whose quote they are: none where none are, or they stand in a field.
   const selected = () => {
     const selection = getSelection();
     if (selection === null || selection.isCollapsed || selection.rangeCount === 0) return null;
     const words = cut(String(selection).trim(), MAX_QUOTE);
     const range = selection.getRangeAt(0);
-    const node = range.commonAncestorContainer;
-    const element = node instanceof Element ? node : node.parentElement;
+    const element = holderOf(range);
     if (words === "" || element === null || element.closest("input, textarea, select, [contenteditable]") !== null) return null;
     return { path: pathOf(element), quote: words, section: sectionOf(element), box: boxOf(range.getBoundingClientRect()), words: true };
   };
@@ -296,7 +325,8 @@ export const PAGE_PICK_SCRIPT = `(() => {
   // What the panel holds of the page told again where it moved: each element marked, and the words selected.
   const tell = () => {
     told.queued = false;
-    const marks = told.marks.map(({ path }) => {
+    // Note that an element marked for each of several threads' words is said once.
+    const marks = [...new Set(told.marks.map(({ path }) => path))].map((path) => {
       const element = find(path);
       return { path, box: element === null ? null : boxOf(element.getBoundingClientRect()) };
     });
