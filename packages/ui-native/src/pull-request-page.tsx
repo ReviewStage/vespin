@@ -242,8 +242,8 @@ type ConfirmAskProps = {
   readonly onDismiss: () => void;
 };
 
-/** What an act that asks first offers beside its act. */
-const CANCEL = "Cancel";
+/** What an act that asks first offers beside its act, and the role the system draws it in. */
+const CANCEL = { LABEL: "Cancel", ROLE: "cancel" } as const;
 
 /**
  * The question an act asks first, as the system's alert: its question,
@@ -277,7 +277,7 @@ export function ConfirmAsk({
           <Text modifiers={[frame({ width: 0, height: 0 })]}>{""}</Text>
         </Alert.Trigger>
         <Alert.Actions>
-          <SwiftUIButton label={CANCEL} role="cancel" onPress={onDismiss} />
+          <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={onDismiss} />
           <SwiftUIButton
             label={act}
             role={destructive ? "destructive" : "default"}
