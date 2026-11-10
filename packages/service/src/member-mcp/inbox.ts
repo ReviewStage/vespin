@@ -40,13 +40,11 @@ import {
   openAskOf,
   threadNeedsReader,
 } from "@repo/features/inbox-wire";
-import { LINK_PLACE, linkOf, mentionMarkdownLink } from "@repo/features/link-grammar";
 import { MEMBER_MCP_TOOL } from "@repo/features/member-mcp-tool";
 import { Clock, Effect } from "effect";
 import { agentToolRejected, orStoreRefusal } from "../agents/agent-tools.js";
 import { settledMessages, threadLineOf } from "../agents/coder-host/inbox.js";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
-import { workspaceStepOf } from "../agents/written-mentions.js";
 import { ACTION_RESULT_STATUS, HOSTED_API_ERROR, type WireRecord } from "../core.js";
 import type { HostedRefusal } from "../http/http-effect.js";
 import {
@@ -172,29 +170,18 @@ function unmarkedAs(refusal: HostedRefusal): WireRecord {
   );
 }
 
-/** The member's threads of the workspace, by what waits on them first, each with its mention under the workspace's step. */
+/** The member's threads of the workspace, by what waits on them first. */
 export function readMemberInbox(userId: string, workspaceId: string) {
   return orStoreRefusal(
-    Effect.zipWith(
-      workspaceInboxItems(userId, workspaceId),
-      workspaceStepOf(userId, workspaceId),
-      (items, step) => {
-        const orders = Object.values(THREAD_ORDER);
-        const threads = orders.flatMap((order) =>
-          items
-            .filter((item) => orderOf(item, userId) === order)
-            .map((item) => ({
-              ...threadOf(item, userId),
-              mention: mentionMarkdownLink(
-                item.title,
-                linkOf({ kind: LINK_PLACE.INBOX_ITEM, itemId: item.id }, step),
-              ),
-            })),
-        );
-        return { threads };
-      },
-      { concurrent: true },
-    ),
+    Effect.map(workspaceInboxItems(userId, workspaceId), (items) => {
+      const orders = Object.values(THREAD_ORDER);
+      const threads = orders.flatMap((order) =>
+        items
+          .filter((item) => orderOf(item, userId) === order)
+          .map((item) => threadOf(item, userId)),
+      );
+      return { threads };
+    }),
   );
 }
 

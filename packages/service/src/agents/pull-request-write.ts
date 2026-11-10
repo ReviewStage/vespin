@@ -10,7 +10,7 @@
  * `agentPullRequestReach`), so a repository the workspace's installation no
  * longer reaches is refused before the member's token is read; a pull
  * request named by its repository and number is reached as its reads reach
- * it (`github/repository-pull-request-procedures.ts`) before it comes here
+ * it (`github/repository-pull-request.ts`) before it comes here
  * (`memberWriteOnReached`). That token is
  * the member's own GitHub App user token (`GitHubApp.userToken`), the one an
  * agent opens its pull request on as its developer
