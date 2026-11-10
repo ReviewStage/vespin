@@ -14,7 +14,12 @@
  */
 
 import { readFile } from "node:fs/promises";
-import type { HookCallback, HookCallbackMatcher, SDKMessage } from "@anthropic-ai/claude-agent-sdk";
+import type {
+  HookCallback,
+  HookCallbackMatcher,
+  HookEvent,
+  SDKMessage,
+} from "@anthropic-ai/claude-agent-sdk";
 import type { CodexNotification } from "./protocol.js";
 
 /** 128 and SIGKILL's 9: how a shell reports a command killed by the signal. */
@@ -36,14 +41,32 @@ const CLAUDE_CODE_EXIT = /^Exit code (\d+)/;
 /** The tool whose commands are watched, as Claude Code names it and its hooks match it. */
 const CLAUDE_CODE_BASH = "Bash";
 
+/** The hook events the watch runs on, as Claude Code names them. */
+const HOOK_EVENT = {
+  PRE_TOOL_USE: "PreToolUse",
+  POST_TOOL_USE: "PostToolUse",
+  POST_TOOL_USE_FAILURE: "PostToolUseFailure",
+} as const satisfies Record<string, HookEvent>;
+
+/** The app-server notifications and item type the watch reads of a Codex command. */
+const CODEX_COMMAND = {
+  STARTED: "item/started",
+  COMPLETED: "item/completed",
+  ITEM: "commandExecution",
+} as const;
+
 /** What the model is told beside the answer, after the transcript's line. */
 const AGENT_ADVICE =
   "The kernel killed this command for using more memory than the sandbox has. Run it again with less parallelism (fewer workers, jobs, or threads), or on less at once, rather than unchanged.";
 
-/** The number on a file's `<key> <n>` line, none where it holds no such line. */
+/** The number on a file's `<key> <n>` line, its unit after it left aside (`MemTotal: 8605824 kB`); none where it holds no such line. */
 function countIn(text: string, key: string): number | undefined {
   const line = text.split("\n").find((entry) => entry.startsWith(`${key} `));
-  const count = line === undefined ? Number.NaN : Number(line.slice(key.length + 1).trim());
+  const said = line
+    ?.slice(key.length + 1)
+    .trim()
+    .split(/\s+/)[0];
+  const count = said === undefined || said === "" ? Number.NaN : Number(said);
   return Number.isFinite(count) ? count : undefined;
 }
 
@@ -141,12 +164,13 @@ export function claudeCodeMemoryWatch(
   const began = new Map<string, number | undefined>();
   const lines = new Map<string, string>();
   const onBegin: HookCallback = async (hook) => {
-    if (hook.hook_event_name === "PreToolUse") began.set(hook.tool_use_id, await readings.kills());
+    if (hook.hook_event_name === HOOK_EVENT.PRE_TOOL_USE)
+      began.set(hook.tool_use_id, await readings.kills());
     return { continue: true };
   };
   const onEnd: HookCallback = async (hook) => {
-    if (hook.hook_event_name === "PostToolUse") began.delete(hook.tool_use_id);
-    if (hook.hook_event_name !== "PostToolUseFailure") return { continue: true };
+    if (hook.hook_event_name === HOOK_EVENT.POST_TOOL_USE) began.delete(hook.tool_use_id);
+    if (hook.hook_event_name !== HOOK_EVENT.POST_TOOL_USE_FAILURE) return { continue: true };
     const killsBefore = began.get(hook.tool_use_id);
     began.delete(hook.tool_use_id);
     const line = outOfMemoryLine({
@@ -160,7 +184,7 @@ export function claudeCodeMemoryWatch(
     return {
       continue: true,
       hookSpecificOutput: {
-        hookEventName: "PostToolUseFailure",
+        hookEventName: HOOK_EVENT.POST_TOOL_USE_FAILURE,
         additionalContext: outOfMemoryContext(line),
       },
     };
@@ -210,15 +234,15 @@ export function codexMemoryWatch(
   const began = new Map<string, number | undefined>();
   return async (notification) => {
     if (
-      notification.method === "item/started" &&
-      notification.params.item.type === "commandExecution"
+      notification.method === CODEX_COMMAND.STARTED &&
+      notification.params.item.type === CODEX_COMMAND.ITEM
     ) {
       began.set(notification.params.item.id, await readings.kills());
       return notification;
     }
-    if (notification.method !== "item/completed") return notification;
+    if (notification.method !== CODEX_COMMAND.COMPLETED) return notification;
     const { item } = notification.params;
-    if (item.type !== "commandExecution" || !began.has(item.id)) return notification;
+    if (item.type !== CODEX_COMMAND.ITEM || !began.has(item.id)) return notification;
     const killsBefore = began.get(item.id);
     began.delete(item.id);
     const line = outOfMemoryLine({
