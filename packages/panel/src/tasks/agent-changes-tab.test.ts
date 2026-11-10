@@ -2267,7 +2267,7 @@ test("a file the service will not read whole, or whose text is not the one its p
   assert.equal(await readTexts("src/moved.ts"), undefined);
 });
 
-test("no file is read whole for an agent on no task, a head not named, or a task whose repository is not the pull request's", async () => {
+test("no file is read whole for a head not named, or a task whose repository is not the pull request's", async () => {
   files = [changed("src/seats.ts", { patch: HEAD_PATCH })];
   commits = { headSha: "a".repeat(40) };
   assert.equal(
@@ -2275,12 +2275,6 @@ test("no file is read whole for an agent on no task, a head not named, or a task
     undefined,
     "another repository",
   );
-  const taskless = agentsControl({
-    agents: [{ ...AGENT, planId: null }],
-    agentIds: [AGENT.id],
-    models: [],
-  });
-  assert.equal((await drawTab({ control: taskless })).readTexts, undefined, "no task");
   commits = {};
   assert.equal((await drawTab()).readTexts, undefined, "no head");
   commits = { headSha: "a".repeat(40) };

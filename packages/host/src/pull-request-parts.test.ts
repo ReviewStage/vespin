@@ -30,6 +30,7 @@ import { windowFocus } from "./window-focus.js";
 
 const AGENT = "3c2e1d0f-9a8b-4c7d-8e6f-5a4b3c2d1e0f";
 const REVIEWER = "7d6c5b4a-3e2f-4a1b-9c8d-7e6f5a4b3c2d";
+const TASK = "5e4d3c2b-1a0f-4e9d-8c7b-6a5f4e3d2c1b";
 const OWN = "https://github.com/acme/relay/pull/42";
 const OTHER = "https://github.com/acme/relay/pull/7";
 
@@ -72,7 +73,7 @@ function overview(url: string, number: number): AgentOverviewPullRequestAnswerVi
   };
 }
 
-/** The list with the taskless agent working on its own pull request, and the reviewer's pull request beside it. */
+/** The list with the agent working on its own pull request, and the reviewer's pull request beside it. */
 function listing(
   moved: { own?: Partial<AgentPullRequest>; other?: Partial<AgentPullRequest> } = {},
   status: (typeof AGENT_STATUS)[keyof typeof AGENT_STATUS] = AGENT_STATUS.RUNNING,
@@ -83,8 +84,8 @@ function listing(
       [REVIEWER, AGENT_STATUS.COMPLETED],
     ]),
     pullRequests: [
-      { agentId: AGENT, taskId: null, pullRequest: line(OWN, 42, moved.own) },
-      { agentId: REVIEWER, taskId: null, pullRequest: line(OTHER, 7, moved.other) },
+      { agentId: AGENT, taskId: TASK, pullRequest: line(OWN, 42, moved.own) },
+      { agentId: REVIEWER, taskId: TASK, pullRequest: line(OTHER, 7, moved.other) },
     ],
   };
 }

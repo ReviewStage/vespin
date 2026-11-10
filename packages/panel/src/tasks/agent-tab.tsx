@@ -3107,7 +3107,7 @@ function AgentTabView({
                           origin={origin}
                           readerId={readerId}
                           agentId={agent.id}
-                          taskId={agent.planId ?? undefined}
+                          taskId={agent.planId}
                           replay={replay}
                           delegation={{
                             models,
@@ -3765,7 +3765,7 @@ export function AgentSubagentTab({
               phase={workerWorkingPhase(status)}
               startedAt={shown ? transcript.runStartedAt : undefined}
               ended={transcript.pages === 0 ? undefined : endLineParts(status, transcript.failure)}
-              failureAbout={{ agentId, taskId: owner?.planId ?? undefined, callId }}
+              failureAbout={{ agentId, taskId: owner?.planId, callId }}
               onRetry={transcript.onRetry}
               onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
               olderFailed={transcript.olderFailed}

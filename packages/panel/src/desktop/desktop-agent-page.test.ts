@@ -124,7 +124,7 @@ const STARTED_ID = "1d2e3f40-5a6b-4c7d-8e9f-0a1b2c3d4e5f";
 
 const PAGE: AgentPage = {
   id: AGENT_ID,
-  planId: null,
+  planId: PAGE_TASK,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Sweep the flaky tests",
@@ -230,7 +230,7 @@ function listedPublished(): TasksControl["listedPullRequests"] {
   const opened = published?.pullRequest ?? undefined;
   return opened === undefined
     ? undefined
-    : [{ agentId: AGENT_ID, taskId: null, pullRequest: opened }];
+    : [{ agentId: AGENT_ID, taskId: PAGE_TASK, pullRequest: opened }];
 }
 /** How many of the pull request's conversation entries its read left on GitHub; none answers no read. */
 let earlier = 0;
@@ -626,7 +626,7 @@ test("a fork's draft on the page names its source's message, whose press opens i
 
   assert.deepEqual(
     links.map((link) => link.place),
-    [{ kind: LINK_DESTINATION.MESSAGE, agentId: AGENT_ID, messageId: "answer" }],
+    [{ kind: LINK_DESTINATION.MESSAGE, planId: PAGE_TASK, agentId: AGENT_ID, messageId: "answer" }],
   );
   assert.equal(
     page.querySelector(`.desktop-agent section[aria-label="${TAB_WORDS.NEW_AGENT}"]`),
@@ -1843,7 +1843,7 @@ it.effect(
       workspace = [
         {
           id: "3c3c3c3c-0000-4000-8000-000000000000",
-          planId: null,
+          planId: PAGE_TASK,
           model: PAGE.model,
           effort: PAGE.effort,
           title: "Bill by seat",

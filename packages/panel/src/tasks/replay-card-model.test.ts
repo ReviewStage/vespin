@@ -75,7 +75,7 @@ function first(text: string): AgentTranscriptMessage {
 function summary(overrides: Partial<AgentSummary>): AgentSummary {
   return {
     id: "00000000-0000-4000-8000-000000000000",
-    planId: null,
+    planId: "00000000-0000-4000-8000-000000000001",
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: null,

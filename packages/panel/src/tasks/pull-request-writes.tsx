@@ -589,7 +589,7 @@ export function PullRequestWriteNote({
   const openSettings = useOpenSettings();
   const openWorkspaceGitHub = useOpenWorkspaceGitHub();
   const place = useContext(WritePlaceContext);
-  // Note that a task's workspace is the task's to name, and an agent on none names its page's.
+  // Note that a task's workspace is the task's to name, and a place on none names its own.
   const openAccess = () =>
     place?.taskId === null || place?.taskId === undefined
       ? openSettings({
