@@ -38,6 +38,10 @@ it("a failure message keeps its words and loses every run shaped like a credenti
     redactCredentials(`id AKIA${"A".repeat(16)} and ${"a_b-".repeat(9)} refused`),
     "id [redacted] and [redacted] refused",
   );
+  assert.equal(
+    redactCredentials(`config {'token': 'short'} and token='brief' refused`),
+    `config {'[redacted]'} and [redacted]' refused`,
+  );
   assert.equal(redactCredentials("Invalid API key provided"), "Invalid API key provided");
   assert.equal(
     redactCredentials(`{"accessToken": "fixture.value"} client_secret:fixture refused`),

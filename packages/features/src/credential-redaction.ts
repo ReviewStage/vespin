@@ -8,13 +8,14 @@
 
 /**
  * The value a `key`, `token`, or `secret` name is assigned by `=` or `:` in a
- * query string or JSON, with up to 64 word characters of whatever prefixes
- * the name; a value ends at a space, an `&`, or a quote, so the parameter
+ * query string, JSON, or a single-quoted literal, with up to 64 word
+ * characters of whatever prefixes the name; a value ends at a space, an `&`,
+ * or either quote, so the parameter
  * after it is still read. Note that the prefix is bounded, because static
  * analysis reads an unbounded `\w*` before the name as rescanned from every
  * offset of a long word run; what a longer prefix leaves is the bare run's.
  */
-const NAMED_CREDENTIAL_PATTERN = /\w{0,64}(?:key|token|secret)"?\s*[=:]\s*"?[^\s&"']+/gi;
+const NAMED_CREDENTIAL_PATTERN = /\w{0,64}(?:key|token|secret)["']?\s*[=:]\s*["']?[^\s&"']+/gi;
 
 /**
  * Anything else shaped like a credential, each replaced whole: an `sk-` key,
