@@ -141,33 +141,50 @@ export function useLiveActivity(signedIn: boolean): void {
   }, [acts, phone, activity]);
   // The ends sent and not yet answered, so a render while one is out never sends it twice.
   const telling = useRef(new Set<EndedActivity>());
+  // Whether a change came while an end was out, and a count bumped to tell the ends again once one fails after it.
+  const missed = useRef(false);
+  const [retries, setRetries] = useState(0);
   useEffect(() => {
     if (phone === undefined) return;
+    // Note that a failure retries only after a change it ran over, so a service that refuses never loops.
+    const failed = () => {
+      if (!missed.current) return;
+      missed.current = false;
+      setRetries((count) => count + 1);
+    };
     for (const end of ends) {
       // Note that an end naming no token would clear whatever activity stands, so it is dropped while a newer one does.
       if (end.token === undefined && activity !== undefined) {
         told(end);
         continue;
       }
-      if (telling.current.has(end)) continue;
+      if (telling.current.has(end)) {
+        missed.current = true;
+        continue;
+      }
       telling.current.add(end);
       // Note that the end names its own token, so the service clears it alone, and a late one never clears a newer activity's.
       acts[ACT_KIND.LIVE_ACTIVITY_ENDED]({
         deviceToken: phone.token,
         environment: phone.environment,
         ...(end.token === undefined ? {} : { activityToken: end.token }),
-      })
-        .then(
-          (answer) => {
-            logRefusal(answer);
-            // An end the service did not take waits for the phone's next change.
-            if (!("failure" in answer)) told(end);
-          },
-          (error: unknown) => console.error("The Live Activity's end was not told.", error),
-        )
-        .finally(() => telling.current.delete(end));
+      }).then(
+        (answer) => {
+          logRefusal(answer);
+          telling.current.delete(end);
+          // An end the service did not take waits for the phone's next change.
+          if ("failure" in answer) failed();
+          else told(end);
+        },
+        (error: unknown) => {
+          console.error("The Live Activity's end was not told.", error);
+          telling.current.delete(end);
+          failed();
+        },
+      );
     }
-  }, [acts, phone, activity, ends, told]);
+    // Note that `retries` is followed only to tell the ends again; its value is not read.
+  }, [acts, phone, activity, ends, told, retries]);
   // Whether an account was signed in at the last render, so a sign-out is told from a launch still reading the account.
   const wasSignedIn = useRef(false);
   useEffect(() => {
