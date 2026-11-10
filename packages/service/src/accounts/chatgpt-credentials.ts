@@ -639,7 +639,9 @@ function renewedFrom(
  * where none is named, good for at least the
  * renewal margin, or the longer one a caller names (a launch of Codex asks
  * for a token that outlasts its first turn's start): the one it holds where
- * it is, a renewed one otherwise. Runs under the row's lock, OpenAI's token
+ * it is, a renewed one otherwise. A plan at its usage limit answers the
+ * limit rather than a token, unless the caller only reads the plan's usage
+ * (`evenAtLimit`), which its limit does not stop. Runs under the row's lock, OpenAI's token
  * endpoint included, so two renewals of one plan never race its rotating
  * refresh token. A row the retired third-party sign-in sealed is removed,
  * answering none.
@@ -649,6 +651,7 @@ export const refreshChatGptAccess = /* @__PURE__ */ Effect.fnUntraced(function* 
   ring: KeyRing,
   margin: Duration.Duration = REFRESH_MARGIN,
   subscriptionId?: string,
+  evenAtLimit = false,
 ) {
   const access: ChatGptAccess = yield* withProviderKeyLocked(
     userId,
@@ -669,7 +672,7 @@ export const refreshChatGptAccess = /* @__PURE__ */ Effect.fnUntraced(function* 
       }
       const now = yield* DateTime.nowAsDate;
       const limitResetsAt = planLimitResetsAt(row, now.getTime());
-      if (limitResetsAt !== undefined)
+      if (limitResetsAt !== undefined && !evenAtLimit)
         return { outcome: CHATGPT_ACCESS.LIMIT_REACHED, limitResetsAt };
       const dueAt = now.getTime() + Duration.toMillis(Duration.max(margin, REFRESH_MARGIN));
       if (row.accessExpiresAt !== null && row.accessExpiresAt.getTime() > dueAt) {

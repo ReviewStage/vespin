@@ -99,6 +99,7 @@ import {
   retiredChatGptRow,
 } from "./chatgpt-credentials.js";
 import { pollChatGptDeviceLogin, startChatGptDeviceLogin } from "./chatgpt-device-login.js";
+import { readChatGptUsage } from "./chatgpt-usage.js";
 
 const SAVE_BRAKE = {
   windowMs: Duration.toMillis(Duration.hours(1)),
@@ -130,16 +131,16 @@ const SUBSCRIPTION_KINDS = Object.values(PROVIDER_KEY_KIND).filter(
 /** Every Claude setup-token's own prefix, an OAuth token's, which no API key carries. */
 const CLAUDE_SETUP_TOKEN_PREFIX = "sk-ant-oat";
 
-/** A plan's usage as last heard, none where none was or where its window has reset since. */
-function usageOf(row: ProviderKeyRow, now: number): PlanUsage | undefined {
-  if (row.usagePercent === null) return undefined;
-  if (row.usageResetsAt !== null && row.usageResetsAt.getTime() <= now) return undefined;
-  return {
-    // Note that a harness may report past the whole window, which reads as all of it.
-    usedPercent: Math.min(Math.max(row.usagePercent, 0), 100),
-    ...(row.usageWindowMins === null ? undefined : { windowMins: row.usageWindowMins }),
-    ...(row.usageResetsAt === null ? undefined : { resetsAt: row.usageResetsAt.getTime() }),
-  };
+/** A plan's usage windows as last heard, the shortest first, each left out once its reset has passed. */
+function usageOf(row: ProviderKeyRow, now: number): readonly PlanUsage[] {
+  return (row.usageWindows ?? [])
+    .filter((window) => window.resetsAt === undefined || window.resetsAt > now)
+    .map((window) => ({
+      ...window,
+      // Note that a harness may report past the whole window, which reads as all of it.
+      usedPercent: Math.min(Math.max(window.usedPercent, 0), 100),
+    }))
+    .toSorted((a, b) => (a.windowMins ?? Infinity) - (b.windowMins ?? Infinity));
 }
 
 /**
@@ -201,7 +202,8 @@ const keysAnswer = /* @__PURE__ */ Effect.fnUntraced(function* (
         position: row.position,
         forAgents: row.forAgents,
         ...(row.accountEmail === null ? undefined : { email: row.accountEmail }),
-        ...(usage === undefined ? undefined : { usage }),
+        ...(usage.length === 0 ? undefined : { usage: usage[0], usageWindows: usage }),
+        ...(row.usageHeardAt === null ? undefined : { usageHeardAt: row.usageHeardAt.getTime() }),
       });
     }
   }
@@ -249,7 +251,9 @@ export function providerKeysProcedures(seams: ProviderKeysProcedureSeams) {
   const signingKeys = chatGptSigningKeys();
   const keyed = hosted.account.use(accountMiddleware(seams.resolveUserId)).use(keyRingMiddleware);
   return {
+    /** The account's keys, its ChatGPT plans' usage read afresh first where due (`readChatGptUsage`). */
     providerKeys: keyed.providerKeys.effect(function* ({ context }) {
+      yield* readChatGptUsage(context.userId, context.ring);
       return yield* keysAnswer(context.userId, context.ring);
     }),
 

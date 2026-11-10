@@ -2220,7 +2220,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
                       windowDurationMins: 300,
                       resetsAt: resetsAt / 1000,
                     },
-                    secondary: null,
+                    secondary: { usedPercent: 40, windowDurationMins: 10080, resetsAt: null },
                     rateLimitReachedType: "rate_limit_reached",
                   },
                 },
@@ -2235,12 +2235,19 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
             row.id === second,
             row.status,
             row.limitResetsAt?.toISOString() ?? null,
-            row.usagePercent,
-            row.usageWindowMins,
+            row.usageWindows,
           ]),
           [
-            [false, PROVIDER_KEY_STATUS.UNVERIFIED, null, null, null],
-            [true, PROVIDER_KEY_STATUS.LIMIT_REACHED, new Date(resetsAt).toISOString(), 100, 300],
+            [false, PROVIDER_KEY_STATUS.UNVERIFIED, null, null],
+            [
+              true,
+              PROVIDER_KEY_STATUS.LIMIT_REACHED,
+              new Date(resetsAt).toISOString(),
+              [
+                { usedPercent: 100, windowMins: 300, resetsAt },
+                { usedPercent: 40, windowMins: 10080 },
+              ],
+            ],
           ],
         );
       }),
@@ -2540,8 +2547,23 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
         yield* launch(ran(agent.lineIds[0] ?? ""));
 
         const resetsAt = Date.UTC(2026, 9, 21, 15, 40);
+        const weekResetsAt = Date.UTC(2026, 9, 25, 9);
+        // The week's reading, and one on a single model's week, which stands for the plan's week on no model.
+        const weekOf = (rateLimitType: string, utilization: number) => ({
+          type: "rate_limit_event",
+          rate_limit_info: {
+            status: "allowed",
+            rateLimitType,
+            resetsAt: weekResetsAt / 1000,
+            utilization,
+          },
+          uuid: randomUUID(),
+          ...top,
+        });
         yield* launch(
           failedClaudeLaunch(agent.lineIds[1] ?? "", [
+            weekOf("seven_day", 0.4),
+            weekOf("seven_day_opus", 0.9),
             {
               type: "rate_limit_event",
               rate_limit_info: {
@@ -2584,14 +2606,17 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           [PROVIDER_KEY_STATUS.INVALID, null],
           [PROVIDER_KEY_STATUS.INVALID, null],
         ]);
-        // The usage the limit reported stays the plan's latest, in percent of its five hours, through the turns after it.
+        // The usage the limit reported stays the plan's latest, in percent of its five hours beside its week, through the turns after it.
         const [row] = yield* listProviderKeyRows(
           agent.userId,
           PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
         );
         assert.deepEqual(
-          [row?.usagePercent, row?.usageWindowMins, row?.usageResetsAt?.toISOString()],
-          [100, 300, new Date(resetsAt).toISOString()],
+          row?.usageWindows?.toSorted((a, b) => (a.windowMins ?? 0) - (b.windowMins ?? 0)),
+          [
+            { usedPercent: 100, windowMins: 300, resetsAt },
+            { usedPercent: 40, windowMins: 10080, resetsAt: weekResetsAt },
+          ],
         );
       }),
   );

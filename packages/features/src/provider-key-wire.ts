@@ -227,8 +227,12 @@ const subscriptionKeySummarySchema = EffectSchema.Struct({
    * A service that predates the default answers none, which reads as on.
    */
   forAgents: EffectSchema.optionalKey(EffectSchema.Boolean),
-  /** How much of its usage window it has used, as last heard; absent until a turn heard it, and once that window has reset. */
+  /** How much of its shortest usage window it has used, as last heard, for a client from before `usageWindows`; absent until heard, and once that window has reset. */
   usage: EffectSchema.optionalKey(planUsageSchema),
+  /** Every usage window it is counted in, the shortest first, as last heard: the 5-hour session and the week; a window that has reset since is left out. */
+  usageWindows: EffectSchema.optionalKey(EffectSchema.Array(planUsageSchema)),
+  /** When its usage windows were last heard, in epoch milliseconds, where that is known. */
+  usageHeardAt: EffectSchema.optionalKey(countedNumber),
 });
 
 export type SubscriptionKeySummary = typeof subscriptionKeySummarySchema.Type;

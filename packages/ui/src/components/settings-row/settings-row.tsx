@@ -17,6 +17,7 @@ import { LANDED, landedMark } from "../landed/landed.js";
 import { GAP, type Gap, Inline } from "../layout/layout.js";
 import { PROGRESS_SIZE, Progress, type ProgressTone } from "../progress/progress.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
+import { type UsageMeterRow, UsageMeters } from "../usage-meters/usage-meters.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
 
 /**
@@ -381,6 +382,21 @@ export function SettingsRowMeter({
   return (
     <span className="ui-settings-row-meter mt-ui-8 block">
       <Progress value={value} tone={tone} size={PROGRESS_SIZE.THIN} />
+    </span>
+  );
+}
+
+/** How much of each of its usage windows a row's plan has used, as meters under its state line (`UsageMeters`). */
+export function SettingsRowUsage({
+  rows,
+  heard,
+}: {
+  rows: readonly UsageMeterRow[];
+  heard?: string | undefined;
+}): React.JSX.Element {
+  return (
+    <span className="ui-settings-row-usage mt-ui-6 block">
+      <UsageMeters rows={rows} heard={heard} />
     </span>
   );
 }

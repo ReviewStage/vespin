@@ -8,11 +8,11 @@ import {
   type ProviderKeyProvider,
   type ProviderKeyStatus,
 } from "@repo/features/provider-key-wire";
-import { and, asc, eq, inArray, lte, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, lte, ne, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type DatabaseShape } from "../core/query.js";
-import { accountProviderKey } from "../schemas/account-provider-key.js";
+import { accountProviderKey, type StoredUsageWindow } from "../schemas/account-provider-key.js";
 import { InstantColumnSchema } from "./columns.js";
 import type { SealedProviderKey } from "./provider-key-seal.js";
 import type { TaskStoreEffect, TaskStoreFailure } from "./task-store.js";
@@ -49,6 +49,13 @@ const FastAccessSchema = Schema.Literals(Object.values(FAST_ACCESS));
 
 const KindSchema = Schema.Literals(Object.values(PROVIDER_KEY_KIND));
 
+/** One usage window as `usage_windows` keeps it. */
+const UsageWindowSchema = Schema.Struct({
+  usedPercent: Schema.Number,
+  windowMins: Schema.optionalKey(Schema.Int),
+  resetsAt: Schema.optionalKey(Schema.Number),
+});
+
 const SealedRowSchema = Schema.Struct({
   id: Schema.String,
   provider: ProviderSchema,
@@ -63,9 +70,8 @@ const SealedRowSchema = Schema.Struct({
   accessExpiresAt: Schema.NullOr(InstantColumnSchema),
   forAgents: Schema.Boolean,
   limitResetsAt: Schema.NullOr(InstantColumnSchema),
-  usagePercent: Schema.NullOr(Schema.Number),
-  usageWindowMins: Schema.NullOr(Schema.Int),
-  usageResetsAt: Schema.NullOr(InstantColumnSchema),
+  usageWindows: Schema.NullOr(Schema.Array(UsageWindowSchema)),
+  usageHeardAt: Schema.NullOr(InstantColumnSchema),
   position: Schema.Int,
   label: Schema.NullOr(Schema.String),
   accountEmail: Schema.NullOr(Schema.String),
@@ -104,9 +110,8 @@ const ROW_COLUMNS = {
   accessExpiresAt: accountProviderKey.accessExpiresAt,
   forAgents: accountProviderKey.forAgents,
   limitResetsAt: accountProviderKey.limitResetsAt,
-  usagePercent: accountProviderKey.usagePercent,
-  usageWindowMins: accountProviderKey.usageWindowMins,
-  usageResetsAt: accountProviderKey.usageResetsAt,
+  usageWindows: accountProviderKey.usageWindows,
+  usageHeardAt: accountProviderKey.usageHeardAt,
   position: accountProviderKey.position,
   label: accountProviderKey.label,
   accountEmail: accountProviderKey.accountEmail,
@@ -224,9 +229,8 @@ const savedColumns = (write: typeof SavedSchema.Type) => ({
   fastAccess: write.fastAccess,
   accessExpiresAt: write.accessExpiresAt,
   limitResetsAt: null,
-  usagePercent: null,
-  usageWindowMins: null,
-  usageResetsAt: null,
+  usageWindows: null,
+  usageHeardAt: null,
   createdAt: write.now,
 });
 
@@ -422,25 +426,56 @@ const updatePlanStatus = SqlSchema.void({
     ),
 });
 
-/** A plan's usage as a turn on it last heard it, on whatever credential the row holds now, saved no later than the turn opened. */
-const updatePlanUsage = SqlSchema.void({
+/**
+ * One usage window as a turn on the plan heard it, laid over the plan's
+ * windows in place of the one of its length, on whatever credential the
+ * row holds now, saved no later than the turn opened. Note that the windows
+ * are merged in the one statement, so two turns hearing two windows at once
+ * never write back each other's stale reading.
+ */
+const mergePlanUsage = SqlSchema.void({
   Request: Schema.Struct({
     ...TargetSchema.fields,
-    usagePercent: Schema.Number,
-    usageWindowMins: Schema.NullOr(Schema.Int),
-    usageResetsAt: Schema.NullOr(Schema.Date),
+    window: UsageWindowSchema,
+    heardAt: Schema.Date,
     savedBy: Schema.Date,
+  }),
+  execute: (write) =>
+    Database.use((db) => {
+      const length = write.window.windowMins ?? null;
+      const others = sql`coalesce((
+        select jsonb_agg(kept) from jsonb_array_elements(${accountProviderKey.usageWindows}) as kept
+        where (kept->>'windowMins')::int is distinct from ${length}::int
+      ), '[]'::jsonb)`;
+      return db
+        .update(accountProviderKey)
+        .set({
+          usageWindows: sql`${others} || jsonb_build_array(${JSON.stringify(write.window)}::jsonb)`,
+          usageHeardAt: write.heardAt,
+        })
+        .where(and(targetRow(db, write), lte(accountProviderKey.createdAt, write.savedBy)));
+    }),
+});
+
+/** Every usage window of the subscription of this id, as a read of its provider answered them, in place of what it held. */
+const replacePlanUsage = SqlSchema.void({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    subscriptionId: Schema.String,
+    windows: Schema.Array(UsageWindowSchema),
+    heardAt: Schema.Date,
   }),
   execute: (write) =>
     Database.use((db) =>
       db
         .update(accountProviderKey)
-        .set({
-          usagePercent: write.usagePercent,
-          usageWindowMins: write.usageWindowMins,
-          usageResetsAt: write.usageResetsAt,
-        })
-        .where(and(targetRow(db, write), lte(accountProviderKey.createdAt, write.savedBy))),
+        .set({ usageWindows: write.windows, usageHeardAt: write.heardAt })
+        .where(
+          and(
+            eq(accountProviderKey.userId, write.userId),
+            eq(accountProviderKey.id, write.subscriptionId),
+          ),
+        ),
     ),
 });
 
@@ -808,41 +843,41 @@ export function setPlanStatus(
   });
 }
 
-/** How much of its usage window a plan had used, as its harness last reported it. */
-export interface PlanUsage {
-  /** The share of the window used, in percent. */
-  readonly usedPercent: number;
-  /** How long the window is, in minutes, where the harness said. */
-  readonly windowMins?: number;
-  /** When the window resets, where the harness said. */
-  readonly resetsAt?: Date;
-}
-
 /**
- * Writes the usage a coding agent's turn heard its harness report on the
- * account's plan of this kind, the subscription of this id or the first of
- * its kind where none is named, over whatever reading the row held. As with
- * `setPlanStatus`, a credential saved after the turn opened (`savedBy`) is
- * not given it.
+ * Writes one usage window a coding agent's turn heard its harness report on
+ * the account's plan of this kind, the subscription of this id or the first
+ * of its kind where none is named, in place of the window of its length the
+ * row held, the others kept. As with `setPlanStatus`, a credential saved
+ * after the turn opened (`savedBy`) is not given it.
  */
 export function setPlanUsage(
   userId: string,
   provider: ProviderKeyProvider,
   kind: ProviderKeyKind,
-  usage: PlanUsage,
+  window: StoredUsageWindow,
+  heardAt: Date,
   savedBy: Date,
   subscriptionId?: string,
 ): TaskStoreEffect<void> {
-  return updatePlanUsage({
+  return mergePlanUsage({
     userId,
     provider,
     kind,
     ...(subscriptionId === undefined ? {} : { subscriptionId }),
-    usagePercent: usage.usedPercent,
-    usageWindowMins: usage.windowMins ?? null,
-    usageResetsAt: usage.resetsAt ?? null,
+    window,
+    heardAt,
     savedBy,
   });
+}
+
+/** Writes every usage window a read of the plan's provider answered for the account's subscription of this id, in place of all it held. */
+export function setPlanUsageWindows(
+  userId: string,
+  subscriptionId: string,
+  windows: readonly StoredUsageWindow[],
+  heardAt: Date,
+): TaskStoreEffect<void> {
+  return replacePlanUsage({ userId, subscriptionId, windows, heardAt });
 }
 
 /** Writes what a fast call on the key a step ran on showed of its organization, where the row still holds that key. */

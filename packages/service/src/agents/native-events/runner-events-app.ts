@@ -634,8 +634,9 @@ function landWrite(
         {
           usedPercent: write.usedPercent,
           ...(write.windowMins === undefined ? {} : { windowMins: write.windowMins }),
-          ...(write.resetsAt === undefined ? {} : { resetsAt: new Date(write.resetsAt) }),
+          ...(write.resetsAt === undefined ? {} : { resetsAt: write.resetsAt }),
         },
+        new Date(now),
         new Date(write.turnOpenedAt ?? now),
         applying.subscriptionId,
       );

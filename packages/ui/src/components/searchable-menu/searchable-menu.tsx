@@ -243,6 +243,8 @@ export interface MenuLastLine {
   masked?: boolean | undefined;
   /** A link at the line's end, set apart from the words: Manage usage. */
   end?: React.ReactNode;
+  /** What stands under the line, inset as its words are: the plan's usage meters. */
+  below?: React.ReactNode;
 }
 
 /** Which side of the menu a submenu stands on: beside its row to the right, or to the left where there is no room. */
@@ -316,6 +318,9 @@ const LAST_LINE_BODY =
 
 /** The link at the last line's end, never broken across lines. */
 const LAST_LINE_END = "ui-searchable-menu-last-line-end flex-none whitespace-nowrap";
+
+/** What stands under the last line, inset as its words are. */
+const LAST_LINE_BELOW = "ui-searchable-menu-last-line-below px-row-inset pt-ui-6 pb-ui-4";
 
 /** The last line's mark and words, the mark centered on the words' first line. */
 const LAST_LINE_WORDS =
@@ -583,6 +588,7 @@ function LastLine({ line }: { line: MenuLastLine }): React.JSX.Element {
           </span>
         )}
       </div>
+      {line.below === undefined ? null : <div className={LAST_LINE_BELOW}>{line.below}</div>}
     </div>
   );
 }

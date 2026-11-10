@@ -1,7 +1,15 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { AGENT_PAYER, type AgentPayer, type AgentUsage } from "@repo/features/agent-wire";
 import type { ModelProvider } from "@repo/features/models-wire";
-import { GLYPH_INK, GlyphSlot, type MenuLastLine, OutsideLink } from "@repo/ui";
+import type { SubscriptionKeySummary } from "@repo/features/provider-key-wire";
+import {
+  GLYPH_INK,
+  GlyphSlot,
+  type MenuLastLine,
+  OutsideLink,
+  USAGE_METERS_WIDTH,
+  UsageMeters,
+} from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
 import { ICON_SIZE, KeyRoundIcon, LaptopIcon } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
@@ -9,13 +17,15 @@ import { useQuery } from "@tanstack/react-query";
 import { ActorLine, ActorRef } from "../actor-ref.js";
 import { HarnessMark } from "../harness-marks.js";
 import { providerKeysQuery } from "../live-reads.js";
+import { planUsageMeters } from "../plan-usage.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import {
   agentPayerParts,
   PAYER_MARK,
   type PayerMark,
   type PayerParts,
-  payerPlanName,
+  payerPlanOf,
+  planNameOf,
 } from "./agent-model.js";
 import { useOpenLink } from "./use-open-link.js";
 
@@ -93,26 +103,35 @@ function PayerWords({
 }
 
 /**
- * The name of the reader's own plan that pays for the agent (`payerPlanName`),
- * read from their keys: the subscription the page named, or, for one a new
- * agent would start on (`next`), the first with room left; none on a
- * teammate's agent (`owner`), whose own plan pays.
+ * The reader's own plan that pays for the agent (`payerPlanOf`), read from
+ * their keys: the subscription the page named, or, for one a new agent
+ * would start on (`next`), the first with room left; none on a teammate's
+ * agent (`owner`), whose own plan pays.
  */
-export function usePayerPlanName(
+export function usePayerPlan(
   payer: AgentPayer | undefined,
   subscriptionId: string | undefined,
   next: boolean,
   owner: Actor | undefined,
-): string | undefined {
-  // Note that a plan is named from the reader's own keys, so a teammate's agent names none of its starter's.
+): SubscriptionKeySummary | undefined {
+  // Note that a plan is read from the reader's own keys, so a teammate's agent reads none of its starter's, nor its usage.
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
   const keys = useQuery(providerKeysQuery(accountId)).data;
-  return payerPlanName(payer, keys?.subscriptions, subscriptionId, next, owner !== undefined);
+  return payerPlanOf(payer, keys?.subscriptions, subscriptionId, next, owner !== undefined);
+}
+
+/** The paying plan's usage meters, full width under its line; none before its usage is heard. */
+function PlanUsage({ plan }: { plan: SubscriptionKeySummary }): React.JSX.Element | null {
+  const meters = planUsageMeters(plan, Date.now());
+  return meters === undefined ? null : (
+    <UsageMeters rows={meters.rows} heard={meters.heard} width={USAGE_METERS_WIDTH.FILL} />
+  );
 }
 
 /**
  * The model menu's last line: who pays, its mark before it, with Manage
- * usage at its end where the reader's own ChatGPT plan does; nothing where no
+ * usage at its end where the reader's own ChatGPT plan does, and the plan's
+ * usage under it where it is the reader's own (`plan`); nothing where no
  * payer is named. `owner` is the teammate who started the agent, none for
  * the reader's own.
  */
@@ -121,14 +140,15 @@ export function payerLastLine(
   provider: ModelProvider | undefined,
   usage: AgentUsage | undefined,
   owner: Actor | undefined,
-  planName?: string | undefined,
+  plan?: SubscriptionKeySummary | undefined,
 ): MenuLastLine | undefined {
-  const parts = agentPayerParts(payer, provider, usage?.costUsd, planName);
+  const parts = agentPayerParts(payer, provider, usage?.costUsd, planNameOf(plan));
   if (parts === undefined) return undefined;
   const line = {
     glyph: <PayerGlyph mark={parts.mark} provider={provider} />,
     words: <PayerWords parts={parts} owner={owner} />,
     masked: parts.masked,
+    ...(plan === undefined ? undefined : { below: <PlanUsage plan={plan} /> }),
   };
   return payer === AGENT_PAYER.CHATGPT_SUBSCRIPTION && owner === undefined
     ? { ...line, end: <ManageUsageLink /> }

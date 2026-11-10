@@ -315,6 +315,10 @@ const lineOf = (within: Element) => {
 const meterOf = (within: Element) =>
   within.querySelector('[data-slot="progress"]')?.getAttribute("data-tone") ?? undefined;
 
+/** A plan's usage meters, each window's row as its words read. */
+const metersOf = (within: Element) =>
+  [...within.querySelectorAll("[data-window]")].map((row) => row.textContent);
+
 const plain = (words: string) => ({ words, state: SETTINGS_ROW_STATE.PLAIN });
 const readyLine = plain("Ready");
 /** The name a key with none of its own is shown by. */
@@ -406,7 +410,7 @@ function leave(): void {
   for (const root of roots.splice(0)) act(() => root.unmount());
 }
 
-test("each card opens on its harness and its Add; each credential says how it stands under its name, a plan how much of its window it has used", async () => {
+test("each card opens on its harness and its Add; each credential says how it stands under its name, a plan with room how much of each window it has used, in meters alone", async () => {
   const empty = await mount();
   assert.deepEqual(
     labels(empty).filter((label) => label !== ""),
@@ -419,14 +423,22 @@ test("each card opens on its harness and its Add; each credential says how it st
 
   held = {
     keys: [{ ...ANTHROPIC_KEY, provider: PROVIDER_KEY_PROVIDER.OPENAI, position: 0 }],
-    subscriptions: [{ ...CLAUDE_PLAN, usage: { usedPercent: 42.4, windowMins: 300 } }],
+    subscriptions: [
+      {
+        ...CLAUDE_PLAN,
+        usage: { usedPercent: 42.4, windowMins: 300 },
+        usageWindows: [
+          { usedPercent: 42.4, windowMins: 300 },
+          { usedPercent: 18, windowMins: 10_080 },
+        ],
+      },
+    ],
   };
   // Note that one client holds the test's worlds, so each later world waits for its own keys to replace the last one's.
   const connected = await mount();
   const claudePlan = () => credential(connected, "Claude plan");
-  await vi.waitFor(() =>
-    assert.deepEqual(lineOf(claudePlan()), plain("42% of the 5-hour limit used")),
-  );
+  await vi.waitFor(() => assert.deepEqual(metersOf(claudePlan()), ["5-hour42%", "Weekly18%"]));
+  assert.equal(lineOf(claudePlan()), undefined, "no Ready line stands over the meters");
   assert.equal(meterOf(claudePlan()), "working");
   assert.deepEqual(lineOf(credential(connected, KEY_NAME)), readyLine);
   assert.equal(meterOf(credential(connected, KEY_NAME)), undefined, "a key draws no bar");

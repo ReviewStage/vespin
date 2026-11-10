@@ -705,25 +705,28 @@ function turnCompletedMoments(params: unknown): readonly NativeMoment[] {
   ];
 }
 
-/** How much of its primary window the plan has used, where the update names that window. */
-function primaryUsage(
-  primary: (typeof RATE_LIMIT_WINDOW)["Type"] | undefined,
+/** How much of each window the update names the plan has used: its primary window, the session, and its secondary, the week. */
+function windowUsage(
+  windows: readonly ((typeof RATE_LIMIT_WINDOW)["Type"] | null | undefined)[],
 ): readonly NativeMoment[] {
-  if (primary == null) return [];
-  return [
-    {
-      kind: NATIVE_MOMENT.PLAN_USAGE,
-      usedPercent: primary.usedPercent,
-      ...(primary.windowDurationMins == null ? {} : { windowMins: primary.windowDurationMins }),
-      // Note that Codex counts a window's reset in seconds since the epoch.
-      ...(primary.resetsAt === null ? {} : { resetsAt: primary.resetsAt * 1000 }),
-    },
-  ];
+  return windows.flatMap((window) =>
+    window == null
+      ? []
+      : [
+          {
+            kind: NATIVE_MOMENT.PLAN_USAGE,
+            usedPercent: window.usedPercent,
+            ...(window.windowDurationMins == null ? {} : { windowMins: window.windowDurationMins }),
+            // Note that Codex counts a window's reset in seconds since the epoch.
+            ...(window.resetsAt == null ? {} : { resetsAt: window.resetsAt * 1000 }),
+          } as const,
+        ],
+  );
 }
 
 /**
- * The plan's limits as Codex last heard them: how much of its primary
- * window it has used, and, where one is reached, the latest reset among the
+ * The plan's limits as Codex last heard them: how much of each of its
+ * windows it has used, and, where one is reached, the latest reset among the
  * windows spent. Note that a rolling update may leave out what it does not
  * know, so one that names no reached limit lifts nothing: the turn's end
  * clears the limit instead.
@@ -732,7 +735,7 @@ function rateLimitMoments(params: unknown): readonly NativeMoment[] {
   const read = readRateLimits(params);
   if (Option.isNone(read)) return [];
   const { primary, secondary, rateLimitReachedType } = read.value.rateLimits;
-  const usage = primaryUsage(primary);
+  const usage = windowUsage([primary, secondary]);
   const spent = [primary, secondary].filter(
     (window) => window != null && window.usedPercent >= WINDOW_SPENT_PERCENT,
   );

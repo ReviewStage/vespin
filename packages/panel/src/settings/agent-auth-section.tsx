@@ -65,6 +65,7 @@ import {
   SettingsRowMeter,
   type SettingsRowSkeletonShape,
   SettingsRowStateLine,
+  SettingsRowUsage,
   SettingsSection,
   SettingsSectionsSkeleton,
   Stack,
@@ -86,6 +87,7 @@ import { useRowDrag } from "../desktop/use-row-drag.js";
 import { confirmFailure, refusedShown } from "../failure-report.js";
 import { HarnessMark } from "../harness-marks.js";
 import { providerKeysQuery, providerKeysRetryMutation } from "../live-reads.js";
+import { type PlanUsageMeters, planUsageMeters } from "../plan-usage.js";
 import { linkPressOf, useOpenLink } from "../tasks/use-open-link.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
@@ -355,29 +357,11 @@ function harnessReady(answer: ProviderKeysAnswer, provider: ProviderKeyProvider)
 
 /* ----- What a credential says ----- */
 
-/** Minutes in an hour, and in a day, which a usage window is named in. */
-const MINUTES = { HOUR: 60, DAY: 24 * 60, WEEK: 7 * 24 * 60 } as const;
-
-/** The window a plan's usage is counted in, as its line names it: "the 5-hour limit", "the weekly limit". */
-function windowWords(windowMins: number | undefined): string {
-  if (windowMins === undefined) return "its limit";
-  if (windowMins === MINUTES.WEEK) return "the weekly limit";
-  if (windowMins % MINUTES.DAY === 0) return `the ${String(windowMins / MINUTES.DAY)}-day limit`;
-  if (windowMins % MINUTES.HOUR === 0) return `the ${String(windowMins / MINUTES.HOUR)}-hour limit`;
-  return `the ${String(windowMins)}-minute limit`;
-}
-
 /** A reached limit's words, with when it resets where the provider named it: "At its limit · back at 3:40 PM". */
 function limitWords(plan: SubscriptionKeySummary, now: number): string {
   return plan.limitResetsAt === undefined
     ? WORDS.AT_LIMIT
     : `${WORDS.AT_LIMIT} · ${WORDS.BACK_AT} ${dueText(plan.limitResetsAt, now)}`;
-}
-
-/** What a plan with room says: how much of its window it has used, as last heard, or Ready before a turn has said. */
-function roomWords(plan: SubscriptionKeySummary): string {
-  if (plan.usage === undefined) return WORDS.READY;
-  return `${String(Math.round(plan.usage.usedPercent))}% of ${windowWords(plan.usage.windowMins)} used`;
 }
 
 /** What a Claude token that does not stand says. */
@@ -409,10 +393,16 @@ function signInFix(plan: SubscriptionKeySummary): string {
   return plan.status === PROVIDER_KEY_STATUS.INELIGIBLE ? WORDS.SIGN_IN_AGAIN : WORDS.RECONNECT;
 }
 
-/** A plan's line under its name: its words, whether they need a hand, and the bar under them where its usage is known. */
+/**
+ * A plan's line under its name: its words, whether they need a hand, and
+ * under them its usage, each window's meter where its usage is known
+ * (`usage`), else one full bar at its limit (`meter`). A plan with room
+ * whose usage is known says no words, since its meters say it.
+ */
 interface PlanLine {
-  readonly words: string;
+  readonly words?: string;
   readonly ok: boolean;
+  readonly usage?: PlanUsageMeters;
   readonly meter?: { readonly value: number; readonly tone: ProgressTone };
 }
 
@@ -422,22 +412,18 @@ function planLine(
   plan: SubscriptionKeySummary,
   now: number,
 ): PlanLine {
+  const usage = planUsageMeters(plan, now);
   if (plan.status === PROVIDER_KEY_STATUS.LIMIT_REACHED) {
     return {
       words: limitWords(plan, now),
       ok: false,
-      meter: { value: 100, tone: PROGRESS_TONE.ATTENTION },
+      ...(usage === undefined
+        ? { meter: { value: 100, tone: PROGRESS_TONE.ATTENTION } }
+        : { usage }),
     };
   }
-  if (standing(plan)) {
-    return {
-      words: roomWords(plan),
-      ok: true,
-      ...(plan.usage === undefined
-        ? undefined
-        : { meter: { value: plan.usage.usedPercent, tone: PROGRESS_TONE.WORKING } }),
-    };
-  }
+  if (standing(plan))
+    return usage === undefined ? { words: WORDS.READY, ok: true } : { ok: true, usage };
   const words = provider === PROVIDER_KEY_PROVIDER.ANTHROPIC ? tokenWords(plan) : signInWords(plan);
   return { words, ok: false };
 }
@@ -1139,8 +1125,10 @@ function PlanRow({
         }
         description={
           <>
-            <State ok={line.ok}>{line.words}</State>
-            {line.meter === undefined ? null : (
+            {line.words === undefined ? null : <State ok={line.ok}>{line.words}</State>}
+            {line.usage !== undefined ? (
+              <SettingsRowUsage rows={line.usage.rows} heard={line.usage.heard} />
+            ) : line.meter === undefined ? null : (
               <SettingsRowMeter value={line.meter.value} tone={line.meter.tone} />
             )}
           </>

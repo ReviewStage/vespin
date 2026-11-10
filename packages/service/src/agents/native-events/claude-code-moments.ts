@@ -314,12 +314,15 @@ const INFORMATIONAL_WARNING = "warning";
 /** The limit status that refuses the plan's calls, as `SDKRateLimitInfo` spells it. */
 const RATE_LIMIT_REFUSED = "rejected";
 
-/** How long each of the plan's limits runs, in minutes, by the `rateLimitType` the SDK names it. */
+/**
+ * How long each of the plan's limits on every model runs, in minutes, by
+ * the `rateLimitType` the SDK names it. Note that a week's limit on one
+ * model alone (`seven_day_opus`, `seven_day_sonnet`) is left out, since it
+ * would stand in the plan's usage for the week on every model.
+ */
 const RATE_LIMIT_WINDOW_MINS: Readonly<Record<string, number>> = {
   five_hour: 5 * 60,
   seven_day: 7 * 24 * 60,
-  seven_day_opus: 7 * 24 * 60,
-  seven_day_sonnet: 7 * 24 * 60,
 };
 
 /**
@@ -641,13 +644,13 @@ function rateLimitMoments(message: WireValue): readonly NativeMoment[] {
     rateLimitType === undefined ? undefined : RATE_LIMIT_WINDOW_MINS[rateLimitType];
   return [
     // Note that the SDK reports utilization as a share of one, which the plan's row keeps in percent.
-    ...(utilization === undefined
+    ...(utilization === undefined || windowMins === undefined
       ? []
       : [
           {
             kind: NATIVE_MOMENT.PLAN_USAGE,
             usedPercent: utilization * 100,
-            ...(windowMins === undefined ? {} : { windowMins }),
+            windowMins,
             ...(resetsAtMs === undefined ? {} : { resetsAt: resetsAtMs }),
           } as const,
         ]),
