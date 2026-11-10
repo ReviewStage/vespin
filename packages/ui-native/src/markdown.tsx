@@ -1,7 +1,7 @@
 // markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, links, mention chips, and pictures that open full screen and zoom.
 
 import { Host, Image as SwiftUIImage } from "@expo/ui/swift-ui";
-import { accessibilityHidden } from "@expo/ui/swift-ui/modifiers";
+import { accessibilityHidden, frame } from "@expo/ui/swift-ui/modifiers";
 import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
 import type { LinkPlace } from "@repo/features/link-grammar";
@@ -86,6 +86,14 @@ const ENTITY_SYMBOL: { readonly [K in EntityKind]: Glyph } = {
   [ENTITY_KIND.WORKSPACE]: "building.2",
   [ENTITY_KIND.DATE]: "calendar",
 };
+
+/**
+ * The font size a chip's custom symbol is set at, as a share of its square.
+ * Note that a symbol set at the square's own size overflows it, since its
+ * template stands at one and a half cap heights, so it is set smaller and
+ * centered in the square rather than hung from its baseline.
+ */
+const CHIP_SYMBOL_SCALE = 0.85;
 
 /** Each heading level's size and weight, a step above the words as the panel draws a message's headings. */
 const HEADING_LOOK: { readonly [Level in 1 | 2 | 3 | 4 | 5 | 6]: TextStyle } = {
@@ -182,9 +190,9 @@ function ChipGlyph({
     <Host style={{ width: size, height: size }}>
       <SwiftUIImage
         assetName={glyph}
-        size={size}
+        size={size * CHIP_SYMBOL_SCALE}
         color={color}
-        modifiers={[accessibilityHidden()]}
+        modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}
       />
     </Host>
   );
