@@ -203,6 +203,8 @@ const planUsageSchema = EffectSchema.Struct({
   usedPercent: countedNumber,
   /** How long the window is, in minutes, where the harness said. */
   windowMins: EffectSchema.optionalKey(countedNumber),
+  /** The model the window alone counts, as its provider names it ("Opus"); absent for a window on every model. */
+  model: EffectSchema.optionalKey(EffectSchema.String),
   /** When the window resets, in epoch milliseconds, where the harness said. */
   resetsAt: EffectSchema.optionalKey(countedNumber),
 });

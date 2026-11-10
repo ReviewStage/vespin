@@ -53,6 +53,7 @@ const KindSchema = Schema.Literals(Object.values(PROVIDER_KEY_KIND));
 const UsageWindowSchema = Schema.Struct({
   usedPercent: Schema.Number,
   windowMins: Schema.optionalKey(Schema.Int),
+  model: Schema.optionalKey(Schema.String),
   resetsAt: Schema.optionalKey(Schema.Number),
 });
 
@@ -428,7 +429,7 @@ const updatePlanStatus = SqlSchema.void({
 
 /**
  * One usage window as a turn on the plan heard it, laid over the plan's
- * windows in place of the one of its length, on whatever credential the
+ * windows in place of the one of its length and model, on whatever credential the
  * row holds now, saved no later than the turn opened. Note that the windows
  * are merged in the one statement, so two turns hearing two windows at once
  * never write back each other's stale reading.
@@ -443,9 +444,11 @@ const mergePlanUsage = SqlSchema.void({
   execute: (write) =>
     Database.use((db) => {
       const length = write.window.windowMins ?? null;
+      const model = write.window.model ?? null;
       const others = sql`coalesce((
         select jsonb_agg(kept) from jsonb_array_elements(${accountProviderKey.usageWindows}) as kept
         where (kept->>'windowMins')::int is distinct from ${length}::int
+          or (kept->>'model') is distinct from ${model}::text
       ), '[]'::jsonb)`;
       return db
         .update(accountProviderKey)
@@ -846,8 +849,8 @@ export function setPlanStatus(
 /**
  * Writes one usage window a coding agent's turn heard its harness report on
  * the account's plan of this kind, the subscription of this id or the first
- * of its kind where none is named, in place of the window of its length the
- * row held, the others kept. As with `setPlanStatus`, a credential saved
+ * of its kind where none is named, in place of the window of its length and
+ * model the row held, the others kept. As with `setPlanStatus`, a credential saved
  * after the turn opened (`savedBy`) is not given it.
  */
 export function setPlanUsage(

@@ -634,6 +634,7 @@ function landWrite(
         {
           usedPercent: write.usedPercent,
           ...(write.windowMins === undefined ? {} : { windowMins: write.windowMins }),
+          ...(write.model === undefined ? {} : { model: write.model }),
           ...(write.resetsAt === undefined ? {} : { resetsAt: write.resetsAt }),
         },
         new Date(now),

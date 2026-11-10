@@ -19,10 +19,15 @@ import {
 import { timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
 
-/** One usage window as `usage_windows` keeps it: the share used, in percent, its length in minutes and its reset in epoch milliseconds where heard. */
+/**
+ * One usage window as `usage_windows` keeps it: the share used, in percent,
+ * its length in minutes, the model it alone counts as its provider names it
+ * ("Opus"), and its reset in epoch milliseconds, each where heard.
+ */
 export interface StoredUsageWindow {
   readonly usedPercent: number;
   readonly windowMins?: number;
+  readonly model?: string;
   readonly resetsAt?: number;
 }
 
@@ -87,7 +92,8 @@ export const accountProviderKey = pgTable(
     usageResetsAt: timestamptz("usage_resets_at"),
     /**
      * How much of each of its usage windows a plan has used, as last heard:
-     * the 5-hour session and the week, one entry a window length, each
+     * the 5-hour session, the week, and a week on one model alone, one entry
+     * a window length and model, each
      * replaced as a turn on the plan or a read of its provider hears it
      * again; null until one has, and a saved credential starts without it.
      */

@@ -2548,7 +2548,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
 
         const resetsAt = Date.UTC(2026, 9, 21, 15, 40);
         const weekResetsAt = Date.UTC(2026, 9, 25, 9);
-        // The week's reading, and one on a single model's week, which stands for the plan's week on no model.
+        // The week's reading on every model, and one on Opus alone, which is a window of its own beside it.
         const weekOf = (rateLimitType: string, utilization: number) => ({
           type: "rate_limit_event",
           rate_limit_info: {
@@ -2606,7 +2606,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           [PROVIDER_KEY_STATUS.INVALID, null],
           [PROVIDER_KEY_STATUS.INVALID, null],
         ]);
-        // The usage the limit reported stays the plan's latest, in percent of its five hours beside its week, through the turns after it.
+        // The usage the limit reported stays the plan's latest, in percent of its five hours beside its weeks, through the turns after it.
         const [row] = yield* listProviderKeyRows(
           agent.userId,
           PROVIDER_KEY_KIND.CLAUDE_SETUP_TOKEN,
@@ -2616,6 +2616,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           [
             { usedPercent: 100, windowMins: 300, resetsAt },
             { usedPercent: 40, windowMins: 10080, resetsAt: weekResetsAt },
+            { usedPercent: 90, windowMins: 10080, model: "Opus", resetsAt: weekResetsAt },
           ],
         );
       }),

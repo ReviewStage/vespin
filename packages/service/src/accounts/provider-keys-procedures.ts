@@ -131,7 +131,7 @@ const SUBSCRIPTION_KINDS = Object.values(PROVIDER_KEY_KIND).filter(
 /** Every Claude setup-token's own prefix, an OAuth token's, which no API key carries. */
 const CLAUDE_SETUP_TOKEN_PREFIX = "sk-ant-oat";
 
-/** A plan's usage windows as last heard, the shortest first, each left out once its reset has passed. */
+/** A plan's usage windows as last heard, the shortest first and a length's window on every model before one on a model alone, each left out once its reset has passed. */
 function usageOf(row: ProviderKeyRow, now: number): readonly PlanUsage[] {
   return (row.usageWindows ?? [])
     .filter((window) => window.resetsAt === undefined || window.resetsAt > now)
@@ -140,7 +140,11 @@ function usageOf(row: ProviderKeyRow, now: number): readonly PlanUsage[] {
       // Note that a harness may report past the whole window, which reads as all of it.
       usedPercent: Math.min(Math.max(window.usedPercent, 0), 100),
     }))
-    .toSorted((a, b) => (a.windowMins ?? Infinity) - (b.windowMins ?? Infinity));
+    .toSorted(
+      (a, b) =>
+        (a.windowMins ?? Infinity) - (b.windowMins ?? Infinity) ||
+        Number(a.model !== undefined) - Number(b.model !== undefined),
+    );
 }
 
 /**
