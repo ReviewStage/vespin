@@ -83,7 +83,7 @@ it.layer(SUITE)("a button in an agent's reply", (it) => {
 
         yield* experimentInTestWorkspace(owner, EXPERIMENT.REPLY_BUTTONS);
         assert.equal(yield* claimReplyButtonPress(buttonId, owner, NOW), true);
-        yield* settleReplyButtonPress(buttonId, owner, reached);
+        yield* settleReplyButtonPress(buttonId, owner, reached, NOW);
         const again = yield* pressReplyButton(writer, teammate, agentId, buttonId, noSummary);
         assert.deepEqual(
           { by: again.pressed?.by, agent: again.pressed?.agent?.id },

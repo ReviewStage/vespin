@@ -168,7 +168,7 @@ export const pressReplyButton = /* @__PURE__ */ Effect.fnUntraced(function* (
         hostedStoreOrUnavailable(releaseReplyButtonPress(button.id, userId)).pipe(Effect.ignore),
       ),
     );
-    yield* hostedStoreOrUnavailable(settleReplyButtonPress(button.id, userId, reached));
+    yield* hostedStoreOrUnavailable(settleReplyButtonPress(button.id, userId, reached, now));
   }
   // Note that the button is read again either way, since a press unclaimed is another's that landed or runs since the first read.
   const settled = yield* hostedStoreOrUnavailable(readReplyButton(userId, button.id));
