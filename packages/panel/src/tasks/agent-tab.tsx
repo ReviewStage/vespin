@@ -1,3 +1,4 @@
+import { bootHolds } from "@repo/features/agent-boot";
 import {
   AGENT_PART,
   type AgentPart,
@@ -186,6 +187,7 @@ import {
   useCallHeld,
   waitingOnYouWords,
 } from "./agent-approvals.js";
+import { AgentBootBar, bootBarOf } from "./agent-boot-bar.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { ForwardChip, useForwardToast } from "./agent-forward.js";
 import {
@@ -2965,6 +2967,9 @@ function AgentTabView({
   );
   // Whether the agent works and how its turn ended are read from its newest turn's record alone (`tabTurnOf`).
   const standing = tabTurnOf(agent, composer);
+  // Note that a first launch still booting says so over the transcript (`AgentBootBar`), so no working line or end line stands under it.
+  const booting = bootHolds(transcript.boot?.phase);
+  const bootBar = bootBarOf(transcript.boot);
   // Note that the sign-in card's Retry is offered only where the box stands, as Try again is.
   const signIn: GitHubSignInDoors | undefined =
     onUnarchive === undefined && continuedNote === undefined && composer.closed === undefined
@@ -3091,6 +3096,7 @@ function AgentTabView({
   );
   return (
     <AgentTabFrame ref={tab} label={name}>
+      <AgentBootBar agentId={agent.id} bar={bootBar} retries={controlsQueue} />
       <MacOwnerProvider value={macOwner}>
         <AgentPicturesProvider value={pictures}>
           <WholePartsProvider value={wholeParts}>
@@ -3124,7 +3130,7 @@ function AgentTabView({
                           holding={holding}
                           failed={transcript.failed}
                           failedWith={transcript.failedWith}
-                          working={standing.working}
+                          working={standing.working && !booting}
                           phase={standing.phase}
                           waitsUntil={standing.waitsUntil}
                           turnId={standing.turnId ?? agent.turnId}
@@ -3138,7 +3144,7 @@ function AgentTabView({
                           }
                           ended={
                             // Note that the end line waits for a first page, so a stopped agent's tab never draws it over nothing, and gives way to the working line while the agent works.
-                            transcript.pages === 0 || standing.working
+                            transcript.pages === 0 || standing.working || booting
                               ? undefined
                               : endLineParts(
                                   standing.status,
@@ -3197,8 +3203,10 @@ function AgentTabView({
             paused={queue.paused}
             editing={queueEditing.editing}
             onMove={queue.move}
-            onSteer={(message) =>
-              queue.change({ change: QUEUE_CHANGE.STEER, messageId: message.id })
+            onSteer={
+              booting
+                ? undefined
+                : (message) => queue.change({ change: QUEUE_CHANGE.STEER, messageId: message.id })
             }
             onEdit={queueEditing.edit}
             onCancelEdit={queueEditing.cancelRow}
