@@ -395,3 +395,38 @@ test("a usage limit with no known reset tells the reader to send a message", () 
   assert.ok(container.textContent?.includes("Codex usage limit reached"));
   assert.ok(container.textContent?.includes("Send a message to continue"));
 });
+
+test("a usage limit that moved the turn on names the payer it ran out on and the one it continues on", () => {
+  const { container } = drawn({
+    type: "data-usage-limit",
+    data: {
+      agent: "Claude",
+      resetsAt: null,
+      moved: { from: "Work plan", to: "API key · sk-…a91F" },
+    },
+  });
+  assert.ok(container.textContent?.includes("Claude usage limit reached on Work plan"));
+  assert.ok(container.textContent?.includes("Continuing on API key · sk-…a91F"));
+  assert.ok(!container.textContent?.includes("Send a message to continue"));
+});
+
+test.each([
+  { name: "a worker on Claude Code", tool: "Agent", agent: "Claude" },
+  { name: "a subagent on Codex", tool: "collabAgentToolCall", agent: "Codex" },
+])(
+  "$name the plan's usage limit ended draws the limit's notice in its answer's place",
+  ({ tool, agent }) => {
+    const { container } = drawn(
+      storedPart(
+        tool,
+        { description: "Collect real menu items", prompt: "List the menus.", tool: "spawnAgent" },
+        { usageLimit: { agent, resetsAt: null } },
+      ),
+    );
+    const words = container.textContent ?? "";
+    assert.ok(words.includes(`${agent} usage limit reached`), words);
+    // The worker's card says its title alone, since nothing goes on from the worker.
+    assert.ok(!words.includes("Send a message to continue"), words);
+    assert.ok(!words.includes("usageLimit"), words);
+  },
+);
