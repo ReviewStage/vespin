@@ -31,7 +31,7 @@ import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What joins a pull request's branches, the one it merges from after the one it merges into, as GitHub writes it. */
-const BRANCH_ARROW = " ← ";
+const BRANCH_ARROW = "←";
 
 type PullRequestHeadProps = {
   readonly title: string;
@@ -47,12 +47,36 @@ type PullRequestHeadProps = {
   readonly sentence?: string | undefined;
 };
 
+/** One branch, as the panel's header names it: Lucide's branch glyph, then its name in the monospaced face. */
+function Branch({ name }: { readonly name: string }) {
+  const colors = useColors();
+  return (
+    <HStack spacing={SPACE.TIGHT}>
+      <ToneGlyph
+        glyph={LUCIDE_SYMBOL.GIT_BRANCH}
+        tone={STATUS_TONE.NEUTRAL}
+        textStyle={TYPE_ROLE.ROW_LINE}
+        hidden
+      />
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.ROW_LINE, design: "monospaced" }),
+          foregroundStyle(colors.TEXT_BODY),
+          lineLimit(1),
+        ]}
+      >
+        {name}
+      </Text>
+    </HStack>
+  );
+}
+
 /**
  * A pull request's heading, as a list's first row: its title in 20 pt
  * semibold with its number muted after it, then where it stands as a chip,
- * its state's glyph in GitHub's color and its word, and its branches, the
- * one it merges into first, then GitHub's sentence of whether it would
- * merge, in the body's ink.
+ * its state's glyph in GitHub's color and its word, then its branches on a
+ * line of their own, the one it merges into first, then GitHub's sentence of
+ * whether it would merge, in the body's ink.
  */
 export function PullRequestHead({
   title,
@@ -88,26 +112,21 @@ export function PullRequestHead({
       </Text>
       <HStack spacing={SPACE.TIGHT + 2}>
         <FieldChip label={stateLabel} mark={{ glyph: look.symbol, tone: look.tone }} />
-        {branches === undefined ? null : (
-          <HStack spacing={SPACE.TIGHT}>
-            <ToneGlyph
-              glyph={LUCIDE_SYMBOL.GIT_BRANCH}
-              tone={STATUS_TONE.NEUTRAL}
-              textStyle={TYPE_ROLE.ROW_LINE}
-              hidden
-            />
-            <Text
-              modifiers={[
-                font({ textStyle: TYPE_ROLE.ROW_LINE, design: "monospaced" }),
-                foregroundStyle(colors.TEXT_MUTED),
-                lineLimit(1),
-              ]}
-            >
-              {`${branches.base}${BRANCH_ARROW}${branches.head}`}
-            </Text>
-          </HStack>
-        )}
       </HStack>
+      {branches === undefined ? null : (
+        <HStack spacing={SPACE.TIGHT + 2}>
+          <Branch name={branches.base} />
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE }),
+              foregroundStyle(colors.TEXT_MUTED),
+            ]}
+          >
+            {BRANCH_ARROW}
+          </Text>
+          <Branch name={branches.head} />
+        </HStack>
+      )}
       {sentence === undefined ? null : (
         <Text
           modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_BODY)]}
