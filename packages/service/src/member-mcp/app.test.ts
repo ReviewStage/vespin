@@ -1537,7 +1537,7 @@ it.effect(
 );
 
 it.effect(
-  "an admin acting through the server reads the workspace's members but is refused its slug, which the owner changes",
+  "an admin acting through the server reads the workspace's members and sets its photo but is refused its slug, which the owner changes",
   () =>
     Effect.gen(function* () {
       const { auth, fetch, services } = yield* standing;
@@ -1572,6 +1572,9 @@ it.effect(
       const changed = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG, {
         slug: "seats",
       });
+      const photo = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO, {
+        photo: "data:image/png;base64,iVBORw0KGgo=",
+      });
 
       assert.notEqual(members.isError, true, members.content[0].text);
       assert.deepEqual(
@@ -1590,6 +1593,8 @@ it.effect(
         slug: "seats",
         name: "Test Workspace",
       });
+      assert.notEqual(photo.isError, true, photo.content[0].text);
+      assert.equal(typeof JSON.parse(photo.content[0].text).workspace.photoVersion, "string");
     }),
 );
 

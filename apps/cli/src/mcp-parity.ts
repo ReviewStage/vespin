@@ -32,6 +32,7 @@ export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.LIST_WORKSPACES]: { command: ["workspace", "list"] },
   [MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS]: { command: ["workspace", "members"] },
   [MEMBER_MCP_TOOL.SET_WORKSPACE_SLUG]: { command: ["workspace", "slug"] },
+  [MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO]: { command: ["workspace", "photo"] },
   [MEMBER_MCP_TOOL.LIST_TASKS]: { command: ["task", "list"] },
   [MEMBER_MCP_TOOL.READ_TASK]: { command: ["task", "view"] },
   [MEMBER_MCP_TOOL.LIST_AGENTS]: { command: ["agent", "list"] },
