@@ -29,6 +29,7 @@ import { OWN_PULL_REQUEST } from "@repo/host/app-state";
 import type { PortActPayload } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
 import { STATUS_TONE } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import {
   mutationOptions,
@@ -950,7 +951,14 @@ export function useAgents(input: {
   );
   const limitReached = useCallback(
     (words: string) =>
-      toast({ replayUnmasked: true, words, tone: STATUS_TONE.ATTENTION, hold: TOAST_HOLD.FAILED }),
+      toast({
+        replayUnmasked: true,
+        words,
+        tone: STATUS_TONE.ATTENTION,
+        // The clock the usage-limit card wears, so a limit reads as the one thing wherever it is said.
+        glyph: GLYPH.TIME,
+        hold: TOAST_HOLD.FAILED,
+      }),
     [toast],
   );
   // Note that the acts and the opening are read through a ref, because the
