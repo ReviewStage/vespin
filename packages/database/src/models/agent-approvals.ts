@@ -151,7 +151,8 @@ const settleByRunner = SqlSchema.findAll({
         .set({
           status,
           settledBy,
-          confirmedAt: at,
+          // The first word of it keeps the instant it landed at.
+          confirmedAt: sql`coalesce(${agentApproval.confirmedAt}, ${at}::timestamptz)`,
           // A member's answer already recorded keeps the instant it landed at.
           settledAt: sql`coalesce(${agentApproval.settledAt}, ${at}::timestamptz)`,
         })
