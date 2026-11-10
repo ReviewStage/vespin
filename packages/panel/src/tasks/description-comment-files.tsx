@@ -3,6 +3,7 @@ import type { DescriptionCommentFile } from "@repo/features/description-comment-
 import { ACT_KIND } from "@repo/host/acts";
 import { PICTURE_STATE } from "@repo/ui/picture-read";
 import { useQueries } from "@tanstack/react-query";
+import { useRef } from "react";
 import { sendAct } from "../act.js";
 import { pictureQuery } from "../picture-query.js";
 import { AttachedFileChips } from "./attached-file-chips.js";
@@ -34,7 +35,13 @@ function readDescriptionFile(planId: string, attachmentId: string) {
   return sendAct(ACT_KIND.TASKS_PICTURE_READ, { planId, attachmentId });
 }
 
-/** A comment's files as chips, each read once and kept as the plan's pictures are (`../picture-query.ts`). */
+/**
+ * A comment's files as chips, each read once and kept as the plan's pictures
+ * are (`../picture-query.ts`). Note that a file's chip stays the same object
+ * for as long as its name, type, and bytes do, because the row a chip is
+ * taken off in knows each chip by the object (`AttachedFileChips`), and a
+ * new one each draw would scale every file out and in again.
+ */
 export function useCommentFileChips(
   planId: string,
   files: readonly DescriptionCommentFile[],
@@ -43,13 +50,22 @@ export function useCommentFileChips(
     queries: files.map((file) => pictureQuery(planId, file.attachmentId, readDescriptionFile)),
     combine: (results) => results.map((result) => result.data),
   });
+  const kept = useRef(new Map<string, FileChip>());
   return files.map((file, index) => {
     const read = reads[index];
-    return {
-      name: file.name,
-      mediaType: file.mediaType,
-      url: read?.kind === PICTURE_STATE.READY ? read.url : "",
-    };
+    const url = read?.kind === PICTURE_STATE.READY ? read.url : "";
+    const was = kept.current.get(file.attachmentId);
+    if (
+      was !== undefined &&
+      was.name === file.name &&
+      was.mediaType === file.mediaType &&
+      was.url === url
+    ) {
+      return was;
+    }
+    const chip = { name: file.name, mediaType: file.mediaType, url };
+    kept.current.set(file.attachmentId, chip);
+    return chip;
   });
 }
 
