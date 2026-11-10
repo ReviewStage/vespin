@@ -4,13 +4,14 @@ import { Schema } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, expect, test, vi } from "vitest";
-import { keptKey, useKept } from "./use-kept.js";
+import { keptKey, keptNow, useKept } from "./use-kept.js";
 
 /**
  * use-kept.test.ts -- a view choice is remembered: a surface drawn again
  * after it went opens at the choice it last kept, one never chosen opens at
  * its initial value, and so does one an earlier build kept in a shape that
- * no longer reads.
+ * no longer reads; where storage refuses a write, the choice drawn is what
+ * goes on, read outside React too.
  */
 
 declare global {
@@ -127,7 +128,7 @@ test("a change is made over what storage holds now, and one that answers what it
   expect(window.localStorage.getItem(KEPT.SORT.name)).toBeNull();
 });
 
-test("where storage refuses a write, a change goes on from the choice drawn, not the older one it holds", () => {
+test("where storage refuses a write, a change, and a read outside React, go on from the choice drawn, not the older one it holds", () => {
   window.localStorage.setItem(KEPT.SORT.name, JSON.stringify(SORT.LATEST));
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
@@ -138,6 +139,7 @@ test("where storage refuses a write, a change goes on from the choice drawn, not
   const flip = (held: Sort): Sort => (held === SORT.LATEST ? SORT.OLDEST : SORT.LATEST);
   act(() => doors?.change(flip));
   expect(shown()).toBe(`${SORT.OLDEST} ${SORT.OLDEST}`);
+  expect(keptNow(KEPT.SORT, SORT.LATEST)).toBe(SORT.OLDEST);
   act(() => doors?.change(flip));
   expect(shown()).toBe(`${SORT.LATEST} ${SORT.LATEST}`);
   act(() => doors?.change(flip));

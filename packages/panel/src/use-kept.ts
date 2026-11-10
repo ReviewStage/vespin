@@ -38,8 +38,14 @@ export const keptFlag = Schema.Literals(["true", "false"]).pipe(
   ),
 );
 
-/** The keys whose last write storage refused, so what a surface draws is newer than what storage holds, each with the text storage held then. */
-const UNWRITTEN = new Map<string, string | null>();
+/** The keys whose last write storage refused, so what a surface draws is newer than what storage holds, each with the text storage held then and the choice drawn. */
+const UNWRITTEN = new Map<string, { readonly text: string | null; readonly drawn: unknown }>();
+
+/** Whether storage refused the last write under `name` and holds what it held then, so the choice drawn is newer than it. */
+function refusedNow(name: string): boolean {
+  const unwritten = UNWRITTEN.get(name);
+  return unwritten !== undefined && unwritten.text === readKeptText(name);
+}
 
 /** The surfaces drawn now that hold each key, so a choice made in one is drawn in every other. */
 const HOLDERS = new Map<string, Set<(kept: unknown) => void>>();
@@ -83,7 +89,7 @@ export function useKept<A>(
       drawn.current = next;
       setValue(next);
       if (writeKept(key.name, key.schema, next)) UNWRITTEN.delete(key.name);
-      else UNWRITTEN.set(key.name, readKeptText(key.name));
+      else UNWRITTEN.set(key.name, { text: readKeptText(key.name), drawn: next });
       for (const holder of HOLDERS.get(key.name) ?? []) holder(next);
     },
     [key],
@@ -91,8 +97,9 @@ export function useKept<A>(
   const change = useCallback(
     (changed: (kept: A) => A) => {
       // Note that where storage refused the last write, the choice drawn is newer than the one it holds, so it is changed instead, unless another window has kept one since.
-      const refused = UNWRITTEN.has(key.name) && UNWRITTEN.get(key.name) === readKeptText(key.name);
-      const was = refused ? drawn.current : readKept(key.name, key.schema, drawn.current);
+      const was = refusedNow(key.name)
+        ? drawn.current
+        : readKept(key.name, key.schema, drawn.current);
       const next = changed(was);
       if (!Object.is(next, was)) choose(next);
     },
@@ -105,10 +112,12 @@ export function useKept<A>(
  * The choice kept under `key` now, or `initial` where none was kept, it no
  * longer reads, or storage refuses the read, for a caller outside React
  * that reads it as it acts, as a failure's Investigate asks which workspace
- * is chosen as the failure is shown. Note that a choice whose last write
- * storage refused reads as storage holds it, since no surface's draw is in
- * reach here.
+ * is chosen as the failure is shown. Note that where storage refused the
+ * last write, the choice drawn is answered, since it is newer than what
+ * storage holds, as `useKept`'s `change` reads it.
  */
 export function keptNow<A>(key: KeptKey<A>, initial: A): A {
+  // Note that what was drawn was chosen through this key's own schema, so it is this key's type.
+  if (refusedNow(key.name)) return UNWRITTEN.get(key.name)?.drawn as A;
   return readKept(key.name, key.schema, initial);
 }
