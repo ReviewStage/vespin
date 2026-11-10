@@ -10,6 +10,13 @@ name: Release iOS
 # through an App Store Connect API key of its own, apart from the one the Mac
 # release notarizes with, and exports it straight to App Store Connect. The
 # build number is the run's, so every upload is one TestFlight has not seen.
+#
+# The app reports crashes to the desktop's Sentry project, under the same DSN
+# (SENTRY_DSN), and the archive uploads its Hermes source maps and dSYMs there
+# through sentry-cli (SENTRY_AUTH_TOKEN), as Sentry's Expo config plugin adds
+# the build phases for. A refused upload warns and the build goes on
+# (SENTRY_ALLOW_FAILURE), so Sentry being down never holds a TestFlight build
+# back; its reports read unsymbolicated until symbols are uploaded by hand.
 
 on:
   push:
@@ -66,11 +73,15 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_P8_BASE64 }}
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           for secret_name in \
             APP_STORE_CONNECT_KEY_P8_BASE64 \
             APP_STORE_CONNECT_KEY_ID \
-            APP_STORE_CONNECT_ISSUER_ID; do
+            APP_STORE_CONNECT_ISSUER_ID \
+            SENTRY_AUTH_TOKEN \
+            SENTRY_DSN; do
             if [[ -z "${!secret_name:-}" ]]; then
               echo "error: required GitHub Actions secret is missing: $secret_name" >&2
               exit 1
@@ -99,8 +110,12 @@ jobs:
           fi
           echo "Vespin $VERSION ($BUILD_NUMBER)"
 
+      # The token's presence is what turns Sentry's upload phases on (app.config.ts).
       - name: Generate the native project
         working-directory: apps/mobile
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: pnpm exec expo prebuild --platform ios --clean
 
       - name: Archive, export, and upload
@@ -109,6 +124,9 @@ jobs:
           APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
           APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
           APP_STORE_CONNECT_KEY_P8_BASE64: ${{ secrets.APP_STORE_CONNECT_KEY_P8_BASE64 }}
+          SENTRY_ALLOW_FAILURE: "true"
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
         run: |
           set -o pipefail
           key_directory=$(mktemp -d "$RUNNER_TEMP/vespin-asc.XXXXXX")
