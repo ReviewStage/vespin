@@ -5,9 +5,12 @@ import {
   OutsideLink,
   OutsideSteps,
   PasteSteps,
+  SettingsBlock,
+  SettingsSection,
   STEP_STATE,
   Step,
   Steps,
+  WaitingLine,
 } from "@repo/ui";
 import { inputProblem } from "@repo/ui/reported-failure";
 import { useState } from "react";
@@ -17,8 +20,9 @@ import { CatalogSection } from "../section";
 /**
  * steps.tsx -- a setup told as numbered steps: one to do now beside one still
  * to come, and the first done, its number turned to the check, the second
- * the one to do now; steps done outside the app with the wait under them;
- * and a key got elsewhere and pasted, its link to the page outside.
+ * the one to do now; steps done outside the app with the wait under them,
+ * alone and in a settings card's block; the wait alone, while a code is
+ * fetched; and a key got elsewhere and pasted, its link to the page outside.
  */
 
 /** The catalog opens no pages: the link's press goes nowhere. */
@@ -95,6 +99,32 @@ function StepsExample(): React.JSX.Element {
             state={STEP_STATE.CURRENT}
           />
         </OutsideSteps>
+      </CatalogSection>
+      <CatalogSection id="steps-in-card" title="In a settings card">
+        <SettingsSection title="Connect Claude Code">
+          <SettingsBlock>
+            <OutsideSteps waiting="Waiting for Claude Code to connect">
+              <Step number={1} title="Run this in a terminal" state={STEP_STATE.CURRENT}>
+                <CopyField
+                  label="Claude Code command"
+                  value="claude mcp add --transport http vespin https://example.com/api/mcp"
+                  what="command"
+                  copy={copyToClipboard}
+                  width={COPY_FIELD_WIDTH.FULL}
+                  prompt={COPY_FIELD_PROMPT.SHELL}
+                />
+              </Step>
+              <Step
+                number={2}
+                title="Type /mcp in Claude Code, choose vespin, and sign in"
+                state={STEP_STATE.CURRENT}
+              />
+            </OutsideSteps>
+          </SettingsBlock>
+        </SettingsSection>
+      </CatalogSection>
+      <CatalogSection id="steps-wait" title="The wait alone, while a code is fetched">
+        <WaitingLine>Getting a code</WaitingLine>
       </CatalogSection>
       <CatalogSection id="steps-paste" title="A key got elsewhere and pasted">
         <PasteExample />
