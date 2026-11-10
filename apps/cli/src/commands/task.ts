@@ -17,11 +17,15 @@ import { TASK_FILE_QUERY_FLAG } from "@repo/features/contract";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import { INBOX_STATUS, type InboxItem, openAskOf } from "@repo/features/inbox-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
 import {
+  TASK_BLOCK_CHANGE,
+  TASK_BLOCK_RELATION,
   TASK_FILE_REFUSAL,
   TASK_PRIORITY_ORDER,
   TASK_STATUS_ORDER,
   TASK_TREE_ENTRY,
+  type Task,
   type TaskFileRefusal,
   type TaskPullRequestLine,
   type TaskSummary,
@@ -37,9 +41,13 @@ import { resolveTaskId, signedInMemberId } from "../tasks.js";
 import { resolveWorkspace } from "../workspace.js";
 import { agentLines, startAgent, startedLines } from "./agent.js";
 import { writeDescription } from "./description.js";
+import { resolveSection } from "./section.js";
 
 /** What `--assignee` takes to assign the task to nobody, and to the signed-in member. */
 const ASSIGNEE_WORD = { NONE: "none", ME: "me" } as const;
+
+/** What `--parent` and `--section` take to take the task out from under its parent, or out of its section. */
+const NONE_WORD = "none";
 
 /** The fields of a task every answer prints, its key beside them where it has a number. */
 function taskJson(task: Omit<TaskSummary, "agents">, workspaceName: string | undefined) {
@@ -325,6 +333,37 @@ const createCommand = Command.make(
   ]),
 );
 
+/** A task flag that may be given again, once for each task it names. */
+function taskFlags(name: string, description: string) {
+  return Flag.String(name).pipe(Flag.atLeast(0), Flag.withDescription(description));
+}
+
+/** The blocks `--blocked-by`, `--blocks`, and their `--remove-` forms name, each as `plans.block` takes it, the tasks resolved to ids. */
+function blockChangesOf(named: {
+  readonly blockedBy: readonly string[];
+  readonly blocks: readonly string[];
+  readonly removeBlockedBy: readonly string[];
+  readonly removeBlocks: readonly string[];
+}) {
+  const asked = [
+    ...named.blockedBy.map(
+      (task) => [TASK_BLOCK_CHANGE.ADD, TASK_BLOCK_RELATION.BLOCKED_BY, task] as const,
+    ),
+    ...named.blocks.map(
+      (task) => [TASK_BLOCK_CHANGE.ADD, TASK_BLOCK_RELATION.BLOCKS, task] as const,
+    ),
+    ...named.removeBlockedBy.map(
+      (task) => [TASK_BLOCK_CHANGE.REMOVE, TASK_BLOCK_RELATION.BLOCKED_BY, task] as const,
+    ),
+    ...named.removeBlocks.map(
+      (task) => [TASK_BLOCK_CHANGE.REMOVE, TASK_BLOCK_RELATION.BLOCKS, task] as const,
+    ),
+  ];
+  return Effect.forEach(asked, ([change, relation, task]) =>
+    Effect.map(resolveTaskId(task), (taskId) => ({ change, relation, taskId })),
+  );
+}
+
 const updateCommand = Command.make(
   "update",
   {
@@ -344,13 +383,30 @@ const updateCommand = Command.make(
       Flag.withDescription("A member by email, name, or id; me for you, none for nobody"),
     ),
     name: Flag.String("name").pipe(Flag.optional, Flag.withDescription("Its new name")),
+    parent: Flag.String("parent").pipe(
+      Flag.optional,
+      Flag.withDescription("The task to put it under, by id, number, or key; none for the top"),
+    ),
+    blockedBy: taskFlags("blocked-by", "A task it waits on, added; again for each"),
+    blocks: taskFlags("blocks", "A task that waits on it, added; again for each"),
+    removeBlockedBy: taskFlags("remove-blocked-by", "A task it waits on, taken away"),
+    removeBlocks: taskFlags("remove-blocks", "A task that waits on it, taken away"),
+    section: Flag.String("section").pipe(
+      Flag.optional,
+      Flag.withDescription("Your sidebar section to keep it in, by id or title; none for none"),
+    ),
   },
-  ({ task, status, priority, assignee, name }) =>
+  ({ task, status, priority, assignee, name, parent, section, ...blockFlags }) =>
     Effect.gen(function* () {
-      if ([status, priority, assignee, name].every(Option.isNone)) {
+      const blocksAsked = Object.values(blockFlags).some((named) => named.length > 0);
+      if (
+        [status, priority, assignee, name, parent, section].every(Option.isNone) &&
+        !blocksAsked
+      ) {
         return yield* new CommandFailed({
           exit: CLI_EXIT.USAGE,
-          message: "Name a change: --status, --priority, --assignee, or --name.",
+          message:
+            "Name a change: --status, --priority, --assignee, --name, --parent, --blocked-by, --blocks, their --remove- forms, or --section.",
         });
       }
       const id = yield* resolveTaskId(task);
@@ -358,32 +414,84 @@ const updateCommand = Command.make(
       const assigneeId = Option.isSome(assignee)
         ? yield* memberIdOf(id, assignee.value)
         : undefined;
-      const { plan } = yield* askService(hosted.plans.update, {
-        params: { id },
-        body: {
-          ...(Option.isSome(status) ? { status: status.value } : undefined),
-          ...(Option.isSome(priority) ? { priority: priority.value } : undefined),
-          ...(assigneeId === undefined ? undefined : { assigneeId }),
-          ...(Option.isSome(name) ? { name: name.value } : undefined),
-        },
-      });
+      const parentTaskId = Option.isNone(parent)
+        ? undefined
+        : parent.value === NONE_WORD
+          ? null
+          : yield* resolveTaskId(parent.value);
+      const blockChanges = yield* blockChangesOf(blockFlags);
+      const fields = {
+        ...(Option.isSome(status) ? { status: status.value } : undefined),
+        ...(Option.isSome(priority) ? { priority: priority.value } : undefined),
+        ...(assigneeId === undefined ? undefined : { assigneeId }),
+        ...(Option.isSome(name) ? { name: name.value } : undefined),
+      };
+      // Note that each change is its own request, as the task menu's are, and the task as the last one answers is the one printed.
+      let plan: Task | undefined;
+      if (Object.keys(fields).length > 0) {
+        plan = (yield* askService(hosted.plans.update, { params: { id }, body: fields })).plan;
+      }
+      if (parentTaskId !== undefined) {
+        plan = (yield* askService(hosted.plans.parent, { params: { id }, body: { parentTaskId } }))
+          .plan;
+      }
+      for (const block of blockChanges) {
+        plan = (yield* askService(hosted.plans.block, { params: { id }, body: block })).plan;
+      }
+      plan ??= (yield* askService(hosted.plans.open, { id })).plan;
+      const sectionId = Option.isNone(section)
+        ? undefined
+        : section.value === NONE_WORD
+          ? null
+          : (yield* resolveSection(plan.workspaceId, section.value)).section.id;
+      if (sectionId !== undefined) {
+        yield* askService(hosted.taskSections.write, {
+          kind: TASK_SECTION_WRITE.PLACE,
+          taskId: id,
+          sectionId,
+        });
+      }
       const { workspaces } = yield* askService(hosted.workspaces.list, undefined);
-      const found = taskJson(plan, workspaceNamed(workspaces, plan.workspaceId));
+      const found = {
+        ...taskJson(plan, workspaceNamed(workspaces, plan.workspaceId)),
+        parentTaskId: plan.parentTaskId ?? null,
+        blockedBy: plan.blockedBy ?? [],
+        blocks: plan.blocks ?? [],
+        ...(sectionId === undefined ? undefined : { sectionId }),
+      };
       yield* answer({
         json: found,
         lines: [
           `Updated ${taskLabel(found)} ${found.name}: ${found.status ?? "none"}, ${found.priority ?? "none"}, ${found.assignee?.name ?? "nobody"}.`,
+          ...(parentTaskId === undefined ? [] : [`  Parent: ${found.parentTaskId ?? "none"}`]),
+          ...(blockChanges.length === 0
+            ? []
+            : [
+                `  Blocked by: ${found.blockedBy.join(", ") || "none"}`,
+                `  Blocks: ${found.blocks.join(", ") || "none"}`,
+              ]),
+          ...(sectionId === undefined ? [] : [`  Section: ${sectionId ?? "none"}`]),
         ],
         ids: [found.id],
       });
     }),
 ).pipe(
-  Command.withDescription("Change a task's status, priority, assignee, or name"),
+  Command.withDescription(
+    "Change a task's status, priority, assignee, name, parent, blocks, or sidebar section",
+  ),
   Command.withExamples([
     { command: "vespin task update ACME-42 --status done", description: "Mark a task done" },
     {
       command: "vespin task update ACME-42 --assignee me --priority high",
       description: "Take a task, and raise it",
+    },
+    {
+      command: "vespin task update ACME-42 --blocked-by ACME-41 --parent ACME-40",
+      description: "Make it wait on another, under a parent",
+    },
+    {
+      command: 'vespin task update ACME-42 --section "This week"',
+      description: "Keep it in one of your sidebar sections",
     },
   ]),
 );

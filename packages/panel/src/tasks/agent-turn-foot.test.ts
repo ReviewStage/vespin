@@ -3,7 +3,9 @@
 import assert from "node:assert/strict";
 import {
   AGENT_BRIEF,
+  AGENT_FAILURE,
   AGENT_STATUS,
+  type AgentFailure,
   type AgentStatus,
   type AgentSummary,
   type AgentTranscriptMessage,
@@ -77,8 +79,12 @@ afterEach(() => {
   fakeAppBridge({});
 });
 
-/** The agent's turn as the tab draws it, over a page of the task and that turn, for an agent of `status`. */
-async function drawnTurn(status: AgentStatus, waitsUntil?: number): Promise<HTMLElement> {
+/** The agent's turn as the tab draws it, over a page of the task and that turn, for an agent of `status`, its turn waiting until `waitsUntil` or failed with `failure` where given. */
+async function drawnTurn(
+  status: AgentStatus,
+  waitsUntil?: number,
+  failure?: AgentFailure,
+): Promise<HTMLElement> {
   const agent: AgentSummary = {
     ...agentOf(status),
     ...(waitsUntil === undefined
@@ -87,6 +93,9 @@ async function drawnTurn(status: AgentStatus, waitsUntil?: number): Promise<HTML
           turnId: TURN,
           turn: { id: TURN, queuedAt: 1000, status: TURN_STATUS.RUNNING, waitsUntil },
         }),
+    ...(failure === undefined
+      ? undefined
+      : { turnId: TURN, turn: { id: TURN, queuedAt: 1000, status: TURN_STATUS.FAILED, failure } }),
   };
   fakeAppBridge({});
   fakeActPort({});
@@ -161,4 +170,11 @@ test("a turn still running offers no Copy, its words not yet whole", async () =>
 test("a waiting turn keeps its waiting line until its native usage-limit notice arrives", async () => {
   await drawnTurn(AGENT_STATUS.RUNNING, Date.UTC(2026, 10, 9, 23));
   assert.ok(document.body.textContent?.includes("Waiting for your usage limit to reset at"));
+});
+
+test("a turn its plan's usage limit ended ends on the limit's notice, never a failure line", async () => {
+  await drawnTurn(AGENT_STATUS.FAILED, undefined, AGENT_FAILURE.PLAN_LIMIT);
+  const words = document.body.textContent ?? "";
+  assert.ok(words.includes("Claude usage limit reached"), words);
+  assert.ok(!words.includes("Failed"), words);
 });
