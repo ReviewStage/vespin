@@ -77,6 +77,7 @@ import {
   PROVIDER_KEY_STATUS,
 } from "@repo/features/provider-key-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
+import { REPOSITORY_SCRIPT_KIND } from "@repo/features/workspace-sandbox-setup-wire";
 import { sessionKey } from "@repo/runtime/vocabulary";
 import { SANDBOX_IDLE, type Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
@@ -867,6 +868,35 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           eventsUrl: `${EVENTS_URL}${FIRST_LAUNCH}`,
           linesUrl: `${LINES_URL}${FIRST_LAUNCH}`,
           mcpUrl: MCP_URL,
+          // Every tool of ours that does more than read, which the worker is denied; it keeps the reads.
+          workerDenied: [
+            "post_thread",
+            "withdraw_ask",
+            "open_pull_request",
+            "edit_description",
+            "show_image",
+            "show_page",
+            "start_agent",
+            "stop_agent",
+            "message_agent",
+            "update_agent",
+            "create_task",
+            "update_task",
+            "create_section",
+            "delete_section",
+            "create_automation",
+            "update_automation",
+            "delete_automation",
+            "run_automation",
+            "save_memory",
+            "reply_to_comment",
+            "update_comment",
+            "run_on_mac",
+            "browser",
+            "list_ports",
+            "share_port",
+            "schedule_wakeup",
+          ],
           transcriptsUrl: `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,
           integrations: [LINEAR_SERVER],
           allowedDomains: [],
@@ -3754,7 +3784,13 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.ok(Result.isSuccess(ring));
         const workspace = agent.organizationId;
         yield* setInstallScript(workspace, "apt-get install -y redis-tools", new Date(0));
-        yield* setRepositorySetup(workspace, RELAY_FULL_NAME, "pnpm install", new Date(0));
+        yield* setRepositorySetup(
+          workspace,
+          RELAY_FULL_NAME,
+          REPOSITORY_SCRIPT_KIND.SETUP,
+          "pnpm install",
+          new Date(0),
+        );
         yield* setWorkspaceVariable(
           workspace,
           "DATABASE_URL",

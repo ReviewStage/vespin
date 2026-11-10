@@ -560,6 +560,13 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         assert.deepEqual(ownerOf(runAgent.id), ownedByRun);
         assert.deepEqual(ownerOf(runChild.id), ownedByRun);
         assert.equal(ownerOf(loose.id), undefined);
+        // The child names the agent that started it, which its card names in the starter's place.
+        const starterOf = (agentId: string) =>
+          planlessAgents.find((agent) => agent.id === agentId)?.startedByAgentId;
+        assert.deepEqual(
+          [starterOf(runChild.id), starterOf(runAgent.id)],
+          [runAgent.id, undefined],
+        );
         // Every plan's agents, the archived among them, as each plan's own list names them, for its
         // tabs, their harness, Mac, and continues among it; the live rows come in the order they
         // were started across the plans.

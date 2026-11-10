@@ -97,7 +97,7 @@ import {
   tabNotificationsStatus,
   webNoticeDoors,
 } from "./web-notices";
-import { copyPng, downloadText, openTab, webPlatform } from "./web-platform";
+import { copyPng, copyRichText, downloadText, openTab, webPlatform } from "./web-platform";
 import { openTerminalSocketFromPage } from "./web-terminal-socket";
 
 /** Where the host in the tab keeps its files, inside the browser's storage (`local-storage-file-system.ts`). */
@@ -321,6 +321,9 @@ function platformProcedures(
     ),
     [KIND.WINDOW_COPY_IMAGE]: port[KIND.WINDOW_COPY_IMAGE].handler(({ input }) =>
       copyPng(Promise.resolve(input.png)),
+    ),
+    [KIND.WINDOW_COPY_RICH]: port[KIND.WINDOW_COPY_RICH].handler(({ input }) =>
+      copyRichText(input),
     ),
     [KIND.WINDOW_SAVE_FILE]: port[KIND.WINDOW_SAVE_FILE].handler(({ input }) =>
       downloadText({ name: input.name, text: input.text }),

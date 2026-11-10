@@ -55,6 +55,7 @@ import {
 } from "../auth/oauth-clients.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import type { GitHubApp } from "../github/github-app.js";
+import { pullRequestLinksLayer } from "../github/pull-request-links.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import type { IntegrationConnect } from "../integrations/integration-connect.js";
 import { memberMcpApp, memberMcpAuth } from "../member-mcp/app.js";
@@ -234,6 +235,7 @@ export function memberMcpStanding(options: MemberMcpStandingOptions = {}) {
       harness.layer,
       Layer.succeed(SentryApp, sentryAppService(undefined, [])),
       Layer.succeed(PageLinks, { sandbox: undefined }),
+      pullRequestLinksLayer,
       options.integrations ?? integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
     );
     yield* seedRows.pipe(Effect.provide(services));

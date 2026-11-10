@@ -118,7 +118,7 @@ import {
 import { taskChangeAsked, taskChangeSettled, taskChangeWritten } from "../tasks/task-change.js";
 import { createTaskAsked } from "../tasks/task-create-relation.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
-import { agentStarterName, controlsAgent } from "./agent-reach.js";
+import { agentStarterName, startsFromAgent } from "./agent-reach.js";
 import { calledId } from "./called-id.js";
 import { queueOnPage } from "./coder-host/agent-queue.js";
 import { addAgentRepository, addedRepositoryLine } from "./coder-host/agent-repository-add.js";
@@ -1862,10 +1862,11 @@ export interface PageAsked {
   readonly entries: number;
 }
 
-/** One entry of a page: its place, the journal it stands in, which a fork names, none for a line sent to the agent, its words, cut to the bound, and the id of the call it says, where it is one. */
+/** One entry of a page: its place, the journal it stands in, which a fork names, none for a line sent to the agent, the line sent to the agent, which a rewind names, none for the agent's own, its words, cut to the bound, and the id of the call it says, where it is one. */
 export interface PageEntry {
   readonly place: TranscriptPlace;
   readonly messageId: string | undefined;
+  readonly lineId: string | undefined;
   readonly text: string;
   readonly callId: string | undefined;
 }
@@ -1897,6 +1898,8 @@ function pageEntriesOf(
     place: { seq: record.seq, entry },
     // Note that only the agent's own journal is named, because a fork is cut at one and refuses a line.
     messageId: record.message.role === MESSAGE_ROLE.ASSISTANT ? record.id : undefined,
+    // Note that a line sent to the agent is named apart, because a rewind is cut before one and a fork refuses it.
+    lineId: record.message.role === MESSAGE_ROLE.USER ? record.id : undefined,
     text: cutText(text, AGENT_TOOL_BOUNDS.AGENT_ENTRY_CHARS),
     callId,
   }));
@@ -2009,8 +2012,12 @@ export function pageAnswer(
 }
 
 /** An entry as `read_agent` says it: its words, and the journal it stands in where it is the agent's own. */
-function readAgentEntry({ messageId, text }: PageEntry): WireRecord {
-  return messageId === undefined ? { text } : { messageId, text };
+function readAgentEntry({ messageId, lineId, text }: PageEntry): WireRecord {
+  return {
+    ...(messageId === undefined ? undefined : { messageId }),
+    ...(lineId === undefined ? undefined : { lineId }),
+    text,
+  };
 }
 
 /**
@@ -2136,7 +2143,7 @@ const sourceLanding = (
     const found = yield* workspaceAgentOf(caller, from.agentId);
     if (Option.isNone(found)) return Result.fail(START_AGENT_REFUSAL.NO_SOURCE);
     const { agent: source, workspaceId } = found.value;
-    if (!controlsAgent(callerUserId(caller), source)) {
+    if (!startsFromAgent(callerUserId(caller), source)) {
       return Result.fail(`Not started: only ${yield* agentStarterName(source)} can do this.`);
     }
     if (named !== undefined && named !== source.taskId) {
@@ -2505,7 +2512,7 @@ interface TaskUpdateAnswered {
 }
 
 /** A task's change as the model reads it: the task as it now stands, its parent and its blocks where the call named them, and whether every change named already stood before the call. */
-const taskUpdateAnswer = (
+export const taskUpdateAnswer = (
   userId: string,
   task: StoredTask["task"],
   { already, section, parentNamed, blocksNamed }: TaskUpdateAnswered,

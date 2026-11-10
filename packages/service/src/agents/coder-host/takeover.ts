@@ -47,7 +47,7 @@ import {
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
 import { ModelCatalog } from "../../providers/model-catalog.js";
-import { admitsPlanWriter, controlsAgent } from "../agent-reach.js";
+import { admitsPlanWriter, startsFromAgent } from "../agent-reach.js";
 import { agentSandboxOf } from "../agent-sandbox-open.js";
 import { macCheckoutsOf } from "../machine/device-machine.js";
 import { MENTIONED_BOUNDS } from "../mentioned-context.js";
@@ -273,6 +273,24 @@ export function placeOfAgent(
     : { taskId: null, organizationId, repository };
 }
 
+/**
+ * Where a Start from another agent runs where its ask names no place: where
+ * its source runs, so a continue or a fork goes on where the work was, but
+ * in the cloud for a source on another member's Mac, since a Mac runs its
+ * owner's agents alone, and a teammate takes such an agent up in the cloud
+ * unless they name a Mac of their own.
+ */
+export function inheritedPlaceOf(
+  userId: string,
+  source: Pick<Agent, "userId" | "machine" | "deviceId">,
+): { readonly machine: AgentMachineKind; readonly deviceId?: string | null | undefined } {
+  const machine = source.machine ?? AGENT_MACHINE.VERCEL;
+  if (machine === AGENT_MACHINE.DEVICE && source.userId !== userId) {
+    return { machine: AGENT_MACHINE.VERCEL };
+  }
+  return { machine, deviceId: source.deviceId };
+}
+
 /** The place alone, as a Start from another agent reads its source against it. */
 export function whereOf(place: StartWhere): StartWhere {
   if (place.taskId !== null) return { taskId: place.taskId };
@@ -417,7 +435,9 @@ const goesOnInPullRequest = (userId: string, source: Agent, stored: AgentPullReq
  * stands stopped on a snapshot (`agentSandboxOf`), a legacy one among them,
  * hands that sandbox, whose latest snapshot the new agent's is created from at its
  * first open (`../machine/sandbox-machine.ts`), so it is never woken; any
- * other has its work copied to a branch (`snapshot.ts`). Note that a
+ * other has its work copied to a branch (`snapshot.ts`), and a source on a
+ * Mac hands only the branch it pushed, since nothing of the Mac's is read
+ * for a Start, whoever asks it. Note that a
  * sandbox still running is copied rather than handed, because its snapshot
  * is its last stop's, behind what it holds now; that a source in another
  * repository than the one the new agent works in hands no sandbox, since
@@ -436,6 +456,13 @@ const sourceWorkOf = (
     copy: { copied: false, miss: SNAPSHOT_MISS.FAILED },
   };
   return Effect.gen(function* () {
+    // A source on a Mac hands only the branch it pushed: nothing is read from the Mac, whoever starts from it.
+    if (source.machine === AGENT_MACHINE.DEVICE) {
+      return {
+        on: TAKEN_ON.COPY,
+        copy: { copied: false, miss: SNAPSHOT_MISS.ON_DEVICE },
+      } satisfies SourceWork;
+    }
     const [session] =
       source.repository?.toLowerCase() === repository?.toLowerCase()
         ? yield* standingSessionsOf(source.userId, [source.conversationId])
@@ -489,7 +516,7 @@ export const startFromOf = /* @__PURE__ */ Effect.fnUntraced(function* (
   }
   const { agent: source, published } = found;
   // An agent on its starter's own GitHub token is continued or forked by its starter alone, before its work is copied.
-  if (!controlsAgent(userId, source)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+  if (!startsFromAgent(userId, source)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   const repository = yield* placeRepository(userId, place);
   const { lineage, carried } = yield* hostedStoreOrUnavailable(
     lineageOf(userId, source, repository),
@@ -727,7 +754,7 @@ const carriedSessionOf = Effect.fnUntraced(function* (
 ) {
   const { source } = from;
   const sourceMachine = source.machine ?? AGENT_MACHINE.VERCEL;
-  const place = ask.runsOn ?? { machine: sourceMachine, deviceId: source.deviceId };
+  const place = ask.runsOn ?? inheritedPlaceOf(userId, source);
   const [onto, off] = yield* Effect.all([
     checkoutsOn(userId, place.machine, "deviceId" in place ? place.deviceId : undefined),
     checkoutsOn(source.userId, sourceMachine, source.deviceId),

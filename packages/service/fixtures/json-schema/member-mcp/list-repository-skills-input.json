@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "properties": {
+    "workspace": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 48,
+      "description": "The workspace to list, by the slug list_workspaces answered; leave it out where the member belongs to one workspace alone."
+    },
+    "repository": {
+      "type": "string",
+      "maxLength": 140,
+      "description": "The repository whose skills lead the list, by its full name (owner/name); the member's installed skills alone where left out."
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}
