@@ -423,6 +423,27 @@ test(
 );
 
 test(
+  "a folder made before worktrees, whose own repository a snapshot would be removed with, is not saved",
+  async (t) => {
+    const { scratch, shell } = await fixture(t);
+    const own = path.join(scratch, "agents", "agent", "repository");
+    mkdirSync(own, { recursive: true });
+    git(own, ["init", "--quiet"]);
+    git(own, ["commit", "--quiet", "--allow-empty", "-m", "first"]);
+    writeFileSync(path.join(own, "notes.txt"), "unpushed\n");
+
+    const saved = runEnded(
+      scratch,
+      shell,
+      agentSnapshotScript({ worktree: own, agentId: "agent" }),
+    );
+
+    assert.notEqual(saved.code, 0);
+  },
+  GIT_DEADLINE,
+);
+
+test(
   "a make that fails after its worktree is added takes the worktree and its entry away, so the next launch starts clean",
   async (t) => {
     const { scratch, origin, push, shell, state } = await fixture(t);
