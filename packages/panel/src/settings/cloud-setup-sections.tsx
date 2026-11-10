@@ -24,7 +24,7 @@ import {
   RepositoryPicture,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
-  SettingsRowActSlot,
+  SettingsRowControlHold,
   type SettingsRowSkeletonShape,
   SettingsRowsSkeleton,
   SettingsSection,
@@ -311,8 +311,6 @@ function ScriptRow({
     manages && script !== ""
       ? [{ label: "Remove", icon: <TrashIcon />, danger: true, onSelect: removal.ask }]
       : [];
-  // Note that a row an owner may edit and with no ⋯ yet keeps a ⋯'s room, so the Save its edit brings grows nothing.
-  const end = manages && actions.length === 0 ? <SettingsRowActSlot /> : undefined;
   return (
     <>
       <MenuRow
@@ -336,7 +334,6 @@ function ScriptRow({
               </Inline>
             ),
           error: saveRefusal(saving.error),
-          end,
           control:
             changed || added !== undefined ? (
               <EditActions
@@ -346,6 +343,9 @@ function ScriptRow({
                 onLeave={added === undefined ? discard : added.onCancel}
                 onSave={save}
               />
+            ) : manages ? (
+              // Note that a row an owner may edit already stands as tall as the Discard and Save its edit brings, so their arrival moves nothing.
+              <SettingsRowControlHold />
             ) : undefined,
           below: (
             <ScriptEditor
