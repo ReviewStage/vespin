@@ -135,8 +135,12 @@ const TurnSchema = Schema.Struct({
   limited: Schema.optionalKey(Schema.Boolean),
   /** Whether the provider refused the credential that paid, such as a key expired or a plan signed out. */
   refused: Schema.optionalKey(Schema.Boolean),
-  /** Whether the turn's launch ended on the plan's limit and the turn waits, still open, for a launch on the next payer to go on with it (`NATIVE_WRITE.RETRY`). */
+  /** Whether the turn's launch ended on the plan's limit, or on a session it could not resume, and the turn waits, still open, for the next launch to go on with it (`NATIVE_WRITE.RETRY`). */
   retrying: Schema.optionalKey(Schema.Boolean),
+  /** Whether the harness could not find the session the turn's launch resumed (`NATIVE_MOMENT.SESSION_LOST`). */
+  sessionLost: Schema.optionalKey(Schema.Boolean),
+  /** Whether the turn already went on once in a fresh session handed the agent's steps, after its launch lost the session, so a second loss fails it. */
+  replayed: Schema.optionalKey(Schema.Boolean),
   /** The MCP servers mentioned to the agent that this turn took as it started, which its calls are handed whatever the switches say. */
   servers: Schema.optionalKey(Schema.Array(Schema.String)),
 });
@@ -207,7 +211,7 @@ export const NATIVE_WRITE = {
   CONTEXT: "context",
   /** Say a turn's failure in the log, and as an issue where its user did not expect it. */
   FAILED: "failed",
-  /** Launch the agent again on the next payer, to go on with the turn its plan's limit cut short. */
+  /** Launch the agent again, to go on with the turn its plan's limit cut short on the next payer, or, with `replay`, the turn whose session the harness could not resume in a fresh one handed the agent's steps. */
   RETRY: "retry",
   /** Hold the turn its plan's limit cut short open until the soonest limit resets, for the minute sweep to go on with it then, where no payer has room now. */
   WAIT: "wait",
@@ -235,7 +239,7 @@ export type NativeWrite =
       /** Whether the provider refused the credential that paid, which opens no issue where the credential is the starter's own. */
       readonly refused: boolean;
     }
-  | { readonly kind: typeof NATIVE_WRITE.RETRY; readonly turnId: string }
+  | { readonly kind: typeof NATIVE_WRITE.RETRY; readonly turnId: string; readonly replay?: true }
   | { readonly kind: typeof NATIVE_WRITE.WAIT; readonly turnId: string; readonly until: number }
   | {
       readonly kind: typeof NATIVE_WRITE.PLAN_STATUS;
@@ -563,6 +567,7 @@ class Fold {
     this.state = moment.warm === true ? { ...cold, warm: true } : cold;
     if (ended === undefined) return;
     let turn = this.#closed(ended.turn);
+    if (this.#replayed(turn, ended.openedForEnd, moment.ending)) return;
     if (this.#retried(turn, ended.openedForEnd, moment.ending, rateLimitResetsAt)) return;
     if (turn.limited === true && moment.ending !== NATIVE_ENDING.STOPPED) {
       turn = this.#limitNotice(turn, null);
@@ -679,6 +684,37 @@ class Fold {
     return true;
   }
 
+  /**
+   * Whether the turn, its launch having found no session to resume
+   * (`sessionLost`), is kept open for a launch on a fresh session handed the
+   * agent's steps so far (`NATIVE_WRITE.RETRY`'s `replay`), which lets the
+   * lost session go, rather than failed: once a turn, never for a turn
+   * opened for its launch's end, whose line no launch took, and never on a
+   * Stop. As a limited turn's retry does (`#retried`), it ends nothing and
+   * says no failure, and the launch that goes on with it takes it as its own.
+   */
+  #replayed(
+    turn: Turn,
+    openedForEnd: boolean,
+    ending: (typeof NATIVE_ENDING)[keyof typeof NATIVE_ENDING],
+  ): boolean {
+    if (turn.sessionLost !== true || turn.replayed === true) return false;
+    if (openedForEnd || ending === NATIVE_ENDING.STOPPED) return false;
+    const {
+      failure: _failure,
+      refusal: _refusal,
+      refusing: _refusing,
+      compactionFailed: _compaction,
+      limited: _limited,
+      sessionLost: _lost,
+      waiting: _waiting,
+      ...kept
+    } = turn;
+    this.#setTurn({ ...kept, retrying: true, replayed: true });
+    this.writes.push({ kind: NATIVE_WRITE.RETRY, turnId: turn.id, replay: true });
+    return true;
+  }
+
   #usage(usage: RunUsage): void {
     const turn = this.turn();
     this.#setTurn({ ...turn, usage: addModelUsage(turn.usage, usage) });
@@ -718,6 +754,11 @@ class Fold {
       case NATIVE_MOMENT.TRANSCRIPT_BROKEN:
         this.writes.push({ kind: NATIVE_WRITE.TRANSCRIPT_BROKEN, sessionId: moment.sessionId });
         return;
+      case NATIVE_MOMENT.SESSION_LOST: {
+        const turn = this.state.turn;
+        if (turn !== undefined) this.#setTurn({ ...turn, sessionLost: true });
+        return;
+      }
       case NATIVE_MOMENT.ACTIVE:
         this.turn();
         return;

@@ -29,24 +29,21 @@ const subagent = (name: string): Block => ({ part: ROW_PART.SUBAGENT, name });
 const agent = (name: string): Block => ({ part: ROW_PART.AGENT, name });
 const arrived = (name: string): Block => ({ part: ROW_PART.ARRIVED, name });
 
-/** A turn's rows as a reader scans them: each block by name, each group's line, what it holds, and whether it is open and running, each fold's line and what it holds. */
+/** A turn's rows as a reader scans them: each block by name, and each group's line, what it holds, and whether it is open and running. */
 function scanned(rows: readonly TurnRow<Block>[]): unknown[] {
   return rows.map((row) => {
     if (row.kind === TURN_ROW.BLOCK) return row.block.name;
-    if (row.kind === TURN_ROW.GROUP) {
-      return [
-        row.summary,
-        row.blocks.map((block) => block.name),
-        { open: row.open, running: row.running },
-      ];
-    }
-    return [row.summary, scanned(row.rows)];
+    return [
+      row.summary,
+      row.blocks.map((block) => block.name),
+      { open: row.open, running: row.running },
+    ];
   });
 }
 
 /** The rows of a turn of `blocks`, moving or finished. */
 function rowsOf(blocks: readonly Block[], moving: boolean) {
-  return scanned(turnRows(blocks, READING, { key: "turn", moving, done: !moving }));
+  return scanned(turnRows(blocks, READING, { moving }));
 }
 
 test("a thought between two calls joins their group, whose line counts the calls alone", () => {
@@ -59,49 +56,32 @@ test("a thought between two calls joins their group, whose line counts the calls
   );
 });
 
-test("a run of calls is counted in the same words while its turn moves and once it has finished, so its line does not reword itself as the turn ends", () => {
-  const turn = [call("ls"), call("cat"), words("One file.")];
-  assert.deepEqual(rowsOf(turn, true), [
-    ["2 tool calls", ["ls", "cat"], { open: false, running: false }],
-    "One file.",
-  ]);
-  assert.deepEqual(rowsOf(turn, false), [["2 tool calls", ["ls", "cat"]], "One file."]);
-});
-
-test("a finished turn folds everything ahead of its last words under one line, thoughts, subagents, and agents it started inside it on rows of their own, its line saying it started them and counting its earlier words", () => {
-  assert.deepEqual(
-    rowsOf(
-      [
-        thought("Find the invites."),
-        call("ls"),
-        subagent("Compare the queues."),
-        thought("Read it."),
-        call("cat"),
-        agent("Fix the expiry."),
-        words("Started one."),
-        words("Seven days."),
-      ],
-      false,
-    ),
+test("a finished turn folds only its work, so every one of its words stands, an answer given before the agent waited among them, as it did while the turn moved", () => {
+  const turn = [
+    thought("Find the upgrade."),
+    call("git log"),
+    subagent("Compare the scroll changes."),
+    agent("Fix the anchoring."),
+    words("I answered on the thread."),
+    call("gh pr checks"),
+    call("gh pr view"),
+    words("Every check passed."),
+  ];
+  const closed = { open: false, running: false };
+  assert.deepEqual(rowsOf(turn, false), [
     [
-      [
-        "2 tool calls, 1 subagent, started 1 agent, 1 message",
-        [
-          "Find the invites.",
-          "ls",
-          "Compare the queues.",
-          "Read it.",
-          "cat",
-          "Fix the expiry.",
-          "Started one.",
-        ],
-      ],
-      "Seven days.",
+      "2 tool calls, 1 subagent",
+      ["Find the upgrade.", "git log", "Compare the scroll changes.", "Fix the anchoring."],
+      closed,
     ],
-  );
+    "I answered on the thread.",
+    ["2 tool calls", ["gh pr checks", "gh pr view"], closed],
+    "Every check passed.",
+  ]);
+  assert.deepEqual(rowsOf(turn, true), rowsOf(turn, false));
 });
 
-test("a message that reached a turn while it ran stands where it arrived: between the groups while the turn moves, and splitting the fold once it has finished, each fold counting its own calls", () => {
+test("a message that reached a turn while it ran stands where it arrived, between the groups, each counting its own calls", () => {
   const turn = [
     call("a"),
     call("b"),
@@ -115,12 +95,12 @@ test("a message that reached a turn while it ran stands where it arrived: betwee
     ["1 tool call", ["c"], { open: true, running: false }],
   ]);
   assert.deepEqual(rowsOf(turn, false), [
-    ["2 tool calls", ["a", "b"]],
+    ["2 tool calls", ["a", "b"], { open: false, running: false }],
     "GitHub reviewed the pull request.",
     "c",
     "Fixed.",
   ]);
-  // A stretch with no call between two messages keeps its rows, as a lead with none does.
+  // A stretch with no call between two messages keeps its rows.
   assert.deepEqual(
     rowsOf(
       [call("a"), arrived("First."), thought("Read both."), arrived("Second."), words("Done.")],
@@ -130,7 +110,7 @@ test("a message that reached a turn while it ran stands where it arrived: betwee
   );
 });
 
-test("a finished turn whose lead is one call alone draws that call on its own row rather than folding it, and a call with a thought beside it still folds", () => {
+test("a finished turn's run of one call alone stands on its own row rather than in a group, and a call with a thought beside it is still grouped", () => {
   assert.deepEqual(rowsOf([call("delete_section"), words("Deleted.")], false), [
     "delete_section",
     "Deleted.",
@@ -141,7 +121,10 @@ test("a finished turn whose lead is one call alone draws that call on its own ro
   ]);
   assert.deepEqual(
     rowsOf([thought("Delete it."), call("delete_section"), words("Deleted.")], false),
-    [["1 tool call", ["Delete it.", "delete_section"]], "Deleted."],
+    [
+      ["1 tool call", ["Delete it.", "delete_section"], { open: false, running: false }],
+      "Deleted.",
+    ],
   );
 });
 
@@ -155,14 +138,10 @@ function changed(value: unknown): unknown {
 
 test("a row of each kind reads alike copied whole, and otherwise once any of its fields or its blocks' fields changes", () => {
   const moving = turnRows([call("read"), call("grep"), words("Reading.")], READING, {
-    key: "turn",
     moving: true,
-    done: false,
   });
   const finished = turnRows([call("read"), thought("why"), call("grep"), words("Done.")], READING, {
-    key: "turn",
     moving: false,
-    done: true,
   });
   const rows = [...moving, ...finished];
   for (const kind of Object.values(TURN_ROW)) {

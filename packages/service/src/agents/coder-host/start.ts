@@ -123,6 +123,7 @@ import { agentLineSender } from "./steer.js";
 import { summaryOf } from "./stop.js";
 import {
   type Inherited,
+  inheritedPlaceOf,
   landedInheriting,
   openedTakingOver,
   type ReplayFitter,
@@ -768,7 +769,8 @@ const defaultPlaceOf = Effect.fnUntraced(function* (
  * names (`runsOn`), from another agent too, which is how an agent moves;
  * else where the agent it is started from runs, for a continue or a fork,
  * `start_agent` from another agent among them, so a local agent goes on
- * locally; else the starter's default (`defaultPlaceOf`). The starter is
+ * locally, but the cloud for a teammate's Start from another member's Mac
+ * agent (`inheritedPlaceOf`); else the starter's default (`defaultPlaceOf`). The starter is
  * the account the Start is made for: a member's own, the calling agent's
  * starter for `start_agent`, and the automation's owner for an automation's
  * run. Whichever decided it, a device runs only its owner's agents, so a
@@ -788,7 +790,7 @@ const machineOfStart = Effect.fnUntraced(function* (
   const place: PlaceRead =
     ask.runsOn ??
     (source !== undefined
-      ? { machine: source.machine ?? AGENT_MACHINE.VERCEL, deviceId: source.deviceId }
+      ? inheritedPlaceOf(userId, source)
       : yield* defaultPlaceOf(userId, task, ask.automationOrigin !== undefined));
   if (place.machine === AGENT_MACHINE.VERCEL) return IN_THE_CLOUD;
   const { deviceId } = place;

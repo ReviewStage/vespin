@@ -4131,7 +4131,11 @@ test("read_task reads a teammate's task of the caller's workspace with its descr
   const read = await call(AGENT_TOOL.READ_TASK, { taskId: taskIds.billing });
   assert.equal(read.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(read));
   assert.ok(isRecord(read.task) && isRecord(read.description));
-  assert.deepEqual([read.task.name, read.task.isYourTask], ["Billing", false]);
+  // Bob made the Billing task, so it is answered as his, by the account his link names him by.
+  assert.deepEqual(
+    [read.task.name, read.task.isYourTask, read.task.startedByUserId],
+    ["Billing", false, teammates.userId],
+  );
   assert.deepEqual(read.description, { text: description, saved: true, leftOutChars: 0 });
   const own = await call(AGENT_TOOL.READ_TASK, { taskId: taskIds.invitations });
   assert.equal(isRecord(own.task) && own.task.isYourTask, true, JSON.stringify(own));

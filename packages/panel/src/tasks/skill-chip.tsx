@@ -1,3 +1,4 @@
+import { pictureMarker, pictureMarkers } from "@repo/features/picture-marker";
 import { skillWord } from "@repo/features/skill-word";
 import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
 import {
@@ -17,6 +18,7 @@ import {
   useState,
 } from "react";
 import { afterPaint } from "../after-paint.js";
+import { WordPicturesContext } from "./picture-chips.js";
 import type { SkillSource } from "./skill-picker.js";
 import { opensFile, SkillRef, type SkillSubject, type SkillWithFile } from "./skill-ref.js";
 import { type TranscriptElement, TranscriptWords } from "./transcript-blocks.js";
@@ -59,6 +61,19 @@ const SKILL_ELEMENT = {
   NAME: "name",
 } as const;
 
+/** The element a picture's marker is written in as, its name its attribute. */
+const PICTURE_ELEMENT = {
+  TAG: "app-picture-chip",
+  NAME: "name",
+} as const;
+
+/** A chip written into the words: where it stands, and the element it is written in as. */
+interface WordChip {
+  readonly start: number;
+  readonly end: number;
+  readonly element: string;
+}
+
 const SkillFileContext = createContext<SkillFileDoors | undefined>(undefined);
 
 /** The task's skills, by name, read once a reader wants them; nothing before they land, or where they were not read. */
@@ -71,14 +86,31 @@ function useKnownSkills(wanted: boolean): ReadonlyMap<string, SkillOption> | und
   return doors?.skills;
 }
 
-/** The words with each chip written in as its element, the `/name` it stands for its content. */
-function withChips(text: string, tokens: readonly TextRange[]): string {
+/** A skill's chip, written in as its element, the `/name` it stands for its content. */
+function skillChip(text: string, token: TextRange): WordChip {
+  const name = text.slice(token.start + 1, token.end);
+  return {
+    ...token,
+    element: `<${SKILL_ELEMENT.TAG} ${SKILL_ELEMENT.NAME}="${name}">${skillWord(name)}</${SKILL_ELEMENT.TAG}>`,
+  };
+}
+
+/** A picture's chip, written in as its element, its marker its content. */
+function pictureChip(start: number, end: number, name: string): WordChip {
+  return {
+    start,
+    end,
+    element: `<${PICTURE_ELEMENT.TAG} ${PICTURE_ELEMENT.NAME}="${name}">${pictureMarker(name)}</${PICTURE_ELEMENT.TAG}>`,
+  };
+}
+
+/** The words with each chip written in as its element, in order. */
+function withChips(text: string, chips: readonly WordChip[]): string {
   let written = "";
   let at = 0;
-  for (const token of tokens) {
-    const name = text.slice(token.start + 1, token.end);
-    written += `${text.slice(at, token.start)}<${SKILL_ELEMENT.TAG} ${SKILL_ELEMENT.NAME}="${name}">${skillWord(name)}</${SKILL_ELEMENT.TAG}>`;
-    at = token.end;
+  for (const chip of chips) {
+    written += `${text.slice(at, chip.start)}${chip.element}`;
+    at = chip.end;
   }
   return written + text.slice(at);
 }
@@ -98,7 +130,23 @@ function SkillElement({ node }: MarkdownNodeProps): ReactNode {
   return <SkillRef name={name} skill={skill} onOpen={onOpen} />;
 }
 
-const SKILL_COMPONENTS: MarkdownComponents = { [SKILL_ELEMENT.TAG]: SkillElement };
+/** The element a picture's marker was written in as: the picture's chip, where the message holds it, and its marker as words otherwise. */
+function PictureElement({ node }: MarkdownNodeProps): ReactNode {
+  const pictures = useContext(WordPicturesContext);
+  const name = String(node?.properties[PICTURE_ELEMENT.NAME] ?? "");
+  if (pictures === undefined || !pictures.names.has(name)) return pictureMarker(name);
+  return pictures.chip(name);
+}
+
+/** What the chips a message's words may hold are drawn with, and the tags and attributes each is written in as. */
+const CHIP_COMPONENTS: MarkdownComponents = {
+  [SKILL_ELEMENT.TAG]: SkillElement,
+  [PICTURE_ELEMENT.TAG]: PictureElement,
+};
+const CHIP_TAGS = {
+  [SKILL_ELEMENT.TAG]: [SKILL_ELEMENT.NAME],
+  [PICTURE_ELEMENT.TAG]: [PICTURE_ELEMENT.NAME],
+} as const;
 
 /** Hands every transcript under it the task's skills and what opening one's file does. */
 export function SkillFiles({
@@ -164,7 +212,7 @@ export function useSkillOpener(): ((skill: SkillOption) => void) | undefined {
   return useContext(SkillFileContext)?.onOpen;
 }
 
-/** A message the developer sent, as markdown with every line break typed kept, each skill it names drawn as its chip; `asDocument` draws it as a document and `line` on one line, as `TranscriptWords` does. */
+/** A message the developer sent, as markdown with every line break typed kept, each skill it names and each picture of its own it names (`WordPicturesContext`) drawn as its chip; `asDocument` draws it as a document and `line` on one line, as `TranscriptWords` does. */
 export function SentWords({
   text,
   asDocument = false,
@@ -175,15 +223,22 @@ export function SentWords({
   line?: boolean | undefined;
 }): ReactNode {
   const skills = useKnownSkills(holdsSlashWord(text));
-  const tokens = skills === undefined ? [] : skillTokens(text, new Set(skills.keys()));
-  if (tokens.length === 0) {
+  const pictures = useContext(WordPicturesContext);
+  const chips = [
+    ...(skills === undefined ? [] : skillTokens(text, new Set(skills.keys()))).map((token) =>
+      skillChip(text, token),
+    ),
+    ...pictureMarkers(text)
+      .filter((marker) => pictures?.names.has(marker.name) === true)
+      .map((marker) => pictureChip(marker.start, marker.end, marker.name)),
+  ].sort((first, second) => first.start - second.start);
+  if (chips.length === 0) {
     return <TranscriptWords text={text} typed asDocument={asDocument} line={line} />;
   }
   const element: TranscriptElement = {
-    markdown: withChips(text, tokens),
-    tag: SKILL_ELEMENT.TAG,
-    attributes: [SKILL_ELEMENT.NAME],
-    components: SKILL_COMPONENTS,
+    markdown: withChips(text, chips),
+    tags: CHIP_TAGS,
+    components: CHIP_COMPONENTS,
   };
   return (
     <TranscriptWords text={text} element={element} typed asDocument={asDocument} line={line} />

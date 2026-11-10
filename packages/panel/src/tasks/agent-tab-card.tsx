@@ -31,6 +31,7 @@ import {
   ActorMark,
   AutomationCard,
   automationActor,
+  namedAutomationActor,
   PROVENANCE_VERB,
   ProvenanceRow,
 } from "../actor-ref.js";
@@ -40,6 +41,7 @@ import { useRepositoryPictures } from "../repository-pictures.js";
 import { type ArchivedByReading, pullRequestNumberLabel } from "./agent-model.js";
 import { ModelLabel } from "./model-label.js";
 import { PullRequestMark } from "./pull-request-mark.js";
+import { useStartingAgent } from "./starting-agent.js";
 import { type CopiedTranscript, LATEST_ACTIVITY, latestActivity } from "./transcript-copy.js";
 import { WorkingTime } from "./working-time.js";
 
@@ -66,12 +68,14 @@ import { WorkingTime } from "./working-time.js";
  * An agent's card, and a subagent's or a brain's worker's, wears its tile
  * beside its name (`actor-ref.tsx`), its harness giving way to the working
  * mark while it works. Under the head, an agent's card says in provenance
- * rows (`ProvenanceRow`) who started it and when: the automation whose run
- * started it, by its tile and name, where the window knows it, or else, for
- * a teammate's agent, the teammate's face and name; either hangs its own
- * card over this one. An agent with no task's card says too that it was
- * started from Slack, where it was, and the repository it works in, which
- * its sidebar row leaves to it. Then its pull request where the place holds one, by
+ * rows (`ProvenanceRow`) who started it and when: the coding agent that
+ * started it, by its tile and name, where the task list carries it; else the
+ * automation whose run started it, by its tile and name, where the window
+ * knows it, or by the name it had where the window cannot read it; or else,
+ * for a teammate's agent, the teammate's face and name; each hangs its own
+ * card over this one. The card says too that it was started from Slack,
+ * where it was, and an agent with no task's the repository it works in,
+ * which its sidebar row leaves to it. Then its pull request where the place holds one, by
  * its mark, number, and title. An archived agent's says who archived it, the app or another agent on a
  * member's behalf among them, and the reason given. The card has no way to the tab of its own: wherever it hangs, the
  * name it hangs from is what a press opens, so the card only says.
@@ -124,6 +128,10 @@ export interface CardReading {
   readonly startedBy?: DescriptionEditor | undefined;
   /** The automation whose run started the agent, drawn "[tile] Started by Morning Sentry triage · 3d ago" in the starter's place where the window knows it. */
   readonly automationId?: string | undefined;
+  /** That automation's name as the run started it, which names it plainly where the window cannot read it: deleted, or a teammate's. */
+  readonly automationName?: string | undefined;
+  /** The coding agent that started this one, drawn by its tile and name in the starter's place where the task list carries it. */
+  readonly startedByAgentId?: string | undefined;
   /** When the agent was started, said after whoever started it, where known. */
   readonly startedAt?: number | undefined;
   /** The agent's own tile, beside its name; none on a card that is no agent's, or of one the place does not hold. */
@@ -136,7 +144,7 @@ export interface CardReading {
   readonly archivedBy?: ArchivedByReading | undefined;
   /** The repository the agent works in, as `owner/name`, said where its row does not name it: an agent with no task's. */
   readonly repository?: string | undefined;
-  /** Whether a member started the agent from Slack, said where its row does not mark it: an agent with no task's. */
+  /** Whether a member started the agent from Slack. */
   readonly fromSlack?: boolean | undefined;
 }
 
@@ -168,35 +176,68 @@ function cornerSays(corner: CardCorner): boolean {
 }
 
 /**
- * Who started the agent and when: the automation whose run did, by its tile
- * and name, which hang its card and open its page, where the window knows
- * it (`automation-directory.tsx`); else a teammate, by their face and name,
- * which hang their card; else nobody.
+ * Who started the agent and when: the coding agent whose `start_agent` did,
+ * by its tile and name, which hang its tab's card and open its tab, where
+ * the task list carries it (`starting-agent.ts`); else the automation whose
+ * run did, by its tile and name, which hang its card and open its page,
+ * where the window knows it (`automation-directory.tsx`), or by the name it
+ * had where the window cannot read it, deleted or a teammate's; else a
+ * teammate, by their face and name, which hang their card; else nobody.
  */
 function StartedBy({
   by,
+  agentId,
   automationId,
+  automationName,
   at,
+  models,
 }: {
   by: DescriptionEditor | undefined;
+  agentId: string | undefined;
   automationId: string | undefined;
+  automationName: string | undefined;
   at: number | undefined;
+  models: readonly CatalogModel[];
 }): React.JSX.Element | null {
   const now = useMinute();
   const person = usePerson(by);
+  const starter = useStartingAgent(agentId, models);
   const known = useAutomation(automationId);
-  if (known === undefined && by === undefined) return null;
-  return known === undefined ? (
+  if (starter !== undefined) {
+    return (
+      <ProvenanceRow
+        verb={PROVENANCE_VERB.STARTED}
+        actor={starter.actor}
+        onOpen={starter.onOpen}
+        at={at}
+        now={now}
+      />
+    );
+  }
+  if (known !== undefined) {
+    return (
+      <ProvenanceRow
+        verb={PROVENANCE_VERB.STARTED}
+        actor={automationActor(known.automation)}
+        card={<AutomationCard automation={known.automation} workspaceName={known.workspaceName} />}
+        onOpen={known.onOpen}
+        at={at}
+        now={now}
+      />
+    );
+  }
+  if (automationId !== undefined || automationName !== undefined) {
+    return (
+      <ProvenanceRow
+        verb={PROVENANCE_VERB.STARTED}
+        actor={namedAutomationActor(automationId, automationName)}
+        at={at}
+        now={now}
+      />
+    );
+  }
+  return by === undefined ? null : (
     <ProvenanceRow verb={PROVENANCE_VERB.STARTED} actor={person} at={at} now={now} />
-  ) : (
-    <ProvenanceRow
-      verb={PROVENANCE_VERB.STARTED}
-      actor={automationActor(known.automation)}
-      card={<AutomationCard automation={known.automation} workspaceName={known.workspaceName} />}
-      onOpen={known.onOpen}
-      at={at}
-      now={now}
-    />
   );
 }
 
@@ -361,7 +402,9 @@ export function AgentTabCard({
     choice,
     transcript,
     startedBy,
+    startedByAgentId,
     automationId,
+    automationName,
     startedAt,
     tile,
     pullRequest,
@@ -385,7 +428,14 @@ export function AgentTabCard({
         // Note that the word is a reader's alone, because the tile that shows the work hides its mark from a reader and nothing drawn says it.
         <VisuallyHidden>{glyphStateWords(GLYPH_STATE.WORKING, false)}</VisuallyHidden>
       ) : null}
-      <StartedBy by={startedBy} automationId={automationId} at={startedAt} />
+      <StartedBy
+        by={startedBy}
+        agentId={startedByAgentId}
+        automationId={automationId}
+        automationName={automationName}
+        at={startedAt}
+        models={models}
+      />
       {fromSlack === true ? (
         <HoverCardRow
           look={HOVER_CARD_ROW_LOOK.DETAIL}
