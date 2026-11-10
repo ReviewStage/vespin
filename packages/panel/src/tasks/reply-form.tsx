@@ -3,9 +3,9 @@ import { useState } from "react";
 import { CommentEditor, overCommentBound } from "./comment-editor.js";
 
 /**
- * reply-form.tsx -- the words a member writes over a GitHub comment or beside it, with their Cancel and their send: a thread's reply, a pending comment's edit.
+ * reply-form.tsx -- the words of a member's pending GitHub comment written again, with their Cancel and their save.
  *
- * One form for every small box of words sent to GitHub: the Markdown field
+ * An edit's form, as a description comment's edit is one: the Markdown field
  * (`CommentEditor`) and, under its words inside its frame, the shared foot
  * (`ComposerFoot`) holding Cancel and the send, which reads in words. Enter
  * sends, Shift+Enter adds a line, Esc lets the form go keeping its

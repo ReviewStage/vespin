@@ -4153,18 +4153,20 @@ function reviewWith(threads: readonly ReviewThread[]): AgentOverviewConversation
   };
 }
 
-/** The press of the words given under the thread. */
+/** The thread's own press named `label`: Resolve or Reopen at its head's end, or its reply's send. */
 function threadPress(thread: HTMLElement, label: string): HTMLButtonElement {
   return (
-    [...thread.querySelectorAll<HTMLButtonElement>(".pull-request-thread-actions button")].find(
-      (each) => each.textContent === label,
-    ) ?? assert.fail(`the thread offers ${label}`)
+    [
+      ...thread.querySelectorAll<HTMLButtonElement>(
+        ".comment-tools button, .pull-request-thread-actions button",
+      ),
+    ].find((each) => each.getAttribute("aria-label") === label) ??
+    assert.fail(`the thread offers ${label}`)
   );
 }
 
-/** Writes a reply on the thread as the member would, the field opened first. */
+/** Writes a reply in the thread's box as the member would. */
 function writeReply(thread: HTMLElement, words: string): void {
-  act(() => threadPress(thread, "Reply…").click());
   writeBox(thread, words, "Reply");
 }
 
@@ -4189,7 +4191,7 @@ function threadAfterChanges(): ReviewThread {
   return { ...base, resolved, comments: [...base.comments, ...replies] };
 }
 
-test("a thread is replied on, resolved, and opened again from under its comments, each asked of the service for the agent by the thread's id, the thread then drawn as GitHub holds it", async () => {
+test("a thread is replied on from its box and resolved and opened again from its head, each asked of the service for the agent by the thread's id, the thread then drawn as GitHub holds it", async () => {
   const tab = await draw(
     controlAnswering({
       conversation: () => Promise.resolve({ pullRequest: reviewWith([threadAfterChanges()]) }),
@@ -4202,21 +4204,21 @@ test("a thread is replied on, resolved, and opened again from under its comments
   writeReply(card(), "Renamed in the next push.");
   act(() => threadPress(card(), "Reply").click());
   await settle();
-  assert.equal(boxWordsElement(card()) === null, true, "the field closes once GitHub took it");
+  assert.equal(boxWords(card(), "Reply"), "", "the box empties once GitHub took it");
   assert.match(
     card().querySelector(".annotation-comments")?.textContent ?? "",
     /Renamed in the next push\./u,
     "the reply is drawn under the thread once read again",
   );
 
-  act(() => threadPress(card(), "Resolve conversation").click());
+  act(() => threadPress(card(), "Resolve").click());
   await settle();
   assert.deepEqual(labels(), ["Resolved"]);
 
-  act(() => threadPress(card(), "Unresolve conversation").click());
+  act(() => threadPress(card(), "Reopen").click());
   await settle();
   assert.deepEqual(labels(), []);
-  assert.ok(threadPress(card(), "Resolve conversation"), "the thread stands open again");
+  assert.ok(threadPress(card(), "Resolve"), "the thread stands open again");
 
   assert.deepEqual(changes, [
     [
@@ -4244,7 +4246,7 @@ test("while a thread's resolve is out, its reply stands still, neither sent nor 
     tab.querySelector<HTMLElement>(".pull-request-thread") ?? assert.fail("the thread is drawn");
 
   writeReply(card(), "Done.");
-  act(() => threadPress(card(), "Resolve conversation").click());
+  act(() => threadPress(card(), "Resolve").click());
   await vi.waitFor(() => assert.equal(threadPress(card(), "Reply").disabled, true));
   pressInBox(card(), { key: "Enter", metaKey: true });
   pressInBox(card(), { key: "Escape" });
@@ -4887,7 +4889,7 @@ test("the pointer resting on a review thread in Files changed lights the lines i
   assert.equal(litFrom(), 12, "the focused thread lights its own lines");
 });
 
-test("a review thread on its line in Files changed is replied on and resolved from under its comments, as in the Conversation", async () => {
+test("a review thread on its line in Files changed is replied on and resolved as in the Conversation", async () => {
   const flagged = thread({ id: "PRRT_flag" });
   const readChanges: ReadChanges = () =>
     Promise.resolve({
@@ -4923,9 +4925,9 @@ test("a review thread on its line in Files changed is replied on and resolved fr
   const note = drawn.renderAnnotation("src/invite.ts", `${PAGE}#discussion_r1`);
 
   writeReply(note, "Renamed.");
-  act(() => threadPress(note, "Reply").click());
+  pressInBox(note, { key: "Enter" }, "Reply");
   await settle();
-  act(() => threadPress(note, "Resolve conversation").click());
+  act(() => threadPress(note, "Resolve").click());
   await settle();
 
   assert.deepEqual(changes, [
