@@ -142,6 +142,22 @@ the host stands on is polyfilled in one place, `src/host/polyfills.ts`, each
 with a line on why; Shiki stays out of the app, and a fenced block is drawn
 plain.
 
+## The Live Activity
+
+The member's running agents stand in one Live Activity, which the service
+starts, updates, and ends by push (`@repo/features/live-activity-wire`).
+`app.config.ts` adds the widget extension that draws it as a native target,
+as it adds the Notification Service Extension: its Swift is under
+`live-activity/`, the presentations with a preview each and the Stop
+button's `LiveActivityIntent`, which iOS runs in the app's process, so the
+app builds it too. The app's own native module, autolinked from
+`modules/live-activity/`, holds the activity's attributes, which the widget
+builds as well, since ActivityKit matches the two by the type's name, and
+hands the app's JavaScript the tokens, an activity's end, and each Stop
+(`src/live-activity/`). Xcode's canvas draws the previews; on a simulator,
+`-liveActivity true` beside `-fixture inbox` starts an activity of the
+fixture's own, which `maestro/live-activity.yaml` shoots.
+
 ## Tests
 
 Logic is tested with vitest, under `src/**/*.test.ts`, as root `AGENTS.md`'s
