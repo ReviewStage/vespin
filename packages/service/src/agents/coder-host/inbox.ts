@@ -574,6 +574,7 @@ function keptOptionPage(
         },
       });
     }),
+    Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(Result.fail(INBOX_REFUSAL.UNAVAILABLE))),
   );
 }
