@@ -1,7 +1,7 @@
 /**
  * inbox-pushes.ts -- what the service pushes to a member's phone: an Inbox post that waits on them, its notification cleared once it settles, and a run of theirs that failed.
  *
- * Three kinds of news reach a phone (`PUSH_KIND`), each its own so one can
+ * Three kinds of news reach a phone (`PUSH_KIND`, `@repo/features/inbox-push-wire`), each its own so one can
  * be dropped alone: an agent's post that asks the member something, a
  * decide, do, or answer; any other post of an agent's on a thread that
  * waits on them; and a turn of an agent they started that failed. A thread
@@ -65,6 +65,7 @@ import { readLastActive } from "@repo/database/models/presence-store";
 import { listPushDevices, type PushDevice } from "@repo/database/models/push-device-store";
 import type { SettledAgentTurn } from "@repo/database/models/writer";
 import { LIMIT_REACHED_WORDS } from "@repo/features/agent-failure-words";
+import { PUSH_CATEGORY, PUSH_KIND } from "@repo/features/inbox-push-wire";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -91,28 +92,6 @@ import {
   readInboxItemHome,
 } from "../inbox/inbox-store.js";
 import { APNS_PUSH_TYPE, type ApnsPayload, ApnsSender } from "./apns.js";
-
-/** What a push tells of, as the payload's `kind` names it. */
-export const PUSH_KIND = {
-  /** An agent's post asking the member something: a decide, do, or answer. */
-  ASK: "ask",
-  /** Any other post of an agent's on a thread that waits on the member. */
-  POST: "post",
-  /** A turn of an agent the member started that failed. */
-  RUN_FAILED: "run-failed",
-  /** A thread settled, so its delivered notification is removed; a background push. */
-  SETTLED: "settled",
-} as const;
-
-/** The actions the app offers on an alert, as its `aps.category` names them; the app registers each. */
-export const PUSH_CATEGORY = {
-  /** A decide that takes one option: a button per option, labeled from the payload's `options`. */
-  DECIDE: "inbox-decide",
-  /** Any other post: a reply typed in place. */
-  REPLY: "inbox-reply",
-  /** A failed run: no action but opening the agent. */
-  RUN_FAILED: "agent-run-failed",
-} as const;
 
 /** The most characters of a title and a body an alert says; Apple caps a payload at 4 KB. */
 const ALERT_BOUND = { TITLE_CHARS: 120, BODY_CHARS: 240 } as const;

@@ -151,6 +151,7 @@
     "./pull-request-chapters-live": "./src/pull-request-chapters-live.js",
     "./diff-hunks": "./src/diff-hunks.js",
     "./provider-key-wire": "./src/provider-key-wire.js",
+    "./inbox-push-wire": "./src/inbox-push-wire.js",
     "./push-device-wire": "./src/push-device-wire.js",
     "./push-device-model": "./src/push-device-model.js",
     "./presence-wire": "./src/presence-wire.js",
