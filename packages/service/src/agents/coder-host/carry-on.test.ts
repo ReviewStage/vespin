@@ -91,7 +91,6 @@ it.layer(getTestDB())("the carry-on decision", (it) => {
           failure: TURN_FAILURE.MODEL,
           failureDetail: hostAwayDetail("Studio"),
         },
-        hostBack: true,
       };
 
       assert.deepEqual(carryOnDecision(mac), {
@@ -120,24 +119,17 @@ it.layer(getTestDB())("the carry-on decision", (it) => {
   );
 
   it.effect(
-    "a turn its Mac lost waits for the Mac's first beat back, queued message or not, since the Mac refuses every line until then",
+    "a turn cut off while its Mac is away waits for the Mac's first beat back, queued message or not, since the Mac refuses every line until then",
     () =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;
-        const away: CarryOnInput = {
-          ...resumable(now),
-          turn: {
-            ...cutOff(now),
-            failure: TURN_FAILURE.MODEL,
-            failureDetail: hostAwayDetail("Studio"),
-          },
-        };
+        const away: CarryOnInput = { ...resumable(now), hostAway: true };
 
         assert.deepEqual(carryOnDecision(away), { outcome: CARRY_ON_OUTCOME.AWAIT_HOST });
         assert.deepEqual(carryOnDecision({ ...away, queued: true }), {
           outcome: CARRY_ON_OUTCOME.AWAIT_HOST,
         });
-        assert.deepEqual(carryOnDecision({ ...away, queued: true, hostBack: true }), {
+        assert.deepEqual(carryOnDecision({ ...away, queued: true, hostAway: false }), {
           outcome: CARRY_ON_OUTCOME.QUEUE_NEXT,
         });
       }),
@@ -361,6 +353,33 @@ it.layer(Layer.mergeAll(getTestDB(), LOCAL_AGENT_ENVIRONMENT, UNREACHED))(
           yield* hostWrite(beatDevice(userId, deviceId));
 
           assert.deepEqual(yield* deviceAgentLinesWaiting(userId, deviceId), []);
+        }),
+    );
+
+    it.effect(
+      "a runner its Mac settles while the Mac itself is past its lease waits for the Mac's beat, which then carries it on",
+      () =>
+        Effect.gen(function* () {
+          const warm = yield* warmLocalAgent;
+          const { userId, deviceId, agent } = warm;
+          const lost = yield* turnRunning(warm, "Now the emails.");
+          // The Mac's beats stopped reaching us, and its runner's end is the first word back.
+          yield* TestClock.adjust("6 minutes");
+          yield* settledDeviceAgentLine(userId, deviceId, warm.launchId, 1);
+          yield* turnEnded(warm);
+          assert.equal(yield* carriedOnStands(warm, lost), false, "nothing goes while away");
+          assert.equal((yield* agentQueueNow(agent.id)).paused, undefined);
+
+          yield* hostWriteCarriedOn(
+            sessionsFor,
+            userId,
+            deviceId,
+            () => Effect.void,
+            beatDevice(userId, deviceId),
+          );
+
+          assert.equal(yield* carriedOnStands(warm, lost), true);
+          assert.notEqual(yield* launchClaimed(warm), undefined);
         }),
     );
 
