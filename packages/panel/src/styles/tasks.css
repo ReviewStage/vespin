@@ -1194,11 +1194,13 @@
   height: var(--ui-control-icon);
 }
 
-.pull-request-title-row > .pull-request-title,
+/* Note that the title's block stands off by margins rather than padding,
+   so the tint it wears while the keyboard selects it holds its words. */
+.pull-request-title-row > .ui-editable-block,
 .pull-request-title-row > .pull-request-title-wait {
   min-width: 0;
   flex: 1 1 auto;
-  padding-block: calc((var(--ui-control-height) - var(--ui-type-dialog-leading)) / 2);
+  margin-block: calc((var(--ui-control-height) - var(--ui-type-dialog-leading)) / 2);
 }
 
 .pull-request-title-actions {
@@ -1237,10 +1239,10 @@
     order: 0;
   }
 
-  .pull-request-title-row > .pull-request-title,
+  .pull-request-title-row > .ui-editable-block,
   .pull-request-title-row > .pull-request-title-wait {
     flex-basis: 100%;
-    padding-block: 0;
+    margin-block: 0;
   }
 
   /* Note that Preview, Run, and the merge control together may outgrow the
@@ -1485,70 +1487,19 @@
   user-select: text;
 }
 
-/* The title edited in place (`pull-request-writes.tsx`): its pencil stands
-   faint after the number until the title is hovered or the pencil focused,
-   the two wrapping as one. The pencil takes no room on the line, so it
-   never wraps onto a line of its own: it overhangs the title's end into its
-   inset and the header's own (`--column-inset`), the title keeping just
-   enough of an inset that the two hold it. The field takes the title's own
-   type and room, bare as a task's name renames. */
-.pull-request-title.pull-request-title-editable {
-  padding-inline-end: max(
-    var(--row-inset),
-    calc(var(--ui-space-2) + var(--ui-space-24) - var(--column-inset))
-  );
+/* The title edited where it stands (`pull-request-writes.tsx`), its words
+   running on into the number after them as a heading's do. */
+.pull-request-title .ui-editable-heading {
+  display: inline;
 }
 
-/* Beside the pill, the title starts at the row's gap, and the controls
-   after it take the pencil's overhang, so it keeps the pencil's room
-   itself. */
-.pull-request-title-row > .pull-request-title {
+/* Beside the pill, the title starts at the row's gap. */
+.pull-request-title-row > .ui-editable-block > .pull-request-title {
   padding-inline-start: 0;
-}
-
-.pull-request-title-row > .pull-request-title.pull-request-title-editable {
-  padding-inline-end: calc(var(--ui-space-2) + var(--ui-space-24));
 }
 
 .pull-request-title-end {
   white-space: nowrap;
-}
-
-.pull-request-title-edit {
-  display: inline-flex;
-  position: relative;
-  width: 0;
-  overflow: visible;
-  inset-inline-start: var(--ui-space-2);
-  /* Note that the pencil hangs past the line by as much as it is taller,
-     so the line stands its own leading and the words do not move as the
-     field opens in their place. */
-  margin-block: calc((1lh - var(--ui-space-24)) / 2);
-  vertical-align: top;
-  opacity: 0;
-  transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
-}
-
-.pull-request-title-edit:has(:focus-visible) {
-  opacity: 1;
-}
-
-@media (hover: hover) {
-  .pull-request-title-editable:hover .pull-request-title-edit {
-    opacity: 1;
-  }
-}
-
-/* A finger has no hover to bring the pencil, and an unseen one still takes
-   a tap at the title's end, so a touch screen shows it at rest. */
-@media (hover: none) {
-  .pull-request-title-edit {
-    opacity: 1;
-  }
-}
-
-.pull-request-title-field {
-  display: grid;
 }
 
 .pull-request-number {

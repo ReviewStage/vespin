@@ -11,6 +11,8 @@ import { isComposingKey } from "../../composing-key.js";
  * a document's keys do, and is no Tab stop of its own. Esc leaves it back onto what holds it, and
  * Return or ↓ leaves it on into what follows; either is its owner's to
  * carry out, `onLeave` hearing which, after the key's default is held back.
+ * Where it is given a bound, its words are held to it as they are typed, as
+ * a field's `maxLength` holds its own, so no word stands past what is kept.
  */
 
 /** Which way a key left the heading: back onto what holds it, or on into what follows it. */
@@ -29,10 +31,29 @@ function leaveOf(key: string): EditableHeadingLeave | undefined {
   return undefined;
 }
 
+/** The caret at the end of a heading's words, the heading focused. */
+export function headingCaretAtEnd(element: HTMLElement): void {
+  element.focus();
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  window.getSelection()?.removeAllRanges();
+  window.getSelection()?.addRange(range);
+}
+
+/** The words cut back to `maxLength` where they ran past it, the caret at their end. */
+function bound(element: HTMLElement, maxLength: number | undefined): void {
+  const words = element.textContent;
+  if (maxLength === undefined || words.length <= maxLength) return;
+  element.textContent = words.slice(0, maxLength);
+  headingCaretAtEnd(element);
+}
+
 /** A heading edited in place; `onInput`, `onFocus`, and `onBlur` hear its typing and its focus. */
 export function EditableHeading({
   label,
   ref,
+  maxLength,
   onInput,
   onFocus,
   onBlur,
@@ -40,6 +61,8 @@ export function EditableHeading({
 }: {
   label: string;
   ref?: RefObject<HTMLElement | null> | undefined;
+  /** How many characters its words may run to. */
+  maxLength?: number | undefined;
   onInput?: ((event: FormEvent<HTMLElement>) => void) | undefined;
   onFocus?: ((event: FocusEvent<HTMLElement>) => void) | undefined;
   onBlur?: ((event: FocusEvent<HTMLElement>) => void) | undefined;
@@ -67,7 +90,10 @@ export function EditableHeading({
       tabIndex={-1}
       spellCheck
       onFocus={onFocus}
-      onInput={onInput}
+      onInput={(event) => {
+        bound(event.currentTarget, maxLength);
+        onInput?.(event);
+      }}
       onBlur={onBlur}
       onKeyDown={keyed}
     />
