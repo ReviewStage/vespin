@@ -84,7 +84,7 @@ import { storeWriter } from "@repo/database/models/writer";
 import { AGENT_MACHINE, DEVICE_LEASE } from "@repo/features/agent-wire";
 import { redactCredentials } from "@repo/features/credential-redaction";
 import { causeKind } from "@repo/runtime/effect";
-import { COMMAND_GONE, type CommandExit, Sandbox, touchSandbox } from "@repo/sandbox";
+import { COMMAND_GONE, type CommandExit, Sandbox } from "@repo/sandbox";
 import { Cause, Clock, Data, Duration, Effect, ErrorReporter, Exit, Option } from "effect";
 import { RUN_STATUS, TURN_FAILURE, TURN_STATUS } from "../../core.js";
 import type { FoundPlace, MachineLifecycle, RecordedRunner } from "../machine/agent-machine.js";
@@ -92,6 +92,7 @@ import { RUNNER_RECORD } from "../machine/agent-machine.js";
 import { deploymentLifecycle } from "../machine/agent-machines.js";
 import { heldProjection } from "../native-events/native-projection.js";
 import { FAILURE_CHARS } from "../native-events/runner-moments.js";
+import { touchAgentSandbox } from "../sandbox-use.js";
 import { agentLogIds } from "./agent-log.js";
 import { CODER } from "./bounds.js";
 import { holdingRunnerIfFree } from "./runner-lease.js";
@@ -570,15 +571,15 @@ export const reconcileAgents = /* @__PURE__ */ Effect.fn("web/reconcileAgents")(
  * The minute sweep's keep-alive: the sandbox of every cloud turn still
  * running inside its progress deadline touched, at most a sweep's worth, a
  * few at a time, each and all within their bounds (`KEEP_UP_SWEEP`); answers
- * how many it drew. A touch that fails is said in the log by `touchSandbox`,
- * and one cut short here, and passed over, since the next minute's sweep
- * touches it again well inside its idle window.
+ * how many it drew, each one's use recorded (`touchAgentSandbox`). A touch
+ * that fails is said in the log, and one cut short here, and passed over,
+ * since the next minute's sweep touches it again well inside its idle window.
  */
 export const keepRunningSandboxesUp = /* @__PURE__ */ Effect.fn("web/keepRunningSandboxesUp")(
   function* (now: number) {
     const names = yield* runningTurnSandboxes(new Date(now), KEEP_UP_SWEEP.SANDBOXES);
     const touched = (name: string) =>
-      touchSandbox(name).pipe(
+      touchAgentSandbox(name).pipe(
         Effect.timeoutOption(KEEP_UP_SWEEP.TOUCH),
         Effect.flatMap((done) =>
           Option.isSome(done)
