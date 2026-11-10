@@ -51,6 +51,7 @@ import {
   readDescriptionCommentThread,
   startDescriptionCommentThread,
 } from "@repo/database/models/description-comments";
+import { listRevisions, readRevision } from "@repo/database/models/description-revisions";
 import { readPageById } from "@repo/database/models/task-pages";
 import { listTaskSections } from "@repo/database/models/task-section-store";
 import { readTask, readTaskWorkspace } from "@repo/database/models/task-store";
@@ -97,7 +98,12 @@ import {
   type PullRequestWriteAnswer,
   pullRequestActionRequestSchema,
 } from "@repo/features/pull-request-write-wire";
-import { TASK_STATUS } from "@repo/features/task-wire";
+import {
+  DESCRIPTION_HISTORY_BOUNDS,
+  type DescriptionRevisionLine,
+  descriptionRevisionSeqSchema,
+  TASK_STATUS,
+} from "@repo/features/task-wire";
 import { WORKSPACE_BOUNDS, workspaceOfSlug } from "@repo/features/workspace-wire";
 import type { Sandbox } from "@repo/sandbox";
 import {
@@ -122,6 +128,7 @@ import {
   CODER_READ_AGENT_TOOL,
   callerUserId,
   callerWorkspaceId,
+  cutOnLine,
   LIST_AGENTS_TOOL,
   LIST_TASKS_TOOL,
   orStoreRefusal,
@@ -228,6 +235,11 @@ import {
   type MentioningComment,
   memberCommentAnswer,
 } from "../tasks/description-comments-procedures.js";
+import {
+  DESCRIPTION_SAVE_REFUSAL,
+  DESCRIPTION_SAVE_STATUS,
+  restoreRevision,
+} from "../tasks/description-notes.js";
 import type { SentryApp } from "../triggers/sentry/sentry-app-config.js";
 import { AdmittedMember, type AdmittedMemberValues } from "./admission.js";
 import { answerAskAsMember, closeThreadAsMember, readMemberInbox, replyAsMember } from "./inbox.js";
@@ -856,6 +868,180 @@ const MEMBER_EDIT_DESCRIPTION_TOOL = memberMcpTool({
                 )
               : Effect.succeed(agentToolRejected(EXPERIMENT_OFF_REFUSAL)),
         ),
+    ),
+  experiment: EXPERIMENT.DESCRIPTIONS,
+});
+
+/*
+ * A description's history. Each runs the operation the window's History tab
+ * runs through its procedure (`plans.descriptionRevisions`,
+ * `descriptionRevision`, `restoreDescription`): the history read under the
+ * member's membership of the task's workspace, and a restore the member's own
+ * save, kept as a revision naming the one it brought back.
+ */
+
+/** Why a history call answered nothing, in words the agent can act on. */
+const DESCRIPTION_HISTORY_REFUSAL = {
+  NO_TASK: `Not read: no task the member can open has that id; ${MEMBER_MCP_TOOL.LIST_TASKS} names them.`,
+  NO_REVISION: `Not read: the description has no revision of that number; ${MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS} names them.`,
+  NOT_RESTORED_NO_TASK: `Not restored: no task the member can open has that id; ${MEMBER_MCP_TOOL.LIST_TASKS} names them.`,
+  NOT_RESTORED_NO_REVISION: `Not restored: the description has no revision of that number; ${MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS} names them.`,
+  NOT_RESTORED_TOO_LONG: "Not restored: the revision is longer than a description may now be.",
+  NOT_RESTORED: "Not restored: the service could not reach its store.",
+} as const;
+
+/** What a restore that saved nothing answers, by why. */
+const RESTORE_REFUSAL_WORDS: ReadonlyMap<string, string> = new Map([
+  [DESCRIPTION_SAVE_REFUSAL.NO_TASK, DESCRIPTION_HISTORY_REFUSAL.NOT_RESTORED_NO_TASK],
+  [DESCRIPTION_SAVE_REFUSAL.NO_REVISION, DESCRIPTION_HISTORY_REFUSAL.NOT_RESTORED_NO_REVISION],
+  [DESCRIPTION_SAVE_REFUSAL.TOO_LONG, DESCRIPTION_HISTORY_REFUSAL.NOT_RESTORED_TOO_LONG],
+]);
+
+/** The task whose description's history a call is about. */
+const HISTORY_TASK_INPUT = describeWire(
+  wireUuidSchema,
+  `The task whose description's history to read, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
+);
+
+/** A revision a call names, by its number. */
+const revisionSeqInput = (words: string) =>
+  describeWire(
+    descriptionRevisionSeqSchema,
+    `${words}, by the number ${MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS} answered.`,
+  );
+
+const ListDescriptionRevisionsInputSchema = Schema.Struct({
+  taskId: HISTORY_TASK_INPUT,
+  before: Schema.optionalKey(
+    describeWire(
+      descriptionRevisionSeqSchema,
+      "The earlier a page answered, to read the next older page; leave it out for the newest.",
+    ),
+  ),
+});
+
+const ReadDescriptionRevisionInputSchema = Schema.Struct({
+  taskId: HISTORY_TASK_INPUT,
+  seq: revisionSeqInput("The revision to read"),
+});
+
+const RestoreDescriptionRevisionInputSchema = Schema.Struct({
+  taskId: describeWire(
+    wireUuidSchema,
+    `The task whose description to restore, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
+  ),
+  seq: revisionSeqInput("The revision to put back"),
+});
+
+/** Epoch milliseconds as the agent reads a moment. */
+const momentOf = (at: number) => new Date(at).toISOString();
+
+/** One revision as the agent reads it: its number, who wrote it, when, how many changes, and the revision it brought back where it is a restore. */
+const revisionLineOf = (line: DescriptionRevisionLine) => ({
+  seq: line.seq,
+  writer: line.lastEdit.actor,
+  by: line.lastEdit.by?.name ?? line.lastEdit.label ?? null,
+  ...(line.agentId === undefined ? undefined : { agentId: line.agentId }),
+  startedAt: momentOf(line.startedAt),
+  editedAt: momentOf(line.lastEdit.at),
+  changes: line.changes,
+  ...(line.restoredFrom === undefined ? undefined : { restoredFrom: line.restoredFrom.seq }),
+});
+
+/** A history call run as the member, about the workspace that holds the task as they reach it, refused where that workspace has Task descriptions off. */
+const historyAsMember = <R>(
+  taskId: string,
+  noTask: string,
+  run: (userId: string) => Effect.Effect<WireRecord, StoreFailure, R>,
+) =>
+  readAsMember(
+    (userId) => readTaskWorkspace(userId, taskId),
+    noTask,
+    ({ caller }) =>
+      Effect.flatMap(
+        experimentOnIn(callerWorkspaceId(caller), EXPERIMENT.DESCRIPTIONS),
+        (descriptionsOn) =>
+          descriptionsOn
+            ? orStoreRefusal(run(callerUserId(caller)))
+            : Effect.succeed(agentToolRejected(EXPERIMENT_OFF_REFUSAL)),
+      ),
+  );
+
+const LIST_DESCRIPTION_REVISIONS_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.LIST_DESCRIPTION_REVISIONS,
+  description:
+    "List the history of a task's description, by its taskId, as its History tab does: every save " +
+    "is kept, and saves one writer makes one after another are one revision. Answers the newest " +
+    `${DESCRIPTION_HISTORY_BOUNDS.PAGE} revisions first, each with its number (seq), its writer ` +
+    "(developer for a member, notetaker, agent, or earlier for the text from before history began), " +
+    "by whom (the member's or the agent's name, null for none), the agentId of an agent's, when it " +
+    "began and last moved, how many changes its saves made, and restoredFrom, the revision a " +
+    "member's restore brought back; and earlier, which before takes to read the next older page, " +
+    `absent on the oldest. ${MEMBER_MCP_TOOL.READ_DESCRIPTION_REVISION} reads one revision's text. ` +
+    "Answers `accepted` with them, or `rejected` and why.",
+  input: ListDescriptionRevisionsInputSchema,
+  annotations: READ_ONLY,
+  run: (asked) =>
+    historyAsMember(asked.taskId, DESCRIPTION_HISTORY_REFUSAL.NO_TASK, (userId) =>
+      Effect.map(listRevisions(userId, asked.taskId, asked.before), (page) => ({
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        revisions: page.revisions.map(revisionLineOf),
+        ...(page.earlier === undefined ? undefined : { earlier: page.earlier }),
+      })),
+    ),
+  experiment: EXPERIMENT.DESCRIPTIONS,
+});
+
+const READ_DESCRIPTION_REVISION_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.READ_DESCRIPTION_REVISION,
+  description:
+    "Read one revision of a task's description, by its taskId and the revision's number (seq): the " +
+    `whole description as it stood after that revision, cut on a line at ${DESCRIPTION_TEXT_READ_CHARS} ` +
+    "characters with how many were left out. Read the revision before it, seq less one, to see what " +
+    `it changed. Answers \`accepted\` with its text, or \`rejected\` and why.`,
+  input: ReadDescriptionRevisionInputSchema,
+  annotations: READ_ONLY,
+  run: (asked) =>
+    historyAsMember(asked.taskId, DESCRIPTION_HISTORY_REFUSAL.NO_TASK, (userId) =>
+      Effect.map(readRevision(userId, asked.taskId, asked.seq), (revision) => {
+        if (Option.isNone(revision)) {
+          return agentToolRejected(DESCRIPTION_HISTORY_REFUSAL.NO_REVISION);
+        }
+        const text = cutOnLine(revision.value.document.body, DESCRIPTION_TEXT_READ_CHARS);
+        return {
+          status: ACTION_RESULT_STATUS.ACCEPTED,
+          revision: { seq: asked.seq, text: text.text, leftOutChars: text.leftOutChars },
+        };
+      }),
+    ),
+  experiment: EXPERIMENT.DESCRIPTIONS,
+});
+
+const RESTORE_DESCRIPTION_REVISION_TOOL = memberMcpTool({
+  name: MEMBER_MCP_TOOL.RESTORE_DESCRIPTION_REVISION,
+  description:
+    "Put one revision of a task's description back as its text, by its taskId and the revision's " +
+    "number (seq), as the History tab's Restore does: the restore is the member's own save, kept " +
+    "as a revision of its own that names the one it brought back, so the text it replaced stays " +
+    "in the history, and a restore is undone by restoring the revision before it. Restore one only " +
+    "when the member asks for it. Answers `accepted` with the revision restored and whether the " +
+    "description changed, false where it already held that text, or `rejected` and why.",
+  input: RestoreDescriptionRevisionInputSchema,
+  annotations: IDEMPOTENT_CHANGE,
+  run: (asked) =>
+    historyAsMember(asked.taskId, DESCRIPTION_HISTORY_REFUSAL.NOT_RESTORED_NO_TASK, (userId) =>
+      Effect.map(restoreRevision({ userId, taskId: asked.taskId }, asked.seq), (restored) =>
+        restored.status === DESCRIPTION_SAVE_STATUS.SAVED
+          ? {
+              status: ACTION_RESULT_STATUS.ACCEPTED,
+              restored: asked.seq,
+              changed: restored.txid !== undefined,
+            }
+          : agentToolRejected(
+              RESTORE_REFUSAL_WORDS.get(restored.reason) ??
+                DESCRIPTION_HISTORY_REFUSAL.NOT_RESTORED,
+            ),
+      ),
     ),
   experiment: EXPERIMENT.DESCRIPTIONS,
 });
@@ -2175,6 +2361,9 @@ export const MEMBER_MCP_TOOLS: readonly MemberMcpTool[] = [
   MEMBER_CREATE_TASK_TOOL,
   MEMBER_UPDATE_TASK_TOOL,
   MEMBER_EDIT_DESCRIPTION_TOOL,
+  LIST_DESCRIPTION_REVISIONS_TOOL,
+  READ_DESCRIPTION_REVISION_TOOL,
+  RESTORE_DESCRIPTION_REVISION_TOOL,
   MEMBER_CREATE_SECTION_TOOL,
   MEMBER_DELETE_SECTION_TOOL,
   MEMBER_START_AGENT_TOOL,

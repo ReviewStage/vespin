@@ -1,6 +1,6 @@
 ---
 name: vespin
-description: Drive Vespin from a shell with the `vespin` command: create tasks, read and write their descriptions, start coding agents and wait on them, check out an agent's branch, share a cloud agent's port by preview link, and answer the inbox threads agents post. Load it when asked to work with Vespin tasks, their descriptions, agents, or inbox from a terminal, to script or pipe Vespin, or to wait on an agent and bring its branch local. Prefer Vespin's MCP server only when you have no shell.
+description: Drive Vespin from a shell with the `vespin` command: create tasks, read, write, and restore their descriptions, start coding agents and wait on them, check out an agent's branch, share a cloud agent's port by preview link, and answer the inbox threads agents post. Load it when asked to work with Vespin tasks, their descriptions, agents, or inbox from a terminal, to script or pipe Vespin, or to wait on an agent and bring its branch local. Prefer Vespin's MCP server only when you have no shell.
 ---
 
 # vespin
@@ -36,6 +36,7 @@ Other commands:
 | --- | --- |
 | `task list [--mine] [--status s]` · `task view <task>` · `task update <task> [--status] [--priority] [--assignee] [--name]` | Find, read, and change tasks; `--status done` marks one done |
 | `description show <task>` · `description edit <task> -F <file\|->` | Print the description as Markdown; replace it whole |
+| `description history <task> [--before <r>]` · `description show <task> --revision <r>` · `description restore <task> <r>` | List the description's revisions, newest first, 50 a page (`--before` the revision it printed for older ones); print it as it stood after one; put one back, kept as a new revision, so restoring the one before undoes it |
 | `agent start <task> [-F prompt] [--model m --effort e] [--branch b] [--cloud\|--on <device>] [--follow\|--wait]` | Start an agent; `vespin models` lists `--model` and `--effort` values |
 | `agent continue <id> [-F note] [--at <message-id>] [--model m --effort e] [--cloud\|--on <device>] [--follow\|--wait]` | Continue an agent as the app's Continue does: it is stopped, and a new agent on its task is handed its brief and transcript, then the note. The new agent runs as you, on your own Claude or ChatGPT plan, so a teammate's agent is handed over to you. `--at` forks at one of its assistant messages instead (ids from `agent logs --json`), and it goes on. It runs on the agent's model and where it runs unless you name them |
 | `agent list [<task>] [--offset n]` · `agent view <id>` | Agents, newest first, the workspace's 50 a page (`--offset` the `nextOffset` it printed); one agent's status |
