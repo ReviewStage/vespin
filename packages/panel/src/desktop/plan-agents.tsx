@@ -72,9 +72,9 @@ import type { ChosenRows } from "./tasks-selection.js";
  * every width, a + at rest as Sub-tasks' is, the strip's "+" by another
  * place (`newAgentStarts`), so it stands while the group is folded too. A
  * task with no agent listed, once its agents are read, still draws the
- * group, its one row New agent (`AgentStartRow`), so the head looks the same
- * before its first agent as after it, and that agent takes the row's place
- * rather than a group arriving to push the description down.
+ * group's head alone, its + the start, as Sub-tasks stands empty, so the
+ * head looks the same before its first agent as after it, and that agent
+ * lands under it rather than a group arriving to push the description down.
  *
  * On a phone, Overview is the task's one page, with no strip, summary, or
  * Inbox tab beside it (`task-pane-switcher.tsx`), so the group holds the rest
@@ -169,8 +169,9 @@ function PlanAgentRow({
 /**
  * The task's agents at the head of its description, under their group's head,
  * those waiting on the developer first, then those at work, then the
- * newest, and what `starts` offers after them, or New agent as its one row
- * where it lists none; nothing where it offers none of these. A row's press is handed to `onOpenAgent` by its agent's id, and
+ * newest, and what `starts` offers after them, or its head alone where it
+ * lists none and offers New agent; nothing where it offers none of these.
+ * A row's press is handed to `onOpenAgent` by its agent's id, and
  * `onOpenPullRequest` opens an agent's pull request as its own chip does.
  */
 export function PlanAgents({
@@ -223,14 +224,11 @@ export function PlanAgents({
   );
   // Note that a phone's group stands for its archived agents too, on a task whose every agent is archived, which starts none.
   const archived = phone === undefined ? 0 : (agents.archived?.length ?? 0);
-  // Note that New agent stands as the row of a group over no agent only once the agents are read, so a task loading its agents does not offer it.
-  // Note that it wears the agent's glyph rather than a second +, so the row reads as the agent it starts and the head's + as the add.
-  const first =
-    agents.agents?.length === 0 && starts.length === 0 && newAgent !== undefined
-      ? { ...newAgent, icon: <EntityGlyph kind={ENTITY_KIND.AGENT} /> }
-      : undefined;
-  const offered = first === undefined ? starts : [first];
-  const grouped = entries.length > 0 || offered.length > 0 || archived > 0;
+  // Note that an empty group stands only once the agents are read, so a task loading its agents does not offer New agent.
+  const empty = agents.agents?.length === 0 && newAgent !== undefined;
+  // Note that a group over nothing folds nothing, since a fold over no rows would hide nothing.
+  const holds = entries.length > 0 || starts.length > 0 || archived > 0;
+  const grouped = holds || empty;
   // Note that a phone's Inbox row counts only what no listed agent's row marks already.
   const listed = new Set(entries.map((entry) => entry.row.id));
   let unmarked = 0;
@@ -268,9 +266,9 @@ export function PlanAgents({
                     noun: entries.length === 1 ? AGENTS_NOUN.one : AGENTS_NOUN.many,
                   }
             }
-            fold={{ defaultOpen: !folded }}
+            fold={holds ? { defaultOpen: !folded } : undefined}
           >
-            {entries.length + offered.length === 0 ? null : (
+            {entries.length + starts.length === 0 ? null : (
               <TaskRows
                 id={selection.regionId}
                 label={AGENTS_LIST}
@@ -294,7 +292,7 @@ export function PlanAgents({
                     onOpenPullRequest={() => onOpenPullRequest(entry.row.id)}
                   />
                 ))}
-                {offered.map((start) => (
+                {starts.map((start) => (
                   <AgentStartRow
                     key={start.label}
                     label={start.label}

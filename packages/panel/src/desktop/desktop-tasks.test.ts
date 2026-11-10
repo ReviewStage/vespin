@@ -336,7 +336,7 @@ test("a run's task leads its bar with the path to the automation whose run made 
   );
 });
 
-test("a wide task's details with no agent offer New agent as its Agents group's row, which opens a draft as the way back to the agents does", async () => {
+test("a wide task's details with no agent offer New agent on its Agents group's head, which opens a draft as the way back to the agents does", async () => {
   fakeAppPlatform(QUIET_PANEL);
   fakeAppBridge({});
   fakeActPort({});
@@ -367,7 +367,7 @@ test("a wide task's details with no agent offer New agent as its Agents group's 
     ),
   );
   const newAgent =
-    container.querySelector<HTMLElement>(".plan-agents [data-task-id='New agent'] button") ??
+    container.querySelector<HTMLElement>(".plan-agents button[aria-label='New agent']") ??
     assert.fail("New agent is offered");
 
   act(() => newAgent.click());
