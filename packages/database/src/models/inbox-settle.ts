@@ -28,7 +28,13 @@
  * item's key does.
  */
 
-import { INBOX_ASK_STATUS, INBOX_STATUS } from "@repo/features/inbox-wire";
+import {
+  INBOX_ASK_STATUS,
+  INBOX_ASK_STATUS_MOVES,
+  INBOX_STATUS,
+  INBOX_STATUS_MOVES,
+  statusesMovingTo,
+} from "@repo/features/inbox-wire";
 import { TASK_SETTLED, TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import {
   type AnyColumn,
@@ -52,6 +58,9 @@ import { inboxMessage } from "../schemas/inbox-message.js";
 import { task } from "../schemas/task.js";
 
 type SettleEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
+
+/** A message's ask's status, as it was kept. */
+const ASK_STATUS = sql<string>`${inboxMessage.ask} ->> 'status'`;
 
 /** Why an item settled on its own, as its close and its withdrawn ask say it. */
 const INBOX_SETTLED_REASON = {
@@ -99,7 +108,7 @@ const closeOpenItems = SqlSchema.findAll({
             by === SETTLE_BY.TASK
               ? inArray(inboxItem.taskId, ids)
               : inArray(inboxItem.agentId, ids),
-            eq(inboxItem.status, INBOX_STATUS.OPEN),
+            inArray(inboxItem.status, statusesMovingTo(INBOX_STATUS_MOVES, INBOX_STATUS.CLOSED)),
             or(isNotNull(inboxItem.openAskMessageId), eq(inboxItem.needsReply, true)),
           ),
         )
@@ -129,7 +138,12 @@ const withdrawOpenAsks = SqlSchema.void({
         .where(
           and(
             inArray(inboxMessage.itemId, itemIds),
-            sql`${inboxMessage.ask} ->> 'status' = ${INBOX_ASK_STATUS.OPEN}`,
+            inArray(
+              ASK_STATUS,
+              statusesMovingTo(INBOX_ASK_STATUS_MOVES, INBOX_ASK_STATUS.WITHDRAWN, [
+                INBOX_ASK_STATUS.OPEN,
+              ]),
+            ),
           ),
         ),
     ),
@@ -303,7 +317,12 @@ const reopenSettledItems = SqlSchema.findAll({
       db
         .update(inboxItem)
         .set({ status: INBOX_STATUS.OPEN, closedReason: null, settledAt: null })
-        .where(settledBy(request))
+        .where(
+          and(
+            settledBy(request),
+            inArray(inboxItem.status, statusesMovingTo(INBOX_STATUS_MOVES, INBOX_STATUS.OPEN)),
+          ),
+        )
         .returning({ id: inboxItem.id }),
     ),
 });
@@ -323,7 +342,7 @@ const findLatestAsks = SqlSchema.findAll({
         .selectDistinctOn([inboxMessage.itemId], {
           id: inboxMessage.id,
           itemId: inboxMessage.itemId,
-          status: sql<string | null>`${inboxMessage.ask} ->> 'status'`,
+          status: sql<string | null>`${ASK_STATUS}`,
           withdrawnReason: sql<string | null>`${inboxMessage.ask} ->> 'withdrawnReason'`,
         })
         .from(inboxMessage)
@@ -332,22 +351,51 @@ const findLatestAsks = SqlSchema.findAll({
     ),
 });
 
-/** The ask of the message named open again, the why and the time of its withdrawal taken off, and its item holding it open. */
-const reopenAsk = SqlSchema.void({
-  Request: Schema.Struct({ messageId: Schema.String, itemId: Schema.String }),
-  execute: ({ messageId, itemId }) =>
-    Effect.andThen(
+/**
+ * The ask of the message named open again, the why and the time of its
+ * withdrawal taken off, and its item holding it open; whether it opened.
+ * Note that the write is guarded on the ask standing as the undo read it,
+ * withdrawn for the settle's reason, so an ask another write moved since
+ * the read is left as that write stood it, and its item holds nothing open.
+ */
+const reopenAsk = SqlSchema.findAll({
+  Request: Schema.Struct({
+    messageId: Schema.String,
+    itemId: Schema.String,
+    reason: Schema.String,
+  }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ messageId, itemId, reason }) =>
+    Effect.tap(
       Database.use((db) =>
         db
           .update(inboxMessage)
           .set({
             ask: sql`(${inboxMessage.ask} - 'withdrawnReason' - 'withdrawnAt') || jsonb_build_object('status', ${INBOX_ASK_STATUS.OPEN}::text)`,
           })
-          .where(eq(inboxMessage.id, messageId)),
+          .where(
+            and(
+              eq(inboxMessage.id, messageId),
+              inArray(
+                ASK_STATUS,
+                statusesMovingTo(INBOX_ASK_STATUS_MOVES, INBOX_ASK_STATUS.OPEN, [
+                  INBOX_ASK_STATUS.WITHDRAWN,
+                ]),
+              ),
+              sql`${inboxMessage.ask} ->> 'withdrawnReason' = ${reason}`,
+            ),
+          )
+          .returning({ id: inboxMessage.id }),
       ),
-      Database.use((db) =>
-        db.update(inboxItem).set({ openAskMessageId: messageId }).where(eq(inboxItem.id, itemId)),
-      ),
+      (opened) =>
+        opened.length === 0
+          ? Effect.void
+          : Database.use((db) =>
+              db
+                .update(inboxItem)
+                .set({ openAskMessageId: messageId })
+                .where(eq(inboxItem.id, itemId)),
+            ),
     ),
 });
 
@@ -399,7 +447,7 @@ function reopen(
     );
     yield* Effect.forEach(
       withdrawn,
-      (ask) => reopenAsk({ messageId: ask.id, itemId: ask.itemId }),
+      (ask) => reopenAsk({ messageId: ask.id, itemId: ask.itemId, reason }),
       {
         discard: true,
       },

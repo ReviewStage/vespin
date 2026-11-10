@@ -19,6 +19,8 @@ import {
   resealProviderKey,
   saveProviderKey,
   setPlanStatus,
+  setPlanUsage,
+  setPlanUsageWindows,
   setProviderKeyForAgents,
   setProviderKeyStatus,
   setSubscriptionLabel,
@@ -555,6 +557,50 @@ it.layer(getTestDB())("the provider key store", (it) => {
 
         yield* setSubscriptionLabel(owner, ANTHROPIC, CLAUDE_SETUP_TOKEN, first, null);
         assert.deepEqual((yield* shownOf(owner))[1], ["first", null]);
+      }),
+  );
+
+  it.effect(
+    "a provider's answer to a usage ask replaces the plan's windows, but never a turn's reading heard after the ask went out",
+    () =>
+      Effect.gen(function* () {
+        const { owner } = yield* openAccounts;
+        const { CHATGPT_OAUTH } = PROVIDER_KEY_KIND;
+        const plan = yield* saveProviderKey(
+          owner,
+          PROVIDER_KEY_PROVIDER.OPENAI,
+          CHATGPT_OAUTH,
+          sealed("plan"),
+          "ChatGPT",
+          null,
+          new Date(1_000),
+        );
+        const windowsOf = Effect.map(listProviderKeyRows(owner, CHATGPT_OAUTH), (rows) =>
+          rows.map((row) => row.usageWindows),
+        );
+        const session = { usedPercent: 10, windowMins: 300 };
+
+        yield* setPlanUsageWindows(owner, plan, [session], new Date(2_000));
+        const answered = yield* windowsOf;
+        // A turn hears the session at 60% while the next ask, sent at 3s, is still out; its answer lands after.
+        yield* setPlanUsage(
+          owner,
+          PROVIDER_KEY_PROVIDER.OPENAI,
+          CHATGPT_OAUTH,
+          { usedPercent: 60, windowMins: 300 },
+          new Date(4_000),
+          new Date(4_000),
+          plan,
+        );
+        yield* setPlanUsageWindows(
+          owner,
+          plan,
+          [{ usedPercent: 20, windowMins: 300 }],
+          new Date(3_000),
+        );
+
+        assert.deepEqual(answered, [[session]]);
+        assert.deepEqual(yield* windowsOf, [[{ usedPercent: 60, windowMins: 300 }]]);
       }),
   );
 });

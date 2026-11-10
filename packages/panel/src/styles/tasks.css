@@ -2807,9 +2807,9 @@ svg.lucide {
 }
 
 /* The field that answers a thread, starts one, or edits a comment, on the
-   message box (`message-box.tsx`): a reply as every box in the window is, an
-   edit in the card's well, a first comment bare on the card. What stands
-   here lays out what it holds. */
+   message box (`message-box.tsx`): a reply as every box in the window is, a
+   first comment and an edit bare on the card. What stands here lays out
+   what it holds. */
 .comment-field {
   --comment-field-inline: var(--ui-space-8);
   margin-top: var(--ui-control-gap);
@@ -2857,14 +2857,36 @@ svg.lucide {
 /* A thread's first comment is the card itself (`COMPOSER_LOOK.BARE`): its
    words on the card's own surface, no well inside it, its tools along the
    card's foot. */
-.comment-field[data-variant="first"] {
+.comment-field:is([data-variant="first"], [data-variant="edit"]) {
   --comment-field-inline: 0;
   margin-top: 0;
 }
 
-.comment-field[data-variant="first"] :is(.ui-composer-files, .ui-composer-foot) {
+.comment-field:is([data-variant="first"], [data-variant="edit"])
+  :is(.ui-composer-files, .ui-composer-foot) {
   padding-right: 0;
   padding-left: 0;
+}
+
+/* A comment's words edited in their place stand where they were read, in
+   the comment's body with no inset over them, so opening Edit moves no
+   word: only the caret lands in them and the foot opens under them. */
+.comment-field[data-variant="edit"] :is(.agent-composer-placeholder, .agent-composer-input) {
+  min-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.comment-field[data-variant="edit"] .ui-composer-foot {
+  padding-bottom: 0;
+}
+
+/* Its foot holds no more than the +, the microphone, Cancel, and Send,
+   which stand whole in a comment's narrowest card, so its box folds none of
+   them into its ⋯ as a narrower agent's box would: it answers no composer
+   width of its own, while keeping its inline-size containment. */
+.comment-field[data-variant="edit"] {
+  container-name: none;
 }
 
 /* One of an agent's log's rows (`agent-tab.tsx`, drawn only near the view

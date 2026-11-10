@@ -9,8 +9,10 @@ import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { useConnected } from "../connection.js";
 import { failureShown } from "../failure-report.js";
+import { usePerson } from "../member-directory.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { AgentComposer } from "./agent-composer.js";
+import { teammateStarter } from "./agent-model.js";
 import { useInboxAcknowledger } from "./inbox-acknowledge.js";
 import { focusMissing } from "./inbox-ask-controls.js";
 import { inboxNoteReading } from "./inbox-model.js";
@@ -242,6 +244,9 @@ function AnswerCard({
       : INBOX_BOX_WORDS.REPLY_PLACEHOLDER;
   // The item's agent's model and servers, which the box's chips change as the agent's own box does.
   const model = useAgentModel({ agent, choose: agents.onChoose });
+  // Note that a teammate's agent is named as theirs, so its chip names their plan and none of the reader's.
+  const starter = usePerson(agent?.startedBy);
+  const owner = teammateStarter(agent?.startedBy, readerId) === undefined ? undefined : starter;
   const servers = useAgentServers({
     agent: agent ?? { id: item.agentId },
     write: agents.onSwitchServers,
@@ -361,6 +366,7 @@ function AnswerCard({
         modelsFailed={agents.modelsFailed}
         readModels={agents.readModels}
         usage={undefined}
+        owner={owner}
         servers={servers}
         onStop={neverStops}
         followsUp

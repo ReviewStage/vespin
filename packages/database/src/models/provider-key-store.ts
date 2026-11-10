@@ -500,23 +500,33 @@ const claimUsageAsk = SqlSchema.findOneOption({
     ),
 });
 
-/** Every usage window of the subscription of this id, as a read of its provider answered them, in place of what it held. */
+/**
+ * Every usage window of the subscription of this id, as a read of its
+ * provider asked `askedAt` answered them, in place of what it held, where
+ * no turn heard a reading since the ask; nothing where one did. Note that
+ * the check and the write are one statement, so a turn's reading landing
+ * while the ask was out is never written over by the answer.
+ */
 const replacePlanUsage = SqlSchema.void({
   Request: Schema.Struct({
     userId: Schema.String,
     subscriptionId: Schema.String,
     windows: Schema.Array(UsageWindowSchema),
-    heardAt: Schema.Date,
+    askedAt: Schema.Date,
   }),
   execute: (write) =>
     Database.use((db) =>
       db
         .update(accountProviderKey)
-        .set({ usageWindows: write.windows, usageHeardAt: write.heardAt })
+        .set({ usageWindows: write.windows, usageHeardAt: write.askedAt })
         .where(
           and(
             eq(accountProviderKey.userId, write.userId),
             eq(accountProviderKey.id, write.subscriptionId),
+            or(
+              isNull(accountProviderKey.usageHeardAt),
+              lte(accountProviderKey.usageHeardAt, write.askedAt),
+            ),
           ),
         ),
     ),
@@ -929,14 +939,19 @@ export function claimPlanUsageAsk(
   return Effect.map(claimUsageAsk({ userId, subscriptionId, at, since }), Option.isSome);
 }
 
-/** Writes every usage window a read of the plan's provider answered for the account's subscription of this id, in place of all it held. */
+/**
+ * Writes every usage window a read of the plan's provider made `askedAt`
+ * answered for the account's subscription of this id, in place of all it
+ * held, unless a turn on the plan heard a reading after the ask, which
+ * stands.
+ */
 export function setPlanUsageWindows(
   userId: string,
   subscriptionId: string,
   windows: readonly StoredUsageWindow[],
-  heardAt: Date,
+  askedAt: Date,
 ): TaskStoreEffect<void> {
-  return replacePlanUsage({ userId, subscriptionId, windows, heardAt });
+  return replacePlanUsage({ userId, subscriptionId, windows, askedAt });
 }
 
 /** Writes what a fast call on the key a step ran on showed of its organization, where the row still holds that key. */
