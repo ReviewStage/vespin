@@ -15,6 +15,7 @@ import {
 } from "@repo/database/schemas";
 import { agentTable } from "@repo/database/schemas/agent";
 import { agentApproval } from "@repo/database/schemas/agent-approval";
+import { agentBootTable } from "@repo/database/schemas/agent-boot";
 import { AGENT_SANDBOX_STATE, agentSandboxTable } from "@repo/database/schemas/agent-sandbox";
 import { user } from "@repo/database/schemas/auth";
 import { automationRun } from "@repo/database/schemas/automation";
@@ -23,6 +24,7 @@ import { taskBlock } from "@repo/database/schemas/task-block";
 import { TOPIC } from "@repo/database/sync/notification";
 import {
   agentApprovalSync,
+  agentBootSync,
   agentPinSync,
   agentPullRequestSync,
   agentSandboxSync,
@@ -42,6 +44,7 @@ import {
   turnsSync,
   userSync,
 } from "@repo/database/sync/tables";
+import type { BootPhase } from "@repo/features/agent-boot";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/agent-sandbox-wire";
 import { AGENT_BRIEF, type AgentFailure } from "@repo/features/agent-wire";
 import { NO_TASK_OWNER, TASK_LIST_READ } from "@repo/features/task-list-live";
@@ -225,6 +228,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         permissionMode: agentTable.permissionMode,
         pendingApprovals: PENDING_APPROVALS_OF_AGENT,
         sandboxState: SANDBOX_STATE_OF_AGENT,
+        bootPhase: sql<BootPhase | null>`${agentBootTable.phase}`,
         sandboxRunsUntil: SANDBOX_RUNS_UNTIL_OF_AGENT,
         // Note that a released desktop reads an agent's read mark only for one on no task, which no agent is, so it is never marked.
         markedUnread: sql<boolean>`false`,
@@ -264,6 +268,7 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
           ),
         )
         .leftJoin(device, eq(device.id, agentTable.deviceId))
+        .leftJoin(agentBootTable, eq(agentBootTable.agentId, agentTable.id))
         .leftJoinLateral(latest, sql`true`)
         .where(
           // An agent on a task is listed only where the account reaches the task too, as a read of it by its id is.
@@ -344,6 +349,7 @@ function movedAgents(moved: SyncMoved): SQL {
         ...moved.keys(agentPullRequestSync, agentPullRequest.agentId),
         ...moved.topics(agentApprovalSync, TOPIC.AGENT),
         ...moved.topics(agentSandboxSync, TOPIC.AGENT),
+        ...moved.topics(agentBootSync, TOPIC.AGENT),
         ...moved.topics(turnsSync, TOPIC.AGENT),
       ]),
       liveKeysIn(agentTable.conversationId, [
@@ -390,6 +396,7 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
     agentPullRequestSync,
     agentApprovalSync,
     agentSandboxSync,
+    agentBootSync,
     automationSync,
     automationRunSync,
     userSync,
