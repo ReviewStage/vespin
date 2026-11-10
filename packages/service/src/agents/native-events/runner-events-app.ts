@@ -1002,8 +1002,8 @@ const runnerEventsEndpoint = /* @__PURE__ */ Effect.fn("web/runnerEventsEndpoint
     );
   }
   // The task follows the turns the batch moved, once their rows are written: a turn starting takes
-  // it up, and a turn's end may have finished its work, or archives the agent with a task moved to
-  // Done while it worked (`tasks/task-finish.ts`).
+  // it up, and a turn's end archives the agent with a task moved to Done while it worked
+  // (`tasks/task-finish.ts`).
   if (taskId !== null && applied.value.turns.started) {
     yield* reopenTaskForWork(target.userId, taskId);
   }

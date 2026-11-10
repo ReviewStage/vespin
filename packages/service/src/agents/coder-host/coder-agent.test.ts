@@ -342,26 +342,25 @@ test("an agent on a task with no repository names what it decided in its message
   assert.deepEqual([decided("Acme/Relay"), decided(null)], [true, false]);
 });
 
-test("every agent on a task is told to keep its task's status with update_task, moving it back to in progress and on to done, a helper on its starter's task leaving it to the starter and one on a task of its own keeping that one's, and one on no task told of no status", () => {
+test("every agent on a task is told to keep its task's status with update_task, on to done once its work and subtasks are, a helper on its starter's task leaving it to the starter, and one on no task told of no status", () => {
   const STATUS = "## Your task's status";
   const told = (brief: AgentBrief, task: OwnTask | null) => {
     const words = coderInstructions("Acme/Relay", brief, task, standingFor("Acme/Relay"));
     const at = words.indexOf(STATUS);
-    if (at === -1) return [false, false, false, false, false];
+    if (at === -1) return [false, false, false, false];
     const section = words.slice(at, words.indexOf("\n\n## ", at + STATUS.length));
     return [
       true,
       section.includes(AGENT_TOOL.UPDATE_TASK),
-      section.includes("Mark it done"),
+      section.includes("every subtask is Done or Canceled"),
       section.includes(
         "Where another agent started you on its task, leave the status to that agent",
       ),
-      section.includes("one started on a task of its own keeps that status itself"),
     ];
   };
   for (const brief of Object.values(AGENT_BRIEF)) {
-    assert.deepEqual(told(brief, TASK_ADDRESS), [true, true, true, true, true], brief);
-    assert.deepEqual(told(brief, null), [false, false, false, false, false], brief);
+    assert.deepEqual(told(brief, TASK_ADDRESS), [true, true, true, true], brief);
+    assert.deepEqual(told(brief, null), [false, false, false, false], brief);
   }
 });
 

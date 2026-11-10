@@ -237,13 +237,9 @@ export const SERVER_HOST_KIND = {
   THIS_MAC: "this_mac",
 } as const;
 
-/** Who finished a task: a member, by moving it to Done or Canceled, or the service, on the merge of its work or, for a task an automation's run, a Slack message, or `start_agent` made, on its agents finishing well. */
+/** Who finished a task: a member or an agent, by moving it to Done or Canceled. */
 export const SERVER_TASK_FINISHER = {
   MEMBER: "member",
-  MERGE: "merge",
-  RUN: "run",
-  SLACK: "slack",
-  START: "start",
 } as const;
 
 /**
@@ -426,7 +422,7 @@ export interface ServerEventProperties {
   [SERVER_EVENT.AUTOMATION_RUN_START]: { trigger_kind: AutomationFiringKind };
   [SERVER_EVENT.GITHUB_APP_INSTALL]: Record<string, never>;
   [SERVER_EVENT.HOST_INSTALL]: { kind: Values<typeof SERVER_HOST_KIND> };
-  /** A task moved to Done or Canceled, by a member's own move or by the service on its work's merge. */
+  /** A task moved to Done or Canceled, by a member's or an agent's move. */
   [SERVER_EVENT.TASK_FINISH]: {
     status: ServerTaskFinishStatus;
     by: Values<typeof SERVER_TASK_FINISHER>;

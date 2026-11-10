@@ -1094,7 +1094,7 @@ function startAgentWords(on: Pick<ExperimentsOn, "descriptionsOn">): string {
     `stand as a task of its own, make it with ${AGENT_TOOL.CREATE_TASK} first. Where you work ` +
     "on no task, taskId left out starts it on a new task made for it, named as its agent is, " +
     "assigned to the member you work for, in the repository you work in or the one repository " +
-    `names, and done by itself once its agents finish well${NEW_TASK_PROMPT_WORDS[words]}. ` +
+    `names${NEW_TASK_PROMPT_WORDS[words]}. ` +
     "This one call carries everything the agent is told as " +
     "it starts, and the agent sets to work on it at once, so never follow it with a message to " +
     "the agent it started; message it only when there is something new to say. Its checkout is " +

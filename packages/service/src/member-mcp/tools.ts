@@ -1689,7 +1689,7 @@ function memberStartAgentWords(handed: string, newTaskPrompt: string): string {
     "Start a new coding agent as the member, exactly as their own Start would: on a task " +
     `they can open by its taskId, ${handed}; or on a new task made for it in ` +
     "the workspace named, named as its agent is, assigned to the member, in the repository " +
-    `named or none, and done by itself once its agents finish well${newTaskPrompt}. ` +
+    `named or none${newTaskPrompt}. ` +
     "This one call carries everything the agent is told as it starts, and the " +
     "agent sets to work on it at once. Its checkout is the repository's default branch, or " +
     "the branch named, which must already be on GitHub. It runs on the model and effort " +
