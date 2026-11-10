@@ -52,7 +52,7 @@ import {
   fakeActs,
   fakeActsAnswer,
 } from "../testing/app-bridge.js";
-import { handState, readExperiments } from "../testing/app-state.js";
+import { handState, readExperiments, writeListedTasks } from "../testing/app-state.js";
 import {
   composerEditor,
   editorBundleLanded,
@@ -473,6 +473,14 @@ test("a page's link alone on its line, naming its task by the task's number, is 
         ?.getAttribute("src"),
       pageFrameUrl({ taskId: BILLING.id, pageId: FUNNEL.id, version: FUNNEL.version }),
     ),
+  );
+  // A task listed anew, as a teammate's or an agent's lands in the window, leaves the page loaded rather than drawing it again.
+  const frame = page.querySelector(`[data-inbox-message-text] iframe[title="${FUNNEL.title}"]`);
+  act(() => writeListedTasks({ tasks: [numbered, { ...INVITES, number: 183 }] }));
+  await settle();
+  assert.ok(
+    page.querySelector(`[data-inbox-message-text] iframe[title="${FUNNEL.title}"]`) === frame,
+    "the page's frame is the one first drawn",
   );
 });
 
