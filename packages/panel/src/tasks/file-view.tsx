@@ -1,3 +1,4 @@
+import { shortCommit } from "@repo/features/code-ref-words";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
 import type { TasksTreeAnswer } from "@repo/features/tasks-view";
 import {
@@ -49,7 +50,6 @@ import {
   FILE_READ,
   type FileRead,
   fileUrl,
-  shortCommit,
   WHOLE_TEXT,
   type WholeText,
   wholeTextOf,

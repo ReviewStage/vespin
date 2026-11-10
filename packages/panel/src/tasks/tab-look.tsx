@@ -4,6 +4,7 @@ import {
   type AgentPullRequest,
   type AgentStatus,
 } from "@repo/features/agent-wire";
+import { agentGlyphState, GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { AgentPlaceholderIcon, DocumentIcon, PlusIcon, TaskStatusMark } from "@repo/ui";
@@ -12,8 +13,8 @@ import { pullRequestLabelOf, TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { DOCUMENT_REGION } from "@repo/ui/tasks-model";
 import { AppWindowIcon, BotIcon, GitPullRequestIcon, GlobeIcon, InboxIcon } from "lucide-react";
 import { HarnessMark } from "../harness-marks.js";
-import { GLYPH_STATE, type GlyphState, StateGlyph, stateEndMark } from "../state-glyph.js";
-import { agentGlyphState, providerOf } from "./agent-model.js";
+import { StateGlyph, stateEndMark } from "../state-glyph.js";
+import { providerOf } from "./agent-model.js";
 import { fileLook } from "./file-ref.js";
 import { PullRequestMark, type PullRequestMarked } from "./pull-request-mark.js";
 import { type FixedSidePanelTab, SIDE_PANEL_TAB } from "./task-tab-model.js";

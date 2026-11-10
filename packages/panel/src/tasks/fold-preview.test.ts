@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { TOOL_BLOCK, TOOL_STATE, type ToolBlock } from "@repo/features/tool-call-block";
 import { CALL_KIND, type CallKind } from "@repo/features/turn-rows";
 import { DisclosureFind } from "@repo/ui";
 import { MESSAGE_ROLE } from "@repo/wire";
@@ -8,7 +9,6 @@ import { Effect } from "effect";
 import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test } from "vitest";
-import { TOOL_BLOCK, TOOL_STATE, type ToolBlock } from "../ai-elements/tool.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";

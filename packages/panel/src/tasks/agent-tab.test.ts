@@ -13,6 +13,7 @@ import type { DescriptionMention } from "@repo/features/mention-link";
 import { pageFrameUrl } from "@repo/features/page-frame";
 import { PAGE_OWNER } from "@repo/features/page-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
+import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { ProviderMark } from "@repo/ui";
 import { ACTOR_KIND, type Actor, SOMEONE_REASON } from "@repo/ui/actor-model";
@@ -36,7 +37,6 @@ import { AGENT_LEAD, AgentMessage } from "./agent-tab.js";
 import { ChipCards } from "./chip-cards.js";
 import { TranscriptAgent } from "./line-cards.js";
 import { TaskMentions, type TaskMentionsValue } from "./task-mentions.js";
-import { TOOL_TARGET, type ToolTarget } from "./tool-call-model.js";
 
 /**
  * agent-tab.test.ts -- a call about an agent is a row that opens the
