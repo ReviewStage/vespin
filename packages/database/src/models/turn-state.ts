@@ -1069,19 +1069,6 @@ export function recordTurnSnapshot(
 }
 
 /**
- * Records on the turn the checkout as it stood before it, as the runner
- * reported it with the turn's first line; a later report of the same turn
- * writes over it, as a line resent to a fresh launch is recorded afresh.
- */
-export function recordTurnSnapshot(
-  target: TurnTarget,
-  turnId: string,
-  snapshot: TurnCheckoutSnapshot,
-): TurnStateEffect<void> {
-  return writeSnapshot({ turnId, conversationId: target.conversationId, snapshot });
-}
-
-/**
  * Stamps a Stop on the turn at `at`, once, and pulls its deadline in to the
  * Stop's own (`TURN_DEADLINE.STOP_MS`); answers whether this call stamped it.
  */
