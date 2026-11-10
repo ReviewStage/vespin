@@ -4134,7 +4134,7 @@ const REVOKE_MCP_CLIENT_TOOL = memberMcpTool({
     "no other member's. It cannot renew its access, and its next sign-in asks the member " +
     `again. Revoking the client making this call cuts that client off: its access ends within ` +
     `${MCP_ACCESS_TOKEN_MINUTES} minutes and it must sign in again. A client the member never ` +
-    `allowed, or ${PRODUCT_NAME}'s own desktop app, is left as it is. Answers \`accepted\` with ` +
+    `allowed, or ${PRODUCT_NAME}'s own Mac or iPhone app, is left as it is. Answers \`accepted\` with ` +
     "the clients as they then stand, never a token, or `rejected` and why.",
   input: RevokeMcpClientInputSchema,
   annotations: DESTRUCTIVE,

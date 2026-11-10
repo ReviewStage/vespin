@@ -15,18 +15,18 @@
  * transaction, through the same store, since the provider's own
  * `delete-consent` takes a session too: a refresh after it is refused, and
  * the client's next sign-in asks again. A revoke of a client the member
- * never allowed, or of the desktop's, deletes nothing, and every revoke
+ * never allowed, or of the desktop's or the iPhone's, deletes nothing, and every revoke
  * answers the clients as they then stand.
  */
 
 import { listOAuthGrants, revokeOAuthClient } from "@repo/database/models/oauth-grants";
 import type { McpClient, McpClientsAnswer } from "@repo/features/mcp-client-wire";
 import { Effect } from "effect";
-import { CLI_OAUTH_CLIENT, DESKTOP_OAUTH_CLIENT } from "../auth/oauth-clients.js";
+import { CLI_OAUTH_CLIENT, DESKTOP_OAUTH_CLIENT, IOS_OAUTH_CLIENT } from "../auth/oauth-clients.js";
 import { hostedStoreOrUnavailable } from "../http/http-effect.js";
 
-/** The clients no member revokes here: the desktop's own, which signs the Mac in. */
-const FIRST_PARTY_CLIENTS: readonly string[] = [DESKTOP_OAUTH_CLIENT.id];
+/** The clients no member revokes here: the desktop's and the iPhone's own, which sign the Mac and the phone in. */
+const FIRST_PARTY_CLIENTS: readonly string[] = [DESKTOP_OAUTH_CLIENT.id, IOS_OAUTH_CLIENT.id];
 
 /**
  * The clients that skip consent and are listed by the live token they hold:
@@ -57,7 +57,7 @@ export const mcpClientsRead = Effect.fn("web/mcpClientsRead")(function* (
   } satisfies McpClientsAnswer;
 });
 
-/** The member's tokens and Allow of one client deleted, the desktop's left as it is, answered with the clients as they then stand. */
+/** The member's tokens and Allow of one client deleted, the desktop's and the iPhone's left as they are, answered with the clients as they then stand. */
 export const mcpClientRevoke = Effect.fn("web/mcpClientRevoke")(function* (
   userId: string,
   clientId: string,
