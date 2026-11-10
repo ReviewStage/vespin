@@ -38,7 +38,8 @@ export const TASK_BLOCK_REFUSAL = {
     "blocker, directly or through other tasks; take away the block that runs the other way first.",
 } as const;
 
-const TASK_IDS = Schema.Array(wireUuidSchema).check(Schema.isMaxLength(MAX_TASKS_PER_LIST));
+/** A list of tasks a call names, by the id `list_tasks` answered. */
+export const TASK_IDS = Schema.Array(wireUuidSchema).check(Schema.isMaxLength(MAX_TASKS_PER_LIST));
 
 /** One side of a task's blocks as a call changes it: the tasks to add, and the tasks to take away. */
 const blockChangesInput = (side: string) =>

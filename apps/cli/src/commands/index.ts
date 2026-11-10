@@ -27,6 +27,7 @@ import { preferencesCommand } from "./preferences.js";
 import { sectionCommand } from "./section.js";
 import { sentryCommand } from "./sentry.js";
 import { setupCommand } from "./setup.js";
+import { skillsCommand } from "./skills.js";
 import { taskCommand } from "./task.js";
 import { updateCommand } from "./update.js";
 import { versionCommand } from "./version.js";
@@ -48,6 +49,7 @@ export const COMMANDS = [
   memoryCommand,
   automationCommand,
   modelsCommand,
+  skillsCommand,
   integrationsCommand,
   sentryCommand,
   preferencesCommand,

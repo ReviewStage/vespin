@@ -39,7 +39,7 @@ import {
   readWorkspaceSentry,
 } from "../triggers/sentry/sentry-installations.js";
 import { AdmittedMember } from "./admission.js";
-import { memberMcpClients } from "./clients-procedures.js";
+import { mcpClientsRead } from "./mcp-client-operations.js";
 import { memberMcpResourceUrl } from "./resource.js";
 
 /**
@@ -165,7 +165,7 @@ export const listMcpClientsAsMember = () =>
   Effect.gen(function* () {
     const member = yield* AdmittedMember;
     return yield* accepted(
-      memberMcpClients(member.userId, memberMcpResourceUrl(member.baseURL)),
+      mcpClientsRead(member.userId, memberMcpResourceUrl(member.baseURL)),
       MEMBER_INTEGRATION_REFUSAL.UNANSWERED,
     );
   });

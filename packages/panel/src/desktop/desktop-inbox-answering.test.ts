@@ -889,10 +889,10 @@ test("an answer no reply came back for is taken as sent once its thread holds a 
   assert.equal(pane.querySelector('.agent-composer [role="alert"]'), null);
 });
 
-test("a nod on a notice the agent posted over first is not taken: the notice stands open again, and the box says so", async () => {
+test("a nod on a notice the agent posted over first is not taken: the notice stands open again, and a toast says so", async () => {
   const notice: InboxItem = { ...noticeOf(THRESHOLD), startedBy: TEAMMATE };
   world.inboxes.set(BILLING.id, [notice, RETRY]);
-  const { page } = mount();
+  const { page } = mount([], { toasts: true });
   await settle();
   const waiting: ((view: AgentInboxAnsweredView) => void)[] = [];
   const bridge = appBridge();
@@ -916,9 +916,11 @@ test("a nod on a notice the agent posted over first is not taken: the notice sta
   await act(async () => waiting.shift()?.({ item: asked, taken: false }));
   await settle();
   assert.equal(sendWords(itemPane(page)), "Got it", "the notice stands open, to nod to again");
-  assert.equal(
-    itemPane(page).querySelector('.agent-composer [role="alert"]')?.textContent,
-    "The agent changed this item before your answer landed. Answer it as it stands now.",
+  assert.deepEqual(
+    [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
+      (words) => words.textContent,
+    ),
+    ["Acknowledged “Alert at 80%?”", "The agent changed this item before you acknowledged it."],
   );
 });
 

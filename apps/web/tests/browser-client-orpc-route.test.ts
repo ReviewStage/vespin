@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
 import { openGitHubConnectIntent } from "@repo/database/models/github-connection-store";
-import type { MemberSeams } from "@repo/database/models/workspace-seams";
 import { invitation, member, organization, user } from "@repo/database/schemas/auth";
 import { getTestDB } from "@repo/database/testing";
 import { HOSTED_API_ERROR } from "@repo/features";
@@ -39,16 +38,6 @@ const PAGE_COOKIE = "better-auth.session_token=page";
 /** A Better Auth call this test never makes, refused if it were. */
 const unmade = () => Effect.die(new Error("this test makes no Better Auth call"));
 
-const MEMBERS: MemberSeams = {
-  inviteMember: unmade,
-  listInvitations: unmade,
-  cancelInvitation: unmade,
-  removeMember: unmade,
-  updateMemberRole: unmade,
-  leaveOrganization: unmade,
-  updateOrganization: unmade,
-};
-
 /** What a request carried as it left the client: its method, path, cookies, content type, and body. */
 interface Sent {
   readonly line: string;
@@ -74,8 +63,8 @@ const serve = (session: string | null, sent: Sent[] = []) =>
         unlinkGitHub: unmade,
       }),
       workspaceInvitations: workspaceInvitationsProcedures({
+        resolveUserId: () => Effect.succeed(Option.none()),
         resolveSessionUserId,
-        members: MEMBERS,
       }),
     });
     // SAFETY: the claim and the offer read the database alone, which is all a test provides of the web runtime's services.

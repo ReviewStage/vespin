@@ -5,8 +5,10 @@ import { taskPicturesIn } from "./description-attachment-link.js";
 import { descriptionSections } from "./description-document.js";
 import {
   applyNotesToText,
-  NOTE_KIND,
   type DescriptionNote,
+  NOTE_KIND,
+  NOTE_MISS,
+  type NoteMiss,
   readNotes,
   withAgentEdit,
 } from "./description-notes.js";
@@ -162,7 +164,11 @@ test("a deletion that leaves part of a line standing keeps every mention whole, 
   for (const find of ["pl_1#Goal", "as [@Goal](luke://plan/pl_1#Goal) says"]) {
     const cut: DescriptionNote = { kind: NOTE_KIND.REPLACE, find, text: "" };
 
-    assert.deepEqual(applyNotesToText(MENTIONED, [cut]), { text: MENTIONED, missed: cut }, find);
+    assert.deepEqual(
+      applyNotesToText(MENTIONED, [cut]),
+      { text: MENTIONED, missed: cut, why: { kind: NOTE_MISS.DROPS_MENTION } },
+      find,
+    );
   }
   const reworded: DescriptionNote = { kind: NOTE_KIND.REPLACE, find: ", store first", text: "" };
   assert.equal(
@@ -254,26 +260,52 @@ test("a section is moved by deleting it where it stands and writing it in front 
   assert.equal(moved.text.endsWith("## Hard parts\n"), true);
 });
 
-test("a batch with one note naming what the text does not hold exactly once takes none of its notes", () => {
+test("a batch with one note that cannot be taken takes none of its notes, and says why that one missed", () => {
   const twice = `${DOCUMENT}\n## Goal\n\n- A second goal section.\n`;
-  const cases: readonly { text: string; note: DescriptionNote }[] = [
+  const cases: readonly { text: string; note: DescriptionNote; why: NoteMiss }[] = [
     {
       text: DOCUMENT,
       note: { kind: NOTE_KIND.REPLACE, find: "a phrase the description never held", text: "x" },
+      why: { kind: NOTE_MISS.NOWHERE },
     },
-    { text: DOCUMENT, note: { kind: NOTE_KIND.REPLACE, find: "## Rollout", text: "" } },
-    { text: twice, note: add("Goal", "- Lands nowhere.") },
-    { text: twice, note: { kind: NOTE_KIND.REPLACE, find: "## Goal", text: "## Goals" } },
+    {
+      text: DOCUMENT,
+      note: { kind: NOTE_KIND.REPLACE, find: "## Rollout", text: "" },
+      why: { kind: NOTE_MISS.NOWHERE },
+    },
+    {
+      text: twice,
+      note: add("Goal", "- Lands nowhere."),
+      why: { kind: NOTE_MISS.HEADING_REPEATED, times: 2 },
+    },
+    {
+      text: twice,
+      note: { kind: NOTE_KIND.REPLACE, find: "## Goal", text: "## Goals" },
+      why: { kind: NOTE_MISS.REPEATED, times: 2 },
+    },
+    {
+      text: `${DOCUMENT}\n${MENTIONED}`,
+      note: {
+        kind: NOTE_KIND.REPLACE,
+        find: "Ship as [@Goal](luke://plan/pl_1#Goal) says",
+        text: "Ship",
+      },
+      why: { kind: NOTE_MISS.DROPS_MENTION },
+    },
+    {
+      text: `${DOCUMENT}\n${PICTURED}`,
+      note: { kind: NOTE_KIND.REPLACE, find: PICTURE_LINE, text: "No picture" },
+      why: { kind: NOTE_MISS.DROPS_PICTURE },
+    },
   ];
-  for (const { text, note } of cases) {
+  for (const { text, note, why } of cases) {
     // The deletion before the miss is half of a move, and must not land without it.
     const taken = applyNotesToText(text, [
       { kind: NOTE_KIND.REPLACE, find: "Only an admin can add someone.", text: "" },
       note,
     ]);
 
-    assert.equal(taken.text, text, note.kind);
-    assert.deepEqual(taken.missed, note, note.kind);
+    assert.deepEqual(taken, { text, missed: note, why }, why.kind);
   }
 });
 
@@ -386,7 +418,11 @@ test("a correction that puts a picture in code, where it draws no picture, is no
   for (const text of ["```md\n" + PICTURE_LINE + "\n```", `\`${PICTURE_LINE}\``]) {
     const note: DescriptionNote = { kind: NOTE_KIND.REPLACE, find: PICTURE_LINE, text };
 
-    assert.deepEqual(applyNotesToText(PICTURED, [note]), { text: PICTURED, missed: note }, text);
+    assert.deepEqual(
+      applyNotesToText(PICTURED, [note]),
+      { text: PICTURED, missed: note, why: { kind: NOTE_MISS.DROPS_PICTURE } },
+      text,
+    );
   }
 });
 

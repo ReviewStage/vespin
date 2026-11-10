@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 import { it } from "@effect/vitest";
 import type { DatabaseServices } from "@repo/database/core/query";
-import type { MemberSeams } from "@repo/database/models/workspace-seams";
 import { noDatabase } from "@repo/database/testing/no-database";
 import { workspaceInvitationsProcedures } from "@repo/service/accounts/workspace-invitations-procedures";
 import { githubProcedures } from "@repo/service/github/github-procedures";
@@ -47,16 +46,6 @@ type Session = typeof USER_ID | null;
 /** A Better Auth call this test never makes, refused if it were. */
 const unmade = () => Effect.die(new Error("this test makes no Better Auth call"));
 
-const MEMBERS: MemberSeams = {
-  inviteMember: unmade,
-  listInvitations: unmade,
-  cancelInvitation: unmade,
-  removeMember: unmade,
-  updateMemberRole: unmade,
-  leaveOrganization: unmade,
-  updateOrganization: unmade,
-};
-
 /**
  * The page's network: Better Auth's session read answered signed in, the
  * GitHub and workspace routes answered by the hosted oRPC handler on the
@@ -77,8 +66,8 @@ const serve = (session: Session, asked: string[]) =>
         unlinkGitHub: unmade,
       }),
       workspaceInvitations: workspaceInvitationsProcedures({
+        resolveUserId: () => Effect.succeed(Option.none()),
         resolveSessionUserId,
-        members: MEMBERS,
       }),
     });
     // SAFETY: the claim and the offer read the database alone, which is all a test provides of the web runtime's services, here one that refuses every statement.

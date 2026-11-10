@@ -532,6 +532,10 @@ export interface ComposerEditorProps {
   readonly onTrigger: (trigger: ComposerTrigger | undefined) => void;
   /** Draws a chip into the element its node stands as; answers what takes the drawing down. */
   readonly drawChip: (element: HTMLElement, chip: ComposerChip) => () => void;
+  /** The pictures a marker names (`@repo/features/picture-marker`), whose markers become chips; none where the box takes no pictures. */
+  readonly pictures?: ReadonlySet<string> | undefined;
+  /** Draws a picture's chip into the element its node stands as, handed the picture's name; answers what takes the drawing down. Where none is given, its marker is drawn as the words it is. */
+  readonly drawPicture?: ((element: HTMLElement, name: string) => () => void) | undefined;
   /** Draws a quote into the element its block stands as; answers what takes the drawing down. Where none is given, the quote's words are drawn as they are. */
   readonly drawQuote?: ((element: HTMLElement, quote: ComposerQuote) => () => void) | undefined;
   /** What the box's mentions are picked and drawn with: an `@` word reported as `/` words are, and each mention drawn into its node's element; none where the box takes no mentions. */
@@ -548,6 +552,13 @@ export interface ComposerMark {
    * whether any went in. The mark is let go either way.
    */
   readonly insert: (words: string) => boolean;
+  /**
+   * The pictures named put in as their chips where the mark now stands,
+   * spaced from a word on either side, the caret after them; answers whether
+   * they went in, which they do not past the bound. The mark is let go
+   * either way.
+   */
+  readonly insertPictures: (names: readonly string[]) => boolean;
   readonly release: () => void;
 }
 
@@ -576,6 +587,8 @@ export interface ComposerEditorHandle extends EditorFormatting {
   readonly insertMention: (mention: MentionNode) => void;
   /** The skills a `/name` names: each such word is drawn as a chip from now on. */
   readonly setSkills: (skills: ReadonlySet<string>) => void;
+  /** The pictures a marker names: each such marker is drawn as its chip from now on. */
+  readonly setPictures: (pictures: ReadonlySet<string>) => void;
   /** Whether the words take a change: off while a message is held, read-only while a dictation stands, which keeps the caret. */
   readonly setInput: (input: ComposerInput) => void;
   /** The attributes that tie the editor element to its list (`listAria`), which name it a combobox while the list stands (`rootAria`). */

@@ -23,6 +23,8 @@ export const NATIVE_MOMENT = {
   SESSION: "session",
   /** The store's copy of the session's transcript lost a batch the harness could not append, so it holds a gap and is never resumed from. */
   TRANSCRIPT_BROKEN: "transcript_broken",
+  /** The harness could not find the session its launch was told to resume, so the turn goes on in a fresh session handed the agent's steps so far. */
+  SESSION_LOST: "session_lost",
   /** The harness is at work: a turn opens here where none is open. */
   ACTIVE: "active",
   /** A model call answered: what follows belongs to its step. `key` is the harness's own id for the call's answer, where it names one. */
@@ -112,6 +114,7 @@ export type NativeMoment =
   | { readonly kind: typeof NATIVE_MOMENT.LINE_ACCEPTED; readonly clientId: string }
   | { readonly kind: typeof NATIVE_MOMENT.SESSION; readonly sessionId: string }
   | { readonly kind: typeof NATIVE_MOMENT.TRANSCRIPT_BROKEN; readonly sessionId: string }
+  | { readonly kind: typeof NATIVE_MOMENT.SESSION_LOST }
   | { readonly kind: typeof NATIVE_MOMENT.ACTIVE }
   | { readonly kind: typeof NATIVE_MOMENT.STEP; readonly key?: string }
   | { readonly kind: typeof NATIVE_MOMENT.STEP_CLOSED }
