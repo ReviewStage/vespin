@@ -186,10 +186,12 @@ jobs:
 
           # The dSYMs, from the finished archive through the sentry-cli
           # Sentry's package ships, under the org and project the plugin
-          # wrote into ios/sentry.properties.
+          # wrote into ios/sentry.properties. A sentry-cli that cannot be
+          # found warns as a refused upload does, rather than failing the
+          # step under bash -e.
           echo "--- Sentry dSYMs"
-          sentry_cli_package=$(node --print "require('path').dirname(require.resolve('@sentry/cli/package.json', { paths: [require.resolve('@sentry/react-native/package.json')] }))")
-          if ! SENTRY_PROPERTIES=ios/sentry.properties node "$sentry_cli_package/bin/sentry-cli" debug-files upload "$archive_path/dSYMs"; then
+          sentry_cli_package=$(node --print "require('path').dirname(require.resolve('@sentry/cli/package.json', { paths: [require.resolve('@sentry/react-native/package.json')] }))" || true)
+          if [[ -z "$sentry_cli_package" ]] || ! SENTRY_PROPERTIES=ios/sentry.properties node "$sentry_cli_package/bin/sentry-cli" debug-files upload "$archive_path/dSYMs"; then
             echo "::warning::sentry-cli could not upload the archive's dSYMs, so this build's native crashes read unsymbolicated"
           fi
 
