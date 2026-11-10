@@ -1,6 +1,8 @@
 import {
+  AGENT_FAILURE,
   AGENT_MACHINE,
   AGENT_STATUS,
+  type AgentFailure,
   type AgentStatus,
   type AgentSummary,
   type ListedAgent,
@@ -89,7 +91,8 @@ function markedPullRequest<PullRequest extends Pick<TaskPullRequestLine, "state"
  * as it started where it ran none. Note that `latestStart` counts the
  * archived agents too, because archiving the agent that took over from a
  * failure must not bring the failure back. The held and live reads both
- * count `TaskAgentsSummary.failed` here, so the two agree.
+ * count `TaskAgentsSummary.failed` here, so the two agree. An agent its
+ * plan's usage limit stopped is no failure to count, since its user expects it.
  */
 export function standingFailures(
   agents: readonly {
@@ -97,12 +100,16 @@ export function standingFailures(
     readonly status: AgentStatus;
     /** When its last turn settled; none where it ran none. */
     readonly at: number | undefined;
+    /** Why its newest turn failed, where it did. */
+    readonly failure: AgentFailure | undefined;
   }[],
   latestStart: number,
 ): number {
   return agents.filter(
-    ({ createdAt, status, at }) =>
-      status === AGENT_STATUS.FAILED && (at ?? createdAt) >= latestStart,
+    ({ createdAt, status, at, failure }) =>
+      status === AGENT_STATUS.FAILED &&
+      failure !== AGENT_FAILURE.PLAN_LIMIT &&
+      (at ?? createdAt) >= latestStart,
   ).length;
 }
 
@@ -188,9 +195,12 @@ export function taskAgentsStatus(
  * because its row's leading glyph gives way to the working mark instead.
  */
 export function tasklessAgentStatus(
-  agent: Pick<TasklessAgent, "status" | "pullRequest">,
+  agent: Pick<TasklessAgent, "status" | "pullRequest" | "turn">,
 ): TaskAgentsStatus {
-  if (agent.status === AGENT_STATUS.FAILED) return { kind: TASK_AGENTS_STATUS.FAILED };
+  // An agent its plan's usage limit stopped is no failure to mark, as `standingFailures` counts none.
+  if (agent.status === AGENT_STATUS.FAILED && agent.turn?.failure !== AGENT_FAILURE.PLAN_LIMIT) {
+    return { kind: TASK_AGENTS_STATUS.FAILED };
+  }
   return agent.pullRequest === undefined
     ? NO_STATUS
     : { kind: TASK_AGENTS_STATUS.PULL_REQUEST, pullRequest: agent.pullRequest };
