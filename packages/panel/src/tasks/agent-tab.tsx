@@ -116,6 +116,7 @@ import {
 import { ACTOR_KIND, ACTOR_STATE, type Actor } from "@repo/ui/actor-model";
 import { AlarmClockCheckIcon, GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { pullRequestLabelOf } from "@repo/ui/tab-strip-model";
+import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import {
@@ -170,7 +171,6 @@ import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
-import { useBusyPress } from "../settings/busy-press.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
@@ -3235,7 +3235,7 @@ function AgentTabView({
             brief={agent.brief}
             tools={(narrow) => (
               <>
-                <AgentPlace agent={agent} readerId={readerId} move={placeMove} narrow={narrow} />
+                <AgentPlace agent={agent} move={placeMove} narrow={narrow} />
                 <ForwardChip agent={agent} />
               </>
             )}
@@ -3347,25 +3347,27 @@ export function StartingAgentTab({
  * end line's place, and a press the service refused offers it again.
  */
 function TryAgainPress({ onPress }: { onPress: () => Promise<boolean> }): React.JSX.Element {
-  // Note that the press is kept in a ref as well as drawn, so a second press before the draw sends nothing.
-  const pressed = useRef(false);
+  // Note that a press taken is kept in a ref as well as drawn, so a press before the draw sends nothing.
+  const taken = useRef(false);
   const [sent, setSent] = useState(false);
-  const press = useBusyPress(() => {
-    if (pressed.current) return undefined;
-    pressed.current = true;
-    return onPress().then((took) => {
-      pressed.current = took;
-      setSent(took);
-    });
-  });
+  const press = useAsyncAction(rejectionWords);
+  const tryAgain = () => {
+    if (taken.current) return;
+    void press.run(() =>
+      onPress().then((took) => {
+        taken.current = took;
+        setSent(took);
+      }),
+    );
+  };
   return (
     <Button
       variant={BUTTON_VARIANT.OUTLINE}
       icon={<GLYPH.RETRY />}
-      busy={press.busy}
+      busy={press.running}
       busyLabel={TRYING_AGAIN_LABEL}
       disabled={sent}
-      onClick={press.onPress}
+      onClick={tryAgain}
     >
       {TRY_AGAIN_LABEL}
     </Button>

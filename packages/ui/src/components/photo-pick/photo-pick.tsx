@@ -30,13 +30,18 @@ const PICK_WORDS = {
   REMOVE: "Remove photo",
 } as const;
 
-/** The tile as a press: a workspace tile's box and corner, lighting its camera under the pointer or the keyboard's focus. */
+/**
+ * The tile as a press: a workspace tile's box and corner, lighting its camera
+ * under the pointer or the keyboard's focus. On a coarse pointer it takes a
+ * press `--ui-touch-target` across, centered on it, while it draws at its own
+ * size, so it stops clipping there and its veil keeps the corner itself.
+ */
 const TILE =
-  "ui-photo-pick group/photo relative m-0 inline-flex size-avatar-card flex-none items-center justify-center overflow-hidden rounded-avatar-tile border-0 bg-transparent p-0 text-muted-foreground cursor-press disabled:cursor-default disabled:opacity-disabled data-[blank=true]:border data-[blank=true]:border-dashed data-[blank=true]:border-border-strong data-[blank=true]:bg-well [&_svg]:size-control-icon";
+  "ui-photo-pick group/photo relative m-0 inline-flex size-avatar-card flex-none items-center justify-center overflow-hidden rounded-avatar-tile border-0 bg-transparent p-0 text-muted-foreground cursor-press disabled:cursor-default disabled:opacity-disabled data-[blank=true]:border data-[blank=true]:border-dashed data-[blank=true]:border-border-strong data-[blank=true]:bg-well [&_svg]:size-control-icon pointer-coarse:overflow-visible pointer-coarse:before:absolute pointer-coarse:before:top-1/2 pointer-coarse:before:left-1/2 pointer-coarse:before:size-[max(100%,var(--ui-touch-target))] pointer-coarse:before:[transform:translate(-50%,-50%)] pointer-coarse:before:content-['']";
 
 /** The camera laid over a tile that stands, shown under the pointer or the keyboard's focus. */
 const OVER =
-  "ui-photo-pick-over absolute inset-0 flex items-center justify-center bg-veil text-on-veil opacity-0 transition-opacity duration-(--ui-duration-hover) ease-plain group-hover/photo:opacity-100 group-focus-visible/photo:opacity-100";
+  "ui-photo-pick-over absolute inset-0 flex items-center justify-center rounded-avatar-tile bg-veil text-on-veil opacity-0 transition-opacity duration-(--ui-duration-hover) ease-plain group-hover/photo:opacity-100 group-focus-visible/photo:opacity-100";
 
 /** The photo of `name`, picked through `picker`; `unnamed` is the name its tile says while none is typed. */
 export function PhotoPick({

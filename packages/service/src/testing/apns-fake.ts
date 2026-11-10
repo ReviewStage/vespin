@@ -2,6 +2,7 @@
  * apns-fake.ts -- the APNs transport and the sender as a test stands them: each records what it was handed and answers what the test scripted.
  */
 
+import type { DatabaseServices } from "@repo/database/core/query";
 import { Effect, Layer } from "effect";
 import {
   APNS_DELIVERY,
@@ -43,17 +44,28 @@ export interface RecordingApnsSender {
   readonly sent: ApnsNotification[];
 }
 
-/** A sender that records each notification and answers it as `delivery` says, one answer for every one or one by the notification, for a test of what decides to push. */
+/**
+ * A sender that records each notification and answers it as `delivery` says,
+ * one answer for every one or one by the notification, for a test of what
+ * decides to push; an answer by the notification may be an effect, for a
+ * test of what else happens while a push is in flight.
+ */
 export function recordingApnsSender(
   delivery:
     | ApnsDelivery
-    | ((notification: ApnsNotification) => ApnsDelivery) = APNS_DELIVERY.DELIVERED,
+    | ((
+        notification: ApnsNotification,
+      ) =>
+        | ApnsDelivery
+        | Effect.Effect<ApnsDelivery, never, DatabaseServices>) = APNS_DELIVERY.DELIVERED,
 ): RecordingApnsSender {
   const sent: ApnsNotification[] = [];
   const layer = Layer.succeed(ApnsSender, {
     send: (notification) => {
       sent.push(notification);
-      return Effect.succeed(typeof delivery === "function" ? delivery(notification) : delivery);
+      if (typeof delivery !== "function") return Effect.succeed(delivery);
+      const answered = delivery(notification);
+      return Effect.isEffect(answered) ? answered : Effect.succeed(answered);
     },
   });
   return { layer, sent };

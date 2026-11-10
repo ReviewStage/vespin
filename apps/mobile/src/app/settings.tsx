@@ -30,26 +30,19 @@ import { useRef } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
-import {
-  NOTIFICATION_STANDING,
-  type NotificationStanding,
-  useNotificationPermission,
-} from "../notification-permission.js";
+import { NOTIFICATION_STANDING, useNotificationPermission } from "../notification-permission.js";
 import { clearAccountNotifications } from "../notifications.js";
 import {
   isPushNotify,
+  notificationsAllowed,
   unregisterPushDevice,
   useFixtureRun,
   usePushDeviceKey,
   usePushDeviceStanding,
 } from "../push-device.js";
 
-/** How each standing of the permission reads beside Notifications. */
-const NOTIFICATION_WORDS = {
-  [NOTIFICATION_STANDING.ALLOWED]: "On",
-  [NOTIFICATION_STANDING.REFUSED]: "Off",
-  [NOTIFICATION_STANDING.UNASKED]: "Not set up",
-} as const satisfies Record<NotificationStanding, string>;
+/** What Notifications reads once the phone lets the app notify, until the service says how its pushes fare. */
+const NOTIFICATIONS_ON = "On";
 
 /** The step toward allowing them, where one is left: the system's prompt, or iOS's Settings after a refusal. */
 const NOTIFICATION_STEP = {
@@ -72,6 +65,7 @@ export default function SettingsScreen() {
   const device = usePushDeviceKey();
   const push = usePushDeviceStanding(device);
   const fixture = useFixtureRun();
+  const allowed = notificationsAllowed(fixture, notifications.standing);
   // The rest of the settings, under the chosen workspace, open in Safari, since the app draws no web view.
   const manage =
     chosen === undefined
@@ -128,21 +122,26 @@ export default function SettingsScreen() {
               />
             </ListSection>
           )}
-          <ListSection title="Notifications">
-            {push.standing !== undefined ? (
-              <ValueRow label="Notifications" value={pushStandingText(push.standing)} />
-            ) : notifications.standing === undefined ? null : (
-              <ValueRow label="Notifications" value={NOTIFICATION_WORDS[notifications.standing]} />
-            )}
-            {notifications.standing === NOTIFICATION_STANDING.REFUSED ||
+          {/* Note that Notifications reads one state: how the phone's pushes fare once it lets the app notify, and only the step toward letting it until then. */}
+          {allowed ? (
+            <ListSection title="Notifications">
+              <ValueRow
+                label="Notifications"
+                value={
+                  push.standing === undefined ? NOTIFICATIONS_ON : pushStandingText(push.standing)
+                }
+              />
+            </ListSection>
+          ) : notifications.standing === NOTIFICATION_STANDING.REFUSED ||
             notifications.standing === NOTIFICATION_STANDING.UNASKED ? (
+            <ListSection title="Notifications">
               <ActionRow
                 label={NOTIFICATION_STEP[notifications.standing]}
                 onPress={notifications.allow}
               />
-            ) : null}
-          </ListSection>
-          {push.standing === undefined ? null : (
+            </ListSection>
+          ) : null}
+          {!allowed || push.standing === undefined ? null : (
             <ListSection title="Notify me" footer={PUSH_NOTIFY_FOOTER}>
               <PickRows
                 label="Notify me"

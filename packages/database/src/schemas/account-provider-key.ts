@@ -7,9 +7,29 @@ import {
   type ProviderKeyStatus,
 } from "@repo/features/provider-key-wire";
 import { sql } from "drizzle-orm";
-import { boolean, doublePrecision, index, integer, pgTable, text } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  doublePrecision,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+} from "drizzle-orm/pg-core";
 import { timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
+
+/**
+ * One usage window as `usage_windows` keeps it: the share used, in percent,
+ * its length in minutes, the model it alone counts as its provider names it
+ * ("Opus"), and its reset in epoch milliseconds, each where heard.
+ */
+export interface StoredUsageWindow {
+  readonly usedPercent: number;
+  readonly windowMins?: number;
+  readonly model?: string;
+  readonly resetsAt?: number;
+}
 
 /**
  * One of an account's own provider credentials, an API key or a
@@ -63,16 +83,30 @@ export const accountProviderKey = pgTable(
     /** When a plan's reached usage limit resets, where its provider said; null for every other status. */
     limitResetsAt: timestamptz("limit_resets_at"),
     /**
-     * How much of its usage window a plan had used, in percent, as a turn on
-     * it last heard its harness report; null until one has. Only the latest
-     * reading is kept, of the window the harness reported, and a saved
-     * credential starts without one.
+     * The one usage window `usage_windows` replaced, which nothing reads or
+     * writes now; kept until a deployment that still writes it is gone, and
+     * dropped after.
      */
     usagePercent: doublePrecision("usage_percent"),
-    /** How long the window `usagePercent` reads is, in minutes, where the harness said; null otherwise. */
     usageWindowMins: integer("usage_window_mins"),
-    /** When the window `usagePercent` reads resets, where the harness said; null otherwise. */
     usageResetsAt: timestamptz("usage_resets_at"),
+    /**
+     * How much of each of its usage windows a plan has used, as last heard:
+     * the 5-hour session, the week, and a week on one model alone, one entry
+     * a window length and model, each
+     * replaced as a turn on the plan or a read of its provider hears it
+     * again; null until one has, and a saved credential starts without it.
+     */
+    usageWindows: jsonb("usage_windows").$type<readonly StoredUsageWindow[]>(),
+    /** When `usageWindows` was last heard; null with it. */
+    usageHeardAt: timestamptz("usage_heard_at"),
+    /**
+     * When the plan's provider was last asked for its usage, whether or not
+     * it answered; null until it has been. Kept apart from `usageHeardAt`,
+     * so a refusal waits its turn before the next ask without the reading
+     * passing for fresh.
+     */
+    usageAskedAt: timestamptz("usage_asked_at"),
     /** Where the credential stands in its provider's one order, its plans and its API key alike, the first paying first. */
     position: integer("position").notNull().default(0),
     /** The name the account gave the subscription or API key; null for the name it is shown by default. */

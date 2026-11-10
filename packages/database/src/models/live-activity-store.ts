@@ -9,9 +9,14 @@
  * the row is made by the first register and kept, each register setting its
  * own token. An update token registered stands for an activity on the phone,
  * so it stamps the activity started where none stood. The service's own
- * records, a push sent, an activity ended, a token Apple said is gone, name
- * the phone by the id it listed it under. The one read across accounts is
- * the sweep's: the accounts with an activity standing, by id alone. What
+ * records, a start claimed, a push sent, an activity ended, a token Apple
+ * said is gone, name the phone by the id it listed it under, and each is
+ * held to what the service read of the row, so a refresh that overlaps
+ * another never undoes what that one wrote since: a claim lands only where
+ * the activity still stands as read, a record only on the activity it was
+ * sent to, a clear only of the token it names. The one read across accounts
+ * is the sweep's: the accounts with an activity standing, by id alone, the
+ * longest unswept first and each row stamped as it is taken. What
  * the activity shows is read here too: the account's own agents, unarchived,
  * whose turn runs, the newest turn first.
  */
@@ -67,10 +72,17 @@ const RunningAgentTurnSchema = Schema.Struct({
 
 export type RunningAgentTurn = typeof RunningAgentTurnSchema.Type;
 
-/** What a push records of the phone's activity: when it went, the state it carried, and, for a push-to-start, that an activity now stands. */
+/** What a push records of the phone's activity: when it went, the state it carried, and the start of the activity it went to, which must still stand. */
 export interface LiveActivityPush {
+  readonly sentAt: Date;
   readonly sentState: string;
-  readonly started: boolean;
+  readonly startedAt: Date;
+}
+
+/** The activity a refresh read on the phone: its start and its update token, which a claim or a clear is held to. */
+export interface LiveActivityRead {
+  readonly startedAt: Date | null;
+  readonly activityToken: string | null;
 }
 
 const OwnPhoneSchema = Schema.Struct({
@@ -96,6 +108,25 @@ function ownRow(userId: string, pushDeviceId: string) {
     inArray(liveActivity.pushDeviceId, ownPhones(userId)),
   );
 }
+
+/** The row's activity still as a refresh read it: the same start and the same update token, either of them none. */
+function standsAsRead(read: LiveActivityRead) {
+  return and(
+    read.startedAt === null
+      ? isNull(liveActivity.startedAt)
+      : eq(liveActivity.startedAt, read.startedAt),
+    read.activityToken === null
+      ? isNull(liveActivity.activityToken)
+      : eq(liveActivity.activityToken, read.activityToken),
+  );
+}
+
+const LiveActivityReadSchema = Schema.Struct({
+  startedAt: Schema.NullOr(Schema.Date),
+  activityToken: Schema.NullOr(Schema.String),
+});
+
+const ClaimedRowSchema = Schema.Struct({ pushDeviceId: Schema.String });
 
 const findOwnPhone = SqlSchema.findOneOption({
   Request: OwnPhoneSchema,
@@ -155,27 +186,95 @@ const clearOwnActivity = SqlSchema.void({
     ),
 });
 
-const clearOwnStartToken = SqlSchema.void({
-  Request: OwnRowSchema,
-  execute: ({ userId, pushDeviceId }) =>
+const clearOwnActivityAsRead = SqlSchema.findAll({
+  Request: Schema.Struct({ ...OwnRowSchema.fields, read: LiveActivityReadSchema }),
+  Result: ClaimedRowSchema,
+  execute: ({ userId, pushDeviceId, read }) =>
     Database.use((db) =>
-      db.update(liveActivity).set({ startToken: null }).where(ownRow(userId, pushDeviceId)),
+      db
+        .update(liveActivity)
+        .set({ activityToken: null, startedAt: null, sentState: null })
+        .where(and(ownRow(userId, pushDeviceId), standsAsRead(read)))
+        .returning({ pushDeviceId: liveActivity.pushDeviceId }),
+    ),
+});
+
+const clearOwnActivityToken = SqlSchema.void({
+  Request: Schema.Struct({ ...OwnRowSchema.fields, token: Schema.String }),
+  execute: ({ userId, pushDeviceId, token }) =>
+    Database.use((db) =>
+      db
+        .update(liveActivity)
+        .set({ activityToken: null, startedAt: null, sentState: null })
+        .where(and(ownRow(userId, pushDeviceId), eq(liveActivity.activityToken, token))),
+    ),
+});
+
+const clearOwnStartToken = SqlSchema.void({
+  Request: Schema.Struct({ ...OwnRowSchema.fields, token: Schema.String }),
+  execute: ({ userId, pushDeviceId, token }) =>
+    Database.use((db) =>
+      db
+        .update(liveActivity)
+        .set({ startToken: null })
+        .where(and(ownRow(userId, pushDeviceId), eq(liveActivity.startToken, token))),
+    ),
+});
+
+const claimOwnStart = SqlSchema.findAll({
+  Request: Schema.Struct({
+    ...OwnRowSchema.fields,
+    startToken: Schema.String,
+    read: LiveActivityReadSchema,
+    now: Schema.Date,
+  }),
+  Result: ClaimedRowSchema,
+  execute: ({ userId, pushDeviceId, startToken, read, now }) =>
+    Database.use((db) =>
+      db
+        .update(liveActivity)
+        .set({ startedAt: now, activityToken: null, sentState: null })
+        .where(
+          and(
+            ownRow(userId, pushDeviceId),
+            eq(liveActivity.startToken, startToken),
+            standsAsRead(read),
+          ),
+        )
+        .returning({ pushDeviceId: liveActivity.pushDeviceId }),
+    ),
+});
+
+const releaseOwnStart = SqlSchema.void({
+  Request: Schema.Struct({ ...OwnRowSchema.fields, claimedAt: Schema.Date }),
+  execute: ({ userId, pushDeviceId, claimedAt }) =>
+    Database.use((db) =>
+      db
+        .update(liveActivity)
+        .set({ startedAt: null })
+        .where(
+          and(
+            ownRow(userId, pushDeviceId),
+            eq(liveActivity.startedAt, claimedAt),
+            isNull(liveActivity.activityToken),
+          ),
+        ),
     ),
 });
 
 const updateOwnPushed = SqlSchema.void({
   Request: Schema.Struct({
     ...OwnRowSchema.fields,
-    now: Schema.Date,
+    sentAt: Schema.Date,
     sentState: Schema.String,
-    started: Schema.Boolean,
+    startedAt: Schema.Date,
   }),
-  execute: ({ userId, pushDeviceId, now, sentState, started }) =>
+  execute: ({ userId, pushDeviceId, sentAt, sentState, startedAt }) =>
     Database.use((db) =>
       db
         .update(liveActivity)
-        .set({ sentAt: now, sentState, ...(started ? { startedAt: now } : undefined) })
-        .where(ownRow(userId, pushDeviceId)),
+        .set({ sentAt, sentState })
+        .where(and(ownRow(userId, pushDeviceId), eq(liveActivity.startedAt, startedAt))),
     ),
 });
 
@@ -204,18 +303,34 @@ const findOwnActivities = SqlSchema.findAll({
     ),
 });
 
-const findStandingMembers = SqlSchema.findAll({
-  Request: Schema.Int,
+const takeStandingMembers = SqlSchema.findAll({
+  Request: Schema.Struct({ limit: Schema.Int, now: Schema.Date }),
   Result: Schema.Struct({ userId: Schema.String }),
-  execute: (limit) =>
+  execute: ({ limit, now }) =>
     Database.use((db) =>
       db
-        .selectDistinct({ userId: pushDevice.userId })
-        .from(liveActivity)
-        .innerJoin(pushDevice, eq(pushDevice.id, liveActivity.pushDeviceId))
-        .where(isNotNull(liveActivity.startedAt))
-        .orderBy(asc(pushDevice.userId))
-        .limit(limit),
+        .update(liveActivity)
+        .set({ sweptAt: now })
+        .from(pushDevice)
+        .where(
+          and(
+            eq(pushDevice.id, liveActivity.pushDeviceId),
+            inArray(
+              liveActivity.pushDeviceId,
+              queryBuilder
+                .select({ id: liveActivity.pushDeviceId })
+                .from(liveActivity)
+                .where(isNotNull(liveActivity.startedAt))
+                .orderBy(
+                  sql`${liveActivity.sweptAt} asc nulls first`,
+                  asc(liveActivity.pushDeviceId),
+                )
+                .limit(limit)
+                .for("update", { skipLocked: true }),
+            ),
+          ),
+        )
+        .returning({ userId: pushDevice.userId }),
     ),
 });
 
@@ -271,15 +386,24 @@ export function registerLiveActivityToken(
   });
 }
 
-/** The account's phone's activity ended on the phone, its update token forgotten; a phone the account does not hold is passed over. */
+/**
+ * The account's phone's activity ended on the phone, its update token
+ * forgotten: only where the phone still holds `activityToken` when the app
+ * names the activity that ended, or whatever stands where it does not; a
+ * phone the account does not hold is passed over.
+ */
 export function endLiveActivityOnPhone(
   userId: string,
   phone: PushDeviceToken,
+  activityToken?: string,
 ): LiveActivityEffect<void> {
   return Effect.gen(function* () {
     const own = yield* findOwnPhone({ userId, ...phone });
     if (Option.isNone(own)) return;
-    yield* clearOwnActivity({ userId, pushDeviceId: own.value.id });
+    const pushDeviceId = own.value.id;
+    yield* activityToken === undefined
+      ? clearOwnActivity({ userId, pushDeviceId })
+      : clearOwnActivityToken({ userId, pushDeviceId, token: activityToken });
   });
 }
 
@@ -290,34 +414,61 @@ export function listLiveActivityPhones(
   return findOwnActivities(userId);
 }
 
-/** A push to the account's phone's activity recorded as sent now, with the state it carried; a push-to-start stamps the activity started. */
+/**
+ * The account's phone's push-to-start claimed at `now`, answering whether
+ * this caller won it: only where the phone still holds `startToken` and its
+ * activity stands as `read`, so of two refreshes that read the same row one
+ * claims it and sends, and the other sends nothing. The claim stamps the
+ * activity started and forgets any update token an aged one held.
+ */
+export function claimLiveActivityStart(
+  userId: string,
+  pushDeviceId: string,
+  claim: { readonly startToken: string; readonly read: LiveActivityRead; readonly now: Date },
+): LiveActivityEffect<boolean> {
+  return Effect.map(claimOwnStart({ userId, pushDeviceId, ...claim }), (rows) => rows.length > 0);
+}
+
+/** A claimed push-to-start that will not be tried again let go, where the claim still stands and no update token came of it. */
+export function releaseLiveActivityStart(
+  userId: string,
+  pushDeviceId: string,
+  claimedAt: Date,
+): LiveActivityEffect<void> {
+  return releaseOwnStart({ userId, pushDeviceId, claimedAt });
+}
+
+/** A push to the account's phone's activity recorded as sent, with the state it carried, where the activity it went to still stands. */
 export function recordLiveActivityPushed(
   userId: string,
   pushDeviceId: string,
   push: LiveActivityPush,
 ): LiveActivityEffect<void> {
-  return Effect.flatMap(DateTime.nowAsDate, (now) =>
-    updateOwnPushed({ userId, pushDeviceId, now, ...push }),
-  );
+  return updateOwnPushed({ userId, pushDeviceId, ...push });
 }
 
-/** The account's phone's activity ended, or its update token gone: the token, the stamp, and the state last sent forgotten. */
+/** The account's phone's activity ended: the token, the stamp, and the state last sent forgotten, where it still stands as `read`; answers whether it did. */
 export function recordLiveActivityEnded(
   userId: string,
   pushDeviceId: string,
-): LiveActivityEffect<void> {
-  return clearOwnActivity({ userId, pushDeviceId });
+  read: LiveActivityRead,
+): LiveActivityEffect<boolean> {
+  return Effect.map(
+    clearOwnActivityAsRead({ userId, pushDeviceId, read }),
+    (rows) => rows.length > 0,
+  );
 }
 
-/** A token of the account's phone Apple said is gone, forgotten: the push-to-start token alone, or the activity with its update token. */
+/** A token of the account's phone Apple said is gone, forgotten where the phone still holds it: the push-to-start token alone, or the activity with its update token. */
 export function forgetLiveActivityToken(
   userId: string,
   pushDeviceId: string,
   kind: LiveActivityTokenKind,
+  token: string,
 ): LiveActivityEffect<void> {
   return kind === LIVE_ACTIVITY_TOKEN.START
-    ? clearOwnStartToken({ userId, pushDeviceId })
-    : clearOwnActivity({ userId, pushDeviceId });
+    ? clearOwnStartToken({ userId, pushDeviceId, token })
+    : clearOwnActivityToken({ userId, pushDeviceId, token });
 }
 
 /** The account's own unarchived agents whose turn runs, the newest turn first: what the activity shows. */
@@ -327,7 +478,15 @@ export function listRunningAgentTurns(
   return findRunningAgentTurns(userId);
 }
 
-/** The sweep's read: up to `limit` accounts with an activity standing on a phone, by id alone. */
+/**
+ * The sweep's read: the accounts of up to `limit` phones with an activity
+ * standing, by id alone, the phones the sweep took longest ago first, each
+ * stamped taken now so the next sweep comes round to the rest; a phone
+ * another sweep is taking meanwhile is passed over.
+ */
 export function listLiveActivityMembers(limit: number): LiveActivityEffect<readonly string[]> {
-  return Effect.map(findStandingMembers(limit), (rows) => rows.map((row) => row.userId));
+  return Effect.gen(function* () {
+    const rows = yield* takeStandingMembers({ limit, now: yield* DateTime.nowAsDate });
+    return [...new Set(rows.map((row) => row.userId))];
+  });
 }

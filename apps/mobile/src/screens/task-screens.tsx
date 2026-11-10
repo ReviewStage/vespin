@@ -2,7 +2,7 @@
 
 import { AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { threadsWaitingWords } from "@repo/features/inbox-list-model";
-import { iosAppRouteOf } from "@repo/features/ios-app-links";
+import { iosAgentRoute, iosPullRequestRoute } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION, type LinkDestination, linkOf } from "@repo/features/link-grammar";
 import { agentName } from "@repo/features/model-label";
 import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
@@ -43,7 +43,6 @@ import {
   LinkRow,
   type ListLook,
   ListSection,
-  type MarkdownPlace,
   PATH_PART,
   RelationRow,
   ROW_ACTION_TONE,
@@ -57,10 +56,10 @@ import {
   WordsRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { openURL } from "expo-linking";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
+import { openInSafari, useOpenLink } from "../open-link.js";
 import { SettingsBarButton, useSettingsAccount } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import {
@@ -120,25 +119,10 @@ function noMatchWords(search: string): string {
   return `No tasks match “${search}”.`;
 }
 
-/** Opens an address in Safari, saying on the console where it could not. */
-function opened(address: string): void {
-  openURL(address).catch((error: unknown) => console.error("The address did not open.", error));
-}
-
 /** A destination on vespin.dev in the workspace, opened in Safari, since the app draws no page for it yet. */
 function openOnWeb(destination: LinkDestination, workspace: Workspace | undefined): void {
   if (workspace === undefined) return;
-  opened(linkOf(destination, workspace.slug ?? workspace.id));
-}
-
-/** A link a description names opened where it goes: a place the app draws on its own screen, and anything else in Safari. */
-function useOpenPlace(): (place: MarkdownPlace) => void {
-  const router = useRouter();
-  return (place) => {
-    const route = iosAppRouteOf(place.place);
-    if (route === undefined) opened(place.href);
-    else router.push(route);
-  };
+  openInSafari(linkOf(destination, workspace.slug ?? workspace.id));
 }
 
 /** The row's acts: Mark done, offered on a task not yet done, as the panel's row offers it. */
@@ -304,6 +288,21 @@ function pickedGroups(tree: TaskTree, picked: string): readonly TaskTreeGroup[] 
   return [...(tree.pinned === undefined ? [] : [tree.pinned]), ...tree.sections].filter(
     (group) => group.key === picked,
   );
+}
+
+/**
+ * The groups column's pick that shows task `id` in the middle column: the
+ * pick it stands on where that group lists the task, else Pinned or the
+ * section that lists it, else My tasks.
+ */
+function pickHolding(tree: TaskTree, id: string, current: string): string {
+  const lists = (groups: readonly TaskTreeGroup[]) =>
+    groups.some((group) => group.rows.some(({ task }) => task.id === id));
+  if (lists(pickedGroups(tree, current))) return current;
+  const named = [...(tree.pinned === undefined ? [] : [tree.pinned]), ...tree.sections].find(
+    (group) => lists([group]),
+  );
+  return named?.key ?? MY_TASKS_GROUP;
 }
 
 /** How many tasks a group's rows hold. */
@@ -473,7 +472,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   );
 }
 
-/** The task's agents as the panel's Agents group lists them, New agent after them, which opens its sheet, and the line of its threads that need you. */
+/** The task's agents as the panel's Agents group lists them, each pull request's number opening its own screen, New agent after them, which opens its sheet, and the line of its threads that need you. */
 function OverviewAgents({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
   const { task } = overview;
@@ -493,7 +492,7 @@ function OverviewAgents({ overview }: { readonly overview: TaskOverview }) {
               : {
                   number: pullRequest.number,
                   state: pullRequest.state,
-                  onPress: () => opened(pullRequest.url),
+                  onPress: () => router.push(iosPullRequestRoute(agent.id, pullRequest.number)),
                 }
           }
         />
@@ -545,7 +544,7 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
  */
 function OverviewPage({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
-  const openPlace = useOpenPlace();
+  const openLink = useOpenLink();
   const { task, document } = overview;
   const { data: descriptions = false } = useQuery({
     ...appStateQuery,
@@ -556,7 +555,7 @@ function OverviewPage({ overview }: { readonly overview: TaskOverview }) {
   // A related task opens on its own Overview, and an agent on its page, where its transcript and its composer stand.
   const open = (id: string) => {
     if (related.has(id)) router.push(`/tasks/${encodeURIComponent(id)}`);
-    else if (agents.has(id)) router.push(`/tasks/agent/${encodeURIComponent(id)}`);
+    else if (agents.has(id)) router.push(iosAgentRoute(id));
   };
   return (
     <RowList look={LIST_LOOK.PLAIN} onSelect={open}>
@@ -571,7 +570,7 @@ function OverviewPage({ overview }: { readonly overview: TaskOverview }) {
           <WordsRow
             words={document.document.body}
             repository={task.repository}
-            onOpenPlace={openPlace}
+            onOpenLink={openLink}
           />
         </ListSection>
       )}
@@ -630,9 +629,18 @@ function TasksSplitScreen({
   readonly select: (id: string) => void;
 }) {
   const three = useThreeColumns();
-  const [picked, setPicked] = useState<string>(MY_TASKS_GROUP);
   const { search, setSearch, listing } = useTasksScreen();
+  const [picked, setPicked] = useState<string>(() =>
+    selected === undefined ? MY_TASKS_GROUP : pickHolding(listing.tree, selected, MY_TASKS_GROUP),
+  );
+  // Note that a selection a link or a related task made moves the groups column to a group that lists it, so its row stands beside its page.
+  const [shown, setShown] = useState(selected);
+  if (selected !== shown) {
+    setShown(selected);
+    if (selected !== undefined) setPicked(pickHolding(listing.tree, selected, picked));
+  }
   const overview = useTaskOverview(selected);
+  const read = useTasksRead();
   const account = useSettingsAccount();
   const tree = (
     <TasksTree
@@ -654,10 +662,12 @@ function TasksSplitScreen({
           }
           content={three ? tree : undefined}
           detail={
-            overview === undefined ? (
-              <EmptyState title={SELECT_A_TASK} symbol="checklist" />
-            ) : (
+            overview !== undefined ? (
               <OverviewPage key={overview.task.id} overview={overview} />
+            ) : selected !== undefined && read ? (
+              <EmptyState title={TASK_NOT_FOUND} symbol="questionmark.folder" />
+            ) : (
+              <EmptyState title={SELECT_A_TASK} symbol="checklist" />
             )
           }
           detailMenu={overview === undefined ? undefined : taskMenu(overview)}

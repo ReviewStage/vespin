@@ -1,5 +1,5 @@
 /**
- * status-tone.ts -- the six tones a status is drawn in, the one list every component that says where something stands reads.
+ * status-tone.ts -- the seven tones a status is drawn in, the one list every component that says where something stands reads.
  *
  * Each tone means one thing, and its colors are set once, beside it, in
  * `tokens/status-tone.css`: whatever wears `data-tone` with one of these
@@ -17,6 +17,8 @@ export const STATUS_TONE = {
   NEUTRAL: "neutral",
   /** Still going, with nothing to do yet: a task in progress, running checks, the merge queue. */
   WORKING: "working",
+  /** On its way up, ready in a moment: a sandbox booting. */
+  STARTING: "starting",
   /** Needs a person: needs you, a review asked for, a sign-in expired. */
   ATTENTION: "attention",
   /** Finished well: a task done, an agent finished, a check passed, connected. */

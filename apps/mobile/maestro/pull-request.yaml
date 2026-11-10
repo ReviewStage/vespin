@@ -1,4 +1,4 @@
-# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, then merged from the bar; one whose checks failed; and one in the merge queue, taken out of it after the question, and opened on GitHub.
+# pull-request.yaml -- a pull request's screen: reached from its card on the agent's page, whose Merge asks first; green and ready, then merged from the bar; reached from its task's Overview, by its agent's row and by its chip; one whose checks failed; and one in the merge queue, taken out of it after the question, and opened on GitHub.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -43,6 +43,38 @@ appId: dev.vespin.ios
     timeout: 30000
 - waitForAnimationToEnd
 - takeScreenshot: pull-request-merged
+# A task's Overview opens it on the same screen rather than on GitHub: by the
+# number on its agent's row, and by the chip its description names it with.
+# Note that each is reached from a fresh launch, since iOS offers Maestro no
+# back press.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- tapOn: "Tasks"
+- tapOn: "Teammate invitations"
+- assertVisible: "Agents"
+- tapOn: "#128"
+- extendedWaitUntil:
+    visible: "Ready to merge"
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-from-agent-row
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- tapOn: "Tasks"
+- tapOn: "Teammate invitations"
+- scrollUntilVisible:
+    element: ".*#128 Invite a teammate by email"
+    direction: DOWN
+- tapOn: ".*#128 Invite a teammate by email"
+- extendedWaitUntil:
+    visible: "Ready to merge"
+    timeout: 30000
+- waitForAnimationToEnd
+- takeScreenshot: pull-request-from-chip
 # One whose checks failed: the failure first, a check still running, and
 # changes asked for, with no merge to press.
 - launchApp:

@@ -315,6 +315,15 @@ const lineOf = (within: Element) => {
 const meterOf = (within: Element) =>
   within.querySelector('[data-slot="progress"]')?.getAttribute("data-tone") ?? undefined;
 
+/** A plan's usage meters, each window's row as a reader hears its words, the copies that size its columns left out. */
+const metersOf = (within: Element) =>
+  [...within.querySelectorAll("[data-window]")].map((row) =>
+    [...row.querySelectorAll("span")]
+      .filter((span) => span.children.length === 0 && span.closest("[aria-hidden]") === null)
+      .map((span) => span.textContent)
+      .join(""),
+  );
+
 const plain = (words: string) => ({ words, state: SETTINGS_ROW_STATE.PLAIN });
 const readyLine = plain("Ready");
 /** The name a key with none of its own is shown by. */
@@ -406,7 +415,7 @@ function leave(): void {
   for (const root of roots.splice(0)) act(() => root.unmount());
 }
 
-test("each card opens on its harness and its Add; each credential says how it stands under its name, a plan how much of its window it has used", async () => {
+test("each card opens on its harness and its Add; each credential says how it stands under its name, a plan with room how much of each window it has used, in meters alone", async () => {
   const empty = await mount();
   assert.deepEqual(
     labels(empty).filter((label) => label !== ""),
@@ -419,14 +428,22 @@ test("each card opens on its harness and its Add; each credential says how it st
 
   held = {
     keys: [{ ...ANTHROPIC_KEY, provider: PROVIDER_KEY_PROVIDER.OPENAI, position: 0 }],
-    subscriptions: [{ ...CLAUDE_PLAN, usage: { usedPercent: 42.4, windowMins: 300 } }],
+    subscriptions: [
+      {
+        ...CLAUDE_PLAN,
+        usage: { usedPercent: 42.4, windowMins: 300 },
+        usageWindows: [
+          { usedPercent: 42.4, windowMins: 300 },
+          { usedPercent: 18, windowMins: 10_080 },
+        ],
+      },
+    ],
   };
   // Note that one client holds the test's worlds, so each later world waits for its own keys to replace the last one's.
   const connected = await mount();
   const claudePlan = () => credential(connected, "Claude plan");
-  await vi.waitFor(() =>
-    assert.deepEqual(lineOf(claudePlan()), plain("42% of the 5-hour limit used")),
-  );
+  await vi.waitFor(() => assert.deepEqual(metersOf(claudePlan()), ["5-hour42%", "Weekly18%"]));
+  assert.equal(lineOf(claudePlan()), undefined, "no Ready line stands over the meters");
   assert.equal(meterOf(claudePlan()), "working");
   assert.deepEqual(lineOf(credential(connected, KEY_NAME)), readyLine);
   assert.equal(meterOf(credential(connected, KEY_NAME)), undefined, "a key draws no bar");
@@ -449,11 +466,8 @@ test("each card opens on its harness and its Add; each credential says how it st
     ),
   );
   assert.ok(button(credential(attention, "Claude plan"), "Replace token"));
-  assert.deepEqual(
-    lineOf(credential(attention, "ana@work.test")),
-    needsHand("Signed out of Codex."),
-  );
-  assert.ok(button(credential(attention, "ana@work.test"), "Sign in again"));
+  assert.deepEqual(lineOf(credential(attention, "ana@work.test")), needsHand("Sign-in expired"));
+  assert.ok(button(credential(attention, "ana@work.test"), "Reconnect"));
   leave();
 
   // A plan at its limit says until when, its bar full in the attention ink; only Codex's offers Manage usage, which opens ChatGPT's usage settings.
@@ -769,12 +783,12 @@ test("a Codex plan connects in place through Codex's code, which goes once conne
   await vi.waitFor(() => assert.ok(!labels(page).includes("ana@work.test")));
 });
 
-test("a Codex plan OpenAI signed out offers Sign in again, which asks for a code in place", async () => {
+test("a Codex plan whose sign-in expired offers Reconnect, which asks for a code in place", async () => {
   waitOpen = Promise.withResolvers();
   held = { keys: [], subscriptions: [{ ...CHATGPT_PLAN, status: PROVIDER_KEY_STATUS.INVALID }] };
   const page = await mount();
   await vi.waitFor(() => assert.ok(credential(page, "ana@work.test")));
-  await press(credential(page, "ana@work.test"), "Sign in again");
+  await press(credential(page, "ana@work.test"), "Reconnect");
   assert.equal(sentOf(ACT_KIND.CHATGPT_DEVICE_START).length, 1);
   assert.match(page.textContent ?? "", /225Q-1343X/u);
 });

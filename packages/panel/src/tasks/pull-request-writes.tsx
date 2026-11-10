@@ -67,6 +67,7 @@ import {
   type ReactNode,
   useCallback,
   useContext,
+  useEffect,
   useId,
   useLayoutEffect,
   useMemo,
@@ -639,7 +640,22 @@ export function PullRequestWriteNote({
 const TITLE_WORDS = {
   BLOCK: "Title",
   FIELD: "Pull request title",
+  SEND_AGAIN: "Send again",
 } as const;
+
+/** Where the title's edit stands once its words are left: nothing out, sent and waiting on GitHub, or held because another change was out. */
+const TITLE_EDIT = {
+  VIEWING: "viewing",
+  SENDING: "sending",
+  HELD: "held",
+} as const;
+
+/** The title's edit, the words it drew where they are not the pull request's own; while they are typed in, the words are the field's. */
+type TitleEdit =
+  | { readonly kind: typeof TITLE_EDIT.VIEWING }
+  | { readonly kind: typeof TITLE_EDIT.SENDING | typeof TITLE_EDIT.HELD; readonly title: string };
+
+const TITLE_VIEWING: TitleEdit = { kind: TITLE_EDIT.VIEWING };
 
 /** The title's line in the dialog's type, holding its words or the blocks of a title still being read. */
 export function PullRequestTitleLine({ children }: { children: ReactNode }): React.JSX.Element {
@@ -656,8 +672,11 @@ export function PullRequestTitleLine({ children }: { children: ReactNode }): Rea
  * is: nothing marks them editable, a click in them puts the caret there,
  * and Return on the title selected puts it at their end. Return or the
  * focus leaving keeps them where they changed and are not empty; Escape
- * puts the title back. The words stand as typed until GitHub answers, and
- * where it refuses, the title as it was comes back.
+ * puts the title back. The words stand as typed until GitHub answers,
+ * whatever a read lands meanwhile, and where it refuses, the title as it
+ * was comes back. Where they were not sent because another change was out,
+ * they stand as typed and a toast says why, offering to send them again;
+ * dismissing it puts the title back.
  */
 export function PullRequestTitle({
   title,
@@ -673,23 +692,63 @@ export function PullRequestTitle({
   const text = useRef<HTMLElement | null>(null);
   const standing = useRef(title);
   standing.current = title;
-  // The words follow the title wherever they are not being typed in.
+  // Read as a press lands, so the toast's Send again, which outlives this render, sends through the newest writes.
+  const newestWrites = useRef(writes);
+  newestWrites.current = writes;
+  const toast = useToast();
+  const withdrawToast = useWithdrawToast();
+  const toastSubject = useId();
+  // Note that the edit is held in a ref as well, so an answer landing before the next render reads the edit it answers.
+  const edit = useRef<TitleEdit>(TITLE_VIEWING);
+  const [drawn, setDrawn] = useState<TitleEdit>(TITLE_VIEWING);
+  const move = (next: TitleEdit) => {
+    edit.current = next;
+    setDrawn(next);
+  };
+  // The words follow the edit, or the title where none stands, wherever they are not being typed in.
   useLayoutEffect(() => {
     const element = text.current;
     if (element === null || element === document.activeElement) return;
-    element.textContent = title;
-  }, [title]);
+    element.textContent = drawn.kind === TITLE_EDIT.VIEWING ? title : drawn.title;
+  }, [title, drawn]);
+  useEffect(() => () => withdrawToast(toastSubject), [withdrawToast, toastSubject]);
+  const send = (typed: string) => {
+    const sent: TitleEdit = { kind: TITLE_EDIT.SENDING, title: typed };
+    move(sent);
+    void newestWrites.current
+      .write({ action: PULL_REQUEST_ACTION.EDIT_TITLE, title: typed })
+      .then((outcome) => {
+        // Note that words left again while this one was out are a newer edit, which this answer does not settle.
+        if (edit.current !== sent) return;
+        if (outcome !== NOT_SENT) {
+          move(TITLE_VIEWING);
+          return;
+        }
+        move({ kind: TITLE_EDIT.HELD, title: typed });
+        toast({
+          words: NOT_SENT_WORDS,
+          tone: STATUS_TONE.ATTENTION,
+          subject: toastSubject,
+          replayUnmasked: true,
+          persists: true,
+          action: {
+            label: TITLE_WORDS.SEND_AGAIN,
+            replayUnmasked: true,
+            onPress: () => send(typed),
+          },
+          onDismiss: () => move(TITLE_VIEWING),
+        });
+      });
+  };
   const keep = (element: HTMLElement) => {
+    withdrawToast(toastSubject);
     const typed = element.textContent.trim();
     if (typed === "" || typed === standing.current) {
       element.textContent = standing.current;
+      move(TITLE_VIEWING);
       return;
     }
-    void writes.write({ action: PULL_REQUEST_ACTION.EDIT_TITLE, title: typed }).then((outcome) => {
-      if (!outcome.done && element !== document.activeElement) {
-        element.textContent = standing.current;
-      }
-    });
+    send(typed);
   };
   return (
     <EditableBlock
