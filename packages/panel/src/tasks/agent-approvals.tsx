@@ -135,11 +135,11 @@ export const MODE_GLYPH = {
   [AGENT_PERMISSION_MODE.AUTO]: AutoApproveIcon,
 } as const satisfies Record<AgentPermissionMode, () => React.JSX.Element>;
 
-/** The modes in the order the menu offers them. */
+/** The modes in the order the menu offers them: most asking first, Full access last, as Codex orders its own. */
 export const MODES = [
-  AGENT_PERMISSION_MODE.FULL_ACCESS,
   AGENT_PERMISSION_MODE.ASK,
   AGENT_PERMISSION_MODE.AUTO,
+  AGENT_PERMISSION_MODE.FULL_ACCESS,
 ] as const;
 
 /** The chip's name for a reader, and its menu's. */
