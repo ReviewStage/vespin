@@ -3,10 +3,11 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { archiveAgent } from "@repo/database/models/agent-store";
-import { user } from "@repo/database/schemas/auth";
+import { organization, user } from "@repo/database/schemas/auth";
 import { getTestDB, openTaskAgent, startTask } from "@repo/database/testing";
 import { PAGE_SANDBOX_ORIGIN } from "@repo/features/page-frame";
 import { memorySandbox } from "@repo/sandbox/testing";
+import { eq } from "drizzle-orm";
 import { Clock, Effect, Layer, Redacted } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
@@ -18,6 +19,8 @@ import {
   mintPreviewSession,
   PREVIEW_LINK,
   PREVIEW_NAME_KIND,
+  type PreviewName,
+  previewNameOf,
   previewOrigin,
 } from "./preview-links.js";
 
@@ -25,7 +28,8 @@ import {
  * A shared port's preview host, over a real dialect: a member's page load of
  * an archived agent's preview is drawn the no-preview page under the
  * refusal's status, never the API's refusal as JSON, while a request that is
- * no page load still gets the refusal.
+ * no page load still gets the refusal; and a host named by the agent's task
+ * admits only a session for the agent it names.
  *
  * Synthetic accounts, workspaces, tasks, agents, and keys throughout.
  */
@@ -44,7 +48,7 @@ const openAccount = Effect.gen(function* () {
   return id;
 });
 
-/** The preview host's route over the test's own database and clock, its member's visit of the agent's preview as the routing hands it on, a page load unless said. */
+/** The preview host's route over the test's own database and clock, its member's visit of the agent's preview as the routing hands it on, at its agent-id host and as a page load unless said. */
 const standing = Effect.gen(function* () {
   const services = Layer.mergeAll(
     Layer.succeed(SqlClient.SqlClient, yield* SqlClient.SqlClient),
@@ -60,14 +64,19 @@ const standing = Effect.gen(function* () {
     { disableLogger: true },
   );
   yield* Effect.addFinalizer(() => Effect.promise(() => route.dispose()));
-  return (userId: string, agentId: string, pageLoad = true) =>
+  return (
+    userId: string,
+    agentId: string,
+    pageLoad = true,
+    name: PreviewName = { kind: PREVIEW_NAME_KIND.AGENT, agentId },
+  ) =>
     Effect.gen(function* () {
       const cookie = mintPreviewSession(
         SANDBOX,
         { userId, agentId },
         yield* Clock.currentTimeMillis,
       );
-      const address = `${previewOrigin(SANDBOX, { kind: PREVIEW_NAME_KIND.AGENT, agentId })}${PREVIEW_LINK.PROXY_PATH}/app`;
+      const address = `${previewOrigin(SANDBOX, name)}${PREVIEW_LINK.PROXY_PATH}/app`;
       return yield* Effect.promise(() =>
         route.handler(
           new Request(address, {
@@ -102,6 +111,34 @@ it.layer(getTestDB())("a shared port's preview host", (it) => {
         assert.deepEqual(yield* Effect.promise(() => fetched.json()), {
           error: HOSTED_API_ERROR.AGENT_RETIRED,
         });
+      }),
+  );
+
+  it.effect(
+    "a host named by the agent's task reaches the agent its session admits, and sends a session for another agent to sign in",
+    () =>
+      Effect.gen(function* () {
+        const visit = yield* standing;
+        const member = yield* openAccount;
+        const task = yield* startTask(member, { name: "Teammate invitations" });
+        const agentId = yield* openTaskAgent(member, task.workspaceId, task.id);
+        const other = yield* openTaskAgent(member, task.workspaceId, task.id);
+        yield* archiveAgent(member, agentId, true);
+        const [workspace] = yield* (yield* Database)
+          .select({ slug: organization.slug })
+          .from(organization)
+          .where(eq(organization.id, task.workspaceId));
+        const name = previewNameOf(workspace?.slug ?? "", task.number ?? 0, agentId);
+
+        const own = yield* visit(member, agentId, true, name);
+        const another = yield* visit(member, other, true, name);
+
+        // The task's host found the archived agent, and so met its refusal.
+        assert.equal(own.status, HOSTED_HTTP_STATUS.CONFLICT);
+        assert.equal(another.status, HOSTED_HTTP_STATUS.FOUND);
+        const signIn = new URL(another.headers.get("location") ?? "");
+        assert.equal(signIn.origin, "https://tryluke.dev");
+        assert.equal(signIn.pathname, PREVIEW_LINK.SIGN_IN_PATH);
       }),
   );
 });
