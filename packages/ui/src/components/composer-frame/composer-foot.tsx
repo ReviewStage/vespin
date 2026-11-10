@@ -327,7 +327,10 @@ export function ComposerFoot({
               {note.words}
             </ErrorState>
           ) : (
-            <UsageLimitNotice notice={note.usageLimit} />
+            // The card spans the foot, where the failure's line sits at its start.
+            <div className="ui-composer-foot-notice self-stretch">
+              <UsageLimitNotice notice={note.usageLimit} />
+            </div>
           )}
           {note.mends}
         </div>
