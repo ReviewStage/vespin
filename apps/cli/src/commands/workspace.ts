@@ -16,7 +16,16 @@ import { Argument, Command } from "effect/cli";
 import { configuredWorkspace, keepWorkspace } from "../config-store.js";
 import { answer, CommandFailed } from "../output.js";
 import { askService, session } from "../session.js";
-import { workspaceMembersCommand, workspaceSlugCommand } from "./workspace-members.js";
+import {
+  workspaceInvitationsCommand,
+  workspaceInviteCommand,
+  workspaceMembersCommand,
+  workspaceRemoveCommand,
+  workspaceRenameCommand,
+  workspaceRoleCommand,
+  workspaceSlugCommand,
+  workspaceUninviteCommand,
+} from "./workspace-members.js";
 
 /** A config file this version could not read or write, as the command's failure. */
 function configFailed(failed: { readonly message: string }): CommandFailed {
@@ -95,7 +104,18 @@ const useCommand = Command.make(
 
 export const workspaceCommand = Command.make("workspace").pipe(
   Command.withDescription("List your workspaces, choose the default one, and manage its members"),
-  Command.withSubcommands([listCommand, useCommand, workspaceMembersCommand, workspaceSlugCommand]),
+  Command.withSubcommands([
+    listCommand,
+    useCommand,
+    workspaceMembersCommand,
+    workspaceRemoveCommand,
+    workspaceRoleCommand,
+    workspaceInvitationsCommand,
+    workspaceInviteCommand,
+    workspaceUninviteCommand,
+    workspaceRenameCommand,
+    workspaceSlugCommand,
+  ]),
   Command.withExamples([
     { command: "vespin workspace use acme", description: "Make acme the default workspace" },
   ]),

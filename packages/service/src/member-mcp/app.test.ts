@@ -1594,6 +1594,77 @@ it.effect(
 );
 
 it.effect(
+  "an admin acting through the server invites on the deployment's own origin and cancels, but gives no role, which the owner gives before removing them",
+  () =>
+    Effect.gen(function* () {
+      const { auth, fetch, services } = yield* standing;
+      const owner = yield* Effect.promise(() => signUp(auth));
+      const admin = yield* Effect.promise(() => signUp(auth));
+      yield* Effect.gen(function* () {
+        const workspaceId = yield* openWorkspace(owner.userId);
+        yield* joinWorkspace(workspaceId, admin.userId, WORKSPACE_ROLE.ADMIN);
+      }).pipe(Effect.provide(services));
+      const callAs = (cookie: string, name: string, args: Record<string, unknown>) =>
+        Effect.gen(function* () {
+          const token = yield* Effect.promise(() =>
+            mintedToken(auth, cookie, {
+              clientId: MCP_CLIENT.id,
+              scope: [MEMBER_MCP_SCOPE.MCP],
+              resource: RESOURCE,
+            }),
+          );
+          const { client } = yield* connected(fetch, token, REVISION.MODERN);
+          const answer = decodeAnswer(
+            yield* Effect.promise(() => client.callTool({ name, arguments: args })),
+          );
+          yield* Effect.promise(() => client.close());
+          return answer;
+        });
+      const rolesOf = (text: string) =>
+        JSON.parse(text).members.map(({ userId, role }: { userId: string; role: string }) => [
+          userId,
+          role,
+        ]);
+
+      const invited = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.INVITE_TO_WORKSPACE, {
+        email: "Newcomer@Example.com",
+        role: WORKSPACE_ROLE.MEMBER,
+      });
+      const invitation = JSON.parse(invited.content[0].text).invitation;
+      const listed = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.LIST_WORKSPACE_INVITATIONS, {});
+      const canceled = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.CANCEL_WORKSPACE_INVITATION, {
+        invitationId: invitation.id,
+      });
+      const unranked = yield* callAs(admin.cookie, MEMBER_MCP_TOOL.CHANGE_WORKSPACE_MEMBER_ROLE, {
+        userId: owner.userId,
+        role: WORKSPACE_ROLE.MEMBER,
+      });
+      const demoted = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.CHANGE_WORKSPACE_MEMBER_ROLE, {
+        userId: admin.userId,
+        role: WORKSPACE_ROLE.MEMBER,
+      });
+      const removed = yield* callAs(owner.cookie, MEMBER_MCP_TOOL.REMOVE_WORKSPACE_MEMBER, {
+        userId: admin.userId,
+      });
+
+      assert.notEqual(invited.isError, true, invited.content[0].text);
+      assert.equal(invitation.email, "newcomer@example.com");
+      assert.ok(invitation.acceptUrl.startsWith(`${MEMBER_MCP_TEST.ORIGIN}/`));
+      assert.deepEqual(
+        JSON.parse(listed.content[0].text).invitations.map(({ id }: { id: string }) => id),
+        [invitation.id],
+      );
+      assert.deepEqual(JSON.parse(canceled.content[0].text).invitations, []);
+      assert.equal(unranked.isError, true);
+      assert.deepEqual(rolesOf(demoted.content[0].text), [
+        [owner.userId, WORKSPACE_ROLE.OWNER],
+        [admin.userId, WORKSPACE_ROLE.MEMBER],
+      ]);
+      assert.deepEqual(rolesOf(removed.content[0].text), [[owner.userId, WORKSPACE_ROLE.OWNER]]);
+    }),
+);
+
+it.effect(
   "a member's connect_integration answers the sign-in link alone, and the sign-in returns to this deployment's own address",
   () =>
     Effect.gen(function* () {
