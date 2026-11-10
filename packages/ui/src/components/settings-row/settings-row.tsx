@@ -452,9 +452,13 @@ export function SettingsRowValue({ children }: { children: ReactNode }): React.J
   );
 }
 
-/** The room of a row's ⋯ on a row with none, so every row's value ends in one column. */
+/**
+ * The room of a row's ⋯ on a row with none, so every row's value ends in one
+ * column, and its line stands a ⋯ tall, so a press that arrives on it later,
+ * an edit's Save, grows nothing.
+ */
 export function SettingsRowActSlot(): React.JSX.Element {
-  return <span className="ui-settings-row-act-slot w-control flex-none" aria-hidden="true" />;
+  return <span className="ui-settings-row-act-slot size-control flex-none" aria-hidden="true" />;
 }
 
 /** What is true of a saved credential, on one muted line beside its presses: its hint, its login, its status, wrapping between facts, never inside one. */

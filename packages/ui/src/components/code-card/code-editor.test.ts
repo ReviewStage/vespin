@@ -8,7 +8,10 @@ import { CodeEditor } from "./code-editor.js";
 /**
  * code-editor.test.ts -- a code editor handed colors for older words draws
  * the words typed, never the ones its colors were for, so the colored layer
- * under the caret always spells what the field holds. Synthetic code.
+ * under the caret always spells what the field holds; and a numbered one
+ * numbers each line the field holds, its empty ones and a closing empty one
+ * included, so each number stands beside the line the caret is on.
+ * Synthetic code.
  */
 
 declare global {
@@ -41,4 +44,26 @@ test("colors for older words leave the drawn words those typed", () => {
   );
   const drawn = document.querySelector("pre")?.textContent ?? expect.fail("No drawn lines");
   expect(drawn).toBe(`${typed}\n`);
+});
+
+test("a numbered editor numbers every line it holds, empty ones included", () => {
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+  // Four lines as the text area holds them: two with words, an empty one between, and the empty one a closing newline opens.
+  const typed = "pnpm install\n\nuv sync\n";
+  act(() =>
+    root.render(
+      createElement(CodeEditor, {
+        label: "Script",
+        value: typed,
+        onChange: () => {},
+        lineNumbers: true,
+      }),
+    ),
+  );
+  const drawn = [...(document.querySelector("pre")?.children ?? [])].map(
+    (line) => line.firstElementChild?.textContent,
+  );
+  expect(drawn).toEqual(["1", "2", "3", "4"]);
 });
