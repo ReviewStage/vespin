@@ -23,7 +23,8 @@ import { beginTaskWork, createTask, updateTask } from "../task-store.js";
  * task, agent, or account, stands open. The
  * act's opposite, the agent brought back or a member moving the task off
  * Done or Canceled, opens again exactly the items that act settled, its asks
- * open again; the task reopened by us as a turn starts on it opens nothing.
+ * open again; the task reopened by us as a turn starts on it opens nothing,
+ * and leaves them to the task's next Done or Canceled to open on its undo.
  *
  * Synthetic accounts, workspaces, tasks, and agents throughout.
  */
@@ -137,7 +138,7 @@ it.layer(getTestDB())("an inbox item settling with its task", (it) => {
   );
 
   it.effect(
-    "opens again exactly the items a move settled when a member moves the task off it, and nothing when a turn reopens it",
+    "opens again the items a move settled when a member moves the task off it, nothing when a turn reopens it, and keeps a turn's items for the next move",
     () =>
       Effect.gen(function* () {
         const dean = yield* openAccount;
@@ -149,19 +150,22 @@ it.layer(getTestDB())("an inbox item settling with its task", (it) => {
         assert.equal(yield* beginTaskWork(dean, taskId), true);
         yield* assertSettled(first, "Its task is done.");
 
-        // Done again over a later question, then moved back by a member: only that move's item opens.
+        // Done again over a later question, then moved back by a member: that move's item opens, and the
+        // first move's, which the turn left keyed on a stamp it cleared, with it.
         yield* TestClock.adjust("1 minute");
         const later = yield* openInboxItem(dean, workspace, taskId, agentId, true);
         yield* updateTask(dean, taskId, { status: TASK_STATUS.DONE });
         yield* updateTask(dean, taskId, { status: TASK_STATUS.IN_PROGRESS });
-        yield* assertOpen([later]);
-        yield* assertSettled(first, "Its task is done.");
+        yield* assertOpen([...first, later]);
 
-        // Canceled and put back to do, the same way.
+        // Done, then Canceled, then put back to do: the Done's item, handed to the Canceled, opens too.
+        yield* TestClock.adjust("1 minute");
+        yield* updateTask(dean, taskId, { status: TASK_STATUS.DONE });
+        yield* TestClock.adjust("1 minute");
         yield* updateTask(dean, taskId, { status: TASK_STATUS.CANCELED });
-        yield* assertSettled([later], "Its task was canceled.");
+        yield* assertSettled([...first, later], "Its task was canceled.");
         yield* updateTask(dean, taskId, { status: TASK_STATUS.TODO });
-        yield* assertOpen([later]);
+        yield* assertOpen([...first, later]);
       }),
   );
 });

@@ -25,7 +25,10 @@
  * to that act instead, its reason and stamp, so undoing that act in turn
  * opens it. A task we reopen on our own, as a turn starting on it does
  * (`beginTaskWork`), opens nothing; only the agent's own post under the
- * item's key does.
+ * item's key does. Nor does it leave them closed for good: the task's next
+ * Done or Canceled takes over every item an earlier one of its own left
+ * closed, its stamp cleared by that turn or replaced by a move between the
+ * two, so a member's move off it opens them with its own.
  */
 
 import { INBOX_ASK_STATUS, INBOX_STATUS } from "@repo/features/inbox-wire";
@@ -135,7 +138,63 @@ const withdrawOpenAsks = SqlSchema.void({
     ),
 });
 
-/** The open items named that ask settled, and their open asks withdrawn, with why; how many settled. */
+/** The reasons a task's own Done or Canceled closes an item for. */
+const TASK_SETTLED_REASONS: readonly InboxSettledReason[] = [
+  INBOX_SETTLED_REASON.TASK_DONE,
+  INBOX_SETTLED_REASON.TASK_CANCELED,
+];
+
+/**
+ * The task's items an earlier Done or Canceled of its own settled that
+ * still stand closed for it, handed to this one: closed for its reason at
+ * its stamp; their ids. Note that such an item outlived the stamp it was
+ * keyed on, which a turn taking the task up cleared or a move between Done
+ * and Canceled replaced, so without this no undo could ever open it.
+ */
+const adoptTaskSettledItems = SqlSchema.findAll({
+  Request: SettleRequestSchema,
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ ids, reason, now }) =>
+    Database.use((db) =>
+      db
+        .update(inboxItem)
+        .set({ closedReason: reason, settledAt: now })
+        .where(
+          and(
+            inArray(inboxItem.taskId, ids),
+            eq(inboxItem.status, INBOX_STATUS.CLOSED),
+            isNull(inboxItem.closedBy),
+            inArray(inboxItem.closedReason, TASK_SETTLED_REASONS),
+          ),
+        )
+        .returning({ id: inboxItem.id }),
+    ),
+});
+
+/** The adopted items' asks an earlier task settle withdrew made to say this one's reason, withdrawn at its stamp, so its undo opens them again. */
+function adoptTaskSettled(request: typeof SettleRequestSchema.Type): SettleEffect<void> {
+  return Effect.gen(function* () {
+    const adopted = yield* adoptTaskSettledItems(request);
+    if (adopted.length === 0) return;
+    const latest = yield* findLatestAsks({ itemIds: adopted.map(({ id }) => id) });
+    yield* Effect.forEach(
+      latest.filter(
+        (ask) =>
+          ask.status === INBOX_ASK_STATUS.WITHDRAWN &&
+          TASK_SETTLED_REASONS.some((reason) => reason === ask.withdrawnReason),
+      ),
+      (ask) =>
+        rewordWithdrawnAsk({
+          messageId: ask.id,
+          reason: request.reason,
+          at: request.now.getTime(),
+        }),
+      { discard: true },
+    );
+  });
+}
+
+/** The open items named that ask settled, and their open asks withdrawn, with why; how many settled. A task's settle first takes over the items its earlier settles left closed. */
 function settle(
   by: (typeof SETTLE_BY)[keyof typeof SETTLE_BY],
   ids: readonly string[],
@@ -144,6 +203,7 @@ function settle(
 ): SettleEffect<number> {
   if (ids.length === 0) return Effect.succeed(0);
   return Effect.gen(function* () {
+    if (by === SETTLE_BY.TASK) yield* adoptTaskSettled({ by, ids, reason, now });
     const closed = yield* closeOpenItems({ by, ids, reason, now });
     if (closed.length === 0) return 0;
     yield* withdrawOpenAsks({ itemIds: closed.map(({ id }) => id), reason, now });
