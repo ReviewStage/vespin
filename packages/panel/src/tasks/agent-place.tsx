@@ -5,6 +5,7 @@ import {
   DEVICE_STANDING,
   type DeviceStanding,
 } from "@repo/features/agent-wire";
+import { sandboxMemoryGb } from "@repo/features/sandbox-size";
 import { RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import { RUN_ON_MAC_REASON_WORDS } from "@repo/features/workspace-tools-model";
 import {
@@ -87,6 +88,11 @@ function macWords(name: string, standing: DeviceStanding | undefined): string {
     : `${name} · Can't check status`;
 }
 
+/** A sandbox's size as the card's head names it: its vCPUs and their memory, "4 vCPUs · 8 GB". */
+function sandboxSizeWords(vcpus: number): string {
+  return `${vcpus} vCPUs · ${sandboxMemoryGb(vcpus)} GB`;
+}
+
 /** This Mac's command setting's choices, as Settings › This Mac words them. */
 const MAC_COMMAND_CHOICES: readonly ChoiceItem<MacCommandMode>[] = MAC_COMMAND_MODE_LIST.map(
   (mode) => ({ value: mode, label: MAC_COMMAND_MODE_LABEL[mode] }),
@@ -118,10 +124,13 @@ function runOnMacStands(read: RunOnMacRead): string {
  */
 function CloudChip({
   agentId,
+  vcpus,
   readerId,
   narrow,
 }: {
   agentId: string;
+  /** The vCPUs its sandbox opens with, which the card's head names with their memory; none from a service older than it. */
+  vcpus: number | undefined;
   readerId: string | undefined;
   narrow: boolean;
 }): React.JSX.Element {
@@ -133,17 +142,20 @@ function CloudChip({
       ? undefined
       : personActor(read.standing.owner, members, readerId, former);
   const stands = runOnMacStands(read);
+  const size = vcpus === undefined ? undefined : sandboxSizeWords(vcpus);
+  const said = [
+    size,
+    owner === undefined
+      ? undefined
+      : `${AGENT_TOOL.RUN_ON_MAC} on ${actorName(owner, { sentence: true, possessive: true })} Mac, ${stands}`,
+  ].flatMap((part) => (part === undefined ? [] : [`, ${part}`]));
   return (
     <PlaceChip
       glyph={<GLYPH.CLOUD aria-hidden="true" />}
       words={RUNS_ON_WORDS.CLOUD}
-      sub={undefined}
+      sub={size}
       note={SHARED_NOTE.CLOUD}
-      said={
-        owner === undefined
-          ? undefined
-          : `, ${AGENT_TOOL.RUN_ON_MAC} on ${actorName(owner, { sentence: true, possessive: true })} Mac, ${stands}`
-      }
+      said={said.length === 0 ? undefined : said.join("")}
       more={
         owner === undefined ? undefined : (
           <>
@@ -188,14 +200,21 @@ export function AgentPlace({
   readerId,
   narrow = false,
 }: {
-  agent: Pick<AgentSummary, "id" | "mac" | "machine">;
+  agent: Pick<AgentSummary, "id" | "mac" | "machine" | "sandboxVcpus">;
   /** The reader's account, whose own Mac the card calls "Your Mac". */
   readerId: string | undefined;
   /** Whether the box is too narrow for the chip's words, so it draws its glyph alone. */
   narrow?: boolean;
 }): React.JSX.Element | null {
   if (agent.machine !== AGENT_MACHINE.DEVICE) {
-    return <CloudChip agentId={agent.id} readerId={readerId} narrow={narrow} />;
+    return (
+      <CloudChip
+        agentId={agent.id}
+        vcpus={agent.sandboxVcpus}
+        readerId={readerId}
+        narrow={narrow}
+      />
+    );
   }
   if (agent.mac === undefined) return null;
   return <MacChip mac={agent.mac} narrow={narrow} />;
