@@ -41,17 +41,36 @@ export function createToastManager<Data extends object>(): ToastStackManager<Dat
   return BaseToast.createToastManager<Data>();
 }
 
-/** The toasts the manager keeps, newest first, each drawn by `draw`. */
+/**
+ * The viewport and the toasts the manager keeps in it, newest first, each
+ * drawn by `draw`; nothing while it keeps none. Note that the viewport and
+ * its portal stand only while a toast does, because the window draws none
+ * nearly always, and both cost a mount and an unmount for nothing.
+ */
 function Standing<Data extends object>({
+  label,
+  container,
   draw,
 }: {
+  label: string;
+  container: HTMLElement | null | undefined;
   draw: (toast: StandingToast<Data>) => ReactNode;
 }): ReactNode {
   const { toasts } = BaseToast.useToastManager<Data>();
-  return toasts.map(draw);
+  if (toasts.length === 0) return null;
+  return (
+    <BaseToast.Portal container={container}>
+      <BaseToast.Viewport
+        className="ui-toast-stack pointer-events-none fixed z-toast"
+        aria-label={label}
+      >
+        {toasts.map(draw)}
+      </BaseToast.Viewport>
+    </BaseToast.Portal>
+  );
 }
 
-/** The stack, named as a landmark, its manager's toasts each drawn by `children`. */
+/** The stack, named as a landmark while it holds a toast, its manager's toasts each drawn by `children`. */
 export function ToastStack<Data extends object>({
   manager,
   label,
@@ -73,14 +92,7 @@ export function ToastStack<Data extends object>({
       limit={TOAST_LIMIT}
       timeout={Duration.toMillis(TOAST_HOLD)}
     >
-      <BaseToast.Portal container={container}>
-        <BaseToast.Viewport
-          className="ui-toast-stack pointer-events-none fixed z-toast"
-          aria-label={label}
-        >
-          <Standing draw={children} />
-        </BaseToast.Viewport>
-      </BaseToast.Portal>
+      <Standing label={label} container={container} draw={children} />
     </BaseToast.Provider>
   );
 }
