@@ -40,6 +40,7 @@ import {
   INLINE_DIFF,
   INLINE_DIFF_LABEL,
 } from "./diff-view.js";
+import { EXPERIMENT, experimentOn } from "./experiments.js";
 import {
   isKeepAwake,
   KEEP_AWAKE_DEFAULT,
@@ -248,6 +249,8 @@ export const APP_SETTING_SCHEMA = {
     default: true,
     page: SETTINGS_PAGE.THIS_MAC,
     order: 3,
+    // Note that the switch stands only where Computer use is on, as every gated feature's row does.
+    visible: (view) => experimentOn(view.settings.experiments, EXPERIMENT.COMPUTER_USE),
     // Nothing to run per write: the host reads the switch as each action on an app arrives.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
   }),

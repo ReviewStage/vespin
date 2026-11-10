@@ -486,7 +486,16 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       : {
           ...unavailableConcern(HOST_PLATFORM_CONCERN.MAC_COMMANDS),
           // Note that a host without the Mac commands holds no ask, so an answer finds none waiting and is answered all the same, as the Gateway's refusal of its method was.
-          acts: { MAC_COMMAND_ANSWER: () => Effect.void },
+          acts: {
+            MAC_COMMAND_ANSWER: () => Effect.void,
+            COMPUTER_USE_STATUS: () =>
+              Effect.succeed({
+                permissions: { screenRecording: false, accessibility: false },
+                apps: [],
+              }),
+            COMPUTER_USE_ASK_PERMISSIONS: () =>
+              Effect.succeed({ screenRecording: false, accessibility: false }),
+          },
         };
 
     const thisMacHost = platform.has(HOST_PLATFORM_CONCERN.THIS_MAC_HOST)

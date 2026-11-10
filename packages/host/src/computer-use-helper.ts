@@ -45,17 +45,37 @@ export const COMPUTER_HELPER_FAILURE = {
   FAILED: "failed",
 } as const;
 
-/** A request beyond the agent's actions: one app named, without launching it, so the developer can be asked about it. */
-export const COMPUTER_HELPER_OP = { DESCRIBE_APP: "describe_app" } as const;
+/**
+ * The requests beyond the agent's actions: one app named, without launching
+ * it, so the developer can be asked about it; and the Mac's two grants,
+ * read, or asked for by macOS's own prompts, for Settings to show.
+ */
+export const COMPUTER_HELPER_OP = {
+  DESCRIBE_APP: "describe_app",
+  PERMISSIONS: "permissions",
+  REQUEST_PERMISSIONS: "request_permissions",
+} as const;
 
 export type ComputerHelperRequest =
   | MacComputerAction
-  | { readonly op: typeof COMPUTER_HELPER_OP.DESCRIBE_APP; readonly app: string };
+  | { readonly op: typeof COMPUTER_HELPER_OP.DESCRIBE_APP; readonly app: string }
+  | {
+      readonly op:
+        | typeof COMPUTER_HELPER_OP.PERMISSIONS
+        | typeof COMPUTER_HELPER_OP.REQUEST_PERMISSIONS;
+    };
+
+/** Whether macOS lets the helper capture other apps' windows and post input to them. */
+export interface ComputerPermissions {
+  readonly screenRecording: boolean;
+  readonly accessibility: boolean;
+}
 
 /** What one request came to: what the action did, the app described, or why the helper did nothing. */
 export type ComputerHelperAnswer =
   | { readonly outcome: ComputerOutcome }
   | { readonly described: ComputerApp }
+  | { readonly permissions: ComputerPermissions }
   | { readonly failure: string; readonly message: string };
 
 export interface ComputerUseHelperSeam {
@@ -109,6 +129,12 @@ const helperLineSchema = Schema.fromJsonString(
       ),
     }),
     Schema.Struct({ id: Schema.Number, ok: Schema.Literal(true), app: helperAppSchema }),
+    Schema.Struct({
+      id: Schema.Number,
+      ok: Schema.Literal(true),
+      screen_recording: Schema.Boolean,
+      accessibility: Schema.Boolean,
+    }),
     Schema.Struct({ id: Schema.Number, ok: Schema.Literal(true), done: Schema.String }),
   ]),
 );
@@ -140,7 +166,11 @@ function answerOf(line: HelperLine): ComputerHelperAnswer {
   }
 
   if ("app" in line) return { described: wireApp(line.app) };
-
+  if ("screen_recording" in line) {
+    return {
+      permissions: { screenRecording: line.screen_recording, accessibility: line.accessibility },
+    };
+  }
   return { outcome: { done: line.done } };
 }
 

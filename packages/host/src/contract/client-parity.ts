@@ -99,6 +99,9 @@ const byDesign = (why: string): ClientGapCell => ({
 
 /** The web's gaps, each the reason a browser tab cannot carry the act or carries it its own way. */
 const WEB = {
+  COMPUTER_USE: byDesign(
+    "Agents use apps on the Mac through its own helper, which a tab cannot run",
+  ),
   CLI: byDesign(
     "A tab cannot run the install script; the MCP & CLI page shows the command to paste",
   ),
@@ -374,6 +377,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MCP_CLIENTS_REVOKE]: EVERYWHERE,
 
   [PORT_ACT_KIND.MAC_COMMAND_ANSWER]: desktopOnly(WEB.MAC_COMMAND, IOS.MAC_COMMAND),
+  [PORT_ACT_KIND.COMPUTER_USE_STATUS]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
+  [PORT_ACT_KIND.COMPUTER_USE_ASK_PERMISSIONS]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
 
   [PORT_ACT_KIND.MAC_PHOTO_TO_JPEG]: desktopOnly(WEB.MAC_PHOTO, IOS.DESKTOP_ONLY),
 

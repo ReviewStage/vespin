@@ -692,6 +692,8 @@ export type MacShellActKind = (typeof MAC_SHELL_ACT_KIND)[keyof typeof MAC_SHELL
  */
 const MAC_COMMAND_ACT_KIND = {
   MAC_COMMAND_ANSWER: "macCommands.answer",
+  COMPUTER_USE_STATUS: "macCommands.computerUseStatus",
+  COMPUTER_USE_ASK_PERMISSIONS: "macCommands.computerUseAskPermissions",
 } as const;
 
 /**
@@ -1108,6 +1110,8 @@ export const PORT_ACT_USE = {
   MCP_CLIENTS_REVOKE: ACT_USE.WRITE,
 
   MAC_COMMAND_ANSWER: ACT_USE.WRITE,
+  COMPUTER_USE_STATUS: ACT_USE.FETCH,
+  COMPUTER_USE_ASK_PERMISSIONS: ACT_USE.WRITE,
 
   MAC_PHOTO_TO_JPEG: ACT_USE.FETCH,
 

@@ -106,10 +106,11 @@ function scriptedHelper(apps: readonly ComputerApp[]) {
     ask: (request) =>
       Effect.sync(() => {
         asked.push(request);
-
+        if (request.op === COMPUTER_HELPER_OP.PERMISSIONS) {
+          return { permissions: { screenRecording: true, accessibility: false } };
+        }
         if (request.op !== COMPUTER_HELPER_OP.DESCRIBE_APP) return { outcome: { done: "pressed" } };
-        const app = apps.find((each) => each.name === request.app);
-
+        const app = apps.find((each) => each.name === request.app || each.bundleId === request.app);
         return app === undefined
           ? { failure: COMPUTER_HELPER_FAILURE.NOT_FOUND, message: "No such app." }
           : { described: app };
@@ -921,5 +922,36 @@ it.effect(
           "no action reached the helper",
         );
       }
+    }),
+);
+
+it.effect(
+  "Settings reads the Mac's grants and names each app allowed without asking as the helper does, one it no longer finds by its bundle id",
+  () =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR]);
+      const { composer } = yield* subject(
+        scriptedService(),
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        {
+          mode: MAC_COMMAND_MODE.ASK,
+          signedIn: true,
+          computer: {
+            helper: scripted.helper,
+            enabled: true,
+            allowed: ["com.apple.iphonesimulator", "com.example.Gone"],
+          },
+        },
+      );
+
+      const status = yield* composer.acts.COMPUTER_USE_STATUS({});
+
+      assert.deepEqual(status, {
+        permissions: { screenRecording: true, accessibility: false },
+        apps: [
+          { bundleId: "com.apple.iphonesimulator", name: "Simulator", iconPng: "iVBORw0KGgo=" },
+          { bundleId: "com.example.Gone", name: "com.example.Gone" },
+        ],
+      });
     }),
 );
