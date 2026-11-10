@@ -1,4 +1,4 @@
-import { LINK_PLACE, type LinkPlace, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type LinkDestination, linkOf } from "@repo/features/link-grammar";
 import { APP_COMMAND, type KeyedCommand } from "@repo/settings/shortcuts";
 import { createContext, useContext } from "react";
 import { appPlatform, opensTabs } from "./app-platform.js";
@@ -91,7 +91,7 @@ export function linkItems(
 }
 
 /** The copy of a place's link under the workspace the surface hands down, saying Link copied; none where it hands down none. */
-export function useCopyLink(): ((place: LinkPlace) => void) | undefined {
+export function useCopyLink(): ((place: LinkDestination) => void) | undefined {
   const workspace = useContext(LinkWorkspaceContext);
   const copy = useCopyToast();
   const numbered = useNumberedPlace();
@@ -101,7 +101,7 @@ export function useCopyLink(): ((place: LinkPlace) => void) | undefined {
 }
 
 /** A place's link under the workspace the surface hands down, by the task's number where the window lists one; none where it hands down none. */
-function usePlaceLink(): (place: LinkPlace) => string | undefined {
+function usePlaceLink(): (place: LinkDestination) => string | undefined {
   const workspace = useContext(LinkWorkspaceContext);
   const numbered = useNumberedPlace();
   return (place) =>
@@ -109,7 +109,7 @@ function usePlaceLink(): (place: LinkPlace) => string | undefined {
 }
 
 /** Copy link and Open in new tab for a place (`linkItems`), under the workspace the surface hands down; none where it hands down none. */
-export function useLinkItems(): (place: LinkPlace) => MenuAction[] {
+export function useLinkItems(): (place: LinkDestination) => MenuAction[] {
   const linkOfPlace = usePlaceLink();
   const copy = useCopyToast();
   // Note that Copy link prints ⇧⌘C as the chord's link changes, so whoever draws it is drawn again as it does.
@@ -121,7 +121,7 @@ export function useLinkItems(): (place: LinkPlace) => MenuAction[] {
 }
 
 /** Opens a place in a tab of its own, under the workspace the surface hands down, which a middle-click on the row going to it takes; none where it hands down none or the window opens no tabs. */
-export function useOpenInTab(): (place: LinkPlace) => (() => void) | undefined {
+export function useOpenInTab(): (place: LinkDestination) => (() => void) | undefined {
   const linkOfPlace = usePlaceLink();
   return (place) => {
     const link = linkOfPlace(place);
@@ -130,6 +130,6 @@ export function useOpenInTab(): (place: LinkPlace) => (() => void) | undefined {
 }
 
 /** The place an agent is linked by, its own whichever task it works on, which its reader finds by the agent. */
-export function agentPlace(agentId: string): LinkPlace {
-  return { kind: LINK_PLACE.AGENT, agentId };
+export function agentPlace(agentId: string): LinkDestination {
+  return { kind: LINK_DESTINATION.AGENT, agentId };
 }

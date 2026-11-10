@@ -58,7 +58,7 @@ import {
   type IntegrationProvider,
   integrationConnectionOf,
 } from "@repo/features/integration-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
@@ -1108,7 +1108,7 @@ function AutomationActions({
     automation === undefined
       ? []
       : automationActionGroups({
-          links: linkItemsOf({ kind: LINK_PLACE.AUTOMATION, automationId: automation.id }),
+          links: linkItemsOf({ kind: LINK_DESTINATION.AUTOMATION, automationId: automation.id }),
           // Note that the desktop's toolbar stands Run now beside the ⋯, so only a phone's ⋯, the one given a lead, offers it.
           runNow: lead === undefined ? undefined : runNowAction(running, onRunNow),
           onDelete,

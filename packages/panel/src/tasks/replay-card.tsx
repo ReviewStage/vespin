@@ -1,7 +1,7 @@
 import { REPLAY_STEP_KIND, type Replay, type ReplayStep } from "@repo/features/agent-replay";
 import type { AgentPullRequest, AgentSummary, AgentTodos } from "@repo/features/agent-wire";
 import { AGENT_SENDER } from "@repo/features/agent-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import {
   BUTTON_VARIANT,
@@ -483,8 +483,8 @@ export function ReplayCard({
         : () =>
             openPlace(
               taskId === undefined
-                ? { kind: LINK_PLACE.AGENT, agentId }
-                : { kind: LINK_PLACE.AGENT, planId: taskId, agentId },
+                ? { kind: LINK_DESTINATION.AGENT, agentId }
+                : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId },
             );
   const left = leftOutLine(replay);
   const summary = summaryLine(replay);

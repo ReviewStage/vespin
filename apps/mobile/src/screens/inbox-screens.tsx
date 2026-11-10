@@ -26,7 +26,7 @@ import {
 } from "@repo/features/inbox-list-model";
 import { inboxWaitsOn } from "@repo/features/inbox-wire";
 import { iosAppRouteOf } from "@repo/features/ios-app-links";
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { cardTitle } from "@repo/features/plain-words";
 import {
   INBOX_FEED,
@@ -287,8 +287,8 @@ function ThreadDetail({
   const openOnWeb = () => {
     const place =
       holder.kind === INBOX_HOLDER.TASK
-        ? { kind: LINK_PLACE.INBOX_ITEM, planId: holder.task.id, itemId: item.id }
-        : { kind: LINK_PLACE.INBOX_ITEM, agentId: holder.agent.agentId, itemId: item.id };
+        ? { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id }
+        : { kind: LINK_DESTINATION.INBOX_ITEM, agentId: holder.agent.agentId, itemId: item.id };
     const address = linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
     openURL(address).catch((error: unknown) => console.error("The thread did not open.", error));
   };

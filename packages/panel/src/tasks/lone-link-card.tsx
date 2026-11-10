@@ -2,7 +2,7 @@ import { CHECK_SUMMARY } from "@repo/features/agent-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { INBOX_BLOCK } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { LINK_PLACE, readLink, taskNumberOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, readLink, taskNumberOf } from "@repo/features/link-grammar";
 import { LONE_LINK, type LoneLink, loneLinkOf } from "@repo/features/lone-link";
 import { holderTaskId } from "@repo/features/mention-holder";
 import {
@@ -186,8 +186,8 @@ function PageRowCard({
   const known = useKnownNames();
   const place =
     "taskId" in page
-      ? ({ kind: LINK_PLACE.PAGE, planId: page.taskId, pageId: page.pageId } as const)
-      : ({ kind: LINK_PLACE.PAGE, agentId: page.agentId, pageId: page.pageId } as const);
+      ? ({ kind: LINK_DESTINATION.PAGE, planId: page.taskId, pageId: page.pageId } as const)
+      : ({ kind: LINK_DESTINATION.PAGE, agentId: page.agentId, pageId: page.pageId } as const);
   const { name } = placeChipLook(place, writtenWords(target, words), known);
   const glyph = <EntityGlyph kind={ENTITY_KIND.PAGE} />;
   // Note that the page is named from the link as the bar read it, because a page's link the window reads, one ending in a slash or a fragment, may be no mention's.

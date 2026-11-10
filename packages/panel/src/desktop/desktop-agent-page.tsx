@@ -6,7 +6,7 @@ import {
 } from "@repo/features/agent-wire";
 import { dictationKeywords } from "@repo/features/dictation-keywords";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
 import type { PagePlace } from "@repo/features/page-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
@@ -509,17 +509,17 @@ function DesktopAgentPage({
       openPlace?.(
         item === undefined
           ? planId === null
-            ? { kind: LINK_PLACE.INBOX }
-            : { kind: LINK_PLACE.INBOX, planId }
+            ? { kind: LINK_DESTINATION.INBOX }
+            : { kind: LINK_DESTINATION.INBOX, planId }
           : planId === null
-            ? { kind: LINK_PLACE.INBOX_ITEM, agentId, itemId: item }
-            : { kind: LINK_PLACE.INBOX_ITEM, planId, itemId: item },
+            ? { kind: LINK_DESTINATION.INBOX_ITEM, agentId, itemId: item }
+            : { kind: LINK_DESTINATION.INBOX_ITEM, planId, itemId: item },
       );
     }
     if (target.kind === TOOL_TARGET.TASK) openPlace?.(placeOfTaskTarget(target));
     // Its plan's card names its task, an archived agent's among them, whose press opens the plan.
     if (target.kind === TOOL_TARGET.DESCRIPTION && planId !== null) {
-      openPlace?.({ kind: LINK_PLACE.TASK, planId });
+      openPlace?.({ kind: LINK_DESTINATION.TASK, planId });
     }
     // An agent's chip, such as one it was continued or forked to, opens that agent's own page.
     if (target.kind === TOOL_TARGET.AGENT) tasks.agentView.onOpen(target.agent);
@@ -567,7 +567,7 @@ function DesktopAgentPage({
         : (link: ReadLink) => {
             const { place } = link;
             const own =
-              (place.kind === LINK_PLACE.AGENT || place.kind === LINK_PLACE.MESSAGE) &&
+              (place.kind === LINK_DESTINATION.AGENT || place.kind === LINK_DESTINATION.MESSAGE) &&
               place.agentId === agentId;
             if (own) setDrafting(undefined);
             openLink(link);

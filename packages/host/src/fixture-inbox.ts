@@ -45,7 +45,7 @@ import {
   type InboxItem,
   type InboxMessage,
 } from "@repo/features/inbox-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
 import { TASK_PRIORITY, TASK_STATUS, type Task, type TaskSummary } from "@repo/features/task-wire";
@@ -202,7 +202,7 @@ const RECORDED = {
 
 /** Where the recorded thread's words draw its still from: the still's address on the thread, as an agent's post names a picture it attached. */
 const RECORDED_PICTURE_ADDRESS = inboxAttachmentAddress(
-  { kind: LINK_PLACE.INBOX_ITEM, planId: TASK.INVITES, itemId: RECORDED.ITEM },
+  { kind: LINK_DESTINATION.INBOX_ITEM, planId: TASK.INVITES, itemId: RECORDED.ITEM },
   RECORDED.PICTURE,
   FIXTURE_WORKSPACE_SLUG,
 );

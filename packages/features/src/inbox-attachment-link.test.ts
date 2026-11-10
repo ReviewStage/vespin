@@ -5,7 +5,7 @@ import {
   inboxAttachmentIdsIn,
   inboxAttachmentOf,
 } from "./inbox-attachment-link.js";
-import { LINK_PLACE, readLink } from "./link-grammar.js";
+import { LINK_DESTINATION, readLink } from "./link-grammar.js";
 
 /**
  * A picture in an Inbox item's words as its address: written under the
@@ -20,8 +20,8 @@ const OTHER_ITEM_ID = "a1b2c3d4-0000-4000-8000-000000000002";
 const PICTURE = "0b6f6b52-2c1e-4f8e-9a4d-7f1c2e9d5a01";
 const SECOND = "3c9e1a77-58b2-4d0f-8e6a-1b2c3d4e5f02";
 
-const ON_TASK = { kind: LINK_PLACE.INBOX_ITEM, planId: TASK_ID, itemId: ITEM_ID } as const;
-const ON_AGENT = { kind: LINK_PLACE.INBOX_ITEM, agentId: AGENT_ID, itemId: ITEM_ID } as const;
+const ON_TASK = { kind: LINK_DESTINATION.INBOX_ITEM, planId: TASK_ID, itemId: ITEM_ID } as const;
+const ON_AGENT = { kind: LINK_DESTINATION.INBOX_ITEM, agentId: AGENT_ID, itemId: ITEM_ID } as const;
 
 test("a picture's address is its item's link with its id after it, under the task or the agent with no task, and reads back by either scheme", () => {
   const onTask = inboxAttachmentAddress(ON_TASK, PICTURE, "acme");

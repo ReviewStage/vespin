@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
 import { QueryClient } from "@tanstack/react-query";
 import { createMemoryHistory } from "@tanstack/react-router";
 import { it } from "vitest";
@@ -173,7 +173,7 @@ it.each<[string, string, InboxItemHere, Route]>([
     ITEM,
     go({
       workspace: "acme",
-      place: { kind: LINK_PLACE.AGENT, planId: TASK, agentId: AGENT },
+      place: { kind: LINK_DESTINATION.AGENT, planId: TASK, agentId: AGENT },
     }),
   ],
   [

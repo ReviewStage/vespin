@@ -1,7 +1,7 @@
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
 import { FEEDBACK_KIND, type FeedbackKind } from "@repo/features/feedback";
-import { type AccountLink, LINK_PLACE, type ReadLink } from "@repo/features/link-grammar";
+import { type AccountLink, LINK_DESTINATION, type ReadLink } from "@repo/features/link-grammar";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
@@ -67,7 +67,7 @@ import { OpenAiKeyProvider } from "./openai-key.js";
 import { PANEL_TAB, type PanelTab } from "./panel-tabs.js";
 import { OpenPersonProvider, PreloadPersonProvider } from "./person-door.js";
 import { forgetPictures } from "./picture-query.js";
-import { useLinkPlaceLandings } from "./places/link-landings.js";
+import { useLinkDestinationLandings } from "./places/link-landings.js";
 import { useLinkReads } from "./places/link-reads.js";
 import { useNarrowBacks } from "./places/narrow-backs.js";
 import { usePlaceArrivals, usePlaceBinding } from "./places/place-binding.js";
@@ -587,7 +587,7 @@ function AppWindow(): React.JSX.Element {
     const { place } = link;
     if (route.kind === LINK_ROUTE.SETTINGS) {
       openSettings(route.settings);
-    } else if (place.kind === LINK_PLACE.ADMIN) {
+    } else if (place.kind === LINK_DESTINATION.ADMIN) {
       // Admin is the router's place, which its link opens as a navigation from wherever the window stands.
       openAdmin(adminViewOfLink(place));
     } else {
@@ -615,7 +615,7 @@ function AppWindow(): React.JSX.Element {
   // A chime main heard news for plays here, in the one window it was pushed to (`agent-notices.ts`'s `heard`).
   useEffect(() => appBridge().onChime(playCompletionSound), []);
   // A link place loaded at its own address, or landed on with no step saved, is read by its route and opened as its link is (`places/link-places.ts`).
-  useLinkPlaceLandings(openLink);
+  useLinkDestinationLandings(openLink);
   // Where the window has stood, for back and forward, from the moment it
   // knows where it stands: past sign-in, with the account's workspaces read,
   // so a link loaded waits on its own place rather than standing anywhere

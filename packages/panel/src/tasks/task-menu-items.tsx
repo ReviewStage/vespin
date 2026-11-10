@@ -1,4 +1,4 @@
-import { LINK_PLACE, linkOf, taskLinkStep } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf, taskLinkStep } from "@repo/features/link-grammar";
 import type { MentionPlace } from "@repo/features/mention-link";
 import type { TaskSummary } from "@repo/features/task-wire";
 import type { Workspace } from "@repo/features/workspace-wire";
@@ -24,7 +24,7 @@ import type { ShortcutSubject } from "../shortcut-target.js";
  */
 
 /** Where a task's links are written: its workspace by slug, or by id until the workspaces are read, and its repository. */
-export function taskLinkPlace(
+export function taskLinkDestination(
   workspaces: readonly Workspace[],
   task: Pick<TaskSummary, "workspaceId" | "repository">,
 ): MentionPlace {
@@ -34,7 +34,7 @@ export function taskLinkPlace(
 
 /** A task's link: its own address, naming it by its number where it has one. */
 function taskLink(task: Pick<TaskSummary, "id" | "number">, place: MentionPlace): string {
-  return linkOf({ kind: LINK_PLACE.TASK, planId: taskLinkStep(task) }, place.workspace);
+  return linkOf({ kind: LINK_DESTINATION.TASK, planId: taskLinkStep(task) }, place.workspace);
 }
 
 /** Opens a task in a tab of its own, which a middle-click on its row or card takes; none where the window opens no tabs. */
@@ -42,7 +42,7 @@ export function openTaskInTab(
   workspaces: readonly Workspace[],
   task: Pick<TaskSummary, "id" | "number" | "workspaceId" | "repository">,
 ): (() => void) | undefined {
-  return openInTabOf(taskLink(task, taskLinkPlace(workspaces, task)));
+  return openInTabOf(taskLink(task, taskLinkDestination(workspaces, task)));
 }
 
 /**

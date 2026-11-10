@@ -32,8 +32,8 @@ import {
   type ReviewThread,
 } from "@repo/features/agent-wire";
 import {
-  LINK_PLACE,
-  type LinkPlace,
+  LINK_DESTINATION,
+  type LinkDestination,
   PULL_REQUEST_THREAD_VIEW,
   type PullRequestThreadView,
 } from "@repo/features/link-grammar";
@@ -1136,7 +1136,10 @@ function EntryWords({
 /** How a thread drawn in the tab is taken to its other view, and the place a link to it names there; none for a thread GitHub named no id for. */
 interface ThreadJumps {
   readonly jump: (thread: ReviewThread, view: PullRequestThreadView) => void;
-  readonly place: (thread: ReviewThread, view: PullRequestThreadView) => LinkPlace | undefined;
+  readonly place: (
+    thread: ReviewThread,
+    view: PullRequestThreadView,
+  ) => LinkDestination | undefined;
 }
 
 const ThreadJumpContext = createContext<ThreadJumps | undefined>(undefined);
@@ -1159,7 +1162,7 @@ function ThreadTools({ children }: { children: ReactNode }): React.JSX.Element {
 
 /**
  * A thread's ⋯ at the end of its head: Copy link, the thread's app link in
- * the view it is drawn in (`LINK_PLACE.PULL_REQUEST_THREAD`), then, in Files
+ * the view it is drawn in (`LINK_DESTINATION.PULL_REQUEST_THREAD`), then, in Files
  * changed, View in Conversation, where the thread is found by its id;
  * nothing where the thread offers neither.
  */
@@ -2979,7 +2982,7 @@ function centerCard(card: HTMLElement): void {
 /**
  * The tab's door to its review threads by id, and the thread it is bringing
  * into view. A thread is taken to its other view through the window's own
- * route for its link (`LINK_PLACE.PULL_REQUEST_THREAD`), as any link to it
+ * route for its link (`LINK_DESTINATION.PULL_REQUEST_THREAD`), as any link to it
  * would take it, which opens this tab on that view and leaves the ask for
  * it to take; a tab the route cannot reach, one showing another pull
  * request by its number, or one outside the window, takes the jump itself.
@@ -3017,10 +3020,10 @@ function useThreadJumps(input: {
     start(standing.reveal.threadId, standing.reveal.view);
     standing.onRevealed(standing.reveal.ask);
   }, [taken?.reveal.ask, start]);
-  const place = (thread: ReviewThread, view: PullRequestThreadView): LinkPlace | undefined =>
+  const place = (thread: ReviewThread, view: PullRequestThreadView): LinkDestination | undefined =>
     thread.id === undefined || number !== undefined
       ? undefined
-      : { kind: LINK_PLACE.PULL_REQUEST_THREAD, agentId, threadId: thread.id, view };
+      : { kind: LINK_DESTINATION.PULL_REQUEST_THREAD, agentId, threadId: thread.id, view };
   const latestView = useRef(input.onView);
   latestView.current = input.onView;
   const jumpTo = (thread: ReviewThread, view: PullRequestThreadView) => {

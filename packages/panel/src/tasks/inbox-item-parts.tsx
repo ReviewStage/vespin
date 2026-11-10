@@ -33,7 +33,7 @@ import {
   type InboxPerson,
   inboxWaitsOn,
 } from "@repo/features/inbox-wire";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
 import { agentStillWriting } from "@repo/features/task-agents-model";
@@ -383,7 +383,7 @@ function HolderRef({
       onPress={
         openPlace === undefined
           ? undefined
-          : () => openPlace({ kind: LINK_PLACE.TASK, planId: task.id })
+          : () => openPlace({ kind: LINK_DESTINATION.TASK, planId: task.id })
       }
       data-holder-ref=""
       data-kind={holder.kind}

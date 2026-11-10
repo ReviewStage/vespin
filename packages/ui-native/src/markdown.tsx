@@ -2,7 +2,7 @@
 
 import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
-import type { LinkPlace } from "@repo/features/link-grammar";
+import type { LinkDestination } from "@repo/features/link-grammar";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useMemo, useState } from "react";
 import {
@@ -39,7 +39,7 @@ import { Video } from "./video.js";
 /** A place in the app a link names, as `@repo/features/link-grammar` reads it, and the address it was written as. */
 export interface MarkdownPlace {
   readonly workspace: string;
-  readonly place: LinkPlace;
+  readonly place: LinkDestination;
   readonly href: string;
 }
 

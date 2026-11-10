@@ -16,7 +16,7 @@ import { ENTITY_KIND, type EntityKind, entityOfMention } from "@repo/features/en
 import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
-import { LINK_PLACE, linkOf } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { holderTaskId, type MentionHolder } from "@repo/features/mention-holder";
 import {
   encodeMention,
@@ -751,7 +751,7 @@ function threadRows(
     const task = tasks.find((each) => each.id === planId && each.workspaceId === workspace.id);
     if (task === undefined) continue;
     for (const item of items) {
-      const place: InboxItemPlace = { kind: LINK_PLACE.INBOX_ITEM, planId, itemId: item.id };
+      const place: InboxItemPlace = { kind: LINK_DESTINATION.INBOX_ITEM, planId, itemId: item.id };
       held.push({
         row: threadRow(place, item, task.name),
         own: planId === taskId,
@@ -2001,10 +2001,13 @@ export function useMentionPicker({
       if (trigger !== undefined) pickNewDate(trigger);
     } else if ("thread" in row) {
       // A thread is written by its id alone, whose agent and task its reader asks the service for.
-      const thread = { kind: LINK_PLACE.INBOX_ITEM, itemId: row.thread.itemId } as const;
+      const thread = { kind: LINK_DESTINATION.INBOX_ITEM, itemId: row.thread.itemId } as const;
       onChoose({ name: row.name, target: linkOf(thread, place.workspace) });
     } else if ("automation" in row) {
-      const automation = { kind: LINK_PLACE.AUTOMATION, automationId: row.automation.id } as const;
+      const automation = {
+        kind: LINK_DESTINATION.AUTOMATION,
+        automationId: row.automation.id,
+      } as const;
       onChoose({ name: row.name, target: linkOf(automation, place.workspace) });
     } else onChoose({ name: row.written ?? row.name, target: encodeMention(row.mention, place) });
   };

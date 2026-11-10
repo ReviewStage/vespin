@@ -37,7 +37,11 @@ import {
   type ReviewThread,
 } from "@repo/features/agent-wire";
 import { FAILURE_FACT } from "@repo/features/failure-facts";
-import { LINK_PLACE, PULL_REQUEST_THREAD_VIEW, type ReadLink } from "@repo/features/link-grammar";
+import {
+  LINK_DESTINATION,
+  PULL_REQUEST_THREAD_VIEW,
+  type ReadLink,
+} from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import {
   FILE_VIEWED_STATE,
@@ -3701,10 +3705,13 @@ test("the stack it stands in sits beside its branches; its menu lists it tip fir
   assert.deepEqual(links, [
     {
       workspace: "",
-      place: { kind: LINK_PLACE.CHANGES, planId: AGENT.planId, agentId: sibling.id },
+      place: { kind: LINK_DESTINATION.CHANGES, planId: AGENT.planId, agentId: sibling.id },
     },
-    { workspace: "", place: { kind: LINK_PLACE.CHANGES, planId: elsewhere, agentId: away.id } },
-    { workspace: "", place: { kind: LINK_PLACE.CHANGES, agentId: taskless.id } },
+    {
+      workspace: "",
+      place: { kind: LINK_DESTINATION.CHANGES, planId: elsewhere, agentId: away.id },
+    },
+    { workspace: "", place: { kind: LINK_DESTINATION.CHANGES, agentId: taskless.id } },
   ]);
   await vi.waitFor(() => assert.deepEqual(opened, ["https://github.com/acme/relay/pull/46"]));
 });
@@ -5683,7 +5690,7 @@ function Routed({
   const open = (link: ReadLink) => {
     heard.push(link);
     const { place } = link;
-    if (place.kind !== LINK_PLACE.PULL_REQUEST_THREAD) return;
+    if (place.kind !== LINK_DESTINATION.PULL_REQUEST_THREAD) return;
     setView(place.view);
     setReveal((last) => ({
       agentId: place.agentId,
@@ -5797,7 +5804,7 @@ test("a thread's file and lines in the Conversation take it to Files changed thr
   await settle();
 
   assert.deepEqual(heard.at(-1)?.place, {
-    kind: LINK_PLACE.PULL_REQUEST_THREAD,
+    kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
     agentId: AGENT.id,
     threadId: JUMPED,
     view: PULL_REQUEST_THREAD_VIEW.FILES,
@@ -5921,7 +5928,7 @@ test("a link to a thread opens a folded Conversation to land on it, centering it
       routeOpen({
         workspace: "acme",
         place: {
-          kind: LINK_PLACE.PULL_REQUEST_THREAD,
+          kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
           planId: AGENT.planId ?? "",
           agentId: AGENT.id,
           threadId: JUMPED,
@@ -5972,7 +5979,7 @@ test("a thread whose file the changes no longer hold stays in the Conversation, 
     routeOpen({
       workspace: "acme",
       place: {
-        kind: LINK_PLACE.PULL_REQUEST_THREAD,
+        kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
         planId: AGENT.planId ?? "",
         agentId: AGENT.id,
         threadId: "PRRT_kwDOnone",
@@ -6061,7 +6068,7 @@ test("a thread's ⋯ in Files changed shows it in the Conversation through the s
   await threadMenuItem(note, "View in Conversation");
   await frames();
 
-  assert.equal(heard.at(-1)?.place.kind, LINK_PLACE.PULL_REQUEST_THREAD);
+  assert.equal(heard.at(-1)?.place.kind, LINK_DESTINATION.PULL_REQUEST_THREAD);
   assert.equal(option(tab, "Conversation").getAttribute("aria-selected"), "true");
   const card = tab.querySelector(".pull-request-thread") ?? assert.fail("the thread stands");
   assert.equal(card.querySelector("details")?.open, true, "the resolved thread is opened");
@@ -6126,7 +6133,7 @@ test("a link in the pull request's words to one of its own comments on GitHub op
 
   await press("the thread");
   assert.deepEqual(heard.at(-1)?.place, {
-    kind: LINK_PLACE.PULL_REQUEST_THREAD,
+    kind: LINK_DESTINATION.PULL_REQUEST_THREAD,
     agentId: AGENT.id,
     threadId: JUMPED,
     view: PULL_REQUEST_THREAD_VIEW.CONVERSATION,

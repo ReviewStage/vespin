@@ -1,5 +1,5 @@
 import { ENTITY_KIND } from "@repo/features/entity-kind";
-import { LINK_PLACE } from "@repo/features/link-grammar";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import {
   PAGE_SHOWER,
   type PageLine,
@@ -92,7 +92,7 @@ function useShowerDoor(shower: Actor | undefined): (() => void) | undefined {
   if (agentId === undefined) return undefined;
   return () =>
     openPlace({
-      kind: LINK_PLACE.AGENT,
+      kind: LINK_DESTINATION.AGENT,
       ...(taskId === undefined ? undefined : { planId: taskId }),
       agentId,
     });
