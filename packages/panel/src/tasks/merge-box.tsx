@@ -79,10 +79,9 @@ import { type PullRequestWrites, QUEUE_WARNING } from "./pull-request-writes.js"
  *   queue may hold up the pull requests behind it;
  * - blocked by a rule or behind its base, with nothing else to offer, for a
  *   member GitHub lets merge past the base's rules as it lets an admin
- *   (`canBypassRules`, read on their own sign-in), the method chosen as its
- *   words, held, its hint saying why, and its chevron offering, after the
- *   methods and in red, Bypass rules and merge…, which asks first, naming
- *   what it bypasses, and merges as `gh pr merge --admin` does.
+ *   (`canBypassRules`, read on their own sign-in), Bypass rules and merge…
+ *   by the method chosen, its chevron choosing it too, which asks first,
+ *   naming what it bypasses, and merges as `gh pr merge --admin` does.
  *
  * The method is kept per repository across launches, in this window's own
  * storage as the sidebar's folds are (`folded-groups.ts`); the first the
@@ -404,8 +403,6 @@ function MethodPress({
   busyLabel,
   onChoose,
   onPress,
-  held,
-  more,
   width,
 }: {
   variant: ButtonVariant;
@@ -417,19 +414,13 @@ function MethodPress({
   /** What the press says while its own change is out. */
   busyLabel: string | undefined;
   onChoose: (method: MergeMethod) => void;
-  /** What the press does; none where it is held. */
-  onPress?: (() => void) | undefined;
-  /** Why the press itself may not be made now, said in its hint, its chevron still open; none where it may. */
-  held?: string | undefined;
-  /** Items the chevron's menu offers after the methods, set apart by a rule. */
-  more?: readonly MenuAction[] | undefined;
+  onPress: () => void;
   /** How wide the split button stands. */
   width: SplitButtonWidth;
 }): React.JSX.Element {
-  const split = methods.length > 1 || more !== undefined;
-  const menu = useMenu(split);
+  const menu = useMenu(methods.length > 1);
   const icon = variant === BUTTON_VARIANT.PRIMARY ? <GitMergeIcon aria-hidden="true" /> : undefined;
-  if (!split) {
+  if (methods.length < 2) {
     return (
       <Button
         variant={variant}
@@ -448,9 +439,7 @@ function MethodPress({
         variant={variant}
         icon={icon}
         disabled={busy && busyLabel === undefined}
-        mainDisabled={held !== undefined}
         width={width}
-        hintLabel={held}
         onClick={onPress}
         {...busyProps(busyLabel)}
         menu={{ label: BOX_WORDS.CHOOSE_METHOD, ...menu.trigger() }}
@@ -462,10 +451,7 @@ function MethodPress({
           replayUnmasked
           label={BOX_WORDS.CHOOSE_METHOD}
           menu={menu.drawn}
-          groups={[
-            methodItems(methods, method, busy, onChoose),
-            ...(more === undefined ? [] : [more]),
-          ]}
+          groups={[methodItems(methods, method, busy, onChoose)]}
           onClose={menu.close}
         />
       )}
@@ -499,11 +485,10 @@ interface BypassAsked {
 
 /**
  * The press a member who may bypass the base's rules is offered where they
- * hold the merge up, tucked away as Graphite's merge box tucks it: the
- * method chosen as its words, held, its hint saying why, and its chevron's
- * menu offering Bypass rules and merge… after the methods, in red. That asks
- * first, then merges at the head it asked about, so GitHub refuses a head
- * pushed since. The question goes once a read finds another head or another
+ * hold the merge up: Bypass rules and merge… by the method chosen, outlined
+ * in red, its chevron choosing the method as a merge's does. It asks first,
+ * then merges at the head it asked about, so GitHub refuses a head pushed
+ * since. The question goes once a read finds another head or another
  * base, so it never merges a head, or into a base, the member was not asked
  * about, and goes with its panel; one already answered finishes.
  */
@@ -546,26 +531,18 @@ function BypassPress({
   return (
     <>
       <MethodPress
-        variant={BUTTON_VARIANT.PRIMARY}
-        words={PRESS_WORDS[method]}
+        variant={BUTTON_VARIANT.DANGER_OUTLINE}
+        words={`${BOX_WORDS.BYPASS}…`}
         methods={methods}
         method={method}
         busy={busy}
         busyLabel={busyLabel}
         onChoose={onChoose}
         width={width}
-        held={busyLabel === undefined ? sentenceOf(pullRequest, MERGE_ACTION.BYPASS) : undefined}
-        more={[
-          {
-            label: `${BOX_WORDS.BYPASS}…`,
-            danger: true,
-            disabled: busy,
-            onSelect: () => {
-              setAsked({ head: headSha, base });
-              confirm.ask();
-            },
-          },
-        ]}
+        onPress={() => {
+          setAsked({ head: headSha, base });
+          confirm.ask();
+        }}
       />
       <ConfirmDialog open confirm={confirm} question={bypassQuestion(pullRequest, method)} />
     </>

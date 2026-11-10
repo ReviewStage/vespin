@@ -3088,17 +3088,14 @@ test("a pull request ready to merge offers the first method the repository allow
   ]);
 });
 
-/** How a case asks for its change: the merge control's press of the words given, or, the press held, the item of the words given in its chevron's menu. */
-type MergeAsk = string | { readonly held: string; readonly item: string };
-
-test("auto-merge is offered while checks run, and turned off once on; a merge queue's base offers Merge when ready; each is asked of the service for the agent at once, and Remove from queue asks first, as Bypass rules and merge… does, naming what it bypasses, from the chevron's menu of a member GitHub lets merge a blocked pull request past its base's rules, its method's own press held", async () => {
+test("auto-merge is offered while checks run, and turned off once on; a merge queue's base offers Merge when ready; each is asked of the service for the agent at once, and Remove from queue asks first, as Bypass rules and merge… does, naming what it bypasses, for a member GitHub lets merge a blocked pull request past its base's rules", async () => {
   const queueQuestion = {
     answer: "Remove from queue",
     says: /could impact other pull requests in the queue/u,
   };
   const cases: readonly (readonly [
     AgentsControl,
-    MergeAsk,
+    string,
     { readonly answer: string; readonly says: RegExp } | undefined,
     PullRequestActionRequest,
   ])[] = [
@@ -3146,7 +3143,7 @@ test("auto-merge is offered while checks run, and turned off once on; a merge qu
             },
           }),
       }),
-      { held: "Squash and merge", item: "Bypass rules and merge…" },
+      "Bypass rules and merge…",
       {
         answer: "Bypass rules and merge",
         says: /A required review is missing\. This merges it into main now by squash/u,
@@ -3154,20 +3151,10 @@ test("auto-merge is offered while checks run, and turned off once on; a merge qu
       { action: PULL_REQUEST_ACTION.MERGE, method: MERGE_METHOD.SQUASH, headSha: "c0ffee1" },
     ],
   ];
-  for (const [control, ask, question, request] of cases) {
+  for (const [control, label, question, request] of cases) {
     changes = [];
     const tab = await draw(control);
-    const label = typeof ask === "string" ? ask : ask.item;
-    if (typeof ask === "string") await pressBox(tab, ask);
-    else {
-      await pressBox(tab, ask.held);
-      assert.deepEqual(changes, [], `${ask.held} is held`);
-      const chevron =
-        mergeControl(tab)?.querySelector<HTMLButtonElement>('[aria-label="Choose how to merge"]') ??
-        assert.fail("the chevron opens the methods");
-      act(() => chevron.click());
-      await pressItem(ask.item);
-    }
+    await pressBox(tab, label);
     if (question !== undefined) {
       assert.deepEqual(changes, [], `${label} asks first`);
       assert.match(

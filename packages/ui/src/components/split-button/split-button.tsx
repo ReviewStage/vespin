@@ -33,16 +33,13 @@ import { Tooltip } from "../tooltip/hint.js";
  * `busyLabel` it is named by, a Button's own two), the main part refuses its
  * press and stands under its ring as a busy Button does while the chevron still
  * opens the options, and one whose press `succeeded` lands on a check as a
- * busy Button's does. Held (`mainDisabled`), the main part alone says so and
- * refuses its press, its hint saying why, while the chevron still opens the
- * options, so an act that may not be made now can offer another way in its
- * menu. It hugs its words, or spans the row it stands in
+ * busy Button's does. It hugs its words, or spans the row it stands in
  * (`SPLIT_BUTTON_WIDTH.FULL`), its main part taking the room the chevron
- * leaves, as a phone's row of one control draws it. A toolbar short of room folds the main part's words
- * away with `--ui-fold: folded`, as it folds a FoldingButton's, leaving
- * its glyph and its name; shorter still, `--ui-fold: bare` leaves that
- * glyph alone, the chevron not drawn, so the options are reached some
- * other way the app offers.
+ * leaves, as a phone's row of one control draws it. A toolbar short of room
+ * folds the main part's words away with `--ui-fold: folded`, as it folds a
+ * FoldingButton's, leaving its glyph and its name; shorter still,
+ * `--ui-fold: bare` leaves that glyph alone, the chevron not drawn, so the
+ * options are reached some other way the app offers.
  *
  * The hint over the main part is the window's tooltip (`Tooltip`), or one
  * the caller hangs in its place (`hint`): it is handed
@@ -136,7 +133,6 @@ export function SplitButton({
   children,
   onClick,
   disabled,
-  mainDisabled,
   width = SPLIT_BUTTON_WIDTH.HUG,
   busy,
   busyLabel,
@@ -156,8 +152,6 @@ export function SplitButton({
   onClick?: ((event: MouseEvent<HTMLButtonElement>) => void) | undefined;
   /** Whether both halves are unavailable: they refuse their press, and stay reachable so a hint can say why. */
   disabled?: boolean | undefined;
-  /** Whether the main part alone is unavailable, its chevron still dropping its options. */
-  mainDisabled?: boolean | undefined;
   /** How wide it stands: its words' own width, or its whole row. */
   width?: SplitButtonWidth | undefined;
   /** Whether the main part's press landed, read as its ring leaves: a check stands a moment before its words come back (Button's `succeeded`). */
@@ -189,7 +183,7 @@ export function SplitButton({
       variant={variant}
       icon={icon}
       label={label}
-      disabled={disabled === true || mainDisabled === true}
+      disabled={disabled}
       focusableWhenDisabled
       onClick={onClick}
       {...busyProps}
