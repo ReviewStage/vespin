@@ -1,11 +1,11 @@
 import type { AgentStatus } from "@repo/features/agent-wire";
+import type { KnownNames } from "@repo/features/entity-kind";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { PAGE_OWNER, type PageLine } from "@repo/features/page-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
-import type { KnownNames } from "@repo/features/thing-kind";
 import { taskKey } from "@repo/features/workspace-key";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { useQuery } from "@tanstack/react-query";

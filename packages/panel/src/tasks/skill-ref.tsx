@@ -1,6 +1,6 @@
+import { ENTITY_KIND, ENTITY_WORD } from "@repo/features/entity-kind";
 import { skillWord } from "@repo/features/skill-word";
 import { TASK_SKILL_SOURCE, type TaskSkillSource } from "@repo/features/task-wire";
-import { THING_KIND, THING_WORD } from "@repo/features/thing-kind";
 import {
   type ComboboxOption,
   HOVER_CARD_ROW_LOOK,
@@ -127,7 +127,7 @@ export function SkillRef({
     <InlineRef
       look={INLINE_REF_LOOK.PILL}
       glyph={<SkillMark />}
-      kind={THING_WORD[THING_KIND.SKILL]}
+      kind={ENTITY_WORD[ENTITY_KIND.SKILL]}
       label={skillWord(name)}
       name={INLINE_REF_NAME.WHOLE}
       onPress={onOpen === undefined ? undefined : () => onOpen()}

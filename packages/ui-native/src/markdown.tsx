@@ -1,8 +1,8 @@
 // markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, links, mention chips, and pictures that open full screen.
 
 import { readerZone } from "@repo/features/date-mention";
+import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
 import type { LinkPlace } from "@repo/features/link-grammar";
-import { THING_KIND, type ThingKind } from "@repo/features/thing-kind";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useMemo, useState } from "react";
 import {
@@ -41,40 +41,40 @@ export interface MarkdownPlace {
   readonly href: string;
 }
 
-/** The glyph each kind of thing leads its chip with, as the panel's `thing-mark.tsx` gives each kind its own. */
-const THING_SYMBOL: { readonly [K in ThingKind]: SfSymbol } = {
-  [THING_KIND.PLAN]: "checklist",
-  [THING_KIND.SECTION]: "number",
-  [THING_KIND.VERSION]: "clock.arrow.circlepath",
-  [THING_KIND.COMMENT]: "text.bubble",
-  [THING_KIND.PAGE]: "doc.richtext",
-  [THING_KIND.AGENT]: "sparkles",
-  [THING_KIND.WORKER]: "gearshape.2",
-  [THING_KIND.APP]: "app",
-  [THING_KIND.CHANGES]: "plusminus",
-  [THING_KIND.PULL_REQUEST]: "arrow.triangle.pull",
-  [THING_KIND.PULL_REQUEST_THREAD]: "text.bubble",
-  [THING_KIND.ISSUE]: "smallcircle.filled.circle",
-  [THING_KIND.LINK]: "link",
-  [THING_KIND.MESSAGE]: "message",
-  [THING_KIND.HOME]: "house",
-  [THING_KIND.BOARD]: "checklist",
-  [THING_KIND.INBOX]: "tray",
-  [THING_KIND.INBOX_ITEM]: "tray.full",
-  [THING_KIND.AUTOMATIONS]: "bolt",
-  [THING_KIND.AUTOMATION]: "bolt",
-  [THING_KIND.AUTOMATION_RUN]: "bolt.circle",
-  [THING_KIND.SETTINGS]: "gearshape",
-  [THING_KIND.PERSON]: "person.crop.circle",
-  [THING_KIND.ADMIN]: "person.badge.shield.checkmark",
-  [THING_KIND.FILE]: "doc",
-  [THING_KIND.FOLDER]: "folder",
-  [THING_KIND.SERVER]: "server.rack",
-  [THING_KIND.TOOL]: "wrench.and.screwdriver",
-  [THING_KIND.SKILL]: "wand.and.stars",
-  [THING_KIND.REPOSITORY]: "book.closed",
-  [THING_KIND.WORKSPACE]: "building.2",
-  [THING_KIND.DATE]: "calendar",
+/** The glyph each kind of entity leads its chip with, as the panel's `entity-mark.tsx` gives each kind its own. */
+const ENTITY_SYMBOL: { readonly [K in EntityKind]: SfSymbol } = {
+  [ENTITY_KIND.PLAN]: "checklist",
+  [ENTITY_KIND.SECTION]: "number",
+  [ENTITY_KIND.VERSION]: "clock.arrow.circlepath",
+  [ENTITY_KIND.COMMENT]: "text.bubble",
+  [ENTITY_KIND.PAGE]: "doc.richtext",
+  [ENTITY_KIND.AGENT]: "sparkles",
+  [ENTITY_KIND.WORKER]: "gearshape.2",
+  [ENTITY_KIND.APP]: "app",
+  [ENTITY_KIND.CHANGES]: "plusminus",
+  [ENTITY_KIND.PULL_REQUEST]: "arrow.triangle.pull",
+  [ENTITY_KIND.PULL_REQUEST_THREAD]: "text.bubble",
+  [ENTITY_KIND.ISSUE]: "smallcircle.filled.circle",
+  [ENTITY_KIND.LINK]: "link",
+  [ENTITY_KIND.MESSAGE]: "message",
+  [ENTITY_KIND.HOME]: "house",
+  [ENTITY_KIND.BOARD]: "checklist",
+  [ENTITY_KIND.INBOX]: "tray",
+  [ENTITY_KIND.INBOX_ITEM]: "tray.full",
+  [ENTITY_KIND.AUTOMATIONS]: "bolt",
+  [ENTITY_KIND.AUTOMATION]: "bolt",
+  [ENTITY_KIND.AUTOMATION_RUN]: "bolt.circle",
+  [ENTITY_KIND.SETTINGS]: "gearshape",
+  [ENTITY_KIND.PERSON]: "person.crop.circle",
+  [ENTITY_KIND.ADMIN]: "person.badge.shield.checkmark",
+  [ENTITY_KIND.FILE]: "doc",
+  [ENTITY_KIND.FOLDER]: "folder",
+  [ENTITY_KIND.SERVER]: "server.rack",
+  [ENTITY_KIND.TOOL]: "wrench.and.screwdriver",
+  [ENTITY_KIND.SKILL]: "wand.and.stars",
+  [ENTITY_KIND.REPOSITORY]: "book.closed",
+  [ENTITY_KIND.WORKSPACE]: "building.2",
+  [ENTITY_KIND.DATE]: "calendar",
 };
 
 /** Each heading level's size and weight, a step above the words as the panel draws a message's headings. */
@@ -183,7 +183,7 @@ function MentionChip({
         ]}
       >
         <SymbolView
-          name={THING_SYMBOL[chip.thing]}
+          name={ENTITY_SYMBOL[chip.entity]}
           size={size * fontScale}
           tintColor={colors.TEXT_MUTED}
           accessibilityElementsHidden

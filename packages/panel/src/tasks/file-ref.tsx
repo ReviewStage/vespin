@@ -52,7 +52,7 @@ export function fileLook(path: string): FileLook {
  * every hover card is (`@repo/ui`'s `HoverCard`): the file's type icon and its
  * whole path, its repository under the path where the place names one, and
  * under them where the file is read, where the place says, as a mention's
- * lines and commit (`thing-card.tsx`).
+ * lines and commit (`entity-card.tsx`).
  */
 export function FileCard({
   path,

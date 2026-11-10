@@ -35,6 +35,7 @@ import {
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
 import { DEVICE_LAUNCH_UNSTARTED } from "@repo/features/device-agent-wire";
+import type { KnownNames } from "@repo/features/entity-kind";
 import { FAILURE_REASON, type FailureReason, remedyLabel } from "@repo/features/failure-remedy";
 import { threadLineWords } from "@repo/features/inbox-wire";
 import type { MentionHolder } from "@repo/features/mention-holder";
@@ -48,7 +49,6 @@ import {
 import { skillWord } from "@repo/features/skill-word";
 import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
-import type { KnownNames } from "@repo/features/thing-kind";
 import { workingTime } from "@repo/features/time-format";
 import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
 import {
