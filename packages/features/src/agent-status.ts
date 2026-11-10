@@ -1,4 +1,5 @@
 import { TURN_STATUS, type TurnStatus } from "@repo/wire";
+import { BOOT_PHASE, type BootPhase, bootHolds } from "./agent-boot.js";
 import { AGENT_STATUS, type AgentStatus, type AgentTurn, turnStatusOfWord } from "./agent-wire.js";
 
 /**
@@ -20,7 +21,11 @@ import { AGENT_STATUS, type AgentStatus, type AgentTurn, turnStatusOfWord } from
  * never started, and an agent started blank, with no first turn on its way,
  * as completed. That is why the rule takes the instant it reads at, and a
  * reader following the rows live reads the status again at
- * `statusClockEdge`, the instant the clock alone moves it.
+ * `statusClockEdge`, the instant the clock alone moves it. An agent whose
+ * first launch boots its machine before its first turn (`agent-boot.ts`)
+ * reads from its boot record instead: starting for as long as it boots,
+ * however long its setup takes, since the boot's own deadline is what fails
+ * a boot that never comes up, and failed once it did.
  */
 
 /**
@@ -54,6 +59,8 @@ export interface StatusStanding {
   readonly now: number;
   /** Whether the agent was started blank, handed neither the description nor a prompt, so no first turn is on its way; unsaid reads as not. */
   readonly blank?: boolean | undefined;
+  /** Where the agent's first launch stands, while its boot record does; unsaid reads as none. */
+  readonly boot?: BootPhase | null | undefined;
 }
 
 /**
@@ -76,6 +83,9 @@ export function agentStatusAt(
   newest: StatusTurn | undefined,
   standing: StatusStanding,
 ): AgentStatus {
+  if (newest === undefined && bootHolds(standing.boot)) {
+    return standing.boot === BOOT_PHASE.FAILED ? AGENT_STATUS.FAILED : AGENT_STATUS.STARTING;
+  }
   if (newest === undefined && standing.blank === true) return AGENT_STATUS.COMPLETED;
   if (newest === undefined) {
     return standing.now - standing.createdAt <= STARTING_GRACE_MILLIS
@@ -101,7 +111,7 @@ export function statusClockEdge(
   newest: StatusTurn | undefined,
   standing: StatusStanding,
 ): number | undefined {
-  if (newest !== undefined || standing.blank === true) return undefined;
+  if (newest !== undefined || standing.blank === true || bootHolds(standing.boot)) return undefined;
   const edge = standing.createdAt + STARTING_GRACE_MILLIS;
   return standing.now <= edge ? edge + 1 : undefined;
 }

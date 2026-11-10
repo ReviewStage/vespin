@@ -159,7 +159,10 @@ const listedSummaries = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
   agents: readonly AgentLine[],
 ): Effect.fn.Return<{ agents: AgentSummary[] }, HostedRefusal, DatabaseServices> {
-  const standing = yield* standingsOf(agents.map((agent) => agent.conversationId));
+  const standing = yield* standingsOf(
+    agents.map((agent) => agent.conversationId),
+    agents,
+  );
   const names = yield* hostedStoreOrUnavailable(readAccountNames(agents.flatMap(summaryAccounts)));
   const continuedBy = yield* continuedByOf(
     userId,
@@ -425,7 +428,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
         "an agent queue's hand-on at an open",
         queueAtTouch(routedSessions, agent),
       );
-      const standing = yield* standingsOf([agent.conversationId]);
+      const standing = yield* standingsOf([agent.conversationId], [agent]);
       const names = yield* hostedStoreOrUnavailable(readAccountNames(pageAccounts(agent)));
       const continuedBy = yield* continuedByOf(userId, [agent.id]);
       const macs = yield* hostedStoreOrUnavailable(devicesNamed(summaryDevices([agent])));
