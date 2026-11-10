@@ -396,17 +396,21 @@ test("a run of calls folds under a line that says it is open", () => {
   assert.equal(group?.getAttribute("aria-expanded"), "true", "the group says it is open");
 });
 
-test("a finished turn's lead folds under a line that opens as it is pressed", () => {
+test("a finished turn's run of calls folds under a line that opens as it is pressed, and its words stand outside it", () => {
   const { container } = drawn(
     assistant([
       toolPart("read_file", { filePath: "src/new.ts" }, { content: "export {}" }),
-      { type: "text", text: "Read it." },
       toolPart("run_on_mac", { command: "git status" }, { output: "clean" }),
+      { type: "text", text: "Read it." },
       { type: "text", text: "All clean." },
     ]),
   );
   const fold = container.querySelector<HTMLElement>("[data-turn-fold] > summary");
-  assert.equal(fold?.textContent, "2 tool calls, 1 message");
+  assert.equal(fold?.textContent, "2 tool calls");
+  assert.ok(
+    !container.querySelector("[data-turn-fold]")?.textContent?.includes("Read it."),
+    "the words stand outside the fold",
+  );
   assert.equal(fold?.getAttribute("aria-expanded"), "false", "the fold stands closed");
   act(() => fold?.click());
   assert.equal(fold?.getAttribute("aria-expanded"), "true", "the pressed fold says it is open");

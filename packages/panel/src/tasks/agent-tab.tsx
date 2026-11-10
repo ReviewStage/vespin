@@ -1544,9 +1544,8 @@ function TurnFoot({ workedFor, copy }: { workedFor: ReactNode; copy: ReactNode }
  * reached a turn while it ran is drawn inside it, as its own bubble between
  * the work before it and the work after it.
  */
-/** Where a turn's stretches are read from beside the message: its to-do lists, its workers' standings, and the lines that reached it. */
+/** Where a turn's stretches are read from beside the message: its workers' standings and the lines that reached it. */
 interface StretchPlace {
-  readonly todos: TodosPlace;
   readonly standings: ReadonlyMap<string, AgentSubagentStanding> | undefined;
   readonly arrived: readonly ArrivedLine[];
 }
@@ -1555,7 +1554,7 @@ interface StretchPlace {
 function turnStretchesOf(
   message: AgentTranscriptMessage,
   moving: boolean,
-  { todos, standings, arrived }: StretchPlace,
+  { standings, arrived }: StretchPlace,
 ): readonly TurnStretch[] {
   const workers = new Map(
     [...(standings?.values() ?? [])].map(
@@ -1564,7 +1563,6 @@ function turnStretchesOf(
   );
   return turnStretches(
     agentRows(message, moving, {
-      newestTodos: todos.kept,
       workers,
       arrived: arrived.map((line) => line.message),
     }),
@@ -1766,7 +1764,7 @@ export function AgentMessage({
     );
   const stretches =
     piece?.stretches ??
-    turnStretchesOf(message, moving, { todos, standings: delegation?.standings, arrived });
+    turnStretchesOf(message, moving, { standings: delegation?.standings, arrived });
   const first = piece?.first ?? true;
   const last =
     piece?.last === false ? -1 : stretches.findLastIndex((stretch) => stretch.line === undefined);
@@ -2134,7 +2132,6 @@ function sameRead(
   return (
     read.message === message &&
     read.moving === moving &&
-    read.place.todos === place.todos &&
     read.place.standings === place.standings &&
     read.place.arrived === place.arrived
   );
@@ -2153,7 +2150,6 @@ function useLogEntries(
   arrivals: ReadonlyMap<string, readonly ArrivedLine[]>,
 ): readonly LogEntry[] {
   const reads = useRef(new Map<string, PiecesRead>());
-  const todos = useKept(placing.todos, sameTodosPlace);
   return useMemo(() => {
     const held = reads.current;
     const next = new Map<string, PiecesRead>();
@@ -2170,7 +2166,7 @@ function useLogEntries(
         return [{ key, row, index }];
       }
       const moving = working && index === placed.length - 1;
-      const place: StretchPlace = { todos, standings, arrived };
+      const place: StretchPlace = { standings, arrived };
       const was = held.get(message.id);
       const read =
         was !== undefined && sameRead(was, message, moving, place)
@@ -2186,7 +2182,7 @@ function useLogEntries(
     });
     reads.current = next;
     return entries;
-  }, [placing, working, standings, arrivals, todos]);
+  }, [placing, working, standings, arrivals]);
 }
 
 /** Whether two runs of lines are the same lines in the same order. */
