@@ -73,7 +73,7 @@ import { useInboxRoute } from "../inbox-route.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { type SidePanelControl, useSidePanel } from "../tasks/use-side-panel.js";
 import type { InboxChoice } from "../tasks/use-tasks-tab.js";
-import { ToastHost } from "../toast.js";
+import { forgetToasts, ToastHost } from "../toast.js";
 import { appStateQuery, selectTasks } from "../use-app-state.js";
 import {
   type AnyAct,
@@ -616,6 +616,8 @@ beforeEach(() => {
 afterEach(() => {
   act(() => world.root?.unmount());
   world.root = undefined;
+  // Note that a window drawn without its toasts still kept the ones it showed, which the next window to draw them would show again.
+  forgetToasts();
   document.body.innerHTML = "";
   vi.restoreAllMocks();
   vi.unstubAllGlobals();

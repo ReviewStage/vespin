@@ -8,6 +8,7 @@ import { afterEach, test, vi } from "vitest";
 import { useCopyToast } from "./copy-feedback.js";
 import { copyingInto, fakeAppPlatform } from "./testing/app-platform.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
+import { standingToastWords } from "./testing/toast.js";
 import { TOAST_HOLD, ToastHost } from "./toast.js";
 
 /**
@@ -49,9 +50,7 @@ function mount(): void {
 
 /** What each toast standing says, leaving out those on their way out. */
 function standing(): string[] {
-  return [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-    (words) => words.textContent ?? "",
-  );
+  return standingToastWords();
 }
 
 /** Lets `ms` pass on the faked clock the toasts' holds run down on. */

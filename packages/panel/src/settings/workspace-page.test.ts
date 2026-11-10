@@ -82,6 +82,7 @@ import { restOn } from "../testing/hint-rest.js";
 import { stubCanvas, webpBytes } from "../testing/photo-canvas.js";
 import { relayout } from "../testing/resize-observer.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
+import { standingToastWords } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { WorkspacePage, type WorkspaceSettingsControl } from "./workspace-page.js";
 
@@ -1501,12 +1502,7 @@ test("a removal the account's role does not allow says so in a toast", async () 
   await chooseAction(memberNamed(page, "Sam"), "Remove from workspace");
   await confirm("Remove member");
 
-  assert.deepEqual(
-    [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-      (words) => words.textContent,
-    ),
-    [WORKSPACE_NOT_PERMITTED_REFUSAL],
-  );
+  assert.deepEqual(standingToastWords(), [WORKSPACE_NOT_PERMITTED_REFUSAL]);
 });
 
 test("a member leaves after confirming, which names what stays and what stops, and lands the window; an owner is offered no Leave", async () => {
@@ -1563,12 +1559,7 @@ test("the owner deletes a team workspace once its name is typed, told what goes 
     [{ workspaceId: ACME.id }],
   );
   assert.equal(owner.pressed.left, 1);
-  assert.deepEqual(
-    [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-      (words) => words.textContent,
-    ),
-    [`${ACME.name} was deleted`],
-  );
+  assert.deepEqual(standingToastWords(), [`${ACME.name} was deleted`]);
 
   const member = await mount(ACME);
   assert.deepEqual(buttons(leaveGroup(member.page) ?? assert.fail("no leave"), "Delete"), []);

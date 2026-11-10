@@ -21,6 +21,7 @@ import { afterEach, test } from "vitest";
 import { fakeActPort } from "../testing/app-bridge.js";
 import { handState, stateWith } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
+import { standingToastWords } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { UNDO_RAN, undoLast } from "../undo-stack.js";
 import { type InboxReadMarks, type MarkSaying, useInboxReadMarks } from "./use-inbox-read-marks.js";
@@ -157,10 +158,7 @@ function marks() {
         void held().onMark(target, unread, saying);
       }),
     /** What each toast standing says, leaving out those on their way out. */
-    toasts: () =>
-      [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-        (words) => words.textContent ?? "",
-      ),
+    toasts: () => standingToastWords(),
     markAll: (items: readonly InboxItem[]) => act(() => held().onMarkAll(items)),
   };
 }

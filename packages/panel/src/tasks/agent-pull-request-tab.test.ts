@@ -3080,7 +3080,9 @@ test("a pull request ready to merge offers the first method the repository allow
   );
   await pressBox(again, "Rebase and merge");
   assert.equal(
-    document.querySelector('[role="dialog"], [role="alertdialog"]') === null,
+    document.querySelector(
+      '[role="dialog"]:not(.ui-toast), [role="alertdialog"]:not(.ui-toast)',
+    ) === null,
     true,
     "a merge asks nothing first",
   );
@@ -3162,7 +3164,9 @@ test("auto-merge is offered while checks run, and turned off once on; a merge qu
     if (question !== undefined) {
       assert.deepEqual(changes, [], `${label} asks first`);
       assert.match(
-        document.querySelector('[role="dialog"], [role="alertdialog"]')?.textContent ?? "",
+        document.querySelector(
+          '[role="dialog"]:not(.ui-toast), [role="alertdialog"]:not(.ui-toast)',
+        )?.textContent ?? "",
         question.says,
       );
       await answerQuestion(question.answer);
@@ -4478,7 +4482,10 @@ test("the pill is named by the words it draws, so a change out reads as the scre
 });
 
 test("Close acts at once on an open pull request and a draft, a toast offering Reopen, which sends the reopen and goes", async () => {
-  const question = () => document.querySelector('[role="dialog"], [role="alertdialog"]') !== null;
+  const question = () =>
+    document.querySelector(
+      '[role="dialog"]:not(.ui-toast), [role="alertdialog"]:not(.ui-toast)',
+    ) !== null;
   const tab = await draw(merging(MERGE_STATE.CLEAN));
   // Note that Close asks first until the read says the pull request is out of the merge queue.
   await vi.waitFor(() => assert.equal(mergeShown(tab)?.press, "Squash and merge"));
@@ -4530,7 +4537,9 @@ test("Close on an open pull request whose merge status could not be read asks fi
   const tab = await draw(controlAnswering());
   await pressAction(tab, "Close pull request");
 
-  const question = document.querySelector('[role="dialog"], [role="alertdialog"]');
+  const question = document.querySelector(
+    '[role="dialog"]:not(.ui-toast), [role="alertdialog"]:not(.ui-toast)',
+  );
   assert.match(
     question?.textContent ?? "",
     /Could not read whether this pull request is in the merge queue/u,
@@ -4547,7 +4556,8 @@ test("Close on a pull request in the merge queue asks first with the queue's war
     }),
   );
   const question = () =>
-    document.querySelector('[role="dialog"], [role="alertdialog"]')?.textContent ?? undefined;
+    document.querySelector('[role="dialog"]:not(.ui-toast), [role="alertdialog"]:not(.ui-toast)')
+      ?.textContent ?? undefined;
   await pressAction(tab, "Close pull request");
 
   assert.match(question() ?? "", /Close this pull request\?/u);
@@ -5626,7 +5636,8 @@ test("Discard's question stands busy until GitHub answers, and says GitHub's ref
 test("Remove from queue's question goes once a read finds the pull request out of the queue, and a refusal stands in the question for another try", async () => {
   let reads = 0;
   const queued = { queue: true, queued: { position: 2 }, autoMerge: { method: null } } as const;
-  const question = () => document.querySelector('[role="dialog"], [role="alertdialog"]');
+  const question = () =>
+    document.querySelector('[role="dialog"]:not(.ui-toast), [role="alertdialog"]:not(.ui-toast)');
   const tab = await draw(
     controlAnswering({
       pullRequest: () => {
@@ -5684,7 +5695,10 @@ test("Remove from queue's question goes with its panel: hidden, the question is 
   }
   const tab = await drawn(createElement(Hiding));
   // Note that the question is read as whether it stands, so a failure prints a word rather than a whole DOM node.
-  const question = () => document.querySelector('[role="dialog"], [role="alertdialog"]') !== null;
+  const question = () =>
+    document.querySelector(
+      '[role="dialog"]:not(.ui-toast), [role="alertdialog"]:not(.ui-toast)',
+    ) !== null;
 
   await pressBox(tab, "Remove from queue");
   assert.equal(question(), true, "leaving the queue is asked about");

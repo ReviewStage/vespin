@@ -1,80 +1,92 @@
-import { type ReactNode, type RefObject, useLayoutEffect, useRef } from "react";
-import { MOTION_TOKEN, tokenTiming } from "../../motion-timing.js";
+import { Toast as BaseToast, type ToastManager, type ToastObject } from "@base-ui/react/toast";
+import type { ReactNode } from "react";
 import { ANNOUNCE, Announcer, useAnnounce } from "../announcer/announcer.js";
 
 /**
- * toast-stack.tsx -- the toasts standing, in the window's bottom-right corner, and the window's `Announcer` that says them.
+ * toast-stack.tsx -- the toasts standing, in the window's bottom-right corner, as Base UI's toast viewport keeps them over one manager.
  *
- * The stack is a landmark over whatever docks at the window's foot, taking no
- * pointer itself, so only a toast with something to press stands in the way
- * of what is under it. Each toast a change moves glides from where it was
- * drawn to where it now stands, on the spring small elements ride, read from
- * the tokens at the stack so reduced motion and a capture run play nothing.
+ * The manager is the stack's state: whoever shows toasts adds, updates, and
+ * closes them on it, from inside React or out (`createToastManager`), and
+ * the stack draws each one it keeps, newest first, through the `children`
+ * the host hands it, each a `Toast`. Base UI holds the rest: each toast's
+ * hold and its pause while the pointer is over the stack or focus is in it,
+ * how many stand at once (`limit`), the ones past it kept aside until there
+ * is room, and each toast's place. The viewport is a landmark over whatever
+ * docks at the window's foot, taking no pointer itself, so only a toast with
+ * something to press stands in the way of what is under it.
  *
  * What each toast says reaches assistive tech through the window's one pair
- * of live regions, the `Announcer` the stack mounts beside it, since the
- * host mounts the stack with the window rather than with any toast: what was
- * done or is asked politely, and what was refused as an alert, each said
- * once the words the host hands it change. Where the stack mounts (a portal
- * to the body, say) is the host's.
+ * of live regions, the `Announcer` the stack mounts beside it, rather than
+ * the viewport's own, which is kept quiet: what was done or is asked
+ * politely, and what was refused as an alert, each said once the words the
+ * host hands it change. Note that the window's regions are the ones a modal
+ * dialog leaves a reader hearing, and that one voice keeps a toast from
+ * being read twice.
+ *
+ * It is portaled to the body with its `Announcer`, or to `container` where
+ * the host stands it somewhere of its own, as a catalog frames it.
  */
 
-/** Less than this, in CSS pixels, is not a move worth playing. */
-const STILL = 0.5;
+/** How many toasts stand at once; the ones past it wait aside, drawn but hidden, until there is room. */
+const TOAST_LIMIT = 3;
 
-/** Glides each toast a change moved from where it was drawn to where it now stands. */
-function useStackGlide(): RefObject<HTMLOListElement | null> {
-  const list = useRef<HTMLOListElement>(null);
-  const drawn = useRef(new Map<Element, number>());
-  useLayoutEffect(() => {
-    const root = list.current;
-    if (root === null) return;
-    // Note that an empty stack, as it stands nearly always, reads nothing: reading the tokens or a box lays out the whole window, and the stack is drawn again with everything around it.
-    if (root.children.length === 0) {
-      if (drawn.current.size > 0) drawn.current = new Map();
-      return;
-    }
-    const timing = tokenTiming(root, MOTION_TOKEN.DURATION_FAST, MOTION_TOKEN.SPRING_FAST);
-    const next = new Map<Element, number>();
-    for (const toast of root.children) {
-      const top = toast.getBoundingClientRect().top;
-      const was = drawn.current.get(toast);
-      next.set(toast, top);
-      if (was === undefined || Math.abs(was - top) < STILL || timing === undefined) continue;
-      toast.animate([{ transform: `translateY(${was - top}px)` }, { transform: "none" }], timing);
-    }
-    drawn.current = next;
-  });
-  return list;
+/** The toasts the stack's manager keeps, each carrying the host's own `Data`. */
+export type StandingToast<Data extends object> = ToastObject<Data>;
+
+/** The stack's state, which whoever shows toasts adds to, updates, and closes. */
+export type ToastStackManager<Data extends object> = ToastManager<Data>;
+
+/** A manager for one stack's toasts, usable from outside React. */
+export function createToastManager<Data extends object>(): ToastStackManager<Data> {
+  return BaseToast.createToastManager<Data>();
 }
 
-/** The stack, named as a landmark, its toasts oldest first, and the window's `Announcer`, told what the newest toasts say. */
-export function ToastStack({
+/** The toasts the manager keeps, newest first, each drawn by `draw`. */
+function Standing<Data extends object>({
+  draw,
+}: {
+  draw: (toast: StandingToast<Data>) => ReactNode;
+}): ReactNode {
+  const { toasts } = BaseToast.useToastManager<Data>();
+  return toasts.map(draw);
+}
+
+/** The stack, named as a landmark, its manager's toasts each drawn by `children`, and the window's `Announcer`, told what the newest toasts say. */
+export function ToastStack<Data extends object>({
+  manager,
   label,
   polite,
   alert,
+  container,
   children,
 }: {
+  /** The stack's state, as `createToastManager` made it. */
+  manager: ToastStackManager<Data>;
   /** What the stack is called, as a landmark among the window's regions. */
   label: string;
   /** What the polite region says: what was done or is asked, or nothing. */
   polite: string;
   /** What the alert region says: what was refused, or nothing. */
   alert: string;
-  /** The toasts, each a `Toast`, oldest first. */
-  children: ReactNode;
+  /** Where the stack is portaled, where not to the body. */
+  container?: HTMLElement | null | undefined;
+  /** Draws one toast the manager keeps, as a `Toast`. */
+  children: (toast: StandingToast<Data>) => ReactNode;
 }): React.JSX.Element {
-  const list = useStackGlide();
   useAnnounce(ANNOUNCE.POLITE, polite);
   useAnnounce(ANNOUNCE.ALERT, alert);
   return (
-    <>
-      <section className="ui-toast-stack pointer-events-none fixed z-toast" aria-label={label}>
-        <ol ref={list} className="m-0 flex list-none flex-col gap-toast-gap p-0">
-          {children}
-        </ol>
-      </section>
-      <Announcer />
-    </>
+    <BaseToast.Provider toastManager={manager} limit={TOAST_LIMIT}>
+      <BaseToast.Portal container={container}>
+        <BaseToast.Viewport
+          className="ui-toast-stack pointer-events-none fixed z-toast"
+          aria-label={label}
+          aria-live="off"
+        >
+          <Standing draw={children} />
+        </BaseToast.Viewport>
+        <Announcer />
+      </BaseToast.Portal>
+    </BaseToast.Provider>
   );
 }

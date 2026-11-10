@@ -18,6 +18,7 @@ import { installShownFailureReporter } from "./failure-report.js";
 import { copyingInto, fakeAppPlatform } from "./testing/app-platform.js";
 import { handState } from "./testing/app-state.js";
 import { readAppState, testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js";
+import { STANDING_TOAST, standingToastWords } from "./testing/toast.js";
 import {
   TOAST_HOLD,
   ToastHost,
@@ -30,23 +31,17 @@ import { forgetUndo, type PressedRows, pressRows, ROW_WRITE, undoLast } from "./
 import { appStateIn } from "./use-app-state.js";
 
 /**
- * toast.test.ts -- the window's toasts against the window they stand in: a
- * window too short for three stands two, setting the oldest aside until
- * there is room again; one whose hold runs down with an action draws that
- * hold as its countdown; work under way settles into its own card in
- * place; an act's Undo toast takes the act back and stands for the Undo
- * hold, a row write's taken back once, as ⌘Z's entry, which the key then
- * finds gone, and leaving once its entry is pushed off the undo list; and a failure toast reports what failed to Sentry, which a recording
- * SDK stands in for, and copies the details of that report, but is not shown
- * where the connection already says why. jsdom lays nothing out, so the window's height is given. Synthetic
- * throughout.
+ * toast.test.ts -- the window's toasts as the window shows them: a toast
+ * with an action is dismissed by its × or Escape; work under way settles
+ * into its own card in place, a refusal said as an alert; an act's Undo
+ * toast takes the act back and stands for the Undo hold, a row write's
+ * taken back once, as ⌘Z's entry, which the key then finds gone, and
+ * leaving once its entry is pushed off the undo list; another account
+ * signing in sends the last one's toasts away; and a failure toast reports
+ * what failed to Sentry, which a recording SDK stands in for, and copies
+ * the details of that report, but is not shown where the connection already
+ * says why. Synthetic throughout.
  */
-
-/** The window's heights: its least, and one with room for three toasts. */
-const WINDOW = {
-  SHORT: 520,
-  TALL: 800,
-} as const;
 
 let root: Root | undefined;
 let show: ((notice: ToastNotice) => void) | undefined;
@@ -112,9 +107,8 @@ function Shower({ account }: { account: string | undefined }): null {
   return null;
 }
 
-/** The toasts, mounted as the window's root mounts them, in a window `height` tall, with the account signed in; signs another in on each call after. */
-function mount(height: number, account?: string): (next: string) => void {
-  vi.spyOn(window, "innerHeight", "get").mockReturnValue(height);
+/** The toasts, mounted as the window's root mounts them, with the account signed in; signs another in on each call after. */
+function mount(account?: string): (next: string) => void {
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
   const render = (signedIn: string | undefined) =>
@@ -144,11 +138,9 @@ function persisting(words: string): ToastNotice {
   };
 }
 
-/** What each toast standing says, oldest first, leaving out those on their way out. */
+/** What each toast standing says, oldest first, as the stack shows them up the window from its newest at the bottom. */
 function standing(): string[] {
-  return [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-    (words) => words.textContent ?? "",
-  );
+  return standingToastWords();
 }
 
 /** Lets `ms` pass on the faked clock the toasts' holds run down on. */
@@ -160,9 +152,9 @@ function pass(ms: number): void {
 
 /** The button a standing toast labels `label`. */
 function toastButton(label: string): HTMLButtonElement {
-  const found = [
-    ...document.querySelectorAll<HTMLButtonElement>(".ui-toast:not([data-leaving]) button"),
-  ].find((button) => button.textContent === label);
+  const found = [...document.querySelectorAll<HTMLButtonElement>(`${STANDING_TOAST} button`)].find(
+    (button) => button.textContent === label,
+  );
   return found ?? assert.fail(`a toast button named ${label}`);
 }
 
@@ -192,59 +184,14 @@ function pinPressed(sent: TasksPinParams[] = []): PressedRows {
   return pressed;
 }
 
-/** The window grown or shrunk to `height`, as a drag of its edge reports it. */
-function resizeTo(height: number): void {
-  vi.spyOn(window, "innerHeight", "get").mockReturnValue(height);
-  act(() => window.dispatchEvent(new Event("resize")));
-}
-
-test("a window too short for three toasts stands the two newest, and the one set aside stands again once the window is tall enough", () => {
-  mount(WINDOW.SHORT);
-
-  act(() => show?.(persisting("Retry the webhook finished")));
-  act(() => show?.(persisting("Should withdrawn invitations count?")));
-  act(() => show?.(persisting("Nightly upgrade couldn't start")));
-  const short = standing();
-  resizeTo(WINDOW.TALL);
-
-  assert.deepEqual(short, [
-    "Should withdrawn invitations count?",
-    "Nightly upgrade couldn't start",
-  ]);
-  assert.deepEqual(standing(), [
-    "Should withdrawn invitations count?",
-    "Nightly upgrade couldn't start",
-    "Retry the webhook finished",
-  ]);
-});
-
-test("a window made too short for three toasts sets the oldest aside, without dismissing it", () => {
-  mount(WINDOW.TALL);
-  act(() => show?.(persisting("Retry the webhook finished")));
-  act(() => show?.(persisting("Should withdrawn invitations count?")));
-  act(() => show?.(persisting("Nightly upgrade couldn't start")));
-  const tall = standing();
-
-  resizeTo(WINDOW.SHORT);
-  const short = standing();
-  resizeTo(WINDOW.TALL);
-
-  assert.equal(tall.length, 3);
-  assert.deepEqual(short, [
-    "Should withdrawn invitations count?",
-    "Nightly upgrade couldn't start",
-  ]);
-  assert.ok(standing().includes("Retry the webhook finished"), "the toast set aside comes back");
-});
-
 test("a toast with an action carries a Dismiss button the keyboard reaches, and its press or Escape from it sends the toast away", () => {
-  mount(WINDOW.TALL);
+  mount();
   act(() => show?.(persisting("Retry the webhook finished")));
   act(() => show?.(persisting("Nightly upgrade couldn't start")));
   const dismissButtons = () =>
-    [
-      ...document.querySelectorAll<HTMLButtonElement>(".ui-toast:not([data-leaving]) button"),
-    ].filter((button) => button.getAttribute("aria-label") === "Dismiss");
+    [...document.querySelectorAll<HTMLButtonElement>(`${STANDING_TOAST} button`)]
+      .filter((button) => button.getAttribute("aria-label") === "Dismiss")
+      .reverse();
 
   const [first, second] = dismissButtons();
   assert.ok(first && second);
@@ -261,34 +208,8 @@ test("a toast with an action carries a Dismiss button the keyboard reaches, and 
   assert.deepEqual(standing(), []);
 });
 
-test("a phone's keyboard rising in a tall window leaves room for two toasts, setting the oldest aside until it goes down", () => {
-  const seen: EventTarget & { height: number } = Object.assign(new EventTarget(), {
-    offsetTop: 0,
-    offsetLeft: 0,
-    width: 390,
-    height: WINDOW.TALL,
-  });
-  vi.stubGlobal("visualViewport", seen);
-  mount(WINDOW.TALL);
-  act(() => show?.(persisting("Retry the webhook finished")));
-  act(() => show?.(persisting("Should withdrawn invitations count?")));
-  act(() => show?.(persisting("Nightly upgrade couldn't start")));
-
-  seen.height = WINDOW.SHORT;
-  act(() => seen.dispatchEvent(new Event("resize")));
-  const keyboardUp = standing();
-  seen.height = WINDOW.TALL;
-  act(() => seen.dispatchEvent(new Event("resize")));
-
-  assert.deepEqual(keyboardUp, [
-    "Should withdrawn invitations count?",
-    "Nightly upgrade couldn't start",
-  ]);
-  assert.equal(standing().length, 3);
-});
-
 test("two pieces of work under way stand apart, each settles its own card in place, and a refusal is said as an alert", () => {
-  mount(WINDOW.TALL);
+  mount();
   let first: ((notice: ToastNotice) => void) | undefined;
   let second: ((notice: ToastNotice) => void) | undefined;
   act(() => {
@@ -309,11 +230,12 @@ test("two pieces of work under way stand apart, each settles its own card in pla
 
   assert.deepEqual(standing(), ["Saved", "Couldn't save"]);
   assert.deepEqual([...document.querySelectorAll(".ui-toast")], working, "the same two cards");
-  assert.equal(document.querySelector('[role="alert"]')?.textContent, "Couldn't save");
+  const alerts = [...document.querySelectorAll('[role="alert"]')].map((alert) => alert.textContent);
+  assert.ok(alerts.includes("Couldn't save"), "the refusal is said as an alert");
 });
 
 test("a failure toast reports what failed: an unexpected one as an error line and an issue grouped by where and what, credentials redacted, and a refusal as a warning line alone", () => {
-  mount(WINDOW.TALL);
+  mount();
   const issues: { error: Error; hint: unknown }[] = [];
   const lines: { level: string; message: string; attributes: unknown }[] = [];
   const recording: ShownFailureSentry = {
@@ -399,7 +321,7 @@ test("a failure toast reports what failed: an unexpected one as an error line an
 test("a failure toast for a hosted call that never answered reports what the host kept of it, the trace the service's lines carry unredacted, and copies that trace", async () => {
   const copied: string[] = [];
   fakeAppPlatform(copyingInto(copied));
-  mount(WINDOW.TALL);
+  mount();
   const lines: { message: string; attributes: unknown }[] = [];
   const recording: ShownFailureSentry = {
     captureException: () => "",
@@ -453,7 +375,7 @@ test("a failure toast for a hosted call that never answered reports what the hos
     },
   ]);
   const copy = document.querySelector<HTMLButtonElement>(
-    '.ui-toast:not([data-leaving]) button[aria-label="Copy details"]',
+    `${STANDING_TOAST} button[aria-label="Copy details"]`,
   );
   await act(async () => copy?.click());
   assert.ok(
@@ -469,7 +391,7 @@ it.effect(
       handState({}, { network: { online: true, reachable: false } });
       // Note that we wait on the read itself, because it lands after a fiber's hops a busy runner can stretch past any one tick.
       yield* Effect.promise(readAppState);
-      mount(WINDOW.TALL);
+      mount();
       // Note that we wait on the test's client, because the subscription reads the document again as it mounts before it writes it there.
       yield* Effect.promise(() =>
         vi.waitFor(() =>
@@ -495,7 +417,7 @@ test("an unexpected failure toast's Copy details copies what its report sent, wi
   vi.setSystemTime(new Date("2026-10-29T18:20:03.198Z"));
   const copied: string[] = [];
   fakeAppPlatform(copyingInto(copied));
-  mount(WINDOW.TALL);
+  mount();
   const recording: ShownFailureSentry = {
     captureException: () => "event-fixture",
     logger: { warn: () => undefined, error: () => undefined },
@@ -511,7 +433,7 @@ test("an unexpected failure toast's Copy details copies what its report sent, wi
 
   const copies = [
     ...document.querySelectorAll<HTMLButtonElement>(
-      '.ui-toast:not([data-leaving]) button[aria-label="Copy details"]',
+      `${STANDING_TOAST} button[aria-label="Copy details"]`,
     ),
   ];
   assert.equal(copies.length, 1, "the refusal's toast offers no copy");
@@ -543,18 +465,18 @@ test("an unexpected failure toast's Copy details copies what its report sent, wi
   ]);
 });
 
-test("another account signing in empties the stack at once, the last one's toasts gone without leaving in sight", () => {
-  const signIn = mount(WINDOW.TALL, "ada");
+test("another account signing in sends the last one's toasts away", () => {
+  const signIn = mount("ada");
   act(() => show?.(persisting("Retry the webhook finished")));
   act(() => show?.(pinPressed().keep("Task pinned") ?? assert.fail("the pin's toast")));
 
   signIn("grace");
 
-  assert.equal(document.querySelectorAll(".ui-toast").length, 0);
+  assert.deepEqual(standing(), []);
 });
 
 test("an Undo toast's Undo takes a row write back once and sends the toast away, leaving ⌘Z nothing to take back again", async () => {
-  mount(WINDOW.TALL);
+  mount();
   const sent: TasksPinParams[] = [];
   const said = pinPressed(sent).keep("Task pinned") ?? assert.fail("the pin's toast");
   act(() => show?.(said));
@@ -569,7 +491,7 @@ test("an Undo toast's Undo takes a row write back once and sends the toast away,
 });
 
 test("an Undo toast whose entry was pushed off the undo list leaves rather than offer an Undo that does nothing", () => {
-  mount(WINDOW.TALL);
+  mount();
   act(() => show?.(pinPressed().keep("Task pinned") ?? assert.fail("the pin's toast")));
 
   // Pins a drag keeps for ⌘Z say no toast of their own, so the first pin's toast still stands as they push its entry off.
@@ -582,7 +504,7 @@ test("an Undo toast whose entry was pushed off the undo list leaves rather than 
 
 test("an Undo toast nobody points at stands for the Undo hold, then leaves without taking the act back", () => {
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
-  mount(WINDOW.TALL);
+  mount();
   const hold = Duration.toMillis(TOAST_HOLD.UNDO);
   const sent: TasksPinParams[] = [];
   act(() => show?.(pinPressed(sent).keep("Task pinned") ?? assert.fail("the pin's toast")));

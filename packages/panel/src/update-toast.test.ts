@@ -9,6 +9,7 @@ import { afterEach, beforeEach, test, vi } from "vitest";
 import { fakeActPortAnswering, fakeAppBridge } from "./testing/app-bridge.js";
 import { DESKTOP_CAPABILITIES, handState, stateWith } from "./testing/app-state.js";
 import { settleQueries, startQueriesAfresh, withQueryClient } from "./testing/copy-feedback.js";
+import { STANDING_TOAST, standingToastWords } from "./testing/toast.js";
 import { ToastHost } from "./toast.js";
 import { useReadyToast } from "./update-toast.js";
 
@@ -74,14 +75,12 @@ async function mount(): Promise<void> {
 
 /** What each toast standing says, leaving out those on their way out. */
 function said(): string[] {
-  return [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-    (words) => words.textContent ?? "",
-  );
+  return standingToastWords();
 }
 
 /** The standing ready toast's button named `label`, by its words or its accessible name. */
 function button(label: string): HTMLButtonElement {
-  const card = document.querySelector(".ui-toast:not([data-leaving])");
+  const card = document.querySelector(`${STANDING_TOAST}`);
   const found = [...(card?.querySelectorAll("button") ?? [])].find(
     (each) => each.textContent === label || each.getAttribute("aria-label") === label,
   );
