@@ -16,10 +16,20 @@ appId: dev.vespin.ios
 - assertVisible: "Inbox"
 - takeScreenshot: inbox
 # A row's detail: pushed over the list in a compact window, and beside it in
-# a regular one. A plain thread, a notice, opens on its words.
-# Note that the thread may stand below the fold of a short window, the
-# folded iPhone Duo's, so the list is scrolled to it, and settles before the
-# tap, which a list still gliding takes as a stop rather than a pick.
+# a regular one. A thread with a decide ask opens on its question.
+# Note that it is the list's first row, opened as the app launches, because
+# on the folded iPhone Duo a tap on the first row right after the list is
+# scrolled back to its top, on the way back from a thread, opens nothing.
+- tapOn: "Who can withdraw an invite?"
+- assertVisible: ".*withdrawing one deletes it.*"
+- takeScreenshot: inbox-ask
+# Note that pressing "Inbox" goes back to the list on a compact window, by its
+# back button or, where that is a bare chevron as on the folded Duo, its tab,
+# and is a no-op beside the split view on a regular one. A plain thread, a
+# notice, opens on its words; it may stand below the fold of a short window,
+# so the list is scrolled to it, and settles before the tap, which a list
+# still gliding takes as a stop rather than a pick.
+- tapOn: "Inbox"
 - scrollUntilVisible:
     element: "acceptInvite can add a member twice"
     direction: DOWN
@@ -27,17 +37,6 @@ appId: dev.vespin.ios
 - tapOn: "acceptInvite can add a member twice"
 - assertVisible: ".*adds them twice.*"
 - takeScreenshot: inbox-thread
-# Note that pressing the Inbox tab again pops its stack back to the list on a
-# compact window, and is a no-op beside the split view on a regular one. A
-# thread with a decide ask opens on its question.
-- tapOn: "Inbox"
-- scrollUntilVisible:
-    element: "Who can withdraw an invite?"
-    direction: UP
-- waitForAnimationToEnd
-- tapOn: "Who can withdraw an invite?"
-- assertVisible: ".*withdrawing one deletes it.*"
-- takeScreenshot: inbox-ask
 - tapOn: "Inbox"
 - tapOn: "Tasks"
 - assertVisible: "Tasks"

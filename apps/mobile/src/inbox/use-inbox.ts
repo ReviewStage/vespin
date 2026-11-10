@@ -139,12 +139,20 @@ export function useInboxBadge(): number {
   );
 }
 
-/** One thread by its id, with what holds it, wherever it stands in the account's feed; none where the feed holds no such thread. */
+/**
+ * One thread by its id, with what holds it, wherever it stands in the
+ * account's feed; none where the feed holds no such thread. Note that every
+ * workspace's threads are searched, not only the chosen workspace's the list
+ * shows, so a link to a thread of another workspace still opens it.
+ */
 export function useInboxThread(id: string | undefined): {
   readonly listed: InboxListed | undefined;
   readonly readerId: string | undefined;
 } {
-  const groups = useInboxGroups();
+  const { data: groups = NO_GROUPS } = useQuery({
+    ...appStateQuery,
+    select: selectInboxGroupsIn(undefined),
+  });
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const listed = useMemo(() => {
     for (const { holder, items } of groups) {
@@ -201,10 +209,21 @@ export function useReadOnOpen(listed: InboxListed | undefined): void {
   }, [id]);
 }
 
-/** Where a file's bytes were written for the system's player to read: a file of the app's caches, named by the attachment, so it is written once. */
-function cachedFile(attachmentId: string, base64: string): string {
-  const file = new File(Paths.cache, `inbox-${attachmentId}`);
-  if (!file.exists) file.write(base64, { encoding: "base64" });
+/**
+ * Where a file's bytes were written for the system's player to read: a file
+ * of the app's caches, named by the attachment, so it is written once. Note
+ * that the bytes are written beside it first and moved into place once the
+ * write settles, so the player is never handed a file still being written,
+ * and a write cut short never stands as the file a later read finds.
+ */
+async function cachedFile(attachmentId: string, base64: string): Promise<string> {
+  const name = `inbox-${attachmentId}`;
+  const file = new File(Paths.cache, name);
+  if (file.exists) return file.uri;
+  const writing = new File(Paths.cache, `${name}.writing`);
+  if (writing.exists) writing.delete();
+  await writing.write(base64, { encoding: "base64" });
+  await writing.move(file);
   return file.uri;
 }
 
@@ -246,14 +265,15 @@ export function useThreadMedia(
         refused("Reading a thread's file")(error);
       };
       acts[ACT_KIND.AGENTS_INBOX_ATTACHMENT]({ itemId, attachmentId: each.attachmentId })
-        .then((read) => {
+        .then(async (read) => {
           // A read that lands once another thread stands is that thread's no longer.
           if (asked.current.itemId !== itemId) return;
           if (!("base64" in read)) throw new Error(`The file was not read: ${read.failure}.`);
           const source =
             each.kind === INBOX_MEDIA.VIDEO
-              ? cachedFile(each.attachmentId, read.base64)
+              ? await cachedFile(each.attachmentId, read.base64)
               : `data:${read.contentType};base64,${read.base64}`;
+          if (asked.current.itemId !== itemId) return;
           setSources((held) => new Map(held).set(each.attachmentId, source));
         })
         .catch(forget);

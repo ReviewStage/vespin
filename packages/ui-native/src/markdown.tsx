@@ -17,6 +17,7 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   COLUMN_ALIGN,
   type ColumnAlign,
@@ -103,9 +104,6 @@ const CHIP_DROP = 0.22;
 /** How wide a list's marker column stands, in body sizes. */
 const MARKER_WIDTH = 1.4;
 
-/** How far below the screen's top the full-screen picture's Done stands, clear of the status bar and the Dynamic Island. */
-const VIEWER_CLOSE_TOP = 60;
-
 const styles = StyleSheet.create({
   flow: { gap: SPACE.ROW },
   item: { flexDirection: "row", gap: SPACE.TIGHT },
@@ -126,12 +124,7 @@ const styles = StyleSheet.create({
   },
   picture: { width: "100%", borderRadius: 8 },
   viewer: { flex: 1, backgroundColor: "black", justifyContent: "center" },
-  viewerClose: {
-    position: "absolute",
-    top: VIEWER_CLOSE_TOP,
-    right: SPACE.PAGE,
-    padding: SPACE.ROW,
-  },
+  viewerClose: { position: "absolute", padding: SPACE.ROW },
 });
 
 /** What drawing a run needs beyond the run: the colors, the reader's text scale, and the doors a press opens. */
@@ -432,13 +425,17 @@ type PictureProps = {
 
 /**
  * A picture at its message's width, which a press opens full screen over
- * everything, where a pinch zooms it and Done closes it. Note that a picture
+ * everything, where a pinch zooms it and Done closes it. Done stands at the
+ * leading top corner inside the safe area, as Quick Look's does, clear of
+ * what the system draws at the trailing corner: the clock of the folded
+ * iPhone Duo's outer display, beside its rail. Note that a picture
  * still on its way stands as its well at the shape a picture most often
  * is, so the words under it do not jump twice.
  */
 export function Picture({ source, alt }: PictureProps) {
   const colors = useColors();
   const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [aspect, setAspect] = useState<number | undefined>(undefined);
   const [full, setFull] = useState(false);
   const heard = alt === "" ? "Picture" : alt;
@@ -492,7 +489,7 @@ export function Picture({ source, alt }: PictureProps) {
             accessibilityRole="button"
             accessibilityLabel="Done"
             testID="markdown-picture-done"
-            style={styles.viewerClose}
+            style={[styles.viewerClose, { top: insets.top, left: insets.left + SPACE.ROW }]}
           >
             <Text style={{ fontSize: TEXT_SIZE.BODY, fontWeight: "600", color: "white" }}>
               Done
