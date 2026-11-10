@@ -150,8 +150,9 @@ export const taskChangeAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
     );
   }
   if (asked.archived === true) yield* everyAgentStopped(userId, taskId, caller);
+  // Note that a settle asked again of a task already there stops nothing, because a turn begun since was never confirmed.
   const stopped: ReadonlySet<string> =
-    isTaskSettled(asked.status) && asked.stopAgents === true
+    isTaskSettled(asked.status) && asked.status !== standing && asked.stopAgents === true
       ? yield* everyAgentStopped(userId, taskId, caller)
       : new Set();
   // Note that the archive stamp is never written, because a task is archived no longer.
