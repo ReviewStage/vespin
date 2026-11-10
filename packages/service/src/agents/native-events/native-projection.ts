@@ -780,6 +780,12 @@ class Fold {
                 : undefined),
             }
           : rest;
+        // A limit the harness says lifted no longer cut the turn short, so a failure after it is its own.
+        const turn = this.state.turn;
+        if (!moment.refused && turn?.limited === true) {
+          const { limited: _limited, ...lifted } = turn;
+          this.#setTurn(lifted);
+        }
         return;
       }
       case NATIVE_MOMENT.PLAN_USAGE: {

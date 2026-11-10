@@ -384,6 +384,29 @@ test("a message refused stays where it went, marked Not delivered, the box empty
   assert.equal(statusOf(tab.lines("Rebase on main")[0]), undefined, "and is on its way again");
 });
 
+test("a message the plan's usage limit refused says the limit's words where Not delivered stands, its mark's Retry sending it again", async () => {
+  const tab = await drawnTab([]);
+  await tab.send("Rebase on main");
+
+  await tab.answer(0, {
+    failure: AGENT_CALL_FAILURE.AGENT_PLAN_LIMIT_REACHED,
+    resetsAt: Date.UTC(2026, 10, 10, 4),
+  });
+  const [line] = tab.lines("Rebase on main");
+  assert.match(statusOf(line) ?? "", /^Usage limit reached · Resets /u);
+
+  const mark =
+    line?.querySelector<HTMLButtonElement>('button[aria-label^="Usage limit reached"]') ??
+    assert.fail("the line's mark is named by the limit's words");
+  await act(async () => mark.click());
+  await act(async () => menuItem("Retry").click());
+  await settle();
+  assert.deepEqual(
+    tab.sent.map((each) => each.text),
+    ["Rebase on main", "Rebase on main"],
+  );
+});
+
 test("Edit takes a message that did not go back into the box, ahead of the words written since, and lets its line go", async () => {
   const tab = await drawnTab([]);
   await tab.send("Rebase on main");
