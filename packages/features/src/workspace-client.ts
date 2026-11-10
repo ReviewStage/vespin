@@ -75,15 +75,8 @@ import {
  * workspace-client.ts -- the account's workspaces as the host asks the service for them: the list, a workspace created, renamed, given a slug or a photo, or handed over, a GitHub organization connected or disconnected, and its members read, removed, given a role, or left.
  *
  * Every call is the account call, so the bearer is read fresh per attempt
- * and a 401 is renewed and retried once. Renaming, setting the photo,
- * removing a member, changing a member's role, handing the workspace over,
- * and leaving write through Better Auth's own
- * organization calls, so they carry the
- * Mac's Better Auth session rather than its OAuth token: with no session
- * yet, or one the service no longer takes, the call asks for one through
- * the browser's hand-off and is sent once more on it. An owner's or an
- * admin's invitations are made, read, and canceled the same way. A
- * workspace's photo is read apart from the list, as its bytes. A list that did not come back is
+ * and a 401 is renewed and retried once. A workspace's photo is read apart
+ * from the list, as its bytes. A list that did not come back is
  * nothing, because the one thing a caller does without it is keep the
  * workspaces it last read; every other call answers a result, because its
  * caller draws why it did not happen: the account's role does not allow
@@ -95,8 +88,6 @@ import {
 export interface HostedWorkspaceClientOptions {
   /** What authorizes each call on the signed-in account, read fresh for every attempt. */
   credential: CallCredential;
-  /** The Mac's own Better Auth session, for the calls that write through Better Auth's organization endpoints. */
-  sessionCredential: CallCredential;
   /** The hosted service origin, without a trailing slash. */
   serviceBaseUrl: string;
   requestTimeoutMs?: number;
@@ -151,20 +142,12 @@ export class HostedWorkspaceClient {
   readonly #call: AccountCallEffects;
   /** The hosted contract's client under the account's credential. */
   readonly #hosted: HostedClient;
-  /** The hosted contract's client under the Mac's session, for the procedures that write through Better Auth. */
-  readonly #hostedInSession: HostedClient;
 
   constructor(options: HostedWorkspaceClientOptions) {
     this.#hosted = hostedClient({
       baseUrl: options.serviceBaseUrl,
       credential: options.credential,
       requestTimeoutMs: options.requestTimeoutMs,
-    });
-    this.#hostedInSession = hostedClient({
-      baseUrl: options.serviceBaseUrl,
-      credential: options.sessionCredential,
-      requestTimeoutMs: options.requestTimeoutMs,
-      inSession: true,
     });
     this.#call = accountCall({
       baseUrl: options.serviceBaseUrl,
@@ -200,7 +183,7 @@ export class HostedWorkspaceClient {
     );
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return resultOf(
-      hostedCall(this.#hostedInSession.workspaces.rename, admitted),
+      hostedCall(this.#hosted.workspaces.rename, admitted),
       (answer) => answer.workspace,
     );
   }
@@ -246,7 +229,7 @@ export class HostedWorkspaceClient {
     );
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return resultOf(
-      hostedCall(this.#hostedInSession.workspaces.setPhoto, admitted),
+      hostedCall(this.#hosted.workspaces.setPhoto, admitted),
       (answer) => answer.workspace,
     );
   }
@@ -555,7 +538,7 @@ export class HostedWorkspaceClient {
     );
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return resultOf(
-      hostedCall(this.#hostedInSession.workspaces.removeMember, admitted),
+      hostedCall(this.#hosted.workspaces.removeMember, admitted),
       (answer) => answer.members,
     );
   }
@@ -571,7 +554,7 @@ export class HostedWorkspaceClient {
     );
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return resultOf(
-      hostedCall(this.#hostedInSession.workspaces.changeRole, admitted),
+      hostedCall(this.#hosted.workspaces.changeRole, admitted),
       (answer) => answer.members,
     );
   }
@@ -586,7 +569,7 @@ export class HostedWorkspaceClient {
     );
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return resultOf(
-      hostedCall(this.#hostedInSession.workspaces.transfer, admitted),
+      hostedCall(this.#hosted.workspaces.transfer, admitted),
       (answer) => answer.members,
     );
   }
@@ -600,10 +583,7 @@ export class HostedWorkspaceClient {
     );
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return Effect.map(
-      resultOf(
-        hostedCall(this.#hostedInSession.workspaces.leave, admitted),
-        (answer) => answer.workspaceId,
-      ),
+      resultOf(hostedCall(this.#hosted.workspaces.leave, admitted), (answer) => answer.workspaceId),
       (left) => (left.ok && left.answer !== workspaceId ? UNANSWERED : left),
     );
   }
@@ -621,7 +601,7 @@ export class HostedWorkspaceClient {
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return Effect.map(
       resultOf(
-        hostedCall(this.#hostedInSession.workspaces.delete, admitted),
+        hostedCall(this.#hosted.workspaces.delete, admitted),
         (answer) => answer.workspaceId,
       ),
       (deleted) => (deleted.ok && deleted.answer !== workspaceId ? UNANSWERED : deleted),
@@ -639,7 +619,7 @@ export class HostedWorkspaceClient {
     );
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return resultOf(
-      hostedCall(this.#hostedInSession.workspaceInvitations.invite, admitted),
+      hostedCall(this.#hosted.workspaceInvitations.invite, admitted),
       (answer) => answer.invitation,
     );
   }
@@ -658,7 +638,7 @@ export class HostedWorkspaceClient {
     );
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return resultOf(
-      hostedCall(this.#hostedInSession.workspaceInvitations.cancel, admitted),
+      hostedCall(this.#hosted.workspaceInvitations.cancel, admitted),
       (answer) => answer.invitations,
     );
   }

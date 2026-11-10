@@ -10,6 +10,7 @@ import { useConnected } from "../connection.js";
 import { failureShown } from "../failure-report.js";
 import { TOAST_HOLD, useToast } from "../toast.js";
 import { AgentComposer } from "./agent-composer.js";
+import { useInboxAcknowledger } from "./inbox-acknowledge.js";
 import { focusMissing } from "./inbox-ask-controls.js";
 import { type InboxDraft, inboxMissing, inboxNoteReading, inboxThreadSend } from "./inbox-model.js";
 import { ReplyToSelection } from "./reply-to-selection.js";
@@ -51,7 +52,8 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
  * or the line, and says what that is under the foot's bar ("Fill in
  * Host."), until it is filled. A notice waiting on the reader's nod reads
  * Got it on Send while the box is empty, which settles it without messaging
- * the agent (`use-task-inbox.ts`'s `onAcknowledge`), and is the round Send
+ * the agent, held behind a toast whose Undo has it wait again
+ * (`inbox-acknowledge.tsx`), and is the round Send
  * again once a word or a file is in. A notice opening acknowledges
  * (`inbox-model.ts`'s `acknowledgedOnOpen`, `use-inbox-read-marks.ts`'s
  * `useNodOnOpen`) offers no Got it, since opening it was the nod. Unlike
@@ -68,8 +70,9 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
  * A reply leaves the box the moment it is sent and never holds it, as a
  * message leaves the agent's box: an item's replies go one at a time in the
  * order sent (`use-task-inbox.ts`), each standing on the thread meanwhile.
- * Only Got it and Start thread hold the box, Send busy, until they answer,
- * since each settles or opens something. Why a reply did not go is said
+ * Only Got it and Start thread hold the box, Send busy, until they go,
+ * since each settles or opens something: Got it waits behind the item's
+ * replies on their way, then draws the notice settled, its Undo on a toast. Why a reply did not go is said
  * under the foot's bar over the box's own notes, its words and files back in
  * the box; one refused because the agent is archived says so, with
  * Unarchive after it, which brings the agent back and lets the note go.
@@ -225,6 +228,7 @@ function AnswerCard({
   standing.current = draft;
   // Note that only a nod and a thread start hold the box; a reply leaves it at once and the next may follow.
   const sending = control.sending.has(item.id) || starting;
+  const acknowledgeHeld = useInboxAcknowledger();
   // Note that a notice opening acknowledges offers no Got it, since opening it was the nod (`useNodOnOpen`), save while its holder's held read has failed, when opening acknowledges nothing.
   const nodded = acknowledgedOnOpen(item, readerId) && !control.failed;
   const nod = awaitsNod(item) && emptyBox(draft) && !nodded && !starts;
@@ -288,7 +292,7 @@ function AnswerCard({
   };
   const acknowledge = () => {
     setRefusal(undefined);
-    control.onAcknowledge(item);
+    control.onAcknowledge(item, acknowledgeHeld);
   };
   // Note that the same words and files sent again go under the key they went under, so a retry starts one thread.
   // The box lets go of what it sent at once, as a reply does, so words written while the start is out stay

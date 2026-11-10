@@ -7,6 +7,7 @@ import {
   writeInline,
 } from "@repo/features/composer-markdown";
 import { fenceAfter } from "@repo/features/description-document";
+import { pictureMarker, pictureMarkers } from "@repo/features/picture-marker";
 import { skillWord } from "@repo/features/skill-word";
 import { WRITING_MARK } from "@repo/settings/shortcuts";
 import { TEXT_LINK_MARK_ATTRIBUTES } from "@repo/ui/link-face";
@@ -89,6 +90,11 @@ import { withoutTipTapChords, writingKeys } from "./writing-keys.js";
  * every change until a dictation's words land there, so no offset into the
  * string is ever turned back into a place in the document by arithmetic.
  *
+ * A picture's chip is an atom too, read out as its marker, `[Picture 1]`
+ * (`@repo/features/picture-marker`), laid in where the owner marked the caret
+ * as the picture was handed (`ComposerMark.insertPictures`), and made of a
+ * marker naming a picture the box holds wherever the words are laid in.
+ *
  * A `/name` naming one of the repository's skills becomes its chip once the
  * caret has left it, typed or pasted, and at once in words laid in whole;
  * a `/` word the caret ends is reported to the box (`onTrigger`), which
@@ -132,6 +138,7 @@ const NAME_CHARACTER = /[A-Za-z0-9-]/u;
 const SPACE = " ";
 const NEWLINE = "\n";
 const SKILL_NODE = "skill";
+const PICTURE_NODE = "pictureChip";
 const QUOTE_NODE = "replyQuote";
 const HARD_BREAK_NODE = "hardBreak";
 
@@ -164,6 +171,7 @@ function inlineMark(mark: Mark): InlineMark[] {
 function inlineText(node: PmNode): string {
   if (node.isText) return node.text ?? "";
   if (node.type.name === SKILL_NODE) return skillWord(String(node.attrs.name));
+  if (node.type.name === PICTURE_NODE) return pictureMarker(String(node.attrs.name));
   if (node.type.name === MENTION_NODE) {
     return mentionLink({ name: String(node.attrs.name), target: String(node.attrs.target) });
   }
@@ -275,16 +283,28 @@ interface ChipToken {
   readonly node: (schema: Schema) => PmNode;
 }
 
-/** What words are made chips of: the skills a `/name` names, and whether the box takes mentions. */
+/** What words are made chips of: the skills a `/name` names, the pictures a marker names, and whether the box takes mentions. */
 interface Chipping {
   readonly skills: ReadonlySet<string>;
+  readonly pictures: ReadonlySet<string>;
   readonly mentions: boolean;
+}
+
+/** Each marker of a picture the box holds, as the range it stands in. */
+function pictureTokens(text: string, pictures: ReadonlySet<string>): readonly ChipToken[] {
+  return pictureMarkers(text)
+    .filter((marker) => pictures.has(marker.name))
+    .map((marker) => ({
+      start: marker.start,
+      end: marker.end,
+      node: (schema: Schema) => schema.node(PICTURE_NODE, { name: marker.name }),
+    }));
 }
 
 /** Every chip the words spell, in order: each `/name` of a known skill, and each mention written as its link where the box takes mentions, none overlapping another. */
 function chipTokens(
   text: string,
-  { skills, mentions: takesMentions }: Chipping,
+  { skills, pictures, mentions: takesMentions }: Chipping,
 ): readonly ChipToken[] {
   // Note that a box that takes no mentions keeps a mention's link as the words it is, which it can edit.
   const mentions = (takesMentions ? mentionTokens(text) : []).map(
@@ -303,7 +323,11 @@ function chipTokens(
         node: (schema) => schema.node(SKILL_NODE, { name: text.slice(range.start + 1, range.end) }),
       }),
     );
-  return [...mentions, ...skilled].sort((first, second) => first.start - second.start);
+  // Note that a marker inside a mention's link is the link's words, as a `/name` there is.
+  const pictured = pictureTokens(text, pictures).filter(
+    (token) => !mentions.some((each) => token.start < each.end && token.end > each.start),
+  );
+  return [...mentions, ...skilled, ...pictured].sort((first, second) => first.start - second.start);
 }
 
 /** A mark the words wear as the schema holds it. */
@@ -376,31 +400,44 @@ function sliceOf(schema: Schema, text: string, chipping: Chipping): Slice {
 }
 
 /**
- * Each `/name` of a known skill that still stands as words made its chip,
- * but the one the caret ends where it is asked to be spared; nothing where
- * there is none.
+ * Each `/name` of a known skill and each marker of a held picture that
+ * still stands as words made its chip, but the one the caret ends where it
+ * is asked to be spared; nothing where there is none.
  */
 function chipped(
   state: EditorState,
-  skills: ReadonlySet<string>,
+  chipping: Pick<Chipping, "skills" | "pictures">,
   spareCaret: boolean,
 ): Transaction | undefined {
-  const { doc, selection } = state;
+  const { doc, selection, schema } = state;
   const runs = textRuns(doc);
+  const text = textOf(doc);
   const caret = selection.empty ? offsetAt(doc, selection.from) : undefined;
-  const places = skillTokens(textOf(doc), skills)
+  const tokens: {
+    start: number;
+    end: number;
+    node: (place: { from: number; to: number }) => PmNode;
+  }[] = [
+    ...skillTokens(text, chipping.skills).map((token) => ({
+      ...token,
+      node: (place: { from: number; to: number }) =>
+        schema.node(SKILL_NODE, { name: doc.textBetween(place.from + 1, place.to) }),
+    })),
+    ...pictureTokens(text, chipping.pictures).map((token) => ({
+      ...token,
+      node: () => token.node(schema),
+    })),
+  ];
+  const places = tokens
     .filter((token) => !spareCaret || token.end !== caret)
     .flatMap((token) => {
       const place = placeOf(runs, token);
-      return place === undefined
-        ? []
-        : [{ ...place, name: doc.textBetween(place.from + 1, place.to) }];
-    });
+      return place === undefined ? [] : [{ ...place, node: token.node(place) }];
+    })
+    .sort((first, second) => first.from - second.from);
   if (places.length === 0) return undefined;
   const tr = state.tr;
-  for (const place of places.reverse()) {
-    tr.replaceWith(place.from, place.to, state.schema.node(SKILL_NODE, { name: place.name }));
-  }
+  for (const place of places.reverse()) tr.replaceWith(place.from, place.to, place.node);
   return tr.setMeta(CHIPPED_META, true);
 }
 
@@ -426,7 +463,7 @@ function removedChip(view: EditorView, key: string): boolean {
   const back = key === "Backspace";
   if (removedQuote(view, back)) return true;
   const beside = back ? selection.$from.nodeBefore : selection.$from.nodeAfter;
-  if (beside?.type.name !== SKILL_NODE && beside?.type.name !== MENTION_NODE) return false;
+  if (beside === null || beside === undefined || !isChip(beside)) return false;
   const from = back ? selection.from - 1 : selection.from;
   view.dispatch(view.state.tr.delete(from, from + 1).scrollIntoView());
   return true;
@@ -549,6 +586,57 @@ function skillNode(drawChip: ComposerEditorProps["drawChip"], known: (name: stri
 }
 
 /**
+ * A picture's chip: an atom read out as its marker, `[Picture 1]`, its look
+ * the panel's (`drawPicture`), its name in the node and never in the DOM's
+ * attributes, as a skill's is; where the panel draws none, its marker as
+ * words. A chip copied out and pasted back is read by its words, and stays
+ * words where the box holds no picture of that name.
+ */
+function pictureNode(
+  drawPicture: ComposerEditorProps["drawPicture"],
+  held: (name: string) => boolean,
+) {
+  return Node.create({
+    name: PICTURE_NODE,
+    group: "inline",
+    inline: true,
+    atom: true,
+    selectable: false,
+    addAttributes() {
+      return { name: { default: "", rendered: false } };
+    },
+    parseHTML() {
+      return [
+        {
+          tag: `span[data-chip="${PICTURE_NODE}"]`,
+          getAttrs: (element) => {
+            const name = pictureMarkers(element.textContent)[0]?.name;
+            return name !== undefined && held(name) ? { name } : false;
+          },
+        },
+      ];
+    },
+    renderHTML({ node }) {
+      return ["span", { "data-chip": PICTURE_NODE }, pictureMarker(String(node.attrs.name))];
+    },
+    renderText({ node }) {
+      return pictureMarker(String(node.attrs.name));
+    },
+    addNodeView() {
+      return ({ node }) => {
+        const dom = document.createElement("span");
+        dom.contentEditable = "false";
+        dom.dataset.chip = PICTURE_NODE;
+        const name = String(node.attrs.name);
+        if (drawPicture === undefined) dom.textContent = pictureMarker(name);
+        const undraw = drawPicture?.(dom, name) ?? (() => undefined);
+        return { dom, ignoreMutation: () => true, destroy: undraw };
+      };
+    },
+  });
+}
+
+/**
  * The quote block: an atom no caret stands in and no key edits, read out as
  * a blockquote, its look the panel's (`drawQuote`), with the press that
  * takes it out. Note that its words stand in no attribute of the DOM, as a
@@ -612,6 +700,7 @@ function quoteNode(drawQuote: ComposerEditorProps["drawQuote"]) {
 function composerExtensions(
   props: ComposerEditorProps,
   known: (name: string) => boolean,
+  held: (name: string) => boolean,
 ): AnyExtension[] {
   const kit = StarterKit.configure({
     blockquote: false,
@@ -633,14 +722,16 @@ function composerExtensions(
     writingKeys.configure({ actions: MARK_ACTIONS }),
     ...formatReports(props.format),
     skillNode(props.drawChip, known),
+    pictureNode(props.drawPicture, held),
     mentionNode(props.mentions?.drawMention),
     quoteNode(props.drawQuote),
   ];
 }
 
-/** Whether a node is a chip, a skill's or a mention's. */
+/** Whether a node is a chip, a skill's, a picture's, or a mention's. */
 function isChip(node: PmNode): boolean {
-  return node.type.name === SKILL_NODE || node.type.name === MENTION_NODE;
+  const { name } = node.type;
+  return name === SKILL_NODE || name === PICTURE_NODE || name === MENTION_NODE;
 }
 
 /** Every chip a mark was laid on, as words selected around it and marked lay one, made to wear none again. */
@@ -655,6 +746,7 @@ function unmarkedChips(tr: Transaction): Transaction {
 /** What a mounted box keeps between its events: the skills it chips, whether it takes words, what ties it to its list, the last words and word it reported, and its marks. */
 interface ComposerState {
   skills: ReadonlySet<string>;
+  pictures: ReadonlySet<string>;
   input: ComposerInput;
   aria: EditorAria;
   emitted: string;
@@ -704,7 +796,7 @@ function guardPlugin(state: ComposerState, props: ComposerEditorProps): Plugin {
     },
     appendTransaction: (transactions, _old, now) => {
       const chipping = transactions.some((tr) => tr.getMeta(CHIPPED_META) === true);
-      const tr = unmarkedChips((chipping ? undefined : chipped(now, state.skills, true)) ?? now.tr);
+      const tr = unmarkedChips((chipping ? undefined : chipped(now, state, true)) ?? now.tr);
       return tr.docChanged ? tr : undefined;
     },
     view: () => ({ update: (view) => reported(view, state, props) }),
@@ -894,6 +986,44 @@ function insertedAt(
   return true;
 }
 
+/**
+ * Pictures put in as their chips at a place, spaced from a word either
+ * side, the caret after the last and the box focused, each held from now
+ * on; answers whether they went in, which they do not past the bound, nor
+ * where the place holds no words. Note that the change is undone as any
+ * other, so its chips go and come back with undo, and their pictures with
+ * them (`use-attached-files.ts`).
+ */
+function insertedPicturesAt(
+  editor: Editor,
+  state: ComposerState,
+  maxLength: number,
+  pos: number,
+  names: readonly string[],
+): boolean {
+  const { doc, schema } = editor.state;
+  const $pos = doc.resolve(pos);
+  if (names.length === 0 || !$pos.parent.inlineContent) return false;
+  state.pictures = new Set([...state.pictures, ...names]);
+  const chips = names.flatMap((name, index) => [
+    ...(index > 0 || needsSpace($pos.nodeBefore, false) ? [schema.text(SPACE)] : []),
+    schema.node(PICTURE_NODE, { name }),
+  ]);
+  const trail = needsSpace($pos.nodeAfter, true) ? [schema.text(SPACE)] : [];
+  const tr = editor.state.tr.insert(pos, [...chips, ...trail]);
+  if (textOf(tr.doc).length > maxLength) return false;
+  const after = tr.mapping.map(pos) - trail.length;
+  editor.view.dispatch(
+    tr
+      .setSelection(TextSelection.create(tr.doc, after))
+      .setMeta(COMMAND_META, true)
+      .setMeta(CHIPPED_META, true)
+      .scrollIntoView(),
+  );
+  editor.view.focus();
+  return true;
+}
+
 /** The word a trigger found written as the chip given, a space after it unless one follows, the caret after the space. */
 function choseChip(editor: Editor, word: ReturnType<typeof triggerAt>, chip: PmNode): void {
   if (word === undefined) return;
@@ -990,6 +1120,11 @@ function marked(editor: Editor, state: ComposerState, maxLength: number): Compos
       state.marks.delete(mark);
       return pos !== undefined && insertedAt(editor, state, maxLength, pos, words);
     },
+    insertPictures: (names) => {
+      const pos = state.marks.get(mark);
+      state.marks.delete(mark);
+      return pos !== undefined && insertedPicturesAt(editor, state, maxLength, pos, names);
+    },
     release: () => {
       state.marks.delete(mark);
     },
@@ -1015,6 +1150,7 @@ function attributed(
 export function mountComposer(host: HTMLElement, props: ComposerEditorProps): ComposerEditorHandle {
   const state: ComposerState = {
     skills: props.skills,
+    pictures: props.pictures ?? new Set(),
     input: COMPOSER_INPUT.EDITABLE,
     aria: {},
     emitted: props.text,
@@ -1033,7 +1169,11 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
     // Note that pasted words are read as the box reads its own (`clipboardTextParser`), so no paste rule makes a link of a bare address or bold of `__init__`; a link pasted over words selected still links them.
     enablePasteRules: false,
     extensions: [
-      ...composerExtensions(props, (name) => state.skills.has(name)),
+      ...composerExtensions(
+        props,
+        (name) => state.skills.has(name),
+        (name) => state.pictures.has(name),
+      ),
       Extension.create({ name: "composerGuard", addProseMirrorPlugins: () => [guard] }),
     ],
     editorProps: composerProps(state, props),
@@ -1066,7 +1206,12 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
       choseChip(editor, state.mentionTrigger, editor.schema.node(SKILL_NODE, { name })),
     setSkills: (skills) => {
       state.skills = skills;
-      const tr = chipped(editor.state, skills, true);
+      const tr = chipped(editor.state, state, true);
+      if (tr !== undefined) editor.view.dispatch(tr.setMeta("addToHistory", false));
+    },
+    setPictures: (pictures) => {
+      state.pictures = pictures;
+      const tr = chipped(editor.state, state, true);
       if (tr !== undefined) editor.view.dispatch(tr.setMeta("addToHistory", false));
     },
     setInput: (input) => {

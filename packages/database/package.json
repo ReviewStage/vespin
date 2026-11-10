@@ -45,6 +45,8 @@
     "./models/native-call-keys": "./src/models/native-call-keys.js",
     "./models/native-projection-store": "./src/models/native-projection-store.js",
     "./models/oauth-grants": "./src/models/oauth-grants.js",
+    "./models/organization-store": "./src/models/organization-store.js",
+    "./models/invitation-store": "./src/models/invitation-store.js",
     "./models/message-reads": "./src/models/message-reads.js",
     "./models/description-attachments": "./src/models/description-attachments.js",
     "./models/description-comments": "./src/models/description-comments.js",

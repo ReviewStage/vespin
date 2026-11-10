@@ -1223,34 +1223,42 @@ export interface RestartFit {
  * turn's words, the developer's, and their files), then told again against
  * the window once the replay is written, as a Start's replay is
  * (`withinWindow`).
- * Nothing where it took no step of its own yet, or where its rows cannot be
- * read, which then opens the session on its next turn's words alone. Note
+ * Nothing where it has no step to hand, of its own or carried, or where its
+ * rows cannot be read, which then opens the session on its next turn's words alone. Note
  * that a line in no turn yet, as the one being sent and any waiting for the
- * launch, is left out, since each is handed on its own; and that an agent
+ * launch, is left out, since each is handed on its own, as is the line being
+ * sent where a turn already took it (`sending`), as a retried turn's opening
+ * line is, and, where that line is the agent's first message, the note and
+ * replay it carries itself; and that an agent
  * handed its description is handed none of it again here, since the next
  * turn hands its task as it stands now.
  */
 export const restartReplayOf = (
   agent: Agent,
   fit: RestartFit,
+  sending?: string,
 ): Effect.Effect<string | undefined, StoreFailure, DatabaseServices> =>
   Effect.gen(function* () {
     const read = yield* recordsOf(agent, undefined);
     if (read === undefined) return undefined;
     const records = read.records.filter(
       (record, index) =>
-        index === 0 || record.message.role !== MESSAGE_ROLE.USER || record.turnId !== undefined,
+        index === 0 ||
+        record.message.role !== MESSAGE_ROLE.USER ||
+        (record.turnId !== undefined && record.clientId !== sending),
     );
     const senders = yield* lineSendersOf(
       { userId: agent.userId, conversationId: agent.conversationId },
       records.filter((record) => record.message.role === MESSAGE_ROLE.USER).map(({ id }) => id),
     );
     const own = transcriptSteps(records, senders, undefined) ?? [];
-    if (own.length === 0) return undefined;
     const opened = records[0]?.message.role === MESSAGE_ROLE.USER ? records[0].placedAt : undefined;
-    const handed = agent.prompt === null ? undefined : briefOf(agent.prompt, opened);
+    // Note that a first message handed again carries its own note and replay, so neither is replayed ahead of it.
+    const resent = sending !== undefined && records[0]?.clientId === sending;
+    const handed = agent.prompt === null || resent ? undefined : briefOf(agent.prompt, opened);
     const mine = handed?.note === undefined ? own : [handed.note, ...own];
     const steps = [...(handed?.carried?.steps ?? []), ...mine];
+    if (steps.length === 0) return undefined;
     const totalSteps = (handed?.carried?.totalSteps ?? 0) + mine.length;
     const { windowTokens, instructionsTokens, besideBytes } = fit;
     const fitted = yield* fitReplay(

@@ -1,15 +1,22 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
-import { AGENT_MACHINE, type AgentSummary } from "@repo/features/agent-wire";
+import {
+  AGENT_MACHINE,
+  type AgentRunsOnRequest,
+  type AgentSummary,
+} from "@repo/features/agent-wire";
+import type { MacOffer } from "@repo/features/models-wire";
 import { RUN_ON_MAC_OFF, type RunOnMacStanding } from "@repo/features/workspace-tools-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY, MAC_COMMAND_MODE } from "@repo/settings";
+import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
+import { OpenSettingsProvider } from "../open-settings.js";
 import { fakeActPort } from "../testing/app-bridge.js";
 import {
   handBeats,
@@ -21,9 +28,10 @@ import {
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { AgentPlace } from "./agent-place.js";
+import type { PlaceMove } from "./move-agent.js";
 
 /**
- * agent-place.test.ts -- the chip an agent's box wears says where it runs: a device named with its standing as the window's shared presence read says it, not as the agent's own read once did, or the cloud, whose card names the Mac its `run_on_mac` runs on and how it stands.
+ * agent-place.test.ts -- the chip an agent's box wears says where it runs: a device named with its standing as the window's shared presence read says it, not as the agent's own read once did, or the cloud, whose card names the Mac its `run_on_mac` runs on and how it stands; and where a move is offered, it drops the places to move the agent to, or where to add a Mac where the member has none.
  * Synthetic ids and names.
  */
 
@@ -219,4 +227,59 @@ test("a Mac set to let no agent run commands is off in Settings on the reader's 
     ["You", "Offline"],
     "a Mac whose Settings let agents run commands is only offline",
   );
+});
+
+/** The cloud agent's chip drawn with the move given, opened, and the rows its menu lists, the settings the window was asked to open kept. */
+async function placeMenuOf(move: PlaceMove, opened: SettingsLink[]): Promise<HTMLElement[]> {
+  clear();
+  fakeActPort({});
+  handState({});
+  handBeats({});
+  writeAppState(await appBridge().requestAppState());
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  act(() =>
+    root.render(
+      withQueryClient(
+        createElement(
+          OpenSettingsProvider,
+          { value: (link: SettingsLink) => opened.push(link) },
+          createElement(AgentPlace, {
+            agent: { id: AGENT_ID },
+            readerId: READER,
+            move,
+          }),
+        ),
+      ),
+    ),
+  );
+  await settle();
+  act(() => container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]')?.click());
+  return [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+}
+
+test("where a move is offered, the chip lists the places and moves the agent to the one picked, and with no Mac sends the member to add one", async () => {
+  const moved: AgentRunsOnRequest[] = [];
+  const opened: SettingsLink[] = [];
+  const studio: MacOffer = { deviceId: DEVICE, name: "Studio", providers: [] };
+  const withMac = {
+    devices: [studio],
+    moveTo: (to: AgentRunsOnRequest) => moved.push(to),
+    pushedOnly: false,
+  };
+
+  const rows = await placeMenuOf(withMac, opened);
+  assert.deepEqual(
+    rows.map((row) => row.textContent?.includes("Studio") ?? false),
+    [false, true],
+  );
+  act(() => rows[1]?.click());
+  assert.deepEqual(moved, [{ machine: AGENT_MACHINE.DEVICE, deviceId: DEVICE }]);
+
+  const bare = await placeMenuOf({ ...withMac, devices: [] }, opened);
+  act(() => bare.find((row) => row.textContent?.includes("Set up a Mac"))?.click());
+  assert.deepEqual(opened, [{ page: SETTINGS_VIEW.HOSTS }]);
+  assert.equal(moved.length, 1);
 });

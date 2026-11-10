@@ -6,6 +6,7 @@ import {
   linkIntegrationInstallation,
   markIntegrationInstallationDeleted,
 } from "@repo/database/models/integration-installation-store";
+import { renameWorkspace } from "@repo/database/models/organization-store";
 import {
   linkSlackInstallation,
   writeSlackChannelRepository,
@@ -36,8 +37,9 @@ import { openWorkspacePlugin } from "../testing/workspace-plugin.js";
  * workspace renamed, a teammate added to it, and a GitHub installation
  * linked to it or suspended, which notify the workspace; and for the
  * account's first workspace named its own, which notifies the account.
- * Workspaces and memberships are written by the organization plugin, as
- * our routes write them. A workspace's own integrations
+ * Workspaces and memberships are made by the organization plugin, as our
+ * routes make them, and a rename by the store, as the rename writes it. A
+ * workspace's own integrations
  * (`workspaceIntegrationsRead`) are on a narrower topic of their own, which
  * every write to its Sentry installations or its Slack bot notifies alone.
  *
@@ -95,17 +97,10 @@ it.effect(
         const owner = yield* openAccount("Ada Lovelace");
         const teammate = yield* openAccount("Grace Hopper");
         const workspaceId = yield* openTeam(plugin, owner);
-        const headers = new Headers({
-          authorization: `Bearer ${yield* plugin.sessionBearerOf(owner)}`,
-        });
         const workspace: SyncTopic = [TOPIC.WORKSPACE, workspaceId];
 
         yield* wakesTheWorkspaces(
-          plugin.members.updateOrganization({
-            headers,
-            organizationId: workspaceId,
-            data: { name: "Acme Robotics" },
-          }),
+          renameWorkspace(workspaceId, "Acme Robotics"),
           [workspace],
           owner,
         );

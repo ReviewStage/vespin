@@ -236,14 +236,16 @@ import { useTaskStatus } from "./use-known-names.js";
  * connected servers folded into one row: → or Enter on one narrows the list to that
  * kind, as typing its word and a colon does (`@files:`, `@agents:`,
  * `@servers:`, a server's provider such as `@linear:`), which no row
- * spells. Typed, a group holding more than its few ends in the row a
- * capped list ends in ("Show 3 more"), which narrows the list to its kind
- * searched by the same words. A narrowed list stands under a
- * crumb naming the kind, lists up to fifty rows, and searches that kind
- * alone; ⌫ on its empty words widens it again. Narrowed to files and
- * folders, → on a folder walks into it: its first row mentions the folder,
- * the rest are what it holds, from the tree already read, and ⌫ on empty
- * words climbs back out. Narrowing changes only what the list offers; a
+ * spells. Typed, a kind the words name leads the list with its row, so
+ * `@agent` still offers the way into the agents, and a group holding more
+ * than its few ends in the row a capped list ends in ("Show 3 more"), which
+ * narrows the list to its kind searched by the same words. A narrowed list
+ * stands under a crumb naming the kind, lists up to fifty rows, opens at
+ * its top, and searches that kind alone; as a submenu does, ← or ⌫ on its
+ * empty words, or Escape, widens it again, and only then does Escape close
+ * the list. Narrowed to files and folders, → on a folder walks into it: its
+ * first row mentions the folder, the rest are what it holds, from the tree
+ * already read, and the same keys climb back out. Narrowing changes only what the list offers; a
  * pick writes the same mention it would have written from the wide list.
  *
  * A pick hands the editor the mention's name and its target
@@ -1169,7 +1171,13 @@ function groupsFor(
     group(MENTION_GROUP.PAGES, rows.pages, MENTION_FROM.PAGES),
     cappedGroup(MENTION_GROUP.FILES, files, kindOf(MENTION_FROM.FILES)),
   ].filter((each) => each !== keyedGroup);
+  // Note that a kind the words name leads, so `@agent` still offers the way into the agents.
+  const named = matching(
+    kinds.filter((each) => each.narrow.from !== MENTION_FROM.SERVER).map(kindRow),
+    term,
+  );
   return [
+    { label: MENTION_GROUP.FROM, rows: named },
     { label: MENTION_GROUP.DATES, rows: rows.dates },
     ...(keyedGroup === undefined ? [] : [keyedGroup]),
     ...ranked,
@@ -1367,6 +1375,9 @@ function MentionCrumb({ crumb }: { crumb: Crumb }): React.JSX.Element {
   );
 }
 
+/** The key the wide list is drawn under, which no narrowed list's spells. */
+const WIDE_LIST = "wide";
+
 /** The reads the list draws rows from that can fail, each named as its failure says it. */
 const MENTION_READ = {
   MEMBERS: "members",
@@ -1418,6 +1429,8 @@ function MentionMenu({
     <MenuSurface className="mention-menu" inset={MENU_SURFACE_INSET.NONE}>
       {crumb === undefined ? null : <MentionCrumb crumb={crumb} />}
       <ComboboxList
+        // Note that a list narrowed or widened is drawn afresh, so it opens at its top rather than scrolled where the wide list stood, which a pointer's press leaves it.
+        key={crumb === undefined ? WIDE_LIST : JSON.stringify([crumb.kind.narrow, crumb.folder])}
         id={id}
         label={MENU_LABEL}
         groups={comboboxGroups(groups, query, at, rowCard)}
@@ -2048,13 +2061,16 @@ export function useMentionPicker({
     onEscape: () => closeList(),
   });
 
-  // The list's own keys come first: ⌫ widens, → opens, Tab writes, and a
+  // The list's own keys come first: ←, ⌫ and Escape step back, → opens, Tab writes, and a
   // Shift+Enter is the editor's line break, as a modified Home or End is
   // its own; with no row only Escape is the list's.
   const onKey = (event: KeyboardEvent): boolean => {
     if (!shown) return false;
     const bare = !event.shiftKey && !event.altKey && !event.metaKey && !event.ctrlKey;
-    if (event.key === "Backspace" && bare && term === "" && back !== undefined) {
+    // A list a key narrowed steps back as a submenu does: ← or ⌫ on its empty words, or Escape, before Escape closes it.
+    const stepsBack =
+      (event.key === "Backspace" || event.key === "ArrowLeft") && bare && term === "";
+    if (back !== undefined && (stepsBack || (event.key === "Escape" && bare))) {
       back();
       return true;
     }

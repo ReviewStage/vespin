@@ -1196,8 +1196,8 @@ export function subject(
       acts: { ...composer.acts, ...accountAsks.acts },
       /** The composer's row writes that may wait, as a relaunch lays its queue back by. */
       queueable: composer.queueable,
-      flushHeldCloses: composer.flushHeldCloses,
-      letGoHeldCloses: composer.letGoHeldCloses,
+      flushHeldSettles: composer.flushHeldSettles,
+      letGoHeldSettles: composer.letGoHeldSettles,
       answerClosesAfter: service.answerClosesAfter,
       transcripts,
       /** Each of `transcript`'s rows the host laid, in order. */

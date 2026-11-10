@@ -931,38 +931,39 @@ export function GitHubWords({
 }
 
 /**
- * An element of the transcript's own the words are drawn with, as a skill
- * named in a sent message is drawn as its chip (`skill-chip.tsx`): the words
- * with the element written in where it stands, its tag and the attributes it
- * carries, and what draws it. Its words are taken as they are, never as
- * markdown.
+ * The elements of the transcript's own the words are drawn with, as a skill
+ * named in a sent message is drawn as its chip and a picture it names as
+ * the picture's (`skill-chip.tsx`): the words with each element written in
+ * where it stands, each element's tag and the attributes it carries, and
+ * what draws them. Their words are taken as they are, never as markdown.
  */
 export interface TranscriptElement {
   readonly markdown: string;
-  readonly tag: string;
-  readonly attributes: readonly string[];
+  readonly tags: Readonly<Record<string, readonly string[]>>;
   readonly components: MarkdownComponents;
 }
 
-/** The components and tags an element of the transcript's own is drawn with beside the transcript's own, the same objects while the element names the same. */
+/** The components and tags the elements of the transcript's own are drawn with beside the transcript's own, the same objects while the elements hand the same components and tags, which their caller keeps as constants. */
 function useElementDraw(element: TranscriptElement | undefined): {
   components: MarkdownComponents;
   allowedTags: Record<string, string[]>;
   literal: string[] | undefined;
 } {
   const extra = element?.components;
-  const tag = element?.tag;
-  const attributes = element?.attributes.join(" ");
+  const tags = element?.tags;
   return useMemo(
     () =>
-      extra === undefined || tag === undefined || attributes === undefined
+      extra === undefined || tags === undefined
         ? { components: TRANSCRIPT_COMPONENTS, allowedTags: MENTION_TAGS, literal: undefined }
         : {
             components: { ...TRANSCRIPT_COMPONENTS, ...extra },
-            allowedTags: { ...MENTION_TAGS, [tag]: attributes === "" ? [] : attributes.split(" ") },
-            literal: [tag],
+            allowedTags: {
+              ...MENTION_TAGS,
+              ...Object.fromEntries(Object.entries(tags).map(([tag, names]) => [tag, [...names]])),
+            },
+            literal: Object.keys(tags),
           },
-    [extra, tag, attributes],
+    [extra, tags],
   );
 }
 

@@ -98,7 +98,6 @@ import { accountMiddleware, hosted } from "../orpc/base.js";
 import { reachedAgentById } from "./agent-reach.js";
 import {
   askedPublished,
-  askedPullRequest,
   forgetPublished,
   githubReadRefusal,
   type PullRequestSubject,
@@ -126,8 +125,22 @@ export interface AgentPullRequestProcedureSeams extends PublishedReach {
 const numberNamed = (number: string | undefined) =>
   pullRequestNumberOf(number === undefined ? [] : [number]);
 
+/**
+ * What a read of an agent the member reached is about: what it published,
+ * from the instance's kept answers, or the pull request of its repository
+ * `number` names, read afresh (`askedPublished`); its pull request null where
+ * there is none. The tab's reads ask it, and so do the member MCP server's
+ * (`member-mcp/pull-request-tools.ts`).
+ */
+export const askedOfAgent = (
+  published: Effect.Effect<PublishedCache>,
+  userId: string,
+  agent: Agent,
+  number: number | undefined,
+) => Effect.flatMap(published, (kept) => askedPublished(kept, userId, agent, number));
+
 /** The agent the path names for the caller, and the pull request the tab asks about, null where there is none. */
-const askedOfAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
+const reachedAndAsked = /* @__PURE__ */ Effect.fnUntraced(function* (
   published: Effect.Effect<PublishedCache>,
   userId: string,
   id: string,
@@ -135,7 +148,7 @@ const askedOfAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
 ) {
   const { agent } = yield* reachedAgentById(userId, id);
   const number = yield* numberNamed(named);
-  const pullRequest = yield* askedPullRequest(yield* published, userId, agent, number);
+  const { pullRequest } = yield* askedOfAgent(published, userId, agent, number);
   return { agent, pullRequest };
 });
 
@@ -152,9 +165,10 @@ export type OverviewRead<A, R> = (
  * One part of the agent's pull request's overview: the pull request asked
  * about, read from GitHub afresh on a token minted for the agent's
  * repository; none where it names no pull request yet, or the agent works in
- * no repository. Each part is a procedure of its own, so each lands on its own.
+ * no repository. Each part is a procedure of its own, so each lands on its own;
+ * the member MCP server's `read_pull_request` reads it a part a call.
  */
-const overviewPart = <A, R>(
+export const overviewPart = <A, R>(
   agent: Agent,
   pullRequest: AgentPullRequest | null,
   userId: string,
@@ -440,7 +454,22 @@ export const agentPullRequestAction = /* @__PURE__ */ Effect.fnUntraced(function
   number: number | undefined,
   request: PullRequestActionRequest,
 ) {
-  const pullRequest = yield* askedPullRequest(yield* published, userId, agent, number);
+  const { pullRequest } = yield* askedOfAgent(published, userId, agent, number);
+  return yield* actionOnAgentPullRequest(published, userId, agent, pullRequest, request);
+});
+
+/**
+ * One change, as `agentPullRequestAction` makes it, to the pull request
+ * already asked about of the agent, so a caller making several asks once;
+ * not found where there is none.
+ */
+export const actionOnAgentPullRequest = /* @__PURE__ */ Effect.fnUntraced(function* (
+  published: Effect.Effect<PublishedCache>,
+  userId: string,
+  agent: Agent,
+  pullRequest: AgentPullRequest | null,
+  request: PullRequestActionRequest,
+) {
   if (pullRequest === null || !hasRepository(agent)) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
@@ -477,6 +506,31 @@ export function viewedAnswerOf(
     : read;
 }
 
+/** No files viewed, where the agent names no pull request to have marked any in. */
+const NONE_VIEWED: PullRequestViewedAnswer = {
+  outcome: PULL_REQUEST_WRITE_OUTCOME.DONE,
+  files: [],
+};
+
+/**
+ * Which of the files of the pull request asked about of the agent the
+ * member marked viewed on GitHub, on their own GitHub sign-in, since GitHub
+ * keeps the mark for each account alone and the App sees none of it; no
+ * files where the agent names no pull request yet. The tab's read and the
+ * member MCP server's both ask it.
+ */
+export const viewedOfAgent = (
+  userId: string,
+  agent: Agent,
+  pullRequest: AgentPullRequest | null,
+) =>
+  pullRequest === null || !hasRepository(agent)
+    ? Effect.succeed(NONE_VIEWED)
+    : Effect.map(
+        memberPullRequestWrite(userId, agent, pullRequest.number, viewedRead),
+        viewedAnswerOf,
+      );
+
 /** The agent pull request resource: the tab's five reads and its one change, to a signed-in member of the agent's workspace. */
 export function agentPullRequestProcedures(seams: AgentPullRequestProcedureSeams) {
   const published = seams.published ?? instancePublishedCache();
@@ -494,36 +548,18 @@ export function agentPullRequestProcedures(seams: AgentPullRequestProcedureSeams
       const number = yield* numberNamed(input.query?.number);
       return yield* agentPullRequestAction(published, context.userId, agent, number, input.body);
     }),
-    /**
-     * Which of the pull request's files the asking member marked viewed on
-     * GitHub, on their own GitHub sign-in, since GitHub keeps the mark for
-     * each account alone and the App sees none of it; no files where the
-     * agent names no pull request yet. Nothing is let go, as nothing changed.
-     */
+    /** Which of the pull request's files the asking member marked viewed (`viewedOfAgent`). Nothing is let go, as nothing changed. */
     viewed: signedIn.viewed.effect(function* ({ input, context }) {
-      const { agent, pullRequest } = yield* askedOfAgent(
+      const { agent, pullRequest } = yield* reachedAndAsked(
         published,
         context.userId,
         input.id,
         input.number,
       );
-      if (pullRequest === null || !hasRepository(agent)) {
-        const none: PullRequestViewedAnswer = {
-          outcome: PULL_REQUEST_WRITE_OUTCOME.DONE,
-          files: [],
-        };
-        return none;
-      }
-      const read = yield* memberPullRequestWrite(
-        context.userId,
-        agent,
-        pullRequest.number,
-        viewedRead,
-      );
-      return viewedAnswerOf(read);
+      return yield* viewedOfAgent(context.userId, agent, pullRequest);
     }),
     overviewPullRequest: signedIn.overviewPullRequest.effect(function* ({ input, context }) {
-      const { agent, pullRequest } = yield* askedOfAgent(
+      const { agent, pullRequest } = yield* reachedAndAsked(
         published,
         context.userId,
         input.id,
@@ -532,7 +568,7 @@ export function agentPullRequestProcedures(seams: AgentPullRequestProcedureSeams
       return yield* overviewPart(agent, pullRequest, context.userId, overviewPullRequestRead);
     }),
     overviewChecks: signedIn.overviewChecks.effect(function* ({ input, context }) {
-      const { agent, pullRequest } = yield* askedOfAgent(
+      const { agent, pullRequest } = yield* reachedAndAsked(
         published,
         context.userId,
         input.id,
@@ -541,7 +577,7 @@ export function agentPullRequestProcedures(seams: AgentPullRequestProcedureSeams
       return yield* overviewPart(agent, pullRequest, context.userId, overviewChecksRead);
     }),
     overviewConversation: signedIn.overviewConversation.effect(function* ({ input, context }) {
-      const { agent, pullRequest } = yield* askedOfAgent(
+      const { agent, pullRequest } = yield* reachedAndAsked(
         published,
         context.userId,
         input.id,

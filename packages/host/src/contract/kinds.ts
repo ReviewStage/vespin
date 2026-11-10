@@ -284,8 +284,8 @@ export const AGENT_INBOX_ACT_KIND = {
   AGENTS_INBOX_ANSWER: "agents.inboxAnswer",
   /** One open item closed without an answer against the revision the panel drew, under the panel's own key. */
   AGENTS_INBOX_CLOSE: "agents.inboxClose",
-  /** A held close let go once its Undo can no longer be pressed, sent to the service, or taken back by its Undo. */
-  AGENTS_INBOX_CLOSE_RELEASE: "agents.inboxCloseRelease",
+  /** A held close or nod let go once its Undo can no longer be pressed, sent to the service, or taken back by its Undo. */
+  AGENTS_INBOX_RELEASE: "agents.inboxRelease",
   /** A message on one item's thread, open or settled, under the panel's own key; it never answers the item. */
   AGENTS_INBOX_MESSAGE: "agents.inboxMessage",
   /** A new thread with one agent, its subject and first message, under the panel's own key. */
@@ -388,7 +388,7 @@ export const INTEGRATION_ACT_KIND = {
   MCP_CLIENTS_FOLLOW: "mcpClients.follow",
   /** The held outside MCP clients read again at once, as Try again asks. */
   MCP_CLIENTS_RETRY: "mcpClients.retry",
-  /** One outside MCP client revoked under the Mac's session, answering the clients as they then stand, or that the revoke did not finish. */
+  /** One outside MCP client revoked, answering the clients as they then stand, or that the revoke did not finish. */
   MCP_CLIENTS_REVOKE: "mcpClients.revoke",
 } as const;
 
@@ -926,7 +926,7 @@ export const PORT_ACT_USE = {
   AGENTS_INBOX_ITEMS_RETRY: ACT_USE.READ,
   AGENTS_INBOX_ANSWER: ACT_USE.WRITE,
   AGENTS_INBOX_CLOSE: ACT_USE.WRITE,
-  AGENTS_INBOX_CLOSE_RELEASE: ACT_USE.WRITE,
+  AGENTS_INBOX_RELEASE: ACT_USE.WRITE,
   AGENTS_INBOX_MESSAGE: ACT_USE.WRITE,
   AGENTS_INBOX_START: ACT_USE.WRITE,
   AGENTS_INBOX_READ_STATE: ACT_USE.WRITE,

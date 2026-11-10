@@ -19,6 +19,7 @@ import {
   applyNotesToText,
   type DescriptionAgentEdit,
   type DescriptionNote,
+  type NoteMiss,
   withAgentEdit,
 } from "@repo/features/description-notes";
 import {
@@ -123,11 +124,12 @@ export type DescriptionSaveResult =
       readonly reason: string;
     };
 
-/** A batch of notes one of which no longer lands in the text as it stands: that note, and the text; nothing was saved. */
+/** A batch of notes one of which no longer lands in the text as it stands: that note, why, and the text; nothing was saved. */
 interface NotesConflict {
   readonly status: typeof DESCRIPTION_SAVE_STATUS.CONFLICT;
   readonly current: string;
   readonly missed: DescriptionNote;
+  readonly why: NoteMiss;
 }
 
 /** A save that saved nothing, and why. */
@@ -284,6 +286,7 @@ export function saveNotes(
           status: DESCRIPTION_SAVE_STATUS.CONFLICT,
           current: stored.text,
           missed: noted.missed,
+          why: noted.why,
         });
       }
       // An agent's save is journaled with its notes; one that took none changed nothing to journal.
