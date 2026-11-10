@@ -31,6 +31,17 @@
  * ends the launch whatever is pending, and so does one no Stop hook came
  * before, such as an error's. A stop interrupts whichever turn is running, a
  * wakeup's included, and ends a launch with none at once.
+ *
+ * One error's `result` ends nothing: the one the CLI puts out when it could
+ * not reach the API after its own retries (`reconnect.ts`). The launch then
+ * posts CONNECTION_LOST, holds every message the service sends meanwhile, and
+ * probes the API's host until it answers, when the held messages go to the
+ * CLI, or, where none came, CONNECTION_RESTORED asks the service to send
+ * the agent a carry-on line, since the model turn the loss cut off left its
+ * work where it stood. A host that never answers within the bound ends the
+ * launch failed with why, and so does a connection lost again before the
+ * CLI put out any turn output since the last carry-on, where probing again
+ * would only loop.
  */
 
 import { randomUUID, type UUID } from "node:crypto";
@@ -77,6 +88,8 @@ import {
   CLAUDE_CODE_TOOLS,
   CLAUDE_CODE_WORKER,
   type ClaudeCodeConfig,
+  CONNECTION_LOST_DETAIL,
+  connectionLostFailure,
   EFFORT,
   type Effort,
   INPUT_LINE,
@@ -97,6 +110,13 @@ import {
   type RunnerEndEvent,
   type RunnerWaiting,
 } from "./protocol.js";
+import {
+  awaitProvider,
+  claudeCodeConnectionLost,
+  hostOf,
+  type ProbeTarget,
+  probeTargetOf,
+} from "./reconnect.js";
 import { type LaunchTrace, launchTrace, RUNNER_SPAN } from "./trace.js";
 import { transcriptStore } from "./transcripts.js";
 
@@ -115,6 +135,10 @@ const PROMPT_CACHE_TTL = {
   ALL: "ENABLE_PROMPT_CACHING_1H",
   FORCE_SHORT: "FORCE_PROMPT_CACHING_5M",
 } as const;
+/** The variable the CLI reads its API's base URL from, where a gateway stands in for the API. */
+const ANTHROPIC_BASE_URL = "ANTHROPIC_BASE_URL";
+/** The API's host where no base URL is set. */
+const ANTHROPIC_API_HOST = "api.anthropic.com";
 
 /** The name our MCP server is registered under, so its tools reach the model as `mcp__workspace__<tool>` (`@repo/features/agent-tools`'s `WORKSPACE_MCP_SERVER`). */
 const MCP_SERVER = "workspace";
@@ -328,7 +352,23 @@ interface Launch {
   readonly failure: Ref.Ref<string>;
   /** The launch's first event number, which a turn-scoped stop names. */
   readonly firstSequence: number;
+  /** The API's host, as the CLI reaches it, which a lost connection is probed for. */
+  readonly providerHost: string;
+  /** Where that host is probed: the proxy the CLI goes through, or the host itself. */
+  readonly probeTarget: ProbeTarget;
+  /** The wait for the API's host to answer again, while one stands; the messages the service sent meanwhile wait with it. */
+  readonly reconnecting: Ref.Ref<Reconnecting | undefined>;
+  /** How much turn output the CLI had put out when the last carry-on was asked for, so a connection lost before any more fails the launch rather than probing again. */
+  readonly carriedOnAt: Ref.Ref<number | undefined>;
 }
+
+/** A wait for the API's host, and the service's messages held until it answers, in order. */
+interface Reconnecting {
+  readonly probe: Fiber.Fiber<void>;
+  readonly held: { readonly uuid: UUID; readonly prompt: UUID; readonly content: MessageContent }[];
+}
+
+type MessageContent = Extract<InputLine, { type: "message" }>["content"];
 
 /**
  * Calls one of the session's control requests, reporting a failure rather
@@ -348,6 +388,21 @@ function control(step: string, call: () => Promise<unknown>) {
   );
 }
 
+/** Hands one of the service's messages to the CLI, marking the launch in a turn. Called under the admission. */
+const handToCli = Effect.fn("agent-runner/handToCli")(function* (
+  launch: Launch,
+  uuid: UUID,
+  prompt: UUID,
+  content: MessageContent,
+) {
+  const running = yield* Ref.getAndSet(launch.turnRunning, true);
+  yield* Ref.set(launch.warm, false);
+  yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(prompt));
+  // Posted ahead of the hand-off, so it is numbered before anything the CLI says of the message.
+  yield* launch.sink.emit({ type: RUNNER_EVENT.ACCEPTED, uuid });
+  yield* Queue.offer(launch.prompts, userMessage(prompt, content, running));
+});
+
 /** One of the service's lines, acted on at once. */
 const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, text: string) {
   const line = decodeLine(text);
@@ -366,12 +421,13 @@ const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, t
       return yield* launch.admission.withPermit(
         Effect.gen(function* () {
           yield* launch.trace.taken;
-          const running = yield* Ref.getAndSet(launch.turnRunning, true);
-          yield* Ref.set(launch.warm, false);
-          yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(prompt));
-          // Posted ahead of the hand-off, so it is numbered before anything the CLI says of the message.
-          yield* launch.sink.emit({ type: RUNNER_EVENT.ACCEPTED, uuid });
-          yield* Queue.offer(launch.prompts, userMessage(prompt, content, running));
+          // A message sent while the API's host is probed waits for it, and goes next once it answers.
+          const reconnecting = yield* Ref.get(launch.reconnecting);
+          if (reconnecting !== undefined) {
+            reconnecting.held.push({ uuid, prompt, content });
+            return;
+          }
+          yield* handToCli(launch, uuid, prompt, content);
         }),
       );
     }
@@ -381,7 +437,14 @@ const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, t
         return yield* Effect.logWarning("agent-runner: skipped a stop for another launch");
       }
       // A stop with no turn running has nothing to interrupt: the launch,
-      // waiting or idle, ends here.
+      // waiting or idle, ends here; so does one waiting on the API's host,
+      // whose CLI is between turns.
+      const reconnecting = yield* Ref.get(launch.reconnecting);
+      if (reconnecting !== undefined) {
+        yield* Fiber.interrupt(reconnecting.probe);
+        yield* Deferred.succeed(launch.ended, RUNNER_END.STOPPED);
+        return;
+      }
       if (!(yield* Ref.get(launch.turnRunning))) {
         yield* Deferred.succeed(launch.ended, RUNNER_END.STOPPED);
         return;
@@ -490,6 +553,10 @@ const takeMessage = Effect.fn("agent-runner/takeMessage")(function* (
   // `result` took none, since nothing then says the CLI will take it up.
   const left = stillUnanswered(yield* Ref.get(launch.unanswered), message);
   yield* Ref.set(launch.unanswered, left);
+  // A turn the CLI gave up on for want of the API's host is carried on once the host answers, not ended.
+  if (message.subtype === "success" && message.is_error && claudeCodeConnectionLost(message)) {
+    return yield* connectionLost(launch);
+  }
   if (left.size > 0) {
     if (promptsOf(message) === undefined) {
       yield* Effect.forkScoped(watchUnheard(launch, left, yield* Ref.get(launch.heard)));
@@ -508,6 +575,72 @@ const takeMessage = Effect.fn("agent-runner/takeMessage")(function* (
   }
   yield* Ref.set(launch.turnRunning, false);
   yield* launch.sink.emit({ type: RUNNER_EVENT.WAITING, ...inFlight });
+});
+
+/**
+ * The CLI could not reach the API: the launch posts CONNECTION_LOST and
+ * probes the API's host, unless the connection was lost again before the CLI
+ * put out any turn output since the last carry-on, when the launch ends
+ * failed rather than loop. Note that the turn stays marked running, because
+ * the agent's turn is: its model turn ended, its work has not.
+ */
+const connectionLost = Effect.fn("agent-runner/connectionLost")(function* (launch: Launch) {
+  const heard = yield* Ref.get(launch.heard);
+  if ((yield* Ref.get(launch.carriedOnAt)) === heard) {
+    yield* Effect.logWarning(
+      "agent-runner: the connection was lost again before the model answered",
+    );
+    return yield* endFailed(
+      launch,
+      connectionLostFailure(launch.providerHost, CONNECTION_LOST_DETAIL.LOST_AGAIN),
+    );
+  }
+  yield* Effect.logWarning(`agent-runner: lost the connection to ${launch.providerHost}`);
+  yield* launch.sink.emit({ type: RUNNER_EVENT.CONNECTION_LOST, host: launch.providerHost });
+  const held: Reconnecting["held"] = [];
+  const probe = yield* Effect.forkScoped(
+    Effect.flatMap(awaitProvider(launch.probeTarget), (answered) =>
+      connectionProbed(launch, answered),
+    ),
+  );
+  yield* Ref.set(launch.reconnecting, { probe, held });
+});
+
+/**
+ * The probe settled: the host answered, so the messages held meanwhile go to
+ * the CLI, or, with none held, CONNECTION_RESTORED asks the service for a
+ * carry-on line; or the bound passed, and the launch ends failed with why.
+ * Decided under the admission, so no message lands between the decision and
+ * what it does.
+ */
+const connectionProbed = Effect.fn("agent-runner/connectionProbed")(function* (
+  launch: Launch,
+  answered: boolean,
+) {
+  yield* launch.admission.withPermit(
+    Effect.gen(function* () {
+      const reconnecting = yield* Ref.getAndSet(launch.reconnecting, undefined);
+      if (reconnecting === undefined || (yield* Deferred.isDone(launch.ended))) return;
+      if (!answered) {
+        yield* Effect.logWarning(
+          `agent-runner: ${launch.providerHost} did not answer within the wait`,
+        );
+        return yield* endFailed(
+          launch,
+          connectionLostFailure(launch.providerHost, CONNECTION_LOST_DETAIL.GAVE_UP),
+        );
+      }
+      yield* Ref.set(launch.carriedOnAt, yield* Ref.get(launch.heard));
+      for (const { uuid, prompt, content } of reconnecting.held) {
+        yield* handToCli(launch, uuid, prompt, content);
+      }
+      yield* launch.sink.emit({
+        type: RUNNER_EVENT.CONNECTION_RESTORED,
+        host: launch.providerHost,
+        carryOn: reconnecting.held.length === 0,
+      });
+    }),
+  );
 });
 
 /** Whether the launch is still warm, with nothing taken, begun, stopped, or ended since its IDLE. Read under the admission. */
@@ -683,6 +816,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     return { end: RUNNER_END.FAILED, failure: started.failure } satisfies LaunchOutcome;
   }
   const session = started.success.query(Stream.toAsyncIterable(Stream.fromQueue(prompts)));
+  const providerHost = hostOf(context.env[ANTHROPIC_BASE_URL] ?? ANTHROPIC_API_HOST);
   const launch: Launch = {
     session,
     prompts,
@@ -701,6 +835,10 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     ended: yield* Deferred.make<RunnerEnd>(),
     failure: yield* Ref.make(""),
     firstSequence: config.firstSequence,
+    providerHost,
+    probeTarget: probeTargetOf(context.env, providerHost),
+    reconnecting: yield* Ref.make<Reconnecting | undefined>(undefined),
+    carriedOnAt: yield* Ref.make<number | undefined>(undefined),
   };
 
   // Warm before the first line is taken, so a message ahead of a retire takes it out of warm.

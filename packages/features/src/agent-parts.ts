@@ -21,6 +21,9 @@ import {
   type WireValue,
 } from "@repo/wire";
 import {
+  CONNECTION_LOST_PART,
+  type ConnectionLostNotice,
+  ConnectionLostNoticeSchema,
   USAGE_LIMIT_PART,
   UsageLimitAnswerSchema,
   type UsageLimitNotice,
@@ -49,6 +52,7 @@ import { ROW_PART, type RowReading, TURN_ROW, type TurnRow, turnRows } from "./t
 /** The kinds of part a stored message holds that the tab draws apart. */
 export const AGENT_PART = {
   USAGE_LIMIT: USAGE_LIMIT_PART,
+  CONNECTION_LOST: CONNECTION_LOST_PART,
   TEXT: "text",
   REASONING: "reasoning",
   TOOL: "tool",
@@ -70,6 +74,7 @@ export type AgentPartCut = Omit<PartCut, "field"> & { readonly messageId: string
 /** One part of a stored message as the tab draws it. */
 export type AgentPart =
   | { readonly kind: typeof AGENT_PART.USAGE_LIMIT; readonly notice: UsageLimitNotice }
+  | { readonly kind: typeof AGENT_PART.CONNECTION_LOST; readonly notice: ConnectionLostNotice }
   | { readonly kind: typeof AGENT_PART.TEXT; readonly text: string }
   | {
       readonly kind: typeof AGENT_PART.REASONING;
@@ -117,6 +122,12 @@ export function agentPart(part: WireValue): AgentPart {
     const notice = Schema.decodeUnknownOption(UsageLimitNoticeSchema)(part.data);
     return Option.isSome(notice)
       ? { kind: AGENT_PART.USAGE_LIMIT, notice: notice.value }
+      : { kind: AGENT_PART.OTHER };
+  }
+  if (part.type === AGENT_PART.CONNECTION_LOST) {
+    const notice = Schema.decodeUnknownOption(ConnectionLostNoticeSchema)(part.data);
+    return Option.isSome(notice)
+      ? { kind: AGENT_PART.CONNECTION_LOST, notice: notice.value }
       : { kind: AGENT_PART.OTHER };
   }
   if (part.type === AGENT_PART.STEP_START) return { kind: AGENT_PART.STEP_START };
@@ -271,7 +282,9 @@ const AGENT_READING: RowReading<AgentPart> = {
     return part.kind === AGENT_PART.ARRIVED ? part.line.id : String(index);
   },
   part: (part) => {
-    if (part.kind === AGENT_PART.USAGE_LIMIT) return ROW_PART.NOTICE;
+    if (part.kind === AGENT_PART.USAGE_LIMIT || part.kind === AGENT_PART.CONNECTION_LOST) {
+      return ROW_PART.NOTICE;
+    }
     if (part.kind === AGENT_PART.TEXT) return ROW_PART.WORDS;
     if (part.kind === AGENT_PART.ARRIVED) return ROW_PART.ARRIVED;
     if (part.kind !== AGENT_PART.TOOL) return ROW_PART.NOTE;

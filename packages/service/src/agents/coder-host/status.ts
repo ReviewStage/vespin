@@ -1,3 +1,4 @@
+import { CONNECTION_LOST_DETAIL } from "@repo/agent-runner/protocol";
 import type { AgentOwnerFacts } from "@repo/database/models/agent-owners";
 import {
   type Agent,
@@ -160,9 +161,10 @@ const LAUNCH_UNSTARTED_DETAIL = ", because of ";
 
 /**
  * The host's refusal sentences, a provider's words for a prompt past the
- * window, and the words of a run its host lost or a launch it settled
- * unstarted, a failed turn's detail may carry, by the word the wire says for
- * each. Note that those last two read as `other` rather than words of their
+ * window, the words of a run its host lost or a launch it settled
+ * unstarted, and the runner's words for a provider's host it waited for in
+ * vain (`@repo/agent-runner/protocol`'s `CONNECTION_LOST_DETAIL`), a failed
+ * turn's detail may carry, by the word the wire says for each. Note that those last two read as `other` rather than words of their
  * own, because a window reads `failureReason` as one of the words it knows
  * and an older build would refuse the whole page over a new one: `other`
  * reads there as a run that ended without saying why, rather than as the
@@ -199,6 +201,7 @@ export const FAILURE_WORDS: readonly (readonly [AgentFailure, readonly string[]]
     ],
   ],
   [AGENT_FAILURE.OTHER, [HOST_AWAY_DETAIL, LAUNCH_STOPPED_DETAIL]],
+  [AGENT_FAILURE.CONNECTION_LOST, Object.values(CONNECTION_LOST_DETAIL)],
 ];
 
 /**

@@ -43,6 +43,8 @@ import {
 } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import {
+  CONNECTION_LOST_PART,
+  type ConnectionLostNotice,
   isSettledToolPartState,
   isStoredToolPart,
   readStoredUIMessages,
@@ -1692,6 +1694,49 @@ const usageLimitReached = /* @__PURE__ */ Effect.fnUntraced(function* (
   ]);
 });
 
+/** A lost connection stays among the journal's parts where it happened, saying it waits until its restore says when the host answered. */
+const connectionLost = /* @__PURE__ */ Effect.fnUntraced(function* (
+  context: WriterContext,
+  event: Extract<RunEvent, { kind: typeof RUN_EVENT.CONNECTION_LOST }>,
+): Effect.fn.Return<StoreWriteResult, StoreFailure, DatabaseServices> {
+  const opened = yield* journal(context, event.turnId);
+  if (Result.isFailure(opened)) return Result.fail(opened.failure);
+  const row = opened.success;
+  const id = String(event.sequence);
+  if (row.parts.some((part) => part.type === CONNECTION_LOST_PART && part.id === id)) {
+    return Result.succeed(STORE_WRITE_EFFECT.REPEATED);
+  }
+  if (row.finishedAt !== null) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FINISHED });
+  return yield* amendJournal(context, event.turnId, row, [
+    ...row.parts,
+    { type: CONNECTION_LOST_PART, id, data: event.notice },
+  ]);
+});
+
+/** The host answered again: the loss's notice says when, so it reads as a wait that ended rather than one still on. */
+const connectionRestored = /* @__PURE__ */ Effect.fnUntraced(function* (
+  context: WriterContext,
+  event: Extract<RunEvent, { kind: typeof RUN_EVENT.CONNECTION_RESTORED }>,
+): Effect.fn.Return<StoreWriteResult, StoreFailure, DatabaseServices> {
+  const opened = yield* journal(context, event.turnId);
+  if (Result.isFailure(opened)) return Result.fail(opened.failure);
+  const row = opened.success;
+  const id = String(event.lostSequence);
+  const lost = row.parts.find((part) => part.type === CONNECTION_LOST_PART && part.id === id);
+  if (lost === undefined || !("data" in lost)) return Result.succeed(STORE_WRITE_EFFECT.REPEATED);
+  // SAFETY: a part of this type was written with its notice as `data`, which the read back holds to the vocabulary.
+  const notice = lost.data as ConnectionLostNotice;
+  if (notice.restoredAt !== null) return Result.succeed(STORE_WRITE_EFFECT.REPEATED);
+  if (row.finishedAt !== null) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FINISHED });
+  const restored = { ...lost, data: { ...notice, restoredAt: event.restoredAt } };
+  return yield* amendJournal(
+    context,
+    event.turnId,
+    row,
+    row.parts.map((part) => (part === lost ? restored : part)),
+  );
+});
+
 function consume(context: WriterContext, event: RunEvent): Write<StoreWriteResult> {
   switch (event.kind) {
     case RUN_EVENT.TURN_STARTED:
@@ -1712,6 +1757,10 @@ function consume(context: WriterContext, event: RunEvent): Write<StoreWriteResul
       return textDrafted(context, event);
     case RUN_EVENT.USAGE_LIMIT_REACHED:
       return usageLimitReached(context, event);
+    case RUN_EVENT.CONNECTION_LOST:
+      return connectionLost(context, event);
+    case RUN_EVENT.CONNECTION_RESTORED:
+      return connectionRestored(context, event);
     // The rest of the stream is the relay's, about a run's moments rather
     // than the record.
     case RUN_EVENT.SLOW_STEP:

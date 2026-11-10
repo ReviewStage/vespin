@@ -2,7 +2,12 @@ import { nativeTurnId, reasoningItemId } from "@repo/database/models/ids";
 import { CLAUDE_CODE_UNRECORDED_TOOL, UNKNOWN_TOOL } from "@repo/features/agent-tools";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
-import { USAGE_LIMIT_AGENT, type UsageLimitMove } from "@repo/wire/ui-messages";
+import {
+  CONNECTION_LOST_PROVIDER,
+  type ConnectionLostNotice,
+  USAGE_LIMIT_AGENT,
+  type UsageLimitMove,
+} from "@repo/wire/ui-messages";
 import { Option, Schema } from "effect";
 import {
   addModelUsage,
@@ -120,6 +125,8 @@ const TurnSchema = Schema.Struct({
   running: Schema.optionalKey(Schema.Record(Schema.String, Schema.Number)),
   /** Whether the harness ended its model turn with background work still in flight, and waits on it (`NATIVE_MOMENT.WAITING`) with no step opened since. */
   waiting: Schema.optionalKey(Schema.Boolean),
+  /** The sequence of the event that told the connection to the model's provider lost, while the runner waits for the provider's host (`NATIVE_MOMENT.CONNECTION_LOST`). */
+  reconnecting: Schema.optionalKey(Schema.Number),
   /** The calls whose subagents run on in the background, by the key their end is named by (`NATIVE_MOMENT.SUBAGENT_RUNNING`). */
   subagents: Schema.optionalKey(Schema.Record(Schema.String, SubagentSchema)),
   usage: Schema.optionalKey(UsageSchema),
@@ -215,6 +222,8 @@ export const NATIVE_WRITE = {
   RETRY: "retry",
   /** Hold the turn its plan's limit cut short open until the soonest limit resets, for the minute sweep to go on with it then, where no payer has room now. */
   WAIT: "wait",
+  /** Send the agent a carry-on line, the connection its runner lost to the model's provider being back (`coder-host/carry-on.ts`). */
+  CARRY_ON: "carry_on",
 } as const;
 
 export type NativeWrite =
@@ -241,6 +250,7 @@ export type NativeWrite =
     }
   | { readonly kind: typeof NATIVE_WRITE.RETRY; readonly turnId: string; readonly replay?: true }
   | { readonly kind: typeof NATIVE_WRITE.WAIT; readonly turnId: string; readonly until: number }
+  | { readonly kind: typeof NATIVE_WRITE.CARRY_ON; readonly turnId: string }
   | {
       readonly kind: typeof NATIVE_WRITE.PLAN_STATUS;
       readonly status: PlanStatus;
@@ -617,24 +627,37 @@ class Fold {
         turnId: turn.id,
         failure,
         detail,
-        // Note that the model's refusal is its own decision, no fault of ours, so it opens no issue.
-        expected: turn.limited === true || rateLimit !== undefined || refusal,
+        // Note that the model's refusal is its own decision, no fault of ours, so it opens no issue; nor does a provider the runner waited for in vain.
+        expected:
+          turn.limited === true ||
+          rateLimit !== undefined ||
+          refusal ||
+          turn.reconnecting !== undefined,
         refused: turn.refused === true,
       });
     }
     this.#setTurn(undefined);
   }
 
-  #limitNotice(turn: Turn, resetsAt: number | null, moved?: UsageLimitMove): Turn {
+  /** The provider the turn's model is of, as a notice names it: OpenAI's, or Anthropic's for every other. */
+  #provider(): ConnectionLostNotice["provider"] {
     const provider =
       this.#context.model === undefined
         ? undefined
         : providerModelOf(this.#context.model)?.provider;
+    return provider === MODEL_PROVIDER.OPENAI
+      ? CONNECTION_LOST_PROVIDER.OPENAI
+      : CONNECTION_LOST_PROVIDER.ANTHROPIC;
+  }
+
+  #limitNotice(turn: Turn, resetsAt: number | null, moved?: UsageLimitMove): Turn {
     return this.#tell(turn, {
       kind: RUN_EVENT.USAGE_LIMIT_REACHED,
       notice: {
         agent:
-          provider === MODEL_PROVIDER.OPENAI ? USAGE_LIMIT_AGENT.CODEX : USAGE_LIMIT_AGENT.CLAUDE,
+          this.#provider() === CONNECTION_LOST_PROVIDER.OPENAI
+            ? USAGE_LIMIT_AGENT.CODEX
+            : USAGE_LIMIT_AGENT.CLAUDE,
         resetsAt,
         ...(moved === undefined ? undefined : { moved }),
       },
@@ -884,6 +907,32 @@ class Fold {
         if (turn !== undefined) this.#setTurn({ ...this.#closed(turn), waiting: true });
         return;
       }
+      case NATIVE_MOMENT.CONNECTION_LOST: {
+        // The turn waits for the provider's host, still under way, and the transcript says so where it happened;
+        // what the model turn failed with is let go, since the loss is no failure of the turn's unless the wait is.
+        const turn = this.state.turn;
+        if (turn === undefined) return;
+        const { failure: _failure, ...kept } = this.#closed(turn);
+        const told = this.#tell(kept, {
+          kind: RUN_EVENT.CONNECTION_LOST,
+          notice: { provider: this.#provider(), restoredAt: null },
+        });
+        this.#setTurn({ ...told, reconnecting: told.told });
+        return;
+      }
+      case NATIVE_MOMENT.CONNECTION_RESTORED: {
+        const turn = this.state.turn;
+        if (turn === undefined || turn.reconnecting === undefined) return;
+        const { reconnecting, ...kept } = turn;
+        const told = this.#tell(kept, {
+          kind: RUN_EVENT.CONNECTION_RESTORED,
+          lostSequence: reconnecting,
+          restoredAt: this.#context.now,
+        });
+        this.#setTurn(told);
+        if (moment.carryOn) this.writes.push({ kind: NATIVE_WRITE.CARRY_ON, turnId: turn.id });
+        return;
+      }
       case NATIVE_MOMENT.ENDED:
         this.#ended(moment);
         return;
@@ -953,7 +1002,8 @@ function statusOf(
  * with no events, proves only that the runner lives, so it is progress only
  * where the turn is expected to be silent: it holds a call still unanswered,
  * since a harness says nothing while a command runs and only answers once it
- * ends, or it waits on background work after its model turn ended. Note that a
+ * ends, or it waits on background work after its model turn ended, or its
+ * runner waits for the model's provider to answer again. Note that a
  * turn kept from before its open calls were recorded has its heartbeats taken
  * as progress, as every heartbeat was, because a call it opened then may
  * still run; and with no turn under way there is no lease to push.
@@ -962,7 +1012,9 @@ export function turnProgressed(applied: number, state: NativeProjection): boolea
   if (applied > 0) return true;
   const turn = state.turn;
   if (turn === undefined) return false;
-  if (turn.running === undefined || turn.waiting === true) return true;
+  if (turn.running === undefined || turn.waiting === true || turn.reconnecting !== undefined) {
+    return true;
+  }
   return Object.keys(turn.running).length > 0;
 }
 

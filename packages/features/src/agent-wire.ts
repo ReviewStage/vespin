@@ -475,6 +475,8 @@ export const AGENT_FAILURE = {
   PLAN_LIMIT: "plan_limit",
   /** The model refused the turn, as a provider's safeguards do, and no other model retried it; a continue on another model goes on. */
   REFUSAL: "refusal",
+  /** The harness lost its connection to the model's provider, and the provider's host never answered again within the runner's wait, or was lost again at once. */
+  CONNECTION_LOST: "connection_lost",
   OTHER: "other",
 } as const;
 

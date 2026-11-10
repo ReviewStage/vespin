@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { RUN_EVENT, TURN_FAILURE } from "@repo/features/turn-run";
 import { test } from "vitest";
 import { NATIVE_ENDING, NATIVE_MOMENT, PLAN_STATUS } from "./native-moments.js";
-import { heldProjection, NATIVE_WRITE, projectMoments } from "./native-projection.js";
+import {
+  heldProjection,
+  NATIVE_WRITE,
+  projectMoments,
+  turnProgressed,
+} from "./native-projection.js";
 import { toolAnswerSettlement } from "./runner-moments.js";
 
 test("an unknown tool's call settled with a new input, as Codex settles one, keeps the input that names the tool it called", () => {
@@ -42,6 +47,112 @@ test("an unknown tool's call settled with a new input, as Codex settles one, kee
       [RUN_EVENT.TOOL_CALL_SETTLED, "unknown_tool", undefined],
     ],
   );
+});
+
+test("a connection lost to the provider holds the turn open with a notice, counts a heartbeat as progress, and a restore settles the notice and asks for a carry-on", () => {
+  const context = {
+    conversationId: "c_projection",
+    attempt: 1,
+    queuedTurnId: "turn-1",
+    model: "claude-sonnet-4-5",
+    ownKey: false,
+    registered: () => true,
+    report: () => undefined,
+  };
+  const lost = projectMoments(
+    heldProjection(null),
+    [
+      { kind: NATIVE_MOMENT.ACTIVE },
+      { kind: NATIVE_MOMENT.RESULT, failure: "success: API Error: Connection error." },
+      { kind: NATIVE_MOMENT.CONNECTION_LOST, host: "api.anthropic.com" },
+    ],
+    { ...context, sequence: 1, now: 1_000 },
+  );
+  const noticed = lost.writes.flatMap((write) =>
+    write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.CONNECTION_LOST
+      ? [write.event]
+      : [],
+  );
+  assert.equal(noticed.length, 1);
+  assert.deepEqual(noticed[0]?.notice, { provider: "Anthropic", restoredAt: null });
+  assert.ok(lost.state.turn !== undefined, "the turn stays open");
+  assert.equal(lost.state.turn.failure, undefined, "the model turn's failure is let go");
+  assert.equal(
+    lost.writes.some((write) => write.kind === NATIVE_WRITE.FAILED),
+    false,
+  );
+  assert.equal(turnProgressed(0, lost.state), true, "a heartbeat alone is progress while it waits");
+
+  const restored = projectMoments(
+    lost.state,
+    [{ kind: NATIVE_MOMENT.CONNECTION_RESTORED, host: "api.anthropic.com", carryOn: true }],
+    { ...context, sequence: 2, now: 61_000 },
+  );
+  const settled = restored.writes.flatMap((write) =>
+    write.kind === NATIVE_WRITE.EVENT && write.event.kind === RUN_EVENT.CONNECTION_RESTORED
+      ? [write.event]
+      : [],
+  );
+  assert.equal(settled.length, 1);
+  assert.equal(settled[0]?.lostSequence, noticed[0]?.sequence);
+  assert.equal(settled[0]?.restoredAt, 61_000);
+  assert.deepEqual(
+    restored.writes.filter((write) => write.kind === NATIVE_WRITE.CARRY_ON),
+    [{ kind: NATIVE_WRITE.CARRY_ON, turnId: "turn-1" }],
+  );
+  assert.equal(
+    turnProgressed(0, restored.state),
+    false,
+    "a heartbeat alone is no progress once it goes on",
+  );
+
+  // A line the service sent meanwhile goes next instead, so no carry-on is asked for.
+  const lineNext = projectMoments(
+    lost.state,
+    [{ kind: NATIVE_MOMENT.CONNECTION_RESTORED, host: "api.anthropic.com", carryOn: false }],
+    { ...context, sequence: 2, now: 61_000 },
+  );
+  assert.equal(
+    lineNext.writes.some((write) => write.kind === NATIVE_WRITE.CARRY_ON),
+    false,
+  );
+});
+
+test("a launch that gives up on the provider fails its turn as expected, with the runner's words", () => {
+  const context = {
+    conversationId: "c_projection",
+    attempt: 1,
+    queuedTurnId: "turn-1",
+    model: "gpt-5.1-codex",
+    ownKey: false,
+    registered: () => true,
+    report: () => undefined,
+  };
+  const lost = projectMoments(
+    heldProjection(null),
+    [
+      { kind: NATIVE_MOMENT.ACTIVE },
+      { kind: NATIVE_MOMENT.RESULT, failure: "responseStreamDisconnected" },
+      { kind: NATIVE_MOMENT.CONNECTION_LOST, host: "chatgpt.com" },
+    ],
+    { ...context, sequence: 1, now: 1_000 },
+  );
+  const gaveUp = projectMoments(
+    lost.state,
+    [
+      {
+        kind: NATIVE_MOMENT.ENDED,
+        ending: NATIVE_ENDING.FAILED,
+        detail: "failed chatgpt.com could not be reached, and did not answer again within the wait",
+      },
+    ],
+    { ...context, sequence: 2, now: 601_000 },
+  );
+  const failed = gaveUp.writes.filter((write) => write.kind === NATIVE_WRITE.FAILED);
+  assert.equal(failed.length, 1);
+  assert.equal(failed[0]?.expected, true);
+  assert.ok(failed[0]?.detail.includes("did not answer again within the wait"), failed[0]?.detail);
+  assert.equal(gaveUp.state.turn, undefined);
 });
 
 test("a warm launch that fails after its turn ended at its IDLE fails no turn of its own", () => {

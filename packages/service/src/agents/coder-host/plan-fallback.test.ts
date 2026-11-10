@@ -515,6 +515,7 @@ const eventsRoute = (
       Layer.succeed(HostedEnvironment, ENVIRONMENT),
       reached,
       after,
+      NO_GITHUB,
     );
     const web = HttpRouter.toWebHandler(
       runnerEventsApp({}).pipe(HttpRouter.provideRequest(services)),
