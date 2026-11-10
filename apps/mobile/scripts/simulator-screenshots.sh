@@ -163,7 +163,7 @@ run_suite() {
 # app, which takes back the permission.
 run_notification_flow() {
     local notification="$APP_DIRECTORY/maestro/notification"
-    xcrun simctl uninstall "$1" "$bundle_id" || return 1
+    xcrun simctl uninstall "$1" "$bundle_id" || true
     xcrun simctl install "$1" "$app" || return 1
     allow_notifications "$1" || return 1
     run_maestro "$1" "$2" "$notification/background.yaml" || return 1
