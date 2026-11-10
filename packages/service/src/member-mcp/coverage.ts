@@ -380,6 +380,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },
+  workspaceSandboxSetup: { putRunActions: NOT_YET_BUILT },
   workspaceSentry: { install: NEEDS_BROWSER },
   workspaceSlackBot: { connect: NEEDS_BROWSER },
   workspaces: {

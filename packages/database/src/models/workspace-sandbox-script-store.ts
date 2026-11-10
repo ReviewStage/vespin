@@ -1,5 +1,5 @@
 /**
- * workspace-sandbox-script-store.ts -- a workspace's sandbox scripts: read them, set or remove its install script, and set or remove a repository's setup or archive script.
+ * workspace-sandbox-script-store.ts -- a workspace's sandbox scripts: read them, set or remove its install script, set or remove a repository's setup or archive script, and set a repository's run actions.
  *
  * Every function is an effect over the ambient `SqlClient`, keyed by the
  * workspace, so no workspace reads, replaces, or removes another's scripts;
@@ -15,10 +15,11 @@ import {
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { and, asc, eq, type SQL, sql } from "drizzle-orm";
 import { Effect, type Option, Schema } from "effect";
-import { SqlSchema } from "effect/sql";
+import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import {
   workspaceInstallScript as install,
+  workspaceRepositoryRunAction as runAction,
   workspaceRepositorySetup as setup,
 } from "../schemas/workspace-sandbox-script.js";
 import { InstantColumnSchema } from "./columns.js";
@@ -174,6 +175,90 @@ const deleteSetup = SqlSchema.findAll({
     ),
 });
 
+const RunActionSchema = Schema.Struct({
+  id: Schema.String,
+  repository: Schema.String,
+  label: Schema.String,
+  command: Schema.String,
+  updatedAt: InstantColumnSchema,
+});
+
+/** One of a repository's run actions as its list was last saved, with the repository as that save spelled it. */
+export type WorkspaceRunAction = typeof RunActionSchema.Type;
+
+/** One action as a save writes it: the id it keeps, where it keeps one, its label, and its command. */
+export interface RunActionWrite {
+  readonly id?: string | undefined;
+  readonly label: string;
+  readonly command: string;
+}
+
+const RUN_ACTION_COLUMNS = {
+  id: runAction.id,
+  repository: runAction.repository,
+  label: runAction.label,
+  command: runAction.command,
+  updatedAt: runAction.updatedAt,
+};
+
+const RunActionsKeySchema = Schema.Struct({
+  organizationId: Schema.String,
+  repository: Schema.String,
+});
+
+/** The repository's run actions however its letters are cased. */
+function namedRunActions(organizationId: string, repository: string): SQL | undefined {
+  return and(
+    eq(runAction.organizationId, organizationId),
+    sql`lower(${runAction.repository}) = lower(${repository})`,
+  );
+}
+
+const findRunActions = SqlSchema.findAll({
+  Request: Schema.String,
+  Result: RunActionSchema,
+  execute: (organizationId) =>
+    Database.use((db) =>
+      db
+        .select(RUN_ACTION_COLUMNS)
+        .from(runAction)
+        .where(eq(runAction.organizationId, organizationId))
+        .orderBy(asc(sql`lower(${runAction.repository})`), asc(runAction.position)),
+    ),
+});
+
+const findRepositoryRunActions = SqlSchema.findAll({
+  Request: RunActionsKeySchema,
+  Result: RunActionSchema,
+  execute: ({ organizationId, repository }) =>
+    Database.use((db) =>
+      db
+        .select(RUN_ACTION_COLUMNS)
+        .from(runAction)
+        .where(namedRunActions(organizationId, repository))
+        .orderBy(asc(runAction.position)),
+    ),
+});
+
+const deleteRunActions = SqlSchema.void({
+  Request: RunActionsKeySchema,
+  execute: ({ organizationId, repository }) =>
+    Database.use((db) => db.delete(runAction).where(namedRunActions(organizationId, repository))),
+});
+
+const insertRunAction = SqlSchema.void({
+  Request: Schema.Struct({
+    ...RunActionsKeySchema.fields,
+    id: Schema.optionalKey(Schema.String),
+    position: Schema.Number,
+    label: Schema.String,
+    command: Schema.String,
+    now: Schema.Date,
+  }),
+  execute: ({ now, ...row }) =>
+    Database.use((db) => db.insert(runAction).values({ ...row, createdAt: now, updatedAt: now })),
+});
+
 /** The workspace's install script, where one is saved. */
 export function readInstallScript(
   organizationId: string,
@@ -238,4 +323,54 @@ export function removeRepositorySetup(
   kind: RepositoryScriptKind,
 ): ScriptEffect<boolean> {
   return Effect.map(deleteSetup({ organizationId, repository, kind }), (rows) => rows.length > 0);
+}
+
+/** Every repository's run actions in the workspace, in the order of the repositories' names and then of each list. */
+export function listRunActions(
+  organizationId: string,
+): ScriptEffect<readonly WorkspaceRunAction[]> {
+  return findRunActions(organizationId);
+}
+
+/** The repository's run actions in the workspace, in their order; none where no list is saved. */
+export function readRunActions(
+  organizationId: string,
+  repository: string,
+): ScriptEffect<readonly WorkspaceRunAction[]> {
+  return findRepositoryRunActions({ organizationId, repository });
+}
+
+/**
+ * The repository's run actions set, the whole list in its order, replacing
+ * the one that stood under any casing of its name; an empty list removes it.
+ * An action keeps the id it is given, and one given none is named afresh.
+ * Note that the old list is deleted and the new one written in one
+ * transaction, so a reader sees one list or the other, never a mix; two
+ * saves racing on one repository end on one list, the loser refused by the
+ * position index.
+ */
+export function setRunActions(
+  organizationId: string,
+  repository: string,
+  actions: readonly RunActionWrite[],
+  now: Date,
+): ScriptEffect<void> {
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        yield* deleteRunActions({ organizationId, repository });
+        for (const [position, action] of actions.entries()) {
+          yield* insertRunAction({
+            organizationId,
+            repository,
+            position,
+            label: action.label,
+            command: action.command,
+            now,
+            ...(action.id === undefined ? {} : { id: action.id }),
+          });
+        }
+      }),
+    ),
+  );
 }

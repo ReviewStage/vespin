@@ -92,6 +92,12 @@ const WORDS = {
 
 /** What turning each workspace experiment on or off changes for everyone in `workspace`, as its question says it. */
 const FLIP_WORDS = {
+  [EXPERIMENT.RUN_ACTIONS]: {
+    on: (workspace: string) =>
+      `Lets owners and admins of ${workspace} keep each repository's run actions in Cloud setup, and shows a Run menu in every cloud agent's message box that runs one in the agent's sandbox when pressed.`,
+    off: (workspace: string) =>
+      `Hides the Run menu and the run actions in Cloud setup for everyone in ${workspace}, and stops any from being run.`,
+  },
   [EXPERIMENT.DESCRIPTIONS]: {
     on: (workspace: string) =>
       `Shows each task's description, its comments and version history to everyone in ${workspace}, and has agents keep descriptions current as they work.`,

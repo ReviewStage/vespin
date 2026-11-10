@@ -759,6 +759,7 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_SANDBOX_SETUP_READ: "workspace.sandboxSetupRead",
   WORKSPACE_INSTALL_SCRIPT_PUT: "workspace.installScriptPut",
   WORKSPACE_REPOSITORY_SETUP_PUT: "workspace.repositorySetupPut",
+  WORKSPACE_RUN_ACTIONS_PUT: "workspace.runActionsPut",
 } as const;
 
 /**
@@ -1140,6 +1141,7 @@ export const PORT_ACT_USE = {
   WORKSPACE_SANDBOX_SETUP_READ: ACT_USE.FETCH,
   WORKSPACE_INSTALL_SCRIPT_PUT: ACT_USE.WRITE,
   WORKSPACE_REPOSITORY_SETUP_PUT: ACT_USE.WRITE,
+  WORKSPACE_RUN_ACTIONS_PUT: ACT_USE.WRITE,
 } as const satisfies Record<keyof typeof PORT_ACT_KIND, ActUse>;
 
 /**
