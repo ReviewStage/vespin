@@ -281,18 +281,23 @@ test("skills and rename each find the row the page draws", () => {
   assert.deepEqual(labelsFound("rename"), ["Rename workspace"]);
 });
 
-test("mcp finds the Vespin MCP & CLI page's groups and none of the integrations", () => {
+test("mcp finds the Vespin MCP & CLI page's rows and none of the integrations", () => {
   const groups = searchSettings(settingsSearchCorpus(FULL_INPUT), "mcp")?.groups ?? [];
   assert.deepEqual(
     groups.map((group) => group.page),
     [SETTINGS_VIEW.MCP],
   );
   assert.deepEqual(labelsFound("mcp"), [
-    "Apps connected over MCP",
-    "Connect an app over MCP",
+    "Connected apps",
+    "Connect an app",
     "Install the vespin command",
-    "Sign in from your terminal",
+    "CLI sign-in",
   ]);
+});
+
+test("cli sign-in and set up the cli each find the CLI section's row", () => {
+  assert.deepEqual(labelsFound("cli sign-in"), ["CLI sign-in"]);
+  assert.deepEqual(labelsFound("set up the cli"), ["Install the vespin command"]);
 });
 
 test("renaming needs a workspace the reader manages that is not their own first", () => {

@@ -15,7 +15,7 @@ import { AccountSection } from "./account-section.js";
 import { AgentComposerSection } from "./agent-composer-section.js";
 import { AgentsPage } from "./agents-page.js";
 import { AppearanceSection } from "./appearance-page.js";
-import { CliSections } from "./cli-sections.js";
+import { CliSection } from "./cli-section.js";
 import { CloudEnvironmentPage } from "./cloud-environment-page.js";
 import { CommitsSection } from "./commits-section.js";
 import { ExperimentalPage } from "./experimental-page.js";
@@ -23,7 +23,7 @@ import { HostsSection } from "./hosts-section.js";
 import { type IntegrationsFilter, IntegrationsSection } from "./integrations-page.js";
 import { LinksSection } from "./links-section.js";
 import { MacCommandsSection } from "./mac-commands-section.js";
-import { McpClientsSections } from "./mcp-clients-section.js";
+import { McpSection } from "./mcp-clients-section.js";
 import { MemorySection } from "./memory-page.js";
 import { MicrophoneSection } from "./microphone-section.js";
 import { PrivacySection } from "./privacy-section.js";
@@ -159,8 +159,8 @@ export function SettingsPanel({
 
       {view !== SETTINGS_VIEW.MCP ? null : signedIn ? (
         <>
-          <McpClientsSections />
-          <CliSections />
+          <McpSection />
+          <CliSection />
         </>
       ) : (
         <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
