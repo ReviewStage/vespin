@@ -231,6 +231,16 @@ test("a word typed after a file laid in as its chip stands a space apart from it
   typeInComposer(container, "here");
   const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
   assert.equal(editor.getText(), "[Picture 1] here");
+
+  // The document holds the first chip at 1, then the space the caret now stands before.
+  act(() => editor.commands.setTextSelection(2));
+  await drop(container, [png("two.png")]);
+  typeInComposer(container, "and ");
+  assert.equal(
+    editor.getText(),
+    "[Picture 1] [Picture 2] and here",
+    "a space already there is not doubled",
+  );
 });
 
 /** The chip a file was just laid in with taken out as two Backspaces would: the first the space laid in after it, which the browser deletes itself, the second the chip whole. */
