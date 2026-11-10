@@ -152,7 +152,7 @@ import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import { AgentActorRef, type AgentSubject, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
 import { CommentMenu } from "./comment-menu.js";
-import { CommentFiles, KeptCommentFiles } from "./description-comment-files.js";
+import { CommentFiles, useCommentFileEntries } from "./description-comment-files.js";
 import { EDITOR_ROOM_CLASS } from "./description-document-editor.js";
 import type { EditAgents } from "./edit-ref.js";
 import { MessageBox, useMessageBox } from "./message-box.js";
@@ -851,7 +851,7 @@ function CommentEntry({
           <CommentEditField
             planId={doors.control.planId}
             files={entry.files ?? NO_FILES}
-            held={editFiles}
+            changes={editFiles}
             value={editing}
             onChange={write}
             onSave={save}
@@ -868,16 +868,17 @@ function CommentEntry({
  * box as the field a thread's first comment is written in: the words stay
  * where they were read, bare on the card with no box around them, and the
  * box's foot stands under them, its + and microphone and Cancel beside the
- * round send, which saves. The comment's files stand over the words as they
- * do when read, each with its × to take it off, and files added by the +, a
- * paste, or a drop stand after them, held together to the bounds of one
- * message's.
+ * round send, which saves. The box holds the comment's own files first, as
+ * entries of its own (`useCommentFileEntries`), and the files added by the
+ * +, a paste, or a drop after them, so the two are taken off alike and held
+ * together to the bounds of one message's; the edit keeps what changed as
+ * the ids it took off and the files it added.
  */
 function CommentEditField({
   planId,
   files,
   attached = NO_ATTACHMENTS,
-  held: handed,
+  changes: handed,
   value,
   onChange,
   onSave,
@@ -888,8 +889,8 @@ function CommentEditField({
   files: readonly DescriptionCommentFile[];
   /** The files the window holds for it as the edit opens, a held comment's not yet sent; none for a posted one's. */
   attached?: readonly AgentAttachment[];
-  /** Where the files the edit changes are kept, as its words are, so Cancel, Esc, or a save refused finds them as the edit opens again; the field keeps its own where none is handed. */
-  held?: EditFilesHolder | undefined;
+  /** Where what the edit changes of the files is kept, as its words are, so Cancel, Esc, or a save refused finds them as the edit opens again; the field keeps its own where none is handed. */
+  changes?: EditFilesHolder | undefined;
   value: string;
   onChange: (words: string) => void;
   /** Saves the words, with the files the field holds. */
@@ -897,24 +898,49 @@ function CommentEditField({
   onCancel: () => void;
 }): React.JSX.Element {
   const [own, setOwn] = useState<EditFiles>({ dropped: [], attachments: attached });
-  const held = handed ?? { files: own, update: setOwn };
-  // The comment's own files the edit keeps, which their × takes off.
-  const kept = files.filter((file) => !held.files.dropped.includes(file.attachmentId));
+  const changes = handed ?? { files: own, update: setOwn };
+  const { entries, idOf } = useCommentFileEntries(planId, files);
+  /** The box's files for what the edit changed: the comment's own it keeps, then those added. */
+  const held = (edit: EditFiles) => [
+    ...entries.filter((entry) => !edit.dropped.includes(idOf(entry) ?? "")),
+    ...edit.attachments,
+  ];
   const box = useMessageBox({
     draft: value,
     setDraft: onChange,
     placeholder: COMMENT_WORDS.EDIT,
     label: COMMENT_WORDS.EDIT,
     maxLength: DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS,
-    // Note that the files added are held with those kept, so the two are held to a message's bounds together.
-    most: AGENT_BOUNDS.MAX_ATTACHMENTS - kept.length,
+    // Note that what the box holds after a change is read back as the comment's files it no longer holds and the files it added.
     holder: {
-      attachments: held.files.attachments,
-      update: (next) => held.update((was) => ({ ...was, attachments: next(was.attachments) })),
+      attachments: held(changes.files),
+      update: (next) =>
+        changes.update((was) => {
+          const now = next(held(was));
+          return {
+            dropped: entries.flatMap((entry) => {
+              const id = idOf(entry);
+              return id === undefined || now.includes(entry) ? [] : [id];
+            }),
+            attachments: now.filter((entry) => idOf(entry) === undefined),
+          };
+        }),
     },
     onLeave: onCancel,
     onSubmit: () => {
-      if (!box.files.reading) onSave({ kept, added: box.files.attachments });
+      if (box.files.reading) return;
+      // Note that a file the box holds no entry of is kept as it stands, after those it holds, in their order.
+      const held = new Set(box.files.attachments.flatMap((entry) => idOf(entry) ?? []));
+      const unheld = files.filter(
+        (file) => !entries.some((entry) => idOf(entry) === file.attachmentId),
+      );
+      onSave({
+        kept: [
+          ...[...held].flatMap((id) => files.find((file) => file.attachmentId === id) ?? []),
+          ...unheld,
+        ],
+        added: box.files.attachments.filter((entry) => idOf(entry) === undefined),
+      });
     },
     focus: true,
   });
@@ -924,20 +950,6 @@ function CommentEditField({
       look={COMPOSER_LOOK.BARE}
       className="comment-field comment-editing"
       data-variant={REPLY_VARIANT.EDIT}
-      carried={
-        kept.length === 0 ? undefined : (
-          <KeptCommentFiles
-            planId={planId}
-            files={kept}
-            onRemove={(index) => {
-              const file = kept[index];
-              if (file === undefined) return;
-              box.quiet();
-              held.update((was) => ({ ...was, dropped: [...was.dropped, file.attachmentId] }));
-            }}
-          />
-        )
-      }
       beforeSend={
         <Button variant={BUTTON_VARIANT.QUIET} size={BUTTON_SIZE.COMPACT} onClick={onCancel}>
           <ReplayUnmask>{COMMENT_WORDS.CANCEL}</ReplayUnmask>

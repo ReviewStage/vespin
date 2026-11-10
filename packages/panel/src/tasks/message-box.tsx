@@ -73,8 +73,8 @@ import type { DictationControl } from "./use-dictation.js";
  * Send does: the files, whether one is still read, the box's own note, and
  * how narrow the card stands. `MessageBox` draws the card: the shared
  * composer card (`../ai-elements/prompt-input.tsx`), a form whose Send and
- * Enter both submit it, its files over its field, after any the owner
- * draws first (`carried`), in `@repo/ui`'s `ComposerBody`, and its foot (`ComposerFoot`): the + at the left, which
+ * Enter both submit it, its files over its field (`@repo/ui`'s
+ * `ComposerBody`), and its foot (`ComposerFoot`): the + at the left, which
  * opens the file picker or, where the owner hands rows (`plus`), a menu of
  * Attachment and those rows; the owner's `tools` after it; at the right the
  * owner's `actions`, the microphone, the ⋯, and the owner's `beforeSend`;
@@ -179,8 +179,6 @@ interface MessageBoxOptions extends PickerOptions {
   readonly held?: boolean | undefined;
   /** Where the box's files are kept; the box keeps its own where none is handed. */
   readonly holder?: AttachedFilesOptions["holder"];
-  /** The most files the box takes; a message's where none is given, fewer where the owner draws files of its own beside them (`carried`). */
-  readonly most?: number | undefined;
   /** Whether the box takes files at all; a comment's edit keeps the files it was sent with. */
   readonly takesFiles?: boolean | undefined;
   /** Whether words pasted long enough to bury the message come as a text file, as an agent's box takes them. */
@@ -510,7 +508,6 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
   const [mountedFirst] = useState(bundle.data !== undefined);
   const files = useAttachedFiles({
     holder: options.holder,
-    most: options.most,
     held: options.held === true || options.takesFiles === false,
     onRefusal: (words) => say(SAID.FILE, words),
     words: options.draft,
@@ -579,7 +576,6 @@ export function MessageBox({
   look,
   className,
   head,
-  carried,
   tools,
   actions,
   beforeSend,
@@ -596,8 +592,6 @@ export function MessageBox({
   className?: string | undefined;
   /** What stands over the field inside the card: an answer's question, a comment's sends not sent. */
   head?: ReactNode;
-  /** Files the owner draws before the box's own, in their row: those a comment's edit keeps of the comment's. */
-  carried?: ReactNode;
   /** What stands after the + at the foot's left: New task's Runs on chip. */
   tools?: ReactNode;
   /** What stands first at the foot's right, before the microphone: an agent's model chip and context ring, a comment's Start a review. */
@@ -666,7 +660,6 @@ export function MessageBox({
         files={
           takesFiles ? (
             <>
-              {carried}
               <AttachedFileChips
                 files={attachmentChips(pictures.beside)}
                 onRemove={

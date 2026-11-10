@@ -9,6 +9,7 @@ import {
   DESCRIPTION_COMMENT_SCOPE,
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentActionRequest,
+  type DescriptionCommentFile,
   type DescriptionCommentStartRequest,
   type DescriptionCommentThread,
   type DescriptionCommentWriter,
@@ -1856,7 +1857,10 @@ test("an edit's words outlast Cancel and Esc, come back as Edit opens it again, 
 });
 
 /** The reader's own comment carrying two files, its Edit opened, with the files the field holds and a press of Save. */
-function editWithFiles(landing?: () => boolean | Promise<boolean>) {
+function editWithFiles(
+  landing?: () => boolean | Promise<boolean>,
+  more: readonly DescriptionCommentFile[] = [],
+) {
   fakeActs({
     act: (request: AnyAct): Promise<FakeActAnswer> =>
       Promise.resolve(
@@ -1878,6 +1882,7 @@ function editWithFiles(landing?: () => boolean | Promise<boolean>) {
           mediaType: "text/plain",
         },
         { attachmentId: kept, name: "kept.txt", mediaType: "text/plain" },
+        ...more,
       ],
     })),
   };
@@ -1904,7 +1909,7 @@ function editWithFiles(landing?: () => boolean | Promise<boolean>) {
   };
   const save = () =>
     act(async () => field().querySelector<HTMLButtonElement>('button[aria-label="Save"]')?.click());
-  return { ...drawnTab, kept, edit, held, change, save };
+  return { ...drawnTab, kept, edit, field, held, change, save };
 }
 
 test("an edit takes a comment's file off by its \u00d7 and adds one picked by its +, saving the files kept by their ids and the file added", async () => {
@@ -1920,6 +1925,24 @@ test("an edit takes a comment's file off by its \u00d7 and adds one picked by it
   assert.deepEqual(
     sent.action.attachments?.map((file) => [file.name, file.data]),
     [["new.txt", Buffer.from("new\n").toString("base64")]],
+  );
+});
+
+test("an edit holding as many files as a message carries takes no more, and says a message carries that many", async () => {
+  // Note that the comment carries eight files beside the helper's two, so the edit stands full.
+  const more = Array.from({ length: 8 }, (_, at) => ({
+    attachmentId: `7a8b9c0d-1e2f-4a3b-8c4d-6e7f8091a2${String(at).padStart(2, "0")}`,
+    name: `more-${String(at)}.txt`,
+    mediaType: "text/plain",
+  }));
+  const { edit, held, field } = editWithFiles(undefined, more);
+  edit();
+  await pickFiles(field(), [new File(["new\n"], "new.txt", { type: "text/plain" })]);
+
+  assert.equal(held().length, 10, "the edit keeps the comment's ten files and adds none");
+  assert.equal(
+    field().querySelector(".ui-composer-foot-note")?.textContent,
+    "A message can carry up to 10 files.",
   );
 });
 
