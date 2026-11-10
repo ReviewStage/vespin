@@ -2150,7 +2150,7 @@ const SetWorkspacePhotoInputSchema = Schema.Struct({
     workspacePhotoSetRequestSchema.fields.photo,
     `The photo as a base64 \`data:\` URL of a PNG, JPEG, or WebP image ` +
       `(${Object.values(WORKSPACE_PHOTO_TYPE).join(", ")}), at most ${WORKSPACE_PHOTO_BOUNDS.MAX_BYTES} bytes decoded, such as a 256-pixel ` +
-      "square; null removes the photo, so the workspace shows its owner's picture again.",
+      "square; null removes it, and the member's own first workspace then shows their sign-in picture.",
   ),
 });
 

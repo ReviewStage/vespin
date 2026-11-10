@@ -53,7 +53,9 @@ export const workspacePhotoCommand = Command.make(
     ),
     remove: Flag.Boolean("remove").pipe(
       Flag.withDefault(false),
-      Flag.withDescription("Remove the photo, so the workspace shows its owner's picture again"),
+      Flag.withDescription(
+        "Remove the photo; your own first workspace then shows your sign-in picture",
+      ),
     ),
   },
   ({ file, remove }) =>
@@ -93,6 +95,6 @@ export const workspacePhotoCommand = Command.make(
   Command.withDescription("Set or remove the workspace's photo (owner or admin)"),
   Command.withExamples([
     { command: "vespin workspace photo logo.png", description: "Set the photo" },
-    { command: "vespin workspace photo --remove", description: "Show the owner's picture again" },
+    { command: "vespin workspace photo --remove", description: "Remove the photo" },
   ]),
 );
