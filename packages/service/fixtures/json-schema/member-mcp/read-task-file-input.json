@@ -1,0 +1,33 @@
+{
+  "type": "object",
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "description": "The task whose repository to read, by the id list_tasks answered."
+    },
+    "path": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "description": "The file's path from the repository's root, such as src/index.ts."
+    },
+    "firstLine": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "The first line to read, from 1; 1 where left out."
+    },
+    "commit": {
+      "type": "string",
+      "minLength": 40,
+      "maxLength": 40,
+      "description": "The commit to read the file at, by its full SHA, such as the head a pull request stands on; the default branch's head where left out."
+    }
+  },
+  "required": [
+    "taskId",
+    "path"
+  ],
+  "additionalProperties": false
+}

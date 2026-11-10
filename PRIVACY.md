@@ -216,7 +216,18 @@ its own policies, and your phone keeps it in its notification history under
 its own settings, outside Vespin. We keep the token while the phone stays
 registered: the app unregisters it when you sign out, we delete it when
 Apple tells us the phone will no longer take pushes on it, and it is deleted
-with your account.
+with your account. Beside the token we keep each phone's "Notify me" choice,
+when a push to it last reached Apple, and, while its pushes fail, since when
+and Apple's reason, which the phone's Settings shows.
+
+So your phone stays quiet while you're at your desk, the Service notes when
+a desktop or web client of yours was last active: while you use one, it
+tells the Service so at most every 30 seconds, with nothing of what you typed
+or clicked, and we keep only the latest time with your account. While that
+time is within the last two minutes, a notification due to a phone set to
+"Away" is held, and we keep which thread or agent it was about until it is
+sent once you step away, or dropped because it no longer waits on you. The
+time and the holds are deleted with your account.
 
 ### Setup questions
 
@@ -341,7 +352,8 @@ repository snapshot made before default-branch drives expires thirty days after
 its last use. When you delete your account:
 
 - **Account data** (profile, sessions, OAuth tokens, saved credentials,
-  preferences, integration records, and your phones' push tokens) is deleted
+  preferences, integration records, your phones' push tokens, when you were
+  last active at a client, and the notifications held for you) is deleted
   at once.
 - **Your tasks, descriptions, transcripts, and inbox items** are deleted at once,
   but for the tasks in workspaces with other members (below), and we ask
