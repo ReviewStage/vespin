@@ -11,7 +11,7 @@ import { keptKey, keptNow, useKept } from "./use-kept.js";
  * after it went opens at the choice it last kept, one never chosen opens at
  * its initial value, and so does one an earlier build kept in a shape that
  * no longer reads; where storage refuses a write, the choice drawn is what
- * goes on, read outside React too.
+ * goes on, read outside React too, which answers what a surface drawn shows.
  */
 
 declare global {
@@ -128,7 +128,7 @@ test("a change is made over what storage holds now, and one that answers what it
   expect(window.localStorage.getItem(KEPT.SORT.name)).toBeNull();
 });
 
-test("where storage refuses a write, a change, a read outside React, and a surface drawn anew go on from the choice drawn, not the older one it holds", () => {
+test("where storage refuses a write, a change, and a read outside React, go on from the choice drawn, not the older one it holds", () => {
   window.localStorage.setItem(KEPT.SORT.name, JSON.stringify(SORT.LATEST));
   const container = document.body.appendChild(document.createElement("div"));
   root = createRoot(container);
@@ -140,13 +140,15 @@ test("where storage refuses a write, a change, a read outside React, and a surfa
   act(() => doors?.change(flip));
   expect(shown()).toBe(`${SORT.OLDEST} ${SORT.OLDEST}`);
   expect(keptNow(KEPT.SORT, SORT.LATEST)).toBe(SORT.OLDEST);
-  act(() => root?.render(null));
-  act(() => root?.render(createElement(TwoLists)));
-  expect(shown()).toBe(`${SORT.OLDEST} ${SORT.OLDEST}`);
   act(() => doors?.change(flip));
   expect(shown()).toBe(`${SORT.LATEST} ${SORT.LATEST}`);
   act(() => doors?.change(flip));
   expect(shown()).toBe(`${SORT.OLDEST} ${SORT.OLDEST}`);
+  // Drawn anew, the surfaces open on what storage holds, and the read outside React answers what they show.
+  act(() => root?.render(null));
+  act(() => root?.render(createElement(TwoLists)));
+  expect(shown()).toBe(`${SORT.LATEST} ${SORT.LATEST}`);
+  expect(keptNow(KEPT.SORT, SORT.OLDEST)).toBe(SORT.LATEST);
 });
 
 /** A record of sorts by list, which a change of one list's sort keeps the others' of. */
