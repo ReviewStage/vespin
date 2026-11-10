@@ -761,7 +761,7 @@ function fakeService() {
     inboxItemHome: (itemId) =>
       Effect.sync(() => {
         asked.push(`inbox-home:${itemId}`);
-        return { agentId: ITEM.agentId, planId: null, workspaceId: "workspace-1" };
+        return { agentId: ITEM.agentId, planId: TASK_ID, workspaceId: "workspace-1" };
       }),
     markInboxItemUnread: (itemId) =>
       Effect.sync(() => {

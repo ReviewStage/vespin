@@ -1268,12 +1268,11 @@ export function inboxStartTitle(
 
 /**
  * Where one item stands, as a link naming it by its id alone is opened
- * (`link-grammar.ts`): the agent that posted it, its task, null for an
- * agent with no task, and its workspace.
+ * (`link-grammar.ts`): the agent that posted it, its task, and its workspace.
  */
 export const inboxItemHomeSchema = EffectSchema.Struct({
   agentId: wireUuidSchema,
-  planId: EffectSchema.NullOr(wireUuidSchema),
+  planId: wireUuidSchema,
   workspaceId: EffectSchema.NonEmptyString,
 });
 
