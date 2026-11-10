@@ -113,20 +113,29 @@ run_maestro() {
         "$3"
 }
 
+# Runs the notification flow on the booted simulator `$1`, its output under
+# `$2`: Maestro cannot send a push, so the app is sent to the background,
+# `ask.apns` pushed to it, and the notification tapped.
+run_notification_flow() {
+    local notification="$APP_DIRECTORY/maestro/notification"
+    run_maestro "$1" "$2" "$notification/background.yaml" || return 1
+    xcrun simctl push "$1" "$bundle_id" "$notification/ask.apns" || return 1
+    run_maestro "$1" "$2" "$notification/open.yaml"
+}
+
 # Runs every flow under maestro/ once on the booted simulator `$1`, from a
-# clean app, its output under `$2`, which a run before it is cleared from;
-# then the notification flow, whose push Maestro cannot send: the app is
-# sent to the background, `ask.apns` pushed to it, and the notification
-# tapped.
+# clean app, its output under `$2`, which a run before it is cleared from,
+# then the notification flow, and fails where either failed. Note that the
+# notification flow runs whatever the others did, so its screenshots are
+# kept even where another flow fails, and that each step returns its own
+# failure, since `set -e` stands aside inside the `until` that calls this.
 run_flows() {
     rm -rf "$2"
     xcrun simctl terminate "$1" "$bundle_id" 2>/dev/null || true
-    # Note that each step returns its failure itself, since `set -e` stands aside inside the `until` that calls this.
-    run_maestro "$1" "$2" "$APP_DIRECTORY/maestro" || return 1
-    local notification="$APP_DIRECTORY/maestro/notification"
-    run_maestro "$1" "$2/notification" "$notification/background.yaml" || return 1
-    xcrun simctl push "$1" "$bundle_id" "$notification/ask.apns" || return 1
-    run_maestro "$1" "$2/notification" "$notification/open.yaml"
+    local failed=0
+    run_maestro "$1" "$2" "$APP_DIRECTORY/maestro" || failed=1
+    run_notification_flow "$1" "$2/notification" || failed=1
+    return "$failed"
 }
 
 failed=0
