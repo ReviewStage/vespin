@@ -1033,6 +1033,40 @@ export const inboxCloseRequestSchema = EffectSchema.Struct({
 
 export type InboxCloseRequest = typeof inboxCloseRequestSchema.Type;
 
+/**
+ * A member's own nod or close taken back, by the key it was sent under, so
+ * the item waits on them again as it did before: Undo's inverse of Got it
+ * and of Resolve, which the member may ask for whenever they like.
+ */
+export const inboxTakeBackRequestSchema = EffectSchema.Struct({
+  clientKey: filledText(INBOX_BOUNDS.MAX_CLIENT_KEY_CHARS),
+});
+
+export type InboxTakeBackRequest = typeof inboxTakeBackRequestSchema.Type;
+
+/**
+ * What came of a take-back: the nod or close taken back, the item open
+ * again; refused because its agent was told of it, a message to it that
+ * nothing takes back; or refused because the item no longer stands as that
+ * nod or close left it, answered, closed, or posted over since, or the key
+ * named none.
+ */
+export const INBOX_TAKE_BACK = {
+  TAKEN: "taken",
+  TOLD: "told",
+  MOVED_ON: "moved-on",
+} as const;
+
+export type InboxTakeBack = (typeof INBOX_TAKE_BACK)[keyof typeof INBOX_TAKE_BACK];
+
+/** What a take-back comes back as: the item as it then stands, and what came of the take-back. */
+export const inboxTakenBackSchema = EffectSchema.Struct({
+  item: inboxItemSchema,
+  outcome: EffectSchema.Literals(Object.values(INBOX_TAKE_BACK)),
+});
+
+export type InboxTakenBack = typeof inboxTakenBackSchema.Type;
+
 /** How a member's close opens, in the message that tells the agent of it. */
 export const INBOX_CLOSE_LEAD = "Thread closed";
 

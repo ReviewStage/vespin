@@ -29,6 +29,7 @@ import {
   INBOX_CURSOR_START,
   INBOX_REPLY,
   INBOX_STATUS,
+  INBOX_TAKE_BACK,
   type InboxAnswers,
   type InboxItem,
   type InboxRemindRequest,
@@ -40,6 +41,7 @@ import {
   inboxStartTitle,
   inboxThreadMessage,
   inboxTodoTicks,
+  openAskOf,
 } from "@repo/features/inbox-wire";
 import { MESSAGE_CHANNEL, THREAD_LINE_EVENT, type ThreadLineMetadata } from "@repo/wire";
 import type { LanguageModel } from "ai";
@@ -70,7 +72,7 @@ import { logStoreFailure } from "../http/store-failure.js";
 import { accountMiddleware, hosted, writeReceiptMiddleware } from "../orpc/base.js";
 import { pushThreadSettled } from "../push/inbox-pushes.js";
 import { settleThreadDms } from "../slack/thread-dms.js";
-import { settleAgentTaskIfFinished } from "../tasks/task-finish.js";
+import { reopenAgentTaskFinished, settleAgentTaskIfFinished } from "../tasks/task-finish.js";
 import {
   acknowledgeInboxItem,
   answerInboxAsk,
@@ -538,6 +540,50 @@ export const closeAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
+ * Takes back a member's own nod or close, Got it or Resolve, by the key it
+ * went under, as their Undo asks, however long since: the item open again,
+ * waiting on them as it did, its ask open again where the close withdrew
+ * one, and the agent's task back in progress where that question's settle
+ * let it finish. One its agent was told of, a notice that waits to hear back
+ * or a close that carried a note, is refused as told, since nothing takes a
+ * message to an agent back; one the item no longer stands as it left, or a
+ * key that named none of the member's, is refused as moved on. Each answers
+ * the item as it then stands.
+ */
+export const takeBackAsMember = /* @__PURE__ */ Effect.fnUntraced(function* (
+  userId: string,
+  itemId: string,
+  clientKey: string,
+) {
+  const stored = yield* hostedStoreOrUnavailable(readInboxItem(userId, itemId));
+  if (Option.isNone(stored)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+  const { item, answerKey } = stored.value;
+  const settledBy = item.status === INBOX_STATUS.CLOSED ? item.closedBy : item.answeredBy;
+  const standing =
+    item.status !== INBOX_STATUS.OPEN && answerKey === clientKey && settledBy?.userId === userId;
+  if (!standing) return { item, outcome: INBOX_TAKE_BACK.MOVED_ON };
+  // Note that a message under the key, an answer's or a close's note, reached the agent as a notice waiting to hear back did.
+  const told =
+    item.needsReply || (item.thread ?? []).some((message) => message.clientKey === clientKey);
+  if (told) return { item, outcome: INBOX_TAKE_BACK.TOLD };
+  const reopened = yield* hostedStoreOrUnavailable(
+    item.status === INBOX_STATUS.CLOSED
+      ? withdrawInboxClose(userId, itemId, clientKey)
+      : withdrawInboxAnswer(userId, itemId, clientKey),
+  );
+  if (Option.isNone(reopened)) {
+    const now = yield* hostedStoreOrUnavailable(readInboxItem(userId, itemId));
+    if (Option.isNone(now)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+    return { item: now.value.item, outcome: INBOX_TAKE_BACK.MOVED_ON };
+  }
+  // A question open again holds the task its settle let finish, as it held it before.
+  if (openAskOf(reopened.value.thread ?? []) !== undefined) {
+    yield* reopenAgentTaskFinished(userId, reopened.value.agentId);
+  }
+  return { item: reopened.value, outcome: INBOX_TAKE_BACK.TAKEN };
+});
+
+/**
  * Writes a member's message on the thread of one item of the account's
  * workspaces, open or settled, whichever member started its agent, and
  * answers with the item as it then stands. The message is written first,
@@ -749,7 +795,8 @@ const remindOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 
 /**
  * The inbox resource, to a signed-in caller: the three held reads, an
- * item answered or closed without an answer, a message on its thread, and the member's own read state,
+ * item answered or closed without an answer, the member's own nod or close
+ * taken back, a message on its thread, and the member's own read state,
  * which no other member's moves. Marking an item read is what opening it
  * does and writes nothing where it stands read already; marking it unread
  * holds until they read it again; each answers the item's id and its read
@@ -828,6 +875,10 @@ export function inboxProcedures(seams: InboxProcedureSeams) {
     close: signedIn.close.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
       const itemId = yield* pathUuid(input.params.id);
       return yield* closeAsMember(writer, context.userId, itemId, input.body);
+    }),
+    takeBack: signedIn.takeBack.use(writeReceiptMiddleware).effect(function* ({ input, context }) {
+      const itemId = yield* pathUuid(input.params.id);
+      return yield* takeBackAsMember(context.userId, itemId, input.body.clientKey);
     }),
     // Note that an item the account may not read is answered as one that does not exist, so a link by its id says nothing of it.
     home: signedIn.home.effect(function* ({ input, context }) {

@@ -14,14 +14,25 @@ import { messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, SLACK_THREAD_ORIGIN } from "@repo/database/storage-vocabulary";
 import { getTestDB, openedPullRequest, startTask } from "@repo/database/testing";
 import { AGENT_ARCHIVER, CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
-import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_REPLY } from "@repo/features/inbox-wire";
+import {
+  INBOX_ASK,
+  INBOX_ASK_STATUS,
+  INBOX_REPLY,
+  INBOX_TAKE_BACK,
+} from "@repo/features/inbox-wire";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import { MESSAGE_ROLE, TURN_ORIGIN, TURN_STATUS, type TurnStatus } from "@repo/wire";
 import { eq } from "drizzle-orm";
 import { Clock, Effect, Option, Result } from "effect";
 import { idleStandingAgents } from "../agents/coder-host/stop.js";
 import { recordingProductAnalytics, SERVER_EVENT } from "../events/server-events.js";
-import { answerInboxAsk, INBOX_ASK_ANSWER, postInboxThread } from "../inbox/inbox-store.js";
+import { takeBackAsMember } from "../inbox/inbox-procedures.js";
+import {
+  answerInboxAsk,
+  closeInboxItemAsMember,
+  INBOX_ASK_ANSWER,
+  postInboxThread,
+} from "../inbox/inbox-store.js";
 import { reopenTaskForWork, settleTaskAfterTurn, settleTaskIfFinished } from "./task-finish.js";
 
 /**
@@ -320,6 +331,38 @@ it.layer(getTestDB())("a task's work finishing", (it) => {
         assert.equal(Option.getOrThrow(answered).outcome, INBOX_ASK_ANSWER.TAKEN);
         yield* settleTaskIfFinished(userId, task.id);
         assert.equal(yield* statusOf(userId, task.id), TASK_STATUS.DONE);
+      }),
+  );
+
+  it.effect(
+    "a question a member's close let the task finish holds it again once the close is taken back, the task in progress",
+    () =>
+      Effect.gen(function* () {
+        const userId = yield* openUser;
+        const task = yield* startTask(userId, { name: "Teammate invitations" });
+        const agent = yield* openAgent(userId, task.id);
+        yield* turnOf(agent, TURN_STATUS.SETTLED);
+        yield* openedPullRequest(userId, agent.id, pullRequestIn(PULL_REQUEST_STATE.MERGED));
+        const posted = yield* postInboxThread(
+          { userId, taskId: task.id, agentId: agent.id },
+          {
+            key: "branch-protection",
+            title: "Require a review on main",
+            body: "Turn on a required review for main in the repository's settings.",
+            ask: { type: INBOX_ASK.DO, steps: [] },
+            needsReply: false,
+          },
+        );
+        assert.ok(Result.isSuccess(posted));
+        const closeKey = randomUUID();
+        const { id, revision } = posted.success;
+        assert.ok(Option.isSome(yield* closeInboxItemAsMember(userId, id, revision, closeKey)));
+        yield* settleTaskIfFinished(userId, task.id);
+        assert.equal(yield* statusOf(userId, task.id), TASK_STATUS.DONE);
+
+        const takenBack = yield* takeBackAsMember(userId, id, closeKey);
+        assert.equal(takenBack.outcome, INBOX_TAKE_BACK.TAKEN);
+        assert.equal(yield* statusOf(userId, task.id), TASK_STATUS.IN_PROGRESS);
       }),
   );
 

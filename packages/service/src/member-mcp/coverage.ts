@@ -295,6 +295,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
   inbox: {
     home: SCREEN_ONLY,
     answer: NOT_YET_BUILT,
+    takeBack: NOT_YET_BUILT,
   },
   integrations: {
     github: NEEDS_BROWSER,

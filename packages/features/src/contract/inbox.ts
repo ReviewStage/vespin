@@ -1,5 +1,5 @@
 /**
- * inbox.ts -- what an agent posted for the developer (`inbox-wire.ts`, `account-inbox-wire.ts`), read, answered, closed, messaged, and marked read, and a thread a member starts.
+ * inbox.ts -- what an agent posted for the developer (`inbox-wire.ts`, `account-inbox-wire.ts`), read, answered, closed, taken back, messaged, and marked read, and a thread a member starts.
  *
  * The three reads, a task's, an agent's, and the account's, are held by the
  * service while nothing changed since the reader's cursor, and travel as
@@ -34,6 +34,8 @@ import {
   inboxReadStateSchema,
   inboxRemindRequestSchema,
   inboxStartRequestSchema,
+  inboxTakeBackRequestSchema,
+  inboxTakenBackSchema,
 } from "../inbox-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
 import { HOSTED_API_ERROR } from "../service-wire.js";
@@ -66,6 +68,9 @@ const START_BODY_BYTES =
 /** A request to mark every item read names at most a workspace, so a few hundred bytes hold it. */
 const READ_ALL_BODY_BYTES = 1_024;
 
+/** A take-back names one key, so a few hundred bytes hold it. */
+const TAKE_BACK_BODY_BYTES = 1_024;
+
 /** A reminder is one instant or none, so a few hundred bytes hold it. */
 const REMIND_BODY_BYTES = 1_024;
 
@@ -85,7 +90,7 @@ const THREAD_REFUSALS = MESSAGE_REFUSALS;
 /** A message on a thread, or a new one. */
 const threadProcedure = declaredProcedure.errors(refuses(...THREAD_REFUSALS));
 
-/** An answer or a close, each taken once under its idempotency key, which refuses a key already written under (`writeReceiptMiddleware`). */
+/** An answer, a close, or the take-back of one, each taken once under its idempotency key, which refuses a key already written under (`writeReceiptMiddleware`). */
 const settleProcedure = declaredProcedure.errors(
   refuses(...THREAD_REFUSALS, HOSTED_API_ERROR.ALREADY_WRITTEN),
 );
@@ -107,6 +112,7 @@ const INBOX_PROCEDURE_PATH = {
   AGENT: "/api/agents/{id}/inbox",
   ITEM: "/api/inbox/{id}",
   ITEM_CLOSE: "/api/inbox/{id}/close",
+  ITEM_TAKE_BACK: "/api/inbox/{id}/take-back",
   ITEM_MESSAGES: "/api/inbox/{id}/messages",
   ITEM_READ: "/api/inbox/{id}/read",
   ITEM_REMIND: "/api/inbox/{id}/remind",
@@ -171,6 +177,17 @@ export const inboxContract = {
     )
     .input(exactBodyInput(pathIdSchema, inboxCloseRequestSchema))
     .output(EffectSchema.flip(inboxAnsweredSchema)),
+  takeBack: settleProcedure
+    .meta(bodyCap(TAKE_BACK_BODY_BYTES))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: INBOX_PROCEDURE_PATH.ITEM_TAKE_BACK,
+        inputStructure: "detailed",
+      }),
+    )
+    .input(exactBodyInput(pathIdSchema, inboxTakeBackRequestSchema))
+    .output(EffectSchema.flip(inboxTakenBackSchema)),
   message: threadProcedure
     .meta(bodyCap(MESSAGE_BODY_BYTES))
     .meta(

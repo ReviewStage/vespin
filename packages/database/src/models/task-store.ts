@@ -2181,6 +2181,37 @@ export function beginTaskWorkCommitted(
   return beginTask({ userId, taskId });
 }
 
+/** The task moved back to in progress where it stands done by its work's own finish, no one having moved it there by hand. */
+const reopenFinishedTask = SqlSchema.findOneOption({
+  Request: TaskKeySchema,
+  Result: TxidRowSchema,
+  execute: ({ userId, taskId }) =>
+    Database.use((db) =>
+      db
+        .update(task)
+        .set({ status: TASK_STATUS.IN_PROGRESS, completedAt: null })
+        .where(
+          and(
+            reachableTask(userId, taskId),
+            eq(task.status, TASK_STATUS.DONE),
+            isNull(task.doneBy),
+          ),
+        )
+        .returning({ txid: CURRENT_TXID }),
+    ),
+});
+
+/**
+ * Moves a task back to in progress where its work's own finish moved it to
+ * done (`finishTaskWork`), as a question it waited on opening again undoes
+ * that finish, and answers whether it moved. A task a member or an agent
+ * moved to Done by hand, one in any other status, and one the account does
+ * not reach stand as they were, since the move was theirs to make.
+ */
+export function reopenFinishedTaskWork(userId: string, taskId: string): TaskStoreEffect<boolean> {
+  return Effect.map(reopenFinishedTask({ userId, taskId }), Option.isSome);
+}
+
 /** The statuses a task's work is settled in, which a finish leaves as they are and a start or a turn reopens. */
 const SETTLED: readonly TaskStatus[] = [TASK_STATUS.DONE, TASK_STATUS.CANCELED];
 

@@ -7,6 +7,7 @@ import {
   finishTaskWork,
   isStartTask,
   readTaskWorkspace,
+  reopenFinishedTaskWork,
 } from "@repo/database/models/task-store";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import { failureKind } from "@repo/runtime/effect";
@@ -64,6 +65,12 @@ import {
  * move (`settleTaskAfterTurn`). Each agent archived here is let go of on its
  * device, its folder removed (`device-discard.ts`), as the agent tools'
  * archive lets one go; its sandbox already stopped as its turn ended.
+ *
+ * A question opening again on a task its finish moved to done, as a member
+ * takes back the close that settled it (`inbox-procedures.ts`'s
+ * `takeBackAsMember`), moves the task back to in progress, since the
+ * question holds it; one a member or an agent moved to Done by hand stands,
+ * the move being theirs (`reopenFinishedTaskWork`).
  *
  * The other way, a task done or canceled moves back to in progress when an
  * agent is started on it (`coder-host/start.ts`) and when a coding agent's
@@ -163,6 +170,21 @@ export function settleAgentTaskIfFinished(
     Effect.flatMap(readAgent(userId, agentId), (agent) =>
       Option.isSome(agent) && agent.value.taskId !== null
         ? finishCounted(userId, agent.value.taskId)
+        : Effect.void,
+    ),
+  );
+}
+
+/** The agent's task moved back to in progress where its finish moved it to done, as a question of the agent's opening again asks; nothing for an agent on no task, or one the account does not reach. */
+export function reopenAgentTaskFinished(
+  userId: string,
+  agentId: string,
+): Effect.Effect<void, never, DatabaseServices> {
+  return logged(
+    "a finished task's reopening",
+    Effect.flatMap(readAgent(userId, agentId), (agent) =>
+      Option.isSome(agent) && agent.value.taskId !== null
+        ? reopenFinishedTaskWork(userId, agent.value.taskId)
         : Effect.void,
     ),
   );

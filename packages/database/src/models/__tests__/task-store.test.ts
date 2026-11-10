@@ -46,6 +46,7 @@ import {
   readTaskDescription,
   readTaskHeader,
   readTaskWorkspace,
+  reopenFinishedTaskWork,
   saveDescriptionText,
   setTaskParent,
   TaskAssigneeNotMember,
@@ -1066,6 +1067,32 @@ it.layer(getTestDB())("a task's work finishing", (it) => {
         assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), false);
         assert.equal(yield* beginTaskWork(dean, taskId), true);
         assert.equal((yield* listedTask(dean, taskId)).completedAt, undefined);
+      }),
+  );
+
+  it.effect(
+    "a task its finish moved to done goes back to in progress once reopened, once; one moved to Done by hand, and one the account does not reach, stand",
+    () =>
+      Effect.gen(function* () {
+        const { dean, taskId, workspace } = yield* openSharedTask;
+        const outsider = yield* openAccount;
+        const agent = yield* openTaskAgent(dean, workspace, taskId);
+        yield* openedPullRequest(dean, agent, pullRequestIn(PULL_REQUEST_STATE.MERGED));
+        assert.equal(yield* finishTaskWork(dean, taskId, everyoneIdle), true);
+
+        assert.equal(yield* reopenFinishedTaskWork(outsider, taskId), false);
+        assert.equal(yield* reopenFinishedTaskWork(dean, taskId), true);
+        assert.equal(yield* reopenFinishedTaskWork(dean, taskId), false);
+        assert.equal((yield* standingOf(dean, taskId)).status, TASK_STATUS.IN_PROGRESS);
+        assert.equal((yield* listedTask(dean, taskId)).completedAt, undefined);
+
+        const asDean = { by: AGENT_ARCHIVER.MEMBER, userId: dean } as const;
+        yield* updateTask(dean, taskId, { status: TASK_STATUS.DONE }, undefined, {
+          archivedBy: asDean,
+          idle: idleBut(""),
+        });
+        assert.equal(yield* reopenFinishedTaskWork(dean, taskId), false);
+        assert.equal((yield* standingOf(dean, taskId)).status, TASK_STATUS.DONE);
       }),
   );
 
