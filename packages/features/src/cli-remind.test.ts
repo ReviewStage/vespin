@@ -13,6 +13,10 @@ describe("cliRemindAt", () => {
     expect(cliRemindAt("2026-11-12T15:30-05:00", NOW, ZONE)).toEqual({
       at: Date.parse("2026-11-12T15:30-05:00"),
     });
+    // The second 1:30 AM of the night the clocks fall back stays the second.
+    expect(cliRemindAt("2027-11-07T01:30-08:00", NOW, ZONE)).toEqual({
+      at: Date.parse("2027-11-07T01:30-08:00"),
+    });
   });
 
   it("refuses a range, a moment already past, and words naming no date", () => {
