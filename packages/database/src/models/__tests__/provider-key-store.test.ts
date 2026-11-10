@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import {
+  PLAN_USAGE_WINDOW,
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
   PROVIDER_KEY_STATUS,
@@ -19,6 +20,7 @@ import {
   resealProviderKey,
   saveProviderKey,
   setPlanStatus,
+  setPlanUsage,
   setProviderKeyForAgents,
   setProviderKeyStatus,
   setSubscriptionLabel,
@@ -366,6 +368,46 @@ it.layer(getTestDB())("the provider key store", (it) => {
           [PROVIDER_KEY_STATUS.INVALID, null],
           [PROVIDER_KEY_STATUS.UNREADABLE, null],
         ]);
+      }),
+  );
+
+  it.effect(
+    "a plan's weekly reading stands until a newer one is heard; one heard earlier but landing later is passed over",
+    () =>
+      Effect.gen(function* () {
+        const { owner } = yield* openAccounts;
+        const { OPENAI } = PROVIDER_KEY_PROVIDER;
+        const { CHATGPT_OAUTH } = PROVIDER_KEY_KIND;
+        yield* saveProviderKey(
+          owner,
+          OPENAI,
+          CHATGPT_OAUTH,
+          sealed("plan"),
+          "…a",
+          null,
+          new Date(1),
+        );
+        const weekly = (usedPercent: number, readAt: number) =>
+          setPlanUsage(
+            owner,
+            OPENAI,
+            CHATGPT_OAUTH,
+            { window: PLAN_USAGE_WINDOW.WEEKLY, usedPercent, resetsAt: new Date(1_000) },
+            new Date(2),
+            new Date(readAt),
+          );
+        const reading = Effect.map(listProviderKeyRows(owner, CHATGPT_OAUTH), (rows) =>
+          rows.map((row) => [row.weeklyUsagePercent, row.weeklyUsageReadAt?.getTime()]),
+        );
+
+        yield* weekly(40, 20);
+        yield* weekly(30, 10);
+        const afterStale = yield* reading;
+        yield* weekly(45, 20);
+        const sameInstant = yield* reading;
+
+        assert.deepEqual(afterStale, [[40, 20]]);
+        assert.deepEqual(sameInstant, [[45, 20]]);
       }),
   );
 

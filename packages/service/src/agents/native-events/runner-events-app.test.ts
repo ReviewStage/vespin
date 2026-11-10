@@ -2427,7 +2427,7 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
           ]),
         );
 
-        // A weekly reading the next turn hears lands beside the five hours, not over them.
+        // A weekly reading the next turn hears lands beside the five hours, not over them, and a model's own week over neither.
         const weekResetsAt = Date.UTC(2026, 9, 25, 9);
         const third = ran(agent.lineIds[2] ?? "");
         yield* launch([
@@ -2439,6 +2439,18 @@ it.layer(SUITE)("the runner events route, on Codex", (it) => {
               rateLimitType: "seven_day",
               resetsAt: weekResetsAt / 1000,
               utilization: 0.25,
+            },
+            uuid: randomUUID(),
+            ...top,
+          },
+          // A model's own weekly limit is no reading of the plan's week, so it lands over neither.
+          {
+            type: "rate_limit_event",
+            rate_limit_info: {
+              status: "allowed",
+              rateLimitType: "seven_day_opus",
+              resetsAt: Date.UTC(2026, 9, 27) / 1000,
+              utilization: 0.75,
             },
             uuid: randomUUID(),
             ...top,

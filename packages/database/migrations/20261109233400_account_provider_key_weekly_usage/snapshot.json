@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "fab6df49-6b1e-4ee4-b0ae-ba45865aaed3",
-  "prevIds": ["42516e30-61f1-4409-a53e-c753f9ef74ef", "f8ff0f5d-8d42-41d2-8171-63d8ec97566f"],
+  "id": "8571480c-459c-48de-a63a-cc4047ba88cd",
+  "prevIds": ["93b8385e-2a68-4462-80d1-f4a093086774"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -12250,34 +12250,6 @@
       "entityType": "columns",
       "schema": "public",
       "table": "write_receipt"
-    },
-    {
-      "nameExplicit": true,
-      "columns": [
-        {
-          "value": "user_id",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        },
-        {
-          "value": "provider",
-          "isExpression": false,
-          "asc": true,
-          "nullsFirst": false,
-          "opclass": null
-        }
-      ],
-      "isUnique": true,
-      "where": "\"kind\" = 'api_key'",
-      "with": "",
-      "method": "btree",
-      "concurrently": false,
-      "name": "account_provider_key_api_key",
-      "entityType": "indexes",
-      "schema": "public",
-      "table": "account_provider_key"
     },
     {
       "nameExplicit": true,

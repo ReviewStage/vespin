@@ -10,7 +10,7 @@ import {
   type ProviderKeyProvider,
   type ProviderKeyStatus,
 } from "@repo/features/provider-key-wire";
-import { and, asc, eq, inArray, lte, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, lte, ne, or } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type DatabaseShape } from "../core/query.js";
@@ -455,7 +455,12 @@ const updatePlanUsage = SqlSchema.void({
     ),
 });
 
-/** A plan's weekly usage as a turn on it last heard it, and when, on the same terms as `updatePlanUsage`. */
+/**
+ * A plan's weekly usage as a turn on it last heard it, and when, on the same
+ * terms as `updatePlanUsage`, over no reading heard after it: two agents on
+ * one plan land their batches in either order, so one heard earlier but
+ * landing later is passed over, which a pace read from it would misread.
+ */
 const updateWeeklyPlanUsage = SqlSchema.void({
   Request: Schema.Struct({
     ...TargetSchema.fields,
@@ -473,7 +478,16 @@ const updateWeeklyPlanUsage = SqlSchema.void({
           weeklyUsageResetsAt: write.weeklyUsageResetsAt,
           weeklyUsageReadAt: write.weeklyUsageReadAt,
         })
-        .where(and(targetRow(db, write), lte(accountProviderKey.createdAt, write.savedBy))),
+        .where(
+          and(
+            targetRow(db, write),
+            lte(accountProviderKey.createdAt, write.savedBy),
+            or(
+              isNull(accountProviderKey.weeklyUsageReadAt),
+              lte(accountProviderKey.weeklyUsageReadAt, write.weeklyUsageReadAt),
+            ),
+          ),
+        ),
     ),
 });
 
