@@ -65,7 +65,7 @@ import {
   useThisMac,
 } from "../machine-name.js";
 import { DeviceGlyph } from "../tasks/runs-on.js";
-import { showToast, TOAST_HOLD } from "../toast.js";
+import { showToast } from "../toast.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { HostConnectDialog, useHostConnect } from "./host-connect-dialog.js";
 import { ReadFailed } from "./marks.js";
@@ -516,7 +516,6 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
           words: THIS_MAC_WORDS.TURN_ON_FAILED,
           replayUnmasked: true,
           tone: STATUS_TONE.DANGER,
-          hold: TOAST_HOLD.FAILED,
           failure: { surface: FAILURE_SURFACE.THIS_MAC_SET, cause: answer },
         });
       });

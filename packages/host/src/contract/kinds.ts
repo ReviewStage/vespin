@@ -105,6 +105,15 @@ export const ACCOUNT_ASK_ACT_KIND = {
   PUSH_DEVICE_UNREGISTER: "pushDevice.unregister",
   PUSH_DEVICE_STATUS: "pushDevice.status",
   PUSH_DEVICE_NOTIFY: "pushDevice.notify",
+  /**
+   * The tokens of the phone's Live Activity of its member's running agents,
+   * as ActivityKit hands them to the app, and the activity's end on the
+   * phone: each passes through to the service beside the phone's APNs token
+   * and gateway, and is kept nowhere on the way.
+   */
+  LIVE_ACTIVITY_START_TOKEN: "liveActivity.startToken",
+  LIVE_ACTIVITY_TOKEN: "liveActivity.token",
+  LIVE_ACTIVITY_ENDED: "liveActivity.ended",
 } as const;
 
 /** The Automations pages' asks: the account's automations made, changed, deleted, and run now, and a workspace's automations, its runs, or one's runs held and read again. */
@@ -888,6 +897,9 @@ export const PORT_ACT_USE = {
   PUSH_DEVICE_UNREGISTER: ACT_USE.WRITE,
   PUSH_DEVICE_STATUS: ACT_USE.FETCH,
   PUSH_DEVICE_NOTIFY: ACT_USE.WRITE,
+  LIVE_ACTIVITY_START_TOKEN: ACT_USE.WRITE,
+  LIVE_ACTIVITY_TOKEN: ACT_USE.WRITE,
+  LIVE_ACTIVITY_ENDED: ACT_USE.WRITE,
 
   AGENTS_MODELS_FOLLOW: ACT_USE.READ,
   AGENTS_MODELS_RETRY: ACT_USE.READ,

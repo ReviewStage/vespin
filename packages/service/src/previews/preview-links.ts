@@ -2,9 +2,16 @@
  * preview-links.ts -- a shared port's members-only link: the preview host each agent's port is served on, under the page sandbox's own domain, and the signed tokens that admit a signed-in member to it.
  *
  * A port an agent shares is never handed out at its sandbox's own public
- * route. Its link is a host of its own under the page sandbox's domain
- * (`<agent id without dashes>.vespin.page`), a site apart from the app's, so
- * nothing the agent's app runs reaches the app's cookies. That host answers
+ * route. Its link is a host of its own under the page sandbox's domain, named
+ * by the agent's task as a link to it names it and the head of the agent's
+ * own id (`<workspace slug>-<task number>-<6 hex>.vespin.page`), a site apart
+ * from the app's, so nothing the agent's app runs reaches the app's cookies.
+ * The host names the agent only to a member who reaches its task
+ * (`task-number-store.ts`'s `agentIdOfTaskNumber`), so it is read again for
+ * the member each token admits. Where that name would not fit in one DNS
+ * label, as a long slug's would not, the host is the agent's id without its
+ * dashes instead, which every link shared before the task's name was used
+ * also is. That host answers
  * only a member who holds its cookie, and a member gets one by signing in on
  * the app: the app checks the member reaches the agent, mints a handoff
  * token a minute long, and sends the browser to the preview host, which
@@ -31,7 +38,7 @@ export const PREVIEW_LINK = {
   SESSION_PATH: "/__vespin/session",
   /** The preview host's own path the waking page asks whether the preview is ready. */
   STATUS_PATH: "/__vespin/status",
-  QUERY: { AGENT: "agent", RETURN: "return", TOKEN: "token" },
+  QUERY: { PREVIEW: "preview", RETURN: "return", TOKEN: "token" },
   /** The preview host's session cookie, held to that host alone by its prefix. */
   COOKIE: "__Host-vespin-preview",
 } as const;
@@ -50,8 +57,30 @@ export const PREVIEW_TOKEN_LIFETIME = {
   SESSION: Duration.hours(8),
 } as const;
 
-/** A preview host's label: an agent's id, its dashes dropped. */
-const PREVIEW_LABEL = /^[0-9a-f]{32}$/u;
+/** How many of an agent's id's hex digits its preview host ends with, enough to tell apart the agents on one task. */
+const AGENT_HEAD_DIGITS = 6;
+
+/** The most characters one DNS label holds. */
+const MAX_LABEL_CHARS = 63;
+
+/** A preview host's label by its task: a workspace's slug, its task's number, and the head of the agent's id. */
+const TASK_LABEL = /^([a-z0-9]+(?:-[a-z0-9]+)*)-([1-9][0-9]*)-([0-9a-f]{6})$/u;
+
+/** A preview host's label by its agent alone: the agent's id, its dashes dropped. */
+const AGENT_LABEL = /^[0-9a-f]{32}$/u;
+
+/** How a preview host names its agent. */
+export const PREVIEW_NAME_KIND = { TASK: "task", AGENT: "agent" } as const;
+
+/** What a preview host names: the agent's task, by its workspace's slug and its number, and the head of the agent's id; or, where that is too long for a label, the agent's id. */
+export type PreviewName =
+  | {
+      readonly kind: typeof PREVIEW_NAME_KIND.TASK;
+      readonly slug: string;
+      readonly number: number;
+      readonly agentHead: string;
+    }
+  | { readonly kind: typeof PREVIEW_NAME_KIND.AGENT; readonly agentId: string };
 
 /** Who a token admits, to which agent's preview. */
 export interface PreviewMember {
@@ -75,20 +104,54 @@ function sameText(offered: string, held: string): boolean {
   return left.length === right.length && timingSafeEqual(left, right);
 }
 
-/** The preview host an agent's shared port is served on. */
-export function previewOrigin(sandbox: PageSandbox, agentId: string): string {
-  const { protocol, host } = new URL(sandbox.origin);
-  return `${protocol}//${agentId.replaceAll("-", "").toLowerCase()}.${host}`;
+/** A preview host's label for its name. */
+export function previewLabel(name: PreviewName): string {
+  return name.kind === PREVIEW_NAME_KIND.TASK
+    ? `${name.slug}-${name.number}-${name.agentHead}`.toLowerCase()
+    : name.agentId.replaceAll("-", "").toLowerCase();
 }
 
-/** The agent a preview host is for, or none for any host that is not one. */
-export function agentOfPreviewHost(sandbox: PageSandbox, host: string): string | undefined {
+/** The name of an agent's preview: by its task's workspace slug and number where that fits in a label, by the agent's id otherwise. */
+export function previewNameOf(slug: string, number: number, agentId: string): PreviewName {
+  const byTask: PreviewName = {
+    kind: PREVIEW_NAME_KIND.TASK,
+    slug,
+    number,
+    agentHead: agentId.slice(0, AGENT_HEAD_DIGITS),
+  };
+  const fits = previewLabel(byTask).length <= MAX_LABEL_CHARS;
+  return fits ? byTask : { kind: PREVIEW_NAME_KIND.AGENT, agentId };
+}
+
+/** The name a preview host's label spells, or none for a label that spells none. */
+export function previewNameOfLabel(label: string): PreviewName | undefined {
+  const bare = label.toLowerCase();
+  if (AGENT_LABEL.test(bare)) {
+    const agentId = [8, 12, 16, 20].reduceRight(
+      (id, at) => `${id.slice(0, at)}-${id.slice(at)}`,
+      bare,
+    );
+    return { kind: PREVIEW_NAME_KIND.AGENT, agentId };
+  }
+  const match = bare.length <= MAX_LABEL_CHARS ? TASK_LABEL.exec(bare) : null;
+  if (match === null) return undefined;
+  const [, slug, number, agentHead] = match;
+  if (slug === undefined || number === undefined || agentHead === undefined) return undefined;
+  return { kind: PREVIEW_NAME_KIND.TASK, slug, number: Number(number), agentHead };
+}
+
+/** The preview host an agent's shared port is served on. */
+export function previewOrigin(sandbox: PageSandbox, name: PreviewName): string {
+  const { protocol, host } = new URL(sandbox.origin);
+  return `${protocol}//${previewLabel(name)}.${host}`;
+}
+
+/** The preview a host names, or none for any host that is not a preview host. */
+export function previewNameOfHost(sandbox: PageSandbox, host: string): PreviewName | undefined {
   const suffix = `.${new URL(sandbox.origin).host}`;
   const bare = host.replace(/\.$/u, "").toLowerCase();
   if (!bare.endsWith(suffix)) return undefined;
-  const label = bare.slice(0, -suffix.length);
-  if (!PREVIEW_LABEL.test(label)) return undefined;
-  return [8, 12, 16, 20].reduceRight((id, at) => `${id.slice(0, at)}-${id.slice(at)}`, label);
+  return previewNameOfLabel(bare.slice(0, -suffix.length));
 }
 
 /** A token admitting the member to the agent's preview, for its purpose's lifetime from `now`. */

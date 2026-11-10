@@ -273,6 +273,35 @@ export const SETTLED_STATUS = {
 
 export type SettledStatus = (typeof SETTLED_STATUS)[keyof typeof SETTLED_STATUS];
 
+/** What a question that stops running agents says: its title, what the stop takes, and its act's word. */
+export interface StopAgentsWords {
+  readonly title: string;
+  readonly body: string;
+  readonly verb: string;
+}
+
+/** What every question that stops running agents says beneath its title, and its act's word, whatever was pressed. */
+const STOP_AGENTS = {
+  body: "Agents are still running. This will stop them and any work they're in the middle of doing.",
+  verb: "Stop agents",
+} as const;
+
+/** What a settle's question is titled, by the status it settles at. */
+const SETTLE_STOP_TITLES = {
+  [SETTLED_STATUS.DONE]: "Mark as Done?",
+  [SETTLED_STATUS.CANCELED]: "Mark as Canceled?",
+} as const satisfies Record<SettledStatus, string>;
+
+/** What setting a task, or several, at Done or Canceled asks while their agents are running. */
+export function settleStopWords(status: SettledStatus): StopAgentsWords {
+  return { title: SETTLE_STOP_TITLES[status], ...STOP_AGENTS };
+}
+
+/** What archiving a running agent asks, or several at once. */
+export function archiveStopWords(several: boolean): StopAgentsWords {
+  return { title: several ? "Archive agents?" : "Archive agent?", ...STOP_AGENTS };
+}
+
 /** One task's status as a press asks for it, or as its Undo puts it back. */
 export interface StatusChange {
   readonly taskId: string;

@@ -17,7 +17,7 @@ import { useEffect, useRef, useState } from "react";
 import type { AgentActAnswer } from "../act.js";
 import { DRAFT_PLACE, type Draft, EMPTY_DRAFT, useDraft } from "../composer-drafts.js";
 import { useSendQueue } from "../send-queue.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import {
   closesComposer,
   heldSentLines,
@@ -476,7 +476,7 @@ export function useAgentComposer(input: {
       tone: STATUS_TONE.DANGER,
       failure: { surface: FAILURE_SURFACE.AGENT_SEND, cause: answer, about: { agentId } },
       ...(onOpen === undefined
-        ? { hold: TOAST_HOLD.FAILED }
+        ? {}
         : { action: { label: OPEN_WORD, onPress: onOpen, replayUnmasked: true } }),
     });
   };

@@ -34,7 +34,7 @@ import {
   type TranscriptUnread,
   transcriptMarkdown,
 } from "../tasks/transcript-copy.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { actingCommand, type MenuAction, type MenuEnds, type MenuEntry } from "./action-menu.js";
 import { type AgentMenuDoors, agentMenuGroups } from "./agent-actions.js";
 import { MenuTab } from "./tab-strip.js";
@@ -616,7 +616,6 @@ export function useTranscriptCopier(): TranscriptCopier {
     toast({
       words: TRANSCRIPT_UNREAD_NOTE,
       tone: STATUS_TONE.DANGER,
-      hold: TOAST_HOLD.FAILED,
       failure: { surface: FAILURE_SURFACE.TRANSCRIPT_COPY, cause },
       replayUnmasked: true,
     });

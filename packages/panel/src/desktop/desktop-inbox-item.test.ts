@@ -52,9 +52,10 @@ import {
   fakeActs,
   fakeActsAnswer,
 } from "../testing/app-bridge.js";
-import { handState, readExperiments } from "../testing/app-state.js";
+import { handState, readExperiments, writeListedTasks } from "../testing/app-state.js";
 import {
   composerEditor,
+  composerWords,
   editorBundleLanded,
   pasteInComposer,
   pressInComposer,
@@ -473,6 +474,14 @@ test("a page's link alone on its line, naming its task by the task's number, is 
         ?.getAttribute("src"),
       pageFrameUrl({ taskId: BILLING.id, pageId: FUNNEL.id, version: FUNNEL.version }),
     ),
+  );
+  // A task listed anew, as a teammate's or an agent's lands in the window, leaves the page loaded rather than drawing it again.
+  const frame = page.querySelector(`[data-inbox-message-text] iframe[title="${FUNNEL.title}"]`);
+  act(() => writeListedTasks({ tasks: [numbered, { ...INVITES, number: 183 }] }));
+  await settle();
+  assert.ok(
+    page.querySelector(`[data-inbox-message-text] iframe[title="${FUNNEL.title}"]`) === frame,
+    "the page's frame is the one first drawn",
   );
 });
 
@@ -1092,7 +1101,7 @@ test("an item's unsent words outlast a reload of the window, its row marked whil
   assert.equal(composerEditor(itemPane(page)).textContent, "Use 90% instead");
 });
 
-test("files picked or dropped in an item's box are drawn as chips and go with its reply, standing for the developer's own words where they wrote none", async () => {
+test("files picked or dropped in an item's box are drawn as chips in its words and go with its reply", async () => {
   const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const sent = heldMessages(writtenOn(THRESHOLD, "c1b2c3d4-0000-4000-8000-000000000094"));
@@ -1110,7 +1119,7 @@ test("files picked or dropped in an item's box are drawn as chips and go with it
     sent.map(({ text, answers, attachments }) => ({ text, answers, attachments })),
     [
       {
-        text: "",
+        text: "[File: alerts.yml] [File: spec.pdf]",
         answers: undefined,
         attachments: [
           { name: "alerts.yml", mediaType: "text/plain", data: btoa("threshold: 0.9\n") },
@@ -1637,7 +1646,7 @@ test("words selected in an open item's question quote into its box, its reply ca
   act(() => again.click());
   await settle();
   assert.equal(
-    pane.querySelector(".composer-quote-words")?.textContent,
+    pane.querySelector(".composer-editor blockquote")?.textContent,
     "Usage alerts fire at 80% of the plan's quota.",
     "the quote lands in the box behind the reply on its way",
   );
@@ -1825,7 +1834,7 @@ test("an Unarchive that lands after another send was refused lets only the archi
   assert.equal(note(), newer, "the newer refusal stands once the agent is back");
 });
 
-test("files alone make a message: sent from a settled item's box with no words, and drawn on the thread as the files alone", async () => {
+test("a file alone makes a message: sent from a settled item's box as its chip in the words, and drawn on the thread as that chip", async () => {
   const { page } = mount();
   await settle();
   act(() => rowNamed(page, "How is a failed email retried?").click());
@@ -1844,7 +1853,7 @@ test("files alone make a message: sent from a settled item's box with no words, 
     sent.map(({ text, attachments }) => ({ text, attachments })),
     [
       {
-        text: "",
+        text: "[File: trace.txt]",
         attachments: [{ name: "trace.txt", mediaType: "text/plain", data: btoa("boom\n") }],
       },
     ],
@@ -1853,7 +1862,8 @@ test("files alone make a message: sent from a settled item's box with no words, 
     pane.querySelector('[data-message-id="c1b2c3d4-0000-4000-8000-000000000020"]') ??
     assert.fail("the message is drawn");
   assert.deepEqual(attachedNames(message), ["trace.txt"]);
-  assert.equal(message.querySelector("[data-inbox-message-text]"), null, "no empty words");
+  const words = message.querySelector("[data-inbox-message-text]")?.textContent ?? "";
+  assert.equal(words.includes("[File:"), false, "the marker is drawn as its chip");
 });
 
 test("a thread read cut to its latest messages says the earlier ones are in the agent's tab, the agent's name opening that tab on its task", async () => {
@@ -1898,7 +1908,7 @@ test("what an item's box holds unsent, its words and its files, outlasts every m
   assert.equal(readTitle(page), "Alert at 80%?");
   typeInComposer(itemPane(page), "Use 90%");
   await handFiles(page, [new File(["threshold: 0.9\n"], "alerts.yml", { type: "" })], "pick");
-  const box = () => [composerEditor(itemPane(page)).textContent, attachedNames(itemPane(page))];
+  const box = () => [composerWords(itemPane(page)), attachedNames(itemPane(page))];
 
   const answered: InboxItem = {
     ...answeredBy(THRESHOLD, TEAMMATE, "Retry once", "", 3_500),
@@ -1909,7 +1919,11 @@ test("what an item's box holds unsent, its words and its files, outlasts every m
   await vi.waitFor(() =>
     assert.equal(composerEditor(itemPane(page)).getAttribute("aria-label"), "Reply"),
   );
-  assert.deepEqual(box(), ["Use 90%", ["alerts.yml"]], "a teammate's answer takes nothing");
+  assert.deepEqual(
+    box(),
+    ["Use 90% [File: alerts.yml] ", ["alerts.yml"]],
+    "a teammate's answer takes nothing",
+  );
 
   const asked: InboxItem = {
     ...answered,
@@ -1920,7 +1934,11 @@ test("what an item's box holds unsent, its words and its files, outlasts every m
   };
   act(() => deliver([asked, RETRY], "3"));
   await settle();
-  assert.deepEqual(box(), ["Use 90%", ["alerts.yml"]], "nor does the agent asking again");
+  assert.deepEqual(
+    box(),
+    ["Use 90% [File: alerts.yml] ", ["alerts.yml"]],
+    "nor does the agent asking again",
+  );
 });
 
 /** How tall the room is that a thread's board shows, as the tests below lay it out. */
@@ -2061,9 +2079,7 @@ function selectWithin(within: Element, words: string, from: string, to: string):
 /** The quotes the item's box holds, in order. */
 function boxQuotes(pane: HTMLElement): (string | null)[] {
   const box = pane.querySelector(".inbox-answer") ?? assert.fail("the box is drawn");
-  return [...box.querySelectorAll(".composer-editor .composer-quote-words")].map(
-    (quote) => quote.textContent,
-  );
+  return [...box.querySelectorAll(".composer-editor blockquote")].map((quote) => quote.textContent);
 }
 
 test("words selected in what an open ask offers, an option's words, quote into its box as the agent's message's do", async () => {
@@ -2497,8 +2513,8 @@ test("a reply leaves its box the moment it is sent, the box and the ask standing
     "the ask still takes a pick",
   );
 
-  await handFiles(page, [new File(["# Notes"], "notes.md")], "pick");
   typeInComposer(pane, "And for guests?");
+  await handFiles(page, [new File(["# Notes"], "notes.md")], "pick");
   pressInComposer(pane, "Enter");
   await settle();
   assert.deepEqual(
@@ -2527,7 +2543,7 @@ test("a reply leaves its box the moment it is sent, the box and the ask standing
   await settle();
   assert.deepEqual(
     texts(),
-    ["Does it matter for SSO teams?", "And for guests?"],
+    ["Does it matter for SSO teams?", "And for guests? [File: notes.md]"],
     "the second goes once the first answered",
   );
   assert.notEqual(sent[0]?.clientKey, sent[1]?.clientKey, "each under a key of its own");
@@ -2540,14 +2556,14 @@ test("a reply leaves its box the moment it is sent, the box and the ask standing
 
   assert.deepEqual(
     texts(),
-    ["Does it matter for SSO teams?", "And for guests?"],
+    ["Does it matter for SSO teams?", "And for guests? [File: notes.md]"],
     "the reply behind the one refused never goes",
   );
   assert.deepEqual(sendingMarks(page), [], "both leave the thread");
   assert.equal(
-    composerEditor(pane).textContent,
-    "And for guests?Never mind.",
-    "their words come back into the box, in order, a line each read without its break",
+    composerWords(pane),
+    "And for guests? [File: notes.md] \nNever mind.",
+    "their words come back into the box, in order, a line each",
   );
   assert.deepEqual(attachedNames(pane), ["notes.md"]);
   assert.equal(

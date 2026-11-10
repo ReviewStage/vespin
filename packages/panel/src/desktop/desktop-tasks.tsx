@@ -767,7 +767,9 @@ function DescriptionDocument({
   // task's own value, which is the one that stands.
   const standingDoor = useStandingDoor(tasks);
   const setStanding = useSteadyDoor(
-    opened === undefined ? undefined : (standing: TaskStanding) => standingDoor(opened, standing),
+    opened === undefined
+      ? undefined
+      : (standing: TaskStanding) => standingDoor.set(opened, standing),
   );
   const openedId = opened?.id;
   const openedRepository = opened?.repository ?? null;
@@ -1525,6 +1527,7 @@ function DescriptionDocument({
                       </Activity>
                     ) : null}
                     {stranded.dialog}
+                    {standingDoor.dialog}
                   </TaskPage>
                 </OpenAddressesHere>
               </TaskMentions>

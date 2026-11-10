@@ -18,6 +18,7 @@ import { fakeActPort, fakeAppBridge } from "./testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { holdIntegrations, type IntegrationsHeld } from "./testing/app-state.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
+import { STANDING_TOAST, standingToastWords } from "./testing/toast.js";
 import { ToastHost } from "./toast.js";
 
 /**
@@ -101,15 +102,13 @@ async function mount(): Promise<void> {
 
 /** What each toast standing says, oldest first, leaving out those on their way out. */
 function said(): string[] {
-  return [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-    (words) => words.textContent ?? "",
-  );
+  return standingToastWords();
 }
 
 /** Presses `label` on the standing toast that says `words`. */
 async function press(words: string, label: string): Promise<void> {
   const offered = () => {
-    const card = [...document.querySelectorAll(".ui-toast:not([data-leaving])")].find(
+    const card = [...document.querySelectorAll(STANDING_TOAST)].find(
       (each) => each.querySelector(".ui-toast-words")?.textContent === words,
     );
     return [...(card?.querySelectorAll("button") ?? [])].find((each) => each.textContent === label);

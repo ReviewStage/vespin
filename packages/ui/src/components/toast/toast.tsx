@@ -1,16 +1,15 @@
+import { Toast as BaseToast, type ToastObject } from "@base-ui/react/toast";
 import { Duration } from "effect";
-import { type KeyboardEvent, type ReactNode, useRef, useState } from "react";
-import { cssCustomProperties } from "../../css.js";
+import type { ReactNode } from "react";
 import { AlertIcon, CircleCheckIcon, InboxIcon } from "../../icons/lucide-glyphs.js";
 import { type MarkProvider, PROVIDER_MARK_SIZE, ProviderMark } from "../../marks/provider-mark.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";
 import { SpinnerRing } from "../spinner/spinner.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
-import { useToastSwipe } from "./toast-swipe.js";
 
 /**
- * toast.tsx -- one passing notice: a glyph for what it reports, its words, an optional second line under them, and at most one action, beside a failure's copy, at its end.
+ * toast.tsx -- one passing notice, drawn on Base UI's toast: a glyph for what it reports, its words, an optional second line under them, and at most one action, beside a failure's copy, at its end.
  *
  * A toast is a card of its words, each cut at two lines, led by the glyph its
  * tone picks: a check for what was done, an alert for what was refused, the
@@ -20,28 +19,21 @@ import { useToastSwipe } from "./toast-swipe.js";
  * a provider's `mark`, in the brand's own ink rather than the tone's, where
  * what it says is about one of the account's connections.
  * A working toast turns into what came of the work in place, its tone,
- * words, and actions changed on the same card: the glyph it led with fades
- * out under the one it now leads with, which grows in on the spring, and its
- * words fade in anew. One with no action is never pointed at, so
- * clicks pass through it; one with an action or a copy (`ToastActions`, passed as
- * `actions`) takes the pointer, pauses its hold while the pointer is over it
- * or focus is in it, each of which it keeps apart so that one ending while
- * the other stands lets nothing run, and is dismissed by Escape while focus
- * is in it, or swiped sideways (`useToastSwipe`). One whose hold runs down by
- * itself is handed that hold as `countdown`, and drains a thin bar along its
- * foot over it, paused while it is held. It arrives on the pair every
- * arriving element rides and leaves
- * first, over `--ui-duration-exit`, once `leaving` says so; whoever owns
- * its life holds it mounted through that.
+ * words, and actions changed on the same card.
  *
- * What it says aloud is the stack's (`ToastStack`), so the words here are
- * plain text. The toast takes no class or style; where it stands is the
- * stack's.
+ * Its life is Base UI's (`Toast.Root` over the stack's manager,
+ * `ToastStack`): its hold, its pause while the pointer is over the stack or
+ * focus is in it, Escape and a sideways swipe to send it away, its arrival,
+ * departure, and place in the stack, and its words said aloud through the
+ * viewport's live regions, a refusal urgently, its words naming it and its
+ * second line describing it. One with no action is never
+ * pointed at, so clicks pass through it; one with an action or a copy
+ * (`ToastActions`, passed as `actions`) takes the pointer.
  *
- * It is drawn in Tailwind utilities over the theme; `toast.css` keeps what
- * those cannot say: its arrival, turn, departure, and countdown, which are
- * keyframes or read the custom properties its swipe and countdown write, and
- * what answers the pointer, which reads `:has()` and the screen's hover.
+ * The toast takes no class or style; where it stands is the stack's. It is
+ * drawn in Tailwind utilities over the theme; `toast.css` keeps what those
+ * cannot say: its place and motion, which read Base UI's custom properties
+ * and states, and what answers the pointer, which reads the screen's hover.
  */
 
 /** What a toast reports, of the status tones: the act done, the act refused, something asked of the developer, or work still under way. */
@@ -52,31 +44,15 @@ export type ToastTone =
   | typeof STATUS_TONE.WORKING;
 
 /**
- * How long a toast stands, by what it reports, and the only holds a toast
- * names: a change carried, which is short; one carried that its Undo takes
- * back, long enough to reach for Undo, and what any toast with an action
- * stands for where it names no hold; or one refused, which takes the longest
- * to read and to act on. A confirmation drawn on
- * its own control, a `CopyButton`'s check, stands for `DONE` too, so a copy
- * answered on its button and one answered by a toast last the same.
+ * How long a toast stands before it leaves by itself, whatever it reports:
+ * Base UI's default hold. A confirmation drawn on its own control, a
+ * `CopyButton`'s check, stands for it too, so a copy answered on its button
+ * and one answered by a toast last the same.
  */
-export const TOAST_HOLD = {
-  DONE: Duration.seconds(3),
-  UNDO: Duration.seconds(5),
-  FAILED: Duration.seconds(6),
-} as const;
+export const TOAST_HOLD = Duration.seconds(5);
 
 /** The ink a provider's mark stands in: the words' own, since a brand mark is no tone's glyph. */
 const MARK_INK = "text-foreground";
-
-/** A second, in milliseconds: the notch a countdown drains by under reduced motion. */
-const SECOND_MS = 1000;
-
-/** Which of a toast's glyphs is which: the one it leads with now, and the one it led with before its tone last changed. */
-const GLYPH_TURN = {
-  NOW: "now",
-  WAS: "was",
-} as const;
 
 /** The ink each glyph is drawn in: its tone's for what was done and what was refused, and the muted ink for an ask, which is the developer's to answer, and for work not done yet, which a toast says no louder than its words. */
 const GLYPH_INK = {
@@ -89,23 +65,18 @@ const GLYPH_INK = {
 /**
  * The card: its glyph, its words' first line, and its action share a first
  * row as tall as a control, each centered on it; its words wrap at the card's
- * own line. One with an action ends a step closer to it, and a finger's
- * sideways drag on it is the toast's while its up and down stay the page's.
+ * own line. One with an action button ends a step closer to it.
  */
 const TOAST_CARD =
-  "ui-toast relative flex items-start gap-icon-gap rounded-toast border border-border-strong bg-background px-list-inset py-row-inset shadow-toast data-[action=true]:touch-pan-y data-[action=true]:pr-toast-gap";
+  "ui-toast flex items-start gap-icon-gap rounded-toast border border-border-strong bg-background px-list-inset py-row-inset shadow-toast has-[.ui-button:not(.ui-toast-dismiss_.ui-button)]:pr-toast-gap";
 
-/** The one cell its glyphs share, centered on its first row, so a turn of tone crossfades them with the card unmoved. */
+/** The cell its glyph stands in, centered on its first row. */
 const TOAST_GLYPH =
-  "ui-toast-glyph mt-toast-glyph-inset grid size-control-icon flex-none [&_svg]:size-full";
+  "ui-toast-glyph mt-toast-glyph-inset flex size-control-icon flex-none [&_svg]:size-full";
 
 /** Its words and the line under them, a title's step apart, the column standing as far below its last line as above its first. */
 const TOAST_TEXT =
   "ui-toast-text flex min-w-0 flex-1 flex-col gap-toast-line-gap py-toast-text-inset";
-
-/** A bar along its foot, in the muted ink, faint, draining toward its start. */
-const TOAST_COUNTDOWN =
-  "ui-toast-countdown pointer-events-none absolute inset-x-toast-inset bottom-0 h-toast-line-gap origin-left rounded-full bg-muted-foreground opacity-40";
 
 /** The glyph a toast leads with: a check for what was done, an alert for what was refused, the Inbox's tray for an ask, and the spinner's ring for work under way. */
 function ToneGlyph({ tone }: { tone: ToastTone }): React.JSX.Element {
@@ -121,36 +92,22 @@ function ToneGlyph({ tone }: { tone: ToastTone }): React.JSX.Element {
   }
 }
 
-/**
- * The tone a toast leads with now and the one it led with before, kept
- * while the card stands so a change of tone crossfades the two glyphs in
- * one cell rather than swapping them.
- */
-function useToneTurn(tone: ToastTone): { now: ToastTone; was: ToastTone | undefined } {
-  const [turn, setTurn] = useState<{ now: ToastTone; was: ToastTone | undefined }>({
-    now: tone,
-    was: undefined,
-  });
-  if (turn.now === tone) return turn;
-  const next = { now: tone, was: turn.now };
-  setTurn(next);
-  return next;
-}
+/** Which ways a toast is swiped away: off either side, as it stands at the window's edge. */
+const SWIPE_AWAY: ("left" | "right")[] = ["right", "left"];
 
-/** One toast: its tone, words and detail, and the actions at its end, if it has any. */
+/** One toast, the one Base UI keeps as `toast`: its tone, words and detail, and the actions at its end, if it has any. */
 export function Toast({
+  toast,
   tone,
   glyph,
   mark,
   words,
   detail,
   replayUnmasked = false,
-  leaving = false,
   actions,
-  countdown,
-  onHold,
-  onEscape,
 }: {
+  /** The toast as the stack's manager keeps it, which the stack hands each toast it draws. */
+  toast: ToastObject<object>;
   tone: ToastTone;
   /** The glyph it leads with in place of its tone's, where what it says has one of its own. */
   glyph?: (() => React.JSX.Element) | undefined;
@@ -161,104 +118,46 @@ export function Toast({
   detail?: string | undefined;
   /** Whether its words and detail are the app's own, which a screen recording shows as they read; a toast that quotes a person's words, a name, or a refusal's words leaves them masked. */
   replayUnmasked?: boolean | undefined;
-  /** Whether it is on its way out. */
-  leaving?: boolean;
-  /** Its action and dismiss, as `ToastActions` draws them; a toast with none is never pointed at. */
-  actions?: ReactNode;
-  /** The hold it runs down by itself, in milliseconds, drawn as a bar that drains over it; none where it stands until dismissed. */
-  countdown?: number | undefined;
-  /** Told when the pointer or focus first rests on the toast, and when both have left it. Only a toast with actions holds. */
-  onHold?: (holding: boolean) => void;
-  /** Told when Escape is pressed while focus is in the toast, or it is swiped away: dismiss it. */
-  onEscape?: () => void;
+  /** Its ×, beside its action and copy where it has them, as `ToastActions` draws them. */
+  actions: ReactNode;
 }): React.JSX.Element {
-  const held = useRef({ pointer: false, focus: false });
-  const [holding, setHolding] = useState(false);
-  const turn = useToneTurn(tone);
-  const swipe = useToastSwipe(actions === undefined ? undefined : onEscape);
-  const hold = (by: keyof typeof held.current, on: boolean) => {
-    const was = held.current.pointer || held.current.focus;
-    held.current = { ...held.current, [by]: on };
-    const now = held.current.pointer || held.current.focus;
-    if (now === was) return;
-    setHolding(now);
-    onHold?.(now);
-  };
-  const glyphs = turn.was === undefined ? [turn.now] : [turn.was, turn.now];
   const Lead = glyph;
   return (
-    <li
-      ref={swipe.ref}
+    <BaseToast.Root
+      toast={toast}
+      swipeDirection={SWIPE_AWAY}
       className={TOAST_CARD}
       data-tone={tone}
-      data-action={actions === undefined ? undefined : "true"}
-      data-leaving={leaving ? "true" : undefined}
-      data-held={holding ? "true" : undefined}
-      data-turned={turn.was === undefined ? undefined : "true"}
-      {...(actions === undefined
-        ? undefined
-        : {
-            onPointerDown: swipe.onPointerDown,
-            onPointerMove: swipe.onPointerMove,
-            onPointerUp: swipe.onPointerUp,
-            onPointerCancel: swipe.onPointerCancel,
-            onWheel: swipe.onWheel,
-            onPointerEnter: () => hold("pointer", true),
-            onPointerLeave: () => hold("pointer", false),
-            onFocus: () => hold("focus", true),
-            onBlur: () => hold("focus", false),
-            onKeyDown: (event: KeyboardEvent) => {
-              if (event.key !== "Escape") return;
-              event.stopPropagation();
-              onEscape?.();
-            },
-          })}
     >
-      <span className={TOAST_GLYPH} aria-hidden="true">
-        {glyphs.map((shown) => (
-          <span
-            key={shown}
-            className={`col-start-1 row-start-1 flex ${mark !== undefined && shown === turn.now ? MARK_INK : GLYPH_INK[shown]}`}
-            data-tone={shown}
-            data-turn={shown === turn.now ? GLYPH_TURN.NOW : GLYPH_TURN.WAS}
-          >
-            {shown !== turn.now ? (
-              <ToneGlyph tone={shown} />
-            ) : mark !== undefined ? (
-              <ProviderMark provider={mark} size={PROVIDER_MARK_SIZE.SLOT} />
-            ) : Lead !== undefined ? (
-              <Lead />
-            ) : (
-              <ToneGlyph tone={shown} />
-            )}
-          </span>
-        ))}
+      <span
+        className={`${TOAST_GLYPH} ${mark === undefined ? GLYPH_INK[tone] : MARK_INK}`}
+        aria-hidden="true"
+      >
+        {mark !== undefined ? (
+          <ProviderMark provider={mark} size={PROVIDER_MARK_SIZE.SLOT} />
+        ) : Lead !== undefined ? (
+          <Lead />
+        ) : (
+          <ToneGlyph tone={tone} />
+        )}
       </span>
-      <span className={TOAST_TEXT} key={words}>
-        <span className="ui-toast-words line-clamp-2 wrap-anywhere">
+      <span className={TOAST_TEXT}>
+        <BaseToast.Title render={<span className="ui-toast-words line-clamp-2 wrap-anywhere" />}>
           <Text variant={TEXT_VARIANT.SECTION} as={TEXT_ELEMENT.SPAN}>
             <ReplayWords unmasked={replayUnmasked}>{words}</ReplayWords>
           </Text>
-        </span>
+        </BaseToast.Title>
         {detail === undefined ? null : (
-          <span className="ui-toast-detail line-clamp-2 wrap-anywhere">
+          <BaseToast.Description
+            render={<span className="ui-toast-detail line-clamp-2 wrap-anywhere" />}
+          >
             <Text variant={TEXT_VARIANT.CAPTION} as={TEXT_ELEMENT.SPAN} tone={TEXT_TONE.MUTED}>
               <ReplayWords unmasked={replayUnmasked}>{detail}</ReplayWords>
             </Text>
-          </span>
+          </BaseToast.Description>
         )}
       </span>
       {actions}
-      {countdown === undefined ? null : (
-        <span
-          className={TOAST_COUNTDOWN}
-          aria-hidden="true"
-          style={cssCustomProperties({
-            "--ui-toast-hold": `${countdown}ms`,
-            "--ui-toast-seconds": Math.max(1, Math.round(countdown / SECOND_MS)),
-          })}
-        />
-      )}
-    </li>
+    </BaseToast.Root>
   );
 }

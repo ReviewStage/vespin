@@ -676,7 +676,7 @@ function useCommenting(place: DescriptionCommentPlace | undefined) {
     // The draft left on the page with its card closed, where it was started; none while its card is open or it holds nothing of the writer's own.
     drafted:
       pending === undefined && (ownWordsIn(kept.text) || kept.attachments.length > 0)
-        ? { words: kept.text, element: kept.element }
+        ? { words: kept.text, attachments: kept.attachments, element: kept.element }
         : undefined,
     reopen: (box: FrameBox | undefined) => {
       setPicking(false);

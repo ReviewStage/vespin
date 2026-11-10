@@ -3,6 +3,8 @@
 import { useLocalSearchParams } from "expo-router";
 import { NewAgentScreen } from "../screens/start-screens.js";
 
+export { ScreenBoundary as ErrorBoundary } from "../screen-boundary.js";
+
 export default function StartAgentRoute() {
   const { task = "" } = useLocalSearchParams<{ task: string }>();
   return <NewAgentScreen taskId={task} />;

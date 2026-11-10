@@ -15,6 +15,7 @@ import {
   MACOS_DEPLOYMENT_TARGET,
   MICROPHONE_USAGE_DESCRIPTION,
   resolveSigningMode,
+  SHELL_ACCESS_USAGE_DESCRIPTIONS,
   SIGNING_MODE,
 } from "./package-config.mjs";
 import {
@@ -131,6 +132,7 @@ export function createElectronBuilderConfig(env = process.env) {
         LSMinimumSystemVersion: MACOS_DEPLOYMENT_TARGET,
         NSAppleEventsUsageDescription: APPLE_EVENTS_USAGE_DESCRIPTION,
         NSMicrophoneUsageDescription: MICROPHONE_USAGE_DESCRIPTION,
+        ...SHELL_ACCESS_USAGE_DESCRIPTIONS,
         NSPrefersDisplaySafeAreaCompatibilityMode: false,
       },
     },

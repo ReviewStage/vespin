@@ -65,7 +65,7 @@ import { modelsRetryMutation } from "../live-reads.js";
 import type { RenameShape } from "../rename-write.js";
 import { rendererPause } from "../renderer-runtime.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import {
   type LocalWrite,
   pressLocal,
@@ -957,7 +957,6 @@ export function useAgents(input: {
         replayUnmasked: true,
         words,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure,
       }),
     [toast],
@@ -970,7 +969,6 @@ export function useAgents(input: {
         tone: STATUS_TONE.ATTENTION,
         // The clock the usage-limit card wears, so a limit reads as the one thing wherever it is said.
         glyph: GLYPH.TIME,
-        hold: TOAST_HOLD.FAILED,
       }),
     [toast],
   );
@@ -1507,7 +1505,6 @@ export function useAgents(input: {
         replayUnmasked: true,
         words: STOP_NOTHING_YET,
         tone: STATUS_TONE.ATTENTION,
-        hold: TOAST_HOLD.FAILED,
       });
       return false;
     }

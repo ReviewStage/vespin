@@ -87,7 +87,7 @@ import {
 import { agentAutomationNameSql, agentAutomationRunSql } from "./agent-name.js";
 import { ArchivedByColumnSchema, InstantColumnSchema } from "./columns.js";
 import { deleteConversations } from "./conversation-delete.js";
-import { reopenAgentInboxItems, settleAgentInboxItems } from "./inbox-settle.js";
+import { settleAgentInboxItems } from "./inbox-settle.js";
 import {
   type LatestTurn,
   lastSettledTurnsOfReached,
@@ -1046,30 +1046,6 @@ const updateUnmovedArchived = SqlSchema.findAll({
           ),
         )
         .returning({ id: agentTable.id }),
-    ),
-});
-
-/**
- * The task the agent works on, locked against its status changing until
- * the caller commits, as bringing the agent back takes it before the
- * agent's own row: the order a task's write takes the two in, so an
- * unarchive and a task moved off Done never wait on each other in a cycle,
- * while each still sees the other's settle (`inbox-settle.ts`).
- */
-const lockAgentTask = SqlSchema.void({
-  Request: Schema.String,
-  execute: (agentId) =>
-    Database.use((db) =>
-      db
-        .select({ id: task.id })
-        .from(task)
-        .where(
-          inArray(
-            task.id,
-            db.select({ id: agentTable.taskId }).from(agentTable).where(eq(agentTable.id, agentId)),
-          ),
-        )
-        .for("share"),
     ),
 });
 
@@ -3015,7 +2991,7 @@ export function renameAgentCommitted(
   );
 }
 
-/** The account's agent archived, stamped now with who archived it, by default the account itself, or brought back, which clears who did; its conversation and what it published are kept either way. An archive, this one and every other below, settles the agent's open inbox items that ask, its notices left open, in the same transaction, and bringing the agent back opens again those its archive settled (`inbox-settle.ts`). Nothing for an agent of a workspace the account is not in. */
+/** The account's agent archived, stamped now with who archived it, by default the account itself, or brought back, which clears who did; its conversation and what it published are kept either way. An archive, this one and every other below, settles the agent's open inbox items that ask, its notices left open, in the same transaction, and bringing the agent back leaves them settled (`inbox-settle.ts`). Nothing for an agent of a workspace the account is not in. */
 export function archiveAgent(
   userId: string,
   agentId: string,
@@ -3053,8 +3029,7 @@ const lockAgentArchivedAt = SqlSchema.findOneOption({
  * transaction its row was written in; an archive reads the row under its
  * lock first, so of two archives at once only the first answers that it
  * archived the agent, and an archive already standing is kept as it stands,
- * its stamp and record unmoved, so bringing the agent back opens again every
- * item it settled.
+ * its stamp and record unmoved.
  */
 export function archiveAgentCommitted(
   userId: string,
@@ -3066,17 +3041,14 @@ export function archiveAgentCommitted(
     client.withTransaction(
       Effect.gen(function* () {
         const now = yield* DateTime.nowAsDate;
-        if (!archived) yield* lockAgentTask(agentId);
         const archivedBefore = archived
           ? Option.getOrUndefined(yield* lockAgentArchivedAt({ userId, agentId }))?.archivedAt
           : undefined;
-        // An archive already standing is kept as it stands, so its stamp still names the items it settled.
+        // An archive already standing is kept as it stands, its stamp and record unmoved.
         if (archived && archivedBefore !== undefined && archivedBefore !== null) {
           const kept = yield* findAgent({ userId, agentId });
           return Option.map(kept, (agent) => ({ agent, archivedNow: false }));
         }
-        // The archive standing before the write, whose stamp names the items it settled.
-        const standing = archived ? Option.none() : yield* findAgent({ userId, agentId });
         const written = yield* updateAgentArchived({
           userId,
           agentId,
@@ -3084,12 +3056,8 @@ export function archiveAgentCommitted(
           archivedBy: archived ? archivedBy : null,
         });
         if (Option.isNone(written)) return Option.none();
-        // An archive settles the agent's open inbox items that ask, and bringing it back opens again those that archive settled.
+        // An archive settles the agent's open inbox items that ask; bringing it back opens none.
         if (archived) yield* settleAgentInboxItems([agentId], now);
-        const standingArchive = Option.getOrUndefined(standing)?.archivedAt;
-        if (standingArchive !== undefined && standingArchive !== null) {
-          yield* reopenAgentInboxItems(agentId, standingArchive);
-        }
         const { txid, ...agent } = written.value;
         return Option.some({ agent, txid, archivedNow: archived && archivedBefore === null });
       }),
@@ -3137,12 +3105,8 @@ export function unarchiveAgentFrom(
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
-        yield* lockAgentTask(agentId);
         const rows = yield* unarchiveIfStamped({ userId, agentId, archivedAt });
-        if (rows.length === 0) return false;
-        // The items that very archive settled open again with it.
-        yield* reopenAgentInboxItems(agentId, archivedAt);
-        return true;
+        return rows.length > 0;
       }),
     ),
   );

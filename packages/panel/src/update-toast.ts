@@ -22,11 +22,12 @@ import { HOST_CAPABILITY } from "@repo/settings";
 import { UPDATE_STATUS, type UpdateSnapshot } from "@repo/settings/update";
 import { STATUS_TONE, UpdateIcon } from "@repo/ui";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { createStore, useSelector } from "@tanstack/react-store";
 import { Option, Schema } from "effect";
 import { useEffect } from "react";
 import { pressMutation } from "./act-mutations.js";
 import { readKeptOption, writeKept } from "./kept-storage.js";
-import { useToast, useToastStanding, useWithdrawToast } from "./toast.js";
+import { useToast, useWithdrawToast } from "./toast.js";
 import { appStateQuery } from "./use-app-state.js";
 
 /** The storage key the version last announced is kept under. */
@@ -34,6 +35,9 @@ const ANNOUNCED_KEY = "app.update-announced";
 
 /** What the release-ready toast is about, by which it is withdrawn once the release is no longer waiting. */
 const READY_SUBJECT = "update-ready";
+
+/** Whether the ready toast stands, from its showing until it is gone however it went. */
+const readyStanding = createStore(false);
 
 /** The storage key the version whose ready toast was last dismissed is kept under. */
 const DISMISSED_KEY = "app.update-ready-dismissed";
@@ -100,7 +104,7 @@ export function useUpdatedToast(update: UpdateSnapshot | undefined): void {
  * signing in emptied the stack.
  */
 export function useReadyToastStanding(): boolean {
-  return useToastStanding(READY_SUBJECT);
+  return useSelector(readyStanding, (standing) => standing);
 }
 
 /**
@@ -128,7 +132,10 @@ export function useReadyToast(): void {
       persists: true,
       action: { label: "Restart", onPress: () => install(), replayUnmasked: true },
       onDismiss: () => keepDismissed(version),
+      onGone: () => readyStanding.setState(() => false),
     });
+    // Note that it stands from here, after the one it replaces, if any, was told it is gone.
+    readyStanding.setState(() => true);
     return () => withdraw(READY_SUBJECT);
   }, [toast, withdraw, install, version]);
 }

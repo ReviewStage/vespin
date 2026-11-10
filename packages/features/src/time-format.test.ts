@@ -13,6 +13,7 @@ import {
   provenanceText,
   runSpanText,
   sinceText,
+  untilText,
   weekdayAndTimeText,
   workingTime,
 } from "./time-format.js";
@@ -98,6 +99,13 @@ test("a moment to come is due at its time today, its weekday and time inside a w
   assert.equal(dueText(new Date(2026, 10, 9, 9, 0).getTime(), now), "Mon 9:00 AM");
   assert.equal(dueText(new Date(2026, 10, 20, 9, 0).getTime(), now), "Nov 20");
   assert.equal(dueText(new Date(2026, 10, 3, 9, 0).getTime(), now), "Nov 3");
+});
+
+test("a moment to come counts down inside a day and is due by its weekday and time past one", () => {
+  const now = new Date(2026, 10, 6, 14, 3).getTime();
+  assert.equal(untilText(new Date(2026, 10, 6, 16, 33).getTime(), now), "in 2h");
+  assert.equal(untilText(new Date(2026, 10, 7, 11, 0).getTime(), now), "in 20h");
+  assert.equal(untilText(new Date(2026, 10, 9, 9, 0).getTime(), now), "Mon 9:00 AM");
 });
 
 test("a playhead reads minutes and two-digit seconds, past an hour in minutes", () => {

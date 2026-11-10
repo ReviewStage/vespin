@@ -25,6 +25,9 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: new-agent-sheet
 - inputText: "Add a Resend button beside each pending invite."
+# Note that iOS's hideKeyboard is a short drag at the screen's middle, which
+# lowers the keyboard because the sheet's form lowers it on a drag
+# (`SettingsForm`); the words field's return key types a new line.
 - hideKeyboard
 # The model's menu offers the catalog, each model once; a pick keeps the
 # effort it lists nearest the one shown.

@@ -434,6 +434,7 @@ function updateNamesAChange(update: {
   status?: TaskStatus;
   priority?: TaskPriority;
   assigneeId?: string | null;
+  stopAgents?: boolean;
   runsOn?: TaskRunsOnRequest;
 }): boolean {
   return Object.keys(update).length > 0;
@@ -455,6 +456,9 @@ function positionIsPinned(update: { pinned?: boolean; pinPosition?: string }): b
  * member of the task's workspace before it is kept, and null clears it. A move is the task's
  * owner's alone, into a workspace they are a member of whose GitHub reaches
  * the task's repository, and lets its assignee go where they are no member there.
+ * A move to Done or Canceled archives the task's idle agents; with
+ * `stopAgents`, which the member confirmed, it stops the running ones first
+ * and archives them too, and a build from before it names none.
  * A task holds no place to run, so `runsOn`, which a released desktop still
  * sends, is read so that build's change decodes, and changes nothing.
  */
@@ -470,6 +474,8 @@ export const taskUpdateRequestSchema = EffectSchema.Struct({
   status: EffectSchema.optionalKey(taskStatusSchema),
   priority: EffectSchema.optionalKey(taskPrioritySchema),
   assigneeId: EffectSchema.optionalKey(EffectSchema.NullOr(taskAssigneeIdSchema)),
+  /** With a move to Done or Canceled, whether the task's running agents are stopped and archived with it. */
+  stopAgents: EffectSchema.optionalKey(EffectSchema.Boolean),
   runsOn: EffectSchema.optionalKey(taskRunsOnRequestSchema),
 }).check(EffectSchema.makeFilter(updateNamesAChange), EffectSchema.makeFilter(positionIsPinned));
 
@@ -819,14 +825,14 @@ export type TaskPullRequests = typeof taskPullRequestsSchema.Type;
 
 /**
  * The pull request one agent opened, as its row keeps what the service last
- * read of it on GitHub, the agent on a plan or none, archived or not, and
- * the plan it stands on: what a plan's or an agent's own tabs and summary
- * offer the agent's Changes by.
+ * read of it on GitHub, the agent archived or not, and the task it stands
+ * on: what a task's or an agent's own tabs and summary offer the agent's
+ * Changes by.
  */
 export const listedPullRequestSchema = EffectSchema.Struct({
   agentId: EffectSchema.String,
-  /** The plan the agent stands on; null for one on none. */
-  taskId: EffectSchema.NullOr(EffectSchema.String),
+  /** The task the agent stands on. */
+  taskId: EffectSchema.String,
   pullRequest: agentPullRequestSchema,
 });
 

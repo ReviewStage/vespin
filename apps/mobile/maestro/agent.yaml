@@ -3,6 +3,9 @@
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
+# Note that each wait for the screen to settle is capped at five seconds,
+# because the page draws its turn still running, whose mark never stops
+# moving, so an uncapped wait always ran to Maestro's fifteen.
 ---
 # Launched on the host's Inbox fixture, whose invitations agent holds a
 # transcript three turns long (`@repo/host/fixture-inbox`), and opened on its
@@ -14,13 +17,15 @@ appId: dev.vespin.ios
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
 - assertVisible: "Add a way to resend an invite that expired."
-- waitForAnimationToEnd
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: agent-latest
 # A call opens in place on its body: a command as a terminal, its prompt over
 # what it printed.
 - tapOn: "Edited.*"
 - assertVisible: "Input"
-- waitForAnimationToEnd
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: agent-call
 - tapOn: "Edited.*"
 # The second turn: the page it showed as a card, and its recording, which the
@@ -30,12 +35,16 @@ appId: dev.vespin.ios
 - scrollUntilVisible:
     element: "Invite funnel, Page"
     direction: UP
-- waitForAnimationToEnd
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: agent-page-card
 - tapOn: "Invite funnel, Page"
+# Note that the wait is long, because the first web view a freshly booted
+# simulator opens launches WebKit's processes, which has taken a loaded CI
+# runner nearly 40 seconds.
 - extendedWaitUntil:
     visible: "Invites sent in the staging workspace.*"
-    timeout: 30000
+    timeout: 90000
 - takeScreenshot: agent-page
 - tapOn:
     id: "BackButton"
@@ -46,24 +55,29 @@ appId: dev.vespin.ios
     element: "The invite dialog"
     direction: UP
     centerElement: true
-- waitForAnimationToEnd
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: agent-pictures
 # The pull request it opened after them, as its card with Review.
 - scrollUntilVisible:
     element: "#128 Invite a teammate by email"
     direction: DOWN
-- waitForAnimationToEnd
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: agent-pull-request
 - scrollUntilVisible:
     element: ".*tool calls.*"
     direction: UP
-- waitForAnimationToEnd
+- waitForAnimationToEnd:
+    timeout: 5000
 - tapOn: ".*tool calls.*"
 - assertVisible: "Read.*"
-- waitForAnimationToEnd
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: agent-fold
 # Read back, the list offers to jump to the newest row.
 - tapOn: "Jump to latest"
 - assertVisible: "Add a way to resend an invite that expired."
-- waitForAnimationToEnd
+- waitForAnimationToEnd:
+    timeout: 5000
 - takeScreenshot: agent-jump

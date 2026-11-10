@@ -169,13 +169,20 @@ prompts, or error text. The Service counts work done through it (such as
 tasks created and agents started) the same way. Counts are grouped by
 workspace, with each workspace's name and creation date.
 
+The Vespin iOS app sends the same kind of counts while you are signed in:
+when it opens, each day you use it, sign-ins and sign-outs, and the kind of
+screen you open (the Inbox, a thread, a task, an agent, a page, a pull
+request, or Settings) and whether the window showed one column or two, never
+which thread, task, or agent it was. They go through the Service, as the Mac
+app's do, and the app holds no PostHog key of its own.
+
 While you are signed in, the Mac app and the web app record how you use
 Vespin's window, such as the screens you visit and where you click, never your
 screen or other apps. Text you type and other content that may be sensitive is
 masked before a recording leaves your device. Recordings are linked to your
 account. While a maintainer is signed in as your account with your support
 access (section 4), their use of the web app is counted and recorded the same
-way, under your account.
+way, under your account. The iOS app records nothing.
 
 ### Error and performance data
 
@@ -200,6 +207,15 @@ word of the model's answer. These carry only ids, the kind of agent, how
 it was started, and durations, never your messages, the agent's work, or its
 environment; it sends no error reports. An agent running on your own machine
 sends Sentry nothing.
+
+The Vespin iOS app sends Sentry error reports, crash reports (a crash is sent
+the next time you open the app), and reports of a screen that could not be
+drawn. It uses Sentry's default data collection, so reports may include error
+messages, stack traces, the addresses of the app's own requests, device and
+iOS details, the app's version and build, and your IP address. A report
+naming a sign-in token in an address is dropped, and reports name your
+account by its id only. The app sends no performance traces, screenshots, or
+recordings of the screen.
 
 ### Feedback
 
@@ -423,7 +439,8 @@ can also act directly in the app:
 
 - **Usage data:** turn off Settings › Account › "Share usage data". It is set
   per Mac and per browser, is on by default in the Vespin you download, and
-  does not stop the counts the Service makes of work done through it.
+  does not stop the counts the Service makes of work done through it. The
+  iOS app has no such switch yet, and counts while you are signed in.
 - **Commands on your Mac:** set Settings › This Mac › "Let agents run commands
   on this Mac" to Never.
 - **Integrations:** switch one off for a single agent in its message box's MCP

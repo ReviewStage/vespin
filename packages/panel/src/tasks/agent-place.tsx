@@ -32,7 +32,7 @@ import { presenceStanding, useDevicePresence } from "../device-presence.js";
 import { machineName, useThisMac } from "../machine-name.js";
 import { useOpenSettings } from "../open-settings.js";
 import { Picker } from "../settings/picker-row.js";
-import { MOVE_WORDS, type PlaceMove } from "./move-agent.js";
+import type { PlaceMove } from "./move-agent.js";
 import { CLOUD_ROW, DeviceGlyph, rowRequest, runsOnRows } from "./runs-on.js";
 import {
   SANDBOX_STATE_WORDS,
@@ -189,10 +189,12 @@ const SET_UP_WORDS = { LABEL: "Set up a Mac", DETAIL: "Settings › Machines" } 
 /**
  * The places a move offers, as a start's Runs on lists them
  * (`runs-on.tsx`'s `runsOnRows`): the agent's own checked, each other
- * saying only pushed work comes along where the agent runs on a device,
- * and, where the member has no device, a row opening Settings › Hosts to
- * add one; and what a pick does: another place moves the agent there, its
- * own does nothing. None where no move is offered, which reads no presence.
+ * saying what a move there does where it says anything
+ * (`PlaceMove.detail`): that the agent is stopped first while it writes,
+ * and that only pushed work comes along from a device; and, where the
+ * member has no device, a row opening Settings › Hosts to add one; and
+ * what a pick does: another place moves the agent there, its own does
+ * nothing. None where no move is offered, which reads no presence.
  */
 function useMoveMenu(
   here: string | undefined,
@@ -205,7 +207,7 @@ function useMoveMenu(
   if (move === undefined) return undefined;
   const places = runsOnRows(listed, book, thisMac).map(
     (row): MenuRow =>
-      row.id === here || !move.pushedOnly ? row : { detail: MOVE_WORDS.PUSHED_ONLY, ...row },
+      row.id === here || move.detail === undefined ? row : { detail: move.detail, ...row },
   );
   const setUp: readonly MenuRow[] =
     move.devices.length > 0

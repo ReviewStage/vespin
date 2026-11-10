@@ -14,6 +14,7 @@ import { TASK_STATUS } from "@repo/features/task-wire";
 import { TURN_ORIGIN, TURN_STATUS, type TurnStatus } from "@repo/wire";
 import { eq } from "drizzle-orm";
 import { Clock, Effect, Option } from "effect";
+import { doneTaskArchive } from "../agents/agent-change.js";
 import { idleStandingAgents } from "../agents/coder-host/stop.js";
 import { settleTaskAfterTurn } from "./task-finish.js";
 
@@ -121,6 +122,33 @@ it.layer(getTestDB())("an agent archived with its task's Done", (it) => {
 
         yield* settle(running);
         yield* settleTaskAfterTurn(userId, task.id, stopping.id);
+        assert.equal(yield* archived(userId, stopping.id), true);
+      }),
+  );
+
+  it.effect(
+    "a member's Done that confirmed stopping its agents archives the one whose Stop is on the way at once",
+    () =>
+      Effect.gen(function* () {
+        const userId = yield* openUser;
+        const task = yield* startTask(userId, { name: "Teammate invitations" });
+        const stopping = yield* openAgent(userId, task.id);
+        const running = yield* turnOf(stopping, TURN_STATUS.RUNNING);
+        const now = yield* Clock.currentTimeMillis;
+        yield* Database.use((db) =>
+          db
+            .update(turns)
+            .set({ cancelRequestedAt: new Date(now) })
+            .where(eq(turns.id, running)),
+        );
+
+        yield* updateTask(
+          userId,
+          task.id,
+          { status: TASK_STATUS.DONE },
+          undefined,
+          doneTaskArchive({ by: AGENT_ARCHIVER.MEMBER, userId }, new Set([stopping.id])),
+        );
         assert.equal(yield* archived(userId, stopping.id), true);
       }),
   );

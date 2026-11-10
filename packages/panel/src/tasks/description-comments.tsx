@@ -1,4 +1,5 @@
 import { AGENT_BOUNDS, type AgentAttachment, base64Bytes } from "@repo/features/agent-wire";
+import type { FileChip } from "@repo/features/attachment-model";
 import { textChange } from "@repo/features/description-comment-anchor";
 import {
   DESCRIPTION_COMMENT_ACTION,
@@ -8,11 +9,13 @@ import {
   DESCRIPTION_COMMENT_SCOPE,
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentEntry,
+  type DescriptionCommentFile,
   type DescriptionCommentStart,
   type DescriptionCommentThread,
   type DescriptionCommentWriter,
 } from "@repo/features/description-comment-wire";
 import type { DescriptionSection } from "@repo/features/description-document";
+import { fileMarkers } from "@repo/features/file-marker";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { FrameBox, PagePicked } from "@repo/features/page-pick";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -115,7 +118,6 @@ import { useSelector } from "@tanstack/react-store";
 import { Equal } from "effect";
 import {
   createContext,
-  Fragment,
   type ReactNode,
   type RefObject,
   useCallback,
@@ -149,11 +151,16 @@ import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { centerWithin } from "../scroll-within.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import { AgentActorRef, type AgentSubject, agentSubject, NOTHING_HELD } from "./agent-ref.js";
-import { AttachedFileChips, attachmentChips } from "./attached-file-chips.js";
+import { attachmentChips } from "./attached-file-chips.js";
 import { CommentMenu } from "./comment-menu.js";
-import { CommentFiles } from "./description-comment-files.js";
+import {
+  CommentFiles,
+  useCommentFileChips,
+  useCommentFileEntries,
+} from "./description-comment-files.js";
 import { EDITOR_ROOM_CLASS } from "./description-document-editor.js";
 import type { EditAgents } from "./edit-ref.js";
+import { useWordFiles, type WordFiles } from "./file-chips.js";
 import { MessageBox, useMessageBox } from "./message-box.js";
 import { type HeldComment, PAGE_REVIEW_WORDS, type PageReviewControl } from "./page-review.js";
 import { PendingWords } from "./pending-comments.js";
@@ -777,21 +784,42 @@ function CommentEntry({
       text: words.trim() === "" || words === shown ? "" : words,
     }));
   };
-  const save = () => {
+  const save = (files: EditedFiles) => {
     const words = editing?.trim() ?? "";
     // Note that a comment is never saved empty, so an edit emptied asks to delete it, as its menu's Delete does.
     if (words === "") {
       deleting.ask();
       return;
     }
-    // Note that the edit is drawn by the host on the press, so the field closes at once; words refused come back as its draft (`use-description-comments.ts`), which Edit opens on again.
+    // Note that the edit is drawn by the host on the press, so the field closes at once; words refused come back as its draft (`use-description-comments.ts`), and its files here, which Edit opens on again.
     setEditing(undefined);
     edited.update(() => EMPTY_DRAFT);
-    void doors.control.act(thread.id, {
-      action: DESCRIPTION_COMMENT_ACTION.EDIT,
-      entry: entry.id,
-      words,
-    });
+    const carried = entry.files ?? [];
+    void doors.control
+      .act(thread.id, {
+        action: DESCRIPTION_COMMENT_ACTION.EDIT,
+        entry: entry.id,
+        words,
+        ...filesChanged(carried, files),
+      })
+      .then((landed) => {
+        if (landed) return;
+        const kept = new Set(files.kept.map((file) => file.attachmentId));
+        edited.update((was) => ({
+          ...was,
+          attachments: files.added,
+          dropped: carried.map((file) => file.attachmentId).filter((id) => !kept.has(id)),
+        }));
+      });
+  };
+  // The files the edit changes, kept in its draft beside its words.
+  const editFiles: EditFilesHolder = {
+    files: { dropped: edited.draft.dropped ?? [], attachments: edited.draft.attachments },
+    update: (next) =>
+      edited.update((was) => {
+        const files = next({ dropped: was.dropped ?? [], attachments: was.attachments });
+        return { ...was, dropped: files.dropped, attachments: files.attachments };
+      }),
   };
   return (
     <div className="comment-entry relative py-tight-gap" data-entry={entry.id}>
@@ -834,16 +862,19 @@ function CommentEntry({
         {lead}
         {editing === undefined ? (
           <>
-            {/* Note that a comment's files stand over its words, as the field held them and as every message's do. */}
-            {entry.files === undefined ? null : (
-              <CommentFiles planId={doors.control.planId} files={entry.files} />
-            )}
             <WordsDatesContext.Provider value={dates}>
-              <CommentWords words={shown} />
+              <PostedComment
+                planId={doors.control.planId}
+                files={entry.files ?? NO_FILES}
+                words={shown}
+              />
             </WordsDatesContext.Provider>
           </>
         ) : (
           <CommentEditField
+            planId={doors.control.planId}
+            files={entry.files ?? NO_FILES}
+            changes={editFiles}
             value={editing}
             onChange={write}
             onSave={save}
@@ -855,44 +886,138 @@ function CommentEntry({
   );
 }
 
-/** The field a comment's words are edited in, in its place, on the message box: Cancel, then Save. */
+/**
+ * The field a comment's words are edited in, in their place, on the message
+ * box as the field a thread's first comment is written in: the words stay
+ * where they were read, bare on the card with no box around them, and the
+ * box's foot stands under them, its + and microphone and Cancel beside the
+ * round send, which saves. The box holds the comment's own files first, as
+ * entries of its own (`useCommentFileEntries`), and the files added by the
+ * +, a paste, or a drop after them, so the two are taken off alike and held
+ * together to the bounds of one message's; the edit keeps what changed as
+ * the ids it took off and the files it added.
+ */
 function CommentEditField({
+  planId,
+  files,
+  attached = NO_ATTACHMENTS,
+  changes: handed,
   value,
   onChange,
   onSave,
   onCancel,
 }: {
+  planId: string;
+  /** The files the service keeps for the comment. */
+  files: readonly DescriptionCommentFile[];
+  /** The files the window holds for it as the edit opens, a held comment's not yet sent; none for a posted one's. */
+  attached?: readonly AgentAttachment[];
+  /** Where what the edit changes of the files is kept, as its words are, so Cancel, Esc, or a save refused finds them as the edit opens again; the field keeps its own where none is handed. */
+  changes?: EditFilesHolder | undefined;
   value: string;
   onChange: (words: string) => void;
-  onSave: () => void;
+  /** Saves the words, with the files the field holds. */
+  onSave: (files: EditedFiles) => void;
   onCancel: () => void;
 }): React.JSX.Element {
-  // Note that an edit keeps the files its comment was sent with, so it takes none.
+  const [own, setOwn] = useState<EditFiles>({ dropped: [], attachments: attached });
+  const changes = handed ?? { files: own, update: setOwn };
+  const { entries, idOf } = useCommentFileEntries(planId, files);
+  /** The box's files for what the edit changed: the comment's own it keeps, then those added. */
+  const held = (edit: EditFiles) => [
+    ...entries.filter((entry) => !edit.dropped.includes(idOf(entry) ?? "")),
+    ...edit.attachments,
+  ];
   const box = useMessageBox({
     draft: value,
     setDraft: onChange,
     placeholder: COMMENT_WORDS.EDIT,
     label: COMMENT_WORDS.EDIT,
     maxLength: DESCRIPTION_COMMENT_BOUNDS.MAX_WORDS_CHARS,
-    takesFiles: false,
+    // Note that what the box holds after a change is read back as the comment's files it no longer holds and the files it added.
+    holder: {
+      attachments: held(changes.files),
+      update: (next) =>
+        changes.update((was) => {
+          const now = next(held(was));
+          return {
+            dropped: entries.flatMap((entry) => {
+              const id = idOf(entry);
+              return id === undefined || now.includes(entry) ? [] : [id];
+            }),
+            attachments: now.filter((entry) => idOf(entry) === undefined),
+          };
+        }),
+    },
     onLeave: onCancel,
-    onSubmit: onSave,
+    onSubmit: () => {
+      if (box.files.reading) return;
+      // Note that a file the box holds no entry of is kept as it stands, after those it holds, in their order.
+      const held = new Set(box.files.attachments.flatMap((entry) => idOf(entry) ?? []));
+      const unheld = files.filter(
+        (file) => !entries.some((entry) => idOf(entry) === file.attachmentId),
+      );
+      onSave({
+        kept: [
+          ...[...held].flatMap((id) => files.find((file) => file.attachmentId === id) ?? []),
+          ...unheld,
+        ],
+        added: box.files.attachments.filter((entry) => idOf(entry) === undefined),
+      });
+    },
     focus: true,
   });
   return (
     <MessageBox
       box={box}
-      look={COMPOSER_LOOK.FIELD}
+      look={COMPOSER_LOOK.BARE}
       className="comment-field comment-editing"
+      data-variant={REPLY_VARIANT.EDIT}
       beforeSend={
         <Button variant={BUTTON_VARIANT.QUIET} size={BUTTON_SIZE.COMPACT} onClick={onCancel}>
           <ReplayUnmask>{COMMENT_WORDS.CANCEL}</ReplayUnmask>
         </Button>
       }
-      // Note that an edit is drawn on the press, which closes the field, so Save is never busy.
-      send={{ label: COMMENT_WORDS.SAVE, inWords: true, empty: false }}
+      // Note that an edit emptied asks to delete the comment, so the send takes a press while empty, that it waits on files still read, and that an edit is drawn on the press, which closes the field, so it is never busy.
+      send={{ label: COMMENT_WORDS.SAVE, empty: false, held: box.files.reading }}
     />
   );
+}
+
+/** The files an edit's field holds as it saves: the comment's own it kept, in order, and those added after them. */
+interface EditedFiles {
+  readonly kept: readonly DescriptionCommentFile[];
+  readonly added: readonly AgentAttachment[];
+}
+
+/** The files an edit changes as it stands open: the comment's own taken off, by their ids, and those added. */
+interface EditFiles {
+  readonly dropped: readonly string[];
+  readonly attachments: readonly AgentAttachment[];
+}
+
+/** Where an edit's files are kept while it stands open, and how they change. */
+interface EditFilesHolder {
+  readonly files: EditFiles;
+  readonly update: (next: (was: EditFiles) => EditFiles) => void;
+}
+
+/** A comment that carries no files. */
+const NO_FILES: readonly DescriptionCommentFile[] = [];
+
+/** An edit that opens holding no files of the window's. */
+const NO_ATTACHMENTS: readonly AgentAttachment[] = [];
+
+/** What an edit says of its comment's files: nothing where it leaves them as they stand, else the files it keeps by their ids, in order, and those it adds. */
+function filesChanged(
+  carried: readonly DescriptionCommentFile[],
+  { kept, added }: EditedFiles,
+): { readonly keep?: readonly string[]; readonly attachments?: readonly AgentAttachment[] } {
+  const keep = kept.map((file) => file.attachmentId);
+  const same =
+    keep.length === carried.length && keep.every((id, at) => carried[at]?.attachmentId === id);
+  if (same && added.length === 0) return {};
+  return { keep, ...(added.length === 0 ? undefined : { attachments: added }) };
 }
 
 /**
@@ -913,18 +1038,101 @@ function ownWordsOf(thread: DescriptionCommentThread, words: string): string {
   return thread.page?.element === undefined ? words : leadQuoteDropped(words, thread.quote);
 }
 
-/** A comment's words as Markdown, its mentions drawn as their chips, as a message's are. */
-function CommentWords({ words }: { words: string }): React.JSX.Element {
+/** A comment's words as Markdown, its mentions drawn as their chips, as a message's are, and each file of its own they name (`files`) drawn where its marker stands. */
+function CommentWords({
+  words,
+  files,
+}: {
+  words: string;
+  files?: WordFiles | undefined;
+}): React.JSX.Element {
   const link = useMentionLink();
   const openLink = useOpenLink();
   return (
     <MarkdownMessage
-      words={words}
+      words={files === undefined ? words : withFileImages(words, files.names)}
       className="comment-words block text-body-foreground wrap-anywhere"
       link={link}
       openLink={openLink}
+      picture={
+        files === undefined
+          ? undefined
+          : (src) => {
+              const name = fileNameOf(src);
+              return name === undefined ? undefined : files.chip(name);
+            }
+      }
     />
   );
+}
+
+/** Where a file's marker is written as an image, so the words' own image drawer draws its chip: a link within the page, which every link transform keeps. */
+const FILE_SOURCE = "#file:";
+
+/**
+ * The words with each marker outside code that names one of `names` written
+ * as an image of that file, so it is drawn where it stands. Note that the
+ * image says nothing of the file but its source, its name encoded there,
+ * because a name may spell Markdown that would read in its words.
+ */
+function withFileImages(words: string, names: ReadonlySet<string>): string {
+  let written = "";
+  let at = 0;
+  for (const marker of fileMarkers(words)) {
+    if (!names.has(marker.name)) continue;
+    written += `${words.slice(at, marker.start)}![](${FILE_SOURCE}${encodeURIComponent(marker.name)})`;
+    at = marker.end;
+  }
+  return written + words.slice(at);
+}
+
+/** The file an image written by `withFileImages` names; nothing for any other image, nor for one typed by hand whose source does not decode, which is its alt text. */
+function fileNameOf(src: string): string | undefined {
+  if (!src.startsWith(FILE_SOURCE)) return undefined;
+  try {
+    return decodeURIComponent(src.slice(FILE_SOURCE.length));
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * A comment's body: its words, the files they name drawn in them, and its
+ * other files over them, as every message's stand: those sent before
+ * markers, or named only in code. A folded card draws the words alone.
+ */
+function CommentBody({
+  chips,
+  words,
+  folded = false,
+}: {
+  chips: readonly FileChip[];
+  words: string;
+  folded?: boolean | undefined;
+}): React.JSX.Element {
+  const shown = useWordFiles(chips, words);
+  return (
+    <>
+      {folded ? null : <CommentFiles chips={shown.beside} />}
+      <CommentWords words={words} files={shown.named} />
+      {shown.viewer}
+    </>
+  );
+}
+
+/** A posted comment's body as `CommentBody` draws it, each of its files read as the description's. */
+function PostedComment({
+  planId,
+  files,
+  words,
+  folded,
+}: {
+  planId: string;
+  files: readonly DescriptionCommentFile[];
+  words: string;
+  folded?: boolean | undefined;
+}): React.JSX.Element {
+  return <CommentBody chips={useCommentFileChips(planId, files)} words={words} folded={folded} />;
 }
 
 /** What a field that may hold its words in the writer's review is handed. */
@@ -1092,10 +1300,11 @@ function ReplyField({
         unsent.length === 0 ? null : (
           <div className="comment-unsent" data-unsent="">
             {unsent.map((each) => (
-              <Fragment key={each.key}>
-                <AttachedFileChips files={attachmentChips(each.attachments)} />
-                <CommentWords words={each.words} />
-              </Fragment>
+              <CommentBody
+                key={each.key}
+                chips={attachmentChips(each.attachments)}
+                words={each.words}
+              />
             ))}
             <FailureNote
               onRetry={retry}
@@ -1193,8 +1402,8 @@ function sameFiles(was: readonly AgentAttachment[], now: readonly AgentAttachmen
   return was.length === now.length && was.every((file, at) => file === now[at]);
 }
 
-/** How a comment's field stands: as a thread's first comment, the card itself, or as a reply under its comments. */
-const REPLY_VARIANT = { FIRST: "first", REPLY: "reply" } as const;
+/** How a comment's field stands: as a thread's first comment, the card itself, as a reply under its comments, or as a comment's words edited in their place (`CommentEditField`). */
+const REPLY_VARIANT = { FIRST: "first", REPLY: "reply", EDIT: "edit" } as const;
 
 type ReplyVariant = (typeof REPLY_VARIANT)[keyof typeof REPLY_VARIANT];
 
@@ -1397,7 +1606,12 @@ function ThreadCard({
         {first === undefined ? null : (
           <WrittenComment writer={first.writer} agents={doors.agents} at={first.at} now={now}>
             <div className="comment-clamp line-clamp-3">
-              <CommentWords words={ownWordsOf(thread, first.words ?? "")} />
+              <PostedComment
+                planId={doors.control.planId}
+                files={first.files ?? NO_FILES}
+                words={ownWordsOf(thread, first.words ?? "")}
+                folded
+              />
             </div>
           </WrittenComment>
         )}
@@ -3221,19 +3435,33 @@ export function threadsByElement(
   return by;
 }
 
-/** What the pointer over a pin is told: the first comment whole, as its thread draws it, scrolling in the card where it is long. */
+/** A preview's files by their names and types alone, which it draws and opens none of. */
+const NO_PREVIEW_FILES: readonly Pick<FileChip, "name" | "mediaType">[] = [];
+
+/**
+ * What the pointer over a pin is told: the first comment whole, as its
+ * thread draws it, scrolling in the card where it is long, each file its
+ * words name drawn there as its chip by its name and type alone, since a
+ * preview reads no file's bytes and opens none.
+ */
 function PinPreview({
   head,
   words,
+  files = NO_PREVIEW_FILES,
 }: {
   head: Pick<Parameters<typeof Comment>[0], "author" | "nameRef" | "at" | "now" | "trailing">;
   words: string;
+  files?: readonly Pick<FileChip, "name" | "mediaType">[] | undefined;
 }): React.JSX.Element {
+  const shown = useWordFiles(
+    files.map((file) => ({ name: file.name, mediaType: file.mediaType, url: "" })),
+    words,
+  );
   return (
     <HoverCard>
       <Comment {...head}>
         <HoverCardScroll>
-          <CommentWords words={words} />
+          <CommentWords words={words} files={shown.named} />
         </HoverCardScroll>
       </Comment>
     </HoverCard>
@@ -3280,6 +3508,7 @@ function PagePin({
           <PinPreview
             head={{ author, nameRef, at: first.at, now }}
             words={ownWordsOf(thread, first.words ?? "")}
+            files={first.files}
           />
         )
       }
@@ -3362,11 +3591,11 @@ export function PendingPageComment({
           ],
         ];
   // Note that an edit emptied deletes the comment, as a posted one's does, here at once with Undo.
-  const save = () => {
+  const save = ({ added }: EditedFiles) => {
     const next = editing?.trim() ?? "";
     setEditing(undefined);
     if (next === "") review.remove(clientKey);
-    else review.edit(clientKey, next);
+    else review.edit(clientKey, next, added);
   };
   return (
     <div className="comment-entry relative py-tight-gap" data-pending={clientKey}>
@@ -3394,14 +3623,12 @@ export function PendingPageComment({
           />
         )}
         {editing === undefined ? (
-          <>
-            {comment.attachments.length > 0 ? (
-              <AttachedFileChips files={attachmentChips(comment.attachments)} />
-            ) : null}
-            <CommentWords words={words} />
-          </>
+          <CommentBody chips={attachmentChips(comment.attachments)} words={words} />
         ) : (
           <CommentEditField
+            planId={comment.planId}
+            files={NO_FILES}
+            attached={comment.attachments}
             value={editing}
             onChange={setEditing}
             onSave={save}
@@ -3452,6 +3679,7 @@ function HeldPin({
           <PinPreview
             head={{ author, nameRef, trailing: <PendingWords /> }}
             words={heldWords(first)}
+            files={first.attachments}
           />
         )
       }
@@ -3476,11 +3704,13 @@ function DraftWords(): React.JSX.Element {
  */
 function DraftPin({
   words,
+  files,
   stands,
   onOpen,
   onHint,
 }: {
   words: string;
+  files: readonly AgentAttachment[];
   stands: CommentPinStands;
   onOpen: () => void;
   onHint: (over: boolean) => void;
@@ -3494,7 +3724,13 @@ function DraftPin({
       stands={stands}
       onPress={onOpen}
       onHover={onHint}
-      preview={<PinPreview head={{ author, nameRef, trailing: <DraftWords /> }} words={words} />}
+      preview={
+        <PinPreview
+          head={{ author, nameRef, trailing: <DraftWords /> }}
+          words={words}
+          files={files}
+        />
+      }
     />
   );
 }
@@ -3604,7 +3840,13 @@ export function PageCommentLayer({
   onStarted: (threadId: string) => void;
   onCancel: () => void;
   /** The comment started and let go with words of the writer's own, its words and the element it was started on, none on the whole page; none where no such draft waits. */
-  drafted: { readonly words: string; readonly element: DraftPageElement | undefined } | undefined;
+  drafted:
+    | {
+        readonly words: string;
+        readonly attachments: readonly AgentAttachment[];
+        readonly element: DraftPageElement | undefined;
+      }
+    | undefined;
   /** Opens the draft again where it was started, `box` where its element stands in the frame, none on the whole page. */
   onReopen: (box: FrameBox | undefined) => void;
 }): React.JSX.Element {
@@ -3705,6 +3947,7 @@ export function PageCommentLayer({
         >
           <DraftPin
             words={drafted.words}
+            files={drafted.attachments}
             stands={pinStands(draftMark.box)}
             onOpen={() => {
               if (review?.editing === true) return;

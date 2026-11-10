@@ -1,6 +1,7 @@
 // task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and a split view of two or three columns in a regular one.
 
 import { AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
+import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { threadsWaitingWords } from "@repo/features/inbox-list-model";
 import { iosAgentRoute, iosPullRequestRoute } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION, type LinkDestination, linkOf } from "@repo/features/link-grammar";
@@ -62,6 +63,7 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { SettingsBarButton, useSettingsAccount } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
+import { useSurfaceOpen } from "../surface-open.js";
 import {
   type TaskOverview,
   type TasksListing,
@@ -642,6 +644,7 @@ function TasksSplitScreen({
   const overview = useTaskOverview(selected);
   const read = useTasksRead();
   const account = useSettingsAccount();
+  useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
   const tree = (
     <TasksTree
       listing={listing}
@@ -702,7 +705,9 @@ export function TaskScreen() {
   const overview = useTaskOverview(id);
   const read = useTasksRead();
   const menu = overview === undefined ? undefined : taskMenu(overview);
-  if (useHandToSplit(SPLIT_TAB.TASKS, id)) return null;
+  const handed = useHandToSplit(SPLIT_TAB.TASKS, id);
+  useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);
+  if (handed) return null;
   return (
     <>
       <Stack.Screen

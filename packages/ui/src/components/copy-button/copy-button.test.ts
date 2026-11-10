@@ -24,7 +24,7 @@ declare global {
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
-const HOLD_MS = Duration.toMillis(TOAST_HOLD.DONE);
+const HOLD_MS = Duration.toMillis(TOAST_HOLD);
 
 const roots: Root[] = [];
 

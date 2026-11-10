@@ -7,9 +7,9 @@ import {
   writeInline,
 } from "@repo/features/composer-markdown";
 import { fenceAfter } from "@repo/features/description-document";
-import { pictureMarker, pictureMarkers } from "@repo/features/picture-marker";
+import { fileMarker, fileMarkers } from "@repo/features/file-marker";
 import { skillWord } from "@repo/features/skill-word";
-import { WRITING_MARK } from "@repo/settings/shortcuts";
+import { WRITING_BLOCK, WRITING_MARK } from "@repo/settings/shortcuts";
 import { TEXT_LINK_MARK_ATTRIBUTES } from "@repo/ui/link-face";
 import {
   cutReply,
@@ -21,6 +21,12 @@ import {
 } from "@repo/ui/reply-quote";
 import { insideCode, mentionAt, skillTokens, type TextRange } from "@repo/ui/skill-mention";
 import { type AnyExtension, Editor, Extension, Node } from "@tiptap/core";
+import {
+  chainCommands,
+  createParagraphNear,
+  liftEmptyBlock,
+  splitBlock,
+} from "@tiptap/pm/commands";
 import {
   type Fragment,
   type Mark,
@@ -38,14 +44,13 @@ import {
 import type { EditorProps, EditorView } from "@tiptap/pm/view";
 import StarterKit from "@tiptap/starter-kit";
 import { enterKeyHint, enterSends, modEnterSends } from "../enter-sends.js";
-import { pickedRest, spacedAfterChip } from "./chip-spacing.js";
+import { atWordAround, chipOverSelection, spacedChip } from "./chip-spacing.js";
 import {
   COMPOSER_INPUT,
   type ComposerEditorHandle,
   type ComposerEditorProps,
   type ComposerInput,
   type ComposerMark,
-  type ComposerQuote,
   type ComposerTrigger,
   type EditorAria,
   type MentionNode,
@@ -61,29 +66,36 @@ import {
   mentionTokens,
   pastedMention,
 } from "./mention-node.js";
+import { quoteNode } from "./quote-node.js";
 import { editorFormatting, formatReports } from "./writing-format.js";
 import { withoutTipTapChords, writingKeys } from "./writing-keys.js";
 
 /**
- * composer-editor.ts -- an agent's message box on TipTap: words and their inline marks, a line break, a chosen skill as a chip, and a quote of the agent's words as a block, read out as the one string the message is.
+ * composer-editor.ts -- an agent's message box on TipTap: words and their inline marks, a line break, a chosen skill as a chip, and a quote, read out as the one string the message is.
  *
- * The box holds lines of words and nothing a block would make of them, so
- * its schema is StarterKit cut down to a document of paragraphs, text, a
- * hard break, undo, and the inline marks: bold, italic, strikethrough,
- * code, and a link. A mark is typed as its Markdown, by its chord from the
- * writing vocabulary (`./writing-keys.ts`, its marks' chords alone), or from
- * the format toolbar its owner stands over the words selected
+ * The box holds lines of words and one block, the quote, so its schema is
+ * StarterKit cut down to a document of paragraphs, text, a hard break,
+ * undo, the inline marks (bold, italic, strikethrough, code, and a link),
+ * and the quote both editors hold (`./quote-node.ts`), holding lines alone. A mark is typed as its Markdown, by its chord from the writing
+ * vocabulary (`./writing-keys.ts`, its marks' chords and the quote's), or
+ * from the format toolbar its owner stands over the words selected
  * (`./writing-format.ts`), and is read out and back as the Markdown it is
  * (`./composer-markdown.ts`); words wearing none read out exactly as typed.
- * No list, heading, or quote is typed into being, and no link is made of
- * an address as it is typed. A chip wears no mark, so words selected
- * around one and bolded leave it as it was. One node is added, the `skill` chip, an atom that one
- * Backspace takes out whole and that reads out as `/name`; and the quote,
- * a block of the agent's words laid in by Reply where the caret stands
- * (`insertQuote`), never edited, that one Backspace on the line under it
- * takes out whole as it does a chip, and that reads out as a Markdown
- * blockquote with a blank line around it (`@repo/ui/reply-quote`), read
- * back into a block as the words are laid in again. The words leave
+ * A quote is typed as `> ` at a line's start, or by its chord, as Notion's,
+ * Linear's, and Slack's are, and its keys are the editor's own: Backspace
+ * at its start turns the line back into words, and the caret stands over a
+ * quote that starts the box as a gap cursor. Since Enter alone is the
+ * owner's send, Shift with Enter is the box's Enter as a document has it
+ * (`DOCUMENT_ENTER`): a new line, or, on an empty line of a quote, the line
+ * out of it. No list or heading is typed into being, and no link is made of
+ * an address as it is typed. A chip wears no mark, so words selected around
+ * one and bolded leave it as it was. One node is added, the `skill` chip,
+ * an atom that one Backspace takes out whole and that reads out as
+ * `/name`. Reply lays the agent's words in as a quote where the caret
+ * stands (`insertQuote`), edited as any quote is. A quote reads out as a
+ * Markdown blockquote with a blank line around it
+ * (`@repo/ui/reply-quote`), read back into a quote as the words are laid
+ * in again. The words leave
  * the editor one way, `onDraft`, as the string `textOf` reads off the
  * document; nothing hands them back in. A change from outside is one of
  * the handle's commands (`./contract.ts`): `clear` after a send, `replace`
@@ -91,10 +103,10 @@ import { withoutTipTapChords, writingKeys } from "./writing-keys.js";
  * every change until a dictation's words land there, so no offset into the
  * string is ever turned back into a place in the document by arithmetic.
  *
- * A picture's chip is an atom too, read out as its marker, `[Picture 1]`
- * (`@repo/features/picture-marker`), laid in where the owner marked the caret
- * as the picture was handed (`ComposerMark.insertPictures`), and made of a
- * marker naming a picture the box holds wherever the words are laid in.
+ * A file's chip is an atom too, read out as its marker, `[Picture 1]` or
+ * `[File: spec.pdf]` (`@repo/features/file-marker`), laid in where the owner
+ * marked the caret as the file was handed (`ComposerMark.insertFiles`), and
+ * made of a marker naming a file the box holds wherever the words are laid in.
  *
  * A `/name` naming one of the repository's skills becomes its chip once the
  * caret has left it, typed or pasted, and at once in words laid in whole;
@@ -139,8 +151,8 @@ const NAME_CHARACTER = /[A-Za-z0-9-]/u;
 const SPACE = " ";
 const NEWLINE = "\n";
 const SKILL_NODE = "skill";
-const PICTURE_NODE = "pictureChip";
-const QUOTE_NODE = "replyQuote";
+const FILE_NODE = "fileChip";
+const QUOTE_NODE = "blockquote";
 const HARD_BREAK_NODE = "hardBreak";
 
 /** A run of plain text in the words: where it starts in the string, and where in the document. */
@@ -150,11 +162,11 @@ interface TextRun {
   readonly length: number;
 }
 
+/** The writing actions the box answers: its marks', and a quote's. */
+const WRITING_ACTIONS = [...Object.values(WRITING_MARK), WRITING_BLOCK.QUOTE];
+
 /** The marks the box holds, by name. */
 const INLINE_MARKS: ReadonlySet<string> = new Set(Object.values(INLINE_MARK));
-
-/** The writing actions the box answers: its marks', and no block's. */
-const MARK_ACTIONS = Object.values(WRITING_MARK);
 
 /** Whether a mark's name is one the box holds. */
 function isInlineMark(name: string): name is InlineMarkName {
@@ -172,7 +184,7 @@ function inlineMark(mark: Mark): InlineMark[] {
 function inlineText(node: PmNode): string {
   if (node.isText) return node.text ?? "";
   if (node.type.name === SKILL_NODE) return skillWord(String(node.attrs.name));
-  if (node.type.name === PICTURE_NODE) return pictureMarker(String(node.attrs.name));
+  if (node.type.name === FILE_NODE) return fileMarker(String(node.attrs.name));
   if (node.type.name === MENTION_NODE) {
     return mentionLink({ name: String(node.attrs.name), target: String(node.attrs.target) });
   }
@@ -184,9 +196,9 @@ function isQuote(node: PmNode): boolean {
   return node.type.name === QUOTE_NODE;
 }
 
-/** A quote block's words. */
+/** A quote block's words: its lines, each as the Markdown it is written as. */
 function quoteWords(node: PmNode): string {
-  return String(node.attrs.words);
+  return fragmentText(node.content);
 }
 
 /** Inline nodes written as one line of Markdown: the line, and where each text node's words landed in it, by the node's index. */
@@ -214,37 +226,71 @@ function fragmentText(fragment: Fragment): string {
   return blocks.length === 0 ? writtenLine(inline).text : messageText(blocks);
 }
 
+/** The words a copied slice stands for: words picked inside one quote copied as its words, not as a quote, as a copy taken out of a quoted line elsewhere is; anything else as the box writes it. */
+function copiedText(slice: Slice): string {
+  const only = slice.content.childCount === 1 ? slice.content.firstChild : null;
+  const insideQuote = only !== null && isQuote(only) && slice.openStart > 0 && slice.openEnd > 0;
+  return fragmentText(insideQuote ? only.content : slice.content);
+}
+
 /** The words the document stands for, as the message sends them. */
 function textOf(doc: PmNode): string {
   return fragmentText(doc.content);
 }
 
-/** Every run of words in the document, in order, each with where it stands in the words, a mark's delimiters around it. */
+/** Where a character of a quote's line stands once the line is quoted: past the `> ` (or, on an empty line, `>`) of its own line and of each line a break opened before it. */
+function quotedOffset(line: string, at: number): number {
+  const lines = line.split(NEWLINE);
+  const before = line.slice(0, at).split(NEWLINE).length;
+  let prefixes = 0;
+  for (let index = 0; index < before; index += 1) prefixes += lines[index] === "" ? 1 : 2;
+  return at + prefixes;
+}
+
+/** The runs of words of one line of the document, `start` the place its paragraph stands at and `offset` where its words start, a quote's lines shifted past their `> `. */
+function lineRuns(
+  paragraph: PmNode,
+  start: number,
+  offset: number,
+  quoted: boolean,
+): { runs: TextRun[]; length: number } {
+  const children: PmNode[] = [];
+  const starts: number[] = [];
+  paragraph.forEach((child, childStart) => {
+    children.push(child);
+    starts.push(start + 1 + childStart);
+  });
+  const line = writtenLine(children);
+  const runs = line.segments.map((segment) => ({
+    offset: offset + (quoted ? quotedOffset(line.text, segment.offset) : segment.offset),
+    pos: (starts[segment.piece] ?? 0) + segment.from,
+    length: segment.length,
+  }));
+  return { runs, length: quoted ? quoteOf(line.text).length : line.text.length };
+}
+
+/** Every run of words in the document, in order, each with where it stands in the words, a mark's delimiters around it, a quote's lines among them. */
 function textRuns(doc: PmNode): TextRun[] {
   const runs: TextRun[] = [];
   let offset = 0;
   let previous: PmNode | undefined;
-  doc.forEach((paragraph, start) => {
+  doc.forEach((block, start) => {
     if (previous !== undefined) {
-      offset += isQuote(previous) || isQuote(paragraph) ? QUOTE_GAP.length : NEWLINE.length;
+      offset += isQuote(previous) || isQuote(block) ? QUOTE_GAP.length : NEWLINE.length;
     }
-    previous = paragraph;
-    if (isQuote(paragraph)) {
-      offset += quoteOf(quoteWords(paragraph)).length;
+    previous = block;
+    if (!isQuote(block)) {
+      const line = lineRuns(block, start, offset, false);
+      runs.push(...line.runs);
+      offset += line.length;
       return;
     }
-    const children: PmNode[] = [];
-    const starts: number[] = [];
-    paragraph.forEach((child, childStart) => {
-      children.push(child);
-      starts.push(start + 1 + childStart);
+    block.forEach((paragraph, childStart) => {
+      if (childStart > 0) offset += NEWLINE.length;
+      const line = lineRuns(paragraph, start + 1 + childStart, offset, true);
+      runs.push(...line.runs);
+      offset += line.length;
     });
-    const line = writtenLine(children);
-    for (const segment of line.segments) {
-      const pos = (starts[segment.piece] ?? 0) + segment.from;
-      runs.push({ offset: offset + segment.offset, pos, length: segment.length });
-    }
-    offset += line.text.length;
   });
   return runs;
 }
@@ -284,28 +330,28 @@ interface ChipToken {
   readonly node: (schema: Schema) => PmNode;
 }
 
-/** What words are made chips of: the skills a `/name` names, the pictures a marker names, and whether the box takes mentions. */
+/** What words are made chips of: the skills a `/name` names, the files a marker names, and whether the box takes mentions. */
 interface Chipping {
   readonly skills: ReadonlySet<string>;
-  readonly pictures: ReadonlySet<string>;
+  readonly files: ReadonlySet<string>;
   readonly mentions: boolean;
 }
 
-/** Each marker of a picture the box holds, as the range it stands in. */
-function pictureTokens(text: string, pictures: ReadonlySet<string>): readonly ChipToken[] {
-  return pictureMarkers(text)
-    .filter((marker) => pictures.has(marker.name))
+/** Each marker of a file the box holds, as the range it stands in. */
+function fileTokens(text: string, files: ReadonlySet<string>): readonly ChipToken[] {
+  return fileMarkers(text)
+    .filter((marker) => files.has(marker.name))
     .map((marker) => ({
       start: marker.start,
       end: marker.end,
-      node: (schema: Schema) => schema.node(PICTURE_NODE, { name: marker.name }),
+      node: (schema: Schema) => schema.node(FILE_NODE, { name: marker.name }),
     }));
 }
 
 /** Every chip the words spell, in order: each `/name` of a known skill, and each mention written as its link where the box takes mentions, none overlapping another. */
 function chipTokens(
   text: string,
-  { skills, pictures, mentions: takesMentions }: Chipping,
+  { skills, files, mentions: takesMentions }: Chipping,
 ): readonly ChipToken[] {
   // Note that a box that takes no mentions keeps a mention's link as the words it is, which it can edit.
   const mentions = (takesMentions ? mentionTokens(text) : []).map(
@@ -325,10 +371,10 @@ function chipTokens(
       }),
     );
   // Note that a marker inside a mention's link is the link's words, as a `/name` there is.
-  const pictured = pictureTokens(text, pictures).filter(
+  const filed = fileTokens(text, files).filter(
     (token) => !mentions.some((each) => token.start < each.end && token.end > each.start),
   );
-  return [...mentions, ...skilled, ...pictured].sort((first, second) => first.start - second.start);
+  return [...mentions, ...skilled, ...filed].sort((first, second) => first.start - second.start);
 }
 
 /** A mark the words wear as the schema holds it. */
@@ -388,7 +434,7 @@ function documentOf(schema: Schema, text: string, chipping: Chipping): PmNode {
   const blocks = messageBlocks(text);
   const nodes = blocks.flatMap((block) =>
     block.kind === MESSAGE_BLOCK.QUOTE
-      ? [schema.node(QUOTE_NODE, { words: block.words })]
+      ? [schema.node(QUOTE_NODE, null, paragraphsOf(schema, block.words, chipping))]
       : paragraphsOf(schema, block.lines.join(NEWLINE), chipping),
   );
   if (blocks.at(-1)?.kind === MESSAGE_BLOCK.QUOTE) nodes.push(schema.node("paragraph"));
@@ -401,13 +447,13 @@ function sliceOf(schema: Schema, text: string, chipping: Chipping): Slice {
 }
 
 /**
- * Each `/name` of a known skill and each marker of a held picture that
+ * Each `/name` of a known skill and each marker of a held file that
  * still stands as words made its chip, but the one the caret ends where it
  * is asked to be spared; nothing where there is none.
  */
 function chipped(
   state: EditorState,
-  chipping: Pick<Chipping, "skills" | "pictures">,
+  chipping: Pick<Chipping, "skills" | "files">,
   spareCaret: boolean,
 ): Transaction | undefined {
   const { doc, selection, schema } = state;
@@ -424,7 +470,7 @@ function chipped(
       node: (place: { from: number; to: number }) =>
         schema.node(SKILL_NODE, { name: doc.textBetween(place.from + 1, place.to) }),
     })),
-    ...pictureTokens(text, chipping.pictures).map((token) => ({
+    ...fileTokens(text, chipping.files).map((token) => ({
       ...token,
       node: () => token.node(schema),
     })),
@@ -442,27 +488,18 @@ function chipped(
   return tr.setMeta(CHIPPED_META, true);
 }
 
-/** The quote block beside an empty caret at a line's edge, the one above for Backspace at its start and the one below for Delete at its end, taken out whole; answers whether there was one. */
-function removedQuote(view: EditorView, back: boolean): boolean {
-  const { doc, selection } = view.state;
-  const { $from } = selection;
-  if ($from.depth !== 1) return false;
-  const atEdge = back ? $from.parentOffset === 0 : $from.parentOffset === $from.parent.content.size;
-  const index = $from.index(0) + (back ? -1 : 1);
-  if (!atEdge || index < 0 || index >= doc.childCount) return false;
-  const beside = doc.child(index);
-  if (!isQuote(beside)) return false;
-  const from = back ? $from.before(1) - beside.nodeSize : $from.after(1);
-  view.dispatch(view.state.tr.delete(from, from + beside.nodeSize).scrollIntoView());
-  return true;
-}
+/**
+ * Shift with Enter as a document's Enter: a new line, or, on an empty line
+ * of a quote, the line out of the quote. Note that Enter alone is the
+ * owner's send, so Shift with Enter is the box's one way to a new line.
+ */
+const DOCUMENT_ENTER = chainCommands(createParagraphNear, liftEmptyBlock, splitBlock);
 
-/** The chip or the quote beside an empty selection taken out whole, before it for Backspace and after it for Delete; answers whether there was one. */
+/** The chip beside an empty selection taken out whole, before it for Backspace and after it for Delete; answers whether there was one. */
 function removedChip(view: EditorView, key: string): boolean {
   const { selection } = view.state;
   if (!selection.empty || (key !== "Backspace" && key !== "Delete")) return false;
   const back = key === "Backspace";
-  if (removedQuote(view, back)) return true;
   const beside = back ? selection.$from.nodeBefore : selection.$from.nodeAfter;
   if (beside === null || beside === undefined || !isChip(beside)) return false;
   const from = back ? selection.from - 1 : selection.from;
@@ -494,23 +531,14 @@ function slashWord(text: string, caret: number): TriggerWord | undefined {
   return { ...mention, end };
 }
 
-/** The `@` word the caret ends: `@` at the start of a word, then up to six words with no bracket, parenthesis, or `@` in them. */
-const AT_WORD = /(^|\s)@((?:[^\s@[\]()]+(?: [^\s@[\]()]+){0,5})?)$/u;
-
-/** A character of an `@` word, which a pick replaces through to the word's end. */
-const AT_WORD_CHARACTER = /[^\s@[\]()]/u;
-
-/** The `@` word the caret ends, as far as it is typed, through to the word's end; nothing in code. */
+/** The `@` word the caret ends, as far as it is typed, through to the word's end (`atWordAround`); nothing in code. */
 function atWord(text: string, caret: number): TriggerWord | undefined {
-  const match = AT_WORD.exec(text.slice(0, caret));
-  if (match === null) return undefined;
-  const query = match[2] ?? "";
-  const start = caret - query.length - 1;
+  const word = atWordAround(text.slice(0, caret), text.slice(caret));
+  if (word === undefined) return undefined;
+  const start = caret - word.query.length - 1;
   // An `@` in code is the code's, as a `/` there is, and as the server reads no mention there.
   if (insideCode(text, start)) return undefined;
-  let end = caret;
-  while (end < text.length && AT_WORD_CHARACTER.test(text[end] ?? "")) end += 1;
-  return { start, query, end: caret + pickedRest(text.slice(caret, end)).length };
+  return { start, query: word.query, end: caret + word.rest };
 }
 
 /**
@@ -587,18 +615,15 @@ function skillNode(drawChip: ComposerEditorProps["drawChip"], known: (name: stri
 }
 
 /**
- * A picture's chip: an atom read out as its marker, `[Picture 1]`, its look
- * the panel's (`drawPicture`), its name in the node and never in the DOM's
- * attributes, as a skill's is; where the panel draws none, its marker as
- * words. A chip copied out and pasted back is read by its words, and stays
- * words where the box holds no picture of that name.
+ * A file's chip: an atom read out as its marker, `[Picture 1]` or
+ * `[File: spec.pdf]`, its look the panel's (`drawFile`), its name in the
+ * node and never in the DOM's attributes, as a skill's is; where the panel
+ * draws none, its marker as words. A chip copied out and pasted back is read
+ * by its words, and stays words where the box holds no file of that name.
  */
-function pictureNode(
-  drawPicture: ComposerEditorProps["drawPicture"],
-  held: (name: string) => boolean,
-) {
+function fileNode(drawFile: ComposerEditorProps["drawFile"], held: (name: string) => boolean) {
   return Node.create({
-    name: PICTURE_NODE,
+    name: FILE_NODE,
     group: "inline",
     inline: true,
     atom: true,
@@ -609,80 +634,28 @@ function pictureNode(
     parseHTML() {
       return [
         {
-          tag: `span[data-chip="${PICTURE_NODE}"]`,
+          tag: `span[data-chip="${FILE_NODE}"]`,
           getAttrs: (element) => {
-            const name = pictureMarkers(element.textContent)[0]?.name;
+            const name = fileMarkers(element.textContent)[0]?.name;
             return name !== undefined && held(name) ? { name } : false;
           },
         },
       ];
     },
     renderHTML({ node }) {
-      return ["span", { "data-chip": PICTURE_NODE }, pictureMarker(String(node.attrs.name))];
+      return ["span", { "data-chip": FILE_NODE }, fileMarker(String(node.attrs.name))];
     },
     renderText({ node }) {
-      return pictureMarker(String(node.attrs.name));
+      return fileMarker(String(node.attrs.name));
     },
     addNodeView() {
       return ({ node }) => {
         const dom = document.createElement("span");
         dom.contentEditable = "false";
-        dom.dataset.chip = PICTURE_NODE;
+        dom.dataset.chip = FILE_NODE;
         const name = String(node.attrs.name);
-        if (drawPicture === undefined) dom.textContent = pictureMarker(name);
-        const undraw = drawPicture?.(dom, name) ?? (() => undefined);
-        return { dom, ignoreMutation: () => true, destroy: undraw };
-      };
-    },
-  });
-}
-
-/**
- * The quote block: an atom no caret stands in and no key edits, read out as
- * a blockquote, its look the panel's (`drawQuote`), with the press that
- * takes it out. Note that its words stand in no attribute of the DOM, as a
- * chip's name does not, so the recording masks them as text.
- */
-function quoteNode(drawQuote: ComposerEditorProps["drawQuote"]) {
-  return Node.create({
-    name: QUOTE_NODE,
-    group: "block",
-    atom: true,
-    selectable: false,
-    draggable: false,
-    addAttributes() {
-      return { words: { default: "", rendered: false } };
-    },
-    parseHTML() {
-      return [
-        {
-          tag: "blockquote[data-quote]",
-          getAttrs: (element) => ({ words: element.textContent }),
-        },
-      ];
-    },
-    renderHTML({ node }) {
-      return ["blockquote", { "data-quote": "" }, quoteWords(node)];
-    },
-    renderText({ node }) {
-      return quoteOf(quoteWords(node));
-    },
-    addNodeView() {
-      return ({ node, getPos, editor }) => {
-        const dom = document.createElement("div");
-        dom.contentEditable = "false";
-        dom.dataset.quote = "";
-        const quote: ComposerQuote = {
-          words: quoteWords(node),
-          remove: () => {
-            const pos = getPos();
-            if (pos === undefined || !editor.isEditable) return;
-            editor.view.dispatch(editor.state.tr.delete(pos, pos + node.nodeSize));
-            editor.view.focus();
-          },
-        };
-        if (drawQuote === undefined) dom.textContent = quote.words;
-        const undraw = drawQuote?.(dom, quote) ?? (() => undefined);
+        if (drawFile === undefined) dom.textContent = fileMarker(name);
+        const undraw = drawFile?.(dom, name) ?? (() => undefined);
         return { dom, ignoreMutation: () => true, destroy: undraw };
       };
     },
@@ -704,11 +677,11 @@ function composerExtensions(
   held: (name: string) => boolean,
 ): AnyExtension[] {
   const kit = StarterKit.configure({
+    // Note that the quote is the description's own (`quoteNode`), holding lines alone.
     blockquote: false,
     bulletList: false,
     codeBlock: false,
     dropcursor: false,
-    gapcursor: false,
     heading: false,
     horizontalRule: false,
     listItem: false,
@@ -720,19 +693,19 @@ function composerExtensions(
   });
   return [
     withoutTipTapChords(kit),
-    writingKeys.configure({ actions: MARK_ACTIONS }),
+    writingKeys.configure({ actions: WRITING_ACTIONS }),
     ...formatReports(props.format),
     skillNode(props.drawChip, known),
-    pictureNode(props.drawPicture, held),
+    fileNode(props.drawFile, held),
     mentionNode(props.mentions?.drawMention),
-    quoteNode(props.drawQuote),
+    quoteNode(true),
   ];
 }
 
-/** Whether a node is a chip, a skill's, a picture's, or a mention's. */
+/** Whether a node is a chip, a skill's, a file's, or a mention's. */
 function isChip(node: PmNode): boolean {
   const { name } = node.type;
-  return name === SKILL_NODE || name === PICTURE_NODE || name === MENTION_NODE;
+  return name === SKILL_NODE || name === FILE_NODE || name === MENTION_NODE;
 }
 
 /** Every chip a mark was laid on, as words selected around it and marked lay one, made to wear none again. */
@@ -747,7 +720,7 @@ function unmarkedChips(tr: Transaction): Transaction {
 /** What a mounted box keeps between its events: the skills it chips, whether it takes words, what ties it to its list, the last words and word it reported, and its marks. */
 interface ComposerState {
   skills: ReadonlySet<string>;
-  pictures: ReadonlySet<string>;
+  files: ReadonlySet<string>;
   input: ComposerInput;
   aria: EditorAria;
   emitted: string;
@@ -883,7 +856,10 @@ function composerProps(state: ComposerState, props: ComposerEditorProps): Editor
       if (composing(view, event)) return false;
       if (props.onKey(event) || removedChip(view, event.key)) return true;
       // Note that Shift with Enter is never the owner's, ⌘ or Ctrl held too, since Shift is what breaks a line.
-      if (event.shiftKey) return false;
+      if (event.shiftKey) {
+        const plain = event.key === "Enter" && !event.metaKey && !event.ctrlKey && !event.altKey;
+        return plain && DOCUMENT_ENTER(view.state, view.dispatch);
+      }
       if (!(props.enterWrites === true ? modEnterSends(event) : enterSends(event))) return false;
       props.onEnter();
       return true;
@@ -920,7 +896,7 @@ function composerProps(state: ComposerState, props: ComposerEditorProps): Editor
     // Note that a drop of files is left to the card around the box, which takes them as a "+" does.
     handleDrop: (_view, event) => event.dataTransfer?.types.includes("Files") === true,
     clipboardTextParser: (text, _context, _plain, view) => sliceOf(view.state.schema, text, state),
-    clipboardTextSerializer: (slice) => fragmentText(slice.content),
+    clipboardTextSerializer: copiedText,
   };
 }
 
@@ -988,14 +964,14 @@ function insertedAt(
 }
 
 /**
- * Pictures put in as their chips at a place, spaced from a word either
- * side, the caret after the last and the box focused, each held from now
- * on; answers whether they went in, which they do not past the bound, nor
- * where the place holds no words. Note that the change is undone as any
- * other, so its chips go and come back with undo, and their pictures with
- * them (`use-attached-files.ts`).
+ * Files put in as their chips at a place, spaced from a word either side,
+ * the caret after the last and the box focused, each held from now on;
+ * answers whether they went in, which they do not past the bound, nor where
+ * the place holds no words. Note that the change is undone as any other, so
+ * its chips go and come back with undo, and their files with them
+ * (`use-attached-files.ts`).
  */
-function insertedPicturesAt(
+function insertedFilesAt(
   editor: Editor,
   state: ComposerState,
   maxLength: number,
@@ -1005,29 +981,29 @@ function insertedPicturesAt(
   const { doc, schema } = editor.state;
   const $pos = doc.resolve(pos);
   if (names.length === 0 || !$pos.parent.inlineContent) return false;
-  state.pictures = new Set([...state.pictures, ...names]);
+  state.files = new Set([...state.files, ...names]);
   const chips = names.flatMap((name, index) => [
-    ...(index > 0 || needsSpace($pos.nodeBefore, false) ? [schema.text(SPACE)] : []),
-    schema.node(PICTURE_NODE, { name }),
+    ...(index > 0 ? [schema.text(SPACE)] : []),
+    schema.node(FILE_NODE, { name }),
   ]);
   const laid = editor.state.tr.insert(pos, chips);
-  const tr = spacedAfterChip(laid, laid.mapping.map(pos));
+  const tr = spacedChip(laid, pos, laid.mapping.map(pos));
   if (textOf(tr.doc).length > maxLength) return false;
   editor.view.dispatch(tr.setMeta(COMMAND_META, true).setMeta(CHIPPED_META, true).scrollIntoView());
   editor.view.focus();
   return true;
 }
 
-/** The word a trigger found written as the chip given, spaced from what follows (`spacedAfterChip`). */
+/** The word a trigger found written as the chip given, spaced as every chip is (`spacedChip`). */
 function choseChip(editor: Editor, word: ReturnType<typeof triggerAt>, chip: PmNode): void {
   if (word === undefined) return;
   const tr = editor.state.tr.replaceWith(word.from, word.to, chip);
-  editor.view.dispatch(spacedAfterChip(tr, word.from + chip.nodeSize).scrollIntoView());
+  editor.view.dispatch(spacedChip(tr, word.from, word.from + chip.nodeSize).scrollIntoView());
 }
 
 /**
  * A mention made elsewhere laid in where the caret stands, over what is
- * selected, spaced from what follows (`spacedAfterChip`), and the box
+ * selected, spaced as every chip is (`chipOverSelection`), and the box
  * focused; nothing where the box takes no words now, or the words with its
  * link would stand past the bound, as a key typed past it is not written.
  */
@@ -1039,19 +1015,18 @@ function laidInMention(
 ): void {
   if (state.input !== COMPOSER_INPUT.EDITABLE) return;
   const chip = editor.schema.node(MENTION_NODE, { name: mention.name, target: mention.target });
-  const laid = editor.state.tr.replaceSelectionWith(chip, false);
-  const tr = spacedAfterChip(laid, laid.selection.from);
+  const tr = chipOverSelection(editor.state, chip);
   if (textOf(tr.doc).length > maxLength) return;
   editor.view.dispatch(tr.scrollIntoView());
   editor.view.focus();
 }
 
-/** The quote laid in under the line the caret stands on, or in its place where the line is empty, an empty line under it holding the caret. */
-function quotedAt(editor: Editor, words: string): Transaction {
+/** The quote laid in under the line or the quote the caret stands in, or in its place where the line is empty, an empty line under it holding the caret. */
+function quotedAt(editor: Editor, chipping: Chipping, words: string): Transaction {
   const { doc, selection, schema } = editor.state;
   const { $from } = selection;
   const line = doc.child($from.index(0));
-  const quote = schema.node(QUOTE_NODE, { words });
+  const quote = schema.node(QUOTE_NODE, null, paragraphsOf(schema, words, chipping));
   const from = $from.before(1);
   const empty = line.type.name === "paragraph" && line.content.size === 0;
   const tr = empty
@@ -1076,12 +1051,12 @@ function laidInQuote(
   maxLength: number,
   words: string,
 ): boolean {
-  if (state.input !== COMPOSER_INPUT.EDITABLE || editor.state.selection.$from.depth !== 1) {
+  if (state.input !== COMPOSER_INPUT.EDITABLE || editor.state.selection.$from.depth < 1) {
     return false;
   }
   let kept = words;
   while (kept !== "") {
-    const tr = quotedAt(editor, kept);
+    const tr = quotedAt(editor, state, kept);
     const over = textOf(tr.doc).length - maxLength;
     if (over <= 0) {
       editor.view.dispatch(tr.scrollIntoView());
@@ -1103,10 +1078,10 @@ function marked(editor: Editor, state: ComposerState, maxLength: number): Compos
       state.marks.delete(mark);
       return pos !== undefined && insertedAt(editor, state, maxLength, pos, words);
     },
-    insertPictures: (names) => {
+    insertFiles: (names) => {
       const pos = state.marks.get(mark);
       state.marks.delete(mark);
-      return pos !== undefined && insertedPicturesAt(editor, state, maxLength, pos, names);
+      return pos !== undefined && insertedFilesAt(editor, state, maxLength, pos, names);
     },
     release: () => {
       state.marks.delete(mark);
@@ -1133,7 +1108,7 @@ function attributed(
 export function mountComposer(host: HTMLElement, props: ComposerEditorProps): ComposerEditorHandle {
   const state: ComposerState = {
     skills: props.skills,
-    pictures: props.pictures ?? new Set(),
+    files: props.files ?? new Set(),
     input: COMPOSER_INPUT.EDITABLE,
     aria: {},
     emitted: props.text,
@@ -1155,7 +1130,7 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
       ...composerExtensions(
         props,
         (name) => state.skills.has(name),
-        (name) => state.pictures.has(name),
+        (name) => state.files.has(name),
       ),
       Extension.create({ name: "composerGuard", addProseMirrorPlugins: () => [guard] }),
     ],
@@ -1192,8 +1167,8 @@ export function mountComposer(host: HTMLElement, props: ComposerEditorProps): Co
       const tr = chipped(editor.state, state, true);
       if (tr !== undefined) editor.view.dispatch(tr.setMeta("addToHistory", false));
     },
-    setPictures: (pictures) => {
-      state.pictures = pictures;
+    setFiles: (files) => {
+      state.files = files;
       const tr = chipped(editor.state, state, true);
       if (tr !== undefined) editor.view.dispatch(tr.setMeta("addToHistory", false));
     },

@@ -9,7 +9,7 @@ import type { Kept } from "../act.js";
 import { useAppCommand } from "../app-commands.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "../desktop/action-menu.js";
 import type { ShortcutSubject } from "../shortcut-target.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import {
   DATE_PICKER_CLOSE,
   type DatePicked,
@@ -276,7 +276,6 @@ export function useInboxReminding({
               replayUnmasked: true,
               words: WORDS.PAST,
               tone: STATUS_TONE.ATTENTION,
-              hold: TOAST_HOLD.FAILED,
             });
         },
       });

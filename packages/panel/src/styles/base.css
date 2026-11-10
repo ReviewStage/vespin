@@ -394,7 +394,5 @@ body:has(.app-stage[data-capture="true"]) {
   /* The working rows' spinners loop with no end to wait for, so a capture
      would otherwise land wherever in them the shutter happened to fall. */
   --ui-loop-motion: paused;
-  /* A toast's countdown says time passing, which a still frame cannot. */
-  --ui-wait-motion: paused;
   --ui-scroll-glide: auto;
 }

@@ -31,7 +31,7 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tansta
 import { useMemo } from "react";
 import { askKept, firstRefusal, KEPT, type Kept, notKept } from "../act.js";
 import { actMutation } from "../act-mutations.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { pressRows, ROW_WRITE } from "../undo-stack.js";
 import {
   appStateIn,
@@ -185,7 +185,6 @@ export function useSectionWrites(): PinWrites["onWriteSections"] {
         replayUnmasked: true,
         words: SECTION_WRITE_FAILED_NOTE,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface: FAILURE_SURFACE.SECTION_WRITE, cause: changed.cause },
       });
     });
@@ -227,7 +226,6 @@ export function usePinWrites(drawn: () => TasksView): PinWrites {
         replayUnmasked: true,
         words: MARK_FAILED_NOTES[mark],
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface: FAILURE_SURFACE.TASK_MARK, cause: changed.cause, about: { taskId } },
       });
       return false;
@@ -242,7 +240,6 @@ export function usePinWrites(drawn: () => TasksView): PinWrites {
         replayUnmasked: true,
         words: pinned ? REPOSITORY_PIN_FAILED_NOTES.PIN : REPOSITORY_PIN_FAILED_NOTES.UNPIN,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface: FAILURE_SURFACE.REPOSITORY_PIN, cause: changed.cause },
       });
     });
@@ -291,7 +288,6 @@ export function usePinWrites(drawn: () => TasksView): PinWrites {
         replayUnmasked: true,
         words: pinned ? AGENT_PIN_FAILED_NOTES.PIN : AGENT_PIN_FAILED_NOTES.UNPIN,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface: FAILURE_SURFACE.AGENT_PIN, cause: asked.refused, about: { agentId } },
       });
     });
@@ -332,7 +328,6 @@ export function usePinWrites(drawn: () => TasksView): PinWrites {
         replayUnmasked: true,
         words: PIN_MOVE_FAILED_NOTE,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: { surface: FAILURE_SURFACE.PIN_MOVE, cause: firstRefusal(asked) },
       });
     });

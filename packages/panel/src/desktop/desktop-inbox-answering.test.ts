@@ -104,6 +104,7 @@ import { restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
 import { readSegmented, segment, segmentedGroup } from "../testing/segmented.js";
 import { standInBundles } from "../testing/side-bundles.js";
+import { standingToastWords } from "../testing/toast.js";
 
 // Landed before any box renders, as the panel lands it after its first paint.
 beforeAll(() => Effect.runPromise(editorBundleLanded));
@@ -910,12 +911,10 @@ test("a nod on a notice the agent posted over first is not taken: the notice sta
   await act(async () => waiting.shift()?.({ item: asked, taken: false }));
   await settle();
   assert.equal(sendWords(itemPane(page)), "Got it", "the notice stands open, to nod to again");
-  assert.deepEqual(
-    [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-      (words) => words.textContent,
-    ),
-    ["Acknowledged “Alert at 80%?”", "The agent changed this item before you acknowledged it."],
-  );
+  assert.deepEqual(standingToastWords(), [
+    "Acknowledged “Alert at 80%?”",
+    "The agent changed this item before you acknowledged it.",
+  ]);
 });
 
 test("an item its agent posts again after it was answered needs you again once a read holds the newer revision, though the list's older read still stands for it elsewhere", async () => {

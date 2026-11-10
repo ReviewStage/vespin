@@ -173,7 +173,7 @@ import { copyThroughShell, useCopyToast } from "../copy-feedback.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
-import { TOAST_HOLD, useToast } from "../toast.js";
+import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectListedTasks } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
@@ -244,7 +244,7 @@ import {
   AgentPicturesProvider,
   CallPictures,
   MessageFileChips,
-  MessagePictures,
+  MessageFiles,
   ShownPictures,
   useAgentPictureDoor,
 } from "./agent-pictures.js";
@@ -1783,7 +1783,7 @@ export function AgentMessage({
       </MessageContent>
     );
     return (
-      <MessagePictures message={message} words={shown}>
+      <MessageFiles message={message} words={shown}>
         <Message
           from={received ? MESSAGE_ROLE.ASSISTANT : message.role}
           className={received ? RECEIVED_MESSAGE_CLASS : undefined}
@@ -1823,7 +1823,7 @@ export function AgentMessage({
             }
           />
         </Message>
-      </MessagePictures>
+      </MessageFiles>
     );
   }
   const { startedAt, finishedAt } = message;
@@ -3136,7 +3136,7 @@ function AgentTabView({
                           origin={origin}
                           readerId={readerId}
                           agentId={agent.id}
-                          taskId={agent.planId ?? undefined}
+                          taskId={agent.planId}
                           replay={replay}
                           delegation={{
                             models,
@@ -3535,7 +3535,6 @@ function AgentTabBody({
         replayUnmasked: true,
         words: MESSAGE_GONE,
         tone: STATUS_TONE.DANGER,
-        hold: TOAST_HOLD.FAILED,
         failure: {
           surface: FAILURE_SURFACE.MESSAGE_REVEAL,
           cause: FAILURE_CONDITION.GONE,
@@ -3561,7 +3560,6 @@ function AgentTabBody({
               toast({
                 words: result.reason,
                 tone: STATUS_TONE.DANGER,
-                hold: TOAST_HOLD.FAILED,
                 failure: {
                   surface: FAILURE_SURFACE.AGENT_ARCHIVE,
                   cause: result,
@@ -3796,7 +3794,7 @@ export function AgentSubagentTab({
               phase={workerWorkingPhase(status)}
               startedAt={shown ? transcript.runStartedAt : undefined}
               ended={transcript.pages === 0 ? undefined : endLineParts(status, transcript.failure)}
-              failureAbout={{ agentId, taskId: owner?.planId ?? undefined, callId }}
+              failureAbout={{ agentId, taskId: owner?.planId, callId }}
               onRetry={transcript.onRetry}
               onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
               olderFailed={transcript.olderFailed}

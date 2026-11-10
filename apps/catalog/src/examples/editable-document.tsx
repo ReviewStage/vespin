@@ -1,8 +1,9 @@
 /**
- * editable-document.tsx -- a document edited in place, its title and two sections as blocks the keyboard selects, steps across with ↑ and ↓, and opens with Return, a press on a section's words opening it there, and the title's words edited where they stand.
+ * editable-document.tsx -- a document edited in place, its title and two sections as blocks, a rule parting the title from its text, the keyboard selects, steps across with ↑ and ↓, and opens with Return, a press on a section's words opening it there, and the title's words edited where they stand.
  */
 
 import {
+  DocumentRule,
   EDITABLE_BLOCK_KIND,
   EDITABLE_HEADING_LEAVE,
   EditableBlock,
@@ -55,6 +56,7 @@ function EditableDocument(): React.JSX.Element {
               }
             />
           </EditableBlock>
+          <DocumentRule />
           {SECTIONS.map((section) => (
             <EditableBlock
               key={section.heading}

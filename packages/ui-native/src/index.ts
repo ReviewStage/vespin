@@ -74,6 +74,7 @@ export {
 export { ConfirmAsk, MarkRow, PullRequestHead, WriteNoteRow } from "./pull-request-page.js";
 export { LIST_LOOK, type ListLook, ListSection, RowList } from "./row-list.js";
 export { Screen, Spacer } from "./screen.js";
+export { ScreenFailure } from "./screen-failure.js";
 export { SealedPage } from "./sealed-page.js";
 export {
   AccountRow,

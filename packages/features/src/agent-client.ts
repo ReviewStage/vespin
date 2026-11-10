@@ -71,6 +71,10 @@ import {
   githubImageTypeSchema,
   type HostDoneAnswerView,
   type HostsAnswerView,
+  type LiveActivityEndedAnswerView,
+  type LiveActivityEndedParams,
+  type LiveActivityTokenAnswerView,
+  type LiveActivityTokenParams,
   type MemoriesAnswerView,
   type MemoryForgetParams,
   type ProviderKeyForAgentsParams,
@@ -154,6 +158,10 @@ import {
   inboxStartRequestSchema,
   inboxTakeBackRequestSchema,
 } from "./inbox-wire.js";
+import {
+  liveActivityEndedRequestSchema,
+  liveActivityTokenRequestSchema,
+} from "./live-activity-wire.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import { TRANSCRIPT_NOW_QUERY, type TranscriptNowAnswer } from "./live-wire.js";
 import { MEMORY_QUERY } from "./memory-wire.js";
@@ -670,6 +678,33 @@ export class HostedAgentClient {
     const admitted = Result.getOrUndefined(readEither(pushDeviceNotifyRequestSchema)(params));
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
     return hostedCall(this.#hosted.pushDevices.notify, admitted);
+  }
+
+  /** The phone's Live Activity push-to-start token registered; not found until the account holds the phone, and a token the service would refuse by shape never travels. */
+  registerLiveActivityStartToken(
+    params: LiveActivityTokenParams,
+  ): Effect.Effect<LiveActivityTokenAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(liveActivityTokenRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.liveActivities.startToken, admitted);
+  }
+
+  /** The update token of the Live Activity standing on the phone registered; not found until the account holds the phone. */
+  registerLiveActivityToken(
+    params: LiveActivityTokenParams,
+  ): Effect.Effect<LiveActivityTokenAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(liveActivityTokenRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.liveActivities.activityToken, admitted);
+  }
+
+  /** The phone's Live Activity ended or dismissed on the phone, so the service drops its update token. */
+  endLiveActivity(
+    params: LiveActivityEndedParams,
+  ): Effect.Effect<LiveActivityEndedAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(liveActivityEndedRequestSchema)(params));
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+    return hostedCall(this.#hosted.liveActivities.ended, admitted);
   }
 
   /** Tells the service the member used this client just now, which holds their phone's pushes (`presence-wire.ts`); its answer is read by no one. */

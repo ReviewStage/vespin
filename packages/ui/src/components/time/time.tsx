@@ -5,6 +5,7 @@ import {
   momentText,
   provenanceText,
   sinceText,
+  untilText,
   workingTime,
 } from "@repo/features/time-format";
 import { Tooltip } from "../tooltip/hint.js";
@@ -40,6 +41,8 @@ export const TIME_LOOK = {
   DAY: "day",
   /** When a moment to come is due, in a row's few words: "3:04 PM", "Mon 9:00 AM", "Nov 20". */
   DUE: "due",
+  /** When a moment to come comes, counted down inside a day: "in 2h", then "Thu 9:00 AM", "Nov 20". */
+  UNTIL: "until",
   /** The moment in full: "Oct 14, 2026, 3:42 PM". */
   MOMENT: "moment",
   /** How long a run has gone since `at`, counted each second: "1m 12s". */
@@ -74,6 +77,8 @@ function wordsOf(look: TimeLook, at: number, now: number): string {
       return callHeading(at, now);
     case TIME_LOOK.DUE:
       return dueText(at, now);
+    case TIME_LOOK.UNTIL:
+      return untilText(at, now);
     case TIME_LOOK.MOMENT:
       return momentText(at);
     case TIME_LOOK.DURATION:

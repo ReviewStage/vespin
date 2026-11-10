@@ -116,7 +116,7 @@ export function ReadAgentModel({
 /** What a card of an agent's says of the task it works on: its name as the window lists it, or another the window does not list. */
 function useTaskFoot(agent: AgentSummary | undefined): string | undefined {
   const tasks = useKnownNames().tasks;
-  if (agent === undefined || agent.planId === null) return undefined;
+  if (agent === undefined) return undefined;
   const task = tasks.get(agent.planId);
   return task === undefined ? TASK_WORDS.UNKNOWN : `On ${task}`;
 }

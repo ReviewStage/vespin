@@ -18,6 +18,7 @@ import {
 } from "./testing/app-bridge.js";
 import { deliveryOf, handState, stateWith } from "./testing/app-state.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
+import { standingToastWords } from "./testing/toast.js";
 import { ToastHost } from "./toast.js";
 
 /**
@@ -100,9 +101,7 @@ function promptStands(): boolean {
 
 /** What each toast standing says, oldest first. */
 function toasts(): string[] {
-  return [...document.querySelectorAll(".ui-toast:not([data-leaving]) .ui-toast-words")].map(
-    (words) => words.textContent ?? "",
-  );
+  return standingToastWords();
 }
 
 function button(name: string): HTMLButtonElement {

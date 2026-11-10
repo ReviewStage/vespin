@@ -10,7 +10,7 @@ import { PRODUCT_NAME } from "@repo/features/product-name";
  * which the app draws as the thing's chip (`@repo/features/link-grammar`).
  * The id alone finds the thing, so a workspace step that has since changed
  * still opens it. A page is the one place named by two ids, since its
- * address stands under the task or the agent on no task it was shown on.
+ * address stands under the task it was shown on.
  */
 
 /** The rule as an author reads it, under the workspace address given: the coding agent's own, or `<workspace>` spelled out where a caller works across several. */
@@ -22,8 +22,7 @@ export function linkRuleWords(home: string): string {
     `name in quotes or a bare id: an agent \`${home}/agent/<agent-id>\`, a task ` +
     `\`${home}/task/<task-id>\`, an automation \`${home}/automation/<automation-id>\`, a member ` +
     `\`${home}/person/<user-id>\`, a thread \`${home}/inbox/<item-id>\`, and a page under the ` +
-    `task it was shown on, \`${home}/task/<task-id>/page/<page-id>\`, or under the agent on no ` +
-    `task that showed it, \`${home}/agent/<agent-id>/page/<page-id>\`; such as ` +
+    `task it was shown on, \`${home}/task/<task-id>/page/<page-id>\`; such as ` +
     `\`[@Nightly triage](${home}/automation/<automation-id>)\`.`
   );
 }
