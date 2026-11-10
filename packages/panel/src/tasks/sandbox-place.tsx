@@ -47,11 +47,18 @@ export function useSandboxState(sandbox: AgentSandbox | undefined): SandboxState
   const edge = sandboxStandingEdge(sandbox, now);
   useEffect(() => {
     if (edge === undefined) return undefined;
-    return rendererFork(
-      Effect.flatMap(Clock.currentTimeMillis, (at) =>
-        Effect.andThen(Effect.sleep(Duration.millis(Math.max(0, edge - at))), Effect.sync(redraw)),
-      ),
+    // Note that we read the clock again on waking, because a timer may fire a
+    // moment early, and a draw before the edge would find the same edge and
+    // arm nothing more.
+    const until: Effect.Effect<void> = Effect.flatMap(Clock.currentTimeMillis, (at) =>
+      at >= edge
+        ? Effect.sync(redraw)
+        : Effect.andThen(
+            Effect.sleep(Duration.millis(edge - at)),
+            Effect.suspend(() => until),
+          ),
     );
+    return rendererFork(until);
   }, [edge]);
   return sandboxStandingAt(sandbox, now);
 }
@@ -59,7 +66,7 @@ export function useSandboxState(sandbox: AgentSandbox | undefined): SandboxState
 /** The cloud glyph wearing the state's dot, said as the state's word. */
 export function SandboxStateGlyph({ state }: { state: SandboxState }): React.JSX.Element {
   return (
-    <StatusGlyph tone={STATE_TONE[state]} label={SANDBOX_STATE_WORDS[state]}>
+    <StatusGlyph tone={STATE_TONE[state]} label={SANDBOX_STATE_WORDS[state]} hinted={false}>
       <GLYPH.CLOUD aria-hidden="true" />
     </StatusGlyph>
   );

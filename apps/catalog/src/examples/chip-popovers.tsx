@@ -8,7 +8,6 @@ import {
   StatusWords,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -41,7 +40,7 @@ function sandboxFacts(words: string, tone: StatusTone): readonly ChipPopoverFact
 /** The cloud glyph wearing the state's dot. */
 function cloudGlyph(words: string, tone: StatusTone): React.JSX.Element {
   return (
-    <StatusGlyph tone={tone} label={words}>
+    <StatusGlyph tone={tone} label={words} hinted={false}>
       <GLYPH.CLOUD aria-hidden="true" />
     </StatusGlyph>
   );
@@ -58,8 +57,8 @@ const PLACES: readonly MenuRow[] = [
   },
 ];
 
+/** The chip with Move to, its place kept in the cloud: a pick moves an agent elsewhere, which no example does. */
 function WithMoveTo(): React.JSX.Element {
-  const [here, setHere] = useState("cloud");
   return (
     <ChipPopover
       label="Runs on"
@@ -71,9 +70,9 @@ function WithMoveTo(): React.JSX.Element {
       menu={{
         heading: "Move to",
         rows: PLACES,
-        value: here,
+        value: "cloud",
         noMatch: "No places",
-        onPick: setHere,
+        onPick: () => undefined,
       }}
     />
   );

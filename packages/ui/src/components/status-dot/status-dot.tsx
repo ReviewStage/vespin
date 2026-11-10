@@ -11,23 +11,28 @@ import { Tooltip } from "../tooltip/hint.js";
  * has a hole cut under the dot (`status-dot.css`), so the dot reads apart
  * from its strokes on any ground the row stands on. The glyph and its dot say their words to a
  * reader and on hover, since a color alone says nothing to a reader or an
- * eye that cannot tell the inks apart.
+ * eye that cannot tell the inks apart; a glyph whose press shows its
+ * standing in full, as the Cloud chip's popover does, says them to a reader
+ * alone (`hinted` false).
  */
 
 /** `children`, a row's glyph, with a dot in `tone` at its corner, called `label`. */
 export function StatusGlyph({
   tone = STATUS_TONE.NEUTRAL,
   label,
+  hinted = true,
   children,
 }: {
   tone?: StatusTone | undefined;
   /** What the dot says: the standing it stands for. */
   label: string;
+  /** Whether a rest on the glyph shows `label`; false where the control it stands in says it in full. */
+  hinted?: boolean | undefined;
   /** The glyph the dot stands on. */
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <Tooltip label={label}>
+    <Tooltip label={hinted ? label : undefined}>
       <span
         className="ui-status-glyph relative inline-flex"
         data-tone={tone}
