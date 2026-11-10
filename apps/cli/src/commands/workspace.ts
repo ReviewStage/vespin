@@ -17,6 +17,7 @@ import { configuredWorkspace, keepWorkspace } from "../config-store.js";
 import { answer, CommandFailed } from "../output.js";
 import { askService, session } from "../session.js";
 import { createCommand } from "./workspace-create.js";
+import { workspaceMembersCommand, workspaceSlugCommand } from "./workspace-members.js";
 
 /** A config file this version could not read or write, as the command's failure. */
 function configFailed(failed: { readonly message: string }): CommandFailed {
@@ -94,8 +95,16 @@ const useCommand = Command.make(
 );
 
 export const workspaceCommand = Command.make("workspace").pipe(
-  Command.withDescription("List your workspaces, choose the default one, and create one"),
-  Command.withSubcommands([listCommand, useCommand, createCommand]),
+  Command.withDescription(
+    "List your workspaces, choose the default one, create one, and manage its members",
+  ),
+  Command.withSubcommands([
+    listCommand,
+    useCommand,
+    createCommand,
+    workspaceMembersCommand,
+    workspaceSlugCommand,
+  ]),
   Command.withExamples([
     { command: "vespin workspace use acme", description: "Make acme the default workspace" },
   ]),

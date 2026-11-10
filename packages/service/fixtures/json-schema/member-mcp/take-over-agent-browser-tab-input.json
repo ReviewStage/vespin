@@ -1,0 +1,22 @@
+{
+  "type": "object",
+  "properties": {
+    "agentId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "description": "The agent's id, as list_agents answered it."
+    },
+    "tabId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "description": "The tab's id, as list_agent_browser_tabs answered it."
+    }
+  },
+  "required": [
+    "agentId",
+    "tabId"
+  ],
+  "additionalProperties": false
+}

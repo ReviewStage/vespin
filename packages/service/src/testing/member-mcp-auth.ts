@@ -36,6 +36,7 @@ import { Clock, Effect, Layer, Schema } from "effect";
 import { HttpRouter } from "effect/http";
 import type * as HttpClient from "effect/http/HttpClient";
 import { vi } from "vitest";
+import { agentBrowserServices } from "../agents/browser/agent-browser.js";
 import { AgentImage } from "../agents/coder-host/agent-image.js";
 import { agentSandboxLayer } from "../agents/terminal/agent-sandbox.js";
 import { authDatabaseAdapter } from "../auth/auth-database.js";
@@ -199,10 +200,11 @@ const seedRows = Effect.gen(function* () {
   );
 });
 
-/** An agent's sandbox as the edge composes it, over the test's own `Sandbox` and a fixture image. */
-export const MEMBER_MCP_AGENT_SANDBOX = agentSandboxLayer.pipe(
-  Layer.provide(Layer.succeed(AgentImage, FAKE_IMAGE)),
-);
+/** An agent's sandbox and its browser as the edge composes them, over the test's own `Sandbox` and a fixture image. */
+export const MEMBER_MCP_AGENT_SANDBOX = Layer.mergeAll(
+  agentSandboxLayer,
+  agentBrowserServices,
+).pipe(Layer.provide(Layer.succeed(AgentImage, FAKE_IMAGE)));
 
 /** What a test stands the server up over: the transport its metadata documents are fetched through, and the GitHub its tools reach. */
 export interface MemberMcpStandingOptions {

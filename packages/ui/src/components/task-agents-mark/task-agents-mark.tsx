@@ -11,7 +11,7 @@ import {
   type PullRequestMarkState,
   pullRequestMarkState,
 } from "../../marks/pull-request-glyph.js";
-import { DraftMark, FailedMark, NotDeliveredMark } from "../row-mark/row-mark.js";
+import { FailedMark } from "../row-mark/row-mark.js";
 import { WorkingMark } from "../working-mark/working-mark.js";
 
 /**
@@ -27,12 +27,6 @@ import { WorkingMark } from "../working-mark/working-mark.js";
  * them wears nothing. Every icon is named in a fixed phrase, so nothing a
  * task holds rides it, and is drawn in the one seat its `size` sets, so a
  * row moves nothing as its status changes.
- *
- * A sidebar row ends with one mark and its time, never a row of marks that
- * cuts its name to a few letters (`RowEndMark`): the first that holds of a
- * thread waiting on the reader, an orange dot in the tone the Inbox's count
- * is drawn in; a failure, its agent's or a message not delivered; a draft's
- * pencil; and how its agents stand, as above.
  */
 
 /** The seat a task's icon is drawn in: the sidebar's caption size, or a page row's glyph size. */
@@ -66,9 +60,6 @@ const PULL_REQUEST_INK = {
   [PULL_REQUEST_STATE.CLOSED]: "text-destructive",
   [PULL_REQUEST_MARK_QUEUED]: "text-attention",
 } as const satisfies Record<PullRequestMarkState, string>;
-
-/** What the dot of a thread waiting on the reader is called, as the Inbox lists it. */
-const NEEDS_YOU_WORDS = "Needs you";
 
 /** The box every mark is drawn in at `size`, a row mark filling it. */
 function seatClass(size: TaskAgentsMarkSize): string {
@@ -129,54 +120,4 @@ export function TaskAgentsMark({
   size?: TaskAgentsMarkSize;
 }): React.JSX.Element | null {
   return <AgentsStatusMark status={taskAgentsStatus(agents, pullRequests)} size={size} />;
-}
-
-/**
- * The one mark a sidebar row wears before its time, the first that holds:
- * the needs-you dot while a thread waits on the reader; the failed mark
- * while a message sent there was not delivered or its agents failed; the
- * draft's pencil; and else how its agents stand, at work or the pull request
- * they left (`status`). Nothing where none holds.
- */
-export function RowEndMark({
-  needsYou,
-  notDelivered,
-  drafted,
-  status,
-}: {
-  /** Whether a thread of the row's waits on the reader, as the Inbox's Needs you counts it. */
-  needsYou: boolean;
-  /** Whether a message sent to one of its agents was not delivered. */
-  notDelivered: boolean;
-  /** Whether a draft waits in one of its boxes. */
-  drafted: boolean;
-  /** How its agents stand (`taskAgentsStatus`, `tasklessAgentStatus`). */
-  status: TaskAgentsStatus;
-}): React.JSX.Element | null {
-  const seat = seatClass(TASK_AGENTS_MARK_SIZE.SMALL);
-  if (needsYou) {
-    return (
-      <span className={seat} data-row-end="needs-you" role="img" aria-label={NEEDS_YOU_WORDS}>
-        <span className="size-status-dot rounded-disc bg-attention" />
-      </span>
-    );
-  }
-  if (notDelivered) {
-    return (
-      <span className={seat}>
-        <NotDeliveredMark />
-      </span>
-    );
-  }
-  if (status.kind === TASK_AGENTS_STATUS.FAILED) {
-    return <AgentsStatusMark status={status} size={TASK_AGENTS_MARK_SIZE.SMALL} />;
-  }
-  if (drafted) {
-    return (
-      <span className={seat}>
-        <DraftMark />
-      </span>
-    );
-  }
-  return <AgentsStatusMark status={status} size={TASK_AGENTS_MARK_SIZE.SMALL} />;
 }

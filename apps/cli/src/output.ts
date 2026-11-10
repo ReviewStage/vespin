@@ -10,7 +10,8 @@
  * stdout stays the answer alone.
  *
  * A command asks a person nothing unless stdin is a terminal (`canPrompt`):
- * where it is not, what it would ask is read from stdin as input.
+ * where it is not, what it would ask is read from stdin as input, bar a
+ * destructive command's go-ahead, which then takes `--yes` alone.
  */
 
 import { CLI_EXIT, type CliExit } from "@repo/features/cli-exit";
@@ -98,6 +99,53 @@ export const readLine = Effect.fnUntraced(function* (prompt: string) {
   }
   const piped = yield* Effect.orElseSucceed(stdinText, () => "");
   return piped.split("\n")[0];
+});
+
+/** What a person types at a confirmation to go on; anything else, or nothing, goes no further. */
+const CONFIRM_WORDS: ReadonlySet<string> = new Set(["y", "yes"]);
+
+/**
+ * A destructive command's go-ahead: given with `--yes`, or asked of the
+ * person where stdin is a terminal, who must answer y or yes. Note that
+ * without a terminal nothing is read from stdin, because a script that
+ * pipes a stray line must not delete by accident, so `--yes` is required.
+ */
+export const confirmOrYes = Effect.fnUntraced(function* (question: string, yes: boolean) {
+  if (yes) return;
+  if (!(yield* canPrompt)) {
+    return yield* new CommandFailed({
+      exit: CLI_EXIT.USAGE,
+      message: `${question} Pass --yes to go ahead without a terminal to confirm at.`,
+    });
+  }
+  const answered = yield* readLine(`${question} [y/N]`);
+  if (answered !== undefined && CONFIRM_WORDS.has(answered.trim().toLowerCase())) return;
+  return yield* new CommandFailed({ exit: CLI_EXIT.REFUSED, message: "Nothing was deleted." });
+});
+
+/** One line ending, as `echo` or a Windows editor leaves it at the end of piped stdin. */
+const TRAILING_NEWLINE = /\r?\n$/u;
+
+/**
+ * A secret the person hands the command, never an argument, which a shell
+ * keeps in its history: one line typed at a terminal, asked with `prompt` on
+ * stderr and never echoed, since the terminal reads stdin raw with no output
+ * of its own; or all of piped stdin, one trailing line ending dropped, so a
+ * value of several lines arrives whole. Nothing read, or nothing but an
+ * empty value, is a usage failure, whose words never carry what was read.
+ */
+export const readSecret = Effect.fnUntraced(function* (prompt: string) {
+  const read = (yield* canPrompt)
+    ? yield* Effect.flatMap(note(prompt), () =>
+        Effect.option(Effect.flatMap(Terminal.Terminal, (terminal) => terminal.readLine)),
+      ).pipe(Effect.map(Option.getOrUndefined))
+    : yield* Effect.orElseSucceed(stdinText, () => undefined).pipe(
+        Effect.map((piped) => piped?.replace(TRAILING_NEWLINE, "")),
+      );
+  if (read === undefined || read === "") {
+    return yield* new CommandFailed({ exit: CLI_EXIT.USAGE, message: "No value was read." });
+  }
+  return read;
 });
 
 /** The text a `-F <file|->` names: the file's, or stdin's for `-`, or why it could not be read. */
