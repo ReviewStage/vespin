@@ -1,5 +1,5 @@
 /**
- * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `stop`, `update`, `wait`, `checkout`, `ports`, `share`, `forward` (`agent-forward.ts`), and `shell` and `shells` (`agent-shell.ts`): coding agents started, continued, read, followed, messaged, stopped, changed, waited on, their work brought into the working folder, the ports their sandbox listens on shared by link and served on localhost, and its shells attached here.
+ * agent.ts -- `vespin agent start`, `continue`, `list`, `view`, `logs`, `send`, `stop`, `update`, `wait`, `checkout`, `diff` and `pr` (`agent-pull-request.ts`), `ports`, `share`, `forward` (`agent-forward.ts`), and `shell` and `shells` (`agent-shell.ts`): coding agents started, continued, read, followed, messaged, stopped, changed, waited on, their work brought into the working folder, their pull request read and changed, the ports their sandbox listens on shared by link and served on localhost, and its shells attached here.
  *
  * A turn is followed on the held transcript read (`messages.agent`): asked
  * past the cursor the last answer handed back, the service holds it while
@@ -44,6 +44,7 @@ import { askService, session } from "../session.js";
 import { resolveTaskId } from "../tasks.js";
 import { resolveWorkspace } from "../workspace.js";
 import { forwardCommand } from "./agent-forward.js";
+import { diffCommand, prCommand } from "./agent-pull-request.js";
 import { shellCommand, shellsCommand } from "./agent-shell.js";
 
 /** How long after a held read answers the next is asked, so a read that answers at once never spins. */
@@ -1123,7 +1124,7 @@ const updateCommand = Command.make(
   ]),
 );
 
-/** The agent group: start, continue, and the rest through share, with forward and the shells from their own files. */
+/** The agent group: start, continue, and the rest through share, with diff, pr, forward, and the shells from their own files. */
 export const agentCommand = Command.make("agent").pipe(
   Command.withDescription(
     `Start, continue, follow, message, change, and stop ${PRODUCT_NAME}'s coding agents`,
@@ -1140,6 +1141,8 @@ export const agentCommand = Command.make("agent").pipe(
     forwardCommand,
     waitCommand,
     checkoutCommand,
+    diffCommand,
+    prCommand,
     portsCommand,
     shareCommand,
     shellCommand,
