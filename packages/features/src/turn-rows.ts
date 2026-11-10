@@ -109,6 +109,8 @@ export const CALL_KIND = {
   SCHEDULE_WAKEUP: "schedule-wakeup",
   /** The wakeup a coding agent booked canceled (`schedule_wakeup` with `stop`). */
   CANCEL_WAKEUP: "cancel-wakeup",
+  /** A turn a coding agent ended (`end_turn`), with the summary its developer reads as the reply and the follow-ups it offers. */
+  END_TURN: "end-turn",
   /** The workspace's tasks listed (`list_tasks`). */
   LIST_TASKS: "list-tasks",
   /** A fact kept in the workspace's shared memory (`save_memory`, or `remember` in an older transcript), its row saying it. */
@@ -191,6 +193,7 @@ export const CALL_WORDS = {
   [CALL_KIND.SLEEP]: { verb: "Waited", code: false },
   [CALL_KIND.SCHEDULE_WAKEUP]: { verb: "Set a wakeup in", code: false },
   [CALL_KIND.CANCEL_WAKEUP]: { verb: "Canceled the wakeup", code: false },
+  [CALL_KIND.END_TURN]: { verb: "Ended the turn", code: false },
   [CALL_KIND.LIST_TASKS]: { verb: "Listed the tasks", code: false },
   [CALL_KIND.REMEMBER]: { verb: "Saved to memory:", code: false },
   [CALL_KIND.RECALL]: { verb: "Searched memory", code: false },

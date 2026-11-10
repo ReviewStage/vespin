@@ -901,6 +901,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             "list_ports",
             "share_port",
             "schedule_wakeup",
+            "end_turn",
           ],
           transcriptsUrl: `${TRANSCRIPTS_URL}${FIRST_LAUNCH}`,
           integrations: [LINEAR_SERVER],

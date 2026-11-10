@@ -574,6 +574,24 @@ test("with Memory off the instructions say nothing of the workspace's memory; wi
   }
 });
 
+test("with Done and follow-ups off the instructions say nothing of ending a turn; with it on they add its section before the one on messages, and nothing else", () => {
+  for (const brief of Object.values(AGENT_BRIEF)) {
+    const off = coderInstructions("Acme/Relay", brief, TASK_LINK, standingFor("Acme/Relay"));
+    const on = coderInstructions(
+      "Acme/Relay",
+      brief,
+      TASK_LINK,
+      standingFor("Acme/Relay", { turnEnd: true }),
+    );
+    assert.ok(!off.includes(`\`${AGENT_TOOL.END_TURN}\``), brief);
+    const start = on.indexOf("## Ending a turn\n\n");
+    const end = on.indexOf("## What your messages are", start);
+    assert.ok(start > 0 && end > start, brief);
+    assert.ok(on.slice(start, end).includes(`\`${AGENT_TOOL.END_TURN}\``), brief);
+    assert.equal(on.slice(0, start) + on.slice(end), off, brief);
+  }
+});
+
 test("with Task descriptions off the instructions say nothing of a description: no edit_description, no description handed with a task's link or read_task, no description to name or write a write-up into, and comments on pages alone", () => {
   const DESCRIPTION_WORDS = [
     `\`${AGENT_TOOL.EDIT_DESCRIPTION}\``,
