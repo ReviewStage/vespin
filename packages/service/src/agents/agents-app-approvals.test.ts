@@ -29,6 +29,7 @@ import {
   refusal,
   request,
 } from "../testing/agents-app-support.js";
+import { RUNNER_ANSWER, type RunnerAnswer } from "./coder-host/runtime-sessions.js";
 
 /**
  * An agent's permission mode and the asks its runner holds, over the hosted
@@ -180,6 +181,47 @@ it.layer(SUITE)("an agent's permission mode and its asks", (it) => {
             error: HOSTED_API_ERROR.APPROVAL_SETTLED,
             approvalStatus: APPROVAL_STATUS.EXPIRED,
           },
+        });
+      }),
+  );
+
+  it.effect(
+    "an answer whose line no runner took hands its claim back: pending again where the runner was out of reach, expired where none runs",
+    () =>
+      Effect.gen(function* () {
+        const outcomes = (answers: RunnerAnswer) =>
+          Effect.gen(function* () {
+            const started = yield* messagedAgent(fakeAgentSessions({ answers }), {
+              running: true,
+            });
+            const approvalId = yield* asked(started, "request-1");
+            const answered = yield* started.ask(
+              request(approvalPath(approvalId), started.owner, {
+                method: "POST",
+                id: started.agent.id,
+                body: { answer: APPROVAL_ANSWER.ALLOW },
+              }),
+            );
+            const standing = yield* listPendingApprovals(started.owner, started.agent.id);
+            return { answered, pending: standing.map((each) => each.decidedByUserId) };
+          });
+
+        const unreached = yield* outcomes(RUNNER_ANSWER.FAILED);
+        const gone = yield* outcomes(RUNNER_ANSWER.NOT_LIVE);
+
+        assert.deepEqual(unreached, {
+          answered: refusal(HOSTED_HTTP_STATUS.SERVICE_UNAVAILABLE, HOSTED_API_ERROR.UNAVAILABLE),
+          pending: [null],
+        });
+        assert.deepEqual(gone, {
+          answered: {
+            status: HOSTED_HTTP_STATUS.CONFLICT,
+            body: {
+              error: HOSTED_API_ERROR.APPROVAL_SETTLED,
+              approvalStatus: APPROVAL_STATUS.EXPIRED,
+            },
+          },
+          pending: [],
         });
       }),
   );

@@ -3,29 +3,27 @@
  *
  * Only a member who controls the agent answers (`controlsAgent`), as only
  * they steer it, and for an agent its starter's plan pays for, one the plan
- * policy admits as a writer (`admitsPlanWriter`). An ask that no longer
- * waits is refused with how it stands (`approval-settled`), and nothing
- * reaches the runner. One still pending is written to the runner first, as
- * an `approval` line naming the CLI's id for it, the way the agent's
- * messages go: the store's line in the cloud, the device's MESSAGE line on
- * a host (`runtime-sessions.ts`'s `runnerApprovalAnswered`). Then the ask is
- * settled, a compare-and-set on its standing pending, so of two answers
- * racing one settles it and the other is refused; the runner takes the
- * first line to reach it and skips the other, and its own word of what it
- * took (`APPROVAL_RESOLVED`) stands over the row (`runner-approvals.ts`).
- * Note that the line goes first, because an ask settled with no line
- * written would leave the runner holding a call no one can answer again.
- * Where no runner of the agent runs, none holds the ask, which is expired
- * and refused; where the runner could not be reached just now, the ask
- * still waits, and the answer is refused as unavailable, to be sent again.
+ * policy admits as a writer (`admitsPlanWriter`). The answer first claims the
+ * ask, a compare-and-set on its standing pending that records the member as
+ * who decided, so of two members answering at once one claims it and the
+ * other is refused with how it stands (`approval-settled`), and nothing of
+ * theirs reaches the runner. The claim is then written to the runner as an
+ * `approval` line naming the CLI's id for the ask, the way the agent's
+ * messages go: the store's line in the cloud, the device's MESSAGE line on a
+ * host (`runtime-sessions.ts`'s `runnerApprovalAnswered`), and the runner's
+ * own word of what it took (`APPROVAL_RESOLVED`) lands on the row
+ * (`runner-approvals.ts`). Where the line could not be written, the claim is
+ * handed back: pending again where the runner could not be reached just
+ * now, the answer refused as unavailable, to be sent again; and expired
+ * where no runner of the agent runs, since none holds the ask.
  */
 
 import { INPUT_LINE } from "@repo/agent-runner/protocol";
 import type { DatabaseServices } from "@repo/database/core/query";
 import {
   answerApproval,
-  expireApproval,
   readApproval,
+  releaseApprovalClaim,
 } from "@repo/database/models/agent-approvals";
 import type { Agent } from "@repo/database/models/agent-store";
 import {
@@ -67,26 +65,9 @@ export const answeredApproval = /* @__PURE__ */ Effect.fnUntraced(function* (
   const approvalId = yield* pathUuid(id);
   if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* admitsPlanWriter(userId, agent);
-  const standing = yield* hostedStoreOrUnavailable(readApproval(userId, agent.id, approvalId));
-  if (Option.isNone(standing)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-  if (standing.value.status !== APPROVAL_STATUS.PENDING) {
-    return yield* Effect.fail(approvalSettled(standing.value.status));
-  }
-  const line: ApprovalLine = {
-    type: INPUT_LINE.APPROVAL,
-    requestId: standing.value.requestId,
-    decision: DECISION_OF_ANSWER[request.answer],
-    ...(request.message === undefined ? undefined : { message: request.message }),
-  };
-  const reached = yield* runnerApprovalAnswered(agent, line);
-  if (reached === RUNNER_ANSWER.FAILED) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   const at = new Date(yield* Clock.currentTimeMillis);
-  if (reached === RUNNER_ANSWER.NOT_LIVE) {
-    // No runner holds the ask, so no answer can reach it: it expires now rather than at its turn's reap.
-    yield* hostedStoreOrUnavailable(expireApproval(agent.id, approvalId, at));
-    return yield* refusedAsItStands(userId, agent.id, approvalId);
-  }
-  const settled = yield* hostedStoreOrUnavailable(
+  // The answer claims the ask first, so of two members answering at once the runner hears only the one the row records.
+  const claimed = yield* hostedStoreOrUnavailable(
     answerApproval({
       userId,
       agentId: agent.id,
@@ -95,6 +76,29 @@ export const answeredApproval = /* @__PURE__ */ Effect.fnUntraced(function* (
       at,
     }),
   );
-  if (Option.isNone(settled)) return yield* refusedAsItStands(userId, agent.id, approvalId);
-  return { approval: { id: settled.value.id, status: settled.value.status } };
+  if (Option.isNone(claimed)) return yield* refusedAsItStands(userId, agent.id, approvalId);
+  const line: ApprovalLine = {
+    type: INPUT_LINE.APPROVAL,
+    requestId: claimed.value.requestId,
+    decision: DECISION_OF_ANSWER[request.answer],
+    ...(request.message === undefined ? undefined : { message: request.message }),
+  };
+  const reached = yield* runnerApprovalAnswered(agent, line);
+  if (reached === RUNNER_ANSWER.WRITTEN) {
+    return { approval: { id: claimed.value.id, status: claimed.value.status } };
+  }
+  // The line never reached a runner: the claim goes back, pending for another answer where the runner could
+  // not be reached just now, and expired where none runs, so no runner holds the ask.
+  const lost = reached === RUNNER_ANSWER.NOT_LIVE;
+  yield* hostedStoreOrUnavailable(
+    releaseApprovalClaim({
+      agentId: agent.id,
+      approvalId,
+      userId,
+      to: lost ? APPROVAL_STATUS.EXPIRED : APPROVAL_STATUS.PENDING,
+      at,
+    }),
+  );
+  if (!lost) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+  return yield* refusedAsItStands(userId, agent.id, approvalId);
 });

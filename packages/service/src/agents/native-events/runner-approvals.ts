@@ -92,10 +92,14 @@ const APPROVAL_EVENTS: ReadonlySet<unknown> = new Set([
   RUNNER_EVENT.APPROVAL_RESOLVED,
 ]);
 
+/** Words with half a character replaced, which a JSON value Postgres keeps cannot hold. */
+function wellFormed(text: string): string {
+  return text.replace(LONE_SURROGATE, "\uFFFD");
+}
+
 /** Words cut to the bound, an ellipsis ending one cut, as the runner cuts them, and well formed: half a character, the runner's cut's or ours, is replaced. */
 function cutText(text: string, max: number): string {
-  const cut = text.length > max ? `${text.slice(0, max - 1)}…` : text;
-  return cut.replace(LONE_SURROGATE, "\uFFFD");
+  return wellFormed(text.length > max ? `${text.slice(0, max - 1)}…` : text);
 }
 
 /** A value of a call's input cut as the runner cuts it, and no deeper than the bound. */
@@ -107,10 +111,7 @@ function cutValue(value: unknown, depth: number): unknown {
     return value.slice(0, APPROVAL_INPUT.ITEMS_MAX).map((each) => cutValue(each, depth + 1));
   }
   return Object.fromEntries(
-    Object.entries(value).map(([key, each]) => [
-      key.replace(LONE_SURROGATE, "\uFFFD"),
-      cutValue(each, depth + 1),
-    ]),
+    Object.entries(value).map(([key, each]) => [wellFormed(key), cutValue(each, depth + 1)]),
   );
 }
 
@@ -174,8 +175,9 @@ export function landApprovalEvent(
         conversationId,
         turnId: runningTurnId,
         requestId: ask.requestId,
-        toolUseId: ask.toolUseId,
-        subagentId: ask.agentId ?? null,
+        // Note that the ids go into the card's JSON too, so they are kept well formed, as Postgres would write them in text.
+        toolUseId: wellFormed(ask.toolUseId),
+        subagentId: ask.agentId === undefined ? null : wellFormed(ask.agentId),
         toolName: cutText(ask.toolName, APPROVAL_BOUNDS.MAX_TEXT_CHARS),
         title: cutText(ask.title, APPROVAL_BOUNDS.MAX_TEXT_CHARS),
         description:

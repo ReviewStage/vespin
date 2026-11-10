@@ -13,7 +13,10 @@
  * decide from the agent beside it.
  *
  * An ask is settled once, a compare-and-set on its standing pending, so of
- * two answers racing one lands. The one exception is the runner's word of a
+ * two answers racing one lands. A member's answer claims the ask that way
+ * before its line is written to the runner, so the runner hears only the
+ * answer the row records, and the claim is handed back where the line could
+ * not be written (`releaseApprovalClaim`). The one exception is the runner's word of a
  * member's answer, which is what the agent heard: where two members'
  * answers crossed on their way to it, the runner took the first to reach
  * it, so its word stands over whatever answer the row recorded; and where
@@ -251,19 +254,67 @@ const settleByMember = SqlSchema.findAll({
     ),
 });
 
-const expireOne = SqlSchema.findAll({
-  Request: Schema.Struct({ agentId: Schema.String, approvalId: Schema.String, at: Schema.Date }),
+/** That the ask is the member's own claim: settled by their answer, before the runner's word of it. */
+function claimedBy(userId: string) {
+  return and(
+    eq(agentApproval.settledBy, APPROVAL_SETTLED_BY.MEMBER),
+    eq(agentApproval.decidedByUserId, userId),
+  );
+}
+
+const reopenClaim = SqlSchema.findAll({
+  Request: Schema.Struct({
+    agentId: Schema.String,
+    approvalId: Schema.String,
+    userId: Schema.String,
+  }),
   Result: ApprovalRowSchema,
-  execute: ({ agentId, approvalId, at }) =>
+  execute: ({ agentId, approvalId, userId }) =>
+    Database.use((db) =>
+      db
+        .update(agentApproval)
+        .set({
+          status: APPROVAL_STATUS.PENDING,
+          settledBy: null,
+          decidedByUserId: null,
+          settledAt: null,
+        })
+        .where(
+          and(
+            eq(agentApproval.id, approvalId),
+            eq(agentApproval.agentId, agentId),
+            claimedBy(userId),
+          ),
+        )
+        .returning(approvalColumns),
+    ),
+});
+
+const expireClaim = SqlSchema.findAll({
+  Request: Schema.Struct({
+    agentId: Schema.String,
+    approvalId: Schema.String,
+    userId: Schema.String,
+    at: Schema.Date,
+  }),
+  Result: ApprovalRowSchema,
+  execute: ({ agentId, approvalId, userId, at }) =>
     Database.use((db) =>
       db
         .update(agentApproval)
         .set({
           status: APPROVAL_STATUS.EXPIRED,
           settledBy: APPROVAL_SETTLED_BY.ENDED,
+          decidedByUserId: null,
           settledAt: at,
         })
-        .where(and(eq(agentApproval.id, approvalId), eq(agentApproval.agentId, agentId), pending))
+        .where(
+          and(
+            eq(agentApproval.id, approvalId),
+            eq(agentApproval.agentId, agentId),
+            claimedBy(userId),
+          ),
+        )
         .returning(approvalColumns),
     ),
 });
@@ -362,13 +413,22 @@ export function answerApproval(answer: {
   return Effect.map(settleByMember(answer), (rows) => Option.fromNullishOr(rows[0]));
 }
 
-/** Expires one pending ask of the agent named, whose runner has gone with no answer reaching it; answers the ask as it then stands, or none where it no longer waits. */
-export function expireApproval(
-  agentId: string,
-  approvalId: string,
-  at: Date,
-): ApprovalEffect<Option.Option<AgentApprovalRow>> {
-  return Effect.map(expireOne({ agentId, approvalId, at }), (rows) =>
-    Option.fromNullishOr(rows[0]),
-  );
+/**
+ * Hands back a member's claim of an ask whose answer never reached the
+ * runner: pending again where the runner could not be reached just now, so
+ * another answer may take it, or expired where no runner holds the ask at
+ * all. Only the member's own claim is touched; answers the ask as it then
+ * stands, or none where it is no longer their claim.
+ */
+export function releaseApprovalClaim(release: {
+  readonly agentId: string;
+  readonly approvalId: string;
+  readonly userId: string;
+  readonly to: typeof APPROVAL_STATUS.PENDING | typeof APPROVAL_STATUS.EXPIRED;
+  readonly at: Date;
+}): ApprovalEffect<Option.Option<AgentApprovalRow>> {
+  const { to, at, ...claim } = release;
+  const released =
+    to === APPROVAL_STATUS.PENDING ? reopenClaim(claim) : expireClaim({ ...claim, at });
+  return Effect.map(released, (rows) => Option.fromNullishOr(rows[0]));
 }
