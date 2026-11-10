@@ -14,8 +14,9 @@
  * (`invitation-store.ts`), since the plugin's invitation calls take only a
  * session. What the plugin's `createInvitation` checked beyond who asks is
  * checked here the same way, each value mirroring Better Auth 1.7.7's
- * organization plugin: the address lowercased, one already a member's or
- * already invited and pending refused as already invited, a workspace
+ * organization plugin: the address lowercased and held to the plugin's
+ * pattern for one, one already a member's or already invited and pending
+ * refused as already invited, a workspace
  * holding its cap of pending invitations refused as not permitted, and an
  * invitation made to expire when the plugin's would.
  */
@@ -36,7 +37,7 @@ import {
   type WorkspaceInvitation,
 } from "@repo/features/workspace-invitation-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
-import { Clock, Effect, Option } from "effect";
+import { Clock, Effect, Option, Schema } from "effect";
 import {
   recordServerEvent,
   SERVER_EVENT,
@@ -55,6 +56,21 @@ const INVITATION_EXPIRES_IN_MS = 48 * 60 * 60 * 1_000;
 
 /** How many pending invitations a workspace holds before another is refused: Better Auth 1.7.7's organization plugin's default `invitationLimit`. */
 const PENDING_INVITATION_LIMIT = 100;
+
+/**
+ * Whether a lowercased address is one Better Auth 1.7.7's organization
+ * plugin invites: zod's `z.email()` pattern, which its `createInvitation`
+ * checks the address against, stricter than the wire's own
+ * (`workspace-invitation-wire.ts`), refusing a dot at the local part's start
+ * or two in a row, and a top-level domain of one letter or none.
+ */
+const isPluginInvitableEmail = Schema.is(
+  Schema.String.check(
+    Schema.isPattern(
+      /^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+.-]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9-]*\.)+[A-Za-z]{2,}$/,
+    ),
+  ),
+);
 
 /** Who an invitation's email says invited them where the inviter's account cannot be read. */
 const INVITER_UNKNOWN = "A teammate";
@@ -174,6 +190,8 @@ export const workspaceInvite = Effect.fn("web/workspaceInvite")(function* (
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   }
   const email = input.email.toLowerCase();
+  // Note that an address the plugin would not invite is not permitted, as the plugin's refusal was answered.
+  if (!isPluginInvitableEmail(email)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   const now = yield* Clock.currentTimeMillis;
   if (yield* hostedStoreOrUnavailable(isWorkspaceMemberAddress(workspace.id, email))) {
     return yield* Effect.fail(HOSTED_REFUSAL.ALREADY_INVITED);

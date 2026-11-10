@@ -2987,7 +2987,7 @@ it.effect(
 );
 
 it.effect(
-  "an invitation expires 48 hours after it is made, its address is compared lowercased with a member's and a pending one's, and a workspace holding 100 pending is refused another",
+  "an invitation expires 48 hours after it is made, its address is lowercased and compared with a member's and a pending one's, one the plugin would not invite is refused, and a workspace holding 100 pending is refused another",
   () =>
     Effect.gen(function* () {
       const plugin = yield* openWorkspacePlugin;
@@ -3015,6 +3015,10 @@ it.effect(
         assert.deepEqual(
           yield* inviting(plugin, ada, acme, `${grace}@APP.test`.toUpperCase()),
           alreadyInvited,
+        );
+        assert.deepEqual(
+          yield* inviting(plugin, ada, acme, "lin..smith@example.com"),
+          refusedAs(HOSTED_HTTP_STATUS.FORBIDDEN, HOSTED_API_ERROR.NOT_PERMITTED),
         );
 
         for (let index = 1; index < 100; index += 1) {
