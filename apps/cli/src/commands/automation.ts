@@ -119,6 +119,12 @@ const triggerOf = Effect.fnUntraced(function* (flags: TriggerFlags) {
   if (named.length > 1) {
     return yield* usage("Name one trigger: --cron, --github, --sentry, or --trigger.");
   }
+  if (Option.isSome(flags.timezone) && Option.isNone(flags.cron)) {
+    return yield* usage("--timezone goes with --cron.");
+  }
+  if ((flags.label.length > 0 || flags.branch.length > 0) && Option.isNone(flags.github)) {
+    return yield* usage("--label and --branch go with --github.");
+  }
   if (Option.isSome(flags.cron)) {
     const timezone = Option.getOrElse(
       flags.timezone,
@@ -178,6 +184,10 @@ function triggerWords(trigger: AutomationTrigger): string {
       return "webhook";
     case AUTOMATION_TRIGGER.INTEGRATION:
       return `${trigger.provider} ${trigger.event}`;
+    default: {
+      const unknown: never = trigger;
+      throw new Error(`Unknown trigger: ${JSON.stringify(unknown)}`);
+    }
   }
 }
 

@@ -114,6 +114,12 @@ const saveCommand = Command.make(
   },
   ({ words, input, replaces }) =>
     Effect.gen(function* () {
+      if (Option.isSome(input) && words.length > 0) {
+        return yield* new CommandFailed({
+          exit: CLI_EXIT.USAGE,
+          message: "Give the memory as words or with -F, not both.",
+        });
+      }
       const text = (Option.isSome(input) ? yield* readInput(input.value) : words.join(" ")).trim();
       if (text === "") {
         return yield* new CommandFailed({
