@@ -190,13 +190,13 @@ export function useAgentComposer(
   const starter = agent?.startedBy;
   const controlsQueue =
     agent?.runtime !== undefined && (starter === undefined || starter.userId === readerId);
-  const { clear: clearStop } = stopAction;
-  // A Stop stands pressed until the agent stops writing, and what it said goes with the turn.
+  const { clear: clearStop, state: stopState } = stopAction;
+  // A Stop stands pressed until the agent stops writing, and what it said goes with the turn. Note that it runs again as the Stop settles, because the document may show the agent resting before the answer lands.
   useEffect(() => {
     if (writing) return;
     setStopTaken(false);
     clearStop();
-  }, [writing, clearStop]);
+  }, [writing, stopTaken, stopState, clearStop]);
   // A send refused: its words and pictures back in the field, ahead of anything typed since, and the refusal said.
   const handBack = (sent: Sending, refusal: string) => {
     setSending((out) => out.filter(({ id }) => id !== sent.id));
