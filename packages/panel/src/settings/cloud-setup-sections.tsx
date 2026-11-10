@@ -19,6 +19,7 @@ import {
   GAP,
   GlyphSlot,
   Inline,
+  OneLine,
   PlusIcon,
   POPOVER_ALIGN,
   RepositoryPicture,
@@ -323,7 +324,7 @@ function ScriptRow({
             repository === undefined ? (
               name
             ) : (
-              <Inline gap={GAP.ICON}>
+              <Inline gap={GAP.ICON} wrap={false}>
                 <GlyphSlot line>
                   <RepositoryPicture
                     repository={repository}
@@ -331,7 +332,10 @@ function ScriptRow({
                     size={AVATAR_SIZE.GLYPH}
                   />
                 </GlyphSlot>
-                <ReplayMask>{name}</ReplayMask>
+                {/* Note that the name keeps to one line, fading where it is cut, so the Discard and Save an edit brings never wrap it and move the editor. */}
+                <ReplayMask>
+                  <OneLine>{name}</OneLine>
+                </ReplayMask>
               </Inline>
             ),
           error: saveRefusal(saving.error),
