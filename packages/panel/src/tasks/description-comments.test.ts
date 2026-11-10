@@ -34,11 +34,13 @@ import { readExperiments, writeExperiments } from "../testing/app-state.js";
 import { attachmentChipName } from "../testing/attachment-chip.js";
 import {
   composerEditor,
+  composerWords,
   editorBundleLanded,
   installEditorLayout,
   pasteInComposer,
   pressInComposer,
   typeInComposer,
+  writeInComposer,
 } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { AGENT } from "../testing/desktop-inbox.js";
@@ -250,14 +252,15 @@ function wide<Drawn>(draw: () => Drawn, across = 1400): Drawn {
   }
 }
 
-/** Types `words` into a plain field, as a keyboard's input lands. */
-function typeInto(field: HTMLTextAreaElement | null | undefined, words: string): void {
+/** Writes `words` into a comment's field, over what it held, as a keyboard's input lands. */
+function typeInto(field: Element | null | undefined, words: string): void {
   assert.ok(field, "the field stands");
-  act(() => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-    setter?.call(field, words);
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  writeInComposer(field, words);
+}
+
+/** The words a comment's field holds; nothing where no field stands. */
+function wordsIn(field: Element | null | undefined): string | undefined {
+  return field === null || field === undefined ? undefined : composerWords(field);
 }
 
 /** The words marked for a thread, joined as drawn. */
@@ -284,16 +287,9 @@ test("a press on a thread's words opens it beside them, its ✓ resolving it and
   const card = container.querySelector<HTMLElement>(`.comment-card[data-thread="${ID.OPEN}"]`);
   assert.equal(card?.dataset.open, "true");
 
-  const field = card?.querySelector<HTMLTextAreaElement>("textarea");
+  const field = card?.querySelector<HTMLElement>(".composer-editor");
   assert.ok(field);
-  await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-    setter?.call(field, "Not for v1.");
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await act(async () => {
-    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  });
+  await post(field, "Not for v1.");
   await act(async () => {
     card?.querySelector<HTMLButtonElement>('button[aria-label="Resolve"]')?.click();
   });
@@ -424,15 +420,10 @@ test("a page that is not the plan's own marks no comment", () => {
 });
 
 /** Types words into a field and presses Return, as a member posts. */
-async function post(field: HTMLTextAreaElement, words: string): Promise<void> {
-  await act(async () => {
-    const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")?.set;
-    setter?.call(field, words);
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-  });
-  await act(async () => {
-    field.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-  });
+async function post(field: Element, words: string): Promise<void> {
+  writeInComposer(field, words);
+  pressInComposer(field, "Enter");
+  await act(async () => undefined);
 }
 
 test("two threads on the same words both mark them, and a press on them opens each in turn", () => {
@@ -469,8 +460,8 @@ test("a reply whose answer was lost is sent again under the same key, and the ne
   );
   act(() => mark?.click());
   const field = () =>
-    container.querySelector<HTMLTextAreaElement>(
-      `.comment-card[data-thread="${ID.OPEN}"] textarea`,
+    container.querySelector<HTMLElement>(
+      `.comment-card[data-thread="${ID.OPEN}"] .composer-editor`,
     );
 
   const reply = field();
@@ -635,7 +626,7 @@ test("the button beside a list comments on the bullet under the pointer, a paren
   const commentOn = async (item: Element, words: string) => {
     act(() => item.dispatchEvent(new Event("pointerover", { bubbles: true })));
     act(() => container.querySelector<HTMLButtonElement>(".comment-block-button button")?.click());
-    const field = container.querySelector<HTMLTextAreaElement>(".comment-card textarea");
+    const field = container.querySelector<HTMLElement>(".comment-card .composer-editor");
     assert.ok(field);
     await post(field, words);
   };
@@ -672,16 +663,20 @@ test("a press that opens a thread puts the caret in its reply, and a thread draw
   act(() => container.querySelector<HTMLButtonElement>(".comment-count button")?.click());
   const card = () =>
     container.querySelector<HTMLElement>(`.comment-card[data-thread="${ID.GONE}"]`);
-  assert.equal(card()?.querySelector("textarea"), null, "a card at rest has no field");
+  assert.equal(
+    card()?.querySelector<HTMLElement>(".composer-editor"),
+    null,
+    "a card at rest has no field",
+  );
 
   act(() => card()?.querySelector<HTMLElement>(".ui-comment-head")?.click());
 
-  const reply = card()?.querySelector("textarea");
+  const reply = card()?.querySelector<HTMLElement>(".composer-editor");
   assert.ok(reply, "the open thread's reply field");
   assert.equal(document.activeElement, reply);
 
   const tab = drawn("list");
-  const [field] = tab.container.querySelectorAll("textarea");
+  const [field] = tab.container.querySelectorAll<HTMLElement>(".composer-editor");
   assert.ok(field, "the Comments tab's reply field");
   assert.notEqual(
     document.activeElement,
@@ -1016,7 +1011,7 @@ test("a thread being started goes on a press away and on Esc, and its words come
     act(() => container.querySelector<HTMLButtonElement>(".comment-block-button button")?.click());
   };
   const pending = () => container.querySelector(`.comment-card[data-thread="pending"]`);
-  const field = () => pending()?.querySelector<HTMLTextAreaElement>("textarea");
+  const field = () => pending()?.querySelector<HTMLElement>(".composer-editor");
   const away = () =>
     act(() => document.body.dispatchEvent(new Event("pointerdown", { bubbles: true })));
 
@@ -1031,14 +1026,14 @@ test("a thread being started goes on a press away and on Esc, and its words come
   assert.ok(pending() === null, "holding words, it goes too");
 
   startOn();
-  assert.equal(field()?.value, "Worth a setting?", "its words come back");
+  assert.equal(wordsIn(field()), "Worth a setting?", "its words come back");
   act(() => {
     field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   });
   assert.ok(pending() === null, "Esc lets it go");
 
   startOn();
-  assert.equal(field()?.value, "Worth a setting?", "and keeps its words");
+  assert.equal(wordsIn(field()), "Worth a setting?", "and keeps its words");
 });
 
 test("a reply's words outlast its thread closing, and come back as it opens again", () => {
@@ -1050,8 +1045,8 @@ test("a reply's words outlast its thread closing, and come back as it opens agai
         ?.click(),
     );
   const field = () =>
-    container.querySelector<HTMLTextAreaElement>(
-      `.comment-card[data-thread="${ID.OPEN}"][data-open="true"] textarea`,
+    container.querySelector<HTMLElement>(
+      `.comment-card[data-thread="${ID.OPEN}"][data-open="true"] .composer-editor`,
     );
 
   open();
@@ -1060,66 +1055,7 @@ test("a reply's words outlast its thread closing, and come back as it opens agai
   assert.ok(field() === null, "the thread is closed");
 
   open();
-  assert.equal(field()?.value, "Not for v1.");
-});
-
-test("on a finger's keyboard Return in a comment's field breaks the line, and ⌘Return sends it", async () => {
-  answerPointer(true);
-  try {
-    const { container, asked } = drawn("page");
-    act(() =>
-      container
-        .querySelector<HTMLElement>(`mark.description-comment-mark[data-threads~="${ID.OPEN}"]`)
-        ?.click(),
-    );
-    const field = container.querySelector<HTMLTextAreaElement>(
-      `.comment-card[data-thread="${ID.OPEN}"] textarea`,
-    );
-    typeInto(field, "Not for v1.");
-
-    const enter = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
-    await act(async () => {
-      field?.dispatchEvent(enter);
-    });
-    assert.equal(asked.length, 0, "Return sends nothing");
-    assert.equal(enter.defaultPrevented, false, "and types its line");
-
-    await act(async () => {
-      field?.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Enter", metaKey: true, bubbles: true }),
-      );
-    });
-    assert.deepEqual(
-      asked.map(({ action }) => ("words" in action ? action.words : undefined)),
-      ["Not for v1."],
-    );
-  } finally {
-    answerMouse();
-  }
-});
-
-test("on a plan's page a comment's field offers dictation, and the plain field none", async () => {
-  installEditorLayout();
-  const withMentions = drawn("page", THREADS, () => true, PLAN, undefined, PAGE_MENTIONS);
-  act(() =>
-    withMentions.container
-      .querySelector<HTMLElement>(`mark.description-comment-mark[data-threads~="${ID.OPEN}"]`)
-      ?.click(),
-  );
-  await act(async () => undefined);
-  const plain = drawn("page");
-  act(() =>
-    plain.container
-      .querySelector<HTMLElement>(`mark.description-comment-mark[data-threads~="${ID.OPEN}"]`)
-      ?.click(),
-  );
-
-  const dictate = (container: HTMLElement) =>
-    container.querySelector(
-      `.comment-card[data-thread="${ID.OPEN}"] .ui-composer-foot button[aria-label^="Dictate"]`,
-    );
-  assert.ok(dictate(withMentions.container), "the editor's field takes a dictation");
-  assert.equal(dictate(plain.container), null, "the plain field does not");
+  assert.equal(wordsIn(field()), "Not for v1.");
 });
 
 test("in the description's comments list a thread's quote lights its words in the description, and a deleted thread's quote is a press too", () => {
@@ -1175,20 +1111,20 @@ test("a reply's field empties as it is sent and takes the next at once, each sen
       .querySelector<HTMLElement>(`mark.description-comment-mark[data-threads~="${ID.OPEN}"]`)
       ?.click(),
   );
-  const field = container.querySelector<HTMLTextAreaElement>(
-    `.comment-card[data-thread="${ID.OPEN}"] textarea`,
+  const field = container.querySelector<HTMLElement>(
+    `.comment-card[data-thread="${ID.OPEN}"] .composer-editor`,
   );
   assert.ok(field);
   await post(field, "Not for v1.");
-  assert.equal(field.value, "Not for v1.", "a reply refused comes back into the field");
+  assert.equal(wordsIn(field), "Not for v1.", "a reply refused comes back into the field");
 
   await post(field, "Not for v1.");
-  assert.equal(field.value, "", "the field empties as the words are sent");
+  assert.equal(wordsIn(field), "", "the field empties as the words are sent");
   await post(field, "Maybe v2.");
   const words = () => asked.map(({ action }) => ("words" in action ? action.words : undefined));
   assert.deepEqual(words(), ["Not for v1.", "Not for v1.", "Maybe v2."], "none waits on another");
   await act(async () => answer.resolve(false));
-  assert.equal(field.value, "Not for v1.");
+  assert.equal(wordsIn(field), "Not for v1.");
 
   const keys = asked.map(({ action }) => ("clientKey" in action ? action.clientKey : undefined));
   assert.equal(keys[1], keys[0], "the reply whose answer may be lost goes again under its key");
@@ -1207,7 +1143,7 @@ test("a thread being started gives its card's place to the thread as its words a
   };
   const pending = () => container.querySelector(`.comment-card[data-thread="pending"]`);
   comment();
-  const field = pending()?.querySelector<HTMLTextAreaElement>("textarea");
+  const field = pending()?.querySelector<HTMLElement>(".composer-editor");
   assert.ok(field);
   typeInto(field, "Ask Vespin about retries");
 
@@ -1378,7 +1314,7 @@ test("the focus going from the editor into the thread its caret opened keeps it 
   const { container, opened } = await caretInThread();
 
   const reply = container.querySelector<HTMLElement>(
-    `.comment-card[data-thread="${ID.OPEN}"] textarea`,
+    `.comment-card[data-thread="${ID.OPEN}"] .composer-editor`,
   );
   assert.ok(reply, "the thread's reply field");
   act(() => reply.focus());
@@ -1535,7 +1471,7 @@ test("⇧⌘M starts a thread on the words selected, as the bubble over them doe
   );
 
   pressComment();
-  const field = pending()?.querySelector<HTMLTextAreaElement>("textarea");
+  const field = pending()?.querySelector<HTMLElement>(".composer-editor");
   assert.ok(field, "the thread is being started");
   await post(field, "Who can withdraw?");
   assert.deepEqual(
@@ -1577,8 +1513,8 @@ test("⇧⌘M with no words selected starts a thread on the block under the poin
       }),
     );
   });
-  const field = container.querySelector<HTMLTextAreaElement>(
-    `.comment-card[data-thread="pending"] textarea`,
+  const field = container.querySelector<HTMLElement>(
+    `.comment-card[data-thread="pending"] .composer-editor`,
   );
   assert.ok(field, "the thread is being started");
   await post(field, "Only admins?");
@@ -1720,7 +1656,10 @@ test("a reply carries the files picked into its field, and a comment's files are
     [...field.querySelectorAll('[aria-label="Attached files"] > li')].map(attachmentChipName),
     ["steps.txt"],
   );
-  await post(field.querySelector("textarea") ?? assert.fail("no textarea"), "Repro attached.");
+  await post(
+    field.querySelector<HTMLElement>(".composer-editor") ?? assert.fail("no field"),
+    "Repro attached.",
+  );
 
   const [reply] = asked;
   assert.equal(reply?.action.action, DESCRIPTION_COMMENT_ACTION.REPLY);
@@ -1731,37 +1670,6 @@ test("a reply carries the files picked into its field, and a comment's files are
     [["steps.txt", "text/plain", Buffer.from("Steps to reproduce\n").toString("base64")]],
   );
   assert.equal(field.querySelectorAll('[aria-label="Attached files"] > li').length, 0);
-});
-
-test("a picture pasted into the plain field is attached to the reply, as the editor's paste attaches one", async () => {
-  const { container, asked } = drawn("page");
-  act(() =>
-    container
-      .querySelector<HTMLElement>(`mark.description-comment-mark[data-threads~="${ID.OPEN}"]`)
-      ?.click(),
-  );
-  const card =
-    container.querySelector(`.comment-card[data-thread="${ID.OPEN}"]`) ?? assert.fail("no card");
-  const field = card.querySelector("textarea") ?? assert.fail("no textarea");
-  const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 7, 7, 7]);
-  const paste = new Event("paste", { bubbles: true, cancelable: true });
-  Object.defineProperty(paste, "clipboardData", {
-    value: { files: [new File([png], "screenshot.png", { type: "image/png" })] },
-  });
-  await act(async () => {
-    field.dispatchEvent(paste);
-  });
-  for (let round = 0; round < 4; round += 1) await act(() => Promise.resolve());
-
-  assert.equal(paste.defaultPrevented, true);
-  await post(field, "Like this.");
-  const [reply] = asked;
-  assert.deepEqual(
-    reply !== undefined && "attachments" in reply.action
-      ? reply.action.attachments?.map((file) => [file.name, file.mediaType])
-      : undefined,
-    [["screenshot.png", "image/png"]],
-  );
 });
 
 /** A thread whose one comment, written by `by`, names a date. */
@@ -1905,7 +1813,7 @@ function ownComment(landing?: () => boolean | Promise<boolean>) {
     assert.ok(item, "the menu offers Edit");
     act(() => item.click());
   };
-  const field = () => container.querySelector<HTMLTextAreaElement>(".comment-editing textarea");
+  const field = () => container.querySelector<HTMLElement>(".comment-editing .composer-editor");
   const press = (label: string) =>
     act(() =>
       [...container.querySelectorAll<HTMLButtonElement>(".comment-editing button")]
@@ -1919,20 +1827,20 @@ test("an edit's words outlast Cancel and Esc, come back as Edit opens it again, 
   const { edit, field, press, asked } = ownComment();
 
   edit();
-  assert.equal(field()?.value, "Ship by [@Oct 23, 2026](mention://date/2026-10-23).");
+  assert.equal(wordsIn(field()), "Ship by [@Oct 23, 2026](mention://date/2026-10-23).");
   typeInto(field(), "Ship by Friday.");
   press("Cancel");
   assert.ok(field() === null, "Cancel closes the field");
 
   edit();
-  assert.equal(field()?.value, "Ship by Friday.", "its words come back");
+  assert.equal(wordsIn(field()), "Ship by Friday.", "its words come back");
   act(() => {
     field()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
   });
   assert.ok(field() === null, "Esc closes the field");
 
   edit();
-  assert.equal(field()?.value, "Ship by Friday.", "and keeps them too");
+  assert.equal(wordsIn(field()), "Ship by Friday.", "and keeps them too");
   await act(async () => press("Save"));
   assert.deepEqual(
     asked.map(({ action }) => ("words" in action ? action.words : undefined)),
@@ -1941,7 +1849,7 @@ test("an edit's words outlast Cancel and Esc, come back as Edit opens it again, 
 
   edit();
   assert.equal(
-    field()?.value,
+    wordsIn(field()),
     "Ship by [@Oct 23, 2026](mention://date/2026-10-23).",
     "saved, its draft is let go",
   );

@@ -8,13 +8,26 @@
  * since the phone is signed in here now; an unregister of a token the
  * account does not hold is done all the same, so a phone signing out after
  * its token moved answers no differently. The token is kept in lower case,
- * however the app spelled its hex, so one token is one row. Nothing of the
- * token is logged or answered.
+ * however the app spelled its hex, so one token is one row. A read of the
+ * phone's standing and a set of its "Notify me" act on the account's own
+ * phone alone, and a token it does not hold is answered not found, exactly
+ * as one no account holds, so no account reads or changes another's phone.
+ * Nothing of the token is logged or answered.
  */
 
-import { registerPushDevice, unregisterPushDevice } from "@repo/database/models/push-device-store";
+import {
+  readPushDeviceStatus,
+  registerPushDevice,
+  setPushDeviceNotify,
+  unregisterPushDevice,
+} from "@repo/database/models/push-device-store";
 import type { PushDeviceDoneAnswer } from "@repo/features/push-device-wire";
-import { hostedStoreOrUnavailable, type UserIdResolver } from "../http/http-effect.js";
+import { Effect, Option } from "effect";
+import {
+  HOSTED_REFUSAL,
+  hostedStoreOrUnavailable,
+  type UserIdResolver,
+} from "../http/http-effect.js";
 import { accountMiddleware, hosted } from "../orpc/base.js";
 
 export interface PushDevicesProcedureSeams {
@@ -45,6 +58,29 @@ export function pushDevicesProcedures(seams: PushDevicesProcedureSeams) {
           environment: input.environment,
         }),
       );
+      return DONE;
+    }),
+
+    status: signedIn.status.effect(function* ({ input, context: { userId } }) {
+      const standing = yield* hostedStoreOrUnavailable(
+        readPushDeviceStatus(userId, {
+          token: input.token.toLowerCase(),
+          environment: input.environment,
+        }),
+      );
+      if (Option.isNone(standing)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+      return standing.value;
+    }),
+
+    notify: signedIn.notify.effect(function* ({ input, context: { userId } }) {
+      const held = yield* hostedStoreOrUnavailable(
+        setPushDeviceNotify(
+          userId,
+          { token: input.token.toLowerCase(), environment: input.environment },
+          input.notify,
+        ),
+      );
+      if (!held) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       return DONE;
     }),
   };

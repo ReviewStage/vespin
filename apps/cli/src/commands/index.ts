@@ -14,7 +14,9 @@ import { apiCommand } from "./api.js";
 import { automationCommand } from "./automation.js";
 import { commentCommand } from "./comment.js";
 import { descriptionCommand } from "./description.js";
+import { githubCommand } from "./github.js";
 import { inboxCommand } from "./inbox.js";
+import { keysCommand } from "./keys.js";
 import { mcpCommand } from "./mcp.js";
 import { memoryCommand } from "./memory.js";
 import { modelsCommand } from "./models.js";
@@ -34,10 +36,12 @@ export const COMMANDS = [
   pageCommand,
   agentCommand,
   workspaceCommand,
+  githubCommand,
   inboxCommand,
   memoryCommand,
   automationCommand,
   modelsCommand,
+  keysCommand,
   mcpCommand,
   apiCommand,
   updateCommand,

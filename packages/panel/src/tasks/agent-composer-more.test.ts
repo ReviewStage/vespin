@@ -102,7 +102,7 @@ async function drawnAt(width: number, status: AgentStatus = AGENT_STATUS.COMPLET
   const foot =
     container.querySelector<HTMLElement>("form > :last-child") ?? assert.fail("the foot stands");
   const card =
-    container.querySelector<HTMLElement>(".agent-composer") ?? assert.fail("the card stands");
+    container.querySelector<HTMLElement>(".message-box") ?? assert.fail("the card stands");
   return {
     container,
     card,
