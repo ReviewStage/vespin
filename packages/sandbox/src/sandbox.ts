@@ -13,11 +13,11 @@
  * A run stops `SANDBOX_IDLE` after its last touch: every open and create
  * runs for that long, and whatever holds a sandbox in use touches it
  * (`touch`, `touchSandbox`) about every `SANDBOX_TOUCH_EVERY`, which no
- * caller times any other way. A connection that holds a sandbox open (a
- * terminal, a tunnel, a live view) touches it only once it was used since
- * its last touch (`touchedWhileUsed`), never for standing open alone. A
- * stopped sandbox keeps its disk as a snapshot, so an idle one bills
- * nothing but that.
+ * caller times any other way. Only agent or terminal activity touches a
+ * sandbox (`SANDBOX_IDLE`); a terminal touches it only once it was used
+ * since its last touch (`touchedWhileUsed`), never for standing open
+ * alone. A stopped sandbox keeps its disk as a snapshot, so an idle one
+ * bills nothing but that.
  *
  * A sandbox may open with a drive (`SandboxDrive`): a base drive it fills,
  * or a drive of its own forked from one. Every drive call is the package's,
@@ -199,10 +199,12 @@ export class Sandbox extends Context.Service<Sandbox, SandboxService>()("@repo/s
  * How long a sandbox runs past its last touch: what every open and create
  * runs for, and how far ahead of now each touch puts its end, so this alone
  * decides when an idle sandbox stops. Five minutes with no agent or
- * terminal activity, the one rule every sandbox follows: an idle sandbox
- * bills its memory until it stops, and a resume from its snapshot takes
- * about eleven seconds. An agent on screen is touched every minute
- * whatever this is (`use-warm-agent.ts`).
+ * terminal activity, the one rule every sandbox follows, with no
+ * exceptions: activity is an agent's turn running, a terminal typed in or
+ * printing, or the agent open in a focused Vespin window
+ * (`use-warm-agent.ts`), and nothing else touches a sandbox. A run also
+ * ends at the provider's longest, 24 hours from its start, however active
+ * (`vercel/vercel-sdk.ts`'s `TOUCH`).
  */
 export const SANDBOX_IDLE = Duration.minutes(5);
 

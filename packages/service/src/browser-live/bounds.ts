@@ -10,10 +10,9 @@ export const BROWSER_LIVE_BOUNDS = {
   IDLE: Duration.minutes(5),
   /**
    * How long a socket stays open past the member's last input, however
-   * often its panel says it is watching: as long as the sandbox runs past
-   * its last use (`SANDBOX_IDLE`), since watching alone does not touch it,
-   * so the view closes as idle as its sandbox stops, and Watch again opens
-   * a new view, resuming the sandbox.
+   * often its panel says it is watching: `SANDBOX_IDLE`, the one idle rule,
+   * so a window left open on a Browser tab nobody touches stops streaming
+   * its frames, and Watch again opens a new view.
    */
   INPUT_IDLE: SANDBOX_IDLE,
   /** How often a socket asks whether the panel has gone the idle bound silent. */

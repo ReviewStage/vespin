@@ -1,5 +1,5 @@
 /**
- * relay.ts -- one tunnel: the desktop's socket piped to a bridge in the PTY of the agent's running sandbox, touching the sandbox while bytes cross it and closing when none have for `SANDBOX_IDLE`.
+ * relay.ts -- one tunnel: the desktop's socket piped to a bridge in the PTY of the agent's running sandbox, closing when no bytes have crossed it for `SANDBOX_IDLE`.
  *
  * A connection reaches its agent through the one rule every agent route
  * keeps, as a Terminal's does, then opens a PTY only on a sandbox that is
@@ -13,11 +13,10 @@
  * read only for its shape; its bytes are never read, kept, logged, or
  * counted, here or anywhere the relay writes.
  *
- * Where the bridge's kind holds the sandbox (`TUNNEL_HOLDS_SANDBOX`), the
- * connection touches the sandbox (`@repo/sandbox`'s `touchedWhileUsed`)
- * from its open and then while bytes cross it either way. A connection
- * closes as idle once none has for the idle bound, `SANDBOX_IDLE`, as the
- * sandbox it held stops then too.
+ * A tunnel never holds its sandbox up: only agent or terminal activity does
+ * (`@repo/sandbox`'s `SANDBOX_IDLE`), so a sandbox a tunnel reaches stops on
+ * that rule alone, and the tunnel with it. A connection also closes as idle
+ * once no byte has crossed it either way for `SANDBOX_IDLE`.
  *
  * How the connection ended is the close code the desktop reads as the
  * tunnel's state (`@repo/features/sandbox-tunnel-wire`'s `TUNNEL_CLOSE`).
@@ -29,13 +28,7 @@
 
 import { TUNNEL_CLOSE, tunnelFrameSchema } from "@repo/features/sandbox-tunnel-wire";
 import { SANDBOX_STATE } from "@repo/features/terminal-wire";
-import {
-  type InteractiveShell,
-  ptyLinesOf,
-  SANDBOX_IDLE,
-  type SandboxError,
-  touchedWhileUsed,
-} from "@repo/sandbox";
+import { type InteractiveShell, ptyLinesOf, SANDBOX_IDLE, type SandboxError } from "@repo/sandbox";
 import { readEither } from "@repo/wire/effect";
 import {
   Clock,
@@ -56,12 +49,7 @@ import type { SandboxOpen } from "../agents/terminal/agent-sandbox.js";
 import { EXCESS_KEYS } from "../core.js";
 import { jsonOf } from "../http/http-effect.js";
 import type { RelaySocket } from "../terminal/relay.js";
-import {
-  TUNNEL_BRIDGE_WORD,
-  TUNNEL_HOLDS_SANDBOX,
-  type TunnelBridge,
-  tunnelBridge,
-} from "./bridge.js";
+import { TUNNEL_BRIDGE_WORD, type TunnelBridge, tunnelBridge } from "./bridge.js";
 import { MIRROR_BRIDGE_STEP, type MirrorBridgeStep } from "./mirror-bridge.js";
 
 const TUNNEL_RELAY_BOUNDS = {
@@ -100,8 +88,6 @@ export interface TunnelDependencies {
   readonly connect: (
     shell: InteractiveShell,
   ) => Effect.Effect<RelaySocket, SandboxError, Scope.Scope>;
-  /** Touches the session's sandbox where it runs; a touch that fails is logged, for the next to touch it again. */
-  readonly touch: (sessionId: string) => Effect.Effect<void>;
 }
 
 /** How the relay ends its own socket to the PTY, whatever ended the pipe: the bridge ends with its input. */
@@ -288,12 +274,8 @@ export function relayTunnel(
     if (sandbox.state !== SANDBOX_STATE.RUNNING) {
       return yield* close(TUNNEL_CLOSE.NOT_RUNNING, CLOSE_WHY.NOT_RUNNING);
     }
-    // An open is the developer using the sandbox, and so is every byte that crosses after it: where the kind holds it, it is touched while the tunnel is used.
     const openedAt = yield* DateTime.nowAsDate;
     const lastCrossed = yield* Ref.make(openedAt.getTime());
-    if (TUNNEL_HOLDS_SANDBOX[ask.bridge.kind]) {
-      yield* touchedWhileUsed(deps.touch(sessionId), Ref.get(lastCrossed));
-    }
     const pty = yield* Effect.result(
       deps.connect(sandbox.shell).pipe(Effect.withSpan(TUNNEL_SPAN.CONNECT)),
     );
