@@ -102,6 +102,7 @@ import {
   carryTurn,
   dropAwaitingNothing,
   endTurn,
+  holdQueuedTurns,
   holdTurn,
   queueTurn,
   recordTurnSnapshot,
@@ -613,6 +614,15 @@ export interface StoreWriter {
     target: ConversationTarget,
     hold: { readonly turnId: string; readonly until: Date },
   ): Write<Result.Result<boolean, typeof NO_CONVERSATION>>;
+  /**
+   * Holds the conversation's queued turns open until the usage limit that
+   * refused their launch resets, as a turn no payer can launch now waits for
+   * it (`turn-state.ts`'s `holdQueuedTurns`); answers the turns held.
+   */
+  holdQueuedTurns(
+    target: ConversationTarget,
+    until: Date,
+  ): Write<Result.Result<readonly string[], typeof NO_CONVERSATION>>;
 }
 
 /** The plan's turn origin for each origin the brain's stream names: each is written as reported. */
@@ -2901,6 +2911,10 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
     holdTurn: (target, hold) =>
       underConversation(target, (context) =>
         Effect.map(holdTurn(context.target, hold), Result.succeed),
+      ),
+    holdQueuedTurns: (target, until) =>
+      underConversation(target, (context) =>
+        Effect.map(holdQueuedTurns(context.target, until), Result.succeed),
       ),
   };
 
