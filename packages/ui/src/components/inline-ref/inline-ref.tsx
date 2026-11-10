@@ -224,21 +224,31 @@ function rootClass({
 
 /**
  * A token's glyph, centered in a box the line's size; a pill's in the muted
- * ink. Note that a pill's box is a line of words tall and at least as wide,
- * and a mark drawn at its own size (an agent's 16px tile, a pull request's
- * 12px mark) stands centered on it, spilling evenly above and below rather
- * than hanging from its corner, and widens it, so its name keeps its gap.
+ * ink. An icon is drawn a line of words tall, and so is a glyph seated in a
+ * slot of its own (`--ui-glyph-size`), a working agent's say, so every bare
+ * glyph in a line stands one size. Note that a pill's box is a line of
+ * words tall and at least as wide, and a mark drawn at its own size (a
+ * person's 16px face, a pull request's 12px mark) stands centered on it,
+ * spilling evenly above and below rather than hanging from its corner, and
+ * widens it, so its name keeps its gap.
  * Where the token wraps, the glyph's box is a line of words tall in every
  * look and sits a little under the baseline, as an icon set in words does,
- * so its middle meets the middle of the letters beside it.
+ * so its middle meets the middle of the letters beside it. Note that the
+ * box's baseline is its own bottom edge, held there by an empty item that
+ * stands its height (`after:`), because a flex box otherwise takes its
+ * first item's: an icon's is its bottom edge, but a face's or a tile's is
+ * the letter or glyph inside it, which dropped a person's, a workspace's,
+ * and an automation's mark below every icon's and stretched the line.
  */
 function glyphClass(look: InlineRefLook, fit: InlineRefFit): string {
   const parts = [
-    "ui-inline-ref-glyph inline-flex flex-none items-center justify-center empty:hidden [&>svg]:size-[1em]",
+    "ui-inline-ref-glyph inline-flex flex-none items-center justify-center empty:hidden [--ui-glyph-size:1em] [&>svg]:size-[1em]",
   ];
   const pill = look === INLINE_REF_LOOK.PILL;
   if (fit === INLINE_REF_FIT.FLOW || pill) parts.push("h-[1em]");
-  if (fit === INLINE_REF_FIT.FLOW) parts.push(`align-[-0.125em] ${LOOK_GAP[look].glyph}`);
+  if (fit === INLINE_REF_FIT.FLOW) {
+    parts.push(`align-[-0.125em] after:h-[1em] after:self-baseline ${LOOK_GAP[look].glyph}`);
+  }
   if (pill) parts.push("min-w-[1em] text-muted-foreground");
   return parts.join(" ");
 }

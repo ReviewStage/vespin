@@ -1,4 +1,7 @@
 import {
+  AVATAR_SHAPE,
+  AVATAR_SIZE,
+  Avatar,
   DocumentIcon,
   HoverCard,
   HoverCardHead,
@@ -20,7 +23,8 @@ import { CatalogSection } from "../section";
  * inline-refs.tsx -- things named in a line of words: a link's words, a
  * byline's wash, and a mention's pill, each pressable and not; a pill
  * saying where its subject stands, one that leaves the app as a link, one
- * whose subject is gone, all in running words that they wrap across as the
+ * whose subject is gone, a person's face and an automation's square standing
+ * level with a line glyph, all in running words that they wrap across as the
  * words do; long names wrapping in a narrow column, each glyph kept to its
  * name's first word, and a pull request's key and a date kept whole with
  * their glyph and standing there; the same long names in a slot one line tall, fading out
@@ -118,6 +122,41 @@ function InlineRefs(): React.JSX.Element {
           />{" "}
           it no longer holds, or the skill{" "}
           <InlineRef look={INLINE_REF_LOOK.PILL} kind="skill" label="/release" onPress={press} />.
+        </Text>
+        <Text>
+          Ask{" "}
+          <InlineRef
+            look={INLINE_REF_LOOK.PILL}
+            glyph={<Avatar name="Charles Pan" size={AVATAR_SIZE.INLINE} decorative />}
+            kind="person"
+            label="Charles Pan"
+            onPress={press}
+          />{" "}
+          before{" "}
+          <InlineRef
+            look={INLINE_REF_LOOK.PILL}
+            glyph={
+              <Avatar
+                name="Nightly triage"
+                glyph={<CalendarIcon />}
+                shape={AVATAR_SHAPE.SQUARE}
+                size={AVATAR_SIZE.INLINE}
+                decorative
+              />
+            }
+            kind="automation"
+            label="Nightly triage"
+            onPress={press}
+          />{" "}
+          runs, on{" "}
+          <InlineRef
+            look={INLINE_REF_LOOK.PILL}
+            glyph={<CalendarIcon />}
+            kind="date"
+            label="Oct 20, 2026"
+            name={INLINE_REF_NAME.WHOLE}
+          />
+          .
         </Text>
       </CatalogSection>
       <CatalogSection id="inline-ref-narrow" title="Long names in a narrow column">
