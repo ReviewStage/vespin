@@ -27,13 +27,13 @@ import { CURSOR_START } from "./transcript.js";
  *
  * One small call, bounded in words and in time, asked for a sentence-case
  * title of a few words with nothing around it; what comes back is tidied
- * of the quotes and the full stop a model adds anyway. An answer that is no
- * title, more than a line, past the wire's bound, or more words than a
- * title holds, is taken as none: the small model sometimes answers the
- * exchange it is handed, as though it were spoken to, and that reply cut to
- * the bound would stand as the agent's name, and its task's, at the head of
- * every message it writes. The exchange is handed inside a mark of its own
- * for the same reason, so the model reads it as what to name. An agent is
+ * of the quotes and the full stop a model adds anyway. An answer past the
+ * wire's bound is taken as none rather than cut to it: the small model
+ * sometimes answers the exchange it is handed, as though it were spoken
+ * to, and that reply cut to the bound would stand as the agent's name, and
+ * its task's, at the head of every message it writes. The exchange is
+ * handed inside a mark of its own for the same reason, so the model reads
+ * it as what to name. An agent is
  * asked for its title as the developer's words are received, so a first
  * turn that runs long is named as it starts, from
  * its opening alone, and again as each of its first turns ends where none
@@ -90,8 +90,6 @@ const AGENT_TITLE = {
   THINKING: "disabled",
   /** The most words of its first line a title falls back to where no model names it. */
   FALLBACK_WORDS: 6,
-  /** The most words a model's answer may hold and still be a title, which it is asked to give in six; one past it answers the exchange rather than naming it. */
-  MAX_WORDS: 10,
   /** The most of each message the call reads, which is enough to tell the task from. */
   EXCERPT_CHARS: 2_000,
   /** The newest messages read for the agent's latest answer, past the lines sent since it ended. */
@@ -138,21 +136,15 @@ function titleOf(line: string): Option.Option<string> {
 }
 
 /**
- * The model's answer as a title: one line, unquoted and unpunctuated;
- * nothing where nothing is left, or where the answer is no title, more than
- * one line, past the wire's bound, or more words than a title holds. Note
- * that such an answer is refused rather than cut to the bound, because it
- * is a reply to the exchange, and its first words are no name for the task.
+ * The model's answer as a title: its first line, unquoted and
+ * unpunctuated; nothing where nothing is left or the line runs past the
+ * wire's bound. Note that a line past the bound is refused rather than cut
+ * to it, because it is no title but a reply to the exchange, and its first
+ * words are no name for the task.
  */
 function tidyAgentTitle(answer: string): Option.Option<string> {
-  const lines = answer.trim().split("\n");
-  const line = tidiedLine(lines[0] ?? "");
-  const words = line.split(/\s+/u).length;
-  if (
-    lines.length > 1 ||
-    line.length > AGENT_BOUNDS.MAX_TITLE_CHARS ||
-    words > AGENT_TITLE.MAX_WORDS
-  ) {
+  const line = tidiedLine(answer.trim().split("\n")[0] ?? "");
+  if (line.length > AGENT_BOUNDS.MAX_TITLE_CHARS) {
     return Option.none();
   }
   return titleOf(line);
