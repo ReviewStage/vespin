@@ -38,6 +38,7 @@ export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.LIST_WORKSPACE_INVITATIONS]: { command: ["workspace", "invitations"] },
   [MEMBER_MCP_TOOL.INVITE_TO_WORKSPACE]: { command: ["workspace", "invite"] },
   [MEMBER_MCP_TOOL.CANCEL_WORKSPACE_INVITATION]: { command: ["workspace", "uninvite"] },
+  [MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO]: { command: ["workspace", "photo"] },
   [MEMBER_MCP_TOOL.LIST_TASKS]: { command: ["task", "list"] },
   [MEMBER_MCP_TOOL.READ_TASK]: { command: ["task", "view"] },
   [MEMBER_MCP_TOOL.FIND_TASK]: { command: ["task", "view"] },
@@ -122,6 +123,7 @@ export const MEMBER_MCP_CLI_PARITY = {
   [MEMBER_MCP_TOOL.RENAME_INTEGRATION]: { command: ["integrations", "rename"] },
   [MEMBER_MCP_TOOL.DISCONNECT_INTEGRATION]: { command: ["integrations", "disconnect"] },
   [MEMBER_MCP_TOOL.LIST_MCP_CLIENTS]: { command: ["mcp", "clients"] },
+  [MEMBER_MCP_TOOL.REVOKE_MCP_CLIENT]: { command: ["mcp", "revoke"] },
   [MEMBER_MCP_TOOL.LIST_SENTRY_INSTALLATIONS]: { command: ["sentry", "list"] },
   [MEMBER_MCP_TOOL.DISCONNECT_SENTRY]: { command: ["sentry", "disconnect"] },
 } as const satisfies Record<MemberMcpToolName, McpCliRow>;

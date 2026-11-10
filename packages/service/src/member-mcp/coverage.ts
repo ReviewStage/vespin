@@ -84,6 +84,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.LIST_WORKSPACE_INVITATIONS]: { workspaceInvitations: ["list"] },
   [MEMBER_MCP_TOOL.INVITE_TO_WORKSPACE]: { workspaceInvitations: ["invite"] },
   [MEMBER_MCP_TOOL.CANCEL_WORKSPACE_INVITATION]: { workspaceInvitations: ["cancel"] },
+  [MEMBER_MCP_TOOL.SET_WORKSPACE_PHOTO]: { workspaces: ["setPhoto"] },
   [MEMBER_MCP_TOOL.LIST_TASKS]: { plans: ["list"], taskSections: ["list"] },
   [MEMBER_MCP_TOOL.READ_TASK]: { plans: ["open"] },
   [MEMBER_MCP_TOOL.FIND_TASK]: { plans: ["find", "open"] },
@@ -211,6 +212,7 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.RENAME_INTEGRATION]: { integrations: ["rename"] },
   [MEMBER_MCP_TOOL.DISCONNECT_INTEGRATION]: { integrations: ["disconnect"] },
   [MEMBER_MCP_TOOL.LIST_MCP_CLIENTS]: { mcpClients: ["list"] },
+  [MEMBER_MCP_TOOL.REVOKE_MCP_CLIENT]: { mcpClients: ["revoke"] },
   [MEMBER_MCP_TOOL.LIST_SENTRY_INSTALLATIONS]: { workspaceSentry: ["installations"] },
   [MEMBER_MCP_TOOL.DISCONNECT_SENTRY]: { workspaceSentry: ["disconnect"] },
 } as const satisfies Record<MemberMcpToolName, HostedProcedureNames>;
@@ -354,8 +356,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
     answerRequest: INTERNAL,
   },
   macCommands: { waiting: INTERNAL, settle: INTERNAL, claim: INTERNAL, listening: INTERNAL },
-  // Note that a revoke deletes the member's consent through Better Auth under a session of theirs, which no OAuth token carries.
-  mcpClients: { revoke: NOT_YET_BUILT },
   pullRequests: { reviewOptions: SCREEN_ONLY },
   pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },
   repositoryPins: { list: NOT_YET_BUILT, set: NOT_YET_BUILT },
@@ -378,7 +378,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   workspaces: {
     create: NOT_YET_BUILT,
-    setPhoto: NOT_YET_BUILT,
     setExperiment: INTERNAL,
     transfer: DESTRUCTIVE,
     leave: DESTRUCTIVE,

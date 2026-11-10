@@ -84,23 +84,23 @@ const memberArgument = Argument.String("member").pipe(
 );
 
 /**
- * The member of the workspace `named` names: the one whose account id it
- * is, or whose email it spells in any case, as `workspaces.members` answers
- * them. None is a usage failure listing the members.
+ * The member of the workspace a command names, by account id or by email in
+ * any case, as `workspaces.members` lists them; a usage failure listing the
+ * members where none matches.
  */
 export const namedMember = (workspaceId: string, named: string) =>
   Effect.gen(function* () {
     const { hosted } = yield* session;
     const { members } = yield* askService(hosted.workspaces.members, { workspaceId });
-    const lowered = named.toLowerCase();
-    const member = members.find(
-      ({ userId, email }) => userId === named || email.toLowerCase() === lowered,
-    );
-    if (member !== undefined) return member;
+    const email = named.toLowerCase();
+    const member = members.find((one) => one.userId === named || one.email.toLowerCase() === email);
+    if (member !== undefined) {
+      return { userId: member.userId, name: member.name, email: member.email, role: member.role };
+    }
     return yield* new CommandFailed({
       exit: CLI_EXIT.USAGE,
       message: [
-        `${named} is no member of the workspace. Its members:`,
+        `${named} names no member of the workspace by account id or email. Its members:`,
         ...columns(members.map((one) => [one.userId, one.role, `${one.name} <${one.email}>`])).map(
           (line) => `  ${line}`,
         ),

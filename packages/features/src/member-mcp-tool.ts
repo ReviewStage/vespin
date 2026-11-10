@@ -23,6 +23,7 @@ export const MEMBER_MCP_TOOL = {
   LIST_WORKSPACE_INVITATIONS: "list_workspace_invitations",
   INVITE_TO_WORKSPACE: "invite_to_workspace",
   CANCEL_WORKSPACE_INVITATION: "cancel_workspace_invitation",
+  SET_WORKSPACE_PHOTO: "set_workspace_photo",
   LIST_TASKS: AGENT_TOOL.LIST_TASKS,
   READ_TASK: AGENT_TOOL.READ_TASK,
   FIND_TASK: "find_task",
@@ -107,6 +108,7 @@ export const MEMBER_MCP_TOOL = {
   RENAME_INTEGRATION: "rename_integration",
   DISCONNECT_INTEGRATION: "disconnect_integration",
   LIST_MCP_CLIENTS: "list_mcp_clients",
+  REVOKE_MCP_CLIENT: "revoke_mcp_client",
   LIST_SENTRY_INSTALLATIONS: "list_sentry_installations",
   DISCONNECT_SENTRY: "disconnect_sentry",
 } as const;

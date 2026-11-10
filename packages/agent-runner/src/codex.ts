@@ -139,6 +139,7 @@ import {
   type RunnerSelf,
   runsOnHost,
 } from "./launch.js";
+import { codexMemoryWatch } from "./out-of-memory.js";
 import { CODEX_PIN, SANDBOX_TOOL_ENV } from "./pins.js";
 import {
   CODEX_EFFORT,
@@ -734,6 +735,7 @@ function listenerFor(
   seen: ThreadSeen,
   refresh: Effect.Effect<ChatgptAuthTokensRefreshResponse, CodexTokenFailed> | undefined,
 ): AppServerListener {
+  const annotate = codexMemoryWatch();
   return {
     onRequest: (method) =>
       method === METHOD.CHATGPT_AUTH_TOKENS_REFRESH && refresh !== undefined
@@ -743,7 +745,7 @@ function listenerFor(
         : undefined,
     onNotification: (notification) =>
       Effect.gen(function* () {
-        yield* seen.context.sink.emit(notification);
+        yield* seen.context.sink.emit(yield* Effect.promise(() => annotate(notification)));
         if (notification.method === METHOD.TURN_COMPLETED) {
           const { threadId, turn } = notification.params;
           if (threadId !== seen.threadId) return;

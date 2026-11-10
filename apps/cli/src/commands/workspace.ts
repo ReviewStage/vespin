@@ -1,5 +1,5 @@
 /**
- * workspace.ts -- `vespin workspace list` and `use`: the member's workspaces, and the one a command acts in where nothing else names one.
+ * workspace.ts -- `vespin workspace list` and `use`: the member's workspaces, and the one a command acts in where nothing else names one; and the subcommands that change a workspace, each in a file of its own.
  *
  * `list` reads them through `workspaces.list` and marks the default the
  * config keeps for the service. `use` takes a slug, a slug the workspace
@@ -17,6 +17,11 @@ import { configuredWorkspace, keepWorkspace } from "../config-store.js";
 import { answer, CommandFailed } from "../output.js";
 import { askService, session } from "../session.js";
 import {
+  workspaceDeleteCommand,
+  workspaceLeaveCommand,
+  workspaceTransferCommand,
+} from "./workspace-leave.js";
+import {
   workspaceInvitationsCommand,
   workspaceInviteCommand,
   workspaceMembersCommand,
@@ -26,6 +31,7 @@ import {
   workspaceSlugCommand,
   workspaceUninviteCommand,
 } from "./workspace-members.js";
+import { workspacePhotoCommand } from "./workspace-photo.js";
 
 /** A config file this version could not read or write, as the command's failure. */
 function configFailed(failed: { readonly message: string }): CommandFailed {
@@ -103,7 +109,9 @@ const useCommand = Command.make(
 );
 
 export const workspaceCommand = Command.make("workspace").pipe(
-  Command.withDescription("List your workspaces, choose the default one, and manage its members"),
+  Command.withDescription(
+    "List your workspaces, choose the default one, manage its members, and leave, hand over, or delete one",
+  ),
   Command.withSubcommands([
     listCommand,
     useCommand,
@@ -115,6 +123,10 @@ export const workspaceCommand = Command.make("workspace").pipe(
     workspaceUninviteCommand,
     workspaceRenameCommand,
     workspaceSlugCommand,
+    workspacePhotoCommand,
+    workspaceLeaveCommand,
+    workspaceTransferCommand,
+    workspaceDeleteCommand,
   ]),
   Command.withExamples([
     { command: "vespin workspace use acme", description: "Make acme the default workspace" },

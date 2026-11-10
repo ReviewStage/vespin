@@ -289,6 +289,7 @@ function agentSummary(taskId: string, running = false): AgentSummary {
     turnId: TURN_ID,
     runStartedAt: STARTED_AT,
     brief: AGENT_BRIEF.PROMPT,
+    sandboxVcpus: 2,
   };
 }
 

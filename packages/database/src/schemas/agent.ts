@@ -71,8 +71,9 @@ import { task } from "./task.js";
  * out of every list but the one that asks for archived agents, and null
  * while it stands; its conversation and pull request are kept either way.
  * `archived_by` is who archived it (`StoredArchive`), written with
- * `archived_at` and cleared with it; null for an archive from before the
- * column, and for one an automation's sweep made.
+ * `archived_at` and cleared with it, the app's with why where an automation
+ * run or a Slack agent finishing put it away; null for an archive from
+ * before the column, and for one such a finish made before it was recorded.
  * `disabled_servers` is the MCP servers, by connection name (one account
  * at an integration: `notion`, `notion-2`, the first account's name being
  * its provider's), the developer switched off for this agent from its
