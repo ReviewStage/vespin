@@ -77,6 +77,8 @@ export const MEMBER_MCP_COVERAGE = {
   [MEMBER_MCP_TOOL.READ_AGENT_CHANGES]: { agentPullRequests: ["pullRequest"], agents: ["changes"] },
   [MEMBER_MCP_TOOL.LIST_MODELS]: { models: ["list"], account: ["preferences"] },
   [MEMBER_MCP_TOOL.READ_PAGE]: { taskFiles: ["pages", "page"], agentPages: ["list", "version"] },
+  [MEMBER_MCP_TOOL.READ_TASK_FILE]: { taskFiles: ["file"] },
+  [MEMBER_MCP_TOOL.LIST_TASK_FOLDER]: { taskFiles: ["tree"] },
   [MEMBER_MCP_TOOL.CREATE_TASK]: { plans: ["create", "editDescription"] },
   [MEMBER_MCP_TOOL.UPDATE_TASK]: { plans: ["update", "parent", "block"], taskSections: ["write"] },
   [MEMBER_MCP_TOOL.EDIT_DESCRIPTION]: { plans: ["open", "editDescription"] },
@@ -327,8 +329,6 @@ export const MEMBER_MCP_EXCLUSIONS = {
   repositoryPins: { list: NOT_YET_BUILT, set: NOT_YET_BUILT },
   supportAccess: { grant: SECURITY, revoke: SECURITY },
   taskFiles: {
-    file: NOT_YET_BUILT,
-    tree: NOT_YET_BUILT,
     skills: SCREEN_ONLY,
     keepPicture: SCREEN_ONLY,
     pageFrame: SCREEN_ONLY,

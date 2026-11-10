@@ -1,0 +1,24 @@
+{
+  "type": "object",
+  "properties": {
+    "taskId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 36,
+      "description": "The task whose repository to read, by the id list_tasks answered."
+    },
+    "path": {
+      "type": "string",
+      "maxLength": 1024,
+      "description": "The folder's path from the repository's root, such as src; the root where left out."
+    },
+    "recursive": {
+      "type": "boolean",
+      "description": "true to list everything under the folder, each entry by its path from the folder; false or left out for the folder's own entries."
+    }
+  },
+  "required": [
+    "taskId"
+  ],
+  "additionalProperties": false
+}
