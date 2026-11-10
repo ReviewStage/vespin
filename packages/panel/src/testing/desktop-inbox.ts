@@ -1087,7 +1087,7 @@ export function takenCloses(): { itemId: string; revision: number }[] {
   fakeActs({
     ...bridge,
     act: (request: AnyAct): Promise<FakeActAnswer> => {
-      if (request.kind === ACT_KIND.AGENTS_INBOX_CLOSE_RELEASE) {
+      if (request.kind === ACT_KIND.AGENTS_INBOX_RELEASE) {
         const { clientKey, send } = request.payload;
         const release = held.get(clientKey);
         held.delete(clientKey);

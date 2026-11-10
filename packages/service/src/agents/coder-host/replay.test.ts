@@ -203,6 +203,23 @@ it("a source that never made a branch of its own sends the new agent to the work
     /That agent's own branch is `luke\/pull-request-tab`, with its pull request \[@#3030\]/u,
   );
 
+  // A source on a Mac carries the same branch, and is told what it did on top stayed on its Mac.
+  const onMac = replayOf(
+    {
+      ...from,
+      lineage: [source, origin],
+      told: {
+        ...from.told,
+        work: { on: TAKEN_ON.COPY, copy: { copied: false, miss: SNAPSHOT_MISS.ON_DEVICE } },
+        carried: { agent: origin, published: pullRequest, copiedBranch: undefined },
+      },
+    },
+    from.steps,
+    undefined,
+  ).replay.preamble;
+  assert.match(onMac, /git switch 'luke\/pull-request-tab'/u);
+  assert.match(onMac, /stays on the Mac it ran on, so it is not in that branch/u);
+
   const unread = replayOf(
     {
       ...from,

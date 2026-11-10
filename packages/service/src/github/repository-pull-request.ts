@@ -5,7 +5,7 @@
  * member MCP server's pull request tools (`member-mcp/tools.ts`) both reach
  * a pull request here, so either door refuses and answers alike. Each
  * reach resolves first whether the account is a member of the workspace
- * the query names (`github-procedures.ts`'s `memberPlace`), and only then
+ * the query names (`workspace-repositories.ts`'s `memberPlace`), and only then
  * mints a token for the repository on the workspace's installation, or the
  * member's own token where none reaches it, as a link to the pull request
  * is read (`pull-request-links.ts`). The pull request is read by its number
@@ -49,8 +49,8 @@ import {
 } from "../agents/pull-request-write.js";
 import { HOSTED_REFUSAL } from "../http/http-effect.js";
 import { GitHubApp, type GitHubTokenAccess, markRefusedToken } from "./github-app.js";
-import { memberPlace } from "./github-procedures.js";
 import { type PullRequestReadFailure, pullRequestByNumber } from "./pull-requests.js";
+import { memberPlace } from "./workspace-repositories.js";
 
 /** A pull request a query names: the workspace whose installation reaches its repository, the repository's full name, and its number. */
 export interface PullRequestQuery {

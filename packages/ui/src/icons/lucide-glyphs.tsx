@@ -40,6 +40,7 @@ import {
   List,
   ListChecks,
   ListOrdered,
+  Mail,
   Maximize,
   Maximize2,
   MessageSquare,
@@ -53,6 +54,7 @@ import {
   PanelRight,
   Pause,
   Pencil,
+  PenLine,
   Pin,
   PinOff,
   Play,
@@ -271,6 +273,12 @@ export const ImageIcon = lucideGlyph(Image, "icon-button-glyph");
 
 /** A pencil over an open square: a new piece of work, as every chat app's compose button draws it. */
 export const ComposeIcon = lucideGlyph(SquarePen, "icon-button-glyph");
+
+/** An envelope: an email to be sent, as a draft's card is headed. */
+export const MailIcon = lucideGlyph(Mail, "icon-button-glyph");
+
+/** A pen over a line: words written to be sent, as a draft bound nowhere in particular is headed. */
+export const DraftIcon = lucideGlyph(PenLine, "icon-button-glyph");
 
 /** A cog: the account's row that leads to Settings, drawn the way every app draws settings. */
 export const GearIcon = lucideGlyph(Settings, "gear-glyph");

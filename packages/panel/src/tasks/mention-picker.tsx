@@ -2071,6 +2071,8 @@ export function useMentionPicker({
     const stepsBack =
       (event.key === "Backspace" || event.key === "ArrowLeft") && bare && term === "";
     if (back !== undefined && (stepsBack || (event.key === "Escape" && bare))) {
+      // Note that an Escape taken here is kept from the surface behind, as the field keeps one that closes the list, so a dialog around the box stays open.
+      if (event.key === "Escape") event.stopPropagation();
       back();
       return true;
     }
